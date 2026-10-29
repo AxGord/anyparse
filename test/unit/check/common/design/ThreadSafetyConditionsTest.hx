@@ -1,0 +1,844 @@
+package unit.check.common.design;
+
+import anyparse.check.common.design.ThreadSafety;
+import anyparse.check.common.design.threads.ArgumentValues;
+import anyparse.check.common.design.threads.EdgeConditions;
+import anyparse.check.common.design.threads.FunctionTrees;
+import anyparse.query.CallGraph;
+import anyparse.query.ReachLiveness.ReachConfiguration;
+import unit.QueryTestHelpers;
+
+/**
+ * The `thread-safety` check's path conditions: a call cut by what the code around it says — a value stored into a
+ * `dynamic` member runs where the member runs, a `neverInvokes` target runs nothing it is handed, a branch of a
+ * `mainThreadChecks` call runs on its own threads only, a `Bool` or `null` argument decides the callee's branches — and
+ * the functions nothing can reach under `closedWorld`.
+ */
+class ThreadSafetyConditionsTest extends Test {
+
+	#if (sys || nodejs)
+	/** `W`, whose `dynamic` member `onDone` runs where `run` calls it. */
+	private static final STORE_SLOT: String =
+		'class W { public function new() {} public dynamic function onDone():Void {} public function run():Void onDone(); }';
+	#end
+
+	/**
+	 * A method assigned to a `dynamic` member runs where the member runs — here only in `W.run`, which a spawned thread
+	 * calls — and never at the assignment in `A`'s constructor, so the main thread reaches no sleep.
+	 */
+	@:pin('control') @:killer('M-TS-STORE-INERT')
+	public function testAValueStoredInADynamicMemberRunsWhereTheMemberRuns(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			STORE_SLOT,
+			'class A { final w:W = new W(); public function new() { w.onDone = done; Runner.create(w.run); }'
+			+ ' function done():Void Sys.sleep(1); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The member invoked on the main thread runs the stored value there, and the chain names the invocation, not the assignment. */
+	@:pin('control') @:killer('M-TS-STORE-UNMIRRORED')
+	public function testAStoredValueInvokedOnTheMainThreadIsReachedThroughTheInvoker(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'main thread reaches blocking "Sys.sleep": A.new -> W.run -> A.done -> Sys.sleep'
+			],
+			sleepFindings('', [
+				STORE_SLOT,
+				'class A { final w:W = new W(); public function new() { w.onDone = done; w.run(); } function done():Void Sys.sleep(1); }'
+			])
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A call of the member's name the graph cannot resolve may run the stored value anywhere: the assignment keeps its context. */
+	@:pin('control') @:killer('M-TS-STORE-SEALED-BLIND')
+	public function testAStoredValueAnUnresolvedCallMayRunKeepsTheAssignersContext(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'main thread reaches blocking "Sys.sleep" (also reachable from a background thread): A.new -> A.done -> Sys.sleep'
+				+ ' — repeated by A.new'
+			],
+			sleepFindings('', [
+				STORE_SLOT,
+				'class A { final w:W = new W(); public function new() { w.onDone = done; Runner.create(w.run); }'
+				+ ' function done():Void Sys.sleep(1); }',
+				'class B { public function new() {} public function poke(x:Dynamic):Void Runner.create(() -> x.onDone()); }'
+			])
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A handler handed to a `neverInvokes` target (`Disp.removeEventListener`) runs from no call there: `dispose` reaches nothing. */
+	@:pin('control') @:killer('M-TS-NEVER-INVOKES-BY-TARGET')
+	public function testAHandlerHandedToANeverInvokesTargetRunsNowhereFromThere(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('"neverInvokes":["Disp.removeEventListener"]', [
+			'class Disp { public function new() {} public function addEventListener(t:String, f:()->Void):Void {}'
+			+ ' public function removeEventListener(t:String, f:()->Void):Void {} }',
+			'class A { final d:Disp = new Disp(); public function new() '
+			+ 'Runner.create(listen); function listen():Void d.addEventListener("e", handler);'
+			+ ' public function dispose():Void d.removeEventListener("e", handler); function handler():Void Sys.sleep(1); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A bare `neverInvokes` name matches the call as written, even one the graph resolves to nothing (a library supertype's method). */
+	@:pin('control') @:killer('M-TS-NEVER-INVOKES-BY-NAME')
+	public function testABareNeverInvokesNameMatchesAnUnresolvedCall(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('"neverInvokes":["removeEventListener"]', [
+			'class A extends LibrarySprite { public function new() Runner.create(listen); function listen():Void addEventListener("e", '
+			+ 'handler); public function dispose():Void removeEventListener("e", handler); function handler():Void Sys.sleep(1); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The branch a `mainThreadChecks` call says runs off the main thread reaches nothing on it (`NetEntity2.get`'s shape). */
+	@:pin('control') @:killer('M-TS-MAIN-CHECK-IGNORED', 'M-TS-SITE-MEMO-BY-CALLER')
+	public function testTheOffMainBranchOfAMainThreadCheckIsNoMainStall(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
+			'class T { public static function isMain():Bool return true; }',
+			'class Api { public static function get():Void T.isMain() ? async() : blocked(); static function async():Void {}'
+			+ ' static function blocked():Void Sys.sleep(1); }',
+			'class A { public static function main():Void Api.get(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A check written as a property is read through its getter, the call the graph records at the read. */
+	@:pin('control') @:killer('M-TS-MAIN-CHECK-NO-GETTER')
+	public function testAMainThreadCheckPropertyIsReadThroughItsGetter(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
+			'class T { public static var isMain(get, never):Bool; static function get_isMain():Bool return true; }',
+			'class Api { public static function get():Void if (!T.isMain) Sys.sleep(1); }',
+			'class A { public static function main():Void Api.get(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `final done = check ? null : new Lock()` then `done != null && done.wait()`: the wait runs only off the main thread
+	 * (`LogWriter.truncate`).
+	 */
+	@:pin('control') @:killer('M-TS-NULL-LOCAL-UNREAD')
+	public function testANullTestOfALocalTheCheckChoseIsTheChecksAnswer(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
+			'class T { public static function isMain():Bool return true; }',
+			'class Lock { public function new() {} public function wait():Bool { Sys.sleep(1); return true; } }',
+			'class L { public static function truncate():Bool { final done:Null<Lock> = T.isMain() ? null : new Lock();'
+			+ ' return done != null && done.wait(); } }',
+			'class A { public static function main():Void L.truncate(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** What follows `if (T.isMain()) return;` in its block runs off the main thread only. */
+	@:pin('control') @:killer('M-TS-EARLY-EXIT-UNREAD')
+	public function testCodeAfterAnEarlyExitOnTheCheckRunsOnTheOtherThreads(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
+			'class T { public static function isMain():Bool return true; }',
+			'class Api { public static function put():Void { if (T.isMain()) return; Sys.sleep(1); } }',
+			'class A { public static function main():Void Api.put(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** `work(false)` from the main thread never runs `if (sleep) Sys.sleep(1)`; only the spawned `work(true)` does. */
+	@:pin('control') @:killer('M-TS-ARG-UNBOUND', 'M-TS-STATES-UNCONDITIONED')
+	public function testABoolLiteralArgumentDecidesTheCalleesBranch(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public static function work(sleep:Bool):Void if (sleep) nap(); static function nap():Void Sys.sleep(1); }',
+			'class A { public static function main():Void { W.work(false); Runner.create(() -> W.work(true)); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** An omitted argument takes the callee's `Bool` literal default. */
+	@:pin('control') @:killer('M-TS-DEFAULT-UNREAD')
+	public function testAnOmittedArgumentTakesItsBoolDefault(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public static function work(?n:Int, sleep:Bool = false):Void if (sleep) Sys.sleep(1); }',
+			'class A { public static function main():Void W.work(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A parameter handed on bare carries the value its own caller gave it (`getItemDataByItemPath(path, load)`). */
+	@:pin('control') @:killer('M-TS-ARG-PARAM-UNREAD', 'M-TS-STATES-UNBOUND')
+	public function testAParameterHandedOnCarriesItsValue(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public static function outer(load:Bool):Void inner(load); static function inner(load:Bool):Void if (load) '
+			+ 'Sys.sleep(1); }',
+			'class A { public static function main():Void W.outer(false); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `?fs` left out is null, so `if (fs != null) fs.save()` never runs (`ProjectModel.checkSharedCloudId`). */
+	@:pin('control') @:killer('M-TS-NULL-PARAM-UNREAD')
+	public function testAnOmittedOptionalParameterIsNull(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class Fs { public function new() {} public function save():Void Sys.sleep(1); }',
+			'class W { public static function go(?fs:Fs):Void if (fs != null) fs.save(); }',
+			'class A { public static function main():Void W.go(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `work(true)` with `?n:Int` first: Haxe skips `n` and hands `true` to `sleep`, so position alone does not bind it —
+	 * an argument whose written type is not the optional parameter's keeps every value unknown.
+	 */
+	@:pin('control') @:killer('M-TS-SKIP-UNCHECKED')
+	public function testAnArgumentHaxeMaySkipAnOptionalParameterForBindsNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.work -> Sys.sleep'], sleepFindings('', [
+			'class W { public static function work(?n:Int, sleep:Bool = false):Void if (sleep) Sys.sleep(1); }',
+			'class A { public static function main():Void W.work(true); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A call an `@:overload` of its callee takes hands the body its arguments by position, each parameter the annotation
+	 * skips padded with `null` (4.3.7 `-js`): `W.go(new Foo(), true)` takes `(?y:Int, x:Foo, flag:Bool)` — the own `x:Bar`
+	 * refuses a `Foo` — so the body's `x` is null there and `if (x == null)` runs; the own parameters' slots bind nothing.
+	 * A call its own signature takes (`W.go(new Bar())`: the annotation wants two arguments at least) binds them as written.
+	 */
+	@:pin('control') @:killer('M-TS-OVERLOAD-OWN-SELECTED') @:killer('M-TS-OVERLOAD-VERDICTS')
+	public function testACallAnOverloadTakesBindsNoneOfTheBodysParameters(): Void {
+		#if (sys || nodejs)
+		final types: Array<String> = [
+			'class Foo { public function new() {} }',
+			'class Bar { public function new() {} }',
+			'class W { @:overload(function(?y:Int, x:Foo, flag:Bool):Void {}) public static function go(x:Bar, ?flag:Bool):Void '
+				+ 'if (x == null) Sys.sleep(1); }'
+		];
+		Assert.same(
+			['main thread reaches blocking "Sys.sleep": A.main -> W.go -> Sys.sleep'],
+			sleepFindings('', types.concat(['class A { public static function main():Void W.go(new Foo(), true); }'])),
+			'the annotation binds'
+		);
+		Assert.same(
+			[], sleepFindings('', types.concat(['class A { public static function main():Void W.go(new Bar()); }'])),
+			'the own signature binds'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A parameter the body writes holds what the write gave it, not the argument: the branch stays reachable. */
+	@:pin('control') @:killer('M-TS-PARAM-WRITE-IGNORED')
+	public function testAWrittenParameterIsNotTracked(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.work -> Sys.sleep'], sleepFindings('', [
+			'class W { public static function work(sleep:Bool):Void { sleep = !sleep; if (sleep) Sys.sleep(1); } }',
+			'class A { public static function main():Void W.work(false); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `db.add(true)` under `_mutation` never takes `_batch` (`if (!batch)`): the main thread orders nothing backwards. The
+	 * spawned `add(false)` takes it holding nothing, so the take is no dead one.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-UNCONDITIONED')
+	public function testATakeABoolArgumentRulesOutOrdersNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[],
+			ThreadSafetyCheckTest.orderFindings(ThreadSafetyCheckTest.storeFixture(
+				'acquireMutation(); db.add(true); releaseMutation();',
+				'Runner.create(fs.download); Runner.create(() -> fs.db.add(false)); fs.save();'
+			))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A hold whose take a Bool argument rules out holds nothing: the spawned `op(true)` touches the tree with `_batch` free.
+	 * The main thread's `op(false)` takes both in the other order, one thread against itself.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-HOLD-UNCONDITIONED')
+	public function testAHoldABoolArgumentRulesOutHoldsNothingInOrder(): Void {
+		#if (sys || nodejs)
+		Assert.same([], ThreadSafetyCheckTest.orderFindings([
+			'class Tree { public final lock:Mutex = new Mutex(); public function new() {} public function touch():Void {'
+			+ ' lock.acquire(); lock.release(); } }',
+			'class Db { final _batch:Mutex = new Mutex(); final t:Tree = new Tree(); public function new() {}'
+			+ ' public function op(batch:Bool):Void { if (!batch) _batch.acquire(); t.touch(); if (!batch) _batch.release(); }'
+			+ ' public function ui():Void { t.lock.acquire(); _batch.acquire(); _batch.release(); t.lock.release(); }'
+			+ ' public static function main():Void { final db:Db = new Db(); Runner.create(() -> db.op(true)); db.op(false); db.ui(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A hold on the main thread across a call that blocks only off it (`if (!T.isMain()) Sys.sleep(1)`) blocks nothing. */
+	@:pin('control') @:killer('M-TS-TAINT-UNCONDITIONED')
+	public function testAHoldAcrossACallBlockingOnlyOnAnotherThreadIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same([], [
+			for (v in sleepFindings('"mainThreadChecks":["T.isMain"],"lockPairs":["Mutex.acquire/release"]', [
+				ThreadSafetyCheckTest.MUTEX,
+				'class T { public static function isMain():Bool return true; }',
+				'class A { final _m:Mutex = new Mutex(); public function new() {} public function ui():Void { _m.acquire(); put(); '
+				+ '_m.release(); } function put():Void if (!T.isMain()) Sys.sleep(1); public static function main():Void new A().ui(); }'
+			])) if (v.indexOf('holds') != -1) v
+		]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Under `closedWorld`, a method nothing in the run calls runs on no thread: its sleep is no main stall. */
+	@:pin('control') @:killer('M-TS-CLOSED-WORLD-UNREAD')
+	public function testUnderAClosedWorldAnUncalledMethodRunsNowhere(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('"closedWorld":true', [
+			'class A { public function new() {} public function unused():Void Sys.sleep(1); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A constructor nothing constructs is still an entry point under `closedWorld`: the runtime may make the object. */
+	@:pin('control') @:killer('M-TS-SEAL-CTOR')
+	public function testUnderAClosedWorldAConstructorStaysARoot(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['main thread reaches blocking "Sys.sleep": Main.new -> Sys.sleep'],
+			sleepFindings('"closedWorld":true', ['class Main { public function new() Sys.sleep(1); }'])
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** An `override` of a library supertype's method is the library's to call: it stays a root under `closedWorld`. */
+	@:pin('control') @:killer('M-TS-SEAL-OVERRIDE')
+	public function testUnderAClosedWorldAnOverrideStaysARoot(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.tick -> Sys.sleep'], sleepFindings('"closedWorld":true', [
+			'class A extends LibrarySprite { public function new() {} override function tick():Void Sys.sleep(1); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A method an interface the index does not hold may declare is reached through it: it stays a root under `closedWorld`. */
+	@:pin('control') @:killer('M-TS-SEAL-SUPERTYPE')
+	public function testUnderAClosedWorldAnUnindexedInterfacesMemberStaysARoot(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.tick -> Sys.sleep'], sleepFindings('"closedWorld":true', [
+			'class A implements LibraryTicker { public function new() {} public function tick():Void Sys.sleep(1); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A method an unresolved call may name (`x.tick()` on a `Dynamic`) may run from there: it stays a root under `closedWorld`. */
+	@:pin('control') @:killer('M-TS-SEAL-UNRESOLVED')
+	public function testUnderAClosedWorldAMethodAnUnresolvedCallMayNameStaysARoot(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.tick -> Sys.sleep'], sleepFindings('"closedWorld":true', [
+			'class A { public function new() {} public function tick():Void Sys.sleep(1); }',
+			'class B { public static function main():Void { final x:Dynamic = null; x.tick(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A hold in a method no thread runs holds nothing: no finding for `dead`, whose throw under `_m` never happens. */
+	@:pin('control') @:killer('M-TS-DEAD-HOLDS-KEPT')
+	public function testUnderAClosedWorldAHoldNoThreadRunsIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('"closedWorld":true,"lockPairs":["Mutex.acquire/release"]', [
+			ThreadSafetyCheckTest.MUTEX,
+			'class A { final _m:Mutex = new Mutex(); public function new() {} public function dead(n:Int):Void { _m.acquire();'
+			+ ' if (n > 0) throw "n"; _m.release(); } public function ui():Void { _m.acquire(); _m.release(); }'
+			+ ' public static function main():Void new A().ui(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `final` local bound to a condition decides a read of its name only where that read means it: in its block, after
+	 * it. A read outside the block or outside the lambda that declares it means the member (review r4 `A1`, `A2`).
+	 */
+	@:pin('control') @:killer('M-TS-COND-LOCAL-ANY-BLOCK')
+	public function testAFinalLocalDecidesOnlyTheReadsItBinds(): Void {
+		#if (sys || nodejs)
+		final reached: Array<String> = [
+			'main thread reaches blocking "Sys.sleep" (also reachable from a background thread): S.main -> S.save -> Sys.sleep'
+		];
+		Assert.same([], sleepFindings('', [savesUnder('final ready:Bool = !batch; if (ready) Sys.sleep(1);')]), 'the local');
+		Assert.same(reached, sleepFindings('', [
+			savesUnder('if (c) { final ready:Bool = !batch; use(ready); } if (ready) Sys.sleep(1);')
+		]), 'an inner block');
+		Assert.same(reached, sleepFindings('', [
+			savesUnder('final f:() -> Void = () -> { final ready:Bool = !batch; use(ready); }; f(); if (ready) Sys.sleep(1);')
+		]), 'a lambda');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	#if (sys || nodejs)
+	/** `S.save(batch)` runs `body`; the main thread saves a batch, a worker a single one. */
+	private static function savesUnder(body: String): String {
+		return 'class S { var ready:Bool = true; var c:Bool = true; public function new() {} function use(b:Bool):Void {}'
+			+ ' function save(batch:Bool):Void { $body }'
+			+ ' public static function main():Void { final s:S = new S(); s.save(true); Runner.create(() -> s.save(false)); } }';
+	}
+
+	/**
+	 * Every message of a `Sys.sleep` run over `sources` (plus `Runner`, whose `create` is a spawn), `extra` added to the
+	 * rule's options (`"key":value,…` or empty), with `library` held by the
+	 * resolution scope only — under builds setting `defines`, one per entry — sorted.
+	 */
+	private static function sleepFindings(
+		extra: String, sources: Array<String>, ?library: Array<String>, ?defines: Array<ReachConfiguration>
+	): Array<String> {
+		final found: Array<String> = [
+			for (v in ThreadSafetyCheckTest.violations(
+				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Lock.wait","Mutex.acquire"],"spawns":["Runner.create"]'
+				+ (extra.length > 0 ? ',$extra' : '') + '}}}',
+				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources), null, false, library, defines
+			)) v.message
+		];
+		found.sort(Reflect.compare);
+		return found;
+	}
+	#end
+
+	/** A `Bool` handed to a constructor decides its branches as one handed to a method does (`new W(false)`). */
+	@:pin('control') @:killer('M-TS-NEW-UNBOUND')
+	public function testAConstructionArgumentDecidesTheConstructorsBranch(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public function new(sleep:Bool) if (sleep) Sys.sleep(1); }',
+			'class A { public static function main():Void { new W(false); Runner.create(() -> new W(true)); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A type declaring no constructor is built by its supertype's, with the arguments `new` hands it. */
+	@:pin('control') @:killer('M-TS-NEW-UNBOUND')
+	public function testAnInheritedConstructorTakesTheArgumentsOfItsSupertypes(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public function new(sleep:Bool) if (sleep) Sys.sleep(1); }',
+			'class V extends W {}',
+			'class A { public static function main():Void new V(false); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `null` handed to a parameter with a default leaves it the default (4.3.7: `f(s:String = 'x')` called `f(null)`). */
+	@:pin('control') @:killer('M-TS-NULL-DEFAULT-UNREAD')
+	public function testANullArgumentToAParameterWithADefaultLeavesTheDefault(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.save -> Sys.sleep'], sleepFindings('', [
+			'class W { public static function save(s:String = \'x\'):Void if (s != null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.save(null); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An argument the shared walk types — arithmetic over a static constant of another type and a local — binds the
+	 * parameter of its own type, so the optional `String` after it stays out.
+	 */
+	@:pin('control') @:killer('M-WALK-ARITHMETIC-OFF', 'M-ARGTYPE-STATIC-OFF')
+	public function testAnArgumentTypedByArithmeticBindsItsOwnParameter(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class K { public static inline final WIDTH:Int = 3; }',
+			'class W { public static function make(?w:Float, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
+			'class A { public static function main():Void { final n:Int = 2; W.make(K.WIDTH * n - 1); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The string a call hands a parameter its callee's affix guard tests decides that guard: `.svg` ends with `.svg`. */
+	@:pin('control') @:killer('M-TS-AFFIX-UNREAD', 'M-TS-STRING-ATOM-OFF')
+	public function testAStringTheCalleesAffixGuardTestsDecidesIt(): Void {
+		#if (sys || nodejs)
+		final callee: String = 'using StringTools;\nclass W { public static function show(?hint:String):Void '
+			+ 'if (hint != null) { if (!hint.endsWith(\'.svg\')) Sys.sleep(1); } }';
+		Assert.same([], sleepFindings('', [
+			callee,
+			'class A { public static function main():Void { W.show(\'a.svg\'); W.show(); } }'
+		]));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.show -> Sys.sleep'], sleepFindings('', [
+			callee,
+			'class A { public static function main():Void W.show(\'a.png\'); }'
+		]), 'another string');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A later `using` that may bind the affix method itself leaves the guard undecided. */
+	@:pin('control') @:killer('M-TS-AFFIX-USINGS-UNCHECKED')
+	public function testAStringAffixGuardAnotherUsingMayBindDecidesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.show -> Sys.sleep'], sleepFindings('', [
+			'class Text { public static function endsWith(s:String, e:String):Bool return false; }',
+			'using StringTools;\nusing Text;\nclass W { public static function show(?hint:String):Void '
+			+ 'if (hint != null) { if (!hint.endsWith(\'.svg\')) Sys.sleep(1); } }',
+			'class A { public static function main():Void W.show(\'a.svg\'); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An abstract takes a `String` through `@:from` (`openfl.text.TextFormatAlign`), so a string literal binds it (4.3.7
+	 * binds `align`), the `String` after it stays `null` and the branch a `null` takes runs. An abstract the cast graph does
+	 * not model (one with a type parameter) may bind it or skip it: both bindings are followed, and the branch runs too.
+	 */
+	@:pin('control') @:killer('M-ARGFIT-UNKNOWN-MISFITS')
+	public function testAnArgumentAnAbstractMayTakeLeavesBothBindings(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
+			'abstract Align(Null<Int>) { @:from static function ofText(s:String):Align return null; }',
+			'class W { public static function make(?align:Align, ?hint:String):Void if (hint == null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.make(\'x\'); }'
+		]));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
+			'abstract Align<T>(Null<Int>) { @:from static function ofText<T>(s:String):Align<T> return null; }',
+			'class W { public static function make(?align:Align<Int>, ?hint:String):Void if (hint == null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.make(\'x\'); }'
+		]), 'an abstract the graph does not model');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A value of a plain class unifies with no unrelated class (`tUnification.ml`, `TInst, TInst`: the supertype chain never
+	 * reaches it), so the compiler skips the optional parameter of that class and binds the next (4.3.7): `W.make(v)` with `v: X` leaves
+	 * `y` null and hands `v` to `?x: X`, and the branch on a non-null `y` never runs. A `Y`, or a subclass of it, binds `y` and may run it.
+	 */
+	@:pin('control') @:killer('M-ARGFIT-PLAIN-OFF') @:killer('M-UNIFY-CHAIN-OPEN')
+	public function testAPlainClassArgumentSkipsAnOptionalParameterOfAnUnrelatedClass(): Void {
+		#if (sys || nodejs)
+		final model: Array<String> = [
+			'class X { public function new() {} }',
+			'class Y { public function new() {} }',
+			'class Z extends Y {}',
+			'class W { public static function make(?y:Y, ?x:X):Void if (y != null) Sys.sleep(1); }'
+		];
+		Assert.same([], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final v:X = new X(); W.make(v); } }'
+		])));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final v:Z = null; W.make(v); } }'
+		])), 'a subclass of Y binds y');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An argument of an abstract binds a parameter it casts to (`abstractCast.ml`, probed on Haxe 4.3.7): `W.make(u)` with
+	 * `u: U` and `abstract U(Int) to Float` binds `?w:Float`, so `hint` stays null and the branch never runs; an abstract
+	 * with an `@:to String` member skips `w` and binds `hint`.
+	 */
+	@:pin('control') @:killer('M-ARGFIT-CAST-OFF') @:killer('M-UNIFY-ABSTRACT-OFF') @:killer('M-ARGTYPE-HELD-GRAPH')
+	public function testAnAbstractArgumentBindsTheParameterItCastsTo(): Void {
+		#if (sys || nodejs)
+		final model: Array<String> = [
+			'abstract U(Int) to Float { public inline function new(i:Int) this = i; }',
+			'abstract V(Int) { public inline function new(i:Int) this = i;\n@:to function toText():String return \'v\'; }',
+			'class W { public static function make(?w:Float, ?hint:String, quiet:Bool = true):Void if (hint != null) Sys.sleep(1); }'
+		];
+		Assert.same([], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final u:U = new U(1); W.make(u); } }'
+		])));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final v:V = new V(1); W.make(v); } }'
+		])), 'an `@:to String` member binds hint');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Every way a call may bind decides a guard together: the literal binds the abstract (the `String` stays `null`) or the
+	 * `String` (an `.svg`), and neither way runs the branch. The abstract's `@:from String` sits under `#if`, so whether the
+	 * literal casts to it is another build's question: both ways are followed.
+	 */
+	@:pin('control') @:killer('M-TS-ARG-SETS-UNKNOWN')
+	public function testEveryWayACallMayBindDecidesTogether(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'abstract Align(Null<Int>) {\n#if !flash\n\t@:from static function ofText(s:String):Align return null;\n#end\n}',
+			'using StringTools;\nclass W { public static function make(?align:Align, ?hint:String, quiet:Bool = true):Void '
+			+ 'if (hint != null) { if (!hint.endsWith(\'.svg\')) Sys.sleep(1); } }',
+			'class A { public static function main():Void W.make(\'a.svg\', false); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A construction in a field's initializer binds its arguments too, though no function the tree holds runs it. */
+	@:pin('control') @:killer('M-TS-INIT-SITE-UNREAD')
+	public function testAFieldInitializersConstructionBindsItsArguments(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public function new(sleep:Bool) if (sleep) Sys.sleep(1); }',
+			'class A { final w:W = new W(false); public function new() {} public static function main():Void new A(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A function value written under a guard is handed on only where the guard holds: the reference to the lambda under
+	 * `if (blocking)` runs nothing under `blocking = false`, at the FIRST ask as at every later one — the site's facts were
+	 * read once and cached, and the first ask answered none.
+	 */
+	@:pin('control') @:killer('M-TS-LAMBDA-SITE-UNGUARDED')
+	public function testAFunctionValueWrittenUnderAGuardIsHandedOnOnlyWhereItHolds(): Void {
+		#if (sys || nodejs)
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final graph: CallGraph = CallGraph.build(QueryTestHelpers.rootModules([
+			'class Lib { public static function later(f:()->Void):Void f(); }',
+			'class Api { public static function get(blocking:Bool):Void if (blocking) Lib.later(() -> Sys.sleep(1)); }'
+		]), plugin);
+		final conditions: EdgeConditions = new EdgeConditions(graph, new FunctionTrees(graph, plugin), plugin, _ -> []);
+		final refs: Array<CallEdge> = graph.outEdges('Api.get').filter(e -> e.kind == Ref);
+		Assert.equals(1, refs.length);
+		Assert.equals(0, conditions.carried(refs[0], ArgumentValues.FALSE, ThreadSafety.CTX_MAIN), 'first ask');
+		Assert.equals(0, conditions.carried(refs[0], ArgumentValues.FALSE, ThreadSafety.CTX_MAIN), 'later ask');
+		Assert.equals(ThreadSafety.CTX_MAIN, conditions.carried(refs[0], ArgumentValues.TRUE, ThreadSafety.CTX_MAIN), 'the guard holding');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * One call handed a parameter of its caller binds it anew under each value the caller is reached with: `M.pass` hands
+	 * `W.run` a `true` on the main thread and a `false` on the spawned one, so only the main thread sleeps — the answer of
+	 * one valuation never stands in for another's.
+	 */
+	@:pin('control') @:killer('M-TS-BIND-MEMO-ONE-VALUATION')
+	public function testOneCallBindsAnewUnderEachValuationOfItsCaller(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'main thread reaches blocking "Sys.sleep": A.main -> M.pass -> W.run -> Sys.sleep'
+			],
+			sleepFindings('', [
+				'class W { public static function run(sleep:Bool):Void if (sleep) Sys.sleep(1); }',
+				'class M { public static function pass(b:Bool):Void W.run(b); }',
+				'class A { public static function main():Void { M.pass(true); Runner.create(() -> M.pass(false)); } }'
+			])
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An argument of a type the resolution scope holds and the call graph does not — the std's `UInt`, a library type — is
+	 * resolved there: `u: U` with a library `abstract U(Int) from Int to Float` binds `?w:Float` (4.3.7), so `hint` stays null;
+	 * a `V ... to String` skips `w` and binds `hint`.
+	 */
+	@:pin('control') @:killer('M-ARGTYPE-RESOLUTION-OFF')
+	public function testAnArgumentOfALibraryTypeResolvesInTheResolutionScope(): Void {
+		#if (sys || nodejs)
+		final library: Array<String> = [
+			'package lib;\nabstract U(Int) from Int to Float {}',
+			'package lib;\nabstract V(Int) from Int to String {}'
+		];
+		final callee: String = 'class W { public static function make(?w:Float, ?hint:String):Void if (hint != null) Sys.sleep(1); }';
+		Assert.same([], sleepFindings('', [
+			callee,
+			'import lib.U;\nclass A { public static function main():Void { final u:U = 1; W.make(u); } }'
+		], library));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
+			callee,
+			'import lib.V;\nclass A { public static function main():Void { final v:V = 1; W.make(v); } }'
+		], library), 'a `to String` skips `w`');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Arithmetic over an abstract is typed by the `@:op` overload it selects (`operators.ml`, probed on 4.3.7): `a - b` over
+	 * `U` returns `U`, which binds `?w:Float`; over `S` the overload declared FIRST takes the operands and returns `String`,
+	 * which binds `hint`.
+	 */
+	@:pin('control') @:killer('M-ARGTYPE-OVERLOAD-OFF') @:killer('M-OPS-FIRST-TAKEN')
+	public function testArithmeticOverAnAbstractIsTypedByItsOperatorOverload(): Void {
+		#if (sys || nodejs)
+		final model: Array<String> = [
+			'abstract U(Int) from Int to Float {\n@:op(A - B) static function sub(a:U, b:U):U return 0;\n}',
+			'abstract S(Int) from Int to Float {\n@:op(A - B) static function sub(a:S, b:S):String return \'s\';\n\n'
+				+ '@:op(A - B) static function subF(a:S, b:Float):S return 0;\n}',
+			'class W { public static function make(?w:Float, ?hint:String):Void if (hint != null) Sys.sleep(1); }'
+		];
+		Assert.same([], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final a:U = 1; final b:U = 2; W.make(a - b); } }'
+		])));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final a:S = 1; final b:S = 2; W.make(a - b); } }'
+		])), 'the first overload returns a String');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An enum-abstract value written with no type is of its enum abstract (4.3.7): `E.X` binds `?e:E`, so `hint` stays null.
+	 * Which declarations qualify, branch by branch, is `EnumValueTypeTest`'s.
+	 */
+	@:pin('control') @:killer('M-ENUM-VALUE-OFF')
+	public function testAnEnumAbstractValueIsOfItsAbstract(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'enum abstract E(Int) {\nvar X = 1;\n}',
+			'class W { public static function make(?w:Float, ?e:E, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.make(1, E.X); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The value of an enum abstract a `#if !flash` branch declares and a `typedef` to a target type replaces under `#else`
+	 * (`docs/typing-service.md`, step T6): under builds that never define `flash` the `typedef` is no build's, so `E.X` is of
+	 * `E` and binds `?e:E` (`hint` stays null); with no build known, or one defining `flash`, the value may be of the target
+	 * type, so it may bind `hint`.
+	 */
+	@:pin('control') @:killer('M-BUILDS-FILTER-OFF')
+	public function testAnEnumAbstractValueIsOfItsAbstractInEveryDeclaredBuild(): Void {
+		#if (sys || nodejs)
+		final library: Array<String> = [
+			'package lib;\n#if !flash\nenum abstract E(Int) {\nvar X = 1;\n}\n#else\ntypedef E = flash.Other;\n#end'
+		];
+		final sources: Array<String> = [
+			'import lib.E;\nclass W { public static function make(?w:Float, ?e:E, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
+			'import lib.E;\nclass A { public static function main():Void W.make(1, E.X); }'
+		];
+		final native: ReachConfiguration = {
+			name: 'native',
+			defined: ['cpp'],
+			everDefined: ['cpp'],
+			values: [],
+			compiled: [],
+			types: []
+		};
+		final flash: ReachConfiguration = {
+			name: 'flash',
+			defined: ['flash'],
+			everDefined: ['flash'],
+			values: [],
+			compiled: [],
+			types: []
+		};
+		final reached: Array<String> = ['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'];
+		Assert.same([], sleepFindings('', sources, library, [native]));
+		Assert.same(reached, sleepFindings('', sources, library), 'no build known');
+		Assert.same(reached, sleepFindings('', sources, library, [native, flash]), 'a build defining `flash`');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A field read bare — inherited — and a static read off a type name carry the type their declaration writes, resolved in
+	 * the declaration's file: `width: U` of `Base` and `K.WIDTH: U` both bind `?w:Float`.
+	 */
+	@:pin('control') @:killer('M-ARGTYPE-FIELD-FILE') @:killer('M-ARGTYPE-STATIC-FILE')
+	public function testAFieldsTypeResolvesWhereItsDeclarationWritesIt(): Void {
+		#if (sys || nodejs)
+		final model: Array<String> = [
+			'abstract U(Int) from Int to Float {}',
+			'class Base { public final width:U = 1; public function new() {} }',
+			'class K { public static inline final WIDTH:U = 3; }',
+			'class W { public static function make(?w:Float, ?hint:String):Void if (hint != null) Sys.sleep(1); }'
+		];
+		Assert.same(
+			[], sleepFindings('', model.concat(['class A extends Base { public function new() { super(); W.make(width); } }'])),
+			'an inherited field'
+		);
+		Assert.same(
+			[], sleepFindings('', model.concat(['class A { public static function main():Void W.make(K.WIDTH); }'])),
+			'a static off its type'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+}

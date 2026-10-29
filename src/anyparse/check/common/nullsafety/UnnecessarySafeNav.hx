@@ -1,0 +1,79 @@
+package anyparse.check.common.nullsafety;
+
+import anyparse.query.DeclaredNullity;
+import anyparse.query.SymbolIndex;
+
+/**
+ * Flags a null-safe field access (`a?.b`) whose receiver is provably non-null, so
+ * the `?.` guard cannot ever short-circuit — a plain `.` access is equivalent.
+ *
+ * ## Type-aware, conservative
+ *
+ * The receiver is proven non-null only when it is a plain identifier whose declared
+ * type is recovered via `TypeInfoProvider.declaredTypes` AND is either a value type
+ * the language can never null (`RefShape.nonNullableTypeNames`), or any non-`Null<…>`
+ * nominal type while the enclosing type is null-checked (`RefShape.nullSafetyMetaName`).
+ * Everything else — an unannotated local, a `Null<…>` / `Dynamic` operand, an optional
+ * parameter, or a non-identifier receiver (a chained `a.b?.c` / `a()?.c`) — keeps the
+ * conservative default and is NOT flagged. The shared prover is
+ * `TypeResolver.isProvablyNonNull`, also used by `unnecessary-null-check` and
+ * `redundant-null-coalescing`. Macro-reification subtrees (`RefShape.opaqueKinds`) are
+ * not descended into.
+ *
+ * Unlike `unnecessary-null-check`, the rewrite is unambiguous: dropping the `?` from a
+ * provably non-null `?.` preserves semantics exactly, so `fix` rewrites `?.` to `.`.
+ * `Severity.Info`.
+ */
+@:nullSafety(Strict)
+final class UnnecessarySafeNav extends RuleBase {
+
+	public function new() {
+		super('unnecessary-safe-nav', 'a null-safe access (?.) whose receiver is provably non-null', RuleCategory.NullSafety);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final shape: RefShape = plugin.refShape();
+		final safeNavKind: Null<String> = shape.nullSafeAccessKind;
+		if (safeNavKind == null) return [];
+		final kind: String = safeNavKind;
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
+			final root: QueryNode = tree;
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);
+			function walk(node: QueryNode): Void {
+				if (opaqueKinds.contains(node.kind)) return;
+				if (node.kind == kind && node.children.length == 1) {
+					final span: Null<Span> = node.span;
+					final receiver: QueryNode = node.children[0];
+					if (span != null && TypeResolver.isProvablyNonNull(receiver, root, shape, types)) violations.push({
+						file: entry.file,
+						span: span,
+						rule: 'unnecessary-safe-nav',
+						severity: Severity.Info,
+						message: 'null-safe access is redundant — receiver is never null'
+					});
+				}
+				for (c in node.children) walk(c);
+			}
+			walk(tree);
+		});
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		final marker: String = '?.';
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final rel: Int = source.substring(span.from, span.to).indexOf(marker);
+			if (rel < 0) continue;
+			final at: Int = span.from + rel;
+			edits.push({ span: new Span(at, at + marker.length), text: '.' });
+		}
+		return edits;
+	}
+
+}

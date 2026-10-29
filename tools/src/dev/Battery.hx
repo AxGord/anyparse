@@ -36,7 +36,7 @@ final class Battery {
 	 * a file joining is a regression and one leaving is progress, and either is recorded here with the measurement.
 	 */
 	public static final XCONFIG_ONE_PASS: Array<String> = [
-		'src/anyparse/check/UnnecessarySwitch.hx',
+		'src/anyparse/check/common/control/UnnecessarySwitch.hx',
 		'src/anyparse/macro/ParseDispatchLowering.hx'
 	];
 

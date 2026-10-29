@@ -169,7 +169,7 @@ final class ShardPlan {
 		'unit.check.oracle.OracleGenerationTest' => { ms: 16137, tests: 45 },
 		'unit.check.facts.TypedFactsProbeTest' => { ms: 14707, tests: 30 },
 		'unit.check.FactsFixGateE2ETest' => { ms: 14493, tests: 10 },
-		'unit.check.PreferStaticExtensionFactsTest' => { ms: 13904, tests: 22 },
+		'unit.check.common.expressions.PreferStaticExtensionFactsTest' => { ms: 13904, tests: 22 },
 		'unit.query.ApqAstIntegrationTest' => { ms: 10632, tests: 1 },
 		'unit.check.facts.FactsTypeOracleE2ETest' => { ms: 10521, tests: 3 },
 		'unit.check.oracle.PendingRunsTest' => { ms: 7064, tests: 3 },
@@ -180,14 +180,14 @@ final class ShardPlan {
 		'unit.check.oracle.CompilerOracleE2ETest' => { ms: 4132, tests: 13 },
 		'unit.MutationArmAddressTest' => { ms: 3153, tests: 4 },
 		'unit.check.oracle.OracleRunMemoTest' => { ms: 3084, tests: 7 },
-		'unit.check.ExplicitLocalTypeOracleAbstainTest' => { ms: 3012, tests: 14 },
-		'unit.check.ExplicitLocalTypeOracleE2ETest' => { ms: 2864, tests: 4 },
-		'unit.check.AvoidDynamicRiskyFixE2ETest' => { ms: 2726, tests: 7 },
-		'unit.check.ExplicitTypeReturnOracleTest' => { ms: 2183, tests: 11 },
+		'unit.check.common.types.ExplicitLocalTypeOracleAbstainTest' => { ms: 3012, tests: 14 },
+		'unit.check.common.types.ExplicitLocalTypeOracleE2ETest' => { ms: 2864, tests: 4 },
+		'unit.check.common.types.AvoidDynamicRiskyFixE2ETest' => { ms: 2726, tests: 7 },
+		'unit.check.common.types.ExplicitTypeReturnOracleTest' => { ms: 2183, tests: 11 },
 		'unit.check.oracle.OracleRunWiringTest' => { ms: 2030, tests: 5 },
 		'unit.check.oracle.OracleCacheTest' => { ms: 1980, tests: 11 },
-		'unit.check.AvoidDynamicBagOracleE2ETest' => { ms: 1918, tests: 2 },
-		'unit.check.PreferInlineOracleTest' => { ms: 1772, tests: 7 }
+		'unit.check.common.types.AvoidDynamicBagOracleE2ETest' => { ms: 1918, tests: 2 },
+		'unit.check.common.members.PreferInlineOracleTest' => { ms: 1772, tests: 7 }
 	];
 
 	/**

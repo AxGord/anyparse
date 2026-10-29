@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
@@ -141,7 +142,8 @@ final class ModuleMoveBindings {
 			}
 			final seen: Array<String> = [];
 			final byPath: Array<Int> = modulePathSites(pre, before, textBefore[probe.before], plugin);
-			for (i => use in was) if (!byPath.contains(use.at)) {
+			final asValue: Array<Int> = valueBoundSites(textBefore[probe.before], probe.names, plugin);
+			for (i => use in was) if (!byPath.contains(use.at) && !asValue.contains(use.at)) {
 				final then: Meaning = meaning(pre, before, use.name, use.at, mapped);
 				final nowMeaning: Meaning = meaning(post, after, use.name, now[i].at, module -> module);
 				final readable: Bool = then.key != UNKNOWN || !projectTypes.exists(use.name);
@@ -370,6 +372,22 @@ final class ModuleMoveBindings {
 		if (text == null) return [];
 		final upper: Bool = plugin.refShape().typeNamesUpperInitial == true;
 		return ModulePathTokens.bareNames(text, ModulePathTokens.inertSpans(text, plugin), upper).filter(o -> names.contains(o.name));
+	}
+
+	/**
+	 * Where a name of `names` is written in `text` as a value the file itself declares or binds — a local, a parameter, a
+	 * member, an `enum abstract` value, and each such declaration's own name: a value binding shadows a type of that name, so
+	 * no relocation changes what the name means there.
+	 */
+	private static function valueBoundSites(text: Null<String>, names: Array<String>, plugin: GrammarPlugin): Array<Int> {
+		if (text == null) return [];
+		final source: String = text;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		return tree == null ? [] : [
+			for (name => hits in Refs.findMulti(
+				names, tree, plugin.refShape()
+			)) for (h in hits) if (h.kind == RefKind.Decl || h.bindingSpan != null) SourceText.identTokenOffset(source, h.span, name)
+		];
 	}
 
 }

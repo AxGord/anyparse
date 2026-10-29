@@ -1,0 +1,271 @@
+package anyparse.check.common.unused;
+
+import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.NoAutofix;
+import anyparse.query.IndexScope;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
+
+/**
+ * Flags a call in STATEMENT position whose result is a PROVABLY non-`Void` value
+ * that is discarded — a possibly-lost return value the author should either use or
+ * intentionally ignore. `Info`; report-only (the fix is an intent decision, not a
+ * mechanical edit, so there is no autofix).
+ *
+ * ## Provable non-`Void` only — no guessing
+ *
+ * The callee's return type is resolved exclusively through the existing type
+ * infrastructure, and an UNKNOWN return is always a safe miss:
+ *
+ *  - a plain-identifier call `f()` — the callee binds (scope resolver) to a
+ *    same-file function / local function whose `TypeInfoProvider.returnTypes` outer
+ *    nominal is read; failing a lexical binding (an unqualified implicit-`this`
+ *    method), the enclosing type's member is resolved via `MemberLookup.returnNominalOf`;
+ *  - a `recv.method()` call — `recv`'s declared type (`TypeResolver.identTypeName`) or,
+ *    unbound, its own name as a static receiver, keys `MemberLookup.returnNominalOf`;
+ *  - a `this.method()` call — the enclosing type keys `MemberLookup.returnNominalOf`.
+ *
+ * A callee with no recovered return nominal (unannotated / inferred / stdlib type
+ * absent from the project index / a complex non-identifier receiver / an unresolved
+ * binding), a `Void` return, or the untyped escape hatches (`Dynamic` / `Any`) are
+ * all skipped — never a "probably". Only a `callKind` that is the DIRECT child of an
+ * `exprStatementKind` counts as statement position: the same call as an RHS, an
+ * argument, a `return` value, or a condition keeps its result and is not flagged, and
+ * only the OUTERMOST call of a chain (`a().b()`) is the discarded one.
+ *
+ * ## The index is the REPORT SCOPE, and the finding COUNT depends on it
+ *
+ * `run` builds its `SymbolIndex` from the files it was HANDED, so "absent from the project
+ * index" above is a statement about the lint's report scope, not about the project: a call
+ * from a test file into a `src/` type (`Cli.run()`, `plugin.parseFile()`) resolves only when
+ * both trees are in one run. Neither answer is wrong; the narrow one is blind, and every miss is a miss, never a false
+ * positive.
+ *
+ * The obvious repair — resolve through `IndexScope.resolutionIndexOf`, the way
+ * `prefer-static-extension` and the guard family do, so the project's declared
+ * `resolutionRoots` are honoured at any scope — is REFUSED. That index is report UNION resolutionRoots UNION resolutionLibs UNION the Haxe
+ * std, undivided, and wiring it in floods a test tree with `utest.Assert.*` calls whose `Bool`
+ * result the framework's own idiom discards. The `unused-return-value.allow` list cannot express "the
+ * `utest.Assert` type", only "anything named `equals`", which would silence the rule
+ * everywhere.
+ *
+ * So the fix belongs one level up, in whoever owns `ResolutionScope`:
+ * `Cli.readResolutionLibrary` folds the project's OWN `resolutionRoots` and the external
+ * `resolutionLibs` into one undivided `library` array, so a check cannot ask for "my
+ * project, wider than the report scope" without also getting every library. Split those two
+ * and this check resolves against report UNION roots.
+ *
+ * ## Side-effect idioms — a configurable allowlist
+ *
+ * Mutators whose non-`Void` result is idiomatically discarded (`push` returns the new
+ * length, `remove` a `Bool`, …) are exempt by CALL NAME via `DEFAULT_ALLOW`; a project
+ * extends it through `apqlint.json` (`unused-return-value.allow`, a list of names ADDED
+ * to the default). The match is on the called name for every receiver form.
+ */
+@:nullSafety(Strict)
+final class UnusedReturnValue extends RuleBase implements ConfigAware implements NoAutofix {
+
+	/**
+	 * Call names whose non-`Void` result is idiomatically discarded — in-place
+	 * mutators / membership tests where dropping the return is the norm (`push` /
+	 * `unshift` new length, `pop` / `shift` / `splice` the removed element(s),
+	 * `remove` / `exists` a `Bool`, `add` / `set` / `insert` / `sort` / `resize`
+	 * collection mutations). A project adds to this via `apqlint.json`.
+	 */
+	private static final DEFAULT_ALLOW: Array<String> = [
+		'push',
+		'pop',
+		'shift',
+		'unshift',
+		'splice',
+		'remove',
+		'set',
+		'add',
+		'sort',
+		'resize',
+		'insert',
+		'exists'
+	];
+
+	/** Return outer-nominals that carry no discardable value — `Void` (none) and the untyped escape hatches. */
+	private static final NON_VALUE_RETURNS: Array<String> = ['Void', 'Dynamic', 'Any'];
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
+	public function new() {
+		super(
+			'unused-return-value', 'a call whose provably non-Void result is discarded in statement position — a possibly-lost value',
+			RuleCategory.Unused
+		);
+	}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final shape: RefShape = plugin.refShape();
+		final identKind: String = shape.identKind;
+		final callKind: Null<String> = shape.callKind;
+		final exprStmtKind: Null<String> = shape.exprStatementKind;
+		if (callKind == null || exprStmtKind == null) return [];
+		final callK: String = callKind;
+		final stmtK: String = exprStmtKind;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		if (provider == null) return [];
+		final index: SymbolIndex = IndexScope.report(files, plugin);
+		final ctx: Ctx = {
+			shape: shape,
+			identKind: identKind,
+			callKind: callK,
+			exprStmtKind: stmtK,
+			fieldAccessKind: shape.fieldAccessKind,
+			selfReferenceText: shape.selfReferenceText,
+			opaqueKinds: shape.opaqueKinds ?? [],
+			index: index
+		};
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
+			final extra: Null<Array<String>> = LintConfig.resolveWith(_resolveConfig, entry.file)
+				.stringListOption('unused-return-value', 'allow');
+			final allow: Array<String> = extra == null ? DEFAULT_ALLOW : DEFAULT_ALLOW.concat(extra);
+			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
+			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
+			walk(violations, entry.file, tree, tree, declaredTypes, returnTypes, allow, ctx);
+		});
+	}
+
+	/** No safe single edit — using or ignoring the result is an author decision. */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'using the result and deliberately discarding it are opposite intents, and a call in statement position says nothing'
+			+ ' about which was meant';
+	}
+
+	/**
+	 * Walk `node`, flagging a discarded statement-position call. A call is flagged only
+	 * when its `ExprStmt` is NOT the last child of its block: a non-final block / case /
+	 * body expression's value is always dropped in Haxe, so the discard is PROVEN. The
+	 * LAST statement may instead BE the block's / case's / non-`Void` function's value
+	 * (`return switch { case A: f(); }`), so it is conservatively skipped — a discard
+	 * there is not provable without full value-context typing.
+	 */
+	private static function walk(
+		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>,
+		returnTypes: Map<Int, String>, allow: Array<String>, ctx: Ctx
+	): Void {
+		if (ctx.opaqueKinds.contains(node.kind)) return;
+		final last: Int = node.children.length - 1;
+		for (i in 0...node.children.length) {
+			final child: QueryNode = node.children[i];
+			if (i < last && child.kind == ctx.exprStmtKind && child.children.length >= 1 && child.children[0].kind == ctx.callKind) {
+				final hit: Null<{ span: Span, message: String }> = inspectCall(
+					child.children[0], root, declaredTypes, returnTypes, allow, ctx
+				);
+				if (hit != null) out.push({
+					file: file,
+					span: hit.span,
+					rule: 'unused-return-value',
+					severity: Severity.Info,
+					message: hit.message
+				});
+			}
+			walk(out, file, child, root, declaredTypes, returnTypes, allow, ctx);
+		}
+	}
+
+	/**
+	 * The finding for a discarded statement-position call, or null when the callee's
+	 * return is unknown / `Void` / untyped / allowlisted, or the receiver is not a
+	 * plain identifier.
+	 */
+	private static function inspectCall(
+		call: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, allow: Array<String>, ctx: Ctx
+	): Null<{ span: Span, message: String }> {
+		final span: Null<Span> = call.span;
+		if (span == null || call.children.length < 1) return null;
+		final at: Span = span;
+		final resolved: Null<{ nominal: String, desc: String }> = resolveReturn(
+			call.children[0], root, declaredTypes, returnTypes, allow, ctx
+		);
+		return resolved == null ? null : {
+			span: at,
+			message: 'the ${resolved.nominal} result of ${resolved.desc} is discarded — a possibly-lost value'
+		};
+	}
+
+	/**
+	 * The proven non-`Void` return nominal + a describing text for `callee`, or null when
+	 * the callee is allowlisted, its return is unknown / `Void` / untyped, or its receiver
+	 * is not a plain identifier.
+	 */
+	private static function resolveReturn(
+		callee: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, allow: Array<String>, ctx: Ctx
+	): Null<{ nominal: String, desc: String }> {
+		if (callee.kind == ctx.identKind) {
+			final name: Null<String> = callee.name;
+			if (name == null || allow.contains(name)) return null;
+			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(callee, root, ctx.shape);
+			// A lexical binding (same-file function / local function) reads `returnTypes`;
+			// an unqualified implicit-`this` method resolves against the enclosing type.
+			final nominal: Null<String> = bindingFrom != null ? returnTypes[bindingFrom] : memberReturn(root, callee.span, name, ctx);
+			return discarded(nominal, '${name}()');
+		}
+		final fieldAccessKind: Null<String> = ctx.fieldAccessKind;
+		if (fieldAccessKind == null || callee.kind != fieldAccessKind || callee.children.length != 1) return null;
+		final method: Null<String> = callee.name;
+		if (method == null || allow.contains(method)) return null;
+		final recv: QueryNode = callee.children[0];
+		if (recv.kind != ctx.identKind) return null;
+		final recvName: Null<String> = recv.name;
+		if (recvName == null) return null;
+		final selfText: Null<String> = ctx.selfReferenceText;
+		final nominal: Null<String> = if (selfText != null && recvName == selfText)
+			memberReturn(root, callee.span, method, ctx);
+		else {
+			// An instance receiver resolves through its declared type; an unbound name is a
+			// static / type receiver, looked up by its own name.
+			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, ctx.shape);
+			final lookupType: Null<String> = bindingFrom == null ? recvName : declaredTypes[bindingFrom];
+			lookupType == null ? null : ctx.index.typing.members.returnNominalOf(lookupType, method);
+		}
+		return discarded(nominal, '${recvName}.${method}()');
+	}
+
+	/** The enclosing type's `member` return nominal (for `this.` / implicit-`this` calls), or null. */
+	private static function memberReturn(root: QueryNode, span: Null<Span>, member: String, ctx: Ctx): Null<String> {
+		final enclosing: Null<String> = enclosingTypeName(root, span);
+		return enclosing == null ? null : ctx.index.typing.members.returnNominalOf(enclosing, member);
+	}
+
+	/** The `{nominal, desc}` finding when `nominal` is a discardable value, or null for `Void` / untyped / unknown. */
+	private static function discarded(nominal: Null<String>, desc: String): Null<{ nominal: String, desc: String }> {
+		if (nominal == null || NON_VALUE_RETURNS.contains(nominal)) return null;
+		final n: String = nominal;
+		return { nominal: n, desc: desc };
+	}
+
+	/** The name of the innermost type declaration of `tree` holding `span` (`TypeResolver.enclosingTypeDeclAt`), or null. */
+	private static function enclosingTypeName(tree: QueryNode, span: Null<Span>): Null<String> {
+		return span == null ? null : TypeResolver.enclosingTypeDeclAt(tree, span.from, span.to)?.name;
+	}
+
+}
+
+/** Resolved per-run constants threaded through the recursive walk. */
+private typedef Ctx = {
+	var shape: RefShape;
+	var identKind: String;
+	var callKind: String;
+	var exprStmtKind: String;
+	var fieldAccessKind: Null<String>;
+	var selfReferenceText: Null<String>;
+	var opaqueKinds: Array<String>;
+	var index: SymbolIndex;
+};

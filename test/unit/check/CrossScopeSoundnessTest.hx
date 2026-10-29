@@ -594,9 +594,9 @@ class CrossScopeSoundnessTest extends Test {
 	 * For a name-keyed reflection question, WHICH half of the declared scope holds the reflective
 	 * string must not decide the answer.
 	 *
-	 * The fork this pins was two seams answering one question. `check/Naming`'s reflection scan asked
+	 * The fork this pins was two seams answering one question. `check/common/naming/Naming`'s reflection scan asked
 	 * `IndexScope.widestScopeIndex` — report UNION the library, so an installed haxelib and the std
-	 * counted — while `check/UnusedPrivate`'s asked `resolutionProjectSourcesOf`, report UNION the
+	 * counted — while `check/common/unused/UnusedPrivate`'s asked `resolutionProjectSourcesOf`, report UNION the
 	 * declared `resolutionRoots` and nothing third-party. Both err toward refusal, so neither was a
 	 * correctness bug on its own; what they were is two incompatible precedents for the next site.
 	 *

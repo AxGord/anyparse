@@ -1,11 +1,11 @@
 package unit.check.scan;
 
 import anyparse.check.Check;
-import anyparse.check.CollapsibleIf;
-import anyparse.check.EmptyStatement;
-import anyparse.check.InvertNegatedIfElse;
-import anyparse.check.PreferSwitch;
-import anyparse.check.RedundantElse;
+import anyparse.check.common.control.CollapsibleIf;
+import anyparse.check.common.control.InvertNegatedIfElse;
+import anyparse.check.common.control.PreferSwitch;
+import anyparse.check.common.control.RedundantElse;
+import anyparse.check.common.expressions.EmptyStatement;
 import anyparse.query.CanonicalEdit;
 
 /**

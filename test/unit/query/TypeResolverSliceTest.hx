@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.check.UnusedLocal;
+import anyparse.check.common.unused.UnusedLocal;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;

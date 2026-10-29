@@ -1,0 +1,1001 @@
+package anyparse.check.common.imports;
+
+import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.CrossFileEdits;
+import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.VolatileMessage;
+import anyparse.check.oracle.OracleCoverage;
+import anyparse.check.scan.UsingSites;
+import anyparse.query.AddImport;
+import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ConfigFinder;
+import anyparse.query.ReachLiveness.ReachBuilds;
+import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndexHost;
+import anyparse.query.TypeNameBinding;
+import anyparse.query.cli.CliArgs;
+import haxe.ds.ArraySort;
+import haxe.io.Path;
+
+/**
+ * One statement an ambient source could carry: its module `path`, whether it is a `using`, and the
+ * simple name it binds. The name travels with the path because every soundness question is about
+ * the NAME and every edit is about the path.
+ */
+private typedef Hoistable = {
+	final path: String;
+	final isUsing: Bool;
+	final simple: String;
+
+	/**
+	 * EVERY simple type name the statement brings into scope, not only its leaf: a statement naming a
+	 * module binds every type that module declares, and each of them is a name the addition could
+	 * silently retarget in a module that never spelled the statement.
+	 */
+	final names: Array<String>;
+}
+
+/**
+ * One module that SPELLS a statement, and where: the `file` the removal lands in and the `span` of
+ * the statement itself. A plan carries a list of these because a hoist is one insertion and many
+ * deletions, each of which a finding has to be able to point at.
+ */
+private typedef Spelled = {
+	final file: String;
+	final span: Span;
+}
+
+/**
+ * One decided hoist: `statement` moves into `site`, out of each `from` module. `holders` of
+ * `governed` modules already had it, which is what the threshold was read against.
+ */
+private typedef HoistPlan = {
+	final site: String;
+	final statement: Hoistable;
+	final from: Array<Spelled>;
+	final governed: Int;
+	final holders: Int;
+}
+
+/**
+ * One run's view of the directories: the candidate `sites` DEEPEST FIRST, the modules each governs,
+ * each module's own index entry and its ladder of possible ambient positions, the statements every
+ * EXISTING ambient source already carries, and what this run has decided to put at each site.
+ */
+private typedef HoistContext = {
+	final sites: Array<String>;
+	final governedAt: Map<String, Array<String>>;
+	final infoOf: Map<String, FileInfo>;
+	final ladderOf: Map<String, Array<String>>;
+	final existingAt: Map<String, Array<ImportInfo>>;
+	final decided: Map<String, Array<Hoistable>>;
+
+	/** Every non-private top-level type name each module declares — what a statement naming one brings into scope. */
+	final publicTypes: Map<String, Array<String>>;
+
+	/** What each statement binds, by rank — the reader the import-moving checks share. */
+	final bindings: ImportBindings;
+
+	/**
+	 * Whether `using <path>` and `using <other>` may both offer one access the module `file` writes (`UsingSites.contested`)
+	 * — the only place moving one of them past the other can change what binds; true for a module the run holds no source of.
+	 */
+	final contested: (file:String, path:String, other:String) -> Bool;
+
+	/**
+	 * The builds parsing each file, as indices into the run's builds, by the file's canonical path — or null when the run
+	 * knows no complete list of builds that each name every file they read (`SymbolIndexHost.reachBuilds`). Read on first
+	 * demand: it costs one probe compile per build.
+	 */
+	final parsingBuilds: () -> Null<Map<String, Array<Int>>>;
+
+	/**
+	 * Whether a statement `parsingBuilds` cannot answer for is held rather than vouched for by classpath evidence: the run
+	 * declared its build list complete, so that evidence vouches for nothing a build of the list reads.
+	 */
+	final holdsWithoutBuilds: () -> Bool;
+}
+
+/**
+ * One site's census: every candidate statement in discovery order, how many of the site's modules
+ * already HOLD it (spelled or received from the chain), and the modules it can be lifted out of.
+ */
+private typedef HoistCensus = {
+	final keys: Array<String>;
+	final byKey: Map<String, Hoistable>;
+	final holders: Map<String, Int>;
+	final spellers: Map<String, Array<Spelled>>;
+}
+
+/**
+ * One decided SINK: `statement` leaves the ambient source `site`, where it stands at `span`, and is spelled in
+ * each module of `into` — the readers that do not spell it already. `readers` of `governed` modules read it.
+ */
+private typedef SinkPlan = {
+	final site: String;
+	final statement: Hoistable;
+	final span: Span;
+	final readers: Int;
+	final governed: Int;
+	final into: Array<String>;
+}
+
+/** Both directions of one run's decision, taken from one view of the directories so they cannot disagree. */
+private typedef Plans = {
+	final hoists: Array<HoistPlan>;
+	final sinks: Array<SinkPlan>;
+}
+
+/**
+ * Flags an `import` (or an allow-listed `using`) that stands in at least a threshold share of the
+ * modules one directory's AMBIENT SOURCE would govern, and moves it there: the fix creates or
+ * extends that source and deletes the statement from every module it hoisted from.
+ *
+ * DEFAULT OFF — where a project keeps its shared imports is a convention, not a defect.
+ *
+ * The reverse direction is the same decision: a statement an EXISTING ambient source carries that too
+ * few of its modules read — `unused-import`'s readers, asked one module at a time — goes back into those
+ * readers and leaves the source, which the fix deletes when nothing but whitespace stays. Its threshold
+ * sits strictly below the hoist's, so no share is on both sides of the two.
+ *
+ * The positions an ambient source could occupy come from the grammar, and the modules one governs
+ * come from the same seam the rules judging such a file already read, so there is one notion of "the
+ * modules of this directory" and no second directory walk. A site is weighed only when the run holds
+ * every module it governs, and the widest position is weighed first, so a statement lands as high as
+ * its share reaches and a nested position takes only what its parents did not.
+ *
+ * The candidate criterion is POSITIVE: a plain import or an allow-listed `using`, unguarded, whose
+ * simple name has one declaration reachable by any band the ambient statement would outrank, in a
+ * chain that is bounded and carries neither a guarded statement nor a second binder of that name. A
+ * module's own declaration and its own explicit import both outrank the addition, so a module that
+ * already has the right one is simply unaffected.
+ *
+ * A `using` binds a name AND a position: hoisting one out of a module demotes it below every own
+ * `using` that stays, so it is removed only where no other `using` in scope contests one of its
+ * accesses (`UsingSites.contested`, asked of the typing service per access).
+ * Adding one to a module that had none is safe in the other direction — the new candidates sit below
+ * every own `using` and below every field.
+ *
+ * The refusals, the nesting rule and the config keys: `docs/cli-query-tool.md`.
+ */
+@:nullSafety(Strict)
+final class HoistCommonImport extends RuleBase implements CrossFileFix implements ConfigAware implements DefaultOff
+		implements VolatileMessage {
+
+	/** The share of a directory's modules a statement must stand in, as a percentage. */
+	public static inline final DEFAULT_THRESHOLD: Int = 50;
+
+	/** How many modules a directory must govern before a share of them means anything. */
+	public static inline final DEFAULT_MIN_MODULES: Int = 3;
+
+	/**
+	 * The share of a directory's modules BELOW which an ambient statement goes back into the modules that read
+	 * it, as a percentage. Only a value strictly below the hoist threshold is honoured, so no share is ever on
+	 * both sides and the two directions cannot move one statement back and forth.
+	 */
+	public static inline final DEFAULT_SINK_THRESHOLD: Int = 25;
+
+	private static inline final RULE_ID: String = 'hoist-common-import';
+
+	/** The denominator a percentage threshold is read against. */
+	private static inline final PERCENT: Int = 100;
+
+	/** The keyword an `import` statement's identity opens with. */
+	private static inline final IMPORT_WORD: String = 'import';
+
+	/** The keyword a `using` statement's identity opens with. */
+	private static inline final USING_WORD: String = 'using';
+
+	/** The fragment before the SHARE in a message — the anchor `messageIdentity` masks from. */
+	private static inline final SHARE_LEAD: String = ' stands in ';
+
+	/** The fragment before the READER share in a sink message — the second anchor `messageIdentity` masks from. */
+	private static inline final READ_LEAD: String = ' is read by ';
+
+	/** The `using` modules allowed in an ambient source unless a project names its own list. */
+	private static final DEFAULT_USING_ALLOW: Array<String> = ['StringTools', 'Lambda'];
+
+	/** The linter's memoised per-file config resolver; null when run outside it. */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
+	public function new() {
+		super(
+			RULE_ID,
+			'an import most modules of a directory spell, which the directory\'s ambient source could carry — or an ambient one too '
+			+ 'few of them read, which belongs back in its readers',
+			RuleCategory.Imports
+		);
+	}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
+
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskAfter(MessageMask.maskAfter(message, SHARE_LEAD), READ_LEAD);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final plans: Plans = planFor(files, plugin, null);
+		final out: Array<Violation> = [
+			for (plan in plans.hoists) for (spelled in plan.from)
+				{
+					file: spelled.file,
+					span: spelled.span,
+					rule: RULE_ID,
+					severity: Severity.Warning,
+					message: '${plan.statement.isUsing ? USING_WORD : IMPORT_WORD} \'${plan.statement.path}\'$SHARE_LEAD${plan.holders} of '
+						+ '${plan.governed} module(s) governed by \'${plan.site}\' — it belongs there'
+				}
+		];
+		for (plan in plans.sinks) out.push({
+			file: plan.site,
+			span: plan.span,
+			rule: RULE_ID,
+			severity: Severity.Warning,
+			message: 'ambient ${plan.statement.isUsing ? USING_WORD : IMPORT_WORD} \'${plan.statement.path}\'$READ_LEAD${plan.readers} of '
+			+ '${plan.governed} module(s) it governs — it belongs back in the modules that read it'
+		});
+		return out;
+	}
+
+	/** The whole fix is cross-file — a hoist is one ambient source plus a deletion in every module it lifted from. */
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		return [];
+	}
+
+	public function crossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<Array<CrossFileEdits>> {
+		final sourceOf: Map<String, String> = [];
+		for (entry in files) sourceOf[entry.file] = entry.source;
+		final plans: Plans = planFor(files, plugin, index);
+		final out: Array<Array<CrossFileEdits>> = [];
+		final sites: Array<String> = [];
+		for (plan in plans.hoists) if (!sites.contains(plan.site)) sites.push(plan.site);
+		for (site in sites) {
+			final slice: Null<Array<CrossFileEdits>> = siteSlice(site, plans.hoists, violations, sourceOf, plugin);
+			if (slice != null) out.push(slice);
+		}
+		// A sink waits a pass when a hoist of this one writes one of its files: two slices rewriting one file
+		// would hand the driver overlapping edits. Neither direction moves a statement the other does.
+		final sunk: Null<Array<CrossFileEdits>> = sinkSlice(plans.sinks, violations, sourceOf, plugin);
+		if (sunk != null && !sunk.exists(part -> out.exists(slice -> slice.exists(other -> other.file == part.file)))) out.push(sunk);
+		return out;
+	}
+
+	/**
+	 * Every hoist this file set supports, deepest site first and with a statement an ancestor site
+	 * also takes dropped from its descendants — and every sink, from the same view of the directories.
+	 *
+	 * `run` and `crossFileFix` both derive from here, so the report and the edits cannot disagree
+	 * about which statement moves where.
+	 */
+	private function planFor(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: Null<SymbolIndex>): Plans {
+		final report: SymbolIndex = index ?? IndexScope.report(files, plugin);
+		final resolve: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
+		final ctx: HoistContext = contextOf(report, plugin, files);
+		final plans: Array<HoistPlan> = [];
+		for (site in ctx.sites) planSite(site, ctx, resolve, plans);
+		final sinks: Array<SinkPlan> = [];
+		for (site in ctx.sites) sinkSite(site, ctx, report, plugin, sinks);
+		return {
+			hoists: plans,
+			sinks: sinks
+		};
+	}
+
+	/**
+	 * Weigh one site and append every statement that earns a place in it, recording the decision so a
+	 * parent site counts a module served by this one as having the statement.
+	 */
+	private function planSite(site: String, ctx: HoistContext, resolve: SymbolIndex, plans: Array<HoistPlan>): Void {
+		final governed: Array<String> = ctx.governedAt[site] ?? [];
+		final cfg: LintConfig = LintConfig.resolveWith(_resolveConfig, site);
+		if (governed.length < (cfg.intOption(RULE_ID, 'minModules') ?? DEFAULT_MIN_MODULES)) return;
+		final threshold: Int = cfg.intOption(RULE_ID, 'threshold') ?? DEFAULT_THRESHOLD;
+		final allow: Array<String> = cfg.stringListOption(RULE_ID, 'usingAllowList') ?? DEFAULT_USING_ALLOW;
+		final above: Array<String> = providedAtOrAbove(site, ctx);
+		final census: HoistCensus = censusOf(governed, ctx, allow);
+		for (key in census.keys) {
+			final statement: Null<Hoistable> = census.byKey[key];
+			final lifted: Null<Array<Spelled>> = census.spellers[key];
+			final count: Int = census.holders[key] ?? 0;
+			if (statement == null || lifted == null || lifted.length == 0 || above.contains(key)) continue;
+			if (count * PERCENT >= threshold * governed.length) take(statement, lifted, count, site, ctx, resolve, plans);
+		}
+	}
+
+	/**
+	 * Weigh one EXISTING ambient source and append every statement too few of its modules read — under the
+	 * gates a hoist is weighed under, and a threshold strictly below the hoist's.
+	 *
+	 * A statement no module reads is left to `unused-import`, whose fix deletes it outright.
+	 */
+	private function sinkSite(site: String, ctx: HoistContext, report: SymbolIndex, plugin: GrammarPlugin, sinks: Array<SinkPlan>): Void {
+		final info: Null<FileInfo> = ctx.infoOf[site];
+		final governed: Array<String> = ctx.governedAt[site] ?? [];
+		if (info == null || info.imports.length == 0) return;
+		final cfg: LintConfig = LintConfig.resolveWith(_resolveConfig, site);
+		final sink: Int = cfg.intOption(RULE_ID, 'sinkThreshold') ?? DEFAULT_SINK_THRESHOLD;
+		if (governed.length < (cfg.intOption(RULE_ID, 'minModules') ?? DEFAULT_MIN_MODULES)) return;
+		if (sink >= (cfg.intOption(RULE_ID, 'threshold') ?? DEFAULT_THRESHOLD)) return;
+		final readers: Null<Array<Array<String>>> = UnusedImport.ambientReaders(info, plugin, report);
+		if (readers == null) return;
+		final allow: Array<String> = cfg.stringListOption(RULE_ID, 'usingAllowList') ?? DEFAULT_USING_ALLOW;
+		for (i in 0...info.imports.length) {
+			final candidate: Null<Hoistable> = hoistableOf(info.imports[i], allow, ctx.publicTypes, ctx.bindings);
+			final reading: Array<String> = readers[i];
+			if (candidate == null || reading.length == 0 || reading.length * PERCENT >= sink * governed.length) continue;
+			// Re-bound: strict null-safety does not carry the narrowing past the next statement into a literal.
+			final statement: Hoistable = candidate;
+			if (!sinkSound(statement, site, reading, ctx)) continue;
+			final key: String = keyOf(statement);
+			sinks.push({
+				site: site,
+				statement: statement,
+				span: info.imports[i].span,
+				readers: reading.length,
+				governed: governed.length,
+				into: [
+					for (file in reading) if (!(ctx.infoOf[file]?.imports ?? []).exists(imp -> !imp.guarded && statementKeyOf(imp) == key))
+						file
+				]
+			});
+		}
+	}
+
+	/** One statement's identity: the kind and the path, which is all an ambient source carries. */
+	private static inline function keyOf(statement: Hoistable): String {
+		return '${statement.isUsing ? USING_WORD : IMPORT_WORD}|${statement.path}';
+	}
+
+	/** One import statement's hoist identity, whatever its shape — for asking whether a chain already carries it. */
+	private static inline function statementKeyOf(imp: ImportInfo): String {
+		return '${imp.kind == ImportKind.Using ? USING_WORD : IMPORT_WORD}|${imp.raw}';
+	}
+
+	/** The classpath entry half of an `originOf` answer. */
+	private static inline function classpathOf(origin: String): String {
+		return origin.substring(0, origin.lastIndexOf('|'));
+	}
+
+	/**
+	 * Every candidate statement under `governed`, with the count of modules that HOLD it and the ones
+	 * it may be lifted out of.
+	 *
+	 * A module HOLDS a statement whether it spells it or receives it from an existing ambient source —
+	 * a module the chain already serves is not one that is missing the statement. It is a source of
+	 * removals only where the statement may leave it.
+	 */
+	private static function censusOf(governed: Array<String>, ctx: HoistContext, allow: Array<String>): HoistCensus {
+		final census: HoistCensus = {
+			keys: [],
+			byKey: [],
+			holders: [],
+			spellers: []
+		};
+		for (file in governed) {
+			final info: Null<FileInfo> = ctx.infoOf[file];
+			if (info == null) continue;
+			final held: Array<String> = inForce(info);
+			for (imp in info.imports) {
+				final statement: Null<Hoistable> = hoistableOf(imp, allow, ctx.publicTypes, ctx.bindings);
+				if (statement == null) continue;
+				final key: String = keyOf(statement);
+				if (!census.byKey.exists(key)) {
+					census.byKey[key] = statement;
+					census.keys.push(key);
+				}
+				if (!held.contains(key)) held.push(key);
+				if (removable(info, statement, ctx)) noteSpeller(census, key, file, imp.span);
+			}
+			for (key in held) census.holders[key] = (census.holders[key] ?? 0) + 1;
+		}
+		return census;
+	}
+
+	/** Record that `file` spells `key` at `span` and may be lifted out of. */
+	private static function noteSpeller(census: HoistCensus, key: String, file: String, span: Span): Void {
+		var out: Null<Array<Spelled>> = census.spellers[key];
+		if (out == null) {
+			out = [];
+			census.spellers[key] = out;
+		}
+		out.push({
+			file: file,
+			span: span
+		});
+	}
+
+	/**
+	 * One site's whole edit set — the ambient source created or extended, plus the deletion in each
+	 * module — or null when nothing survives justification or the writer refuses the source.
+	 *
+	 * Only a deletion a violation IN THIS CALL asks for is emitted, and a statement left with no
+	 * surviving deletion is dropped from the source too: an ambient statement nothing was lifted
+	 * out of is an edit no finding asked for.
+	 */
+	private static function siteSlice(
+		site: String, plans: Array<HoistPlan>, violations: Array<Violation>, sourceOf: Map<String, String>, plugin: GrammarPlugin
+	): Null<Array<CrossFileEdits>> {
+		final removals: Array<CrossFileEdits> = [];
+		final statements: Array<Hoistable> = [];
+		for (plan in plans) if (plan.site == site) {
+			final asked: Array<Spelled> = plan.from.filter(f -> justified(violations, f));
+			if (asked.length == 0) continue;
+			statements.push(plan.statement);
+			for (f in asked) removals.push({
+				file: f.file,
+				edits: [
+					{
+						span: f.span,
+						text: ''
+					}
+				]
+			});
+		}
+		if (statements.length == 0) return null;
+		final existing: Null<String> = sourceOf[site];
+		final built: Null<String> = builtAmbientSource(site, existing, statements, plugin);
+		if (built == null || built == existing) return null;
+		final head: CrossFileEdits = existing == null
+			? {
+				file: site,
+				edits: [],
+				create: built
+			}
+			: {
+				file: site,
+				edits: [
+					{
+						span: new Span(0, existing.length),
+						text: built
+					}
+				]
+			};
+		return [head].concat(removals);
+	}
+
+	/**
+	 * Every justified sink as ONE slice set, or null when none survives: each ambient source without the
+	 * statements that leave it — DELETED when nothing but whitespace stays — and each reader with the
+	 * statements it now spells. One set, because two sources may sink into one reader. A reader takes the
+	 * lines the sink inserted and nothing else, since another rule's cross-file edits of the same reader in
+	 * the same pass are merged with them.
+	 *
+	 * A statement some reader cannot take, the writer refusing that file, stays where it is in every file:
+	 * removing it from the source without spelling it in each reader would leave that reader unbound.
+	 */
+	private static function sinkSlice(
+		sinks: Array<SinkPlan>, violations: Array<Violation>, sourceOf: Map<String, String>, plugin: GrammarPlugin
+	): Null<Array<CrossFileEdits>> {
+		final textOf: Map<String, String> = [];
+		final readers: Array<String> = [];
+		final leaving: Map<String, Array<Span>> = [];
+		final sites: Array<String> = [];
+		for (plan in sinks) if (justified(violations, { file: plan.site, span: plan.span })) {
+			final next: Null<Map<String, String>> = spelledInto(plan, textOf, sourceOf, plugin);
+			if (next == null) continue;
+			for (file => text in next) {
+				textOf[file] = text;
+				if (!readers.contains(file)) readers.push(file);
+			}
+			final spans: Array<Span> = leaving[plan.site] ?? [];
+			spans.push(plan.span);
+			leaving[plan.site] = spans;
+			if (!sites.contains(plan.site)) sites.push(plan.site);
+		}
+		if (sites.length == 0) return null;
+		final out: Array<CrossFileEdits> = [
+			for (site in sites) {
+				final spans: Array<Span> = leaving[site] ?? [];
+				remainsBlank(sourceOf[site] ?? '', spans)
+					? {
+						file: site,
+						edits: [],
+						remove: true
+					}
+					: {
+						file: site,
+						edits: [for (span in spans) { span: span, text: '' }]
+					};
+			}
+		];
+		for (file in readers) out.push({
+			file: file,
+			edits: [narrowedEdit(sourceOf[file] ?? '', textOf[file] ?? '')]
+		});
+		return out;
+	}
+
+	/**
+	 * The texts of `plan`'s receiving readers with its statement added, each over its text so far in `textOf`
+	 * — or null when the writer refuses one, since then none may take it.
+	 */
+	private static function spelledInto(
+		plan: SinkPlan, textOf: Map<String, String>, sourceOf: Map<String, String>, plugin: GrammarPlugin
+	): Null<Map<String, String>> {
+		final next: Map<String, String> = [];
+		for (file in plan.into) {
+			final current: Null<String> = textOf[file] ?? sourceOf[file];
+			if (current == null) return null;
+			switch AddImport.addImport(
+				current, plan.statement.path, plan.statement.isUsing, false, plugin, CliArgs.discoverFormatConfig(file)
+			) {
+				case EditResult.Ok(text, _):
+					next[file] = text;
+				case EditResult.Err(_):
+					return null;
+			}
+		}
+		return next;
+	}
+
+	/** Whether `source` holds nothing but whitespace once every span of `spans` is cut out of it. */
+	private static function remainsBlank(source: String, spans: Array<Span>): Bool {
+		final ordered: Array<Span> = spans.copy();
+		ordered.sort((a, b) -> b.from - a.from);
+		var rest: String = source;
+		for (span in ordered) rest = rest.substring(0, span.from) + rest.substr(span.to);
+		return rest.trim().length == 0;
+	}
+
+	/** The one edit taking `before` to `after`, their common prefix and suffix left out of its span. */
+	private static function narrowedEdit(before: String, after: String): FixEdit {
+		final limit: Int = before.length < after.length ? before.length : after.length;
+		var head: Int = 0;
+		while (head < limit && before.charCodeAt(head) == after.charCodeAt(head)) head++;
+		var tail: Int = 0;
+		while (tail < limit - head && before.charCodeAt(before.length - 1 - tail) == after.charCodeAt(after.length - 1 - tail)) tail++;
+		return {
+			span: new Span(head, before.length - tail),
+			text: after.substring(head, after.length - tail)
+		};
+	}
+
+	/** Whether a violation of this rule in THIS call asks for `spelled`'s deletion. */
+	private static function justified(violations: Array<Violation>, spelled: Spelled): Bool {
+		return violations.exists(v -> {
+			final span: Null<Span> = v.span;
+			return v.rule == RULE_ID && v.file == spelled.file && span != null && span.from == spelled.span.from
+				&& span.to == spelled.span.to;
+		});
+	}
+
+	/**
+	 * The ambient source's whole text with `statements` added, or null when the writer refuses one.
+	 *
+	 * Built by the same seat every inserting fixer uses (`AddImport`), statement by statement, so an
+	 * existing source keeps its own statements and their order and a new one is placed by the
+	 * project's own import ordering rather than by this rule's idea of it.
+	 */
+	private static function builtAmbientSource(
+		site: String, existing: Null<String>, statements: Array<Hoistable>, plugin: GrammarPlugin
+	): Null<String> {
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(site);
+		// An EMPTY source is not at the writer's fixed point, so the inserting seat refuses it: a new
+		// source is SEEDED with its first statement instead, and every later one is placed by that seat
+		// exactly as it would be in an existing file. Imports lead, so the seed is one whenever there is
+		// one — a `using` opens its own block below them. The usings go in REVERSE: the seat puts each
+		// fresh `using` ABOVE the header's first one (the lowest static-extension priority), so
+		// inserting them last-first is what leaves them in their source order — which is their priority.
+		final usings: Array<Hoistable> = statements.filter(s -> s.isUsing);
+		usings.reverse();
+		final ordered: Array<Hoistable> = statements.filter(s -> !s.isUsing).concat(usings);
+		if (ordered.length == 0) return null;
+		var text: String = existing ?? '${ordered[0].isUsing ? USING_WORD : IMPORT_WORD} ${ordered[0].path};\n';
+		for (i in (existing == null ? 1 : 0) ... ordered.length) {
+			final statement: Hoistable = ordered[i];
+			switch AddImport.addImport(text, statement.path, statement.isUsing, false, plugin, optsJson) {
+				case EditResult.Ok(next, _):
+					text = next;
+				case EditResult.Err(_):
+					return null;
+			}
+		}
+		return text;
+	}
+
+	/**
+	 * The run's directory view: every candidate position, the modules each governs, and what the
+	 * chain already carries.
+	 *
+	 * A site is DROPPED unless the run holds every module it governs. The share is a property of the
+	 * directory, so a run holding half of it would decide on half the evidence — and the governed set
+	 * is the seam's, never a walk of this rule's own.
+	 */
+	private static function contextOf(
+		report: SymbolIndex, plugin: GrammarPlugin, files: Array<{ file: String, source: String }>
+	): HoistContext {
+		final infoOf: Map<String, FileInfo> = [];
+		final ladderOf: Map<String, Array<String>> = [];
+		final existingAt: Map<String, Array<ImportInfo>> = [];
+		final order: Array<String> = [];
+		for (info in report.allFiles()) {
+			infoOf[info.file] = info;
+			for (group in info.ambientImports) if (!existingAt.exists(group.file)) existingAt[group.file] = group.imports;
+			final ladder: Array<String> = plugin.ambientImportSites(info.file, info.pkg);
+			if (ladder.length == 0) continue;
+			ladderOf[info.file] = ladder;
+			for (site in ladder) if (!order.contains(site)) order.push(site);
+		}
+		final governedAt: Map<String, Array<String>> = [];
+		for (site in order) {
+			final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(site);
+			if (governance == null || !governance.bounded) continue;
+			final names: Array<String> = [for (governed in governance.governs) governed.file];
+			if (names.length > 0 && names.foreach(name -> infoOf.exists(name))) governedAt[site] = names;
+		}
+		final sites: Array<String> = [for (site in order) if (governedAt.exists(site)) site];
+		// SHALLOWEST first, by governed COUNT: a site below another governs a SUBSET of its modules, so
+		// the count orders the containment with no path arithmetic. Weighing the widest position first
+		// is what makes a statement land as HIGH as its share reaches while a nested position takes
+		// only what its parents did not — and the two together leave no statement in two sources of one
+		// chain, which is the shape that would read as a redundant import of its own parent. A tie is a
+		// parent whose every module sits under one child: discovery lists a module's ladder nearest
+		// first, so the LATER of two tied sites is the ancestor and goes first, which also keeps the
+		// plan deterministic.
+		ArraySort.sort(sites, (a, b) -> {
+			final wider: Int = (governedAt[b] ?? []).length - (governedAt[a] ?? []).length;
+			wider != 0 ? wider : order.indexOf(b) - order.indexOf(a);
+		});
+		final widest: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
+		return {
+			sites: sites,
+			governedAt: governedAt,
+			infoOf: infoOf,
+			ladderOf: ladderOf,
+			existingAt: existingAt,
+			decided: [],
+			publicTypes: SymbolIndex.publicTypesByModule(widest),
+			bindings: new ImportBindings(() -> widest, plugin),
+			contested: contestOf(files, plugin, report, widest),
+			parsingBuilds: parsingBuildsOf(plugin),
+			holdsWithoutBuilds: () -> plugin is SymbolIndexHost && (cast plugin: SymbolIndexHost).holdForUnknownBuilds(RULE_ID)
+		};
+	}
+
+	/**
+	 * The run's `HoistContext.contested`: one `UsingSites` per module, made on the first question about it, and a module's
+	 * method set from the std probe or `widest`; a module the run holds no source of contests every rival.
+	 */
+	private static function contestOf(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, report: SymbolIndex, widest: SymbolIndex
+	): (String, String, String) -> Bool {
+		final sourceOf: Map<String, String> = [];
+		for (entry in files) sourceOf[entry.file] = entry.source;
+		final members: Map<String, Array<String>> = UsingSites.membersByModule(widest);
+		final methodsOf: (String) -> Null<Array<String>> = raw -> plugin.knownExtensionMethods(raw) ?? members[raw];
+		final sitesOf: Map<String, UsingSites> = [];
+		function contested(file: String, path: String, other: String): Bool {
+			final source: Null<String> = sourceOf[file];
+			if (source == null) return true;
+			final sites: UsingSites = sitesOf[file] ?? new UsingSites(source, plugin, file, report);
+			sitesOf[file] = sites;
+			return sites.contested(path, other, methodsOf);
+		}
+		return contested;
+	}
+
+	/** Record one sound statement's hoist into `site`, so a parent site counts the modules this one serves. */
+	private static function take(
+		statement: Hoistable, lifted: Array<Spelled>, holders: Int, site: String, ctx: HoistContext, resolve: SymbolIndex,
+		plans: Array<HoistPlan>
+	): Void {
+		if (!hoistSound(statement, site, ctx, resolve)) return;
+		final taken: Array<Hoistable> = ctx.decided[site] ?? [];
+		taken.push(statement);
+		ctx.decided[site] = taken;
+		plans.push({
+			site: site,
+			statement: statement,
+			from: lifted,
+			governed: (ctx.governedAt[site] ?? []).length,
+			holders: holders
+		});
+	}
+
+	/**
+	 * Every statement already in force AT or ABOVE `site`. A statement the chain above a directory
+	 * already provides binds nothing new there, and proposing it again is how a nested ambient source
+	 * comes to repeat its own parent.
+	 */
+	private static function providedAtOrAbove(site: String, ctx: HoistContext): Array<String> {
+		final governed: Array<String> = ctx.governedAt[site] ?? [];
+		if (governed.length == 0) return [];
+		final ladder: Array<String> = ctx.ladderOf[governed[0]] ?? [];
+		// The DECIDED half is what keeps a nested source from repeating its own parent: the widest
+		// position is weighed first, so by the time a nested one is, every statement an ancestor took is
+		// already in force under it.
+		final at: Int = ladder.indexOf(site);
+		return at < 0
+			? []
+			: [
+				for (i in at ... ladder.length) for (imp in ctx.existingAt[ladder[i]] ?? []) statementKeyOf(imp)
+			].concat([
+				for (i in at ... ladder.length) for (statement in ctx.decided[ladder[i]] ?? []) keyOf(statement)
+			]);
+	}
+
+	/**
+	 * Every statement `info` already receives without spelling it — from an EXISTING ambient source
+	 * anywhere in its chain, which is what keeps a module served by a nested source from reading as one
+	 * that is missing the statement.
+	 */
+	private static function inForce(info: FileInfo): Array<String> {
+		return [
+			for (group in info.ambientImports) for (imp in group.imports) statementKeyOf(imp)
+		];
+	}
+
+	/**
+	 * Whether adding `statement` to `site` leaves every name in every governed module bound as before.
+	 *
+	 * The evidence, each part positive: the name has ONE declaration in the resolution scope and the
+	 * path names it; every governed module's chain is bounded and carries neither a guarded statement
+	 * nor a binder of that name; and no module binds the name twice, since within one file the last
+	 * binder wins. A `using` needs one more — no ambient source may carry a `using` already, or this
+	 * site would insert itself above one and re-rank the extensions.
+	 */
+	private static function hoistSound(statement: Hoistable, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
+		if (retargetsSomeModule(statement, site, ctx, resolve) || !reachesEveryReceiver(statement, site, ctx, resolve)) return false;
+		for (file in ctx.governedAt[site] ?? []) {
+			final info: Null<FileInfo> = ctx.infoOf[file];
+			if (info == null || !info.ambientImportsBounded) return false;
+			for (group in info.ambientImports) for (imp in group.imports) {
+				if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;
+				if (statement.isUsing && imp.kind == ImportKind.Using && ctx.contested(file, statement.path, imp.raw)) return false;
+			}
+			var binders: Int = 0;
+			for (imp in info.imports) if (SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) {
+				if (imp.guarded) return false;
+				binders++;
+			}
+			if (binders > 1) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether spelling `statement` in each of its `readers` leaves every name it binds there bound as before —
+	 * the evidence a removal from `site` needs, since a module that reads nothing of it loses nothing.
+	 *
+	 * Own explicit statements outrank the chain and a nearer source outranks a farther one, so a reader holding
+	 * ANY other binder of one of its names, own or ambient, could be reading that one, and the own copy would
+	 * now outrank it: refused rather than proven. A wildcard is no rival, since an explicit statement outranks
+	 * every wildcard from either position. A `using` binds a position as well: the own copy lands ABOVE every
+	 * own `using`, the lowest rank, which keeps its rank against them, and is refused where the chain carries
+	 * another `using` it would now outrank. A chain carrying a guarded statement withholds the verdict, as it
+	 * does for a hoist.
+	 */
+	private static function sinkSound(statement: Hoistable, site: String, readers: Array<String>, ctx: HoistContext): Bool {
+		final key: String = keyOf(statement);
+		// A chain names its sources the way its walk found them, which need not be how the run spells the site.
+		final at: String = ConfigFinder.absolute(site);
+		for (file in readers) {
+			final info: Null<FileInfo> = ctx.infoOf[file];
+			if (info == null || !info.ambientImportsBounded) return false;
+			for (imp in info.imports) if (
+				!(statementKeyOf(imp) == key && !imp.guarded) && SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)
+			)
+				return false;
+			for (group in info.ambientImports) for (imp in group.imports) if (
+				ConfigFinder.absolute(group.file) != at || statementKeyOf(imp) != key
+			) {
+				if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;
+				if (statement.isUsing && imp.kind == ImportKind.Using && ctx.contested(file, statement.path, imp.raw)) return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Whether adding `statement` could make its simple name mean something ELSE in any module `site`
+	 * governs.
+	 *
+	 * An ambient explicit import outranks exactly three bands a module does not spell — its own
+	 * package, the root package, and its own WILDCARD imports — each checked against the compiler. So
+	 * a second declaration of the name is a retarget only where one of those bands carries it, and a
+	 * namesake in an unrelated package of a library no governed module reaches is none. The path must
+	 * also name exactly ONE declaration: two files claiming one module path leave nothing to compare.
+	 */
+	private static function retargetsSomeModule(statement: Hoistable, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
+		final targets: Array<ResolvedType> = resolve.refs.resolveQualifiedRefAll(statement.path);
+		if (targets.length != 1) return true;
+		// EVERY name the statement brings, never only its leaf. A module import carries its siblings,
+		// and a sibling is the name nobody wrote and nobody would look at.
+		final owner: String = targets[0].file.file;
+		return statement.names.exists(name -> retargetsByName(name, owner, site, ctx, resolve));
+	}
+
+	/** Whether a declaration of `name` other than the one at `owner` reaches a governed module through a band the statement outranks. */
+	private static function retargetsByName(name: String, owner: String, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
+		// A module-PRIVATE rival is not a rival: it is visible by simple name only inside its own
+		// module, so no band this statement outranks can carry it to another file.
+		final rivals: Array<FileInfo> = resolve.refs.declaringFiles(name)
+			.filter(found -> found.file != owner && found.types.exists(t -> t.name == name && !t.isPrivate));
+		if (rivals.length == 0) return false;
+		for (file in ctx.governedAt[site] ?? []) {
+			final info: Null<FileInfo> = ctx.infoOf[file];
+			if (info == null) return true;
+			for (rival in rivals) if (rival.pkg == info.pkg || rival.pkg == '' || reachesByWildcard(info, rival)) return true;
+		}
+		return false;
+	}
+
+	/** Whether one of `info`'s PACKAGE wildcards (`p.*`) reaches `rival`'s package — a static wildcard brings members, never a type. */
+	private static function reachesByWildcard(info: FileInfo, rival: FileInfo): Bool {
+		return info.imports.exists(
+			imp -> imp.kind == ImportKind.Wild && imp.raw.endsWith('.*') && imp.raw.substr(0, imp.raw.length - 2) == rival.pkg
+		);
+	}
+
+	/**
+	 * Whether every module `site` governs can resolve `statement` in every build that compiles it.
+	 *
+	 * A module that already holds the statement does. One that does not RECEIVES it, and a build compiling a receiver without
+	 * the classpath entry the statement's module comes from stops on the ambient source, not on any code. A run that knows
+	 * every build the project has asks them (`parsedWithEveryReceiver`), and holds when it cannot. Otherwise a second
+	 * `-main` beside the oracle's build is exactly such a build, which no compile this run makes would see, so a receiver is
+	 * vouched for only by positive evidence: it lives under the same classpath entry, or it already holds an unguarded
+	 * statement resolving under that entry AND top-level package — one entry can carry packages a target refuses, as a
+	 * language library carries per-target ones.
+	 */
+	private static function reachesEveryReceiver(statement: Hoistable, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
+		final targets: Array<ResolvedType> = resolve.refs.resolveQualifiedRefAll(statement.path);
+		if (targets.length != 1) return false;
+		final origin: String = originOf(targets[0].file);
+		// Every module holds the implicit tier without a statement, so the entry and package it comes from vouch for any receiver.
+		if (resolve.refs.names.implicitImportFiles().exists(found -> originOf(found) == origin)) return true;
+		final parsing: Null<Map<String, Array<Int>>> = ctx.parsingBuilds();
+		if (parsing != null) return parsedWithEveryReceiver(targets[0].file.file, site, ctx, parsing);
+		if (ctx.holdsWithoutBuilds()) return false;
+		final key: String = keyOf(statement);
+		for (file in ctx.governedAt[site] ?? []) {
+			final info: Null<FileInfo> = ctx.infoOf[file];
+			if (info == null) return false;
+			if (classpathOf(origin) == classpathOf(originOf(info))) continue;
+			final held: Array<ImportInfo> = info.imports.concat([for (group in info.ambientImports) for (imp in group.imports) imp]);
+			if (!held.exists(imp -> !imp.guarded && (statementKeyOf(imp) == key || resolvesInto(imp, origin, resolve)))) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether every build that parses a module `site` governs parses `module`, the file declaring the statement's module, as
+	 * well: that build already resolves the module and everything the module imports. A module no build parses is compiled by
+	 * none of the builds the project declared to be all of its builds, so it loses nothing.
+	 */
+	private static function parsedWithEveryReceiver(
+		module: String, site: String, ctx: HoistContext, parsing: Map<String, Array<Int>>
+	): Bool {
+		final cwd: String = Sys.getCwd();
+		final carrying: Array<Int> = parsing[OracleCoverage.canonical(cwd, module)] ?? [];
+		for (file in ctx.governedAt[site] ?? []) {
+			final readers: Array<Int> = parsing[OracleCoverage.canonical(cwd, file)] ?? [];
+			if (!readers.foreach(build -> carrying.contains(build))) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * `HoistContext.parsingBuilds` for the run `plugin` hosts, asked of its builds once and on first demand; a plugin that hosts
+	 * no run knows no builds.
+	 */
+	private static function parsingBuildsOf(plugin: GrammarPlugin): () -> Null<Map<String, Array<Int>>> {
+		if (!(plugin is SymbolIndexHost)) return () -> null;
+		final host: SymbolIndexHost = cast plugin;
+		var held: Null<Map<String, Array<Int>>> = null;
+		var asked: Bool = false;
+		return () -> {
+			if (!asked) {
+				asked = true;
+				held = buildsByParsedFile(host.reachBuilds());
+			}
+			held;
+		};
+	}
+
+	/**
+	 * The indices of the configurations of `builds` that parse each file, by its path; null without builds, or when a
+	 * configuration names no parsed files.
+	 */
+	private static function buildsByParsedFile(builds: Null<ReachBuilds>): Null<Map<String, Array<Int>>> {
+		if (builds == null) return null;
+		final out: Map<String, Array<Int>> = [];
+		for (i => configuration in builds.configurations) {
+			final parsed: Null<Array<String>> = configuration.parsed;
+			if (parsed == null) return null;
+			for (path in parsed) {
+				final held: Null<Array<Int>> = out[path];
+				if (held == null)
+					out[path] = [i]
+				else if (!held.contains(i))
+					held.push(i);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The classpath entry `info` was found under, and its top-level package — what a build has to carry to compile it. A
+	 * file whose directory does not end in its package path answers its own path as the entry, which no other origin shares.
+	 */
+	private static function originOf(info: FileInfo): String {
+		final dir: String = Path.directory(info.file);
+		if (info.pkg == '') return '$dir|';
+		final pkgDir: String = info.pkg.split('.').join('/');
+		return if (dir == pkgDir)
+			'|${info.pkg.split('.')[0]}'
+		else if (dir.endsWith('/$pkgDir'))
+			'${dir.substring(0, dir.length - pkgDir.length - 1)}|${info.pkg.split('.')[0]}'
+		else
+			'${info.file}|';
+	}
+
+	/** Whether the module `imp` names is declared under `origin` — a statement the receiver already compiles with. */
+	private static function resolvesInto(imp: ImportInfo, origin: String, resolve: SymbolIndex): Bool {
+		final module: Null<String> = TypeNameBinding.splitPath(imp.aliasTarget ?? imp.raw)?.module;
+		return module != null && resolve.refs.names.filesOfModule(module).exists(found -> originOf(found) == origin);
+	}
+
+	/**
+	 * Whether `statement` may be REMOVED from `info` — always, for an import; for a `using`, only when no other
+	 * `using` in the module's scope contests one of its accesses (`HoistContext.contested`).
+	 *
+	 * Hoisting a `using` demotes it below every own `using` that stays and moves it among the ambient ones, so a module
+	 * where a rival may take one of its accesses keeps its own statement instead and is left unaffected: own outranks
+	 * ambient either way.
+	 */
+	private static function removable(info: FileInfo, statement: Hoistable, ctx: HoistContext): Bool {
+		return !statement.isUsing || !rivalUsings(info, statement.path).exists(o -> ctx.contested(info.file, statement.path, o.raw));
+	}
+
+	/** The `using` statements in scope of `info` naming another module than `path`: its own, then its chain's. */
+	private static function rivalUsings(info: FileInfo, path: String): Array<ImportInfo> {
+		final out: Array<ImportInfo> = info.imports.filter(imp -> imp.kind == ImportKind.Using && imp.raw != path);
+		for (group in info.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using && imp.raw != path) out.push(imp);
+		return out;
+	}
+
+	/**
+	 * `imp` as a hoistable statement, or null when its shape is one this rule cannot reason about:
+	 * a guarded statement, an alias, a wildcard, a member import, or a `using` off the allow-list.
+	 */
+	private static function hoistableOf(
+		imp: ImportInfo, allow: Array<String>, publicTypes: Map<String, Array<String>>, bindings: ImportBindings
+	): Null<Hoistable> {
+		if (imp.guarded) return null;
+		final simple: String = SourceText.lastSegment(imp.raw);
+		final shaped: Bool = switch imp.kind {
+			case ImportKind.Import: SourceText.isUpperInitial(simple);
+			case ImportKind.Using: allow.contains(imp.raw);
+			case ImportKind.Alias, ImportKind.Wild: false;
+		};
+		if (!shaped) return null;
+		// A statement whose bound-name set could not be established is not a candidate: the criterion
+		// is about what each of those names means in every governed module, and there is nothing to ask.
+		final names: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
+		// Nor is one binding a VALUE name — a constructor, an enum-abstract value, a module-level field
+		// (`ImportBindings`). The criterion below is made per TYPE name, while the ambient copy lands
+		// AHEAD of every module's own imports and a constructor outranks a field import or a field
+		// wildcard in either order: the addition could retarget a bare name in a module that never
+		// spelled the statement, and the removal hand one to an own import that used to lose it.
+		final binding: Null<ImportBinding> = imp.kind == ImportKind.Using ? bindings.ofUsing(imp.raw) : bindings.ofImport(imp.raw);
+		return if (!ImportBindings.bindsNoValue(binding))
+			null
+		else if (names == null || names.length == 0)
+			null
+		else
+			{
+				path: imp.raw,
+				isUsing: imp.kind == ImportKind.Using,
+				simple: simple,
+				names: names
+			};
+	}
+
+}

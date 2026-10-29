@@ -1,0 +1,104 @@
+package anyparse.check.common.nullsafety;
+
+import anyparse.query.DeclaredNullity;
+import anyparse.query.SymbolIndex;
+
+/**
+ * Flags a null-coalescing whose left operand is provably non-null —
+ * `nonNull ?? fallback` — so the right operand is dead. `Severity.Info`; `fix`
+ * unwraps it to the left operand. A second arm needs no type: `x ?? null` is `x`
+ * whatever `x` is — `??` types as its left operand, and a null one yields the same null.
+ *
+ * ## Type-aware, conservative
+ *
+ * The left operand must be a plain identifier proven non-null by
+ * `TypeResolver.isProvablyNonNull` — a `RefShape.nonNullableTypeNames` value type,
+ * or a non-`Null<…>` nominal local / parameter / field while the enclosing type is
+ * null-checked (`RefShape.nullSafetyMetaName`). A non-identifier left operand (a
+ * call / field access whose type is unknown), an operand with no recovered type, an
+ * optional parameter, or a `Null<…>` / `Dynamic` operand keeps the conservative
+ * default and is not flagged, so a load-bearing fallback is never removed.
+ * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
+ */
+@:nullSafety(Strict)
+final class RedundantNullCoalescing extends RuleBase {
+
+	public function new() {
+		super(
+			'redundant-null-coalescing', 'a null-coalescing whose left operand is never null, or whose right operand is null',
+			RuleCategory.NullSafety
+		);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final coalKind: String = seams.coalKind;
+		final nullKind: Null<String> = seams.nullKind;
+		final opaqueKinds: Array<String> = seams.opaqueKinds;
+		final shape: RefShape = seams.shape;
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
+			final root: QueryNode = tree;
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);
+			function walk(node: QueryNode): Void {
+				if (opaqueKinds.contains(node.kind)) return;
+				if (node.kind == coalKind && node.children.length == 2) {
+					final span: Null<Span> = node.span;
+					final message: String = if (nullKind != null && node.children[1].kind == nullKind)
+						'`?? null` is a no-op — the result is the left operand';
+					else if (TypeResolver.isProvablyNonNull(node.children[0], root, shape, types))
+						'right operand is dead — left operand is never null';
+					else
+						'';
+					if (span != null && message != '') violations.push({
+						file: entry.file,
+						span: span,
+						rule: 'redundant-null-coalescing',
+						severity: Severity.Info,
+						message: message
+					});
+				}
+				for (c in node.children) walk(c);
+			}
+			walk(tree);
+		});
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		final seams: Null<Seams> = resolveSeams(plugin);
+		return seams == null
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, [seams.coalKind], (node, span) -> {
+				if (node.children.length != 2) return null;
+				final leftSpan: Null<Span> = node.children[0].span;
+				return leftSpan == null ? null : { span: span, text: source.substring(leftSpan.from, leftSpan.to) };
+			});
+	}
+
+	/** Resolve the null-coalescing seam kind plus opaque kinds and shape, or null when the coalesce kind is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final nullCoalesceKind: Null<String> = shape.nullCoalesceKind;
+		return nullCoalesceKind == null ? null : {
+			coalKind: nullCoalesceKind,
+			nullKind: shape.nullLiteralKind,
+			opaqueKinds: shape.opaqueKinds ?? [],
+			shape: shape
+		};
+	}
+
+}
+
+/**
+ * The resolved seams `RedundantNullCoalescing` reads in `run` and `fix`;
+ * `opaqueKinds` / `shape` are read only by `run` (the type-aware walk).
+ */
+private typedef Seams = {
+	final coalKind: String;
+	final nullKind: Null<String>;
+	final opaqueKinds: Array<String>;
+	final shape: RefShape;
+};

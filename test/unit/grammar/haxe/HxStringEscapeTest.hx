@@ -1,7 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.check.Check.Violation;
-import anyparse.check.UnusedLocal;
+import anyparse.check.common.unused.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxStringEscape;
 import anyparse.query.QueryNode;

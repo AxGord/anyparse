@@ -1,0 +1,269 @@
+package anyparse.check.common.members;
+
+import anyparse.check.Check.OracleRelaxable;
+import anyparse.check.Check.RiskyFix;
+import anyparse.query.CtorFieldFold;
+import anyparse.query.CtorFieldWrite;
+import anyparse.query.FieldWriteIndex;
+import anyparse.query.MemberWriteScan;
+import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
+
+/**
+ * Flags a PUBLIC `var` field, assigned only at its declaration (or by a sole
+ * constructor statement) and never reassigned anywhere in the project, that the
+ * immutable `final` should replace — and rewrites `var` to `final`. `Severity.Info` (a
+ * modernization cleanup toward immutability), with an autofix. The public-visibility
+ * counterpart of `prefer-final-field`: where that check proves single-assignment for a
+ * file-confined private field with a single-file text scan, this one proves it for
+ * a public field — writable from any file — with a cross-file, type-resolved
+ * `FieldWriteIndex`.
+ *
+ * ## Soundness — why a missed write is impossible
+ *
+ * A false negative (a wrong `final` the compiler rejects) is the dangerous
+ * direction, so the candidate must be PROVABLY single-assignment:
+ *
+ * 1. The field's single assignment is proven by one of two arms. WITH a declaration
+ *    initializer, that initializer is the one assignment and `writtenAnywhere` must
+ *    find no other. WITHOUT one, the shared
+ *    `RefactorSupport.ctorSoleAssignmentFinalizable` proves the sole write is exactly
+ *    one unconditional constructor assignment (the arm `prefer-final-field`
+ *    always had); `writtenAnywhere` — which the constructor write itself trips — is
+ *    replaced by `FieldWriteIndex.writtenOutsideDeclaration`: every resolved write
+ *    must lie inside the declaring file's decl range, bailing too when that range
+ *    cannot be pinned for an ambiguous simple name, while the predicate's in-file
+ *    text scan covers the declaring file itself. `prefer-read-only-field` cedes
+ *    exactly these candidates (same predicate), so the two rules stay disjoint. A
+ *    THIRD arm, `RefactorSupport.ctorConditionalDefaultFinalEdits`, claims an
+ *    INITIALIZED field (a `(default, null)` property included) whose only write
+ *    beyond that initializer is one top-level `if (p != null) x = p;` constructor
+ *    statement: it is single-assignment once the declaration default moves into the
+ *    constructor, which is what its TWO-edit fix does (`final x:T;` plus
+ *    `x = p ?? <default>;`). Its whole single-file proof lives in that predicate, and
+ *    `prefer-read-only-field` cedes these candidates through the same call.
+ * 2. No subtype of it can write the field (`MemberWriteScan.subtypeWriteReaches`). A
+ *    `this.field` write in a subtype, and any write through a subtype-typed receiver,
+ *    are attributed to the SUBTYPE rather than to this type, so the write index alone
+ *    would miss them; the gate scans each subtype's body and asks the index about the
+ *    subtype. Merely HAVING a subtype no longer bails. The two arms have DIFFERENT reach:
+ *    the body scan runs over the resolution scope, so a subtype declared in a configured
+ *    library root counts, and the `writtenAnywhere(subtype, …)` arm reads a write index
+ *    over that same scope — so a write through a THIRD-PARTY subtype, made in a third
+ *    third-party file and therefore absent from the subtype's own body, is seen. The same gate
+ *    also bails when a SUPERtype declares the same field (`MemberLookup.supertypeDeclaresMember`):
+ *    its property access is then fixed by that interface / superclass var, which final would
+ *    violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface
+ *    (which supertypeDeclaresMember treats as absent): out of scope it may still declare a
+ *    mutable member, so the rewrite is skipped conservatively.
+ * 3. No unresolved write can target the field
+ *    (`FieldWriteIndex.hasUnresolvedWriteTargeting`): a write to the field NAME
+ *    whose receiver could not be attributed to a type could be a hidden write to
+ *    this field, so any such write bails the candidate — UNLESS every one is a
+ *    plain `=` of a builtin-typed literal AND the candidate's declared type is a
+ *    plain project class no builtin can convert into (then the write provably
+ *    targets some other type). The index over-counts toward "written".
+ * 4. No resolved write targets this type's field — `FieldWriteIndex.writtenAnywhere`
+ *    for the initializer arm; the constructor arm substitutes
+ *    `writtenOutsideDeclaration` (see 1). Receiver resolution covers `this`,
+ *    typed identifiers, field-access chains, index accesses, inherited-field and
+ *    static roots — see `FieldWriteIndex`'s receiver-resolution doc.
+ * 5. No STRUCTURAL type pins the field mutable — `StructuralTypes.structuralConformanceForbidsFinal`.
+ *    Haxe unifies a class with an anonymous structure by member set, and a `final` field
+ *    satisfies neither a structural `var x:T` nor a structural `function x():T` (both
+ *    measured). That unification is a READ position, so every write gate above is blind to
+ *    it. The gate is conservative by construction: it answers CONFORMANCE — does the type
+ *    declare the whole member set some structure naming this field requires? — not use.
+ *
+ * Together these prove the single assignment is the sole one. Residual blind spots — a
+ * `@:build` macro injecting a writer, and the two shapes item 5 cannot see — an anonymous structure written INLINE in an
+ * annotation, and a structural type declared in a configured library root — surface as loud
+ * compile errors, never silent corruption.
+ *
+ * ## Macro-built owners — `RiskyFix` + `OracleRelaxable`
+ *
+ * The same split as `prefer-final-field` (its class doc has the builder shapes): an owner a build macro reaches keeps its finding, whose
+ * edit is admitted only under a compiler oracle through typecheck-and-revert (`setOracleRelaxed`) and declined without one; every other
+ * owner keeps the ordinary fix. The null-guarded default fold is never admitted on such an owner, nor the swap
+ * under a builder that resolvably reads finality; one that cannot be resolved is the silent residual.
+ *
+ * ## Whole-project scope required
+ *
+ * The write index and the subtype gate are only sound over a scope holding EVERY file that can
+ * reference the type, and that is NOT the lint scope: `run` builds both over the PROJECT scope —
+ * report files UNION the declared `resolutionRoots` (`RefactorSupport.resolutionProjectSourcesOf`),
+ * the key whose whole purpose is that a narrow lint still answers over the whole project. Without
+ * it the answer moved with the command line: `hxq lint src/anyparse/core --fix` finalized three
+ * `LoweringCtx` fields that `src/anyparse/macro/Build.hx` assigns, and under `--no-oracle` there is
+ * no revert net, so the non-compiling tree stayed on disk.
+ *
+ * A project declaring no `resolutionRoots` still answers from the report scope alone — the
+ * limitation `unused-private` / `prefer-final-field` carry, and there the sound usage is still
+ * linting the whole project (`lint src/`).
+ *
+ * ## Which half of the scope answers which question
+ *
+ * The LIBRARY half (`resolutionLibs`, the std) is admitted per QUESTION, not per rule, and the
+ * split is per question because admitting it to EVERYTHING loses findings, through two
+ * mechanisms: a skip-parsing library source that merely SPELLS the member name
+ * (`SymbolIndex.text.skippedMayReference`), and structural conformance against a library
+ * anonymous structure. So:
+ *
+ *  - The WRITE index spans the resolution scope with the library half tagged third-party. It is
+ *    the index that WANTS the library: a third-party subtype's write is invisible anywhere else.
+ *  - The name/type index — `members`, `subtypes`, `traits`, and the skip-parse `text` scan —
+ *    spans it too. A library supertype, an implemented library interface and a library `@:build`
+ *    are real vetoes the project scope cannot see, and admitting them costs no finding.
+ *  - The STRUCTURAL scan alone keeps the PROJECT-scoped index. It matches an anonymous structure
+ *    by member NAME set with no type check, over a closure that reads an unresolvable supertype
+ *    as declaring everything, so a `MonoBehaviour` subclass conforms to `haxe.macro.Expr.TypePath`
+ *    and to `haxe.macro.Type.EnumType`. That residual is a defect in the conformance proof —
+ *    the same wildcard already withholds findings from the project scope alone — rather than a
+ *    property of the library.
+ *
+ * What makes the wide index affordable is that every question a rule asks about ITS OWN candidate
+ * carries that candidate's file and is narrowed back to the project half: `FieldWriteIndex.admits`
+ * for a write, `RawSourceScan.admits` for the skip-parse scan. A haxelib can neither name a project
+ * type nor hold a statically-typed write into one.
+ *
+ * The one finding the split does cost is a corrected false proof: a field was freed by a claim
+ * that `Single` is a project class no builtin converts into, true only while the report scope
+ * hid the std's `abstract Single to Float from Float`. That proof resolves the
+ * annotation from the candidate's own file (`FieldWriteIndex.plainClassInScope`), so
+ * it answers the same in both scopes instead of by accident in one.
+ */
+@:nullSafety(Strict)
+final class PreferFinalPublicField extends RuleBase implements RiskyFix implements OracleRelaxable {
+
+	/** Whether a compiler oracle verifies the fix, which is what admits a macro-built owner's edit. */
+	private var _oracleRelaxed: Bool = false;
+
+	public function new() {
+		super(
+			'prefer-final-public-field',
+			'a public var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be '
+			+ 'final',
+			RuleCategory.Members
+		);
+	}
+
+	/**
+	 * Admit the edits of MACRO-BUILT owners. Set by `Cli.applyLintFixes` only when this check runs
+	 * as a verified `RiskyFix`, so those edits always pass the typecheck-and-revert pipeline.
+	 */
+	public function setOracleRelaxed(relaxed: Bool): Void {
+		_oracleRelaxed = relaxed;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		// ONE index — the whole resolution scope with the library half tagged third-party, every
+		// per-candidate question it answers carrying the candidate's file so the tag can narrow it
+		// back out. The STRUCTURAL scan was the last gate held back to a project-scoped index,
+		// because it matched an anonymous structure by member NAME SET alone and the library's
+		// structures then vetoed far past what they can unify with. It now proves the conformance
+		// instead (`StructuralTypes.memberCouldUnify`), so the split has nothing left to protect.
+		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
+		final index: SymbolIndex = IndexScope.resolution(scope, plugin);
+		final writeIndex: FieldWriteIndex = IndexScope.resolutionWrites(scope, plugin);
+		final violations: Array<Violation> = [];
+		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
+			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin, _oracleRelaxed);
+		});
+		return violations;
+	}
+
+	/**
+	 * The edits for each flagged field, through the shared `RefactorSupport.finalizeFieldEdits`:
+	 * a `var` -> `final` keyword swap for the initializer and constructor arms, and the
+	 * two-edit conditional-default fold for the third (the declaration loses its property
+	 * head and default, the constructor's guarded assignment becomes `x = p ?? <default>`).
+	 * Every candidate is by construction assigned exactly once after the rewrite, so both
+	 * shapes are safe; each fires only when the declaration's bytes still match what the
+	 * check saw, and a fold's edits are emitted together or not at all.
+	 */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) if (v.declineReason == null) v.span], plugin);
+	}
+
+	/** The finding's message for the arm that proved the public field `name` single-assignment. */
+	private static inline function messageOf(name: String, folded: Bool, initialized: Bool): String {
+		return if (folded)
+			'public field \'$name\' has a null-guarded constructor default; use final and default with ??'
+		else if (initialized)
+			'public field \'$name\' is never reassigned; use final'
+		else
+			'public field \'$name\' is assigned only in the constructor; use final';
+	}
+
+	/**
+	 * Flag `field` when it is provably single-assignment through one of two arms — WITH a
+	 * declaration initializer (never written anywhere), or WITHOUT one when its sole
+	 * write is exactly one unconditional constructor assignment
+	 * (`RefactorSupport.ctorSoleAssignmentFinalizable`) — its enclosing type has no
+	 * writing subtype, and no write — resolved, or unresolved-but-possibly-targeting
+	 * (`hasUnresolvedWriteTargeting`, which re-derives the candidate's declared type
+	 * and applies the type-parameter / unique-plain-class / import-shadow guards) —
+	 * targets it outside that single assignment.
+	 */
+	private static function considerField(
+		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
+		writeIndex: FieldWriteIndex, plugin: GrammarPlugin, oracleRelaxed: Bool
+	): Void {
+		final name: Null<String> = field.name;
+		final span: Null<Span> = field.span;
+		if (name == null || span == null) return;
+		// A file the grammar could not read can hold any write, so no single-assignment proof
+		// survives it — but only when it can reach this MEMBER, which it can only do by
+		// spelling the name. A whole-project veto here silenced the rule for every file in a
+		// scope holding one unparseable file. The candidate's own file narrows the scan back off
+		// the library half: a skip-parsing haxelib source cannot name a project type.
+		if (index.text.skippedMayReference(name, file)) return;
+		final initialized: Bool = CtorFieldWrite.isInitializedNonPropertyField(source, field);
+		// The conditional-default arm: an initialized field (a `(default, null)` property
+		// included) whose only other write is one `if (p != null) x = p;` constructor
+		// statement, folded to `final` plus `x = p ?? <default>`. Its own proof is entirely
+		// inside the shared predicate, which `prefer-read-only-field` cedes on.
+		final folded: Bool = CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null;
+		// The no-init arm's single-file proof embeds the cheap syntactic no-initializer /
+		// non-property checks, so a field qualifying for NO arm bails here; the parse
+		// behind the predicate is memoized by the caching plugin.
+		if (!folded && !initialized && !CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
+		if (index.typing.members.supertypeDeclaresMember(owner, name)) return;
+		// Interface-mutability gate — complements supertypeDeclaresMember (which resolves
+		// a supertype member by name but treats an UNRESOLVABLE interface as absent): an
+		// implemented interface that cannot be resolved may still declare a mutable
+		// `name`, so `var → final` is unsafe and skipped conservatively.
+		if (index.typing.members.implementsInterfaceDeclaringMember(owner, name)) return;
+		// Structural-conformance gate: the type may be passed where an anonymous structure
+		// declaring `name` mutably is expected — a READ position, so every write gate below is
+		// blind to it — and a `final` field satisfies neither a structural `var` nor a
+		// structural method.
+		if (index.typing.structural.structuralConformanceForbidsFinal(owner, name)) return;
+		// Core-API gate: a `@:coreApi` type's members are pinned to the property access of a core
+		// type in the compiler's std path that no scope here holds, and `var` -> `final` is
+		// "Field <name> has different property access than core type".
+		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
+		// Every write question about THIS candidate carries its file, so the write index can drop
+		// what a third-party source recorded: a haxelib cannot name a project type. The subtype
+		// question below deliberately does not — there the subject may itself be third-party, and
+		// its writes are the whole point of the library being in this index.
+		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
+		if (initialized && !folded) {
+			if (writeIndex.writtenAnywhere(owner, name, file)) return;
+		} else {
+			// The constructor assignment IS a write, so `writtenAnywhere` cannot gate this
+			// arm; instead every RESOLVED write must lie inside the declaring file's decl
+			// range — the in-file text scan inside the predicate already proved the
+			// constructor statement is the only write there. Same for the folded arm.
+			if (writeIndex.writtenOutsideDeclaration(owner, name, file)) return;
+		}
+		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
+		// A macro-built type's fields are not what the declaration says (`prefer-final-field`'s class
+		// doc): the finding is kept, and whether its edit is admitted is `macroFinalDecline`'s to say.
+		final decline: Null<String> = CtorFieldFold.macroFinalDecline(index, index, owner, file, folded, oracleRelaxed);
+		out.push(CtorFieldFold.finalFinding(file, span, 'prefer-final-public-field', messageOf(name, folded, initialized), decline));
+	}
+
+}

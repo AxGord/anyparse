@@ -1,9 +1,9 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.PreferEnumAbstract;
-import anyparse.check.PreferInline;
-import anyparse.check.UnusedPrivate;
+import anyparse.check.common.members.PreferEnumAbstract;
+import anyparse.check.common.members.PreferInline;
+import anyparse.check.common.unused.UnusedPrivate;
 
 /**
  * The supertype and subtype questions three member rules ask about the OWNER are read off the owner's DECLARATION,

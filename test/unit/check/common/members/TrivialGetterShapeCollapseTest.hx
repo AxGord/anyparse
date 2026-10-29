@@ -1,0 +1,970 @@
+package unit.check.common.members;
+
+import anyparse.check.LintConfig;
+import anyparse.check.common.members.TrivialGetter;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+
+/**
+ * The accessor-shape collapses of `trivial-getter`, and the subtype/cross-file and
+ * conditional-compilation gating that decides whether a collapse may fire.
+ *
+ * The `(get, set)` shape-A collapse (trivial getter, non-trivial setter) is
+ * decided three ways on the external statement-level writes to the backing
+ * field: 0 writes collapses to `(default, set)` unchanged; 1..maxBypassWrites
+ * writes collapses and marks each write `@:bypassAccessor` (default cap 3,
+ * overridable via the `maxBypassWrites` option); more than the cap, or any write
+ * nested inside a larger expression, falls back to marking `get_x` `inline`
+ * (skipped when the getter is already `inline` or `override`). Shape B (both
+ * accessors trivial) collapses to a plain `var`; shape C (trivial setter, real
+ * getter) collapses to `(get, default)`.
+ */
+class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
+
+	/**
+	 * The confined case: property, backing field and getter all in ONE branch. The collapse's edits —
+	 * the accessor-clause rewrite, the field deletion and the getter deletion, modifier runs included
+	 * — all land inside the region, leaving the directives untouched.
+	 */
+	public inline function testConditionalCollapseStaysInsideItsBranch(): Void {
+		assertFixContains(
+			'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+			+ '\tprivate function get_active():Bool return _active;\n\t#end\n}',
+			'#if cpp\n\tpublic var active(default, null):Bool = false;\n\t#end'
+		);
+	}
+
+	public function testShapeATrivialGetterRealSetterFlagged(): Void {
+		final vs: Array<Violation> = violations(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+		));
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove '
+			+ 'get_active',
+			vs[0].message
+		);
+	}
+
+	public function testShapeAFixToDefaultSet(): Void {
+		final fixed: String = fixedText(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+		));
+		Assert.isTrue(fixed.indexOf('active(default, set)') >= 0);
+		Assert.isTrue(fixed.indexOf('= false') >= 0);
+		Assert.isTrue(fixed.indexOf('return active = v') >= 0);
+		Assert.isTrue(fixed.indexOf('get_active') == -1);
+		Assert.isTrue(fixed.indexOf('private var _active') == -1);
+	}
+
+	public function testShapeAExternalWriteBypassFlagged(): Void {
+		final vs: Array<Violation> = violations(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
+		));
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove '
+			+ 'get_active and mark 1 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+	}
+
+	public function testShapeACtorInitMoveFlagged(): Void {
+		final src: String = 'class PermitsButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n'
+			+ '\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n'
+			+ '\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n'
+			+ '\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), [{ file: 'PermitsButton.hx', source: src }]).length);
+	}
+
+	public function testShapeACtorInitMoveFix(): Void {
+		final src: String = 'class PermitsButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n'
+			+ '\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n'
+			+ '\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n'
+			+ '\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('disabled(default, set):Bool = false') >= 0);
+		Assert.isTrue(fixed.indexOf('return disabled;') >= 0);
+		Assert.isTrue(fixed.indexOf('disabled = v') >= 0);
+		Assert.isTrue(fixed.indexOf('get_disabled') == -1);
+		Assert.isTrue(fixed.indexOf('private var _disabled') == -1);
+		Assert.isTrue(fixed.indexOf('_disabled = false') == -1);
+	}
+
+	public function testShapeACtorInitNotMovableBypassFlagged(): Void {
+		// `trace(_disabled)` reads the field before `_disabled = false`, so the init is not
+		// relocatable; the write is marked @:bypassAccessor instead and the property collapses.
+		final src: String = 'class C {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n'
+			+ '\t\ttrace(_disabled);\n\t\t_disabled = false;\n\t}\n\tfunction get_disabled():Bool return _disabled;\n'
+			+ '\tfunction set_disabled(v:Bool):Bool { redraw(); return _disabled = v; }\n}';
+		final vs: Array<Violation> = CheckFixture.violations(new TrivialGetter(), src);
+		Assert.equals(1, vs.length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor disabled = false') >= 0);
+		Assert.isTrue(fixed.indexOf('trace(disabled)') >= 0);
+		Assert.isTrue(fixed.indexOf('get_disabled') == -1);
+	}
+
+	/**
+	 * Regression: a single-quoted `SingleStringExpr` ctor-init carries its text in a `Literal`
+	 * child, not a `name` slot (`node.name` is always null there — the double-quoted spelling is
+	 * the one with a `name`), so a predicate that read `node.name` here was permanently
+	 * unreachable and misclassified every single-quoted movable literal as an external write. The
+	 * message below must land on the SAME shape `testShapeAZeroWritesNoBypass` gets (no
+	 * `@:bypassAccessor`), only with `label`/`_label` in place of `active`/`_active`.
+	 * Killed by arm `M-TRIVGET-MOVABLE-LITERAL-FALSE`.
+	 */
+	@:pin('control')
+	@:killer('M-TRIVGET-MOVABLE-LITERAL-FALSE')
+	public function testShapeACtorInitSingleQuotedStringMoveFix(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n\tpublic function new() {\n'
+			+ '\t\t_label = \'lit\';\n\t}\n\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n'
+			+ '\t\t_label = v;\n\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\' and remove get_label',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('label(default, set):String = \'lit\'') >= 0);
+		Assert.isTrue(fixed.indexOf('get_label') == -1);
+		Assert.isTrue(fixed.indexOf('private var _label') == -1);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1);
+	}
+
+	/**
+	 * The interpolating sibling of the fix above: a `$name` fragment inside the single-quoted
+	 * literal projects an `Ident` child alongside the `Literal` text, so the ctor-init is
+	 * genuinely not a compile-time constant and must stay on the `@:bypassAccessor` arm — the fix
+	 * must not swing the other way and start treating every single-quoted ctor init as movable.
+	 */
+	public function testShapeACtorInitInterpolatedStringStaysBypass(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n'
+			+ '\tpublic function new(name:String) {\n\t\t_label = \'hi $$name\';\n\t}\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n\t\t_label = v;\n'
+			+ '\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\', remove '
+			+ 'get_label and mark 1 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'hi $$name\'') >= 0);
+	}
+
+	/**
+	 * A NEGATIVE numeric ctor-init relocates. `-1` projects as `negationKind(IntLit 1)`, so a
+	 * predicate reading only the literal kinds saw an operator node and pushed the write onto the
+	 * `@:bypassAccessor` arm — caught in review beside a byte-equivalent `255`, which folded clean.
+	 * Both spellings the projection produces are asserted: the integer and the float.
+	 *
+	 * CONTROL for the negation descent. KILLED by arm `M-TRIVGET-NO-NEGATION-DESCENT`.
+	 */
+	@:pin('control')
+	@:killer('M-TRIVGET-NO-NEGATION-DESCENT')
+	public function testShapeACtorInitNegativeNumberMoveFix(): Void {
+		for (init in ['-1', '-1.5']) {
+			final src: String = 'class C {\n\tpublic var mask(get, set):Float;\n\tprivate var _mask:Float;\n\tpublic function new() {\n'
+				+ '\t\t_mask = $init;\n\t}\n\tfunction get_mask():Float return _mask;\n\tfunction set_mask(v:Float):Float {\n'
+				+ '\t\t_mask = v;\n\t\ttrace(v);\n\t\treturn _mask;\n\t}\n}';
+			final fixed: String = fixedText(src);
+			Assert.isTrue(fixed.indexOf('mask(default, set):Float = $init') >= 0, 'a negative literal must relocate: $init');
+			Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1, 'no write is left to bypass for $init');
+		}
+	}
+
+	/**
+	 * A negation over anything that is NOT a literal stays on the bypass arm — the descent is one
+	 * level over the numeric vocabulary, not "an operator with one child".
+	 */
+	public function testShapeACtorInitNegatedIdentifierStaysBypass(): Void {
+		final src: String = 'class C {\n\tpublic var mask(get, set):Int;\n\tprivate var _mask:Int;\n\tpublic function new(seed:Int) {\n'
+			+ '\t\t_mask = -seed;\n\t}\n\tfunction get_mask():Int return _mask;\n\tfunction set_mask(v:Int):Int {\n'
+			+ '\t\t_mask = v;\n\t\ttrace(v);\n\t\treturn _mask;\n\t}\n}';
+		Assert.isTrue(fixedText(src).indexOf('@:bypassAccessor mask = -seed') >= 0);
+	}
+
+	/**
+	 * A single-quoted literal whose only segment is an INERT trigger relocates: `'$'` projects one
+	 * `LoneDollar` child and `'$$'` one `Dollar`, neither of which is the plain-text segment kind, so
+	 * a text-only whitelist read `_currency = '$';` as an external write. The grammar now declares the
+	 * two as `stringInterpInertSegmentKinds`, which makes this a read rather than a judgement — and the
+	 * splice is VERBATIM, so the relocated token is the source token, escape and all.
+	 *
+	 * CONTROL for the inert-segment read. KILLED by arm `M-TRIVGET-INERT-SEGMENT-IGNORED`.
+	 */
+	@:pin('control')
+	@:killer('M-TRIVGET-INERT-SEGMENT-IGNORED')
+	public function testShapeACtorInitInertDollarSegmentMoveFix(): Void {
+		for (init in ['\'$$\'', '\'$$$$\'']) {
+			final src: String = 'class C {\n\tpublic var cur(get, set):String;\n\tprivate var _cur:String;\n\tpublic function new() {\n'
+				+ '\t\t_cur = $init;\n\t}\n\tfunction get_cur():String return _cur;\n\tfunction set_cur(v:String):String {\n'
+				+ '\t\t_cur = v;\n\t\ttrace(v);\n\t\treturn _cur;\n\t}\n}';
+			final fixed: String = fixedText(src);
+			Assert.isTrue(fixed.indexOf('cur(default, set):String = $init') >= 0, 'an inert-segment literal must relocate: $init');
+			Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1, 'no write is left to bypass for $init');
+		}
+	}
+
+	/**
+	 * A HEX ctor-init relocates. The gap this closes is the one the whole vocabulary differential
+	 * exists for: `HexLit` stood unlisted while `IntLit` was listed, so `_mask = 0xFF;` took the
+	 * bypass arm and `_mask = 255;` — the same value — folded clean.
+	 */
+	public function testShapeACtorInitHexMoveFix(): Void {
+		final src: String = 'class C {\n\tpublic var mask(get, set):Int;\n\tprivate var _mask:Int;\n\tpublic function new() {\n'
+			+ '\t\t_mask = 0xFF;\n\t}\n\tfunction get_mask():Int return _mask;\n\tfunction set_mask(v:Int):Int {\n'
+			+ '\t\t_mask = v;\n\t\ttrace(v);\n\t\treturn _mask;\n\t}\n}';
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('mask(default, set):Int = 0xFF') >= 0);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1);
+	}
+
+	public function testBothTrivialCollapsesToPlainVar(): Void {
+		final vs: Array<Violation> = violations(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool return _active = v;'
+		));
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter and setter over backing field \'_active\'; use a plain field \'var active\' and '
+			+ 'remove get_active/set_active',
+			vs[0].message
+		);
+	}
+
+	public function testBothTrivialFixToPlainVar(): Void {
+		assertFixCanonical(
+			cls(
+				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+				+ '\tfunction set_active(v:Bool):Bool return _active = v;'
+			),
+			'public var active:Bool = false', '_active'
+		);
+	}
+
+	public function testShapeCTrivialSetterRealGetterFlagged(): Void {
+		final vs: Array<Violation> = violations(cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n'
+			+ '\tfunction set_count(v:Int):Int return _count = v;'
+		));
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'count\' has a trivial setter over backing field \'_count\'; use \'var count(get, default)\' and remove set_count',
+			vs[0].message
+		);
+	}
+
+	public function testShapeCFixToGetDefault(): Void {
+		final fixed: String = fixedText(cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n'
+			+ '\tfunction set_count(v:Int):Int return _count = v;'
+		));
+		Assert.isTrue(fixed.indexOf('count(get, default):Int = 0') >= 0);
+		Assert.isTrue(fixed.indexOf('return count + 1') >= 0);
+		Assert.isTrue(fixed.indexOf('set_count') == -1);
+		Assert.isTrue(fixed.indexOf('private var _count') == -1);
+	}
+
+	public function testShapeCExternalReadNotFlagged(): Void {
+		// A read of _count outside get_count would newly route through the non-trivial getter
+		// after conversion to (get, default), so the property is skipped.
+		final src: String = cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n'
+			+ '\tfunction set_count(v:Int):Int return _count = v;\n\tfunction peek():Int { return _count; }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShapeCCompoundAssignNotFlagged(): Void {
+		// _count += 1 outside get_count READS _count (x += 1 compiles to x = get_count() + 1), so
+		// it would newly route through the non-trivial getter — the property is skipped.
+		final src: String = cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n'
+			+ '\tfunction set_count(v:Int):Int return _count = v;\n\tfunction bump():Void { _count += 1; }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShapeCExternalPureWriteStillFlagged(): Void {
+		// A pure write _count = 5 outside the accessors is a direct (default) write, not a read,
+		// so it does not block the (get, default) collapse.
+		final src: String = cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n'
+			+ '\tfunction set_count(v:Int):Int return _count = v;\n\tfunction reset():Void { _count = 5; }'
+		);
+		Assert.equals(1, violations(src).length);
+	}
+
+	public function testFixShapeCShadowedLoopVarUsesThis(): Void {
+		// The sibling arm: a TRIVIAL SETTER collapse to (get, default) renames the backing-field
+		// WRITE, which under a loop-variable shadow would become the self-assignment `x = x`.
+		final src: String = cls(
+			'public var x(get, set):Int;\n\tprivate var _x:Int = 0;\n\tprivate var _items:Array<Int> = [];\n\tfunction get_x():Int {'
+			+ ' redraw(); return _x; }\n\tfunction set_x(v:Int):Int return _x = v;\n\tfunction m():Void { for (x in _items) _x = x; }'
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('this.x = x') >= 0, 'a shadowed write target must be qualified');
+		Assert.isTrue(fixed.indexOf('x(get, default)') >= 0);
+	}
+
+	public function testShapeABypassFix(): Void {
+		final fixed: String = fixedText(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
+		));
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor active = true') >= 0);
+		Assert.isTrue(fixed.indexOf('active(default, set)') >= 0);
+		Assert.isTrue(fixed.indexOf('get_active') == -1);
+		Assert.isTrue(fixed.indexOf('private var _active') == -1);
+	}
+
+	public function testShapeABypassShadowedCtorWrite(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n'
+			+ '\tpublic function new(?active:Bool) { _active = active ?? false; }\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor this.active = active ?? false') >= 0);
+		Assert.isTrue(fixed.indexOf('active(default, set):Bool = false') >= 0);
+	}
+
+	public function testShapeAExceedsCapInline(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n'
+			+ '\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n\tfunction d():Void { _active = false; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\', but 4 external write(s) block a (default, set) '
+			+ 'collapse; mark get_active inline',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('inline function get_active') >= 0);
+		Assert.isTrue(fixed.indexOf('return _active') >= 0);
+		Assert.isTrue(fixed.indexOf('private var _active') >= 0);
+		Assert.isTrue(fixed.indexOf('(get, set)') >= 0);
+	}
+
+	public function testShapeANonStmtWriteInline(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n'
+			+ '\tfunction f():Void { if ((_active = true)) trace(1); }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\', but 1 external write(s) block a (default, set) '
+			+ 'collapse; mark get_active inline',
+			vs[0].message
+		);
+	}
+
+	public function testShapeAAlreadyInlineGetterNotFlagged(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tinline function get_active():Bool return '
+			+ '_active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n'
+			+ '\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n\tfunction d():Void { _active = false; }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShapeAOverrideGetterNotFlagged(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\toverride function get_active():Bool return '
+			+ '_active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n'
+			+ '\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n\tfunction d():Void { _active = false; }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShapeACtorInitPlusBypass(): Void {
+		final src: String = 'class C {\n\tpublic var active(get, set):Bool;\n\tprivate var _active:Bool;\n\tpublic function new() {\n'
+			+ '\t\t_active = false;\n\t\tinit();\n\t}\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }\n}';
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('active(default, set):Bool = false') >= 0);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor active = true') >= 0);
+		Assert.isTrue(fixed.indexOf('_active = false') == -1);
+	}
+
+	public function testShapeAConfigCapInline(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n'
+			+ '\tfunction b():Void { _active = false; }'
+		);
+		final check: TrivialGetter = new TrivialGetter();
+		final cfg: LintConfig = LintConfig.parse('{"rules": {"trivial-getter": {"maxBypassWrites": 1}}}');
+		check.setConfigResolver(_ -> cfg);
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\', but 2 external write(s) block a (default, set) '
+			+ 'collapse; mark get_active inline',
+			vs[0].message
+		);
+	}
+
+	public function testShapeAZeroWritesNoBypass(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove '
+			+ 'get_active',
+			vs[0].message
+		);
+		Assert.isTrue(fixedText(src).indexOf('@:bypassAccessor') == -1);
+	}
+
+	public function testShapeAExactlyCapBypass(): Void {
+		// Exactly maxBypassWrites (default 3) statement-level writes sit ON the cap boundary
+		// and still take the bypass arm — only cap + 1 falls back to the inline arm.
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
+			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n'
+			+ '\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove '
+			+ 'get_active and mark 3 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor active = true') >= 0);
+		Assert.isTrue(fixed.indexOf('active(default, set)') >= 0);
+	}
+
+	public function testShapeACompoundAssignBypass(): Void {
+		// A compound assign (`_count += 1;`) is a statement-level WRITE (`writeTargetField`
+		// covers it), so it takes the bypass arm; under `@:bypassAccessor` both its read and
+		// write are direct — identical to the pre-collapse backing-field access.
+		final src: String = cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n'
+			+ '\tfunction set_count(v:Int):Int { redraw(); return _count = v; }\n\tfunction bump():Void { _count += 1; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'count\' has a trivial getter over backing field \'_count\'; use \'var count(default, set)\', remove get_count '
+			+ 'and mark 1 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor count += 1') >= 0);
+		Assert.isTrue(fixed.indexOf('count(default, set)') >= 0);
+		Assert.isTrue(fixed.indexOf('get_count') == -1);
+	}
+
+	public function testShapeAStringInterpSimpleReadRenamed(): Void {
+		// A simple `$_backing` string-interpolation READ of the backing field must be
+		// renamed to `$prop` on a (get, set) -> (default, set) collapse — the property has
+		// physical storage, so the interpolation reads it directly. Previously the simple
+		// `$name` form (a bare `Ident` node, not `IdentExpr`) tripped the rename refusal.
+		final src: String = cls(
+			'public var sel(get, set):Int;\n\tprivate var _sel:Int = -1;\n\tfunction get_sel():Int return _sel;\n'
+			+ '\tfunction set_sel(v:Int):Int { redraw(); return _sel = v; }\n\tfunction log():Void { trace(\'v=$$_sel\'); }'
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('sel(default, set)') >= 0);
+		Assert.isTrue(fixed.indexOf('get_sel') == -1);
+		Assert.isTrue(fixed.indexOf('v=$$sel') >= 0);
+		Assert.isTrue(fixed.indexOf('v=$$_sel') == -1);
+	}
+
+	public function testShapeAStringInterpSimpleReadShadowedRefused(): Void {
+		// When a local of the PROPERTY name shadows the field in a function, a simple
+		// `$_backing` interpolation cannot be safely rewritten to `$prop` (a bare `$prop`
+		// would bind the local, not the field, and the `$name` form admits no `this.`
+		// qualifier) — the collapse is refused (conservative).
+		final src: String = cls(
+			'public var sel(get, set):Int;\n\tprivate var _sel:Int = -1;\n\tfunction get_sel():Int return _sel;\n'
+			+ '\tfunction set_sel(v:Int):Int { redraw(); return _sel = v; }\n\tfunction log():Void { var sel = 3; trace(\'v=$$_sel\'); }'
+		);
+		assertFixRefused(src);
+	}
+
+	public function testShapeCStringInterpReadBlocksCollapse(): Void {
+		// Shape C (non-trivial getter + trivial setter) would collapse to (get, default), but a
+		// simple `$_backing` interpolation READ outside the getter would route through the
+		// non-trivial getter after the collapse -- the read-gate must see the interpolation read
+		// (it is a bare `Ident`, not `IdentExpr`) and skip the property.
+		final src: String = cls(
+			'public var x(get, set):Int;\n\tprivate var _x:Int = 0;\n\tfunction get_x():Int { redraw(); return _x; }\n'
+			+ '\tfunction set_x(v:Int):Int return _x = v;\n\tfunction log():Void { trace(\'v=$$_x\'); }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testSubclassedNotOverriddenCollapses(): Void {
+		// Sub extends Base but overrides NEITHER get_active/set_active nor redeclares `active`
+		// (the DarkDropDownListItem shape), so dropping get_active strands no override — collapse.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+			+ '\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function ping():Void {}\n}';
+		Assert.equals(1, violations(source).length);
+	}
+
+	public function testSubclassReadingBackingFieldCollapsesCrossFile(): Void {
+		// Sub extends Base and reads Base's PRIVATE _active directly (legal — subclass-visible). The
+		// collapse deletes _active; the cross-file fix rewrites Sub's READ `_active` -> `active` so the
+		// property is flagged AND fixed atomically (both slices land in the one source file here).
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+			+ '\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Bool return _active;\n}';
+		Assert.equals(1, violations(source).length);
+		final fixed: String = crossFixApply([{ file: 'C.hx', source: source }])['C.hx'] ?? '';
+		Assert.isTrue(fixed.indexOf('active(default, null):Bool = false') >= 0);
+		Assert.isTrue(fixed.indexOf('get_active') == -1);
+		Assert.isTrue(fixed.indexOf('_active') == -1);
+		Assert.isTrue(fixed.indexOf('return active;') >= 0);
+	}
+
+	public function testSubclassReadingDifferentFieldCollapses(): Void {
+		// Sub reads a DIFFERENT inherited private field (_other), never _active, so deleting _active
+		// is safe — the field-reference gate is field-specific and the property collapses.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+			+ '\tprivate var _other:Int = 0;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n'
+			+ '\tpublic function peek():Int return _other;\n}';
+		Assert.equals(1, violations(source).length);
+	}
+
+	public function testCrossFileSubtypeReadCollapses(): Void {
+		// Base in one file, a subtype in ANOTHER file reads Base's private _active. The property is
+		// flagged and the cross-file fix collapses Base AND rewrites the subtype's read `_active` -> `active`.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+					+ '\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek():Bool return _active;\n}' }
+		];
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
+		final out: Map<String, String> = crossFixApply(files);
+		final base: String = out['Base.hx'] ?? '';
+		final sub: String = out['Sub.hx'] ?? '';
+		Assert.isTrue(base.indexOf('active(default, null):Bool = false') >= 0);
+		Assert.isTrue(base.indexOf('get_active') == -1);
+		Assert.isTrue(base.indexOf('_active') == -1);
+		Assert.isTrue(sub.indexOf('return active;') >= 0);
+		Assert.isTrue(sub.indexOf('_active') == -1);
+	}
+
+	public function testCrossFileSubtypeWriteBlocked(): Void {
+		// The subtype WRITES the backing field; after a collapse that write would route through the
+		// (default, null) storage illegally — the whole collapse stays blocked (0 findings).
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+					+ '\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function set():Void { _active = true; }\n}' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
+	}
+
+	public function testCrossFileUnresolvableReceiverBlocked(): Void {
+		// The subtype reads the backing field through a NON-this/super receiver (`o._active`); the
+		// receiver's binding is not proven owner-or-subtype, so the occurrence is unattributable and
+		// the collapse stays blocked (fail-closed).
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+					+ '\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek(o:Base):Bool return o._active;\n}' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
+	}
+
+	/**
+	 * The SECOND operand of the occurrence walk's exclusion test, which nothing reached before:
+	 * a class in a SCANNED file that spells the backing name, is no subtype of the owner, and
+	 * does not declare the name itself — so only `MemberLookup.supertypeDeclaresMember` can
+	 * account for it, and an occurrence the walk cannot account for blocks the collapse outright.
+	 *
+	 * The foreign supertype has to live in a file the scan does NOT read. Declaring it beside the
+	 * real subtype puts its `private var _label` declaration in the walk too, and a declaration
+	 * name is none of the shapes `attributeOccurrence` binds — it lands in the uncovered bucket
+	 * and blocks the collapse for a reason that has nothing to do with the operand under test.
+	 * `affectedSubtypeFiles` reads only subtype-declaring and `@:access` files, while the index
+	 * reads them all, which is exactly the gap this fixture needs.
+	 *
+	 * This guards behaviour that already held; what it adds is reach. This rule and
+	 * `prefer-enum-abstract` are the two whose rewritten call sites no fixture exercised
+	 * (docs/testing.md § "Rules the deciding arm cannot reach are pinned one fixture per rule"), and
+	 * both are the right-hand operand of a short-circuiting `||` whose left operand every
+	 * existing fixture already satisfied.
+	 */
+	@:pin('control') @:killer('M-SUPERDECLARES-FALSE')
+	public function testForeignHierarchyBackingNameStaysAccountedFor(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var label(get, set):String;\n\tprivate var _label:String = \'\';\n\tfunction '
+					+ 'get_label():String return _label;\n\tfunction set_label(v:String):String { redraw(); return _label = v; }\n}'
+			},
+			{
+				file: 'Sub.hx',
+				source: 'class Sub extends Base {\n\tpublic function draw():String return _label;\n}\n\nclass Heir extends Foreign '
+					+ '{\n\tpublic function read():String return _label;\n}'
+			},
+			{ file: 'Foreign.hx', source: 'class Foreign {\n\tprivate var _label:String = \'x\';\n}' }
+		];
+		// Leading: the shape reports, so the fixture provably reaches the collapse the assertion below
+		// then reads the output of.
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
+		// One string over BOTH reads: `Sub`'s is the rename only the collapse can produce, `Heir`'s is
+		// the one it must leave alone, and neither half can be satisfied without the other.
+		Assert.equals(
+			'class Sub extends Base {\n\tpublic function draw():String\n\t\treturn label;\n}\n\nclass Heir extends Foreign {\n'
+			+ '\tpublic function read():String\n\t\treturn _label;\n}\n',
+			crossFixApply(files)['Sub.hx']
+		);
+	}
+
+	public function testCrossFileMultiSubtypeReadsAtomic(): Void {
+		// Two subtypes in two files each read the backing field; ALL are rewritten in one atomic rename.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+					+ '\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub1.hx', source: 'class Sub1 extends Base {\n\tpublic function a():Bool return _active;\n}' },
+			{ file: 'Sub2.hx', source: 'class Sub2 extends Base {\n\tpublic function b():Bool return this._active;\n}' }
+		];
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
+		final out: Map<String, String> = crossFixApply(files);
+		Assert.isTrue((out['Base.hx'] ?? '').indexOf('_active') == -1);
+		Assert.isTrue((out['Sub1.hx'] ?? '').indexOf('return active;') >= 0);
+		Assert.isTrue((out['Sub2.hx'] ?? '').indexOf('return this.active;') >= 0);
+		Assert.isTrue((out['Sub1.hx'] ?? '').indexOf('_active') == -1);
+		Assert.isTrue((out['Sub2.hx'] ?? '').indexOf('_active') == -1);
+	}
+
+	public function testCrossFileShapeASubtypeRead(): Void {
+		// The TextLink.label shape: a (get, set) property with a trivial getter and a NON-trivial
+		// setter, whose backing field a subtype reads in another file. The collapse to (default, set)
+		// deletes get_x, keeps set_x, and rewrites the subtype read `_label` -> `label`.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var label(get, set):String;\n\tprivate var _label:String = \'\';\n\tfunction '
+					+ 'get_label():String return _label;\n\tfunction set_label(v:String):String { redraw(); return _label = v; }\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function draw():String return _label;\n}' }
+		];
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
+		final out: Map<String, String> = crossFixApply(files);
+		final base: String = out['Base.hx'] ?? '';
+		Assert.isTrue(base.indexOf('label(default, set)') >= 0);
+		Assert.isTrue(base.indexOf('get_label') == -1);
+		Assert.isTrue(base.indexOf('return label = v') >= 0);
+		Assert.isTrue((out['Sub.hx'] ?? '').indexOf('return label;') >= 0);
+	}
+
+	public function testAbstractOwnerCrossFileSubtypeReadCollapses(): Void {
+		// The OWNER is an abstract class; a subtype in another file reads its private backing field.
+		// Exercises subtypeRefWalk's owner-span exclusion / cls attribution for AbstractClassDecl:
+		// the property collapses AND the subtype's read is renamed `_active` -> `active`.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'abstract class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+					+ '\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek():Bool return _active;\n}' }
+		];
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
+		final out: Map<String, String> = crossFixApply(files);
+		final base: String = out['Base.hx'] ?? '';
+		final sub: String = out['Sub.hx'] ?? '';
+		Assert.isTrue(base.indexOf('active(default, null):Bool = false') >= 0);
+		Assert.isTrue(base.indexOf('get_active') == -1);
+		Assert.isTrue(sub.indexOf('return active;') >= 0);
+		Assert.isTrue(sub.indexOf('_active') == -1);
+	}
+
+	public function testAbstractSubtypeWriteBlocked(): Void {
+		// The subtype is itself an abstract class and WRITES the inherited backing
+		// field — the collapse must stay blocked. Integration guard: the block is
+		// carried by SymbolIndex's subtype machinery seeing the abstract subtype.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+					+ '\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Mid.hx', source: 'abstract class Mid extends Base {\n\tpublic function reset():Void _active = false;\n}' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
+	}
+
+	/**
+	 * A property and its trivial getter written inside a member-position `#if` are members of the
+	 * class like any other. The region is ONE child of the container holding every branch's members
+	 * flattened, so scanning the container's direct children alone silently exempted the whole trio.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate function get_active():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * The collapse renames the backing field into the PROPERTY's name, which only exists where the
+	 * property's branch compiles. A reader in another branch would be rewritten to a member its own
+	 * build does not have, so a guarded property whose backing field is mentioned outside its branch
+	 * is refused outright.
+	 */
+	public function testConditionalBackingFieldReadInAnotherBranchNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\t#end\n\tprivate var _active:Bool = false;\n\tprivate '
+				+ 'function get_active():Bool return _active;\n\t#if !cpp\n\tpublic function readIt():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * The getter duplicated across branches: the name-keyed table keeps only the LAST branch's, so the
+	 * collapse would delete the `#if` branch's side-effecting getter and route the property straight
+	 * to storage in that build — output that parses and compiles, and is silently wrong. The gate
+	 * requires every touched member to sit in ONE branch.
+	 */
+	public function testConditionalRivalGettersNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\t#if debug\n'
+				+ '\tprivate function get_active():Bool { trace(\'read\'); return _active; }\n\t#else\n'
+				+ '\tprivate function get_active():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * The collapse deletes the backing field and the getter together. When those are all of a
+	 * region's members, the result is a bare `#if … #end` the grammar does not model, so the
+	 * candidate is refused rather than emitted as a permanently unfixable advisory.
+	 */
+	public function testConditionalCollapseEmptyingItsRegionNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tpublic var active(get, never):Bool;\n\t#if cpp\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate function get_active():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A subtype that reaches its supertype through `import p.Owner as O;` must not be left
+	 * reading a backing field the collapse deleted. `affectedSubtypeFiles` ran its own
+	 * `supertypes.contains(parent)` scan over `allFiles()` instead of the index's subtype
+	 * adjacency, so an alias supertype was not a subtype to IT — while `subtypeBlocks` /
+	 * `subtypeFieldBlocks`, which do go through the index, saw the same subtype perfectly well on
+	 * the same tree. The collapse rewrote only the owner and the tree stopped compiling with
+	 * `Unknown identifier : _v` (Haxe 4.3.7); through a written `extends` the same fixture
+	 * rewrote both files and compiled, which is what placed the defect in this check rather than
+	 * in the index.
+	 *
+	 * The invariant asserted is the one the compiler enforces — the subtype may keep its `_active`
+	 * read only while the owner still declares the field — because it holds for BOTH acceptable
+	 * outcomes: rewriting the subtype too, and withholding the collapse. The written-`extends`
+	 * control pins the rewriting one, so a green run cannot come from the check going silent
+	 * everywhere.
+	 */
+	public function testAliasImportedSupertypeLeavesNoDanglingBackingRead(): Void {
+		assertNoDanglingBackingRead(crossFixApply(aliasSubtypeFiles('import p.Owner as O;\n', 'O')));
+		assertNoDanglingBackingRead(crossFixApply(aliasSubtypeFiles('import p.Owner in O;\n', 'O')));
+		final plain: Map<String, String> = crossFixApply(aliasSubtypeFiles('', 'Owner'));
+		assertNoDanglingBackingRead(plain);
+		Assert.isTrue((plain['p/Owner.hx'] ?? '').indexOf('active(default, null):Bool = false') >= 0, 'the control collapses');
+		Assert.isTrue((plain['p/Sub.hx'] ?? '').indexOf('return active;') >= 0, 'the control rewrites the subtype read');
+	}
+
+	/**
+	 * The residue that pin recorded, now closed — REPLACED by the parity it asked for rather than
+	 * weakened. `classifyOwnerBinding` asks `index.isSubtype`, whose walk now reads the same alias
+	 * hops `subtypesOf` reads on the way down, so the subtype's read is a rename edit instead of an
+	 * occurrence the completeness gate blocks on: through an alias the collapse REPORTS and rewrites
+	 * both files, exactly as the written-`extends` control does.
+	 *
+	 * Compile-proved rather than only asserted structurally: `lint --rule trivial-getter --fix` over
+	 * the two files produced the control's own edit count, and the compiler accepts the rewritten
+	 * tree. Both spellings, since the grammar projects `in` and `as` alike.
+	 */
+	public function testAliasImportedSupertypeRewritesBothFiles(): Void {
+		for (imports in ['import p.Owner as O;\n', 'import p.Owner in O;\n']) {
+			Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), aliasSubtypeFiles(imports, 'O')).length, imports);
+			final out: Map<String, String> = crossFixApply(aliasSubtypeFiles(imports, 'O'));
+			Assert.isTrue((out['p/Owner.hx'] ?? '').indexOf('active(default, null):Bool = false') >= 0, 'the owner collapses');
+			Assert.isTrue((out['p/Sub.hx'] ?? '').indexOf('return active;') >= 0, 'and the subtype read is rewritten');
+		}
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), aliasSubtypeFiles('', 'Owner')).length);
+	}
+
+	/**
+	 * The `${…}` sibling of the guard above: a block interpolation projects a `Block` child, which
+	 * the all-children-are-text predicate must refuse just as it refuses a bare `$name` `Ident` — a
+	 * whitelist of the text kind covers both, a blacklist of the `Ident` kind would cover only one
+	 * and would relocate `'${a + b}'` into a field initializer, where the identifiers are out of
+	 * scope and the result does not compile.
+	 */
+	public function testShapeACtorInitBlockInterpolatedStringStaysBypass(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n'
+			+ '\tpublic function new(name:String) {\n\t\t_label = \'$${name}!\';\n\t}\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n\t\t_label = v;\n'
+			+ '\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'$${name}!\'') >= 0);
+	}
+
+	/**
+	 * The same hole one kind over: a hex integer projects `HexLit`, not `IntLit`, so the movable-
+	 * literal kind list had to name it explicitly — `_mask = 0xFF;` was pushed onto the
+	 * `@:bypassAccessor` arm while the byte-equivalent `_mask = 255;` collapsed cleanly. A missing
+	 * kind in a movability list reads exactly like the dead `name` probe it sits next to: the check
+	 * refuses a rewrite it should make, and nothing fails.
+	 */
+	public function testShapeACtorInitHexLiteralMoveFix(): Void {
+		final src: String = cls(
+			'public var mask(get, set):Int;\n\tprivate var _mask:Int;\n\tpublic function new() { _mask = 0xFF; }\n'
+			+ '\tfunction get_mask():Int return _mask;\n\tfunction set_mask(v:Int):Int { redraw(); return _mask = v; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'mask\' has a trivial getter over backing field \'_mask\'; use \'var mask(default, set)\' and remove get_mask',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('mask(default, set):Int = 0xFF') >= 0);
+		Assert.isTrue(fixed.indexOf('get_mask') == -1);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1);
+	}
+
+	/**
+	 * The recognized ctor-init leaves the external-write count, so the fix does not merely reword a
+	 * finding — it can carry one ACROSS the bypass cap and change what gets written. Four writes,
+	 * one of them the movable ctor-init: with the init recognized the remaining three sit on the cap
+	 * and take the bypass arm (collapse + mark), where before they read as four and fell back to the
+	 * inline arm (`mark get_label inline`, the field kept). `testShapeAExactlyCapBypass` cannot see
+	 * this boundary — its backing field carries a decl initializer, so the ctor-init path is never
+	 * entered at all.
+	 */
+	public function testShapeACtorInitCrossesBypassCap(): Void {
+		final src: String = cls(
+			'public var label(get, set):String;\n\tprivate var _label:String;\n\tpublic function new() { _label = \'lit\'; }\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String { redraw(); return _label = v; }\n'
+			+ '\tfunction a():Void { _label = \'a\'; }\n\tfunction b():Void { _label = \'b\'; }\n\tfunction c():Void { _label = \'c\'; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\', remove '
+			+ 'get_label and mark 3 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('label(default, set):String = \'lit\'') >= 0);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'a\'') >= 0);
+		Assert.isTrue(fixed.indexOf('inline function get_label') == -1);
+		Assert.isTrue(fixed.indexOf('private var _label') == -1);
+	}
+
+	/**
+	 * Run the check + `crossFileFix` over `files`, apply every rename's per-file edits (unioned,
+	 * canonicalized), and return the resulting source per file — the in-test equivalent of `apq lint
+	 * --fix`'s cross-file commit. A file with no edits keeps its source.
+	 */
+	private function crossFixApply(files: Array<{ file: String, source: String }>): Map<String, String> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: TrivialGetter = new TrivialGetter();
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
+		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
+		for (rename in check.crossFileFix(files, vs, plugin, index)) for (slice in rename) {
+			final fileEdits: Array<{ span: Span, text: String }> = byFile[slice.file] ?? [];
+			for (e in slice.edits) fileEdits.push(e);
+			byFile[slice.file] = fileEdits;
+		}
+		final out: Map<String, String> = [];
+		for (f in files) {
+			final edits: Null<Array<{ span: Span, text: String }>> = byFile[f.file];
+			if (edits == null) {
+				out[f.file] = f.source;
+				continue;
+			}
+			out[f.file] = switch CanonicalEdit.canonicalize(f.source, edits, true, plugin) {
+				case Ok(text): text;
+				case Err(message):
+					Assert.fail('crossFix canonicalize Err ($message)');
+					f.source;
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * An owner whose trivial getter bridges `_active`, and a subtype in ANOTHER file that reads
+	 * that field directly. `subImports` is the subtype file's import line (empty for the written
+	 * control) and `superName` the name its `extends` clause spells.
+	 */
+	private function aliasSubtypeFiles(subImports: String, superName: String): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'p/Owner.hx',
+				source: 'package p;\nclass Owner {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+					+ '\tfunction get_active():Bool return _active;\n}'
+			},
+			{
+				file: 'p/Sub.hx',
+				source: 'package p;\n${subImports}class Sub extends $superName {\n\tpublic function peek():Bool return _active;\n}'
+			}
+		];
+	}
+
+	/**
+	 * The subtype may still read `_active` only while the owner still declares it — the shape
+	 * the compiler refuses otherwise.
+	 */
+	private function assertNoDanglingBackingRead(out: Map<String, String>): Void {
+		final owner: String = out['p/Owner.hx'] ?? '';
+		final sub: String = out['p/Sub.hx'] ?? '';
+		Assert.isTrue(
+			sub.indexOf('_active') < 0 || owner.indexOf('_active') >= 0, 'the subtype reads a backing field the owner no longer declares'
+		);
+	}
+
+}

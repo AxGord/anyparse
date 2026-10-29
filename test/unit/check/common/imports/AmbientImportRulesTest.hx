@@ -1,0 +1,479 @@
+package unit.check.common.imports;
+
+import anyparse.check.common.imports.RedundantImport;
+import unit.cli.CliFixture;
+
+/**
+ * The import rules under an AMBIENT import source, end to end through `unused-import`.
+ *
+ * An ambient source's statements are read by the modules under its directory, never by its own
+ * text — so the liveness question is cross-file by nature, and getting it wrong in either direction
+ * is a defect this rule's `fix` acts on: judged against its own text every ambient statement reads
+ * as dead and the fix deletes a load-bearing import, while a governed set the run could not
+ * establish makes the same verdict on the modules it never saw.
+ */
+@:nullSafety(Strict)
+class AmbientImportRulesTest extends Test {
+
+	/** An ambient source whose binding a module under it really uses. */
+	private static final LIVE_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/T.hx', source: 'package a;\n\nclass T {}\n' },
+		{ name: 'src/lib/import.hx', source: 'import a.T;\n' },
+		{ name: 'src/lib/Sub.hx', source: 'package lib;\n\nclass Sub extends T {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n}\n' }
+	];
+
+	/** The same shape with nothing under the directory referring to the bound name. */
+	private static final DEAD_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/T.hx', source: 'package a;\n\nclass T {}\n' },
+		{ name: 'src/lib/import.hx', source: 'import a.T;\n' },
+		{ name: 'src/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
+	];
+
+	/**
+	 * An ambient `using` of a module that calls its OWN statics extension-style — so the declaring
+	 * module depends on that statement and is one of its readers.
+	 */
+	private static final SELF_USING_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/import.hx', source: 'using aaa.Extqqw;\n' },
+		{
+			name: 'src/aaa/Extqqw.hx',
+			source: 'package aaa;\n\nclass Extqqw {\n\n\tpublic static function tagqqw(s: String): String {\n\t\treturn \'S\' + s;\n'
+				+ '\t}\n\n\tpublic static function twiceqqw(s: String): String {\n\t\treturn s.tagqqw().tagqqw();\n\t}\n\n}\n'
+		}
+	];
+
+	/** An ambient `using` nothing under its own directory reaches for — the same arm's reporting half. */
+	private static final DEAD_USING_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/lib/import.hx', source: 'using aaa.Extqqw;\n' },
+		{
+			name: 'src/aaa/Extqqw.hx',
+			source: 'package aaa;\n\nclass Extqqw {\n\n\tpublic static function tagqqw(s: String): String {\n\t\treturn \'S\' + s;\n'
+				+ '\t}\n\n}\n'
+		},
+		{ name: 'src/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
+	];
+
+	/**
+	 * An ambient `using` whose module lies under the directory it governs and never calls its own statics extension-style:
+	 * the module's only mention of the name is its own declaration, which no `using` is needed for.
+	 */
+	private static final SELF_MENTION_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/import.hx', source: 'using aaa.Extqqw;\n' },
+		{
+			name: 'src/aaa/Extqqw.hx',
+			source: 'package aaa;\n\nclass Extqqw {\n\n\tpublic static function tagqqw(s: String): String {\n\t\treturn \'S\' + s;\n'
+				+ '\t}\n\n\tpublic static function twiceqqw(s: String): String {\n\t\treturn Extqqw.tagqqw(s);\n\t}\n\n}\n'
+		},
+		{ name: 'src/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
+	];
+
+	/** An ambient statement whose target module lies INSIDE the subtree the source governs. */
+	private static final DECLARER_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/import.hx', source: 'import a.Zqq;\n' },
+		{ name: 'src/a/Zqq.hx', source: 'package a;\n\nclass Zqq {}\n' },
+		{ name: 'src/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
+	];
+
+	/**
+	 * A nearer ambient group whose ONLY binder of the name is `#if`-guarded, above a farther group
+	 * carrying the statement the module also spells itself.
+	 */
+	private static final GUARDED_NEARER_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/T.hx', source: 'package a;\n\nclass T {}\n' },
+		{ name: 'src/b/T.hx', source: 'package b;\n\nclass T {}\n' },
+		{ name: 'src/outer/import.hx', source: 'import a.T;\n' },
+		{ name: 'src/outer/inner/import.hx', source: '#if useB\nimport b.T;\n#end\n' },
+		{ name: 'src/outer/inner/Modq.hx', source: 'package outer.inner;\n\nimport a.T;\n\nclass Modq {}\n' }
+	];
+
+	/** The same shape with the nearer group's guard gone, so nothing competes for the name. */
+	private static final GUARDED_NEARER_CONTROL: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/T.hx', source: 'package a;\n\nclass T {}\n' },
+		{ name: 'src/b/T.hx', source: 'package b;\n\nclass T {}\n' },
+		// DECLARED, not merely named: an ambient statement whose module the run cannot read binds names
+		// this rule cannot enumerate, and the search for the group that decides a name has to refuse there.
+		{ name: 'src/b/Wqq.hx', source: 'package b;\n\nclass Wqq {}\n' },
+		{ name: 'src/outer/import.hx', source: 'import a.T;\n' },
+		{ name: 'src/outer/inner/import.hx', source: 'import b.Wqq;\n' },
+		{ name: 'src/outer/inner/Modq.hx', source: 'package outer.inner;\n\nimport a.T;\n\nclass Modq {}\n' }
+	];
+
+	/**
+	 * A file whose own `using` an ambient source repeats, with a SECOND own `using` beside it that offers the same access:
+	 * both modules extend a `Wqqz` with `zqq`, and the file calls it on one.
+	 */
+	private static final USING_RIVAL_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/Wqqz.hx', source: 'package a;\n\nclass Wqqz {}\n' },
+		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {\n\tpublic static function zqq(w:Wqqz):Int return 1;\n}\n' },
+		{
+			name: 'src/b/Rqq.hx',
+			source: 'package b;\n\nimport a.Wqqz;\n\nclass Rqq {\n\tpublic static function zqq(w:Wqqz):Int return 2;\n}\n'
+		},
+		{ name: 'src/lib/import.hx', source: 'using a.Sqq;\n' },
+		{
+			name: 'src/lib/Modq.hx',
+			source: 'package lib;\n\nimport a.Wqqz;\n\nusing b.Rqq;\nusing a.Sqq;\n\nclass Modq {\n'
+				+ '\tstatic function f(w:Wqqz):Int return w.zqq();\n}\n'
+		}
+	];
+
+	/**
+	 * The same shape with a rival whose `zqq` rejects the receiver: it offers no access of the file, so the deleted
+	 * statement's position is nobody's to take.
+	 */
+	private static final USING_QUIET_RIVAL_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/Wqqz.hx', source: 'package a;\n\nclass Wqqz {}\n' },
+		{ name: 'src/a/Oqqz.hx', source: 'package a;\n\nclass Oqqz {}\n' },
+		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {\n\tpublic static function zqq(w:Wqqz):Int return 1;\n}\n' },
+		{
+			name: 'src/b/Rqq.hx',
+			source: 'package b;\n\nimport a.Oqqz;\n\nclass Rqq {\n\tpublic static function zqq(o:Oqqz):Int return 2;\n}\n'
+		},
+		{ name: 'src/lib/import.hx', source: 'using a.Sqq;\n' },
+		{
+			name: 'src/lib/Modq.hx',
+			source: 'package lib;\n\nimport a.Wqqz;\n\nusing b.Rqq;\nusing a.Sqq;\n\nclass Modq {\n'
+				+ '\tstatic function f(w:Wqqz):Int return w.zqq();\n}\n'
+		}
+	];
+
+	/**
+	 * An own `using` an ambient source repeats, a rival above it declaring the same method, and the call on a `@:forward`
+	 * abstract: both modules answer the access the abstract hands to its underlying type, so the rival contests it.
+	 */
+	private static final USING_FORWARD_RIVAL_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/Wqqz.hx', source: 'package a;\n\nclass Wqqz {}\n' },
+		{ name: 'src/a/Fwdqqz.hx', source: 'package a;\n\n@:forward abstract Fwdqqz(Wqqz) from Wqqz {}\n' },
+		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {\n\tpublic static function zqq(w:Wqqz):Int return 1;\n}\n' },
+		{
+			name: 'src/b/Rqq.hx',
+			source: 'package b;\n\nimport a.Wqqz;\n\nclass Rqq {\n\tpublic static function zqq(w:Wqqz):Int return 2;\n}\n'
+		},
+		{ name: 'src/lib/import.hx', source: 'using a.Sqq;\n' },
+		{
+			name: 'src/lib/Modq.hx',
+			source: 'package lib;\n\nimport a.Fwdqqz;\n\nusing b.Rqq;\nusing a.Sqq;\n\nclass Modq {\n'
+				+ '\tstatic function f(w:Fwdqqz):Int return w.zqq();\n}\n'
+		}
+	];
+
+	/** The same shape with the rival `using` gone, so the two positions are interchangeable. */
+	private static final USING_RIVAL_CONTROL: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {}\n' },
+		{ name: 'src/b/Rqq.hx', source: 'package b;\n\nclass Rqq {}\n' },
+		{ name: 'src/lib/import.hx', source: 'using a.Sqq;\n' },
+		{ name: 'src/lib/Modq.hx', source: 'package lib;\n\nusing a.Sqq;\n\nclass Modq {}\n' }
+	];
+
+	/** A module whose sibling a NEARER ambient group binds to another declaration. */
+	private static final SIBLING_NEARER_TREE: Array<{ name: String, source: String }> = [
+		{
+			name: 'src/aaa/Modqqw.hx',
+			source: 'package aaa;\n\nclass Modqqw {}\n\nclass Othqqw {}\n'
+		},
+		{ name: 'src/ccc/Othqqw.hx', source: 'package ccc;\n\nclass Othqqw {}\n' },
+		{ name: 'src/import.hx', source: 'import aaa.Modqqw;\n' },
+		{ name: 'src/inner/import.hx', source: 'import ccc.Othqqw;\n' },
+		{
+			name: 'src/inner/Mqq.hx',
+			source: 'package inner;\n\nimport aaa.Modqqw;\n\nclass Mqq {\n\n\tvar a: Othqqw;\n\tvar b: Modqqw;\n\n}\n'
+		}
+	];
+
+	/** The same shape with the nearer group binding nothing of the statement's — where the deletion IS safe. */
+	private static final SIBLING_NEARER_CONTROL: Array<{ name: String, source: String }> = [
+		{
+			name: 'src/aaa/Modqqw.hx',
+			source: 'package aaa;\n\nclass Modqqw {}\n\nclass Othqqw {}\n'
+		},
+		{ name: 'src/ccc/Elsqqw.hx', source: 'package ccc;\n\nclass Elsqqw {}\n' },
+		{ name: 'src/import.hx', source: 'import aaa.Modqqw;\n' },
+		{ name: 'src/inner/import.hx', source: 'import ccc.Elsqqw;\n' },
+		{
+			name: 'src/inner/Mqq.hx',
+			source: 'package inner;\n\nimport aaa.Modqqw;\n\nclass Mqq {\n\n\tvar a: Othqqw;\n\tvar b: Modqqw;\n\n}\n'
+		}
+	];
+
+	/** An own enum import the ambient source repeats, beside an own import of another enum sharing its constructor `Red`. */
+	private static final CTOR_RIVAL_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/p/Col.hx', source: 'package p;\n\nenum Col {\n\tRed;\n}\n' },
+		{ name: 'src/p/Col2.hx', source: 'package p;\n\nenum Col2 {\n\tRed;\n}\n' },
+		{ name: 'src/lib/import.hx', source: 'import p.Col;\n' },
+		{
+			name: 'src/lib/Modq.hx',
+			source: 'package lib;\n\nimport p.Col2;\nimport p.Col;\n\nclass Modq {\n\n\tvar c: Col = Red;\n\tvar d: Col2;\n\n}\n'
+		}
+	];
+
+	@:pin('control')
+	@:killer('M-AMBIENT-GOVERNANCE-BLIND')
+	public function testAnAmbientImportAModuleUnderItUsesIsNotReported(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			'', findings(LIVE_TREE, ['src/a/T.hx', 'src/lib/import.hx', 'src/lib/Sub.hx']),
+			'the statement is read by the module under the directory, so the ambient source it sits in does not own its liveness'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-GOVERNANCE-BLIND')
+	public function testTheGovernedSetIsReadEvenWhenTheRunWasGivenTheAmbientSourceAlone(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			'', findings(LIVE_TREE, ['src/lib/import.hx']),
+			'the modules under the directory are a fact about the tree, not about the scope a run was given'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-GOVERNANCE-SHORT')
+	public function testAnAmbientImportNoModuleUnderItUsesIsStillReported(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			'src/lib/import.hx:a.T', findings(DEAD_TREE, ['src/a/T.hx', 'src/lib/import.hx', 'src/lib/Other.hx']),
+			'nothing under the directory binds the name, so the statement is dead and deletable'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-DECLARER-READS-USING')
+	public function testTheDeclaringModuleIsAReaderOfAnAmbientUsingOfItself(): Void {
+		#if (sys || nodejs)
+		// A module's own declaration outranks an IMPORT of itself, so it never needs one — but it does
+		// not `using` itself, and one that calls its own statics extension-style depends on exactly that
+		// statement. Checked against the compiler: the module compiles with the ambient `using` and
+		// fails with `String has no field tagqqw` without it.
+		Assert.equals(
+			'', findings(SELF_USING_TREE, ['src/import.hx', 'src/aaa/Extqqw.hx']),
+			'the declaring module is a reader of an ambient `using` of itself'
+		);
+		Assert.equals(
+			'src/lib/import.hx:aaa.Extqqw', findings(DEAD_USING_TREE, ['src/lib/import.hx', 'src/aaa/Extqqw.hx', 'src/lib/Other.hx']),
+			'an ambient `using` nothing under its directory reaches for is still reported'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-UNUSED-USING-SELF-MENTION')
+	public function testTheDeclaringModulesOwnDeclarationIsNoUseOfAnAmbientUsing(): Void {
+		#if (sys || nodejs)
+		// The module's mentions of its own name — its declaration, a qualified static call — bind that declaration and need
+		// no `using`. Checked against the compiler: the tree compiles with the ambient statement and without it.
+		Assert.equals(
+			'src/import.hx:aaa.Extqqw', findings(SELF_MENTION_TREE, ['src/import.hx', 'src/aaa/Extqqw.hx', 'src/lib/Other.hx']),
+			'a self-mention is no read of an ambient `using`'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-DECLARER-READS')
+	public function testTheModuleAnAmbientStatementImportsIsNotOneOfItsReaders(): Void {
+		#if (sys || nodejs)
+		// The governed subtree holds the declaring module, and the used-test is textual, so that
+		// module's own `class Zqq` read as a use of the statement that imports it — which no module
+		// ever needs of itself, and which made a stale statement in a root ambient source unreportable.
+		Assert.equals(
+			'src/import.hx:a.Zqq', findings(DECLARER_TREE, ['src/import.hx', 'src/a/Zqq.hx', 'src/lib/Other.hx']),
+			'the declaring module is not a reader of the import that names it'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-IMPORT-LEAF-ONLY-NAMES')
+	public function testASiblingTheNearerGroupDecidesKeepsTheOwnStatement(): Void {
+		#if (sys || nodejs)
+		// Checked against the compiler: with the own module import the bare sibling name means
+		// `aaa.Othqqw`, and without it the NEARER ambient group's `ccc.Othqqw` — a module import binds
+		// every type its module declares, so the chain can decide a sibling somewhere else entirely.
+		Assert.equals(
+			'', redundantFindings(SIBLING_NEARER_TREE, 'src/inner/Mqq.hx'),
+			'a nearer ambient group deciding a SIBLING name makes the deletion a retarget'
+		);
+		Assert.equals(
+			'src/inner/Mqq.hx:aaa.Modqqw', redundantFindings(SIBLING_NEARER_CONTROL, 'src/inner/Mqq.hx'),
+			'with nothing nearer competing for any of the statement\'s names it IS redundant'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-REDUNDANT-GUARDED-SKIP')
+	public function testAGuardedBinderInTheNearestGroupKeepsTheOwnStatement(): Void {
+		#if (sys || nodejs)
+		// Checked against the compiler: with the own statement the name means `a.T` in both builds;
+		// without it, `a.T` undefined and `b.T` with the define — the nearer group DECIDES the name, so
+		// searching past it because its binder is guarded reports a farther group as the provider.
+		Assert.equals(
+			'', redundantFindings(GUARDED_NEARER_TREE, 'src/outer/inner/Modq.hx'),
+			'a nearer ambient group binding the name under a guard makes the deletion a retarget'
+		);
+		Assert.equals(
+			'src/outer/inner/Modq.hx:a.T', redundantFindings(GUARDED_NEARER_CONTROL, 'src/outer/inner/Modq.hx'),
+			'with nothing nearer competing for the name the same statement IS redundant'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-REDUNDANT-USING-POSITION')
+	public function testAnOwnUsingIsKeptWhereAnotherUsingCouldTakeItsPosition(): Void {
+		#if (sys || nodejs)
+		// A `using` binds a name AND a position: extensions resolve in reverse declaration order and
+		// every own statement outranks every ambient one, so deleting the own copy hands each method to
+		// whichever rival is next. Checked against the compiler on a method both modules declare.
+		Assert.equals(
+			'', redundantFindings(USING_RIVAL_TREE, 'src/lib/Modq.hx'),
+			'another `using` in scope could take the position the deleted one held'
+		);
+		Assert.equals(
+			'src/lib/Modq.hx:a.Sqq', redundantFindings(USING_RIVAL_CONTROL, 'src/lib/Modq.hx'),
+			'with no rival `using` the ambient statement holds the same position'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-USING-CONTEST-ANY')
+	@:killer('M-USING-OFFER-OPEN')
+	public function testAnOwnUsingGoesWhereNoRivalOffersItsAccesses(): Void {
+		#if (sys || nodejs)
+		// The rival declares the method for another receiver, so it is passed over at the one access either could take.
+		// Checked against the compiler: the file prints the same with its own statement and without it.
+		Assert.equals(
+			'src/lib/Modq.hx:a.Sqq', redundantFindings(USING_QUIET_RIVAL_TREE, 'src/lib/Modq.hx'),
+			'a rival rejecting the receiver takes no position'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-USING-FORWARD-DECIDED')
+	public function testARivalOfAForwardedAccessContests(): Void {
+		#if (sys || nodejs)
+		// The abstract declares no `zqq`, so 4.3.7 hands the access to `Wqqz`, where both modules take it: deleting the own
+		// statement would hand it to the rival.
+		Assert.equals('', redundantFindings(USING_FORWARD_RIVAL_TREE, 'src/lib/Modq.hx'), 'the rival answers the forwarded access');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An own enum import the ambient source repeats, with an own import of another enum sharing a
+	 * constructor ABOVE it. An ambient statement reads as written ahead of every own one, so
+	 * deleting the own copy hands the bare `Red` to `p.Col2` — the identity argument holds per TYPE name
+	 * only, and a statement binding a value stays.
+	 */
+	@:pin('control')
+	@:killer('M-REDUNDANT-AMBIENT-VALUES')
+	public function testAnOwnStatementBindingAConstructorIsKeptBesideTheAmbientCopy(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			'', redundantFindings(CTOR_RIVAL_TREE, 'src/lib/Modq.hx'),
+			'deleting the own `import p.Col;` would hand `Red` to the own `import p.Col2;` written above it'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-GOVERNANCE-COMPLETE')
+	public function testAGovernedSetThatCannotBeEstablishedWithholdsEveryVerdict(): Void {
+		// The fixture is never written, so the modules under the ambient source's directory cannot be
+		// enumerated at all. A short set is not a smaller one: answering from it calls a statement dead
+		// on the readers the run never saw.
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'apq_absent_tree/a/T.hx', source: 'package a;\n\nclass T {}\n' },
+			{ file: 'apq_absent_tree/lib/import.hx', source: 'import a.T;\n' },
+			{ file: 'apq_absent_tree/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
+		];
+		Assert.equals('', reported(files, ''), 'an ambient source whose readers could not be enumerated is judged on nothing');
+	}
+
+	/**
+	 * `unused-import`'s findings over the tree-relative subset `analysed`, each as
+	 * `<file>:<import path>`, comma-joined in report order. The whole `tree` is written to disk —
+	 * the governed set is read from there, not from the analysed set.
+	 */
+	private function findings(tree: Array<{ name: String, source: String }>, analysed: Array<String>): String {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_ambient_rules', tree);
+		var out: String = '';
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final files: Array<{ file: String, source: String }> = [
+				for (name in analysed) { file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
+			];
+			out = reported(files, '$root/');
+		});
+		return out;
+		#else
+		return '';
+		#end
+	}
+
+	/**
+	 * `redundant-import`'s findings over `tree` written to disk, as `<file>:<import path>`, comma-joined
+	 * in report order. `subject` is the one module the run analyses — the chain is read from disk, so the
+	 * ambient sources need not be in the set.
+	 */
+	private function redundantFindings(tree: Array<{ name: String, source: String }>, subject: String): String {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_ambient_redundant', tree);
+		var out: String = '';
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final files: Array<{ file: String, source: String }> = [
+				for (entry in tree) if (!entry.name.endsWith('import.hx')) { file: '$root/${entry.name}', source: entry.source }
+			];
+			final violations: Array<Violation> = CheckFixture.violationsIn(new RedundantImport(), files);
+			out = [for (v in violations) '${v.file.substr(root.length + 1)}:${pathOf(v.message)}'].join(',');
+		});
+		return out;
+		#else
+		return '';
+		#end
+	}
+
+	/** Every `unused-import` finding as `<file without prefix>:<import path>`, comma-joined in report order. */
+	private function reported(files: Array<{ file: String, source: String }>, prefix: String): String {
+		final violations: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files);
+		return [
+			for (v in violations) '${v.file.substr(prefix.length)}:${pathOf(v.message)}'
+		].join(',');
+	}
+
+	/** The import path a finding names, taken from the quoted span of its message. */
+	private static function pathOf(message: String): String {
+		final open: Int = message.indexOf('\'');
+		final close: Int = message.indexOf('\'', open + 1);
+		return open < 0 || close < 0 ? message : message.substring(open + 1, close);
+	}
+
+}

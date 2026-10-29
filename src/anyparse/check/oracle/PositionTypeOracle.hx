@@ -2,6 +2,7 @@ package anyparse.check.oracle;
 
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
+import anyparse.check.common.types.ExplicitType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 

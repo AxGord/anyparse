@@ -1,0 +1,82 @@
+package anyparse.check.common.nullsafety;
+
+import anyparse.query.DeclaredNullity;
+import anyparse.query.NodeShape;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+
+/**
+ * Flags a comparison against `null` whose other operand is provably non-null, so
+ * the comparison is a constant — `if (x != null)` where `x` cannot be null.
+ *
+ * ## Type-aware, conservative
+ *
+ * The operand is proven non-null only when it is a plain identifier whose declared
+ * type is recovered via `TypeInfoProvider.declaredTypes` and is a non-`Null<…>` nominal
+ * type while the enclosing type is null-checked (`RefShape.nullSafetyMetaName`, e.g.
+ * `@:nullSafety`). Everything else — an unannotated local, a `Null<…>` field (absent
+ * from `declaredTypes`), a method-call or field-access operand — keeps the conservative
+ * default and is NOT flagged, so the check never reports a load-bearing null guard.
+ * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
+ *
+ * A bare VALUE type (`RefShape.nonNullableTypeNames` — Haxe `Int` / `Float` / `Bool` /
+ * `UInt`) is deliberately NOT a proof here, which is why the check asks
+ * `TypeResolver.isProvablyNonNullAtNullComparison` and not the general
+ * `isProvablyNonNull`. Those types are non-nullable on STATIC targets only, and a file
+ * containing `x != null` on one is a dynamic-target file by construction — the
+ * comparison does not compile otherwise (`On static platforms, null can't be used as
+ * basic type Int`). Every site the value-type arm would flag on real trees is a load-bearing
+ * dynamic-target guard, several inside an explicit `#if neko` / `#if (js && html5)`.
+ *
+ * `Severity.Info`; `fix` conservatively drops the redundant comparison where a safe span
+ * rewrite exists — unwrap the always-true `if (x != null)`, delete the always-false
+ * `if (x == null)`, or drop a conjunct / disjunct from a homogeneous `&&` / `||` chain (shared
+ * with `dead-null-guard` via `CheckScan.simplifyNullComparisonFixes`) — and refuses elsewhere.
+ * A declaration initialised by the literal `null` — a parameter default (`p:T = null`), a
+ * field or a local alike — is exempted at the proof, so it is never flagged; the residual
+ * soundness caveat is the proof trusts `@:nullSafety` without a strict-null check.
+ */
+@:nullSafety(Strict)
+final class UnnecessaryNullCheck extends RuleBase {
+
+	public function new() {
+		super('unnecessary-null-check', 'a comparison against null whose operand is provably non-null', RuleCategory.NullSafety);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final shape: RefShape = plugin.refShape();
+		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
+		final nullLitKind: Null<String> = shape.nullLiteralKind;
+		if (equalityKinds.length == 0 || nullLitKind == null) return [];
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
+			final root: QueryNode = tree;
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, plugin.typeSyntax, index);
+			function walk(node: QueryNode): Void {
+				if (opaqueKinds.contains(node.kind)) return;
+				final span: Null<Span> = node.span;
+				final operand: Null<QueryNode> = equalityKinds.contains(node.kind) ? NodeShape.nullComparedSide(node, nullLitKind) : null;
+				if (
+					span != null && operand != null && TypeResolver.isProvablyNonNullAtNullComparison(operand, root, shape, types)
+				) violations.push({
+					file: entry.file,
+					span: span,
+					rule: 'unnecessary-null-check',
+					severity: Severity.Info,
+					message: 'null check is redundant — operand is never null'
+				});
+				for (c in node.children) walk(c);
+			}
+			walk(tree);
+		});
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return CheckScan.simplifyNullComparisonFixes(plugin, source, violations);
+	}
+
+}

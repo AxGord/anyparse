@@ -1,0 +1,392 @@
+package anyparse.check.common.loops;
+
+import anyparse.query.BinderScan;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.IndexScope;
+import anyparse.query.NodeShape;
+import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
+
+/**
+ * Flags a `Map` read / write spelled as a method call where index access is idiomatic —
+ * `m.get(k)` → `m[k]`, `m.set(k, v)` → `m[k] = v` — per the user preference "access values
+ * with `map[key]`, set with `map[key] = value`". `Severity.Info` (a modernization cleanup),
+ * with an autofix.
+ *
+ * ## The receiver type is load-bearing — Map ABSTRACT only
+ *
+ * `m.get(k)` / `m.set(k, v)` share their AST with a call to any `get` / `set` method on any
+ * type, and index access `x[k]` / `x[k] = v` is valid ONLY on Haxe's `Map` abstract (its
+ * `@:arrayAccess` operators). The concrete `haxe.ds.StringMap` / `IntMap` / `ObjectMap`
+ * classes carry `.get` / `.set` but NO array access, so rewriting a `StringMap`-typed
+ * receiver to `m[k]` would not compile. So the check flags only when the receiver's declared
+ * outer-nominal type is a `RefShape.mapAbstractTypeNames` (`Map`), OR a
+ * `RefShape.nullableWrapperTypeNames` (`Null`) whose verbatim `:Type` source unwraps to a
+ * `mapAbstractTypeNames` nominal (`Null<Map<…>>`). The receiver may be a bare identifier
+ * (resolved via `TypeResolver.identBindingFrom` + `TypeInfoProvider.declaredTypes`, or — when it
+ * names no value binding at all — as an implicit-`this` read of an INHERITED member, resolved
+ * through `RefactorSupport.implicitThisMemberTypeSource`) OR a PATH
+ * — a chain of plain field accesses over an identifier or `this` (`this.m`, `obj.m`, `a.b.c`),
+ * whose root resolves the same way and whose field segments resolve cross-file through a
+ * `SymbolIndex` (`NominalTypes.pathRootTypeName` / `pathFinalMemberTypeSource`). An
+ * unresolvable receiver, a `StringMap` / `IntMap` / other concrete-map or unrelated type, and
+ * a receiver with a call / index access / `?.` link anywhere in its path are all conservative
+ * misses — the rule never flags without positive Map proof, since rewriting a non-Map to `[]`
+ * is a compile error.
+ *
+ * ## Arity + position
+ *
+ * A `get` call must have exactly one argument and a `set` call exactly two (`m.get(k, d)` /
+ * `m.set(k)` are a foreign method or a nonexistent overload — not rewritten). The `set`
+ * rewrite produces an ASSIGNMENT (`m[k] = v` / `obj.m[k] = v`), valid only in STATEMENT
+ * position, so `fix` emits it only when the call is a direct child of an `exprStatementKind`
+ * (`ExprStmt`); a `set` used as an expression is still flagged but left for a human. An
+ * unbraced control-flow branch body (`if (c) m.set(k, v);`) is still an `ExprStmt` — statement
+ * position — so the `set` fix DOES fire there, producing `if (c) m[k] = v;`. A `get` rewrite
+ * is an expression and fixes anywhere (`m.get(k).foo`, `f(m.get(k))`). Nested matches
+ * (`m.get(n.get(k))`) yield overlapping edits; `RefactorSupport.dropContainedEdits` keeps the
+ * outer, the inner is caught on the next `--fix` pass.
+ *
+ * A `set` whose VALUE argument is an object literal is not flagged at all: `m[k] = v` goes
+ * through the `Map` abstract @:arrayAccess write, which does not propagate the map value type
+ * into the argument the way `set(k, v)` does, so the literal keeps its own all-`var` inferred
+ * structure and fails to unify with any value type carrying even one `final` field (through
+ * `Null<V>` too). A value that merely CONTAINS a literal
+ * (`m.set(k, f({ a: 1 }))`) is unaffected — there the literal is typed against the parameter.
+ *
+ * ## Cross-file scope
+ *
+ * A path receiver's member types resolve through a `SymbolIndex` over the file set `run` is
+ * given, so on a changed-files SUBSET a type declared elsewhere reads as unresolvable and the
+ * finding is re-skipped. To keep nested cross-file lookups exposed by an earlier `--fix` pass
+ * converging, the check is listed among the `Cli` fixed-point loop's full-scope ids. `fix`
+ * itself needs no index: it re-extracts each call's structural shape and keeps only the spans
+ * `run` already validated.
+ *
+ * ## Grammar-agnostic
+ *
+ * Driven by `identKind`, `callKind`, `fieldAccessKind`, `exprStatementKind`,
+ * `mapAbstractTypeNames`, and `nullableWrapperTypeNames` (any missing kind → no-op); all type
+ * resolution requires `plugin is TypeInfoProvider`.
+ */
+@:nullSafety(Strict)
+final class PreferIndexAccess extends RuleBase {
+
+	private static inline final GET_METHOD: String = 'get';
+	private static inline final SET_METHOD: String = 'set';
+	private static inline final GET_ARG_COUNT: Int = 1;
+	private static inline final SET_ARG_COUNT: Int = 2;
+	private static inline final GET_MESSAGE: String = 'read a map value with map[key] instead of map.get(key)';
+	private static inline final SET_MESSAGE: String = 'set a map value with map[key] = value instead of map.set(key, value)';
+
+	public function new() {
+		super(
+			'prefer-index-access', 'a Map get/set call (m.get(k) / m.set(k, v)) replaceable with index access (m[k] / m[k] = v)',
+			RuleCategory.Loops
+		);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		// A path receiver's member types resolve cross-file; the index is built at most once, on
+		// first demand, because most runs never reach a path receiver that cleared every other gate.
+		final resolveSymbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
+		return RunScan.collectWith(files, plugin, config(plugin), (entry, root, c, violations) -> {
+			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(entry.source);
+			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);
+			// The invisible-binder scan is per FILE while the implicit-`this` gate is per site, and
+			// most files never reach it — so it is built at most once, on first demand. `computed`
+			// distinguishes a cached null (the grammar cannot answer) from "not yet scanned".
+			var binders: Null<Array<String>> = null;
+			var bindersComputed: Bool = false;
+			final resolveBinders: () -> Null<Array<String>> = () -> {
+				if (!bindersComputed) {
+					bindersComputed = true;
+					binders = BinderScan.resolverInvisibleBinderNames(root, c.shape);
+				}
+				return binders;
+			};
+			final matcher: (
+				QueryNode, Null<String>
+			) -> Null<Match> = (call, parentKind) ->
+				match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols, entry.file, resolveBinders);
+			collect(
+				root, null, c, matcher, m -> violations.push({
+					file: entry.file,
+					span: m.callSpan,
+					rule: 'prefer-index-access',
+					severity: Severity.Info,
+					message: m.isSet ? SET_MESSAGE : GET_MESSAGE
+				})
+			);
+		});
+	}
+
+	/** Rewrite each flagged `get` to `m[k]` and each statement-position `set` to `m[k] = v`, trusting `run`'s validated spans. */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return RunScan.editsWith(plugin, source, config(plugin), (tree, cfg) -> {
+			final byKey: Map<String, Match> = [];
+			collect(
+				tree, null, cfg, (call, parentKind) -> structuralMatch(call, parentKind, cfg),
+				m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m
+			);
+			return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
+				final text: Null<String> = editText(m, source);
+				return text == null ? null : { span: m.callSpan, text: text };
+			}));
+		});
+	}
+
+	/**
+	 * Whether `nominal` (with optional verbatim `source`) is a `Map`-abstract name, or
+	 * a nullable wrapper whose inner nominal is one — the shared `CheckScan` predicate.
+	 */
+	private static inline function nominalIsMap(nominal: String, source: Null<String>, cfg: Cfg): Bool {
+		return MapNominal.isMap(nominal, source, cfg.mapTypes, cfg.nullableWrappers, cfg.typeSyntax);
+	}
+
+	/** Resolve the per-grammar seams + type provider, or null when the grammar lacks a needed kind / type info. */
+	private static function config(plugin: GrammarPlugin): Null<Cfg> {
+		final shape: RefShape = plugin.refShape();
+		final identKind: Null<String> = shape.identKind;
+		final callKind: Null<String> = shape.callKind;
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		final exprStmtKind: Null<String> = shape.exprStatementKind;
+		final mapTypes: Array<String> = shape.mapAbstractTypeNames ?? [];
+		if (identKind == null || callKind == null || fieldKind == null || exprStmtKind == null || mapTypes.length == 0) return null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		if (provider == null) return null;
+		final typed: TypeInfoProvider = provider;
+		return {
+			shape: shape,
+			typed: typed,
+			identKind: identKind,
+			callKind: callKind,
+			fieldKind: fieldKind,
+			exprStmtKind: exprStmtKind,
+			objectLiteralKind: shape.objectLiteralKind,
+			mapTypes: mapTypes,
+			nullableWrappers: shape.nullableWrapperTypeNames ?? [],
+			typeSyntax: plugin.typeSyntax,
+			opaqueKinds: shape.opaqueKinds ?? [],
+			ternaryKind: shape.ternaryKind,
+			nullCoalKind: shape.nullCoalesceKind,
+			eqKind: shape.eqKind,
+			notEqKind: shape.notEqKind,
+			nullLitKind: shape.nullLiteralKind
+		};
+	}
+
+	/** Walk `node`, invoking `sink` for every `get` / `set` call on a `Map`-abstract receiver. */
+	private static function collect(
+		node: QueryNode, parentKind: Null<String>, cfg: Cfg, matcher: (QueryNode, Null<String>) -> Null<Match>, sink: Match -> Void
+	): Void {
+		if (cfg.opaqueKinds.contains(node.kind)) return;
+		if (node.kind == cfg.callKind) {
+			final m: Null<Match> = matcher(node, parentKind);
+			if (m != null) sink(m);
+		}
+		for (c in node.children) collect(c, node.kind, cfg, matcher, sink);
+	}
+
+	/**
+	 * If `call` is a `Map`-abstract `get(k)` / `set(k, v)` on an identifier or path receiver,
+	 * return the resolved match; else null. Layers the receiver-type gate and the
+	 * INFERENCE-FRAGILITY gate onto the structural shape from `structuralMatch`: a key (or set
+	 * value) whose subtree contains a null guard — a null-comparison ternary or `??` — with an
+	 * inference-open fallback is a conservative miss, because dropping the method-argument context
+	 * (`m[k]` types the key in VALUE mode) would flip that fallback's inferred constraint to
+	 * `Null<…>` and break an active `@:nullSafety` scope downstream
+	 * (`TypeResolver.isInferenceFragileNullGuard`).
+	 */
+	private static function match(
+		call: QueryNode, parentKind: Null<String>, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
+		cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String, invisibleBinders: () -> Null<Array<String>>
+	): Null<Match> {
+		final m: Null<Match> = structuralMatch(call, parentKind, cfg);
+		if (m == null) return null;
+		if (!receiverIsMap(m.recv, root, declaredTypes, declaredTypeSources, cfg, symbols, file, invisibleBinders)) return null;
+		for (i in 1...call.children.length) {
+			if (containsFragileNullGuard(call.children[i], m.callSpan, root, declaredTypes, cfg)) return null;
+		}
+		return m;
+	}
+
+	/** The rewrite text for `m`, or null when it is a `set` outside statement position (no safe expression form). */
+	private static function editText(m: Match, source: String): Null<String> {
+		final recvSpan: Null<Span> = m.recv.span;
+		final keySpan: Null<Span> = m.key.span;
+		if (recvSpan == null || keySpan == null) return null;
+		final recvSrc: String = source.substring(recvSpan.from, recvSpan.to);
+		final keySrc: String = source.substring(keySpan.from, keySpan.to);
+		if (!m.isSet) return '$recvSrc[$keySrc]';
+		if (!m.isStatement) return null;
+		final value: Null<QueryNode> = m.value;
+		if (value == null) return null;
+		final valSpan: Null<Span> = value.span;
+		return valSpan == null ? null : '$recvSrc[$keySrc] = ${source.substring(valSpan.from, valSpan.to)}';
+	}
+
+	/**
+	 * Whether `recv` is an identifier or path whose declared type resolves to a `Map`-abstract
+	 * nominal — directly (`Map`), or a nullable wrapper unwrapping to one (`Null<Map<…>>`). A bare
+	 * identifier resolves through its binding annotation, or — when it names no value binding at all
+	 * — through the enclosing type's member closure as an implicit-`this` read
+	 * (`RefactorSupport.implicitThisMemberTypeSource`, which walks the `extends` chain import-aware
+	 * and refuses a name any resolver-invisible binder shadows); a path resolves its root through
+	 * `pathRootTypeName` (a binding annotation, or, for `this`, the enclosing type; or, for a static
+	 * TYPE-name root, the unique type it names in scope — NOT the implicit-`this` arm, which is
+	 * bare-identifier only) and walks each field segment's member type cross-file through `symbols`.
+	 * An unresolved binding / path / type is a conservative miss — index access `[]` compiles only on
+	 * the abstract, so this gate never flags without positive Map proof.
+	 */
+	private static function receiverIsMap(
+		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg,
+		symbols: () -> Null<SymbolIndex>, file: String, invisibleBinders: () -> Null<Array<String>>
+	): Bool {
+		final path: Null<Array<String>> = NominalTypes.pathOf(recv, cfg.identKind, cfg.fieldKind);
+		if (path == null) return false;
+		if (path.length == 1) {
+			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
+			if (bindingFrom == null) return inheritedIsMap(recv, root, cfg, symbols, file, invisibleBinders);
+			final typeName: Null<String> = declaredTypes[bindingFrom];
+			return typeName != null && nominalIsMap(typeName, declaredTypeSources[bindingFrom], cfg);
+		}
+		final index: Null<SymbolIndex> = symbols();
+		if (index == null) return false;
+		// A value / this root resolves through the simple-name segment walk; a static TYPE-name
+		// root (no value binding) resolves import-aware from the reference file's scope.
+		final rootType: Null<String> = NominalTypes.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
+		final src: Null<String> = NominalTypes.pathReceiverMemberTypeSource(path, rootType, index, file);
+		if (src == null) return false;
+		final nominal: Null<String> = NominalTypes.outerNominalOf(src, cfg.typeSyntax);
+		return nominal != null && nominalIsMap(nominal, src, cfg);
+	}
+
+	/**
+	 * Whether an UNBOUND bare identifier is an implicit-`this` read of a `Map`-abstract member of
+	 * the enclosing type — in practice a member declared by a SUPERTYPE, which the scope resolver
+	 * does not answer for because it resolves declarations, not inheritance (an own-class field IS
+	 * answered, in this file or not). Requires the cross-file index; an unresolved member, or one
+	 * whose written type is not a `Map`, is a conservative miss like every other receiver here.
+	 */
+	private static function inheritedIsMap(
+		recv: QueryNode, root: QueryNode, cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String,
+		invisibleBinders: () -> Null<Array<String>>
+	): Bool {
+		final index: Null<SymbolIndex> = symbols();
+		if (index == null) return false;
+		final src: Null<String> = RefactorSupport.implicitThisMemberTypeSource(recv, root, cfg.shape, index, file, invisibleBinders());
+		if (src == null) return false;
+		final nominal: Null<String> = NominalTypes.outerNominalOf(src, cfg.typeSyntax);
+		return nominal != null && nominalIsMap(nominal, src, cfg);
+	}
+
+	/**
+	 * Whether `node`'s subtree contains a null guard — a ternary whose condition compares
+	 * against the null literal, or a `??` — whose FALLBACK operand (the branch taken when the
+	 * guarded value IS null: the else-branch of `!=`, the then-branch of `==`, the right
+	 * operand of `??`) is inference-fragile at `site`. For the ternary the identity shape is
+	 * NOT required: any null-comparison ternary re-typed in value mode lets the comparison's
+	 * `Null<…>` reach branch unification, so only the fallback's openness matters.
+	 */
+	private static function containsFragileNullGuard(
+		node: QueryNode, site: Span, root: QueryNode, declaredTypes: Map<Int, String>, cfg: Cfg
+	): Bool {
+		if (node.kind == cfg.ternaryKind && node.children.length == 3) {
+			final cond: QueryNode = node.children[0];
+			final eq: Bool = cond.kind == cfg.eqKind;
+			if ((eq || cond.kind == cfg.notEqKind) && NodeShape.nullComparedSide(cond, cfg.nullLitKind) != null) {
+				final fallback: QueryNode = eq ? node.children[1] : node.children[2];
+				if (TypeResolver.isInferenceFragileNullGuard(fallback, site, root, cfg.shape, declaredTypes)) return true;
+			}
+		}
+		return node.kind == cfg.nullCoalKind && node.children.length == 2
+			&& TypeResolver.isInferenceFragileNullGuard(node.children[1], site, root, cfg.shape, declaredTypes)
+			|| node.children.exists(c -> containsFragileNullGuard(c, site, root, declaredTypes, cfg));
+	}
+
+	/**
+	 * The structural shape of a `get(k)` / `set(k, v)` call on an identifier or path receiver —
+	 * the arity check, the receiver as a plain path, and the key / value / statement-position
+	 * extraction — WITHOUT the type gate. `run` layers the type + null-guard gates on top; `fix`
+	 * uses it alone and keeps only the spans `run` already flagged, so the fix trusts detection
+	 * and needs no cross-file index of its own.
+	 *
+	 * One gate here IS about the value expression, because it decides compilability rather than
+	 * taste: a `set` whose value argument is an `objectLiteralKind` node is refused. `m[k] = v`
+	 * goes through the `Map` abstract @:arrayAccess write, whose overload resolution does not
+	 * propagate the map value type into the argument the way a plain `set(k, v)` call does, so
+	 * an anonymous-structure literal keeps its own all-`var` inferred structure and fails to
+	 * unify with a value type carrying even one `final` field — the compiler then reports
+	 * `No @:arrayAccess function for haxe.ds.Map<K, V> accepts arguments of K and { … }`, which
+	 * names neither the literal nor the mutability. An all-`var` target accepts the literal, a
+	 * target with any `final` field does not, through `Null<V>` as well.
+	 * Field mutability is not knowable from the call site, so the whole shape is a conservative
+	 * miss, in the same direction as an unresolvable receiver. A value that merely CONTAINS a
+	 * literal (`m.set(k, f({ a: 1 }))`) is unaffected: there the literal is typed against the
+	 * parameter, not against the map.
+	 */
+	private static function structuralMatch(call: QueryNode, parentKind: Null<String>, cfg: Cfg): Null<Match> {
+		if (call.children.length < 1) return null;
+		final callee: QueryNode = call.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != cfg.fieldKind || method == null || callee.children.length != 1) return null;
+		final recv: QueryNode = callee.children[0];
+		if (NominalTypes.pathOf(recv, cfg.identKind, cfg.fieldKind) == null) return null;
+		final isSet: Bool = if (method == GET_METHOD && call.children.length == GET_ARG_COUNT + 1)
+			false;
+		else if (method == SET_METHOD && call.children.length == SET_ARG_COUNT + 1)
+			true;
+		else
+			return null;
+		if (isSet && cfg.objectLiteralKind != null && call.children[2].kind == cfg.objectLiteralKind) return null;
+		final callSpan: Null<Span> = call.span;
+		return callSpan == null ? null : {
+			callSpan: callSpan,
+			recv: recv,
+			key: call.children[1],
+			value: isSet ? call.children[2] : null,
+			isSet: isSet,
+			isStatement: parentKind == cfg.exprStmtKind
+		};
+	}
+
+}
+
+/** A resolved `Map`-abstract `get` / `set` call site. */
+private typedef Match = {
+	var callSpan: Span;
+	var recv: QueryNode;
+	var key: QueryNode;
+	var value: Null<QueryNode>;
+	var isSet: Bool;
+	var isStatement: Bool;
+};
+
+/** Per-run resolved seams + type provider. */
+private typedef Cfg = {
+	var shape: RefShape;
+	var typed: TypeInfoProvider;
+	var identKind: String;
+	var callKind: String;
+	var fieldKind: String;
+	var exprStmtKind: String;
+	var objectLiteralKind: Null<String>;
+	var mapTypes: Array<String>;
+	var nullableWrappers: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
+	var typeSyntax: TypeSyntaxReader;
+
+	var opaqueKinds: Array<String>;
+	var ternaryKind: Null<String>;
+	var nullCoalKind: Null<String>;
+	var eqKind: Null<String>;
+	var notEqKind: Null<String>;
+	var nullLitKind: Null<String>;
+};

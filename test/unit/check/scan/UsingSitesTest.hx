@@ -1,7 +1,7 @@
 package unit.check.scan;
 
 import anyparse.check.Severity;
-import anyparse.check.UnusedImport;
+import anyparse.check.common.imports.UnusedImport;
 import anyparse.check.scan.UsingSites;
 import anyparse.query.SymbolIndex;
 

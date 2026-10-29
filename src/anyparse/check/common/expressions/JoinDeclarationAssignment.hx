@@ -1,0 +1,221 @@
+package anyparse.check.common.expressions;
+
+import anyparse.check.scan.CheckScan;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.NodeShape;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
+import anyparse.query.SymbolIndex;
+
+using StringTools;
+
+/**
+ * Flags a bare local declaration immediately followed by its first assignment, joining the
+ * pair into an initialized declaration:
+ *
+ * ```haxe
+ * var defaults;
+ * defaults = value;
+ * // ->
+ * var defaults = value;
+ * ```
+ *
+ * `Info` -- the code is correct, this is a readability simplification. The `var`/`final`
+ * keyword and any `:type` are preserved; the `var`->`final` upgrade is left to
+ * `prefer-final` (this rule does one job -- joining), so on a full `--fix` the two compose
+ * to `final defaults = value;`. It also finishes what `prefer-if-expression-assignment`
+ * starts: that rule leaves `var x; x = if (…) …`, which this joins to `var x = if (…) …`.
+ *
+ * ## What is flagged
+ *
+ * Two CONSECUTIVE statements of one statement list (`ControlFlowSupport.blockKinds`) where:
+ *
+ * - the first is a local declaration (`localDeclKinds`) with NO initializer (`children`
+ *   empty) declaring exactly ONE variable -- a multi-declarator `var a, b;` (which projects
+ *   as a single decl whose span still spells `, b`) is skipped, detected by a top-level
+ *   comma in the declaration text (a comma inside a `<…>` / `(…)` type is not one);
+ * - the second is `name = rhs;` -- a PLAIN `=` (`assignKind`) whose l-value is exactly the
+ *   declared identifier (`identKind`, same name), not `name.f = …` / `name[i] = …`;
+ * - `rhs` does NOT reference `name` -- `var x; x = x + 1;` reads an uninitialized `x`, and
+ *   `var x = x + 1;` is a self-reference the compiler rejects;
+ * - no comment sits in a region the join drops (between the declaration and the r-value).
+ *
+ * Adjacency is required: a statement between the declaration and the assignment would have
+ * its evaluation reordered by the join, so only the IMMEDIATELY following assignment
+ * qualifies. That is also what makes this rule immune to the reachability hazard its
+ * constructor-arm siblings carry -- nothing at all can sit between the two, so the join can
+ * never hop a guard or an early exit (`var x:Int; if (c) return; x = f();` is not a
+ * candidate). The reported span is the declaration.
+ *
+ * ## Autofix
+ *
+ * `fix` replaces both statements with `<decl> = <rhs>;` -- the declaration verbatim minus
+ * its trailing `;` (keyword and `:type` kept), the r-value verbatim from its span. Needs
+ * `localDeclKinds`, `exprStatementKind`, `assignKind` and `controlFlowSupport` (any unset
+ * makes the check a no-op).
+ */
+@:nullSafety(Strict)
+final class JoinDeclarationAssignment extends RuleBase {
+
+	public function new() {
+		super(
+			'join-declaration-assignment',
+			'a bare local declaration immediately followed by its first assignment, joinable to an initialized declaration',
+			RuleCategory.Expressions
+		);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
+			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
+			final matches: Array<Match> = [];
+			collectMatches(tree, entry.source, comments, seams, matches);
+			for (m in matches) violations.push({
+				file: entry.file,
+				span: m.declSpan,
+				rule: 'join-declaration-assignment',
+				severity: Severity.Info,
+				message: 'this declaration and its next-line assignment can be joined into an initialized declaration'
+			});
+		});
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+			final matches: Array<Match> = [];
+			collectMatches(tree, source, comments, seams, matches);
+			final byKey: Map<String, Match> = [];
+			for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
+
+			return CanonicalEdit.dropContainedEdits(
+				CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: '${m.declText} = ${m.rhsSource};' }))
+			);
+		});
+	}
+
+	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */
+	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final localDeclKinds: Null<Array<String>> = shape.localDeclKinds;
+		if (localDeclKinds == null || localDeclKinds.length == 0) return null;
+		final exprStmtKind: Null<String> = shape.exprStatementKind;
+		if (exprStmtKind == null) return null;
+		final assignKind: Null<String> = shape.assignKind;
+		if (assignKind == null) return null;
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		return support == null ? null : {
+			localDeclKinds: localDeclKinds,
+			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
+			exprStmtKind: exprStmtKind,
+			assignKind: assignKind,
+			identKind: shape.identKind,
+			stringInterpKind: shape.stringInterpIdentKind,
+			blockKinds: support.blockKinds()
+		};
+	}
+
+	/** Collect every joinable (declaration, assignment) pair reachable under `node`. */
+	private static function collectMatches(
+		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, out: Array<Match>
+	): Void {
+		if (s.blockKinds.contains(node.kind)) {
+			final kids: Array<QueryNode> = node.children;
+			for (i in 0...kids.length - 1) {
+				final m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, s);
+				if (m != null) out.push(m);
+			}
+		}
+		for (c in node.children) collectMatches(c, source, comments, s, out);
+	}
+
+	/**
+	 * The join match for a `decl` immediately followed by `assign`, or null when they are
+	 * not a single-var bare declaration and its own first plain assignment (see the class
+	 * doc for every gate).
+	 */
+	private static function matchPair(
+		decl: QueryNode, assign: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
+	): Null<Match> {
+		if (!s.localDeclKinds.contains(decl.kind) || decl.children.length != 0) return null;
+		final name: Null<String> = decl.name;
+		final declSpan: Null<Span> = decl.span;
+		if (name == null || declSpan == null) return null;
+		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
+		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
+		final declText: String = source.substring(declSpan.from, declSpan.to - 1).rtrim();
+		if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // never joined
+
+		final binary: Null<QueryNode> = NodeShape.assignmentOf(assign, s.exprStmtKind, s.assignKind);
+		if (binary == null) return null;
+		final lhs: QueryNode = binary.children[0];
+		if (lhs.kind != s.identKind || lhs.name != name) return null;
+		final rhs: QueryNode = binary.children[1];
+		if (referencesName(rhs, name, s)) return null; // self-reference in the initializer
+
+		final assignSpan: Null<Span> = assign.span;
+		final rhsSpan: Null<Span> = rhs.span;
+		if (assignSpan == null || rhsSpan == null) return null;
+		// Re-bind to a non-null local: narrowing does not reach the struct literal below.
+		final keySpan: Span = declSpan;
+		final m: Match = {
+			declSpan: keySpan,
+			editSpan: new Span(keySpan.from, assignSpan.to),
+			declText: declText,
+			rhsSource: source.substring(rhsSpan.from, rhsSpan.to)
+		};
+		return droppedComment(keySpan, rhsSpan, assignSpan.to, comments) ? null : m;
+	}
+
+
+	/**
+	 * Whether any descendant of `node` is an occurrence of the local `name` -- either a plain
+	 * `identKind` reference or a `stringInterpKind` one (a braceless `$name` inside a
+	 * single-quoted string, which projects as a distinct kind, not `identKind`).
+	 */
+	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
+		return (node.kind == s.identKind || node.kind == s.stringInterpKind) && node.name == name
+			|| node.children.exists(c -> referencesName(c, name, s));
+	}
+
+	/**
+	 * Whether a comment sits inside the joined region `[declSpan.from, assignTo)` but outside
+	 * the two verbatim-kept spans -- the declaration minus its `;` (`[declSpan.from,
+	 * declSpan.to - 1)`) and the r-value. Such a comment (on the dropped `;`, the assignment's
+	 * `name =`, or between the statements) would be lost by the rebuild, so the pair is skipped.
+	 */
+	private static function droppedComment(
+		declSpan: Span, rhsSpan: Span, assignTo: Int, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Bool {
+		for (tok in comments) if (tok.from >= declSpan.from && tok.to <= assignTo) {
+			final inDecl: Bool = tok.from >= declSpan.from && tok.to <= declSpan.to - 1;
+			final inRhs: Bool = tok.from >= rhsSpan.from && tok.to <= rhsSpan.to;
+			if (!inDecl && !inRhs) return true;
+		}
+		return false;
+	}
+
+}
+
+/** The kinds `JoinDeclarationAssignment` reads. */
+private typedef Seams = {
+	var localDeclKinds: Array<String>;
+	var localDeclContinuationKinds: Array<String>;
+	var exprStmtKind: String;
+	var assignKind: String;
+	var identKind: String;
+	var stringInterpKind: Null<String>;
+	var blockKinds: Array<String>;
+}
+
+/** A joinable pair: the declaration span (finding key), the replaced span, and the two verbatim text pieces. */
+private typedef Match = {
+	var declSpan: Span;
+	var editSpan: Span;
+	var declText: String;
+	var rhsSource: String;
+}

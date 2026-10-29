@@ -1,7 +1,7 @@
 package unit.check;
 
-import anyparse.check.StaticConstant;
-import anyparse.check.UnusedPrivate;
+import anyparse.check.common.members.StaticConstant;
+import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
@@ -127,10 +127,10 @@ class BuildMacroMetaSeamTest extends Test {
 		],
 		'src/anyparse/query/MemberWriteScan.hx' => ['@:build', '@:autoBuild', '@:genericBuild', '@:coreApi'],
 		'src/anyparse/query/AllowGrants.hx' => ['@:allow'],
-		'src/anyparse/check/TrivialGetter.hx' => ['@:isVar'],
-		'src/anyparse/check/BackingFieldRefs.hx' => ['@:bypassAccessor'],
-		'src/anyparse/check/RedundantBypassAccessor.hx' => ['@:bypassAccessor'],
-		'src/anyparse/check/RedundantIsVar.hx' => ['@:isVar'],
+		'src/anyparse/check/common/members/TrivialGetter.hx' => ['@:isVar'],
+		'src/anyparse/check/common/members/BackingFieldRefs.hx' => ['@:bypassAccessor'],
+		'src/anyparse/check/common/members/RedundantBypassAccessor.hx' => ['@:bypassAccessor'],
+		'src/anyparse/check/common/members/RedundantIsVar.hx' => ['@:isVar'],
 		'src/anyparse/check/scan/PropertyStorage.hx' => ['@:bypassAccessor'],
 		'src/anyparse/check/scan/NativeCodeScan.hx' => [
 			'@:functionCode',
@@ -140,7 +140,7 @@ class BuildMacroMetaSeamTest extends Test {
 			'@:headerCode',
 			'@:cppNamespaceCode'
 		],
-		'src/anyparse/check/PreferInline.hx' => [
+		'src/anyparse/check/common/members/PreferInline.hx' => [
 			'@:',
 			'@:access',
 			'@:allow',

@@ -1,11 +1,11 @@
 package unit.check;
 
-import anyparse.check.DeadCode;
-import anyparse.check.DuplicateImport;
-import anyparse.check.SelfAssignment;
 import anyparse.check.Severity;
-import anyparse.check.UnusedImport;
-import anyparse.check.UnusedLocal;
+import anyparse.check.common.imports.DuplicateImport;
+import anyparse.check.common.imports.UnusedImport;
+import anyparse.check.common.unused.DeadCode;
+import anyparse.check.common.unused.SelfAssignment;
+import anyparse.check.common.unused.UnusedLocal;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;

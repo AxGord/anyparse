@@ -1,0 +1,353 @@
+package anyparse.check.common.loops;
+
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.NegationScan;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.ShapeVocab;
+import anyparse.query.SymbolIndex;
+
+/**
+ * Flags a loop (`for` / `while` / `do … while`) whose body opens with a bare `if (g) continue;` guard — the
+ * user's rule: combine `for` + `if` into `for (...) if (...) {`, preferred over a leading
+ * `if (!cond) continue;` that inverts the condition and wastes a line. `Severity.Info`,
+ * with an autofix in TWO arms.
+ *
+ * ## The two arms
+ *
+ * LIFT — the loop body IS the braced block, and the inverted guard becomes the header the
+ * loop did not have:
+ * `for (x in xs) { if (g) continue; REST }` → `for (x in xs) if (INV(g)) { REST }`.
+ *
+ * MERGE — the loop body is ALREADY a lifted header `if (c) { … }` whose braced block opens
+ * with the guard, so the inversion joins that header with `&&` rather than creating a second
+ * one:
+ * `for (x in xs) if (c) { if (g) continue; REST }` → `for (x in xs) if (c && INV(g)) { REST }`.
+ *
+ * Both arms rest on the same equivalence — a `continue` in that FIRST position is exactly "do not enter
+ * the body" — and both run every gate below. It holds for a `do … while` too: its `continue` goes on to
+ * the condition, which is where the inverted `if` leaves it (verified on `haxe --interp` 4.3.7), so `do {
+ * if (g) continue; REST } while (c);` lifts to `do if (!g) { REST } while (c);`. The merge arm additionally
+ * parenthesises whichever operand binds looser than `&&`: the KEPT header condition through
+ * `RefShape.andLowerPrecedenceKinds` (the same list `collapsible-if` merges with), and a De
+ * Morgan `||` negation through the `slotKind` argument `NegationScan.negateConditionText` /
+ * `BooleanLogicSupport.negateCondition` take — the merge slot is synthetic, so it is
+ * addressed by KIND where `simplify-negated-compound` passes a parent node.
+ *
+ * ## The inversion — De Morgan when possible, sound over NaN and null
+ *
+ * `INV` negates the guard condition `g` so the surviving iterations are the ones the
+ * `continue` skipped. When the grammar exposes a `BooleanLogicSupport` and `g` is
+ * comment-free, `NegationScan.negateConditionText` pushes De Morgan inward — right-nesting
+ * a parenthesised group wherever the flat `||` chain would strand a null-safety narrowing —
+ * otherwise (a seam-less grammar, or a comment inside `g`) it falls back to the verbatim
+ * text engine. Both agree on the leaf rules:
+ *
+ * - `!e` → `e` (strip the `!`, unwrapping a redundant paren so `!(a && b)` → `a && b`);
+ * - `a == b` → `a != b`, `a != b` → `a == b` (NaN-safe: IEEE `NaN == x` is false and
+ *   `NaN != x` true, so `!(a == b)` is `a != b` even with a NaN operand);
+ * - an ordered comparison `<` / `<=` / `>` / `>=` flips only where the operand types license it:
+ *   `!(a < b)` and `a >= b` DIFFER when an operand is a NaN or a `null`, so it stays wrapped;
+ * - `&&` / `||` distribute by De Morgan (`a && b` → `!a || !b`) on the seam path, or the
+ *   whole `g` wraps `!(g)` on the fallback path; a bare identifier / call / field access
+ *   → `!g`.
+ *
+ * ## Gates
+ *
+ * The guard must be the FIRST statement of a braced block with at least one statement AFTER
+ * it (a guard-only body is a no-op loop, left alone) — the loop body itself on the lift arm,
+ * the header-if's then-branch on the merge arm — and the guard a bare `if` (no `else`) whose
+ * then-branch is exactly `continue;` (bare or braced-single). A CASCADE — the statement right
+ * after the first guard is ANOTHER `if`-continue — is deliberately NOT flagged: the user keeps
+ * sequential `continue` guards, each introducing its own checks, rather than nesting them. A
+ * later `continue` deeper in REST is fine (the wrapped body still continues the same loop) and
+ * does not block the flag. A comment inside the guard, or between the block brace and the
+ * guard, would be lost by the rewrite, so such a guard is left unflagged.
+ *
+ * The merge arm adds two of its own. The header `if` must carry NO `else`: that branch fires
+ * on `!c` today and would fire on `!c || g` after the merge. And it needs
+ * `RefShape.andOperatorText` — unset, only the lift arm runs.
+ *
+ * The LIFT arm adds one more, and it is about POSITION rather than shape: the header it emits
+ * carries no `else`, so wherever the loop sits somewhere an `else` CAN follow, that trailing
+ * `else` rebinds to the emitted header: `if (p) for (x in xs) { if (x == 0) continue; trace(x);
+ * } else trace(0);` lifted to `if (p) for (x in xs) if (x != 0) { trace(x); } else trace(0);`
+ * runs the else-branch once per skipped element instead of once when `p` is false.
+ * So the arm runs only in a SHIELDED position. `IfExpressionChain.childShielded`
+ * carries one boolean down the walk, seeded true at the module root (nothing follows a
+ * top-level declaration but another one) and re-derived per child against
+ * `IfExpressionChain.shieldSeams`; it is false only in the then-branch of an else-carrying
+ * conditional, and wherever a chain of brace-less bodies inherits that exposure — so
+ * `if (p) while (ok) for (…) { … } else …` is refused too. The gate sits INSIDE `match`, so
+ * both `run`'s report and `fix`'s re-index read it from one place. That is belt and braces
+ * rather than an enforced invariant: `fix` only emits edits for spans `run` already
+ * reported, so no test flips if the gate moves into `walk` alone.
+ *
+ * The MERGE arm needs no such gate, and not by luck: position is irrelevant to it BY
+ * CONSTRUCTION. It rewrites an `if` that ALREADY exists — it edits that header's condition
+ * span and the body span, emits no new `if`, and so changes no else-binding anywhere. The
+ * tempting shape argument — that in an unshielded position the trailing `else` has ALREADY
+ * bound to the loop body's header `if`, leaving it three children where `match` accepts only
+ * the else-less two — describes the common non-`#if` case and is NOT an invariant.
+ * Counterexample, confirmed to FIRE:
+ * `if (p) #if X for (x in xs) if (c) { if (g) continue; trace(x); } #else trace(1); #end
+ * else trace(0);` parses as `IfStmt(p, Conditional(…), else)` — the `else` binds to
+ * `if (p)`, the header `if (c)` keeps TWO children, and the `Conditional` passes the
+ * unshielded flag through `RefactorSupport.isConditionalKind`. The arm fires there and
+ * rewrites the header to `if (c && !g)`, which is exactly right.
+ *
+ * ## Grammar-agnostic
+ *
+ * Driven by `ShapeVocab.statementLoopKinds` — `loopStatementKinds`, whose body is the
+ * last child, and `doWhileLoopKinds`, whose body is the FIRST (`LoopScan.loopBody`) —
+ * `continueStatementKind`, `ifStatementKinds` and `blockStmtKind` (any unset → no-op),
+ * plus `notKind` / `eqKind` / `notEqKind` / `parenKind` and the atomic-expression kinds
+ * (`identKind` / `callKind` / `fieldAccessKind` / …) that shape the inversion,
+ * `andOperatorText` / `andLowerPrecedenceKinds` / `logicalAndKind` that shape the merge, and
+ * `opaqueKinds` to skip macro reification. The dangling-else gate adds
+ * `ControlFlowSupport.blockKinds()` plus the delimited-host kinds
+ * `IfExpressionChain.shieldSeams` folds in, and `ifExpressionKinds` alongside
+ * `ifStatementKinds` for the conditional set. The two halves fail in OPPOSITE directions.
+ * Dropping a SHIELD entry only downgrades a TAIL child from proved-safe to inherited, so the
+ * LIFT arm then refuses MORE — the conservative direction. Dropping a CONDITIONAL entry does
+ * the reverse: `childShielded` ends with
+ * `!(index == THEN_BRANCH_INDEX && conditionalKinds.contains(parent.kind))`, so an EMPTY
+ * conditional set answers "shielded" for every non-tail child, the gate never fires and the
+ * arm refuses FEWER sites. `ifStatementKinds` is a hard `readSeams` requirement, which is
+ * what keeps Haxe safe; `ifExpressionKinds` is independently optional and is the ONE seam
+ * whose absence LOOSENS this gate — a genuine under-refusal risk for a future grammar with
+ * an if-expression form.
+ */
+@:nullSafety(Strict)
+final class LoopGuard extends RuleBase {
+
+	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
+	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
+
+	public function new() {
+		super(
+			'loop-guard', 'a loop whose body opens with an if-continue guard, liftable into — or mergeable with — a for/while … if header',
+			RuleCategory.Loops
+		);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
+			// The module root is shielded: nothing follows a top-level declaration but another
+			// one, so no `else` can reach a loop that inherits its exposure from there.
+			walk(
+				tree, violations, entry.file, entry.source, seams, true,
+				CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
+			);
+		});
+	}
+
+	/** Lift each flagged loop's leading guard into an inverted `if` header, replacing the body block. */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final byGuard: Map<String, Candidate> = [];
+			indexCandidates(tree, source, seams, byGuard, true);
+			final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
+				? null
+				: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, byGuard, (m, _) -> {
+				final bodySpan: Null<Span> = m.body.span;
+				final guardSpan: Null<Span> = m.guard.span;
+				if (bodySpan == null || guardSpan == null) return;
+				final rest: String = source.substring(guardSpan.to, bodySpan.to - 1);
+				final headerCond: Null<QueryNode> = m.headerCond;
+				if (headerCond == null) {
+					edits.push({ span: bodySpan, text: 'if (${invert(m.cond, source, seams, types)}) {$rest}' });
+					return;
+				}
+				final headerSpan: Null<Span> = headerCond.span;
+				final andOp: Null<String> = seams.andOperatorText;
+				if (headerSpan == null || andOp == null) return;
+				final kept: String = source.substring(headerSpan.from, headerSpan.to);
+				final lhs: String = seams.negation.andLowerPrecedenceKinds.contains(headerCond.kind) ? '($kept)' : kept;
+				edits.push({
+					span: headerSpan,
+					text: '$lhs $andOp ${invert(m.cond, source, seams, types, seams.negation.andKind)}'
+				});
+				edits.push({ span: bodySpan, text: '{$rest}' });
+			});
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
+	}
+
+	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
+	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final loopKinds: Array<String> = ShapeVocab.statementLoopKinds(shape);
+		if (loopKinds.length == 0) return null;
+		final continueKind: Null<String> = shape.continueStatementKind;
+		if (continueKind == null) return null;
+		final ifKinds: Null<Array<String>> = shape.ifStatementKinds;
+		if (ifKinds == null || ifKinds.length == 0) return null;
+		final blockStmtKind: Null<String> = shape.blockStmtKind;
+		if (blockStmtKind == null) return null;
+		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
+		return {
+			loopKinds: loopKinds,
+			doWhileKinds: shape.doWhileLoopKinds ?? [],
+			continueKind: continueKind,
+			ifKinds: ifKinds,
+			blockStmtKind: blockStmtKind,
+			bodyBlockKinds: blockKinds.length == 0 ? [blockStmtKind] : blockKinds,
+			exprBodyKinds: shape.expressionBodyKinds ?? [],
+			headerIfKinds: ShapeVocab.ifKinds(shape),
+			negation: NegationScan.negationSeams(shape),
+			opaqueKinds: shape.opaqueKinds ?? [],
+			support: plugin.booleanLogicSupport(),
+			andOperatorText: shape.andOperatorText,
+			shield: IfExpressionChain.shieldSeams(shape, blockKinds)
+		};
+	}
+
+	/** Walk `node`, flagging each loop whose body opens with a liftable `if`-continue guard. */
+	private static function walk(
+		node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams, shielded: Bool, ?types: (QueryNode) -> Null<String>
+	): Void {
+		if (s.opaqueKinds.contains(node.kind)) return;
+		if (s.loopKinds.contains(node.kind)) {
+			final m: Null<Candidate> = match(node, source, s, shielded);
+			// The lifted header tests the INVERTED guard condition; if that inversion cannot
+			// shed its `!( … )` wrap, the header reads worse than the `continue` it replaces.
+			if (m != null && NegationScan.negationIsClean(m.cond, source, s.support, types)) {
+				final span: Null<Span> = m.guard.span;
+				if (span != null) out.push({
+					file: file,
+					span: span,
+					rule: 'loop-guard',
+					severity: Severity.Info,
+					message: 'this leading if-continue guard can move to the loop header (for/while … if)'
+				});
+			}
+		}
+		for (i => c in node.children) walk(c, out, file, source, s, IfExpressionChain.childShielded(node, i, s.shield, shielded), types);
+	}
+
+	/** Index every liftable loop's candidate by its guard's `from:to` span key (for `fix` to re-find it). */
+	private static function indexCandidates(node: QueryNode, source: String, s: Seams, out: Map<String, Candidate>, shielded: Bool): Void {
+		if (s.opaqueKinds.contains(node.kind)) return;
+		if (s.loopKinds.contains(node.kind)) {
+			final m: Null<Candidate> = match(node, source, s, shielded);
+			if (m != null) {
+				final span: Null<Span> = m.guard.span;
+				if (span != null) out['${span.from}:${span.to}'] = m;
+			}
+		}
+		for (i => c in node.children) indexCandidates(c, source, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
+	}
+
+	/**
+	 * The candidate for `loop`, or null when neither arm applies. A braced loop body goes to
+	 * `matchBlock` as the LIFT arm (no header to merge with); a loop body that is itself a
+	 * header `if (c) { … }` goes there as the MERGE arm, carrying that header's CONDITION, and
+	 * must additionally have no `else`, a braced then-branch, and the two `&&` seams the merge
+	 * emits (`andOperatorText` for the joiner, `logicalAndKind` for the slot the inversion is
+	 * parenthesised against).
+	 */
+	private static function match(loop: QueryNode, source: String, s: Seams, shielded: Bool): Null<Candidate> {
+		final body: Null<QueryNode> = LoopScan.loopBody(loop, s.doWhileKinds);
+		if (body == null) return null;
+		// The LIFT arm creates an `if` header with NO `else`, so in a position an `else` can
+		// reach, that trailing `else` rebinds to the emitted header. Refuse there. The MERGE arm
+		// below needs none: it edits an EXISTING header's condition instead of emitting an `if`,
+		// so it changes no else-binding at all. See the dangling-else gate in the class doc.
+		if (s.bodyBlockKinds.contains(body.kind)) return shielded ? matchBlock(body, source, s, null) : null;
+		// The MERGE arm: the loop body is already a lifted header `if (c) { … }`, so the guard
+		// joins that header with `&&` instead of creating one. An `else` disqualifies the site —
+		// it fires on `!c` today and would fire on `!c || g` after the merge.
+		// `andKind` gates too: it is the slot the inversion is parenthesised against, and without it a
+		// De Morgan `||` result would land bare after the `&&` and silently re-associate.
+		if (s.andOperatorText == null || s.negation.andKind == null) return null;
+		// A `do … while` holds a body that is not a block in an expression-body wrapper, its `if` an
+		// if-EXPRESSION with a block-expression branch: `do if (c) { … } while (x);`.
+		final header: QueryNode = s.exprBodyKinds.contains(body.kind) && body.children.length == 1 ? body.children[0] : body;
+		if (!s.headerIfKinds.contains(header.kind) || header.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
+		final thenBranch: QueryNode = header.children[1];
+		return s.bodyBlockKinds.contains(thenBranch.kind) ? matchBlock(thenBranch, source, s, header.children[0]) : null;
+	}
+
+	/**
+	 * The leading guard `body` opens with, bundled with the header condition the MERGE arm joins it
+	 * to — or null when the body is not loop-guard's shape, or a comment before or inside that guard
+	 * would be lost by the rewrite.
+	 *
+	 * The shape test itself is `LoopScan.leadingContinueGuard`, and it lives there rather than here
+	 * because `guard-continue` must read the SAME answer to know what it may not claim: the two rules
+	 * fired on one loop body and gave opposite advice until they shared it.
+	 */
+	private static function matchBlock(body: QueryNode, source: String, s: Seams, headerCond: Null<QueryNode>): Null<Candidate> {
+		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, source, s.ifKinds, s.blockStmtKind, s.continueKind);
+		return guard == null ? null : {
+			guard: guard,
+			body: body,
+			cond: guard.children[0],
+			headerCond: headerCond
+		};
+	}
+
+	/**
+	 * The inverted source of guard condition `cond` — the negation the lifted `if` header tests.
+	 * `slotKind` is set on the merge arm, where the negation becomes the right operand of the
+	 * header's `&&` and a De Morgan `||` result must carry a parenthesis pair.
+	 */
+	private static function invert(
+		cond: QueryNode, source: String, s: Seams, ?types: (QueryNode) -> Null<String>, ?slotKind: String
+	): String {
+		return NegationScan.negateConditionText(cond, source, s.negation, s.support, types, slotKind);
+	}
+
+}
+
+/** The `RefShape` kinds `LoopGuard` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+	/** Every loop statement (`ShapeVocab.statementLoopKinds`); a `doWhileKinds` one carries its body FIRST, the rest last. */
+	var loopKinds: Array<String>;
+
+	var doWhileKinds: Array<String>;
+	var continueKind: String;
+	var ifKinds: Array<String>;
+	var blockStmtKind: String;
+
+	/**
+	 * The block kinds a loop body or a header's branch may be (`ControlFlowSupport.blockKinds`, `blockStmtKind` alone
+	 * without the support): a `for` / `while` body is a statement block, a `do … while` one a body block, the branch of
+	 * its header `if` a block expression.
+	 */
+	var bodyBlockKinds: Array<String>;
+
+	/** The wrapper a `do … while` puts around a body that is not a block (`RefShape.expressionBodyKinds`). */
+	var exprBodyKinds: Array<String>;
+
+	/** Every `if` a MERGE header may be (`ShapeVocab.ifKinds`): a `do … while` header is an if-expression. */
+	var headerIfKinds: Array<String>;
+	var negation: NegationSeams;
+	var opaqueKinds: Array<String>;
+	var support: Null<BooleanLogicSupport>;
+	var andOperatorText: Null<String>;
+
+	/**
+	 * The dangling-`else` gate's inputs: the parents that close every child with a delimiter,
+	 * and every `if` form a lifted header's missing `else` could be absorbed by.
+	 */
+	var shield: ShieldSeams;
+}
+
+/**
+ * A matched loop guard: the `if`-continue statement, the block whose span the rewrite replaces,
+ * the guard condition to invert, and — on the MERGE arm only — the CONDITION of the header `if`
+ * the inversion joins with `&&` (null on the LIFT arm, which creates that header instead).
+ */
+private typedef Candidate = {
+	var guard: QueryNode;
+	var body: QueryNode;
+	var cond: QueryNode;
+	var headerCond: Null<QueryNode>;
+}

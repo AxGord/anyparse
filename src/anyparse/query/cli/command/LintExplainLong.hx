@@ -1,8 +1,8 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.Check;
-import anyparse.check.LongLockExplain.LongLockReport;
-import anyparse.check.ThreadSafety;
+import anyparse.check.common.design.ThreadSafety;
+import anyparse.check.common.design.threads.LongLockExplain.LongLockReport;
 import anyparse.query.format.LintFormat.ExplainedLocks;
 
 using Lambda;

@@ -481,7 +481,7 @@ final class StructuralTypes {
 	 * compared by its written simple name. It is wrong for exactly one shape — an out-of-scope
 	 * `typedef` aliasing the other side's nominal, which would be followed if it resolved — which
 	 * leaves the std path and whatever no configured root reaches, the configured library half being
-	 * indexed. `unit.check.StructuralConformanceProofTest#testUnresolvableStructureMemberTypeRefutes`
+	 * indexed. `unit.check.common.members.StructuralConformanceProofTest#testUnresolvableStructureMemberTypeRefutes`
 	 * pins the residual, so a future instance is a test change rather than a silent one.
 	 */
 	private function comparableTypeOf(typeSource: String, host: ResolvedType, seen: Array<String>): Null<ComparableType> {

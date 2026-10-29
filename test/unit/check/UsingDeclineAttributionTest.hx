@@ -1,10 +1,10 @@
 package unit.check;
 
-import anyparse.check.DeadBinderCounterLoop;
-import anyparse.check.PreferExists;
-import anyparse.check.PreferFind;
-import anyparse.check.PreferLpad;
 import anyparse.check.Severity;
+import anyparse.check.common.literals.PreferLpad;
+import anyparse.check.common.loops.DeadBinderCounterLoop;
+import anyparse.check.common.loops.PreferExists;
+import anyparse.check.common.loops.PreferFind;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.ParseGate;

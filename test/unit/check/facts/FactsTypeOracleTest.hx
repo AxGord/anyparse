@@ -1,7 +1,7 @@
 package unit.check.facts;
 
 import anyparse.check.Check.OracleType;
-import anyparse.check.ExplicitType;
+import anyparse.check.common.types.ExplicitType;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.facts.FactsTypeSpelling;
 import anyparse.query.EditJournal;

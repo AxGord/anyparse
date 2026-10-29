@@ -2,9 +2,9 @@ package unit.check;
 
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
-import anyparse.check.Naming;
-import anyparse.check.UnusedPrivate;
-import anyparse.check.UnusedPublicMember;
+import anyparse.check.common.naming.Naming;
+import anyparse.check.common.unused.UnusedPrivate;
+import anyparse.check.common.unused.UnusedPublicMember;
 import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.NamingPolicy.FrameworkContract;

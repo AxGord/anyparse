@@ -1,12 +1,12 @@
 package unit.check.scan;
 
 import anyparse.check.Check;
-import anyparse.check.DoubleNegation;
-import anyparse.check.FoldStringLiterals;
-import anyparse.check.InvertNegatedIfElse;
-import anyparse.check.JoinStringAppend;
-import anyparse.check.RedundantToString;
-import anyparse.check.SimplifyNegatedCompound;
+import anyparse.check.common.control.DoubleNegation;
+import anyparse.check.common.control.InvertNegatedIfElse;
+import anyparse.check.common.control.SimplifyNegatedCompound;
+import anyparse.check.common.literals.FoldStringLiterals;
+import anyparse.check.common.literals.JoinStringAppend;
+import anyparse.check.common.literals.RedundantToString;
 import unit.cli.CliFixture;
 
 using Lambda;

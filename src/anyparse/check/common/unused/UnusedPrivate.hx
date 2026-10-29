@@ -1,0 +1,1002 @@
+package anyparse.check.common.unused;
+
+import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FrameworkAware;
+import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.scan.EnumAbstractForms;
+import anyparse.check.scan.ReflectionScan;
+import anyparse.query.IndexScope;
+import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberLookup.SupertypeProof;
+import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.query.NamingPolicy.NamedDecl;
+import anyparse.query.NamingPolicy.NamingCategory;
+import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
+import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeRefIndex;
+import anyparse.query.TypeResolver;
+
+using StringTools;
+
+/**
+ * Flags `private` class members (fields / methods) that are never referenced —
+ * dead members the formatter cannot remove. The completion of the unused-*
+ * family (import -> local -> private member) and the second consumer of the
+ * cross-file `SymbolIndex`.
+ *
+ * ## Confinement is occurrence-based, not structure-based
+ *
+ * A Haxe `private` member is reachable only from its own class — UNLESS a
+ * subtype, an `@:access` grant, or an `@:allow` exposes it across files, or a
+ * file the parser skipped hides one of those. When
+ * `RefactorSupport.isPrivateMemberConfined` proves none of those apply, the
+ * member's only possible references live in its declaring file, so a raw
+ * word-boundary scan of that file outside the declaration
+ * (`RefactorSupport.referencedInRange`) is a complete usage test.
+ *
+ * When the type is NOT structurally confined, the member is still flagged if the
+ * STRONGER cross-file proof holds (a project-owner decision): a raw word-boundary
+ * scan over EVERY file in report UNION resolution scope finds ZERO occurrences of
+ * the name outside its own declaration (`provablyDeadProjectWide`). A subtype /
+ * `@:access` grantee / `@:allow`ed type can only reach the member by NAMING it, so
+ * a name that appears nowhere is dead regardless of structure. Neither arm is
+ * coarse about skip-parse: the confinement gate asks `skippedMayReference` per
+ * MEMBER, and the cross-file proof needs no gate at all, since `nameOccursOutside`
+ * walks the index's RETAINED sources — skipped files included — with the same
+ * word-boundary test. What an unreadable file still costs is a FRAMEWORK contract
+ * whose chain root lives in it: that cannot be proven, the member is reported, and
+ * `--fix` declines it.
+ *
+ * ## Implicitly-reachable members are skipped
+ *
+ * Constructors, property accessors (`get_` / `set_`, reached via `(get, set)`,
+ * not by name), and annotation-bearing members (`@:keep`, abstract `@:from` /
+ * `@:op`, ...) can be used without an in-source identifier reference. The grammar
+ * marks these via `NamedDecl.implicitReach` — except when a conditional-compilation
+ * region sits between the annotation and the declaration, which
+ * `AnnotatedMemberScan` recovers; the check never flags them — a missed dead
+ * member, never a deleted live one. Members reachable only through a framework or
+ * macro across files are skipped too: a `static final` macro-force field
+ * (`= SomeType`, via `implicitReach`), and a utest `test*` method whose class
+ * transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved
+ * through the cross-file index).
+ *
+ * ## Members that are public despite no `public` keyword
+ *
+ * Three shapes carry no visibility keyword yet are not private, so they are exempt
+ * from the reference scan (`violationFor`): an `override` member inherits the
+ * base's visibility and is invoked polymorphically from unseen code; an
+ * `extern class` member is PUBLIC by the extern rule and reached from outside
+ * the file (`collectExternTypes` names its enclosing type); an `abstract` member
+ * is a contract implemented by subclasses, reachable through every implementor.
+ *
+ * A FOURTH exemption is not a modifier at all: a member a FRAMEWORK reaches by
+ * name, with no call written anywhere. The grammar's
+ * `NamingSupport.frameworkReachable` answers that, over the frameworks the
+ * language ships (utest's `test` / `spec` / `setup` / `teardown` prefixes on a
+ * `Test` subclass) UNIONED with the contracts the project declares in
+ * `apqlint.json` (`frameworks`). `unused-public-member` reads that roster through
+ * the same predicate and `naming` through the narrower `frameworkOwnsName`, so a
+ * project that declares a framework cannot get the carve-out from one rule and not
+ * its siblings.
+ *
+ * ## Autofix
+ *
+ * Deletion is CONSERVATIVE: the report stays broad (a member is flagged as soon as
+ * it is unreferenced and confined), but `fix` removes one only when every doubt is
+ * ruled out, so it never breaks another platform's build. A member is deleted only
+ * when its initializer is side-effect-free (a body-bearing method always
+ * qualifies, a body-less declaration never — `RefactorSupport.isSideEffectFree`),
+ * it is not an abstract-method impl of an `extends` class
+ * (`mayImplementAbstractMethod`: Haxe impls carry no `override` and the base's
+ * call is invisible to a single-file scan — unless the compiler's facts show no supertype
+ * declares the name, `supertypeDecline`), its enclosing type carries no `@:rtti`
+ * (model-Node serialization by field name), `@:keep`, or `@:build`, and its name
+ * appears in no string literal anywhere in the RESOLUTION scope — report files
+ * UNION the library, `ReflectionScan`'s scope, the only one a name-keyed
+ * reflection question is asked in — where it would be a possible `Reflect.field`
+ * target.
+ *
+ * Conditional compilation (`#if` / `#elseif` / `#else`) refines the reference scan
+ * rather than vetoing the file wholesale: a member in a `#if`-carrying file is
+ * deleted only when a raw word-boundary scan over EVERY file in report UNION
+ * resolution scope finds ZERO occurrences of its name outside its own declaration
+ * (`referencedElsewhere`) — raw text sees inside `#if` regions and comments, so
+ * zero hits proves it unreferenced in every branch; any occurrence keeps the
+ * whole-file veto in force. A separate arm deletes a `private function new() {}`
+ * that `run` proved never instantiated (the static-utility idiom), keeping the
+ * coarse whole-file `#if` veto (no-`#if` / no-`@:build` gates). The member is
+ * removed with its modifier / meta group and whole line, batched per file by the
+ * caller.
+ */
+@:nullSafety(Strict)
+final class UnusedPrivate extends RuleBase implements ConfigAware implements FrameworkAware {
+
+	/**
+	 * The one decline sentence two gates share: a member of a macro-built type, and a private empty
+	 * constructor of one. Only the MEMBER gate is live — the constructor one is a re-check no finding
+	 * reaches, since `run`'s collector already drops a macro-built type. The name is what keeps the
+	 * unreachable half saying the same thing as the live one if it ever starts firing, and keeps the
+	 * `--fix` ledger — which buckets by exact text — from growing two rows for one cause. Every other
+	 * gate spells its sentence inline, at its own condition.
+	 */
+	private static inline final DECLINE_BUILD_MACRO: String = 'the enclosing type is under a `@:build` macro, which reads the '
+		+ 'field list this deletion would change';
+
+	/** The decline of a member of an `extends` class the compiler's facts cannot clear (`supertypeDecline`). */
+	private static inline final DECLINE_ABSTRACT_IMPL: String = 'the member may implement an ABSTRACT method of the `extends` '
+		+ 'class — a Haxe impl carries no `override`, so the call in the base is invisible from here';
+
+	/** The decline of a member whose `extends` chain neither the facts nor the resolution scope resolve (`supertypeDecline`). */
+	private static inline final DECLINE_UNRESOLVED_CHAIN: String = 'a supertype of the `extends` chain is outside the resolution '
+		+ 'scope, so whether it declares this name (as an ABSTRACT method a Haxe impl implements without `override`) is unproven';
+
+	/**
+	 * RESOLUTION-scope string-literal contents gathered by the last `run` — `ReflectionScan.reflectionSurface`,
+	 * report files UNION the library — consulted by `fix`'s reflection gate. Null until `run` populates it;
+	 * `fix` then asks the same seam with the one source it is handed, which still unions the resolution scope.
+	 */
+	private var _reflectedContents: Null<Array<String>> = null;
+
+	/**
+	 * The files and the reflection surface the last `run` saw, from which `fix` builds the static-reach
+	 * scan on its first need (`staticReachOf`). Null until `run` populates it, which leaves the string gate
+	 * closed for every static.
+	 */
+	private var _reachInput: Null<{ files: Array<{ file: String, source: String }>, surface: ReflectionSurface }> = null;
+
+	/** The static-reach scan built from `_reachInput`, once per `run`. */
+	private var _staticReach: Null<StaticReflectionReach> = null;
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
+	public function new() {
+		super('unused-private', 'private field/method declared but never referenced', RuleCategory.Unused);
+	}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
+
+	/**
+	 * Report every unused private member (the `violationFor` reference test — an in-file
+	 * scan for a confined type, else the report-UNION-resolution zero-occurrence proof)
+	 * plus a deletable private empty constructor: a `private function new() {}` in a
+	 * never-instantiated all-static utility class (no structural `new C`, no reflection
+	 * mention of the class name, no use of the class as a value or through an alias, no `@:build`,
+	 * no subtype). The RESOLUTION-scope string-literal contents gathered here
+	 * (`ReflectionScan.reflectionSurface` — report UNION the library) serve TWO readers — `fix`'s per-member reflection gate, and the
+	 * constructor arm below, which asks them about the CLASS name. Widening the scope can only
+	 * add contents, so the arm can only stop reporting a constructor, never start.
+	 */
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final support: Null<NamingSupport> = plugin.namingSupport();
+		if (support == null) return [];
+		final index: SymbolIndex = IndexScope.report(files, plugin);
+		final scopeIndex: SymbolIndex = IndexScope.widestScopeIndex(plugin, index) ?? index;
+		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
+		final surface: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
+		final reflected: Array<String> = surface.whole;
+		final violations: Array<Violation> = [];
+		final ctorCandidates: Array<{ file: String, className: String, span: Span }> = [];
+
+		for (entry in files) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
+			if (tree == null) continue;
+			final externTypes: Array<String> = [];
+			collectExternTypes(tree, externTypes);
+			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
+			// project as unmodified — so PRIVATE — fields of a plain abstract, while every one of them
+			// is public API. Left in, the check deleted 15 of one real file's 17 colour constants.
+			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
+			// Hoisted once per file: a word inside a comment or an inert (non-interpolating) string
+			// no longer reads as a reference to the declaration that spells it.
+			final matchMask: Array<Span> = OccurrenceScan.inertMask(entry.source, plugin);
+			for (decl in support.project(tree)) if (!EnumAbstractForms.isValue(decl.span, guarded)) {
+				final v: Null<Violation> = violationFor(
+					entry.file, entry.source, decl, index, scopeIndex, support, externTypes, contracts, matchMask
+				);
+				if (v != null) violations.push(v);
+			}
+			collectCtorCandidates(plugin, tree, entry.file, ctorCandidates);
+		}
+		_reflectedContents = reflected;
+		_reachInput = { files: files, surface: surface };
+		_staticReach = null;
+		// TWO of the three proofs below need a file the parser could read — `hasSubtype` is
+		// structural and `mentionedInStrings` reads literals off parsed trees, while
+		// `isInstantiatedAnywhere` already scans the raw `files` array and so sees a `new C()`
+		// inside an unparseable one by itself. Both of the two are refuted only by a file that
+		// spells the CLASS, which is the handle a CONSTRUCTOR gives and the only one it gives, so
+		// the question is asked per class rather than per run: as `skippedFiles().length == 0` one
+		// unreadable file anywhere silenced this arm for every other.
+		//
+		// Keying on a TYPE name is the alias hole `skippedMayReference`'s own doc warns about — a
+		// file extending a `typedef` of the owner never spells it. `hasSubtype` beside it USED to
+		// share that hole, which is what made the pair look balanced; it now walks the typedef alias
+		// chain (`SubtypeGraph.subtypesOf`), so this half is the weaker of the two and the residue is
+		// exact: an UNREADABLE file that extends an alias of the owner. What is left needs the
+		// skipped file's own supertype clause, which is precisely what not parsing it withholds.
+		// A privilege reaching the class is asked by the constructor's member name: a waived
+		// `new M()` through an alias, a waived `C.new` reference and a grantee's construction
+		// spell no `new C` the raw scan can read.
+		for (c in ctorCandidates) if (
+			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className, c.file)
+			&& !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
+			&& !usedAsValue(c.className, files, plugin, index) && !isAliased(c.className, scopeIndex)
+			&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')
+		) violations.push({
+			file: c.file,
+			span: c.span,
+			rule: 'unused-private',
+			severity: Severity.Warning,
+			message: 'unused private constructor \'new\' of never-instantiated \'${c.className}\''
+		});
+		return violations;
+	}
+
+	/**
+	 * Delete the auto-fixable subset of `violations` under conservative gates: a
+	 * doubtful case stays report-only, so `--fix` never breaks another platform's
+	 * build. A flagged MEMBER is removed only when its initializer is side-effect-free (a body-bearing method always
+	 * qualifies, a body-less declaration never), it is not an abstract-method impl of an `extends` class (`mayImplementAbstractMethod`,
+	 * lifted when the compiler's facts clear the chain — `supertypeDecline`), its enclosing type carries no
+	 * `@:rtti` (model-Node field-name serialization, via the index), `@:keep`, or
+	 * `@:build`, and its name appears in no string literal anywhere in the RESOLUTION scope — report
+	 * files UNION the library, which is `ReflectionScan`'s scope and the only one a name-keyed
+	 * reflection question is asked in — where it would be a possible `Reflect.field` target.
+	 *
+	 * Conditional compilation refines rather than vetoes wholesale: a file carrying ANY
+	 * `#if` makes the single-file reference scan branch-blind, so a MEMBER in such a file
+	 * is deleted only when the raw word-boundary scan over EVERY file in report UNION
+	 * resolution scope finds ZERO occurrences of its name outside its own declaration
+	 * (`referencedElsewhere` over `widestScopeIndex`) — raw text sees inside `#if` regions
+	 * and comments, so zero hits proves it unreferenced in every branch. When an occurrence
+	 * exists (code under a `#if` arm, or a comment mention) the whole-file veto stands and
+	 * the member is kept. The private empty constructor arm keeps the coarse whole-file
+	 * `#if` veto (deleted only under no-`#if` / no-`@:build`). Each removal folds in the
+	 * member's modifier / meta group and whole line; the caller batches them into one
+	 * canonicalize per file.
+	 *
+	 * The deletable set then passes `MemberBranchScan.survivingDeletions`, the region guard
+	 * `unused-public-member`, `orphan-accessor` and `trivial-getter` already run and this check
+	 * alone was missing: a member-position `#if` region whose EVERY member is flagged keeps them
+	 * all. Emptying one leaves a shape the grammar does not model, and the re-parse gate then drops
+	 * every edit the pass had for the file — including the other checks'. The per-member gates
+	 * above cannot see it, since each is decided alone; the question is per EDIT SET.
+	 *
+	 * EVERY one of those gates writes its own sentence on the finding it declines, so `apq lint
+	 * --fix` names the cause instead of reporting a bare `declined` (`Violation.declineReason`, whose
+	 * only reader is that ledger — no reported byte moves); the two `@:build` sites share
+	 * `DECLINE_BUILD_MACRO`. The two remaining `continue`s get NONE by intent: a finding with no
+	 * span, and one whose span matches no member of THIS source, are not gates that closed — they
+	 * are a violation this call cannot place, and a sentence there would be invented rather than
+	 * the deciding gate speaking.
+	 */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		if (tree == null) return edits;
+		final hasConditional: Bool = fileHasConditional(source);
+		final scopeIndex: Null<SymbolIndex> = IndexScope.widestScopeIndex(plugin, index);
+		// Hoisted once per file — see `run`'s twin.
+		final matchMask: Array<Span> = OccurrenceScan.inertMask(source, plugin);
+
+		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }> = [];
+		collectMembers(tree, false, memberByFrom);
+		final classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }> = [];
+		collectClassMeta(plugin, tree, classMeta);
+		// The fallback path — `fix` reached without the `run` that fills the field. The empty path is a
+		// name no scope file has, so the source joins the scan as one more entry instead of shadowing a
+		// real one; what it is NOT any more is a scan of this file ALONE, since the seam unions the
+		// resolution scope onto whatever it is handed.
+		final reflected: Array<String> = _reflectedContents ?? ReflectionScan.reflectionSurface([{ file: '', source: source }], plugin)
+			.whole;
+		final shape: RefShape = plugin.refShape();
+		final pure: (QueryNode) -> Bool = initializerPurity(plugin, source, tree, index);
+
+		final deleting: Array<QueryNode> = [];
+		// The finding behind each member this call TRIED to delete, so the region gate below can name
+		// the one it took down. Keyed on the span the report and `memberByFrom` already agree on.
+		final attempted: Map<Int, Violation> = [];
+		for (v in violations) if (v.severity == Severity.Warning) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final hit: Null<{ node: QueryNode, parent: QueryNode, inExtends: Bool }> = memberByFrom[span.from];
+			if (hit == null) continue;
+			final node: QueryNode = hit.node;
+			final owner: Null<String> = hit.parent.name;
+			inline function attempt(): Void {
+				deleting.push(node);
+				attempted[span.from] = v;
+			}
+			if (isPrivateEmptyCtor(node)) {
+				if (hasConditional) {
+					v.declineReason = 'this is a private empty constructor and the file carries an `#if` region, so the '
+						+ 'never-instantiated proof behind its deletion is a whole-file one conditional compilation voids';
+					continue;
+				}
+				final ctorMeta: Null<{ hasBuild: Bool, hasKeep: Bool }> = owner == null ? null : classMeta[owner];
+				if (ctorMeta == null || !ctorMeta.hasBuild)
+					attempt();
+				else
+					v.declineReason = DECLINE_BUILD_MACRO;
+				continue;
+			}
+			if (hasConditional && referencedElsewhere(node.name, v.file, span, scopeIndex, source, matchMask)) {
+				v.declineReason = 'the file carries an `#if` region and the name occurs elsewhere in the resolution scope, so which '
+					+ 'branch reads it is not decidable from here';
+				continue;
+			}
+			final decline: Null<String> = memberDeclineReason(
+				node, owner, hit.inExtends, supertypeDecline.bind(plugin, v.file, source, owner, node.name, scopeIndex), index, classMeta,
+				reflected, pure, stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
+			);
+			if (decline == null)
+				attempt();
+			else
+				v.declineReason = decline;
+		}
+		final surviving: Array<QueryNode> = survivingPerType(
+			tree, MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source)), shape.conditionalMemberKind, deleting
+		);
+		noteRegionDeclines(deleting, surviving, attempted);
+		for (member in surviving) {
+			final span: Null<Span> = member.span;
+			final hit: Null<{ node: QueryNode, parent: QueryNode, inExtends: Bool }> = span == null ? null : memberByFrom[span.from];
+			if (span != null && hit != null)
+				edits.push(CheckScan.deletionEdit(source, member, hit.parent, span, plugin.lexicalRegions(source)));
+		}
+		return edits;
+	}
+
+	/**
+	 * The static-reach scan over what the last `run` saw, built on the first call and kept for the rest
+	 * of the run; null before any `run`, or when the grammar cannot answer it.
+	 */
+	private function staticReachOf(plugin: GrammarPlugin): Null<StaticReflectionReach> {
+		final input: Null<{ files: Array<{ file: String, source: String }>, surface: ReflectionSurface }> = _reachInput;
+		if (_staticReach == null && input != null) _staticReach = StaticReflectionReach.build(input.files, plugin, input.surface);
+		return _staticReach;
+	}
+
+	/**
+	 * Whether no string can reach `member` of `owner` (declared in `file`, child of `parent`) by reflection
+	 * — true only for a static of a class no class value of which escapes (`StaticReflectionReach`).
+	 */
+	private function stringsUnreachable(
+		member: QueryNode, parent: QueryNode, owner: Null<String>, file: String, plugin: GrammarPlugin, index: Null<SymbolIndex>
+	): Bool {
+		final name: Null<String> = member.name;
+		if (owner == null || name == null || index == null) return false;
+		if (!isStaticClassMember(member, parent, plugin.refShape().staticModifierKind)) return false;
+		final reach: Null<StaticReflectionReach> = staticReachOf(plugin);
+		return reach != null && !reach.staticReachable(owner, file, name, index);
+	}
+
+	/**
+	 * Whether `node` is a class body whose direct children carry the members and any
+	 * `extends` clause — `CheckScan.isClassBodyKind`: a plain, `final` / modified, or `abstract class`.
+	 */
+	private static inline function isClassScopeNode(kind: String): Bool {
+		return CheckScan.isClassBodyKind(kind);
+	}
+
+	/**
+	 * Raw-text presence of ANY conditional-compilation directive. In a file carrying one
+	 * the single-file reference scan is branch-blind, so a member used only under a `#if`
+	 * arm (and members declared inside one) would read as unused. A flagged MEMBER survives
+	 * this only via the report-UNION-resolution zero-occurrence proof (`referencedElsewhere`);
+	 * the empty-constructor arm keeps the coarse whole-file veto.
+	 */
+	private static inline function fileHasConditional(source: String): Bool {
+		return source.indexOf('#if') >= 0 || source.indexOf('#else') >= 0 || source.indexOf('#elseif') >= 0;
+	}
+
+	/** Space / tab / newline / carriage-return. */
+	private static inline function isWhitespace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	/**
+	 * Whether `member` might implement an abstract method of a base class — a method
+	 * (`FnMember` / `FinalModifiedMember`) that is lexically inside a class carrying
+	 * an `extends` clause (`inExtendsClass`, threaded through `#if` wrappers by
+	 * `collectMembers`). A Haxe abstract-method impl carries no `override` keyword
+	 * (so `violationFor`'s override carve-out does not catch it) and the base's call
+	 * is invisible to a single-file scan, so `--fix` must NOT auto-delete it: the
+	 * finding is still reported, but the declaration is kept. Conservative — every
+	 * method of a subclass is spared, since a single file cannot see which one the
+	 * base declares abstract, whether or not the base is in the linted file set.
+	 */
+	private static inline function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
+		return (member.kind == 'FnMember' || member.kind == 'FinalModifiedMember') && inExtendsClass;
+	}
+
+	/**
+	 * Why the `extends` chain of `owner` (declared in `file`) may still reach its member `name`, or null when it provably
+	 * does not: no supertype declares the name, so the member implements nothing (a private member redeclaring an
+	 * inherited one needs `override` unless the inherited one is abstract), and none carries `@:autoBuild`, whose macro
+	 * runs over this type as its own `@:build`. The compiler's facts answer first; where they cannot (no complete facts,
+	 * a supertype no configuration typed, an owner the facts do not place in `file`) the resolution scope does
+	 * (`MemberLookup.supertypeMemberProof` over `scopeIndex`, which holds the configured libraries): every link resolved,
+	 * none declaring the name, none under a build macro. Anything else keeps the abstract-method decline: the base's call
+	 * is invisible from here.
+	 */
+	private static function supertypeDecline(
+		plugin: GrammarPlugin, file: String, source: String, owner: Null<String>, name: Null<String>, scopeIndex: Null<SymbolIndex>
+	): Null<String> {
+		if (owner == null || name == null) return DECLINE_ABSTRACT_IMPL;
+		final oracle: Null<FactsTypeOracle> = FactsTypeOracle.forFix(plugin, file, source);
+		final facts: InheritedMember = oracle == null ? Untyped : oracle.inheritedMember(file, owner, name);
+		return switch facts {
+			case Undeclared: null;
+			case AutoBuilt(sup):
+				'the supertype `$sup` is `@:autoBuild`, whose macro builds this type as its own `@:build` and reads the '
+					+ 'field list this deletion would change';
+			case Declared(_): DECLINE_ABSTRACT_IMPL;
+			case Untyped: scopeIndex == null ? DECLINE_ABSTRACT_IMPL : scopeChainDecline(scopeIndex, file, owner, name);
+		};
+	}
+
+	/**
+	 * `supertypeDecline`'s answer from the resolution scope alone: null when every link of `owner`'s chain resolves and
+	 * none declares `name` or is under a build macro; else the gate, naming the macro-built supertype when there is one.
+	 */
+	private static function scopeChainDecline(scopeIndex: SymbolIndex, file: String, owner: String, name: String): Null<String> {
+		final built: Array<String> = [];
+		return switch scopeIndex.typing.members.supertypeMemberProof(owner, name, file, built) {
+			case Absent: null;
+			case Declares: DECLINE_ABSTRACT_IMPL;
+			case Unreachable if (built.length > 0):
+				'the supertype `${built[0]}` is under a build macro (`@:build` / `@:autoBuild`), which may add or read the member '
+					+ 'this deletion would remove';
+			case Unreachable: DECLINE_UNRESOLVED_CHAIN;
+		};
+	}
+
+	/**
+	 * Whether `name` is referenced anywhere in scope outside its own declaration `span` —
+	 * the gate that decides if a `#if`-carrying file's whole-file veto can be lifted. Scans
+	 * every file in `scopeIndex` (report UNION resolution) when present, excluding the
+	 * member's own declaration in its own `file`; falls back to the single `source` the
+	 * caller was handed when no index is available (a direct `fix` call). A null `name` has
+	 * nothing to prove absent, so the veto stands (`true`). Conservative: any occurrence —
+	 * code under a `#if` arm, a comment or string mention — keeps the member.
+	 */
+	private static function referencedElsewhere(
+		name: Null<String>, file: String, span: Span, scopeIndex: Null<SymbolIndex>, source: String, matchMask: Array<Span>
+	): Bool {
+		return name == null || (
+			scopeIndex != null
+				? scopeIndex.text.nameOccursOutside(name, file, span)
+				: OccurrenceScan.referencedInRange(source, name, 0, source.length, [span], matchMask)
+		);
+	}
+
+	/**
+	 * A `Warning` for `decl` if it is an unreferenced, non-implicitly-reachable private
+	 * member, else null. Skips public members, non-members (types / locals / params),
+	 * implicitly-reachable members.
+	 *
+	 * The usage test is OCCURRENCE-based, not structure-based (a project-owner decision):
+	 * a subtype, an `@:access` grant, or an `@:allow` could in principle reach a private
+	 * member across files, but only if it actually NAMES it — so the coarse structural
+	 * confinement gate is lifted whenever the STRONGER cross-file proof holds. When the
+	 * enclosing type is index-confined (`isPrivateMemberConfined`) an in-file reference
+	 * scan is a complete usage test; otherwise the member is flagged only when a raw
+	 * word-boundary scan over EVERY file in report UNION resolution finds ZERO occurrences
+	 * of the name outside its own declaration (`provablyDeadProjectWide`) — an unreferenced
+	 * name cannot be referenced by a subtype / grantee / allowed type either. That path
+	 * RETAINS the skip-parse veto (a skip-parsed report file could hide a reference the
+	 * scan cannot see, so any skip-parse in report scope keeps structural confinement).
+	 *
+	 * Three visibility carve-outs never reach the reference scan: an `abstract` member is a
+	 * contract implemented by subclasses, reachable through every implementor; an `override`
+	 * member inherits the base's visibility (not private) and is invoked polymorphically from
+	 * code a single-file scan cannot see; an `extern class` member carries no visibility
+	 * keyword yet is PUBLIC by the extern rule, and is reached from outside the file
+	 * (`externTypes` names its enclosing type).
+	 *
+	 * A FOURTH carve-out cannot be read off the modifiers at all: the IMPLEMENTATION of an abstract
+	 * member carries neither keyword, because Haxe rejects `override` on one. It is recognised by asking
+	 * the widest index whether a supertype declares the name — the question `prefer-inline` already asks
+	 * for the same reason.
+	 */
+	private static function violationFor(
+		file: String, source: String, decl: NamedDecl, index: SymbolIndex, scopeIndex: SymbolIndex, support: NamingSupport,
+		externTypes: Array<String>, contracts: Array<FrameworkContract>, matchMask: Array<Span>
+	): Null<Violation> {
+		final category: NamingCategory = decl.category;
+		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return null;
+		// An `abstract` member is a contract implemented by subclasses — reachable
+		// through every implementor, so never dead from the declaring class alone.
+		// The framework question goes to the WIDEST index for the reason the supertype question
+		// below does: the closure to a contract's root can run through a base declared in a
+		// resolution library, and the report index stops at the first supertype it cannot name — a
+		// driver `extends GameBase extends MonoBehaviour` with only `GameBase` outside the report
+		// scope would have its declared `Start` proposed for deletion.
+		if (
+			decl.mods.contains('public') || decl.mods.contains('override') || decl.mods.contains('abstract') || decl.implicitReach != null
+			|| support.frameworkReachable(decl, () -> scopeIndex, contracts)
+		)
+			return null;
+		final owner: Null<String> = decl.enclosingType;
+		final span: Null<Span> = decl.span;
+		if (owner == null || span == null || externTypes.contains(owner)) return null;
+		// An IMPLEMENTATION of an abstract supertype member carries neither `abstract` nor
+		// `override` — Haxe rejects `override` on one — so the modifier carve-outs above miss it
+		// while the base invokes it polymorphically through its own declaration. Asked of the
+		// WIDEST index, because the declaring base may live in a resolution library rather than
+		// the report scope. An unresolvable supertype leaves the member flaggable, as before.
+		if (scopeIndex.typing.members.supertypeDeclaresMember(owner, decl.name, file)) return null;
+		// The confinement question goes to the WIDEST index too: a `@:access` grant or a subtype
+		// declared OUTSIDE the report scope (but inside the project's `resolutionRoots`) is
+		// invisible to the narrow `index`, which would wrongly call the member confined to this
+		// one file and run a same-file-only scan that can never see the grantee. Widening can only
+		// ADD subtypes/grants `index` did not have, never remove one it did, so this can only turn
+		// an existing finding OFF — never invent one on a member that is genuinely referenced.
+		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, scopeIndex, null, file)
+			? !OccurrenceScan.referencedInRange(source, decl.name, 0, source.length, [span], matchMask)
+			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex, matchMask);
+		return unused ? {
+			file: file,
+			span: span,
+			rule: 'unused-private',
+			severity: Severity.Warning,
+			message: 'unused private \'${decl.name}\''
+		} : null;
+	}
+
+	/**
+	 * The unconfined-member usage test: whether `name` is provably dead across the whole
+	 * project — zero word-boundary occurrences outside its own declaration `span` in EVERY
+	 * file of report UNION resolution scope. A private member is reachable only from its own
+	 * class or a subtype / `@:access` grantee / `@:allow`ed type; if the raw scan (which sees
+	 * inside `#if` regions and comments) finds the name nowhere but its declaration, none of
+	 * those name it.
+	 *
+	 * That scan needs no parse and gets none: `nameOccursOutside` walks the index's RETAINED
+	 * sources, which include every skip-parsed file, with the same word-boundary test
+	 * `skippedMayReference` uses plus the interpolation escape. So a reference hiding in an
+	 * unreadable file already fails this proof by itself, and the `skippedFiles().length == 0`
+	 * this used to open with only put every OTHER member in the scope back on the structural
+	 * confinement gate. A cheap own-file pre-scan short-circuits the common referenced case
+	 * before the cross-file walk; the library scan runs only for a name already unique in
+	 * report scope.
+	 *
+	 * What an unreadable file still costs here is a FRAMEWORK contract whose chain root lives in it:
+	 * that cannot be proven, so a member the contract reaches is now reported where the run-wide
+	 * clause used to hide it. The CONFINED arm has behaved that way since it went per-name, so the
+	 * two arms agree, and `--fix` declines the member on the unresolvable `extends`.
+	 */
+	private static function provablyDeadProjectWide(
+		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex, matchMask: Array<Span>
+	): Bool {
+		return !OccurrenceScan.referencedInRange(source, name, 0, source.length, [span], matchMask)
+			&& !index.text.nameOccursOutside(name, file, span)
+			&& (scopeIndex == index || !scopeIndex.text.nameOccursOutside(name, file, span));
+	}
+
+	/**
+	 * Why removing `member`s declaration would drop behaviour, or null when it drops none: a
+	 * body-bearing method never executes at its site (deletable); a body-less declaration is a
+	 * contract whose implementation lives elsewhere (never deletable); a field is deletable only
+	 * when it has no initializer or one `pure` clears (its first child is the initializer expression): the type-aware deletion
+	 * purity `TypeResolver.isDeletionPure` when the fix has an index, the kind-only `MemberKinds.isSideEffectFree` without one.
+	 */
+	private static function shapeDecline(member: QueryNode, pure: (QueryNode) -> Bool): Null<String> {
+		// A body-less declaration has no dead code to remove — its implementation
+		// lives elsewhere (an `extern`'s in native code; an `abstract`'s in
+		// subclasses, though those are already exempt in `violationFor`).
+		for (c in member.children) if (c.kind == 'NoBody')
+			return 'the declaration has no body, so the implementation this would delete lives outside the file (an `extern` member '
+				+ 'in native code) and there is no dead code here to remove';
+		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return null;
+		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
+		return init == null || pure(init)
+			? null
+			: 'the initializer is not provably side-effect-free, so deleting the field would drop whatever it does';
+	}
+
+	/**
+	 * Whether a class-scope `node` carries an `extends` clause among its direct
+	 * children (`(ClassForm C (ExtendsClause …) …)`).
+	 */
+	private static function classDeclaresExtends(node: QueryNode): Bool {
+		return node.children.exists(child -> child.kind == 'ExtendsClause');
+	}
+
+	/**
+	 * Index every field / method member node by its span's `from` offset, each with
+	 * its direct parent (the context `declGroupSpan` needs to fold the member's
+	 * modifier / meta siblings) and whether it is lexically inside a class carrying
+	 * an `extends` clause. The extends flag is threaded top-down through transparent
+	 * wrappers: a member-level `#if … #end` region projects its members as children
+	 * of a `Conditional` node, so the enclosing class's `ExtendsClause` is a sibling
+	 * of that wrapper, NOT of the member — only a class-scope node
+	 * (`isClassScopeNode`) recomputes the flag from its own `extends` clause.
+	 */
+	private static function collectMembers(
+		node: QueryNode, inExtends: Bool, out: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }>
+	): Void {
+		final childExtends: Bool = isClassScopeNode(node.kind) ? classDeclaresExtends(node) : inExtends;
+		for (child in node.children) {
+			if (MemberKinds.isFieldMemberKind(child.kind)) {
+				final span: Null<Span> = child.span;
+				if (span != null) out[span.from] = { node: child, parent: node, inExtends: childExtends };
+			}
+			if (MemberKinds.descendsToMemberHost(node.kind, child.kind)) collectMembers(child, childExtends, out);
+		}
+	}
+
+	/**
+	 * Collect the simple names of every `extern class` in `node`'s subtree. The
+	 * `extern` keyword projects as a modifier sibling (`Extern`) preceding the
+	 * class decl (`(Extern) (ClassDecl C …)`), possibly after `Private` / `@:meta`
+	 * siblings, so the run of preceding modifier / meta siblings is scanned for it.
+	 * An extern member has no visibility keyword yet is PUBLIC, so its enclosing
+	 * type must be exempt from the private-member reference scan.
+	 */
+	private static function collectExternTypes(node: QueryNode, out: Array<String>): Void {
+		final siblings: Array<QueryNode> = node.children;
+		for (i in 0...siblings.length) {
+			final child: QueryNode = siblings[i];
+			final name: Null<String> = child.name;
+			if (name != null && isClassScopeNode(child.kind) && precededByExtern(siblings, i)) out.push(name);
+			collectExternTypes(child, out);
+		}
+	}
+
+	/**
+	 * Whether an `Extern` modifier sibling precedes the child at `index` — scanning
+	 * back over the contiguous run of modifier / meta siblings (`Private` / `Extern`
+	 * / `@:meta`) that a class decl may carry, stopping at the first non-modifier.
+	 */
+	private static function precededByExtern(siblings: Array<QueryNode>, index: Int): Bool {
+		var i: Int = index - 1;
+		while (i >= 0) {
+			final kind: String = siblings[i].kind;
+			if (kind == 'Extern') return true;
+			if (kind != 'Private' && kind != 'Meta' && kind != 'MetaCall') return false;
+			i--;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether `node` is the private empty constructor `private function new() {}` — a
+	 * `FnMember` named `new` with no parameters and an empty block body. Such a member
+	 * is only ever a violation via the constructor arm (`run` skips it for the member
+	 * scan), so a `new` finding in `fix` routes here.
+	 */
+	private static function isPrivateEmptyCtor(node: QueryNode): Bool {
+		return node.kind == 'FnMember' && node.name == 'new' && isEmptyCtorBody(node);
+	}
+
+	/** Whether a `FnMember`'s only child is an empty block body (no params, no statements). */
+	private static function isEmptyCtorBody(node: QueryNode): Bool {
+		return node.children.length == 1 && node.children[0].kind == 'BlockBody' && node.children[0].children.length == 0;
+	}
+
+	/** Whether `name` occurs as a word inside any collected string-literal content (a possible reflection target). */
+	private static function mentionedInStrings(name: String, contents: Array<String>): Bool {
+		return contents.exists(c -> OccurrenceScan.referencedInRange(c, name, 0, c.length, []));
+	}
+
+	/**
+	 * The class-scope node a decl child represents: itself for a plain `class` /
+	 * `abstract class`, the inner `ClassForm` for a `final class` (`FinalDecl`
+	 * wrapper), else null.
+	 */
+	private static function classFormOf(child: QueryNode): Null<QueryNode> {
+		if (isClassScopeNode(child.kind)) return child;
+		if (child.kind == 'FinalDecl') for (c in child.children) if (isClassScopeNode(c.kind)) return c;
+		return null;
+	}
+
+	/**
+	 * Index each class by name with its build-macro / retained-declaration annotations, asked through
+	 * the one seam-aware leading-run walk `AnnotatedDeclScan` owns rather than a private copy of it: a
+	 * copy with no region seam dropped the whole class's protection whenever a member-free `#if` sat
+	 * between the annotation and the class, and `--fix` then deleted its privates. Keyed on the OUTER
+	 * child (`siblings[index]`) so a `final class`'s leading meta - a sibling of the `FinalDecl`
+	 * wrapper, not of the inner form - is read once at the right level.
+	 *
+	 * WHICH annotations those are is the GRAMMAR's answer, not this file's: `RefShape`'s
+	 * `typeBuildMacroMetaNames` and `retainedDeclMetaName`. Spelling `'@:build'` / `'@:keep'` here was
+	 * the last Haxe tag written into a check, and it made the build-macro question have two answers -
+	 * this one, which knew only `@:build`, and `MemberWriteScan.carriesBuildMacro`, which knows all
+	 * three. A grammar declaring neither seam gets the empty answer its own projection already gives.
+	 */
+	private static function collectClassMeta(
+		plugin: GrammarPlugin, tree: QueryNode, out: Map<String, { hasBuild: Bool, hasKeep: Bool }>
+	): Void {
+		final shape: RefShape = plugin.refShape();
+		final build: Array<Int> = AnnotatedDeclScan.typeStartsAny(plugin, tree, shape.typeBuildMacroMetaNames);
+		final keep: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, shape.retainedDeclMetaName);
+		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
+			final span: Null<Span> = siblings[index].span;
+			out[name] = { hasBuild: AnnotatedDeclScan.covers(span, build), hasKeep: AnnotatedDeclScan.covers(span, keep) };
+		});
+	}
+
+	/**
+	 * Collect every class with a deletable-candidate private empty constructor: an
+	 * all-static-shaped utility class (has a `static` member) whose `private function
+	 * new() {}` exists purely to forbid instantiation, and which carries no `@:build`
+	 * macro. Instantiation / reflection are filtered by the caller (needs the full
+	 * file set).
+	 */
+	private static function collectCtorCandidates(
+		plugin: GrammarPlugin, tree: QueryNode, file: String, out: Array<{ file: String, className: String, span: Span }>
+	): Void {
+		final build: Array<Int> = AnnotatedDeclScan.typeStartsAny(plugin, tree, plugin.refShape().typeBuildMacroMetaNames);
+		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
+			// An abstract class is never instantiated by definition and its private
+			// empty ctor is the subclass-only idiom — `new` stays for `super()`.
+			if (classNode.kind == 'AbstractClassDecl') return;
+			if (AnnotatedDeclScan.covers(siblings[index].span, build)) return;
+			final ctor: Null<QueryNode> = privateEmptyCtorOf(classNode);
+			final cspan: Null<Span> = ctor?.span;
+			if (ctor != null && cspan != null && hasStaticMember(classNode)) out.push({ file: file, className: name, span: cspan });
+		});
+	}
+
+	/** The class's `private function new() {}` (empty body, no params), or null. */
+	private static function privateEmptyCtorOf(classNode: QueryNode): Null<QueryNode> {
+		final kids: Array<QueryNode> = classNode.children;
+		for (i in 0...kids.length) {
+			final child: QueryNode = kids[i];
+			if (child.kind == 'FnMember' && child.name == 'new' && isEmptyCtorBody(child) && precededByPrivate(kids, i)) return child;
+		}
+		return null;
+	}
+
+	/** Whether the member at `index` is preceded by a `Private` modifier (and not `Public`) in its meta / modifier run. */
+	private static function precededByPrivate(siblings: Array<QueryNode>, index: Int): Bool {
+		var i: Int = index - 1;
+		var sawPrivate: Bool = false;
+		while (i >= 0) {
+			final kind: String = siblings[i].kind;
+			if (kind == 'Private')
+				sawPrivate = true;
+			else if (kind == 'Public')
+				return false;
+			else if (kind != 'Meta' && kind != 'MetaCall')
+				break;
+			i--;
+		}
+		return sawPrivate;
+	}
+
+	/**
+	 * Whether `member` is a `static` member of the CLASS body `parent` — its modifier run, read back
+	 * from the member, holds `static`. A modifier the run does not show (behind a `#if`) reads as absent,
+	 * which only keeps the string gate closed.
+	 */
+	private static function isStaticClassMember(member: QueryNode, parent: QueryNode, staticKind: Null<String>): Bool {
+		if (staticKind == null || !CheckScan.isClassBodyKind(parent.kind)) return false;
+		var i: Int = parent.children.indexOf(member) - 1;
+		while (i >= 0 && MemberKinds.MODIFIER_META_KINDS.contains(parent.children[i].kind)) {
+			if (parent.children[i].kind == staticKind) return true;
+			i--;
+		}
+		return false;
+	}
+
+	/** Whether the class carries at least one `static` member (the utility-class shape). */
+	private static function hasStaticMember(classNode: QueryNode): Bool {
+		return classNode.children.exists(child -> child.kind == 'Static');
+	}
+
+	/** Whether `className` is instantiated (`new ClassName`) anywhere in the file set. */
+	private static function isInstantiatedAnywhere(className: String, files: Array<{ file: String, source: String }>): Bool {
+		return files.exists(entry -> containsInstantiation(entry.source, className));
+	}
+
+	/**
+	 * Whether any parsed file uses `className` as a VALUE — a reference to the class anywhere but the
+	 * receiver of a member access. A class value reaches its constructor with no `new` written
+	 * (`Type.createInstance(C, [])`), so it is never proven never-instantiated. Every spelling that can
+	 * denote the class counts: its simple name, a qualified path ending in it (`mk(app.C)`), and an
+	 * import alias of it (`import app.C as K`); the positive shape is the receiver slot alone, since that
+	 * is the only one a static-utility class needs.
+	 */
+	private static function usedAsValue(
+		className: String, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: SymbolIndex
+	): Bool {
+		final shape: RefShape = plugin.refShape();
+		function valueUse(node: QueryNode, parent: Null<QueryNode>, names: Array<String>): Bool {
+			final isReceiver: Bool = parent != null && parent.kind == shape.fieldAccessKind && parent.children[0] == node;
+			final named: Bool = node.kind == shape.identKind && names.contains(node.name ?? '') || node.kind == shape.fieldAccessKind
+				&& node.name == className;
+			return named && !isReceiver || node.children.exists(c -> valueUse(c, node, names));
+		}
+		return files.exists(entry -> {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
+			final names: Array<String> = [className];
+			final fi: Null<FileInfo> = index.fileInfo(entry.file);
+			if (fi != null)
+				for (alias => targets in TypeRefIndex.importAliasEdges(fi, true))
+					if (targets.contains(className)) names.push(alias);
+			tree != null && valueUse(tree, null, names);
+		});
+	}
+
+	/**
+	 * Whether a `typedef` in `index` aliases `className`: the alias's own name is then a class value of
+	 * the same class, spelled with a name the value scan was not asked about.
+	 */
+	private static function isAliased(className: String, index: SymbolIndex): Bool {
+		return index.allFiles().exists(f -> f.types.exists(t -> t.aliasTargetNominal == className));
+	}
+
+	/**
+	 * Raw-text scan for `new ClassName` in `source`: an occurrence of `className` at
+	 * an identifier boundary, immediately preceded (past whitespace) by the `new`
+	 * keyword. Sees inside `#if` regions (unlike the AST walkers), so a
+	 * conditionally-compiled instantiation is not missed.
+	 */
+	private static function containsInstantiation(source: String, className: String): Bool {
+		final len: Int = className.length;
+		if (len == 0) return false;
+		var i: Int = 0;
+		while (i + len <= source.length) {
+			final at: Int = source.indexOf(className, i);
+			if (at < 0) return false;
+			final afterIdx: Int = at + len;
+			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
+			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
+			if (beforeOk && afterOk && precededByNew(source, at)) return true;
+			i = at + 1;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the token ending just before `pos` (past whitespace, and past a package / module qualifier `pkg.sub.`) is the
+	 * `new` keyword at a word boundary — `new pkg.Type()` constructs `Type` as surely as `new Type()`.
+	 */
+	private static function precededByNew(source: String, pos: Int): Bool {
+		final kw: String = 'new';
+		var j: Int = skipWhitespaceBack(source, pos - 1);
+		while (j >= 0 && source.fastCodeAt(j) == '.'.code) {
+			j = skipWhitespaceBack(source, j - 1);
+			while (j >= 0 && SourceText.isIdentChar(source.fastCodeAt(j))) j--;
+			j = skipWhitespaceBack(source, j);
+		}
+		final start: Int = j + 1 - kw.length;
+		if (start < 0) return false;
+		for (k in 0...kw.length) if (source.fastCodeAt(start + k) != kw.fastCodeAt(k)) return false;
+		return start == 0 || !SourceText.isIdentChar(source.fastCodeAt(start - 1));
+	}
+
+	/**
+	 * Why a flagged MEMBER (not the constructor) fails a deletion gate, or null when it clears
+	 * every one: a side-effect-bearing or body-less declaration (`shapeDecline`), an abstract-method
+	 * impl of an `extends` class (`mayImplementAbstractMethod`), an enclosing type carrying `@:rtti`
+	 * / `@:keep` / `@:build`, or a name some in-scope string literal spells (a possible reflection
+	 * target). Any doubt keeps the member (still reported), and the sentence returned here is what
+	 * the `--fix` ledger prints for it.
+	 *
+	 * Each gate spells its OWN sentence at its OWN condition, rather than mapping a code to text
+	 * elsewhere, which is what keeps the two from drifting apart (`Violation.declineReason`).
+	 */
+	private static function memberDeclineReason(
+		node: QueryNode, owner: Null<String>, inExtends: Bool, supertypes: () -> Null<String>, index: Null<SymbolIndex>,
+		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>, pure: (QueryNode) -> Bool,
+		stringsUnreachable: () -> Bool
+	): Null<String> {
+		final shapeReason: Null<String> = shapeDecline(node, pure);
+		if (shapeReason != null) return shapeReason;
+		if (mayImplementAbstractMethod(node, inExtends)) {
+			final reason: Null<String> = supertypes();
+			if (reason != null) return reason;
+		}
+		if (owner != null) {
+			if (index != null && index.traits.transitivelyCarriesRtti(owner))
+				return 'the enclosing type transitively carries `@:rtti`, so its members are reachable by NAME at runtime';
+			final meta: Null<{ hasBuild: Bool, hasKeep: Bool }> = classMeta[owner];
+			if (meta != null && meta.hasBuild) return DECLINE_BUILD_MACRO;
+			if (meta != null && meta.hasKeep) return 'the enclosing type is `@:keep`, so nothing may drop a member of it';
+		}
+		final name: Null<String> = node.name;
+		return name == null || !mentionedInStrings(name, reflected) || stringsUnreachable()
+			? null
+			: 'the name occurs in a STRING somewhere in the resolution scope, where it would be a `Reflect.field` target';
+	}
+
+	/**
+	 * Visit each class declaration in `node`'s subtree, passing the class-scope node,
+	 * its name (guaranteed non-null), and its sibling run + index (for a leading-meta
+	 * scan). Descends into a class BODY, never the `FinalDecl` wrapper, so a `final
+	 * class`'s leading meta is read once at the right level.
+	 */
+	private static function forEachClassDecl(node: QueryNode, visit: (QueryNode, String, Array<QueryNode>, Int) -> Void): Void {
+		final kids: Array<QueryNode> = node.children;
+		for (i in 0...kids.length) {
+			final child: QueryNode = kids[i];
+			final classNode: Null<QueryNode> = classFormOf(child);
+			final name: Null<String> = classNode?.name;
+			if (classNode != null && name != null) {
+				visit(classNode, name, kids, i);
+				forEachClassDecl(classNode, visit);
+			} else {
+				forEachClassDecl(child, visit);
+			}
+		}
+	}
+
+	/**
+	 * `deleting` minus every member whose removal would leave a conditional region with no member
+	 * declaration at all — `MemberBranchScan.survivingDeletions`, the guard `unused-public-member`,
+	 * `orphan-accessor` and `trivial-getter` already run, folded over one TYPE declaration at a
+	 * time so their refusals accumulate.
+	 *
+	 * The fold is what keeps a MODULE-position region out of the guard's hands: `#if flash class C
+	 * { … } #end` may lose every member of `C` (`#if flash class C {} #end` parses), while a region
+	 * inside a type body may not, and the guard sees only the container it is handed. A module
+	 * region is therefore stepped THROUGH to the types it declares, never passed as a container —
+	 * the class-body callers above never meet this because they hand it one class.
+	 */
+	private static function survivingPerType(
+		node: QueryNode, seams: MemberBranchSeams, condKind: Null<String>, deleting: Array<QueryNode>
+	): Array<QueryNode> {
+		var out: Array<QueryNode> = deleting;
+		for (child in node.children)
+			out = condKind != null && child.kind == condKind
+				? survivingPerType(child, seams, condKind, out)
+				: MemberBranchScan.survivingDeletions(seams, child, out, c -> MemberKinds.isMemberDeclKind(c.kind));
+		return out;
+	}
+
+	/**
+	 * Write the region gate's sentence on the finding behind every member `survivingDeletions`
+	 * refused — the ones whose whole `#if` branch this call would have emptied.
+	 *
+	 * A fact about the SET, which no per-member gate can answer, so it is attributed here: at the
+	 * one place the drop becomes observable, and only for a member this call actually TRIED to
+	 * delete (`attempted`), never for one an earlier gate had already declined for its own cause.
+	 */
+	private static function noteRegionDeclines(
+		deleting: Array<QueryNode>, surviving: Array<QueryNode>, attempted: Map<Int, Violation>
+	): Void {
+		for (node in deleting) if (!surviving.contains(node)) {
+			final span: Null<Span> = node.span;
+			final declined: Null<Violation> = span == null ? null : attempted[span.from];
+			if (declined != null)
+				declined.declineReason = 'every member of its `#if` branch would go with it, and emptying a conditional region '
+					+ 'loses the branch itself';
+		}
+	}
+
+	/**
+	 * How `fix` judges a field initializer: by the deletion purity `unused-local` asks of a local's — with an index, a
+	 * plain field read, a pure array literal and a provably pure stdlib call widen the kind-only answer
+	 * (`TypeResolver.isDeletionPure`); without one, `MemberKinds.isSideEffectFree`.
+	 */
+	private static function initializerPurity(
+		plugin: GrammarPlugin, source: String, tree: QueryNode, index: Null<SymbolIndex>
+	): (QueryNode) -> Bool {
+		final shape: RefShape = plugin.refShape();
+		return index == null
+			? MemberKinds.isSideEffectFree.bind(_, shape)
+			: TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);
+	}
+
+	/** The last index at or before `j` that is not whitespace, or -1. */
+	private static function skipWhitespaceBack(source: String, j: Int): Int {
+		var at: Int = j;
+		while (at >= 0 && isWhitespace(source.fastCodeAt(at))) at--;
+		return at;
+	}
+
+}

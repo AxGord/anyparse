@@ -576,6 +576,65 @@ class ModuleMoveTest extends Test {
 		);
 	}
 
+	/**
+	 * A private type of a moved module is seen by that module only, so a module elsewhere that writes the same name for a
+	 * type its own import binds — one the analysed set does not hold — is not a reader whose meaning the move must prove.
+	 */
+	@:pin('control')
+	@:killer('M-MODMOVE-PRIVATE-PROBED')
+	public function testAPrivateTypeOfAMovedModuleIsNoNameAnotherModuleReads(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tvar c: Context;\n}\n\nprivate typedef Context = { var x: Int; }\n';
+		final user: String = 'package other;\n\nimport ext.Context;\n\nclass User {\n\tvar c: Context;\n}\n';
+		final out: ModuleMoveOutcome = moved(
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
+			[file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
+		);
+		Assert.equals(a.replace('package pkg;', 'package pkg.sub;'), textOf(out, 'src/pkg/sub/A.hx'));
+		Assert.isFalse(out.changes.exists(c -> c.file == 'src/other/User.hx'));
+	}
+
+	/**
+	 * A name the reader binds as a value of its own — here an `enum abstract` value, declared and read — means that value
+	 * whatever type of the name moves, so the reader gains no import.
+	 */
+	@:pin('control')
+	@:killer('M-MODMOVE-VALUE-SHADOW-PROBED')
+	public function testANameTheReaderBindsAsItsOwnValueGainsNoImport(): Void {
+		final a: String = 'package pkg;\n\nclass A {}\n';
+		final cat: String = 'package pkg;\n\nenum abstract Cat(String) {\n\tvar A = \'a\';\n\tvar B = \'b\';\n\n'
+			+ '\tpublic function isA(): Bool return this == A;\n}\n';
+		final out: ModuleMoveOutcome = moved(
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
+			[file('src/pkg/A.hx', a), file('src/pkg/Cat.hx', cat)]
+		);
+		Assert.isFalse(out.changes.exists(c -> c.file == 'src/pkg/Cat.hx'));
+		Assert.same([], out.imports);
+	}
+
+	/**
+	 * A value of the reader's own shadows the moved type's name only where it is in scope: beside a local `A` in one
+	 * function, a static receiver `A` and a type position `A` in another still read the moved type, so the reader still
+	 * gains the import — each read alone, so neither carries the other's import.
+	 */
+	@:pin('control')
+	@:killer('M-MODMOVE-VALUE-SHADOW-UNSCOPED')
+	public function testAValueOfTheReadersOwnShadowsTheMovedNameOnlyInItsScope(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic function new() {}\n\n\tpublic static function make(): Int return 1;\n}\n';
+		final local: String = '\tfunction f(): Int {\n\t\tfinal A: Int = 1;\n\t\treturn A;\n\t}\n\n';
+		for (other in [
+			'\tfunction g(): Int {\n\t\treturn A.make();\n\t}\n',
+			'\tfunction g(x: A): Void {}\n'
+		]) {
+			final user: String = 'package pkg;\n\nclass User {\n' + local + other + '}\n';
+			final out: ModuleMoveOutcome = moved(
+				[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
+				[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
+			);
+			Assert.equals(user.replace('package pkg;\n', 'package pkg;\n\nimport pkg.sub.A;\n'), textOf(out, 'src/pkg/User.hx'));
+			Assert.same(['src/pkg/User.hx: import pkg.sub.A;'], out.imports);
+		}
+	}
+
 	private static inline function move(from: String, to: String): ModuleRelocation {
 		return { from: from, to: to };
 	}

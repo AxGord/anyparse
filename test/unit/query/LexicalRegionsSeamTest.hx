@@ -104,7 +104,8 @@ class LexicalRegionsSeamTest extends Test {
 	 * `anyparse.query`, `anyparse.check` and `anyparse.format` may name ANY `anyparse.grammar.*`
 	 * package in EXACTLY the modules on this list, and this asserts the list rather than a count.
 	 *
-	 *  - `check/LintConfig.hx`, `check/LintDocuments.hx`, `check/RuleDeclaration.hx`, `check/ThreadSafetyOptions.hx`,
+	 *  - `check/LintConfig.hx`, `check/LintDocuments.hx`, `check/common/design/RuleDeclaration.hx`,
+	 *    `check/common/design/threads/ThreadSafetyOptions.hx`,
 	 *    `check/config/ApqLintConfig.hx`, `check/config/OwnedTypesDeclaration.hx` and `check/oracle/OracleDeclaration.hx` — `apqlint.json`
 	 *    IS a JSON document, so the config reader and the readers of keys whose shape it does not type (`compilerOracle`, `ownedTypes`, the
 	 *    declarative rule options, the `thread-safety` options) consume `anyparse.grammar.json.JValue` as their value type. A shipped
@@ -144,8 +145,8 @@ class LexicalRegionsSeamTest extends Test {
 		final allowed: Array<String> = [
 			'src/anyparse/check/LintConfig.hx',
 			'src/anyparse/check/LintDocuments.hx',
-			'src/anyparse/check/RuleDeclaration.hx',
-			'src/anyparse/check/ThreadSafetyOptions.hx',
+			'src/anyparse/check/common/design/RuleDeclaration.hx',
+			'src/anyparse/check/common/design/threads/ThreadSafetyOptions.hx',
 			'src/anyparse/check/config/ApqLintConfig.hx',
 			'src/anyparse/check/config/OwnedTypesDeclaration.hx',
 			'src/anyparse/check/oracle/OracleDeclaration.hx',

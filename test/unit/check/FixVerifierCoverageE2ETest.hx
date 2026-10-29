@@ -3,8 +3,8 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.AvoidDynamic;
 import anyparse.check.FixVerifier;
+import anyparse.check.common.types.AvoidDynamic;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.OracleCoverage;
 import unit.cli.CliFixture;

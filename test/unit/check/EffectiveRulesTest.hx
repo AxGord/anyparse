@@ -4,10 +4,10 @@ package unit.check;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import anyparse.check.AvoidDynamic;
 import anyparse.check.Check;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
+import anyparse.check.common.types.AvoidDynamic;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 

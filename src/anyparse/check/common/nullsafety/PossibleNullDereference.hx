@@ -1,0 +1,165 @@
+package anyparse.check.common.nullsafety;
+
+import anyparse.check.Check.NoAutofix;
+import anyparse.check.common.nullsafety.NullableSource.NullableSourceCfg;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+
+/**
+ * Flags a dereference of a provably-nullable expression with no null check — a
+ * possible NPE. Three nullable sources so far: a `Map`-family index `m[k]` (a
+ * `Null<V>`), an `Array` / `List` `pop` / `shift` call (a `Null<T>`), and a call
+ * to a function whose declared return type is `Null<T>`. Slice 1 of the
+ * reference-nullable family (mechanism B, the type-driven / point-wise sibling of
+ * the flow-sensitive `null-dereference`). `Info`; report-only.
+ *
+ * ## Type-aware — the receiver type is load-bearing
+ *
+ * `m[k].field` shares an identical AST with `arr[i].field`, `arr.pop().field` with
+ * a `pop()` call on any type, and `findUser().field` with any call — only the
+ * receiver's declared type / the callee's declared return type tells them apart. A
+ * `Map` index yields `Null<V>` (an `Array` / `String` index a non-null `T`),
+ * `Array.pop` / `Array.shift` / `List.pop` yield `Null<T>` (a same-named method on
+ * an unrelated type does not), and a `Null<T>`-returning function yields a nullable
+ * result. So the deref flags only when the receiver is a
+ * `nullableIndexTypeNames` index or a `nullableInstanceReturnCalls` call whose
+ * receiver type matches, or a call whose plain-identifier callee binds to a function
+ * whose `TypeInfoProvider.returnTypes` outer nominal is a `nullableReturnMarkerTypes`
+ * (`Null`). The receiver type is asked in two steps: its own written annotation
+ * (`TypeResolver.identTypeName`) when it is a plain identifier, then
+ * `CheckScan.typeNominalResolver` — the chain resolver, which reaches a field path
+ * (`o.cache[k]`), a call receiver (`g().pop()`) and the `Null<Map<…>>` the annotation
+ * map degrades to the bare name `Null`. All resolution requires
+ * `plugin is TypeInfoProvider`. An `Array` / `String` receiver, an unannotated and
+ * unresolvable one, an unrelated-type method, a non-`Null<…>` (or unannotated) return,
+ * and a qualified `this.f()` / `obj.f()` callee are safe misses.
+ *
+ * ## Point-wise, not flow-sensitive
+ *
+ * There is no narrowing, with ONE exception. `if (arr.length > 0) arr.pop().f` and a
+ * guarded `findUser().f` are still flagged, since the guard is invisible without flow —
+ * that is why the severity is `Info` (advisory), not the `Warning` the flow-sensitive
+ * engine earns. The exception is the map-membership guard `m.exists(k)`, which
+ * `NullFlow` already models for the flow check's seed: this check asks it, through
+ * `NullFacts.indexPresent`, for the map reads a dominating guard proves present, and
+ * skips them; without that the rule reports a fifth of its findings on sites the author had
+ * guarded. The guard must match BOTH operands by source text, so `if (m.exists(k)) m[j].f` stays flagged. The
+ * same model answers a RE-READ of the entry: `if (m[k] != null) m[k].f`, `m[k] != null && m[k].f` and `if (m[k]
+ * == null) m[k] = []; m[k].f` are present as long as nothing but name reads sits between the check or write and
+ * the read (a call, a `new` or a write through a path drops it). A path proven by `exists` on one side of a join and by
+ * the entry on the other (`if (!m.exists(k)) m[k] = 1;`) proves nothing, and a key drawn from `m.keys()` stays flagged.
+ *
+ * A cross-file `Type.static()` / `obj.method()` return IS now resolved via
+ * `MemberLookup.returnNominalOf` (conservative under a simple-name collision); a bare
+ * `this.f()` stays a safe miss. Macro-reification subtrees (`RefShape.opaqueKinds`) are
+ * not descended into.
+ */
+@:nullSafety(Strict)
+final class PossibleNullDereference extends RuleBase implements NoAutofix {
+
+	public function new() {
+		super(
+			'possible-null-dereference',
+			'a dereference of a nullable result (map[key], Array/List pop/shift, Null<T>-returning call) '
+			+ 'with no null check — a possible NPE',
+			RuleCategory.NullSafety
+		);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final shape: RefShape = plugin.refShape();
+		final identKind: Null<String> = shape.identKind;
+		final derefKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
+		final cfg: Null<NullableSourceCfg> = NullableSource.build(shape);
+		if (identKind == null || derefKinds.length == 0 || cfg == null) return [];
+		final cfgValue: NullableSourceCfg = cfg;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		if (provider == null) return [];
+		// The RESOLUTION index, not the report one — `NullableSource`'s class doc says why, and why
+		// the exclusion list has to be re-applied inside the arc once it is this wide.
+		final index: SymbolIndex = IndexScope.resolution(files, plugin);
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
+			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
+			final nominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
+				entry.source, plugin, tree, entry.file, index, true
+			);
+			final ctx: Ctx = {
+				derefKinds: derefKinds,
+				opaqueKinds: shape.opaqueKinds ?? [],
+				cfg: cfgValue,
+				index: index,
+				guarded: existsGuardedReads(tree, shape, entry.source)
+			};
+			walk(violations, entry.file, tree, tree, returnTypes, nominalOf, ctx);
+		});
+	}
+
+	/** No safe single edit — report-only. */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'a nullable value needs a guard, a default or a different API, and whether that belongs at the access or where the'
+			+ ' value is produced restructures different code each time';
+	}
+
+	/**
+	 * The span keys of every map read `m[k]` a dominating `m.exists(k)` guard proves present
+	 * in `tree` — the receivers this check must NOT report, collected by asking `NullFlow`,
+	 * the one exists-guard model in the analysis layer, rather than re-deriving the guard here.
+	 *
+	 * A flow walk is the only thing that can answer it: the guard may sit in an enclosing
+	 * `if`, in an early-returning `if (!m.exists(k)) return;` before the read, or in the left
+	 * operand of the `&&` the read itself is the right operand of. The walk covers function
+	 * units only, so a read in a field initializer keeps today's point-wise behaviour — it has
+	 * no flow to be guarded by.
+	 */
+	private static function existsGuardedReads(tree: QueryNode, shape: RefShape, source: String): Map<String, Bool> {
+		final out: Map<String, Bool> = [];
+		NullFlow.analyze(tree, shape, source, (node, facts) -> {
+			final span: Null<Span> = node.span;
+			if (span != null && facts.indexPresent(node)) out['${span.from}:${span.to}'] = true;
+		});
+		return out;
+	}
+
+	/** Walk `node`, flagging a deref whose receiver is a nullable source. */
+	private static function walk(
+		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, returnTypes: Map<Int, String>,
+		nominalOf: Null<(QueryNode) -> Null<String>>, ctx: Ctx
+	): Void {
+		if (ctx.opaqueKinds.contains(node.kind)) return;
+		if (ctx.derefKinds.contains(node.kind) && node.children.length >= 1) {
+			final span: Null<Span> = node.span;
+			final receiverSpan: Null<Span> = node.children[0].span;
+			final guarded: Bool = receiverSpan != null && ctx.guarded.exists('${receiverSpan.from}:${receiverSpan.to}');
+			if (span != null && !guarded) {
+				final source: Null<String> = NullableSource.describe(node.children[0], root, returnTypes, ctx.cfg, ctx.index, nominalOf);
+				if (source != null) out.push({
+					file: file,
+					span: span,
+					rule: 'possible-null-dereference',
+					severity: Severity.Info,
+					message: '$source can be null; this dereference has no null check'
+				});
+			}
+		}
+		for (c in node.children) walk(out, file, c, root, returnTypes, nominalOf, ctx);
+	}
+
+}
+
+/**
+ * Resolved constants threaded through the recursive walk — per-run except `guarded`,
+ * the per-FILE set of exists-guarded map-read span keys `existsGuardedReads` collects.
+ */
+private typedef Ctx = {
+	var derefKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var cfg: NullableSourceCfg;
+	var index: Null<SymbolIndex>;
+	var guarded: Map<String, Bool>;
+};

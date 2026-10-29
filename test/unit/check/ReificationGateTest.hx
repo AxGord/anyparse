@@ -1,11 +1,11 @@
 package unit.check;
 
-import anyparse.check.AvoidDynamic;
 import anyparse.check.Check;
 import anyparse.check.ReificationScan;
 import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
-import anyparse.check.StringLiteralDup;
+import anyparse.check.common.literals.StringLiteralDup;
+import anyparse.check.common.types.AvoidDynamic;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;

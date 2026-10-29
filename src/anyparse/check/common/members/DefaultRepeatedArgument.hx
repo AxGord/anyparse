@@ -1,0 +1,636 @@
+package anyparse.check.common.members;
+
+import anyparse.check.Check.CrossFileEdits;
+import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.CheckScan;
+import anyparse.query.MemberKinds;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
+
+/**
+ * A parameter with no default that at least two call sites hand the SAME compile-time constant:
+ * the constant is the default the signature never declared. Flags the parameter, and the autofix
+ * writes `= <constant>` onto it and drops the argument at every site that agreed — atomically,
+ * across files, through `CrossFileFix`. Sites passing something ELSE keep their explicit argument and are untouched,
+ * which is what makes the rewrite meaning-preserving rather than a guess — PROVIDED that argument is never `null`:
+ * Haxe hands a parameter its default for an explicit `null` too (`f(null)` with `x:Null<Int> = 7` is 7 on 4.3.7,
+ * `--interp` and js), so one call of the name whose argument there is not proven non-null (`provenNonNull`, a
+ * positive list) refuses the finding. The rewrite compiles either way, so no compiler oracle can catch it.
+ * `Severity.Info`, default OFF.
+ *
+ * The shape is common enough to have a name: a constant whose own doc calls it "the default", read
+ * at every call site because the signature has no slot for it. The reviewer's version of this rule
+ * is "a parameter with one correct value per call site is not flexibility"; this is the mechanical
+ * half of it, and it stops short of the other half (deleting a parameter no caller ever varies),
+ * which needs a judgement no check has.
+ *
+ * ## What counts as the constant
+ *
+ * A REFERENCE to a `static inline` constant, never a literal. Two reasons, and the first is hard:
+ * Haxe accepts only a compile-time constant as a default, and a plain `static final` is NOT one —
+ * `function f(ms:Int = K.NI)` where `NI` is a non-inline `static final` is
+ * `Default argument value should be constant`. So the rule must read the
+ * constant's own declaration, and `inline` is the gate. The second reason is division of labour: a
+ * repeated LITERAL argument is `magic-number`'s finding, and hoisting it into a named constant is
+ * that rule's fix, after which this one sees it.
+ *
+ * Visibility is checked from the DECLARATION, not from the call: a qualified `Type.CONST` is
+ * readable wherever `Type` is, but a bare `CONST` is the CALLER's own member, so it is accepted
+ * only when caller and declaration share a type.
+ *
+ * ## Resolution — and why the gates are where they are
+ *
+ * A callee resolves three ways, all of which require the declaration to be IN the lint scope:
+ * a bare name to a member of the enclosing type, `Type.member` to a `static` of a type declared
+ * exactly once, and `receiver.member` through the receiver's own declared type. That last one is
+ * what reaches the largest real group (a widget method called on a dozen differently-named
+ * fields), and it is also the one that would reach a LIBRARY signature if the scope gate were
+ * missing — nothing about `gl.disable(gl.BLEND)` should ever be rewritten by a linter.
+ *
+ * Three gates carry the correctness of the rewrite itself:
+ *
+ * - the parameter must be TRAILING, or every parameter after it must already have a default.
+ *   Otherwise the argument cannot be dropped without Haxe's type-directed skipping deciding what
+ *   the remaining arguments mean, which is a different program;
+ * - a call site counts only when the constant is its LAST argument, and that argument sits inside
+ *   the leading run of required parameters. Haxe binds by position, so cutting an earlier argument
+ *   slides every later one into the slot before it (`d(K.T, 1)` becomes `d(1)`, which compiles when
+ *   the types agree), and past an optional parameter the argument's slot may have been skipped by
+ *   type. A site that fails this keeps all its arguments. The census is rebuilt on every `--fix`
+ *   pass, so a second pass that defaults an earlier parameter judges each call against the signature
+ *   the first pass left;
+ * - the function must be referenced NOWHERE as a value. Adding a default changes its type —
+ *   `(Int) -> Void` becomes `(?Int) -> Void`, and the two do not unify — so a `.bind`,
+ *   a method value or any non-callee occurrence of the name refuses the whole finding.
+ *
+ * A member NAME declared more than ONCE in the scope is refused outright — by two types, or by
+ * the two arms of one conditional region. That is the cheap over-approximation of "this may be an
+ * interface member or an override": a default added to an
+ * implementation leaves the interface's signature alone, so a call typed by the interface would
+ * lose an argument it still needs.
+ *
+ * ## Scope sensitivity
+ *
+ * The census is built from the files the check is HANDED. A narrow run sees few call sites and
+ * therefore reports almost nothing — the safe direction, and the reason a per-file lint is not a
+ * census. The threshold is TWO agreeing sites, so a single-caller parameter is never flagged even
+ * though it is the strongest case for a default; deciding that one needs to know whether the
+ * caller is the only one that will ever exist, which the scope cannot say.
+ */
+@:nullSafety(Strict)
+final class DefaultRepeatedArgument extends RuleBase implements DefaultOff implements CrossFileFix {
+
+	private static inline final RULE_ID: String = 'default-repeated-argument';
+
+	/** What each flagged parameter's fix must do, keyed by `<file>:<span.from>` of the violation. */
+	private final _plans: Map<String, Plan> = [];
+
+	public function new() {
+		super(
+			RULE_ID,
+			'a parameter with no default that several call sites hand the same constant — the default the signature never declared',
+			RuleCategory.Members
+		);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		_plans.clear();
+		final resolved: Null<Seams> = resolveSeams(plugin);
+		if (resolved == null) return [];
+		final parsed: Array<Parsed> = parseAll(plugin, files, resolved);
+		final scope: Scope = collectDeclarations(parsed, resolved);
+		final census: Map<String, Map<String, Array<CallSite>>> = [];
+		final nullable: Map<String, Bool> = [];
+		for (entry in parsed) collectCalls(census, nullable, entry, scope, resolved);
+		return report(census, nullable, scope, resolved);
+	}
+
+	/** Every edit lands through `crossFileFix` — the argument sites are in other files. */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+	/** One atomic group per flagged parameter: the default written on, the agreed arguments dropped. */
+	public function crossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<Array<CrossFileEdits>> {
+		final out: Array<Array<CrossFileEdits>> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final plan: Null<Plan> = _plans['${v.file}:${span.from}'];
+			if (plan != null) out.push(slices(plan));
+		}
+		return out;
+	}
+
+	// ---- reporting -------------------------------------------------------------------------
+
+	/** One finding per (member, parameter) whose agreeing sites clear every gate. */
+	private function report(
+		census: Map<String, Map<String, Array<CallSite>>>, nullable: Map<String, Bool>, scope: Scope, seams: Seams
+	): Array<Violation> {
+		final out: Array<Violation> = [];
+		for (key => byConstant in census) {
+			final parts: Array<String> = key.split('#');
+			final index: Null<Int> = Std.parseInt(parts[1]);
+			final found: Null<MemberInfo> = scope.members[parts[0]];
+			if (index == null || found == null) continue;
+			final member: MemberInfo = found;
+			// A call of the name passing an argument there that may be null would take the default once there is one.
+			if (!eligible(member, scope, seams) || nullable['${member.name}#$index'] == true) continue;
+			final winner: Null<{ constant: String, sites: Array<CallSite> }> = agreed(byConstant);
+			if (winner == null) continue;
+			final param: Null<QueryNode> = index < member.params.length ? member.params[index] : null;
+			if (param == null || !defaultable(member, index, seams)) continue;
+			final paramSpan: Null<Span> = param.span;
+			if (paramSpan == null) continue;
+			// The literal is bound before the index write: array-access assignment resolves its
+			// `@:arrayAccess` overload from the argument's own type, which a bare structure literal
+			// does not yet have.
+			final plan: Plan = {
+				declFile: member.file,
+				paramEnd: paramSpan.to,
+				constant: winner.constant,
+				sites: winner.sites
+			};
+			_plans['${member.file}:${paramSpan.from}'] = plan;
+			out.push({
+				file: member.file,
+				span: paramSpan,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: '${winner.sites.length} call sites pass \'${winner.constant}\' here — make it the parameter\'s default'
+			});
+		}
+		return out;
+	}
+
+	/** One plan's edits, grouped by the file each falls in. */
+	private static function slices(plan: Plan): Array<CrossFileEdits> {
+		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
+		inline function add(file: String, edit: { span: Span, text: String }): Void {
+			final edits: Array<{ span: Span, text: String }> = byFile[file] ?? [];
+			edits.push(edit);
+			byFile[file] = edits;
+		}
+		add(plan.declFile, { span: new Span(plan.paramEnd, plan.paramEnd), text: ' = ${plan.constant}' });
+		for (site in plan.sites) add(site.file, { span: new Span(site.cutFrom, site.cutTo), text: '' });
+		return [for (file => edits in byFile) { file: file, edits: edits }];
+	}
+
+	// ---- census ----------------------------------------------------------------------------
+
+	/** Every (member, parameter index) a call handed a constant, and which constant, and where. */
+	private static function collectCalls(
+		census: Map<String, Map<String, Array<CallSite>>>, nullable: Map<String, Bool>, entry: Parsed, scope: Scope, seams: Seams
+	): Void {
+		walkCalls(entry.tree, null, (call, owner) -> {
+			// EVERY call of a name the scope declares, resolved or not: Haxe hands a parameter its default for an explicit
+			// `null` too, so a site whose argument may be null would change meaning under the default — and it compiles.
+			final called: Null<String> = call.children[0].name;
+			if (called != null && scope.memberOwners.exists(called))
+				for (i in 1...call.children.length)
+					if (!provenNonNull(call.children[i], owner, entry, scope, seams)) nullable['$called#${i - 1}'] = true;
+			final member: Null<MemberInfo> = resolveCallee(call, owner, entry, scope, seams);
+			if (member == null) return;
+			final args: Array<QueryNode> = [for (i in 1...call.children.length) call.children[i]];
+			// Only the LAST argument is a candidate: Haxe binds arguments by position, so cutting any
+			// earlier one slides every argument after it into the slot before — `d(K.T, 1)` becomes
+			// `d(1)` — which compiles whenever the types agree and is a different call.
+			final last: Int = args.length - 1;
+			// And argument `last` is parameter `last` only across the leading run of REQUIRED
+			// parameters. Past an optional one Haxe may have skipped a slot by type, and the census
+			// would attribute the constant to a parameter it never reached.
+			if (last >= requiredPrefix(member, seams)) return;
+			final constant: Null<String> = constantSpelling(args[last], owner, member.owner, entry, scope, seams);
+			if (constant == null) return;
+			final site: Null<CallSite> = callSite(entry.file, args);
+			if (site == null) return;
+			final key: String = '${member.owner}.${member.name}#$last';
+			final byConstant: Map<String, Array<CallSite>> = census[key] ?? [];
+			final sites: Array<CallSite> = byConstant[constant] ?? [];
+			sites.push(site);
+			byConstant[constant] = sites;
+			census[key] = byConstant;
+		}, seams);
+	}
+
+	/** How many leading parameters are `required` — Haxe never skips one, so in that run argument `j` IS parameter `j`. */
+	private static function requiredPrefix(member: MemberInfo, seams: Seams): Int {
+		var count: Int = 0;
+		for (param in member.params) {
+			if (!required(param, seams)) break;
+			count++;
+		}
+		return count;
+	}
+
+	/**
+	 * The deletion span for the LAST argument — the argument plus the comma before it, so removing it
+	 * leaves a well-formed list. A sole argument cuts only itself.
+	 */
+	private static function callSite(file: String, args: Array<QueryNode>): Null<CallSite> {
+		final last: Int = args.length - 1;
+		final span: Null<Span> = args[last].span;
+		if (span == null) return null;
+		if (last == 0) return { file: file, cutFrom: span.from, cutTo: span.to };
+		final previous: Null<Span> = args[last - 1].span;
+		return previous == null ? null : { file: file, cutFrom: previous.to, cutTo: span.to };
+	}
+
+	/** The constant at least two sites agree on, or null when no single spelling reaches two. */
+	private static function agreed(byConstant: Map<String, Array<CallSite>>): Null<{ constant: String, sites: Array<CallSite> }> {
+		var best: Null<{ constant: String, sites: Array<CallSite> }> = null;
+		for (constant => sites in byConstant) if (sites.length >= 2 && (best == null || sites.length > best.sites.length))
+			best = { constant: constant, sites: sites };
+		return best;
+	}
+
+	// ---- gates -----------------------------------------------------------------------------
+
+	/** Whether the DECLARATION may take a default at all — see the type doc's gate list. */
+	private static function eligible(member: MemberInfo, scope: Scope, seams: Seams): Bool {
+		return member.plain && scope.memberOwners[member.name] == 1 && scope.valueReferenced[member.name] != true;
+	}
+
+	/** Whether parameter `index` can lose its argument — it is last, or every later one already defaults. */
+	private static function defaultable(member: MemberInfo, index: Int, seams: Seams): Bool {
+		if (!required(member.params[index], seams)) return false;
+		for (i in index + 1...member.params.length) if (required(member.params[i], seams)) return false;
+		return true;
+	}
+
+	/** Whether a parameter must be passed — no default, not optional, not rest. */
+	private static function required(param: QueryNode, seams: Seams): Bool {
+		return param.children.length == 0 && param.kind != seams.optionalParamKind && param.kind != seams.restParamKind;
+	}
+
+	/**
+	 * The written spelling of `arg` when it is a reference to an `inline` constant this
+	 * declaration can also see, else null. `callerOwner` is the type the call sits in and
+	 * `declOwner` the one declaring the callee — a BARE constant belongs to the former and is
+	 * only usable as a default when the two are the same type.
+	 */
+	private static function constantSpelling(
+		arg: QueryNode, callerOwner: Null<String>, declOwner: String, entry: Parsed, scope: Scope, seams: Seams
+	): Null<String> {
+		final name: Null<String> = arg.name;
+		if (name == null) return null;
+		if (arg.kind == seams.identKind) {
+			return if (callerOwner != declOwner || entry.binders.exists(name))
+				null
+			else if (scope.constants['$declOwner.$name'] == true)
+				name
+			else
+				null;
+		}
+		if (arg.kind != seams.fieldAccessKind || arg.children.length != 1) return null;
+		final receiver: QueryNode = arg.children[0];
+		final declared: Null<String> = receiver.name;
+		if (receiver.kind != seams.identKind || declared == null) return null;
+		final typeName: String = declared;
+		// The default is written INSIDE the declaring type, where the qualifier is that type's own name
+		// — `drainIOThread(ms:Int = ThreadUtils.DRAIN_TIMEOUT_MS)` inside `ThreadUtils` compiles but
+		// reads as a stutter. Dropping it also merges the qualified and bare spellings of one constant
+		// into a single census bucket, which is what they are.
+		return if (!upperInitial(typeName) || entry.binders.exists(typeName) || scope.ambiguousTypes[typeName] == true)
+			null
+		else if (scope.constants['$typeName.$name'] != true)
+			null
+		else if (typeName == declOwner)
+			name
+		else
+			'$typeName.$name';
+	}
+
+	// ---- resolution ------------------------------------------------------------------------
+
+	/** The declaration a call's callee names, or null when the rule cannot see one. */
+	private static function resolveCallee(
+		call: QueryNode, owner: Null<String>, entry: Parsed, scope: Scope, seams: Seams
+	): Null<MemberInfo> {
+		final callee: QueryNode = call.children[0];
+		final name: Null<String> = callee.name;
+		if (name == null) return null;
+		if (callee.kind == seams.identKind) return owner == null || entry.binders.exists(name) ? null : scope.members['$owner.$name'];
+		if (callee.kind != seams.fieldAccessKind || callee.children.length != 1) return null;
+		final receiver: QueryNode = callee.children[0];
+		final receiverName: Null<String> = receiver.name;
+		if (receiver.kind != seams.identKind || receiverName == null || receiverName == '') return null;
+		if (upperInitial(receiverName)) {
+			if (entry.binders.exists(receiverName) || scope.ambiguousTypes[receiverName] == true) return null;
+			final member: Null<MemberInfo> = scope.members['$receiverName.$name'];
+			return member != null && member.isStatic ? member : null;
+		}
+		final declaredTypes: Null<Map<Int, String>> = entry.declaredTypes;
+		final typeName: Null<String> = declaredTypes == null
+			? null
+			: TypeResolver.identTypeName(receiver, entry.tree, entry.shape, declaredTypes);
+		if (typeName == null || scope.ambiguousTypes[typeName] == true) return null;
+		final member: Null<MemberInfo> = scope.members['$typeName.$name'];
+		return member != null && !member.isStatic ? member : null;
+	}
+
+	// ---- declaration collection ------------------------------------------------------------
+
+	/** Every type, member, `inline` constant and value-use of a member name across the scope. */
+	private static function collectDeclarations(parsed: Array<Parsed>, seams: Seams): Scope {
+		final scope: Scope = {
+			members: [],
+			constants: [],
+			memberOwners: [],
+			ambiguousTypes: [],
+			seenTypes: [],
+			valueReferenced: []
+		};
+		for (entry in parsed) collectHosts(entry.tree, entry, scope, seams);
+		for (entry in parsed) collectValueUses(entry.tree, null, 0, scope, seams);
+		return scope;
+	}
+
+	private static function collectHosts(node: QueryNode, entry: Parsed, scope: Scope, seams: Seams): Void {
+		final name: Null<String> = node.name;
+		if (seams.typeHostKinds.contains(node.kind) && name != null) {
+			if (scope.seenTypes.exists(name)) scope.ambiguousTypes[name] = true;
+			scope.seenTypes[name] = true;
+			collectMembers(node, name, entry, scope, seams);
+		}
+		for (c in node.children) collectHosts(c, entry, scope, seams);
+	}
+
+	private static function collectMembers(host: QueryNode, owner: String, entry: Parsed, scope: Scope, seams: Seams): Void {
+		final run: Array<String> = [];
+		var blocked: Bool = false;
+		for (child in host.children) {
+			if (seams.metaKinds.contains(child.kind)) {
+				blocked = true;
+				continue;
+			}
+			if (seams.modifierKinds.contains(child.kind)) {
+				run.push(child.kind);
+				continue;
+			}
+			if (child.kind == seams.conditionalMemberKind) {
+				collectMembers(child, owner, entry, scope, seams);
+				run.resize(0);
+				blocked = false;
+				continue;
+			}
+			final name: Null<String> = child.name;
+			if (name != null && seams.memberDeclKinds.contains(child.kind)) {
+				if (seams.functionKinds.contains(child.kind))
+					addMember(child, owner, name, run, blocked, entry, scope, seams);
+				else if (isInlineConstant(run, seams))
+					// One whose value is `null` is no default worth writing, and no proof an argument is non-null.
+					scope.constants['$owner.$name'] = child.children.length == 0 || child.children[0].kind != seams.nullLiteralKind;
+			}
+			run.resize(0);
+			blocked = false;
+		}
+	}
+
+	private static function addMember(
+		decl: QueryNode, owner: String, name: String, run: Array<String>, blocked: Bool, entry: Parsed, scope: Scope, seams: Seams
+	): Void {
+		final key: String = '$owner.$name';
+		scope.memberOwners[name] = (scope.memberOwners[name] ?? 0) + 1;
+		if (scope.members.exists(key)) return;
+		final staticKind: Null<String> = seams.staticModifierKind;
+		scope.members.set(key, {
+			file: entry.file,
+			owner: owner,
+			name: name,
+			params: [for (c in decl.children) if (seams.paramKinds.contains(c.kind)) c],
+			isStatic: staticKind != null && run.contains(staticKind),
+			plain: !blocked && name != seams.constructorName && !overriding(run, seams) && !rebindable(run, seams)
+			&& decl.children.exists(c -> seams.bodyKinds.contains(c.kind))
+		});
+	}
+
+	/** Whether a modifier run marks a constant this rule may spell as a default — `static inline`. */
+	private static function isInlineConstant(run: Array<String>, seams: Seams): Bool {
+		final inlineKind: Null<String> = seams.inlineModifierKind;
+		final staticKind: Null<String> = seams.staticModifierKind;
+		return inlineKind != null && staticKind != null && run.contains(inlineKind) && run.contains(staticKind);
+	}
+
+	private static function overriding(run: Array<String>, seams: Seams): Bool {
+		final kind: Null<String> = seams.overrideModifierKind;
+		return kind != null && run.contains(kind);
+	}
+
+	private static function rebindable(run: Array<String>, seams: Seams): Bool {
+		final dyn: Null<String> = seams.dynamicModifierKind;
+		if (dyn != null && run.contains(dyn)) return true;
+		final mac: Null<String> = seams.macroModifierKind;
+		return mac != null && run.contains(mac);
+	}
+
+	/** Mark every member name that occurs anywhere OTHER than as a call's callee — a value use. */
+	private static function collectValueUses(node: QueryNode, parent: Null<QueryNode>, index: Int, scope: Scope, seams: Seams): Void {
+		final name: Null<String> = node.name;
+		final isCallee: Bool = parent != null && parent.kind == seams.callKind && index == 0;
+		if (
+			name != null && !isCallee && (node.kind == seams.identKind || node.kind == seams.fieldAccessKind)
+			&& scope.memberOwners.exists(name)
+		)
+			scope.valueReferenced[name] = true;
+		for (i in 0...node.children.length) collectValueUses(node.children[i], node, i, scope, seams);
+	}
+
+	// ---- walking ---------------------------------------------------------------------------
+
+	/** Visit every call with the simple name of the type it sits in. */
+	private static function walkCalls(node: QueryNode, owner: Null<String>, visit: (QueryNode, Null<String>) -> Void, seams: Seams): Void {
+		final here: Null<String> = seams.typeHostKinds.contains(node.kind) && node.name != null ? node.name : owner;
+		if (node.kind == seams.callKind && node.children.length > 1) visit(node, here);
+		for (c in node.children) walkCalls(c, here, visit, seams);
+	}
+
+	private static function parseAll(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, seams: Seams): Array<Parsed> {
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final shape: RefShape = plugin.refShape();
+		final out: Array<Parsed> = [];
+		for (entry in CheckScan.parseAll(plugin, files)) {
+			final binders: Map<String, Bool> = [];
+			collectBinders(entry.tree, binders, seams);
+			out.push({
+				file: entry.file,
+				tree: entry.tree,
+				shape: shape,
+				binders: binders,
+				declaredTypes: provider?.declaredTypes(entry.source)
+			});
+		}
+		return out;
+	}
+
+	private static function collectBinders(node: QueryNode, out: Map<String, Bool>, seams: Seams): Void {
+		final name: Null<String> = node.name;
+		if (name != null && seams.binderKinds.contains(node.kind)) out[name] = true;
+		for (c in node.children) collectBinders(c, out, seams);
+	}
+
+	private static function upperInitial(name: String): Bool {
+		return name.charAt(0).toUpperCase() == name.charAt(0);
+	}
+
+	/** Resolve every seam the check reads, or null when one it cannot work without is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final callKind: Null<String> = shape.callKind;
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		if (callKind == null || fieldAccessKind == null || shape.upperInitialNeverCaptures != true) return null;
+		final modifiers: Array<String> = (shape.modifierOrderKinds ?? []).concat(shape.visibilityModifierKinds ?? []);
+		for (kind in [
+			shape.staticModifierKind,
+			shape.inlineModifierKind,
+			shape.macroModifierKind,
+			shape.dynamicModifierKind,
+			shape.externModifierKind,
+			shape.overrideModifierKind
+		]) {
+			if (kind != null && !modifiers.contains(kind)) modifiers.push(kind);
+		}
+		return {
+			nonNullKinds: nonNullKindsOf(shape),
+			nullLiteralKind: shape.nullLiteralKind,
+			parenKind: shape.parenKind,
+			negationKind: shape.negationKind,
+			callKind: callKind,
+			identKind: shape.identKind,
+			fieldAccessKind: fieldAccessKind,
+			paramKinds: shape.paramKinds ?? [],
+			optionalParamKind: shape.optionalParamKind,
+			restParamKind: shape.restParamKind,
+			typeHostKinds: (shape.typeDeclKinds ?? []).concat(shape.visibilityContainerKinds ?? []),
+			memberDeclKinds: shape.memberDeclKinds ?? [],
+			functionKinds: shape.functionKinds ?? [],
+			binderKinds: (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? []).concat(shape.selfScopeDeclKinds ?? []),
+			modifierKinds: modifiers,
+			metaKinds: plugin.metaShape().metaKinds,
+			staticModifierKind: shape.staticModifierKind,
+			inlineModifierKind: shape.inlineModifierKind,
+			dynamicModifierKind: shape.dynamicModifierKind,
+			macroModifierKind: shape.macroModifierKind,
+			overrideModifierKind: shape.overrideModifierKind,
+			conditionalMemberKind: shape.conditionalMemberKind,
+			constructorName: shape.constructorName,
+			bodyKinds: shape.functionBodyKinds ?? []
+		};
+	}
+
+	/**
+	 * Whether `arg` can never be `null` — a POSITIVE list, since a typecheck is no net here: a non-null literal (a
+	 * negated one too), a construction, a collection or object literal, a function value, a boolean operator's result,
+	 * or a reference to an `inline` constant whose value is no `null` literal. Anything else (a variable, a call, a field
+	 * read, `null` itself) may be null at run time, where it would take the default instead of itself.
+	 */
+	private static function provenNonNull(arg: QueryNode, owner: Null<String>, entry: Parsed, scope: Scope, seams: Seams): Bool {
+		final kids: Array<QueryNode> = arg.children;
+		return (arg.kind == seams.parenKind || arg.kind == seams.negationKind) && kids.length == 1
+			? provenNonNull(kids[0], owner, entry, scope, seams)
+			: seams.nonNullKinds.contains(arg.kind) || owner != null && constantSpelling(arg, owner, owner, entry, scope, seams) != null;
+	}
+
+	/**
+	 * The kinds of an expression that is never `null` (`provenNonNull`): a non-null literal, a
+	 * construction, a collection or object literal, a function value, a boolean operator's result.
+	 */
+	private static function nonNullKindsOf(shape: RefShape): Array<String> {
+		final out: Array<String> = [
+			for (kind in MemberKinds.constantLiteralKinds(shape)) if (kind != shape.nullLiteralKind) kind
+		];
+		for (kind in [
+			shape.newExprKind,
+			shape.arrayLiteralKind,
+			shape.objectLiteralKind,
+			shape.notKind,
+			shape.logicalAndKind,
+			shape.logicalOrKind
+		]) if (kind != null) out.push(kind);
+		return out.concat(shape.lambdaKinds ?? []).concat(shape.comparisonKinds ?? []);
+	}
+
+}
+
+/** One parsed file plus the per-file tables the census reads. */
+private typedef Parsed = {
+	final file: String;
+	final tree: QueryNode;
+	final shape: RefShape;
+	final binders: Map<String, Bool>;
+	final declaredTypes: Null<Map<Int, String>>;
+};
+
+/** One function declaration the rule can see, and what its signature allows. */
+private typedef MemberInfo = {
+	final file: String;
+	final owner: String;
+	final name: String;
+	final params: Array<QueryNode>;
+	final isStatic: Bool;
+
+	/** False when the declaration's own shape forbids a default — see the type doc's gate list. */
+	final plain: Bool;
+};
+
+/** One agreeing call site's deletion span. */
+private typedef CallSite = {
+	final file: String;
+	final cutFrom: Int;
+	final cutTo: Int;
+};
+
+/** What one flagged parameter's fix must do. */
+private typedef Plan = {
+	final declFile: String;
+	final paramEnd: Int;
+	final constant: String;
+	final sites: Array<CallSite>;
+};
+
+/** Everything the scope declares, keyed for the census. */
+private typedef Scope = {
+	final members: Map<String, MemberInfo>;
+	final constants: Map<String, Bool>;
+	final memberOwners: Map<String, Int>;
+	final ambiguousTypes: Map<String, Bool>;
+	final seenTypes: Map<String, Bool>;
+	final valueReferenced: Map<String, Bool>;
+};
+
+/** Every seam `DefaultRepeatedArgument` reads, resolved once per run. */
+private typedef Seams = {
+	/** The kinds of an expression that is never `null` (`provenNonNull`). */
+	final nonNullKinds: Array<String>;
+
+	final nullLiteralKind: Null<String>;
+	final parenKind: Null<String>;
+	final negationKind: Null<String>;
+	final callKind: String;
+	final identKind: String;
+	final fieldAccessKind: String;
+	final paramKinds: Array<String>;
+	final optionalParamKind: Null<String>;
+	final restParamKind: Null<String>;
+	final typeHostKinds: Array<String>;
+	final memberDeclKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final binderKinds: Array<String>;
+	final modifierKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final staticModifierKind: Null<String>;
+	final inlineModifierKind: Null<String>;
+	final dynamicModifierKind: Null<String>;
+	final macroModifierKind: Null<String>;
+	final overrideModifierKind: Null<String>;
+	final conditionalMemberKind: Null<String>;
+	final constructorName: Null<String>;
+	final bodyKinds: Array<String>;
+};

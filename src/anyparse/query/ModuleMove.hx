@@ -391,14 +391,15 @@ final class ModuleMove {
 
 	/**
 	 * The names whose meaning each file's relocation may change: in a relocated module every bare upper-initial name it
-	 * writes, in any other module the names the relocated modules declare that it writes.
+	 * writes, in any other module the names the relocated modules declare visibly that it writes — a private type is seen
+	 * by its own module only, so no other module's reading of its name can drift.
 	 */
 	private static function bindingProbes(
 		files: Array<{ file: String, source: String }>, planned: Array<PlannedMove>, newPathOf: Map<String, String>, plugin: GrammarPlugin
 	): Array<BindingProbe> {
 		final upper: Bool = plugin.refShape().typeNamesUpperInitial == true;
 		final declared: Array<String> = [];
-		for (p in planned) for (t in p.info.types) if (!declared.contains(t.name)) declared.push(t.name);
+		for (p in planned) for (t in p.info.types) if (!t.isPrivate && !declared.contains(t.name)) declared.push(t.name);
 		final out: Array<BindingProbe> = [];
 		for (e in files) {
 			final moved: Bool = newPathOf.exists(e.file);

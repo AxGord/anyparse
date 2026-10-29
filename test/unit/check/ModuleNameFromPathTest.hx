@@ -1,8 +1,8 @@
 package unit.check;
 
-import anyparse.check.ExplicitLocalType;
-import anyparse.check.ExplicitType;
-import anyparse.check.ShortenTypeRef;
+import anyparse.check.common.imports.ShortenTypeRef;
+import anyparse.check.common.types.ExplicitLocalType;
+import anyparse.check.common.types.ExplicitType;
 import anyparse.check.oracle.PositionTypeOracle;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;

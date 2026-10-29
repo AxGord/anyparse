@@ -1,9 +1,9 @@
 package unit.check;
 
 import anyparse.check.Check.GroupedEdit;
-import anyparse.check.LambdaLoopScan;
-import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
+import anyparse.check.common.expressions.PreferStaticExtension;
+import anyparse.check.common.loops.LambdaLoopScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
@@ -88,7 +88,7 @@ class UsingInsertRefusalTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-BOOL-LOOP-USING-COVERED-KEPT')
-	@:access(anyparse.check.LambdaLoopScan)
+	@:access(anyparse.check.common.loops.LambdaLoopScan)
 	public function testBoolLoopCoveredAnchorDropsTheWholeSet(): Void {
 		final header: UsingHeader = headerOf();
 		final anchor: Int = anchorOf(header);
@@ -101,7 +101,7 @@ class UsingInsertRefusalTest extends Test {
 
 	/** The uncovered twin: the rewrite and the `using` come back as ONE atomic group. */
 	@:pin('guard')
-	@:access(anyparse.check.LambdaLoopScan)
+	@:access(anyparse.check.common.loops.LambdaLoopScan)
 	public function testBoolLoopUncoveredAnchorGroupsTheInsert(): Void {
 		final header: UsingHeader = headerOf();
 		final rewrites: Array<{ span: Span, text: String }> = [{ span: new Span(SRC.length - 4, SRC.length - 2), text: 'ZZ' }];
@@ -120,7 +120,7 @@ class UsingInsertRefusalTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-PSE-USING-INSERT-SILENT')
-	@:access(anyparse.check.PreferStaticExtension)
+	@:access(anyparse.check.common.expressions.PreferStaticExtension)
 	public function testStaticExtensionCoveredAnchorRefuses(): Void {
 		final header: UsingHeader = headerOf();
 		final anchor: Int = anchorOf(header);
@@ -131,7 +131,7 @@ class UsingInsertRefusalTest extends Test {
 
 	/** The uncovered twin: both modules land as one merged zero-width edit at the anchor. */
 	@:pin('guard')
-	@:access(anyparse.check.PreferStaticExtension)
+	@:access(anyparse.check.common.expressions.PreferStaticExtension)
 	public function testStaticExtensionUncoveredAnchorAppendsOneEdit(): Void {
 		final header: UsingHeader = headerOf();
 		final anchor: Int = anchorOf(header);

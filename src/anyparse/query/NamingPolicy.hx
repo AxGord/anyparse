@@ -8,7 +8,7 @@ import anyparse.runtime.Span;
  *
  * Naming conventions are a per-grammar capability, declared here alongside
  * `RefShape` / `MetaShape` rather than in the generic check: the check in
- * `anyparse.check.Naming` is language-agnostic and asks the plugin's
+ * `anyparse.check.common.naming.Naming` is language-agnostic and asks the plugin's
  * `NamingSupport` to project the declarations worth checking and to resolve
  * the effective policy for a file, then applies the policy. Every Haxe /
  * checkstyle specific lives behind this seam.

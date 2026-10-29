@@ -1,18 +1,18 @@
 package unit.check.scan;
 
 import anyparse.check.Check;
-import anyparse.check.DoubleNegation;
-import anyparse.check.FoldStringLiterals;
-import anyparse.check.InvertNegatedIfElse;
-import anyparse.check.JoinStringAppend;
-import anyparse.check.PreferIfExpressionChain;
-import anyparse.check.PreferSwitch;
-import anyparse.check.PreferSwitchExpression;
-import anyparse.check.PreferTernaryAssignment;
-import anyparse.check.PreferTernaryExpression;
-import anyparse.check.PreferTernaryReturn;
-import anyparse.check.ReturnReassignTernary;
-import anyparse.check.SimplifyNegatedCompound;
+import anyparse.check.common.control.DoubleNegation;
+import anyparse.check.common.control.InvertNegatedIfElse;
+import anyparse.check.common.control.PreferIfExpressionChain;
+import anyparse.check.common.control.PreferSwitch;
+import anyparse.check.common.control.PreferSwitchExpression;
+import anyparse.check.common.control.PreferTernaryAssignment;
+import anyparse.check.common.control.PreferTernaryExpression;
+import anyparse.check.common.control.PreferTernaryReturn;
+import anyparse.check.common.control.ReturnReassignTernary;
+import anyparse.check.common.control.SimplifyNegatedCompound;
+import anyparse.check.common.literals.FoldStringLiterals;
+import anyparse.check.common.literals.JoinStringAppend;
 import anyparse.query.GrammarPlugin;
 import unit.cli.CliFixture;
 

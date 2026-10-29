@@ -21,7 +21,7 @@ import unit.CheckFixture;
  * conformance against a library anonymous structure, and `declarationSiteOf` going ambiguous on a shared SIMPLE
  * name — and NONE is the write index. So the library now IS in the write index, tagged third-party
  * and narrowed per owner, which is what closes the third-party-subtype blind spot
- * (`unit.check.FieldWriteResolutionScopeTest`); the name-keyed scans stay on the project view
+ * (`unit.check.common.members.FieldWriteResolutionScopeTest`); the name-keyed scans stay on the project view
  * this class pins.
  */
 class ResolutionProjectFilesTest extends Test {

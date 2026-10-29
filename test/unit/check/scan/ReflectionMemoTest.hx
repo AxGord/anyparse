@@ -74,7 +74,7 @@ class ReflectionMemoTest extends Test {
 
 	/**
 	 * Two different scopes through ONE plugin answer separately. The cross-CALLER witness of the
-	 * same cut the cell above pins across passes: `check/Naming` hands this scan a set built from
+	 * same cut the cell above pins across passes: `check/common/naming/Naming` hands this scan a set built from
 	 * the pass index while the five whole-scope checks hand it the report array, so both shapes
 	 * reach one memo within a single run — and both sets here hold ONE file, so a memo validating by KEY or by subset (a
 	 * file-to-source map) would answer the second from the first; the length-only mutant is already the previous cell's.

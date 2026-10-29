@@ -140,7 +140,7 @@ final class RefShapeKindProjectionTest extends Test {
 	 * `enumAbstractSyntax.head` carries `{name}` / `{under}` holes a fixer fills; `importLineTemplate` / `usingLineTemplate`
 	 * carry the `%` a module relocation fills with a path, and `packageSegmentPattern` is the regex it checks a package
 	 * segment against — no source slice contains any of them verbatim, so a capture probe would assert the wrong thing.
-	 * What owns each is its emitter (`unit.check.PreferEnumAbstractCheckTest`, `unit.query.ModuleMoveTest`), recorded here
+	 * What owns each is its emitter (`unit.check.common.members.PreferEnumAbstractCheckTest`, `unit.query.ModuleMoveTest`), recorded here
 	 * so the census admits the slot by ADDRESS and another template slot cannot join in silence.
 	 *
 	 * Addressed by `<field>#<slot>` and not by field: an exemption naming `enumAbstractSyntax` WHOLE

@@ -619,7 +619,7 @@ final class Rename {
 	 * The innermost node of one of `kinds` containing `offset`, or null when none does — the raw walk
 	 * behind the four lookups above and behind `innermostSpanOfKinds`.
 	 *
-	 * Declared a second time as `anyparse.check.BindingScope.innermostSpanOfKinds`, which adds an
+	 * Declared a second time as `anyparse.check.common.naming.BindingScope.innermostSpanOfKinds`, which adds an
 	 * `exclude` span and keeps the OUTER of two co-starting matches where this keeps the inner.
 	 * `unit.query.InnermostScopeSpanParityTest` pins both halves: the tie-break is observable only on
 	 * kinds that co-start, which the grammar's `scopeKinds` never does, so `exclude` is the whole

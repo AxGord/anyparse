@@ -52,11 +52,11 @@ class TestDiscoveryParityTest extends Test {
 	 * reports it rather than registering it.
 	 */
 	private static final EXPECTED_BASE_CLASSES: Array<String> = [
-		'unit.check.ExplicitLocalTypeCheckTestBase',
-		'unit.check.FoldStringLiteralsCheckTestBase',
-		'unit.check.NamingCheckTestBase',
-		'unit.check.RedundantParensOperandArmsTestBase',
-		'unit.check.TrivialGetterCheckTestBase',
+		'unit.check.common.expressions.RedundantParensOperandArmsTestBase',
+		'unit.check.common.literals.FoldStringLiteralsCheckTestBase',
+		'unit.check.common.members.TrivialGetterCheckTestBase',
+		'unit.check.common.naming.NamingCheckTestBase',
+		'unit.check.common.types.ExplicitLocalTypeCheckTestBase',
 		'unit.grammar.haxe.HxTestHelpers'
 	];
 

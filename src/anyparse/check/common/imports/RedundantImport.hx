@@ -1,0 +1,328 @@
+package anyparse.check.common.imports;
+
+import anyparse.check.Check.RiskyFix;
+import anyparse.check.scan.UsingSites;
+import anyparse.query.SymbolIndex;
+
+/**
+ * Flags a SUB-MODULE type import (`import pkg.Mod.Sub;`) whose MODULE is already imported in the
+ * same file. A plain `import pkg.Mod;` binds every TOP-LEVEL type the module declares — not only
+ * its main one — so the second statement binds nothing the first has not already bound, and
+ * deleting it changes no name in the file.
+ *
+ * This is the report side of a fact the shared `TypeRefPrinter` prints by. When the two disagreed,
+ * a fixer that materialised a secondary type (`explicit-local-type`'s annotation) spliced
+ * `import fs.DiskSystemInterface.DiskSystemCloudAction;` into a file already carrying
+ * `import fs.DiskSystemInterface;` — observed on a real project. The printer now takes the
+ * module-import route; this rule cleans up what earlier runs left behind.
+ *
+ * ## The evidence a finding needs
+ *
+ * Every gate demands POSITIVE evidence — an unprovable case is left alone, never deleted:
+ *
+ *  - the statement is a PLAIN, UNALIASED, unguarded `import` whose leaf is UPPER-INITIAL (a
+ *    lower-initial leaf imports a static field, which a module import does not bring in) and whose
+ *    parent path's last segment is upper-initial too (a lower-initial parent is a package, so the
+ *    path is a main type, not a sub-module one);
+ *  - the same file carries an unguarded, unaliased `import <module>;` or `using <module>;` — a
+ *    `using` IS an import plus static extension, so it binds the module's types as well. An ALIASED
+ *    module import binds only the alias and never qualifies;
+ *  - the resolution index PROVES the module declares a top-level type of that name. An unindexed
+ *    module (outside the lint scope) yields no finding, and an enum CONSTRUCTOR / static import
+ *    (`import pkg.Colors.Red;`) fails this gate by construction — `Red` is a member, not a type;
+ *  - nothing ELSE in the file binds the same simple name: another plain import or `using` whose
+ *    module declares it, an alias of that name, a duplicate of this very path, or a type the file
+ *    itself declares. Haxe accepts two imports of one simple name and lets the LAST win, so removing
+ *    one where a second binder exists could change what the name means. A wildcard is measured to be
+ *    outranked by the surviving module import and is deliberately NOT a binder (`bindsElsewhere`);
+ *  - nothing else binds one of the sub-type's VALUE names either: an enum's constructors and an
+ *    enum abstract's values come with the import, the LAST binder of one wins, and constructors of
+ *    another module sharing a name are a third binder the deletion can promote
+ *    (`valuesBoundElsewhere`, reading `ImportBindings`). The AMBIENT arm below keeps a statement that
+ *    binds any value at all — its identity argument is made per type name.
+ *
+ * ## Why `RiskyFix`, not a trusted deletion
+ *
+ * The last gate is only as complete as the RESOLUTION INDEX, and that is a property of the RUN, not
+ * of the file: a competing module OUTSIDE the lint scope contributes no veto, so the same file
+ * yields "delete" or "refuse" depending on what else was linted. The window where that matters is
+ * narrow — a third module must declare a type of the SAME simple name AND sit positionally BETWEEN
+ * the qualifying module import and this one, since only then does deleting change which binder is
+ * last — but it is not a structurally-provable shape invariant, which is exactly `Check.RiskyFix`'s
+ * definition. So the deletions are applied speculatively and REVERTED per file when the project's
+ * `compilerOracle` says the build broke; with no oracle configured the rule stays report-only. A
+ * silent survivor still needs the two same-named types to be assignment-compatible, which the
+ * report leaves for a human.
+ *
+ * `fix` deletes the flagged statement; the caller batches the deletions into one whole-file
+ * canonicalize, which drops the blank line.
+ */
+@:nullSafety(Strict)
+final class RedundantImport extends RuleBase implements RiskyFix {
+
+	private static final RULE_ID: String = 'redundant-import';
+
+	public function new() {
+		super(RULE_ID, 'a sub-type import already bound by a plain import of its module', RuleCategory.Imports);
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final index: SymbolIndex = IndexScope.report(files, plugin);
+		// The resolution index — report files UNION the configured library roots — proves what a
+		// module declares. Widening it only ever adds evidence: it can turn an unprovable statement
+		// into a finding, and it can reveal a SECOND binder of the name, which vetoes one.
+		final resolveIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
+		// What a statement naming a MODULE brings into scope, built once: the ambient arm asks it per
+		// statement per file, and a module import's SIBLINGS are the names the leaf reading lost.
+		final publicTypes: Map<String, Array<String>> = SymbolIndex.publicTypesByModule(resolveIndex);
+		// The VALUE names a statement binds, from the reader the import-moving checks share: a deletion
+		// that changes no TYPE can still hand a bare constructor or module-level field to another binder.
+		final bindings: ImportBindings = new ImportBindings(() -> resolveIndex, plugin);
+		// Which accesses a `using` takes part in, asked of the typing service per file; a file the run holds no source of
+		// contests every rival.
+		final sourceOf: Map<String, String> = [];
+		for (entry in files) sourceOf[entry.file] = entry.source;
+		final members: Map<String, Array<String>> = UsingSites.membersByModule(resolveIndex);
+		final methodsOf: (String) -> Null<Array<String>> = raw -> plugin.knownExtensionMethods(raw) ?? members[raw];
+		final violations: Array<Violation> = [];
+		for (info in index.allFiles()) {
+			final source: Null<String> = sourceOf[info.file];
+			final sites: Null<UsingSites> = source == null ? null : new UsingSites(source, plugin, info.file, index);
+			for (imp in info.imports) {
+				final module: Null<String> = redundantModuleOf(info, imp, resolveIndex, bindings);
+				final contests: (ImportInfo) -> Bool = contestsOf(sites, imp, methodsOf);
+				final ambient: Null<String> = module != null
+					? null
+					: ambientProviderOf(info, imp, resolveIndex, publicTypes, bindings, contests);
+				if (module != null)
+					violations.push({
+						file: info.file,
+						span: imp.span,
+						rule: RULE_ID,
+						severity: Severity.Warning,
+						message: 'redundant import \'${imp.raw}\': \'$module\' is imported here and already binds \''
+						+ '${SourceText.lastSegment(imp.raw)}\''
+					});
+				else if (ambient != null)
+					violations.push({
+						file: info.file,
+						span: imp.span,
+						rule: RULE_ID,
+						severity: Severity.Warning,
+						message: 'redundant ' + (imp.kind == ImportKind.Using ? 'using' : 'import')
+						+ ' \'${imp.raw}\': \'$ambient\' already puts the same statement in force in every module here'
+					});
+			}
+		}
+		return violations;
+	}
+
+	/**
+	 * Delete each flagged import statement (its span IS the whole `import …;`). The caller batches
+	 * the edits into one whole-file `RefactorSupport.canonicalize`, which drops the now-blank line.
+	 */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) if (v.severity == Severity.Warning) {
+			final span: Null<Span> = v.span;
+			if (span != null) edits.push({ span: span, text: '' });
+		}
+		return edits;
+	}
+
+	/**
+	 * Whether `o` brings every top-level type of `module` into scope: an unguarded, unaliased
+	 * `import <module>;` or `using <module>;` (a `using` is an import plus static extension). An
+	 * `Alias` binds only its alias, a `Wild` binds statics or main types, and a GUARDED statement
+	 * exists in some builds only — none of the three qualifies.
+	 */
+	private static inline function providesModule(o: ImportInfo, module: String): Bool {
+		return !o.guarded && (o.kind == ImportKind.Import || o.kind == ImportKind.Using) && o.raw == module;
+	}
+
+	/**
+	 * The NEAREST ambient group binding `simple` at all — the one that decides the name once the file's
+	 * own statement goes. Guardedness must not steer the SEARCH, only the verdict at the group it lands
+	 * on; filtered here it walks past a nearer group whose only binder is `#if`-guarded.
+	 */
+	private static function nearestBinder(info: FileInfo, name: String, publicTypes: Map<String, Array<String>>): Null<AmbientImportGroup> {
+		return info.ambientImports.find(g -> g.imports.exists(o -> SymbolIndex.bindsAnyOf(o, [name], publicTypes)));
+	}
+
+	/**
+	 * The ambient source that already puts `imp` in force in `info`, or null when deleting `imp` could
+	 * change what a name means there.
+	 *
+	 * ONE shape qualifies, and it is stated positively: `imp` is an unguarded `import` or `using`, the
+	 * NEAREST ambient statement binding its simple name is an unguarded statement of the very same
+	 * kind and path, the chain was bounded, and nothing else in the file binds that name. An identical
+	 * statement binds an identical thing whatever it names — which is why this arm consults no
+	 * declaration at all, and why anything short of identical is refused instead of reasoned about. A
+	 * nearer ambient source binding the simple name to something ELSE is what makes the file's own
+	 * statement load-bearing, and it is the case this refuses on.
+	 */
+	private static function ambientProviderOf(
+		info: FileInfo, imp: ImportInfo, index: SymbolIndex, publicTypes: Map<String, Array<String>>, bindings: ImportBindings,
+		contests: (ImportInfo) -> Bool
+	): Null<String> {
+		if (imp.guarded || !info.ambientImportsBounded) return null;
+		if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) return null;
+		if (imp.kind == ImportKind.Using && usingCompetitorInScope(info, imp, contests)) return null;
+		// The identity argument below is made per TYPE name. A statement that also binds a VALUE — a
+		// constructor, an enum-abstract value, a module-level field — would need it made per value,
+		// against a precedence where constructors outrank fields across the ambient boundary; until
+		// it is, such a statement stays.
+		if (!ImportBindings.bindsNoValue(imp.kind == ImportKind.Using ? bindings.ofUsing(imp.raw) : bindings.ofImport(imp.raw)))
+			return null;
+		// EVERY name the statement brings, never only its leaf: a statement naming a MODULE binds every
+		// type that module declares, and the chain can decide a SIBLING name somewhere else entirely, so
+		// deleting the file's own statement hands that sibling to a nearer ambient group's declaration.
+		final names: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
+		if (names == null || names.length == 0) return null;
+		var provider: Null<String> = null;
+		for (name in names) {
+			// The NEAREST group binding the name AT ALL — guardedness must not steer this choice. Filtered
+			// to unguarded binders the search walks PAST a nearer group whose only binder is `#if`-guarded
+			// and reports a farther identical one, so deleting the file's own statement retargets the name
+			// in the builds that guard is on. A guarded binder in the nearest group makes the question refuse.
+			final nearest: Null<AmbientImportGroup> = nearestBinder(info, name, publicTypes);
+			// One group has to decide ALL of them. Where two groups decide two of the statement's names,
+			// the surviving chain reproduces neither position whole.
+			if (nearest == null || (provider != null && nearest.file != provider)) return null;
+			provider = nearest.file;
+			// EVERY binder of the name in that group must be the identical statement: within one file the
+			// LAST binder of a simple name wins, so a guarded or differently-pathed sibling decides the name
+			// in some build. And no own statement is exempt — the binder that survives is an ambient one, so
+			// a second own binder would decide it instead and the deletion is a retarget.
+			final binders: Array<ImportInfo> = nearest.imports.filter(o -> SymbolIndex.bindsAnyOf(o, [name], publicTypes));
+			if (!binders.foreach(o -> !o.guarded && o.kind == imp.kind && o.raw == imp.raw)) return null;
+			if (bindsElsewhere(info, imp, '', name, index)) return null;
+		}
+		return provider;
+	}
+
+	/**
+	 * Whether a `using` other than `imp` and its ambient twins is in scope for `info` and CONTESTS it — the gate that keeps
+	 * the identity argument honest for the one kind it does not hold for.
+	 *
+	 * A `using` binds a NAME and a POSITION in the static-extension order, and the position is what an
+	 * identical statement elsewhere does NOT reproduce. Checked against the compiler rather than
+	 * assumed: extensions are tried in REVERSE declaration order, every own statement outranks every
+	 * ambient one, a NEARER ambient group outranks a farther one, and within one file the last declaration wins. So deleting
+	 * the file's own statement can hand a method to whichever rival is next in that order — but only at an access both may
+	 * bind: a name both modules may extend with, on a receiver neither passes over or one the typing service cannot read
+	 * (`contests`, `UsingSites.contested`). A rival contesting no access leaves every access where it was.
+	 *
+	 * An ambient `using` of the SAME module is not a competitor: it names the module this statement
+	 * names, so whichever of them wins, the method resolves to the same static.
+	 */
+	private static function usingCompetitorInScope(info: FileInfo, imp: ImportInfo, contests: (ImportInfo) -> Bool): Bool {
+		for (o in info.imports) if (o.kind == ImportKind.Using && (o.span.from != imp.span.from || o.span.to != imp.span.to) && contests(o))
+			return true;
+		for (group in info.ambientImports)
+			for (o in group.imports)
+				if (o.kind == ImportKind.Using && o.raw != imp.raw && contests(o)) return true;
+		return false;
+	}
+
+	/** Whether a rival `using` contests `imp` in the file `sites` reads (`UsingSites.contested`); every rival, with no source. */
+	private static function contestsOf(
+		sites: Null<UsingSites>, imp: ImportInfo, methodsOf: (String) -> Null<Array<String>>
+	): (ImportInfo) -> Bool {
+		if (sites == null) return rival -> true;
+		final present: UsingSites = sites;
+		return rival -> present.contested(imp.raw, rival.raw, methodsOf);
+	}
+
+	/**
+	 * The module path that already binds `imp`'s leaf name in `info`, or null when `imp` is not a
+	 * provably redundant sub-module type import. See the class doc for the gate set; each one fails
+	 * closed.
+	 */
+	private static function redundantModuleOf(info: FileInfo, imp: ImportInfo, index: SymbolIndex, bindings: ImportBindings): Null<String> {
+		if (imp.guarded || imp.kind != ImportKind.Import) return null;
+		final dot: Int = imp.raw.lastIndexOf('.');
+		if (dot <= 0) return null;
+		final simple: String = imp.raw.substring(dot + 1);
+		// A lower-initial leaf is a static field / enum-constructor import, and a lower-initial
+		// parent segment is a package — neither shape is a module's sub-type.
+		if (!SourceText.isUpperInitial(simple)) return null;
+		final module: String = imp.raw.substring(0, dot);
+		return if (!SourceText.isUpperInitial(SourceText.lastSegment(module)))
+			null
+		else if (!info.imports.exists(o -> providesModule(o, module)))
+			null
+		else if (!moduleDeclaresType(index, module, simple))
+			null
+		else if (bindsElsewhere(info, imp, module, simple, index) || valuesBoundElsewhere(info, imp, module, bindings))
+			null
+		else
+			module;
+	}
+
+	/** Whether the index knows a file whose module IS `module` and which declares a top-level type named `name`. */
+	private static function moduleDeclaresType(index: SymbolIndex, module: String, name: String): Bool {
+		return index.refs.declaringFiles(name).exists(f -> f.module == module);
+	}
+
+	/**
+	 * Whether anything in `info` OTHER than `imp` and the qualifying module import binds `name`.
+	 * Two imports of one simple name are legal in Haxe and the LAST one wins, so a second binder
+	 * makes the deletion a possible retarget rather than a no-op — refuse it.
+	 *
+	 * A WILDCARD is deliberately not a binder here, measured rather than assumed: a package
+	 * `import pkg.*;` is OUTRANKED by an explicit module import in either statement order (verified
+	 * on 4.3.7), and the qualifying module import always survives the deletion — so a wildcard can
+	 * never become the winner and vetoing on one would only suppress a true finding. A module
+	 * wildcard `import pkg.Mod.*;` binds statics and enum constructors, no type name at all.
+	 *
+	 * A type the FILE ITSELF declares outranks every import, so the deletion would be safe there
+	 * too; it stays a veto because the finding's MESSAGE would be false — the module import is not
+	 * what binds the name in that file.
+	 */
+	private static function bindsElsewhere(info: FileInfo, imp: ImportInfo, module: String, name: String, index: SymbolIndex): Bool {
+		if (info.types.exists(t -> t.name == name)) return true;
+		for (o in info.imports) if (o.span.from != imp.span.from || o.span.to != imp.span.to) switch o.kind {
+			case ImportKind.Alias:
+				if ((o.alias ?? o.raw) == name) return true;
+			case ImportKind.Wild:
+			case _:
+				if (SourceText.lastSegment(o.raw) == name) return true;
+				if (o.raw != module && moduleDeclaresType(index, o.raw, name)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether deleting `imp` could hand one of the VALUE names it binds — a constructor or enum-abstract
+	 * value of the sub-type it names — to a line other than the qualifying `module` import. That import
+	 * binds the very same values, so where it is the next binder nothing changes; a THIRD line binding
+	 * one at the same rank (`ImportBindings.collision`: an enum of another module sharing a constructor
+	 * name, an alias nobody listed) may be the one that wins instead. A sub-type whose values cannot be
+	 * listed refuses beside any line binding a value at that rank. A wildcard binds no constructor at
+	 * this rank and is no binder here.
+	 */
+	private static function valuesBoundElsewhere(info: FileInfo, imp: ImportInfo, module: String, bindings: ImportBindings): Bool {
+		final values: Null<Array<String>> = bindings.ofImport(imp.raw)?.typeValues;
+		if (values != null && values.length == 0) return false;
+		final mine: ImportBinding = {
+			types: [],
+			wildcardTypes: [],
+			typeValues: values,
+			fieldValues: []
+		};
+		for (o in info.imports) if ((o.span.from != imp.span.from || o.span.to != imp.span.to) && !providesModule(o, module)) {
+			final theirs: Null<ImportBinding> = switch o.kind {
+				case ImportKind.Wild: null;
+				case ImportKind.Alias: bindings.ofAlias(o.alias ?? o.raw);
+				case ImportKind.Using: bindings.ofUsing(o.raw);
+				case _: bindings.ofImport(o.raw);
+			};
+			if (theirs != null && ImportBindings.collision(mine, imp.raw, theirs, o.raw) != null) return true;
+		}
+		return false;
+	}
+
+}

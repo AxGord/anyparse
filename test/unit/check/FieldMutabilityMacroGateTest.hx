@@ -1,10 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.InlineConstant;
-import anyparse.check.PreferFinal;
-import anyparse.check.PreferFinalField;
-import anyparse.check.TrivialGetter;
+import anyparse.check.common.expressions.PreferFinal;
+import anyparse.check.common.members.InlineConstant;
+import anyparse.check.common.members.PreferFinalField;
+import anyparse.check.common.members.TrivialGetter;
 
 /**
  * Rules that act on a declaration the compiler does NOT see, and the two ways it differs from the

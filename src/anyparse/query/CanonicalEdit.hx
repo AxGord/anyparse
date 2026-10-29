@@ -342,7 +342,7 @@ final class CanonicalEdit {
 			// Everything else — end of file, and the byte that CLOSES the body a block
 			// was left orphaned inside — steals nothing. That second case is not
 			// hypothetical: `add-member` appends before the closer, and refusing there
-			// blocked a real file of this repo (`src/anyparse/check/PreferReadOnlyField.hx`,
+			// blocked a real file of this repo (`src/anyparse/check/common/members/PreferReadOnlyField.hx`,
 			// which ends on an orphaned `/** … */`) with a remedy `add-member` cannot
 			// perform — it has no addressing options at all.
 			final next: Int = j >= source.length ? -1 : source.fastCodeAt(j);

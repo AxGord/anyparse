@@ -4,8 +4,8 @@ package unit.cli;
 import sys.io.File;
 #end
 import anyparse.check.Check.Violation;
-import anyparse.check.Complexity;
 import anyparse.check.LintConfig;
+import anyparse.check.common.design.Complexity;
 import anyparse.query.Cli;
 import unit.CheckFixture;
 

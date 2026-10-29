@@ -1,12 +1,12 @@
 package unit.cli;
 
-import anyparse.check.PositiveSinks;
+import anyparse.check.common.design.threads.PositiveSinks;
 import anyparse.query.Cli;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
 import haxe.Json;
-import unit.check.ThreadSafetyCheckTest;
-import unit.check.ThreadSafetyLongLocksTest;
+import unit.check.common.design.ThreadSafetyCheckTest;
+import unit.check.common.design.ThreadSafetyLongLocksTest;
 
 using StringTools;
 

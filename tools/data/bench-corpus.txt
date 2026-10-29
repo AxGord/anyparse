@@ -31,18 +31,18 @@
 # (the primitive mix then matches the full trees within ~2 points; at reps=10
 # V8 over-optimises and expectLit's share drops by 10).
 @${ANYPARSE_BENCH_EXTRA}
-src/anyparse/check/AvoidDynamic.hx
-src/anyparse/check/DeadBinderCounterLoop.hx
-src/anyparse/check/DeadNullGuard.hx
-src/anyparse/check/EmptyCaseArm.hx
-src/anyparse/check/MapKeysLookup.hx
-src/anyparse/check/MissingVisibility.hx
-src/anyparse/check/PossibleNullDereference.hx
-src/anyparse/check/PreferIfExpressionReturn.hx
-src/anyparse/check/PreferNullCoalescing.hx
-src/anyparse/check/RedundantImport.hx
+src/anyparse/check/common/types/AvoidDynamic.hx
+src/anyparse/check/common/loops/DeadBinderCounterLoop.hx
+src/anyparse/check/common/nullsafety/DeadNullGuard.hx
+src/anyparse/check/common/control/EmptyCaseArm.hx
+src/anyparse/check/common/loops/MapKeysLookup.hx
+src/anyparse/check/common/members/MissingVisibility.hx
+src/anyparse/check/common/nullsafety/PossibleNullDereference.hx
+src/anyparse/check/common/control/PreferIfExpressionReturn.hx
+src/anyparse/check/common/nullsafety/PreferNullCoalescing.hx
+src/anyparse/check/common/imports/RedundantImport.hx
 src/anyparse/check/Severity.hx
-src/anyparse/check/ShadowingCaseBinder.hx
+src/anyparse/check/common/naming/ShadowingCaseBinder.hx
 src/anyparse/format/Format.hx
 src/anyparse/format/KeepEmptyLinesPolicy.hx
 src/anyparse/format/WhitespacePolicy.hx

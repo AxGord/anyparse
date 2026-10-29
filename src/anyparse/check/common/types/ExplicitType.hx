@@ -1,0 +1,972 @@
+package anyparse.check.common.types;
+
+import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.OracleAssisted;
+import anyparse.check.Check.OracleType;
+import anyparse.check.Check.TypeOracle;
+import anyparse.check.common.types.LiteralInfer.AnnotationSite;
+import anyparse.check.scan.EnumAbstractForms;
+import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.MemberKinds;
+import anyparse.query.NominalTypes;
+import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.query.ShapeVocab;
+import anyparse.query.SourceText;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoMemo;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeNameBinding;
+import anyparse.query.TypeRefIndex;
+import anyparse.query.TypeRefPrinter;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
+
+/**
+ * Flags a class / abstract / interface member that omits an explicit type — a
+ * field with no `:Type`, a function parameter with no `:Type`, or a function with
+ * no return type. Stating types everywhere is a documented project rule; the check
+ * holds without a type-checker because the omission is purely syntactic.
+ * A conservative autofix fills in a statically-certain initializer type, plus a : Void return
+ * type when a block-bodied function has no value-return and no throw in its own scope (nested
+ * functions and lambdas excluded). A non-Void return type has no structural evidence at all, so
+ * it is the `OracleAssisted` pass (`fixWithOracle`), which asks the compiler and therefore runs
+ * only under a configured `compilerOracle`; the rest stays report-only.
+ *
+ * ## Grammar-agnostic
+ *
+ * `RefShape.fieldDeclKinds` are the field hosts; `RefShape.memberDeclKinds` minus
+ * those are the function hosts. `RefShape.paramKinds` are parameters,
+ * `RefShape.functionBodyKinds` the body markers — a function child that is neither
+ * a parameter nor a body is its return type. Field / parameter type presence is
+ * read from source: the type annotation is not projected as a node, but it sits
+ * between the name and the initializer / default, so a `:` there means a type is
+ * present. Enum-abstract values (a `RefShape.enumAbstractDeclKind` member's
+ * fields) are exempt — their type is the abstract's underlying type. Any unset →
+ * no-op.
+ */
+@:nullSafety(Strict)
+final class ExplicitType extends RuleBase implements OracleAssisted {
+
+	/**
+	 * An anonymous-structure return type longer than this stays report-only — the same
+	 * default the sibling `explicit-local-type` applies to inferred local types, where a
+	 * long inline structure is noise rather than documentation.
+	 */
+	private static inline final MAX_ANON_LEN: Int = 80;
+
+	/** The message of a missing return type's finding: the one finding keyed by its function rather than a node of its own. */
+	private static inline final RETURN_MESSAGE: String = 'function declared without an explicit return type';
+
+	private static inline final DECLINE_NO_RETURN_SLOT: String = "no `)` sits right before the function's body, where the return type goes";
+	private static inline final DECLINE_NO_NAME: String = 'the declaration does not spell its name in active code';
+	private static inline final DECLINE_MACRO_RETURN: String = 'a `macro` function the oracle cannot type: not every value it returns '
+		+ 'is an expression quotation (`macro …`) or `Context.error`';
+	private static inline final DECLINE_MACRO_PARAM: String = 'a parameter of a `macro` function: the oracle cannot type macro context';
+
+	/** The type every value of a `macro` function's proven returns has. */
+	private static inline final MACRO_RETURN_TYPE: String = 'haxe.macro.Expr';
+
+	/** A ternary's children: the condition and its two arms. */
+	private static inline final IF_ELSE_CHILDREN: Int = 3;
+
+	private static inline final DECLINE_NO_SLOT: String = 'no slot after the name takes the annotation';
+	private static inline final DECLINE_NO_STRUCTURAL_RETURN: String = 'a non-Void return type has no structural evidence — the '
+		+ 'oracle-assisted pass types it when the project configures a compilerOracle';
+	private static inline final DECLINE_NO_STRUCTURAL_TYPE: String = 'no structural rule names its type — a literal, a typed `new` '
+		+ 'or cast initializer, or a supertype declaring the parameter — and the oracle-assisted pass types it when the project '
+		+ 'configures a compilerOracle';
+
+	public function new() {
+		super('explicit-type', 'a member field, parameter, or return type without an explicit type annotation', RuleCategory.Types);
+	}
+
+	/**
+	 * The oracle-assisted pass: annotate every flagged return type, parameter and field the
+	 * `TypeOracle` types. `fix()` leaves each of them report-only when no structural evidence pins
+	 * it — a non-`Void` return type never has any; the compiler's own answer is that evidence, so
+	 * the same findings become fixable the moment a project configures a `compilerOracle`. A
+	 * violation keys the node it is about: a FUNCTION node for its return type, a parameter or
+	 * field node for its own.
+	 *
+	 * Per finding, every failed gate leaves it report-only and records why (`declineReason`): a
+	 * `macro` function (its `Expr` return and parameters are implicit), a slot the annotation cannot
+	 * be placed in, a name token the source does not spell in active code, an oracle decline, and a
+	 * type the normalizer refuses. A parameter or field the compiler types `Dynamic`/`Any` is refused
+	 * as a local is (`LiteralInfer.admissibleLocal`).
+	 */
+	public function fixWithOracle(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
+	): Array<{ span: Span, text: String }> {
+		final shape: RefShape = plugin.refShape();
+		final fields: Array<String> = shape.fieldDeclKinds ?? [];
+		final members: Array<String> = shape.memberDeclKinds ?? [];
+		final bodies: Array<String> = shape.functionBodyKinds ?? [];
+		final functions: Array<String> = [for (k in members) if (!fields.contains(k)) k];
+		if (functions.length == 0 || bodies.length == 0 || violations.length == 0) return [];
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin, violations[0].file);
+		final seams: ReturnSeams = {
+			source: source,
+			file: violations[0].file,
+			bodies: bodies,
+			params: shape.paramKinds ?? [],
+			flagged: [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}' => v],
+			printer: printer,
+			oracle: oracle,
+			regions: plugin.lexicalRegions(source),
+			typeParams: RunScan.typeParamNamesOf(plugin, source)
+		};
+		final macroKind: Null<String> = shape.macroModifierKind;
+		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
+		final edits: Array<{ span: Span, text: String }> = [];
+
+		function walk(node: QueryNode): Void {
+			final kids: Array<QueryNode> = node.children;
+			for (i in 0...kids.length) {
+				final child: QueryNode = kids[i];
+				if (functions.contains(child.kind) && !MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) {
+					for (edit in functionOracleEdits(seams, child)) edits.push(edit);
+				} else if (fields.contains(child.kind)) {
+					pushEdit(edits, fieldOracleEdit(seams, child));
+				}
+				walk(child);
+			}
+		}
+		walk(tree);
+		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+		return edits;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final shape: RefShape = plugin.refShape();
+		final fields: Array<String> = shape.fieldDeclKinds ?? [];
+		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
+		final params: Array<String> = shape.paramKinds ?? [];
+		final bodies: Array<String> = shape.functionBodyKinds ?? [];
+		final enumAbstract: Null<String> = shape.enumAbstractDeclKind;
+		// Function hosts are the member kinds that are not fields; a missing fields
+		// or functions set leaves the check with nothing useful to do.
+		final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
+		return fields.length == 0 || functions.length == 0
+			? []
+			: RunScan.collect(files, plugin, (entry, tree, violations) -> {
+				// checkstyle `Type.ignoreEnumAbstractValues` (default true) toggles the enum-abstract-value exemption.
+				final ignoreEA: Bool = plugin.checkOverrides(entry.file)?.explicitTypeIgnoreEnumAbstract ?? true;
+				final ea: Null<String> = ignoreEA ? enumAbstract : null;
+				// The same exemption for the values of an enum abstract written `@:enum` (or through the
+				// `#if` version guard): they project under a plain abstract, and annotating one with its
+				// literal's type is a compile error (`Int should be <the abstract>`).
+				final guarded: Array<Int> = ignoreEA ? EnumAbstractForms.valueStarts(plugin, tree) : [];
+				walk(violations, entry.file, entry.source, tree, null, fields, functions, params, bodies, ea, guarded);
+			});
+	}
+
+	/**
+	 * Annotate a field / parameter whose initializer has a statically-certain type: a
+	 * literal (`String` / `Bool` / `Int` / `Float`, negatives included), a `new T<...>()`
+	 * with written type parameters, or a typed cast / check-type `(x : T)`. Everything
+	 * uncertain — a bare `new T()` (possibly generic), a call, a field read, an array /
+	 * map / ternary, or a `[]` — is left report-only: a wrong annotation breaks the build, so when
+	 * uncertain the fix skips. A missing non-Void return type is report-only HERE too, and is
+	 * picked up by `fixWithOracle` when the project configures a compiler oracle.
+	 */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		final shape: RefShape = plugin.refShape();
+		final fields: Array<String> = shape.fieldDeclKinds ?? [];
+		final params: Array<String> = shape.paramKinds ?? [];
+		final fixable: Array<String> = fields.concat(params);
+		return fixable.length == 0
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final edits: Array<{ span: Span, text: String }> = [];
+				collectInitializerEdits(tree, source, violations, shape, plugin, fixable, edits);
+				final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
+				final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
+				collectVoidReturnEdits(tree, source, shape, violations, functions, memberKinds, edits);
+				collectInheritedParamEdits(tree, source, violations, plugin, index, functions, params, edits);
+				collectMacroReturnEdits(tree, source, violations, plugin, index, functions, memberKinds, edits);
+				recordStructuralDeclines(violations, edits);
+				return edits;
+			});
+	}
+
+	/**
+	 * The RETURN half of a printed function type — `(name : String) -> String` yields `String`.
+	 * Public as the parse seam its own tests drive: a function-TYPED parameter is the shape that
+	 * tells a real reading from a split at the first `->`, and no realistic fixture reaches it
+	 * through the display server.
+	 * The compiler prints a method's own type as a parenthesised parameter group followed by
+	 * `->` and the result, read by the grammar (`GrammarPlugin.typeSyntax`), so a reply of any
+	 * other shape (a position that resolved to a value, a query the server could not answer, a
+	 * type the grammar cannot read) yields null.
+	 */
+	public static function returnTypeOf(printed: String, typeSyntax: TypeSyntaxReader): Null<String> {
+		return switch typeSyntax(printed)?.shape {
+			case Function(_, ret, false): ret.text;
+			case _: null;
+		};
+	}
+
+	/** Whether `c` is a space or tab — horizontal whitespace, excluding line breaks. */
+	private static inline function isInlineSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code;
+	}
+
+	/** Whether `c` continues a dotted type-reference token — a letter, digit, `_` or `.`. */
+	private static inline function isNominalPart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+			|| c == '.'.code;
+	}
+
+	/** `edit` appended to `edits` unless it is null. */
+	private static inline function pushEdit(edits: Array<{ span: Span, text: String }>, edit: Null<{ span: Span, text: String }>): Void {
+		if (edit != null) edits.push(edit);
+	}
+
+	/** The finding `flagged` keys at `node`'s span, or null. */
+	private static inline function findingAt(flagged: Map<String, Violation>, node: QueryNode): Null<Violation> {
+		final span: Null<Span> = node.span;
+		return span == null ? null : flagged['${span.from}:${span.to}'];
+	}
+
+	/**
+	 * Give every finding `edits` left unfixed, and no earlier pass declined in its own words (the `macro` pass), its
+	 * decline reason. An edit belongs to the NARROWEST finding around it: a function's return-type finding spans its
+	 * parameters' findings too.
+	 */
+	private static function recordStructuralDeclines(violations: Array<Violation>, edits: Array<{ span: Span, text: String }>): Void {
+		final fixed: Array<Violation> = [];
+		for (e in edits) {
+			var owner: Null<Violation> = null;
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				final best: Null<Span> = owner?.span;
+				if (
+					span != null && span.from <= e.span.from && e.span.from <= span.to
+					&& (best == null || best.from <= span.from && span.to <= best.to)
+				)
+					owner = v;
+			}
+			if (owner != null) fixed.push(owner);
+		}
+		for (v in violations) if (!fixed.contains(v) && v.declineReason == null)
+			v.declineReason = v.message == RETURN_MESSAGE ? DECLINE_NO_STRUCTURAL_RETURN : DECLINE_NO_STRUCTURAL_TYPE;
+	}
+
+	/**
+	 * The annotation edit for ONE flagged function, or null when any gate fails. Split out of
+	 * `fixWithOracle` for the complexity budget; every `null` here leaves the finding report-only.
+	 */
+	private static function returnEdit(s: ReturnSeams, fn: QueryNode): Null<{ span: Span, text: String }> {
+		final span: Null<Span> = fn.span;
+		final name: Null<String> = fn.name;
+		final v: Null<Violation> = span == null ? null : s.flagged['${span.from}:${span.to}'];
+		if (span == null || name == null || v == null) return null;
+		final body: Null<QueryNode> = fn.children.find(c -> s.bodies.contains(c.kind));
+		final at: Int = body == null ? -1 : voidInsertPoint(span.from, body, s.source);
+		if (at < 0) return decline(v, DECLINE_NO_RETURN_SLOT);
+		// A position-based oracle answers at a position INSIDE the name token, not at the
+		// `function` keyword the node's span starts on.
+		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
+		return nameAt < 0
+			? decline(v, DECLINE_NO_NAME)
+			: annotation(s, v, s.oracle.returnType(s.file, span, name, nameAt + name.length), at, methodProof(s, fn), false);
+	}
+
+	/** The oracle-assisted edits for the flagged return type and parameters of the function `fn`. */
+	private static function functionOracleEdits(s: ReturnSeams, fn: QueryNode): Array<{ span: Span, text: String }> {
+		final out: Array<{ span: Span, text: String }> = [];
+		pushEdit(out, returnEdit(s, fn));
+		final own: Array<QueryNode> = [for (c in fn.children) if (s.params.contains(c.kind)) c];
+		for (index in 0...own.length) pushEdit(out, paramOracleEdit(s, fn, own[index], index));
+		return out;
+	}
+
+	/**
+	 * The annotation edit for the flagged parameter `param`, the `index`-th of `fn`, or null when any gate fails (the
+	 * finding's `declineReason` says which).
+	 */
+	private static function paramOracleEdit(
+		s: ReturnSeams, fn: QueryNode, param: QueryNode, index: Int
+	): Null<{ span: Span, text: String }> {
+		final span: Null<Span> = param.span;
+		final fnSpan: Null<Span> = fn.span;
+		final v: Null<Violation> = span == null ? null : s.flagged['${span.from}:${span.to}'];
+		final name: Null<String> = param.name;
+		final fnName: Null<String> = fn.name;
+		if (span == null || fnSpan == null || v == null || name == null || fnName == null) return null;
+		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
+		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
+		final at: Int = param.children.length > 0 ? LiteralInfer.insertPoint(param, param.children[0], s.source) : nameAt + name.length;
+		return at < 0
+			? decline(v, DECLINE_NO_SLOT)
+			: annotation(s, v, s.oracle.paramType(s.file, fnSpan, fnName, index, name, nameAt + name.length), at, methodProof(s, fn), true);
+	}
+
+	/** The annotation edit for the flagged field `field`, or null when any gate fails (the finding's `declineReason` says which). */
+	private static function fieldOracleEdit(s: ReturnSeams, field: QueryNode): Null<{ span: Span, text: String }> {
+		final span: Null<Span> = field.span;
+		final v: Null<Violation> = span == null ? null : s.flagged['${span.from}:${span.to}'];
+		final name: Null<String> = field.name;
+		if (span == null || v == null || name == null) return null;
+		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
+		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
+		final at: Int = field.children.length > 0
+			? LiteralInfer.insertPoint(field, field.children[0], s.source)
+			: bareFieldInsertPoint(s.source, nameAt + name.length, span.to);
+		return at < 0
+			? decline(v, DECLINE_NO_SLOT)
+			: annotation(s, v, s.oracle.fieldType(s.file, span, name, nameAt + name.length), at, null, true);
+	}
+
+	/**
+	 * The `:Type` edit at `at` for the oracle's `answer`, normalised for this file, or null with the finding's
+	 * `declineReason` set. `admissible` applies the refusals a local's annotation takes (`LiteralInfer.admissibleLocal`):
+	 * a parameter or field is a binding exactly as a local is, while a return type may legitimately say `Void`.
+	 */
+	private static function annotation(
+		s: ReturnSeams, v: Violation, answer: OracleType, at: Int, methodName: Null<String>, admissible: Bool
+	): Null<{ span: Span, text: String }> {
+		final raw: String = switch answer {
+			case Typed(type): type;
+			case Declined(reason): return decline(v, reason);
+		};
+		final site: AnnotationSite = { file: s.file, methodName: methodName };
+		final mark: Int = s.printer.pendingImportMark();
+		final normalized: Null<String> = LiteralInfer.normalizeWith(raw, s.printer, MAX_ANON_LEN, site, at);
+		final norm: Null<String> = admissible ? LiteralInfer.admissibleLocal(normalized, s.printer) : normalized;
+		if (norm != null) return { span: new Span(at, at), text: ':$norm' };
+		s.printer.rollbackPendingImports(mark);
+		return decline(v, LiteralInfer.unwritableReason(raw, MAX_ANON_LEN, site, admissible));
+	}
+
+	/**
+	 * `fn`'s name when it DECLARES type parameters (`TypeInfoProvider.typeParamNames`), else null. The
+	 * `<method>.<param>` form a compiler prints can only belong to such a method; without that proof the same
+	 * shape is an ordinary package-qualified type whose package tail happens to match the method name.
+	 */
+	private static function methodProof(s: ReturnSeams, fn: QueryNode): Null<String> {
+		final span: Null<Span> = fn.span;
+		return span != null && s.typeParams.exists(span.from) ? fn.name : null;
+	}
+
+	/**
+	 * Where a field with no initializer takes its annotation: right after its name, or after its accessor list
+	 * `(get, set)` — the slot a `;` follows. -1 when `;` does not follow within `end`.
+	 */
+	private static function bareFieldInsertPoint(source: String, nameEnd: Int, end: Int): Int {
+		var at: Int = nameEnd;
+		if (at < end && source.fastCodeAt(at) == '('.code) {
+			final close: Int = source.indexOf(')', at);
+			if (close < 0 || close >= end) return -1;
+			at = close + 1;
+		}
+		var next: Int = at;
+		while (next < end && isInlineSpace(source.fastCodeAt(next))) next++;
+		return next < source.length && source.fastCodeAt(next) == ';'.code ? at : -1;
+	}
+
+	/** Record `reason` on `v` and answer no edit. */
+	private static function decline(v: Violation, reason: String): Null<{ span: Span, text: String }> {
+		v.declineReason = reason;
+		return null;
+	}
+
+	/**
+	 * Walk `node` carrying its `parentKind` (for the enum-abstract exemption). A
+	 * field with no type annotation is flagged unless its container is an enum
+	 * abstract; a function has each untyped parameter and its missing return type
+	 * flagged. `guarded` holds the span starts of the values of an enum abstract the grammar does
+	 * not project as one (`EnumAbstractForms`), which carries the same exemption.
+	 */
+	private static function walk(
+		out: Array<Violation>, file: String, source: String, node: QueryNode, parentKind: Null<String>, fields: Array<String>,
+		functions: Array<String>, params: Array<String>, bodies: Array<String>, enumAbstract: Null<String>, guarded: Array<Int>
+	): Void {
+		if (fields.contains(node.kind)) {
+			final exempt: Bool = parentKind == enumAbstract || EnumAbstractForms.isValue(node.span, guarded);
+			if (!exempt && !LiteralInfer.hasTypeBeforeInit(node, source))
+				push(out, file, node.span, 'field declared without an explicit type');
+		} else if (functions.contains(node.kind)) {
+			checkFunction(out, file, source, node, params, bodies);
+		}
+		for (c in node.children) walk(out, file, source, c, node.kind, fields, functions, params, bodies, enumAbstract, guarded);
+	}
+
+	/**
+	 * Flag each untyped parameter of `fn`, and `fn` itself when it has no return
+	 * type — a child that is neither a parameter nor a body marker. A constructor
+	 * (`new`) is exempt from the return-type rule: it has no return type.
+	 * Flag each untyped parameter of `fn`, and `fn` itself when it has no return
+	 * type. A constructor (`new`) is exempt from the return-type rule — it has no
+	 * return type to declare.
+	 */
+	private static function checkFunction(
+		out: Array<Violation>, file: String, source: String, fn: QueryNode, params: Array<String>, bodies: Array<String>
+	): Void {
+		for (child in fn.children) if (params.contains(child.kind) && !LiteralInfer.hasTypeBeforeInit(child, source))
+			push(out, file, child.span, 'parameter declared without an explicit type');
+		if (fn.name != 'new' && !hasReturnType(fn, params, bodies)) push(out, file, fn.span, RETURN_MESSAGE);
+	}
+
+	/**
+	 * Whether `fn` declares a return type. A generic constraint (`<T:C>`) and a
+	 * return type project as the same kind of node, but a constraint sits before the
+	 * parameters and the return type immediately before the body — so the return type
+	 * is the child directly preceding the body marker, when that child is neither a
+	 * parameter nor a body. (A constrained generic with no parameters and no return
+	 * type is the one residual miss; it under-reports, never false-positives.)
+	 */
+	private static function hasReturnType(fn: QueryNode, params: Array<String>, bodies: Array<String>): Bool {
+		final kids: Array<QueryNode> = fn.children;
+		var bodyIndex: Int = -1;
+		for (i in 0...kids.length) if (bodies.contains(kids[i].kind)) bodyIndex = i;
+		if (bodyIndex <= 0) return false;
+		final before: QueryNode = kids[bodyIndex - 1];
+		return !params.contains(before.kind) && !bodies.contains(before.kind);
+	}
+
+	private static function push(out: Array<Violation>, file: String, span: Null<Span>, message: String): Void {
+		if (span != null) out.push({
+			file: file,
+			span: span,
+			rule: 'explicit-type',
+			severity: Severity.Warning,
+			message: message
+		});
+	}
+
+	/**
+	 * The `: Void` return-type pass of `fix()`: annotate every flagged function whose
+	 * block body holds no value-return or throw in its own scope. The invariants are
+	 * captured by the local `walk` / `editVoid` closures — mirroring the recursive-walker
+	 * shape used elsewhere (`CallGraphNodes.collect`) — instead of being threaded through
+	 * every recursive call. A `macro`-modified function returns `Expr` implicitly and is
+	 * left report-only, detected via `RefactorSupport.macroModifierPrecedes` whose run
+	 * ends at the previous member declaration.
+	 */
+	private static function collectVoidReturnEdits(
+		tree: QueryNode, source: String, shape: RefShape, violations: Array<Violation>, functions: Array<String>, members: Array<String>,
+		edits: Array<{ span: Span, text: String }>
+	): Void {
+		final valueReturns: Array<String> = shape.valueReturnKinds ?? [];
+		if (functions.length == 0 || valueReturns.length == 0) return;
+		final blockBody: Null<String> = shape.blockBodyKind;
+		if (blockBody == null) return;
+		final blockBodyKind: String = blockBody;
+		final stop: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		final throwKinds: Array<String> = shape.throwKinds ?? [];
+		final macroKind: Null<String> = shape.macroModifierKind;
+		final flagged: Map<String, Violation> = RunScan.findingsBySpan(violations);
+		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
+
+		function editVoid(fn: QueryNode): Void {
+			final span: Null<Span> = fn.span;
+			if (span == null || !flagged.exists('${span.from}:${span.to}')) return;
+			final body: Null<QueryNode> = fn.children.find(c -> c.kind == blockBodyKind);
+			// A throw in the function's own scope makes its return type unify with any type
+			// (a caller may use the call as a value), so `: Void` would be unsound — leave it
+			// report-only, as with a value-return.
+			if (
+				body == null || MemberKinds.subtreeContainsKindStopping(body, valueReturns, stop)
+				|| MemberKinds.subtreeContainsKindStopping(body, throwKinds, stop)
+			)
+				return;
+			final at: Int = voidInsertPoint(span.from, body, source);
+			if (at >= 0) edits.push({ span: new Span(at, at), text: ':Void' });
+		}
+
+		function walk(node: QueryNode): Void {
+			final kids: Array<QueryNode> = node.children;
+			for (i in 0...kids.length) {
+				final child: QueryNode = kids[i];
+				if (functions.contains(child.kind) && !MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) editVoid(child);
+				walk(child);
+			}
+		}
+		walk(tree);
+	}
+
+	/**
+	 * The `macro`-function pass of `fix()`, the only route to such a function's annotation: the display oracle is blind
+	 * inside a `macro` function. A flagged return type becomes `haxe.macro.Expr` (through the file's printer, imported or
+	 * qualified) when `macroReturnsExpr` proves the function's own returns; otherwise it declines with
+	 * `DECLINE_MACRO_RETURN`. Every flagged parameter of a `macro` function declines with `DECLINE_MACRO_PARAM` — nothing
+	 * structural types it and the oracle cannot.
+	 */
+	private static function collectMacroReturnEdits(
+		tree: QueryNode, source: String, violations: Array<Violation>, plugin: GrammarPlugin, index: Null<SymbolIndex>,
+		functions: Array<String>, members: Array<String>, edits: Array<{ span: Span, text: String }>
+	): Void {
+		final shape: RefShape = plugin.refShape();
+		final macroKind: Null<String> = shape.macroModifierKind;
+		if (macroKind == null || violations.length == 0) return;
+		final seams: MacroSeams = {
+			source: source,
+			tree: tree,
+			plugin: plugin,
+			index: index,
+			shape: shape,
+			flagged: RunScan.findingsBySpan(violations),
+			file: violations[0].file,
+			printer: null
+		};
+		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
+		final own: Array<FixEdit> = [];
+		function walk(node: QueryNode): Void {
+			final kids: Array<QueryNode> = node.children;
+			for (i in 0...kids.length) {
+				final child: QueryNode = kids[i];
+				if (functions.contains(child.kind) && MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary))
+					pushEdit(own, macroReturnEdit(seams, child));
+				walk(child);
+			}
+		}
+		walk(tree);
+		if (own.length == 0) return;
+		for (edit in own) edits.push(edit);
+		final printer: Null<TypeRefPrinter> = seams.printer;
+		if (printer != null) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+	}
+
+	/**
+	 * The `:Expr` edit for the flagged return type of the `macro` function `fn`, or null with the finding's
+	 * `declineReason` set; each flagged parameter of `fn` declines with `DECLINE_MACRO_PARAM`. The file's printer is made
+	 * on the first edit and kept in `s`, so every annotation shares one pending import.
+	 */
+	private static function macroReturnEdit(s: MacroSeams, fn: QueryNode): Null<FixEdit> {
+		final params: Array<String> = s.shape.paramKinds ?? [];
+		for (c in fn.children) if (params.contains(c.kind)) {
+			final pv: Null<Violation> = findingAt(s.flagged, c);
+			if (pv != null) pv.declineReason = DECLINE_MACRO_PARAM;
+		}
+		final v: Null<Violation> = findingAt(s.flagged, fn);
+		final span: Null<Span> = fn.span;
+		if (v == null || span == null) return null;
+		final bodies: Array<String> = s.shape.functionBodyKinds ?? [];
+		final body: Null<QueryNode> = fn.children.find(c -> bodies.contains(c.kind));
+		if (body == null || !macroReturnsExpr(body, s.shape, s.tree, s.index)) return decline(v, DECLINE_MACRO_RETURN);
+		final at: Int = voidInsertPoint(span.from, body, s.source);
+		if (at < 0) return decline(v, DECLINE_NO_RETURN_SLOT);
+		final site: AnnotationSite = { file: s.file, methodName: null };
+		final printer: TypeRefPrinter = s.printer ?? LiteralInfer.printerFor(s.source, s.tree, s.plugin, s.file);
+		s.printer = printer;
+		final type: Null<String> = LiteralInfer.normalizeWith(MACRO_RETURN_TYPE, printer, MAX_ANON_LEN, site, at);
+		return type == null
+			? decline(v, LiteralInfer.unwritableReason(MACRO_RETURN_TYPE, MAX_ANON_LEN, site, false))
+			: { span: new Span(at, at), text: ':$type' };
+	}
+
+	/**
+	 * Whether every value `body` returns in its own scope — nested functions and quotations aside, whose `return`s are not
+	 * this function's — has a `returnProof`, and at least one is a quotation. The compiler unifies exactly those returns to
+	 * `haxe.macro.Expr`, the `Dynamic` companion in either order (as Haxe 4.3.7 types them); a bare `return;`, any other value,
+	 * or no return at all is no proof.
+	 */
+	private static function macroReturnsExpr(body: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>): Bool {
+		final returns: Array<String> = ShapeVocab.returnKinds(shape);
+		final stops: Array<String> = ShapeVocab.nestedFunctionKinds(shape).concat(shape.opaqueKinds ?? []);
+		var quoted: Bool = false;
+		var proven: Bool = true;
+		function walk(node: QueryNode): Void {
+			if (!proven || stops.contains(node.kind)) return;
+			if (returns.contains(node.kind))
+				switch node.children.length == 1 ? returnProof(node.children[0], shape, tree, index) : Unproven {
+					case Quoted:
+						quoted = true;
+					case Companion:
+					case Unproven:
+						proven = false;
+				}
+			for (c in node.children) walk(c);
+		}
+		walk(body);
+		return proven && quoted;
+	}
+
+	/**
+	 * What `value` proves about a `macro` function's return type: `Quoted` for a quotation `RefShape.quotationTypes` types
+	 * `haxe.macro.Expr`, `Companion` for a tabled static call answering `Dynamic` (`Context.error`) whose type name no
+	 * project type shadows, either through a parenthesis or through both arms of a ternary (`Quoted` when one arm is);
+	 * `Unproven` for anything else.
+	 */
+	private static function returnProof(value: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>): ReturnProof {
+		final quotations: Map<String, String> = shape.quotationTypes ?? [];
+		final kids: Array<QueryNode> = value.children;
+		if (quotations[value.kind] == MACRO_RETURN_TYPE) return Quoted;
+		if (value.kind == shape.parenKind && kids.length == 1) return returnProof(kids[0], shape, tree, index);
+		if (value.kind == shape.ternaryKind && kids.length == IF_ELSE_CHILDREN) return switch [
+			returnProof(kids[1], shape, tree, index),
+			returnProof(kids[2], shape, tree, index)
+		] {
+			case [Unproven, _], [_, Unproven]: Unproven;
+			case [Quoted, _], [_, Quoted]: Quoted;
+			case _: Companion;
+		};
+		final call: Null<{ typeName: String, returnSource: String }> = NominalTypes.tabledStaticCall(value, tree, shape);
+		return call != null && call.returnSource == 'Dynamic' && !NominalTypes.shadowedByNonStdType(index, call.typeName)
+			? Companion
+			: Unproven;
+	}
+
+	/**
+	 * The offset right after the parameter list's `)` — where a return-type annotation is
+	 * inserted, before the body — found by scanning back from the body's first token over
+	 * horizontal whitespace only. Shared by the structural `: Void` pass and the oracle-assisted
+	 * one. The first non-whitespace character must be the `)`;
+	 * anything else (a comment ending in `)`, or the `)` and `{` on separate lines)
+	 * leaves the finding report-only, so a `)` inside a comment between the parameter
+	 * list and the body is never mistaken for the parameter close. Returns -1 when the
+	 * `)` is not immediately before the body.
+	 */
+	private static function voidInsertPoint(lo: Int, body: QueryNode, source: String): Int {
+		final bodySpan: Null<Span> = body.span;
+		if (bodySpan == null) return -1;
+		var pos: Int = bodySpan.from;
+		while (pos > lo && isInlineSpace(source.fastCodeAt(pos - 1))) pos--;
+		return pos > lo && source.fastCodeAt(pos - 1) == ')'.code ? pos : -1;
+	}
+
+	/**
+	 * The INHERITED-SIGNATURE pass of `fix()`: type a flagged parameter by COPYING the annotation
+	 * the SAME method carries on a supertype or implemented interface of the enclosing type.
+	 * `class H implements I { public function get(str) … }` against
+	 * `interface I { function get(str:String):Bytes; }` yields `str:String` — the one parameter
+	 * type that is not an inference guess but a written declaration the implementation must match.
+	 *
+	 * The search is the transitive `supertypes` + `interfaces` closure of the enclosing type, and
+	 * EVERY ambiguity is a conservative skip that leaves the finding report-only, because a wrong
+	 * annotation breaks the build:
+	 *
+	 * - no `SymbolIndex` (the check ran outside a resolving fix path) or the enclosing type is not
+	 *   indexed / not found by span;
+	 * - a constructor — `new` is never inherited, so a supertype ctor's signature is unrelated;
+	 * - no type in the closure declares a member of that name (a plain method: its type would need
+	 *   the compiler oracle, which this pass does not use);
+	 * - a declaring type whose source is unavailable or does not parse, whose parameter list is
+	 *   SHORTER, whose parameter at that position carries a different OPTIONALITY (`?p` vs `p` are
+	 *   different node kinds and a mismatched implementation would not compile), or which leaves
+	 *   that parameter untyped as well;
+	 * - a GENERIC declaring type (`typeParamArity != 0`): it states its members with its own type
+	 *   parameters, which the implementation binds to anything, so a copied `T` names nothing here;
+	 * - two declaring types stating DIFFERENT type sources for the position;
+	 * - a parameter the initializer pass already annotated from its default value;
+	 * - a type source not usable from THIS file verbatim (`typeUsableFrom`). The pass copies a type
+	 *   REFERENCE, never an import: `AddImport` returns a whole rewritten source rather than a span
+	 *   edit, and a file whose import block sits inside `#if` regions has no safe insert slot to
+	 *   compute from a check's `fix`.
+	 */
+	private static function collectInheritedParamEdits(
+		tree: QueryNode, source: String, violations: Array<Violation>, plugin: GrammarPlugin, index: Null<SymbolIndex>,
+		functions: Array<String>, params: Array<String>, edits: Array<{ span: Span, text: String }>
+	): Void {
+		if (index == null || functions.length == 0 || params.length == 0 || violations.length == 0) return;
+		// Re-bound to a non-null local: strict null-safety narrowing does not reach a struct literal.
+		final idx: SymbolIndex = index;
+		final file: String = violations[0].file;
+		final fi: Null<FileInfo> = idx.fileInfo(file);
+		if (fi == null) return;
+		final owners: Array<TypeDeclInfo> = fi.types;
+		final flagged: Map<String, Bool> = [];
+		for (v in violations) {
+			final vs: Null<Span> = v.span;
+			if (vs != null) flagged['${vs.from}:${vs.to}'] = true;
+		}
+		final seams: InheritedSeams = {
+			idx: idx,
+			plugin: plugin,
+			file: file,
+			functions: functions,
+			params: params
+		};
+
+		function visit(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (functions.contains(node.kind) && name != null && name != 'new') {
+				final own: Array<QueryNode> = [for (c in node.children) if (params.contains(c.kind)) c];
+				final owner: Null<TypeDeclInfo> = enclosingType(tree, owners, node.span);
+				if (owner != null) for (i in 0...own.length) paramEdit(seams, owner, name, own, i, source, edits, flagged);
+			}
+			for (c in node.children) visit(c);
+		}
+		visit(tree);
+	}
+
+	/**
+	 * Push the annotation edit for `own[i]` when it is flagged, not already annotated by another
+	 * pass, and the inherited declaration yields a type source usable from this file. Every failed
+	 * gate is a silent skip — the finding stays report-only.
+	 */
+	private static function paramEdit(
+		s: InheritedSeams, owner: TypeDeclInfo, method: String, own: Array<QueryNode>, i: Int, source: String,
+		edits: Array<{ span: Span, text: String }>, flagged: Map<String, Bool>
+	): Void {
+		final node: QueryNode = own[i];
+		final span: Null<Span> = node.span;
+		if (span == null || !flagged.exists('${span.from}:${span.to}')) return;
+		for (e in edits) if (e.span.from >= span.from && e.span.from <= span.to) return;
+		final found: Null<InheritedParam> = inheritedParam(s, owner, method, i, node.kind);
+		if (found == null) return;
+		if (!typeUsableFrom(s, found.text, found.file)) return;
+		final at: Int = node.children.length > 0 ? LiteralInfer.insertPoint(node, node.children[0], source) : span.to;
+		if (at >= 0) edits.push({ span: new Span(at, at), text: ':${found.text}' });
+	}
+
+	/** The index entry of the type declaration of `tree` holding `span` (`TypeResolver.enclosingTypeDeclAt`), or null. */
+	private static function enclosingType(tree: QueryNode, owners: Array<TypeDeclInfo>, span: Null<Span>): Null<TypeDeclInfo> {
+		final decl: Null<TypeDeclMatch> = span == null ? null : TypeResolver.enclosingTypeDeclAt(tree, span.from, span.to);
+		return decl == null ? null : owners.find(t -> t.name == decl.name);
+	}
+
+	/**
+	 * The type source written for parameter `paramIndex` of `method` by the transitive supertype /
+	 * interface closure of `owner`, or null when no declaring type states one UNAMBIGUOUSLY. A type
+	 * that declares a member of that name but cannot yield a matching typed parameter aborts the
+	 * whole lookup rather than being skipped: it is evidence the position is not what this pass
+	 * assumes.
+	 */
+	private static function inheritedParam(
+		s: InheritedSeams, owner: TypeDeclInfo, method: String, paramIndex: Int, paramKind: String
+	): Null<InheritedParam> {
+		final queue: Array<String> = owner.supertypes.concat(owner.interfaces);
+		final seen: Array<String> = [owner.name];
+		var found: Null<InheritedParam> = null;
+		var at: Int = 0;
+		while (at < queue.length) {
+			final name: String = queue[at++];
+			if (seen.contains(name)) continue;
+			seen.push(name);
+			// A generic declaring type states its members with its OWN type parameters, which the
+			// implementation may bind to anything -- copying `T` verbatim never compiles. Refusing the
+			// whole lookup (not just this candidate) keeps the answer conservative.
+			for (fi in s.idx.refs.declaringFiles(name)) for (t in fi.types) if (t.name == name) {
+				for (sup in t.supertypes.concat(t.interfaces)) queue.push(sup);
+				if (!t.members.exists(m -> m.name == method)) continue;
+				if (t.typeParamArity != 0) return null;
+				final src: Null<String> = s.idx.sourceOf(fi.file);
+				if (src == null) return null;
+				final text: Null<String> = declaredParamType(s, src, t.span, method, paramIndex, paramKind);
+				if (text == null) return null;
+				final prev: Null<InheritedParam> = found;
+				if (prev != null && prev.text != text) return null;
+				found = { text: text, file: fi.file };
+			}
+		}
+		return found;
+	}
+
+	/**
+	 * The verbatim `:Type` source of the `paramIndex`-th parameter of `method` declared inside
+	 * `typeSpan` of `src`, or null when the method node, the position, the optionality
+	 * (`paramKind`) or the annotation itself is not there.
+	 */
+	private static function declaredParamType(
+		s: InheritedSeams, src: String, typeSpan: Span, method: String, paramIndex: Int, paramKind: String
+	): Null<String> {
+		final provider: Null<TypeInfoProvider> = s.plugin is TypeInfoProvider ? cast s.plugin : null;
+		if (provider == null) return null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(s.plugin, src);
+		if (tree == null) return null;
+		final fn: Null<QueryNode> = memberNamed(tree, typeSpan, method, s.functions);
+		if (fn == null) return null;
+		final own: Array<QueryNode> = [for (c in fn.children) if (s.params.contains(c.kind)) c];
+		if (paramIndex >= own.length || own[paramIndex].kind != paramKind) return null;
+		final span: Null<Span> = own[paramIndex].span;
+		return span == null ? null : provider.declaredTypeSources(src)[span.from];
+	}
+
+	/**
+	 * The function node named `method` inside `typeSpan` — located by span containment rather than
+	 * by a type-declaration kind, so no extra grammar seam is needed. A node that is itself a
+	 * parameter host is the only shape searched, and a local function / lambda never carries a
+	 * member kind, so nesting cannot produce a false hit.
+	 */
+	private static function memberNamed(node: QueryNode, typeSpan: Span, method: String, functions: Array<String>): Null<QueryNode> {
+		final span: Null<Span> = node.span;
+		if (functions.contains(node.kind) && node.name == method && span != null && span.from >= typeSpan.from && span.to <= typeSpan.to)
+			return node;
+		for (c in node.children) {
+			final hit: Null<QueryNode> = memberNamed(c, typeSpan, method, functions);
+			if (hit != null) return hit;
+		}
+		return null;
+	}
+
+	/**
+	 * Whether `typeText` can be written VERBATIM in the file being fixed and MEAN THERE WHAT IT
+	 * MEANS in `declFile`. Both halves matter: a name that merely resolves on both sides can still
+	 * resolve to two DIFFERENT types (`import a.Payload` here, `import b.Payload` in the interface),
+	 * and Haxe rejects the resulting override with a type mismatch.
+	 *
+	 * Per nominal, in order:
+	 *
+	 * - one of `TypeNameBinding.AMBIENT_TYPE_NAMES` → yes, it means the same thing in every module;
+	 * - brought in by a `#if`-guarded import on EITHER side → no: `ImportInfo.guarded` marks an
+	 *   import whose presence is branch-dependent while the index is branch-blind, so the name
+	 *   would not resolve in the other configuration;
+	 * - resolvable from BOTH files to exactly one declaration each, and it is the SAME declaration
+	 *   (same file, same span) → yes;
+	 * - resolvable from neither (a type the index does not model at all — the standard library is
+	 *   normally absent) AND both files carry the identical plain `import` path for the name → yes;
+	 * - anything else → no. That includes a name resolvable on one side only (it would need an
+	 *   import this pass does not add), an ambiguous simple name, and a type declared in a file the
+	 *   index SKIPPED, which is indistinguishable from an unknown one.
+	 */
+	private static function typeUsableFrom(s: InheritedSeams, typeText: String, declFile: String): Bool {
+		final here: Null<FileInfo> = s.idx.fileInfo(s.file);
+		final there: Null<FileInfo> = s.idx.fileInfo(declFile);
+		if (here == null || there == null) return false;
+		for (n in nominalsOf(typeText)) if (!TypeNameBinding.AMBIENT_TYPE_NAMES.contains(n)) {
+			if (TypeRefIndex.bindsUnderGuard(here, n) || TypeRefIndex.bindsUnderGuard(there, n)) return false;
+			final mine: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, s.file);
+			final theirs: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, declFile);
+			if (mine.length == 1 && theirs.length == 1) {
+				if (mine[0].file.file != theirs[0].file.file || mine[0].type.span.from != theirs[0].type.span.from) return false;
+				continue;
+			}
+			if (mine.length != 0 || theirs.length != 0) return false;
+			final path: Null<String> = TypeRefIndex.plainImportPathOf(here, n);
+			if (path == null || path != TypeRefIndex.plainImportPathOf(there, n)) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * The distinct SIMPLE nominal names a written type source mentions — `Null<pkg.Box<Int>>` →
+	 * `Null`, `Box`, `Int`. Identifier runs are split on every other character (so generics,
+	 * function arrows and anonymous-structure punctuation all fall away), each run is reduced to
+	 * its last dotted segment, and a run that does not start upper-case (a package segment, an
+	 * anonymous field name) is dropped.
+	 *
+	 * A type PARAMETER is NOT distinguishable here — `T` scans exactly like a nominal — which is
+	 * why the generic case is refused one level up, on the declaring type's `typeParamArity`,
+	 * rather than left to `typeUsableFrom`.
+	 */
+	private static function nominalsOf(typeText: String): Array<String> {
+		final out: Array<String> = [];
+		var i: Int = 0;
+		while (i < typeText.length) {
+			if (!isNominalPart(typeText.fastCodeAt(i))) {
+				i++;
+				continue;
+			}
+			final start: Int = i;
+			while (i < typeText.length && isNominalPart(typeText.fastCodeAt(i))) i++;
+			final token: String = typeText.substring(start, i);
+			final simple: String = SourceText.lastSegment(token);
+			final head: Int = simple.fastCodeAt(0);
+			if (head >= 'A'.code && head <= 'Z'.code && !out.contains(simple)) out.push(simple);
+		}
+		return out;
+	}
+
+	/**
+	 * The initializer pass of `fix()`: for each flagged field / parameter whose
+	 * initializer's type is statically certain, push a `:T` annotation edit.
+	 * Return-type violations key the whole function and are absent from the
+	 * field/param index, so they fall through to the Void pass.
+	 */
+	private static function collectInitializerEdits(
+		tree: QueryNode, source: String, violations: Array<Violation>, shape: RefShape, plugin: GrammarPlugin, fixable: Array<String>,
+		edits: Array<{ span: Span, text: String }>
+	): Void {
+		final byKey: Map<String, QueryNode> = [];
+		MemberKinds.indexNodesByKind(tree, fixable, byKey);
+		// A cast target lookup costs a SECOND full parse of the file (`castTargetSources`),
+		// so compute it lazily and cache it — a fix whose violations key nothing into `byKey`,
+		// or whose initializers are never casts, never pays for it.
+		final castTargets: () -> Map<Int, String> = TypeInfoMemo.castTargetSources(RunScan.typeInfoOf(plugin), source);
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
+			if (node == null || node.children.length == 0) continue;
+			final typeSource: Null<String> = LiteralInfer.inferType(node.children[0], source, shape, castTargets);
+			if (typeSource == null) continue;
+			final at: Int = LiteralInfer.insertPoint(node, node.children[0], source);
+			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
+		}
+	}
+
+}
+
+/** What one returned value proves about a `macro` function's return type (`ExplicitType.returnProof`). */
+private enum ReturnProof {
+
+	/** A quotation of an expression: its type is `haxe.macro.Expr`. */
+	Quoted;
+
+	/** A `Dynamic` value (`Context.error`): unifies with the quotations beside it. */
+	Companion;
+
+	/** Anything else. */
+	Unproven;
+
+}
+
+/** What `ExplicitType`'s `macro`-function pass reads per file; `printer` is made on the first annotation. */
+private typedef MacroSeams = {
+	final source: String;
+	final tree: QueryNode;
+	final plugin: GrammarPlugin;
+	final index: Null<SymbolIndex>;
+	final shape: RefShape;
+	final flagged: Map<String, Violation>;
+	final file: String;
+	var printer: Null<TypeRefPrinter>;
+}
+
+/**
+ * One inherited parameter annotation: the VERBATIM type source `text` written for the position,
+ * and the `file` of the supertype / interface that wrote it — the second half is what
+ * `ExplicitType.typeUsableFrom` needs to tell an ambient top-level name from one that only
+ * resolved because the DECLARING file imported it.
+ */
+private typedef InheritedParam = {
+	final text: String;
+	final file: String;
+};
+
+/**
+ * The read-only context `ExplicitType.returnEdit` needs per finding: the `source` and `file`
+ * being fixed (the display server addresses a POSITION IN A FILE), the body-marker kinds, the
+ * violation spans this call owns, the per-file type `printer`, and the `oracle` itself.
+ */
+private typedef ReturnSeams = {
+	final source: String;
+	final file: String;
+	final bodies: Array<String>;
+
+	/** The parameter kinds (`RefShape.paramKinds`). */
+	final params: Array<String>;
+
+	final flagged: Map<String, Violation>;
+	final printer: TypeRefPrinter;
+	final oracle: TypeOracle;
+
+	/**
+	 * The source's lexically-scanned non-code regions, hoisted once per file — the grammar's own
+	 * answer (`GrammarPlugin.lexicalRegions`), carried here rather than re-derived per member.
+	 */
+	final regions: Array<LexRegion>;
+
+	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
+	final typeParams: Map<Int, Array<String>>;
+};
+
+/**
+ * The read-only context `ExplicitType.collectInheritedParamEdits` threads through its helpers: the
+ * resolving `idx`, the `plugin` that parses a declaring file, the `file` being fixed (the
+ * resolution origin for every copied type reference), and the member / parameter kind seams.
+ */
+private typedef InheritedSeams = {
+	final idx: SymbolIndex;
+	final plugin: GrammarPlugin;
+	final file: String;
+	final functions: Array<String>;
+	final params: Array<String>;
+};

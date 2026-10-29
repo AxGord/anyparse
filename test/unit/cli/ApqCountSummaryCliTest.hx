@@ -8,7 +8,7 @@ using StringTools;
 #end
 
 import anyparse.check.Check.Violation;
-import anyparse.check.Naming;
+import anyparse.check.common.naming.Naming;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.SymbolIndex;

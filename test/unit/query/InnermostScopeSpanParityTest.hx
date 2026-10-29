@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.check.BindingScope;
+import anyparse.check.common.naming.BindingScope;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Rename;
@@ -58,7 +58,7 @@ class InnermostScopeSpanParityTest extends Test {
 	 * fired anywhere in the fixture would land on some offset, and a hand-picked set of offsets is
 	 * exactly what would miss it.
 	 */
-	@:access(anyparse.check.BindingScope)
+	@:access(anyparse.check.common.naming.BindingScope)
 	@:access(anyparse.query.Rename)
 	public function testTheTwoWalksAgreeWhereverExcludeIsNull(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -103,7 +103,7 @@ class InnermostScopeSpanParityTest extends Test {
 	 * answers the outer lambda, `Rename` the inner parameter. This is the fixture the doc sentence
 	 * never had.
 	 */
-	@:access(anyparse.check.BindingScope)
+	@:access(anyparse.check.common.naming.BindingScope)
 	@:access(anyparse.query.Rename)
 	public function testCoStartingNodesAreTheOneShapeTheTwoWalksDisagreeOn(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar thin = e -> e + 1;\n\t}\n}';

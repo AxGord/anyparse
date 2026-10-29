@@ -1,16 +1,16 @@
 package unit.check;
 
-import anyparse.check.CommentWidth;
-import anyparse.check.DocLength;
-import anyparse.check.DocMeasurementClaim;
 import anyparse.check.EffectiveRules;
-import anyparse.check.EmptyComment;
-import anyparse.check.EnglishComments;
 import anyparse.check.LintConfig;
 import anyparse.check.LintDocuments;
-import anyparse.check.MagicNumber;
-import anyparse.check.PreferDocComment;
-import anyparse.check.PreferFind;
+import anyparse.check.common.docs.CommentWidth;
+import anyparse.check.common.docs.DocLength;
+import anyparse.check.common.docs.DocMeasurementClaim;
+import anyparse.check.common.docs.EmptyComment;
+import anyparse.check.common.docs.EnglishComments;
+import anyparse.check.common.docs.PreferDocComment;
+import anyparse.check.common.literals.MagicNumber;
+import anyparse.check.common.loops.PreferFind;
 import unit.cli.CliFixture;
 
 /**
