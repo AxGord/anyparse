@@ -19,6 +19,8 @@ final class Dev {
 		{ name: 'clone-census', main: CloneCensus.main, usage: CloneCensus.USAGE },
 		{ name: 'worker-build', main: WorkerBuild.main, usage: WorkerBuild.USAGE },
 		{ name: 'shard', main: Shard.main, usage: Shard.USAGE },
+		{ name: 'mutation-arm', main: MutationArm.main, usage: MutationArm.USAGE },
+		{ name: 'mutation-check', main: MutationCheck.main, usage: MutationCheck.USAGE },
 		{ name: 'slice-gate', main: SliceGate.main, usage: SliceGate.USAGE },
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
 		{ name: 'merge-arms', main: MergeArms.main, usage: MergeArms.USAGE },

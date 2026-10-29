@@ -291,7 +291,7 @@ final class CliFixture {
 	 *
 	 * A fixture that spawns the CLI as a PROCESS needs a built `bin/apq.js`, and
 	 * `haxe test-js.hxml` alone does not build one. A MUTATION TRACK never has it:
-	 * `tools/mutation-check.sh` builds only `test.js`, into a directory of its own, and runs it
+	 * `dev mutation-check` builds only `test.js`, into a directory of its own, and runs it
 	 * with the CWD set to a fresh worktree whose gitignored `bin/` holds no engine — so
 	 * `node bin/apq.js` there answers `MODULE_NOT_FOUND`, and the fixture reads as a failure of
 	 * whatever the arm cut rather than of its own environment. Two classes carried a private copy

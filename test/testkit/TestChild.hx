@@ -17,7 +17,8 @@ import anyparse.check.oracle.OracleGeneration;
  *  - `spawn`: `HaxeSpawn.runAll` over the jobs in the JSON file `APQ_TEST_CHILD_INPUT`, two at a time;
  *  - `bounded-run` / `bounded-pending`: the same jobs through `HaxeSpawn.runAll` / `HaxeSpawn.startAll` + `await`,
  *    the driver bounded by `APQ_TEST_CHILD_BOUND` ms, writing the runs as JSON to `APQ_TEST_CHILD_OUTPUT` - so a test
- *    can wedge a driver and still end, by killing this process, when the bound fails to.
+ *    can wedge a driver and still end, by killing this process, when the bound fails to;
+ *  - `flood`: the content of `APQ_TEST_CHILD_INPUT` printed to stdout, then `Sys.exit` — the suite's own way out.
  *
  * It is the CHILD's code that is under test, which is why it is this binary — a mutation arm's cut reaches it.
  */
@@ -43,6 +44,10 @@ class TestChild {
 			case 'bounded-run':
 				final runs: Array<HaxeRun> = HaxeSpawn.runAll(haxe.Json.parse(input), 1024 * 1024, 2, false, childBound());
 				sys.io.File.saveContent(Sys.getEnv('APQ_TEST_CHILD_OUTPUT') ?? '', haxe.Json.stringify(runs));
+			case 'flood':
+				// a transcript printed and the process ended straight after, as utest's report ends it
+				Sys.print(input);
+				Sys.exit(0);
 			case 'bounded-pending':
 				final runs: Array<HaxeRun> = HaxeSpawn.startAll(haxe.Json.parse(input), 1024 * 1024, 2, childBound()).await();
 				sys.io.File.saveContent(Sys.getEnv('APQ_TEST_CHILD_OUTPUT') ?? '', haxe.Json.stringify(runs));

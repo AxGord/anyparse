@@ -7,7 +7,7 @@ import anyparse.query.QueryNode;
 using StringTools;
 
 /**
- * Unit cover for `apq mutation-schema` — the composition `tools/mutation-arm.sh` compiles every arm a copy can stand
+ * Unit cover for `apq mutation-schema` — the composition `dev mutation-arm` compiles every arm a copy can stand
  * for into ONE build with.
  *
  * What a composed build has to keep is the per-arm build's meaning, so the cases pin the three ways it could lose it:

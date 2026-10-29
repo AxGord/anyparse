@@ -4,7 +4,7 @@
 		"resolves to a `name` below or the build stops; every arm below is named by",
 		"at least one `@:killer` or the build stops; and every `type`/`method` below",
 		"has to still exist or the build stops. Run one with",
-		"`tools/mutation-arm.sh <NAME>`, all of them with `--all`.",
+		"`node bin/dev.js mutation-arm <NAME>`, all of them with `--all`.",
 		"",
 		"An arm cuts exactly one way. `force` inserts `return <force>;` directly",
 		"after the member's signature, leaving the rest of the body behind as dead",
@@ -31847,6 +31847,14 @@
 			"find": "case IfWidthExceeds(n, _, notFired) if (n > width): gluedSide(notFired, width);",
 			"replace": "case IfWidthExceeds(_, _, notFired): gluedSide(notFired, width);",
 			"note": "a collapse drops every lineLength threshold on the chain's flat side, so a rule below the limit that the collapsed inner chain reaches never fires and the chain stays one over-threshold line"
+		},
+		{
+			"name": "M-RUNNER-PIPE-ASYNC",
+			"type": "RunTests",
+			"method": "main",
+			"find": "'for (const s of [process.stdout, process.stderr]) if (s._handle && s._handle.setBlocking) s._handle.setBlocking(true)'",
+			"replace": "''",
+			"note": "the runner's streams stay asynchronous, so a transcript read through a pipe loses its tail at the exit utest ends the run with"
 		}
 	]
 }

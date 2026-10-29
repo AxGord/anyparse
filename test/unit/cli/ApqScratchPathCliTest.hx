@@ -187,8 +187,8 @@ class ApqScratchPathCliTest extends Test {
 	 * machine-global file.
 	 *
 	 * `guard`, not `control`, for TWO independent reasons and either alone is enough. The
-	 * one recorded for `apq probe`: `mutation-check.sh` builds an arm's worktree with
-	 * `worker-build.sh <dir> test` — the runner only — and `bin/` is gitignored, so the
+	 * one recorded for `apq probe`: `dev mutation-check` builds an arm's slot with
+	 * `haxe test-js-common.hxml` — the runner only — and `bin/` is gitignored, so the
 	 * fresh worktree has no `bin/apq.js` and this method takes its not-built branch. The
 	 * one it did not: even WITH an engine there a child runs a PRE-BUILT binary, so a cut
 	 * to `src/` could not reach it anyway. The two in-process fixtures above are what kill

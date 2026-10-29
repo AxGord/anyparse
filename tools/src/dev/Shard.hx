@@ -119,8 +119,7 @@ final class Shard {
 	 */
 	public static function run(job: ShardJob): Int {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
-		dirs.startupSweep(job.repo);
-		final work: String = dirs.claim(WORK_PREFIX);
+		final work: String = dirs.claimAfterSweep(WORK_PREFIX, job.repo);
 		final keep: Bool = job.keep || job.planOnly;
 		final status: Int = try execute(job, work) catch (exception: Exception) {
 			release(dirs, work, keep, 1, job.warn);
@@ -186,6 +185,14 @@ final class Shard {
 			slower != 0 ? slower : Reflect.compare(a, b);
 		});
 		return [for (cls in classes) '${ms[cls]}\t${tests[cls]}\t$cls\n'].join('');
+	}
+
+	/**
+	 * `command` under the caller's own OCaml collector settings: the process driver tunes them for every `haxe` it
+	 * starts, and the suite's compiles run in the environment the suite was given.
+	 */
+	public static function callerGc(command: Command): Command {
+		return command.env('OCAMLRUNPARAM', Sys.getEnv('OCAMLRUNPARAM') ?? Sys.getEnv('CAMLRUNPARAM') ?? '');
 	}
 
 	/** Plan, run and report; answers the exit status. Every file it writes goes into `work`. */
@@ -467,14 +474,6 @@ final class Shard {
 	/** A run's transcript as one file: its stdout, its stderr, and why it gave no exit status when it gave none. */
 	private static function saveLog(log: String, result: Result): Void {
 		File.saveContent(log, result.out + result.err + (result.failure == '' ? '' : '${result.failure}\n'));
-	}
-
-	/**
-	 * `command` under the caller's own OCaml collector settings: the process driver tunes them for every `haxe` it
-	 * starts, and the suite's compiles run in the environment the suite was given.
-	 */
-	private static function callerGc(command: Command): Command {
-		return command.env('OCAMLRUNPARAM', Sys.getEnv('OCAMLRUNPARAM') ?? Sys.getEnv('CAMLRUNPARAM') ?? '');
 	}
 
 	/** Shard `s`'s in-suite milliseconds: the sum of its `APQ_TEST_TIMING` rows, 0 when it wrote none. */
