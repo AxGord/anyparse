@@ -298,7 +298,7 @@ final class SliceGate {
 	/** The corpus row of `--baseline`: the sweep the suite just wrote, saved for the gate to compare with. */
 	private function corpusSaved(): Outcome {
 		if (!forkSet()) return Skipped('ANYPARSE_HXFORMAT_FORK unset — the suite ran no corpus');
-		final saved: Result = _gate.inTree(cmd('node bin/apq.js sweep --save ${_gate.log('sweep-base.json')}'));
+		final saved: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --save ${_gate.log('sweep-base.json')}'));
 		_gate.summary.detail(saved.lines()[0] ?? '');
 		return saved.ok ? Passed : Failed(GateTree.quote(saved));
 	}
@@ -309,7 +309,7 @@ final class SliceGate {
 		if (baseline == null) return NotRun(GateTree.NO_BASELINE);
 		final sweep: Null<String> = baseline.sweep;
 		if (sweep == null || !forkSet()) return NotRun('no corpus: ANYPARSE_HXFORMAT_FORK unset at the baseline or now');
-		final diff: Result = _gate.inTree(cmd('node bin/apq.js sweep --diff $sweep'));
+		final diff: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --diff $sweep'));
 		if (!diff.ok) return Failed(GateTree.quote(diff));
 		final line: String = diff.lines().find(l -> l.startsWith('--- sweep --diff')) ?? '';
 		_gate.summary.detail(diff.lines()[0] ?? '');

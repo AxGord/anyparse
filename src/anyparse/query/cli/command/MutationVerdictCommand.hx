@@ -10,7 +10,7 @@ import anyparse.query.MutationVerdict.MutationVerdictResult;
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class MutationVerdictCommand implements CliCommand {
+final class MutationVerdictCommand implements CliCommand implements LanguageFree {
 
 	public function new() {}
 

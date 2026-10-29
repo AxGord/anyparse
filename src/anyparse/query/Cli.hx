@@ -8,6 +8,7 @@ import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliIo;
 import anyparse.query.cli.CliRegistry;
+import anyparse.query.cli.LanguageChoice;
 import anyparse.query.cli.PostWriteFix;
 import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.WriteFailure;
@@ -210,9 +211,9 @@ final class Cli {
 		// a large share of all parsing. A microtask
 		// runs under a non-verbose catcher, so the throw is a plain unwind. Same exit code, same
 		// raw stack for a crash that escapes `run`.
-		js.Node.queueMicrotask(() -> proc.exitCode = run(Sys.args()));
+		js.Node.queueMicrotask(() -> proc.exitCode = run(Sys.args(), true));
 		#elseif sys
-		Sys.exit(run(Sys.args()));
+		Sys.exit(run(Sys.args(), true));
 		#else
 		throw 'apq: only sys targets supported';
 		#end
@@ -231,9 +232,9 @@ final class Cli {
 	 * Only this exception. An internal error still reaches the reader as a stack trace, which is
 	 * what a bug wants.
 	 */
-	public static function run(args: Array<String>): Int {
+	public static function run(args: Array<String>, chooseLanguage: Bool = false): Int {
 		try
-			return dispatch(args)
+			return dispatch(args, chooseLanguage)
 		catch (failure: WriteFailure) {
 			// Named with the subcommand, like every other line the CLI prints: a bare `apq:` costs
 			// a script the identity of the op that failed, and `args[0]` is the op by construction
@@ -256,7 +257,7 @@ final class Cli {
 	 * Separate from `run` so the write-failure catch has somewhere to sit that is not inside 100
 	 * arms: the split is the catch, and nothing else moved.
 	 */
-	private static function dispatch(args: Array<String>): Int {
+	private static function dispatch(args: Array<String>, chooseLanguage: Bool): Int {
 		if (args.length == 0 || args[0] == '-h' || args[0] == '--help') {
 			printUsage();
 			return EXIT_OK;
@@ -285,7 +286,11 @@ final class Cli {
 			postWriteFix = true;
 		else
 			rest.push(a);
-		return registered.run(rest, new CliContext(requireMatch, postWriteFix));
+		// The process entry names no default grammar: an argv with no `--lang` gets the one its files or its stdin
+		// name, or a usage error. An in-process caller keeps its argv as given.
+		if (!chooseLanguage) return registered.run(rest, new CliContext(requireMatch, postWriteFix));
+		final chosen: LanguageChoiceResult = LanguageChoice.choose(rest, registered, CliIo.readStdin);
+		return registered.run(chosen.args, new CliContext(requireMatch, postWriteFix, chosen.stdin));
 	}
 
 	private static function printUsage(): Void {
@@ -297,7 +302,7 @@ final class Cli {
 		for (command in CliRegistry.commands()) CliIo.sysPrint(CliRegistry.helpLine(command.name()));
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Global options:\n');
-		CliIo.sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Pick grammar plugin (default: the one the file extensions, or stdin, name)\n');
 		CliIo.sysPrint('  -h, --help      Show help\n');
 	}
 

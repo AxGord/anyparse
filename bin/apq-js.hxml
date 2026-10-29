@@ -9,4 +9,4 @@ bin/apq-js-common.hxml
 # output of every block but the last. The line exits with the warm step's
 # status, forced to 0 (`|| true`, for a missing node too) — a failed launcher
 # build or warm leaves a whole engine that runs without a cache.
---cmd haxe bin/apq-launch-common.hxml -js bin/apq-launch.js; HXQ_BIN=bin/apq.js sh bin/hxq --warm-code-cache || true
+--cmd haxe bin/apq-launch-common.hxml -js bin/apq-launch.js; HXQ_BIN=bin/apq.js sh bin/apq --warm-code-cache || true

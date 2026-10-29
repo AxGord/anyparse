@@ -1522,8 +1522,8 @@
 			"type": "anyparse.query.cli.CliContext",
 			"method": "CliContext",
 			"kind": "ClassDecl",
-			"find": "public function new(requireMatch: Bool, postWriteFix: Bool = false) {\nthis.requireMatch = requireMatch;\nthis.postWriteFix = postWriteFix;\n}",
-			"replace": "private static var _sticky: Bool = false;\n\npublic function new(requireMatch: Bool, postWriteFix: Bool = false) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;\nthis.postWriteFix = postWriteFix;\n}",
+			"find": "public function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String) {\nthis.requireMatch = requireMatch;\nthis.postWriteFix = postWriteFix;\nthis.stdin = stdin;\n}",
+			"replace": "private static var _sticky: Bool = false;\n\npublic function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;\nthis.postWriteFix = postWriteFix;\nthis.stdin = stdin;\n}",
 			"note": "the per-run flag gains a static backing, so one invocation's --exit-on-empty survives into the next one in the same process"
 		},
 		{
@@ -31756,6 +31756,49 @@
 			"find": "final brkSide: Doc = thresholdTree(thresholds, [], true, evalAt, brkShapeAt);",
 			"replace": "final brkSide: Doc = thresholdTree(thresholds, [], true, evalAt, thresholds.length == 0 ? brkShapeAt : shapeAt);",
 			"note": "a cascade holding a lineLength rule never tags its trailing-operator fill for the opBool re-eval, so a chain whose call operand overflows keeps its trailing operators"
+		},
+		{
+			"name": "M-GET-STRING-QUOTED",
+			"type": "anyparse.query.cli.DataPath",
+			"method": "render",
+			"force": "json(value, source, shape)",
+			"note": "`apq get` prints a string value as a quoted, escaped JSON literal instead of its decoded text, so a script reading a key gets the quotes and backslashes too"
+		},
+		{
+			"name": "M-DATA-PATH-ESCAPE-IGNORED",
+			"type": "anyparse.query.cli.DataPath",
+			"method": "parse",
+			"force": "path.split(\".\")",
+			"note": "a backslash-escaped dot in a path splits like any other, so a key that holds a dot can no longer be named"
+		},
+		{
+			"name": "M-LANG-OF-FILE-NONE",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "langOfFile",
+			"force": "null",
+			"note": "no extension names a grammar, so every process call without `--lang` is refused even on a `.json` or `.hx` file"
+		},
+		{
+			"name": "M-LANG-OF-CONTENT-NONE",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "langOfContent",
+			"force": "null",
+			"note": "a JSON document on stdin is no longer recognised by its content, so `cat x.json | apq get - k` needs `--lang`"
+		},
+		{
+			"name": "M-LANG-CHOICE-FLAG-VALUE-COUNTED",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "isFileArgument",
+			"force": "!args[i].startsWith(\"-\")",
+			"note": "a flag value such as `sweep --save base.json` names the grammar, so a Haxe command silently runs on the JSON grammar"
+		},
+		{
+			"name": "M-GET-WALKABLE-ALWAYS",
+			"type": "anyparse.query.cli.DataPath",
+			"method": "walkable",
+			"find": "return shape.objectLiteralKind != null || shape.arrayLiteralKind != null;",
+			"replace": "return true;",
+			"note": "a grammar with no object or array kind (mermaid) is walked anyway, so `apq get x.mmd a` no longer says the grammar has no path to name"
 		}
 	]
 }

@@ -58,7 +58,7 @@ typedef AstOpts = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class AstCommand implements CliCommand {
+final class AstCommand implements CliCommand implements StdinDocument {
 
 	public function new() {}
 
@@ -71,14 +71,15 @@ final class AstCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAst(args);
+		return runAst(args, ctx.readStdin);
 	}
 
 	public function usage(): Void {
 		printAstUsage();
 	}
 
-	public static function runAst(args: Array<String>): Int {
+	/** `readStdin` supplies `--stdin`'s text — the run's `CliContext.readStdin`. */
+	public static function runAst(args: Array<String>, readStdin: () -> String): Int {
 		final o: AstOpts = parseAstArgs(args);
 		if (o.errExit != null) return o.errExit;
 
@@ -110,7 +111,7 @@ final class AstCommand implements CliCommand {
 			source = codeArg;
 			fileLabel = '<probe>';
 		} else if (o.stdinFlag) {
-			source = CliIo.readStdin();
+			source = readStdin();
 			fileLabel = '<stdin>';
 		} else if (file != null) {
 			source = CliIo.readSourceForParse(file);

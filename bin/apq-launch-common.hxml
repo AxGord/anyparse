@@ -8,5 +8,5 @@
 -lib hxnodejs
 -D js-es=6
 -D analyzer-optimize
-# The Haxe source a warm run (`hxq --warm-code-cache`) drives the engine over.
+# The Haxe source a warm run (`apq --warm-code-cache`) drives the engine over.
 -resource src/anyparse/query/cli/CodeCacheLauncher.hx@warm-fixture

@@ -107,6 +107,7 @@ class CliHelpListingPinTest extends Test {
 		'  new           Create a new module — final class / implements <iface> (canonical)',
 		'  source        Emit RAW verbatim file lines (no parse; --range L:L2)',
 		'  show          Alias of `source`, for a sandbox that vetoes that word',
+		'  get           Print the value at a dotted path of a data document (JSON)',
 		'  fmt           Canonicalise Haxe source (writer round-trip; --write / --list)'
 	];
 
@@ -192,10 +193,11 @@ class CliHelpListingPinTest extends Test {
 		'  new           Create a new module — final class / implements <iface> (canonical)',
 		'  source        Emit RAW verbatim file lines (no parse; --range L:L2)',
 		'  show          Alias of `source`, for a sandbox that vetoes that word',
+		'  get           Print the value at a dotted path of a data document (JSON)',
 		'  fmt           Canonicalise Haxe source (writer round-trip; --write / --list)',
 		'',
 		'Global options:',
-		'  --lang <name>   Pick grammar plugin (default: haxe)',
+		'  --lang <name>   Pick grammar plugin (default: the one the file extensions, or stdin, name)',
 		'  -h, --help      Show help'
 	];
 

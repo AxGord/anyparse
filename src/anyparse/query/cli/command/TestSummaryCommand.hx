@@ -9,7 +9,7 @@ import anyparse.query.ExitCode.*;
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class TestSummaryCommand implements CliCommand {
+final class TestSummaryCommand implements CliCommand implements LanguageFree {
 
 	/**
 	 * Env var naming the transcript to read when no positional source is given.

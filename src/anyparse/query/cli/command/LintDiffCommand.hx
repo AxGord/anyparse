@@ -12,7 +12,7 @@ import anyparse.query.format.json.LintFindingJson;
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class LintDiffCommand implements CliCommand {
+final class LintDiffCommand implements CliCommand implements LanguageFree {
 
 	private static inline final LINT_DIFF_EXAMPLE_LIMIT: Int = 20;
 

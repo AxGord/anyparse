@@ -32,16 +32,10 @@ final class CliArgs {
 	public static inline final MAX_INT: Int = 0x7FFFFFFF;
 
 	/** The `--lang` of the JSON grammar plugin. */
-	public static inline final JSON_LANG: String = 'json';
+	public static inline final JSON_LANG: String = JsonQueryPlugin.LANG;
 
 	/** The `--lang` of the Mermaid flowchart grammar plugin. */
-	public static inline final MERMAID_LANG: String = 'mermaid';
-
-	/** The file extension `pickPluginFor` routes to the JSON grammar. */
-	private static inline final JSON_EXTENSION: String = '.json';
-
-	/** The file extensions `pickPluginFor` routes to the Mermaid flowchart grammar. */
-	private static final MERMAID_EXTENSIONS: Array<String> = ['.mmd', '.mermaid'];
+	public static inline final MERMAID_LANG: String = MermaidQueryPlugin.LANG;
 
 	/**
 	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
@@ -142,38 +136,85 @@ final class CliArgs {
 	 * plugins whose `RefShape` carries a code kind vocabulary, enumerable so a
 	 * whole-registry check (`RefShapeKindProjectionTest`) covers a plugin added here without
 	 * being taught its name. That test calls `pickPlugin` for every name here, so a name declared here and
-	 * not constructed there fails the suite. `pickPlugin` itself stays switch-only: it is the construction
-	 * site, never gated on this list, so a plugin constructed there is never refused for being absent here.
-	 * The DATA grammars `json` (`JSON_LANG`) and `mermaid` (`MERMAID_LANG`) are constructed there and
+	 * not constructed there fails the suite. `pickPlugin` builds from the whole registry (`grammars`),
+	 * never gated on this list, so a plugin registered there is never refused for being absent here.
+	 * The DATA grammars `json` (`JSON_LANG`) and `mermaid` (`MERMAID_LANG`) are registered there and
 	 * deliberately absent: `json` declares only its two container kinds and the string kind and `mermaid`
 	 * none, which the registry check's Haxe-sized floors would reject as a shrunken vocabulary;
 	 * `JsonQueryPluginTest` and `MermaidQueryPluginTest` hold them against their own projections instead.
 	 */
 	public static function langNames(): Array<String> {
-		return ['haxe'];
+		return [HaxeQueryPlugin.LANG];
+	}
+
+	/**
+	 * Every grammar the CLI can dispatch, each with the `--lang`, file extensions and content test its plugin
+	 * declares — the ONE registry `pickPlugin`, `langOfFile` and `langOfContent` read, so a new grammar is a new
+	 * row here and no extension is spelled anywhere else in the CLI. Built fresh per call: a shared
+	 * registry would be process-scoped state (invariant 1).
+	 */
+	public static function grammars(): Array<GrammarEntry> {
+		return [
+			{
+				lang: HaxeQueryPlugin.LANG,
+				extensions: HaxeQueryPlugin.EXTENSIONS,
+				recognises: null,
+				make: HaxeQueryPlugin.new
+			},
+			{
+				lang: JsonQueryPlugin.LANG,
+				extensions: JsonQueryPlugin.EXTENSIONS,
+				recognises: JsonQueryPlugin.recognises,
+				make: JsonQueryPlugin.new
+			},
+			{
+				lang: MermaidQueryPlugin.LANG,
+				extensions: MermaidQueryPlugin.EXTENSIONS,
+				recognises: null,
+				make: MermaidQueryPlugin.new
+			}
+		];
 	}
 
 	public static function pickPlugin(lang: String): GrammarPlugin {
-		return switch lang {
-			case 'haxe': new HaxeQueryPlugin();
-			case JSON_LANG: new JsonQueryPlugin();
-			case MERMAID_LANG: new MermaidQueryPlugin();
-			case _: throw new UsageFailure('no grammar plugin for --lang "$lang"');
-		};
+		return grammarOf(lang).make();
+	}
+
+	/**
+	 * The `--lang` of the grammar whose declared extension `path` ends with (case-insensitive), or null when no
+	 * registered grammar claims it.
+	 */
+	public static function langOfFile(path: String): Null<String> {
+		final lower: String = path.toLowerCase();
+		for (entry in grammars()) for (extension in entry.extensions) if (lower.endsWith(extension)) return entry.lang;
+		return null;
+	}
+
+	/** The `--lang` of the one grammar whose content test accepts `text`, or null when none or several do. */
+	public static function langOfContent(text: String): Null<String> {
+		final langs: Array<String> = [
+			for (entry in grammars()) {
+				final recognises: Null<String -> Bool> = entry.recognises;
+				if (recognises != null && recognises(text)) entry.lang;
+			}
+		];
+		return langs.length == 1 ? langs[0] : null;
 	}
 
 	/**
 	 * The plugin for the FILE at `path` (null: no file — source from `--code`
-	 * / stdin): a `.json` file is the `json` grammar's and a `.mmd` / `.mermaid`
-	 * file the `mermaid` grammar's whatever `lang` says, every other file `lang`'s
-	 * (`pickPlugin`). The `hxq` shim prepends `--lang haxe` to every command, so the
+	 * / stdin): the grammar whose extension the file carries (`langOfFile`) whatever
+	 * `lang` says, any other file `lang`'s (`pickPlugin`); `lang` itself must still
+	 * name a registered grammar. The `hxq` shim prepends `--lang haxe` to every command, so the
 	 * extension is the only signal an agent's `hxq add-element arms.json …` carries;
 	 * an explicit `--lang json` reaches the same plugin through `pickPlugin`. The edit
 	 * and read commands that work on a data grammar (`add-element`, `remove-element`,
 	 * `replace-node`, `ast`, `source`) pick through here.
 	 */
 	public static function pickPluginFor(lang: String, path: Null<String>): GrammarPlugin {
-		return pickPlugin(path == null ? lang : langOfPath(path.toLowerCase(), lang));
+		final named: GrammarEntry = grammarOf(lang);
+		final ofFile: Null<String> = path == null ? null : langOfFile(path);
+		return ofFile == null ? named.make() : pickPlugin(ofFile);
 	}
 
 	/**
@@ -346,20 +387,15 @@ final class CliArgs {
 		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
 	}
 
-	/** The source-file extension the grammar plugin `--lang lang` reads — the inverse of `langOfPath`, Haxe's for any other. */
+	/** The source-file extension the grammar plugin `--lang lang` reads — the first one it declares; the inverse of `langOfFile`. */
 	public static function sourceExtensionOf(lang: String): String {
-		return switch lang {
-			case JSON_LANG: JSON_EXTENSION;
-			case MERMAID_LANG: MERMAID_EXTENSIONS[0];
-			case _: '.hx';
-		};
+		return grammarOf(lang).extensions[0];
 	}
 
-	/** The `--lang` a lower-cased file path's extension selects, `lang` for an extension no data grammar claims. */
-	private static function langOfPath(lower: String, lang: String): String {
-		if (lower.endsWith(JSON_EXTENSION)) return JSON_LANG;
-		for (extension in MERMAID_EXTENSIONS) if (lower.endsWith(extension)) return MERMAID_LANG;
-		return lang;
+	/** The registry row of `--lang lang`; an unregistered name is a usage error. */
+	private static function grammarOf(lang: String): GrammarEntry {
+		for (entry in grammars()) if (entry.lang == lang) return entry;
+		throw new UsageFailure('no grammar plugin for --lang "$lang"');
 	}
 
 	/**
@@ -431,4 +467,22 @@ typedef WalkerScan = {
 	var names: Array<String>;
 	var inputSpecs: Array<String>;
 	var separator: Int;
+};
+
+/** One row of `CliArgs.grammars`: what a grammar plugin declares about itself, and how to build it. */
+typedef GrammarEntry = {
+	/** The `--lang` name. */
+	final lang: String;
+
+	/** The file extensions, lower case with the dot, whose files are this grammar's. */
+	final extensions: Array<String>;
+
+	/**
+	 * Whether a document's text is recognisably this grammar's, for stdin
+	 * with no `--lang`; null when the grammar declares no such test.
+	 */
+	final recognises: Null<String -> Bool>;
+
+	/** A fresh plugin instance. */
+	final make: () -> GrammarPlugin;
 };

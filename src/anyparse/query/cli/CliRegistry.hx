@@ -25,6 +25,7 @@ import anyparse.query.cli.command.ExtractSuperclassCommand;
 import anyparse.query.cli.command.ExtractVarCommand;
 import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.GatesCommand;
+import anyparse.query.cli.command.GetCommand;
 import anyparse.query.cli.command.ImportersCommand;
 import anyparse.query.cli.command.InlineCommand;
 import anyparse.query.cli.command.InlineMethodCommand;
@@ -184,6 +185,7 @@ final class CliRegistry {
 			new NewCommand(),
 			new SourceCommand(),
 			new ShowCommand(),
+			new GetCommand(),
 			new FmtCommand()
 		];
 	}
