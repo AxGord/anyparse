@@ -12,6 +12,7 @@ import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
 import devkit.TmpLifecycle;
+import haxe.Exception;
 import haxe.Json;
 import haxe.Timer;
 import haxe.io.Path;
@@ -54,6 +55,7 @@ final class Battery {
 	private static inline final SWEEP_FAIL: String = 'sweep-fail';
 	private static inline final SWEEP_SKIP: String = 'sweep-skip';
 	private static inline final CLIENT_LINTED: String = 'lint-client';
+	private static inline final LINTED: String = 'lint-anyparse';
 
 	/** The table's seconds are given to a tenth. */
 	private static inline final TENTHS_PER_SECOND: Int = 10;
@@ -86,9 +88,6 @@ final class Battery {
 
 	/** What the static-target probe compiles: a change under any of them since the base runs it. */
 	private static final JVM_INPUTS: Array<String> = ['src', 'tools/src/dev/JvmPortability.hx', 'tools/jvm-portability.hxml'];
-
-	/** The files of a snapshot, by the suffix after its commit key. */
-	private static final SNAPSHOT_FILES: Array<String> = ['anyparse.json', 'client.json', 'sweep.json', 'suite.txt'];
 
 	private final _summary: Summary = new Summary();
 	private final _readings: Map<String, Int> = [];
@@ -386,6 +385,7 @@ final class Battery {
 		final runs: Array<Result> = Pool.of(jobs.length).run(jobs);
 		final why: Array<String> = [];
 		File.saveContent(workFile('lint-anyparse.json'), runs[0].out);
+		if (isJson(runs[0].out)) _readings[LINTED] = 1;
 		if (!runs[0].ok) {
 			Sys.print(runs[0].err);
 			why.push('lint of src+test exited ${runs[0].status}');
@@ -393,7 +393,7 @@ final class Battery {
 		final clientRun: Null<Result> = runs[1];
 		if (client != null && clientRun != null) {
 			File.saveContent(workFile('lint-client.json'), clientRun.out);
-			_readings[CLIENT_LINTED] = 1;
+			if (isJson(clientRun.out)) _readings[CLIENT_LINTED] = 1;
 			if (!clientRun.ok) {
 				Sys.print(clientRun.err);
 				why.push('lint of $client/src exited ${clientRun.status}');
@@ -519,7 +519,7 @@ final class Battery {
 			run: Branches.newRunId(),
 			ownLease: mode.match(Own(_, _))
 		};
-		final status: Int = try new Battery(plan, mode).drive() catch (exception: haxe.Exception) {
+		final status: Int = try new Battery(plan, mode).drive() catch (exception: Exception) {
 			Sys.stderr().writeString('dev battery: logs kept in $work\n');
 			throw exception;
 		};
@@ -665,17 +665,16 @@ final class Battery {
 
 	/**
 	 * The snapshot of the commit `head` in `cache`, from what this run read: a file is written only when its row produced its
-	 * reading, whatever the verdict was, and the files of an earlier snapshot of the same commit are cleared first so none
-	 * outlives the run that should have replaced it. The suite's counts file goes last — it is what says a snapshot exists.
+	 * reading, whatever the verdict was; a row that read nothing leaves the commit's earlier file in place, since a weaker
+	 * reading never replaces a kept one. The suite's counts file goes last — it is what says a snapshot exists.
 	 * `saveSweep` writes the corpus sweep to the file it is given. Answers why it could not be written, or null.
 	 */
 	public static function keepSnapshot(
 		cache: String, head: String, work: String, readings: Map<String, Int>, saveSweep: String -> Result
 	): Null<String> {
 		final key: String = Path.join([cache, head]);
-		for (suffix in SNAPSHOT_FILES) if (FileSystem.exists('$key-$suffix')) FileSystem.deleteFile('$key-$suffix');
 		final lint: String = Path.join([work, 'lint-anyparse.json']);
-		if (FileSystem.exists(lint)) File.copy(lint, '$key-anyparse.json');
+		if (readings.exists(LINTED) && FileSystem.exists(lint)) File.copy(lint, '$key-anyparse.json');
 		final client: String = Path.join([work, 'lint-client.json']);
 		if (readings.exists(CLIENT_LINTED) && FileSystem.exists(client)) File.copy(client, '$key-client.json');
 		if (readings.exists(SWEEP_PASS)) {
@@ -735,6 +734,16 @@ final class Battery {
 	/** `elapsed` seconds to a tenth, with an `s`. */
 	private static function seconds(elapsed: Float): String {
 		return '${Math.round(elapsed * TENTHS_PER_SECOND) / TENTHS_PER_SECOND}s';
+	}
+
+	/** Whether `text` is a parseable JSON document: the lint prints one only when it ran to its end. */
+	private static function isJson(text: String): Bool {
+		try {
+			Json.parse(text);
+			return true;
+		} catch (_: Exception) {
+			return false;
+		}
 	}
 
 }

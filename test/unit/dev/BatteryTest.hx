@@ -136,7 +136,7 @@ final class BatteryTest extends Test {
 			File.saveContent(dir.file('abc-sweep.json'), 'stale');
 			final saved: Array<String> = [];
 			// the suite was red: its counts were read, the corpus never ran
-			final readings: Map<String, Int> = ['tests' => 12, 'assertions' => 34];
+			final readings: Map<String, Int> = ['tests' => 12, 'assertions' => 34, 'lint-anyparse' => 1];
 			Assert.isNull(Battery.keepSnapshot(dir.path, 'abc', work, readings, file -> {
 				saved.push(file);
 				return new Result('sweep', {
@@ -150,7 +150,7 @@ final class BatteryTest extends Test {
 			Assert.equals('12 34', File.getContent(dir.file('abc-suite.txt')).trim());
 			Assert.isTrue(FileSystem.exists(dir.file('abc-anyparse.json')));
 			Assert.same([], saved, 'a sweep nobody read is not saved');
-			Assert.isFalse(FileSystem.exists(dir.file('abc-sweep.json')), 'a stale file does not outlive the run that replaced it');
+			Assert.equals('stale', File.getContent(dir.file('abc-sweep.json')), 'a row that read nothing keeps the earlier file');
 		});
 	}
 
@@ -167,6 +167,20 @@ final class BatteryTest extends Test {
 			Assert.stringContains('has no snapshot — nothing compared', Battery.startLine('/r', 'h1', 'b1', dir.path));
 			File.saveContent(dir.file('b1-suite.txt'), '1 2\n');
 			Assert.stringContains('comparing against b1', Battery.startLine('/r', 'h1', 'b1', dir.path));
+		});
+	}
+
+	public function testALintThatProducedNothingKeepsNoLintSnapshot(): Void {
+		TempDir.with(dir -> {
+			final work: String = dir.file('work');
+			FileSystem.createDirectory(work);
+			File.saveContent('$work/lint-anyparse.json', '');
+			File.saveContent('$work/lint-client.json', 'garbage');
+			File.saveContent(dir.file('abc-anyparse.json'), '{"kept":1}');
+			final readings: Map<String, Int> = ['tests' => 1, 'assertions' => 2];
+			Assert.isNull(Battery.keepSnapshot(dir.path, 'abc', work, readings, file -> throw 'no sweep to save'));
+			Assert.equals('{"kept":1}', File.getContent(dir.file('abc-anyparse.json')), 'an unread lint does not replace the kept one');
+			Assert.isFalse(FileSystem.exists(dir.file('abc-client.json')));
 		});
 	}
 
