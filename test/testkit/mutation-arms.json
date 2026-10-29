@@ -27995,8 +27995,8 @@
 			"name": "M-COLLAPSE-GLUE-REST-CHAIN-SKIPPED",
 			"type": "anyparse.core.CollapsePass",
 			"method": "chainGluedIfOpens",
-			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;",
-			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): fl;",
+			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(gluedSide(fl, width))): gluedSide(fl, width);",
+			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): gluedSide(fl, width);",
 			"note": "a rest-aware `&&` / `+` chain whose trailing paren opens is no longer forward-glued, so it breaks before `|| (` instead of hugging the paren"
 		},
 		{
@@ -31799,6 +31799,54 @@
 			"find": "return shape.objectLiteralKind != null || shape.arrayLiteralKind != null;",
 			"replace": "return true;",
 			"note": "a grammar with no object or array kind (mermaid) is walked anyway, so `apq get x.mmd a` no longer says the grammar has no path to name"
+		},
+		{
+			"name": "M-PAREN-REST-THRESHOLD-INEXACT",
+			"type": "anyparse.core.Renderer",
+			"method": "pushExceedsBranch",
+			"find": "rendersAsMeasured(flatDoc, false, col + pendingSpace + flatWidth)",
+			"replace": "rendersAsMeasured(flatDoc)",
+			"note": "a glued paren holding a chain with a lineLength threshold measures the rest of its line flat to the end instead of up to a later argument list that breaks, so it opens on a line that fits"
+		},
+		{
+			"name": "M-CHAIN-GLUE-THRESHOLD-FIRES",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGluedIfOpens",
+			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(gluedSide(fl, width))): gluedSide(fl, width);",
+			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;",
+			"note": "a rest-aware chain whose flat side a lineLength threshold partitions is not recognised as a glued infix chain, so it is never committed glued around its opened paren and breaks at its own operator instead"
+		},
+		{
+			"name": "M-CHAIN-COLLAPSE-THRESHOLD-FIRES",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rewriteTaggedAddChain",
+			"find": "rewrite(gluedSide(tagged.flat, width), decisions, true, width)",
+			"replace": "rewrite(tagged.flat, decisions, true, width)",
+			"note": "an inner add-chain collapsed inside a broken outer one keeps its lineLength threshold, which fires past the limit and breaks the collapsed chain"
+		},
+		{
+			"name": "M-CHAIN-COLLAPSE-PROBED-THRESHOLD-FIRES",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rewriteUnmemoized",
+			"find": "rewrite(gluedSide(probed.flat, width), decisions, true, width)",
+			"replace": "rewrite(probed.flat, decisions, true, width)",
+			"note": "an inner add-chain ending in a bare paren, collapsed inside a broken outer one, keeps its lineLength threshold, which fires past the limit and breaks it"
+		},
+		{
+			"name": "M-CHAIN-GLUE-PAREN-THRESHOLD-FIRES",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGluedIfOpens",
+			"find": "case WrapBoundary(Group(IfBreak(_, fl))): gluedSide(fl, width);",
+			"replace": "case WrapBoundary(Group(IfBreak(_, fl))): fl;",
+			"note": "a chain in a paren of its own, committed glued around an opened paren, keeps its lineLength threshold, which measures the chain flat and breaks it after the commit"
+		},
+		{
+			"name": "M-CHAIN-GLUED-SIDE-DROPS-REACHED-THRESHOLD",
+			"type": "anyparse.core.CollapsePass",
+			"method": "gluedSide",
+			"find": "case IfWidthExceeds(n, _, notFired) if (n > width): gluedSide(notFired, width);",
+			"replace": "case IfWidthExceeds(_, _, notFired): gluedSide(notFired, width);",
+			"note": "a collapse drops every lineLength threshold on the chain's flat side, so a rule below the limit that the collapsed inner chain reaches never fires and the chain stays one over-threshold line"
 		}
 	]
 }
