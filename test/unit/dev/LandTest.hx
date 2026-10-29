@@ -51,14 +51,15 @@ final class LandTest extends Test {
 	}
 
 	public function testTheBatteryIsQuickUnlessAskedFull(): Void {
-		Assert.same(['--quick'], Land.batteryFlags(false, false, false, null));
-		Assert.same([], Land.batteryFlags(false, false, true, null));
-		Assert.same(['--allow-blast', '--snapshot', '--quick'], Land.batteryFlags(true, true, false, null));
+		Assert.same(['--quick'], Land.batteryFlags(false, false, false, null, []));
+		Assert.same([], Land.batteryFlags(false, false, true, null, []));
+		Assert.same(['--allow-blast', '--snapshot', '--quick'], Land.batteryFlags(true, true, false, null, []));
 	}
 
 	public function testTheSuiteTakesTheShardsALeaseLeavesBesideTheLightBranches(): Void {
-		Assert.same(['--quick', '-n', '4'], Land.batteryFlags(false, false, false, 8));
-		Assert.same(['--quick', '-n', '1'], Land.batteryFlags(false, false, false, 2));
+		Assert.same(['--quick', '-n', '4'], Land.batteryFlags(false, false, false, 8, []));
+		Assert.same(['--quick', '-n', '1'], Land.batteryFlags(false, false, false, 2, []));
+		Assert.same(['--allow', 'corpus', '--allow', 'lint', '--quick'], Land.batteryFlags(false, false, false, null, ['corpus', 'lint']));
 	}
 
 	public function testAQuietLandingRunsTheQuickBattery(): Void {
@@ -361,6 +362,7 @@ final class LandTest extends Test {
 			final request: Null<BatteryRequest> = battery == null ? null : {
 				allowBlast: false,
 				snapshot: false,
+				allow: [],
 				full: battery.full,
 				leased: null,
 				cache: cache,

@@ -30,7 +30,7 @@ using StringTools;
 final class Land {
 
 	public static inline final USAGE: String = 'usage: dev land <branch> [-m <message>] [--no-battery] [--full] [--allow-blast] '
-		+ '[--snapshot] [--logs <dir>] [--repo <tree>]';
+		+ '[--allow <row>]... [--snapshot] [--logs <dir>] [--repo <tree>]';
 
 	/** Every this-many-th landing runs the battery in full, whatever it touched. */
 	public static inline final FULL_EVERY: Int = 10;
@@ -243,7 +243,7 @@ final class Land {
 		final why: Null<String> = fullReason(_merged(_repo), landing, request.full, request.every);
 		final mode: String = why == null ? 'battery quick' : 'battery full: $why';
 		_summary.detail(mode);
-		final flags: Array<String> = batteryFlags(request.allowBlast, request.snapshot, why != null, request.leased);
+		final flags: Array<String> = batteryFlags(request.allowBlast, request.snapshot, why != null, request.leased, request.allow);
 		return switch _exec(flags, _repo, Path.join([_logs, 'battery.log'])) {
 			case Failed(failure): Failed('$mode — $failure');
 			case other: other;
@@ -262,6 +262,7 @@ final class Land {
 		final request: BatteryRequest = {
 			allowBlast: args.flag('--allow-blast'),
 			snapshot: args.flag('--snapshot'),
+			allow: args.options('--allow'),
 			full: args.flag('--full'),
 			leased: PoolLease.threads(),
 			cache: cacheDir(Sys.getEnv),
@@ -342,10 +343,16 @@ final class Land {
 	 * lease leaves beside the battery's light branches; otherwise the battery
 	 * sizes it, from its own count or from the lease its suite's branch takes.
 	 */
-	public static function batteryFlags(allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>): Array<String> {
+	public static function batteryFlags(
+		allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>, allow: Array<String>
+	): Array<String> {
 		final flags: Array<String> = [];
 		if (allowBlast) flags.push('--allow-blast');
 		if (snapshot) flags.push('--snapshot');
+		for (row in allow) {
+			flags.push('--allow');
+			flags.push(row);
+		}
 		if (!full) flags.push('--quick');
 		final shards: Null<Int> = Branches.share(leased, Battery.lightThreads());
 		if (shards != null) {
@@ -364,6 +371,9 @@ typedef Compile = (tree:String, log:String) -> Outcome;
 typedef BatteryRequest = {
 	var allowBlast: Bool;
 	var snapshot: Bool;
+
+	/** The battery rows whose failure the verdict waives, each reported as allowed (`dev battery --allow`). */
+	var allow: Array<String>;
 
 	/** Whether the full battery was asked for. */
 	var full: Bool;

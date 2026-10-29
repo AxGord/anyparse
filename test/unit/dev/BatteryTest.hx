@@ -1,6 +1,7 @@
 package unit.dev;
 
 import dev.Battery;
+import devkit.Summary.Outcome;
 import devkit.TempDir;
 import js.node.Fs.Fs;
 import sys.io.File;
@@ -76,6 +77,17 @@ final class BatteryTest extends Test {
 		);
 		Assert.isTrue(Battery.blastOutcome([{ label: 'client', status: null }], true, 'k').match(Failed(_)), 'a lint-diff with no status');
 		Assert.isTrue(Battery.blastOutcome([], false, null).match(Skipped(_)), 'no base snapshot compared');
+	}
+
+	@:pin('guard')
+	public function testAFailedRowNamedByAllowIsWaivedAndNoOtherIs(): Void {
+		final red: Outcome = Failed('8 fixtures changed');
+		Assert.equals('8 fixtures changed', Battery.waiver('corpus', ['corpus'], red));
+		Assert.isNull(Battery.waiver('lint', ['corpus'], red), 'a row not named keeps its failure');
+		Assert.isNull(Battery.waiver('corpus', [], red));
+		Assert.isNull(Battery.waiver('corpus', ['corpus'], NotRun('the suite was red')), 'a row that did not run is not waived');
+		Assert.isNull(Battery.waiver('corpus', ['corpus'], Passed));
+		Assert.isTrue(Battery.rowNames().contains('corpus') && Battery.rowNames().contains('fmt xconfig'));
 	}
 
 	public function testTheClosingLinesCarryTheBaseDeltaAndACorpusNotRun(): Void {

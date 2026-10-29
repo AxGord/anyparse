@@ -31,7 +31,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class Battery {
 
-	public static inline final USAGE: String = 'usage: dev battery [-n <N>] [--quick] [--snapshot] [--base <key>] [--cache <dir>] [--allow-blast] [--keep] '
+	public static inline final USAGE: String = 'usage: dev battery [-n <N>] [--quick] [--snapshot] [--allow <row>]... [--base <key>] [--cache <dir>] [--allow-blast] [--keep] '
 		+ '[--client <tree> | --no-client] [--jvm | --no-jvm] [--repo <tree>]';
 
 	/**
@@ -164,7 +164,14 @@ final class Battery {
 	private function runBranch(rows: Array<String>): Int {
 		for (name in rows) {
 			Sys.println('\n=== $name ===');
-			_summary.time(name, step(name));
+			final run: () -> Outcome = step(name);
+			_summary.time(name, () -> {
+				final outcome: Outcome = run();
+				final waived: Null<String> = waiver(name, _plan.allow, outcome);
+				if (waived == null) return outcome;
+				_summary.detail('allowed: $waived');
+				return Passed;
+			});
 		}
 		Branches.leave(branchReport(rows), _plan.run, _summary, _readings);
 		return 0;
@@ -475,11 +482,14 @@ final class Battery {
 		final snapshot: Bool = args.flag('--snapshot');
 		final noClient: Bool = args.flag('--no-client');
 		final allowBlast: Bool = args.flag('--allow-blast');
+		final allow: Array<String> = args.options('--allow');
 		final keep: Bool = args.flag('--keep');
 		final jvm: Bool = args.flag('--jvm');
 		final noJvm: Bool = args.flag('--no-jvm');
 		final repo: String = Repo.resolve(args.option('--repo'));
 		args.done();
+		for (name in allow) if (!rowNames().contains(name))
+			throw new UsageError('--allow names no battery row: \'$name\' (rows: ${rowNames().join(', ')})');
 		if (jvm && noJvm) throw new UsageError('pass --jvm or --no-jvm, not both');
 		if ((Sys.getEnv('ANYPARSE_HXFORMAT_FORK') ?? '') == '') {
 			// the corpus layer skips in silence without it, and "corpus clean" must never read like "corpus not run"
@@ -505,6 +515,7 @@ final class Battery {
 			quick: quick,
 			snapshot: snapshot,
 			allowBlast: allowBlast,
+			allow: allow,
 			client: noClient ? null : clientOf(clientOption ?? Sys.getEnv('ANYPARSE_CLIENT_TREE')),
 			jvmSkip: jvmSkip(repo, base, jvm ? true : noJvm ? false : null),
 			run: Branches.newRunId(),
@@ -516,6 +527,22 @@ final class Battery {
 		};
 		release(dirs, work, repo, status == 0 && !keep, keep);
 		return status;
+	}
+
+	/** Every row the battery reports, by the name `--allow` takes. */
+	public static function rowNames(): Array<String> {
+		return [for (rows in BRANCHES) for (row in rows) row];
+	}
+
+	/**
+	 * Why the failed `outcome` of the row `name` does not fail the verdict, or null: the row is named by `allow` (a slice the
+	 * gate already sanctioned for it) and it failed. A row that did not run, and a row not named, keep their outcome.
+	 */
+	public static function waiver(name: String, allow: Array<String>, outcome: Outcome): Null<String> {
+		return switch outcome {
+			case Failed(why) if (allow.contains(name)): why;
+			case _: null;
+		};
 	}
 
 	/** The newest snapshot in `cache` by mtime — the keys are commits, which sort in no meaningful order — or null. */
@@ -699,6 +726,9 @@ typedef BatteryPlan = {
 	var quick: Bool;
 	var snapshot: Bool;
 	var allowBlast: Bool;
+
+	/** The rows whose failure the verdict waives (`--allow`), each saying so. */
+	var allow: Array<String>;
 
 	/** The second, private tree linted (and blasted) beside this one, or null. */
 	var client: Null<String>;
