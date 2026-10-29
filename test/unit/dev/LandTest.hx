@@ -65,7 +65,7 @@ final class LandTest extends Test {
 	public function testAQuietLandingRunsTheQuickBattery(): Void {
 		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 });
 		Assert.equals(0, run.status);
-		Assert.same([['--quick']], run.flags);
+		Assert.same([['--quick', '--base', run.base]], run.flags);
 		Assert.isTrue(run.output.indexOf('battery quick') >= 0, run.output);
 	}
 
@@ -74,7 +74,7 @@ final class LandTest extends Test {
 	public function testAPathWhereShardsDivergeRunsTheFullBattery(): Void {
 		final run: Landing = landing(() -> Passed, 'test/testkit/Extra.hx', { full: false, landed: 0 });
 		Assert.equals(0, run.status);
-		Assert.same([[]], run.flags);
+		Assert.same([['--base', run.base]], run.flags);
 		Assert.isTrue(run.output.indexOf('battery full: touches test/testkit/Extra.hx') >= 0, run.output);
 	}
 
@@ -82,15 +82,15 @@ final class LandTest extends Test {
 	@:killer('M-LAND-TENTH-LANDING-STAYS-QUICK')
 	public function testTheTenthLandingRunsTheFullBattery(): Void {
 		final ninth: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 8 });
-		Assert.same([['--quick']], ninth.flags);
+		Assert.same([['--quick', '--base', ninth.base]], ninth.flags);
 		final tenth: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 9 });
-		Assert.same([[]], tenth.flags);
+		Assert.same([['--base', tenth.base]], tenth.flags);
 		Assert.isTrue(tenth.output.indexOf('battery full: landing 10') >= 0, tenth.output);
 	}
 
 	public function testAskedForFullTheBatteryIsFullWhateverTheMergeBrings(): Void {
 		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: true, landed: 0 });
-		Assert.same([[]], run.flags);
+		Assert.same([['--base', run.base]], run.flags);
 		Assert.isTrue(run.output.indexOf('battery full: --full') >= 0, run.output);
 	}
 
@@ -143,13 +143,13 @@ final class LandTest extends Test {
 
 	public function testMergedPathsNobodyCanReadRunTheFullBattery(): Void {
 		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0, unreadable: true });
-		Assert.same([[]], run.flags);
+		Assert.same([['--base', run.base]], run.flags);
 		Assert.isTrue(run.output.indexOf('battery full: the merged paths are unknown') >= 0, run.output);
 	}
 
 	public function testAFileRenamedOutOfTheTestKitAsksForFull(): Void {
 		final run: Landing = landing(() -> Passed, 'docs/moved.md', { full: false, landed: 0 }, 'test/testkit/Old.hx');
-		Assert.same([[]], run.flags);
+		Assert.same([['--base', run.base]], run.flags);
 		Assert.isTrue(run.output.indexOf('battery full: touches test/testkit/Old.hx') >= 0, run.output);
 	}
 
@@ -334,6 +334,54 @@ final class LandTest extends Test {
 		Assert.equals(0, run.builds);
 	}
 
+	public function testTheBatteryIsPinnedToTheCommitTheLandingMergedOnto(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 });
+		Assert.equals(run.headBefore.substr(0, dev.Battery.KEY_LENGTH), run.base);
+		Assert.same([['--quick', '--base', run.base]], run.flags);
+		Assert.equals('', run.builtFrom, 'a base the cache holds is not made again');
+	}
+
+	public function testABaseWithoutASnapshotGetsOneFromADetachedTreeOfIt(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0, noSnapshot: true });
+		Assert.equals(0, run.status);
+		Assert.equals(2, run.flags.length);
+		Assert.same(['--snapshot', '--quick', '--no-base', '--repo'], run.flags[0].slice(0, 4));
+		Assert.equals(run.headBefore, run.builtFrom, 'the snapshot is taken of the commit landed onto, not of the landing');
+		Assert.isFalse(run.builtTreeLeft);
+		Assert.same(['--quick', '--base', run.base], run.flags[1]);
+		Assert.isTrue(run.output.indexOf('had no snapshot — made') >= 0, run.output);
+	}
+
+	public function testASnapshotOfTheBaseThatCannotBeMadeFailsTheLanding(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', {
+			full: false,
+			landed: 0,
+			noSnapshot: true,
+			baseFails: true
+		});
+		Assert.equals(1, run.status);
+		Assert.equals(1, run.flags.length, 'the landing\'s own battery does not run against a base nobody could snapshot');
+		Assert.isTrue(run.output.indexOf('could not be made') >= 0, run.output);
+		Assert.isFalse(run.builtTreeLeft);
+		Assert.isFalse(run.moved, 'the base is ensured before the pick, so main is untouched');
+		Assert.isFalse(run.merged);
+		Assert.equals(0, run.builds);
+		Assert.equals('', run.dirty);
+	}
+
+	public function testARedBatteryOfTheBaseStillServesAsTheBase(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', {
+			full: false,
+			landed: 0,
+			noSnapshot: true,
+			baseRed: true
+		});
+		Assert.equals(0, run.status);
+		Assert.equals(2, run.flags.length);
+		Assert.same(['--quick', '--base', run.base], run.flags[1]);
+		Assert.isTrue(run.output.indexOf('was red — its snapshot is the base all the same') >= 0, run.output);
+	}
+
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
@@ -347,6 +395,7 @@ final class LandTest extends Test {
 			final repo: String = dir.file('repo');
 			scaffold(repo, added, renameFrom, shape);
 			final headBefore: String = cmd('git -C $repo rev-parse HEAD').run().out.trim();
+			final base: String = headBefore.substr(0, dev.Battery.KEY_LENGTH);
 			final logs: String = dir.file('logs');
 			FileSystem.createDirectory(logs);
 			final printed: Array<String> = [];
@@ -357,7 +406,11 @@ final class LandTest extends Test {
 				makeDirectories('$cache/landings');
 				File.saveContent('$cache/landings/${battery.landed}', '');
 			}
+			seedBase(battery, cache, base);
+			var builtFrom: String = '';
+			var builtTree: String = '';
 			final red: Bool = battery != null && battery.fails == true;
+
 			final unreadable: Bool = battery != null && battery.unreadable == true;
 			final request: Null<BatteryRequest> = battery == null ? null : {
 				allowBlast: false,
@@ -377,7 +430,17 @@ final class LandTest extends Test {
 				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
 				exec: (words, tree, log) -> {
 					flags.push(words);
-					return red ? Failed('the battery is red') : Passed;
+					final at: Int = words.indexOf('--repo');
+					if (at >= 0) {
+						builtTree = words[at + 1];
+						builtFrom = cmd('git -C $builtTree rev-parse HEAD').run().out.trim();
+					}
+					return if (at >= 0)
+						makeBase(battery, cache, base)
+					else if (red)
+						Failed('the battery is red')
+					else
+						Passed;
 				},
 				merged: tree -> unreadable ? null : Land.mergedPaths(tree),
 				print: line -> printed.push(line)
@@ -391,6 +454,10 @@ final class LandTest extends Test {
 				againOutput: printed.slice(firstLines).join('\n'),
 				output: printed.join('\n'),
 				flags: flags,
+				base: base,
+				builtFrom: builtFrom,
+				builtTreeLeft: FileSystem.exists(builtTree),
+				headBefore: headBefore,
 				tallied: FileSystem.exists('$cache/landings'),
 				builds: builds,
 				merging: cmd('git -C $repo rev-parse -q --verify CHERRY_PICK_HEAD').run().ok
@@ -470,6 +537,23 @@ final class LandTest extends Test {
 		return build();
 	}
 
+	/** The cache of a landing that asks for a battery holds the snapshot of `base`, unless the scenario is the cache lacking it. */
+	private static function seedBase(battery: Null<Battery>, cache: String, base: String): Void {
+		if (battery == null || battery.noSnapshot == true) return;
+		makeDirectories(cache);
+		File.saveContent('$cache/$base-suite.txt', '1 2\n');
+	}
+
+	/** The battery that makes the snapshot of `base` in `cache`, as the scenario has it: red, or leaving no snapshot at all. */
+	private static function makeBase(battery: Null<Battery>, cache: String, base: String): Outcome {
+		final left: Bool = battery?.baseFails != true;
+		if (left) {
+			makeDirectories(cache);
+			File.saveContent('$cache/$base-suite.txt', '1 2\n');
+		}
+		return left && battery?.baseRed != true ? Passed : Failed('the battery is red');
+	}
+
 }
 
 /** What a `Land.land` run over a scratch repository left behind. */
@@ -479,6 +563,15 @@ private typedef Landing = {
 
 	/** The flags of every battery the run started. */
 	var flags: Array<Array<String>>;
+
+	/**
+	 * The commit `main` was at before the run and its snapshot key; when a battery made the snapshot, the commit of the tree
+	 * it ran over and whether that tree outlived it.
+	 */
+	var headBefore: String;
+	var base: String;
+	var builtFrom: String;
+	var builtTreeLeft: Bool;
 
 	/** Whether the landings were counted. */
 	var tallied: Bool;
@@ -515,6 +608,14 @@ private typedef Battery = {
 
 	/** Whether the script is red. */
 	@:optional var fails: Bool;
+
+	/**
+	 * Whether the cache lacks the snapshot of the commit landed onto; whether the battery that makes it is red but still
+	 * leaves a snapshot, or leaves none.
+	 */
+	@:optional var noSnapshot: Bool;
+	@:optional var baseRed: Bool;
+	@:optional var baseFails: Bool;
 
 	/** Whether the paths of the merge cannot be read. */
 	@:optional var unreadable: Bool;

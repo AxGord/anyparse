@@ -44,6 +44,8 @@ final class Land {
 	/** Where, under the battery's snapshot directory, the landings are counted. */
 	private static inline final TALLY_DIR: String = 'landings';
 
+	private static final NO_BATTERY: String = '--no-battery';
+
 	/**
 	 * Where a shard and the one-process run of the suite can diverge, so a landing that brings a path in is checked against
 	 * both: the test kit and runner, the shard planning and the transcript parity it is judged by, the battery script, the
@@ -84,6 +86,9 @@ final class Land {
 	/** Whether this run built the binaries from the picked tree. */
 	private var _built: Bool = false;
 
+	/** The snapshot key of the commit the checked-out branch was at when the landing began, or null before the base step. */
+	private var _base: Null<String> = null;
+
 	private function new(options: LandOptions) {
 		_repo = options.repo;
 		_branch = options.branch;
@@ -102,6 +107,7 @@ final class Land {
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
 			{ name: 'clean', step: clean },
 			{ name: 'branch', step: shape },
+			{ name: 'base', step: ensureBase.bind(battery) },
 			{ name: 'pick', step: pick },
 			{ name: 'build', step: build },
 			{ name: 'commit', step: commit.bind(message) },
@@ -238,27 +244,63 @@ final class Land {
 	 * decided here, from what the commit brought in and the count of landings, and the row names why.
 	 */
 	private function runBattery(request: Null<BatteryRequest>): Outcome {
-		if (request == null) return Skipped('--no-battery');
+		if (request == null) return Skipped(NO_BATTERY);
 		final landing: Int = Tally.next(Path.join([request.cache, TALLY_DIR]));
 		final why: Null<String> = fullReason(_merged(_repo), landing, request.full, request.every);
 		final mode: String = why == null ? 'battery quick' : 'battery full: $why';
 		_summary.detail(mode);
-		final flags: Array<String> = batteryFlags(request.allowBlast, request.snapshot, why != null, request.leased, request.allow);
+		final flags: Array<String> = batteryFlags(request.allowBlast, request.snapshot, why != null, request.leased, request.allow, _base);
 		return switch _exec(flags, _repo, Path.join([_logs, 'battery.log'])) {
 			case Failed(failure): Failed('$mode — $failure');
 			case other: other;
 		};
 	}
 
-
 	private function git(words: Array<String>): Result {
 		return cmd('git -C $_repo $words').run();
+	}
+
+	/** The detached tree at `tree`, if one is there; a tree git will not remove is left and said so. */
+	private function dropTree(tree: String): Void {
+		if (!FileSystem.exists(tree)) return;
+		final removed: Result = git(['worktree', 'remove', '--force', tree]);
+		if (!removed.ok) _summary.detail('the tree $tree is left in place: ${removed.firstError()}');
+	}
+
+	/**
+	 * The snapshot of the commit the landing merges onto, in the cache, before anything is picked: a landing is judged against
+	 * that commit and no other, and a snapshot that cannot be had leaves the tree untouched. A missing one is made by a battery
+	 * over a detached tree of that commit that compares nothing; the snapshot is a reading, so a red battery of the base
+	 * still serves — only a base whose battery left no snapshot fails.
+	 */
+	private function ensureBase(request: Null<BatteryRequest>): Outcome {
+		if (request == null) return Skipped(NO_BATTERY);
+		final head: String = git(['rev-parse', 'HEAD']).out.trim();
+		_base = Battery.keyOf(_repo, head);
+		final base: Null<String> = _base;
+		return base == null ? Passed : baseSnapshot(request, base, head);
+	}
+
+	private function baseSnapshot(request: BatteryRequest, base: String, head: String): Outcome {
+		final file: String = Path.join([request.cache, '$base-suite.txt']);
+		if (FileSystem.exists(file)) return Passed;
+		final tree: String = Path.join([_logs, 'base-$base']);
+		dropTree(tree);
+		final added: Result = git(['worktree', 'add', '--detach', tree, head]);
+		if (!added.ok) return Failed('no tree of the base $base to snapshot: ${added.firstError()}');
+		_summary.detail('base $base had no snapshot — made');
+		final flags: Array<String> = batteryFlags(false, true, false, request.leased, []).concat(['--no-base', '--repo', tree]);
+		final outcome: Outcome = _exec(flags, _repo, Path.join([_logs, 'battery-base.log']));
+		dropTree(tree);
+		if (!FileSystem.exists(file)) return Failed('the snapshot of the base $base could not be made — ${why(outcome)}');
+		if (!outcome.match(Passed)) _summary.detail('the battery of the base $base was red — its snapshot is the base all the same');
+		return Passed;
 	}
 
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final message: Null<String> = args.option('-m');
-		final noBattery: Bool = args.flag('--no-battery');
+		final noBattery: Bool = args.flag(NO_BATTERY);
 		final request: BatteryRequest = {
 			allowBlast: args.flag('--allow-blast'),
 			snapshot: args.flag('--snapshot'),
@@ -344,7 +386,7 @@ final class Land {
 	 * sizes it, from its own count or from the lease its suite's branch takes.
 	 */
 	public static function batteryFlags(
-		allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>, allow: Array<String>
+		allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>, allow: Array<String>, ?base: String
 	): Array<String> {
 		final flags: Array<String> = [];
 		if (allowBlast) flags.push('--allow-blast');
@@ -354,12 +396,24 @@ final class Land {
 			flags.push(row);
 		}
 		if (!full) flags.push('--quick');
+		if (base != null) {
+			flags.push('--base');
+			flags.push(base);
+		}
 		final shards: Null<Int> = Branches.share(leased, Battery.lightThreads());
 		if (shards != null) {
 			flags.push('-n');
 			flags.push('$shards');
 		}
 		return flags;
+	}
+
+	/** Why the battery of a base left no snapshot. */
+	private static function why(outcome: Outcome): String {
+		return switch outcome {
+			case Failed(failure): failure;
+			case _: 'it left none';
+		};
 	}
 
 }

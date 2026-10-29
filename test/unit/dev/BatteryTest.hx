@@ -1,12 +1,18 @@
 package unit.dev;
 
 import dev.Battery;
+import devkit.Args.UsageError;
+import devkit.Cmd.cmd;
+import devkit.Result;
 import devkit.Summary.Outcome;
 import devkit.TempDir;
 import js.node.Fs.Fs;
+import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /**
  * `dev battery`'s readings: which snapshot a run compares against, the counts it reads off the suite and the sweep, the
@@ -15,17 +21,6 @@ import utest.Test;
  */
 @:nullSafety(Strict)
 final class BatteryTest extends Test {
-
-	public function testTheBaseIsTheNewestSnapshotByMtimeNotByName(): Void {
-		TempDir.with(dir -> {
-			for (key in ['ffff0000', '00000000']) File.saveContent(dir.file('$key-suite.txt'), '1 2\n');
-			File.saveContent(dir.file('zzzz9999-anyparse.json'), '{}');
-			Fs.utimesSync(dir.file('ffff0000-suite.txt'), Date.fromTime(1000000), Date.fromTime(1000000));
-			Fs.utimesSync(dir.file('00000000-suite.txt'), Date.fromTime(2000000), Date.fromTime(2000000));
-			Assert.equals('00000000', Battery.newestBase(dir.path));
-		});
-		TempDir.with(dir -> Assert.isNull(Battery.newestBase(dir.path), 'a first run has no base'));
-	}
 
 	public function testASnapshotSuiteLineIsTwoCounts(): Void {
 		TempDir.with(dir -> {
@@ -105,6 +100,78 @@ final class BatteryTest extends Test {
 	public function testNoJvmSkipsTheProbeWithoutAskingGit(): Void {
 		Assert.equals('--no-jvm', Battery.jvmSkip('/nonexistent', null, false));
 		Assert.equals('no baseline commit to diff the core against', Battery.jvmSkip('/nonexistent', null, null));
+	}
+
+	public function testTheDefaultBaseIsTheFirstParentWhateverElseTheCacheHolds(): Void {
+		TempDir.with(dir -> {
+			final repo: String = dir.file('repo');
+			FileSystem.createDirectory(repo);
+			git(repo, ['init', '-q', '-b', 'main']);
+			Assert.isNull(Battery.defaultBase(repo), 'no commit yet');
+			for (name in ['first', 'second']) {
+				File.saveContent('$repo/$name.txt', name);
+				git(repo, ['add', '.']);
+				git(repo, ['commit', '-q', '-m', name]);
+			}
+			final parent: String = cmd('git -C $repo rev-parse --short=${Battery.KEY_LENGTH} HEAD~1').run().out.trim();
+			final head: String = cmd('git -C $repo rev-parse --short=${Battery.KEY_LENGTH} HEAD').run().out.trim();
+			// a snapshot of another tree, written after the parent's, is the one an mtime pick would take
+			for (key in [parent, 'ffff0000', head]) File.saveContent(dir.file('$key-suite.txt'), '1 2\n');
+			Fs.utimesSync(dir.file('$parent-suite.txt'), Date.fromTime(1000000), Date.fromTime(1000000));
+			Fs.utimesSync(dir.file('ffff0000-suite.txt'), Date.fromTime(3000000), Date.fromTime(3000000));
+			Assert.equals(parent, Battery.defaultBase(repo));
+			Assert.equals(parent, Battery.baseOf(null, false, repo));
+			Assert.equals('named', Battery.baseOf('named', false, repo), '--base wins');
+			Assert.isNull(Battery.baseOf(null, true, repo), '--no-base compares nothing');
+			Assert.raises(() -> Battery.baseOf('named', true, repo), UsageError);
+		});
+	}
+
+	public function testARedBatteryStillKeepsEveryReadingItProduced(): Void {
+		TempDir.with(dir -> {
+			final work: String = dir.file('work');
+			FileSystem.createDirectory(work);
+			File.saveContent('$work/lint-anyparse.json', '{}');
+			File.saveContent(dir.file('abc-suite.txt'), 'stale');
+			File.saveContent(dir.file('abc-sweep.json'), 'stale');
+			final saved: Array<String> = [];
+			// the suite was red: its counts were read, the corpus never ran
+			final readings: Map<String, Int> = ['tests' => 12, 'assertions' => 34];
+			Assert.isNull(Battery.keepSnapshot(dir.path, 'abc', work, readings, file -> {
+				saved.push(file);
+				return new Result('sweep', {
+					status: 0,
+					out: '',
+					err: '',
+					failure: '',
+					overflowed: false
+				});
+			}));
+			Assert.equals('12 34', File.getContent(dir.file('abc-suite.txt')).trim());
+			Assert.isTrue(FileSystem.exists(dir.file('abc-anyparse.json')));
+			Assert.same([], saved, 'a sweep nobody read is not saved');
+			Assert.isFalse(FileSystem.exists(dir.file('abc-sweep.json')), 'a stale file does not outlive the run that replaced it');
+		});
+	}
+
+	public function testARunThatReadNothingKeepsNoSnapshot(): Void {
+		TempDir.with(dir -> {
+			Assert.isNull(Battery.keepSnapshot(dir.path, 'abc', dir.file('work'), [], file -> throw 'no sweep to save'));
+			Assert.isFalse(FileSystem.exists(dir.file('abc-suite.txt')), 'the file that says a snapshot exists is not written');
+		});
+	}
+
+	public function testARunSaysWhenItsBaseHasNoSnapshotToCompareWith(): Void {
+		TempDir.with(dir -> {
+			Assert.stringContains('no cached baseline', Battery.startLine('/r', 'h1', null, dir.path));
+			Assert.stringContains('has no snapshot — nothing compared', Battery.startLine('/r', 'h1', 'b1', dir.path));
+			File.saveContent(dir.file('b1-suite.txt'), '1 2\n');
+			Assert.stringContains('comparing against b1', Battery.startLine('/r', 'h1', 'b1', dir.path));
+		});
+	}
+
+	private static function git(repo: String, words: Array<String>): Void {
+		cmd('git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false -C $repo $words').run().check();
 	}
 
 }

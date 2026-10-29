@@ -26,13 +26,16 @@ using StringTools;
  * `dev battery` — the end-of-slice proof as ONE command with one verdict (docs/testing.md § "The per-slice battery"): the
  * three binaries and a typecheck of the corpus drill, then four branches at once, each a `--rows` process of this tool
  * (`devkit.Branches`) whose transcript is replayed in a fixed order once all have joined. A step that could not run fails
- * the verdict on its own; `--snapshot` on green caches this HEAD as the next run's "before" arm.
+ * the verdict on its own; `--snapshot` caches this HEAD, green or red, as the next run's "before" arm.
  */
 @:nullSafety(Strict)
 final class Battery {
 
-	public static inline final USAGE: String = 'usage: dev battery [-n <N>] [--quick] [--snapshot] [--allow <row>]... [--base <key>] [--cache <dir>] [--allow-blast] [--keep] '
+	public static inline final USAGE: String = 'usage: dev battery [-n <N>] [--quick] [--snapshot] [--allow <row>]... [--base <key> | --no-base] [--cache <dir>] [--allow-blast] [--keep] '
 		+ '[--client <tree> | --no-client] [--jvm | --no-jvm] [--repo <tree>]';
+
+	/** The characters of HEAD a snapshot is keyed by. */
+	public static inline final KEY_LENGTH: Int = 8;
 
 	/**
 	 * The files the writer settles only on a second rewrite under the vendored config. Compared for equality:
@@ -61,9 +64,6 @@ final class Battery {
 	/** What a branch may run before it is killed: a wedged run, not a slow one. */
 	private static inline final BRANCH_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
 
-	/** The characters of HEAD a snapshot is keyed by. */
-	private static inline final KEY_LENGTH: Int = 8;
-
 	/** The build file only a typecheck reaches: the corpus drill's driver, a root-level module no binary's `-main` types. */
 	private static inline final RECON_HXML: String = 'recon.hxml';
 
@@ -86,6 +86,9 @@ final class Battery {
 
 	/** What the static-target probe compiles: a change under any of them since the base runs it. */
 	private static final JVM_INPUTS: Array<String> = ['src', 'tools/src/dev/JvmPortability.hx', 'tools/jvm-portability.hxml'];
+
+	/** The files of a snapshot, by the suffix after its commit key. */
+	private static final SNAPSHOT_FILES: Array<String> = ['anyparse.json', 'client.json', 'sweep.json', 'suite.txt'];
 
 	private final _summary: Summary = new Summary();
 	private final _readings: Map<String, Int> = [];
@@ -115,11 +118,7 @@ final class Battery {
 	private function drive(): Int {
 		final started: Float = Timer.stamp();
 		final base: Null<String> = _plan.base;
-		Sys.println(
-			base == null
-				? 'battery: repo ${_plan.repo} at ${_plan.head}, no cached baseline (first run — use --snapshot)'
-				: 'battery: repo ${_plan.repo} at ${_plan.head}, comparing against $base'
-		);
+		Sys.println(startLine(_plan.repo, _plan.head, base, _plan.cache));
 		// the branches run the code this run started with, not the `dev.js` the build is about to replace
 		final self: String = workFile('dev.js');
 		File.copy(FileSystem.fullPath(js.Node.__filename), self);
@@ -194,7 +193,7 @@ final class Battery {
 	}
 
 	/**
-	 * The totals, the table and the verdict; on green, the snapshot when asked. Answers the exit status. A run stopped by its
+	 * The totals, the table and the verdict; the snapshot when asked, whatever the verdict. Answers the exit status. A run stopped by its
 	 * build (`span` null) has no branches to total or to overlap.
 	 */
 	private function finish(started: Float, span: Null<Float>): Int {
@@ -215,17 +214,12 @@ final class Battery {
 				+ 'battery, never the code; a benchmark arm runs alone and sequentially (docs/testing.md).'
 			);
 		}
-		if (!_summary.passed()) {
+		// a snapshot is a reading, not a verdict: a red tip is the next landing's base all the same
+		final refused: Null<String> = _plan.snapshot && span != null ? snapshot() : null;
+		if (refused != null) Sys.println('battery: no snapshot — $refused');
+		if (!_summary.passed() || refused != null) {
 			Sys.println('--- battery: FAIL ---');
 			return 1;
-		}
-		if (_plan.snapshot) {
-			final refused: Null<String> = snapshot();
-			if (refused != null) {
-				Sys.println('battery: no snapshot — $refused');
-				Sys.println('--- battery: FAIL ---');
-				return 1;
-			}
 		}
 		Sys.println('--- battery: PASS ---');
 		return 0;
@@ -236,14 +230,11 @@ final class Battery {
 	 * commit. Answers why it could not be written, or null.
 	 */
 	private function snapshot(): Null<String> {
-		final key: String = Path.join([_plan.cache, _plan.head]);
-		File.copy(workFile('lint-anyparse.json'), '$key-anyparse.json');
-		if (_readings.exists(CLIENT_LINTED)) File.copy(workFile('lint-client.json'), '$key-client.json');
-		final save: Result = hxq(['sweep', '--save', '$key-sweep.json']).run();
-		if (!save.ok) return 'the corpus sweep could not be saved: ${save.firstError()}';
-		File.saveContent('$key-suite.txt', '${_readings[TESTS] ?? 0} ${_readings[ASSERTIONS] ?? 0}\n');
-		Sys.println('battery: snapshot written for ${_plan.head} in ${_plan.cache}');
-		return null;
+		final refused: Null<String> = keepSnapshot(
+			_plan.cache, _plan.head, _plan.work, _readings, file -> hxq(['sweep', '--save', file]).run()
+		);
+		if (refused == null) Sys.println('battery: snapshot written for ${_plan.head} in ${_plan.cache}');
+		return refused;
 	}
 
 	/** The suite, sharded through `dev shard` (the monolith cross-check unless `--quick`), its counts kept. */
@@ -288,7 +279,7 @@ final class Battery {
 		_readings[SWEEP_PASS] = counts[0];
 		_readings[SWEEP_FAIL] = counts[1];
 		_readings[SWEEP_SKIP] = counts[2];
-		_summary.detail('${counts[0]} pass / ${counts[1]} fail / ${counts[2]} skip-parse');
+		_summary.detail('${counts[0]} pass / ${counts[1]} fail / ${counts[2]} skip-parse, against ${_plan.base ?? 'no base'}');
 		return corpusRegressed(text) ? Failed('the corpus regressed against ${_plan.base} — see the Δ line above') : Passed;
 	}
 
@@ -464,6 +455,11 @@ final class Battery {
 		return Branches.light(BRANCHES, branchThreads);
 	}
 
+	/** The snapshot of HEAD's first parent in `repo`, or null at a root commit. */
+	public static inline function defaultBase(repo: String): Null<String> {
+		return keyOf(repo, 'HEAD^');
+	}
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final rows: Null<String> = args.option('--rows');
@@ -476,6 +472,7 @@ final class Battery {
 		}
 		final shards: Int = shardCount(args.option('-n') ?? args.option('--shards') ?? '${Shard.DEFAULT_SHARDS}');
 		final baseOption: Null<String> = args.option('--base');
+		final noBase: Bool = args.flag('--no-base');
 		final cacheOption: Null<String> = args.option('--cache');
 		final clientOption: Null<String> = args.option('--client');
 		final quick: Bool = args.flag('--quick');
@@ -491,6 +488,7 @@ final class Battery {
 		for (name in allow) if (!rowNames().contains(name))
 			throw new UsageError('--allow names no battery row: \'$name\' (rows: ${rowNames().join(', ')})');
 		if (jvm && noJvm) throw new UsageError('pass --jvm or --no-jvm, not both');
+
 		if ((Sys.getEnv('ANYPARSE_HXFORMAT_FORK') ?? '') == '') {
 			// the corpus layer skips in silence without it, and "corpus clean" must never read like "corpus not run"
 			Sys.stderr().writeString('dev battery: ANYPARSE_HXFORMAT_FORK is unset — the corpus layer would skip silently\n');
@@ -500,7 +498,7 @@ final class Battery {
 		// created before it is resolved: a full path is a real path, and a directory that does not exist has none
 		FileSystem.createDirectory(cacheDir);
 		final cache: String = FileSystem.fullPath(cacheDir);
-		final base: Null<String> = baseOption ?? newestBase(cache);
+		final base: Null<String> = baseOf(baseOption, noBase, repo);
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		final work: String = dirs.claimAfterSweep(WORK_PREFIX, repo);
 		final mode: LeaseMode = Lease.ofEnvironment();
@@ -545,19 +543,22 @@ final class Battery {
 		};
 	}
 
-	/** The newest snapshot in `cache` by mtime — the keys are commits, which sort in no meaningful order — or null. */
-	public static function newestBase(cache: String): Null<String> {
-		final suffix: String = '-suite.txt';
-		var newest: Null<String> = null;
-		var at: Float = Math.NEGATIVE_INFINITY;
-		for (name in FileSystem.readDirectory(cache)) if (name.endsWith(suffix)) {
-			final time: Float = FileSystem.stat(Path.join([cache, name])).mtime.getTime();
-			if (time > at) {
-				at = time;
-				newest = name.substr(0, name.length - suffix.length);
-			}
-		}
-		return newest;
+	/**
+	 * The snapshot key of `rev` in `repo`, or null when it names no commit. Whatever else the cache holds — a run of another
+	 * tree, a worker's gate — is never a baseline: a snapshot compares the tree it was taken of.
+	 */
+	public static function keyOf(repo: String, rev: String): Null<String> {
+		final run: Result = cmd('git -C $repo rev-parse --verify --quiet --short=$KEY_LENGTH $rev^{commit}').run();
+		return run.ok ? run.out.trim() : null;
+	}
+
+	/**
+	 * The baseline of a run: `named` (`--base`), none at all (`--no-base`, for the run that makes a snapshot and compares
+	 * nothing), else the snapshot of HEAD's first parent, the commit a landing merged onto.
+	 */
+	public static function baseOf(named: Null<String>, none: Bool, repo: String): Null<String> {
+		if (none && named != null) throw new UsageError('pass --base or --no-base, not both');
+		return none ? null : named ?? defaultBase(repo);
 	}
 
 	/** The two counts of a snapshot's suite line at `file` (tests, assertions), or null when there is none. */
@@ -660,6 +661,37 @@ final class Battery {
 				: 'corpus not run'
 		);
 		return lines;
+	}
+
+	/**
+	 * The snapshot of the commit `head` in `cache`, from what this run read: a file is written only when its row produced its
+	 * reading, whatever the verdict was, and the files of an earlier snapshot of the same commit are cleared first so none
+	 * outlives the run that should have replaced it. The suite's counts file goes last — it is what says a snapshot exists.
+	 * `saveSweep` writes the corpus sweep to the file it is given. Answers why it could not be written, or null.
+	 */
+	public static function keepSnapshot(
+		cache: String, head: String, work: String, readings: Map<String, Int>, saveSweep: String -> Result
+	): Null<String> {
+		final key: String = Path.join([cache, head]);
+		for (suffix in SNAPSHOT_FILES) if (FileSystem.exists('$key-$suffix')) FileSystem.deleteFile('$key-$suffix');
+		final lint: String = Path.join([work, 'lint-anyparse.json']);
+		if (FileSystem.exists(lint)) File.copy(lint, '$key-anyparse.json');
+		final client: String = Path.join([work, 'lint-client.json']);
+		if (readings.exists(CLIENT_LINTED) && FileSystem.exists(client)) File.copy(client, '$key-client.json');
+		if (readings.exists(SWEEP_PASS)) {
+			final save: Result = saveSweep('$key-sweep.json');
+			if (!save.ok) return 'the corpus sweep could not be saved: ${save.firstError()}';
+		}
+		if (readings.exists(TESTS)) File.saveContent('$key-suite.txt', '${readings[TESTS] ?? 0} ${readings[ASSERTIONS] ?? 0}\n');
+		return null;
+	}
+
+	/** The line that opens a run: the snapshot it compares against, or why it compares nothing. */
+	public static function startLine(repo: String, head: String, base: Null<String>, cache: String): String {
+		final opening: String = 'battery: repo $repo at $head, ';
+		if (base == null) return '${opening}no cached baseline (first run — use --snapshot)';
+		if (!FileSystem.exists(Path.join([cache, '$base-suite.txt']))) return '${opening}base $base has no snapshot — nothing compared';
+		return '${opening}comparing against $base';
 	}
 
 	/**
