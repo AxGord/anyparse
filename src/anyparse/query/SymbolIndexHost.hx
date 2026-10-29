@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.scan.ReflectionMemo;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
@@ -86,6 +87,13 @@ interface SymbolIndexHost {
 	 * stops reporting.
 	 */
 	function resolutionProjectFiles(): Null<Array<{ file: String, source: String }>>;
+
+	/**
+	 * The library sources the project DECLARED — `resolutionRoots` and `resolutionLibs` — without the std that joins the
+	 * scope by itself; null when no scope is injected. For a scan of what the code the project runs may do to its objects:
+	 * a library is code the project chose, while the std is reached only through entry points the project calls itself.
+	 */
+	function declaredLibrary(): Null<LibrarySources>;
 
 	/**
 	 * EVERY project source — the report files UNION the declared `resolutionRoots` — when EVERY declared

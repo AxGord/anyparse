@@ -1,5 +1,6 @@
 package anyparse.check.scan;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.SourceText;
 
@@ -27,6 +28,9 @@ final class AccessorClauseText {
 	/** The accessor that admits no access at all. */
 	private static inline final NEVER_ACCESSOR: String = 'never';
 
+	/** The write accessor that routes a write through the property's set accessor. */
+	private static inline final SET_ACCESSOR: String = 'set';
+
 	/**
 	 * The accessor identifiers that give a property no storage of its own: a call through `get_` / `set_`, or no access at
 	 * all. Haxe makes a property physical when either accessor is `default` / `null` or it carries `@:isVar` (4.3.7: a
@@ -36,9 +40,33 @@ final class AccessorClauseText {
 	 */
 	private static final STORAGELESS_ACCESSORS: Array<String> = ['get', 'set', 'never'];
 
+	/** The read accessors under which a plain read returns the physical field itself. */
+	private static final FIELD_READS: Array<String> = ['default', 'null'];
+
 	/** Whether the write accessor of `clause` is `never` - no write from anywhere, the declaring type included. */
 	public static inline function writesNever(clause: AccessorClause): Bool {
 		return clause.write == NEVER_ACCESSOR;
+	}
+
+	/**
+	 * Whether a plain read of `clause`'s property returns its physical field (`default` / `null`) while a write
+	 * runs its set accessor — the shape whose field holds only what that accessor, or a direct access, stores.
+	 */
+	public static function readsFieldWritesThroughSetter(clause: AccessorClause): Bool {
+		return FIELD_READS.contains(clause.read) && clause.write == SET_ACCESSOR;
+	}
+
+	/**
+	 * The edit turning the read accessor of the property whose `var` keyword starts `propSpan` into `never`, or null
+	 * when it has no well-formed clause.
+	 */
+	public static function neverReadEdit(source: String, propSpan: Span): Null<FixEdit> {
+		final open: Int = accessorParenOpen(source, propSpan);
+		if (open < 0) return null;
+		final n: Int = source.length;
+		final from: Int = skipSpace(source, open + 1, n);
+		final read: Null<{ id: String, next: Int }> = identAt(source, from, n);
+		return read == null ? null : { span: new Span(from, read.next), text: NEVER_ACCESSOR };
 	}
 
 	/**

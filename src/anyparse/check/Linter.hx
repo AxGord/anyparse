@@ -362,6 +362,10 @@ final class Linter {
 			// (the slot names the method), this one requires no slot to name it at all. Registry
 			// order is therefore free; the comment records why nobody needs to re-derive it.
 			new OrphanAccessor(),
+			// Edits a property's read slot, which `trivial-getter` and `redundant-property-access` also rewrite — but this rule
+			// needs a `set` write slot under a `default` / `null` read, the first a `get` read and the second `(default, default)`,
+			// so no clause is claimed twice and registry order is free.
+			new UnstoredProperty(),
 			// Deletes public methods, as `orphan-accessor` deletes accessor ones — the two can never
 			// claim the same method: this rule skips every `get_` / `set_`-prefixed name outright, and
 			// that check claims nothing else. Registry order is therefore free.

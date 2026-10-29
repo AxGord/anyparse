@@ -6,18 +6,14 @@ import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
-import anyparse.check.scan.NativeCodeScan;
+import anyparse.check.scan.PropertyStorage;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.check.scan.RunScan;
-import anyparse.query.CondRegionScan;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
-import anyparse.query.ParseGate;
-import anyparse.query.RawSourceScan;
-import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -71,9 +67,6 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 
 	/** The metadata that forces physical storage onto a property. */
 	private static inline final IS_VAR_META: String = '@:isVar';
-
-	/** The metadata that makes a property access reach the physical field directly. */
-	private static inline final BYPASS_META: String = '@:bypassAccessor';
 
 	/** Why a finding on a macro-built owner carries no edit without a compiler oracle — one ledger row for every such site. */
 	private static inline final MACRO_DECLINE: String =
@@ -154,7 +147,7 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 		// that access is a compile error, so only an oracle-verified fix may remove it.
 		final declined: Bool = !ctx.oracleVerified
 			&& (declared.hasBuild || scopeIndex.traits.transitivelyCarriesBuildMacro(owner, host.file));
-		for (c in candidates) if (!ReflectionScan.runtimeName(ctx.reflection, c.name) && !storageReachable(ctx, c.name)) {
+		for (c in candidates) if (!ReflectionScan.runtimeName(ctx.reflection, c.name) && !PropertyStorage.storageReachable(ctx, c.name)) {
 			final finding: Violation = {
 				file: host.file,
 				span: c.meta,
@@ -187,42 +180,6 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 			&& CtorFieldFold.declInitializer(member, shape) == null
 			? { name: name, meta: metaSpan }
 			: null;
-	}
-
-	/**
-	 * Whether any scope file may reach the physical field of the property `name`: a file spelling the
-	 * name that does not parse, an unparsed `#if` region spelling it, or a construct `touchesStorage`
-	 * reports.
-	 */
-	private static function storageReachable(ctx: Ctx, name: String): Bool {
-		final accessors: Array<String> = [CheckScan.GET_PREFIX + name, CheckScan.SET_PREFIX + name];
-		for (entry in ctx.scope) if (RawSourceScan.mentionsWord(entry.source, name)) {
-			final tree: Null<QueryNode> = ParseGate.parseOrNull(ctx.plugin, entry.source);
-			if (tree == null) return true;
-			if (CondRegionScan.opaqueCondRegionMentioning(tree, entry.source, name, ctx.shape) != null) return true;
-			if (touchesStorage(tree, entry.source, name, accessors, ctx)) return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Whether the subtree under `node` holds a method named one of `accessors`, a construct carrying
-	 * `@:bypassAccessor`, or a native-code carrier (`NativeCodeScan.isCarrier`), whose text mentions `name` as a
-	 * standalone identifier. Text rather than resolution: inside an accessor body a mention may reach the
-	 * field in any spelling — bare, `this.`-qualified, interpolated — and inside target code it is not
-	 * Haxe at all; a mention that reaches nothing only costs a finding.
-	 */
-	private static function touchesStorage(node: QueryNode, source: String, name: String, accessors: Array<String>, ctx: Ctx): Bool {
-		final span: Null<Span> = node.span;
-		final nodeName: Null<String> = node.name;
-		final accessor: Bool = nodeName != null && CheckScan.METHOD_KINDS.contains(node.kind) && accessors.contains(nodeName);
-		final bypass: Bool = node.children.exists(c -> MemberKinds.META_KINDS.contains(c.kind) && c.name == BYPASS_META);
-		if (
-			span != null && (accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))
-			&& SourceText.mentionsIdent(source, span, name)
-		)
-			return true;
-		return node.children.exists(c -> touchesStorage(c, source, name, accessors, ctx));
 	}
 
 	/** Whether `text` is the whole `@:isVar` metadata as `fix` may delete it — bare, or with an empty argument list. */

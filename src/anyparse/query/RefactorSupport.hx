@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.scan.ReflectionMemo;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Refs.RefHit;
@@ -129,6 +130,15 @@ final class RefactorSupport {
 	public static inline function resolutionProjectSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
 		return host != null && host.hasDeclaredResolutionScope() ? host.resolutionProjectFiles() : null;
+	}
+
+	/**
+	 * The library sources the project declared — `resolutionRoots` and `resolutionLibs`, the std left out — when `plugin`
+	 * hosts a scope, else null (`SymbolIndexHost.declaredLibrary`).
+	 */
+	public static inline function declaredLibraryOf(plugin: GrammarPlugin): Null<LibrarySources> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host?.declaredLibrary();
 	}
 
 	/**
