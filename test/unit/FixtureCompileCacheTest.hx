@@ -80,37 +80,42 @@ class FixtureCompileCacheTest extends Test {
 		final first: Fixture = fixture(PROBE, MAIN);
 		final second: Fixture = fixture(PROBE, MAIN);
 		final third: Fixture = fixture(PROBE, MAIN);
-		CliFixture.always(
-			() -> for (dir in [cache, first.dir, first.probe, second.dir, second.probe, third.dir, third.probe]) CliFixture.removeDir(dir),
-			() -> {
-				FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
-				final entry: String = Path.join([
-					cache,
-					[for (f in FileSystem.readDirectory(cache)) if (f.endsWith('.json.gz')) f][0]
-				]);
-				// a live holder: this process, whose record lands only after the waiter started waiting
-				FileSystem.rename(entry, '$entry.aside');
-				FileSystem.createDirectory('$entry.lock');
-				File.saveContent('$entry.lock/pid', Std.string(js.Node.process.pid));
-				ChildProcess.spawn('sh', [
-					'-c',
-					'sleep 0.5; mv "$$1.aside" "$$1"; rm -f "$$1.lock/pid"; rmdir "$$1.lock"',
-					'sh',
-					entry
-				]);
-				final shared: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, second.dir, args(second));
-				Assert.equals(0, shared.status);
-				Assert.isTrue(shared.out.toString().indexOf(resolved(second.dir)) >= 0, 'the shared replay names its own cwd');
-				// a dead holder: its claim is cleared, the compile runs here unrecorded, and the next one claims the key again
-				FileSystem.deleteFile(entry);
-				FileSystem.createDirectory('$entry.lock');
-				File.saveContent('$entry.lock/pid', '999999999');
-				FixtureCompileCache.run('haxe', 'stamp', cache, third.dir, args(third));
-				Assert.isFalse(FileSystem.exists('$entry.lock'));
-				FixtureCompileCache.run('haxe', 'stamp', cache, third.dir, args(third));
-				Assert.equals('miss,shared,pass,miss', tally(cache));
+		final probe: Any = js.Syntax.code('process.kill');
+		CliFixture.always(() -> {
+			js.Syntax.code('process.kill = {0}', probe);
+			for (dir in [cache, first.dir, first.probe, second.dir, second.probe, third.dir, third.probe]) CliFixture.removeDir(dir);
+		}, () -> {
+			FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
+			final entry: String = Path.join([
+				cache,
+				[for (f in FileSystem.readDirectory(cache)) if (f.endsWith('.json.gz')) f][0]
+			]);
+			// A live holder: this process. It records and releases the key the first time the waiter probes whether it is
+			// alive, so the record lands while the waiter waits — however slow the machine — and nothing of the holder is
+			// still running once the waiter returns, to race the dead-holder claim below.
+			FileSystem.rename(entry, '$entry.aside');
+			FileSystem.createDirectory('$entry.lock');
+			File.saveContent('$entry.lock/pid', Std.string(js.Node.process.pid));
+			function holder(): Void {
+				FileSystem.rename('$entry.aside', entry);
+				FileSystem.deleteFile('$entry.lock/pid');
+				FileSystem.deleteDirectory('$entry.lock');
 			}
-		);
+			js.Syntax.code(
+				'process.kill = function(pid, signal) { process.kill = {0}; {1}(); return {0}.call(process, pid, signal); }', probe, holder
+			);
+			final shared: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, second.dir, args(second));
+			Assert.equals(0, shared.status);
+			Assert.isTrue(shared.out.toString().indexOf(resolved(second.dir)) >= 0, 'the shared replay names its own cwd');
+			// a dead holder: its claim is cleared, the compile runs here unrecorded, and the next one claims the key again
+			FileSystem.deleteFile(entry);
+			FileSystem.createDirectory('$entry.lock');
+			File.saveContent('$entry.lock/pid', '999999999');
+			FixtureCompileCache.run('haxe', 'stamp', cache, third.dir, args(third));
+			Assert.isFalse(FileSystem.exists('$entry.lock'));
+			FixtureCompileCache.run('haxe', 'stamp', cache, third.dir, args(third));
+			Assert.equals('miss,shared,pass,miss', tally(cache));
+		});
 	}
 
 	/**
