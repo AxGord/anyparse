@@ -43,7 +43,45 @@ final class CommandTest extends Test {
 	/** Prints one line with no break after it. */
 	private static inline final PRINT_UNENDED: String = 'process.stdout.write("a")';
 
+	/** Prints its parent's pid. */
+	private static inline final PRINT_PPID: String = 'process.stdout.write(String(process.ppid))';
+
 	private final _node: String = js.Node.process.execPath;
+
+	/** A tethered command runs under its tether, never as this process's own child, whatever command was derived from it. */
+	public function testTheTetherIsKeptByEveryDerivedCommand(): Void {
+		final own: String = '${js.Node.process.pid}';
+		Assert.equals(own, cmd('$_node -e $PRINT_PPID').text(), 'untethered: this process\'s own child');
+		TempDir.with(dir -> {
+			final tethered: devkit.Command = cmd('$_node -e $PRINT_PPID').tethered();
+			for (derived in [
+				tethered,
+				tethered.at(dir.path),
+				tethered.env('DEVKIT_PROBE', 'x'),
+				tethered.timeout(60000)
+			]) {
+				final parent: String = derived.text();
+				Assert.notEquals(own, parent, derived.toString());
+				Assert.notEquals('', parent);
+			}
+			Assert.notEquals(own, tethered.pipe(cmd('$_node -e $UPPER')).text(), 'the upstream stage of a pipe');
+		});
+	}
+
+	public function testATetheredRunAnswersAsAnUntetheredOne(): Void {
+		final plain: Result = cmd('$_node -e $FAIL').run();
+		final tethered: Result = cmd('$_node -e $FAIL').tethered().run();
+		Assert.same([plain.status, plain.out, plain.err, plain.failure], [tethered.status, tethered.out, tethered.err, tethered.failure]);
+		Assert.equals(3, tethered.status);
+	}
+
+	/** The tether is the command's standard input, so an input or a pipe into it would be dropped: both are refused. */
+	public function testATetheredCommandReadsNoInput(): Void {
+		Assert.raises(() -> cmd('$_node -e $UPPER').tethered().input('x'));
+		Assert.raises(() -> cmd('$_node -e $UPPER').input('x').tethered());
+		Assert.raises(() -> cmd('$_node -e $PRINT_XY').pipe(cmd('$_node -e $UPPER').tethered()));
+		Assert.raises(() -> cmd('$_node -e $PRINT_XY').pipe(cmd('$_node -e $UPPER')).tethered());
+	}
 
 	public function testArgumentsReachTheProgramVerbatim(): Void {
 		final weird: Array<String> = ['--foo', 'a b', '', '$$HOME', 'it\'s', 'x;y|z', '"q"', '*', '`id`'];

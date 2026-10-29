@@ -122,7 +122,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 	}
 
 	/**
-	 * `apq patch --batch <rows>` — many patches in one process, for `tools/mutation-arm.sh`, whose render of a full sweep
+	 * `apq patch --batch <rows>` — many patches in one process, for `dev mutation-arm`, whose render of a full sweep
 	 * spent most of its minutes starting `apq` once per arm and re-reading and re-canonical-checking the same file for
 	 * every arm cut in it. Each row is `<file>\t<selector>\t<payload-file>\t<out-file>`: the patched text goes to
 	 * `<out-file>`, byte for byte what `apq patch <file> --select <selector> --from-file <payload-file>` prints, and a

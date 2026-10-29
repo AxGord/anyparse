@@ -69,12 +69,12 @@ typedef TestCensus = {
  *
  * **The arm registry is checked BOTH ways at build time.** A `@:killer` naming no declared arm, a
  * declared arm nobody names, and an arm whose member has been renamed or moved out from under it each
- * stop the build before anyone runs a sweep (`tools/mutation-arm.sh <NAME>`).
+ * stop the build before anyone runs a sweep (`dev mutation-arm <NAME>`).
  *
  * **What the typer cannot answer, the parser does.** A module whose every type sits behind `#if macro`
  * contributes NO type to this build; `moduleTypes` separates that answer from an absent module, and
  * such an arm is recorded in `TestRegistry.deferredArms()` and answered by
- * `unit.MutationArmAddressTest`, which parses the very file `tools/mutation-arm.sh` would patch.
+ * `unit.MutationArmAddressTest`, which parses the very file `dev mutation-arm` would patch.
  *
  * **No state.** Everything the macro emits is a fresh literal built per call, so the generated
  * registration holds no `static var` — invariant 1. **No `#if macro` guard, and that is enforced:**
@@ -497,7 +497,7 @@ class TestDiscovery {
 	 * method, else any class of the same MODULE that does — or null when nothing there declares it.
 	 *
 	 * `type` is a MODULE path everywhere else in this machinery: `MutationArms.candidateFiles` maps
-	 * it straight to a file and `tools/mutation-arm.sh` resolves it the same way by hand, and the
+	 * it straight to a file and `dev mutation-arm` resolves it the same way by hand, and the
 	 * cut the runner applies is a file-scoped `<kind>:<member>` selector that never asks which class
 	 * of the file declares the member. Only this check read it as a CLASS, and the disagreement cost
 	 * a whole shape of arm: a member of a SUB-MODULE type (`AddressIndex` in `Address.hx`,

@@ -452,7 +452,7 @@ final class CliIo {
 			// Bridged through `Null<String>` like every other `fullPath` in the tree (`StdResolver.resolveSymlink`):
 			// on hxnodejs it RETURNS null for a path that vanished since `exists`, and a compilation server reads
 			// the inlined call as nullable — unbridged, this line failed every warm build of the suite, which is
-			// what `tools/mutation-check.sh` builds each track through.
+			// what `dev mutation-check` builds each track through.
 			final full: Null<String> = FileSystem.exists(path) ? FileSystem.fullPath(path) : null;
 			target = full ?? path;
 			staged = target + STAGED_WRITE_SUFFIX;

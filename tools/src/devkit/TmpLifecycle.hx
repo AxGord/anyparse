@@ -167,6 +167,12 @@ final class TmpLifecycle {
 		if (swept > 0) Sys.stderr().writeString('tmp-lifecycle: swept $swept orphaned scratch $noun under $root\n');
 	}
 
+	/** A new directory of `prefix` (`claim`), claimed after the `startupSweep`, which so never sees this run's own. */
+	public function claimAfterSweep(prefix: String, ?repo: String): String {
+		startupSweep(repo);
+		return claim(prefix);
+	}
+
 	/** The configuration the environment gives, as `tools/tmp-lifecycle.sh` reads it. */
 	public static function fromEnv(): TmpLifecycle {
 		return new TmpLifecycle(

@@ -13,7 +13,7 @@ using Lambda;
 using StringTools;
 
 /**
- * The arms row of a slice gate: `tools/mutation-arm.sh --fast` over the arms the slice added or re-encoded, every arm on
+ * The arms row of a slice gate: `dev mutation-arm --fast` over the arms the slice added or re-encoded, every arm on
  * a type it touched, every arm a pin of a touched test class names, and each `--arm`. The registry's whole `--all` is a
  * release run, never a slice gate.
  */
@@ -47,7 +47,7 @@ final class GateArms {
 		if (names.length == 0) return Skipped('no arm added, re-encoded or on a touched type');
 		final threads: Null<Int> = gate.options.threads;
 		final jobs: Array<String> = threads == null ? [] : ['--jobs', '$threads'];
-		final run: Result = gate.inTree(cmd('tools/mutation-arm.sh $names --fast $jobs'));
+		final run: Result = gate.inTree(cmd('node bin/dev.js mutation-arm $names --fast $jobs'));
 		File.saveContent(gate.log('arms.log'), run.out + run.err);
 		final tally: EReg = ~/^(\d+) tracks: (\d+) killed, .*$/m;
 		if (!tally.match(run.out)) return Failed('no verdict line — ${GateTree.quote(run)}');

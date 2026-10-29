@@ -6,8 +6,8 @@ import haxe.Exception;
 
 /**
  * One program and its argument vector, run with no shell in between — so nothing in an argument is ever quoted,
- * split or expanded. Usually built by `Cmd.cmd`. A command is immutable: `at`, `env`, `timeout`, `input` and `pipe`
- * each answer a new one, so a command can be kept and reused as a template.
+ * split or expanded. Usually built by `Cmd.cmd`. A command is immutable: `at`, `env`, `timeout`, `input`, `pipe` and
+ * `tethered` each answer a new one, so a command can be kept and reused as a template.
  *
  * Every run goes through `HaxeSpawn` (`exec` here, `runAll` from `Pool`), the project's one process seam.
  */
@@ -27,9 +27,11 @@ final class Command {
 	private final _timeout: Int;
 	private final _input: Null<String>;
 	private final _upstream: Null<Command>;
+	private final _tethered: Bool;
 
 	private function new(
-		argv: Array<String>, cwd: Null<String>, env: DynamicAccess<String>, timeout: Int, input: Null<String>, upstream: Null<Command>
+		argv: Array<String>, cwd: Null<String>, env: DynamicAccess<String>, timeout: Int, input: Null<String>, upstream: Null<Command>,
+		tethered: Bool
 	) {
 		this.argv = argv;
 		_cwd = cwd;
@@ -37,6 +39,7 @@ final class Command {
 		_timeout = timeout;
 		_input = input;
 		_upstream = upstream;
+		_tethered = tethered;
 	}
 
 	/** `run`, throwing `CommandFailed` unless it exited 0. */
@@ -56,25 +59,38 @@ final class Command {
 
 	/** This command run in `dir`. */
 	public function at(dir: String): Command {
-		return new Command(argv, dir, _env, _timeout, _input, _upstream);
+		return new Command(argv, dir, _env, _timeout, _input, _upstream, _tethered);
 	}
 
 	/** This command with the environment variable `name` set to `value` over this process's environment. */
 	public function env(name: String, value: String): Command {
 		final env: DynamicAccess<String> = Reflect.copy(_env) ?? {};
 		env[name] = value;
-		return new Command(argv, _cwd, env, _timeout, _input, _upstream);
+		return new Command(argv, _cwd, env, _timeout, _input, _upstream, _tethered);
 	}
 
 	/** This command killed after `ms` milliseconds, which then answers a `failure`; 0 is no limit. */
 	public function timeout(ms: Int): Command {
-		return new Command(argv, _cwd, _env, ms, _input, _upstream);
+		return new Command(argv, _cwd, _env, ms, _input, _upstream, _tethered);
+	}
+
+	/**
+	 * This command run under a tether to the process driver that starts it (`SpawnJob.tethered`): it and everything it
+	 * starts end with the driver however the driver goes, so a run killed outright leaves no such command behind. A
+	 * tethered command always runs through the driver, as a `Pool` job. Its standard input is the tether, so it reads
+	 * no `input` and no pipe: either is refused.
+	 */
+	public function tethered(): Command {
+		if (_input != null || _upstream != null)
+			throw new Exception('`${toString()}` reads an input, and a tethered command reads its tether');
+		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, true);
 	}
 
 	/** This command with `text` as its standard input. */
 	public function input(text: String): Command {
 		if (_upstream != null) throw new Exception('`${toString()}` already reads a pipe');
-		return new Command(argv, _cwd, _env, _timeout, text, _upstream);
+		if (_tethered) throw new Exception('`${toString()}` is tethered, and a tethered command reads its tether');
+		return new Command(argv, _cwd, _env, _timeout, text, _upstream, _tethered);
 	}
 
 	/**
@@ -83,7 +99,8 @@ final class Command {
 	 */
 	public function pipe(next: Command): Command {
 		if (next._input != null || next._upstream != null) throw new Exception('`$next` already has an input');
-		return new Command(next.argv, next._cwd, next._env, next._timeout, null, this);
+		if (next._tethered) throw new Exception('`$next` is tethered, and a tethered command reads its tether');
+		return new Command(next.argv, next._cwd, next._env, next._timeout, null, this, next._tethered);
 	}
 
 	/** Run the command (every stage of a pipeline) to its end. Never throws for the command's own sake: see `Result`. */
@@ -124,24 +141,25 @@ final class Command {
 			timeout: _timeout
 		};
 		if (stdin != null) job.stdin = stdin;
+		if (_tethered) job.tethered = true;
 		return job;
 	}
 
 	/** One process: this command with `input` (when given) on its standard input. */
 	private function spawn(input: Null<String>): Result {
 		return input == null
-			? new Result(toString(), HaxeSpawn.exec(job(null), MAX_BUFFER))
+			? new Result(toString(), one(job(null)))
 			: TempDir.with(dir -> {
 				final file: String = dir.file('stdin');
 				sys.io.File.saveContent(file, input);
-				return new Result(toString(), HaxeSpawn.exec(job(file), MAX_BUFFER));
+				return new Result(toString(), one(job(file)));
 			});
 	}
 
 	/** The command running `argv[0]` over the rest of `argv`. */
 	public static function of(argv: Array<String>): Command {
 		if (argv.length == 0) throw new Exception('a command needs a program to run');
-		return new Command(argv.copy(), null, {}, 0, null, null);
+		return new Command(argv.copy(), null, {}, 0, null, null, false);
 	}
 
 	/** One argument of a `Cmd.cmd` template: `value` as text; a null `value` (`source` in the template) throws. */
@@ -159,6 +177,11 @@ final class Command {
 	/** `parts` laid end to end: the argument vector of a template, one array per template word. */
 	public static function flat(parts: Array<Array<String>>): Array<String> {
 		return [for (part in parts) for (item in part) item];
+	}
+
+	/** One job run to its end: in this process, or through the process driver when it is tethered. */
+	private static function one(job: SpawnJob): HaxeRun {
+		return job.tethered == true ? HaxeSpawn.runAll([job], MAX_BUFFER, 1)[0] : HaxeSpawn.exec(job, MAX_BUFFER);
 	}
 
 	/** `arg` as it would have to be written in a POSIX shell. */

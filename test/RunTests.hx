@@ -21,6 +21,12 @@ import utest.Runner;
 class RunTests {
 
 	public static function main(): Void {
+		// utest's report ends the process with `process.exit` right after printing, and where a pipe is written
+		// asynchronously (macOS) that drops whatever the pipe had not taken yet: a reader through a pipe got a failure
+		// list cut off mid-name. Blocking writes make a piped transcript as whole as one redirected to a file.
+		js.Syntax.code(
+			'for (const s of [process.stdout, process.stderr]) if (s._handle && s._handle.setBlocking) s._handle.setBlocking(true)'
+		);
 		// before the private temp root: a child shares its parent test's scratch, where the fixtures live
 		if (testkit.TestChild.run()) return;
 		if (listing()) return;
@@ -44,7 +50,7 @@ class RunTests {
 		// A token `<class>#<i>/<k>` runs one slice of a class's tests (`ShardFilter`):
 		// `dev shard` deals a class heavier than a shard as several. A token
 		// `test:<text>` runs the tests whose `<class>.<method>` contains `<text>`
-		// (`tools/mutation-check.sh --killer-first`).
+		// (`dev mutation-check --killer-first`).
 		final filterEnv: Null<String> = Sys.getEnv('APQ_TEST');
 		final filters: Array<ShardToken> = filterEnv == null ? [] : [
 			for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') ShardFilter.parse(StringTools.trim(f))

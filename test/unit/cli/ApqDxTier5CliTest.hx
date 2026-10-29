@@ -251,8 +251,8 @@ class ApqDxTier5CliTest extends Test {
 	 *
 	 * `guard`, not `control`, and the reason is worth knowing before you write
 	 * another child-process fixture: NO source cut can kill this one.
-	 * `mutation-check.sh` builds the arm's worktree with `worker-build.sh <dir>
-	 * test` — the test runner only — and `bin/` is gitignored, so the fresh
+	 * `dev mutation-check` builds the arm's slot with `haxe test-js-common.hxml`
+	 * — the test runner only — and `bin/` is gitignored, so the fresh
 	 * worktree has no `bin/apq.js` at all and this method takes its not-built
 	 * branch. Under `M-PROBE-SLOT-CONST` the three IN-PROCESS probe
 	 * fixtures go red and this pair stays green. Those three kill the arm; this

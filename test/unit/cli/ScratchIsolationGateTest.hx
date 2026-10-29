@@ -10,7 +10,7 @@ import sys.FileSystem;
  * The suite process writes its fixtures inside a PRIVATE scratch root, never the ambient one.
  *
  * `RunTests.main` calls `CliFixture.isolateTempDir()` before it registers a single fixture, and
- * that call is the whole of what keeps two concurrent suite processes — a `mutation-arm.sh`
+ * that call is the whole of what keeps two concurrent suite processes — a `dev mutation-arm`
  * sweep, a `dev shard` shard set, a second worker on the same machine — from generating the
  * same fixture directory name and deleting each other's files mid-test. Nothing checked
  * it: delete the call and this suite stays green, because the damage lands in ANOTHER process's

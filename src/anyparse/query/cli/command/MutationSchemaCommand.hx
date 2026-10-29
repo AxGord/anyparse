@@ -7,7 +7,7 @@ import anyparse.query.MutationSchema.SchemaFile;
 /**
  * `apq mutation-schema` — compose declared arms into one build behind a run-time switch, for mutation-arm.
  *
- * A WRITE command over a scratch tree: `tools/mutation-arm.sh` runs it inside a worktree of its own.
+ * A WRITE command over a scratch tree: `dev mutation-arm` runs it inside a worktree of its own.
  */
 @:nullSafety(Strict)
 final class MutationSchemaCommand implements CliCommand {
@@ -39,7 +39,7 @@ final class MutationSchemaCommand implements CliCommand {
 		CliIo.sysPrint('Usage: apq mutation-schema <plan>\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Compose declared mutation arms into ONE build behind a run-time switch\n');
-		CliIo.sysPrint('(tools/mutation-arm.sh). Each plan row is\n');
+		CliIo.sysPrint('(dev mutation-arm). Each plan row is\n');
 		CliIo.sysPrint('  <id> TAB <file> TAB <selector> TAB <mutated-file>\n');
 		CliIo.sysPrint('where <mutated-file> is <file> with the arm cut applied. Every file named is\n');
 		CliIo.sysPrint('rewritten IN PLACE, relative to the working directory: the arm method is\n');

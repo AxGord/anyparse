@@ -35,7 +35,7 @@ typedef ArmSite = {
 
 /**
  * Every declared arm still ADDRESSES a live member — asked of the parser, of
- * the very file `tools/mutation-arm.sh` patches.
+ * the very file `dev mutation-arm` patches.
  *
  * `testkit.TestDiscovery` asks the same question of the TYPER, and for most
  * arms that is the earlier and better answer: it is a build error, so a rename
@@ -219,7 +219,7 @@ final class MutationArmAddressTest extends Test {
 	 * The walk above covers the FRAGMENT half. The other third of the registry declares
 	 * `force` instead, and nothing checked those at all: that walk skips an arm with no
 	 * fragment, and the build macro only asks the typer that the member exists. Their one
-	 * applicability test lived inside `tools/mutation-arm.sh`, so it ran when the ARM ran —
+	 * applicability test lived inside `dev mutation-arm`, so it ran when the ARM ran —
 	 * the same "only a run can tell you" that has cost a whole green slice on a rotted
 	 * fragment, in the half that had no walk yet.
 	 *

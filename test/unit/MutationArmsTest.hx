@@ -170,8 +170,8 @@ final class MutationArmsTest extends Test {
 	/**
 	 * A dotted type becomes the files the runner tries, one per classpath root, in classpath order.
 	 *
-	 * `tools/mutation-arm.sh` resolves an arm's `type` to a file by hand — `for root in src test tools/src`,
-	 * first hit wins — and `unit.MutationArmAddressTest` parses whichever one
+	 * `dev mutation-arm` resolves an arm's `type` to a file — `src`, `test`, `tools/src`
+	 * in turn, first hit wins — and `unit.MutationArmAddressTest` parses whichever one
 	 * exists. This is the pure half of that, asked of a type name written here rather
 	 * than of the real registry, so `M-ARM-PATH-FLAT` has a second instance to break.
 	 */

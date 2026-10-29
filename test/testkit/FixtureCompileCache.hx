@@ -11,7 +11,7 @@ import js.node.Zlib;
 import js.node.fs.Stats;
 
 /**
- * A content-addressed REPLAY of the fixture compiles the reach probes run, for `tools/mutation-check.sh`.
+ * A content-addressed REPLAY of the fixture compiles the reach probes run, for `dev mutation-check`.
  *
  * A mutation track that pins `unit.query.MemberReachFactsTest` spent 63 of its 66 seconds in ~290 `haxe` compiles of
  * tiny fixtures (`TypedFactsProbe`, `ReachDefinesProbe`), and every track of a sweep compiled the SAME fixtures: a
@@ -37,7 +37,7 @@ import js.node.fs.Stats;
  * - **What the compile wrote is a diff of the roots**, taken around the real run; a file outside the roots cannot be
  *   written by a whitelisted compile, because no whitelisted path leads there.
  *
- * `tools/mutation-check.sh` and `dev shard` share one store kept across runs, renewing
+ * `dev mutation-check` and `dev shard` share one store kept across runs, renewing
  * an entry on every hit and dropping one unused for a week (`tools/fixture-cache.sh`). A cache that outlives a run
  * outlives the compiler install it recorded, so that runner's stamp names the binary by path, version, size and mtime.
  */

@@ -39,7 +39,7 @@ final class MutationVerdictCommand implements CliCommand implements LanguageFree
 
 	#if (sys || nodejs)
 	/**
-	 * `apq mutation-verdict <log>... [--expect <csv>]` — classify one utest transcript for `tools/mutation-check.sh`
+	 * `apq mutation-verdict <log>... [--expect <csv>]` — classify one utest transcript for `dev mutation-check`
 	 * (several are the slices of one run, read as their union — `MutationVerdict.merge`), printing the verdict on the
 	 * first line and the row detail on the second — plus a THIRD line, the same
 	 * detail with every list uncapped, but only when `cap` (MutationVerdict) actually
@@ -114,7 +114,7 @@ final class MutationVerdictCommand implements CliCommand implements LanguageFree
 		final expected: Array<String> = [
 			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
 		];
-		// several transcripts are the slices of one run (`tools/mutation-check.sh`'s fallback), read as their union
+		// several transcripts are the slices of one run (`dev mutation-check`'s fallback), read as their union
 		final verdict: MutationVerdictResult = MutationVerdict.classify(
 			raws.length == 1 ? TestTranscript.parseTestSummary(raw) : MutationVerdict.merge(raws.map(TestTranscript.parseTestSummary)),
 			expected
@@ -132,7 +132,7 @@ final class MutationVerdictCommand implements CliCommand implements LanguageFree
 		CliIo.sysPrint('Usage: apq mutation-verdict <transcript>... [--expect <csv>]\n');
 		CliIo.sysPrint('       apq mutation-verdict <haxe-build-log> --build\n');
 		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Classify one utest stdout transcript for tools/mutation-check.sh.\n');
+		CliIo.sysPrint('Classify one utest stdout transcript for dev mutation-check.\n');
 		CliIo.sysPrint('Prints the verdict on line 1 and the report-row detail on line 2:\n');
 		CliIo.sysPrint('  KILLED    the run went red and every expectation matched something\n');
 		CliIo.sysPrint('  SURVIVED  the run was GREEN by utest own predicate (warnings count as red)\n');

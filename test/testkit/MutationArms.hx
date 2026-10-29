@@ -102,7 +102,7 @@ final class MutationArms {
 	private static final SOURCE_ROOTS: Array<String> = ['src', 'test', 'tools/src'];
 
 	/**
-	 * The files `tools/mutation-arm.sh` would try for an arm's `type`, in classpath order.
+	 * The files `dev mutation-arm` would try for an arm's `type`, in classpath order.
 	 *
 	 * The script resolves a type to a file by hand (`for root in src test tools/src`) and every
 	 * arm's cut is applied to whichever candidate exists. Nothing checked that the

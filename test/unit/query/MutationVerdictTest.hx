@@ -6,7 +6,7 @@ import anyparse.query.cli.TestTranscript;
 using StringTools;
 
 /**
- * Unit cover for `apq mutation-verdict` — the classifier `tools/mutation-check.sh`
+ * Unit cover for `apq mutation-verdict` — the classifier `dev mutation-check`
  * used to carry as a second, untestable awk copy.
  *
  * Every case drives a hand-written utest transcript through the REAL
