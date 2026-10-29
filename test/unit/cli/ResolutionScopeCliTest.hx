@@ -3,9 +3,11 @@ package unit.cli;
 #if (sys || nodejs)
 import sys.io.File;
 #end
+import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.Cli;
 import anyparse.query.HaxelibResolver;
 import anyparse.query.StdResolver;
+import anyparse.query.cli.command.LintCommand;
 
 using StringTools;
 
@@ -424,6 +426,28 @@ class ResolutionScopeCliTest extends Test {
 			StdResolver.discoveries - stdBefore <= 1, 'the std probe is memoised — one `which haxe` at most for the whole process'
 		);
 		CliFixture.removeDir(proj);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The scope keeps what the project DECLARED apart from the std that joins it by itself: the declared half holds the
+	 * root alone, while the whole library holds the std as well.
+	 */
+	@:pin('control') @:killer('M-LINT-STD-IN-DECLARED')
+	public function testTheDeclaredLibraryLeavesTheStdOut(): Void {
+		#if (sys || nodejs)
+		if (StdResolver.stdDir() == null) {
+			Assert.pass('no installed Haxe std — the declared/std split skipped');
+			return;
+		}
+		final root: String = CliFixture.writeDir('resdeclared', [{ name: 'B.hx', source: 'package other;\nclass B {}\n' }]);
+		final sources: Null<ResolutionSources> = LintCommand.resolutionThunk([], [root], [], true)?.sources();
+		CliFixture.removeDir(root);
+		final declared: Int = (sources?.declaredLibrary?.entries() ?? []).length;
+		Assert.equals(1, declared, 'the declared half is the root and nothing else');
+		Assert.isTrue((sources?.library.entries() ?? []).length > declared, 'the whole library carries the std too');
 		#else
 		Assert.pass('non-sys target');
 		#end

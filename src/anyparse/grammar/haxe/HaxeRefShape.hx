@@ -1179,6 +1179,23 @@ final class HaxeRefShape {
 		// declares — `exists(k:K):Bool`, `remove(k:K):Bool` — fixed on every target. `get` is
 		// absent on purpose: its `Null<V>` depends on the type argument.
 		table.instanceMethodReturns = ['Map.exists' => 'Bool', 'Map.remove' => 'Bool'];
+		// What sees whether an object HAS a field, not only its value: the field lists
+		// and copies, `Json` and the `JsonPrinter` it delegates to, `Serializer` (a bare
+		// `serialize` is the instance method on any receiver), `Std.string` printing an object, and a member read or test by
+		// a name the call computes — each of which may tell a missing field from a null one.
+		table.objectEnumeratingCalls = [
+			'Reflect.fields' => -1,
+			'Type.getInstanceFields' => -1,
+			'Json.stringify' => -1,
+			'JsonPrinter.print' => -1,
+			'Reflect.copy' => -1,
+			'Serializer.run' => -1,
+			'serialize' => -1,
+			'Std.string' => -1,
+			'Reflect.field' => 1,
+			'Reflect.getProperty' => 1,
+			'Reflect.hasField' => 1
+		];
 		table.nullableIndexTypeNames = ['Map', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'WeakMap'];
 		table.mapAbstractTypeNames = ['Map'];
 		table.nullableInstanceReturnCalls = [

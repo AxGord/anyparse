@@ -130,7 +130,8 @@ class BuildMacroMetaSeamTest extends Test {
 		'src/anyparse/check/TrivialGetter.hx' => ['@:isVar'],
 		'src/anyparse/check/BackingFieldRefs.hx' => ['@:bypassAccessor'],
 		'src/anyparse/check/RedundantBypassAccessor.hx' => ['@:bypassAccessor'],
-		'src/anyparse/check/RedundantIsVar.hx' => ['@:isVar', '@:bypassAccessor'],
+		'src/anyparse/check/RedundantIsVar.hx' => ['@:isVar'],
+		'src/anyparse/check/scan/PropertyStorage.hx' => ['@:bypassAccessor'],
 		'src/anyparse/check/scan/NativeCodeScan.hx' => [
 			'@:functionCode',
 			'@:functionTailCode',

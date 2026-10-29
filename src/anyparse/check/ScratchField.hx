@@ -4,6 +4,7 @@ import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.PropertyStorage;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.check.scan.RunScan;
 import anyparse.query.BinderScan;
@@ -27,7 +28,7 @@ using Lambda;
  * it sits in that method, and every read there follows a write of the same call — and turns it into
  * a local of that method. `Info`, with an autofix: the field is deleted and the first write becomes the
  * declaration (`final` when it is the only write, else `var`), keeping the field's declared type; the
- * local drops the field's leading underscores when nothing the method mentions takes that name.
+ * local drops the field's leading underscores when no member of the type and nothing the method mentions takes that name.
  *
  * ## What is reported — every gate a positive proof
  *
@@ -46,9 +47,9 @@ using Lambda;
  *   earlier call left. Pessimistic: a branch assigns only when both arms do, a loop, `switch` or `try`
  *   leaves the state as it found it, and a read in a loop body after a write of the same iteration is
  *   dominated. This one fails in `run`; the finding then says so.
- * - A DECLARATION SLOT: the first write is a statement `name = value;` of a block holding every
- *   occurrence after it, so the local declared there is in scope at each of them.
- * - A TYPE: the field declares one, which the local keeps.
+ * - NOT THE SETTER OF A PROPERTY IT NEVER STORES (`PropertyStorage.unstoredBy`): the field is likely what it forgot to store.
+ * - A DECLARATION SLOT and A TYPE: the first write is a statement `name = value;` of a block holding every occurrence
+ *   after it, so the local declared there is in scope at each of them; the field declares the type the local keeps.
  * - A DROPPABLE INITIALIZER: none, a side-effect-free one, or a construction of a class whose
  *   constructor only assigns its own fields side-effect-free values (`trivialConstruction`).
  * - A LIFETIME the field did not carry: no method is CALLED on an object value, which may start work
@@ -124,7 +125,9 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 					severity: Severity.Info,
 					message: c.plan == null && c.decline == DECLINE_NOT_DOMINATED
 						? '$where, but a read there can see what an earlier call left in it'
-						: '$where, written before every read there — it can be a local of that method',
+						: c.plan == null && c.decline != DECLINE_NO_SLOT
+							? '$where, written before every read there — but ${c.decline}'
+							: '$where, written before every read there — it can be a local of that method',
 					declineReason: c.plan == null ? c.decline : null
 				});
 			}
@@ -281,6 +284,12 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			retained: found.retained
 		};
 		if (!walk.dominated) return candidate;
+		// the method holds the field's occurrences, so it has a body: no bodiless kind to tell apart
+		final unstored: Null<String> = PropertyStorage.unstoredBy(found.method, container, source, s.mutableFieldKinds, null)?.name;
+		if (unstored != null) {
+			candidate.decline = declineUnstored(found.methodName, unstored);
+			return candidate;
+		}
 		candidate.plan = planOf(candidate, found.body, source, walk.writes);
 		if (candidate.plan == null) candidate.decline = DECLINE_NO_SLOT;
 		return candidate;
@@ -401,7 +410,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			declStmt: found.stmt,
 			declTarget: first,
 			declValue: found.assign.children[1],
-			localName: localNameOf(c.name, c.refs, source, methodSpan, s),
+			localName: localNameOf(c.name, c.refs, c.container, source, methodSpan, s),
 			writes: writes
 		};
 	}
@@ -409,13 +418,15 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	/**
 	 * The local's name: the field's without its leading underscores, when that is an identifier the
 	 * method's text does not mention, no `$name` interpolation would need re-spelling, and it is no
-	 * reserved word — else the field's own name.
+	 * reserved word nor the name of a member of the type, which the local would shadow — else the field's own name.
 	 */
-	private static function localNameOf(name: String, refs: Array<QueryNode>, source: String, method: Span, s: Seams): String {
+	private static function localNameOf(
+		name: String, refs: Array<QueryNode>, container: QueryNode, source: String, method: Span, s: Seams
+	): String {
 		var bare: String = name;
 		while (bare.length > 1 && bare.charAt(0) == '_') bare = bare.substr(1);
 		final usable: Bool = bare != name && ~/^[a-z][A-Za-z0-9_]*$/.match(bare) && !s.reservedWords.contains(bare)
-			&& !refs.exists(r -> r.kind == s.interpIdentKind)
+			&& !refs.exists(r -> r.kind == s.interpIdentKind) && !container.children.exists(m -> m.name == bare)
 			&& !OccurrenceScan.referencedInRange(source, bare, method.from, method.to, []);
 		return usable ? bare : name;
 	}
@@ -617,6 +628,15 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			return (throughSelf && fields.contains(name) || bare && (fields.contains(name) || params.contains(name)))
 				&& MemberKinds.isSideEffectFree(assign.children[1], shape);
 		});
+	}
+
+	/**
+	 * Why the fix keeps a field that `method` (the set accessor of `property`) stores instead of the property it
+	 * never stores: that field is the evidence of a value the setter meant to keep, which a local would erase.
+	 */
+	private static function declineUnstored(method: String, property: String): String {
+		return
+			'`$method` never stores property `$property`, so this field may be the value it meant to keep there, which a local would hide';
 	}
 
 }

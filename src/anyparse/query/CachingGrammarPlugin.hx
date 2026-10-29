@@ -297,6 +297,11 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return roots.length == 0 ? null : sources.report.concat(roots);
 	}
 
+	/** The declared half of the injected library (`ResolutionSources.declaredLibrary`), or null with no scope. */
+	public function declaredLibrary(): Null<LibrarySources> {
+		return scopeSources()?.declaredLibrary;
+	}
+
 	/** `SymbolIndexHost`: the report UNION the project roots, when the roots matched. */
 	public function completeProjectFiles(): Null<Array<{ file: String, source: String }>> {
 		final sources: Null<ResolutionSources> = scopeSources();
@@ -963,6 +968,12 @@ typedef ResolutionSources = {
 	final report: Array<{ file: String, source: String }>;
 	final projectRoots: Array<{ file: String, source: String }>;
 	final library: LibrarySources;
+
+	/**
+	 * The read-only sources the project DECLARED — its `resolutionRoots` and `resolutionLibs` — without the std that joins
+	 * the library by itself: the code the project wrote or chose, as opposed to the std it calls into. Absent reads as none.
+	 */
+	@:optional final declaredLibrary: LibrarySources;
 
 	/**
 	 * Whether the declared `resolutionRoots` MATCHED at least one `.hx`, report files included. Not

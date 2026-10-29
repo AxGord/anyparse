@@ -1,5 +1,6 @@
 package anyparse.check.scan;
 
+import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
@@ -127,19 +128,9 @@ final class ReflectionScan {
 		// per (scope x scope) pair, and a declared `resolutionLibs` puts thousands of paths in the scope,
 		// while this whole function is a sliver of a run either way (V8 compares paths drawn from one
 		// array by pointer). The widening's cost sits in `NamingRenames.reflectionNamesInOtherFiles`' pre-filter,
-		// not in this union. `Bool` values are the flag a Haxe set has to carry.
-		final out: Array<ScopeFile> = [];
-		final seen: Map<String, Bool> = [];
-		inline function take(entry: ScopeFile): Void {
-			if (!seen.exists(entry.file)) {
-				seen[entry.file] = true;
-				out.push(entry);
-			}
-		}
-		for (entry in files) take(entry);
+		// not in this union.
 		final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);
-		if (resolution != null) for (entry in resolution) take(entry);
-		return out;
+		return unionByPath(files, resolution);
 	}
 
 	/**
@@ -220,6 +211,27 @@ final class ReflectionScan {
 	}
 
 	/**
+	 * Whether the code the project runs — the report, its `resolutionRoots` and `resolutionLibs`, the std left out — may list,
+	 * test or render the fields of an object at run time: a call the grammar names in `RefShape.objectEnumeratingCalls` whose
+	 * member-name argument, where it declares one, is no plain literal, or a file the parser cannot read. Such code sees a
+	 * field's PRESENCE, which removing a field's storage changes even when every value read stays the same. The std, which
+	 * spells those calls itself, enumerates only when the project calls one of the listed entry points. A grammar declaring
+	 * no such calls proves nothing.
+	 */
+	public static function enumeratesObjects(files: Array<ScopeFile>, plugin: GrammarPlugin): Bool {
+		final shape: RefShape = plugin.refShape();
+		final calls: Null<Map<String, Int>> = shape.objectEnumeratingCalls;
+		if (calls == null) return true;
+		final invocations: Array<String> = MemberKinds.invocationKinds(shape);
+		final fold: Null<StringFoldSupport> = plugin.stringFoldSupport();
+		for (entry in unionByPath(files, RefactorSupport.declaredLibraryOf(plugin)?.entries())) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
+			if (tree == null || enumeratingCallIn(tree, entry.source, calls, invocations, fold)) return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Collect into `out` the plain-literal content and the interpolation fragments that `node` and its
 	 * descendants carry. A node the fold answers for is a PLAIN literal and contributes its content;
 	 * one whose kind is a string-EXPRESSION host contributes each static `Literal` child instead.
@@ -235,6 +247,45 @@ final class ReflectionScan {
 					out.fragments.push(fragment);
 			}
 		for (child in node.children) collect(child, source, fold, out);
+	}
+
+	/** Whether `node`'s subtree holds a call `enumeratesObjects` counts. */
+	private static function enumeratingCallIn(
+		node: QueryNode, source: String, calls: Map<String, Int>, invocations: Array<String>, fold: Null<StringFoldSupport>
+	): Bool {
+		final calleeSpan: Null<Span> = invocations.contains(node.kind) && node.children.length > 0 ? node.children[0].span : null;
+		if (calleeSpan != null) {
+			final callee: String = ~/\s+/g.replace(source.substring(calleeSpan.from, calleeSpan.to), '');
+			for (spelling => nameArg in calls) if (
+				(callee == spelling || callee.endsWith('.$spelling')) && !literalNameArg(node, nameArg, source, fold)
+			)
+				return true;
+		}
+		return node.children.exists(c -> enumeratingCallIn(c, source, calls, invocations, fold));
+	}
+
+	/**
+	 * Whether the call `node` names one member by a plain literal at argument `nameArg` — then it enumerates nothing.
+	 */
+	private static function literalNameArg(node: QueryNode, nameArg: Int, source: String, fold: Null<StringFoldSupport>): Bool {
+		return fold != null && nameArg >= 0 && nameArg + 1 < node.children.length
+			&& fold.literalOf(node.children[nameArg + 1], source) != null;
+	}
+
+	/** `files` followed by each `extra` file whose path they do not already hold — once per PATH, deduped through a map. */
+	private static function unionByPath(files: Array<ScopeFile>, extra: Null<Array<ScopeFile>>): Array<ScopeFile> {
+		// `Bool` values are the flag a Haxe set has to carry.
+		final out: Array<ScopeFile> = [];
+		final seen: Map<String, Bool> = [];
+		inline function take(entry: ScopeFile): Void {
+			if (!seen.exists(entry.file)) {
+				seen[entry.file] = true;
+				out.push(entry);
+			}
+		}
+		for (entry in files) take(entry);
+		if (extra != null) for (entry in extra) take(entry);
+		return out;
 	}
 
 }

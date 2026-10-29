@@ -258,7 +258,7 @@ class RedundantImportCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('redundant-import');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, RiskyFix), 'redundant-import deletions are oracle-verified');
-		Assert.equals(196, Linter.builtins().length);
+		Assert.equals(197, Linter.builtins().length);
 	}
 
 	// --- helpers -------------------------------------------------------------------

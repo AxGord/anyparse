@@ -18,6 +18,10 @@ using StringTools;
  */
 class ScratchFieldCheckTest extends Test {
 
+	/** The classes every fixture uses: a value class with a trivial constructor, one without, and a method to call. */
+	private static final SUPPORT: String = 'class P {\n\tpublic var x:Float;\n\n\tpublic function new(x:Float) {\n\t\tthis.x = x;\n\t}\n\n'
+		+ '\tpublic function go():Void {}\n}\n\nclass N {\n\tpublic var v:Int = 0;\n\n\tpublic function new() {\n\t\ttrace(v);\n\t}\n}';
+
 	/** A plain scratch value: the field goes, its first write declares the local, every use is renamed. */
 	@:pin('control') @:killer('M-SCRATCH-SILENT')
 	public function testAScratchFieldBecomesALocal(): Void {
@@ -309,45 +313,6 @@ class ScratchFieldCheckTest extends Test {
 		Assert.notNull(Linter.byId('scratch-field'));
 	}
 
-	/** The classes every fixture uses: a value class with a trivial constructor, one without, and a method to call. */
-	private static final SUPPORT: String = 'class P {\n\tpublic var x:Float;\n\n\tpublic function new(x:Float) {\n\t\tthis.x = x;\n\t}\n\n'
-		+ '\tpublic function go():Void {}\n}\n\nclass N {\n\tpublic var v:Int = 0;\n\n\tpublic function new() {\n\t\ttrace(v);\n\t}\n}';
-
-	private function violations(src: String): Array<Violation> {
-		return CheckFixture.violations(new ScratchField(), src);
-	}
-
-	/** `src` after the fix of a check that runs without an oracle. */
-	private function fixed(src: String): String {
-		return fixedWith(new ScratchField(), src);
-	}
-
-	/** `src` after `check`'s fix of its own findings. */
-	private function fixedWith(check: ScratchField, src: String): String {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
-		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
-		return CanonicalEdit.applyEdits(src, edits);
-	}
-
-	/** Exactly one finding, its fix declined for a reason that says `why`, and the source left alone. */
-	private function assertDeclinedAs(src: String, why: String): Void {
-		final check: ScratchField = new ScratchField();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
-		Assert.equals(1, vs.length);
-		if (vs.length != 1) return;
-		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
-		Assert.equals(0, edits.length);
-		final reason: String = vs[0].declineReason ?? '';
-		Assert.isTrue(reason.indexOf(why) >= 0, reason);
-	}
-
-	/** A class `C` declaring `field` and `method`, followed by the support classes. */
-	private static function scratch(field: String, method: String): String {
-		return 'class C {\n\t$field\n\n\tpublic function new() {}\n\n\t$method\n}\n\n$SUPPORT';
-	}
-
 	/**
 	 * A named function expression and an `inline` local function run when they are called, not where they are written,
 	 * like a lambda (`ShapeVocab.nestedFunctionKinds`): an occurrence inside one is no read the write before it dominates.
@@ -383,6 +348,75 @@ class ScratchFieldCheckTest extends Test {
 				)).length,
 				nested
 			);
+	}
+
+	/**
+	 * The set accessor of a property whose plain reads return its field, which it never stores: its scratch field is
+	 * most likely the value it forgot to store there, so the finding says so and the fix keeps the field.
+	 */
+	@:pin('control') @:killer('M-SCRATCH-UNSTORED-BLIND')
+	public function testASetterThatNeverStoresItsPropertyKeepsItsField(): Void {
+		final src: String = scratch(
+			'public var label(default, set):String;\n\tprivate var _label:String;',
+			'function set_label(value:String):String {\n\t\t_label = value;\n\t\ttrace(value);\n\t\treturn _label;\n\t}'
+		);
+		assertDeclinedAs(src, '`set_label` never stores property `label`');
+		Assert.equals(src, fixed(src));
+	}
+
+	/** A setter that stores its property is an ordinary method: its scratch field still becomes a local. */
+	@:pin('control') @:killer('M-PROPSTORE-MENTION-BLIND')
+	public function testASetterThatStoresItsPropertyStillFixes(): Void {
+		final out: String = fixed(scratch(
+			'public var label(default, set):String;\n\tprivate var _label:String;',
+			'function set_label(value:String):String {\n\t\t_label = value.trim();\n\t\tlabel = _label;\n\t\treturn _label;\n\t}'
+		));
+		Assert.isTrue(out.indexOf('private var _label') < 0, out);
+		Assert.isTrue(out.indexOf('final _label:String = value.trim();') >= 0, out);
+	}
+
+	/** The stripped name is not taken when a member of the type holds it, even unmentioned: the local would shadow it. */
+	@:pin('control') @:killer('M-SCRATCH-MEMBER-NAME-TAKEN')
+	public function testAMemberNameIsNotTakenByTheLocal(): Void {
+		final out: String = fixed(scratch(
+			'public var size:Int = 0;\n\tprivate var _size:Int;', 'function f(n:Int):Int {\n\t\t_size = n * 2;\n\t\treturn _size;\n\t}'
+		));
+		Assert.isTrue(out.indexOf('final _size:Int = n * 2;') >= 0, out);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return CheckFixture.violations(new ScratchField(), src);
+	}
+
+	/** `src` after the fix of a check that runs without an oracle. */
+	private function fixed(src: String): String {
+		return fixedWith(new ScratchField(), src);
+	}
+
+	/** `src` after `check`'s fix of its own findings. */
+	private function fixedWith(check: ScratchField, src: String): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
+		return CanonicalEdit.applyEdits(src, edits);
+	}
+
+	/** Exactly one finding, its fix declined for a reason that says `why`, and the source left alone. */
+	private function assertDeclinedAs(src: String, why: String): Void {
+		final check: ScratchField = new ScratchField();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
+		Assert.equals(0, edits.length);
+		final reason: String = vs[0].declineReason ?? '';
+		Assert.isTrue(reason.indexOf(why) >= 0, reason);
+	}
+
+	/** A class `C` declaring `field` and `method`, followed by the support classes. */
+	private static function scratch(field: String, method: String): String {
+		return 'class C {\n\t$field\n\n\tpublic function new() {}\n\n\t$method\n}\n\n$SUPPORT';
 	}
 
 }

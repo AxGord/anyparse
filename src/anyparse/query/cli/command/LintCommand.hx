@@ -736,6 +736,7 @@ final class LintCommand implements CliCommand {
 		final reportPaths: Map<String, Bool> = [for (f in files) realPath(f.file) => true];
 		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
+		var declaredLibrary: Null<Array<{ file: String, source: String }>> = null;
 		var rootsMatched: Bool = false;
 		var rootsAllMatched: Bool = false;
 		return {
@@ -756,7 +757,12 @@ final class LintCommand implements CliCommand {
 					// The library half stays the WHOLE read-only scope — project roots included — so the
 					// process-scoped parse tier keeps promoting exactly what it did, and it stays ONE
 					// memoised array instance (`SharedParseTier.promote` keys on the instance).
-					library = rootFiles.concat(readResolutionLibrary(libNames, stdEnabled, reportPaths, rootFiles));
+					final libraryRead: {
+						declared: Array<{ file: String, source: String }>,
+						std: Array<{ file: String, source: String }>
+					} = readResolutionLibrary(libNames, stdEnabled, reportPaths, rootFiles);
+					declaredLibrary = rootFiles.concat(libraryRead.declared);
+					library = rootFiles.concat(libraryRead.declared).concat(libraryRead.std);
 				}
 				final rootFiles: Array<{ file: String, source: String }> = projectRoots ?? [];
 				final libFiles: Array<{ file: String, source: String }> = library ?? [];
@@ -764,6 +770,7 @@ final class LintCommand implements CliCommand {
 					report: files,
 					projectRoots: rootFiles,
 					library: new LibrarySources(libFiles),
+					declaredLibrary: new LibrarySources(declaredLibrary ?? []),
 					rootsMatched: rootsMatched,
 					rootsAllMatched: rootsAllMatched
 				};
@@ -854,7 +861,7 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function readResolutionLibrary(
 		libNames: Array<String>, stdEnabled: Bool, reportPaths: Map<String, Bool>, alreadyRead: Array<{ file: String, source: String }>
-	): Array<{ file: String, source: String }> {
+	): { declared: Array<{ file: String, source: String }>, std: Array<{ file: String, source: String }> } {
 		// Resolve the declared haxelib NAMES to source dirs ON FIRST DEMAND ONLY — the
 		// `haxelib libpath` spawn lives here, reached only through the thunk, never in its
 		// null-decision, so a run whose checks never build the index (e.g. `--rule
@@ -879,11 +886,17 @@ final class LintCommand implements CliCommand {
 		// declining it process-wide. Either way the scope stays exactly as declared.
 		// `StdResolver.stdDir` memoises, so the `which haxe` probe runs at most once per process
 		// whichever side reaches it first.
+		// The std is read as a half of its own, after the declared libraries and without what they already hold, so a consumer
+		// can ask the project's code apart from the std it calls into (`ResolutionSources.declared`).
 		final stdDir: Null<String> = stdEnabled ? StdResolver.stdDir() : null;
-		if (stdDir != null) for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) scanRoots.push(spec);
+		final stdSpecs: Array<String> = stdDir == null ? [] : [
+			for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) spec
+		];
 		final exclude: Map<String, Bool> = reportPaths.copy();
 		for (entry in alreadyRead) exclude[realPath(entry.file)] = true;
-		return readResolutionSources(scanRoots, exclude);
+		final declared: Array<{ file: String, source: String }> = readResolutionSources(scanRoots, exclude);
+		for (entry in declared) exclude[realPath(entry.file)] = true;
+		return { declared: declared, std: stdSpecs.length == 0 ? [] : readResolutionSources(stdSpecs, exclude) };
 	}
 
 	/** Read every `.hx` matched by `specs`, skipping any whose `realPath` is in `exclude` and any that cannot be read. */

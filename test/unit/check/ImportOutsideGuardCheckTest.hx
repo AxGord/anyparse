@@ -132,7 +132,7 @@ class ImportOutsideGuardCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('import-outside-guard');
 		Assert.notNull(check);
 		Assert.isFalse(Std.isOfType(check, DefaultOff), 'the rule reports a header nothing can read — no opt-in');
-		Assert.equals(196, Linter.builtins().length);
+		Assert.equals(197, Linter.builtins().length);
 	}
 
 	// --- helpers -------------------------------------------------------------------

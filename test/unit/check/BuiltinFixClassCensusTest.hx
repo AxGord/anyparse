@@ -52,7 +52,7 @@ class BuiltinFixClassCensusTest extends Test {
 	public function testTheBuiltinSetIsThisBig(): Void {
 		// Shrinkage IS the acceptance test: a new builtin changes this number, and the author
 		// then has to say which side of the verified/unverified split it joins.
-		Assert.equals(196, Linter.builtins().length);
+		Assert.equals(197, Linter.builtins().length);
 	}
 
 	public function testTheseAreTheRiskyFixRules(): Void {
@@ -76,6 +76,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'scratch-field',
 			'shorten-type-ref',
 			'typed-event-constant',
+			'unstored-property',
 			'unused-public-member'
 		], idsImplementing(c -> c is RiskyFix));
 	}

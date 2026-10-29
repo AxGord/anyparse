@@ -4464,7 +4464,7 @@
 		},
 		{
 			"name": "M-ISVAR-ACCESSOR-BODY-BLIND",
-			"type": "anyparse.check.RedundantIsVar",
+			"type": "anyparse.check.scan.PropertyStorage",
 			"method": "touchesStorage",
 			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
 			"replace": "(bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
@@ -4472,7 +4472,7 @@
 		},
 		{
 			"name": "M-ISVAR-BYPASS-BLIND",
-			"type": "anyparse.check.RedundantIsVar",
+			"type": "anyparse.check.scan.PropertyStorage",
 			"method": "touchesStorage",
 			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
 			"replace": "(accessor || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
@@ -4512,7 +4512,7 @@
 		},
 		{
 			"name": "M-ISVAR-OPAQUE-BLIND",
-			"type": "anyparse.check.RedundantIsVar",
+			"type": "anyparse.check.scan.PropertyStorage",
 			"method": "storageReachable",
 			"find": "if (CondRegionScan.opaqueCondRegionMentioning(tree, entry.source, name, ctx.shape) != null) return true;",
 			"replace": "",
@@ -4536,7 +4536,7 @@
 		},
 		{
 			"name": "M-ISVAR-NATIVE-BLIND",
-			"type": "anyparse.check.RedundantIsVar",
+			"type": "anyparse.check.scan.PropertyStorage",
 			"method": "touchesStorage",
 			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
 			"replace": "(accessor || bypass)",
@@ -31847,6 +31847,183 @@
 			"find": "case IfWidthExceeds(n, _, notFired) if (n > width): gluedSide(notFired, width);",
 			"replace": "case IfWidthExceeds(_, _, notFired): gluedSide(notFired, width);",
 			"note": "a collapse drops every lineLength threshold on the chain's flat side, so a rule below the limit that the collapsed inner chain reaches never fires and the chain stays one over-threshold line"
+		},
+		{
+			"name": "M-SCRATCH-UNSTORED-BLIND",
+			"type": "anyparse.check.ScratchField",
+			"method": "candidateOf",
+			"find": "if (unstored != null) {",
+			"replace": "if (unstored != null && false) {",
+			"note": "the setter of a property it never stores is fixed like any method, so the field holding the value it forgot to store becomes a local and the evidence is gone"
+		},
+		{
+			"name": "M-SCRATCH-MEMBER-NAME-TAKEN",
+			"type": "anyparse.check.ScratchField",
+			"method": "localNameOf",
+			"find": "&& !container.children.exists(m -> m.name == bare)",
+			"replace": "",
+			"note": "the stripped name is taken even when a member of the type holds it, so the local shadows that member in the method"
+		},
+		{
+			"name": "M-PROPSTORE-READS-BLIND",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "readAnywhere",
+			"force": "false",
+			"note": "no read is ever found, so a property something reads is offered a never read access, which breaks every read"
+		},
+		{
+			"name": "M-PROPSTORE-WRITE-TARGETS-OFF",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "plainWriteToken",
+			"force": "null",
+			"note": "a plain write counts as a read, so a property only ever written through its setter is never offered the never read access"
+		},
+		{
+			"name": "M-PROPSTORE-COMPOUND-AS-WRITE",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "plainWriteToken",
+			"find": "node.kind == shape.assignKind",
+			"replace": "true",
+			"note": "a compound assignment or an increment counts as a pure write, although it reads the property first"
+		},
+		{
+			"name": "M-PROPSTORE-MENTION-BLIND",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "unstoredBy",
+			"find": "&& !SourceText.mentionsIdent(source, methodSpan, name)",
+			"replace": "",
+			"note": "a setter is judged unstored without reading its body, so one that stores its property is reported"
+		},
+		{
+			"name": "M-UNSTORED-INIT-BLIND",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "considerSetter",
+			"find": "CtorFieldFold.declInitializer(property, shape) != null || ",
+			"replace": "",
+			"note": "a declaration initializer is not seen as a store, so a property whose field holds that value is reported as never stored"
+		},
+		{
+			"name": "M-UNSTORED-REFLECTION-BLIND",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "considerSetter",
+			"find": "ReflectionScan.runtimeName(reflection, name)",
+			"replace": "false",
+			"note": "a reflective string naming the property is ignored, although Reflect.setField writes its field by name"
+		},
+		{
+			"name": "M-UNSTORED-META-ADMITTED",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "carriesMetadata",
+			"force": "false",
+			"note": "metadata on the property is ignored, so the fix rewrites the read access of a property a macro or the runtime may reach"
+		},
+		{
+			"name": "M-UNSTORED-KEEP-ADMITTED",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "ownerDecline",
+			"find": "if (info.hasKeep)",
+			"replace": "if (false)",
+			"note": "a @:keep owner is fixed like any other, although its field may be reached by name"
+		},
+		{
+			"name": "M-UNSTORED-RTTI-ADMITTED",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "ownerDecline",
+			"find": "if (index.traits.transitivelyCarriesRtti(owner))",
+			"replace": "if (false)",
+			"note": "an @:rtti owner is fixed like any other, so the access its runtime type information describes changes"
+		},
+		{
+			"name": "M-UNSTORED-CHAIN-ADMITTED",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "ownerDecline",
+			"find": "index.subtypes.supertypeChainResolved(owner) ?",
+			"replace": "true ?",
+			"note": "an owner whose supertype chain does not resolve is fixed anyway, although an unseen supertype may declare the property with the access it must keep"
+		},
+		{
+			"name": "M-UNSTORED-EXTERN-ADMITTED",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "run",
+			"find": "declared != null && declared.isExtern",
+			"replace": "false",
+			"note": "an extern owner is judged like a class, although the native side stores its field where no text shows it"
+		},
+		{
+			"name": "M-PROPSTORE-BODILESS-ADMITTED",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "unstoredBy",
+			"find": "method.children[method.children.length - 1].kind == noBodyKind",
+			"replace": "false",
+			"note": "a setter declared without a body is read as one that stores nothing, so an abstract or extern accessor is reported"
+		},
+		{
+			"name": "M-UNSTORED-DYNAMIC-WRITE-BLIND",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "considerSetter",
+			"find": "if (writes.hasUnresolvedWrite(name, file)) return;",
+			"replace": "",
+			"note": "a write through Dynamic is not seen as a store, so the fix removes a field that write needs and the program fails at run time"
+		},
+		{
+			"name": "M-UNSTORED-ENUMERATION-ADMITTED",
+			"type": "anyparse.check.UnstoredProperty",
+			"method": "enumerates",
+			"force": "false",
+			"note": "code listing or rendering an object's fields is ignored, so the fix changes what it prints"
+		},
+		{
+			"name": "M-REFLECT-ENUM-BLIND",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "enumeratesObjects",
+			"force": "false",
+			"note": "no scope is ever seen enumerating an object, so a printing call no longer declines the fix"
+		},
+		{
+			"name": "M-REFLECT-ENUM-COMPUTED-BLIND",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "literalNameArg",
+			"force": "nameArg >= 0",
+			"note": "a member read by a computed name is taken for a literal one, so it no longer counts as enumerating"
+		},
+		{
+			"name": "M-REFLECT-ENUM-LITERAL-ENUMERATES",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "literalNameArg",
+			"force": "false",
+			"note": "a member read by a literal name counts as enumerating, so a read of another member declines the fix"
+		},
+		{
+			"name": "M-REFLECT-ENUM-STD-INCLUDED",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "enumeratesObjects",
+			"find": "RefactorSupport.declaredLibraryOf(plugin)?.entries()",
+			"replace": "RefactorSupport.resolutionSourcesOf(plugin)",
+			"note": "the std joins the enumeration scan, and since it spells every enumerating call itself the fix is declined in every real run"
+		},
+		{
+			"name": "M-LINT-STD-IN-DECLARED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "resolutionThunk",
+			"find": "declaredLibrary = rootFiles.concat(libraryRead.declared);",
+			"replace": "declaredLibrary = rootFiles.concat(libraryRead.declared).concat(libraryRead.std);",
+			"note": "the declared half of the scope carries the std too, so a scan of the project's own code reads the std"
+		},
+		{
+			"name": "M-HXSHAPE-JSONPRINTER-UNLISTED",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "'JsonPrinter.print' => -1,",
+			"replace": "",
+			"note": "a direct JsonPrinter.print call no longer counts as rendering an object, so the fix changes what it prints"
+		},
+		{
+			"name": "M-HXSHAPE-COPY-UNLISTED",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "'Reflect.copy' => -1,",
+			"replace": "",
+			"note": "a Reflect.copy no longer counts as enumerating an object, so the fix changes which fields the copy carries"
 		}
 	]
 }

@@ -2448,6 +2448,14 @@ final class RefShape {
 	public var nullableFlowExcludedCalls: Null<Array<String>>;
 
 	/**
+	 * Callee spellings (matched on their trailing dotted segments) whose call may list, test or render the fields of
+	 * an object at run time, so it sees a field's PRESENCE — mapped to the index of the argument naming one member,
+	 * whose plain literal makes the call no enumeration, or `-1` when the call enumerates whatever its arguments.
+	 * Optional; unset proves no scope enumeration-free.
+	 */
+	public var objectEnumeratingCalls: Null<Map<String, Int>>;
+
+	/**
 	 * Dotted `Type.method` calls that ASSERT their single plain-identifier argument is
 	 * non-null (they throw otherwise) — e.g. the test framework's `Assert.notNull`. The
 	 * flow engine clears the argument's `MaybeNull` fact after such a call (`maybe`-only —
