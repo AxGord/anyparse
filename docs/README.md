@@ -1,9 +1,10 @@
 # docs/ — what each file is for
 
-Every file under `docs/` has ONE of five roles, and the role decides what may be written into it:
+Every file under `docs/` has ONE of six roles, and the role decides what may be written into it:
 
 | role | what it holds | who reads it | numbers? |
 |---|---|---|---|
+| **guide** | how to use the tools: what a command or a lint rule does for its user, its flags, its configuration — current tense | users, and agents driving the tools | never |
 | **reference** | a contract: what a component, gate or command proves, its rules, how to run it — current tense, short | agents, every session | never — a reading belongs in the commit message and the journal |
 | **journal** | readings of one tree at one moment, slice narratives, campaign tables — moved verbatim out of a reference, under the heading they were written for | nobody by default; `git log -S` and the ledger's citations | yes, stamped with the tree they measured |
 | **ledger** | one line per refuted hypothesis: what → why not → the slice with the detail | anyone about to have the same idea | the slice id only |
@@ -16,6 +17,10 @@ A contract lives in ONE place. When a class doc owns it (a registry's record sha
 
 | file | role | size | overlaps with code | purpose |
 |---|---|---:|---|---|
+| [`guide/README.md`](guide/README.md) | guide | 1 KB | — | the user guide's table of contents |
+| [`guide/getting-started.md`](guide/getting-started.md), [`query.md`](guide/query.md), [`refactoring.md`](guide/refactoring.md), [`editing.md`](guide/editing.md), [`formatting.md`](guide/formatting.md), [`grammar.md`](guide/grammar.md) | guide | 37 KB | every `cli/command/*.hx` (`--help` is the flag reference) | install, the query commands, the span-splice refactorings, the insert / replace ops and JSON editing, `new` / `fmt` and the comment-loss guard, the grammar platform from a user's side |
+| [`guide/lint.md`](guide/lint.md), [`lint-config.md`](guide/lint-config.md) | guide | 25 KB | `anyparse.query.cli.command.LintCommand`, `anyparse.check.LintConfig` | running, fixing, suppressing and reporting lint; every `apqlint.json` key |
+| [`guide/lint/<category>.md`](guide/lint/) | guide | 490 KB | one section per rule of `Linter.builtins()` in that `RuleCategory`; `unit.check.RuleGuideTest` fails on a rule without a section or a section naming no rule | what each lint rule reports, fixes and refuses — the prose half of [`lint-rules.md`](lint-rules.md); each page links back to its category there |
 | [`architecture.md`](architecture.md) | reference | 37 KB | `anyparse.macro.*` (the five passes), `anyparse.core.CoreIR` (the primitive list), `anyparse.core.Doc` / `Renderer` (the probe-family table lives HERE, the class points at it), `anyparse.runtime.*` | the full technical model: CoreIR, strategies, formats, runtime, writer, the two compilation modes |
 | [`design-principles.md`](design-principles.md) | reference | 13 KB | the invariants code comments link to (§ 2 for RUN-scoped state) | each non-negotiable invariant with the pain point that motivates it |
 | [`typing-service.md`](typing-service.md) | reference | 9 KB | `anyparse.query.TypingService` / `QueryCache` / `DeclarationKey` (the API lives on the classes), `tools/src/dev/TyperConformance.hx` | the typing service: its API, the cache keys, invalidation, the conformance harness, where the later typer steps plug in |
@@ -42,6 +47,7 @@ A contract lives in ONE place. When a class doc owns it (a registry's record sha
 
 ## Where a new sentence goes
 
+- What a command or a lint rule does for its USER → `guide/` (a rule's prose → its section in `guide/lint/<category>.md`); never the root `README.md`, which only introduces the project and links here.
 - A rule, a command, what a gate proves → the reference that owns the component; if a class doc already states it, link the class instead of restating. The split: an API's contract (what a class, field or handler does, its arguments, its refusals) lives in the code at the API; the architectural picture (how the pieces fit, the pipeline, the invariants, why) lives here. Where the two disagree, the code is the behaviour — fix the doc and put the refutation in `decisions.md`.
 - A number, a duration, a tree SHA, a "measured on …" → the commit message, and the journal under the reference section it was taken for (`## From § <heading>`).
 - "We tried X, measured Y, so no" → one line in `decisions.md`, appended by `node bin/dev.js decision --slice <ID> "<text>"` (never an edit of the file).

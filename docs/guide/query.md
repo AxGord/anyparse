@@ -1,0 +1,19 @@
+# Structural query
+
+The read-only commands: each finds code by its shape or by its binding, never by a regex over lines.
+
+| Command | Finds |
+|---|---|
+| `ast` | the parsed AST (S-expr or `--json`), or a subtree by `--select` / `--at` |
+| `search` | expression/statement **shapes** with `$x` metavars (`recv.add($x)`) |
+| `refs` | value bindings — `--decls` / `--reads` / `--writes`, scope-resolved. A member access (`Type.f()`, `obj?.f()`) is NOT a value binding, so it never appears here; when the scope holds some, `refs` says so on stderr and points at `mentions` — an empty result is never on its own proof that a name is unreferenced |
+| `uses` | type-position references (fields, params, type params) |
+| `blast` | full change-impact for a type (uses + refs + member access) |
+| `mentions` / `lit` / `cases` | every named occurrence (a simple name also answers a qualified type reference and an `import` / `using` whose LAST dotted segment it is — `mentions Assets` lists `import openfl.Assets;` — printing the path found; a dotted name stays exact) / string-or-ident leaves / switch case-patterns |
+| `callees` / `callers` | transitive call tree out of / into a function (`--depth`), over the approximate project-wide call graph (name + declared-type resolution, `Null<T>` unwrapped; a receiver that is itself a CALL takes the callee's DECLARED return type, so `getWorker().work()` resolves — an annotation the source carries, never an inferred one, and a `Null<T>` / `Dynamic` / `Any` return names no dispatchable type and stays unresolved; virtual edges to subtype overrides — a BARE call to a non-static member of the enclosing type is an implicit-`this` call and gets them too; `Ref` edges for lambdas / method values / `.bind` with the receiving call recorded as `via`; out-of-scope targets become `[external]` nodes; unresolved sites counted honestly — and when NO edge resolved, the note says so in the stronger form, since a tree of just the root label reads exactly like a populated one; `--exit-on-empty` fires on that same signal) |
+| `reach` | shortest call path(s) `--from A --to B` (repeatable `--to`, `Type.*` patterns) over the same graph — "does main-context code reach this blocking call, and through which chain" |
+| `clusters` | partition analytics for one type over the same graph — "along which lines does this god-type split": members grouped by undirected intra-type call-edge connectivity after high-fan-in hubs are extracted into a utils bucket (`--hubs <n>`, `0` = off, default auto; lambdas condensed into their enclosing member); each component reports its directional hub traffic (the future module interface), plus resolved/unresolved coverage counts |
+| `stdlib-dup` | "did someone reimplement a stdlib function by hand?" — two tiers. Tier one is a pure candidate filter: a function with a real body, arity 1..3 with no optional/rest/default parameter, primitive parameter AND return types, and a body whose every free name is bound inside it or is one of `Math` / `Std` / `StringTools` / `String` (so no `this`, no project call, no allocation, no `throw`, nothing non-deterministic). `--census` stops there and prints the per-stage drop-off. Tier two enumerates every pooled stdlib call of the same return type, fills its slots from the candidate's parameters, the `Int -> String` interpolation adapter, and the literals lifted from the candidate's OWN body, then compiles ONE generated probe per candidate and runs both forms over a grid seeded with those same literals. Findings are `info` — agreement over a finite grid is evidence, not proof, so nothing is ever rewritten |
+| `meta` | declarations carrying a given `@:metadata` |
+| `diff` | structural AST diff between two files |
+| `source` | raw verbatim lines — `--range`, or one node's source by name/position (`--select` / `--at`); no-parse mode reads files the grammar can't yet read |
