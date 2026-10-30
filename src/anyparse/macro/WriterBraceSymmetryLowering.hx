@@ -302,15 +302,14 @@ final class WriterBraceSymmetryLowering {
 	 * ω-single-stmt-braces CHAIN symmetry, else-side: the runtime expression that decides
 	 * whether an `else` branch is mid-chain and must therefore keep its braces.
 	 */
-	private static function buildElseChainSuppressExpr(bs: BraceSymmetryCtx, node: ShapeNode, child: ShapeNode, fieldAccess: Expr): Expr {
+	private static function buildElseChainSuppressExpr(bs: BraceSymmetryCtx, node: ShapeNode, child: ShapeNode): Expr {
 		if (!bs.ctx.trivia || !child.fmtHasFlag(DROP_SINGLE_STMT_BRACES)) return macro false;
-		final found: Null<{ sibling: ShapeNode, name: String, access: Expr }> = findThenSiblingAccess(node);
-		if (found == null) return macro opt._ssbChainSuppress;
-		final thenAccess: Expr = found.access;
-		return macro (opt._ssbChainSuppress
-			|| anyparse.format.SingleStmtBraces.chainForcesBraces(
-				$thenAccess, $fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
-			));
+		return findThenSiblingAccess(node) == null
+			? macro opt._ssbChainSuppress
+			: macro (opt._ssbChainSuppress
+				|| anyparse.format.SingleStmtBraces.chainForcesBraces(
+					value, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
+				));
 	}
 
 	/**
@@ -337,7 +336,7 @@ final class WriterBraceSymmetryLowering {
 	 * trailing comment). Off-path the access is byte-identical to the raw field access.
 	 */
 	private static function deBraceBodyAccess(
-		bs: BraceSymmetryCtx, child: ShapeNode, fieldAccess: Expr, elseFieldName: Null<String>
+		bs: BraceSymmetryCtx, child: ShapeNode, fieldAccess: Expr, elseFieldName: Null<String>, typePath: String
 	): { effAccess: Expr, ssbSuppressCond: Null<Expr>, ssbTrailCommentExpr: Null<Expr> } {
 		// ω-single-stmt-braces: a body field carrying `@:fmt(dropSingleStmtBraces)`
 		// (trivia mode only) substitutes its runtime value with
@@ -369,14 +368,17 @@ final class WriterBraceSymmetryLowering {
 		// Kept as the direct spelling of the condition; the chain probe is the one that
 		// actually answers today.
 		final elseFollowsExpr: Expr = elseAccess == null ? macro false : macro $elseAccess != null;
-		// The body's own `@:trailOpt(';')` slot (`value.<field>TrailPresent`): a redundant
-		// trailing `;` (`for (…) { x; };`) would become `for (…) x;;` once de-braced — invalid
-		// to the Haxe compiler — so it fails the unwrap closed (braces kept).
-		// omega-ssb-trailopt-drop: always `false` — the trail slot of a brace-droppable
-		// field is no longer emitted (see `emitMandatoryRefTrail`), so the `for (…) x;;`
-		// shape the keep-braces gate defended against cannot occur. The gate itself stays
-		// as a fail-closed guard for any FUTURE field that both drops braces and emits a trail.
-		final trailSemiExpr: Expr = macro false;
+		// The body's own `@:trailOpt(';')` slot (`value.<field>TrailPresent`), which the writer
+		// re-emits: a redundant trailing `;` (`for (…) { x; };`) would become `for (…) x;;` once
+		// de-braced — invalid to the Haxe compiler — so it fails the unwrap closed (braces kept).
+		final trailSemiExpr: Expr = switch fieldAccess.expr {
+			case EField(_, name) if (
+				dropBraces && child.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true && bs.isTriviaBearing(typePath)
+			):
+				final slot: Expr = { expr: EField(macro value, name + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX), pos: Context.currentPos() };
+				macro ($slot == true);
+			case _: macro false;
+		};
 		// ω-single-stmt-braces CHAIN symmetry: force this then-body to keep its
 		// braces when we are mid-chain (`opt._ssbChainSuppress`, propagated from
 		// the root) OR when THIS `if` is the chain root and the spine scan finds a
@@ -390,7 +392,7 @@ final class WriterBraceSymmetryLowering {
 			? macro false
 			: macro (opt._ssbChainSuppress
 				|| anyparse.format.SingleStmtBraces.chainForcesBraces(
-					$fieldAccess, $elseAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
+					value, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
 				));
 		// omega-ssb-wrap: `isIfThenBody` is a MACRO-time discriminator - `elseFieldName`
 		// is non-null only for `HxIfStmt.thenBody` (the fitLineIfWithElse

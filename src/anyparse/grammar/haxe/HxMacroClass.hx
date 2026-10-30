@@ -45,5 +45,6 @@ typedef HxMacroClass = {
 	var head: HxMacroClassHead;
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps, heritageWrap) var heritage: Array<HxHeritageClause>;
 	@:fmt(beginEndType('macroClassBeginType', 'macroClassEndType'), interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'),
-		blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+		blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
+	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }

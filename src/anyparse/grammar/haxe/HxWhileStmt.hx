@@ -10,14 +10,14 @@ package anyparse.grammar.haxe;
  * `BlockStmt`) is accepted. Uses only existing Lowering patterns:
  * `@:lead` / `@:trail` on a Ref field and a bare Ref field.
  *
- * `@:fmt(trailOptKeepIf('elementIsConditional_HxStatement'))` on the body keeps the
- * `@:trailOpt(';')` slot after a `#if` region, whose last branch may end unterminated
- * (`#if d b() #else c() #end;`): there the `;` is the statement's terminator, not a redundant one.
+ * The body's `@:trailOpt(';')` slot is written back from source presence: a `;` after a block
+ * body is redundant and the `empty-statement` lint's to remove, while after a `#if` region whose
+ * last branch ends unterminated (`#if d b() #else c() #end;`) it is the statement's terminator.
  */
 @:peg
 typedef HxWhileStmt = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('whileCondParensInsideOpen', 'whileCondParensInsideClose'),
 		captureCondOpenNewline) var cond: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('whileBody'), dropSingleStmtBraces, trailOptKeepIf('elementIsConditional_HxStatement'),
-		loopBodyIfElseNext('loopBodyIfElseNext', 'IfStmt', 'elseBody')) var body: HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('whileBody'), dropSingleStmtBraces, loopBodyIfElseNext('loopBodyIfElseNext', 'IfStmt', 'elseBody'))
+	var body: HxStatement;
 };

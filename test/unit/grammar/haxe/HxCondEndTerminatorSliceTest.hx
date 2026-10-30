@@ -3,16 +3,16 @@ package unit.grammar.haxe;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
- * `@:fmt(trailOptKeepIf)`: the `;` after a statement-position `#if … #end` region that is the
- * body of an `if` / `else` / `while` / `for`.
+ * The `;` after a statement-position `#if … #end` region that is the body of an `if` / `else` /
+ * `while` / `for`, or the last statement of a block.
  *
- * Those bodies carry a `@:trailOpt(';')` slot the writer never re-emits, on the premise that a
- * statement owns its own terminator. A `#if` region breaks the premise: its last branch may end
- * unterminated (`else #if d b() #else c() #end;`), and Haxe expands the region at token level, so
- * the `;` after `#end` IS the statement's terminator. Dropping it emits `Missing ;` at the next
- * statement. The slot is kept from source presence only for a region body; the redundant `;`
- * after a braced body still goes.
+ * A region's last branch may end unterminated (`else #if d b() #else c() #end;`), and Haxe expands
+ * the region at token level, so the `;` after `#end` IS the statement's terminator: dropping it
+ * emits `Missing ;` at the next statement. The writer keeps every such source `;` — after a braced
+ * body too, where it is redundant and the `empty-statement` lint's to remove — and never adds one.
  */
 @:nullSafety(Strict)
 final class HxCondEndTerminatorSliceTest extends Test {
@@ -58,7 +58,7 @@ final class HxCondEndTerminatorSliceTest extends Test {
 	public function testElseIfChainTailKeepsSemiUnderRemove(): Void {
 		final src: String = wrap('if (x) a() else if (y) b() else #if d b() #elseif e a() #else c() #end;');
 		final out: String = HxWriteFixture.triviaWrite(src, REMOVE);
-		Assert.isTrue(StringTools.endsWith(out, '#else c() #end;\n\t}\n}'), 'expected `#end;` in: <$out>');
+		Assert.isTrue(out.endsWith('#else c() #end;\n\t}\n}'), 'expected `#end;` in: <$out>');
 	}
 
 	/** Source presence decides: a region whose branches carry their own `;` gains none after `#end`. */
@@ -70,20 +70,15 @@ final class HxCondEndTerminatorSliceTest extends Test {
 		Assert.equals(out, HxWriteFixture.triviaWrite(src, DEFAULT));
 	}
 
-	/** The redundant `;` after a braced body still goes, so de-bracing cannot produce `;;`. */
+	/** The redundant `;` after a braced body is kept, so under brace removal the braces stay: never `a();;`. */
 	@:pin('control')
-	@:killer('M-TRAILOPT-KEEP-UNGATED')
-	public function testRedundantSemiAfterBlockStillDropped(): Void {
+	@:killer('M-SSB-TRAILSEMI-GATE-OFF')
+	public function testSemiAfterBlockKeepsBracesUnderRemove(): Void {
 		final src: String = wrap('for (i in xs) { a(); };');
-		final out: String = HxWriteFixture.triviaWrite(src, REMOVE);
-		Assert.isTrue(out.indexOf('a();;') == -1, 'did not expect `;;` in: <$out>');
-		Assert.isTrue(out.indexOf('a();') != -1, 'expected the body in: <$out>');
+		Assert.equals(wrap('for (i in xs) {\n\t\t\ta();\n\t\t};'), HxWriteFixture.triviaWrite(src, REMOVE));
 	}
 
-	/**
-	 * The last statement of a block: the `;` after `#end` is the block Star's trailing separator,
-	 * which the writer drops after a `stmtNoSemi` element unless `@:fmt(trailSepKeepIf)` names it.
-	 */
+	/** The last statement of a block: the `;` after `#end` is the block Star's trailing separator, written back. */
 	@:pin('control')
 	@:killer('M-TRAILSEP-KEEP-OFF')
 	public function testBlockTailKeepsSemiAfterEnd(): Void {
@@ -110,12 +105,12 @@ final class HxCondEndTerminatorSliceTest extends Test {
 		Assert.equals(mid, HxWriteFixture.triviaWrite(mid, DEFAULT));
 	}
 
-	/** Every other `stmtNoSemi` tail still loses its redundant `;`. */
+	/** Every other block tail keeps its source `;` as well (`switch … {};`), glued to the `}`. */
 	@:pin('control')
-	@:killer('M-TRAILSEP-KEEP-ALL')
-	public function testBlockTailStillDropsSemiAfterSwitch(): Void {
+	@:killer('M-TRAILSEP-KEEP-OFF')
+	public function testBlockTailKeepsSemiAfterSwitch(): Void {
 		final src: String = wrap('switch x {\n\t\t\tcase _:\n\t\t};');
-		Assert.equals(wrap('switch x {\n\t\t\tcase _:\n\t\t}'), HxWriteFixture.triviaWrite(src, DEFAULT));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, DEFAULT));
 	}
 
 	private static function wrap(body: String): String {

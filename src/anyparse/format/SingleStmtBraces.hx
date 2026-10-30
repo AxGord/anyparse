@@ -70,9 +70,9 @@ class SingleStmtBraces {
 	 *     of an `if` whose `else` sibling renders bare; position within the then-body is
 	 *     over-approximated to "on the spine", and a brace-bearing then-body seals itself
 	 *     and never arms the frame;
-	 *  6. `hasTrailingSemi` — a redundant trailing `;` on the enclosing statement.
-	 *     Unreachable while the writer omits that slot on a brace-droppable field, kept
-	 *     as a fail-closed guard for a field that would both drop braces and emit one;
+	 *  6. `hasTrailingSemi` — a redundant trailing `;` on the enclosing statement, which
+	 *     the writer keeps (removing it is the `empty-statement` lint's job), so the
+	 *     braces stay rather than leave `x;;`;
 	 *  7. `siblingKeepsBraces` — an if/else de-braces BOTH branches or NEITHER. The probe
 	 *     answers through this function, so it inherits gate 4 instead of copying it, and
 	 *     runs both ways: a bare branch opposite a brace-keeping sibling GAINS braces
@@ -100,6 +100,10 @@ class SingleStmtBraces {
 		// Gate 8 above is skipped with it: it exists to repair a shape the REMOVE
 		// direction can produce, and under symmetry-only nothing can.
 		if (!drop) return body;
+		// Gate 6. The hazard it guards: de-bracing `for (…) { x; };` would emit `for (…) x;;`,
+		// which anyparse parses and the Haxe compiler rejects. The writer re-emits that `;`
+		// (the body's own trail slot), so a body carrying one keeps its braces - a do-body too.
+		if (hasTrailingSemi) return body;
 		// The do-body is the ONE brace-droppable field a suppress frame cannot reach: its
 		// rendering is always followed by the `while (...)` keyword+paren, so no de-braced
 		// do-body can ever sit on the trailing spine of an enclosing then-body. Gate 5's
@@ -110,11 +114,6 @@ class SingleStmtBraces {
 		// branch keeps its own too. De-bracing one half of an if/else while the other stays
 		// braced (`if (b) return true; else { ... }`) is an asymmetry violation, so fail closed.
 		if (siblingKeepsBraces) return body;
-		// Gate 6. The hazard it guards: de-bracing `for (…) { x; };` would emit
-		// `for (…) x;;`, which anyparse parses and the Haxe compiler rejects. It is gone
-		// at the root — `WriterLowering.emitMandatoryRefTrail` no longer re-emits that
-		// slot on a brace-droppable field, so every splice passes `false` here.
-		if (hasTrailingSemi) return body;
 		// The de-brace decision (gates 1-8) lives in `deBracedElem`, shared with
 		// `hoistTrailingComment` so a same-line trailing comment on the single statement
 		// travels with the bare statement (the writer folds it after the statement's own
@@ -169,15 +168,14 @@ class SingleStmtBraces {
 	 * ω-single-stmt-braces CHAIN symmetry: does ANY branch of an if / else-if /
 	 * else chain keep its braces? OR of `keepsBraces` over the outer then, every
 	 * else-if then, and the terminal else block, walking the nested `elseBody`
-	 * spine. `IfStmt(stmt)` wraps a single `HxIfStmt` struct, reached via
-	 * `Type.enumParameters(v)[0]`; its `thenBody` / `elseBody` are portable field
-	 * accesses. When true the caller forces braces on EVERY branch (symmetric-
+	 * spine from `ifStmt`, the chain root's own `HxIfStmt` struct. `IfStmt(stmt)` wraps a
+	 * single `HxIfStmt` struct, reached via `Type.enumParameters(v)[0]`; its `thenBody` /
+	 * `elseBody` are portable field accesses. When true the caller forces braces on EVERY branch (symmetric-
 	 * braced); only a chain whose every branch is de-braceable de-braces them all.
 	 * A null `elseBody` (a lone `if`) or a non-`if` terminal are handled by the
 	 * walk. Each branch's `elseFollows` is derived from the spine so gate 4
 	 * (dangling-else) matches its real splice exactly, and `hasTrailingSemi` is
-	 * read from each else-if then-body's own `TrailPresent` slot: only the
-	 * TERMINAL branch (no further `else`) can carry a redundant trailing `;`
+	 * read from each body's own `TrailPresent` slot, the argument its real splice passes
 	 * (gate 6) — missing it would leave that branch braced while earlier branches
 	 * de-brace. Byte-inert when `drop` is off. `suppress` is THREADED into every
 	 * `keepsBraces` probe rather than short-circuiting the scan: a suppressed frame
@@ -189,25 +187,19 @@ class SingleStmtBraces {
 	 * the chain gate exists to prevent. Suppress can only ever ADD braces here: it
 	 * is a keep-arm of `deBracedElem`, never a de-brace one.
 	 */
-	public static function chainForcesBraces(thenBody: Dynamic, elseBody: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool): Bool {
+	public static function chainForcesBraces(ifStmt: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool): Bool {
 		if (!drop && !symmetry) return false;
-		if (keepsBraces(thenBody, drop, symmetry, suppress, elseBody != null, false, true)) return true;
-		var cur: Dynamic = elseBody;
-		while (cur != null && Reflect.isEnumValue(cur) && Type.enumConstructor(cast cur) == 'IfStmt') {
-			final ps: Array<Dynamic> = Type.enumParameters(cast cur);
-			final stmt: Null<Dynamic> = ps.length == 0 ? null : ps[0];
-			if (stmt == null) break;
-			final innerThen: Dynamic = stmt.thenBody;
-			final innerElse: Dynamic = stmt.elseBody;
-			// omega-ssb-trailopt-drop: always `false`. The terminal else-if then-body
-			// CAN carry the enclosing statement's redundant trailing `;`, but the writer
-			// no longer re-emits that slot, so gate 6 cannot fire at the real splice -
-			// and a scan that still read the slot would hold the whole chain braced over
-			// a `;` that never reaches the output.
-			if (keepsBraces(innerThen, drop, symmetry, suppress, innerElse != null, false, true)) return true;
-			cur = innerElse;
+		var stmt: Null<Dynamic> = ifStmt;
+		while (stmt != null) {
+			final elseBody: Dynamic = stmt.elseBody;
+			if (keepsBraces(stmt.thenBody, drop, symmetry, suppress, elseBody != null, stmt.thenBodyTrailPresent == true, true))
+				return true;
+			if (elseBody == null || !Reflect.isEnumValue(elseBody) || Type.enumConstructor(cast elseBody) != 'IfStmt')
+				return elseBody != null && keepsBraces(elseBody, drop, symmetry, suppress, false, stmt.elseBodyTrailPresent == true, false);
+			final ps: Array<Dynamic> = Type.enumParameters(cast elseBody);
+			stmt = ps.length == 0 ? null : ps[0];
 		}
-		return cur != null && keepsBraces(cur, drop, symmetry, suppress, false, false, false);
+		return false;
 	}
 
 	/**
@@ -236,6 +228,8 @@ class SingleStmtBraces {
 	 * block expression, whose elements are STATEMENTS — so it passes a lift that builds the
 	 * expression-statement, typed, from the writer's generated code. What is shared is the part that
 	 * would otherwise drift: the Star element wrapper and the block ctor's positional slot vector.
+	 * The element's `sepAfter` — the block writer writes back the `;` it records — is set only when the
+	 * statement does not terminate itself, so a synthesized block never gains a `;` after a `}`.
 	 */
 	public static function wrapInBlock(value: EnumValue, blockCtor: String, ?lift: (EnumValue) -> Dynamic): Dynamic {
 		final en: Null<Enum<Dynamic>> = Type.getEnum(cast value);
@@ -248,7 +242,7 @@ class SingleStmtBraces {
 			leadingComments: [],
 			trailingComment: null,
 			trailingBeforeSep: false,
-			sepAfter: true,
+			sepAfter: raise != null || !innerSelfTerminates(value),
 			node: raise == null ? value : raise(value)
 		};
 		final args: Array<Dynamic> = [[elem], null, null, false, [], false];
@@ -315,6 +309,9 @@ class SingleStmtBraces {
 			// settle what one can decide.
 			if (allDeBrace && (braced ? tryDeBraced(b, last, suppress) == null : !bareLegalAt(b, last))) allDeBrace = false;
 		}
+		// Gate 6 for the group: the writer keeps a `;` written after the last catch body, and
+		// `catch (e) x;;` does not compile, so that `;` keeps the group braced.
+		if (allDeBrace && catches != null && catches.length > 0 && catchCarriesSemi(catches[catches.length - 1])) allDeBrace = false;
 		// omega-brace-symmetry: verdict 2 IS the de-brace direction, so symmetry-only
 		// can never reach it - a group with a braced member is repaired upward (1) and
 		// one with none is left alone (0).
@@ -603,13 +600,13 @@ class SingleStmtBraces {
 
 	private static function containsIf(v: Dynamic): Bool {
 		if (v == null) return false;
-		if (Std.isOfType(v, String) || Std.isOfType(v, Bool) || Std.isOfType(v, Float) || Std.isOfType(v, Int)) return false;
+		if (v is String || v is Bool || v is Float || v is Int) return false;
 		if (Reflect.isEnumValue(v)) {
 			final e: EnumValue = cast v;
 			final ctor: String = Type.enumConstructor(e);
 			return ctor == 'IfStmt' || ctor == 'IfExpr' || ctor.startsWith('Cond') || Type.enumParameters(e).exists(containsIf);
 		}
-		if (!Std.isOfType(v, Array)) return Reflect.isObject(v) && Reflect.fields(v).exists(f -> containsIf(Reflect.field(v, f)));
+		if (!(v is Array)) return Reflect.isObject(v) && Reflect.fields(v).exists(f -> containsIf(Reflect.field(v, f)));
 		final arr: Array<Dynamic> = v;
 		return arr.exists(containsIf);
 	}
@@ -829,6 +826,12 @@ class SingleStmtBraces {
 		if (Type.enumConstructor(e) != 'ExprStmt') return false;
 		final ps: Array<Dynamic> = Type.enumParameters(e);
 		return ps.length >= 2 && ps[1] != true;
+	}
+
+	/** Whether a catch clause's body slot recorded a source `;` after it (`catch (e) { … };`). */
+	private static function catchCarriesSemi(clause: Any): Bool {
+		final node: Any = hasStructField(clause, 'node') ? Reflect.field(clause, 'node') : clause;
+		return hasStructField(node, 'bodyTrailPresent') && Reflect.field(node, 'bodyTrailPresent') == true;
 	}
 
 }

@@ -13,8 +13,10 @@ import utest.Test;
  * extended the member span over trailing trivia and broke
  * span-dependent ops (member reorder, inline-method, line bounds).
  *
- * Both writers normalise the stray `;` onto its own line as an empty
- * member; neither doubles the `NoBody` signature form's own terminator.
+ * The trivia writer glues the stray `;` back onto the body it follows
+ * (`};`, `@:fmt(glueToPrevious)`); removing it is the `empty-statement`
+ * lint's job. The plain writer keeps it as an empty member on its own
+ * line; neither doubles the `NoBody` signature form's own terminator.
  */
 @:nullSafety(Strict)
 final class HxFnMemberTrailSemiSliceTest extends Test {
@@ -28,9 +30,12 @@ final class HxFnMemberTrailSemiSliceTest extends Test {
 		Assert.notNull(HaxeModuleTriviaParser.parse(src));
 	}
 
-	public function testTriviaNormalizesStraySemiToOwnLine(): Void {
-		final src: String = 'class C {\n\tfunction f():Void {};\n}';
-		Assert.equals('class C {\n\tfunction f():Void {}\n\t;\n}', triviaWrite(src));
+	@:pin('control')
+	@:killer('M-GLUE-TO-PREVIOUS-OFF')
+	public function testTriviaGluesStraySemiToBody(): Void {
+		final glued: String = 'class C {\n\tfunction f():Void {};\n}';
+		Assert.equals(glued, triviaWrite(glued));
+		Assert.equals(glued, triviaWrite('class C {\n\tfunction f():Void {}\n\t;\n}'));
 	}
 
 	public function testTriviaKeepsSemiFreeBodySemiFree(): Void {

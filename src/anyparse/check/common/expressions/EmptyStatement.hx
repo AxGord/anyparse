@@ -1,5 +1,6 @@
 package anyparse.check.common.expressions;
 
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.scan.RegionTerminator;
 import anyparse.query.ElementSpan;
 import anyparse.query.SymbolIndex;
@@ -11,10 +12,18 @@ using StringTools;
  * S1116), usually an editing leftover or a misplaced terminator. Three positions:
  * a statement-scope `;` (inside a body, e.g. the trailing `;` of `g();;`), a
  * member-scope `;` (after a class member, e.g. `function f():Void {};`), and the
- * one the parser ABSORBS into a block-terminated statement (`for (…) { … };`),
- * which no node marks — see `absorbedSemicolon`. Purely structural. `Warning`;
- * `fix` deletes the `;` — the whole physical line when the `;` sits alone on it
- * (so no blank residue is left), otherwise only the `;` itself.
+ * one the parser ABSORBS into a block-terminated statement (`for (…) { … };`,
+ * `if (…) { … }; else`), which no node marks — see `absorbedSemicolons`. Purely
+ * structural. `Warning`; `fix` deletes the `;` — the whole physical line when the
+ * `;` sits alone on it (so no blank residue is left), otherwise only the `;` itself.
+ * The formatter writes every such `;` back, so this rule is what removes them.
+ *
+ * ## Inside a `macro` quotation (`QuotationAware`)
+ *
+ * The rule declines the central reification drop: a stray `;` after a block or a
+ * member is not represented in the AST a quotation builds (`macro class X { function
+ * f() {}; }` reifies the same fields as without it, as does `if (c) { … }; else` and
+ * `{ … };`), so deleting it hands the macro identical data.
  *
  * ## Grammar-agnostic
  *
@@ -24,7 +33,7 @@ using StringTools;
  * a no-op.
  */
 @:nullSafety(Strict)
-final class EmptyStatement extends RuleBase {
+final class EmptyStatement extends RuleBase implements QuotationAware {
 
 	public function new() {
 		super('empty-statement', 'a stray empty statement (a lone ;)', RuleCategory.Expressions);
@@ -81,8 +90,7 @@ final class EmptyStatement extends RuleBase {
 				message: 'empty statement'
 			});
 		}
-		final absorbed: Null<Span> = absorbedSemicolon(source, node, blockKinds);
-		if (absorbed != null) out.push({
+		for (absorbed in absorbedSemicolons(source, node, blockKinds)) out.push({
 			file: file,
 			span: absorbed,
 			rule: 'empty-statement',
@@ -112,37 +120,50 @@ final class EmptyStatement extends RuleBase {
 
 
 	/**
-	 * The span of a `;` the parser ABSORBED into `node` rather than projecting as an
-	 * empty-statement node, or null when there is none. A block-terminated statement
-	 * (`for (…) { … };`, `if (…) { … } else { … };`, `try … catch (…) { … };`) needs no
-	 * terminator, so the `;` is stray - but it lands INSIDE the statement's own span,
-	 * past its last child, where no node marks it. Requiring that last child to be a
-	 * BLOCK (`blockStmtKind` / `catchClauseKind`) is what separates this from every
-	 * `;` that is mandatory: a value-position block is a different kind
-	 * (`BlockExpr` / `IfExpr` / `TryExpr` / `FnExpr` / `ObjectLit`), and
+	 * The span of every `;` the parser ABSORBED into `node` rather than projecting as an
+	 * empty-statement node. A block-terminated statement (`for (…) { … };`, `if (…) { … } else { … };`,
+	 * `try … catch (…) { … };`) needs no terminator, so the `;` is stray - but it lands INSIDE the
+	 * statement's own span, right after a BLOCK child (`blockStmtKind` / `catchClauseKind`), where no
+	 * node marks it: past the last child, or between a block and the next child (`if (…) { … }; else`).
+	 * Requiring the block is what separates this from every `;` that is mandatory: a value-position
+	 * block is a different kind (`BlockExpr` / `IfExpr` / `TryExpr` / `FnExpr` / `ObjectLit`), and
 	 * `do { … } while (c);` / `if (c) g();` end in a condition or an inner statement.
 	 */
-	private static function absorbedSemicolon(source: String, node: QueryNode, blockKinds: Array<String>): Null<Span> {
+	private static function absorbedSemicolons(source: String, node: QueryNode, blockKinds: Array<String>): Array<Span> {
+		final out: Array<Span> = [];
 		final span: Null<Span> = node.span;
-		if (span == null || blockKinds.length == 0) return null;
-		var lastSpan: Null<Span> = null;
-		var lastKind: String = '';
-		for (child in node.children) if (child.span != null) {
-			lastSpan = child.span;
-			lastKind = child.kind;
+		if (span == null || blockKinds.length == 0) return out;
+		final spans: Array<Span> = [];
+		final kinds: Array<String> = [];
+		for (child in node.children) {
+			final childSpan: Null<Span> = child.span;
+			if (childSpan == null) continue;
+			spans.push(childSpan);
+			kinds.push(child.kind);
 		}
-		if (lastSpan == null || !blockKinds.contains(lastKind)) return null;
-		final childEnd: Int = lastSpan.to;
-		if (childEnd >= span.to) return null;
-		final tail: String = source.substring(childEnd, span.to);
-		if (tail.trim() != ';') return null;
-		final at: Int = childEnd + tail.indexOf(';');
-		// A `}` must be what already terminated the statement. A CatchClause with a
-		// SINGLE-STATEMENT body (`catch (e) log(x);`) also ends before the `;`, but there
-		// the terminator is mandatory - the char before it is `)`, not `}`.
+		for (i => childSpan in spans) if (blockKinds.contains(kinds[i])) {
+			final last: Bool = i == spans.length - 1;
+			final at: Int = semicolonAfterBlock(source, childSpan.to, last ? span.to : spans[i + 1].from, last);
+			if (at >= 0) out.push(new Span(at, at + 1));
+		}
+		return out;
+	}
+
+	/**
+	 * The offset of a `;` that directly follows (whitespace only between) a `}` ending at `from` and
+	 * lies before `limit`, or -1. Past the LAST child nothing but whitespace may follow it. A
+	 * CatchClause with a SINGLE-STATEMENT body (`catch (e) log(x);`) also ends before a `;`, but there
+	 * the terminator is mandatory - the char before it is `)`, not `}`.
+	 */
+	private static function semicolonAfterBlock(source: String, from: Int, limit: Int, last: Bool): Int {
+		if (from >= limit) return -1;
+		final gap: String = source.substring(from, limit);
+		final trimmed: String = gap.trim();
+		if (!trimmed.startsWith(';') || (last && trimmed != ';')) return -1;
+		final at: Int = from + gap.indexOf(';');
 		var before: Int = at - 1;
 		while (before >= 0 && source.isSpace(before)) before--;
-		return before >= 0 && source.charAt(before) == '}' ? new Span(at, at + 1) : null;
+		return before >= 0 && source.charAt(before) == '}' ? at : -1;
 	}
 
 }

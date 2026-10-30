@@ -34,19 +34,18 @@ package anyparse.grammar.haxe;
  * `if` head's column, so the separator asks the PREVIOUS FIELD whether it glued
  * (`PrevBodyInfo.headGlue`) and routes a glued close to `sameLineElse` as a curly close is
  * routed. `@:fmt(dropSingleStmtBraces)` on BOTH bodies opts into `opt.dropSingleStmtBraces`
- * (`SingleStmtBraces.unwrapStmt`, trivia mode only, every safety gate fails closed), and
- * `@:fmt(trailOptKeepIf(…))` keeps the `;` after a `#if` region body (`… #end;`): its last
- * branch may end unterminated, so that `;` is the statement's terminator.
+ * (`SingleStmtBraces.unwrapStmt`, trivia mode only, every safety gate fails closed). A source
+ * `;` after either body (`if (c) { … };`) lands in its `@:trailOpt(';')` slot and is written
+ * back glued: redundant after a `}`, it is the `empty-statement` lint's to remove, while after a
+ * `#if` region body (`… #end;`) it is the statement's own terminator.
  */
 @:peg
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose'),
 		captureCondOpenNewline) var cond: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), fitLineIfWithElse, clearElseIfBranch,
-		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces,
-		trailOptKeepIf('elementIsConditional_HxStatement')) var thenBody: HxStatement;
+		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces) var thenBody: HxStatement;
 	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, semicolonNextLineElse,
 		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'),
-		elseIfCommentReflow, fitLineIfWithElse, propagateElseIfBranch, dropSingleStmtBraces,
-		trailOptKeepIf('elementIsConditional_HxStatement')) var elseBody: Null<HxStatement>;
+		elseIfCommentReflow, fitLineIfWithElse, propagateElseIfBranch, dropSingleStmtBraces) var elseBody: Null<HxStatement>;
 };

@@ -3,12 +3,15 @@ package unit.grammar.haxe;
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
+import anyparse.format.WhitespaceInvariant;
+import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.FormatterOff;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.runtime.ByteOrderMark;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 import unit.grammar.haxe.HxFormatterCorpusHelpers.HxTestCase;
@@ -68,6 +71,18 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final SWEEP_PREV_PATH: String = 'bin/.prev-sweep.json';
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+
+	/**
+	 * The fixtures whose formatted output still differs from their input by more than whitespace,
+	 * each a known writer behaviour: a block comment inside a wrapped `+` chain is moved off its
+	 * operand, and a `_` between a numeric literal and its type suffix is dropped. Every other fixture the writer
+	 * formats must keep its token sequence — the formatter never adds or removes a token (a
+	 * redundant `;` included: removing it is the `empty-statement` lint's job).
+	 */
+	private static final KNOWN_TOKEN_DRIFT: Array<String> = [
+		'test/testcases/lineends/issue_396_long_opadd_chain.hxtest',
+		'test/testcases/other/numeric_separator.hxtest'
+	];
 
 	/**
 	 * ω-sweep-fixture-status: per-fixture status map for `apq recon
@@ -234,6 +249,7 @@ class HxFormatterCorpusTest extends Test {
 			// restore has to be repeated here — without it the fork's
 			// `other/formatter_off*` cases could never pass.
 			final actualRaw: String = FormatterOff.restore(tc.input, emitted, HaxeLexicalRegions.scanComments);
+			assertTokensKept(relPath, tc.input, actualRaw);
 			final actual: String = stripTrailingNewline(actualRaw);
 			if (actual == tc.expected) {
 				pass++;
@@ -452,6 +468,19 @@ class HxFormatterCorpusTest extends Test {
 	 */
 	private static function stripTrailingNewline(s: String): String {
 		return s.length > 0 && s.fastCodeAt(s.length - 1) == '\n'.code ? s.substr(0, s.length - 1) : s;
+	}
+
+	/**
+	 * Fails unless what `fmt` would write keeps `input`'s token sequence (whitespace aside) or `relPath` is a
+	 * `KNOWN_TOKEN_DRIFT` fixture. Mirrors the CLI round trip: the byte-order mark is carried, and an output
+	 * that loses a comment is skipped — `fmt` refuses to write those, a guard of its own.
+	 */
+	private static function assertTokensKept(relPath: String, input: String, emitted: String): Void {
+		final written: String = ByteOrderMark.carry(input, emitted);
+		if (CommentInventory.firstMissing(input, written, HaxeLexicalRegions.scanComments) != null) return;
+		final drift: Null<Divergence> = WhitespaceInvariant.firstDivergence(input, written);
+		if (drift != null && !KNOWN_TOKEN_DRIFT.contains(relPath))
+			Assert.fail('$relPath: formatting changed more than whitespace at line ${drift.line}: <${drift.expected}> → <${drift.actual}>');
 	}
 
 }

@@ -116,16 +116,18 @@ final class WriterRefFieldLowering {
 		// chain root it is the spine scan over then + else-if bodies. Reused by the
 		// unwrap gate (terminal else block) AND the else-if writeCall propagation.
 		// `macro false` off-path (plain mode / non-dropSingleStmtBraces field).
-		final elseChainSuppressExpr: Expr = buildElseChainSuppressExpr(ctx.braceSym, node, child, fieldAccess);
+		final elseChainSuppressExpr: Expr = buildElseChainSuppressExpr(ctx.braceSym, node, child);
 		final dropElseBraces: Bool = ctx.ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces');
 		final thenSiblingKeepsExpr: Expr = dropElseBraces ? buildThenSiblingKeepsProbe(ctx.braceSym, node, typePath) : macro false;
+		// Gate 6: the else-body's own `;` slot is re-emitted (`pushStmtBodyTrailOpt`), so a set slot keeps the braces.
+		final elseTrailSemiExpr: Expr = structTrailOptAccess == null ? macro false : macro $structTrailOptAccess == true;
 		// ω-single-stmt-braces trailing-comment hoist for the else-body: same gate args as
-		// its `unwrapStmt` splice below (elseFollows=false, hasTrailingSemi=false, isThenBody=false)
+		// its `unwrapStmt` splice below (elseFollows=false, the slot's hasTrailingSemi, isThenBody=false)
 		// so the hoisted comment fires exactly when the de-brace does.
 		final elseTrailCommentExpr: Null<Expr> = dropElseBraces
 			? macro anyparse.format.SingleStmtBraces.hoistTrailingComment(
-				$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false, $thenSiblingKeepsExpr || $elseChainSuppressExpr,
-				false
+				$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, false, $elseTrailSemiExpr,
+				$thenSiblingKeepsExpr || $elseChainSuppressExpr, false
 			)
 			: null;
 		// ω-orphan-prefix-decl: same opt-fanout seat the mandatory-Ref path has —
@@ -161,7 +163,7 @@ final class WriterRefFieldLowering {
 				ctx, child, optParts, kwLead, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName,
 				prevBodyField, typePath, prevPadTrailing, indentObjArgs
 			);
-			pushTrailOptKeep(optParts, child, trailOptText, structTrailOptAccess, fieldAccess);
+			if (dropElseBraces) pushStmtBodyTrailOpt(optParts, trailOptText, structTrailOptAccess);
 		} else if (leadText != null) {
 			// ω-before-lead: the block comment the source wrote just before the
 			// lead literal (`var x /* c */ = 1`), re-emitted ahead of the lead's own
@@ -177,6 +179,8 @@ final class WriterRefFieldLowering {
 				ctx, child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName, indentObjArgs,
 				prevTrailFieldName
 			);
+			// A statement body's `;` (`catch (e) { … };`) is a source token like the mandatory path's.
+			pushStmtBodyTrailOpt(optParts, trailOptText, structTrailOptAccess);
 		} else {
 			emitOptionalAbsentOnBody(ctx, child, optParts, refName, writeCall, bareSep);
 		}
@@ -197,9 +201,8 @@ final class WriterRefFieldLowering {
 		// further `else` at its own level, so `elseFollows` is `false`; ancestor
 		// dangling-else frames still apply via `opt._ssbSuppress`. Unwrapping
 		// `else { if (c) x; }` yields the `else if` form by construction.
-		// `hasTrailingSemi` is `false`: an else-body's own writer path already drops a
-		// redundant trailing `;` (`else { x; };` → `else x;`, no `;;`), so — unlike the
-		// for / while / then-body splice — de-bracing is always safe and never gated.
+		// `hasTrailingSemi` is the body's own `;` slot, as for the for / while / then-body
+		// splice: `else { x; };` keeps its braces rather than become `else x;;`.
 		// ω-single-stmt-braces symmetry (gate 7): an else-body must keep its braces whenever
 		// the sibling then-body keeps its own (see buildThenSiblingKeepsProbe).
 		final optValInit: Expr = dropElseBraces
@@ -207,7 +210,7 @@ final class WriterRefFieldLowering {
 				var _sv = $fieldAccess;
 				if (_sv != null)
 					_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
-						_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, false, false,
+						_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, false, $elseTrailSemiExpr,
 						$thenSiblingKeepsExpr || $elseChainSuppressExpr, false
 					);
 				_sv;
@@ -691,18 +694,11 @@ final class WriterRefFieldLowering {
 		// behaviour for now. `null` on `<field>TrailPresent` is reserved
 		// for raw->paired upcasts from `Converters.rawToPaired_*` and
 		// falls through to canonical emit via the `==false` test.
-		// omega-ssb-trailopt-drop: a field whose braces may be dropped
-		// (`@:fmt(dropSingleStmtBraces)` — `HxIfStmt.thenBody` / `HxForStmt.body` /
-		// `HxWhileStmt.body` / `HxDoWhileStmt.body`) never re-emits this slot: a
-		// STATEMENT owns its own terminator (`if (c) g();` puts the `;` inside the
-		// inner `ExprStmt`), so the slot can only ever hold a REDUNDANT `;`
-		// (`for (…) { x; };`). Canonicalising it away removes the `for (…) x;;`
-		// hazard at the root instead of defending against it with a keep-braces
-		// gate, and matches what the optional `elseBody` path does. The one
-		// exception is `@:fmt(trailOptKeepIf)` - see `pushTrailOptKeep`.
+		// A field whose braces may be dropped (`@:fmt(dropSingleStmtBraces)`) keeps the
+		// source's `;` glued to its body - see `pushStmtBodyTrailOpt`.
 		if (!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null) return;
 		if (child.fmtHasFlag('dropSingleStmtBraces')) {
-			pushTrailOptKeep(parts, child, trailOptText, structTrailOptAccess, fieldAccess);
+			pushStmtBodyTrailOpt(parts, trailOptText, structTrailOptAccess);
 			return;
 		}
 		final sourcePresent: Expr = macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText});
@@ -711,25 +707,15 @@ final class WriterRefFieldLowering {
 	}
 
 	/**
-	 * `@:fmt(trailOptKeepIf('<predicate>'))`: the statement-body `@:trailOpt` slot a
-	 * `dropSingleStmtBraces` field otherwise never re-emits, kept (from source presence) when the
-	 * named predicate answers true for the SOURCE body. A `#if` region's last branch may end
-	 * unterminated (`else #if d b() #else c() #end;`), and then the `;` after `#end` is the
-	 * statement's own terminator: dropping it emits code that does not compile. The predicate sees
-	 * the field value before any de-brace substitution, so a redundant `;` after a `}` still goes.
-	 * Pushes nothing for a field without the meta or without a source-presence slot.
+	 * The statement-body `@:trailOpt` slot of a `dropSingleStmtBraces` field, re-emitted from source
+	 * presence and glued to the body: a `;` after a block-terminated body (`for (…) { … };`) is
+	 * redundant, but removing a source token is the `empty-statement` lint's job, not the writer's.
+	 * De-bracing refuses a body whose slot is set (`SingleStmtBraces` gate 6), so the kept `;` never
+	 * turns a de-braced `{ x; };` into `x;;`. Pushes nothing without a source-presence slot (plain mode).
 	 */
-	private static function pushTrailOptKeep(
-		parts: Array<Expr>, child: ShapeNode, trailOptText: Null<String>, structTrailOptAccess: Null<Expr>, fieldAccess: Expr
-	): Void {
-		final args: Null<Array<String>> = child.fmtReadStringArgs('trailOptKeepIf');
-		if (args == null || structTrailOptAccess == null || trailOptText == null) return;
-		if (args.length != 1)
-			Context.fatalError(
-				'WriterLowering: @:fmt(trailOptKeepIf) expects 1 string arg (predicate), got ${args.length}', Context.currentPos()
-			);
-		final keep: Expr = WriterLowering.astPredCallT(args[0], [fieldAccess]);
-		parts.push(macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de());
+	private static function pushStmtBodyTrailOpt(parts: Array<Expr>, trailOptText: Null<String>, structTrailOptAccess: Null<Expr>): Void {
+		if (structTrailOptAccess == null || trailOptText == null) return;
+		parts.push(macro $structTrailOptAccess == true ? _dt($v{trailOptText}) : _de());
 	}
 
 	/**
@@ -824,7 +810,7 @@ final class WriterRefFieldLowering {
 		final writeFn: String = ctx.writeFnFor(refName);
 		// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-		final deBraced = deBraceBodyAccess(ctx.braceSym, child, fieldAccess, elseFieldName);
+		final deBraced = deBraceBodyAccess(ctx.braceSym, child, fieldAccess, elseFieldName, typePath);
 		final effAccess: Expr = deBraced.effAccess;
 		final ssbSuppressCond: Null<Expr> = deBraced.ssbSuppressCond;
 		final ssbTrailCommentExpr: Null<Expr> = deBraced.ssbTrailCommentExpr;

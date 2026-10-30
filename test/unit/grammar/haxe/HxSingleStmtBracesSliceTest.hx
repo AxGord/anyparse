@@ -152,17 +152,13 @@ class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-SSB-TRAILOPT-REEMIT')
-	public inline function testTrailingSemiTerminalElseIfDropsSemiAndDeBraces(): Void {
-		// The terminal else-if then-body carried the enclosing statement's redundant
-		// trailing `;`. Now that the slot never re-emits, no branch is held braced by it,
-		// so the whole chain de-braces symmetrically. Each body keeps its own line - the
-		// `ifBody` policy honours the source layout and `fitLineIfWithElse` governs a
-		// chain that has an `else`, unlike the `else`-less cases above which go inline.
-		// Verified idempotent, and the shape compiles and runs.
-		assertFmt(
-			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tA();\n\t\t} else if (b) {\n\t\t\tB();\n\t\t};\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\tA();\n\t\telse if (b)\n\t\t\tB();\n\t}\n}'
+	@:killer('M-SSB-CHAIN-THEN-TRAILSEMI-OFF')
+	public inline function testTrailingSemiTerminalElseIfKeepsSemiAndBraces(): Void {
+		// The terminal else-if then-body carries the enclosing statement's redundant trailing `;`.
+		// The writer keeps it (removing it is the `empty-statement` lint's job), so that body keeps
+		// its braces (gate 6) and the chain scan, reading the same slot, keeps every branch braced.
+		roundTrip(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tA();\n\t\t} else if (b) {\n\t\t\tB();\n\t\t};\n\t}\n}'
 		);
 	}
 
@@ -217,36 +213,26 @@ class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-SSB-TRAILOPT-REEMIT')
-	public inline function testTrailingEmptyStmtAfterForDropsSemiAndDeBraces(): Void {
-		// `for (...) { stmt; };` — the trailing `;` sits in the body's own
-		// `@:trailOpt(';')` slot, where it can only ever be REDUNDANT (the inner
-		// statement owns its own terminator), so the writer canonicalises it away.
-		// With the `;` gone the `for (...) stmt;;` hazard cannot arise and the single
-		// statement de-braces normally.
-		assertFmt(
-			'class F {\n\tfunction f(m:Map<Int, Int>):Void {\n\t\tfor (k => v in m) {\n\t\t\ttrace(v);\n\t\t};\n\t}\n}',
-			'class F {\n\tfunction f(m:Map<Int, Int>):Void {\n\t\tfor (k => v in m) trace(v);\n\t}\n}'
-		);
+	@:killer('M-SSB-TRAILSEMI-GATE-OFF')
+	public inline function testTrailingSemiAfterForKeepsSemiAndBraces(): Void {
+		// `for (...) { stmt; };` — the trailing `;` sits in the body's own `@:trailOpt(';')` slot and
+		// is written back, so the single statement keeps its braces: de-bracing would emit `stmt;;`.
+		roundTrip('class F {\n\tfunction f(m:Map<Int, Int>):Void {\n\t\tfor (k => v in m) {\n\t\t\ttrace(v);\n\t\t};\n\t}\n}');
 	}
 
 	@:pin('control')
-	@:killer('M-SSB-TRAILOPT-REEMIT')
-	public inline function testTrailingEmptyStmtAfterIfDropsSemiAndDeBraces(): Void {
-		assertFmt(
-			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t};\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) g();\n\t}\n}'
-		);
+	@:killer('M-TRAILOPT-KEEP-OFF')
+	public inline function testTrailingSemiAfterIfKeepsSemiAndBraces(): Void {
+		// The kept `;` holds the braces twice over - the splice's own gate 6 and the chain scan,
+		// which reads the same slot even with no `else` - so the cut that kills it drops the `;`.
+		roundTrip('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t};\n\t}\n}');
 	}
 
-	public inline function testTrailingEmptyStmtAfterElseDropsSemiKeepsBraces(): Void {
-		// The else-body's writer path drops the redundant trailing `;` (`else { h(); };` ->
-		// no `;;`), so that stray `;` is gone. But the sibling then-body is multi-statement
-		// and keeps its braces, so the if/else symmetry gate (gate 7) keeps the else braced
-		// too - a single-vs-multi if/else de-braces NEITHER branch.
-		assertFmt(
-			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg2();\n\t\t} else {\n\t\t\th();\n\t\t};\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg2();\n\t\t} else {\n\t\t\th();\n\t\t}\n\t}\n}'
+	public inline function testTrailingSemiAfterElseKeepsSemiAndBraces(): Void {
+		// The else-body writes its trailing `;` back as well, and the multi-statement then-body keeps
+		// both branches braced (gate 7).
+		roundTrip(
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg2();\n\t\t} else {\n\t\t\th();\n\t\t};\n\t}\n}'
 		);
 	}
 

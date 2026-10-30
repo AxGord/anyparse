@@ -27,7 +27,7 @@ package anyparse.grammar.haxe;
 enum HxDoWhileBody {
 
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks,
-		uniformStmtBlanks, trailSepKeepIf('elementIsConditional_HxStatement'))
+		uniformStmtBlanks)
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockBody(stmts: Array<HxStatement>);

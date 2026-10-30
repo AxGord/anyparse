@@ -477,42 +477,90 @@
 		{
 			"name": "M-TRAILOPT-KEEP-OFF",
 			"type": "anyparse.macro.WriterRefFieldLowering",
-			"method": "pushTrailOptKeep",
-			"find": "parts.push(macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de());",
-			"replace": "",
-			"note": "no body field keeps its `@:trailOpt(';')` slot, so the `;` after an unterminated `#if` region body is dropped and the next statement fails with `Missing ;`"
+			"method": "pushStmtBodyTrailOpt",
+			"find": "parts.push(macro $structTrailOptAccess == true ? _dt($v{trailOptText}) : _de());",
+			"replace": "parts.push(macro _de());",
+			"note": "no if / else / for / while body writes back its `@:trailOpt(';')` slot, so the `;` after a `}` is dropped by the formatter and the `;` after an unterminated `#if` region body is lost, failing the next statement with `Missing ;`"
 		},
 		{
 			"name": "M-TRAILOPT-KEEP-PRESENCE-BLIND",
 			"type": "anyparse.macro.WriterRefFieldLowering",
-			"method": "pushTrailOptKeep",
-			"find": "parts.push(macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de());",
-			"replace": "parts.push(macro $keep ? _dt($v{trailOptText}) : _de());",
-			"note": "the kept slot stops reading source presence, so a region whose branches carry their own `;` gains a second one after `#end`"
+			"method": "pushStmtBodyTrailOpt",
+			"find": "parts.push(macro $structTrailOptAccess == true ? _dt($v{trailOptText}) : _de());",
+			"replace": "parts.push(macro _dt($v{trailOptText}));",
+			"note": "the body slot stops reading source presence, so a region whose branches carry their own `;` gains a second one after `#end`"
 		},
 		{
-			"name": "M-TRAILOPT-KEEP-UNGATED",
-			"type": "anyparse.macro.WriterRefFieldLowering",
-			"method": "pushTrailOptKeep",
-			"find": "parts.push(macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de());",
-			"replace": "parts.push(macro $structTrailOptAccess == true ? _dt($v{trailOptText}) : _de());",
-			"note": "the slot is kept for every body, not just a `#if` region, so the redundant `;` after a de-braced block comes back as `;;`"
+			"name": "M-SSB-TRAILSEMI-GATE-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "macro ($slot == true);",
+			"replace": "macro false;",
+			"note": "a mandatory body's kept `;` no longer holds its braces under brace removal, so `for (…) { x; };` is de-braced into `for (…) x;;`, which Haxe rejects"
 		},
 		{
 			"name": "M-TRAILSEP-KEEP-OFF",
 			"type": "anyparse.macro.TriviaBlockLowering",
 			"method": "triviaBlockSepExprs",
-			"find": "(!($p) || $k)",
-			"replace": "!($p)",
-			"note": "a block's trailing `;` after a `#if` region is dropped again like any `stmtNoSemi` tail, so `#end;` before `}` loses the only terminator of the region's last branch"
+			"find": "return macro (_arr[$i].sepAfter && !anyparse.core.DocMeasure.endsWithSemi($doc));",
+			"replace": "return macro (_arr[$i].sepAfter && !anyparse.core.DocMeasure.endsWithSemi($doc) && !(${pred(i)}));",
+			"note": "a block's trailing `;` after a `stmtNoSemi` element is dropped again, so `#end;` before `}` loses the only terminator of the region's last branch and `switch … {};` loses a source token"
 		},
 		{
-			"name": "M-TRAILSEP-KEEP-ALL",
+			"name": "M-WRAP-SEPAFTER-ALWAYS",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "wrapInBlock",
+			"find": "sepAfter: raise != null || !innerSelfTerminates(value),",
+			"replace": "sepAfter: true,",
+			"note": "a synthesized block records a source `;` after its statement, so the block writer appends one after the `}` of an `if` it braced"
+		},
+		{
+			"name": "M-CATCH-TRAILOPT-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalRefField",
+			"find": "// A statement body's `;` (`catch (e) { … };`) is a source token like the mandatory path's.\npushStmtBodyTrailOpt(optParts, trailOptText, structTrailOptAccess);",
+			"replace": "",
+			"note": "an optional statement body without a keyword (the last `catch` body) stops writing back its `@:trailOpt(';')` slot, so `try … catch (e) { … };` loses its `;` to the formatter"
+		},
+		{
+			"name": "M-SSB-CHAIN-TRAILSEMI-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "chainForcesBraces",
+			"find": "stmt.elseBodyTrailPresent == true",
+			"replace": "false",
+			"note": "the if/else chain scan ignores the `;` kept after the terminal else body, so brace removal strips the chain and writes `else b();;`"
+		},
+		{
+			"name": "M-TRY-TRAILSEMI-GATE-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tryBraceVerdict",
+			"find": "catchCarriesSemi(catches[catches.length - 1])",
+			"replace": "false",
+			"note": "a `try` group de-braces although its last catch body carries a kept `;`, so the writer emits `catch (e) b();;`"
+		},
+		{
+			"name": "M-GLUE-TO-PREVIOUS-OFF",
 			"type": "anyparse.macro.TriviaBlockLowering",
-			"method": "triviaBlockSepExprs",
-			"find": "(!($p) || $k)",
-			"replace": "true",
-			"note": "every source `;` after a block's last element is kept, so the redundant one after a closing `}` comes back"
+			"method": "triviaBlockGlueExpr",
+			"force": "macro false",
+			"note": "a stray member `;` is written on its own line again (`}` newline `;`) and the blank line before the next member is lost"
+		},
+		{
+			"name": "M-EMPTY-STMT-BEFORE-ELSE-OFF",
+			"type": "anyparse.check.common.expressions.EmptyStatement",
+			"method": "semicolonAfterBlock",
+			"find": "if (!trimmed.startsWith(';') || (last && trimmed != ';')) return -1;",
+			"replace": "if (trimmed != ';') return -1;",
+			"note": "only a `;` past a statement's last child is found, so `if (…) { … }; else` keeps its stray `;` unreported"
+		},
+		{
+			"name": "M-EMPTY-STMT-QUOTATION-BLIND",
+			"type": "anyparse.check.common.expressions.EmptyStatement",
+			"method": "EmptyStatement",
+			"kind": "ClassDecl",
+			"find": "final class EmptyStatement extends RuleBase implements QuotationAware {",
+			"replace": "final class EmptyStatement extends RuleBase {",
+			"note": "the rule takes the central reification drop again, so a stray `;` inside a `macro class` is neither reported nor fixed"
 		},
 		{
 			"name": "M-SEP-GLUE-OFF",
@@ -2039,8 +2087,8 @@
 			"name": "M-SSB-CHAIN-TAIL-OFF",
 			"type": "anyparse.format.SingleStmtBraces",
 			"method": "chainForcesBraces",
-			"find": "\treturn cur != null && keepsBraces(cur, drop, symmetry, suppress, false, false, false);",
-			"replace": "\treturn false;",
+			"find": "return elseBody != null && keepsBraces(elseBody, drop, symmetry, suppress, false, stmt.elseBodyTrailPresent == true, false);",
+			"replace": "return false;",
 			"note": "the chain scan stops probing the FINAL else branch, so an asymmetry that only the tail of an else-if chain carries no longer forces the earlier branches to keep their braces"
 		},
 		{
@@ -2097,12 +2145,12 @@
 			"note": "the glued body is emitted with no width test at all, so a header whose glued first line overflows never falls back to the break layout"
 		},
 		{
-			"name": "M-SSB-TRAILOPT-REEMIT",
-			"type": "anyparse.macro.WriterRefFieldLowering",
-			"method": "emitMandatoryRefTrail",
-			"find": "\tif (child.fmtHasFlag('dropSingleStmtBraces')) {\n\t\tpushTrailOptKeep(parts, child, trailOptText, structTrailOptAccess, fieldAccess);\n\t\treturn;\n\t}",
-			"replace": "",
-			"note": "a brace-droppable field re-emits its `@:trailOpt` slot again, so the redundant `;` a for/if body carried comes back and holds the braces the drop had earned"
+			"name": "M-SSB-CHAIN-THEN-TRAILSEMI-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "chainForcesBraces",
+			"find": "stmt.thenBodyTrailPresent == true, true))",
+			"replace": "false, true))",
+			"note": "the if/else chain scan ignores a `;` kept after a then-body, so brace removal strips the rest of the chain while that body keeps its braces - an asymmetric chain"
 		},
 		{
 			"name": "M-SSB-ELSE-SPINE-STOP",

@@ -2354,6 +2354,9 @@ typedef BlockStarCtx = {
 
 	/** ω-blank-around-multiline-members: inserts the blank once both neighbours' Docs are known; `macro {}` without the flag. */
 	final blankAroundApplyExpr: Expr;
+
+	/** `@:fmt(glueToPrevious)`: whether element `_t` is written glued to the previous one; `macro false` without the flag. */
+	final glueToPreviousExpr: Expr;
 };
 typedef EofStarCtx = {
 	final fieldAccess: Expr;

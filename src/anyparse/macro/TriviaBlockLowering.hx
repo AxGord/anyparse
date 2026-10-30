@@ -1,7 +1,6 @@
 package anyparse.macro;
 
 #if macro
-import anyparse.core.ShapeTree;
 import anyparse.macro.WriterBlankLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -477,9 +476,6 @@ final class TriviaBlockLowering {
 		// identical to the pre-fix path (no predicate consult).
 		?blockEndedPredicate: String,
 		?blockEndedSchemaPath: String,
-		// `@:fmt(trailSepKeepIf('<pred>'))`: a source `;` after the LAST element is kept, whatever
-		// `blockEndedPredicate` says, when this predicate holds for that element. Null → dropped as before.
-		?trailSepKeepPredicate: String,
 		// ω-cond-leading-doc-lookthrough: when set (only alongside
 		// `beforeDocCommentEmptyLines`), the `_currHasDocComment` scan looks
 		// through a `#if … #end` member to its first inner member's leading
@@ -534,7 +530,10 @@ final class TriviaBlockLowering {
 		// FU12: `@:fmt(relocateTrailingComments)` — the element push becomes the
 		// `IfTrailingCommentOverflows` choice under `opt.trailingCommentAbove`.
 		// False keeps the pre-slice push byte for byte.
-		relocateTrailingComments: Bool = false
+		relocateTrailingComments: Bool = false,
+		// `@:fmt(glueToPrevious('<field>', '<Ctor>'))`: the element field and the ctor of it written glued to the
+		// previous element - see `triviaBlockGlueExpr`. Null → every element starts its own line.
+		?glueToPrevious: Array<String>
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
@@ -641,7 +640,7 @@ final class TriviaBlockLowering {
 		// spliced Expr into a BlockStarCtx and delegates to triviaBlockMainExpr.
 		final beginEnd = triviaBlockBeginEndExpr(beginEndType, keepCurlyBlanks, beginTypeAccess ?? macro null, endTypeAccess ?? macro null);
 		final between = triviaBlockBetweenExprs(blankBeforeFinalDocInLeading, betweenMultilineCommentsBlanks);
-		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath, trailSepKeepPredicate);
+		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath);
 		final leaf = triviaBlockLeafExprs(
 			afterFieldsWithDocComments, beforeDocCommentEmptyLines, existingBetweenFields, interMember, indentCaseLabelsGate,
 			lineCommentTrailBlank
@@ -695,7 +694,8 @@ final class TriviaBlockLowering {
 			caseSiblingOfferDecl: caseSym ? caseSiblingOfferLocals() : macro {},
 			blankAroundMarkExpr: blankAround.markExpr,
 			blankAroundSeenExpr: blankAround.seenExpr,
-			blankAroundApplyExpr: blankAround.applyExpr
+			blankAroundApplyExpr: blankAround.applyExpr,
+			glueToPreviousExpr: triviaBlockGlueExpr(glueToPrevious)
 		};
 		return triviaBlockMainExpr(ctx);
 	}
@@ -960,15 +960,6 @@ final class TriviaBlockLowering {
 		};
 	}
 
-	/** The predicate named by a block Star's `@:fmt(trailSepKeepIf('<pred>'))`, or null. */
-	private static function trailSepKeepPredicate(node: ShapeNode): Null<String> {
-		final args: Null<Array<String>> = node.fmtReadStringArgs('trailSepKeepIf');
-		if (args == null) return null;
-		if (args.length != 1)
-			Context.fatalError('@:fmt(trailSepKeepIf) expects 1 string arg (predicate), got ${args.length}', Context.currentPos());
-		return args[0];
-	}
-
 	/**
 	 * Block-Star blockEnded between-element / trailing sep emission (ω-blockended-
 	 * trivia, Session 3 + ω-phase-g + ω-condcomp-stray-semi). Builds the
@@ -982,23 +973,18 @@ final class TriviaBlockLowering {
 	 * sep would be commented out.
 	 */
 	private static function triviaBlockSepExprs(
-		sepText: Null<String>, blockEnded: Bool, blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>,
-		trailSepKeepPredicate: Null<String>
+		sepText: Null<String>, blockEnded: Bool, blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>
 	): { final blockSepBeforeHardlineExpr: Expr; final blockTrailSepEmitExpr: Expr; final elemSepGlueExpr: Expr; } {
 		if (sepText == null || !blockEnded)
 			return { blockSepBeforeHardlineExpr: macro {}, blockTrailSepEmitExpr: macro {}, elemSepGlueExpr: macro _elem };
 		inline function pred(i: Expr): Expr return triviaBlockPredCallExpr(blockEndedPredicate, blockEndedSchemaPath, macro _arr[$i].node);
-		inline function keep(i: Expr): Expr
-			return triviaBlockPredCallExpr(trailSepKeepPredicate, blockEndedSchemaPath, macro _arr[$i].node);
 		inline function betweenSep(i: Expr, doc: Expr): Expr {
 			final p: Expr = pred(i);
 			return macro (_arr[$i].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator($doc) && !($p)));
 		}
-		inline function trailSep(i: Expr, doc: Expr): Expr {
-			final p: Expr = pred(i);
-			final k: Expr = keep(i);
-			return macro (_arr[$i].sepAfter && !anyparse.core.DocMeasure.endsWithSemi($doc) && (!($p) || $k));
-		}
+		// A source `;` after the LAST element is written back whatever the element: after a
+		// block-terminated statement it is redundant, but removing a source token is a lint's job.
+		inline function trailSep(i: Expr, doc: Expr): Expr return macro (_arr[$i].sepAfter && !anyparse.core.DocMeasure.endsWithSemi($doc));
 		final priorSep: Expr = betweenSep(macro _si - 1, macro _priorElemDoc);
 		final lastSep: Expr = trailSep(macro _arr.length - 1, macro _priorElemDoc);
 		final ownBetween: Expr = betweenSep(macro _si, macro _elem);
@@ -1134,9 +1120,20 @@ final class TriviaBlockLowering {
 		final blankAroundSeenExpr: Expr = c.blankAroundSeenExpr;
 		final blankAroundApplyExpr: Expr = c.blankAroundApplyExpr;
 		final elemPushExpr: Expr = c.elemPushExpr;
+		final glueExpr: Expr = c.glueToPreviousExpr;
 		return macro {
 			while (_si < _arr.length) {
 				final _t = _arr[_si];
+				// A glued element skips its own line, blank-line policy and kind tracking, so the
+				// element after it is spaced as if it followed the previous element directly.
+				if ($glueExpr) {
+					final _elem: anyparse.core.Doc = $triviaElemCall;
+					final _tc: Null<String> = _t.trailingComment;
+					final _elemSep: anyparse.core.Doc = _elem;
+					$elemPushExpr;
+					_si++;
+					continue;
+				}
 				$initCurrKindExpr;
 				$blockSepBeforeHardlineExpr;
 				_inner.push(_dhl());
@@ -1322,6 +1319,24 @@ final class TriviaBlockLowering {
 	private static function caseSiblingOfferLocals(): Expr {
 		return macro var _csO: Null<anyparse.format.SiblingBreakOffer> = null,
 			_csWK: Int = -1;
+	}
+
+	/**
+	 * `@:fmt(glueToPrevious('<field>', '<Ctor>'))`: the runtime test that element `_t` is written right
+	 * after the previous one, on its line — its `<field>` holds `<Ctor>` (Haxe: a stray member-scope `;`,
+	 * so `function f() {};` keeps `};`), and nothing sits between the two to keep them apart (no leading
+	 * comment on it, no trailing comment on the previous element). `macro false` without the flag.
+	 */
+	private static function triviaBlockGlueExpr(args: Null<Array<String>>): Expr {
+		if (args == null) return macro false;
+		if (args.length != 2)
+			Context.fatalError('@:fmt(glueToPrevious) expects 2 string args (field, ctor), got ${args.length}', Context.currentPos());
+		final value: Expr = { expr: EField(macro _t.node, args[0]), pos: Context.currentPos() };
+		final ctor: String = args[1];
+		return macro (_si > 0 && _t.leadingComments.length == 0 && _arr[_si - 1].trailingComment == null && {
+			final _gv: Null<EnumValue> = $value;
+			_gv != null && Type.enumConstructor(_gv) == $v{ctor};
+		});
 	}
 
 }

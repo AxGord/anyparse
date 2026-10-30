@@ -26,15 +26,15 @@ package anyparse.grammar.haxe;
  * a Terminal projects no `QueryNode` and the value binder would be invisible to `refs` /
  * `rename` and to every declaration-walking check; the emitted bytes are unchanged.
  *
- * `@:fmt(trailOptKeepIf('elementIsConditional_HxStatement'))` on the body keeps the
- * `@:trailOpt(';')` slot after a `#if` region, whose last branch may end unterminated
- * (`#if d b() #else c() #end;`): there the `;` is the statement's terminator, not a redundant one.
+ * The body's `@:trailOpt(';')` slot is written back from source presence: a `;` after a block
+ * body is redundant and the `empty-statement` lint's to remove, while after a `#if` region whose
+ * last branch ends unterminated (`#if d b() #else c() #end;`) it is the statement's terminator.
  */
 @:peg
 typedef HxForStmt = {
 	@:lead('(') @:fmt(condWrap('conditionWrap')) var varName: HxIdentLit;
 	@:optional @:lead('=>') var valueName: Null<HxKeyValueBinder>;
 	@:kw('in') @:trail(')') @:fmt(condWrapEnd) var iterable: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('forBody'), dropSingleStmtBraces, trailOptKeepIf('elementIsConditional_HxStatement'),
-		loopBodyIfElseNext('loopBodyIfElseNext', 'IfStmt', 'elseBody')) var body: HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('forBody'), dropSingleStmtBraces, loopBodyIfElseNext('loopBodyIfElseNext', 'IfStmt', 'elseBody'))
+	var body: HxStatement;
 };

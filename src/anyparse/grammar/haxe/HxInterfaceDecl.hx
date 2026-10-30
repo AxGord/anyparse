@@ -36,5 +36,6 @@ typedef HxInterfaceDecl = {
 		blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars'
-		), betweenMultilineCommentsBlanks, blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+		), betweenMultilineCommentsBlanks, blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments,
+		glueToPrevious('member', 'EmptySemiMember')) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }

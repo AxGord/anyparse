@@ -31,7 +31,7 @@ final class BranchOutliningTest extends Test {
 					return Foo.Bar(new anyparse.runtime.Span(_start, ctx.pos));
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 		Assert.equals(2, rules.length);
@@ -60,7 +60,7 @@ final class BranchOutliningTest extends Test {
 					return Foo.Bar(_raw);
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 		Assert.equals(2, rules.length);
@@ -80,7 +80,7 @@ final class BranchOutliningTest extends Test {
 					return Foo.Bar(left);
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 	}
@@ -113,7 +113,7 @@ final class BranchOutliningTest extends Test {
 					return Foo.Bar(0);
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 		Assert.equals(2, rules.length);
@@ -134,7 +134,7 @@ final class BranchOutliningTest extends Test {
 					}
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 	}
@@ -150,7 +150,7 @@ final class BranchOutliningTest extends Test {
 					for (k => v in parseMap(ctx)) if (k == v) return Foo.Bar(k);
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 	}
@@ -166,7 +166,7 @@ final class BranchOutliningTest extends Test {
 					return parseX(ctx);
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 	}
@@ -183,7 +183,7 @@ final class BranchOutliningTest extends Test {
 					return Foo.NONE;
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 	}
@@ -200,7 +200,7 @@ final class BranchOutliningTest extends Test {
 					return Foo.Bar(_start);
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 	}
@@ -211,7 +211,7 @@ final class BranchOutliningTest extends Test {
 		assertKeptInline(macro {
 			{
 				final _start: String = '';
-			};
+			}
 			final _start: Int = ctx.pos;
 			{
 				final _savedPos: Int = ctx.pos;
@@ -219,7 +219,7 @@ final class BranchOutliningTest extends Test {
 					return Foo.Bar(_start);
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 	}
@@ -239,11 +239,11 @@ final class BranchOutliningTest extends Test {
 							return Foo.Bar(0);
 						} catch (_branchFail: anyparse.runtime.ParseError)
 							ctx.pos = _savedPos;
-					};
+					}
 					return Foo.Baz(1);
 				} catch (_branchFail: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 		Assert.same(['parseR', 'parseRAlt0', 'parseRAlt1'], [for (rule in rules) rule.fnName]);
@@ -259,7 +259,7 @@ final class BranchOutliningTest extends Test {
 					return Foo.Bar(0);
 				} catch (_e: anyparse.runtime.ParseError)
 					ctx.pos = _savedPos;
-			};
+			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
 	}

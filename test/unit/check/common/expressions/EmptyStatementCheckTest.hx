@@ -2,6 +2,7 @@ package unit.check.common.expressions;
 
 import anyparse.check.Severity;
 import anyparse.check.common.expressions.EmptyStatement;
+import testkit.QuotedSemicolonProbe;
 
 /**
  * The `empty-statement` check: a stray empty statement (a lone `;`) is flagged
@@ -128,6 +129,50 @@ class EmptyStatementCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\ttry\n\t\t\trisky()\n\t\tcatch (exception:Exception)\n'
 			+ '\t\t\tlog(exception);\n\t\th();\n\t}\n}';
 		Assert.equals(0, violations(src).length);
+	}
+
+	/** The `;` written between a block and its `else` is absorbed into the `if` too, and `fix` drops it. */
+	@:pin('control')
+	@:killer('M-EMPTY-STMT-BEFORE-ELSE-OFF')
+	public function testSemicolonBeforeElseFlaggedAndFixed(): Void {
+		final src: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\tg();\n\t\t}; else {\n\t\t\th();\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(
+			'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\tg();\n\t\t} else {\n\t\t\th();\n\t\t}\n\t}\n}', applyFix(src)
+		);
+	}
+
+	/**
+	 * Inside a `macro class` quotation the stray member `;` is reported and fixed too: it is not in the
+	 * AST the quotation builds, so the rule declines the central reification drop.
+	 */
+	@:pin('control')
+	@:killer('M-EMPTY-STMT-QUOTATION-BLIND')
+	public function testMacroClassMemberSemicolonFlaggedAndFixed(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar c = macro class X {\n\t\t\tfunction g() {};\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(
+			'class C {\n\tfunction f():Void {\n\t\tvar c = macro class X {\n\t\t\tfunction g() {}\n\t\t};\n\t}\n}', applyFix(src)
+		);
+	}
+
+	/**
+	 * The premise of the rule's `QuotationAware` opt-out, checked against the compiler that builds this suite: every `;`
+	 * it deletes inside a quotation — before `else`, after a loop / catch / bare block, in a case body, after a member of a
+	 * `macro class` — is absent from the reified AST. A Haxe release that starts keeping one fails here, not in a user's macro.
+	 */
+	public function testDeletedSemicolonIsNotInTheReifiedAst(): Void {
+		final divergent: Array<String> = QuotedSemicolonProbe.divergentPairs();
+		Assert.equals(0, divergent.length, 'reified differently with the `;`: ${divergent.join(', ')}');
+	}
+
+	/** A file the formatter has already written (`};` glued everywhere) is fixed as it stands, no `fmt` between. */
+	public function testFixOnFormattedFileNeedsNoReformat(): Void {
+		final src: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tfor (i in [1]) {\n\t\t\tg();\n\t\t};\n\t\ttry {\n\t\t\tg();\n'
+			+ '\t\t} catch (e:Dynamic) {};\n\t\tswitch c {};\n\t};\n\n\tfunction g():Void {}\n}';
+		final expected: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tfor (i in [1]) {\n\t\t\tg();\n\t\t}\n\t\ttry {\n\t\t\tg();\n'
+			+ '\t\t} catch (e:Dynamic) {}\n\t\tswitch c {}\n\t}\n\n\tfunction g():Void {}\n}';
+		Assert.equals(expected, applyFix(src));
 	}
 
 	private function violations(src: String): Array<Violation> {
