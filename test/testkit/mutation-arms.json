@@ -11858,15 +11858,15 @@
 			"name": "M-TS-QUIET-SWALLOWS",
 			"type": "anyparse.check.common.design.threads.MainSinkReport",
 			"method": "report",
-			"find": "if (states.edgeContext(edge) & ThreadSafety.CTX_MAIN == 0) continue;",
-			"replace": "if (states.edgeContext(edge) & ThreadSafety.CTX_MAIN == 0 || states.edgeContext(edge) & ThreadSafety.CTX_QUIET != 0) continue;",
+			"find": "if ((states.edgeContext(edge) & ThreadSafety.CTX_MAIN) == 0) continue;",
+			"replace": "if ((states.edgeContext(edge) & ThreadSafety.CTX_MAIN) == 0 || (states.edgeContext(edge) & ThreadSafety.CTX_QUIET) != 0) continue;",
 			"note": "one path through a quiet root silences a sink every other main-thread path still reaches"
 		},
 		{
 			"name": "M-TS-QUIET-INTO-CALLBACK",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "callbackContext",
-			"find": "final loud: Int = (ctx & CTX_QUIET != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));",
+			"find": "final loud: Int = ((ctx & CTX_QUIET) != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));",
 			"replace": "final loud: Int = ctx;",
 			"note": "a callback a quiet root registers or spawns inherits its quiet, so a listener or worker it hands on is never reported"
 		},
@@ -17465,8 +17465,8 @@
 			"name": "M-TS-MAINSHORT-LOUD-ONLY",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "explained",
-			"find": "if (ctx & (CTX_MAIN | CTX_QUIET) != 0)",
-			"replace": "if (ctx & CTX_MAIN != 0)",
+			"find": "if ((ctx & (CTX_MAIN | CTX_QUIET)) != 0)",
+			"replace": "if ((ctx & CTX_MAIN) != 0)",
 			"note": "a short lock a quiet root takes on the main thread is missing from the main-thread takes"
 		},
 		{
@@ -17529,8 +17529,8 @@
 			"name": "M-TS-UPWARD-INERT",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "run",
-			"find": "!(e.kind == Ref && inertRef(e)) && states.edgeContext(e)",
-			"replace": "states.edgeContext(e)",
+			"find": "!(e.kind == Ref && inertRef(e)) && (states.edgeContext(e)",
+			"replace": "(states.edgeContext(e)",
 			"note": "a value stored where it never runs from repeats with the loop that stores it"
 		},
 		{
@@ -17561,7 +17561,7 @@
 			"name": "M-TS-B-MAIN-ONLY-KEPT",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0",
+			"find": "final mainOnly: Bool = lock != null && (states.edgeContext(a.edge) & CTX_BG) == 0",
 			"replace": "final mainOnly: Bool = false",
 			"note": "a hold only the main thread runs is a stall like any other"
 		},
@@ -19321,7 +19321,7 @@
 			"name": "M-TS-QUIET-HOLD",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": " || states.edgeContext(a.edge) & (CTX_MAIN | CTX_BG) == 0)",
+			"find": " || (states.edgeContext(a.edge) & (CTX_MAIN | CTX_BG)) == 0)",
 			"replace": ")",
 			"note": "a hold only a quiet root runs reports as the main thread's own long work, though the root waits on purpose"
 		},
@@ -32582,6 +32582,30 @@
 			"find": "opt.interfaceBeginType = section.interfaceEmptyLines?.beginType ?? opt.interfaceBeginType;",
 			"replace": "",
 			"note": "`interfaceEmptyLines.beginType` is parsed and dropped, so an interface body keeps the source edge"
+		},
+		{
+			"name": "M-CPREC-NESTED-EDITS-OVERLAP",
+			"type": "anyparse.check.common.expressions.CPrecedenceTrap",
+			"method": "fix",
+			"find": "!spans.exists(outer -> outer != span && outer.from <= span.from && span.to <= outer.to)",
+			"replace": "true",
+			"note": "a flagged operand nested in another flagged one is wrapped in the same pass, so two edits overlap"
+		},
+		{
+			"name": "M-NSSTRICT-TYPE-OFF-TWICE",
+			"type": "anyparse.check.haxe.nullsafety.NullSafetyStrict",
+			"method": "findings",
+			"find": "!typeEntries.contains(node)",
+			"replace": "true",
+			"note": "a class-level @:nullSafety(Off) is reported a second time as a below-type Off"
+		},
+		{
+			"name": "M-SUBSTR-ANY-START",
+			"type": "anyparse.check.haxe.expressions.SubstrNegativeStart",
+			"method": "run",
+			"find": "subtractKinds.contains(start.kind)",
+			"replace": "true",
+			"note": "every substr start is flagged, not only a subtraction"
 		}
 	]
 }

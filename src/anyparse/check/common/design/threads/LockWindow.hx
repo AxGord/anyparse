@@ -143,7 +143,7 @@ final class LockWindow {
 		final escapes: Array<QueryNode> = [];
 		var leaks: Bool = false;
 		for (bits in 0...1 << flags.length) {
-			_decided = [for (i => f in flags) f => bits & (1 << i) != 0];
+			_decided = [for (i => f in flags) f => (bits & (1 << i)) != 0];
 			reset(acquireFrom, releaseFroms, raisingFroms);
 			if (sequence(fn.children, false) == true) _leaks = true;
 			leaks = leaks || _leaks;

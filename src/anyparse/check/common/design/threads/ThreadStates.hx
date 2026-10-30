@@ -106,7 +106,7 @@ final class ThreadStates {
 	public function mainPath(edge: CallEdge): Array<String> {
 		final start: Null<ThreadState> = (
 			_byNode[edge.from] ?? []
-		).find(s -> _conditions.carried(edge, s.valuation, s.ctx) & ThreadSafety.CTX_MAIN != 0);
+		).find(s -> (_conditions.carried(edge, s.valuation, s.ctx) & ThreadSafety.CTX_MAIN) != 0);
 		final parts: Array<String> = [edge.from];
 		if (start == null) return parts;
 		final visited: Array<ThreadState> = [start];
@@ -169,7 +169,7 @@ final class ThreadStates {
 				id: id,
 				valuation: valuation,
 				ctx: entered,
-				parent: entered & ThreadSafety.CTX_MAIN != 0 ? parent : null
+				parent: (entered & ThreadSafety.CTX_MAIN) != 0 ? parent : null
 			};
 			_states[key] = state;
 			final list: Array<ThreadState> = _byNode[id] ?? [];
@@ -181,7 +181,7 @@ final class ThreadStates {
 		}
 		final merged: Int = known.ctx | entered;
 		if (merged == known.ctx) return;
-		if (known.ctx & ThreadSafety.CTX_MAIN == 0 && merged & ThreadSafety.CTX_MAIN != 0) known.parent = parent;
+		if ((known.ctx & ThreadSafety.CTX_MAIN) == 0 && (merged & ThreadSafety.CTX_MAIN) != 0) known.parent = parent;
 		known.ctx = merged;
 		contexts[id] = (contexts[id] ?? 0) | merged;
 		_queue.push(known);
@@ -216,13 +216,13 @@ final class ThreadStates {
 	}
 
 	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */
-	public static function chainText(path: Array<String>, cap: Int): String {
+	public static function chainText(path: Array<String>, cap: Int = ThreadSafety.CHAIN_CAP): String {
 		return (path.length > cap + 1 ? ['...'].concat(path.slice(-(cap + 1))) : path).join(' -> ');
 	}
 
 	/** The context `ctx` becomes on entering `id`: the main thread goes quiet in a `quiet` root. */
 	private static function enter(quiet: Array<String>, id: String, ctx: Int): Int {
-		return quiet.contains(id) && ctx & ThreadSafety.CTX_MAIN != 0 ? (ctx & ~ThreadSafety.CTX_MAIN) | ThreadSafety.CTX_QUIET : ctx;
+		return quiet.contains(id) && (ctx & ThreadSafety.CTX_MAIN) != 0 ? (ctx & ~ThreadSafety.CTX_MAIN) | ThreadSafety.CTX_QUIET : ctx;
 	}
 
 }

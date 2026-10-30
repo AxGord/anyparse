@@ -252,7 +252,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		// a finding a directive silences is shown nowhere: no other finding folds onto it
 		final suppressed: (Violation) -> Bool = Suppression.silencer(files, plugin.lexicalRegions);
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
-		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
+		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && (states.edgeContext(e) & CTX_MAIN) != 0;
 		final repeatsOnMain: MainRepeats = new MainRepeats(graph, repetition, states, conditions, runsMain);
 		final reported: Map<String, Violation> = MainSinkReport.report(
 			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain },
@@ -327,7 +327,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		final mainTakes: Array<MainTake> = [];
 		for (a in acquires) {
 			final ctx: Int = states.edgeContext(a.edge);
-			if (ctx & (CTX_MAIN | CTX_QUIET) != 0) mainTakes.push({ take: a, quiet: ctx & CTX_MAIN == 0 });
+			if ((ctx & (CTX_MAIN | CTX_QUIET)) != 0) mainTakes.push({ take: a, quiet: (ctx & CTX_MAIN) == 0 });
 		}
 		return LongLockExplain.report(sites, acquires, long, taints, mainTakes, lock -> {
 			final without: Array<String> = [];
@@ -605,7 +605,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	 */
 	private static function callbackContext(graph: CallGraph, edge: CallEdge, lists: ChainLists, ctx: Int): Int {
 		final via: Null<String> = edge.via;
-		final loud: Int = (ctx & CTX_QUIET != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));
+		final loud: Int = ((ctx & CTX_QUIET) != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));
 		return if (ThreadStates.runsOnMain(graph, edge, lists))
 			CTX_MAIN
 		else if (via != null && lists.spawnIds.contains(via))
@@ -631,7 +631,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 				graph, conditions, roots, (e, ctx) -> callbackContext(graph, e, listsOf(e.file), ctx), inertRef, seedable
 			);
 			final loud: Array<String> = [
-				for (q in roots) if (graph.inEdges(q).exists(e -> e.kind.isInvocation() && states.edgeContext(e) & CTX_MAIN != 0)) q
+				for (q in roots) if (graph.inEdges(q).exists(e -> e.kind.isInvocation() && (states.edgeContext(e) & CTX_MAIN) != 0)) q
 			];
 			if (loud.length == 0) return states;
 			roots = roots.filter(q -> !loud.contains(q));
@@ -780,11 +780,11 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			final fold: FoldHold = RootCauseFold.unreported(a, paths.normal);
 			folds.push(fold);
 			// a hold only a quiet root runs waits on purpose, on the main thread, which never waits for its own hold
-			if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) || states.edgeContext(a.edge) & (CTX_MAIN | CTX_BG) == 0)
+			if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) || (states.edgeContext(a.edge) & (CTX_MAIN | CTX_BG)) == 0)
 				continue;
 			// the main thread never waits for a hold of a lock it alone holds there: such a hold stays only as the main thread's
 			// own long work; who else holds a lock no member names is unknown
-			final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0 && !states.assumed.exists(a.edge.from);
+			final mainOnly: Bool = lock != null && (states.edgeContext(a.edge) & CTX_BG) == 0 && !states.assumed.exists(a.edge.from);
 			final held: Null<String> = taints.reentrantHeld(a);
 			final pick: { long: LockTaint, normal: LockTaint } = mainOnly ? own : any;
 			final judges: HoldJudges = {

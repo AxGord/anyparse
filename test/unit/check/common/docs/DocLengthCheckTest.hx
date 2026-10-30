@@ -106,7 +106,7 @@ class DocLengthCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('doc-length');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'doc-length is opt-in');
-		Assert.equals(197, Linter.builtins().length);
+		Assert.equals(200, Linter.builtins().length);
 	}
 
 	/** The check's findings on `src` under the `apqlint.json` document `configJson`. */
@@ -134,7 +134,7 @@ class DocLengthCheckTest extends Test {
 
 	/** `count` indented copies of `text`, one per line. */
 	private function body(count: Int, text: String): String {
-		return [for (i in 0...count) '\t$text'].join('\n');
+		return [for (_ in 0...count) '\t$text'].join('\n');
 	}
 
 }

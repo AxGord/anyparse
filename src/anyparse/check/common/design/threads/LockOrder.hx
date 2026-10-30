@@ -383,7 +383,7 @@ final class LockOrder {
 	/** The step of `steps` running on a context of `mask` that precedes every other such step; null with none. */
 	private static function least(steps: Array<OrderStep>, mask: Int, rank: (OrderStep) -> RankedStep): Null<RankedStep> {
 		var out: Null<RankedStep> = null;
-		for (step in steps) if (step.ctx & mask != 0) {
+		for (step in steps) if ((step.ctx & mask) != 0) {
 			final s: RankedStep = rank(step);
 			final known: Null<RankedStep> = out;
 			if (known == null || precedes(s, known)) out = s;

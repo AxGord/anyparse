@@ -486,7 +486,7 @@ enum abstract WalkFlags(Int) from Int to Int {
 	final InTypeAnnotation = 4;
 
 	public inline function has(flag: WalkFlags): Bool {
-		return this & (flag: Int) != 0;
+		return (this & (flag: Int)) != 0;
 	}
 
 	public inline function with(flag: WalkFlags, on: Bool): WalkFlags {

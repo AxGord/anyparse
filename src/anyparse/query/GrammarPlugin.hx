@@ -3451,6 +3451,14 @@ final class RefShape {
 	public var comparisonOperandHostKinds: Null<Array<String>>;
 
 	/**
+	 * The operand slots where this grammar groups a BARE operand differently from the C-family precedence a reader
+	 * carries over: under each host operator kind, the operand kinds that diverge and the slots (0 left, 1 right) where
+	 * they do. Read by `c-precedence-trap`, which parenthesizes such an operand the way the parser already groups it;
+	 * optional, unset makes that rule a no-op.
+	 */
+	public var cPrecedenceDivergences: Null<Array<PrecedenceDivergence>>;
+
+	/**
 	 * The ARITHMETIC CORE of the kinds that bind strictly tighter than the comparison
 	 * tier, plus the POSTFIX in/decrements: those that also parse identically across the
 	 * C-family languages, so a `parenKind` wrapping one as an operand of a
@@ -4077,6 +4085,17 @@ typedef EnumAbstractSyntax = {
 @:nullSafety(Strict)
 typedef TypeRefShape = {
 	var typeRefKinds: Array<String>;
+}
+
+/**
+ * One row of `RefShape.cPrecedenceDivergences`: a bare operand whose kind is in `operands`, sitting in one of `slots`
+ * (0 left, 1 right) of a `hosts` operator, is grouped here the way a C-family reader would not group it.
+ */
+@:nullSafety(Strict)
+typedef PrecedenceDivergence = {
+	var hosts: Array<String>;
+	var operands: Array<String>;
+	var slots: Array<Int>;
 }
 
 /**

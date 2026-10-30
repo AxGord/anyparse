@@ -70,7 +70,7 @@ final class MainSinkReport {
 			// between contexts in ways the graph cannot see; sinks inside it are
 			// the primitive's own machinery, not application-level main calls
 			if (taints.listsOf(edge.file).marshalIds.contains(edge.from)) continue;
-			if (states.edgeContext(edge) & ThreadSafety.CTX_MAIN == 0) continue;
+			if ((states.edgeContext(edge) & ThreadSafety.CTX_MAIN) == 0) continue;
 			final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}';
 			final known: Null<Array<String>> = targets[key];
 			if (known == null) {
@@ -436,14 +436,14 @@ final class MainSinkReport {
 		graph: CallGraph, edge: CallEdge, sinks: Array<String>, path: Array<String>, ctx: Int, note: String, warn: Bool
 	): Violation {
 		final named: String = [for (t in sinks) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR);
-		final also: String = ctx & ThreadSafety.CTX_BG != 0 ? ' (also reachable from a background thread)' : '';
+		final also: String = (ctx & ThreadSafety.CTX_BG) != 0 ? ' (also reachable from a background thread)' : '';
 		final sorted: Array<String> = ThreadSafety.sortedIds(sinks);
 		return {
 			file: edge.file,
 			span: edge.span,
 			rule: 'thread-safety',
 			severity: warn ? Severity.Warning : Severity.Info,
-			message: 'main thread reaches blocking $named$also: ${ThreadStates.chainText(path, ThreadSafety.CHAIN_CAP)} -> '
+			message: 'main thread reaches blocking $named$also: ${ThreadStates.chainText(path)} -> '
 				+ '${sinks.join(ThreadSafety.SUBJECT_SEPARATOR)}$note',
 			data: {
 				family: FindingFamily.MainSink,
@@ -517,7 +517,7 @@ final class MainSinkReport {
 		owned.sinks = sorted;
 		owned.finding.message = 'main thread repeats short blocking '
 			+ [for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)
-			+ ' at this call: ${ThreadStates.chainText(owned.path, ThreadSafety.CHAIN_CAP)} -> '
+			+ ' at this call: ${ThreadStates.chainText(owned.path)} -> '
 			+ sorted.join(ThreadSafety.SUBJECT_SEPARATOR);
 		final data: Null<FindingData> = owned.finding.data;
 		if (data != null) data.chain = owned.path.concat(sorted);

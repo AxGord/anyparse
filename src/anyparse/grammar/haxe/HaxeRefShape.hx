@@ -1492,6 +1492,14 @@ final class HaxeRefShape {
 		// tier above every binary operator) and `Interval` (one tier looser, and a `...` that abuts
 		// numeric-literal / field-access `.` lexing) are deliberately not hosts.
 		table.comparisonOperandHostKinds = ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq'];
+		// Haxe binds `&` `|` `^` tighter than a comparison and as ONE left-associative tier, and `%` a tier above `*` `/`; C binds
+		// the three bitwise operators looser than `==` and apart from each other (`&` over `^` over `|`), and `%` beside `*` `/`.
+		table.cPrecedenceDivergences = [
+			{ hosts: table.comparisonOperandHostKinds ?? [], operands: ['BitAnd', 'BitOr', 'BitXor'], slots: [0, 1] },
+			{ hosts: ['BitAnd'], operands: ['BitOr', 'BitXor'], slots: [0] },
+			{ hosts: ['BitXor'], operands: ['BitOr'], slots: [0] },
+			{ hosts: ['Mul', 'Div'], operands: ['Mod'], slots: [1] }
+		];
 		// The arithmetic core plus the POSTFIX in/decrements: tiers 9-11 and the
 		// postfix chain links, strictly tighter than a comparison here AND in every
 		// C-family language, so the drop is right on both readings. `PostIncr` /

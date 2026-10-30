@@ -541,7 +541,7 @@ final class LockTaint {
 		final roots: Array<WalkStep> = [];
 		if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge) || onErrorPath(edge)) return roots;
 		for (state in _threads.statesOf(a.edge.from)) for (bit in THREAD_BITS) if (
-			state.ctx & bit != 0 && _conditions.carried(a.edge, state.valuation, bit) != 0
+			(state.ctx & bit) != 0 && _conditions.carried(a.edge, state.valuation, bit) != 0
 		) {
 			final live: Int = _conditions.carried(edge, state.valuation, bit);
 			if (live == 0) continue;

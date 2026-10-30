@@ -142,7 +142,7 @@ final class HoldGrade {
 		return [
 			for (a in acquires) {
 				final key: String = takenKey(a);
-				if (states.edgeContext(a.edge) & ThreadSafety.CTX_MAIN != 0 && (a.lock == null || !taints.quiet.sharedOnly(key))) key;
+				if ((states.edgeContext(a.edge) & ThreadSafety.CTX_MAIN) != 0 && (a.lock == null || !taints.quiet.sharedOnly(key))) key;
 			}
 		];
 	}

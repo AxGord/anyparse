@@ -186,7 +186,7 @@ final class MainRepeats {
 	/** The valuations of the main-thread states of `id`. */
 	private function mainStates(id: String): Array<String> {
 		return [
-			for (s in _states.statesOf(id)) if (s.ctx & ThreadSafety.CTX_MAIN != 0) s.valuation
+			for (s in _states.statesOf(id)) if ((s.ctx & ThreadSafety.CTX_MAIN) != 0) s.valuation
 		];
 	}
 

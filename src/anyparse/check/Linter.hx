@@ -77,6 +77,7 @@ import anyparse.check.common.docs.FragmentedDocComment;
 import anyparse.check.common.docs.MisplacedTypeDoc;
 import anyparse.check.common.docs.PreferDocComment;
 import anyparse.check.common.docs.PreferLineComment;
+import anyparse.check.common.expressions.CPrecedenceTrap;
 import anyparse.check.common.expressions.EmptyBlock;
 import anyparse.check.common.expressions.EmptyStatement;
 import anyparse.check.common.expressions.HoistEmbeddedAssignment;
@@ -197,6 +198,7 @@ import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.check.common.unused.UnusedPublicMember;
 import anyparse.check.common.unused.UnusedReturnValue;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
+import anyparse.check.haxe.expressions.SubstrNegativeStart;
 import anyparse.check.haxe.literals.PreferInterpolation;
 import anyparse.check.haxe.literals.PreferLpad;
 import anyparse.check.haxe.loops.PreferCount;
@@ -204,6 +206,7 @@ import anyparse.check.haxe.loops.PreferExists;
 import anyparse.check.haxe.loops.PreferFind;
 import anyparse.check.haxe.loops.PreferForeach;
 import anyparse.check.haxe.loops.PreferMapLiteral;
+import anyparse.check.haxe.nullsafety.NullSafetyStrict;
 import anyparse.check.haxe.types.PreferIsOperator;
 import anyparse.check.haxe.types.PreferMapType;
 import anyparse.core.PhaseTimings;
@@ -256,6 +259,9 @@ final class Linter {
 			new IfFalseDeadCode(),
 			new EmptyBlock(),
 			new IdenticalOperands(),
+			new CPrecedenceTrap(),
+			new SubstrNegativeStart(),
+			new NullSafetyStrict(),
 			new SelfAssignment(),
 			new DuplicateCase(),
 			new CasePatternSeparator(),

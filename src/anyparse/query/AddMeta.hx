@@ -96,6 +96,15 @@ final class AddMeta {
 		return host == null ? null : runEdit(source, prefixRun(TreePath.parentOf(tree, host), host), host, text);
 	}
 
+	/**
+	 * The metadata and modifier siblings written in front of the declaration `decl` of `tree` — the run `addMeta` extends
+	 * — or an empty list when it has none or carries no span.
+	 */
+	public static function leadingRun(tree: QueryNode, decl: QueryNode): Array<QueryNode> {
+		final host: Null<QueryNode> = declarationHost(tree, decl);
+		return host == null ? [] : prefixRun(TreePath.parentOf(tree, host), host);
+	}
+
 	private static inline function foldSpaces(text: String): String {
 		return ~/\s+/g.replace(text.trim(), ' ');
 	}

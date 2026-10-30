@@ -331,6 +331,7 @@ class CrossScopeSoundnessTest extends Test {
 	private static final FIX_WRITERS: Array<String> = [
 		'inline-constant',
 		'naming',
+		'null-safety-strict',
 		'orphan-accessor',
 		'prefer-final-field',
 		'prefer-final-public-field',
