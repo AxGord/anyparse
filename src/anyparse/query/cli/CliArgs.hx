@@ -7,6 +7,7 @@ import anyparse.query.SourceText;
 import anyparse.query.cli.CliArgs.ExpandedInputs;
 import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
+import anyparse.query.merge.StructuralMerge.MergeShape;
 import anyparse.runtime.Span;
 
 /**
@@ -159,19 +160,22 @@ final class CliArgs {
 				lang: HaxeQueryPlugin.LANG,
 				extensions: HaxeQueryPlugin.EXTENSIONS,
 				recognises: null,
-				make: HaxeQueryPlugin.new
+				make: HaxeQueryPlugin.new,
+				merge: Declarations
 			},
 			{
 				lang: JsonQueryPlugin.LANG,
 				extensions: JsonQueryPlugin.EXTENSIONS,
 				recognises: JsonQueryPlugin.recognises,
-				make: JsonQueryPlugin.new
+				make: JsonQueryPlugin.new,
+				merge: Records
 			},
 			{
 				lang: MermaidQueryPlugin.LANG,
 				extensions: MermaidQueryPlugin.EXTENSIONS,
 				recognises: null,
-				make: MermaidQueryPlugin.new
+				make: MermaidQueryPlugin.new,
+				merge: Declarations
 			}
 		];
 	}
@@ -393,6 +397,11 @@ final class CliArgs {
 		return grammarOf(lang).extensions[0];
 	}
 
+	/** How `apq merge-file` takes the files of the grammar `lang` apart. */
+	public static function mergeShapeOf(lang: String): MergeShape {
+		return grammarOf(lang).merge;
+	}
+
 	/** The registry row of `--lang lang`; an unregistered name is a usage error. */
 	private static function grammarOf(lang: String): GrammarEntry {
 		for (entry in grammars()) if (entry.lang == lang) return entry;
@@ -486,4 +495,7 @@ typedef GrammarEntry = {
 
 	/** A fresh plugin instance. */
 	final make: () -> GrammarPlugin;
+
+	/** How `apq merge-file` takes the grammar's files apart: by declarations (source) or by records (data). */
+	final merge: MergeShape;
 };

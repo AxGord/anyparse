@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import dev.MergeBrief.MergePlace;
 import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
@@ -17,12 +18,14 @@ using StringTools;
 /**
  * `dev land <branch>` — the parent's landing of a reviewed slice branch in the tree that holds this `dev.js`, as ONE
  * command: the branch's single commit is applied on top of the checked-out branch (`git cherry-pick --no-commit`), so the
- * history stays linear, its append-only files merging as their `.gitattributes` say (`docs/decisions.md` by union,
- * `mutation-arms.json` by `dev merge-arms`), the three binaries rebuilt, the commit made with a `Slice: <ID>` trailer, then
+ * history stays linear, its files merging as their `.gitattributes` say (`docs/decisions.md` by union, source and JSON
+ * through their grammar by `apq merge-file`, each merged file a detail line), the three binaries rebuilt, the commit made
+ * with a `Slice: <ID>` trailer, then
  * `dev battery` (quick, or in full when the commit brings in a path where a shard and the one-process suite can
  * diverge, or the number of the landing, counted over every landing that runs the battery, is a multiple of ten — the
  * battery row says which) — and one verdict line. A branch that does not carry exactly one commit over the checked-out one
- * is refused; a conflict git cannot resolve or a failed build rolls the tree back to where it was; a red battery leaves the
+ * is refused; a conflict git cannot resolve or a failed build rolls the tree back to where it was — a place the merge
+ * driver left gets a `MergeBrief` with the `--resolve` choices that re-land it; a red battery leaves the
  * commit for the caller to judge (docs/testing.md § "Landing a slice"). Any step after the pick that does not pass — one
  * that threw (`not run`) as much as one that failed — rolls it back.
  */
@@ -30,7 +33,8 @@ using StringTools;
 final class Land {
 
 	public static inline final USAGE: String = 'usage: dev land <branch> [-m <message>] [--no-battery] [--full] [--allow-blast] '
-		+ '[--allow <row>]... [--snapshot] [--rounds <n>] [--tokens <n>] [--logs <dir>] [--repo <tree>]';
+		+ '[--allow <row>]... [--snapshot] [--rounds <n>] [--tokens <n>] [--resolve <path>#<key>=<ours|theirs|both>]... '
+		+ '[--queue <file>] [--logs <dir>] [--repo <tree>]';
 
 	/** The trailers a landing carries its review rounds and the tokens the slice cost under, which `dev slice-stats` reads. */
 	public static inline final ROUNDS_TRAILER: String = 'Review-Rounds';
@@ -40,8 +44,14 @@ final class Land {
 	/** Every this-many-th landing runs the battery in full, whatever it touched. */
 	public static inline final FULL_EVERY: Int = 10;
 
-	/** The merge driver `.gitattributes` names for `test/testkit/mutation-arms.json`. */
-	private static inline final ARMS_DRIVER: String = 'anyparse-arms';
+	/** The merge driver `.gitattributes` names for the files a grammar reads (`apq merge-file`). */
+	private static inline final DRIVER: String = 'anyparse';
+
+	/** The prefix `apq merge-file` reports a merged file with. */
+	private static inline final MERGED_PREFIX: String = 'auto-merged: ';
+
+	/** The queue file whose lines a merge brief quotes, under the repository, when `--queue` names none. */
+	private static inline final QUEUE: String = '.claude/batch/wave-D.md';
 
 	/** What the battery may run before it is killed. */
 	private static inline final BATTERY_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
@@ -85,6 +95,11 @@ final class Land {
 	/** The trailers the commit carries beside `Slice`, each `<key>: <value>`. */
 	private final _trailers: Array<String>;
 
+	/** The places settled for the merge driver, each `<path>#<key>=<choice>`. */
+	private final _resolve: Array<String>;
+
+	private final _queue: Null<String>;
+
 	/** Whether the pick of this run has begun, so a failed step rolls the tree back. */
 	private var _picking: Bool = false;
 
@@ -106,6 +121,8 @@ final class Land {
 		_merged = options.merged;
 		_print = options.print;
 		_trailers = options.trailers ?? [];
+		_resolve = options.resolve ?? [];
+		_queue = options.queue;
 	}
 
 	/**
@@ -199,21 +216,38 @@ final class Land {
 		return null;
 	}
 
-	/** `git cherry-pick --no-commit` of the branch's commit with the arm registry's driver named; a conflict it leaves fails the step. */
+	/**
+	 * `git cherry-pick --no-commit` of the branch's commit with the grammar merge driver named, the places `--resolve`
+	 * settled handed to it; every file it merged is a detail line, and a conflict it leaves fails the step with a brief.
+	 */
 	private function pick(): Outcome {
-		final dev: String = Path.join([_repo, 'bin/dev.js']);
+		final apq: String = Path.join([_repo, 'bin/apq.js']);
+		final choices: String = _resolve.length == 0 ? '' : ' --choices ${shellQuoted(choicesFile())}';
 		_before = git(['rev-parse', 'HEAD']).out.trim();
 		_picking = true;
 		final run: Result = git([
 			'-c',
-			'merge.$ARMS_DRIVER.driver=node $dev merge-arms %O %A %B',
+			'merge.$DRIVER.driver=node ${shellQuoted(apq)} merge-file %O %A %B --path %P$choices',
 			'cherry-pick',
 			'--no-commit',
 			_branch
 		]);
+		final said: String = '${run.err}\n${run.out}';
+		for (line in said.split('\n')) if (line.startsWith(MERGED_PREFIX)) _summary.detail(line.trim());
 		if (run.ok) return Passed;
 		final unmerged: Array<String> = git(['diff', '--name-only', '--diff-filter=U']).lines();
-		return Failed(unmerged.length > 0 ? 'git could not merge ${unmerged.join(', ')}' : run.firstError());
+		if (unmerged.length == 0) return Failed(run.firstError());
+		final places: Array<MergePlace> = MergeBrief.placesOf(said);
+		if (places.length == 0) return Failed('git could not merge ${unmerged.join(', ')}');
+		final brief: String = MergeBrief.write(_repo, _branch, _logs, places, _queue ?? Path.join([_repo, QUEUE]));
+		return Failed('git could not merge ${unmerged.join(', ')} — ${places.length} place(s) to choose, brief $brief');
+	}
+
+	/** The `--resolve` choices written where `apq merge-file --choices` reads them: `<path>\t<key>\t<choice>` lines. */
+	private function choicesFile(): String {
+		final file: String = Path.join([_logs, 'merge-choices.tsv']);
+		File.saveContent(file, [for (entry in _resolve) choiceLine(entry)].join(''));
+		return file;
 	}
 
 	/** `apq.js`, `test.js` and `dev.js` rebuilt from the picked tree, at once. */
@@ -332,6 +366,9 @@ final class Land {
 		final branch: String = args.positionals(['<branch>'])[0];
 		if (!noBattery && (Sys.getEnv('ANYPARSE_HXFORMAT_FORK') ?? '') == '')
 			throw new UsageError('the battery needs ANYPARSE_HXFORMAT_FORK — set it, or pass --no-battery');
+		final resolve: Array<String> = args.options('--resolve');
+		for (entry in resolve) choiceLine(entry);
+		final queue: Null<String> = args.option('--queue');
 		final logs: String = logsOption ?? Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'anyparse-land', branch.replace('/', '-')]);
 		FileSystem.createDirectory(logs);
 		return land({
@@ -340,6 +377,8 @@ final class Land {
 			logs: logs,
 			message: message,
 			trailers: trailers,
+			resolve: resolve,
+			queue: queue,
 			battery: noBattery ? null : request,
 			compile: (tree, log) -> Binaries.compileWith(tree, log, [], Lease.ofEnvironment()),
 			exec: execBattery,
@@ -351,6 +390,19 @@ final class Land {
 	/** The pick, the build and the battery of `options`; answers the exit status. */
 	public static function land(options: LandOptions): Int {
 		return new Land(options).run(options.message, options.battery);
+	}
+
+	/**
+	 * The choices-file line of a `--resolve` entry `<path>#<key>=<choice>` (the key may hold `#` and `=` itself: the path
+	 * ends at the first `#`, the choice starts past the last `=`); an entry of another shape is refused.
+	 */
+	public static function choiceLine(entry: String): String {
+		final hash: Int = entry.indexOf('#');
+		final equals: Int = entry.lastIndexOf('=');
+		final choice: String = equals > hash ? entry.substr(equals + 1) : '';
+		if (hash <= 0 || equals <= hash + 1 || !MergeBrief.CHOICES.contains(choice))
+			throw new UsageError('--resolve takes <path>#<key>=<${MergeBrief.CHOICES.join('|')}>, not `$entry`');
+		return '${entry.substr(0, hash)}\t${entry.substring(hash + 1, equals)}\t$choice\n';
 	}
 
 	/** The slice id a branch carries: its name past the last `/`, without the `hxqb-` prefix (`batch/hxqb-LAND-2` is `LAND-2`). */
@@ -441,6 +493,11 @@ final class Land {
 		return out;
 	}
 
+	/** `word` as one shell word: git runs a merge driver through the shell, and quotes only its own `%` placeholders. */
+	public static function shellQuoted(word: String): String {
+		return "'" + word.replace("'", "'\\''") + "'";
+	}
+
 	/** Why the battery of a base left no snapshot. */
 	private static function why(outcome: Outcome): String {
 		return switch outcome {
@@ -483,6 +540,12 @@ typedef LandOptions = {
 
 	/** The trailers the commit carries beside `Slice` (`metricTrailers`); none when absent. */
 	@:optional var trailers: Array<String>;
+
+	/** The places settled for the merge driver, each `<path>#<key>=<choice>` (`Land.choiceLine`); none when absent. */
+	@:optional var resolve: Array<String>;
+
+	/** The queue file a merge brief quotes; the repository's `.claude/batch/wave-D.md` when absent. */
+	@:optional var queue: String;
 
 	/** The battery to run; null runs none. */
 	var battery: Null<BatteryRequest>;

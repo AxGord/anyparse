@@ -1,7 +1,7 @@
 package dev;
 
-import dev.MergeArms.ArmRecord;
-import dev.MergeArms.RecordFile;
+import dev.ArmRegistry.ArmRecord;
+import dev.ArmRegistry.RecordFile;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.Summary;
@@ -33,9 +33,9 @@ final class GateArms {
 	/** The arms row of `gate`, the heavy rows' threads as the arms' jobs. */
 	public static function outcome(gate: GateTree): Outcome {
 		if (gate.options.noArms) return Skipped('--no-arms');
-		final now: RecordFile = MergeArms.parse(File.getContent(Path.join([gate.tree, ARMS_REGISTRY])));
+		final now: RecordFile = ArmRegistry.parse(File.getContent(Path.join([gate.tree, ARMS_REGISTRY])));
 		final shown: Result = cmd('git -C ${gate.tree} show ${gate.base}:$ARMS_REGISTRY').run();
-		final old: Null<RecordFile> = shown.ok ? MergeArms.parse(shown.out) : null;
+		final old: Null<RecordFile> = shown.ok ? ArmRegistry.parse(shown.out) : null;
 		final layout: Array<String> = [for (file in layoutFiles(gate)) moduleOf(file)].filter(m -> m != '');
 		final modules: Array<String> = [for (file in gate.touched) moduleOf(file)].filter(m -> m != '' && !layout.contains(m));
 		final extra: Array<String> = gate.options.arms;

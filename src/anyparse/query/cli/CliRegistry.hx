@@ -37,6 +37,7 @@ import anyparse.query.cli.command.LintScoreCommand;
 import anyparse.query.cli.command.LitCommand;
 import anyparse.query.cli.command.MakeFinalCommand;
 import anyparse.query.cli.command.MentionsCommand;
+import anyparse.query.cli.command.MergeFileCommand;
 import anyparse.query.cli.command.MetaCommand;
 import anyparse.query.cli.command.MoveCommand;
 import anyparse.query.cli.command.MoveElementsCommand;
@@ -172,6 +173,7 @@ final class CliRegistry {
 			new GatesCommand(),
 			new DiffCommand(),
 			new ChangedCommand(),
+			new MergeFileCommand(),
 			new StripCommand(),
 			new WriterEqualsCommand(),
 			new WriterProbeCommand(),

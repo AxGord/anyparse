@@ -2,8 +2,10 @@
 # A union merge keeps every line both branches added.
 docs/decisions.md merge=union
 
-# JSON forbids the trailing comma a union would need, so the arm registry merges record by record, keyed by name:
-# `dev land` passes the driver; elsewhere name it on the command line —
-#   git -c merge.anyparse-arms.driver='node bin/dev.js merge-arms %O %A %B' merge <branch>
+# Source and JSON merge through their grammar, declaration by declaration and record by record (`apq merge-file`):
+# imports of both sides united, members and records both sides added kept, a layout-only difference read as none; a
+# declaration both sides changed stays a conflict. `dev land` names the driver; elsewhere name it on the command line —
+#   git -c merge.anyparse.driver='node bin/apq.js merge-file %O %A %B --path %P' merge <branch>
 # Without the driver git falls back to its ordinary line merge.
-test/testkit/mutation-arms.json merge=anyparse-arms
+*.hx merge=anyparse
+*.json merge=anyparse

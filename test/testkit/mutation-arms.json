@@ -31521,20 +31521,20 @@
 			"note": "a fresh import is added although it also binds a type or constructor the file already reads bare, which then silently means the imported one"
 		},
 		{
-			"name": "M-MERGE-ARMS-THEIRS-LOST",
-			"type": "dev.MergeArms",
-			"method": "side",
-			"find": "Keep(other)",
-			"replace": "Keep(mine)",
-			"note": "a record only theirs changed keeps our unchanged text, so the merge driver drops the other branch's re-encoded arm without a conflict"
+			"name": "M-KEYED-MERGE-THEIRS-LOST",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "childText",
+			"find": "if (old != null && old.text == mine.text) return other.text;",
+			"replace": "if (old != null && old.text == mine.text) return mine.text;",
+			"note": "a child only theirs changed keeps our unchanged text, so the merge driver drops the other branch's change without a conflict"
 		},
 		{
-			"name": "M-MERGE-ARMS-APPEND-ORDER",
-			"type": "dev.MergeArms",
-			"method": "merge",
-			"find": "while (at < result.length && added.contains(result[at].key)) at++;",
+			"name": "M-KEYED-MERGE-APPEND-ORDER",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "seatAfter",
+			"find": "while (at < out.length && oursAdded.contains(out[at].key)) at++;",
 			"replace": "at += 0;",
-			"note": "a record theirs appended lands before the one ours appended at the same place, so the merged registry's order depends on which side merged into which"
+			"note": "a child theirs added lands before the one ours added at the same place, so the merged order depends on which side merged into which"
 		},
 		{
 			"name": "M-DECISION-APPEND-GLUED",
@@ -31654,7 +31654,7 @@
 			"name": "M-DECLARATION-DELTA-BODY-FILTERED",
 			"type": "anyparse.query.cli.DeclarationDelta",
 			"method": "inBody",
-			"force": "(version.owner[line] < 0 || !version.units[version.owner[line]].header) && carriesWords(version.lines[line])",
+			"force": "(version.owner[line] < 0 || !version.units[version.owner[line]].header) && DeclarationLines.carriesWords(version.lines[line])",
 			"note": "a body line of punctuation alone no longer counts, so a closing brace moved past a statement reads as no change and the file falls through to imports or renamed"
 		},
 		{
@@ -31669,7 +31669,7 @@
 			"type": "anyparse.query.cli.DeclarationDelta",
 			"method": "bodyLines",
 			"find": "if (inBody(version, line)) version.lines[line]",
-			"replace": "if (inBody(version, line) && carriesWords(version.lines[line])) version.lines[line].trim()",
+			"replace": "if (inBody(version, line) && DeclarationLines.carriesWords(version.lines[line])) version.lines[line].trim()",
 			"note": "body lines are compared trimmed and without punctuation-only lines, so a closing brace moved past a statement beside an added import reads as an imports-only change"
 		},
 		{
@@ -32504,6 +32504,52 @@
 			"find": ": macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || ctx.lineBreakBefore(_opStart);",
 			"replace": ": macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);",
 			"note": "an additive chain misses a source break before a non-head operator that its left operand's parse consumed, so a kept chain is glued there on the next pass"
+		},
+		{
+			"name": "M-KEYED-MERGE-NO-RECURSION",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "childText",
+			"find": "if (oldTree != null && mineTree != null && otherTree != null)",
+			"replace": "if (oldTree != null && mineTree != null && otherTree != null && false)",
+			"note": "a type both sides changed is a conflict as a whole instead of being merged member by member, so two members added beside each other stop merging"
+		},
+		{
+			"name": "M-DECLARATION-TREE-SPACING-IS-CONTENT",
+			"type": "anyparse.query.merge.DeclarationTree",
+			"method": "childOf",
+			"find": "final lead: String = blankLead(whole);",
+			"replace": "final lead: String = '';",
+			"note": "the blank line a member gains when ours inserts one above it reads as a change of that member, so theirs' edit of it becomes a conflict"
+		},
+		{
+			"name": "M-KEYED-MERGE-NO-PLACE-LINE-MERGE",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "settle",
+			"find": "if (merged != null) {",
+			"replace": "if (merged != null && false) {",
+			"note": "a body both sides edited on different lines becomes a conflict although git's line merge of that one place is clean"
+		},
+		{
+			"name": "M-DECLARATION-TREE-CONDITIONAL-BLIND",
+			"type": "anyparse.query.merge.DeclarationTree",
+			"method": "conditionalBetween",
+			"force": "false",
+			"note": "a member added inside an #if region is merged by key and can land past its #end, silently unconditional"
+		},
+		{
+			"name": "M-KEYED-MERGE-REPLACEMENTS-UNITED",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "replacedOnBothSides",
+			"force": "false",
+			"note": "two different renames of one member, or two replacements of one list value, are both kept instead of conflicting"
+		},
+		{
+			"name": "M-KEYED-MERGE-RENAME-AGAINST-DELETE",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "replacedOnBothSides",
+			"find": "|| theirs.children.exists(c -> find(base, c.key) == null)",
+			"replace": "&& theirs.children.exists(c -> find(base, c.key) == null)",
+			"note": "a member one side renamed and the other deleted comes back under its new name, silently, because by key a rename is a removal and an addition"
 		}
 	]
 }

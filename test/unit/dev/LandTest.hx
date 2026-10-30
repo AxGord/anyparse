@@ -1,6 +1,7 @@
 package unit.dev;
 
 import dev.Land;
+import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Summary.Outcome;
 import devkit.TempDir;
@@ -22,6 +23,22 @@ final class LandTest extends Test {
 
 	/** The slice branch of the scratch repository; its id, `S1`, is what the trailer names. */
 	private static inline final BRANCH: String = 'batch/hxqb-S1';
+
+	/** A merge driver that writes its own text over ours and reports the merge. */
+	private static inline final DRIVER_STUB: String = "const fs = require('fs'); const a = process.argv;\n"
+		+ "if (a[2] === 'merge-file') { fs.writeFileSync(a[4], 'by the driver\\n');\n"
+		+ "process.stderr.write('auto-merged: ' + a[a.indexOf('--path') + 1] + ' (stub)\\n'); }\n";
+
+	/** A merge driver that leaves one place both sides changed, as `apq merge-file` reports it. */
+	private static inline final CONFLICT_STUB: String = "const fs = require('fs'); const a = process.argv;\n"
+		+ "if (a[2] === 'merge-file') { fs.writeFileSync(a[4], 'conflicted\\n');\n"
+		+ "process.stderr.write('merge-conflict: ' + a[a.indexOf('--path') + 1] + ' C.f (ours changed, theirs changed)\\n');\n"
+		+ 'process.exitCode = 1; }\n';
+
+	/** A merge driver that writes the choices it was handed over ours. */
+	private static inline final CHOICES_STUB: String = "const fs = require('fs'); const a = process.argv;\n"
+		+ "if (a[2] === 'merge-file') { const i = a.indexOf('--choices');\n"
+		+ "fs.writeFileSync(a[4], i < 0 ? 'none\\n' : fs.readFileSync(a[i + 1])); }\n";
 
 	@:pin('control')
 	@:killer('M-LAND-NOT-RUN-KEEPS-MERGE')
@@ -260,19 +277,62 @@ final class LandTest extends Test {
 		Assert.equals('x\nmain\nside\n', run.files['notes.md']);
 	}
 
-	public function testTheArmRegistryDriverIsNamedWhenThePickMerges(): Void {
+	public function testTheGrammarDriverIsNamedAndWhatItMergedIsADetailLine(): Void {
 		final run: Landing = landing(() -> Passed, 'b.txt', null, null, {
-			attributes: 'arms.json merge=anyparse-arms\n',
+			attributes: 'arms.json merge=anyparse\n',
 			base: [
 				{ path: 'arms.json', content: 'x\n' },
-				{ path: 'bin/dev.js', content: "require('fs').writeFileSync(process.argv[4], 'by the driver\\n');\n" }
+				{ path: 'bin/apq.js', content: DRIVER_STUB }
 			],
 			onSide: [{ path: 'arms.json', content: 'side\n' }],
 			onMain: [{ path: 'arms.json', content: 'main\n' }],
 			read: ['arms.json']
 		});
-		Assert.equals(0, run.status);
+		Assert.equals(0, run.status, run.output);
 		Assert.equals('by the driver\n', run.files['arms.json']);
+		Assert.isTrue(run.output.indexOf('auto-merged: arms.json (stub)') >= 0, run.output);
+	}
+
+	public function testAPlaceTheDriverLeftFailsThePickWithABrief(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, {
+			attributes: 'arms.json merge=anyparse\n',
+			base: [
+				{ path: 'arms.json', content: 'x\n' },
+				{ path: 'bin/apq.js', content: CONFLICT_STUB }
+			],
+			onSide: [{ path: 'arms.json', content: 'side\n' }],
+			onMain: [{ path: 'arms.json', content: 'main\n' }],
+			read: ['arms.json']
+		});
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('1 place(s) to choose') >= 0, run.output);
+		Assert.isFalse(run.merging);
+		Assert.equals('main\n', run.files['arms.json']);
+		Assert.isTrue(run.brief.indexOf('### `C.f` — ours changed, theirs changed') >= 0, run.brief);
+		Assert.isTrue(run.brief.indexOf('--resolve \'arms.json#C.f=theirs\'') >= 0, run.brief);
+	}
+
+	public function testAResolutionReachesTheDriver(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, {
+			attributes: 'arms.json merge=anyparse\n',
+			base: [
+				{ path: 'arms.json', content: 'x\n' },
+				{ path: 'bin/apq.js', content: CHOICES_STUB }
+			],
+			onSide: [{ path: 'arms.json', content: 'side\n' }],
+			onMain: [{ path: 'arms.json', content: 'main\n' }],
+			resolve: ['arms.json#C (head)=theirs'],
+			read: ['arms.json']
+		});
+		Assert.equals(0, run.status, run.output);
+		Assert.equals('arms.json\tC (head)\ttheirs\n', run.files['arms.json']);
+	}
+
+	public function testAResolutionOfAnotherShapeIsRefused(): Void {
+		Assert.equals('a.hx\tC.f#2\tboth\n', Land.choiceLine('a.hx#C.f#2=both'));
+		Assert.raises(() -> Land.choiceLine('a.hx=ours'), UsageError);
+		Assert.raises(() -> Land.choiceLine('a.hx#C.f=mine'), UsageError);
+		Assert.equals("'/a b/it'\\''s'", Land.shellQuoted("/a b/it's"));
 	}
 
 	@:pin('control')
@@ -439,6 +499,7 @@ final class LandTest extends Test {
 				logs: logs,
 				message: shape.message,
 				trailers: shape.trailers,
+				resolve: shape.resolve,
 				battery: request,
 				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
 				exec: (words, tree, log) -> {
@@ -482,7 +543,8 @@ final class LandTest extends Test {
 				commits: Std.parseInt(cmd('git -C $repo rev-list --count HEAD').run().out.trim()) ?? -1,
 				message: cmd('git -C $repo log -1 --format=%B').run().out.trim(),
 				author: cmd('git -C $repo log -1 --format=%an').run().out.trim(),
-				files: [for (path in shape.read ?? []) path => File.getContent('$repo/$path')]
+				files: [for (path in shape.read ?? []) path => File.getContent('$repo/$path')],
+				brief: FileSystem.exists('$logs/merge-brief.md') ? File.getContent('$logs/merge-brief.md') : ''
 			};
 		});
 	}
@@ -612,6 +674,9 @@ private typedef Landing = {
 
 	/** The contents, after the run, of the paths the setup asked to read. */
 	var files: Map<String, String>;
+
+	/** The merge brief the run wrote, or empty. */
+	var brief: String;
 }
 
 /** The battery a landing asks for: whether in full, and the landings the count already holds. */
@@ -667,6 +732,9 @@ private typedef Setup = {
 
 	/** The trailers the landing marks its commit with beside `Slice`. */
 	@:optional var trailers: Array<String>;
+
+	/** The places the landing settles for the merge driver (`--resolve`). */
+	@:optional var resolve: Array<String>;
 
 	/** What the user does in the repository while the binaries are built, and whether the branch is landed a second time. */
 	@:optional var during: (repo:String) -> Void;

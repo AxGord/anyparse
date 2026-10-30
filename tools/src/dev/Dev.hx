@@ -25,7 +25,7 @@ final class Dev {
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
 		{ name: 'slice-stats', main: SliceStats.main, usage: SliceStats.USAGE },
 		{ name: 'battery', main: Battery.main, usage: Battery.USAGE },
-		{ name: 'merge-arms', main: MergeArms.main, usage: MergeArms.USAGE },
+
 		{ name: 'decision', main: Decision.main, usage: Decision.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },
 		{ name: 'fixture-cache', main: FixtureCacheCli.main, usage: FixtureCacheCli.USAGE },

@@ -1,10 +1,8 @@
 package anyparse.query.cli;
 
 import anyparse.query.Address.AddressIndex;
-import anyparse.query.LexicalRegions;
+import anyparse.query.DeclarationLines;
 import anyparse.query.LineDiff;
-import anyparse.query.ModuleScan;
-import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -84,50 +82,10 @@ typedef FileDelta = {
 	final removed: Int;
 }
 
-/** A named node that owns lines of its file. */
-private typedef OwnerUnit = {
-	final node: QueryNode;
-	final key: String;
-	final header: Bool;
-	final depth: Int;
-	final parent: Int;
-	final first: Int;
-	final last: Int;
-}
-
 /** Lines an edit inserted and deleted. */
 private typedef LineCounts = {
 	final added: Int;
 	final removed: Int;
-}
-
-/** What the declaration walk carries down the tree. */
-private typedef UnitScan = {
-	final valueKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final lineIndex: LineIndex;
-	final out: Array<OwnerUnit>;
-}
-
-/** One version of a file as the writer emits it, each line assigned to the declaration that owns it. */
-private typedef FileVersion = {
-	final source: String;
-	final tree: QueryNode;
-	final lines: Array<String>;
-
-	/** The offset each line starts at. */
-	final starts: Array<Int>;
-
-	final units: Array<OwnerUnit>;
-
-	/** Per line, the index of the unit owning it, or -1. */
-	final owner: Array<Int>;
-
-	/** Per unit, the lines it owns. */
-	final owned: Array<Array<String>>;
-
-	/** The lines no declaration owns. */
-	final rest: Array<String>;
 }
 
 /** An identifier run or a single non-blank character, at its offset in the text it was read from. */
@@ -154,9 +112,6 @@ final class DeclarationDelta {
 	/** The pseudo-declaration owning the lines no declaration owns. */
 	public static inline final MODULE_REST: String = '(module)';
 
-	/** How many named ancestors a declaration may have. */
-	private static inline final NAMED_DEPTH: Int = 1;
-
 	/** The edit distance past which a line count falls back to the multiset of lines. */
 	private static inline final MAX_LINE_EDITS: Int = 2000;
 
@@ -168,11 +123,11 @@ final class DeclarationDelta {
 		if (base == now) return textDelta(Unchanged, [], []);
 		final canonBase: Null<String> = canonical(plugin, base, optsJson);
 		final canonNow: Null<String> = canonical(plugin, now, optsJson);
-		if (canonBase == null || canonNow == null) return textDelta(Text, lines(base), lines(now));
+		if (canonBase == null || canonNow == null) return textDelta(Text, DeclarationLines.lines(base), DeclarationLines.lines(now));
 		if (canonBase == canonNow) return textDelta(Layout, [], []);
-		final before: Null<FileVersion> = versionOf(plugin, canonBase);
-		final after: Null<FileVersion> = versionOf(plugin, canonNow);
-		if (before == null || after == null) return textDelta(Text, lines(base), lines(now));
+		final before: Null<FileVersion> = DeclarationLines.versionOf(plugin, canonBase);
+		final after: Null<FileVersion> = DeclarationLines.versionOf(plugin, canonNow);
+		if (before == null || after == null) return textDelta(Text, DeclarationLines.lines(base), DeclarationLines.lines(now));
 		final counts: LineCounts = lineCounts(before.lines, after.lines);
 		final headerBefore: Array<String> = headerLines(before);
 		final headerAfter: Array<String> = headerLines(after);
@@ -206,7 +161,7 @@ final class DeclarationDelta {
 
 	/** The change from `base` to `now` as lines alone, for a file no grammar reads. */
 	public static function compareText(base: String, now: String): FileDelta {
-		return textDelta(base == now ? Unchanged : Text, lines(base), lines(now));
+		return textDelta(base == now ? Unchanged : Text, DeclarationLines.lines(base), DeclarationLines.lines(now));
 	}
 
 	/**
@@ -267,98 +222,6 @@ final class DeclarationDelta {
 
 	private static function canonical(plugin: GrammarPlugin, source: String, optsJson: Null<String>): Null<String> {
 		return try plugin.writeRoundTrip(source, optsJson) ?? source catch (exception: Exception) null;
-	}
-
-	private static function versionOf(plugin: GrammarPlugin, source: String): Null<FileVersion> {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: Exception) return null;
-		final index: LineIndex = new LineIndex(source);
-		final units: Array<OwnerUnit> = [];
-		collectUnits(tree, -1, '', {
-			valueKinds: plugin.refShape().moduleValueDeclKinds,
-			metaKinds: plugin.metaShape().metaKinds,
-			lineIndex: index,
-			out: units
-		});
-		final text: Array<String> = lines(source);
-		final starts: Array<Int> = [];
-		var offset: Int = 0;
-		for (line in text) {
-			starts.push(offset);
-			offset += line.length + 1;
-		}
-		final comment: Array<Bool> = commentLines(plugin.lexicalRegions(source), text, starts, index);
-		final owner: Array<Int> = [for (_ in text) -1];
-		for (i => unit in units) for (line in unit.first ... unit.last + 1) if (owner[line] == unit.parent) owner[line] = i;
-		// a line above a declaration that nothing else holds is the declaration's while it is a blank, a comment or an
-		// annotation; a line of code punctuation — a closing brace — ends the run
-		for (i => unit in units) {
-			final floor: Int = unit.parent < 0 ? -1 : units[unit.parent].first;
-			var line: Int = unit.first - 1;
-			while (line > floor && owner[line] == unit.parent && (comment[line] || text[line].trim() == '' || carriesWords(text[line]))) {
-				owner[line] = i;
-				line--;
-			}
-		}
-		final owned: Array<Array<String>> = [for (_ in units) []];
-		final rest: Array<String> = [];
-		for (line => holder in owner) if (holder < 0)
-			rest.push(text[line])
-		else
-			owned[holder].push(text[line]);
-		return {
-			source: source,
-			tree: tree,
-			lines: text,
-			starts: starts,
-			units: units,
-			owner: owner,
-			owned: owned,
-			rest: rest
-		};
-	}
-
-	/** For each line, whether it opens inside a comment — a doc block's every line, its close included. */
-	private static function commentLines(
-		regions: Array<LexRegion>, text: Array<String>, starts: Array<Int>, index: LineIndex
-	): Array<Bool> {
-		final out: Array<Bool> = [for (_ in text) false];
-		for (region in regions) if (region.kind == LexRegionKind.LineComment || region.kind == LexRegionKind.BlockComment) {
-			final last: Int = index.lineColAt(region.to > region.from ? region.to - 1 : region.from).line - 1;
-			for (line in index.lineColAt(region.from).line - 1...last + 1) {
-				final first: Int = starts[line] + (text[line].length - text[line].ltrim().length);
-				if (first >= region.from && first < region.to) out[line] = true;
-			}
-		}
-		return out;
-	}
-
-	private static function collectUnits(node: QueryNode, parent: Int, parentKey: String, scan: UnitScan): Void {
-		for (child in node.children) {
-			// an annotation is no declaration of its own: its lines go to the declaration it precedes
-			if (scan.metaKinds.contains(child.kind)) continue;
-			final name: Null<String> = child.name;
-			final span: Null<Span> = child.span;
-			if (name == null || span == null) {
-				collectUnits(child, parent, parentKey, scan);
-				continue;
-			}
-			final first: Int = scan.lineIndex.lineColAt(span.from).line - 1;
-			// a name on its declaration's own first line — a supertype, a type parameter — is part of that declaration
-			if (parent >= 0 && first == scan.out[parent].first) continue;
-			final depth: Int = parent < 0 ? 0 : scan.out[parent].depth + 1;
-			final key: String = parentKey == '' ? name : '$parentKey.$name';
-			final index: Int = scan.out.length;
-			scan.out.push({
-				node: child,
-				key: key,
-				header: ModuleScan.IMPORT_DECL_KINDS.contains(child.kind) || ModuleScan.PACKAGE_DECL_KINDS.contains(child.kind),
-				depth: depth,
-				parent: parent,
-				first: first,
-				last: scan.lineIndex.lineColAt(span.to > span.from ? span.to - 1 : span.from).line - 1
-			});
-			if (depth < NAMED_DEPTH && !scan.valueKinds.contains(child.kind)) collectUnits(child, index, key, scan);
-		}
 	}
 
 	private static function declarationChanges(plugin: GrammarPlugin, before: FileVersion, after: FileVersion): Array<DeclarationChange> {
@@ -452,11 +315,6 @@ final class DeclarationDelta {
 		return out;
 	}
 
-	private static function carriesWords(line: String): Bool {
-		for (i in 0...line.length) if (SourceText.isIdentChar(line.fastCodeAt(i))) return true;
-		return false;
-	}
-
 	/** The header's lines in order, as the writer emits them. */
 	private static function headerLines(version: FileVersion): Array<String> {
 		return [
@@ -524,10 +382,6 @@ final class DeclarationDelta {
 		if (a.length != b.length) return false;
 		for (i => line in a) if (line != b[i]) return false;
 		return true;
-	}
-
-	private static function lines(text: String): Array<String> {
-		return text.length == 0 ? [] : text.split('\n');
 	}
 
 }
