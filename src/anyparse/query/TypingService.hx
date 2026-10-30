@@ -4,6 +4,7 @@ import anyparse.query.GrammarPlugin.CoreValueTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.TypeNameBinding.NameTarget;
 import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -106,42 +107,74 @@ final class TypingService {
 	}
 
 	/**
-	 * BODY: the declaration the name `spelling`, written at offset `at` of `file` in a type position or read as a value
-	 * (`position`), denotes — or `Unknown` when no tier of the resolution order provably names one declaration of the index:
-	 * a type outside it, a tier nothing here reads, a name the compiler resolves to no type. THE question every rule and op
-	 * asks of a written name; the order is `TypeNameBinding`'s (`tierOf`, `dottedTierOf`), and a value position takes the
-	 * caller's word that the name's head binds no value (`resolveAt` asks it).
+	 * The tier `spelling`, written at `at` of `file` in a type position, binds — `resolve` before it is narrowed to one
+	 * declaration: a caller comparing two readings keeps `Unknown` (nothing here reads it) apart from `Free` (no type of
+	 * the index or the std's top level).
 	 */
-	public function resolve(file: FileInfo, spelling: String, at: Int, position: NamePosition): Resolution {
+	public inline function typeReading(file: FileInfo, spelling: String, at: Int): Tier {
+		return reading(file, spelling, at, TypePosition);
+	}
+
+	/**
+	 * BODY: the declaration the name `spelling`, written at offset `at` of `file` in a type position, denotes — or `Unknown`
+	 * when no tier of the resolution order provably names one declaration of the index: a type outside it, a tier nothing
+	 * here reads, a name the compiler resolves to no type. THE question every rule and op asks of a written type name; the
+	 * order is `TypeNameBinding`'s (`tierOf`, `dottedTierOf`). A name read as a value is asked through `resolveAt`, which
+	 * first proves that its head binds no value.
+	 */
+	public function resolve(file: FileInfo, spelling: String, at: Int): Resolution {
+		return single(reading(file, spelling, at, TypePosition));
+	}
+
+	/**
+	 * How `head.sub` written at `at` of `file` and read as a value is read, decided by what the bare `head` binds there
+	 * (`TypeNameBinding.tierOf`; a guarded statement's every candidate, `unknownCandidates`) and by whether that type
+	 * declares or inherits a member `sub` (4.3.7: an imported `Mod`'s static `Sub` wins over a module `Mod` holding a type
+	 * `Sub`; `Expr.Field` names an enum constructor): a member access when one does, by module path when every one provably
+	 * does not or the head binds no type, `Unreadable` when neither can be shown.
+	 */
+	public function headReading(file: FileInfo, head: String, sub: String, at: Int): HeadReading {
+		final targets: Null<Array<NameTarget>> = switch _refs.names.tierOf(head, file, at) {
+			case Free: [];
+			case Bound(decls): [InIndex(decls)];
+			case Unknown: _refs.names.unknownCandidates(head, file, at);
+		};
+		if (targets == null) return Unreadable;
+		var member: Bool = false;
+		for (target in targets) switch target {
+			case OutOfIndex(_):
+				return Unreadable;
+			case InIndex(decls):
+				for (d in decls) if (members.declaringMember(d, sub) != null)
+					member = true;
+				else if (!members.declarationLacksMember(d, sub))
+					return Unreadable;
+		}
+		return member ? AsMember : ByModulePath;
+	}
+
+	/**
+	 * The tier of `spelling` at `at` of `file` read in `position`. A value position takes the caller's word that the head
+	 * binds no value, which is why only `readingAt`, holding the tree that proves it, asks one.
+	 */
+	private function reading(file: FileInfo, spelling: String, at: Int, position: NamePosition): Tier {
 		final asValue: Bool = position == ValuePosition;
-		final tier: Tier = if (spelling.indexOf('.') < 0)
+		return if (spelling.indexOf('.') < 0)
 			_refs.names.tierOf(spelling, file, at)
 		else if (asValue && headMayReadMember(file, spelling, at))
 			Tier.Unknown
 		else
 			_refs.names.dottedTierOf(spelling, file, asValue, at);
-		final one: Null<ResolvedType> = switch tier {
-			case Bound(decls): TypeRefIndex.oneDeclaration(decls);
-			case Unknown, Free: null;
-		};
-		return one == null ? Resolution.Unknown : Declared(one);
 	}
 
 	/**
-	 * Whether the head of `Head.member`, read as a value in `file` at `at`, may read `member` as a field: the type the bare head
-	 * binds (`TypeNameBinding.tierOf`, the file's own types and imports included) declares or inherits a member of that name, or
-	 * may (4.3.7: an imported `Mod`'s static `Sub` wins over a module `Mod` holding a type `Sub`), or what it binds is unread.
-	 * False for any longer path, whose head is a package.
+	 * Whether the head of `Head.member`, read as a value in `file` at `at`, may read `member` as a field (`headReading` is
+	 * not `ByModulePath`). False for any longer path, whose head is a package.
 	 */
 	private function headMayReadMember(file: FileInfo, spelling: String, at: Int): Bool {
 		final dot: Int = spelling.indexOf('.');
-		if (spelling.indexOf('.', dot + 1) >= 0) return false;
-		final member: String = spelling.substr(dot + 1);
-		return switch _refs.names.tierOf(spelling.substr(0, dot), file, at) {
-			case Bound(decls): decls.exists(d -> !members.declarationLacksMember(d, member));
-			case Unknown: true;
-			case Free: false;
-		};
+		return spelling.indexOf('.', dot + 1) < 0
+			&& headReading(file, spelling.substr(0, dot), spelling.substr(dot + 1), at) != ByModulePath;
 	}
 
 	/**
@@ -218,30 +251,48 @@ final class TypingService {
 	}
 
 	/**
-	 * `resolve` asked of the name written at offset `at` of the indexed `file`, read with `plugin`: a type reference
-	 * (`TypeRefShape.typeRefKinds`) in a type position, an identifier or a path of field reads over one as a value — whose
-	 * head must bind no value (`ValueDoors.bindsNoValue`). `Unknown` for any other node and a file the index does not hold.
+	 * `resolve` asked of the name written at offset `at` of the indexed `file`, read with `plugin` (`readingAt`): a type
+	 * reference in a type position, an identifier or a path of field reads over one as a value whose head binds no value.
 	 */
 	public static function resolveAt(index: SymbolIndex, plugin: GrammarPlugin, file: String, at: Int): Resolution {
+		return single(readingAt(index, plugin, file, at));
+	}
+
+	/**
+	 * The tier the name written at offset `at` of the indexed `file` binds, read with `plugin` from `root` (the file's
+	 * `parseFileTypeRefs` tree; parsed from the index's text when absent): a type reference (`TypeRefShape.typeRefKinds`)
+	 * in a type position, an identifier or a path of field reads over one as a value — whose head must bind no value
+	 * (`ValueDoors.bindsNoValue`). `Unknown` for any other node and a file the index does not hold.
+	 */
+	public static function readingAt(index: SymbolIndex, plugin: GrammarPlugin, file: String, at: Int, ?root: QueryNode): Tier {
 		final fi: Null<FileInfo> = index.fileInfo(file);
 		final source: Null<String> = index.sourceOf(file);
-		if (fi == null || source == null) return Resolution.Unknown;
-		final root: QueryNode = plugin.parseFileTypeRefs(source);
+		if (fi == null || source == null && root == null) return Tier.Unknown;
+		final tree: QueryNode = root ?? plugin.parseFileTypeRefs(source ?? '');
 		final shape: RefShape = plugin.refShape();
-		final node: Null<QueryNode> = innermostAt(root, at);
+		final node: Null<QueryNode> = innermostAt(tree, at);
 		final name: Null<String> = node?.name;
-		if (node == null || name == null) return Resolution.Unknown;
-		if (plugin.typeRefShape().typeRefKinds.contains(node.kind)) return index.typing.resolve(fi, name, at, TypePosition);
+		if (node == null || name == null) return Tier.Unknown;
+		if (plugin.typeRefShape().typeRefKinds.contains(node.kind)) return index.typing.reading(fi, name, at, TypePosition);
 		final identKind: Null<String> = shape.identKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		final path: Null<Array<String>> = identKind == null || fieldKind == null ? null : NominalTypes.pathOf(node, identKind, fieldKind);
 		var head: QueryNode = node;
 		while (head.kind != identKind && head.children.length == 1) head = head.children[0];
 		final headSpan: Null<Span> = head.span;
-		if (path == null || headSpan == null) return Resolution.Unknown;
-		return ValueDoors.bindsNoValue(head, path[0], headSpan, fi, root, shape, file, index)
-			? index.typing.resolve(fi, path.join('.'), at, ValuePosition)
-			: Resolution.Unknown;
+		if (path == null || headSpan == null) return Tier.Unknown;
+		return ValueDoors.bindsNoValue(head, path[0], headSpan, fi, tree, shape, file, index)
+			? index.typing.reading(fi, path.join('.'), at, ValuePosition)
+			: Tier.Unknown;
+	}
+
+	/** The one declaration `tier` binds (`TypeRefIndex.oneDeclaration`), or `Unknown`. */
+	public static function single(tier: Tier): Resolution {
+		final one: Null<ResolvedType> = switch tier {
+			case Bound(decls): TypeRefIndex.oneDeclaration(decls);
+			case Unknown, Free: null;
+		};
+		return one == null ? Resolution.Unknown : Declared(one);
 	}
 
 	/**
@@ -398,6 +449,20 @@ enum Resolution {
 
 	/** Nothing proves one declaration of the index: a type outside it, a tier nothing here reads, a name naming no type. */
 	Unknown;
+
+}
+
+/** How a spelling `Head.Sub` read as a value is read at one site (`TypingService.headReading`). */
+enum HeadReading {
+
+	/** The head binds no type there, or only ones declaring no member `Sub`: the compiler reads the spelling by module path. */
+	ByModulePath;
+
+	/** The head binds a type declaring a member named `Sub` (a static field, an enum constructor): a member access. */
+	AsMember;
+
+	/** What the head binds, or whether that declares `Sub`, is not something the index holds. */
+	Unreadable;
 
 }
 

@@ -527,13 +527,15 @@ class ModuleMoveTest extends Test {
 		Assert.equals('package aa;\n\nimport zz.Q;\n\nclass A {\n\tvar t: Thing;\n}\n', textOf(out, 'src/aa/A.hx'));
 	}
 
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-MODMOVE-MEMBER-BLIND')
 	public function testAStaticFieldOfAnImportedModuleStaysWhenTheSameNamedModuleMoves(): Void {
 		final out: ModuleMoveOutcome = moved([move('src/p/Mod.hx', 'src/p/sub/Mod.hx')], staticFieldShape());
 		Assert.isFalse(out.changes.exists(c -> c.file == 'src/p/Main.hx'), [for (c in out.changes) c.file].join(', '));
 	}
 
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-MODMOVE-MEMBER-BLIND')
 	public function testAStaticFieldOfAnImportedModuleStaysWhenItsReaderMoves(): Void {
 		final out: ModuleMoveOutcome = moved([move('src/p/Main.hx', 'src/q/Main.hx')], staticFieldShape());
 		Assert.equals(
@@ -653,6 +655,36 @@ class ModuleMoveTest extends Test {
 			'package a.b.c;\n\nclass Main {\n\tstatic function main() {\n\t\ttrace(a.Mod.Sub.id());\n\t}\n}\n',
 			textOf(out, 'src/a/b/c/Main.hx')
 		);
+	}
+
+	/**
+	 * A qualified spelling whose reading the index cannot decide on either side is not "nowhere": a guarded wildcard may
+	 * hand `Mod.Sub` to its package's module in one build and to the reader's own package in another, which the move
+	 * changes, so with a project type of the head's name the move is refused rather than taken as harmless.
+	 */
+	@:pin('control')
+	@:killer('M-MODMOVE-UNKNOWN-AS-NOWHERE')
+	public function testASpellingUnreadOnBothSidesIsNoProofOfItsReading(): Void {
+		final reasons: Array<String> = refused([move('src/x/Main.hx', 'src/y/Main.hx')], [
+			file('src/a/Mod.hx', 'package a;\n\nclass Mod {}\n\nclass Sub {}\n'),
+			file('src/x/Mod.hx', 'package x;\n\nclass Mod {}\n\nclass Sub {}\n'),
+			file('src/x/Main.hx', 'package x;\n\n#if foo\nimport a.*;\n#end\n\nclass Main {\n\tvar s: Mod.Sub;\n}\n')
+		]);
+		Assert.isTrue(reasons.exists(r -> r.contains('Mod.Sub') && r.contains('cannot decide')), reasons.join(' | '));
+	}
+
+	/**
+	 * A head the moved file binds as its own value (a parameter here) keeps that binding wherever the file lives, so its
+	 * `Mod.Sub` is no module-path spelling to compare, though a project type of the head's name exists: the move goes through.
+	 */
+	@:pin('control')
+	@:killer('M-MODMOVE-OWN-VALUE-HEAD-COMPARED')
+	public function testAHeadTheFileBindsAsAValueIsNotCompared(): Void {
+		final out: ModuleMoveOutcome = moved([move('src/a/Main.hx', 'src/b/Main.hx')], [
+			file('src/a/Mod.hx', 'package a;\n\nclass Mod {}\n\nclass Sub {}\n'),
+			file('src/a/Main.hx', 'package a;\n\nclass Main {\n\tstatic function g(Mod: Dynamic): Dynamic {\n\t\treturn Mod.Sub;\n\t}\n}\n')
+		]);
+		Assert.isFalse(out.changes.exists(c -> c.newSource.contains('a.Mod.Sub')), [for (c in out.changes) c.file].join(', '));
 	}
 
 	private static inline function move(from: String, to: String): ModuleRelocation {

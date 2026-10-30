@@ -13,6 +13,8 @@ import sys.FileSystem;
 import sys.io.File;
 import unit.CheckFixture;
 
+using StringTools;
+
 /**
  * The name-resolution traps (`test/traps/resolve.json`): at every probe the resolver (`TypingService.resolveAt`) answers
  * the declaration Haxe 4.3.7 names there or `Unknown`, never another one, and an `answered` probe the compiler's own; the
@@ -38,7 +40,16 @@ class ResolveTrapsTest extends Test {
 		Assert.isTrue(wrong.length == 0, 'every answer is the compiler\'s, or Unknown where the probe allows it:\n${wrong.join('\n')}');
 	}
 
+	/** A compiler of another version may name other declarations, so the catalog names the one it was recorded with. */
+	public function testTheCompilerIsTheOneTheCatalogWasRecordedWith(): Void {
+		Assert.equals(recordedWith(), compilerVersion(), 'the catalog was recorded with haxe ${recordedWith()}; this run has another');
+	}
+
 	public function testTheCatalogExpectsTheCompilersAnswer(): Void {
+		if (compilerVersion() != recordedWith()) {
+			Assert.pass('not asked of haxe ${compilerVersion()}: the catalog was recorded with ${recordedWith()}');
+			return;
+		}
 		final wrong: Array<String> = [];
 		for (trap in catalog()) for (probe in trap.probes) {
 			final dir: String = written(trap, probe);
@@ -50,48 +61,6 @@ class ResolveTrapsTest extends Test {
 			FileSystem.deleteDirectory(dir);
 		}
 		Assert.isTrue(wrong.length == 0, 'every expectation is what 4.3.7 names at the probe:\n${wrong.join('\n')}');
-	}
-
-	public function testTheOracleAnswersWhereTheResolverCannot(): Void {
-		final trap: Trap = catalog().filter(t -> t.name == 'a-value-shadows-the-head')[0];
-		final probe: TrapProbe = trap.probes.filter(p -> p.expect != null && p.answered != true)[0];
-		Assert.isNull(resolved(trap, probe), 'a member of the head\'s name in the file leaves the resolver Unknown');
-		final dir: String = written(trap, probe);
-		final main: String = Path.withoutExtension(probe.file).split('/').join('.');
-		File.saveContent(Path.join([dir, 'build.hxml']), '-cp .\n-main $main\n--no-output\n');
-		final oracle: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(new HaxeQueryPlugin().typeSyntax, 'build.hxml', dir);
-		Assert.notNull(oracle, 'a display server comes up');
-		if (oracle != null) {
-			final source: String = textOf(trap, probe).get(probe.file) ?? '';
-			final index: SymbolIndex = indexOf(trap, probe);
-			final got: Resolution = CompilerDisplayOracle.resolveAt(
-				oracle, index, new HaxeQueryPlugin(), probe.file, offsetOf(source, probe)
-			);
-			oracle.stop();
-			Assert.equals(probe.expect, named(got), 'the compiler\'s declaration, mapped onto the index');
-		}
-		FileSystem.deleteDirectory(dir);
-	}
-
-	/**
-	 * With no oracle, `CompilerDisplayOracle.resolveAt` is the resolver's
-	 * own answer: `Unknown` stays `Unknown`, a declaration stays it.
-	 */
-	@:pin('control')
-	@:killer('M-ORACLE-RESOLVE-NO-ORACLE-DROPPED')
-	public function testWithoutAnOracleTheResolversAnswerStands(): Void {
-		final shadowed: Trap = catalog().filter(t -> t.name == 'a-value-shadows-the-head')[0];
-		final unknown: TrapProbe = shadowed.probes.filter(p -> p.expect != null && p.answered != true)[0];
-		final full: Trap = catalog().filter(t -> t.name == 'a-full-path-names-its-module')[0];
-		final declared: TrapProbe = full.probes.filter(p -> p.answered == true)[0];
-		Assert.same([null, declared.expect], [
-			for (pair in [{ trap: shadowed, probe: unknown }, { trap: full, probe: declared }]) {
-				final source: String = textOf(pair.trap, pair.probe).get(pair.probe.file) ?? '';
-				named(CompilerDisplayOracle.resolveAt(
-					null, indexOf(pair.trap, pair.probe), new HaxeQueryPlugin(), pair.probe.file, offsetOf(source, pair.probe)
-				));
-			}
-		]);
 	}
 
 	/** What the resolver answers at `probe`, as `<file>#<Type>`, null for `Unknown`. */
@@ -150,10 +119,23 @@ class ResolveTrapsTest extends Test {
 		return read.traps;
 	}
 
+	/** The compiler version the catalog's expectations were asked of. */
+	private static function recordedWith(): String {
+		final read: TrapCatalog = Json.parse(File.getContent(CATALOG));
+		return read.haxe;
+	}
+
+	/** What `haxe --version` on PATH prints, trimmed. */
+	private static function compilerVersion(): String {
+		final run: Dynamic = ChildProcess.spawnSync('haxe', ['--version'], { encoding: 'utf8' }); // noqa: avoid-dynamic
+		return '${run.stdout ?? ''}${run.stderr ?? ''}'.trim();
+	}
+
 }
 
-/** `test/traps/resolve.json`. */
+/** `test/traps/resolve.json`: the traps, and the compiler version their expectations were recorded with. */
 private typedef TrapCatalog = {
+	final haxe: String;
 	final traps: Array<Trap>;
 }
 

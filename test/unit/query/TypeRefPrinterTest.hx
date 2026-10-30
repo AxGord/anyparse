@@ -49,8 +49,11 @@ class TypeRefPrinterTest extends Test {
 	 * A plain `import pkg.deep.Mod;` binds every TOP-LEVEL type the module declares, not only its
 	 * main one — so a secondary type of that module is already visible and must print short with
 	 * NO fresh import. Route 2 firing here is what put `import fs.DiskSystemInterface.DiskSystemCloudAction;`
-	 * into a file already carrying `import fs.DiskSystemInterface;`.
+	 * into a file already carrying `import fs.DiskSystemInterface;`. The module's typedef of a type the index does not hold
+	 * (`Int`) binds no value name, so it vetoes no short name.
 	 */
+	@:pin('control')
+	@:killer('M-BIND-UNSEEN-TARGET-UNLISTED')
 	public function testModuleImportMakesItsSecondaryTypeVisible(): Void {
 		final index: SymbolIndex = indexOf([
 			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }

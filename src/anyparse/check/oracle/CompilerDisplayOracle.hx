@@ -139,22 +139,6 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	}
 
 	/**
-	 * Where the compiler says the declaration of the name at offset `bytePos` of `file` is written (`--display …@position`),
-	 * or null when it names none — an error, an empty list, no server. Read-only against the warm server, like `typeAt`.
-	 */
-	public function positionAt(file: String, bytePos: Int): Null<TypeReplyPosition> {
-		invocations++;
-		#if nodejs
-		final forms: Array<String> = pathForms(file);
-		for (form in forms) {
-			final pos: Null<TypeReplyPosition> = parsePositionResponse(connectRun(['--display', '$form@$bytePos@position']) ?? '');
-			if (pos != null) return pos;
-		}
-		#end
-		return null;
-	}
-
-	/**
 	 * Start a warm display server for `hxml` (run from `cwd`) under the configuration's `defines`
 	 * and return a handle, or null when one could not be brought up — no `haxe`, no free port
 	 * after several tries, or a non-nodejs target. A returned handle MUST be `stop`ped to reap
@@ -286,19 +270,6 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		final host: FileInfo = file;
 		final found: Array<TypeDeclInfo> = host.types.filter(t -> t.name == named && t.span.from <= from && from < t.span.to);
 		return found.length == 1 ? Declared({ file: host, type: found[0] }) : Resolution.Unknown;
-	}
-
-	/**
-	 * What the name at offset `at` of the indexed `file` denotes: `TypingService.resolveAt`, and where that is `Unknown`, the
-	 * declaration `oracle` names there (`positionAt`, `declarationAt`) — the compiler as the answer of last resort, never a
-	 * second opinion over a resolved name. Without an oracle, the resolver's answer.
-	 */
-	public static function resolveAt(
-		oracle: Null<CompilerDisplayOracle>, index: SymbolIndex, plugin: GrammarPlugin, file: String, at: Int
-	): Resolution {
-		final own: Resolution = TypingService.resolveAt(index, plugin, file, at);
-		final pos: Null<TypeReplyPosition> = oracle == null || own.match(Declared(_)) ? null : oracle.positionAt(file, at);
-		return pos == null ? own : declarationAt(index, pos);
 	}
 
 	/**

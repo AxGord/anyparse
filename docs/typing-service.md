@@ -50,25 +50,31 @@ a value.
 
 ## Name resolution
 
-`resolve(file, spelling, at, position)` is the question every rule and op asks of a written name: which declaration of
-the index it denotes, or `Unknown` — never another one. `position` says how the name is read: in a type position, or as a
-value (an expression, or the head of a path of field reads, `Mod.Sub.f()`). `resolveAt(index, plugin, file, at)` asks it
-of the name written at an offset: a type reference there, or an identifier or field path, whose head must bind no value
-(`ValueDoors.bindsNoValue`). The order is `TypeNameBinding`'s: `tierOf` for a simple name, `dottedTierOf` for a dotted one.
+`resolve(file, spelling, at)` is the question every rule and op asks of a written type name: which declaration of the
+index it denotes, or `Unknown` — never another one; `typeReading` gives the tier before it is narrowed to one declaration,
+so a caller comparing two readings keeps `Unknown` (nothing here reads it) apart from `Free` (no type of the index). A
+name read as a value (an expression, or the head of a path of field reads, `Mod.Sub.f()`) is asked only at an offset of a
+parsed file — `resolveAt(index, plugin, file, at)`, `readingAt` for the tier — since only the tree proves its head binds no
+value (`ValueDoors.bindsNoValue`): a local, a parameter or a field of that name takes the name first. The order is
+`TypeNameBinding`'s: `tierOf` for a simple name, `dottedTierOf` for a dotted one.
 
 - A path led by a package (`p.Mod`, `p.Mod.Sub`) names its module and its type; a `p.Sub` binds the type an import of the
   file brings whose package is `p` and whose name is `Sub` (an import of `p.M` makes `p.Sub` the sub-type of `p.M`).
 - A module-relative `Mod.Sub` asks the modules named `Mod` in the compiler's order — the package wildcards (last first),
   the file's package, each parent, the toplevel — never the file's own types nor an import of `Mod`. In a type position a
   module lacking a visible `Sub` hands the question on; read as a value the first module found ends it, and where the
-  type the bare `Mod` binds (the file's own, an import's) declares or inherits a member `Sub`, that member is read.
+  type the bare `Mod` binds (the file's own, an import's) declares or inherits a member `Sub`, that member is read. Which
+  of the two a value `Mod.Sub` is, is `headReading` (`ByModulePath`, `AsMember`, `Unreadable`), the one answer `hxq move`
+  compares a spelling by too.
 
 Every reading is pinned by the resolution traps (`test/traps/resolve.json`, `unit.query.ResolveTrapsTest`): mini projects
 with the positions a name is asked at and the declaration 4.3.7 names there; the test asks the compiler too, so a trap is
-never an assumption. `CompilerDisplayOracle.resolveAt` answers where the resolver is `Unknown`, from the display server
-(`--display …@position`, read-only), mapped back onto the index (`declarationAt`). `dev trap-fix-sweep` formats every trap that
-runs, applies the SAFE autofixes (`--no-oracle`: no risky or oracle-assisted fix, the name-resolving ones among them,
-is swept) and reports a fix that changed what a program prints or whether it compiles, or an engine run that failed.
+never an assumption; the catalog names the compiler version it was recorded with (`haxe`), and a run of another version
+fails on that alone instead of on every probe. `dev trap-fix-sweep` runs every trap that runs as written, formats it, runs
+it again (`FORMAT-CHANGED` when the formatter changed what it prints), applies every autofix under the probe's own build as
+its `compilerOracle` — so the risky and oracle-assisted fixes, the name-resolving ones among them, are swept — and reports
+a fix that changed what a program prints or whether it compiles, or an engine run that failed. A trace's `file:line:`
+prefix is not compared: it is the layout's.
 
 A typed answer crossing files carries no file: a member's written type is spelled for the reading file
 (`TypeRefIndex.spelledIn`) before it leaves `MemberLookup.memberRead`, so a namesake the reader declares never takes its

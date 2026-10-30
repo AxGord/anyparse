@@ -15548,18 +15548,18 @@
 		{
 			"name": "M-BIND-TYPEDEF-NOT-FOLLOWED",
 			"type": "anyparse.query.ImportBindings",
-			"method": "typeValuesOf",
-			"find": "typeValuesOf(next.type, next.file, seen.concat([type]))",
+			"method": "aliasValuesOf",
+			"find": "typeValuesOf(next.type, next.file, seen.concat([type]), unseenAsNone)",
 			"replace": "[]",
 			"note": "a typedef aliasing an enum is read as binding no constructor, though the compiler binds the target's"
 		},
 		{
 			"name": "M-BIND-NULL-WRAPPER-FOLLOWED",
 			"type": "anyparse.query.ImportBindings",
-			"method": "typeValuesOf",
-			"find": "target == null || (shape.nullableWrapperTypeNames ?? []).contains(SourceText.lastSegment(target))",
-			"replace": "target == null",
-			"note": "a typedef of `Null<Col>` is followed to `Null` itself, which declares no value, though the compiler follows through to `Col`'s constructors"
+			"method": "aliasFollowed",
+			"find": "return args != null && args.length == 1 ? args[0] : null;",
+			"replace": "return null;",
+			"note": "a typedef of `Null<Col>` is not followed to `Col`, though the compiler binds `Col`'s constructors through it"
 		},
 		{
 			"name": "M-BIND-ABSTRACT-STATICS",
@@ -31336,11 +31336,27 @@
 		},
 		{
 			"name": "M-MODMOVE-MEMBER-BLIND",
-			"type": "anyparse.query.ModuleMoveBindings",
+			"type": "anyparse.query.TypingService",
 			"method": "headReading",
 			"find": "member = true;",
 			"replace": "{}",
 			"note": "a head binding a type that declares the sub-type's name as a member (a static field, an enum constructor) is read by module path, so the member access is rewritten or its head left uncompared"
+		},
+		{
+			"name": "M-MODMOVE-UNKNOWN-AS-NOWHERE",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "spellingDrift",
+			"find": "was.match(Unknown) && now.match(Unknown) && !sides.projectTypes.exists(s.head)",
+			"replace": "was.match(Unknown) && now.match(Unknown)",
+			"note": "a qualified spelling the index cannot read on either side is taken to keep its reading, even where a project type of the head's name could be what it reads"
+		},
+		{
+			"name": "M-MODMOVE-OWN-VALUE-HEAD-COMPARED",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "qualifiedDrifts",
+			"find": "for (i => s in was) if (!ownValues.contains(s.at)) {",
+			"replace": "for (i => s in was) {",
+			"note": "a qualified spelling whose head the file binds as its own value is compared by module path, so the move is refused where a project type bears the head's name"
 		},
 		{
 			"name": "M-REF-MODULE-PARENTS-BLIND",
@@ -32309,14 +32325,14 @@
 			"name": "M-MODMOVE-VALUE-HEAD-BLIND",
 			"type": "anyparse.query.ModuleMoveBindings",
 			"method": "readingOf",
-			"find": "if (!asValue) return",
-			"replace": "if (true) return",
+			"find": "return asValue",
+			"replace": "return false",
 			"note": "an expression head Mod.Sub is read as a type position, which passes a nearer module lacking Sub"
 		},
 		{
 			"name": "M-RESOLVE-HEAD-MEMBER-BLIND",
 			"type": "anyparse.query.TypingService",
-			"method": "resolve",
+			"method": "reading",
 			"find": "else if (asValue && headMayReadMember(file, spelling, at))",
 			"replace": "else if (false)",
 			"note": "a value-position Mod.Sub whose head binds a type with a member Sub is read as a module path"
@@ -32330,12 +32346,19 @@
 			"note": "an engine lint --fix that failed reads as a fix that changed nothing"
 		},
 		{
-			"name": "M-ORACLE-RESOLVE-NO-ORACLE-DROPPED",
-			"type": "anyparse.check.oracle.CompilerDisplayOracle",
-			"method": "resolveAt",
-			"find": "return pos == null ? own : declarationAt(index, pos);",
-			"replace": "return pos == null ? Resolution.Unknown : declarationAt(index, pos);",
-			"note": "without an oracle the resolver's own declaration is dropped"
+			"name": "M-SWEEP-FORMAT-UNCHECKED",
+			"type": "dev.TrapFixSweep",
+			"method": "verdictOf",
+			"find": "else if (!formatKept)",
+			"replace": "else if (false)",
+			"note": "a probe the formatter changed is judged only by its fix, compared with the formatted text"
+		},
+		{
+			"name": "M-SWEEP-TRACE-LINE-COMPARED",
+			"type": "dev.TrapFixSweep",
+			"method": "printed",
+			"force": "out",
+			"note": "a trace's file:line prefix is compared, so a formatter that moves a call reads as one that changed the program"
 		},
 		{
 			"name": "M-TCO-FIELD-KNOB-IGNORED",
@@ -32962,6 +32985,22 @@
 			"find": "|| (cause != null && at >= cause.from && at < cause.to)",
 			"replace": "",
 			"note": "a write or call in the condition that proved a bound, after its comparison, is never seen, so the bound outlives the change"
+		},
+		{
+			"name": "M-PRINTER-UNLISTED-VALUES-READ-AS-NONE",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "shadowedLocally",
+			"find": "valueNames == null || valueNames.contains(simple)",
+			"replace": "valueNames != null && valueNames.contains(simple)",
+			"note": "an imported type whose value names the index cannot list (a build macro's enum) is read as binding none, so a short name it may take is printed"
+		},
+		{
+			"name": "M-BIND-UNSEEN-TARGET-UNLISTED",
+			"type": "anyparse.query.ImportBindings",
+			"method": "aliasValuesOf",
+			"find": "final unlisted: Null<Array<String>> = unseenAsNone ? [] : null;",
+			"replace": "final unlisted: Null<Array<String>> = null;",
+			"note": "a typedef the index cannot follow is unlisted for the printer too, so an import of its module vetoes every short name in the file"
 		}
 	]
 }

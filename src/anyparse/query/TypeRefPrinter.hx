@@ -120,8 +120,8 @@ final class TypeRefPrinter {
 	/** The file's inert (comment + literal-text) regions, computed on FIRST use and cached — see `inertRegions`. */
 	private var _inertRegions: Null<Array<Span>> = null;
 
-	/** Value names this file's imports bring in with an enum-like type, computed on FIRST use — see `importedMemberNames`. */
-	private var _importedMemberNames: Null<Array<String>> = null;
+	/** Value names this file's imports bring in with an enum-like type, once computed (`names` null when unlisted). */
+	private var _importedMemberNames: Null<{ names: Null<Array<String>> }> = null;
 
 	/** Type-parameter name -> the spans that parameter is in scope over, computed on FIRST use — see `typeParamScopes`. */
 	private var _typeParamScopes: Null<Map<String, Array<Span>>> = null;
@@ -378,49 +378,42 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * Every VALUE name this file's imports bring in ALONGSIDE a type — an imported `enum`'s
-	 * constructors and an imported `enum abstract`'s values (`RefShape.bareConstructorTypeKinds`),
-	 * computed on FIRST ask and cached for the rest of this printer's life.
+	 * Every VALUE name this file's imports bring in ALONGSIDE a type — an imported `enum`'s constructors and an imported
+	 * `enum abstract`'s values, as `ImportBindings.valuesSeen` reads an import or a `using` — computed on FIRST ask and
+	 * cached for the rest of this printer's life; null when an import binds a type of the index whose values it cannot list
+	 * (one a build macro may add constructors to), so any name may be one.
 	 *
-	 * Importing such a type TAKES those names, and it takes them harder than an import of
-	 * a type takes its own: `import types.BASection;` (an `enum` declaring `Hash`) makes
-	 * a bare `Hash` in expression position mean the CONSTRUCTOR in a file whose own package declares
-	 * `class Hash`, and it keeps meaning the constructor beside an explicit `import module.Hash;` —
-	 * in either import order. That is why `shadowedLocally` consults this ABOVE its
-	 * explicit-import short-circuit rather than down with the bulk imports.
+	 * Importing such a type TAKES those names, and it takes them harder than an import of a type takes its own: an imported
+	 * enum's constructor `Hash` makes a bare `Hash` in expression position mean the CONSTRUCTOR in a file whose own package
+	 * declares `class Hash`, beside an explicit import of that class too, in either import order. That is why
+	 * `shadowedLocally` consults this ABOVE its explicit-import short-circuit rather than down with the bulk imports.
 	 *
-	 * Three neighbours do NOT bind a name here, each verified the same way: a plain class's statics
-	 * (only a `pkg.Type.*` wildcard imports those), a same-package enum the file does not import,
-	 * and — the reason this predicate is CONSERVATIVE rather than exact — a TYPE position, where
-	 * `final h: Null<Hash>` still resolves to the class. The printer answers one question per path
-	 * with no position to key on, so it answers the expression one; the cost is a type annotation
-	 * left fully qualified in a file that imports an enum whose constructor happens to share the
-	 * type's simple name, which always resolves.
-	 *
-	 * A module import binds every top-level type of that module, secondary enums included, so the
-	 * scan matches on the module path as well as on an explicitly imported type path; a `using`
-	 * binds them on the same terms. Empty without a resolution index — only it knows what a module
-	 * declares.
+	 * CONSERVATIVE rather than exact: in a TYPE position `final h: Null<Hash>` still resolves to the class, but the printer
+	 * answers one question per path with no position to key on, so it answers the expression one; the cost is a type
+	 * annotation left fully qualified, which always resolves. Empty without a resolution index, and for a module the index
+	 * never saw — nothing here could list it.
 	 */
-	private function importedMemberNames(): Array<String> {
-		final cached: Null<Array<String>> = _importedMemberNames;
-		if (cached != null) return cached;
-		final out: Array<String> = [];
+	private function importedMemberNames(): Null<Array<String>> {
+		final cached: Null<{ names: Null<Array<String>> }> = _importedMemberNames;
+		if (cached != null) return cached.names;
 		final index: Null<SymbolIndex> = _index;
 		final plugin: Null<GrammarPlugin> = _plugin;
-		final kinds: Array<String> = plugin == null ? [] : plugin.refShape().bareConstructorTypeKinds ?? [];
-		if (index != null && kinds.length > 0) {
-			final imported: Array<String> = _usingModules.copy();
-			for (path in _importMap) if (!imported.contains(path)) imported.push(path);
-			if (imported.length > 0) for (f in index.allFiles()) {
-				final byModule: Bool = imported.contains(f.module);
-				for (t in f.types)
-					if (kinds.contains(t.kind) && (byModule || imported.contains(ModuleScan.pathOfTypeIn(f, t.name))))
-						for (m in t.members)
-							if (!out.contains(m.name)) out.push(m.name);
+		var out: Null<Array<String>> = [];
+		if (index != null && plugin != null) {
+			final bindings: ImportBindings = new ImportBindings(() -> index, plugin);
+			final paths: Array<String> = _usingModules.copy();
+			for (path in _importMap) if (!paths.contains(path)) paths.push(path);
+			for (path in paths) {
+				final values: Null<Array<String>> = bindings.valuesSeen(path);
+				final listed: Array<String> = out ?? [];
+				if (values == null) {
+					out = null;
+					break;
+				}
+				for (name in values) if (!listed.contains(name)) listed.push(name);
 			}
 		}
-		_importedMemberNames = out;
+		_importedMemberNames = { names: out };
 		return out;
 	}
 
@@ -727,7 +720,8 @@ final class TypeRefPrinter {
 		if (bound != null && bound != canonical) return true;
 		final aliased: Null<String> = _aliasTargets[simple];
 		if (aliased != null && aliased != canonical) return true;
-		if (importedMemberNames().contains(simple)) return true;
+		final valueNames: Null<Array<String>> = importedMemberNames();
+		if (valueNames == null || valueNames.contains(simple)) return true;
 		if (shadowedByGuardedImport(canonical, simple)) return true;
 		if (shadowedByModuleImport(canonical, simple)) return true;
 		final root: Null<QueryNode> = _root;

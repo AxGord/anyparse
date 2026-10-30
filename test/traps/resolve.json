@@ -1,5 +1,6 @@
 {
 	"about": "Name-resolution traps: each a mini project and the positions where a written name is asked. `expect` is the declaration Haxe 4.3.7 names there (`--display <file>@<offset>@position`, as `<file>#<Type>`), null where it names no type declaration of the project (an error, a value, a type outside). `TypingService.resolveAt` may answer it or Unknown, never another; `answered` probes must answer it. Checked by unit.query.ResolveTrapsTest, the compiler's answers included.",
+	"haxe": "4.3.7",
 	"traps": [
 		{
 			"name": "module-relative-head-stops-at-the-nearest-module",

@@ -717,6 +717,39 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.equals(0, enumViolations(enumConsumer('')).length, 'the value sites stay qualified');
 	}
 
+	/**
+	 * An imported enum a build macro shapes may bind constructors its source does not list, so any of them may take the bare
+	 * name: the annotations stay qualified, where the same enum written without the macro hands them its short name.
+	 */
+	@:pin('control')
+	@:killer('M-PRINTER-UNLISTED-VALUES-READ-AS-NONE')
+	public function testAnImportedMacroBuiltEnumMayShadowAnyName(): Void {
+		final src: String = 'package module;\n\nimport types.BASection;\n\nclass Clean {\n\n\tpublic function f():Void {\n'
+			+ '\t\tfinal a:module.Hash = g();\n\t\tfinal b:module.Hash = g();\n\t}\n\n}\n';
+		final plain: String = 'package types;\n\nenum BASection {\n\tPrepare;\n}\n';
+		final built: String = 'package types;\n\n@:build(types.Macro.build())\nenum BASection {\n\tPrepare;\n}\n';
+		Assert.same([2, 0], [enumViolations(src, plain).length, enumViolations(src, built).length]);
+	}
+
+	/**
+	 * A typedef of a nullable wrapper binds what its argument binds (the compiler follows `Null<BASection>` to its
+	 * constructors), so importing it takes `Hash` as importing the enum does; one over an enum lacking `Hash` leaves the name
+	 * free.
+	 */
+	@:pin('control')
+	@:killer('M-BIND-NULL-WRAPPER-FOLLOWED')
+	public function testANullableTypedefOfAnEnumTakesItsConstructors(): Void {
+		final src: String = 'package module;\n\nimport types.BASection.Maybe;\n\nclass Clean {\n\n\tpublic function f():Void {\n'
+			+ '\t\tfinal a:module.Hash = g();\n\t\tfinal b:module.Hash = g();\n\t}\n\n}\n';
+		final types: (String) -> String = target ->
+			'package types;\n\nenum BASection {\n\tHash;\n\tPrepare;\n}\n\nenum Other {\n\tPrepare;\n}\n\n'
+				+ 'typedef Maybe = Null<$target>;\n';
+		Assert.same([0, 2], [
+			enumViolations(src, types('BASection')).length,
+			enumViolations(src, types('Other')).length
+		]);
+	}
+
 	// --- the index proof ---
 
 	public function testWithoutAResolutionIndexTheRunIsReportOnly(): Void {
@@ -918,7 +951,9 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 	/** The enum-shadow scope: the consumer itself, the enum that binds `Hash`, and the class of the same name. */
-	private function enumPlugin(report: Array<{ file: String, source: String }>): CachingGrammarPlugin {
+	private function enumPlugin(
+		report: Array<{ file: String, source: String }>, enumSource: String = BASECTION_SOURCE
+	): CachingGrammarPlugin {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({
 			declared: true,
@@ -926,7 +961,7 @@ class ShortenTypeRefCheckTest extends Test {
 				report: report,
 				projectRoots: [],
 				library: new LibrarySources([
-					{ file: 'types/BASection.hx', source: BASECTION_SOURCE },
+					{ file: 'types/BASection.hx', source: enumSource },
 
 					{ file: 'module/Hash.hx', source: MODULE_HASH_SOURCE }
 				])
@@ -935,9 +970,9 @@ class ShortenTypeRefCheckTest extends Test {
 		return scoped;
 	}
 
-	private function enumViolations(src: String): Array<Violation> {
+	private function enumViolations(src: String, enumSource: String = BASECTION_SOURCE): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'module/Clean.hx', source: src }];
-		return CheckFixture.violationsIn(valueRule(), report, enumPlugin(report));
+		return CheckFixture.violationsIn(valueRule(), report, enumPlugin(report, enumSource));
 	}
 
 	private function enumApplyFix(src: String): String {

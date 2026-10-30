@@ -517,10 +517,10 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/**
-	 * A typedef binds the constructors of what it aliases (through `Null<T>` too), so an
-	 * alias of `Col2` meets `Col` on `Red`; one whose target the compiler unwraps is unlisted.
+	 * A typedef binds the constructors of what it aliases (through `Null<T>` too, the compiler
+	 * unwrapping it), so an alias of `Col2` meets `Col` on `Red`, plain or nullable.
 	 */
-	@:pin('control') @:killer('M-BIND-TYPEDEF-NOT-FOLLOWED', 'M-BIND-NULL-WRAPPER-FOLLOWED')
+	@:pin('control') @:killer('M-BIND-TYPEDEF-NOT-FOLLOWED')
 	public function testATypedefBindsTheConstructorsOfWhatItAliases(): Void {
 		Assert.equals(0, edits(module('import p.TAlias;\nimport p.Col;\n'), null, BIND_LIBS).length);
 		Assert.equals(0, edits(module('import p.TNull;\nimport p.Col;\n'), null, BIND_LIBS).length);

@@ -54,7 +54,7 @@ typedef BindingCollision = {
  *    in either order; inside either tier, and between two types, the LAST statement wins.
  *
  * POSITIVE whitelist. A set the index cannot list is null: an enum or abstract carrying a build macro,
- * a typedef whose target does not resolve (or is a nullable wrapper the compiler follows through),
+ * a typedef whose target (a nullable wrapper's argument, which the compiler follows through) does not resolve,
  * a module the index never saw. The residual limit —
  * documented, not hidden: a module the index never saw contributes its own last segment as its only
  * TYPE, and two lines whose sets are BOTH unlisted are not read as colliding (`collision`), the
@@ -126,18 +126,29 @@ final class ImportBindings {
 	}
 
 	/**
+	 * The value names the types `import <path>;` brings declare (its `typeValues`), with a module the index never saw and a
+	 * typedef whose target it cannot read or resolve read as binding none: null only where the index holds an enum or an
+	 * abstract a build macro shapes (directly or through a typedef, a nullable wrapper's argument too), whose constructors no
+	 * source lists.
+	 */
+	public function valuesSeen(path: String): Null<Array<String>> {
+		return isWildcard(path) ? [] : readExplicit(path, true).typeValues;
+	}
+
+	/**
 	 * What the explicit import `path` binds. A module path binds its module; a path one segment longer
 	 * than a module binds the secondary type it names, or — when it names a member — that member as a
-	 * field value; anything else is a module the index never saw (the residual reading).
+	 * field value; anything else is a module the index never saw (the residual reading), whose value sets
+	 * are unlisted unless `unseenAsNone` reads what the index never saw as binding none (`valuesSeen`).
 	 */
-	private function readExplicit(path: String): ImportBinding {
+	private function readExplicit(path: String, unseenAsNone: Bool = false): ImportBinding {
 		final files: Array<FileInfo> = filesOf(path);
 		final imported: Array<ResolvedType> = _index()?.refs.names.importedTypes(path) ?? [];
 		if (files.length > 0) {
 			var typeValues: Null<Array<String>> = [];
 			var fieldValues: Null<Array<String>> = [];
 			for (file in files) {
-				for (t in file.types) if (!t.isPrivate) typeValues = union(typeValues, typeValuesOf(t, file, []));
+				for (t in file.types) if (!t.isPrivate) typeValues = union(typeValues, typeValuesOf(t, file, [], unseenAsNone));
 				fieldValues = union(fieldValues, moduleFieldsOf(file));
 			}
 			final types: Array<String> = [];
@@ -154,7 +165,7 @@ final class ImportBindings {
 		for (r in imported) return {
 			types: [leaf],
 			wildcardTypes: [],
-			typeValues: typeValuesOf(r.type, r.file, []),
+			typeValues: typeValuesOf(r.type, r.file, [], unseenAsNone),
 			fieldValues: []
 		};
 		final ownerFields: Array<String> = [
@@ -172,7 +183,7 @@ final class ImportBindings {
 			: {
 				types: [leaf],
 				wildcardTypes: [],
-				typeValues: null,
+				typeValues: unseenAsNone ? [] : null,
 				fieldValues: null
 			};
 	}
@@ -223,26 +234,47 @@ final class ImportBindings {
 	 * members — the values of an `enum abstract`, and of a legacy `@:enum abstract`, which projects as a
 	 * plain abstract and so cannot be told apart (a plain abstract's instance properties are the price,
 	 * paid in refusals, never in a wrong rewrite); either kind carrying a build macro is unlisted. A
-	 * typedef binds what its target binds — an anonymous structure nothing — and is followed through the
-	 * index; a target that does not resolve, re-enters the chain, or is a nullable wrapper (the compiler
-	 * follows `Null<Col>` to `Col`'s constructors) is unlisted. Every other kind binds none.
+	 * typedef binds what its target binds — an anonymous structure nothing, a nullable wrapper what its
+	 * argument binds (the compiler follows `Null<Col>` to `Col`'s constructors) — and is followed through
+	 * the index (`aliasValuesOf`). Every other kind binds none.
 	 */
-	private function typeValuesOf(type: TypeDeclInfo, file: FileInfo, seen: Array<TypeDeclInfo>): Null<Array<String>> {
+	private function typeValuesOf(type: TypeDeclInfo, file: FileInfo, seen: Array<TypeDeclInfo>, unseenAsNone: Bool): Null<Array<String>> {
 		final shape: RefShape = _plugin.refShape();
 		final abstracts: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		final enums: Array<String> = shape.bareConstructorTypeKinds ?? [];
-		if (type.kind == TYPEDEF_KIND) {
-			if (type.isAnonStruct) return [];
-			final target: Null<String> = type.aliasTargetRaw;
-			if (target == null || (shape.nullableWrapperTypeNames ?? []).contains(SourceText.lastSegment(target))) return null;
-			final next: Null<ResolvedType> = _index()?.refs.resolveTypeRef(target, file, type.span.from);
-			return next == null || seen.contains(next.type) ? null : typeValuesOf(next.type, next.file, seen.concat([type]));
-		}
+		if (type.kind == TYPEDEF_KIND) return aliasValuesOf(type, file, seen, unseenAsNone);
 		if (!abstracts.contains(type.kind) && !enums.contains(type.kind)) return [];
 		if (type.hasBuild || type.hasAutoBuild) return null;
 		if (!abstracts.contains(type.kind)) return [for (m in type.members) m.name];
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		return [for (m in type.members) if (!m.isStatic && fields.contains(m.kind)) m.name];
+	}
+
+	/**
+	 * `typeValuesOf` of the typedef `type`: an anonymous structure binds nothing, any other is followed through the index to
+	 * what it aliases (`aliasFollowed`, a nullable wrapper's argument included); a target that cannot be read, does not
+	 * resolve or re-enters the chain is unlisted — or, under `unseenAsNone`, binds none (the index cannot show it binds any).
+	 */
+	private function aliasValuesOf(type: TypeDeclInfo, file: FileInfo, seen: Array<TypeDeclInfo>, unseenAsNone: Bool): Null<Array<String>> {
+		if (type.isAnonStruct) return [];
+		final unlisted: Null<Array<String>> = unseenAsNone ? [] : null;
+		final target: Null<String> = aliasFollowed(type);
+		if (target == null) return unlisted;
+		final next: Null<ResolvedType> = _index()?.refs.resolveTypeRef(target, file, type.span.from);
+		return next == null || seen.contains(next.type) ? unlisted : typeValuesOf(next.type, next.file, seen.concat([type]), unseenAsNone);
+	}
+
+	/**
+	 * The type the typedef `type`'s value names are read through: what it aliases, or — for a nullable wrapper
+	 * (`typedef X = Null<Col>`), which the compiler follows to `Col`'s constructors — the wrapper's one argument; null when
+	 * neither can be read.
+	 */
+	private function aliasFollowed(type: TypeDeclInfo): Null<String> {
+		final target: Null<String> = type.aliasTargetRaw;
+		final written: Null<String> = type.aliasTargetWritten;
+		if (target == null || !(_plugin.refShape().nullableWrapperTypeNames ?? []).contains(SourceText.lastSegment(target))) return target;
+		final args: Null<Array<String>> = written == null ? null : _plugin.typeSyntax(written)?.argumentTexts();
+		return args != null && args.length == 1 ? args[0] : null;
 	}
 
 	/** Every declaration `target` names: a module's MAIN type (`p.C`) or a module's secondary type (`p.Mod.C`). */
