@@ -9,6 +9,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
+import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
 
 /**
@@ -171,7 +172,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 				units: units,
 				loopKinds: loopKinds,
 				blockKinds: blockKinds,
-				writes: null
+				locals: null
 			};
 			for (unit in units) analyzeUnit(violations, entry.file, entry.source, unit, ctx);
 		});
@@ -376,34 +377,24 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 	 * The writes that may change a value `bucket` reads (`WriteSites.mayOverlap`; the group's own chain, when it is
 	 * one, read as a reference) that `unit`'s own body performs — or null when one runs at a time no position in
 	 * `unit` decides: inside a function nested in `unit` (it runs whenever it is called), or, for a local `unit`
-	 * captures, in a closure other than the body that declares it (a call `unit` makes may run it). A write of the
+	 * captures, in a closure other than the body that declares it (a call
+	 * `unit` makes may run it: `UnchangedLocal.writesCaptured`). A write of the
 	 * declaring body itself cannot run while `unit` does, and a member written in another body is outside what the
 	 * rule models (the class doc's "Same value"). A write no path names (`WriteSite.path` null) writes every operand.
 	 */
 	private static function ownWrites(bucket: BindingBucket, unit: QueryNode, ctx: Ctx): Null<Array<WriteSite>> {
 		final out: Array<WriteSite> = [];
-		for (w in writesOf(ctx)) {
+		final locals: UnchangedLocal = localsOf(ctx);
+		for (w in locals.writes) {
 			final written: Null<String> = w.path;
 			if (written != null && !bucket.paths.exists(p -> WriteSites.mayOverlap(written, p, p == bucket.own))) continue;
 			final body: Null<QueryNode> = innermostUnitAt(w.effect - 1, ctx.units);
 			if (body == unit)
 				out.push(w);
-			else if (body != null && (strictlyWithin(body, unit) || capturedWriteElsewhere(written, body, ctx)))
+			else if (body != null && (strictlyWithin(body, unit) || locals.writesCaptured(w)))
 				return null;
 		}
 		return out;
-	}
-
-	/**
-	 * Whether a write of `written` in `body` (a body outside the analyzed one) writes a LOCAL some other body declares —
-	 * a binding declared inside a function unit. A member's declaration sits in no unit: a write of it in another body
-	 * is outside what the rule models.
-	 */
-	private static function capturedWriteElsewhere(written: Null<String>, body: QueryNode, ctx: Ctx): Bool {
-		final binding: Int = written == null ? -1 : WriteSites.rootBinding(written);
-		if (binding < 0) return false;
-		final declaring: Null<QueryNode> = innermostUnitAt(binding, ctx.units);
-		return declaring != null && declaring != body;
 	}
 
 	/** `sorted` cut before every occurrence some write in `writes` takes effect ahead of, since the previous one. */
@@ -467,21 +458,20 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 		var bestLength: Int = 0;
 		for (u in units) {
 			final s: Null<Span> = u.span;
-			if (s != null && holds(s, offset) && (best == null || s.to - s.from < bestLength)) {
-				best = u;
-				bestLength = s.to - s.from;
-			}
+			if (s == null || !holds(s, offset) || best != null && s.to - s.from >= bestLength) continue;
+			best = u;
+			bestLength = s.to - s.from;
 		}
 		return best;
 	}
 
-	/** The file's writes (`WriteSites.of`), collected the first time a group asks. */
-	private static function writesOf(ctx: Ctx): Array<WriteSite> {
-		final known: Null<Array<WriteSite>> = ctx.writes;
+	/** The file's writes and function spans (`UnchangedLocal`), collected the first time a group asks. */
+	private static function localsOf(ctx: Ctx): UnchangedLocal {
+		final known: Null<UnchangedLocal> = ctx.locals;
 		if (known != null) return known;
-		final all: Array<WriteSite> = WriteSites.of(ctx.tree, ctx.shape);
-		ctx.writes = all;
-		return all;
+		final built: UnchangedLocal = new UnchangedLocal(ctx.tree, ctx.shape);
+		ctx.locals = built;
+		return built;
 	}
 
 	/** Drop a group whose every occurrence nests inside an equally- or more-frequent larger group's occurrence. */
@@ -594,8 +584,8 @@ private typedef Ctx = {
 	/** `ControlFlowSupport.blockKinds`: the statement lists a shared `final` can go into. */
 	var blockKinds: Array<String>;
 
-	/** The file's writes once a group has asked for them (`writesOf`). */
-	var writes: Null<Array<WriteSite>>;
+	/** The file's writes and function spans once a group has asked for them (`localsOf`). */
+	var locals: Null<UnchangedLocal>;
 }
 
 /**

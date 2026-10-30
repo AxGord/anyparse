@@ -413,6 +413,30 @@ class ExtractRepeatedExpressionTest extends Test {
 		Assert.equals(1, violations('class C { var a:A; function m() { k(a.b.c); k(a.b.c); k(a.b.c); a.b.c = 5; } }').length);
 	}
 
+	/** A call inside a lambda may run a sibling closure that writes the local the lambda reads. */
+	@:pin('control')
+	@:killer('M-UNCHANGED-LOCAL-CAPTURED-WRITE-IGNORED')
+	public function testASiblingClosureWriteDropsTheGroup(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C { function m() { var i = 0; final bump = () -> i++; final g = () -> {'
+				+ ' k(Std.int(i)); bump(); k(Std.int(i)); k(Std.int(i)); }; } }'
+			).length
+		);
+	}
+
+	/** The body declaring the local writes it while no call of the lambda runs: the lambda's group stays. */
+	@:pin('control')
+	@:killer('M-UNCHANGED-LOCAL-CAPTURED-DECLARER-COUNTED')
+	public function testTheDeclaringBodysWriteKeepsTheGroup(): Void {
+		Assert.equals(
+			1,
+			violations('class C { function m() { var i = 0; final g = () -> { k(Std.int(i)); k(Std.int(i)); k(Std.int(i)); }; i++; } }')
+				.length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new ExtractRepeatedExpression(), src);
 	}

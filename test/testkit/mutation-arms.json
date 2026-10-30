@@ -33448,6 +33448,36 @@
 			"note": "a function literal writing the local is called by the run and changes it between two reads"
 		},
 		{
+			"name": "M-UNCHANGED-LOCAL-REBIND-IGNORED",
+			"type": "anyparse.query.UnchangedLocal",
+			"method": "reboundByCalls",
+			"force": "[]",
+			"note": "no closure rebinds a local by name, so a flow keeps narrowing a local a called closure set to null"
+		},
+		{
+			"name": "M-UNCHANGED-LOCAL-REBIND-SHADOW",
+			"type": "anyparse.query.UnchangedLocal",
+			"method": "reboundByCalls",
+			"find": "if (isLocal(binding) && fromCall(at.from, binding, region) && !out.contains(name)) out.push(name);",
+			"replace": "if (!out.contains(name)) out.push(name);",
+			"note": "a closure writing its own same-named local reads as rebinding the outer one, which loses its facts"
+		},
+		{
+			"name": "M-UNCHANGED-LOCAL-CAPTURED-WRITE-IGNORED",
+			"type": "anyparse.query.UnchangedLocal",
+			"method": "writesCaptured",
+			"force": "false",
+			"note": "a sibling closure writing a captured local reads as a write no call runs, so a lambda keeps a group a call changes"
+		},
+		{
+			"name": "M-UNCHANGED-LOCAL-CAPTURED-DECLARER-COUNTED",
+			"type": "anyparse.query.UnchangedLocal",
+			"method": "writesCaptured",
+			"find": "return isLocal(binding) && fromCall(at.from, binding, null);",
+			"replace": "return isLocal(binding);",
+			"note": "the declaring body writing its own local reads as a call-run write, dropping a lambda group no call changes"
+		},
+		{
 			"name": "M-PMB-ANY-ITERABLE",
 			"type": "anyparse.check.haxe.loops.PreferMapBind",
 			"method": "matches",

@@ -9,6 +9,7 @@ import anyparse.query.RefsCache;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;
+import anyparse.query.UnchangedLocal;
 import anyparse.runtime.SameItems;
 
 /**
@@ -624,10 +625,13 @@ final class NullFlow {
 		final predicates: Array<NonNullPredicate> = typeSources == null ? [] : nonNullPredicates(root, shape, identKind, typeSources);
 		final written: Map<Int, String> = typeSources ?? [];
 		final argType: QueryNode -> Null<String> = arg -> TypeResolver.identDeclaredTypeSource(arg, shape, root, () -> written, false);
+		final locals: UnchangedLocal = new UnchangedLocal(root, shape);
 		forEachFunctionUnit(
 			root, shape,
 			(body, paramNames) ->
-				analyzeBody(body, shape, source, identKind, paramNames, visit, seed, declaredNullable, predicates, argType, recording)
+				analyzeBody(
+					body, shape, source, identKind, paramNames, visit, seed, declaredNullable, predicates, argType, locals, recording
+				)
 		);
 	}
 
@@ -802,10 +806,12 @@ final class NullFlow {
 	private static function analyzeBody(
 		body: QueryNode, shape: RefShape, source: String, identKind: String, paramNames: Array<String>,
 		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>,
-		predicates: Array<NonNullPredicate>, argType: QueryNode -> Null<String>, recording: Bool
+		predicates: Array<NonNullPredicate>, argType: QueryNode -> Null<String>, locals: UnchangedLocal, recording: Bool
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final nestedFnKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
+		final ownNames: Array<String> = paramNames.concat(collectDeclared(body, localDeclKinds, nestedFnKinds));
+		final bodySpan: Null<Span> = body.span;
 		final ctx: FlowCtx = {
 			identKind: identKind,
 			assignKind: shape.assignKind,
@@ -848,10 +854,10 @@ final class NullFlow {
 			assertTrueCalls: shape.assertTrueCalls ?? [],
 			assertFalseCalls: shape.assertFalseCalls ?? [],
 			mapExistsMethods: shape.mapExistsMethods ?? [],
-			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? [], nestedFnKinds),
+			captured: bodySpan == null ? ownNames : locals.reboundByCalls(bodySpan),
 			selfScopeDeclKinds: shape.selfScopeDeclKinds,
 			binderKinds: BinderScan.binderKinds(shape),
-			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds, nestedFnKinds)),
+			ownNames: ownNames,
 			source: source,
 			nullableSourceRhs: seed,
 			declaredNullable: declaredNullable,
@@ -1481,29 +1487,6 @@ final class NullFlow {
 			if (!seen && !out.unseen.contains(n)) out.unseen.push(n);
 		}
 		for (n in known) if (!written.contains(n)) markKnown(out, n);
-		return out;
-	}
-
-	/** The names mutated inside any nested function value within `body` — excluded from narrowing for the whole function. */
-	private static function collectCaptured(
-		body: QueryNode, identKind: String, writeKinds: Array<String>, nestedFnKinds: Array<String>
-	): Array<String> {
-		final out: Array<String> = [];
-		function collectWrites(n: QueryNode): Void {
-			if (writeKinds.contains(n.kind) && n.children.length >= 1) {
-				final target: QueryNode = n.children[0];
-				final name: Null<String> = target.name;
-				if (target.kind == identKind && name != null) out.push(name);
-			}
-			for (c in n.children) collectWrites(c);
-		}
-		function walkBody(n: QueryNode): Void {
-			if (nestedFnKinds.contains(n.kind))
-				collectWrites(n);
-			else
-				for (c in n.children) walkBody(c);
-		}
-		walkBody(body);
 		return out;
 	}
 

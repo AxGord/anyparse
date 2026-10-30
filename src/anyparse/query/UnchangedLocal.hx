@@ -11,7 +11,9 @@ using Lambda;
  * identifier reads". A local or a parameter — a binding declared inside a function — survives a call when no function
  * literal or local function other than the ones declaring it writes it (a call may run one); it holds across a region
  * when it survives calls and no write in the region may change it. A write is matched by storage (`WriteSites.mayOverlap`
- * with the whole storage read), and one whose target no path names counts as a write of everything. One file's writes
+ * with the whole storage read), and `survivesCalls` and `holds` count one whose
+ * target no path names as a write of everything (conservative). A null path never
+ * names a local binding, so the binding-keyed entries (`writesCaptured`, `reboundByCalls`) skip such a write. One file's writes
  * and function spans, collected when built; instance state of one scan, never shared.
  */
 @:nullSafety(Strict)
@@ -56,6 +58,38 @@ final class UnchangedLocal {
 		return true;
 	}
 
+	/**
+	 * Whether `w` writes a local through its own binding from a function literal or local function that does not
+	 * declare it: a call may run it. A write no path names reaches no local through its binding.
+	 */
+	public function writesCaptured(w: WriteSite): Bool {
+		final path: Null<String> = w.path;
+		final at: Null<Span> = w.node.span;
+		if (path == null || at == null) return false;
+		final binding: Int = WriteSites.rootBinding(path);
+		return isLocal(binding) && fromCall(at.from, binding, null);
+	}
+
+	/**
+	 * The names of the locals a function literal or local function nested in `region` (or being it) rebinds without
+	 * declaring them — a write of the binding itself, not of a member or an element under it. For a flow that keys its
+	 * facts by name: every binding of one name shares the answer.
+	 */
+	public function reboundByCalls(region: Span): Array<String> {
+		final out: Array<String> = [];
+		for (w in writes) {
+			final path: Null<String> = w.path;
+			final span: Null<Span> = w.node.span;
+			if (path == null || span == null || path.indexOf('.') >= 0) continue;
+			final at: Span = span;
+			if (at.from < region.from || region.to < at.to) continue;
+			final binding: Int = WriteSites.rootBinding(path);
+			final name: String = path.substr(0, path.lastIndexOf('@'));
+			if (isLocal(binding) && fromCall(at.from, binding, region) && !out.contains(name)) out.push(name);
+		}
+		return out;
+	}
+
 	/** The storage key and binding offset `ident` reads when it is an identifier bound inside a function; else null. */
 	private function localRead(ident: QueryNode): Null<LocalRead> {
 		final name: Null<String> = ident.name;
@@ -63,20 +97,33 @@ final class UnchangedLocal {
 		if (ident.kind != _shape.identKind || name == null || span == null || name == _shape.selfReferenceText) return null;
 		final binding: Null<Int> = Refs.bindingAt(name, span.from, _tree, _shape);
 		final key: Null<String> = WriteSites.accessPath(ident, _tree, _shape);
-		return binding == null || key == null || !_functions.exists(f -> f.from < binding && binding < f.to)
-			? null
-			: { key: key, binding: binding };
+		return binding == null || key == null || !isLocal(binding) ? null : { key: key, binding: binding };
 	}
 
 	/** Whether a function literal or local function that does not declare the local writes it: a call may run it. */
 	private function writtenByLiteral(local: LocalRead): Bool {
 		for (w in writes) {
 			final at: Null<Span> = w.node.span;
-			if (at == null || !overlaps(w, local.key)) continue;
-			if (_functions.exists(f -> f.from <= at.from && at.from < f.to && (f.from > local.binding || local.binding >= f.to)))
-				return true;
+			if (at != null && overlaps(w, local.key) && fromCall(at.from, local.binding, null)) return true;
 		}
 		return false;
+	}
+
+	/** Whether `binding` is the offset of a declaration inside a function: a local or a parameter. */
+	private function isLocal(binding: Int): Bool {
+		return binding >= 0 && _functions.exists(f -> f.from < binding && binding < f.to);
+	}
+
+	/**
+	 * Whether a function holding offset `at` does not hold `binding` — code there runs when that function is called —
+	 * counting only functions inside `within` when given.
+	 */
+	private function fromCall(at: Int, binding: Int, within: Null<Span>): Bool {
+		final lo: Int = within == null ? 0 : within.from;
+		final hi: Int = within == null ? 0 : within.to;
+		return _functions.exists(
+			f -> f.from <= at && at < f.to && (f.from > binding || binding >= f.to) && (within == null || lo <= f.from && f.to <= hi)
+		);
 	}
 
 	private static function overlaps(w: WriteSite, key: String): Bool {
