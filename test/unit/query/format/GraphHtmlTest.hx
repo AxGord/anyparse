@@ -1,10 +1,12 @@
 package unit.query.format;
 
+import anyparse.query.CallGraph;
 import anyparse.query.format.GraphHtml;
 import anyparse.query.format.GraphMermaid;
 import anyparse.query.format.json.GraphPageJson;
 import anyparse.query.format.json.GraphPageJsonParser;
 import anyparse.query.graph.CodeGraph;
+import anyparse.query.graph.GraphDiff;
 import anyparse.query.graph.GraphView;
 
 /**
@@ -78,6 +80,45 @@ class GraphHtmlTest extends Test {
 		Assert.equals(data.legend, back.legend);
 	}
 
+	/**
+	 * Over a graph comparing two versions every view colours what changed: the package holding the changes, the type
+	 * added and its member, the edges; the legend charts the three changes, which a graph of one version's does not.
+	 */
+	public function testAComparisonColoursEveryView(): Void {
+		final diff: CodeGraph = GraphDiff.compare(declared(GraphFixture.DIFF_BEFORE), declared(GraphFixture.DIFF_AFTER), ['p.A.run']);
+		final data: GraphPageJson = GraphHtml.data(diff, Package, prune(), 'diff');
+		Assert.equals(',p_p,t_p_dA,t_p_dC', [for (v in data.views) v.id].join(','));
+		Assert.isTrue(data.views[0].mermaid.indexOf('class p_p changed') >= 0, data.views[0].mermaid);
+		final pkg: String = data.views[1].mermaid;
+		Assert.isTrue(pkg.indexOf('class t_p_dA changed') >= 0, pkg);
+		Assert.isTrue(pkg.indexOf('class t_p_dC added') >= 0, pkg);
+		Assert.isTrue(pkg.indexOf('t_p_dC ==>|new| t_p_dA') >= 0, pkg);
+		final added: String = data.views[3].mermaid;
+		Assert.isTrue(added.indexOf('class m_p_dC_dgo added') >= 0, added);
+		Assert.isTrue(data.legend.indexOf('m_added(added)') >= 0, data.legend);
+		Assert.equals(-1, GraphHtml.data(members(), Package, prune(), 'calls').legend.indexOf('m_added'));
+	}
+
+	/**
+	 * Each `<!--` of the inlined library is written `<\!--`, which a string or a regular expression reads alike, so no
+	 * comment opener can make a later `</script>` stop closing its element.
+	 */
+	@:killer('M-GRAPH-HTML-COMMENT-OPEN')
+	@:pin('control')
+	public function testAnInlinedCommentOpenerIsNeutralised(): Void {
+		final page: String = GraphHtml.page(
+			GraphHtml.data(members(), Package, prune(), 'calls'), 'var s = "<!--<script>"; var r = /<!--/;'
+		);
+		Assert.isTrue(page.indexOf('var s = "<\\!--<script>"; var r = /<\\!--/;') >= 0);
+		Assert.equals(-1, page.indexOf('<!--'));
+	}
+
+	/** A location naming a view in a malformed escape opens the first view instead of stopping the page's script. */
+	public function testAMalformedLocationOpensTheFirstView(): Void {
+		final page: String = GraphHtml.page(GraphHtml.data(members(), Package, prune(), 'calls'), '');
+		Assert.isTrue(page.indexOf('try { id = decodeURIComponent(location.hash.slice(1)); } catch (malformed) { id = ""; }') >= 0);
+	}
+
 	/** The member graph of the fixture. */
 	private static function members(): CodeGraph {
 		return MemberGraphBuilder.whole(GraphFixture.calls(), null);
@@ -92,6 +133,10 @@ class GraphHtmlTest extends Test {
 			mutualOnly: false,
 			external: false
 		};
+	}
+
+	private static function declared(source: String): CodeGraph {
+		return MemberGraphBuilder.declared(CallGraph.build([{ file: 'p/A.hx', source: source }], new HaxeQueryPlugin()), null);
 	}
 
 }

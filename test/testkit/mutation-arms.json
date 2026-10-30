@@ -32845,6 +32845,54 @@
 			"find": "if (seams.barrierKinds.contains(node.kind)) out.resize(0);",
 			"replace": "",
 			"note": "a bound above a function literal reaches its body"
+		},
+		{
+			"name": "M-GRAPH-VIEW-HOLDER-UNCHANGED",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "changeWithin",
+			"find": "found = Changed;",
+			"replace": "found = null;",
+			"note": "a type or a package holding an added, removed or changed member reads unchanged once folded, so a view above the members shows no change at all"
+		},
+		{
+			"name": "M-GRAPH-VIEW-FOLD-UNSUMMED",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "fold",
+			"find": "sum.before += change == Changed ? (e.before ?? e.weight) : e.weight;",
+			"replace": "sum.before += e.weight;",
+			"note": "an edge folded from a reweighted one counts its later weight as its earlier, so the folded edge's earlier weight is wrong"
+		},
+		{
+			"name": "M-GRAPH-VIEW-EDGE-CHANGE-DROPPED",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "drawFolded",
+			"find": "drawn.change = change;",
+			"replace": "",
+			"note": "a view draws every edge of a comparison uncoloured: what was added, removed or reweighted is lost at the first fold or filter"
+		},
+		{
+			"name": "M-GRAPH-HTML-COMMENT-OPEN",
+			"type": "anyparse.query.format.GraphHtml",
+			"method": "inlined",
+			"find": ".replace('<!--', '<\\\\!--')",
+			"replace": "",
+			"note": "a `<!--` of the inlined library followed by `<script` keeps the page's own `</script>` from closing the element, and the page's script never runs"
+		},
+		{
+			"name": "M-GRAPH-VIEW-SHUT-EDGE-UNMARKED",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "markChanged",
+			"find": "if (current.change == null) current.change = Changed;",
+			"replace": "",
+			"note": "a changed edge between two unchanged nodes folding into one is dropped unmarked, so the package or type holding the change reads unchanged"
+		},
+		{
+			"name": "M-GRAPH-MERMAID-CYCLE-HIDES-CHANGE",
+			"type": "anyparse.query.format.GraphMermaid",
+			"method": "flowchart",
+			"find": "if (e.change == null && mutual[i])",
+			"replace": "if (mutual[i])",
+			"note": "a changed edge closing a cycle is drawn red after its change colour, so a comparison hides the change on every edge of a cycle"
 		}
 	]
 }

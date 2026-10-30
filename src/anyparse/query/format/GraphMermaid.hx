@@ -16,7 +16,8 @@ import anyparse.query.graph.CodeGraph;
  * a node that holds others is a subgraph, any other a vertex shaped by its level, and the edges follow
  * at the top level, labelled by kind (a call or an import is unlabelled) and
  * by weight above one; an edge whose ends depend on each other is drawn red. A graph comparing two versions
- * (`GraphDiff`) colours each added, removed or changed vertex and link, and signs a changed subgraph's title.
+ * (`GraphDiff`) colours each added, removed or changed vertex and link, a changed link closing a cycle thick in its
+ * change's colour, and signs a changed subgraph's title.
  *
  * Every label is `MmdLabel.Plain`, the text a reader sees, so the label codec escapes whatever Mermaid
  * would read as syntax or markup — a type label `Map<String, Int>` renders as written.
@@ -36,6 +37,9 @@ final class GraphMermaid {
 
 	/** The style of an edge whose ends depend on each other (`CodeGraph.isMutual`). */
 	private static inline final MUTUAL_STYLE: String = 'stroke:#d33,stroke-width:2px';
+
+	/** The width a changed edge whose ends depend on each other is drawn at, in its change's colour. */
+	private static inline final MUTUAL_CHANGED_WIDTH: String = 'stroke-width:4px';
 
 	/**
 	 * The styles of a node, and of a link, a graph comparing two versions
@@ -72,9 +76,17 @@ final class GraphMermaid {
 		final changes: Array<GraphChange> = [Added, Removed, Changed];
 		for (change in changes) classed(statements, change, nodeStyle(change), leaves.filter(n -> n.change == change));
 		// a link's ordinal is its place among the chart's links, and every edge is one chain of one link
-		for (change in changes) linkStyled(statements, [for (i => e in edges) if (e.change == change) '$i'], linkStyle(change));
-		// last, so a link both changed and mutual is drawn as the cycle it closes
-		linkStyled(statements, [for (i => e in edges) if (graph.isMutual(e)) '$i'], MUTUAL_STYLE);
+		final mutual: Array<Bool> = [for (e in edges) graph.isMutual(e)];
+		for (change in changes) {
+			linkStyled(statements, [for (i => e in edges) if (e.change == change && !mutual[i]) '$i'], linkStyle(change));
+		}
+		// a changed link closing a cycle keeps its change's colour, which a comparison exists to show, and is drawn thick
+		for (change in changes) {
+			linkStyled(
+				statements, [for (i => e in edges) if (e.change == change && mutual[i]) '$i'], '${linkStyle(change)},$MUTUAL_CHANGED_WIDTH'
+			);
+		}
+		linkStyled(statements, [for (i => e in edges) if (e.change == null && mutual[i]) '$i'], MUTUAL_STYLE);
 		return { first: statements[0], rest: statements.slice(1) };
 	}
 

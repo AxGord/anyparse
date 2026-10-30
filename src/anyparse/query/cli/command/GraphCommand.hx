@@ -96,21 +96,32 @@ final class GraphCommand implements CliCommand {
 		final kindsSpec: Null<String> = request.kinds;
 		final kinds: Null<Array<EdgeKind>> = kindsSpec == null ? null : CliCallGraph.parseEdgeKinds(COMMAND, kindsSpec);
 		if (kindsSpec != null && kinds == null) return EXIT_USAGE;
+		final page: Null<String> = request.html;
+		// the page cannot be written without the library, so the scope is not read for it
+		if (page != null && !FileSystem.exists(MERMAID)) {
+			CliIo.stderr('apq $COMMAND: no Mermaid library at $MERMAID — rebuild the engine from a tree that vendors it\n');
+			return EXIT_RUNTIME;
+		}
 		final revisions: Null<Array<String>> = request.diff;
 		if (revisions != null) {
 			final changes: Null<CodeGraph> = diffGraph(request, revisions, kinds);
 			if (changes == null) return EXIT_RUNTIME;
-			printView(request.output, changes, '$COMMAND --diff ${revisions[0]} ${revisions[1]} --level member --edges calls');
+			final compared: String = '$COMMAND --diff ${revisions[0]} ${revisions[1]}';
+			if (page != null)
+				return writePage(request, changes, page, '$compared --level ${request.level}', changes.nodes().length == 0, ctx);
+			printView(request.output, changes, '$compared --level member --edges calls');
 			return ctx.emptyExit(changes.nodes().length == 0);
 		}
-		final page: Null<String> = request.html;
 		// a page opens its nodes down to the finest level the edges reach, so it draws that level
 		final drawn: Null<CodeGraph> = request.edges == Imports
 			? importGraph(request.inputSpecs, request.lang, page == null ? request.level : Type)
 			: callGraph(request.inputSpecs, request.lang, page == null ? request.level : Member, kinds);
 		if (drawn == null) return EXIT_RUNTIME;
 		final full: CodeGraph = request.packageDepth > 0 ? GraphView.foldPackages(drawn, request.packageDepth) : drawn;
-		if (page != null) return writePage(request, full, page, ctx);
+		if (page != null)
+			return writePage(
+				request, full, page, '$COMMAND --level ${request.level} --edges ${request.edges}', full.edges().length == 0, ctx
+			);
 		final focusIds: Array<String> = [];
 		for (query in request.focus) {
 			final found: Array<GraphNode> = GraphView.named(full, query, request.level);
@@ -203,15 +214,12 @@ final class GraphCommand implements CliCommand {
 		}
 		if (inputSpecs.length == 0) throw new UsageFailure('missing <file-or-dir-or-glob> argument');
 		if (html != null) {
-			if (diff != null) throw new UsageFailure('--html draws one graph: it does not combine with --diff');
 			if (centring.length > 0) throw new UsageFailure('${centring[0]} centres one view: --html draws a view of each node it opens');
 			if (formatted) throw new UsageFailure('--format chooses the report on stdout: --html writes a page instead');
 		}
 		if (diff != null) {
-			if (level != null && level != Member) throw new UsageFailure('--diff compares members: it draws --level member');
-			if (source == Imports) throw new UsageFailure('--diff compares the call graph: it draws --edges calls');
-			if (pruning.length > 0) throw new UsageFailure('${pruning[0]} prunes one graph: it does not combine with --diff');
-			level = Member;
+			level = comparedLevel(level, source, pruning, html != null);
+			source = Calls;
 		}
 		final drawn: GraphLevel = level ?? Package;
 		final edges: GraphEdgeSource = source ?? (drawn == Member ? Calls : Imports);
@@ -325,24 +333,23 @@ final class GraphCommand implements CliCommand {
 	}
 
 	/**
-	 * Write the page of `full` (`GraphHtml`) to `file`, its first view at the level asked, with the Mermaid library
-	 * vendored in the tree the engine was built from; `EXIT_RUNTIME` when the library cannot be read (message printed).
+	 * Write the page of `full` (`GraphHtml`) titled `title` to `file`, its first view at the level asked, with the Mermaid
+	 * library vendored in the tree the engine was built from, which the run has found there; `empty` when the answer is,
+	 * as the report of the same graph would call it.
 	 */
-	private static function writePage(request: GraphRequest, full: CodeGraph, file: String, ctx: CliContext): Int {
-		if (!FileSystem.exists(MERMAID)) {
-			CliIo.stderr('apq $COMMAND: no Mermaid library at $MERMAID — rebuild the engine from a tree that vendors it\n');
-			return EXIT_RUNTIME;
-		}
+	private static function writePage(
+		request: GraphRequest, full: CodeGraph, file: String, title: String, empty: Bool, ctx: CliContext
+	): Int {
 		final data: GraphPageJson = GraphHtml.data(full, request.level, {
 			minWeight: request.minWeight,
 			focus: [],
 			radius: 0,
 			mutualOnly: request.mutualOnly,
 			external: request.external
-		}, '$COMMAND --level ${request.level} --edges ${request.edges}');
+		}, title);
 		CliIo.writeFile(file, GraphHtml.page(data, InflateImpl.run(new BytesInput(File.getBytes(MERMAID))).toString()));
 		CliIo.sysPrint('apq $COMMAND: wrote $file, ${data.views.length} view${CliIo.plural(data.views.length)}\n');
-		return ctx.emptyExit(full.edges().length == 0);
+		return ctx.emptyExit(empty);
 	}
 
 	/** `view` as `output` asks: the text report, or the graph as Mermaid headed by `caption`, or as JSON. */
@@ -398,14 +405,30 @@ final class GraphCommand implements CliCommand {
 		CliIo.sysPrint('                    from git without a checkout: each member added (+), removed (-) or changed (~,\n');
 		CliIo.sysPrint('                    by its text), each edge added, removed or reweighted; an unchanged member folds\n');
 		CliIo.sysPrint('                    into its type, and an edge between unchanged nodes is left out. Takes --kinds,\n');
-		CliIo.sysPrint('                    --external, --format, --lang; refuses the pruning options and another level\n');
+		CliIo.sysPrint('                    --external, --format, --html, --lang; refuses the pruning options, and another\n');
+		CliIo.sysPrint('                    level unless --html opens the comparison from it (the packages by default)\n');
 		CliIo.sysPrint('  --format <f>      text (the report, default), mermaid or json\n');
 		CliIo.sysPrint('  --html <file>     Write one page that reads with no network instead of the report: the graph at\n');
 		CliIo.sysPrint('                    the level asked, a click on a package or a type opening what it holds and\n');
-		CliIo.sysPrint('                    what that touches, light and dark, a legend; the Mermaid library inlined.\n');
-		CliIo.sysPrint('                    Takes --kinds, --package-depth, --min-weight, --mutual, --external; refuses\n');
-		CliIo.sysPrint('                    --focus, --radius, --diff and --format\n');
+		CliIo.sysPrint('                    what that touches, light and dark, a legend; the Mermaid library inlined; with\n');
+		CliIo.sysPrint('                    --diff every view colours what changed. Takes --kinds, --package-depth,\n');
+		CliIo.sysPrint('                    --min-weight, --mutual, --external; refuses --focus, --radius and --format\n');
 		CliIo.sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
+	}
+
+	/**
+	 * The level a `--diff` run draws, `level` and `source` as asked and `pruning` the pruning options given: a page opens
+	 * the comparison from the level asked, the packages by default, and a report lists its members; a `UsageFailure` on
+	 * anything a comparison does not take.
+	 */
+	private static function comparedLevel(
+		level: Null<GraphLevel>, source: Null<GraphEdgeSource>, pruning: Array<String>, page: Bool
+	): GraphLevel {
+		if (!page && level != null && level != Member)
+			throw new UsageFailure('--diff compares members: it draws --level member unless --html opens them from another');
+		if (source == Imports) throw new UsageFailure('--diff compares the call graph: it draws --edges calls');
+		if (pruning.length > 0) throw new UsageFailure('${pruning[0]} prunes one graph: it does not combine with --diff');
+		return page ? (level ?? Package) : Member;
 	}
 
 }

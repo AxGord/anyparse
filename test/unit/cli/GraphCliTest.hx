@@ -112,7 +112,7 @@ class GraphCliTest extends Test {
 			['--level', 'module'],
 			['--min-weight', '0'],
 			['--html', 'x.html', '--focus', 'Alpha'],
-			['--html', 'x.html', '--diff', 'HEAD', 'HEAD'],
+			['--html', 'x.html', '--diff', 'HEAD', 'HEAD', '--edges', 'imports'],
 			['--html', 'x.html', '--format', 'json']
 		]) {
 			var code: Int = -1;

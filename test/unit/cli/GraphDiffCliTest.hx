@@ -4,6 +4,9 @@ import anyparse.query.Cli;
 import anyparse.query.ExitCode;
 import anyparse.query.format.json.CodeGraphJson;
 import anyparse.query.format.json.CodeGraphJsonParser;
+import anyparse.query.format.json.GraphPageJson;
+import anyparse.query.format.json.GraphPageJsonParser;
+import anyparse.query.format.json.GraphPageViewJson;
 import unit.cli.CliFixture.CliRun;
 import unit.query.graph.GraphFixture;
 #if nodejs
@@ -110,6 +113,18 @@ class GraphDiffCliTest extends Test {
 				'3 node(s), 0 edge(s), 0 mutual pair(s)\nchanged:\n  ~ member p.Util.top\n',
 				CliFixture.inDir(root, ['graph', '.', '--diff', 'HEAD~1', 'HEAD'])
 			);
+			// a comparison with changed members and no edge is no empty answer, as a page as in the report
+			final page: CliRun = CliFixture.runIn(root, [
+				'graph',
+				'.',
+				'--diff',
+				'HEAD~1',
+				'HEAD',
+				'--html',
+				'top.html',
+				'--exit-on-empty'
+			]);
+			Assert.equals(ExitCode.EXIT_OK, page.code);
 		});
 		#else
 		Assert.pass('a git child process needs the nodejs target');
@@ -171,6 +186,57 @@ class GraphDiffCliTest extends Test {
 	}
 
 	/**
+	 * `--diff` with `--html` writes the comparison as a page whose first view draws the packages, changed ones coloured;
+	 * `--level` chooses another first view, and the imports, which a comparison does not read, are refused.
+	 */
+	public function testAComparisonWritesAPage(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeTree('apq_graphdiff', [{ name: 'p/A.hx', source: GraphFixture.DIFF_BEFORE }]);
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			CliFixture.git(root, ['init', '-q']);
+			CliFixture.git(root, ['add', '-A']);
+			CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']);
+			File.saveContent('$root/p/A.hx', GraphFixture.DIFF_AFTER);
+			CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'tip']);
+			final run: CliRun = CliFixture.runIn(root, ['graph', 'p', '--diff', 'HEAD~1', 'HEAD', '--html', 'diff.html']);
+			Assert.equals(ExitCode.EXIT_OK, run.code);
+			Assert.equals('apq graph: wrote diff.html, 4 views\n', run.out);
+			final first: GraphPageViewJson = pageOf('$root/diff.html').views[0];
+			Assert.equals('graph --diff HEAD~1 HEAD --level package', first.title);
+			Assert.isTrue(first.mermaid.indexOf('class p_p changed') >= 0, first.mermaid);
+			final typed: CliRun = CliFixture.runIn(root, [
+				'graph',
+				'p',
+				'--diff',
+				'HEAD~1',
+				'HEAD',
+				'--html',
+				'types.html',
+				'--level',
+				'type'
+			]);
+			Assert.equals(ExitCode.EXIT_OK, typed.code);
+			Assert.equals('graph --diff HEAD~1 HEAD --level type', pageOf('$root/types.html').views[0].title);
+			final imports: CliRun = CliFixture.runIn(root, [
+				'graph',
+				'p',
+				'--diff',
+				'HEAD~1',
+				'HEAD',
+				'--html',
+				'x.html',
+				'--edges',
+				'imports'
+			]);
+			Assert.equals(ExitCode.EXIT_USAGE, imports.code);
+			Assert.isFalse(sys.FileSystem.exists('$root/x.html'));
+		});
+		#else
+		Assert.pass('a git child process needs the nodejs target');
+		#end
+	}
+
+	/**
 	 * Run `body` over a scratch repository of two commits: `A` beside `B`, then `A` moved to another directory, its
 	 * package kept, with its member `idle` now calling `B`.
 	 */
@@ -192,6 +258,18 @@ class GraphDiffCliTest extends Test {
 			CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'tip']);
 			body(root);
 		});
+		#end
+	}
+
+	/** The data of the page written to `file`. */
+	private static function pageOf(file: String): GraphPageJson {
+		#if nodejs
+		final page: String = File.getContent(file);
+		final open: String = 'id="graph-data">';
+		final start: Int = page.indexOf(open) + open.length;
+		return GraphPageJsonParser.parse(page.substring(start, page.indexOf('</script>', start)));
+		#else
+		throw new haxe.Exception('a page is read on the nodejs target');
 		#end
 	}
 

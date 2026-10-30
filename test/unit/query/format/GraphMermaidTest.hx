@@ -9,6 +9,8 @@ import anyparse.query.format.GraphMermaid;
 import anyparse.query.graph.CodeGraph;
 import unit.grammar.MermaidAst;
 
+using StringTools;
+
 /**
  * `GraphMermaid` — a code graph written through the Mermaid grammar's writer: what it writes parses back
  * with `MermaidParser` to the AST it was written from, every label comes back as the plain text it was,
@@ -96,6 +98,29 @@ class GraphMermaidTest extends Test {
 	/** An empty graph is a flowchart with no statement after its header. */
 	public function testAnEmptyGraph(): Void {
 		Assert.equals('flowchart LR\n', GraphMermaid.write(new CodeGraph()));
+	}
+
+	/**
+	 * A changed edge closing a cycle keeps its change's colour, drawn thick, rather than the red of a cycle, which hid it;
+	 * the unchanged way back stays red.
+	 */
+	@:killer('M-GRAPH-MERMAID-CYCLE-HIDES-CHANGE')
+	@:pin('control')
+	public function testAChangedCycleKeepsItsChangeColour(): Void {
+		final graph: CodeGraph = new CodeGraph();
+		final a: String = graph.addNode(Member, 'a', 'a', null, false);
+		final b: String = graph.addNode(Member, 'b', 'b', null, false);
+		graph.addEdge(a, b, Call, 2);
+		graph.addEdge(b, a, Call);
+		final changed: Null<GraphEdge> = graph.edge(a, b, Call);
+		if (changed != null) {
+			changed.change = Changed;
+			changed.before = 1;
+		}
+		final styles: Array<String> = GraphMermaid.write(graph).split('\n').filter(line -> line.startsWith('linkStyle'));
+		Assert.equals(
+			'linkStyle 0 stroke:#d90,stroke-width:2px,stroke-width:4px|linkStyle 1 stroke:#d33,stroke-width:2px', styles.join('|')
+		);
 	}
 
 	/** Every vertex and subgraph-title label of `doc`, in document order. */

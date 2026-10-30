@@ -1,6 +1,8 @@
 package anyparse.query.graph;
 
+import anyparse.query.graph.CodeGraph.GraphChange;
 import anyparse.query.graph.CodeGraph.GraphEdge;
+import anyparse.query.graph.CodeGraph.GraphEdgeKind;
 import anyparse.query.graph.CodeGraph.GraphLevel;
 import anyparse.query.graph.CodeGraph.GraphNode;
 
@@ -29,9 +31,25 @@ typedef GraphFilter = {
 }
 
 /**
+ * The edges of a graph a view folds onto one pair of ends and one kind, summed on each side of a graph comparing two
+ * versions: what the later version weighs and whether it holds any of them, and the same of the earlier.
+ */
+private typedef FoldedEdge = {
+	final from: String;
+	final to: String;
+	final kind: GraphEdgeKind;
+	var after: Int;
+	var inAfter: Bool;
+	var before: Int;
+	var inBefore: Bool;
+}
+
+/**
  * Views of a `CodeGraph`: the graph lifted to a coarser level or opened node by node, and the graph pruned by a
  * `GraphFilter`. Each answers a new graph and leaves its input as it was; a node keeps its id, so a view and its source
- * name a declaration alike.
+ * name a declaration alike. A view of a graph comparing two versions (`GraphDiff`) keeps the change: a node holding a
+ * changed node, or a changed edge folded shut inside it, is changed itself, and an edge folded from several is weighed
+ * on each version's side.
  */
 @:nullSafety(Strict)
 final class GraphView {
@@ -62,20 +80,26 @@ final class GraphView {
 	 */
 	public static function opening(graph: CodeGraph, holder: String, open: Map<String, Bool>): CodeGraph {
 		final view: CodeGraph = new CodeGraph();
-		for (n in graph.held(holder)) copy(graph, view, n);
+		final within: Map<String, Null<GraphChange>> = [];
+		for (n in graph.held(holder)) copy(graph, view, n, within);
 		final inside: Map<String, Bool> = [];
 		final pending: Array<String> = [holder];
 		while (pending.length > 0) for (n in graph.held(pending.pop() ?? '')) {
 			inside[n.id] = true;
 			pending.push(n.id);
 		}
+		final sums: Map<String, FoldedEdge> = [];
 		for (id in inside.keys()) for (e in graph.touching(id)) {
 			// an edge between two nodes inside is counted from its source alone
 			if (e.from != id && inside.exists(e.from)) continue;
-			final from: String = copy(graph, view, outermostClosed(graph, nodeOf(graph, e.from), open));
-			final to: String = copy(graph, view, outermostClosed(graph, nodeOf(graph, e.to), open));
-			if (from != to || isOwnRecursion(e, from)) view.addEdge(from, to, e.kind, e.weight);
+			final from: String = copy(graph, view, outermostClosed(graph, nodeOf(graph, e.from), open), within);
+			final to: String = copy(graph, view, outermostClosed(graph, nodeOf(graph, e.to), open), within);
+			if (from != to || isOwnRecursion(e, from))
+				fold(sums, from, to, e)
+			else if (e.change != null)
+				markChanged(view, from);
 		}
+		drawFolded(view, sums);
 		return view;
 	}
 
@@ -116,15 +140,18 @@ final class GraphView {
 		);
 		final reached: Null<Map<String, Bool>> = filter.focus.length == 0 ? null : around(filter.focus, kept, filter.radius);
 		final pruned: Bool = reached != null || filter.minWeight > 1 || filter.mutualOnly;
-		if (!pruned) for (n in graph.nodes()) if (filter.external || !n.external) copy(graph, view, n);
+		final within: Map<String, Null<GraphChange>> = [];
+		if (!pruned) for (n in graph.nodes()) if (filter.external || !n.external) copy(graph, view, n, within);
 		for (id in filter.focus) {
 			final n: Null<GraphNode> = graph.node(id);
 			if (n == null) throw new Exception('graph: no focus node $id');
-			view.markFocus(copy(graph, view, n));
+			view.markFocus(copy(graph, view, n, within));
 		}
+		final sums: Map<String, FoldedEdge> = [];
 		for (e in kept) if (reached == null || (reached.exists(e.from) && reached.exists(e.to))) {
-			view.addEdge(copy(graph, view, nodeOf(graph, e.from)), copy(graph, view, nodeOf(graph, e.to)), e.kind, e.weight);
+			fold(sums, copy(graph, view, nodeOf(graph, e.from), within), copy(graph, view, nodeOf(graph, e.to), within), e);
 		}
+		drawFolded(view, sums);
 		return view;
 	}
 
@@ -153,17 +180,23 @@ final class GraphView {
 		final lifted: CodeGraph = new CodeGraph();
 		// node id -> the id it folds into, null when it folds into none
 		final folded: Map<String, Null<String>> = [];
+		final within: Map<String, Null<GraphChange>> = [];
 		for (n in graph.nodes()) {
 			final target: Null<GraphNode> = into(n);
-			folded[n.id] = target == null ? null : copy(graph, lifted, target);
+			folded[n.id] = target == null ? null : copy(graph, lifted, target, within);
 			if (target != null && n.focus) lifted.markFocus(target.id);
 		}
+		final sums: Map<String, FoldedEdge> = [];
 		for (e in graph.edges()) {
 			final from: Null<String> = folded[e.from];
 			final to: Null<String> = folded[e.to];
-			if (from == null || to == null || (from == to && !isOwnRecursion(e, from))) continue;
-			lifted.addEdge(from, to, e.kind, e.weight);
+			if (from == null || to == null) continue;
+			if (from != to || isOwnRecursion(e, from))
+				fold(sums, from, to, e)
+			else if (e.change != null)
+				markChanged(lifted, from);
 		}
+		drawFolded(lifted, sums);
 		return lifted;
 	}
 
@@ -237,17 +270,105 @@ final class GraphView {
 		return target.addNode(n.level, n.name, n.label, parentId, n.external);
 	}
 
-	/** Add `n` of `source` to `target` with the nodes holding it, unless `target` holds it, and answer its id. */
-	private static function copy(source: CodeGraph, target: CodeGraph, n: GraphNode): String {
+	/**
+	 * Add `n` of `source` to `target` with the nodes holding it, unless `target` holds it, and answer its id. Each node
+	 * added carries its change in a graph comparing two versions, or `Changed` when it has none and a node it holds has one
+	 * (`changeWithin`).
+	 */
+	private static function copy(source: CodeGraph, target: CodeGraph, n: GraphNode, within: Map<String, Null<GraphChange>>): String {
 		final parent: Null<String> = n.parent;
-		final parentId: Null<String> = parent == null ? null : copy(source, target, nodeOf(source, parent));
-		return target.addNode(n.level, n.name, n.label, parentId, n.external);
+		final parentId: Null<String> = parent == null ? null : copy(source, target, nodeOf(source, parent), within);
+		final id: String = target.addNode(n.level, n.name, n.label, parentId, n.external);
+		final change: Null<GraphChange> = changeWithin(source, n, within);
+		final drawn: Null<GraphNode> = target.node(id);
+		if (change != null && drawn != null) drawn.change = change;
+		return id;
 	}
 
 	private static function nodeOf(graph: CodeGraph, id: String): GraphNode {
 		final n: Null<GraphNode> = graph.node(id);
 		if (n == null) throw new Exception('graph: no node $id');
 		return n;
+	}
+
+	/**
+	 * How `n` differs in a graph comparing two versions: its own change, else `Changed` when a node it holds, at any depth,
+	 * differs, else null. `within` remembers the answer for each node walked without a change of its own.
+	 */
+	private static function changeWithin(graph: CodeGraph, n: GraphNode, within: Map<String, Null<GraphChange>>): Null<GraphChange> {
+		final own: Null<GraphChange> = n.change;
+		if (own != null) return own;
+		if (within.exists(n.id)) return within[n.id];
+		var found: Null<GraphChange> = null;
+		for (c in graph.held(n.id)) if (changeWithin(graph, c, within) != null) {
+			found = Changed;
+			break;
+		}
+		within[n.id] = found;
+		return found;
+	}
+
+	/** Count `e` of `graph` on `from` and `to`, the nodes its ends fold into, in `sums`, on the side of each version holding it. */
+	private static function fold(sums: Map<String, FoldedEdge>, from: String, to: String, e: GraphEdge): Void {
+		final key: String = '$from $to ${e.kind}';
+		var sum: Null<FoldedEdge> = sums[key];
+		if (sum == null) {
+			final opened: FoldedEdge = {
+				from: from,
+				to: to,
+				kind: e.kind,
+				after: 0,
+				inAfter: false,
+				before: 0,
+				inBefore: false
+			};
+			sums[key] = opened;
+			sum = opened;
+		}
+		final change: Null<GraphChange> = e.change;
+		if (change != Removed) {
+			sum.after += e.weight;
+			sum.inAfter = true;
+		}
+		if (change == Added) return;
+		sum.before += change == Changed ? (e.before ?? e.weight) : e.weight;
+		sum.inBefore = true;
+	}
+
+	/**
+	 * Add each edge of `sums` to `view`: `Added` when no edge folded into it is in the earlier version, `Removed` when none
+	 * is in the later, `Changed` when the two versions weigh it apart, the earlier weight kept; its weight the later
+	 * version's, or the earlier's for a removed one.
+	 */
+	private static function drawFolded(view: CodeGraph, sums: Map<String, FoldedEdge>): Void {
+		for (sum in sums) {
+			final change: Null<GraphChange> = if (!sum.inBefore)
+				Added
+			else if (!sum.inAfter)
+				Removed
+			else if (sum.before != sum.after)
+				Changed
+			else
+				null;
+			view.addEdge(sum.from, sum.to, sum.kind, change == Removed ? sum.before : sum.after);
+			final drawn: Null<GraphEdge> = view.edge(sum.from, sum.to, sum.kind);
+			if (drawn == null || change == null) continue;
+			drawn.change = change;
+			if (change == Changed) drawn.before = sum.before;
+		}
+	}
+
+	/**
+	 * Mark the node `id` of `view` and every node holding it `Changed` where it has no change of its own: a changed edge
+	 * folded shut inside a node is a change that node holds, which `changeWithin`, walking nodes alone, does not see.
+	 */
+	private static function markChanged(view: CodeGraph, id: String): Void {
+		var current: Null<GraphNode> = view.node(id);
+		while (current != null) {
+			if (current.change == null) current.change = Changed;
+			final parent: Null<String> = current.parent;
+			current = parent == null ? null : view.node(parent);
+		}
 	}
 
 }

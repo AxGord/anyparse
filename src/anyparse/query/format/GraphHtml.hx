@@ -8,12 +8,15 @@ import anyparse.query.graph.CodeGraph;
 import anyparse.query.graph.GraphView;
 import haxe.Exception;
 
+using Lambda;
+
 /**
  * A `CodeGraph` as one self-contained HTML page a reader opens node by node: the first view draws the graph at the level
  * asked, a click on a node holding others opens a view of what it holds, and a click on an opened frame or on an earlier
  * step of the path goes back. Every view is drawn here through `GraphView` and `GraphMermaid`; the page renders the
- * Mermaid text of the view shown with the library it inlines, so it reads with no network. A plain text template: the
- * page is not a typed tree yet.
+ * Mermaid text of the view shown with the library it inlines, so it reads with no network. Of a graph comparing two
+ * versions every view colours what changed, as `GraphView` keeps it. A plain text template: the page is not a typed tree
+ * yet.
  */
 @:nullSafety(Strict)
 final class GraphHtml {
@@ -64,7 +67,8 @@ final class GraphHtml {
 		'<p>Click a package or a type to open it; click an opened frame, or an earlier step of the path above, to go back.</p>',
 		'<p>A plain arrow is a call or an import, a thick one a construction, a dotted one a reference or a virtual call, a circle-ended '
 			+ 'one a member a type holds; a number counts the sites an edge stands for.</p>',
-		'<p>Red: the two ends depend on each other. Bold: what the node opened holds. Dashed: outside the scope.</p>',
+		'<p>Red: the two ends depend on each other, or thick in its colour when the edge changed. Bold: what the node opened holds.'
+			+ ' Dashed: outside the scope.</p>',
 		'</aside>',
 		'</main>'
 	];
@@ -101,7 +105,8 @@ final class GraphHtml {
 		'    });',
 		'  }',
 		'  function shown() {',
-		'    var id = decodeURIComponent(location.hash.slice(1));',
+		'    var id;',
+		'    try { id = decodeURIComponent(location.hash.slice(1)); } catch (malformed) { id = ""; }',
 		'    return Object.prototype.hasOwnProperty.call(views, id) ? id : "";',
 		'  }',
 		'  function go(id) {',
@@ -193,7 +198,8 @@ final class GraphHtml {
 				pending.push(drawn);
 			}
 		}
-		return { views: views, legend: GraphMermaid.write(legend(), null, TB) };
+		final compared: Bool = graph.nodes().exists(n -> n.change != null) || graph.edges().exists(e -> e.change != null);
+		return { views: views, legend: GraphMermaid.write(legend(compared), null, TB) };
 	}
 
 	/**
@@ -241,13 +247,19 @@ final class GraphHtml {
 		};
 	}
 
-	/** `script` with each `</script`, whatever its case, written `<\/script`. */
+	/**
+	 * `script` with each `</script`, whatever its case, written `<\/script`, and each `<!--` written `<\!--`: a string or a
+	 * regular expression reads either alike, and neither can close the element holding it nor open a comment state there.
+	 */
 	private static function inlined(script: String): String {
-		return ~/<\/(script)/gi.map(script, found -> '<\\/${found.matched(1)}');
+		return ~/<\/(script)/gi.map(script, found -> '<\\/${found.matched(1)}').replace('<!--', '<\\!--');
 	}
 
-	/** The legend's chart: a node of each level and outside the scope, and an edge of each look. */
-	private static function legend(): CodeGraph {
+	/**
+	 * The legend's chart: a node of each level and outside the scope, and an edge of each look; for a graph comparing two
+	 * versions (`compared`) also a node and an edge added, removed and changed.
+	 */
+	private static function legend(compared: Bool): CodeGraph {
 		final graph: CodeGraph = new CodeGraph();
 		final pkg: String = graph.addNode(Package, 'package', 'package', null, false);
 		final type: String = graph.addNode(Type, 'type', 'type', null, false);
@@ -260,6 +272,16 @@ final class GraphHtml {
 		graph.addEdge(member, held, Ref);
 		graph.addEdge(held, outside, Contains);
 		graph.markFocus(held);
+		if (compared) for (change in [Added, Removed, Changed]) {
+			final id: String = graph.addNode(Member, change, change, null, false);
+			final drawn: Null<GraphNode> = graph.node(id);
+			if (drawn != null) drawn.change = change;
+			graph.addEdge(member, id, Call, change == Changed ? 2 : 1);
+			final e: Null<GraphEdge> = graph.edge(member, id, Call);
+			if (e == null) continue;
+			e.change = change;
+			if (change == Changed) e.before = 1;
+		}
 		return graph;
 	}
 
