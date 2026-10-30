@@ -5,6 +5,7 @@ import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.GraphScoped;
+import anyparse.check.Check.LanguageBound;
 import anyparse.check.Check.Supersedes;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.VolatileMessage;
@@ -90,7 +91,6 @@ import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.common.expressions.PreferFinal;
 import anyparse.check.common.expressions.PreferLambdaExpressionBody;
 import anyparse.check.common.expressions.PreferLocalFunction;
-import anyparse.check.common.expressions.PreferStaticExtension;
 import anyparse.check.common.expressions.RedundantLambdaWrapper;
 import anyparse.check.common.expressions.RedundantParens;
 import anyparse.check.common.expressions.RedundantThis;
@@ -109,8 +109,6 @@ import anyparse.check.common.imports.UnusedImport;
 import anyparse.check.common.literals.FoldStringLiterals;
 import anyparse.check.common.literals.JoinStringAppend;
 import anyparse.check.common.literals.MagicNumber;
-import anyparse.check.common.literals.PreferInterpolation;
-import anyparse.check.common.literals.PreferLpad;
 import anyparse.check.common.literals.PreferSingleQuotes;
 import anyparse.check.common.literals.RedundantToString;
 import anyparse.check.common.literals.StringLiteralDup;
@@ -121,14 +119,9 @@ import anyparse.check.common.loops.LoopGuard;
 import anyparse.check.common.loops.MapKeysLookup;
 import anyparse.check.common.loops.PreferArrayLiteral;
 import anyparse.check.common.loops.PreferComprehension;
-import anyparse.check.common.loops.PreferCount;
-import anyparse.check.common.loops.PreferExists;
-import anyparse.check.common.loops.PreferFind;
 import anyparse.check.common.loops.PreferForIn;
-import anyparse.check.common.loops.PreferForeach;
 import anyparse.check.common.loops.PreferIndexAccess;
 import anyparse.check.common.loops.PreferKeyValueLoop;
-import anyparse.check.common.loops.PreferMapLiteral;
 import anyparse.check.common.loops.PreferRangeLoop;
 import anyparse.check.common.loops.PreferValueLoop;
 import anyparse.check.common.loops.RedundantMapExists;
@@ -185,8 +178,6 @@ import anyparse.check.common.types.ExplicitLocalType;
 import anyparse.check.common.types.ExplicitType;
 import anyparse.check.common.types.ImpossibleCast;
 import anyparse.check.common.types.ImpossibleIsCheck;
-import anyparse.check.common.types.PreferIsOperator;
-import anyparse.check.common.types.PreferMapType;
 import anyparse.check.common.types.PreferTypedThrow;
 import anyparse.check.common.types.RedundantAscription;
 import anyparse.check.common.types.RedundantCast;
@@ -205,6 +196,16 @@ import anyparse.check.common.unused.UnusedParameter;
 import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.check.common.unused.UnusedPublicMember;
 import anyparse.check.common.unused.UnusedReturnValue;
+import anyparse.check.haxe.expressions.PreferStaticExtension;
+import anyparse.check.haxe.literals.PreferInterpolation;
+import anyparse.check.haxe.literals.PreferLpad;
+import anyparse.check.haxe.loops.PreferCount;
+import anyparse.check.haxe.loops.PreferExists;
+import anyparse.check.haxe.loops.PreferFind;
+import anyparse.check.haxe.loops.PreferForeach;
+import anyparse.check.haxe.loops.PreferMapLiteral;
+import anyparse.check.haxe.types.PreferIsOperator;
+import anyparse.check.haxe.types.PreferMapType;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.runtime.Span;
@@ -606,6 +607,14 @@ final class Linter {
 	}
 
 	/**
+	 * Whether `check` runs on the grammar `GrammarPlugin.langName()` calls `lang`: every check does unless it is
+	 * `LanguageBound` to other grammars.
+	 */
+	public static function runsOn(check: Check, lang: String): Bool {
+		return !(check is LanguageBound) || (cast check: LanguageBound).languages().contains(lang);
+	}
+
+	/**
 	 * Every registered check that declares a `VolatileMessage`, as rule id -> its
 	 * `messageIdentity`. The map `apq lint-diff` keys its findings through.
 	 *
@@ -797,6 +806,7 @@ final class Linter {
 	private static function runGated(
 		check: Check, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolveConfig: Null<(String) -> LintConfig>
 	): Array<Violation> {
+		if (!runsOn(check, plugin.langName())) return [];
 		final found: Array<Violation> = PhaseTimings.measure(
 			'rule ${check.id()}', () -> check.run(scannedBy(check, files, resolveConfig), plugin)
 		);

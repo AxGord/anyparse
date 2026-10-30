@@ -217,7 +217,7 @@ final class LintCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
-		final optionError: Null<Int> = optionScopeError(o, paths);
+		final optionError: Null<Int> = optionScopeError(o, paths, checks, plugin.langName());
 		if (optionError != null) return optionError;
 
 		final files: Array<{ file: String, source: String }> = [];
@@ -1358,20 +1358,36 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
+	 * `EXIT_USAGE`, said on stderr, when `--rule` names a rule the grammar `lang` never runs — answering it with an empty
+	 * report would read as a clean file; null otherwise. A `--category` or default selection drops such a rule silently.
+	 */
+	private static function foreignRuleError(o: LintOpts, checks: Array<Check>, lang: String): Null<Int> {
+		if (o.ruleFilters.length == 0) return null;
+		for (check in checks) if (check is LanguageBound && !Linter.runsOn(check, lang)) {
+			final bound: Array<String> = (cast check: LanguageBound).languages();
+			CliIo.stderr('apq lint: rule "${check.id()}" runs on ${bound.join(', ')} only, and this run reads $lang\n');
+			return EXIT_USAGE;
+		}
+		return null;
+	}
+
+	/**
 	 * The usage error this argv earns for an option it cannot honour, or null when it can.
 	 *
 	 * Two refusals, both about NARROWING. A `--range` window is a claim about ONE file's lines:
 	 * applied to a directory it would narrow every file in it to the same line numbers, which
 	 * is not a narrower version of anything the caller asked for. A `--baseline` narrows the
-	 * REPORT only, so pairing it with `--fix` would hand the fixer a set the snapshot had
-	 * already thinned.
+	 * REPORT only, so pairing it with `--fix` would hand the fixer a set the snapshot had already thinned. A `--rule` naming
+	 * a rule the scope's grammar never runs is refused too (`foreignRuleError`): its empty report would read as a clean file.
 	 *
 	 * One function rather than two branches in `runLint` because that function sits AT its
 	 * complexity budget — either refusal written inline takes it past the limit — and because
 	 * a refusal that reads the whole argv belongs beside its sibling rather than in the middle
 	 * of the run.
 	 */
-	private static function optionScopeError(o: LintOpts, paths: Array<String>): Null<Int> {
+	private static function optionScopeError(o: LintOpts, paths: Array<String>, checks: Array<Check>, lang: String): Null<Int> {
+		final foreign: Null<Int> = foreignRuleError(o, checks, lang);
+		if (foreign != null) return foreign;
 		// REFUSED rather than ignored. `--baseline` narrows what the run REPORTS; `--fix` acts on
 		// what it FINDS, and a fixer handed a narrowed set would leave every finding the snapshot
 		// happens to carry standing while reporting a converged run.
@@ -1622,7 +1638,8 @@ final class LintCommand implements CliCommand {
 		// is below it never sees the finding, and this is where that becomes visible.
 		for (c in checks) {
 			final requires: String = c is VersionGated ? ' [needs ${(cast c: VersionGated).minLanguageVersion()}]' : '';
-			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires\n');
+			final bound: String = c is LanguageBound ? ' [${RuleIndex.languageOf(c)} only]' : '';
+			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires$bound\n');
 		}
 		return EXIT_OK;
 	}
@@ -1633,12 +1650,15 @@ final class LintCommand implements CliCommand {
 	 * resolved exactly as a lint run resolves them, and nothing is parsed or linted.
 	 */
 	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>, checks: Array<Check>): Int {
-		final paths: Array<String> = CliArgs.resolveInputPaths(lang, inputSpecs).paths;
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
-		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, checks)));
+		// A rule the scope's grammar never runs is no state of this scope's lint: it is left out, as a run leaves it out.
+		final runs: Array<Check> = checks.filter(c -> Linter.runsOn(c, io.plugin.langName()));
+		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, runs)));
 		return EXIT_OK;
 	}
 

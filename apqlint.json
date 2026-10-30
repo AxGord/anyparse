@@ -75,7 +75,7 @@
 				"anyparse.check.facts.TypedFactsProbe",
 				"anyparse.check.facts.FactsTypeText",
 				"anyparse.check.facts.FactsTypeTree",
-				"anyparse.check.common.expressions.StaticExtensionFacts",
+				"anyparse.check.haxe.expressions.StaticExtensionFacts",
 				"anyparse.query.ArgumentUses",
 				"anyparse.query.UncheckedConversions",
 				"anyparse.query.CallGraphFacts",

@@ -28,6 +28,8 @@ using StringTools;
  */
 class LexicalRegionsSeamTest extends Test {
 
+	private static inline final HAXE_RULES: String = 'src/anyparse/check/haxe/';
+
 	/** Comment, interpolating literal with a nested same-quote hole, and a regex holding an opener. */
 	private static final SOURCE: String = "// note\nvar s = '${c ? '// inner' : x}';\nvar r = ~/[\\/*]/;\n";
 
@@ -160,6 +162,8 @@ class LexicalRegionsSeamTest extends Test {
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final found: Array<String> = [];
 		for (dir in ['src/anyparse/check', 'src/anyparse/format', 'src/anyparse/query']) for (path in hxFilesUnder(dir)) {
+			// A language's own rule package is that language's by definition, and may read its grammar.
+			if (path.startsWith(HAXE_RULES)) continue;
 			final source: String = File.getContent(path);
 			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 			var at: Int = source.indexOf(GRAMMAR_PATH);

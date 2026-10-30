@@ -2539,7 +2539,7 @@
 		},
 		{
 			"name": "M-BOOL-LOOP-USING-COVERED-KEPT",
-			"type": "anyparse.check.common.loops.LambdaLoopScan",
+			"type": "anyparse.check.haxe.loops.LambdaLoopScan",
 			"method": "withUsingInsert",
 			"find": "if (usingEdit == null) return [];",
 			"replace": "if (usingEdit == null) return flat;",
@@ -2547,7 +2547,7 @@
 		},
 		{
 			"name": "M-PSE-USING-INSERT-SILENT",
-			"type": "anyparse.check.common.expressions.PreferStaticExtension",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "appendUsingInserts",
 			"find": "if (CanonicalEdit.editsOverlapAny([edit], edits)) return false;\n\tedits.push(edit);\n\treturn true;",
 			"replace": "if (!CanonicalEdit.editsOverlapAny([edit], edits)) edits.push(edit);\n\treturn true;",
@@ -2639,7 +2639,7 @@
 		},
 		{
 			"name": "M-LPAD-CONFLICT-SILENT",
-			"type": "anyparse.check.common.literals.PreferLpad",
+			"type": "anyparse.check.haxe.literals.PreferLpad",
 			"method": "fix",
 			"find": "\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(STRING_TOOLS_MODULE, LPAD_METHOD));",
 			"replace": "\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(STRING_TOOLS_MODULE, LPAD_METHOD));",
@@ -2647,7 +2647,7 @@
 		},
 		{
 			"name": "M-FIND-CONFLICT-SILENT",
-			"type": "anyparse.check.common.loops.PreferFind",
+			"type": "anyparse.check.haxe.loops.PreferFind",
 			"method": "fix",
 			"find": "\t\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
 			"replace": "\t\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
@@ -2655,7 +2655,7 @@
 		},
 		{
 			"name": "M-BOOL-LOOP-CONFLICT-SILENT",
-			"type": "anyparse.check.common.loops.LambdaLoopScan",
+			"type": "anyparse.check.haxe.loops.LambdaLoopScan",
 			"method": "edits",
 			"find": "\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));",
 			"replace": "\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));",
@@ -2663,7 +2663,7 @@
 		},
 		{
 			"name": "M-GUARDED-DECLINE-MIS-ATTRIBUTED",
-			"type": "anyparse.check.common.literals.PreferLpad",
+			"type": "anyparse.check.haxe.literals.PreferLpad",
 			"method": "fix",
 			"find": "\t\treturn UsingScan.appendUsingInsert(header, STRING_TOOLS_MODULE, edits, accepted) ? edits : [];",
 			"replace": "\t\treturn UsingScan.appendUsingInsert(header, STRING_TOOLS_MODULE, edits, violations) ? edits : [];",
@@ -2693,7 +2693,7 @@
 		},
 		{
 			"name": "M-FIND-CONFLICT-MIS-ATTRIBUTED",
-			"type": "anyparse.check.common.loops.PreferFind",
+			"type": "anyparse.check.haxe.loops.PreferFind",
 			"method": "fix",
 			"find": "\t\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
 			"replace": "\t\tUsingScan.noteDeclineWhereUnset(violations, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
@@ -9905,7 +9905,7 @@
 		},
 		{
 			"name": "M-INTERP-NULLITY-SKIPPED",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "isSafeArg",
 			"find": "return typeName != null && printsPlain(typeName, arg, ctx);",
 			"replace": "return true;",
@@ -10606,7 +10606,7 @@
 		},
 		{
 			"name": "M-FACTS-FIXED-CAPTURE",
-			"type": "anyparse.check.common.expressions.FactsBindings",
+			"type": "anyparse.check.haxe.expressions.FactsBindings",
 			"method": "fixedAt",
 			"find": "case Slot(callee, index): oracle.constructorArgumentClosed(callee, index);",
 			"replace": "case Slot(_, _): false;",
@@ -10614,7 +10614,7 @@
 		},
 		{
 			"name": "M-FACTS-FIXED-LOOP",
-			"type": "anyparse.check.common.expressions.FactsBindings",
+			"type": "anyparse.check.haxe.expressions.FactsBindings",
 			"method": "fixedAt",
 			"find": "return iteratesClosedCall(oracle, file, decl, shape);",
 			"replace": "return false;",
@@ -10654,7 +10654,7 @@
 		},
 		{
 			"name": "M-FACTS-FIXED-ANY-BINDER",
-			"type": "anyparse.check.common.expressions.PreferStaticExtension",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "factsVerdict",
 			"find": "if (decl == null || !FactsBindings.fixedAt(oracle, file, root, decl, s.shape)) return Verdict.UnresolvedReceiver;",
 			"replace": "if (decl == null) return Verdict.UnresolvedReceiver;",
@@ -10662,7 +10662,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-INFERRED",
-			"type": "anyparse.check.common.expressions.PreferStaticExtension",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "factsVerdict",
 			"find": "if (chain.declaredTypeSources[binding] == null) {",
 			"replace": "if (false) {",
@@ -10670,14 +10670,14 @@
 		},
 		{
 			"name": "M-PSE-FACTS-OFF",
-			"type": "anyparse.check.common.expressions.PreferStaticExtension",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "factsVerdict",
 			"force": "Verdict.UnresolvedReceiver",
 			"note": "a receiver only the compiler's facts type stays report-only"
 		},
 		{
 			"name": "M-PSE-FACTS-SHADOW",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
 			"find": "for (id in chain) if (facts.type(id)?.fields.exists(f -> f.name == method) == true) return Shadowed;",
 			"replace": "",
@@ -10685,7 +10685,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-HOSTS",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
 			"find": "if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
 			"replace": "if (t == null || t.meta.contains(USING_META)) return Unproven;",
@@ -10693,7 +10693,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-USING",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
 			"find": "if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
 			"replace": "if (t == null || !MEMBER_HOSTS.contains(t.kind)) return Unproven;",
@@ -10701,7 +10701,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-PARAM",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "accepts",
 			"find": "case _: false;",
 			"replace": "case _: true;",
@@ -10709,7 +10709,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-OVERLOAD",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "firstParam",
 			"find": "\n\t\t\t|| field.overloads.exists(n -> n > 0)",
 			"replace": "",
@@ -10717,7 +10717,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-DYNAMIC",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
 			"find": "if (receiver == DYNAMIC) return DynamicReceiver;",
 			"replace": "if (receiver == DYNAMIC) return Unproven;",
@@ -10725,7 +10725,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-NULL",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
 			"find": "final receiver: String = FactsTypeText.unwrapNull(typed);",
 			"replace": "final receiver: String = typed;",
@@ -10733,7 +10733,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-TEXT",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
 			"find": "if (!oracle.readsAsCompiled(file)) return Unproven;",
 			"replace": "",
@@ -10741,7 +10741,7 @@
 		},
 		{
 			"name": "M-PSE-FIRST-PARAM",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "firstParamOf",
 			"find": "case Function(args, _) if (args.length > 0 && !args[0].optional): FactsTypeTree.text(args[0].type);",
 			"replace": "case Function(args, _) if (args.length > 0 && !args[0].optional): FactsTypeTree.text(args[args.length - 1].type);",
@@ -10749,7 +10749,7 @@
 		},
 		{
 			"name": "M-PSE-CHANNEL-ALIAS",
-			"type": "anyparse.check.common.expressions.PreferStaticExtension",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "channelsOf",
 			"find": "elsewhere: paths.length > 0 && !paths.contains(module) || excluded,",
 			"replace": "elsewhere: excluded,",
@@ -10757,7 +10757,7 @@
 		},
 		{
 			"name": "M-PSE-CHANNEL-REGION-USING",
-			"type": "anyparse.check.common.expressions.PreferStaticExtension",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "collectUsings",
 			"find": "for (child in node.children) collectUsings(child, out);",
 			"replace": "for (child in node.children) if (child.kind != 'Conditional') collectUsings(child, out);",
@@ -10773,7 +10773,7 @@
 		},
 		{
 			"name": "M-PSE-CLOSURE-USING",
-			"type": "anyparse.check.common.expressions.PreferStaticExtension",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "verdictFor",
 			"find": "\n\t\t\t&& index.typing.members.closureFreeOfExtensionTypes(receiverType, file, at)",
 			"replace": "",
@@ -10797,7 +10797,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-USING-MODULE-WIDE",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "usingsSupply",
 			"find": "if (main && home != null)",
 			"replace": "if (false)",
@@ -10821,7 +10821,7 @@
 		},
 		{
 			"name": "M-PSE-FACTS-USING-SELF-MODULE",
-			"type": "anyparse.check.common.expressions.StaticExtensionFacts",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
 			"find": "usings.contains(module) ? usings : usings.concat([module])",
 			"replace": "usings",
@@ -12495,7 +12495,7 @@
 		},
 		{
 			"name": "M-INTERP-CONSTANT-BLOCK-IGNORED",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "flagConstantBlocks",
 			"force": "false",
 			"note": "an interpolation block holding a target-invariant constant is never flagged, so '${0} ${i + 1}' is left for nobody to clean up"
@@ -12542,7 +12542,7 @@
 		},
 		{
 			"name": "M-INTERP-CONSTANT-IN-META",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "scanInterpBlocks",
 			"find": "if (!inMeta && flagConstantBlocks(",
 			"replace": "if (flagConstantBlocks(",
@@ -12550,7 +12550,7 @@
 		},
 		{
 			"name": "M-INTERP-MACRO-ARGUMENT-REWRITTEN",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "syntaxRefusal",
 			"force": "''",
 			"note": "prefer-interpolation rewrites a literal inside a macro call argument, so a macro keyed by the literal's text (Lang.t) silently sees a different key"
@@ -31258,7 +31258,7 @@
 		},
 		{
 			"name": "M-INTERP-REPORT-GATE-BYPASSED",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "run",
 			"find": "scanSource(entry.file, entry.source, plugin, false, false, index, gate)",
 			"replace": "scanSource(entry.file, entry.source, plugin, true, false, index, gate)",
@@ -31266,7 +31266,7 @@
 		},
 		{
 			"name": "M-INTERP-ENUM-CONVERSION-IGNORED",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "convertsNothing",
 			"find": "!t.members.exists(m -> m.isImplicitCall || m.operatorOverloads.length > 0)",
 			"replace": "true",
@@ -31274,7 +31274,7 @@
 		},
 		{
 			"name": "M-INTERP-ABSTRACT-KIND-UNCHECKED",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "printsPlain",
 			"find": "t.kind == enumKind",
 			"replace": "true",
@@ -31282,7 +31282,7 @@
 		},
 		{
 			"name": "M-INTERP-UNDERLYING-UNCHECKED",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "printsPlain",
 			"find": "basic.contains(underlying)",
 			"replace": "true",
@@ -31290,7 +31290,7 @@
 		},
 		{
 			"name": "M-INTERP-BASIC-NAME-UNBOUND",
-			"type": "anyparse.check.common.literals.PreferInterpolation",
+			"type": "anyparse.check.haxe.literals.PreferInterpolation",
 			"method": "printsPlain",
 			"find": "r -> isCoreDeclaration(r, shape)",
 			"replace": "_ -> true",
@@ -31360,7 +31360,7 @@
 		},
 		{
 			"name": "M-ISOP-PARENS-DROPPED",
-			"type": "anyparse.check.common.types.PreferIsOperator",
+			"type": "anyparse.check.haxe.types.PreferIsOperator",
 			"method": "fix",
 			"find": "return ParenGuard.guard(source, guarded, plugin);",
 			"replace": "return [for (e in guarded) { span: e.span, text: e.text }];",
@@ -31368,7 +31368,7 @@
 		},
 		{
 			"name": "M-ISOP-VALUE-ARGUMENT",
-			"type": "anyparse.check.common.types.PreferIsOperator",
+			"type": "anyparse.check.haxe.types.PreferIsOperator",
 			"method": "namesType",
 			"force": "true",
 			"note": "a second argument that is a value — a `Class<T>` parameter, a static field — is rewritten into a type position that reads a type of its name"
@@ -31383,7 +31383,7 @@
 		},
 		{
 			"name": "M-ISOP-STD-VALUE",
-			"type": "anyparse.check.common.types.PreferIsOperator",
+			"type": "anyparse.check.haxe.types.PreferIsOperator",
 			"method": "receiverIsStd",
 			"find": "span != null\n\t\t\t&& ValueDoors.bindsNoValue(receiver, name, span, fi, proof.root, proof.shape, proof.file, index)",
 			"replace": "span != null\n\t\t\t",
@@ -31399,7 +31399,7 @@
 		},
 		{
 			"name": "M-ISOP-COMMENT-DROPPED",
-			"type": "anyparse.check.common.types.PreferIsOperator",
+			"type": "anyparse.check.haxe.types.PreferIsOperator",
 			"method": "rewrite",
 			"find": "if (gaps.exists(gap -> gap.indexOf('//') != -1 || gap.indexOf('/*') != -1)) return null;",
 			"replace": "",
@@ -31407,7 +31407,7 @@
 		},
 		{
 			"name": "M-ISOP-SYNTAX-POSITION-REWRITTEN",
-			"type": "anyparse.check.common.types.PreferIsOperator",
+			"type": "anyparse.check.haxe.types.PreferIsOperator",
 			"method": "walk",
 			"find": "if (seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind)) return;",
 			"replace": "",
@@ -31415,7 +31415,7 @@
 		},
 		{
 			"name": "M-ISOP-VERSION-UNGATED",
-			"type": "anyparse.check.common.types.PreferIsOperator",
+			"type": "anyparse.check.haxe.types.PreferIsOperator",
 			"method": "minLanguageVersion",
 			"force": "'4.0'",
 			"note": "a project declaring a language older than the operator is told to write it"
@@ -32408,6 +32408,46 @@
 			"find": "graph.nodes().filter(n -> n.level == level)",
 			"replace": "graph.nodes()",
 			"note": "a focus at the type level names the package a lift brought in above the types, and the view silently centres on it"
+		},
+		{
+			"name": "M-LANGUAGE-BOUND-RUNS-EVERYWHERE",
+			"type": "anyparse.check.Linter",
+			"method": "runsOn",
+			"find": "return !(check is LanguageBound) || (cast check: LanguageBound).languages().contains(lang);",
+			"replace": "return true;",
+			"note": "a check bound to one grammar runs on every grammar, so a Haxe standard-library rule reads a JSON or Mermaid tree"
+		},
+		{
+			"name": "M-FOREIGN-RULE-ANSWERED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "foreignRuleError",
+			"find": "if (o.ruleFilters.length == 0) return null;",
+			"replace": "return null;",
+			"note": "an explicit --rule naming a rule the run's grammar never runs is answered with an empty report, which reads as a clean file"
+		},
+		{
+			"name": "M-LANGUAGE-COLUMN-ANY",
+			"type": "anyparse.check.RuleIndex",
+			"method": "languageOf",
+			"find": "return check is LanguageBound ? (cast check: LanguageBound).languages().join(', ') : 'any';",
+			"replace": "return 'any';",
+			"note": "the rule listings call a language-bound rule one that runs on every grammar"
+		},
+		{
+			"name": "M-FOREIGN-RULE-ALWAYS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "foreignRuleError",
+			"find": "if (o.ruleFilters.length == 0) return null;",
+			"replace": "",
+			"note": "a default or --category lint over a grammar some builtin is not bound to is refused, so every apq lint --lang json|mermaid exits 2"
+		},
+		{
+			"name": "M-SCOPED-LISTING-UNFILTERED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "printEffectiveRules",
+			"find": "checks.filter(c -> Linter.runsOn(c, io.plugin.langName()))",
+			"replace": "checks",
+			"note": "the scoped --list-rules lists a rule the scope's grammar never runs as a state of that scope's lint"
 		}
 	]
 }

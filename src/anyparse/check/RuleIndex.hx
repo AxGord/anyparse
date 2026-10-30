@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.LanguageBound;
 import anyparse.check.Check.VersionGated;
 import haxe.format.JsonPrinter;
 
@@ -35,22 +36,22 @@ final class RuleIndex {
 			out.add('| [`$category`](#$category) | ${rules.length} | ${category.description()} |\n');
 		}
 		for (section in sections) {
-			out.add(
-				'\n## `${section.category}`\n\n${section.category.description()}.\n\n| rule | default | description |\n|---|---|---|\n'
-			);
+			out.add('\n## `${section.category}`\n\n${section.category.description()}.\n\n');
+			out.add('| rule | language | default | description |\n|---|---|---|---|\n');
 			for (rule in section.rules) {
 				final state: String = rule is DefaultOff ? 'off' : 'on';
 				final requires: String = rule is VersionGated
 					? ' (fix needs language ${(cast rule: VersionGated).minLanguageVersion()})'
 					: '';
-				out.add('| `${rule.id()}` | $state | ${cell(rule.description())}$requires |\n');
+				out.add('| `${rule.id()}` | ${languageOf(rule)} | $state | ${cell(rule.description())}$requires |\n');
 			}
 		}
 		return out.toString();
 	}
 
 	/**
-	 * The registry as data, one `{id, category, description, defaultOn}` record per rule in registry order — what
+	 * The registry as data, one `{id, category, description, languages, defaultOn}` record
+	 * per rule (`languages` empty for a rule every grammar runs) in registry order — what
 	 * `apq lint --list-rules --format json` prints for a tool that keys rules by category.
 	 */
 	public static function json(checks: Array<Check>): String {
@@ -58,6 +59,7 @@ final class RuleIndex {
 			id: String,
 			category: String,
 			description: String,
+			languages: Array<String>,
 			defaultOn: Bool
 		}> = [
 			for (c in checks)
@@ -65,10 +67,16 @@ final class RuleIndex {
 					id: c.id(),
 					category: c.category(),
 					description: c.description(),
+					languages: c is LanguageBound ? (cast c: LanguageBound).languages() : [],
 					defaultOn: !(c is DefaultOff)
 				}
 		];
 		return JsonPrinter.print(records, null, '  ') + '\n';
+	}
+
+	/** The grammars `check` runs on as a listing spells them: its `LanguageBound` languages, or `any` for a check every grammar runs. */
+	public static function languageOf(check: Check): String {
+		return check is LanguageBound ? (cast check: LanguageBound).languages().join(', ') : 'any';
 	}
 
 	/** `text` safe inside a markdown table cell: a pipe would end the cell. */

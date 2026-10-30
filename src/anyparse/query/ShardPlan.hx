@@ -169,7 +169,7 @@ final class ShardPlan {
 		'unit.check.oracle.OracleGenerationTest' => { ms: 16137, tests: 45 },
 		'unit.check.facts.TypedFactsProbeTest' => { ms: 14707, tests: 30 },
 		'unit.check.FactsFixGateE2ETest' => { ms: 14493, tests: 10 },
-		'unit.check.common.expressions.PreferStaticExtensionFactsTest' => { ms: 13904, tests: 22 },
+		'unit.check.haxe.expressions.PreferStaticExtensionFactsTest' => { ms: 13904, tests: 22 },
 		'unit.query.ApqAstIntegrationTest' => { ms: 10632, tests: 1 },
 		'unit.check.facts.FactsTypeOracleE2ETest' => { ms: 10521, tests: 3 },
 		'unit.check.oracle.PendingRunsTest' => { ms: 7064, tests: 3 },

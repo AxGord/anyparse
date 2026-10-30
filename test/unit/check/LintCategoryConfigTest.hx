@@ -10,7 +10,7 @@ import anyparse.check.common.docs.EmptyComment;
 import anyparse.check.common.docs.EnglishComments;
 import anyparse.check.common.docs.PreferDocComment;
 import anyparse.check.common.literals.MagicNumber;
-import anyparse.check.common.loops.PreferFind;
+import anyparse.check.haxe.loops.PreferFind;
 import unit.cli.CliFixture;
 
 /**

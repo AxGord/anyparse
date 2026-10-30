@@ -317,6 +317,22 @@ interface VersionGated {
 }
 
 /**
+ * A check written for named grammars only: its findings and fixes rest on one language's own syntax or standard
+ * library, so a run over any other grammar does not run it. A check without this marker answers through its
+ * `GrammarPlugin` and runs on every grammar.
+ *
+ * `Linter.collect` skips the check when the run's `GrammarPlugin.langName()` is not among `languages()`, and an
+ * explicit `--rule <id>` naming it on such a run is refused rather than answered with an empty report. A builtin
+ * bound to one language lives in that language's package, `anyparse.check.<lang>.<category>`.
+ */
+interface LanguageBound {
+
+	/** The `GrammarPlugin.langName()` values this check runs on. */
+	function languages(): Array<String>;
+
+}
+
+/**
  * A check whose OWN options decide, per file, whether it scans that file at all: a rule with
  * nothing to look for until the project configures it, a rule that carves paths out of its
  * scope, or a rule whose options switch every one of its findings off.
