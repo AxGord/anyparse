@@ -21,6 +21,9 @@ import haxe.Exception;
  */
 class InlineMethodSliceTest extends Test {
 
+	/** The path every fixture is inlined as; a scope entry under it is the fixture's own file. */
+	private static inline final FIXTURE_FILE: String = 'Fixture.hx';
+
 	/**
 	 * A binary-body method inlined into two call sites: `add(a, b)` with
 	 * body `a + b` is substituted at `add(1, 2)` and `add(3, 4)`, each
@@ -87,7 +90,90 @@ class InlineMethodSliceTest extends Test {
 	/** A recursive body would outlive the deleted declaration — refused. */
 	public function testRefuseRecursion(): Void {
 		final source: String = 'class C {\n\tfunction rec(a:Int):Int return rec(a - 1);\n\tfunction u() { rec(3); }\n}';
-		assertRefused(source, 2, 11);
+		assertRecursionRefused(source, 2, 11);
+	}
+
+	/** A self-call through `this` is the same declaration — refused as recursion. */
+	public function testRefuseThisRecursion(): Void {
+		assertRecursionRefused('class C {\n\tfunction rec(a:Int):Int return this.rec(a - 1);\n\tfunction u() { rec(3); }\n}', 2, 11);
+	}
+
+	/** A static calling itself through its own type's name is the same declaration — refused as recursion. */
+	@:pin('control')
+	@:killer('M-INLINE-METHOD-SELF-RECEIVER')
+	public function testRefuseTypeQualifiedRecursion(): Void {
+		assertRecursionRefused(
+			'class C {\n\tstatic function rec(a:Int):Int return C.rec(a - 1);\n\tstatic function u() { rec(3); }\n}', 2, 18
+		);
+	}
+
+	/**
+	 * A body calling ANOTHER type's static of the same name is no recursion: the receiver resolves to that type, so the call
+	 * stays and the declaration, its modifiers with it, is inlined at its own call sites.
+	 */
+	@:pin('control')
+	@:killer('M-INLINE-METHOD-OTHER-RECEIVER')
+	public function testInlineSameNamedStaticOfAnotherType(): Void {
+		final source: String = 'class Other {\n\tpublic static function path(p:String):String return p + "/";\n}\nclass A {\n'
+			+ '\tpublic static function path(p:String):String return Other.path(p);\n\tstatic function u():String return path("x");\n}';
+		final expected: String = 'class Other {\n\tpublic static function path(p:String):String return p + "/";\n}\nclass A {\n'
+			+ '\tstatic function u():String return Other.path("x");\n}';
+		assertInline(source, 5, 25, expected, [{ file: FIXTURE_FILE, source: source }]);
+	}
+
+	/** A member another file of the project calls would be deleted under that caller — refused. */
+	@:pin('control')
+	@:killer('M-INLINE-METHOD-FOREIGN-REF')
+	public function testRefuseMemberCalledFromAnotherFile(): Void {
+		final source: String = 'class Z {\n\tpublic static function g(a:Int):Int return a + 1;\n\tstatic function u():Int return g(3);\n}';
+		final other: String = 'class Y {\n\tstatic function w():Int return Z.g(2);\n}';
+		assertRefusedWith(
+			source, 2, 25, 'referenced from another file', [{ file: FIXTURE_FILE, source: source }, { file: 'Y.hx', source: other }]
+		);
+	}
+
+	/** With no project scope to ask, a member carrying modifiers is not proven unreachable from other files — refused. */
+	public function testRefuseModifiedMemberWithoutScope(): Void {
+		assertRefusedWith(
+			'class Z {\n\tpublic static function g(a:Int):Int return a + 1;\n\tstatic function u():Int return g(3);\n}', 2, 25,
+			'no project resolution scope'
+		);
+	}
+
+	/**
+	 * A call through the declaring type's name from ANOTHER type of the file would receive a body written in the declaring
+	 * type's scope (`k` is unqualified there) — refused.
+	 */
+	@:pin('control')
+	@:killer('M-INLINE-METHOD-OUTSIDE-TYPE')
+	public function testRefuseCallOutsideDeclaringType(): Void {
+		final source: String = 'class K {\n\tstatic var k:Int = 1;\n\tpublic static function g(a:Int):Int return a + k;\n'
+			+ '\tstatic function u():Int return g(3);\n}\nclass Q {\n\tstatic function w():Int return K.g(2);\n}';
+		assertRefusedWith(source, 3, 25, 'outside the type declaring', [{ file: FIXTURE_FILE, source: source }]);
+	}
+
+	/** The inlined declaration goes with its doc comment; the next member keeps its own. */
+	@:pin('control')
+	@:killer('M-INLINE-METHOD-KEEPS-DOC')
+	public function testInlineRemovesTheDeclarationsDoc(): Void {
+		final source: String =
+			'class C {\n\t/** doc of g */\n\tfunction g(a:Int):Int return a + 1;\n\n\t/** doc of u */\n\tfunction u():Int return g(3);\n}';
+		switch methodOf(source, 3, 11) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('doc of g') < 0, text);
+				Assert.isTrue(text.indexOf('\t/** doc of u */\n\tfunction u():Int return (3 + 1);') >= 0, text);
+				assertReparses(text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/** A same-named call through a VALUE receiver may be this declaration and is not provable — still refused. */
+	public function testRefuseSameNamedCallThroughValue(): Void {
+		assertRefusedWith(
+			'class C {\n\tfunction f(o:C):Int return 1;\n\tfunction u(o:C):Int return f(o) + o.f(null);\n}', 2, 11,
+			'cannot resolve receiver-qualified call'
+		);
 	}
 
 	/**
@@ -157,8 +243,10 @@ class InlineMethodSliceTest extends Test {
 		assertRefused(source, 2, 6);
 	}
 
-	private function assertInline(source: String, line: Int, col: Int, expected: String): Void {
-		final result: EditResult = methodOf(source, line, col);
+	private function assertInline(
+		source: String, line: Int, col: Int, expected: String, ?scope: Array<{ file: String, source: String }>
+	): Void {
+		final result: EditResult = methodOf(source, line, col, scope);
 		switch result {
 			case Ok(text):
 				Assert.equals(expected, text);
@@ -175,6 +263,23 @@ class InlineMethodSliceTest extends Test {
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
 			case Err(_):
 				Assert.pass();
+		}
+	}
+
+	/** Refused, and refused AS recursion rather than for a reason that would mask a lost recursion check. */
+	private function assertRecursionRefused(source: String, line: Int, col: Int): Void {
+		assertRefusedWith(source, line, col, 'is recursive');
+	}
+
+	/** Refused with a message carrying `reason`, so a refusal for another cause does not pass. */
+	private function assertRefusedWith(
+		source: String, line: Int, col: Int, reason: String, ?scope: Array<{ file: String, source: String }>
+	): Void {
+		switch methodOf(source, line, col, scope) {
+			case Ok(text):
+				Assert.fail('expected a refusal ($reason), got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 
@@ -197,10 +302,10 @@ class InlineMethodSliceTest extends Test {
 		}
 	}
 
-	private static function methodOf(source: String, line: Int, col: Int): EditResult {
+	private static function methodOf(source: String, line: Int, col: Int, ?scope: Array<{ file: String, source: String }>): EditResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
-		return InlineMethod.inlineMethod(source, line, col, plugin, shape);
+		return InlineMethod.inlineMethod(source, line, col, plugin, shape, FIXTURE_FILE, scope);
 	}
 
 }

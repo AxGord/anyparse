@@ -58,15 +58,21 @@ using Lambda;
 @:nullSafety(Strict)
 final class InlineMethod {
 
+	/** The file name a caller passing none is indexed under — a source with no path on disk. */
+	private static inline final UNNAMED_FILE: String = 'Source.hx';
+
 	/**
 	 * Inline the function whose declaration is at `line:col` in `source`.
-	 * `plugin` / `shape` are the caller-owned grammar plugin and its
-	 * `RefShape` (the pair the `refs` CLI builds). Returns `Ok(rewritten)`
+	 * `plugin` / `shape` are the caller-owned grammar plugin and its `RefShape` (the pair the `refs` CLI builds);
+	 * `file` is the source's path, which a qualified call's receiver is resolved in. Returns `Ok(rewritten)`
 	 * or an `Err` describing why the inline could not be applied. The
 	 * source is never mutated — the caller decides whether to write the
 	 * result.
 	 */
-	public static function inlineMethod(source: String, line: Int, col: Int, plugin: GrammarPlugin, shape: RefShape): EditResult {
+	public static function inlineMethod(
+		source: String, line: Int, col: Int, plugin: GrammarPlugin, shape: RefShape, file: String = UNNAMED_FILE,
+		?scopeFiles: Array<{ file: String, source: String }>
+	): EditResult {
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
 			case Unparsed(message): return Err(message);
 			case Parsed(parsed): parsed;
@@ -75,11 +81,16 @@ final class InlineMethod {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final prep: InlineMethodPrep = resolveInlineMethod(source, line, col, cursor, tree, shape);
+		final prep: InlineMethodPrep = resolveInlineMethod(source, line, col, cursor, tree, plugin, shape, file, scopeFiles);
 		return switch prep {
 			case PErr(message): Err(message);
 			case POk(target): buildInlineMethodEdits(source, target, plugin, shape);
 		};
+	}
+
+	/** Whether `inner` lies inside `outer`; a node with no span is not known to. */
+	private static inline function within(inner: Null<Span>, outer: Span): Bool {
+		return inner != null && outer.from <= inner.from && inner.to <= outer.to;
 	}
 
 	/**
@@ -209,34 +220,6 @@ final class InlineMethod {
 	}
 
 	/**
-	 * Does `node`'s subtree contain a call to bare `name`, or to a `receiver.name` member?
-	 *
-	 * A grammar that declares no call kind answers false, which is not a hole: the same grammar
-	 * gives `CallSites.collect` nothing to collect, and an inline with no proven call site is
-	 * refused one step later.
-	 */
-	private static function callsName(node: QueryNode, name: String, shape: RefShape): Bool {
-		final callKind: Null<String> = shape.callKind;
-		if (callKind == null) return false;
-		final identKind: String = shape.identKind;
-		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
-		var found: Bool = false;
-		function walk(n: QueryNode): Void {
-			if (found) return;
-			if (n.kind == callKind && n.children.length > 0) {
-				final callee: QueryNode = n.children[0];
-				if (callee.kind == identKind && callee.name == name)
-					found = true;
-				else if (callee.kind == fieldAccessKind && callee.name == name)
-					found = true;
-			}
-			for (c in n.children) walk(c);
-		}
-		walk(node);
-		return found;
-	}
-
-	/**
 	 * The first parameter name a binding inside `expr` re-binds, or null — a shadowed name would make the
 	 * identifier substitution rewrite the WRONG binding. Read off the grammar whole (`BinderScan.boundNames`:
 	 * every named binder and every `case` capture) plus the names the scope resolver cannot see; a grammar
@@ -285,7 +268,8 @@ final class InlineMethod {
 	 * `PErr` with the precise refusal reason.
 	 */
 	private static function resolveInlineMethod(
-		source: String, line: Int, col: Int, cursor: Int, tree: QueryNode, shape: RefShape
+		source: String, line: Int, col: Int, cursor: Int, tree: QueryNode, plugin: GrammarPlugin, shape: RefShape, file: String,
+		scopeFiles: Null<Array<{ file: String, source: String }>>
 	): InlineMethodPrep {
 		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
 		if (node == null) return PErr('position $line:$col is not on a function or a call');
@@ -319,9 +303,6 @@ final class InlineMethod {
 			return PErr('"$name" body is not a single return expression — only `{ return E; }` / `=> E` bodies can be inlined');
 		final exprBody: QueryNode = body;
 
-		// Recursion: `E` calling `name` would outlive the deleted decl.
-		if (callsName(exprBody, name, shape)) return PErr('"$name" is recursive — cannot inline a function that calls itself');
-
 		// A parameter shadowed by a nested binding inside `E` would be
 		// substituted at the wrong binding.
 		final shadow: Null<String> = shadowedParam(exprBody, paramNames, shape);
@@ -334,24 +315,60 @@ final class InlineMethod {
 
 		// Collect + prove-complete the in-file call sites (the same proof
 		// `change-sig` / `remove-param` rely on).
-		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
+		final receivers: QualifiedReceiver = new QualifiedReceiver(file, source, plugin, shape, binding);
+		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape, receivers) {
 			case CErr(message): return PErr(message);
 			case COk(sites): sites;
 		};
+		// Recursion: a call of this very declaration inside `E` would outlive the deleted decl. Asked of the proven call
+		// sites, so a same-named member of another type called from the body is not one.
+		if (callSites.exists(site -> within(site.span, declSpanNN)))
+			return PErr('"$name" is recursive — cannot inline a function that calls itself');
 		if (callSites.length == 0) return PErr('"$name" has no in-file call sites to inline');
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, decl);
+		if (!(shape.localFunctionKinds ?? []).contains(decl.kind)) {
+			final reach: Null<String> = memberReachRefusal(source, callSites, decl, declSpanNN, parent, file, scopeFiles, plugin, shape);
+			if (reach != null) return PErr(reach);
+		}
 
 		// Per-parameter substitution count in `E` (the IdentExpr targets).
 		final occ: Array<Int> = [for (pn in paramNames) countIdentExprNamed(exprBody, pn, shape)];
 
 		return POk({
 			name: name,
-			declSpan: declSpanNN,
+			// The whole declaration goes: its modifier / meta run, its doc comment and the line it held.
+			declSpan: ElementSpan.elementCut(
+				source, decl, parent, declSpanNN, true, ElementSpan.lazyRegions(source, plugin), shape.commaContainerKinds ?? []
+			)
+				.span,
 			params: params,
 			paramNames: paramNames,
 			exprBody: exprBody,
 			occ: occ,
 			callSites: callSites
 		});
+	}
+
+	/**
+	 * Why a METHOD cannot be inlined and deleted from this file alone: a call site outside the type declaring it (the body
+	 * would lose that type's scope — its unqualified statics, private members, `this`), or a reference from another file. That
+	 * one is asked of `scopeFiles`, the project's sources; without them only a member with no modifier / meta run is taken,
+	 * the reach the op held before it could read one.
+	 */
+	private static function memberReachRefusal(
+		source: String, callSites: Array<QueryNode>, decl: QueryNode, declSpan: Span, parent: Null<QueryNode>, file: String,
+		scopeFiles: Null<Array<{ file: String, source: String }>>, plugin: GrammarPlugin, shape: RefShape
+	): Null<String> {
+		final name: String = decl.name ?? '';
+		final typeSpan: Null<Span> = parent?.span;
+		final outside: Null<QueryNode> = typeSpan == null ? callSites[0] : callSites.find(site -> !within(site.span, typeSpan));
+		if (outside != null)
+			return 'call at ${CallSites.posOf(source, outside.span)} is outside the type declaring "$name"'
+				+ ' — the inlined body would lose that type\'s scope';
+		if (scopeFiles != null) return SafeDelete.foreignReferenceRefusal(scopeFiles, file, name, declSpan, plugin, shape);
+		return ElementSpan.declGroupSpan(decl, parent, declSpan).from < declSpan.from
+			? '"$name" carries modifiers and no project resolution scope proves no other file references it'
+			: null;
 	}
 
 	/**
@@ -397,10 +414,7 @@ final class InlineMethod {
 			edits.push({ span: callSpan, text: subText });
 		}
 
-		// Delete the now-dead declaration (its whole owned lines).
-		final deleteSpan: Null<Span> = ElementSpan.ownedLinesSpan(source, target.declSpan);
-		if (deleteSpan == null) return Err('"$name" declaration shares its line with other code — cannot inline cleanly');
-		edits.push({ span: deleteSpan, text: '' });
+		edits.push({ span: target.declSpan, text: '' });
 
 		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		if (rewritten == source) return Err('inline of "$name" is a no-op');

@@ -91,6 +91,33 @@ final class SafeDelete {
 	}
 
 	/**
+	 * Why `memberName`, declared at `memberSpan` of `srcFile`, cannot be removed from that file alone: a reference to it from
+	 * another file of `scopeFiles` (counted as `safeDelete` counts), a file of the scope that does not parse, or an unparsed
+	 * conditional region naming it. Null when no other file can reach it. Files are compared by `FileIdentity`, and a file whose
+	 * text never spells the name is not parsed.
+	 */
+	public static function foreignReferenceRefusal(
+		scopeFiles: Array<{ file: String, source: String }>, srcFile: String, memberName: String, memberSpan: Span, plugin: GrammarPlugin,
+		refShape: RefShape
+	): Null<String> {
+		final self: String = FileIdentity.realPath(srcFile);
+		final parsed: Array<Parsed> = [];
+		for (entry in scopeFiles) if (entry.source.indexOf(memberName) >= 0 && FileIdentity.realPath(entry.file) != self) {
+			final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
+				case Unparsed(_): return 'cannot check references: ${entry.file} does not parse';
+				case Parsed(read): read;
+			};
+			parsed.push({ file: entry.file, source: entry.source, tree: tree });
+		}
+		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parsed, memberName, refShape, 'removing "$memberName"');
+		if (opaque != null) return opaque;
+		final refs: Array<{ file: String, count: Int }> = collectReferences(parsed, srcFile, memberName, memberSpan, refShape);
+		return refs.length <= 0
+			? null
+			: '"$memberName" is referenced from another file: ' + [for (r in refs) '${r.file} (${r.count})'].join(', ');
+	}
+
+	/**
 	 * The span of the member `memberName` declared by the sole type
 	 * `typeName` in `tree` (final-aware), or null when the type or member is
 	 * absent / ambiguous.

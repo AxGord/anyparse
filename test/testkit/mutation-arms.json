@@ -33197,6 +33197,44 @@
 			"find": "if (was == null || !samePosition(",
 			"replace": "if (was != null && !samePosition(",
 			"note": "a configuration naming no declaration for the original reads as agreement, so a broken display answer confirms any rewrite"
+		},
+		{
+			"name": "M-INLINE-METHOD-OTHER-RECEIVER",
+			"type": "anyparse.query.CallSites",
+			"method": "receiverTarget",
+			"find": "return receivers == null ? Unproven : receivers.read(recv, name);",
+			"replace": "return Unproven;",
+			"note": "a receiver is never resolved, so a body calling another type's same-named static refuses the inline"
+		},
+		{
+			"name": "M-INLINE-METHOD-SELF-RECEIVER",
+			"type": "anyparse.query.QualifiedReceiver",
+			"method": "classify",
+			"force": "OtherType",
+			"note": "every resolved receiver reads as another type, so a static calling itself through its own type's name is inlined as no recursion"
+		},
+		{
+			"name": "M-INLINE-METHOD-FOREIGN-REF",
+			"type": "anyparse.query.SafeDelete",
+			"method": "foreignReferenceRefusal",
+			"force": "null",
+			"note": "no other file is ever read, so inline-method deletes a member another file of the project still calls"
+		},
+		{
+			"name": "M-INLINE-METHOD-OUTSIDE-TYPE",
+			"type": "anyparse.query.InlineMethod",
+			"method": "memberReachRefusal",
+			"find": "callSites.find(site -> !within(site.span, typeSpan))",
+			"replace": "null",
+			"note": "a call through the declaring type name from another type receives a body written in the declaring type scope"
+		},
+		{
+			"name": "M-INLINE-METHOD-KEEPS-DOC",
+			"type": "anyparse.query.InlineMethod",
+			"method": "resolveInlineMethod",
+			"find": "source, decl, parent, declSpanNN, true,",
+			"replace": "source, decl, parent, declSpanNN, false,",
+			"note": "the inlined declaration doc comment stays behind and documents the next member"
 		}
 	]
 }

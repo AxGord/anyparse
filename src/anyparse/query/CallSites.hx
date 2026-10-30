@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.QualifiedReceiver.ReceiverTarget;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
@@ -157,7 +158,7 @@ final class CallSites {
 	 * complete.
 	 */
 	public static function collect(
-		decl: QueryNode, tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape
+		decl: QueryNode, tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape, ?receivers: QualifiedReceiver
 	): CollectResult {
 		// The completeness proof is what every consumer buys here, and an unparsed
 		// conditional-compilation region defeats it by construction: a call written inside one
@@ -168,7 +169,9 @@ final class CallSites {
 		final unspellable: Null<String> = missingCallVocabulary(name, shape);
 		if (unspellable != null) return CErr(unspellable);
 		final isMethod: Bool = !(shape.localFunctionKinds ?? []).contains(decl.kind);
-		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name, shape);
+		return isMethod
+			? collectMethodCalls(tree, source, name, binding, shape, receivers)
+			: collectLocalFnCalls(tree, source, name, shape);
 	}
 
 	/** Human-facing `line:col` for a span, in the `apq refs` print convention. */
@@ -239,12 +242,12 @@ final class CallSites {
 	 * Completeness scan: every `Call` callee named `name` must be in one
 	 * of those two sets. A bare callee binding to a DIFFERENT decl is a
 	 * different function (ignored); a bare callee with no resolvable
-	 * binding, or an `obj.name(...)` call with a non-`this` receiver, is a
-	 * refusal — those could be this very function but cannot be proven, so
+	 * binding, or an `obj.name(...)` call with a non-`this` receiver that `receivers` does not prove to name the declaring type (a site)
+	 * or another type declaring its own `name` (not one), is a refusal — those could be this very function but cannot be proven, so
 	 * silently leaving their argument shape stale is not allowed.
 	 */
 	private static function collectMethodCalls(
-		tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape
+		tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape, receivers: Null<QualifiedReceiver>
 	): CollectResult {
 		final hits: Array<RefHit> = Refs.find(name, tree, shape);
 		// A braceless `$name` interpolation read is excluded: it can only STRINGIFY the
@@ -257,7 +260,7 @@ final class CallSites {
 		];
 		final boundReadFroms: Array<Int> = [for (h in boundReads) h.span.from];
 
-		final classified: MethodCallScan = classifyMethodCalls(tree, source, name, boundReadFroms, hits, shape);
+		final classified: MethodCallScan = classifyMethodCalls(tree, source, name, boundReadFroms, hits, shape, receivers);
 		var error: Null<String> = classified.error;
 		final sites: Array<QueryNode> = classified.sites;
 		// Refuse the method captured as a first-class value, whose indirect
@@ -273,7 +276,7 @@ final class CallSites {
 				error = '"$name" is referenced as a value (not called) at ${posOf(source, dangling.span)}'
 					+ ' — indirect calls through a captured reference cannot be tracked';
 		}
-		if (error == null) error = fieldAccessValueCapture(tree, source, name, classified.thisSiteCount, shape);
+		if (error == null) error = fieldAccessValueCapture(tree, source, name, classified.thisSiteCount, shape, receivers);
 		return error != null ? CErr(error) : COk(sites);
 	}
 
@@ -288,7 +291,7 @@ final class CallSites {
 	 * capture is present.
 	 */
 	private static function fieldAccessValueCapture(
-		tree: QueryNode, source: String, name: String, thisSiteCount: Int, shape: RefShape
+		tree: QueryNode, source: String, name: String, thisSiteCount: Int, shape: RefShape, receivers: Null<QualifiedReceiver>
 	): Null<String> {
 		var thisAccess: Int = 0;
 		var error: Null<String> = null;
@@ -296,11 +299,14 @@ final class CallSites {
 			if (error != null) return;
 			if (node.kind == shape.fieldAccessKind && node.name == name && node.children.length > 0) {
 				final recv: QueryNode = node.children[0];
-				if (recv.kind == shape.identKind && recv.name == shape.selfReferenceText)
-					thisAccess++;
-				else
-					error = '"$name" is referenced as a value (not called) at ${posOf(source, node.span)}'
-						+ ' — indirect calls through a captured reference cannot be tracked';
+				switch receiverTarget(recv, name, shape, receivers) {
+					case DeclaringType:
+						thisAccess++;
+					case OtherType:
+					case Unproven:
+						error = '"$name" is referenced as a value (not called) at ${posOf(source, node.span)}'
+							+ ' — indirect calls through a captured reference cannot be tracked';
+				}
 			}
 			for (c in node.children) scan(c);
 		}
@@ -372,16 +378,30 @@ final class CallSites {
 	 * receiver's display name), or none of these (a call to something
 	 * else).
 	 */
-	private static function calleeShape(callee: QueryNode, name: String, shape: RefShape): CalleeShape {
+	private static function calleeShape(callee: QueryNode, name: String, shape: RefShape, ?receivers: QualifiedReceiver): CalleeShape {
 		if (callee.kind == shape.identKind && callee.name == name) {
 			final span: Null<Span> = callee.span;
 			return span == null ? CalleeNone : CalleeBare(span);
 		}
 		if (callee.kind != shape.fieldAccessKind || callee.name != name || callee.children.length <= 0) return CalleeNone;
 		final recv: QueryNode = callee.children[0];
-		if (recv.kind == shape.identKind && recv.name == shape.selfReferenceText) return CalleeThis;
 		final recvName: String = recv.name ?? recv.kind;
-		return CalleeOtherReceiver(recvName);
+		return switch receiverTarget(recv, name, shape, receivers) {
+			case DeclaringType: CalleeThis;
+			case OtherType: CalleeNone;
+			case Unproven: CalleeOtherReceiver(recvName);
+		};
+	}
+
+	/**
+	 * What the receiver `recv` of a `recv.name` access names: the self reference and a receiver `receivers` proves names the
+	 * declaring type both read as the declaration itself; without `receivers` every other receiver is unproven.
+	 */
+	private static function receiverTarget(
+		recv: QueryNode, name: String, shape: RefShape, receivers: Null<QualifiedReceiver>
+	): ReceiverTarget {
+		if (recv.kind == shape.identKind && recv.name == shape.selfReferenceText) return DeclaringType;
+		return receivers == null ? Unproven : receivers.read(recv, name);
 	}
 
 	/**
@@ -455,7 +475,8 @@ final class CallSites {
 	 * or a null error when every call site was resolvable.
 	 */
 	private static function classifyMethodCalls(
-		tree: QueryNode, source: String, name: String, boundReadFroms: Array<Int>, hits: Array<RefHit>, shape: RefShape
+		tree: QueryNode, source: String, name: String, boundReadFroms: Array<Int>, hits: Array<RefHit>, shape: RefShape,
+		receivers: Null<QualifiedReceiver>
 	): MethodCallScan {
 		final sites: Array<QueryNode> = [];
 		final consumedFroms: Array<Int> = [];
@@ -466,7 +487,7 @@ final class CallSites {
 			if (error != null) return;
 			if (node.kind == callKind && node.children.length > 0) {
 				final callee: QueryNode = node.children[0];
-				switch calleeShape(callee, name, shape) {
+				switch calleeShape(callee, name, shape, receivers) {
 					case CalleeBare(identSpan):
 						// A bare `name(...)` call. It is OUR call iff its
 						// callee identifier read binds to `binding`.

@@ -3,6 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.cli.ProjectResolution;
 import anyparse.runtime.Span;
 
 /**
@@ -103,12 +104,14 @@ final class InlineMethodCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final plugin: GrammarPlugin = ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source);
 		final op: String = 'inline-method';
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
-		final result: EditResult = InlineMethod.inlineMethod(source, pos.line, pos.col, plugin, shape);
+		final result: EditResult = InlineMethod.inlineMethod(
+			source, pos.line, pos.col, plugin, shape, filePath, RefactorSupport.resolutionProjectSourcesOf(plugin)
+		);
 		switch result {
 			case Ok(text):
 				if (write) {
