@@ -278,18 +278,15 @@ final class ElementSpan {
 		// line start and `to` just past a line end. That is exactly what `lineExtendedSpan`
 		// produces when it extended, and never when it declined to, so this is also the test
 		// that keeps a mid-line span (a comma-list element, a node sharing its line) out.
-		if (span.from <= 0 || source.fastCodeAt(span.from - 1) != '\n'.code) return span;
-		if (span.to <= span.from || span.to > source.length || source.fastCodeAt(span.to - 1) != '\n'.code) return span;
+		if (!ownsWholeLines(source, span)) return span;
 
 		// `span.from - 1` is the newline that ended the line above, so the line itself starts
 		// before it; it is blank when only horizontal space separates that newline from the
 		// previous one (or from the start of the file).
-		var above: Int = span.from - 2;
-		while (above >= 0 && SourceText.isHorizontalSpace(source.fastCodeAt(above))) above--;
+		final above: Int = spaceStartBefore(source, span.from - 1) - 1;
 		if (above >= 0 && source.fastCodeAt(above) != '\n'.code) return span;
 
-		var below: Int = span.to;
-		while (below < source.length && SourceText.isHorizontalSpace(source.fastCodeAt(below))) below++;
+		final below: Int = spaceEndFrom(source, span.to);
 		// End of file is not a blank line — there is no separator left to give back.
 		return below < source.length && source.fastCodeAt(below) == '\n'.code ? new Span(span.from, below + 1) : span;
 	}
@@ -558,7 +555,9 @@ final class ElementSpan {
 		// A comma list has no blank separators, so only the line branch gives one back. An element that
 		// held a whole line of a one-per-line list (`'x',` with its comma) takes the line with it: the cut
 		// used to leave the line's indentation and break behind, a blank line the writer keeps as trivia.
-		final cut: Span = isComma ? commaListCut(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
+		final cut: Span = isComma
+			? commaListCut(source, span)
+			: braceEdgeSpan(source, blankExtendedSpan(source, lineExtendedSpan(source, span)));
 		return { span: cut, doc: span.from < group.from, annotations: annotationPrefixCount(node, parent) };
 	}
 
@@ -649,6 +648,25 @@ final class ElementSpan {
 		return new Span(lineStart, lineEnd);
 	}
 
+	/**
+	 * `parent` when `node` is a string `Literal` and `parent` the expression that carries its quotes
+	 * (`SingleStringExpr`) — else null. The literal's span is the CONTENT between the quotes, so an address
+	 * resolving it (`--select 'Literal:B'`) names the inside of the element, not the element: cutting that span
+	 * emptied the string (`''`) at rc 0 instead of removing the array item.
+	 */
+	public static function literalWrapperOf(node: QueryNode, parent: QueryNode): Null<QueryNode> {
+		final nodeSpan: Null<Span> = node.span;
+		final parentSpan: Null<Span> = parent.span;
+		return node.kind == 'Literal'
+			&& parent.children.length == 1
+			&& nodeSpan != null
+			&& parentSpan != null
+			&& parentSpan.from < nodeSpan.from
+			&& nodeSpan.to < parentSpan.to
+			? parent
+			: null;
+	}
+
 	/** `n` with its noun, singular or plural — the one place the report's `s` is decided. */
 	private static inline function counted(n: Int, noun: String): String {
 		return n == 1 ? '$n $noun' : '$n ${noun}s';
@@ -729,23 +747,61 @@ final class ElementSpan {
 		return j >= 0 && source.fastCodeAt(j) == ','.code ? new Span(j, span.to) : span;
 	}
 
+	/** Whether `span` starts at a line start and ends just past a line end. */
+	private static function ownsWholeLines(source: String, span: Span): Bool {
+		return span.from > 0
+			&& source.fastCodeAt(span.from - 1) == '\n'.code
+			&& span.to > span.from
+			&& span.to <= source.length
+			&& source.fastCodeAt(span.to - 1) == '\n'.code;
+	}
+
 	/**
-	 * `parent` when `node` is a string `Literal` and `parent` the expression that carries its quotes
-	 * (`SingleStringExpr`) — else null. The literal's span is the CONTENT between the quotes, so an address
-	 * resolving it (`--select 'Literal:B'`) names the inside of the element, not the element: cutting that span
-	 * emptied the string (`''`) at rc 0 instead of removing the array item.
+	 * A whole-line cut that opens or closes a brace body also takes the blank lines that separated it from the sibling on
+	 * its other side: those after it below a `{`, those before it above a `}`. Without it the brace is left beside a blank
+	 * line the cut used to sit between, a separator with nothing left to separate.
 	 */
-	public static function literalWrapperOf(node: QueryNode, parent: QueryNode): Null<QueryNode> {
-		final nodeSpan: Null<Span> = node.span;
-		final parentSpan: Null<Span> = parent.span;
-		return node.kind == 'Literal'
-			&& parent.children.length == 1
-			&& nodeSpan != null
-			&& parentSpan != null
-			&& parentSpan.from < nodeSpan.from
-			&& nodeSpan.to < parentSpan.to
-			? parent
-			: null;
+	private static function braceEdgeSpan(source: String, span: Span): Span {
+		if (!ownsWholeLines(source, span)) return span;
+		final above: Int = spaceStartBefore(source, span.from - 1) - 1;
+		if (above >= 0 && source.fastCodeAt(above) == '{'.code) return new Span(span.from, blankLinesEnd(source, span.to));
+		final below: Int = spaceEndFrom(source, span.to);
+		return below < source.length && source.fastCodeAt(below) == '}'.code ? new Span(blankLinesStart(source, span.from), span.to) : span;
+	}
+
+	/** The end of the run of blank lines starting at line start `to` (`to` itself when the line there is not blank). */
+	private static function blankLinesEnd(source: String, to: Int): Int {
+		var end: Int = to;
+		while (true) {
+			final p: Int = spaceEndFrom(source, end);
+			if (p >= source.length || source.fastCodeAt(p) != '\n'.code) return end;
+			end = p + 1;
+		}
+	}
+
+	/** The start of the run of blank lines ending at line start `from` (`from` itself when the line above is not blank). */
+	private static function blankLinesStart(source: String, from: Int): Int {
+		var start: Int = from;
+		while (true) {
+			// `start - 1` ends the line above: blank when only horizontal space separates it from the newline before.
+			final p: Int = spaceStartBefore(source, start - 1) - 1;
+			if (p < 0 || source.fastCodeAt(p) != '\n'.code) return start;
+			start = p + 1;
+		}
+	}
+
+	/** The offset where the run of horizontal space ending just before `end` starts (`end` when there is none). */
+	private static function spaceStartBefore(source: String, end: Int): Int {
+		var p: Int = end;
+		while (p > 0 && SourceText.isHorizontalSpace(source.fastCodeAt(p - 1))) p--;
+		return p;
+	}
+
+	/** The offset just past the run of horizontal space starting at `from` (`from` when there is none). */
+	private static function spaceEndFrom(source: String, from: Int): Int {
+		var p: Int = from;
+		while (p < source.length && SourceText.isHorizontalSpace(source.fastCodeAt(p))) p++;
+		return p;
 	}
 
 }

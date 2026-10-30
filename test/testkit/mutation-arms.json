@@ -33228,6 +33228,37 @@
 			"note": "no other file is ever read, so inline-method deletes a member another file of the project still calls"
 		},
 		{
+			"name": "M-SAFE-DELETE-OTHER-RECEIVER",
+			"type": "anyparse.query.SafeDelete",
+			"method": "collectReferences",
+			"find": "receivers.read(node.children[0], memberName) == OtherType",
+			"replace": "false",
+			"note": "a receiver naming another type declaring its own member of the name still counts, so another file calling that type's member blocks the delete"
+		},
+		{
+			"name": "M-INLINE-METHOD-SCOPE-INDEX",
+			"type": "anyparse.query.InlineMethod",
+			"method": "resolveInlineMethod",
+			"find": "new QualifiedReceiver(file, source, plugin, shape, binding, null, index)",
+			"replace": "new QualifiedReceiver(file, source, plugin, shape, binding)",
+			"note": "the file's receivers are read over the file alone, so a body calling a same-named static of a type in another file is refused"
+		},
+		{
+			"name": "M-ELEMENT-CUT-BRACE-EDGE",
+			"type": "anyparse.query.ElementSpan",
+			"method": "braceEdgeSpan",
+			"force": "span",
+			"note": "a cut member that opened or closed its type body leaves the blank line beside the brace"
+		},
+		{
+			"name": "M-CHANGE-SIG-RECEIVERS",
+			"type": "anyparse.query.ChangeSig",
+			"method": "changeSig",
+			"find": "SignatureEdit.receiversOf(file, source, plugin, shape, fn.binding)",
+			"replace": "null",
+			"note": "no receiver is resolved, so a call through the declaring type's own name refuses the reorder"
+		},
+		{
 			"name": "M-INLINE-METHOD-OUTSIDE-TYPE",
 			"type": "anyparse.query.InlineMethod",
 			"method": "memberReachRefusal",

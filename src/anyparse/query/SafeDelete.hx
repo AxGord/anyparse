@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.QualifiedReceiver.ReceiverTarget;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
@@ -84,7 +85,9 @@ final class SafeDelete {
 		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parsed, memberName, refShape, 'delete of "$memberName"');
 		if (opaque != null) return Err(opaque);
 
-		final refs: Array<{ file: String, count: Int }> = collectReferences(parsed, srcFile, memberName, memberSpanNN, refShape);
+		final refs: Array<{ file: String, count: Int }> = collectReferences(
+			parsed, srcFile, memberName, memberSpanNN, refShape, plugin, IndexScope.lazySymbolIndex(scopeFiles, plugin)
+		);
 		if (refs.length <= 0) return RemoveMember.removeMember(src.source, srcTypeName, memberName, reformat, plugin, true, optsJson);
 		final where: String = [for (r in refs) '${r.file} (${r.count})'].join(', ');
 		return Err('"$memberName" is still referenced — refusing to delete: $where');
@@ -94,11 +97,12 @@ final class SafeDelete {
 	 * Why `memberName`, declared at `memberSpan` of `srcFile`, cannot be removed from that file alone: a reference to it from
 	 * another file of `scopeFiles` (counted as `safeDelete` counts), a file of the scope that does not parse, or an unparsed
 	 * conditional region naming it. Null when no other file can reach it. Files are compared by `FileIdentity`, and a file whose
-	 * text never spells the name is not parsed.
+	 * text never spells the name is not parsed. `index` resolves the receivers of those references, over `scopeFiles` when
+	 * omitted.
 	 */
 	public static function foreignReferenceRefusal(
 		scopeFiles: Array<{ file: String, source: String }>, srcFile: String, memberName: String, memberSpan: Span, plugin: GrammarPlugin,
-		refShape: RefShape
+		refShape: RefShape, ?index: () -> Null<SymbolIndex>
 	): Null<String> {
 		final self: String = FileIdentity.realPath(srcFile);
 		final parsed: Array<Parsed> = [];
@@ -111,7 +115,9 @@ final class SafeDelete {
 		}
 		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parsed, memberName, refShape, 'removing "$memberName"');
 		if (opaque != null) return opaque;
-		final refs: Array<{ file: String, count: Int }> = collectReferences(parsed, srcFile, memberName, memberSpan, refShape);
+		final refs: Array<{ file: String, count: Int }> = collectReferences(
+			parsed, srcFile, memberName, memberSpan, refShape, plugin, index ?? IndexScope.lazySymbolIndex(scopeFiles, plugin)
+		);
 		return refs.length <= 0
 			? null
 			: '"$memberName" is referenced from another file: ' + [for (r in refs) '${r.file} (${r.count})'].join(', ');
@@ -138,22 +144,33 @@ final class SafeDelete {
 
 	/**
 	 * The per-file reference counts of `memberName` across the scope: every
-	 * `x.member` field access (any receiver), plus — in the declaring file —
-	 * every bare reference the scope resolver binds to the declaration.
-	 * References inside the member's own body span (`memberSpan`, `srcFile`
-	 * only) are excluded so recursion does not block deletion.
+	 * `x.member` field access whose receiver is not proven to name another
+	 * type declaring its own `memberName` (`QualifiedReceiver`, read through
+	 * `index`), plus — in the declaring file — every bare reference the scope
+	 * resolver binds to the declaration. References inside the member's own
+	 * body span (`memberSpan`, `srcFile` only) are excluded so recursion does
+	 * not block deletion.
 	 */
 	private static function collectReferences(
-		parsed: Array<Parsed>, srcFile: String, memberName: String, memberSpan: Span, refShape: RefShape
+		parsed: Array<Parsed>, srcFile: String, memberName: String, memberSpan: Span, refShape: RefShape, plugin: GrammarPlugin,
+		index: () -> Null<SymbolIndex>
 	): Array<{ file: String, count: Int }> {
 		final out: Array<{ file: String, count: Int }> = [];
 		for (entry in parsed) {
 			final inSrc: Bool = entry.file == srcFile;
+			final receivers: QualifiedReceiver = new QualifiedReceiver(
+				entry.file, entry.source, plugin, refShape, memberSpan.from, srcFile, index
+			);
 			var count: Int = 0;
 			function walk(node: QueryNode): Void {
 				if (node.kind == 'FieldAccess' && node.name == memberName) {
 					final span: Null<Span> = node.span;
-					if (span != null && !(inSrc && span.from >= memberSpan.from && span.from < memberSpan.to)) count++;
+					if (
+						span != null
+						&& !(inSrc && span.from >= memberSpan.from && span.from < memberSpan.to)
+						&& !(node.children.length > 0 && receivers.read(node.children[0], memberName) == OtherType)
+					)
+						count++;
 				}
 				for (c in node.children) walk(c);
 			}

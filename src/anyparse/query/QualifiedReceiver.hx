@@ -24,16 +24,27 @@ final class QualifiedReceiver {
 	/** Offset of the member declaration the receivers are read against. */
 	private final _declFrom: Int;
 
+	/** The file declaring that member, as the index keys it. */
+	private final _declFile: String;
+
 	/** The file's resolution index, built on the first receiver asked about. */
 	private final _index: () -> Null<SymbolIndex>;
 
-	/** `file` is the edited file's path as the run's index keys it, `source` its current text. */
-	public function new(file: String, source: String, plugin: GrammarPlugin, shape: RefShape, declFrom: Int) {
+	/**
+	 * `file` is the path of the file whose receivers are read, as the run's index keys it, `source` its current text. The
+	 * member is declared at `declFrom` of `declFile`, `file` when omitted; `index` is the resolution index to read through,
+	 * shared by the readers of several files of one scope, and over `file` alone when omitted.
+	 */
+	public function new(
+		file: String, source: String, plugin: GrammarPlugin, shape: RefShape, declFrom: Int, ?declFile: String,
+		?index: () -> Null<SymbolIndex>
+	) {
 		_file = file;
 		_plugin = plugin;
-		_index = IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin);
+		_index = index ?? IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin);
 		_identKind = shape.identKind;
 		_declFrom = declFrom;
+		_declFile = declFile ?? file;
 	}
 
 	/**
@@ -53,9 +64,14 @@ final class QualifiedReceiver {
 
 	private function classify(decl: ResolvedType, name: String): ReceiverTarget {
 		final type: TypeDeclInfo = decl.type;
-		if (decl.file.file == _file && type.span.from <= _declFrom && _declFrom < type.span.to) return DeclaringType;
+		if (sameFile(decl.file.file, _declFile) && type.span.from <= _declFrom && _declFrom < type.span.to) return DeclaringType;
 		if (type.aliasTargetRaw != null || !type.members.exists(m -> m.name == name)) return Unproven;
 		return OtherType;
+	}
+
+	/** One file whichever path form the index and the caller spell it in. */
+	private static function sameFile(a: String, b: String): Bool {
+		return a == b || FileIdentity.realPath(a) == FileIdentity.realPath(b);
 	}
 
 }

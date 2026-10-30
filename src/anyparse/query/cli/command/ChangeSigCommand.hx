@@ -121,7 +121,7 @@ final class ChangeSigCommand implements CliCommand {
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: ChangeSigResult = ChangeSig.changeSig(
-			source, pos.line, pos.col, permStr, plugin, shape, CliArgs.discoverFormatConfig(filePath)
+			source, pos.line, pos.col, permStr, plugin, shape, CliArgs.discoverFormatConfig(filePath), filePath
 		);
 		switch result {
 			case Ok(text, advisory):

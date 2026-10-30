@@ -84,7 +84,7 @@ final class RemoveParam {
 	 * source under compiled defaults.
 	 */
 	public static function removeParam(
-		source: String, line: Int, col: Int, index: Int, plugin: GrammarPlugin, shape: RefShape, ?optsJson: String
+		source: String, line: Int, col: Int, index: Int, plugin: GrammarPlugin, shape: RefShape, ?optsJson: String, ?file: String
 	): RemoveParamResult {
 		final fn: SignatureTarget = switch SignatureEdit.resolve(
 			source, line, col, plugin, shape, 'remove-param removes a function parameter'
@@ -100,7 +100,9 @@ final class RemoveParam {
 			edits: Array<{ span: Span, text: String }>,
 			error: Null<String>,
 			callSites: Int
-		} = paramSlotEdits(source, fn.tree, fn.decl, index, name, fn.binding, shape);
+		} = paramSlotEdits(
+			source, fn.tree, fn.decl, index, name, fn.binding, shape, SignatureEdit.receiversOf(file, source, plugin, shape, fn.binding)
+		);
 		final error: Null<String> = result.error;
 		if (error != null) return Err(error);
 
@@ -151,7 +153,8 @@ final class RemoveParam {
 	 * is nothing here to give it one.
 	 */
 	public static function paramSlotEdits(
-		source: String, tree: QueryNode, decl: QueryNode, index: Int, name: String, binding: Int, shape: RefShape
+		source: String, tree: QueryNode, decl: QueryNode, index: Int, name: String, binding: Int, shape: RefShape,
+		?receivers: QualifiedReceiver
 	): { edits: Array<{ span: Span, text: String }>, error: Null<String>, callSites: Int } {
 		final params: Array<QueryNode> = CallSites.leadingParams(decl, shape);
 		final n: Int = params.length;
@@ -166,7 +169,7 @@ final class RemoveParam {
 		if (countParamRefs(decl, paramName) > 0)
 			return { edits: [], error: 'parameter "$paramName" is still used in the body — remove its uses first', callSites: 0 };
 
-		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
+		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape, receivers) {
 			case CErr(message): return { edits: [], error: message, callSites: 0 };
 			case COk(sites): sites;
 		};

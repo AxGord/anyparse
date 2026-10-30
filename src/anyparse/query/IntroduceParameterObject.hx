@@ -76,7 +76,7 @@ final class IntroduceParameterObject {
 	 */
 	public static function introduce(
 		source: String, line: Int, col: Int, paramNames: Array<String>, typeName: String, objName: Null<String>, plugin: GrammarPlugin,
-		shape: RefShape, ?optsJson: String
+		shape: RefShape, ?optsJson: String, ?file: String
 	): EditResult {
 		if (!SourceText.isIdentifier(typeName)) return Err('type name "$typeName" is not a valid identifier');
 		if (paramNames.length == 0) return Err('no parameters named — nothing to fold');
@@ -97,7 +97,9 @@ final class IntroduceParameterObject {
 		edits.push({ span: new Span(sigFrom, sigTo), text: '${prep.obj}:$typeName' });
 
 		bodyRefEdits(tree, source, prep.fields, prep.obj, shape, edits);
-		final callErr: Null<String> = callSiteEdits(prep, tree, source, shape, edits);
+		final callErr: Null<String> = callSiteEdits(
+			prep, tree, source, shape, edits, SignatureEdit.receiversOf(file, source, plugin, shape, prep.declSpan.from)
+		);
 		if (callErr != null) return Err(callErr);
 
 		final typedefText: String = 'typedef $typeName = { ${[for (f in prep.fields) '${f.name}:${f.type}'].join(', ')} }';
@@ -253,9 +255,10 @@ final class IntroduceParameterObject {
 
 	/** Replace the folded-argument run at every resolvable call site with an object literal. */
 	private static function callSiteEdits(
-		prep: Prep, tree: QueryNode, source: String, shape: RefShape, edits: Array<{ span: Span, text: String }>
+		prep: Prep, tree: QueryNode, source: String, shape: RefShape, edits: Array<{ span: Span, text: String }>,
+		receivers: Null<QualifiedReceiver>
 	): Null<String> {
-		final collected: CollectResult = CallSites.collect(prep.decl, tree, source, prep.name, prep.declSpan.from, shape);
+		final collected: CollectResult = CallSites.collect(prep.decl, tree, source, prep.name, prep.declSpan.from, shape, receivers);
 		final sites: Array<QueryNode> = switch collected {
 			case CErr(message): return message;
 			case COk(list): list;

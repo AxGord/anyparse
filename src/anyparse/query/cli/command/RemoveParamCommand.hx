@@ -125,7 +125,7 @@ final class RemoveParamCommand implements CliCommand {
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: RemoveParamResult = RemoveParam.removeParam(
-			source, pos.line, pos.col, paramIndex, plugin, shape, CliArgs.discoverFormatConfig(filePath)
+			source, pos.line, pos.col, paramIndex, plugin, shape, CliArgs.discoverFormatConfig(filePath), filePath
 		);
 		switch result {
 			case Ok(text, advisory):

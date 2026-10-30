@@ -465,7 +465,7 @@ class AddressCliTest extends Test {
 		Assert.isTrue(out.indexOf('function g') >= 0, 'and its neighbour is not');
 		#if nodejs
 		Assert.isTrue(
-			err.indexOf('removed FnMember f: 8 lines, with its doc comment and 2 annotations') >= 0, 'the report names the cut: $err'
+			err.indexOf('removed FnMember f: 9 lines, with its doc comment and 2 annotations') >= 0, 'the report names the cut: $err'
 		);
 		#end
 		FileSystem.deleteFile(path);
@@ -565,7 +565,8 @@ class AddressCliTest extends Test {
 		#if (sys || nodejs)
 		final path: String = CliFixture.write(
 			'addr_lit',
-			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\'];\n\n\tfunction f():String {\n\t\treturn g(1) + \'r\';\n\t}\n}\n'
+			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\'];\n\n\tfunction f():String {\n\t\treturn g(1) + \'r\';\n'
+			+ '\t}\n}\n'
 		);
 		Assert.equals(0, Cli.run([
 			'remove-element',

@@ -42,6 +42,30 @@ class SafeDeleteSliceTest extends Test {
 		], plugin(), refShape()));
 	}
 
+	/**
+	 * Another file calling a same-named static through ANOTHER type's name does not reach this member: the receiver resolves
+	 * to that type, which declares its own, so the delete goes on.
+	 */
+	@:pin('control')
+	@:killer('M-SAFE-DELETE-OTHER-RECEIVER')
+	public function testSameNamedStaticOfAnotherTypeDoesNotBlock(): Void {
+		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'path', [
+			{ file: 'pkg/Svc.hx', source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}' },
+			{ file: 'pkg/Other.hx', source: 'package pkg;\n\nclass Other {\n\tpublic static function path(p:String):String return p;\n}' },
+			{ file: 'pkg/Client.hx', source: 'package pkg;\n\nclass Client {\n\tstatic function go():String return Other.path("x");\n}' }
+		]);
+		Assert.isFalse(text.contains('function path'), text);
+	}
+
+	/** A call through the declaring type's own name from another file still blocks the delete. */
+	public function testDeclaringTypeQualifiedCallBlocks(): Void {
+		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'path', false, [
+			{ file: 'pkg/Svc.hx', source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}' },
+			{ file: 'pkg/Other.hx', source: 'package pkg;\n\nclass Other {\n\tpublic static function path(p:String):String return p;\n}' },
+			{ file: 'pkg/Client.hx', source: 'package pkg;\n\nclass Client {\n\tstatic function go():String return Svc.path("x");\n}' }
+		], plugin(), refShape()));
+	}
+
 	/** A self-recursive method with no other reference is removed. */
 	public function testRecursiveRemoved(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n'

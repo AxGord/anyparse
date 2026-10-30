@@ -105,7 +105,8 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 		// plain splice — switching the canonical-out half of `editKeepingCanonical` off
 		// without saying so.
 		final result: EditResult = IntroduceParameterObject.introduce(
-			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape(), CliArgs.discoverFormatConfig(filePath)
+			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape(), CliArgs.discoverFormatConfig(filePath),
+			filePath
 		);
 		switch result {
 			case Ok(text):

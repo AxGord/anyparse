@@ -158,14 +158,35 @@ class InlineMethodSliceTest extends Test {
 	public function testInlineRemovesTheDeclarationsDoc(): Void {
 		final source: String =
 			'class C {\n\t/** doc of g */\n\tfunction g(a:Int):Int return a + 1;\n\n\t/** doc of u */\n\tfunction u():Int return g(3);\n}';
-		switch methodOf(source, 3, 11) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf('doc of g') < 0, text);
-				Assert.isTrue(text.indexOf('\t/** doc of u */\n\tfunction u():Int return (3 + 1);') >= 0, text);
-				assertReparses(text);
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
+		assertInline(source, 3, 11, 'class C {\n\t/** doc of u */\n\tfunction u():Int return (3 + 1);\n}');
+	}
+
+	/** The last member of a type body goes with the blank line that separated it from the member above. */
+	@:pin('control')
+	@:killer('M-ELEMENT-CUT-BRACE-EDGE')
+	public function testInlineLastMemberLeavesNoBlankBeforeTheBrace(): Void {
+		assertInline(
+			'class C {\n\tfunction u():Int return g(3);\n\n\tfunction g(a:Int):Int return a + 1;\n}', 4, 11,
+			'class C {\n\tfunction u():Int return (3 + 1);\n}'
+		);
+	}
+
+	/**
+	 * Another file calling a same-named static through ITS type's name calls that type's member, not this one: the receiver
+	 * resolves over the project's sources, so the declaration is inlined and deleted.
+	 */
+	@:pin('control')
+	@:killer('M-INLINE-METHOD-SCOPE-INDEX')
+	public function testInlineDespiteAnotherFileCallingASameNamedStatic(): Void {
+		final source: String = 'package q;\n\nclass A {\n\tstatic function path(p:String):String\n\t\treturn Other.path(p);\n\n'
+			+ '\tstatic function u():String\n\t\treturn path("x");\n}';
+		final other: String = 'package q;\n\nclass Other {\n\tpublic static function path(p:String):String\n\t\treturn p + "/";\n}';
+		final caller: String = 'package q;\n\nclass B {\n\tstatic function w():String\n\t\treturn Other.path("y");\n}';
+		assertInline(source, 4, 18, 'package q;\n\nclass A {\n\tstatic function u():String\n\t\treturn Other.path("x");\n}', [
+			{ file: FIXTURE_FILE, source: source },
+			{ file: 'Other.hx', source: other },
+			{ file: 'B.hx', source: caller }
+		]);
 	}
 
 	/** A same-named call through a VALUE receiver may be this declaration and is not provable — still refused. */

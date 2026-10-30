@@ -93,4 +93,14 @@ final class SignatureEdit {
 			: null;
 	}
 
+	/**
+	 * The reader of qualified-call receivers in `file` for the declaration at `binding`, or null when the caller named no
+	 * file: a call `R.name(...)` is then unproven, so the op refuses it rather than leave it on the old signature.
+	 */
+	public static function receiversOf(
+		file: Null<String>, source: String, plugin: GrammarPlugin, shape: RefShape, binding: Int
+	): Null<QualifiedReceiver> {
+		return file == null ? null : new QualifiedReceiver(file, source, plugin, shape, binding);
+	}
+
 }

@@ -58,6 +58,25 @@ class ChangeSigSliceTest extends Test {
 		assertChangeSig(source, 3, 12, '1,0', expected, false);
 	}
 
+	/** With the file named, a call through the declaring type's own name is a call site of the declaration and is reordered. */
+	@:pin('control')
+	@:killer('M-CHANGE-SIG-RECEIVERS')
+	public function testReorderTypeQualifiedStaticCall(): Void {
+		final source: String =
+			'class C {\n\tstatic function f(a:Int, b:Int):Int return a - b;\n\tstatic function u():Int return C.f(1, 2) + f(3, 4);\n}';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		switch ChangeSig.changeSig(source, 2, 18, '1,0', plugin, plugin.refShape(), null, 'C.hx') {
+			case Ok(text, _):
+				Assert.equals(
+					'class C {\n\tstatic function f(b:Int, a:Int):Int return a - b;\n'
+					+ '\tstatic function u():Int return C.f(2, 1) + f(4, 3);\n}',
+					text
+				);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	/**
 	 * Format preservation: an oddly-spaced (multi-space) parameter list
 	 * keeps its exact layout — only the slot contents move, the gaps

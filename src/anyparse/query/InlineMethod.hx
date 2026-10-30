@@ -315,7 +315,10 @@ final class InlineMethod {
 
 		// Collect + prove-complete the in-file call sites (the same proof
 		// `change-sig` / `remove-param` rely on).
-		final receivers: QualifiedReceiver = new QualifiedReceiver(file, source, plugin, shape, binding);
+		// One resolution index for the file's receivers and for the references other files hold: over the project's sources
+		// when they are given, so a receiver naming a type of another file resolves.
+		final index: Null<() -> Null<SymbolIndex>> = scopeFiles == null ? null : IndexScope.lazySymbolIndex(scopeFiles, plugin);
+		final receivers: QualifiedReceiver = new QualifiedReceiver(file, source, plugin, shape, binding, null, index);
 		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape, receivers) {
 			case CErr(message): return PErr(message);
 			case COk(sites): sites;
@@ -327,7 +330,9 @@ final class InlineMethod {
 		if (callSites.length == 0) return PErr('"$name" has no in-file call sites to inline');
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, decl);
 		if (!(shape.localFunctionKinds ?? []).contains(decl.kind)) {
-			final reach: Null<String> = memberReachRefusal(source, callSites, decl, declSpanNN, parent, file, scopeFiles, plugin, shape);
+			final reach: Null<String> = memberReachRefusal(
+				source, callSites, decl, declSpanNN, parent, file, scopeFiles, plugin, shape, index
+			);
 			if (reach != null) return PErr(reach);
 		}
 
@@ -357,7 +362,8 @@ final class InlineMethod {
 	 */
 	private static function memberReachRefusal(
 		source: String, callSites: Array<QueryNode>, decl: QueryNode, declSpan: Span, parent: Null<QueryNode>, file: String,
-		scopeFiles: Null<Array<{ file: String, source: String }>>, plugin: GrammarPlugin, shape: RefShape
+		scopeFiles: Null<Array<{ file: String, source: String }>>, plugin: GrammarPlugin, shape: RefShape,
+		index: Null<() -> Null<SymbolIndex>>
 	): Null<String> {
 		final name: String = decl.name ?? '';
 		final typeSpan: Null<Span> = parent?.span;
@@ -365,7 +371,7 @@ final class InlineMethod {
 		if (outside != null)
 			return 'call at ${CallSites.posOf(source, outside.span)} is outside the type declaring "$name"'
 				+ ' — the inlined body would lose that type\'s scope';
-		if (scopeFiles != null) return SafeDelete.foreignReferenceRefusal(scopeFiles, file, name, declSpan, plugin, shape);
+		if (scopeFiles != null) return SafeDelete.foreignReferenceRefusal(scopeFiles, file, name, declSpan, plugin, shape, index);
 		return ElementSpan.declGroupSpan(decl, parent, declSpan).from < declSpan.from
 			? '"$name" carries modifiers and no project resolution scope proves no other file references it'
 			: null;

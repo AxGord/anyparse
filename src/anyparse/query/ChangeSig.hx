@@ -82,7 +82,7 @@ final class ChangeSig {
 	 * omitted), the config the source's canonicality is measured under.
 	 */
 	public static function changeSig(
-		source: String, line: Int, col: Int, perm: String, plugin: GrammarPlugin, shape: RefShape, ?optsJson: String
+		source: String, line: Int, col: Int, perm: String, plugin: GrammarPlugin, shape: RefShape, ?optsJson: String, ?file: String
 	): ChangeSigResult {
 		// The cursor resolves through the shared prologue: a cursor already on a function decl IS that
 		// decl; a bare call resolves back to the decl through `Refs` (methods, not local functions).
@@ -108,7 +108,9 @@ final class ChangeSig {
 
 		// Collect the call sites and prove the set is complete. The two
 		// strategies (method vs. local function) live in `CallSites`.
-		final callSites: Array<QueryNode> = switch CallSites.collect(fn.decl, fn.tree, source, name, fn.binding, shape) {
+		final callSites: Array<QueryNode> = switch CallSites.collect(
+			fn.decl, fn.tree, source, name, fn.binding, shape, SignatureEdit.receiversOf(file, source, plugin, shape, fn.binding)
+		) {
 			case CErr(message): return Err(message);
 			case COk(sites): sites;
 		};
