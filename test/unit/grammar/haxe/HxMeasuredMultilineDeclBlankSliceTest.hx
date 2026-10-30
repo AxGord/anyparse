@@ -40,10 +40,10 @@ class HxMeasuredMultilineDeclBlankSliceTest extends Test {
 	private static final LONG: String = 'class LongerName extends LongBaseClass implements ILongFormInterface implements ILongFormInterface1 '
 		+ 'implements ILongFormInterface2 implements ILongFormInterface3 {}';
 
-	/** Tabs, 140 columns, and an `implementsExtends` rule that wraps a header at that width. */
+	/** Tabs, 140 columns, and an `implementsExtends` rule that wraps a header at that width, two indent units deep. */
 	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
 		+ '"implementsExtends": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "lineLength >= n", "value": 140}], '
-		+ '"type": "onePerLineAfterFirst"}]}}}';
+		+ '"type": "onePerLineAfterFirst", "additionalIndent": 2}]}}}';
 
 	/**
 	 * `CFG` with the heritage cascade cleared — `defaultWrap` alone is a

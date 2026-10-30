@@ -6,6 +6,7 @@ import anyparse.macro.AnnotationKeys;
 import anyparse.macro.AstPredLowering;
 import anyparse.macro.MacroNames.*;
 import anyparse.macro.MetaInspect;
+import anyparse.macro.TriviaTypeSynth;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
@@ -30,6 +31,12 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static inline final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
 	private static inline final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
 	private static inline final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
+	private static inline final HX_FN_BODY: String = 'anyparse.grammar.haxe.HxFnBody';
+	private static inline final HX_FN_BLOCK: String = 'anyparse.grammar.haxe.HxFnBlock';
+
+	/** `HxFnBlock`'s statement Star, the field its trivia slots are named after. */
+	private static inline final FN_BLOCK_STMTS: String = 'stmts';
+
 	private static inline final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
 	private static inline final HX_VAR_DECL: String = 'anyparse.grammar.haxe.HxVarDecl';
 	private static inline final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
@@ -269,7 +276,9 @@ final class HxAstPredLowering extends AstPredLowering {
 			importLeafClassifierField('_classifyImportLeafHead', 'betweenImportsHeadLeafClassify'),
 			keepsBlankLeafClassifierField(),
 			complexItemKindsField(),
-			ternaryBranchHoldsMultilineBlockField()
+			ternaryBranchHoldsMultilineBlockField(),
+			fnBodyEmptyField('fnBodyEmpty', HX_FN_BODY, ['NoBody']),
+			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, [])
 		].concat(new HxCasePredLowering(_shape, _mode).generate());
 	}
 
@@ -1019,6 +1028,31 @@ final class HxAstPredLowering extends AstPredLowering {
 			macro :Bool, macro anyparse.grammar.haxe.HxTernaryBranchBlocks.holdsMultilineBlock(e, $v{leftOperandCtors}),
 			'True iff a ternary operand holds a multi-line block outside the brace or bracket group it opens with.'
 		);
+	}
+
+	/**
+	 * A function body that is absent, `;`, or a `{}` holding neither a statement nor a comment —
+	 * haxe-formatter's `hasEmptyFunctionBody`. `@:fmt(bodyAwareCompactIndent(...))` reads it: a wrapped
+	 * signature over an empty body takes no additional continuation indent.
+	 */
+	private function fnBodyEmptyField(name: String, rule: String, emptyCtors: Array<String>): Field {
+		final cases: Array<Case> = [caseBind(rule, 'BlockBody', [0 => 'blk'], fnBlockEmptyExpr(ident('blk')))];
+		if (emptyCtors.length > 0) cases.push(caseOf(rule, emptyCtors, macro true));
+		return predField(
+			name,
+			[valueArg('b', rule)],
+			macro :Bool, nullSwitch(ident('b'), macro true, cases, macro false),
+			'True iff a function body is absent, `;`, or a `{}` holding no statement and no comment.'
+		);
+	}
+
+	/** `{}` with no statement — and, where the block carries trivia, no comment after `{` or before `}`. */
+	private function fnBlockEmptyExpr(block: Expr): Expr {
+		final stmts: Expr = field(block, FN_BLOCK_STMTS);
+		if (!isTriviaBearing(HX_FN_BLOCK)) return macro $stmts.length == 0;
+		final openComment: Expr = field(block, FN_BLOCK_STMTS + TriviaTypeSynth.TRAILING_OPEN_SUFFIX);
+		final closeComments: Expr = field(block, FN_BLOCK_STMTS + TriviaTypeSynth.TRAILING_LEADING_SUFFIX);
+		return macro $stmts.length == 0 && $openComment == null && $closeComments.length == 0;
 	}
 
 }

@@ -23,6 +23,9 @@ package anyparse.grammar.haxe.format;
  * applies. Has no effect on `noWrap` rules or on delimited-list
  * shapes — only chain emit (`BinaryChainEmit`) consumes it.
  *
+ * `additionalIndent` (optional) is the extra continuation indent, in
+ * indent units, the rule charges when it matches; absent is 0.
+ *
  * `conditions` is the AND-list of predicates required for the rule to
  * fire. A rule whose `conditions` contains an unmodelled `cond` string
  * (e.g. `lineLength >= n`) is silently skipped at load time so the
@@ -37,6 +40,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var type: String;
 
 	@:optional var location: String;
+
+	@:optional var additionalIndent: Int;
 
 	@:optional var conditions: Array<HxFormatWrapCondition>;
 };

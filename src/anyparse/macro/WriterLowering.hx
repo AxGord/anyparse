@@ -2406,6 +2406,7 @@ typedef SepStarCtx = {
 	final matrixWrap: Bool;
 	final uniformStmtBlanks: Bool;
 	final relocateTrailingComments: Bool;
+	final forceMultiColsExpr: Expr;
 };
 /**
  * Output bundle of `triviaSepTypedefBlanksExprs` — the seven spliced Expr
@@ -2476,7 +2477,7 @@ typedef SepStarNoTriviaCtx = {
 	final sepText: String;
 	final wrapRulesField: Null<String>;
 	final mapWrap: Null<SepStarMapWrap>;
-	final bodyAwareCompactIndent: Bool;
+	final suppressAdditionalIndent: Expr;
 	final matrixWrap: Bool;
 	final groupRestProbe: Bool;
 	final triviaElemCall: Expr;

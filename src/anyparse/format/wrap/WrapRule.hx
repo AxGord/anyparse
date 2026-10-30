@@ -17,9 +17,14 @@ package anyparse.format.wrap;
  * or on delimited-list shapes (`WrapList.emit`) — only the chain emit
  * (`BinaryChainEmit`) currently consumes it. Mirrors haxe-formatter's
  * per-rule `location` field in `WrapConfig.hx`.
+ *
+ * `additionalIndent` (optional) is the extra continuation indent, in indent units, this rule
+ * charges when it is the one that matched; absent is 0. The parent `WrapRules.defaultAdditionalIndent`
+ * answers only when no rule matches — haxe-formatter's per-rule `additionalIndent`.
  */
 typedef WrapRule = {
 	var conditions: Array<WrapCondition>;
 	var mode: WrapMode;
 	@:optional var location: WrappingLocation;
+	@:optional var additionalIndent: Int;
 };

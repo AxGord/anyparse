@@ -464,7 +464,12 @@ final class HaxeFormatConfigLoader {
 		final defaultLocation: Null<WrappingLocation> = cfg.defaultLocation != null
 			? HaxeFormatValues.wrappingLocationFromString(cfg.defaultLocation) ?? base.defaultLocation
 			: base.defaultLocation;
-		final defaultAdditionalIndent: Null<Int> = cfg.defaultAdditionalIndent ?? base.defaultAdditionalIndent;
+		// The fallback indent belongs to the fallback mode: a block that restates `defaultWrap`
+		// and is silent on `defaultAdditionalIndent` reads the fork's `@:default(0)`, not the
+		// indent of the built-in mode it replaced.
+		final defaultAdditionalIndent: Null<Int> = cfg.defaultAdditionalIndent ?? (
+			resolvedDefault != null ? 0 : base.defaultAdditionalIndent
+		);
 		// F3 ω-methodchain-config-key: NOT `?? base.chainItemsAfterCloseParenOnly`.
 		// A configured cascade opts in by naming the key; inheriting the built-in
 		// cascade's `true` would put every explicit `onePerLine` on the Haxe
@@ -475,21 +480,11 @@ final class HaxeFormatConfigLoader {
 		if (src == null) {
 			final clearing: Bool = clearRulesOnDefaultWrap && resolvedDefault != null;
 			final inheritedRules: Array<WrapRule> = clearing ? [] : base.rules;
-			// B4 ω-implements-extends-wrap: when a `defaultWrap`-only block
-			// CLEARS the built-in cascade (chain classes + implementsExtends),
-			// the fork models continuation indent as a PER-RULE
-			// `additionalIndent` — so a rules-less `defaultWrap` carries NO
-			// extra indent. Don't inherit the base cascade's
-			// `defaultAdditionalIndent` (which encodes the cleared rules' indent);
-			// honour an explicit `defaultAdditionalIndent` if present, else 0.
-			// Chain emitters ignore `defaultAdditionalIndent` (WrapRules doc), so
-			// this is a no-op for opBoolChain / opAddSubChain.
-			final clearedIndent: Null<Int> = clearing ? (cfg.defaultAdditionalIndent ?? 0) : defaultAdditionalIndent;
 			return {
 				rules: inheritedRules,
 				defaultMode: defaultMode,
 				defaultLocation: defaultLocation,
-				defaultAdditionalIndent: clearedIndent,
+				defaultAdditionalIndent: defaultAdditionalIndent,
 				chainItemsAfterCloseParenOnly: itemsAfterCloseParen
 			};
 		}
@@ -530,16 +525,12 @@ final class HaxeFormatConfigLoader {
 		}
 		final locStr: Null<String> = raw.location;
 		final location: Null<WrappingLocation> = locStr != null ? HaxeFormatValues.wrappingLocationFromString(locStr) : null;
-		return location != null
-			? {
-				conditions: mapped,
-				mode: mode,
-				location: location
-			}
-			: {
-				conditions: mapped,
-				mode: mode
-			};
+		final modeNarrow: WrapMode = mode;
+		final rule: WrapRule = { conditions: mapped, mode: modeNarrow };
+		if (location != null) rule.location = location;
+		final additionalIndent: Null<Int> = raw.additionalIndent;
+		if (additionalIndent != null) rule.additionalIndent = additionalIndent;
+		return rule;
 	}
 
 	// Accepts BOTH the symbolic JSON form (`'onePerLine'`, the fork's

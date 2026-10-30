@@ -457,11 +457,11 @@ final class TriviaTryparseLowering {
 			// layout. Resolve the fork-style WrapRules cascade at write
 			// time from opt.implementsExtendsWrap. lineLength rules gate
 			// via IfLineExceeds (prefix-aware); itemCount / defaultMode
-			// resolve as plain Haxe. additionalIndent comes from the
-			// cascade (defaultAdditionalIndent; anyparse WrapRule has no
-			// per-rule indent — see HaxeFormat.defaultImplementsExtendsWrap).
+			// resolve as plain Haxe. The continuation indent is the
+			// matched rule's additionalIndent, the cascade's
+			// defaultAdditionalIndent when no rule matches.
 			final _rules = opt.implementsExtendsWrap;
-			final _ai: Int = _cols * (_rules.defaultAdditionalIndent ?? 0);
+			var _ai: Int = _cols * (_rules.defaultAdditionalIndent ?? 0);
 			// Resolve mode + lineLength threshold from the first matching
 			// rule (itemCount evaluated now; lineLength deferred to the
 			// render gate via _thr). _thr<0 means "apply mode always".
@@ -516,8 +516,8 @@ final class TriviaTryparseLowering {
 	 * Tryparse-Star heritage WrapRules cascade resolution (B4
 	 * ω-implements-extends-wrap): walks `_rules.rules`, evaluates each rule's
 	 * itemCount / lineLength conditions, and assigns the first matching
-	 * rule's `_mode` + lineLength `_thr`. References the runtime `_rules`/
-	 * `_arr`/`_mode`/`_thr`/`opt` locals declared in
+	 * rule's `_mode`, lineLength `_thr` and continuation indent `_ai`. References the runtime `_rules`/
+	 * `_arr`/`_mode`/`_thr`/`_ai`/`_cols`/`opt` locals declared in
 	 * `triviaTryparseHeritageMultiExpr`'s emitted scope. Extracted so the
 	 * multi-clause layout stays under the complexity gate.
 	 */
@@ -550,6 +550,7 @@ final class TriviaTryparseLowering {
 				if (_ok) {
 					_mode = _rule.mode;
 					_thr = _llThr;
+					_ai = _cols * (_rule.additionalIndent ?? 0);
 					_matched = true;
 				}
 			}

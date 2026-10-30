@@ -503,21 +503,9 @@ final class WriterStarEmitLowering {
 		final wrapRulesField: Null<String> = starNode.fmtReadString('wrapRules');
 		final useFill: Bool = starNode.fmtHasFlag('fill');
 		final fillDouble: Bool = starNode.fmtHasFlag('fillDoubleIndent');
-		// ω-functionsignature-body-aware-indent: `@:fmt(bodyAwareCompactIndent)`
-		// on the Star threads `true` into `WrapList.emit`'s `compactContinuation`
-		// param for EVERY function-signature wrap. Such signatures carry
-		// `ignoreSourceNewlinesForWrap`, so their ONLY break source is the
-		// cascade leading-break, which lands at `calcIndent + additionalIndent`
-		// (the additional-only continuation regime) — the same indent the
-		// multi-param one-per-line path uses. Threading `opt._fnSigBodyEmpty`
-		// here was too narrow: a NON-empty single-param signature (cascade
-		// `itemCount <= 1 -> noWrap`, its default fillLineWithLeadingBreak
-		// owning the overflow break) then took the fit-driven `1 + additional`
-		// paren-bump regime and gained an extra indent level. Fields without
-		// the flag pass `false` so only the opt-in site reacts. That slot had no
-		// other reader, and its producer `@:fmt(propagateFnBodyEmpty)` is gone, so
-		// re-narrowing now means re-deriving the emptiness, not reading an opt field.
-		final bodyAware: Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
+		// `@:fmt(bodyAwareCompactIndent(...))`: a function signature with an empty body drops the
+		// cascade's additional indent; every other Star passes `false`.
+		final bodyAware: Expr = bodyEmptySuppressExpr(starNode, ctx.shape.root, ctx.ctx.trivia);
 		// ω-group-rest-probe slice 2: `@:fmt(groupRestProbe)` opt-in for
 		// Star fields whose outer Group should bias toward MBreak when
 		// significant same-line content trails (typedef LHS typeParams,
@@ -549,11 +537,11 @@ final class WriterStarEmitLowering {
 		final groupRestProbeExpr: Expr = groupRestProbe ? (macro !opt._suppressPatternRestProbe) : (macro false);
 		final listCall: Expr = if (wrapRulesField != null) {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
-			final compactContExpr: Expr = macro $v{bodyAware};
+			final suppressAdditionalExpr: Expr = bodyAware;
 			macro anyparse.format.wrap.WrapList.emit(
 				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
-					compactContinuation: $compactContExpr,
+					suppressAdditionalIndent: $suppressAdditionalExpr,
 					groupRestProbe: $groupRestProbeExpr
 				}
 			);
@@ -1193,7 +1181,8 @@ final class WriterStarEmitLowering {
 		// via `propagateTypedefContext`. Non-typedef anon callers
 		// (var-type-hint, fn-return-type) stay cascade-driven.
 		final forceMultiTypedef: Bool = branch.fmtHasFlag('forceMultiInTypedef');
-		final bodyAware: Bool = branch.fmtHasFlag('bodyAwareCompactIndent');
+		// An enum branch has no sibling body field, so only the bare flag's `true` applies here.
+		final bodyAware: Expr = macro $v{branch.fmtHasFlag('bodyAwareCompactIndent')};
 		// ω-group-rest-probe slice 2: enum-Alt branch reader for
 		// `@:fmt(groupRestProbe)`. Trivia-path mirror of the plain-
 		// path read at lowerStruct's Star dispatch. Dual-dispatch

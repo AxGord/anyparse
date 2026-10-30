@@ -204,7 +204,7 @@ final class WriterTriviaStarDispatch {
 			// context is active — non-typedef anon consumers
 			// (var-type-hint, fn-return-type) stay cascade-driven.
 			final forceMultiTypedef: Bool = starNode.fmtHasFlag('forceMultiInTypedef');
-			final bodyAware: Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
+			final bodyAware: Expr = bodyEmptySuppressExpr(starNode, tc.shape.root, true);
 			// ω-group-rest-probe slice 2: struct-Star path reader for
 			// `@:fmt(groupRestProbe)`. Mirrors the lowerStruct plain-
 			// path read (added at the lowerStruct dispatch site).

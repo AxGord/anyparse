@@ -974,11 +974,7 @@ final class HaxeFormat implements TextFormat {
 	 * signatures stay flat (`defaultMode: NoWrap`) and break only when
 	 * one of three cascade triggers fires — `itemCount >= 7`,
 	 * `totalItemLength >= 80`, or `exceedsMaxLineLength`, all routing
-	 * to `FillLine` with `+1 tab` continuation indent.
-	 *
-	 * Per-rule `additionalIndent` from fork's JSON is not modelled —
-	 * the cascade-level `defaultAdditionalIndent: 1` is byte-equivalent
-	 * because every rule in the fork's default carries the same `1`.
+	 * to `FillLine` with one additional continuation indent unit each.
 	 *
 	 * Returned as a fresh struct on each call so test code that mutates
 	 * the `defaultWriteOptions.anonFunctionSignatureWrap` substruct
@@ -989,19 +985,21 @@ final class HaxeFormat implements TextFormat {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }]
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }],
+					additionalIndent: 1
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 80 }]
+					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 80 }],
+					additionalIndent: 1
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+					additionalIndent: 1
 				}
 			],
-			defaultMode: WrapMode.NoWrap,
-			defaultAdditionalIndent: 1
+			defaultMode: WrapMode.NoWrap
 		};
 	}
 
@@ -1082,13 +1080,9 @@ final class HaxeFormat implements TextFormat {
 	 * B4 ω-implements-extends-wrap: default `wrapping.implementsExtends`
 	 * cascade for class/interface heritage clauses, ported from the fork's
 	 * `WrapConfig.implementsExtends` `@:default`. FillLine once the glued
-	 * decl line exceeds 140 (or >4 clauses, or exceeds maxLineLength), at
-	 * a continuation indent of 2 (8 spaces). anyparse `WrapRule` carries no
-	 * per-rule `additionalIndent`, so the fork's per-rule `additionalIndent:
-	 * 2` is modelled as `defaultAdditionalIndent: 2` (every break-mode
-	 * shape in this cascade shares the same indent, so the per-rule vs
-	 * default distinction is byte-equivalent here). Consumed by the
-	 * dedicated heritage emit in `TriviaTryparseLowering.triviaTryparseStarExpr`.
+	 * decl line exceeds 140 (or >4 clauses, or exceeds maxLineLength), each
+	 * rule at a continuation indent of 2 units. Consumed by the dedicated
+	 * heritage emit in `TriviaTryparseLowering.triviaTryparseStarExpr`.
 	 *
 	 * Fresh struct per call (mutation safety) — same convention as the
 	 * other `default*Wrap` helpers.
@@ -1098,19 +1092,21 @@ final class HaxeFormat implements TextFormat {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 140 }]
+					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 140 }],
+					additionalIndent: 2
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }]
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }],
+					additionalIndent: 2
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+					additionalIndent: 2
 				}
 			],
-			defaultMode: WrapMode.NoWrap,
-			defaultAdditionalIndent: 2
+			defaultMode: WrapMode.NoWrap
 		};
 	}
 

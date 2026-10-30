@@ -9,14 +9,13 @@ package anyparse.format.wrap;
  * Format-neutral — any delimited-list site in any text grammar opts in through
  * `@:fmt(wrapRules('<optionFieldName>'))` on its `Star` field, and the rule set
  * lives in `WriteOptions` (or a grammar-specific extension struct) so end-user
- * config can override it without a recompile. A per-RULE `additionalIndent` is
- * deliberately absent: it has no analogue in the Doc IR.
+ * config can override it without a recompile.
  *
- * The two optional fallbacks are read by disjoint emitters, so each is inert on
- * the other's shapes: `defaultLocation` is the operator-placement fallback for
- * the chain emitters, `defaultAdditionalIndent` bumps every break-mode
- * continuation indent by N `indentSize` / `tabWidth` units and is consumed only
- * by `WrapList.emit`.
+ * The two optional fallbacks answer only when no rule matches, and are read by
+ * disjoint emitters: `defaultLocation` is the operator-placement fallback for the
+ * chain emitters; `defaultAdditionalIndent` is the fallback of `WrapRule.additionalIndent`,
+ * the extra continuation indent in `indentSize` / `tabWidth` units, read by
+ * `WrapList.emit` and the heritage-clause emit and ignored by the chain emitters.
  */
 typedef WrapRules = {
 	var rules: Array<WrapRule>;

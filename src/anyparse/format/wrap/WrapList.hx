@@ -82,8 +82,11 @@ typedef WrapListOptions = {
 	 */
 	var ?forceMode: WrapMode;
 
-	/** Charge the continuation indent compactly (body-aware Stars). Default `false`. */
-	var ?compactContinuation: Bool;
+	/**
+	 * Drop the cascade's `additionalIndent` from the continuation indent — a function signature
+	 * whose body is empty (`@:fmt(bodyAwareCompactIndent)`). Default `false`.
+	 */
+	var ?suppressAdditionalIndent: Bool;
 
 	/**
 	 * Charge the same-line tail after the close delimiter (the `;` of `= [ … ];`) to the
@@ -702,6 +705,8 @@ class WrapList {
 	 * Location resolution: the MATCHED rule's `location`, `AfterLast` when it names
 	 * none; `rules.defaultLocation ?? AfterLast` only when no rule matches — haxe-formatter's
 	 * `@:default(AfterLast)` on both `WrapRule.location` and `WrapRules.defaultLocation`.
+	 * `additionalIndent` resolves the same way: the matched rule's, else `rules.defaultAdditionalIndent`,
+	 * 0 when absent.
 	 *
 	 * Used by `BinaryChainEmit.emit` to enumerate cascade outcomes
 	 * across (exceeds, lineLength-firing) state combinations.
@@ -710,16 +715,19 @@ class WrapList {
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
 		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false,
 		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false
-	): { mode: WrapMode, location: WrappingLocation } {
+	): { mode: WrapMode, location: WrappingLocation, additionalIndent: Int } {
 		final fallback: WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
 				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems
-			))
-				return { mode: rule.mode, location: rule.location ?? WrappingLocation.AfterLast };
+			)) return {
+				mode: rule.mode,
+				location: rule.location ?? WrappingLocation.AfterLast,
+				additionalIndent: rule.additionalIndent ?? 0
+			};
 		}
-		return { mode: rules.defaultMode, location: fallback };
+		return { mode: rules.defaultMode, location: fallback, additionalIndent: rules.defaultAdditionalIndent ?? 0 };
 	}
 
 	/**
@@ -1339,6 +1347,43 @@ class WrapList {
 	}
 
 	/**
+	 * Continuation-indent depth (in columns) for break-mode shapes (`Nest(cols, …)`): one
+	 * indent unit plus the cascade's `additionalIndent` — haxe-formatter's
+	 * `calcIndent + additionalIndent` on every wrapped line.
+	 *
+	 * The extra units come from the rule the cascade selects at `exceeds=true / firing=∅`
+	 * (`decideRuleWithLineLengthState`): the matched rule's `additionalIndent`, the cascade's
+	 * `defaultAdditionalIndent` when none matches. That probe state is a heuristic for a
+	 * cascade whose `LineLengthLargerThan` rules could pick a different rule at layout time;
+	 * the built-in cascades carry no such rule.
+	 *
+	 * Two answers drop the extra units. `FillLineWithLeadingBreak` puts its first continuation
+	 * line at one unit whatever the rule says, and with one `cols` per list that is the line
+	 * kept right. `suppressAdditionalIndent` is the caller's own refusal: a function signature
+	 * whose body is empty takes no additional indent.
+	 *
+	 * `complexItemCount` is a static per-list count known before the probe runs, so the
+	 * caller hands it in and the probe answers the same cascade the real decision answers.
+	 *
+	 * Public for the writer's source-multiline sep lists, which skip the cascade: the same
+	 * probe over the same items keeps the indent the cascade gave the list on the pass that
+	 * broke it, so the next pass is a fixed point.
+	 */
+	public static function continuationCols(
+		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, sepWidth: Int, suppressAdditionalIndent: Bool, complexItemCount: Int,
+		hasContainerItems: Bool, hasMultilineLambdaItems: Bool
+	): Int {
+		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		if (suppressAdditionalIndent) return baseCols;
+		final measure: WrapItemMeasure = measureItems(items, sepWidth);
+		final probe: { mode: WrapMode, location: WrappingLocation, additionalIndent: Int } = decideRuleWithLineLengthState(
+			rules, items.length, measure.maxLen, measure.total, true, measure.anyHardline, _ -> false, complexItemCount, measure.minLen,
+			measure.equalLens, hasContainerItems, hasMultilineLambdaItems
+		);
+		return probe.mode == FillLineWithLeadingBreak ? baseCols : baseCols * (1 + probe.additionalIndent);
+	}
+
+	/**
 	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
 	 * pointless single-element `Concat` for the common no-lead path.
 	 */
@@ -1698,61 +1743,6 @@ class WrapList {
 			equalLens: equalLens,
 			anyHardline: anyHardline
 		};
-	}
-
-	/**
-	 * Continuation-indent depth (in columns) for break-mode shapes (`Nest(cols, …)`).
-	 * Two indent regimes coexist:
-	 *   - **Cascade-forced break** (`OnePerLine` / `OnePerLineAfterFirst` /
-	 *     `FillLineWithLeadingBreak`): the cascade injects its own hardlines, so
-	 *     `Nest` adds the `additional` units only and the outer `Nest` stack
-	 *     contributes the rest.
-	 *   - **Fit-driven / trivia-driven** (`NoWrap` / `FillLine`): the hardlines come
-	 *     from trivia-preserved source breaks or `Fill`'s break-on-overflow, which
-	 *     sit one paren-bump deeper — `baseCols * (1 + additional)`.
-	 *
-	 * The probe mode is evaluated at `exceeds=true / firing=∅` before threshold
-	 * enumeration, a heuristic that does not cover a cascade combining
-	 * `defaultAdditionalIndent > 0` with `LineLengthLargerThan` thresholds. Two
-	 * things make it inert in practice: with `additional == 0` both arms of the
-	 * return below are `baseCols`, and no BUILT-IN cascade carries a
-	 * `LineLengthLargerThan` condition, so only a user config reaches the predicate
-	 * at all; and under `breakAsOnePerLine` every mode a rule can select except
-	 * `NoWrap` / `Keep` classifies as forcing, so the rule CHOICE cannot change the
-	 * classification.
-	 *
-	 * `complexItemCount` is deliberately NOT part of that heuristic: it is a static
-	 * per-list count known before either probe runs, so the caller hands it in and
-	 * the probe answers the same cascade the real decision answers. Passing a
-	 * hardcoded 0 made a `complexItemCount >= n` rule select the wrap MODE and then
-	 * compute the continuation INDENT as if the list held no complex items.
-	 *
-	 * `compactContinuation` extends the `additional`-only regime to `FillLine` /
-	 * `NoWrap` for a function signature. It is the `@:fmt(bodyAwareCompactIndent)`
-	 * flag itself; the body-emptiness gate it was first named for was dropped as too
-	 * narrow and its producer is gone.
-	 */
-	private static function continuationCols(
-		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, measure: WrapItemMeasure, sourceMultilineKeep: Bool,
-		compactContinuation: Bool, breakAsOnePerLine: Bool, complexItemCount: Int, hasContainerItems: Bool, hasMultilineLambdaItems: Bool
-	): Int {
-		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
-		final additional: Int = rules.defaultAdditionalIndent ?? 0;
-		final probeMode: WrapMode = onePerLineWhenBreaking(
-			floorSourceMultiline(
-				decideWithLineLengthState(
-					rules, items.length, measure.maxLen, measure.total, true, measure.anyHardline, _ -> false, complexItemCount,
-					measure.minLen, measure.equalLens, hasContainerItems, hasMultilineLambdaItems
-				),
-				sourceMultilineKeep
-			),
-			breakAsOnePerLine, true
-		);
-		final cascadeForcesBreak: Bool = probeMode == OnePerLine
-			|| probeMode == OnePerLineAfterFirst
-			|| probeMode == FillLineWithLeadingBreak;
-		final compactCont: Bool = cascadeForcesBreak || compactContinuation;
-		return baseCols * (compactCont && additional > 0 ? additional : 1 + additional);
 	}
 
 	private static function isTopLevelChain(d: Doc): Bool {
@@ -4621,7 +4611,7 @@ class WrapList {
 			leadBreak: axes.leadBreak ?? Empty,
 			forceExceeds: axes.forceExceeds ?? false,
 			forceMode: axes.forceMode,
-			compactContinuation: axes.compactContinuation ?? false,
+			suppressAdditionalIndent: axes.suppressAdditionalIndent ?? false,
 			groupRestProbe: axes.groupRestProbe ?? false,
 			sepBeforeFlags: axes.sepBeforeFlags,
 			sourceMultilineKeep: axes.sourceMultilineKeep ?? false,
@@ -4659,7 +4649,7 @@ class WrapList {
 		final leadBreak: Doc = axes.leadBreak;
 		final forceExceeds: Bool = axes.forceExceeds;
 		final forceMode: Null<WrapMode> = axes.forceMode;
-		final compactContinuation: Bool = axes.compactContinuation;
+		final suppressAdditionalIndent: Bool = axes.suppressAdditionalIndent;
 		final groupRestProbe: Bool = axes.groupRestProbe;
 		final sepBeforeFlags: Null<Array<Bool>> = axes.sepBeforeFlags;
 		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
@@ -4747,8 +4737,7 @@ class WrapList {
 		// own rendered Doc, so it has to be computed here rather than off `measure`.
 		final multilineLambda: Bool = anyMultilineLambdaItem(items, complexItemKinds);
 		final cols: Int = continuationCols(
-			rules, opt, items, measure, sourceMultilineKeep, compactContinuation, breakAsOnePerLine, complexCount, containerItems,
-			multilineLambda
+			rules, opt, items, sepWidth, suppressAdditionalIndent, complexCount, containerItems, multilineLambda
 		);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
@@ -4869,7 +4858,7 @@ private typedef ResolvedWrapListOptions = {
 	final leadBreak: Doc;
 	final forceExceeds: Bool;
 	final forceMode: Null<WrapMode>;
-	final compactContinuation: Bool;
+	final suppressAdditionalIndent: Bool;
 	final groupRestProbe: Bool;
 	final sepBeforeFlags: Null<Array<Bool>>;
 	final sourceMultilineKeep: Bool;

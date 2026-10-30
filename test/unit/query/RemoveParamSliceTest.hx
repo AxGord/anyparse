@@ -252,32 +252,6 @@ class RemoveParamSliceTest extends Test {
 		assertRemove(source, 2, 9, 1, expected, true);
 	}
 
-	private function assertRemove(source: String, line: Int, col: Int, index: Int, expected: String, advisoryNonNull: Bool): Void {
-		final result: RemoveParamResult = removeOf(source, line, col, index);
-		switch result {
-			case Ok(text, advisory):
-				Assert.equals(expected, text);
-				if (advisoryNonNull)
-					Assert.notNull(advisory);
-				else
-					Assert.isNull(advisory);
-				// Every accepted rewrite must itself re-parse.
-				assertReparses(text);
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
-	}
-
-	private function assertRefused(source: String, line: Int, col: Int, index: Int): Void {
-		final result: RemoveParamResult = removeOf(source, line, col, index);
-		switch result {
-			case Ok(text, _):
-				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
-				Assert.pass();
-		}
-	}
-
 	/**
 	 * PIN. Canonical in, canonical out — the contract every writer-emit op states. An interface method the writer
 	 * wrapped across two lines fits on ONE after the removal, and the raw slot removal used to leave the wrap standing:
@@ -308,12 +282,38 @@ class RemoveParamSliceTest extends Test {
 			'class C {\n\tfunction h(alpha:Int, beta:String, gamma:Int, delta:Int):Bool {\n\t\treturn alpha + gamma + delta > 0;\n\t}\n\n'
 			+ '\tfunction g():Bool {\n\t\treturn h(1000000, "a long string argument", 3000000, 4000000);\n\t}\n}\n'
 		);
-		Assert.isTrue(source.contains('gamma:Int,\n\t\tdelta:Int):Bool {'), 'the signature starts wrapped:\n$source');
+		Assert.isTrue(source.contains('gamma:Int,\n\t\t\tdelta:Int):Bool {'), 'the signature starts wrapped:\n$source');
 		Assert.isTrue(source.contains('argument",\n\t\t\t3000000'), 'and so does the call:\n$source');
 		final text: String = okText(removeOf(source, 2, 11, 1, NARROW));
 		Assert.isTrue(text.contains('\tfunction h(alpha:Int, gamma:Int, delta:Int):Bool {\n'), 'the signature is one line:\n$text');
 		Assert.isTrue(text.contains('\t\treturn h(1000000, 3000000, 4000000);\n'), 'and so is the call:\n$text');
 		Assert.equals(canonical(text), text, 'and the file is canonical');
+	}
+
+	private function assertRemove(source: String, line: Int, col: Int, index: Int, expected: String, advisoryNonNull: Bool): Void {
+		final result: RemoveParamResult = removeOf(source, line, col, index);
+		switch result {
+			case Ok(text, advisory):
+				Assert.equals(expected, text);
+				if (advisoryNonNull)
+					Assert.notNull(advisory);
+				else
+					Assert.isNull(advisory);
+				// Every accepted rewrite must itself re-parse.
+				assertReparses(text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private function assertRefused(source: String, line: Int, col: Int, index: Int): Void {
+		final result: RemoveParamResult = removeOf(source, line, col, index);
+		switch result {
+			case Ok(text, _):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(_):
+				Assert.pass();
+		}
 	}
 
 	private function assertReparses(text: String): Void {

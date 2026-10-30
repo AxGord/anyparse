@@ -78,7 +78,7 @@ final class TriviaSepLowering {
 		fieldAccess: Expr, trailBBAccess: Null<Expr>, trailLCAccess: Null<Expr>, trailCloseAccess: Null<Expr>, trailOpenAccess: Null<Expr>,
 		elemFn: String, openText: String, closeText: String, sepText: String, ?wrapRulesField: String, ?leftCurlyKnob: String,
 		?rightCurlyKnob: String, ?trailPresentAccess: Expr, ?trailingCommaField: String, ?openInsideExpr: Expr, ?closeInsideExpr: Expr,
-		beforeDocCommentEmptyLines: Bool = false, forceMultiInTypedef: Bool = false, bodyAwareCompactIndent: Bool = false,
+		beforeDocCommentEmptyLines: Bool = false, forceMultiInTypedef: Bool = false, ?suppressAdditionalIndent: Expr,
 		groupRestProbe: Bool = false, ignoreSourceNewlinesForWrap: Bool = false, reflowSourceMultiline: Bool = false,
 		matrixWrap: Bool = false,
 		// ω-keep-fnsig-newline: accessor for the close-newline slot
@@ -228,6 +228,12 @@ final class TriviaSepLowering {
 		// Doc line. A line comment there swallows the body's `{`, so route
 		// through the guarded emitter.
 		final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);
+		// The fork lays a typedef's RHS out by its own typedef rule, not the anon-type cascade, so the
+		// Star that opted into `@:fmt(forceMultiInTypedef)` takes no cascade indent inside a typedef body
+		// (`opt._inTypedefBody`, cleared per element, so a nested anon still does).
+		final suppressExpr: Expr = forceMultiInTypedef
+			? macro ${suppressAdditionalIndent ?? macro false} || opt._inTypedefBody
+			: suppressAdditionalIndent ?? macro false;
 		// ω-keep-objectlit / ω-cascade-emits-comments / ω-nowrap-flat /
 		// ω-objectlit-leftCurly-cascade / ω-anontype-right-curly: the keep/ignore/
 		// noWrap runtime checks + leftCurly/rightCurly placement Docs the sep-Star
@@ -283,7 +289,7 @@ final class TriviaSepLowering {
 			sepText: sepText,
 			wrapRulesField: wrapRulesField,
 			mapWrap: mapWrap,
-			bodyAwareCompactIndent: bodyAwareCompactIndent,
+			suppressAdditionalIndent: suppressExpr,
 			matrixWrap: matrixWrap,
 			groupRestProbe: groupRestProbe,
 			triviaElemCall: triviaElemCall,
@@ -320,7 +326,8 @@ final class TriviaSepLowering {
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
 			uniformStmtBlanks: uniformStmtBlanks,
-			relocateTrailingComments: relocateTrailingComments
+			relocateTrailingComments: relocateTrailingComments,
+			forceMultiColsExpr: forceMultiColsFor(wrapRulesField, mapWrap, sepText, suppressExpr)
 		}
 		final predicateScan: Expr = triviaSepPredicateScanExpr(
 			reflowSourceMultiline, uniformStmtBlanks, triviaElemCall, relocateTrailingComments
@@ -552,8 +559,10 @@ final class TriviaSepLowering {
 			c.appendTrailingCommaExpr, c.flatTrailingCommaExpr, c.sepText, c.relocateTrailingComments
 		);
 		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
+		final forceMultiColsExpr: Expr = c.forceMultiColsExpr;
 		return macro {
 			final _inner: Array<anyparse.core.Doc> = [];
+			final _fmDocs: Array<anyparse.core.Doc> = [];
 			$initCurrDocCommentExpr;
 			$keepCurlyBeginExpr;
 			$typedefBeginExpr;
@@ -583,6 +592,7 @@ final class TriviaSepLowering {
 				}
 				$balcEmitExpr;
 				final _elem: anyparse.core.Doc = $triviaElemCall;
+				_fmDocs.push(_elem);
 				$lineExpr;
 				_si++;
 			}
@@ -598,7 +608,7 @@ final class TriviaSepLowering {
 					_tii++;
 				}
 			}
-			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _cols: Int = $forceMultiColsExpr;
 			final _innerWrap: anyparse.core.Doc = _dn(_cols, _dc(_inner));
 			final _parts: Array<anyparse.core.Doc> = [];
 			_parts.push($triviaLeadDoc);
@@ -1002,20 +1012,9 @@ final class TriviaSepLowering {
 			: macro final _complexKinds: Null<Array<Int>> = null;
 		return if (c.wrapRulesField != null) {
 			final rulesExpr: Expr = wrapRulesAccess(c.wrapRulesField, c.mapWrap);
-			// ω-functionsignature-body-aware-indent: thread the field-level
-			// `@:fmt(bodyAwareCompactIndent)` opt-in into `WrapList.emit`'s
-			// `compactContinuation` param as `true` for EVERY function-signature
-			// wrap (mirror of the plain-path site). Those signatures carry
-			// `ignoreSourceNewlinesForWrap`, so every break is the cascade
-			// leading-break at `calcIndent + additionalIndent` (additional-only);
-			// gating on `opt._fnSigBodyEmpty` left a NON-empty single-param
-			// signature one indent level too deep. Other sep-Star consumers
-			// (HxType.Anon.fields, HxObjectLit.fields, etc.) leave the flag clear and
-			// pass `macro false`. The emptiness slot itself had no reader and its
-			// producer `@:fmt(propagateFnBodyEmpty)` is gone; the plain-path reader in
-			// `WriterLowering` carries the same note, and re-narrowing there or here
-			// now means re-deriving the emptiness, not reading an opt field.
-			final compactContExpr: Expr = macro $v{c.bodyAwareCompactIndent};
+			// `@:fmt(bodyAwareCompactIndent(...))`: a function signature with an empty body
+			// drops the cascade's additional indent (`WriterLoweringSupport.bodyEmptySuppressExpr`).
+			final suppressAdditionalExpr: Expr = c.suppressAdditionalIndent;
 			// ω-arraymatrix-wrap: when the Star opted into
 			// `@:fmt(arrayMatrixWrap)` (currently `HxExpr.ArrayExpr`) and the
 			// runtime policy preserves the source grid, attempt a one-pass
@@ -1163,7 +1162,7 @@ final class TriviaSepLowering {
 						forceExceeds: $forceExceedsExpr,
 						trailBreak: $wrapTrailBreakDoc,
 						forceMode: $forceModeExpr,
-						compactContinuation: $compactContExpr,
+						suppressAdditionalIndent: $suppressAdditionalExpr,
 						// ω-pattern-rest-probe: gated at RUNTIME, unlike its macro-time
 						// sibling at `WriterLowering`'s postfix-Star `Call` site, because
 						// the flag is a property of the descent and not of the Star. A
@@ -1786,6 +1785,21 @@ final class TriviaSepLowering {
 		if (tailRehomeFn == null) return [arrDecl];
 		final srcDecl: Expr = macro final _arrSrc = $fieldAccess;
 		return [srcDecl, arrDecl];
+	}
+
+	/**
+	 * The continuation indent of the force-multi (source-multiline) branch: one indent unit for a
+	 * Star without a cascade, else `WrapList.continuationCols` over the elements `_fmDocs` collected,
+	 * so a list the cascade broke on one pass keeps the cascade's `1 + additionalIndent` on the next.
+	 */
+	private static function forceMultiColsFor(
+		wrapRulesField: Null<String>, mapWrap: Null<WriterLowering.SepStarMapWrap>, sepText: String, suppressAdditionalIndent: Expr
+	): Expr {
+		if (wrapRulesField == null) return macro opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final rulesExpr: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
+		return macro anyparse.format.wrap.WrapList.continuationCols(
+			$rulesExpr, opt, _fmDocs, $v{sepText.length + 1}, $suppressAdditionalIndent, 0, false, false
+		);
 	}
 
 }

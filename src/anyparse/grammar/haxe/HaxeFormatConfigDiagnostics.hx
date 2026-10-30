@@ -14,6 +14,8 @@ import anyparse.runtime.StringInput;
 import anyparse.runtime.UnknownField;
 import haxe.Exception;
 
+using Lambda;
+
 /**
  * Says which settings in an `hxformat.json` hxq will not act on.
  *
@@ -25,8 +27,8 @@ import haxe.Exception;
  * the other half: the config author got no signal at all, so a knob that
  * does nothing is indistinguishable from a knob that works.
  *
- * Real configs each carry a dozen or so unimplemented keys — the per-rule
- * `additionalIndent` and a handful of whitespace / brace policies.
+ * Real configs each carry a dozen or so unimplemented keys — mostly
+ * whitespace / brace policies.
  *
  * Analysis and reporting are split on purpose: `diagnose` is a pure function of the config text and is what tests assert
  * on, while `warn` is the boundary shell that knows the file the text came from and owns the once-per-path stderr line.
@@ -164,6 +166,11 @@ final class HaxeFormatConfigDiagnostics {
 			final rules: Null<Array<HxFormatWrapRule>> = cascade.rules;
 			if (rules != null) for (rule in rules) collectRuleIssues(rule, into);
 		}
+		for (chain in [section.methodChain, section.opBoolChain, section.opAddSubChain]) if (chain != null && chainStatesIndent(chain))
+			add(
+				into,
+				'additionalIndent on a methodChain / opBoolChain / opAddSubChain cascade (ignored: a chain wrap takes no extra indent)'
+			);
 	}
 
 	/**
@@ -222,6 +229,17 @@ final class HaxeFormatConfigDiagnostics {
 			section.implementsExtends
 		];
 		return [for (cascade in all) if (cascade != null) cascade];
+	}
+
+	/**
+	 * Does a chain cascade state an indent the chain emitters never read? The chain sections share
+	 * the list schema, so the parser accepts `additionalIndent` / `defaultAdditionalIndent` there and
+	 * only this check says they have no effect.
+	 */
+	private static function chainStatesIndent(chain: HxFormatWrapRules): Bool {
+		if (chain.defaultAdditionalIndent != null) return true;
+		final rules: Null<Array<HxFormatWrapRule>> = chain.rules;
+		return rules != null && rules.exists(rule -> rule.additionalIndent != null);
 	}
 
 }

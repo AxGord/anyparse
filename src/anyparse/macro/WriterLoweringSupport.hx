@@ -37,6 +37,9 @@ using anyparse.macro.MetaInspect;
  */
 final class WriterLoweringSupport {
 
+	/** The Star flag naming a function signature whose continuation indent depends on its body. */
+	private static inline final BODY_AWARE_FLAG: String = 'bodyAwareCompactIndent';
+
 	/**
 	 * Build the field-access Expr `opt.<fieldName>` — used everywhere the
 	 * generated writer reads a `WriteOptions` knob (cascade rules, body
@@ -103,6 +106,24 @@ final class WriterLoweringSupport {
 			expr: EUnop(OpNot, false, beforeNewlineAccess(fieldName)),
 			pos: Context.currentPos()
 		};
+	}
+
+	/**
+	 * The `suppressAdditionalIndent` answer a struct Star hands `WrapList.emit`: `false` without
+	 * `@:fmt(bodyAwareCompactIndent)`, `true` for the bare flag (an owner with no body), and for
+	 * `bodyAwareCompactIndent('<bodyField>', '<emptyPredicate>')` the grammar's typed predicate
+	 * applied to `value.<bodyField>` — a signature whose body is empty takes no additional indent.
+	 */
+	private static function bodyEmptySuppressExpr(starNode: ShapeNode, rootTypePath: String, trivia: Bool): Expr {
+		if (!starNode.fmtHasFlag(BODY_AWARE_FLAG)) return macro false;
+		final args: Null<Array<String>> = starNode.fmtReadStringArgs(BODY_AWARE_FLAG);
+		if (args == null || args.length == 0) return macro true;
+		if (args.length != 2)
+			Context.fatalError(
+				'@:fmt($BODY_AWARE_FLAG) takes no argument or (\'<bodyField>\', \'<emptyPredicate>\')', Context.currentPos()
+			);
+		final bodyAccess: Expr = { expr: EField(macro value, args[0]), pos: Context.currentPos() };
+		return AstPredLowering.predCallExpr(rootTypePath, trivia, false, args[1], [bodyAccess]);
 	}
 
 	/**

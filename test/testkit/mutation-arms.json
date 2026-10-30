@@ -32182,8 +32182,8 @@
 			"name": "M-RULE-MATCH-IGNORED",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "decideRuleWithLineLengthState",
-			"find": "return { mode: rule.mode, location: rule.location ?? WrappingLocation.AfterLast };",
-			"replace": "return { mode: rules.defaultMode, location: fallback };",
+			"find": "mode: rule.mode,\n\tlocation: rule.location ?? WrappingLocation.AfterLast,",
+			"replace": "mode: rules.defaultMode,\n\tlocation: fallback,",
 			"note": "a matched rule answers the section default, so neither its mode nor its operator side reaches the chain"
 		},
 		{
@@ -32685,6 +32685,94 @@
 			"method": "inlined",
 			"force": "script",
 			"note": "a `</script` inside the inlined library closes the element holding it, and the rest of the library spills into the page as text"
+		},
+		{
+			"name": "M-CONTCOLS-NO-ADDITIONAL",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "continuationCols",
+			"find": "baseCols * (1 + probe.additionalIndent)",
+			"replace": "baseCols",
+			"note": "the matched rule additionalIndent is never charged, so a wrapped list stays one unit deep whatever its cascade says"
+		},
+		{
+			"name": "M-CONTCOLS-DEFAULT-ONLY",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "continuationCols",
+			"find": "baseCols * (1 + probe.additionalIndent)",
+			"replace": "baseCols * (1 + (rules.defaultAdditionalIndent ?? 0))",
+			"note": "every break charges the cascade default indent, so a matched rule stating its own indent is overridden"
+		},
+		{
+			"name": "M-CONTCOLS-IGNORE-SUPPRESS",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "continuationCols",
+			"find": "if (suppressAdditionalIndent) return baseCols;",
+			"replace": "",
+			"note": "a function signature over an empty body charges the additional indent like any other"
+		},
+		{
+			"name": "M-CONTCOLS-LEADING-BREAK-INDENT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "continuationCols",
+			"find": "probe.mode == FillLineWithLeadingBreak ? baseCols : ",
+			"replace": "",
+			"note": "a leading-break line charges the additional indent, one unit deeper than its first line belongs"
+		},
+		{
+			"name": "M-FNBODY-COMMENT-EMPTY",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "fnBlockEmptyExpr",
+			"find": "$openComment == null && ",
+			"replace": "",
+			"note": "a body holding only a comment after its open brace counts as empty and its signature loses the additional indent"
+		},
+		{
+			"name": "M-LOADER-DEFAULT-INDENT-INHERIT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "wrapRulesFromConfig",
+			"find": "resolvedDefault != null ? 0 : base.defaultAdditionalIndent",
+			"replace": "base.defaultAdditionalIndent",
+			"note": "a block restating defaultWrap inherits the built-in fallback indent of the mode it replaced"
+		},
+		{
+			"name": "M-HERITAGE-RULE-INDENT",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseHeritageResolveExpr",
+			"find": "_ai = _cols * (_rule.additionalIndent ?? 0);",
+			"replace": "",
+			"note": "a matched heritage rule keeps the cascade default indent instead of its own"
+		},
+		{
+			"name": "M-LOADER-RULE-INDENT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "wrapRuleFromConfig",
+			"find": "if (additionalIndent != null) rule.additionalIndent = additionalIndent;",
+			"replace": "",
+			"note": "a configured rule additionalIndent is dropped at load time"
+		},
+		{
+			"name": "M-FORCEMULTI-COLS-ONE-UNIT",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "forceMultiColsFor",
+			"find": "if (wrapRulesField == null) return",
+			"replace": "if (true) return",
+			"note": "a source-multiline brace list charges one unit whatever its cascade says, so a list the cascade broke at 1 + additionalIndent moves back on the next pass"
+		},
+		{
+			"name": "M-CHAIN-INDENT-UNREPORTED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigDiagnostics",
+			"method": "collectWrappingIssues",
+			"find": "if (chain != null && chainStatesIndent(chain))",
+			"replace": "if (chain != null && false)",
+			"note": "an indent stated on a chain cascade is accepted silently though the chain emitters never read it"
+		},
+		{
+			"name": "M-TYPEDEF-BODY-TAKES-ANON-INDENT",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepStarExpr",
+			"find": "|| opt._inTypedefBody",
+			"replace": "",
+			"note": "a typedef body charges the anon-type cascade indent, which the fork never applies to a typedef RHS"
 		}
 	]
 }

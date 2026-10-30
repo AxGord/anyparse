@@ -59,17 +59,26 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 	}
 
 	/**
-	 * `additionalIndent` is a real per-rule haxe-formatter key hxq has
-	 * not wired, and `HxFormatWrapRule` knows only `type` / `location` /
-	 * `conditions` — none within two edits. Asserting the WHOLE phrase
-	 * pins the absence of a suggestion, which `stringContains` would not.
+	 * `HxFormatWrapRule` knows only `type` / `location` / `additionalIndent` /
+	 * `conditions`, and `priority` is within two edits of none of them. Asserting
+	 * the WHOLE phrase pins the absence of a suggestion, which `stringContains`
+	 * would not.
 	 */
 	public function testUnknownKeyInsideAWrapRuleIsReported(): Void {
 		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
-			'{"wrapping": {"arrayWrap": {"rules": [{"type": "onePerLine", "additionalIndent": 1}]}}}'
+			'{"wrapping": {"arrayWrap": {"rules": [{"type": "onePerLine", "priority": 1}]}}}'
 		);
 		Assert.equals(1, issues.keys.length);
-		Assert.equals('additionalIndent (l.1)', issues.keys[0]);
+		Assert.equals('priority (l.1)', issues.keys[0]);
+	}
+
+	/** A rule's `additionalIndent` is read by the loader, so it is no longer reported as having no effect. */
+	public function testRuleAdditionalIndentIsNotReported(): Void {
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
+			'{"wrapping": {"anonFunctionSignature": {"rules": [{"type": "fillLine", "additionalIndent": 1}]}}}'
+		);
+		Assert.equals(0, issues.keys.length);
+		Assert.equals(0, issues.wrapValues.length);
 	}
 
 	/** A near-miss is a typo, so name the field it almost spells. */
@@ -245,6 +254,17 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 	/** Nothing to say means nothing is said — the clean-config path must not print an empty header. */
 	public function testMessageIsNullWhenThereIsNothingToSay(): Void {
 		Assert.isNull(HaxeFormatConfigDiagnostics.message('/p/hxformat.json', { keys: [], wrapValues: [] }));
+	}
+
+	/** A chain emitter reads no indent, so a chain rule's `additionalIndent` is reported as having no effect. */
+	@:pin('control')
+	@:killer('M-CHAIN-INDENT-UNREPORTED')
+	public function testAChainRuleIndentIsReported(): Void {
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
+			'{"wrapping": {"opBoolChain": {"rules": [{"type": "onePerLine", "additionalIndent": 1}]}}}'
+		);
+		Assert.equals(1, issues.wrapValues.length);
+		Assert.stringContains('additionalIndent', issues.wrapValues[0]);
 	}
 
 }

@@ -210,6 +210,30 @@ class ChangeSigSliceTest extends Test {
 		assertChangeSig(source, 2, 18, '1,0', expected, true);
 	}
 
+	/**
+	 * PIN. Canonical in, canonical out: moving the long parameter to the front of a FILLED list moves where the writer
+	 * breaks it, and the slot swap used to keep the old break — a line the writer would have filled differently.
+	 *
+	 * The raw splice (the killing arm) answers `s(deltaepsilonzeta:Int, beta:String, gamma:Int,\n\t\ta:Int)`, which the writer
+	 * re-fills.
+	 */
+	@:pin('control')
+	@:killer('M-SIGNATURE-EDIT-RAW-SPLICE')
+	public function testAReorderThatMovesTheBreakComesBackCanonical(): Void {
+		final source: String = canonical(
+			'class S {\n\tfunction s(a:Int, beta:String, gamma:Int, deltaepsilonzeta:Int):Bool {\n\t\treturn true;\n\t}\n}\n'
+		);
+		Assert.isTrue(source.contains('gamma:Int,\n\t\t\tdeltaepsilonzeta:Int):Bool {'), 'the fixture starts wrapped:\n$source');
+		final text: String = switch changeSigOf(source, 2, 11, '3,1,2,0', NARROW) {
+			case Ok(t, _): t;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				'';
+		};
+		Assert.isTrue(text.contains('function s(deltaepsilonzeta:Int, beta:String'), 'the parameters were reordered:\n$text');
+		Assert.equals(canonical(text), text, 'and the file is canonical');
+	}
+
 	private function assertChangeSig(source: String, line: Int, col: Int, perm: String, expected: String, advisoryNonNull: Bool): Void {
 		final result: ChangeSigResult = changeSigOf(source, line, col, perm);
 		switch result {
@@ -224,30 +248,6 @@ class ChangeSigSliceTest extends Test {
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');
 		}
-	}
-
-	/**
-	 * PIN. Canonical in, canonical out: moving the long parameter to the front of a FILLED list moves where the writer
-	 * breaks it, and the slot swap used to keep the old break — a line the writer would have filled differently.
-	 *
-	 * The raw splice (the killing arm) answers `s(deltaepsilonzeta:Int, beta:String, gamma:Int,\n\t\ta:Int)`, which the writer
-	 * re-fills.
-	 */
-	@:pin('control')
-	@:killer('M-SIGNATURE-EDIT-RAW-SPLICE')
-	public function testAReorderThatMovesTheBreakComesBackCanonical(): Void {
-		final source: String = canonical(
-			'class S {\n\tfunction s(a:Int, beta:String, gamma:Int, deltaepsilonzeta:Int):Bool {\n\t\treturn true;\n\t}\n}\n'
-		);
-		Assert.isTrue(source.contains('gamma:Int,\n\t\tdeltaepsilonzeta:Int):Bool {'), 'the fixture starts wrapped:\n$source');
-		final text: String = switch changeSigOf(source, 2, 11, '3,1,2,0', NARROW) {
-			case Ok(t, _): t;
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-				'';
-		};
-		Assert.isTrue(text.contains('function s(deltaepsilonzeta:Int, beta:String'), 'the parameters were reordered:\n$text');
-		Assert.equals(canonical(text), text, 'and the file is canonical');
 	}
 
 	private function assertRefused(source: String, line: Int, col: Int, perm: String): Void {

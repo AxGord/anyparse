@@ -150,7 +150,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | module | inventory flags it names |
 |---|---|
 | `WriterRefFieldLowering` | 45 |
-| `WriterTriviaStarDispatch` | 44 |
+| `WriterTriviaStarDispatch` | 43 |
 | `WriterStarEmitLowering` | 41 |
 | `WriterKwRefLowering` | 31 |
 | `WriterTriviaStarEmitLowering` | 28 |
@@ -168,10 +168,10 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `Lowering` | 4 |
 | `StarFieldLowering` | 3 |
 | `WriterBodyPolicyLowering` | 3 |
+| `WriterLoweringSupport` | 3 |
 | `WriterCodegen` | 2 |
 | `WriterBlankLowering` | 2 |
 | `WriterCondWrapLowering` | 2 |
-| `WriterLoweringSupport` | 2 |
 | `WriterTriviaSlotLowering` | 2 |
 | `StructFieldTrailLowering` | 1 |
 | `TriviaPairConverters` | 1 |
