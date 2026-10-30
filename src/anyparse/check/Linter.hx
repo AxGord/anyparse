@@ -162,6 +162,7 @@ import anyparse.check.common.nullsafety.AlwaysNullComparison;
 import anyparse.check.common.nullsafety.DeadNullCoalescing;
 import anyparse.check.common.nullsafety.DeadNullGuard;
 import anyparse.check.common.nullsafety.DeadSafeNav;
+import anyparse.check.common.nullsafety.GroupSafeNav;
 import anyparse.check.common.nullsafety.NullDereference;
 import anyparse.check.common.nullsafety.NullableSwitchMissingNull;
 import anyparse.check.common.nullsafety.PossibleNullDereference;
@@ -205,6 +206,7 @@ import anyparse.check.haxe.loops.PreferCount;
 import anyparse.check.haxe.loops.PreferExists;
 import anyparse.check.haxe.loops.PreferFind;
 import anyparse.check.haxe.loops.PreferForeach;
+import anyparse.check.haxe.loops.PreferMapBind;
 import anyparse.check.haxe.loops.PreferMapLiteral;
 import anyparse.check.haxe.members.StaticInitOrder;
 import anyparse.check.haxe.nullsafety.NullSafetyStrict;
@@ -290,6 +292,7 @@ final class Linter {
 			new PreferNullCoalescing(),
 			new PreferArrayLiteral(),
 			new PreferMapLiteral(),
+			new PreferMapBind(),
 			new PreferMapType(),
 			// Ahead of `fold-adjacent-string-literals` (registered near the top, above) in
 			// READING order only — not load-bearing, `lint --fix` iterates to a fixed point
@@ -450,6 +453,7 @@ final class Linter {
 			new OptionalParamShorthand(),
 			new PreferFinalClass(),
 			new PreferSafeNav(),
+			new GroupSafeNav(),
 			new PreferSafeNavComparison(),
 			new EnglishComments(),
 			// Beside `english-comments`, and disjoint from it by what each reads: that rule flags a

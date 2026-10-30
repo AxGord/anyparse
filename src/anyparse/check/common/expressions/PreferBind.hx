@@ -5,6 +5,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.IndexScope;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -92,12 +93,67 @@ final class PreferBind extends RuleBase {
 		return CheckScan.applyTextMatches(plugin, source, violations, (tree, text) -> matches(tree, file, text, seams, plugin, scope));
 	}
 
+	/**
+	 * The partial application of a call in `tree`, for a rule that spells another callback as one: given the call and the
+	 * index of the argument the callback itself supplies, `bindSpelling`'s text when the callee and every other argument
+	 * pass the proof a `() -> f(a, b)` wrapper does — the same value at creation and at each call, at no cost — else
+	 * null. The supplied argument is the caller's to prove. Null when the grammar lacks the seams.
+	 */
+	public static function partialApplication(
+		tree: QueryNode, file: String, source: String, plugin: GrammarPlugin, index: String -> Null<SymbolIndex>
+	): Null<(QueryNode, Int) -> Null<String>> {
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return null;
+		final ctx: Ctx = contextOf(tree, file, source, seams, plugin, index);
+		final callKind: String = seams.callKind;
+		return (call, free) -> {
+			if (call.kind != callKind || free < 0 || free >= call.children.length - 1) return null;
+			for (i in 1...call.children.length) if (i - 1 != free && !stableArg(call.children[i], ctx)) return null;
+			return stableCallee(call.children[0], ctx) ? bindSpelling(call, free, source) : null;
+		};
+	}
+
+	/**
+	 * A memoised index lookup that COVERS the file asked about: the plugin's resolution scope when it
+	 * holds that file — the one `run` proves against, and wider than the per-pass index `--fix` hands in
+	 * — else the caller's `given` index, else one built over `files`. A file outside the resolution
+	 * roots would otherwise find no declarations at all and every callee would be refused.
+	 */
+	public static function coveringIndex(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?given: SymbolIndex
+	): String -> Null<SymbolIndex> {
+		var wide: Null<SymbolIndex> = null;
+		var widened: Bool = false;
+		var own: Null<SymbolIndex> = given;
+		function covering(file: String): Null<SymbolIndex> {
+			if (!widened) {
+				wide = IndexScope.resolutionIndexOf(plugin);
+				widened = true;
+			}
+			final scope: Null<SymbolIndex> = wide;
+			if (scope != null && scope.fileInfo(file) != null) return scope;
+			final built: SymbolIndex = own ?? IndexScope.report(files, plugin);
+			own = built;
+			return built;
+		}
+		return covering;
+	}
+
 	/** Every bindable lambda under `tree` with its rewrite — the outermost one of a nest only. */
 	private static function matches(
 		tree: QueryNode, file: String, source: String, seams: Seams, plugin: GrammarPlugin, index: String -> Null<SymbolIndex>
 	): Array<{ span: Span, text: String }> {
+		final out: Array<{ span: Span, text: String }> = [];
+		walk(tree, source, contextOf(tree, file, source, seams, plugin, index), out);
+		return out;
+	}
+
+	/** One file's `Ctx` over `tree`, the index and the operand binder left to be built on first use. */
+	private static function contextOf(
+		tree: QueryNode, file: String, source: String, seams: Seams, plugin: GrammarPlugin, index: String -> Null<SymbolIndex>
+	): Ctx {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		final ctx: Ctx = {
+		return {
 			seams: seams,
 			root: tree,
 			file: file,
@@ -107,9 +163,6 @@ final class PreferBind extends RuleBase {
 			declaredTypes: provider?.declaredTypes(source) ?? [],
 			binder: null
 		};
-		final out: Array<{ span: Span, text: String }> = [];
-		walk(tree, source, ctx, out);
-		return out;
 	}
 
 	private static function walk(node: QueryNode, source: String, ctx: Ctx, out: Array<{ span: Span, text: String }>): Void {
@@ -271,9 +324,7 @@ final class PreferBind extends RuleBase {
 
 	/** Whether a declaration of `kind` binds a local or a parameter — not a field, whose value any code may change. */
 	private static function isLocalOrParam(kind: String, shape: RefShape): Bool {
-		return (shape.localDeclKinds ?? []).contains(kind)
-			|| (shape.localDeclContinuationKinds ?? []).contains(kind)
-			|| (shape.paramKinds ?? []).contains(kind);
+		return ShapeVocab.localOrParamKinds(shape).contains(kind);
 	}
 
 	/** Whether a string-literal node carries no interpolation (every child, if any, is plain literal text). */
@@ -285,7 +336,15 @@ final class PreferBind extends RuleBase {
 	/** `callee.bind(arg, …)` built from the lambda's wrapped call, or null if it is not bindable. */
 	private static function rewrite(node: QueryNode, source: String, ctx: Ctx): Null<String> {
 		final call: Null<QueryNode> = bindableCall(node, ctx);
-		if (call == null) return null;
+		return call == null ? null : bindSpelling(call, -1, source);
+	}
+
+	/**
+	 * `callee.bind(arg, …)` spelled from `call`'s own text, the argument at `free` (an index among the arguments, or -1
+	 * for none) left to the caller of the bound function: `_` in its slot, dropped when it is the last argument, and
+	 * the bare callee when it is the only one. Null when a node carries no span.
+	 */
+	private static function bindSpelling(call: QueryNode, free: Int, source: String): Null<String> {
 		final calleeSpan: Null<Span> = call.children[0].span;
 		if (calleeSpan == null) return null;
 		final callee: String = source.substring(calleeSpan.from, calleeSpan.to);
@@ -293,35 +352,10 @@ final class PreferBind extends RuleBase {
 		for (i in 1...call.children.length) {
 			final argSpan: Null<Span> = call.children[i].span;
 			if (argSpan == null) return null;
-			args.push(source.substring(argSpan.from, argSpan.to));
+			args.push(i - 1 == free ? '_' : source.substring(argSpan.from, argSpan.to));
 		}
-		return '$callee.bind(${args.join(', ')})';
-	}
-
-	/**
-	 * A memoised index lookup that COVERS the file asked about: the plugin's resolution scope when it
-	 * holds that file — the one `run` proves against, and wider than the per-pass index `--fix` hands in
-	 * — else the caller's `given` index, else one built over `files`. A file outside the resolution
-	 * roots would otherwise find no declarations at all and every callee would be refused.
-	 */
-	private static function coveringIndex(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?given: SymbolIndex
-	): String -> Null<SymbolIndex> {
-		var wide: Null<SymbolIndex> = null;
-		var widened: Bool = false;
-		var own: Null<SymbolIndex> = given;
-		function covering(file: String): Null<SymbolIndex> {
-			if (!widened) {
-				wide = IndexScope.resolutionIndexOf(plugin);
-				widened = true;
-			}
-			final scope: Null<SymbolIndex> = wide;
-			if (scope != null && scope.fileInfo(file) != null) return scope;
-			final built: SymbolIndex = own ?? IndexScope.report(files, plugin);
-			own = built;
-			return built;
-		}
-		return covering;
+		if (free == args.length - 1) args.pop();
+		return args.length == 0 ? callee : '$callee.bind(${args.join(', ')})';
 	}
 
 	/** Resolve the lambda / call seam kinds, or null when either is unset. */

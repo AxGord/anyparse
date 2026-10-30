@@ -2,6 +2,7 @@ package anyparse.check.scan;
 
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
+import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
 
 /** An integer sum of operands plus a constant: `len - k + 1` is `{len: 1, k: -1}` and `1`, each operand by its storage key. */
@@ -28,7 +29,7 @@ typedef OrderContext = {
 	final writes: Array<WriteSite>;
 	final effects: CallEffects;
 	final calls: Array<CallSite>;
-	final functions: Array<Span>;
+	final locals: UnchangedLocal;
 	final survivors: Map<String, Bool>;
 };
 
@@ -119,14 +120,10 @@ final class OrderGuards {
 	/** One file's inputs: its tree and source, every write and call in it, and what `effects` knows of the calls. */
 	public static function contextOf(tree: QueryNode, source: String, seams: OrderSeams, effects: CallEffects): OrderContext {
 		final calls: Array<CallSite> = [];
-		final functions: Array<Span> = [];
 		function walk(node: QueryNode, within: Null<Span>): Void {
 			final span: Null<Span> = node.span;
 			var inner: Null<Span> = within;
-			if (span != null && seams.barrierKinds.contains(node.kind)) {
-				functions.push(span);
-				inner = span;
-			}
+			if (span != null && seams.barrierKinds.contains(node.kind)) inner = span;
 			if (span != null && seams.callKinds.contains(node.kind)) {
 				final at: Span = span;
 				calls.push({ node: node, span: at, within: within });
@@ -134,14 +131,15 @@ final class OrderGuards {
 			for (c in node.children) walk(c, inner);
 		}
 		walk(tree, null);
+		final locals: UnchangedLocal = new UnchangedLocal(tree, seams.shape);
 		return {
 			seams: seams,
 			tree: tree,
 			source: source,
-			writes: WriteSites.of(tree, seams.shape),
+			writes: locals.writes,
 			effects: effects,
 			calls: calls,
-			functions: functions,
+			locals: locals,
 			survivors: []
 		};
 	}
@@ -331,26 +329,7 @@ final class OrderGuards {
 		final kids: Array<QueryNode> = node.children;
 		if (node.kind == seams.parenKind && kids.length == 1) return survivesCalls(kids[0], ctx);
 		if (seams.memberKinds.contains(node.kind) && kids.length == 1) return survivesCalls(kids[0], ctx) && ctx.effects.immutable(kids[0]);
-		final name: Null<String> = node.name;
-		final span: Null<Span> = node.span;
-		if (node.kind != seams.shape.identKind || name == null || span == null || name == seams.shape.selfReferenceText) return false;
-		final binding: Null<Int> = Refs.bindingAt(name, span.from, ctx.tree, seams.shape);
-		final key: Null<String> = WriteSites.accessPath(node, ctx.tree, seams.shape);
-		return binding != null
-			&& key != null
-			&& ctx.functions.exists(f -> f.from < binding && binding < f.to)
-			&& !captured(key, binding, ctx);
-	}
-
-	/** Whether a function literal or local function that does not declare the local at `binding` writes it: a call may run it. */
-	private static function captured(key: String, binding: Int, ctx: OrderContext): Bool {
-		for (w in ctx.writes) {
-			final written: Null<String> = w.path;
-			final at: Null<Span> = w.node.span;
-			if (at == null || (written != null && !WriteSites.mayOverlap(written, key, false))) continue;
-			if (ctx.functions.exists(f -> f.from <= at.from && at.from < f.to && !(f.from <= binding && binding < f.to))) return true;
-		}
-		return false;
+		return ctx.locals.survivesCalls(node);
 	}
 
 	/** Whether `at` lies in the code a write or call there may change `bound` from: its region or the condition that proved it. */

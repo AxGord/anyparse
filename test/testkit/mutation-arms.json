@@ -8739,7 +8739,7 @@
 			"name": "M-GRAPH-ADOPT-UNRECORDED",
 			"type": "anyparse.query.CallGraph",
 			"method": "addFiles",
-			"find": "reading?.recordAdopted(this, adopted);",
+			"find": "reading.recordAdopted(this, adopted);",
 			"replace": "",
 			"note": "a method a build macro made is a node with no facts recorded, so neither what it runs nor what it touches is seen"
 		},
@@ -13442,7 +13442,7 @@
 			"name": "M-GRAPH-INIT-RECORD",
 			"type": "anyparse.query.CallGraph",
 			"method": "addFiles",
-			"find": "reading?.recordInitializers(this, [for (id in _initFiles.keys()) id]);",
+			"find": "reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);",
 			"replace": "",
 			"note": "(precision) a field initializer is read by its syntax, which admits every implicitly-called member"
 		},
@@ -27066,8 +27066,8 @@
 			"name": "M-CG-DISPATCH-MEMO-LEAKS",
 			"type": "anyparse.query.CallGraph",
 			"method": "addFiles",
-			"find": "\t_dispatchMemo = null;\n\treading?.recordAdopted(this, adopted);",
-			"replace": "\treading?.recordAdopted(this, adopted);",
+			"find": "\t_dispatchMemo = null;\n\tif (reading != null) {",
+			"replace": "\tif (reading != null) {",
 			"note": "the dispatch memo outlives the edges it was kept for: a query after a file is taken out answers the overrides read before"
 		},
 		{
@@ -33027,8 +33027,8 @@
 		},
 		{
 			"name": "M-ORDERGUARD-CAPTURE-IGNORED",
-			"type": "anyparse.check.scan.OrderGuards",
-			"method": "captured",
+			"type": "anyparse.query.UnchangedLocal",
+			"method": "writtenByLiteral",
 			"force": "false",
 			"note": "a local a function literal writes reads as one no call changes, so calling that literal keeps a bound it voided"
 		},
@@ -33397,6 +33397,30 @@
 			"find": "} else if (token == SEPARATOR && _separator == Refused) {",
 			"replace": "} else if (false) {",
 			"note": "every spec admits a bare `--`, so `fmt --list -- F.hx` runs and a parser with no `--` arm drops it silently"
+		},
+		{
+			"name": "M-UNCHANGED-LOCAL-CLOSURE-BLIND",
+			"type": "anyparse.query.UnchangedLocal",
+			"method": "holds",
+			"find": "if (local == null || writtenByLiteral(local)) return false;",
+			"replace": "if (local == null) return false;",
+			"note": "a function literal writing the local is called by the run and changes it between two reads"
+		},
+		{
+			"name": "M-PMB-ANY-ITERABLE",
+			"type": "anyparse.check.haxe.loops.PreferMapBind",
+			"method": "matches",
+			"find": "seams.arrayTypeNames.contains(type)",
+			"replace": "true",
+			"note": "a List comprehension becomes ls.map, which returns a List"
+		},
+		{
+			"name": "M-GSN-VALUE-TAIL",
+			"type": "anyparse.check.common.nullsafety.GroupSafeNav",
+			"method": "collectRuns",
+			"find": "roots.length < 2 || (tailUsed && last == kids.length - 1)",
+			"replace": "roots.length < 2",
+			"note": "a run that is a used block's value is wrapped in a Void guard, which no longer compiles"
 		}
 	]
 }

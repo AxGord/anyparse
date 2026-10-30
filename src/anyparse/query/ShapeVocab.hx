@@ -37,6 +37,14 @@ final class ShapeVocab {
 	}
 
 	/**
+	 * Every declaration binding a local or a parameter — `localDeclKinds`, `localDeclContinuationKinds` and `paramKinds`,
+	 * each once: a binding only its own function can write, unlike a field any code may change.
+	 */
+	public static function localOrParamKinds(shape: RefShape): Array<String> {
+		return union([shape.localDeclKinds, shape.localDeclContinuationKinds, shape.paramKinds]);
+	}
+
+	/**
 	 * The local function STATEMENTS — `localFunctionKinds` and `inlineFunctionKinds`, each once: the scope reading of a
 	 * local function, which the grammar splits because an `inline` one is no complexity unit of its own.
 	 */

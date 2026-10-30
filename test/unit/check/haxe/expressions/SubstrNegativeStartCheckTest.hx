@@ -127,6 +127,11 @@ class SubstrNegativeStartCheckTest extends Test {
 		Assert.equals(1, violations(members('var q = 5; final dec = () -> q--; if (q > k) { dec(); t = s.substr(q - k); }')).length);
 	}
 
+	/** A local `function` statement writing the local is as much a callee that changes it as a lambda is. */
+	public function testLocalFunctionWriteVoidsTheBound(): Void {
+		Assert.equals(1, violations(members('var q = 5; function dec(): Void q--; if (q > k) { dec(); t = s.substr(q - k); }')).length);
+	}
+
 	/** An effect-free std call changes nothing, so the bound stands. */
 	@:pin('control')
 	@:killer('M-ORDERGUARD-EFFECT-FREE-IGNORED')

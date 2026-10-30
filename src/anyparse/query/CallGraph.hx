@@ -342,12 +342,6 @@ final class CallGraph {
 	/** The types that gained a node during the current `addFiles`. */
 	private final _grownTypes: Array<String> = [];
 
-	/**
-	 * `<type>\t<member>` -> its `virtualTargets`, kept only while `addFiles` records the edges of its files: no member and no
-	 * type is added or taken out meanwhile, and a call site per dispatch otherwise walks the type's whole subtree again.
-	 */
-	private var _dispatchMemo: Null<Map<String, Array<String>>> = null;
-
 	/** File -> the function-like nodes whose first declaration it holds: what taking the file out removes. */
 	private final _fileNodes: Map<String, Array<FnNode>> = [];
 
@@ -375,6 +369,12 @@ final class CallGraph {
 	private final _plugin: GrammarPlugin;
 	private final _shape: RefShape;
 	private final _provider: Null<TypeInfoProvider>;
+
+	/**
+	 * `<type>\t<member>` -> its `virtualTargets`, kept only while `addFiles` records the edges of its files: no member and no
+	 * type is added or taken out meanwhile, and a call site per dispatch otherwise walks the type's whole subtree again.
+	 */
+	private var _dispatchMemo: Null<Map<String, Array<String>>> = null;
 
 	private function new(
 		plugin: GrammarPlugin, shape: RefShape, provider: Null<TypeInfoProvider>, types: CallGraphTypes, facts: Null<CallGraphFacts>,
@@ -456,6 +456,11 @@ final class CallGraph {
 		indexEdge(edge);
 	}
 
+	/** The written return types of the file text `source`, by declaration offset (`CallGraphNames.returnSourcesOf`). */
+	public inline function returnSourcesIn(source: String): Map<Int, String> {
+		return CallGraphNames.returnSourcesOf(_plugin, source);
+	}
+
 	/**
 	 * The written bounds of type parameter `name` as `id` sees it: a function, its own or an enclosing one's (a lambda's) or —
 	 * unless `functionsOnly` — its type's; a type, its own (empty if declarations differ). Empty if unbounded, null for none.
@@ -495,11 +500,6 @@ final class CallGraph {
 	/** The source of `file`, or null when the graph does not hold it. */
 	public function sourceOf(file: String): Null<String> {
 		return _entries[CallGraphNames.normalizePath(file)]?.source;
-	}
-
-	/** The written return types of the file text `source`, by declaration offset (`CallGraphNames.returnSourcesOf`). */
-	public inline function returnSourcesIn(source: String): Map<Int, String> {
-		return CallGraphNames.returnSourcesOf(_plugin, source);
 	}
 
 	/** The innermost declaration of a function-like node in `file` whose span contains `offset`, or null outside every function. */
@@ -617,9 +617,11 @@ final class CallGraph {
 			throw exception;
 		}
 		_dispatchMemo = null;
-		reading?.recordAdopted(this, adopted);
-		// the field initializers of every type read so far, which the facts read whole once its files are in
-		reading?.recordInitializers(this, [for (id in _initFiles.keys()) id]);
+		if (reading != null) {
+			reading.recordAdopted(this, adopted);
+			// the field initializers of every type read so far, which the facts read whole once its files are in
+			reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);
+		}
 		_wiring.markGrownChains(_grownTypes);
 		_wiring.wire((from, to, kind, file, span) -> addEdge(from, to, kind, null, file, span));
 	}
@@ -670,6 +672,27 @@ final class CallGraph {
 		return found;
 	}
 
+	/**
+	 * The placeholder for `typeName.member`, a target whose body the graph does not hold (upgraded in place when
+	 * the file declaring it arrives) — or, with
+	 * `interfaceDeclared`, the body-less node standing for an accessor an interface's property implies but never
+	 * declares: a call of it dispatches to the implementations and runs nothing of its own.
+	 */
+	public function externalNode(typeName: String, member: String, interfaceDeclared: Bool = false): String {
+		final id: String = '$typeName.$member';
+		if (!nodes.exists(id)) nodes[id] = {
+			id: id,
+			file: '',
+			typeName: typeName,
+			name: member,
+			span: null,
+			isExternal: !interfaceDeclared,
+			isDynamic: false,
+			isBodyless: interfaceDeclared
+		};
+		return id;
+	}
+
 	/** `virtualTargets` read anew: a walk over every loaded subtype of `typeName`. */
 	private function dispatchTargets(typeName: String, member: String): Array<String> {
 		final result: Array<String> = [];
@@ -692,27 +715,6 @@ final class CallGraph {
 			}
 		}
 		return result;
-	}
-
-	/**
-	 * The placeholder for `typeName.member`, a target whose body the graph does not hold (upgraded in place when
-	 * the file declaring it arrives) — or, with
-	 * `interfaceDeclared`, the body-less node standing for an accessor an interface's property implies but never
-	 * declares: a call of it dispatches to the implementations and runs nothing of its own.
-	 */
-	public function externalNode(typeName: String, member: String, interfaceDeclared: Bool = false): String {
-		final id: String = '$typeName.$member';
-		if (!nodes.exists(id)) nodes[id] = {
-			id: id,
-			file: '',
-			typeName: typeName,
-			name: member,
-			span: null,
-			isExternal: !interfaceDeclared,
-			isDynamic: false,
-			isBodyless: interfaceDeclared
-		};
-		return id;
 	}
 
 	/**
