@@ -140,6 +140,7 @@ import anyparse.check.common.members.ModifierOrder;
 import anyparse.check.common.members.OptionalParamShorthand;
 import anyparse.check.common.members.OrphanAccessor;
 import anyparse.check.common.members.OverriddenInline;
+import anyparse.check.common.members.PreferAccessMeta;
 import anyparse.check.common.members.PreferEnumAbstract;
 import anyparse.check.common.members.PreferFinalClass;
 import anyparse.check.common.members.PreferFinalField;
@@ -180,6 +181,7 @@ import anyparse.check.common.types.ExplicitLocalType;
 import anyparse.check.common.types.ExplicitType;
 import anyparse.check.common.types.ImpossibleCast;
 import anyparse.check.common.types.ImpossibleIsCheck;
+import anyparse.check.common.types.MapAsSet;
 import anyparse.check.common.types.PreferTypedThrow;
 import anyparse.check.common.types.RedundantAscription;
 import anyparse.check.common.types.RedundantCast;
@@ -446,6 +448,8 @@ final class Linter {
 			// ternary. Disjoint from `prefer-null-coalescing` by CONDITION — that one wants a
 			// null comparison, this one an `exists` call.
 			new RedundantMapExists(),
+			new MapAsSet(),
+			new PreferAccessMeta(),
 			new CatchDynamic(),
 			new PreferCaseWildcard(),
 			new PreferCaseGuard(),

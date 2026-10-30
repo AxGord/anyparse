@@ -62,6 +62,9 @@ final class MapValueScan {
 	/** The one Map member that STORES a value — `m.set(k, v)`, whose value needs the non-null proof. */
 	private static inline final SET_METHOD: String = 'set';
 
+	/** The boolean literal every value of a set of keys holds (`MapClaim.KeySet`). */
+	private static inline final TRUE_LITERAL: String = 'true';
+
 	/** `set(key, value)` plus the callee child: the exact child count of a storing call. */
 	private static inline final SET_CALL_CHILDREN: Int = 3;
 
@@ -86,6 +89,12 @@ final class MapValueScan {
 		'toString',
 		'copy'
 	];
+
+	/**
+	 * The Map members a SET of keys may be used through: membership, the keys, removal, a copy. A value read (`get`) answers
+	 * `true` or `null`, which is membership again; `iterator` / `keyValueIterator` / `toString` read the values as values.
+	 */
+	private static final KEY_SET_METHODS: Array<String> = ['get', 'exists', 'keys', 'remove', 'clear', 'copy'];
 
 	/**
 	 * The seams the census reads, or null when the grammar leaves a required one unset — in
@@ -124,13 +133,15 @@ final class MapValueScan {
 			iterationKinds: shape.iterationBindingKinds ?? [],
 			writeParentKinds: shape.writeParentKinds,
 			typeAnnotationKinds: shape.typeAnnotationKinds ?? [],
-			nonNullLiteralKinds: nonNullLiteralKinds
+			nonNullLiteralKinds: nonNullLiteralKinds,
+			boolLitKind: shape.boolLitKind
 		};
 	}
 
 	/**
 	 * Whether the map named `name` and declared at offset `bindingFrom` of `source` can be
-	 * proven never to hold a null VALUE.
+	 * proven never to hold a null VALUE — or, with `claim` `KeySet`, to be a set of its keys: the
+	 * same census, every stored value the literal `true` and no use reading a value as a value.
 	 *
 	 * The census is OWNER-scoped, not name-scoped, and that distinction is load-bearing: a
 	 * walk over every file that merely MENTIONS the name reads a same-named binding in an
@@ -143,12 +154,14 @@ final class MapValueScan {
 	 * `@:access` grantee — the same three doors `prefer-final-field` closes.
 	 */
 	public static function proven(
-		name: String, bindingFrom: Int, source: String, root: QueryNode, index: Null<SymbolIndex>, plugin: GrammarPlugin, seams: ValueSeams
+		name: String, bindingFrom: Int, source: String, root: QueryNode, index: Null<SymbolIndex>, plugin: GrammarPlugin,
+		seams: ValueSeams, ?claim: MapClaim
 	): Bool {
+		final asked: MapClaim = claim ?? NoNullValue;
 		if (MemberWriteScan.carriesBuildMacro(source)) return false;
 		final decl: Null<Decl> = locate(root, null, -1, null, bindingFrom, seams);
 		if (decl == null) return false;
-		if (!subtreeSafe(root, null, -1, null, -1, name, 0, source.length, seams)) return false;
+		if (!subtreeSafe(root, null, -1, null, -1, name, 0, source.length, seams, asked)) return false;
 		final owner: Null<String> = decl.owner;
 		// A local is unreachable outside the file just censused; a member needs the three
 		// cross-file doors closed.
@@ -162,7 +175,7 @@ final class MapValueScan {
 			&& !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
 				if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
 				final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, src);
-				return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams);
+				return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams, asked);
 			});
 	}
 
@@ -213,24 +226,25 @@ final class MapValueScan {
 	 */
 	private static function subtreeSafe(
 		node: QueryNode, parent: Null<QueryNode>, parentSlot: Int, grand: Null<QueryNode>, grandSlot: Int, name: String, from: Int,
-		to: Int, seams: ValueSeams
+		to: Int, seams: ValueSeams, claim: MapClaim
 	): Bool {
 		final span: Null<Span> = node.span;
 		final inRange: Bool = span == null || (span.from >= from && span.from < to);
-		if (node.name == name && inRange && !occurrenceSafe(node, parent, parentSlot, grand, grandSlot, seams)) return false;
-		for (i in 0...node.children.length) if (!subtreeSafe(node.children[i], node, i, parent, parentSlot, name, from, to, seams))
+		if (node.name == name && inRange && !occurrenceSafe(node, parent, parentSlot, grand, grandSlot, seams, claim)) return false;
+		for (i in 0...node.children.length) if (!subtreeSafe(node.children[i], node, i, parent, parentSlot, name, from, to, seams, claim))
 			return false;
 		return true;
 	}
 
-	/** Whether the single occurrence `node` sits in one of the six safe slots. */
+	/** Whether the single occurrence `node` sits in one of the six safe slots — the iterable slot never for a set of keys. */
 	private static function occurrenceSafe(
-		node: QueryNode, parent: Null<QueryNode>, parentSlot: Int, grand: Null<QueryNode>, grandSlot: Int, seams: ValueSeams
+		node: QueryNode, parent: Null<QueryNode>, parentSlot: Int, grand: Null<QueryNode>, grandSlot: Int, seams: ValueSeams,
+		claim: MapClaim
 	): Bool {
 		// Slot 1 — the declaration. A parameter is deliberately NOT one: the map then comes
 		// from a caller the census cannot see.
 		if (seams.declKinds.contains(node.kind))
-			return node.children.length == 0 || (node.children.length == 1 && provenMapExpr(node.children[0], seams));
+			return node.children.length == 0 || (node.children.length == 1 && provenMapExpr(node.children[0], seams, claim));
 		if (seams.paramKinds.contains(node.kind)) return false;
 		// Any OTHER node the grammar happens to name the same — a method, a loop binder, a
 		// type — is a shadow or an unrelated declaration, and fails closed.
@@ -243,13 +257,16 @@ final class MapValueScan {
 		// key-value binder occupies a slot of its own that a plain binder does not.
 		// Slot 6 — a whole-map assignment.
 		return if (p.kind == seams.indexAccessKind && parentSlot == 0)
-			indexSlotSafe(grand, grandSlot, seams)
+			indexSlotSafe(grand, grandSlot, seams, claim)
 		else if (p.kind == seams.fieldAccessKind && parentSlot == 0 && grand != null && grand.kind == seams.callKind && grandSlot == 0)
-			memberCallSlotSafe(p.name, grand, seams)
+			memberCallSlotSafe(p.name, grand, seams, claim)
 		else if (seams.iterationKinds.contains(p.kind))
-			parentSlot == p.children.length - 2
+			claim == NoNullValue && parentSlot == p.children.length - 2
 		else
-			p.kind == seams.assignKind && parentSlot == 0 && p.children.length == ASSIGN_CHILD_COUNT && provenMapExpr(p.children[1], seams);
+			p.kind == seams.assignKind
+				&& parentSlot == 0
+				&& p.children.length == ASSIGN_CHILD_COUNT
+				&& provenMapExpr(p.children[1], seams, claim);
 	}
 
 	/**
@@ -258,23 +275,23 @@ final class MapValueScan {
 	 * increment READS the stored value and writes back a derived one, which no literal gate
 	 * can prove non-null.
 	 */
-	private static function indexSlotSafe(grand: Null<QueryNode>, grandSlot: Int, seams: ValueSeams): Bool {
+	private static function indexSlotSafe(grand: Null<QueryNode>, grandSlot: Int, seams: ValueSeams, claim: MapClaim): Bool {
 		if (grand == null) return true;
 		final g: QueryNode = grand;
 		return g.kind == seams.assignKind && grandSlot == 0
-			? g.children.length == ASSIGN_CHILD_COUNT && provenNonNullValue(g.children[1], seams)
+			? g.children.length == ASSIGN_CHILD_COUNT && provenValue(g.children[1], seams, claim)
 			: !seams.writeParentKinds.contains(g.kind);
 	}
 
 	/**
 	 * Whether a call of the map's member `method` is a safe slot: one of the members that can
-	 * only read or REMOVE always is, `set(k, v)` only with a proven non-null value, and any
-	 * other name — a static extension, a foreign member — fails closed.
+	 * only read or REMOVE always is (for a set of keys, one of `KEY_SET_METHODS`), `set(k, v)` only
+	 * with a proven value, and any other name — a static extension, a foreign member — fails closed.
 	 */
-	private static function memberCallSlotSafe(method: Null<String>, call: QueryNode, seams: ValueSeams): Bool {
+	private static function memberCallSlotSafe(method: Null<String>, call: QueryNode, seams: ValueSeams, claim: MapClaim): Bool {
 		return method != null
-			&& (READ_ONLY_METHODS.contains(method)
-				|| (method == SET_METHOD && call.children.length == SET_CALL_CHILDREN && provenNonNullValue(call.children[2], seams)));
+			&& ((claim == NoNullValue ? READ_ONLY_METHODS : KEY_SET_METHODS).contains(method)
+				|| (method == SET_METHOD && call.children.length == SET_CALL_CHILDREN && provenValue(call.children[2], seams, claim)));
 	}
 
 	/**
@@ -283,7 +300,7 @@ final class MapValueScan {
 	 * An empty literal qualifies trivially; a construction taking VALUE arguments does not,
 	 * since those could carry an existing map's contents.
 	 */
-	private static function provenMapExpr(expr: QueryNode, seams: ValueSeams): Bool {
+	private static function provenMapExpr(expr: QueryNode, seams: ValueSeams, claim: MapClaim): Bool {
 		final node: QueryNode = BoolExprShape.unwrapParens(expr, seams.parenKind);
 		if (node.kind == seams.newExprKind) {
 			return node.children.foreach(c -> seams.typeAnnotationKinds.contains(c.kind));
@@ -292,14 +309,19 @@ final class MapValueScan {
 		final entryKind: Null<String> = seams.mapLiteralEntryKind;
 		for (c in node.children) {
 			if (entryKind == null || c.kind != entryKind || c.children.length != ENTRY_CHILD_COUNT) return false;
-			if (!provenNonNullValue(c.children[1], seams)) return false;
+			if (!provenValue(c.children[1], seams, claim)) return false;
 		}
 		return true;
 	}
 
-	/** Whether `expr` is a literal form that cannot evaluate to null. */
-	private static function provenNonNullValue(expr: QueryNode, seams: ValueSeams): Bool {
-		return seams.nonNullLiteralKinds.contains(BoolExprShape.unwrapParens(expr, seams.parenKind).kind);
+	/** Whether `expr` is a value `claim` admits: a literal form that cannot evaluate to null, or for a set of keys the literal `true`. */
+	private static function provenValue(expr: QueryNode, seams: ValueSeams, claim: MapClaim): Bool {
+		final value: QueryNode = BoolExprShape.unwrapParens(expr, seams.parenKind);
+		return switch claim {
+			case NoNullValue: seams.nonNullLiteralKinds.contains(value.kind);
+			case KeySet:
+				value.kind == seams.boolLitKind && value.name == TRUE_LITERAL;
+		};
 	}
 
 }
@@ -335,4 +357,19 @@ typedef ValueSeams = {
 	final writeParentKinds: Array<String>;
 	final typeAnnotationKinds: Array<String>;
 	final nonNullLiteralKinds: Array<String>;
+	final boolLitKind: Null<String>;
 };
+
+/** What the census proves of every value a map can hold (`MapValueScan.proven`). */
+enum MapClaim {
+
+	/** No value is null: every stored value is a literal that cannot be. */
+	NoNullValue;
+
+	/**
+	 * The map is a SET of its keys: every stored value is the literal `true`, and no use reads a value as anything but
+	 * membership.
+	 */
+	KeySet;
+
+}

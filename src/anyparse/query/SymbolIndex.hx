@@ -1213,4 +1213,9 @@ final class SymbolIndex {
 		return bound == null || bound.exists(name -> names.contains(name));
 	}
 
+	/** The dotted path of the declaration `r` — its package, then its name — the form a grant or a message names a type by. */
+	public static function typePath(r: ResolvedType): String {
+		return r.file.pkg == '' ? r.type.name : '${r.file.pkg}.${r.type.name}';
+	}
+
 }

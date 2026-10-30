@@ -299,18 +299,20 @@ final class StaticExtensions {
 		return next == null ? null : hostOf(next, seen);
 	}
 
+	/**
+	 * Whether the member `m` of `host` is accessible from any file (`fields.ml`: `can_access`): written `public`, or a
+	 * member of an `extern` type or an interface written with no visibility, which defaults to public there. A private
+	 * member is reached from its class and its subclasses only, which a question keyed by the file does not see.
+	 */
+	public static inline function accessible(m: MemberInfo, host: ResolvedType): Bool {
+		return m.visibility == SymbolIndex.PUBLIC_VISIBILITY
+			|| m.visibility == null
+			&& (host.type.isExtern || host.type.kind == SymbolIndex.INTERFACE_DECL_KIND);
+	}
+
 	/** Whether the link `link` of `t` is an interface: every link of an interface, an `implements` link of a class. */
 	private static inline function implemented(t: TypeDeclInfo, link: AncestorLink): Bool {
 		return t.kind == SymbolIndex.INTERFACE_DECL_KIND || t.interfaces.contains(SourceText.lastSegment(link.raw));
-	}
-
-	/**
-	 * Whether the static `m` of `host` is accessible from any file (`fields.ml`: `can_access`): written `public`, or a
-	 * member of an `extern` type written with no visibility, which defaults to public there. A private static is reached
-	 * from its class and its subclasses only, which a question keyed by the file does not see.
-	 */
-	private static inline function accessible(m: MemberInfo, host: ResolvedType): Bool {
-		return m.visibility == SymbolIndex.PUBLIC_VISIBILITY || m.visibility == null && host.type.isExtern;
 	}
 
 	/** Whether `m` is a static a `using` offers as the extension `method` — `@:noUsing` withholds it. */

@@ -95,6 +95,13 @@ typedef NamingRule = {
 	var label: String;
 
 	/**
+	 * Optional NAME selector: when set, the rule applies only to a declaration whose name it matches, so a rule
+	 * about one spelling (a listener named `onX`) can sit ahead of the general rule for its category without
+	 * governing every other declaration of it.
+	 */
+	@:optional var appliesTo: EReg;
+
+	/**
 	 * Optional mechanical name normalizer for the autofix: maps a violating
 	 * name to a corrected one that should conform to `format`, or null when it
 	 * cannot be fixed mechanically. Rules loaded from a `checkstyle.json` carry

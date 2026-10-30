@@ -109,11 +109,6 @@ final class OverriddenInline extends RuleBase {
 		return m.isInline && !m.isStatic && !fieldKinds.contains(m.kind);
 	}
 
-	/** `r`'s package-qualified name, the form a message tells same-named types apart by. */
-	private static inline function qualified(r: ResolvedType): String {
-		return r.file.pkg == '' ? r.type.name : '${r.file.pkg}.${r.type.name}';
-	}
-
 	/**
 	 * Every subtype of `owner` whose override of `name` binds to `owner`'s own declaration in some build. The subtype walk
 	 * is name-keyed where a link resolves to no declaration, so each candidate is re-proved through the override relation.
@@ -135,7 +130,9 @@ final class OverriddenInline extends RuleBase {
 
 	/** The qualified names of `types`, each followed by `.member` when one is given, comma-joined. */
 	private static function listed(types: Array<ResolvedType>, member: Null<String>): String {
-		return [for (r in types) member == null ? qualified(r) : '${qualified(r)}.$member'].join(', ');
+		return [
+			for (r in types) member == null ? SymbolIndex.typePath(r) : '${SymbolIndex.typePath(r)}.$member'
+		].join(', ');
 	}
 
 	/** A finding on the header line of `m`'s declaration, so a `// noqa` inside its body cannot swallow it. */

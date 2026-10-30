@@ -833,9 +833,11 @@ final class RefactorSupport {
 		final out: Array<String> = [];
 		function walk(node: QueryNode): Void {
 			var i: Int = node.children.indexOf(declNode) - 1;
-			while (i >= 0 && MemberKinds.META_KINDS.contains(node.children[i].kind)) {
+			// The run in front of a declaration mixes its metadata with its modifiers (`@:access(T) public function`).
+			while (i >= 0 && MemberKinds.isModifierOrMetaKind(node.children[i].kind)) {
 				final meta: QueryNode = node.children[i];
-				if (meta.name == metaName) for (arg in meta.children) out.push(flattenPath(arg));
+				if (MemberKinds.META_KINDS.contains(meta.kind) && meta.name == metaName) for (arg in meta.children)
+					out.push(flattenPath(arg));
 				i--;
 			}
 			for (c in node.children) walk(c);

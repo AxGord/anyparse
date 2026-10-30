@@ -1500,8 +1500,8 @@
 			"name": "M-ADDMETA-ZERO-WIDTH-INSERT",
 			"type": "anyparse.query.AddMeta",
 			"method": "runEdit",
-			"find": "span: new Span(at, at + 1),\ntext: '$text\\n${lineIndentAt(source, at)}${source.charAt(at)}'",
-			"replace": "span: new Span(at, at),\ntext: '$text\\n${lineIndentAt(source, at)}'",
+			"find": "span: new Span(at, at + 1),\ntext: '${texts.join('\\n$indent')}\\n$indent${source.charAt(at)}'",
+			"replace": "span: new Span(at, at),\ntext: '${texts.join('\\n$indent')}\\n$indent'",
 			"note": "the entry is spliced as a zero-width insert again, so the doc-splitting guard refuses every annotation on a documented declaration"
 		},
 		{
@@ -27466,8 +27466,8 @@
 			"name": "M-EXT-PRIVATE-OPEN",
 			"type": "anyparse.query.StaticExtensions",
 			"method": "accessible",
-			"find": "return m.visibility == SymbolIndex.PUBLIC_VISIBILITY || ",
-			"replace": "return true || ",
+			"find": "return m.visibility == SymbolIndex.PUBLIC_VISIBILITY",
+			"replace": "return true",
 			"note": "a private static is taken as the extension from any file, though it is reached from its class and its subclasses only"
 		},
 		{
@@ -27933,7 +27933,7 @@
 			"name": "M-CASTS-HAND-UNIFIED",
 			"type": "anyparse.query.AbstractCasts",
 			"method": "graphWith",
-			"find": " || _handUnified.contains(pathOf(r))) return null;",
+			"find": " || _handUnified.contains(SymbolIndex.typePath(r))) return null;",
 			"replace": ") return null;",
 			"note": "an abstract the compiler unifies by a hand-written arm (`EnumValue` takes every enum) is decided by its empty clauses"
 		},
@@ -33468,6 +33468,38 @@
 			"find": "seams.arrayTypeNames.contains(type)",
 			"replace": "true",
 			"note": "a List comprehension becomes ls.map, which returns a List"
+		},
+		{
+			"name": "M-MAS-ANY-VALUE",
+			"type": "anyparse.check.common.loops.MapValueScan",
+			"method": "provenValue",
+			"find": "value.kind == seams.boolLitKind && value.name == TRUE_LITERAL",
+			"replace": "true",
+			"note": "a map storing false is read as a set of its keys"
+		},
+		{
+			"name": "M-PAM-GRANT-PUBLIC",
+			"type": "anyparse.check.common.members.PreferAccessMeta",
+			"method": "addGrants",
+			"find": "!hosted.members.exists(m -> StaticExtensions.accessible(m, host))",
+			"replace": "true",
+			"note": "a public member read under the waiver gets its type granted too"
+		},
+		{
+			"name": "M-NAMING-HANDLER-OVERRIDE",
+			"type": "anyparse.check.common.naming.NamingOptions",
+			"method": "handlerRule",
+			"find": "forbidMods: HANDLER_EXEMPT_MODS.copy()",
+			"replace": "forbidMods: []",
+			"note": "an override of a supertype onX listener is reported as a name the project chose"
+		},
+		{
+			"name": "M-ACCESSIBLE-INTERFACE-PRIVATE",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "accessible",
+			"find": "host.type.isExtern || host.type.kind == SymbolIndex.INTERFACE_DECL_KIND",
+			"replace": "host.type.isExtern",
+			"note": "an interface member with no visibility is read as private, so its type is granted for nothing"
 		},
 		{
 			"name": "M-GSN-VALUE-TAIL",

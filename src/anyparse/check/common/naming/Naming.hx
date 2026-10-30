@@ -105,7 +105,7 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 		final indexOf: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final privatizable: Array<PrivatizeCandidate> = [];
 		final crossRenamed: Array<String> = [];
-		final out: Array<Violation> = RunScan.collectWith(files, plugin, plugin.namingSupport(), (entry, tree, support, violations) -> {
+		final out: Array<Violation> = RunScan.collectWith(files, plugin, supportOf(plugin), (entry, tree, support, violations) -> {
 			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
 			// project as fields of a plain abstract, where the FIELD naming rule governs them — and an
 			// enum value is PascalCase by convention, so each one reads as a violation.
@@ -165,7 +165,7 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
-		final support: Null<NamingSupport> = plugin.namingSupport();
+		final support: Null<NamingSupport> = supportOf(plugin);
 		if (support == null) return RenameRefusal.all(violations, RenameRefusal.NO_SUPPORT);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return RenameRefusal.all(violations, RenameRefusal.NO_TREE);
@@ -297,7 +297,7 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<Array<CrossFileEdits>> {
 		if (violations.length == 0 || index == null) return [];
-		final support: Null<NamingSupport> = plugin.namingSupport();
+		final support: Null<NamingSupport> = supportOf(plugin);
 		if (support == null) return [];
 		final idx: SymbolIndex = index;
 		final shape: RefShape = plugin.refShape();
@@ -336,7 +336,7 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 	public function riskyCrossFileFix(
 		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<RiskyCrossFileEdit> {
-		final support: Null<NamingSupport> = plugin.namingSupport();
+		final support: Null<NamingSupport> = supportOf(plugin);
 		if (support != null) return NamingCrossRename.edits(files, violations, plugin, support);
 		for (v in violations) RenameRefusal.note(v, RenameRefusal.NO_SUPPORT);
 		return [];
@@ -422,6 +422,11 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 		return s == null ? null : _privatized[CheckScan.spanKey(v.file, s)];
 	}
 
+	/** The grammar's naming support with this project's `naming` options laid over its policy (`NamingOptions`). */
+	private function supportOf(plugin: GrammarPlugin): Null<NamingSupport> {
+		return NamingOptions.over(plugin.namingSupport(), _resolveConfig);
+	}
+
 	/**
 	 * The violations for `decls` under `policy`: each declaration is tested
 	 * against the first rule whose category matches and whose `requireMods` are
@@ -505,13 +510,14 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 		return decl != null && support.frameworkOwnsName(decl, index, contracts);
 	}
 
-	/** The first rule in `policy` applicable to `decl` (category + modifier filters), or null. */
+	/** The first rule in `policy` applicable to `decl` (category, modifier and name filters), or null. */
 	private static function applicableRule(decl: NamedDecl, policy: NamingPolicy): Null<NamingRule> {
 		return policy.find(
 			rule ->
 				rule.category == decl.category
 				&& rule.requireMods.foreach(m -> decl.mods.contains(m))
 				&& !rule.forbidMods.exists(m -> decl.mods.contains(m))
+				&& (rule.appliesTo?.match(decl.name) ?? true)
 		);
 	}
 

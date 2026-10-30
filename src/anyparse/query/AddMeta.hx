@@ -79,7 +79,7 @@ final class AddMeta {
 		)
 			return Err('already annotated: $text');
 
-		final edit: Null<{ span: Span, text: String }> = runEdit(source, run, hostNN, text);
+		final edit: Null<{ span: Span, text: String }> = runEdit(source, run, hostNN, [text]);
 		return edit == null
 			? Err('the resolved ${resolved.kind} node has no source span to annotate')
 			: CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
@@ -92,8 +92,15 @@ final class AddMeta {
 	 * on the destination TYPE, through it.
 	 */
 	public static function entryEdit(source: String, tree: QueryNode, decl: QueryNode, text: String): Null<{ span: Span, text: String }> {
+		return entriesEdit(source, tree, decl, [text]);
+	}
+
+	/** `entryEdit` for several entries at once, one per line in the declaration's indentation, in the order given. */
+	public static function entriesEdit(
+		source: String, tree: QueryNode, decl: QueryNode, texts: Array<String>
+	): Null<{ span: Span, text: String }> {
 		final host: Null<QueryNode> = declarationHost(tree, decl);
-		return host == null ? null : runEdit(source, prefixRun(TreePath.parentOf(tree, host), host), host, text);
+		return host == null ? null : runEdit(source, prefixRun(TreePath.parentOf(tree, host), host), host, texts);
 	}
 
 	/**
@@ -184,12 +191,14 @@ final class AddMeta {
 	 * re-emitting it says that in the shape of the edit rather than by exempting this op from the guard.
 	 */
 	private static function runEdit(
-		source: String, run: Array<QueryNode>, host: QueryNode, text: String
+		source: String, run: Array<QueryNode>, host: QueryNode, texts: Array<String>
 	): Null<{ span: Span, text: String }> {
 		final at: Null<Int> = insertOffset(run, host);
-		return at == null ? null : {
+		if (at == null) return null;
+		final indent: String = lineIndentAt(source, at);
+		return {
 			span: new Span(at, at + 1),
-			text: '$text\n${lineIndentAt(source, at)}${source.charAt(at)}'
+			text: '${texts.join('\n$indent')}\n$indent${source.charAt(at)}'
 		};
 	}
 

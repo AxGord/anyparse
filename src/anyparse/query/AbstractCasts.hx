@@ -274,7 +274,7 @@ final class AbstractCasts {
 	private function graphWith(r: ResolvedType, clauseEnd: String -> TypeEnd): Null<CastGraph> {
 		final clauses: Null<Array<CastClauses>> = clausesOf(r);
 		if (!_abstractKinds.contains(r.type.kind) || clauses == null) return null;
-		if (clauses.exists(c -> c.typeSelected) || _handUnified.contains(pathOf(r))) return null;
+		if (clauses.exists(c -> c.typeSelected) || _handUnified.contains(SymbolIndex.typePath(r))) return null;
 		final branches: Array<CastBranch> = [
 			for (c in clauses) { from: [for (t in c.from) clauseEnd(t)], to: [for (t in c.to) clauseEnd(t)], transitive: c.transitive }
 		];
@@ -360,11 +360,6 @@ final class AbstractCasts {
 			case [Dyn, Dyn]: true;
 			case _: false;
 		};
-	}
-
-	/** The dotted path of the declaration `r`: its package, then its name. */
-	private static inline function pathOf(r: ResolvedType): String {
-		return r.file.pkg == '' ? r.type.name : '${r.file.pkg}.${r.type.name}';
 	}
 
 	/** The members of `r` the branch `b` declares: those whose declaration starts inside its range. */

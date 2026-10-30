@@ -58,6 +58,10 @@ the cast-sibling of `impossible-is-check`: a runtime-checked cast `cast(x, T)` t
 
 an `is` type-check `x is T` that is provably ALWAYS FALSE — `x`'s declared type `S` and the checked type `T` are two **unrelated classes**, so under Haxe single inheritance no value of `S` can ever be a `T`; `Warning`, report-only. Sound via the cross-file class hierarchy `SymbolIndex` already indexes: flags only when BOTH `S` and `T` resolve to a unique indexed CLASS decl (interface / abstract / enum / typedef on either side → open world or implicit conversions → skip), are distinct, and neither is a transitive supertype of the other with BOTH supertype closures **fully resolved inside the index** (`SymbolIndex.unrelatedClasses`). An unindexed supertype link (an external type, or a project file not in the lint set) makes the relation unknown → skip; generics / parametric / `Null<…>` / `Dynamic` operands or checked types never resolve to an indexed class → skip. No non-null proof is needed (`null is T` is also `false`). Every skip is a safe miss. Report-only: the dead branch's right rewrite is context-dependent
 
+## `map-as-set`
+
+a local or a non-public field declared `Map<K, Bool>` that is only ever a SET of its keys: every value it stores is the literal `true` (an index write, `set`, a map literal) and every use asks membership — `exists`, an index read, `get`, `keys`, `remove`, `clear`, `copy`. An `Array<K>` with `contains` says the same with no value to misread. `Info`, report-only, DEFAULT OFF: the rewrite trades a hash lookup for a linear scan, which is the project's call. The proof is the occurrence census `redundant-map-exists` already runs (`MapValueScan`, here under its key-set claim): a stored `false`, a value iterated (`for (v in m)`, `keyValueIterator`), `toString`, the map passed, returned or bound elsewhere, a same-named parameter in the file, or a member reachable from a subtype, an `@:access` grantee or a `@:build` macro all leave it alone. Only a written annotation is read; a nullable wrapper is not asked.
+
 ## `prefer-is-operator`
 
 A two-argument `Std.isOfType(x, T)` whose second argument names a type, replaceable with the
