@@ -18,6 +18,10 @@ final class CallersCommand implements CliCommand {
 		return 'Transitive call tree INTO a function (approximate call graph)';
 	}
 
+	public function flags(): CliFlags {
+		return new CalleesCommand().flags();
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runCallers(args, ctx);
 	}

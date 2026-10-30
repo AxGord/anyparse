@@ -46,6 +46,10 @@ final class CommentRewriteCommand implements CliCommand {
 		return 'Text find/replace inside comments (write-twin of lit; --regex)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--allow-wide', '--list', '--reformat', '--regex', '--write', '-l', '-w'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runCommentRewrite(args);
 	}

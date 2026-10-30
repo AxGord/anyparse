@@ -27,6 +27,10 @@ final class CasesCommand implements CliCommand {
 		return 'Precise case-pattern lookup (case Ctor: / case Ctor(_): / case A | Ctor:)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--flat'], ['--limit']);
+	}
+
 	/**
 	 * `apq cases <Ctor> <file-or-dir-or-glob>...` — precise case-pattern
 	 * lookup. Finds every `case <Ctor>(_):` / `case <Ctor>:` / `case A |

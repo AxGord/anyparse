@@ -22,6 +22,10 @@ final class PullUpCommand implements CliCommand {
 		return 'Move an instance member up to its superclass';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--scope', '--to', '--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runInheritanceMove(args, true);
 	}

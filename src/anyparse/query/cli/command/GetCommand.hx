@@ -29,6 +29,10 @@ final class GetCommand implements CliCommand implements StdinDocument {
 		return 'Print the value at a dotted path of a data document (JSON)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--nth', '--select']);
+	}
+
 	public function usage(): Void {
 		printGetUsage();
 	}

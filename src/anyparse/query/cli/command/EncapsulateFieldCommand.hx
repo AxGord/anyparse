@@ -22,6 +22,10 @@ final class EncapsulateFieldCommand implements CliCommand {
 		return 'Turn a var field into a get/set property (@:isVar)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], ['--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runEncapsulateField(args);
 	}

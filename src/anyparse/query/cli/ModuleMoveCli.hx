@@ -121,6 +121,11 @@ final class ModuleMoveCli {
 		};
 	}
 
+	/** The flags the module form of `move` reads, beyond the ones its declaration form does. */
+	public static function flags(): CliFlags {
+		return new CliFlags(['--no-mirror', '--verify', '--write'], ['--scope', '--to']);
+	}
+
 	/** The move declaration of the nearest `apqlint.json` above `file` that carries one, or an empty one. */
 	private static function declarationFor(file: String): Either<String, MoveDeclarationData> {
 		final chain: ConfigChain = ConfigFinder.findUpAll(file, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS);

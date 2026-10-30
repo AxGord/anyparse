@@ -26,6 +26,10 @@ final class LintDiffCommand implements CliCommand implements LanguageFree {
 		return 'Multiset diff of two lint --format json snapshots (blast radius)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--label', '--limit', '--new', '--old', '--root']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runLintDiff(args);
 	}

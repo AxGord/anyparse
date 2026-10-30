@@ -24,6 +24,10 @@ final class InlineCommand implements CliCommand {
 		return 'Inline a local variable into its uses';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runInline(args);
 	}

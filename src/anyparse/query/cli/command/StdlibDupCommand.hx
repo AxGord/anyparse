@@ -32,6 +32,10 @@ final class StdlibDupCommand implements CliCommand {
 		return 'Report pure functions a differential run proves equal to a stdlib call';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--census'], ['--limit', '--work']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runStdlibDup(args);

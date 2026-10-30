@@ -23,6 +23,10 @@ final class AddParamCommand implements CliCommand {
 		return 'Add a backward-compatible parameter to a function';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runAddParam(args);
 	}

@@ -5,6 +5,7 @@ import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.LanguageChoice;
 import anyparse.query.cli.UsageFailure;
+import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.GetCommand;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.SweepCommand;
@@ -42,11 +43,26 @@ class LanguageChoiceTest extends Test {
 		Assert.raises(() -> choose(new LintCommand(), ['notes.txt']), UsageFailure);
 	}
 
-	/** A file right after a `--flag` may be its value, so it does not name the grammar. */
+	/** A valued flag's value, as the command declares it, is no file and does not name the grammar. */
 	@:killer('M-LANG-CHOICE-FLAG-VALUE-COUNTED')
 	@:pin('control')
 	public function testAFlagValueIsNotAFile(): Void {
 		Assert.raises(() -> choose(new SweepCommand(), ['--save', 'base.json']), UsageFailure);
+		Assert.same(
+			['--lang', 'haxe', '--baseline', 'base.json', 'A.hx'], choose(new LintCommand(), ['--baseline', 'base.json', 'A.hx']).args
+		);
+	}
+
+	/** A switch takes no value, so the file after it names a grammar: `fmt --list A.hx b.json` names two. */
+	@:killer('M-CLI-FLAGS-SWITCH-TAKES-VALUE')
+	@:pin('control')
+	public function testAFileAfterASwitchCounts(): Void {
+		Assert.raises(() -> choose(new FmtCommand(), ['--list', 'A.hx', 'b.json']), UsageFailure);
+		Assert.same(
+			['--lang', 'haxe', '--list', 'A.hx', 'b.json'],
+			choose(new FmtCommand(), ['--lang-default', 'haxe', '--list', 'A.hx', 'b.json']).args
+		);
+		Assert.same(['--lang', 'haxe', '--write', 'A.hx'], choose(new FmtCommand(), ['--write', 'A.hx']).args);
 	}
 
 	/** Files of two grammars are a usage error. */
@@ -141,7 +157,7 @@ class LanguageChoiceTest extends Test {
 		Assert.raises(() -> choose(new LintCommand(), ['A.hx', 'apqlint.json']), UsageFailure);
 	}
 
-	/** `--` ends the options, so the path after it is a file, not that flag's value. */
+	/** `--` is no flag and takes no value, so the path after it is a file. */
 	@:killer('M-LANG-END-OF-OPTIONS-VALUE')
 	@:pin('control')
 	public function testAPathAfterEndOfOptionsCounts(): Void {

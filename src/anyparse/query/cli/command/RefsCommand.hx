@@ -79,6 +79,10 @@ final class RefsCommand implements CliCommand {
 		return 'Symbol references (value bindings; scope-aware)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--decls', '--doc', '--flat', '--json', '--reads', '--source', '--writes'], ['--limit']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runRefs(args, ctx);
 	}

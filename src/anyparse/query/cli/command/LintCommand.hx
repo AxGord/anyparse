@@ -165,6 +165,32 @@ final class LintCommand implements CliCommand {
 		return 'Run analysis checks and report violations (e.g. unused-import)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(
+			[
+				'--all',
+				'--explain-long',
+				'--fix',
+				'--flat',
+				'--full',
+				'--list-rules',
+				'--no-oracle',
+				'--summary',
+				'--verbose',
+				'-a'
+			],
+			[
+				'--baseline',
+				'--category',
+				'--fail-on',
+				'--fix-probes',
+				'--format',
+				'--range',
+				'--rule'
+			]
+		);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		final status: Int = PhaseTimings.measure('lint', runLint.bind(args));
 		PhaseTimings.report(CliIo.stderr);

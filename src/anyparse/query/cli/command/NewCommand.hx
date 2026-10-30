@@ -58,6 +58,20 @@ final class NewCommand implements CliCommand {
 		return 'Create a new module — final class / implements <iface> (canonical)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--class', '--open', '--raw', '--write'], [
+			'--bodies',
+			'--extends',
+			'--field',
+			'--from',
+			'--from-file',
+			'--implements',
+			'--kind',
+			'--to',
+			'--underlying'
+		]);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runNew(args);
 	}

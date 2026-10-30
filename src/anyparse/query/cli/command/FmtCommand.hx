@@ -106,6 +106,10 @@ final class FmtCommand implements CliCommand {
 		return 'Canonicalise Haxe source (writer round-trip; --write / --list)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--list', '--one-pass', '--verify', '--write', '-l', '-w'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runFmt(args);
 	}

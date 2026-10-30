@@ -20,6 +20,10 @@ final class PushDownCommand implements CliCommand {
 		return 'Move an instance member down to a subclass';
 	}
 
+	public function flags(): CliFlags {
+		return new PullUpCommand().flags();
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return PullUpCommand.runInheritanceMove(args, false);
 	}

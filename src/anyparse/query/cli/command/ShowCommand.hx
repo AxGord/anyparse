@@ -24,6 +24,10 @@ final class ShowCommand implements CliCommand {
 		return 'Alias of `source`, for a sandbox that vetoes that word';
 	}
 
+	public function flags(): CliFlags {
+		return new SourceCommand().flags();
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return SourceCommand.runSource(args);

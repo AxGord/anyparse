@@ -35,6 +35,10 @@ final class TestSummaryCommand implements CliCommand implements LanguageFree {
 		return 'Parse utest stdout transcript into tests/assertions/failures';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--exit-status']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runTestSummary(args);

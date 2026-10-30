@@ -75,6 +75,10 @@ final class SourceCommand implements CliCommand {
 		return 'Emit RAW verbatim file lines (no parse; --range L:L2)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--all', '--number', '--raw', '-n'], ['--at', '--range', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runSource(args);

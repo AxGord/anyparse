@@ -22,6 +22,10 @@ final class DiffCommand implements CliCommand {
 		return 'Structural AST diff between two files';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--flat'], ['--limit']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runDiff(args);
 	}

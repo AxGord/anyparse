@@ -27,6 +27,10 @@ final class OracleCommand implements CliCommand {
 		return 'Typecheck the project once and record the verdict for lint';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runOracle(args);
 	}

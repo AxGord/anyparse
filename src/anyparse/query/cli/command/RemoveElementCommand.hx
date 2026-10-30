@@ -26,6 +26,10 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 		return 'Remove a sibling element by cursor (inverse of add-element)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--keep-doc', '--reformat', '--with-doc', '--write'], ['--kind', '--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runRemoveElement(args, ctx.postWriteFix);
 	}

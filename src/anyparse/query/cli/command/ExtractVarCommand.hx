@@ -23,6 +23,10 @@ final class ExtractVarCommand implements CliCommand {
 		return 'Hoist an expression into a new local final';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--match', '--nth']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runExtractVar(args);
 	}

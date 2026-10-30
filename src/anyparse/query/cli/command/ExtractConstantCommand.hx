@@ -32,6 +32,10 @@ final class ExtractConstantCommand implements CliCommand {
 		return 'Move a literal, or one addressed constant expression, into a named constant';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], ['--into', '--literal', '--name', '--type']).with(ExtractConstantToMode.flags());
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runExtractConstant(args);
 	}

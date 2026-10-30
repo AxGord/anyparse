@@ -81,6 +81,10 @@ final class GatesCommand implements CliCommand {
 		return 'List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--flat'], ['--limit', '--mechanism']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runGates(args);
 	}

@@ -22,6 +22,10 @@ final class MoveMemberCommand implements CliCommand {
 		return 'Move members to another type (any package if all static), rewriting call sites';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--closure', '--keep-bare', '--scaffold', '--write'], ['--scope', '--to', '--type', '--via']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runMoveMember(args);
 	}

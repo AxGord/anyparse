@@ -27,6 +27,12 @@ interface CliCommand {
 	/** The one-line description `apq --help` lists this command with. */
 	public function summary(): String;
 
+	/**
+	 * Every flag this command's parser reads, valued or not (`--lang` and `--help` are implied). The dispatcher
+	 * refuses a `--word` it does not declare, and `LanguageChoice` reads a flag's value as no file.
+	 */
+	public function flags(): CliFlags;
+
 	/** Print this command's own `--help` page to stdout. */
 	public function usage(): Void;
 

@@ -31908,10 +31908,10 @@
 		},
 		{
 			"name": "M-LANG-CHOICE-FLAG-VALUE-COUNTED",
-			"type": "anyparse.query.cli.LanguageChoice",
-			"method": "isFileArgument",
-			"force": "!args[i].startsWith(\"-\")",
-			"note": "a flag value such as `sweep --save base.json` names the grammar, so a Haxe command silently runs on the JSON grammar"
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "takesValue",
+			"force": "false",
+			"note": "no flag takes a value, so a value such as `sweep --save base.json` reads as a file naming the grammar"
 		},
 		{
 			"name": "M-LANG-PRESET-OVERRIDES",
@@ -31938,10 +31938,10 @@
 		},
 		{
 			"name": "M-LANG-END-OF-OPTIONS-VALUE",
-			"type": "anyparse.query.cli.LanguageChoice",
-			"method": "isFileArgument",
-			"find": "args[i - 1] == END_OF_OPTIONS || ",
-			"replace": "",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "takesValue",
+			"find": "return _valued.contains(token)",
+			"replace": "return token == SEPARATOR || _valued.contains(token)",
 			"note": "`--` reads as a flag taking a value, so the first path after it names no grammar and a call picks the grammar of the paths after"
 		},
 		{
@@ -33312,6 +33312,21 @@
 			"find": "if (bodies.count(opensADoc) > 1) {",
 			"replace": "if (false) {",
 			"note": "two blocks that each open a doc are merged, so an orphan doc of a moved member becomes part of the next declaration's doc"
+		},
+		{
+			"name": "M-CLI-FLAGS-SWITCH-TAKES-VALUE",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "positionals",
+			"find": "if (takesValue(token))",
+			"replace": "if (takesValue(token) || isLongFlag(token))",
+			"note": "every long flag reads as taking a value, so `fmt --list A.hx b.json` drops A.hx and formats a Haxe file as JSON"
+		},
+		{
+			"name": "M-CLI-UNKNOWN-FLAG-ADMITTED",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "unknownFlag",
+			"force": "null",
+			"note": "an undeclared `--word` passes the dispatcher, so each command's own parser decides whether it is refused, read as a path, or swallowed"
 		}
 	]
 }

@@ -18,9 +18,6 @@ final class LanguageChoice {
 	/** A preset's grammar (`hxq` passes `--lang-default haxe`): taken only when no file argument names another. */
 	private static inline final PRESET_FLAG: String = '--lang-default';
 
-	/** `--` ends the options: what follows is a path, never a flag's value. */
-	private static inline final END_OF_OPTIONS: String = '--';
-
 	/** The positional naming standard input. */
 	private static inline final STDIN_POSITIONAL: String = '-';
 
@@ -41,7 +38,8 @@ final class LanguageChoice {
 		if (command is LanguageFree || args.contains('--help') || args.contains('-h'))
 			return preset == null ? { args: args, stdin: null } : named(preset, args);
 		final ofFiles: Array<String> = [];
-		for (i in 0...args.length) if (isFileArgument(args, i)) {
+		// A positional by the command's own flag spec, so never a flag's value; a `-`-led one is stdin or a short option.
+		for (i in command.flags().positionals(args)) if (!args[i].startsWith(STDIN_POSITIONAL)) {
 			final lang: Null<String> = CliArgs.langOfFile(args[i]);
 			if (lang != null && !ofFiles.contains(lang)) ofFiles.push(lang);
 		}
@@ -71,16 +69,6 @@ final class LanguageChoice {
 		if (at < 0) return null;
 		if (at + 1 >= given.length) throw new UsageFailure('$PRESET_FLAG needs a language name');
 		return given[at + 1];
-	}
-
-	/**
-	 * May `args[i]` be a file the command reads? Not a flag, and not right after a `--flag`, where it may be that
-	 * flag's value (`sweep --save base.json` names an output, not the language): the command's flags are its own,
-	 * so a file placed after one is not counted and the call asks for `--lang` instead of guessing. After `--` every
-	 * positional is a path.
-	 */
-	private static function isFileArgument(args: Array<String>, i: Int): Bool {
-		return !args[i].startsWith('-') && (i == 0 || args[i - 1] == END_OF_OPTIONS || !args[i - 1].startsWith('--'));
 	}
 
 	/** Every registered `--lang` with its extensions, for a usage error: `haxe .hx, json .json`. */

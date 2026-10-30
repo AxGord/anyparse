@@ -52,6 +52,10 @@ final class MentionsCommand implements CliCommand {
 		return 'Every named-leaf occurrence (uses + refs + lit --any-kind --exact)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--flat'], ['--limit']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runMentions(args, ctx);
 	}

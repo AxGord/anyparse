@@ -24,6 +24,10 @@ final class RemoveParamCommand implements CliCommand {
 		return 'Remove a function parameter + call-site args';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runRemoveParam(args);
 	}

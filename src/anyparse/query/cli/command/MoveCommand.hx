@@ -48,6 +48,10 @@ final class MoveCommand implements CliCommand {
 		return 'Move a type declaration to another file (same package)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--match', '--nth', '--scope', '--select']).with(ModuleMoveCli.flags());
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return ModuleMoveCli.isModuleForm(args) ? ModuleMoveCli.run(args) : runMove(args);
 	}

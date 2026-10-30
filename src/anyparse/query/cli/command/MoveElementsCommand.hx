@@ -29,6 +29,12 @@ final class MoveElementsCommand implements CliCommand {
 		return 'Move a slice of an array literal\'s elements into another array literal (--append / --sorted)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(
+			['--dry-run', '--reformat', '--write'], ['--append', '--into', '--match', '--nth', '--range', '--select', '--sorted']
+		);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runMoveElements(args);
 	}

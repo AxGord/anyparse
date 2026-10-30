@@ -54,6 +54,19 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 		return 'Replace ONE unique fragment inside a node (old ==== new, stdin)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--all', '--reformat', '--write'], [
+			'--at',
+			'--batch',
+			'--from-file',
+			'--kind',
+			'--match',
+			'--nth',
+			'--select',
+			'--sep'
+		]);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runPatch(args, ctx.postWriteFix);
 	}

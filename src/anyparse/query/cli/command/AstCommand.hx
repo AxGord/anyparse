@@ -70,6 +70,32 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		return 'Dump parsed AST (S-expr or JSON)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(
+			[
+				'--count',
+				'--diff',
+				'--doc',
+				'--json',
+				'--source',
+				'--spans',
+				'--stdin',
+				'--type-refs',
+				'--writer-output',
+				'--writer-output-plain'
+			],
+			[
+				'--at',
+				'--children-limit',
+				'--code',
+				'--depth',
+				'--max-children',
+				'--min-children',
+				'--select'
+			]
+		);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runAst(args, ctx.readStdin);
 	}

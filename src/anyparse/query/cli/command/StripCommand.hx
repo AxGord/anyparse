@@ -45,6 +45,10 @@ final class StripCommand implements CliCommand {
 		return 'Sed-strip + parse-check (sole-blocker confirmation)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--dry-run', '--per-pattern', '--regex', '--show'], ['--delete', '--from-cluster', '--replace', '--with']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runStrip(args);
 	}

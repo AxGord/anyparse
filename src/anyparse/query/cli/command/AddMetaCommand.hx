@@ -46,6 +46,10 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 		return 'Add one @:metadata entry to a type or member (canonical-gated)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], ['--at', '--kind', '--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runAddMeta(args, ctx.postWriteFix);
 	}

@@ -26,6 +26,10 @@ final class ReachCommand implements CliCommand {
 		return 'Shortest call path(s) --from A --to B over the call graph';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--format', '--from', '--kinds', '--max-paths', '--to']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runReach(args, ctx);
 	}

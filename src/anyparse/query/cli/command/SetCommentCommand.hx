@@ -26,6 +26,10 @@ final class SetCommentCommand implements CliCommand implements PostWriteFix {
 		return 'Replace the comment at a cursor (line run or block)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], ['--from-file']);
+	}
+
 	/**
 	 * `apq set-comment <file> <line>:<col> (<text> | --from-file | -) [--reformat]
 	 * [--write]` — replace the comment at the cursor (see `SetComment`). Line

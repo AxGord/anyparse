@@ -22,6 +22,10 @@ final class MutationSchemaCommand implements CliCommand {
 		return 'Compose mutation arms into one build behind a run-time switch, for mutation-arm';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runMutationSchema(args);

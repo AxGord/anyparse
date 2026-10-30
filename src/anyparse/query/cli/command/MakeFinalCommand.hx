@@ -25,6 +25,10 @@ final class MakeFinalCommand implements CliCommand {
 		return 'Turn a never-reassigned var field into final';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--scope', '--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		final op: String = 'make-final';
 		var lang: String = 'haxe';

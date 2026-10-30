@@ -20,6 +20,10 @@ final class WriterProbeCommand implements CliCommand {
 		return 'Emit trivia + plain writer outputs side-by-side';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runWriterProbe(args);
 	}

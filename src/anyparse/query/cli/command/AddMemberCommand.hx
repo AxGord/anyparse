@@ -40,6 +40,10 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 		return 'Append a member to a type body (writer-formatted, canonical-gated)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], ['--from-file', '--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runAddMember(args, ctx.postWriteFix);
 	}

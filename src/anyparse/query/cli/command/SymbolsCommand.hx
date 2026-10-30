@@ -21,6 +21,10 @@ final class SymbolsCommand implements CliCommand {
 		return 'List top-level type declarations across a scope (cross-file)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--kind']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runSymbols(args);
 	}

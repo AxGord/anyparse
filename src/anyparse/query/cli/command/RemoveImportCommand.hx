@@ -22,6 +22,10 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 		return 'Remove an import / using by module path (backend of lint --fix)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--keep-doc', '--reformat', '--using', '--write'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runRemoveImport(args, ctx.postWriteFix);
 	}

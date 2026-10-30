@@ -22,6 +22,10 @@ final class MutationVerdictCommand implements CliCommand implements LanguageFree
 		return 'Classify one utest transcript as KILLED/SURVIVED/… for mutation-check';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--build'], ['--expect']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runMutationVerdict(args);

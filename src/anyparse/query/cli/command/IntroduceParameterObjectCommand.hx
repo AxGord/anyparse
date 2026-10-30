@@ -23,6 +23,10 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 		return 'Fold contiguous params into one object param';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--as', '--match', '--name', '--nth', '--params', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runIntroduceParameterObject(args);
 	}

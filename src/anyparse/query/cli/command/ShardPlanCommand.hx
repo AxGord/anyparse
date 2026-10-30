@@ -26,6 +26,10 @@ final class ShardPlanCommand implements CliCommand {
 		return 'Deal a runner\'s test classes onto N APQ_TEST shards';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--classes', '--format', '--runner', '--shards', '--weights']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runShardPlan(args);

@@ -21,6 +21,10 @@ final class RewriteCommand implements CliCommand {
 		return 'Structural search-and-replace (search-pattern metavars)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runRewrite(args);
 	}

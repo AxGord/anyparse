@@ -45,6 +45,10 @@ final class SelfStatusCommand implements CliCommand {
 		return 'List .hx files the grammar plugin cannot parse (dogfood gap)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--source', '--strict'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runSelfStatus(args);

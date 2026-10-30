@@ -51,6 +51,10 @@ final class BlastCommand implements CliCommand {
 		return 'Change-impact checklist (uses + refs + member-access)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--all', '--flat'], ['--limit']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runBlast(args, ctx);
 	}

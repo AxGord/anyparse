@@ -112,6 +112,33 @@ final class ReconCommand implements CliCommand {
 		return 'Skip-parse drill — corpus sweep + locus-cluster histogram';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(
+			[
+				'--all',
+				'--permissive-construct',
+				'--predict-relax',
+				'--predict-strip',
+				'--regex',
+				'--regression-probe',
+				'--source',
+				'--writer-equals',
+				'--writer-equals-plain'
+			],
+			[
+				'--candidates',
+				'--cluster',
+				'--delete',
+				'--expected',
+				'--no-target-cluster',
+				'--probe',
+				'--replace',
+				'--top',
+				'--with'
+			]
+		);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runRecon(args);

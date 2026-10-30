@@ -286,6 +286,8 @@ final class Cli {
 			postWriteFix = true;
 		else
 			rest.push(a);
+		final unknown: Null<String> = registered.flags().unknownFlag(rest);
+		if (unknown != null) throw new UsageFailure('unknown option "$unknown" — `apq $cmd --help` lists its options');
 		// The process entry names no default grammar: an argv with no `--lang` gets the one its files or its stdin
 		// name, or a usage error. An in-process caller keeps its argv as given.
 		if (!chooseLanguage) return registered.run(rest, new CliContext(requireMatch, postWriteFix));

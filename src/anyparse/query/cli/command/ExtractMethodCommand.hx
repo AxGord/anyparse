@@ -46,6 +46,10 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 		return 'Extract a statement run into a local function (closure)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--member', '--reformat', '--write'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runExtractMethod(args, ctx.postWriteFix);
 	}

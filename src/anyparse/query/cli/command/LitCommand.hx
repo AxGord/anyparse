@@ -68,6 +68,10 @@ final class LitCommand implements CliCommand {
 		return 'Leaf-name probe (string literals, identifiers — prose-in-code)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--any-kind', '--exact', '--flat', '--include-comments', '--include-directives'], ['--kind', '--limit']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runLit(args, ctx);
 	}

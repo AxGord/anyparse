@@ -24,6 +24,10 @@ final class ClustersCommand implements CliCommand {
 		return 'Partition a type\'s members by call-edge connectivity (hub bucket + components)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--format', '--hubs', '--kinds']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runClusters(args, ctx);
 	}

@@ -38,6 +38,10 @@ final class ChangedCommand implements CliCommand {
 		return 'What each file changed against a git revision: layout, imports, a rename, or declarations by name';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--names'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		final opts: Null<ChangedOpts> = parseArgs(args);
 		if (opts == null) return ExitCode.EXIT_OK;

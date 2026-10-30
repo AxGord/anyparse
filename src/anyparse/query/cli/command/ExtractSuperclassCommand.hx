@@ -22,6 +22,10 @@ final class ExtractSuperclassCommand implements CliCommand {
 		return 'Generate a superclass, pull members up into it + extend it';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--members', '--out', '--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runExtractSuperclass(args);
 	}

@@ -25,6 +25,10 @@ final class MoveToHelperCommand implements CliCommand {
 		return 'Move class members into a static helper taking the class as first parameter';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--dry-run', '--write'], ['--arms', '--file', '--param', '--scope', '--to', '--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runMoveToHelper(args);
 	}

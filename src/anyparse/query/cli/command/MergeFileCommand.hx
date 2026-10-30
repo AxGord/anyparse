@@ -48,6 +48,10 @@ final class MergeFileCommand implements CliCommand implements LanguageFree {
 		return 'Three-way merge of one file through its grammar — the git merge driver (merge=anyparse)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--choices', '--path']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		final opts: Null<MergeFileOpts> = parseArgs(args);
 		if (opts == null) return ExitCode.EXIT_OK;

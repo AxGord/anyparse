@@ -24,6 +24,10 @@ final class SetModifierCommand implements CliCommand {
 		return 'Flip visibility / add-remove modifiers at a cursor (no retype)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], ['--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runSetModifier(args);
 	}

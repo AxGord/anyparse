@@ -41,6 +41,7 @@ final class MetaCommand implements CliCommand {
 	/** The flag that names the declaration kind — spelled once, so the kind gate reports the flag the user typed. */
 	private static inline final ON_FLAG: String = '--on';
 
+	private static final ARG_CONTAINS_FLAG: String = '--arg-contains';
 	private static final CMD: String = 'meta';
 
 	public function new() {}
@@ -51,6 +52,10 @@ final class MetaCommand implements CliCommand {
 
 	public function summary(): String {
 		return 'Annotation-on-decl shortcut';
+	}
+
+	public function flags(): CliFlags {
+		return new CliFlags(['--flat', '--json'], [ARG_CONTAINS_FLAG, '--limit', ON_FLAG]);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -236,8 +241,8 @@ final class MetaCommand implements CliCommand {
 					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--json':
 					json = true;
-				case '--arg-contains':
-					argContains = CliArgs.expectValue(args, ++i, '--arg-contains');
+				case ARG_CONTAINS_FLAG:
+					argContains = CliArgs.expectValue(args, ++i, ARG_CONTAINS_FLAG);
 				case ON_FLAG:
 					onKind = CliArgs.expectValue(args, ++i, ON_FLAG);
 				case '--flat':

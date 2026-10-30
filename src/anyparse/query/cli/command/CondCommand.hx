@@ -32,6 +32,10 @@ final class CondCommand implements CliCommand {
 		return 'Branch bodies of every #if region mentioning a define';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--active', '--flat', '--inactive', '--names'], ['--limit', '--max-body']);
+	}
+
 	/**
 	 * `apq cond <DEFINE> <file-or-dir-or-glob>...` — for every conditional-compilation region whose
 	 * own `#if` / `#elseif` conditions mention `<DEFINE>`, print each branch's position, its

@@ -44,6 +44,10 @@ final class SetDocCommand implements CliCommand implements PostWriteFix {
 		return 'Add/replace a declaration\'s doc-comment at a cursor';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], ['--from-file', '--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runSetDoc(args, ctx.postWriteFix);
 	}

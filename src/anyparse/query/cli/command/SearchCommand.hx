@@ -49,6 +49,11 @@ final class SearchCommand implements CliCommand {
 		return 'Structural pattern search';
 	}
 
+	public function flags(): CliFlags {
+		// `--` ends the options: a pattern may spell itself like a flag.
+		return new CliFlags(['--explain', '--flat', '--json'], ['--kind', '--limit'], true);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runSearch(args, ctx);
 	}

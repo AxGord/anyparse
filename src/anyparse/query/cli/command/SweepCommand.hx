@@ -54,6 +54,10 @@ final class SweepCommand implements CliCommand {
 		return 'Read corpus sweep snapshot totals + Δ vs prior';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--run'], ['--corpus', '--diff', '--file', '--prev', '--save']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
 		return runSweep(args);

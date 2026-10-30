@@ -24,6 +24,10 @@ final class WriterEqualsCommand implements CliCommand {
 		return 'Byte-equality check on writer output (trivia + --plain)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--plain'], ['--config']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runWriterEquals(args);
 	}

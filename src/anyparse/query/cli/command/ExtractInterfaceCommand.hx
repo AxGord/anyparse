@@ -28,6 +28,10 @@ final class ExtractInterfaceCommand implements CliCommand {
 		return 'Generate an interface from a class\'s public methods + implement it';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--members', '--out', '--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runExtractInterface(args);
 	}

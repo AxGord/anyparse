@@ -140,4 +140,10 @@ final class ExtractConstantToMode {
 		}
 	}
 
+	public static function flags(): CliFlags {
+		return new CliFlags(
+			['--reformat', '--shared', '--write'], ['--annotate', '--into', '--match', '--name', '--nth', '--select', '--to']
+		);
+	}
+
 }

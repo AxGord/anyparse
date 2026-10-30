@@ -45,6 +45,10 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 		return 'Replace a node\'s source span (--select / --at; writer-formatted)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--with-doc', '--write'], ['--at', '--from-file', '--kind', '--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runReplaceNode(args, ctx.postWriteFix);
 	}

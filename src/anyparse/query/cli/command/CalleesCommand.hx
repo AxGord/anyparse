@@ -27,6 +27,10 @@ final class CalleesCommand implements CliCommand {
 		return 'Transitive call tree FROM a function (approximate call graph)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--depth', '--format', '--kinds', '--limit']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runCallees(args, ctx);
 	}

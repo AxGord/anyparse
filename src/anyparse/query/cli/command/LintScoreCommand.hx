@@ -28,6 +28,10 @@ final class LintScoreCommand implements CliCommand implements LanguageFree {
 		return 'Score a lint --format json report against a ground-truth file (precision, recall)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], ['--format', '--limit', '--severity', '--truth']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runLintScore(args);
 	}

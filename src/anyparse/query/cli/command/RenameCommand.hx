@@ -27,6 +27,10 @@ final class RenameCommand implements CliCommand {
 		return 'Scope-correct, format-preserving symbol rename';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--qualify-shadowed', '--write'], ['--match', '--nth', '--scope', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runRename(args);
 	}

@@ -24,6 +24,10 @@ final class ChangeSigCommand implements CliCommand {
 		return 'Reorder a function\'s parameters + call-site args';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runChangeSig(args);
 	}

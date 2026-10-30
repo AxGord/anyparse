@@ -22,6 +22,10 @@ final class AddImportCommand implements CliCommand {
 		return 'Add an import / using to a module (writer-formatted, canonical-gated)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--using', '--write'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runAddImport(args);
 	}

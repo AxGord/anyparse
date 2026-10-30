@@ -22,6 +22,10 @@ final class SafeDeleteCommand implements CliCommand {
 		return 'Remove a member only if unreferenced across the scope';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--reformat', '--write'], ['--scope', '--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runSafeDelete(args);
 	}

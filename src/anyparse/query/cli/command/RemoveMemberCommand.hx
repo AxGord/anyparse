@@ -33,6 +33,10 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 		return 'Remove a member by --type + name (inverse of add-member)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--keep-doc', '--reformat', '--with-doc', '--write'], ['--match', '--nth', '--select', '--type']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runRemoveMember(args, ctx.postWriteFix);
 	}

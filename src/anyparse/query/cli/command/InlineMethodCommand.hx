@@ -25,6 +25,10 @@ final class InlineMethodCommand implements CliCommand {
 		return 'Inline a single-return function into its call sites + delete it';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--write'], ['--match', '--nth', '--select']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runInlineMethod(args);
 	}

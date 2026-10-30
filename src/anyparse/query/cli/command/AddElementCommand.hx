@@ -50,6 +50,12 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		return 'Insert a sibling element — statement/case/list elem (--after/--before)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(
+			['--after', '--append', '--before', '--reformat', '--sorted', '--write'], ['--from-file', '--match', '--nth', '--select']
+		);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runAddElement(args, ctx.postWriteFix);
 	}

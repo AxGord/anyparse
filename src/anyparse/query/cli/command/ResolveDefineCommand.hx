@@ -54,6 +54,10 @@ final class ResolveDefineCommand implements CliCommand {
 		return 'Fold every #if region a define decides: keep the live branch (write-twin of cond)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--list', '--reformat', '--undefined', '--write', '-l', '-w'], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runResolveDefine(args);
 	}

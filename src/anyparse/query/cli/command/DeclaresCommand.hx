@@ -22,6 +22,10 @@ final class DeclaresCommand implements CliCommand {
 		return 'Declaration site(s) of one named type (ambiguity check)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runDeclares(args);
 	}

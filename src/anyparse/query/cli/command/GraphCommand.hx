@@ -86,6 +86,21 @@ final class GraphCommand implements CliCommand {
 		return 'Dependency graph of a scope by package, type or member (weights, focus, mutual pairs)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--external', '--mutual'], [
+			'--diff',
+			'--edges',
+			'--focus',
+			'--format',
+			'--html',
+			'--kinds',
+			'--level',
+			'--min-weight',
+			'--package-depth',
+			'--radius'
+		]);
+	}
+
 	public function usage(): Void {
 		printGraphUsage();
 	}

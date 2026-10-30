@@ -47,6 +47,10 @@ final class UsesCommand implements CliCommand {
 		return 'Type references (field/param/type-param positions)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags(['--doc', '--flat', '--source'], ['--limit']);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runUses(args, ctx);
 	}

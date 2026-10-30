@@ -23,18 +23,6 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 	/** Env var naming the staging path outright, overriding the resolved one. */
 	private static inline final STAGE_PROBE_ENV: String = 'APQ_PROBE_PATH';
 
-	private static final AST_BOOL_FLAGS: Array<String> = [
-		'--json',
-		'--doc',
-		'--source',
-		'--writer-output',
-		'--writer-output-plain',
-		'--diff',
-		'--stdin',
-		'--spans',
-		'--type-refs'
-	];
-
 	public function new() {}
 
 	public function name(): String {
@@ -43,6 +31,11 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 
 	public function summary(): String {
 		return 'AST/writer probe with inline source (no file IO)';
+	}
+
+	/** `ast`'s flags and `--writer-probe`: every other flag is forwarded to `ast`, with its value when `ast` says it takes one. */
+	public function flags(): CliFlags {
+		return new AstCommand().flags().with(new CliFlags(['--writer-probe'], []));
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -83,10 +76,6 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 		// stderr — stdout stays the labelled output, exit code unchanged.
 		if (!plain) writerProbeSourcePreservationNote(source, emitted);
 		return true;
-	}
-
-	private static inline function isAstBoolFlag(flag: String): Bool {
-		return AST_BOOL_FLAGS.contains(flag);
 	}
 
 	/**
@@ -149,11 +138,8 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 			}
 			if (a.startsWith('--')) {
 				forwarded.push(a);
-				// Forward the option's value too. Boolean flags like
-				// `--json` / `--stdin` / `--writer-output` consume no
-				// value — track them by name so we don't eat the code
-				// positional. Anything else is value-bearing per `runAst`.
-				if (!isAstBoolFlag(a) && i + 1 < args.length) {
+				// Forward the option's value too, when `ast` declares one, so a switch never eats the code positional.
+				if (new AstCommand().flags().takesValue(a) && i + 1 < args.length) {
 					forwarded.push(args[i + 1]);
 					i++;
 				}

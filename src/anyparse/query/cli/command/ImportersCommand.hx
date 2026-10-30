@@ -21,6 +21,10 @@ final class ImportersCommand implements CliCommand {
 		return 'List files importing a given module (cross-file)';
 	}
 
+	public function flags(): CliFlags {
+		return new CliFlags([], []);
+	}
+
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runImporters(args);
 	}
