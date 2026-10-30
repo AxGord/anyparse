@@ -16,6 +16,14 @@
 		"abstractEmptyLines": {
 			"beginType": 1,
 			"endType": 1
+		},
+		"interfaceEmptyLines": {
+			"beginType": 1,
+			"endType": 1
+		},
+		"externClassEmptyLines": {
+			"beginType": 1,
+			"endType": 1
 		}
 	},
 	"wrapping": {
