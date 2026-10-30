@@ -31106,6 +31106,14 @@
 			"note": "a written relocation leaves the original module in place"
 		},
 		{
+			"name": "M-SCOPE-FILES-BY-SPELLING",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "collectScopeFiles",
+			"find": "final at: Int = keys.indexOf(OracleDeclaration.realPath(extra));",
+			"replace": "final at: Int = paths.indexOf(extra);",
+			"note": "a named file the scope walk holds under another spelling is indexed twice"
+		},
+		{
 			"name": "M-MODMOVE-CLI-ROLLBACK-OFF",
 			"type": "anyparse.query.cli.ModuleMoveCli",
 			"method": "rollback",

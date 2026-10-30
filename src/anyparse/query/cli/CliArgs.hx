@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.check.oracle.OracleDeclaration;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.grammar.mermaid.MermaidQueryPlugin;
@@ -335,7 +336,18 @@ final class CliArgs {
 	): Null<Array<{ file: String, source: String }>> {
 		final expanded: ExpandedInputs = expandInputs([scopeDir], '.hx');
 		final paths: Array<String> = expanded.paths;
-		for (extra in extraFiles) if (!paths.contains(extra)) paths.push(extra);
+		// An extra file the scope walk already holds under another spelling (absolute against a relative scope) takes that
+		// entry's place: the caller looks its own spelling up, and a second entry would index the file twice.
+		final keys: Array<String> = [for (path in paths) OracleDeclaration.realPath(path)];
+		for (extra in extraFiles) {
+			final at: Int = keys.indexOf(OracleDeclaration.realPath(extra));
+			if (at < 0) {
+				paths.push(extra);
+				keys.push(OracleDeclaration.realPath(extra));
+			} else {
+				paths[at] = extra;
+			}
+		}
 		return ([
 			for (path in paths)
 				{
