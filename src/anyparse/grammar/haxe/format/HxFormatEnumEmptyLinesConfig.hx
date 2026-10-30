@@ -20,10 +20,9 @@ package anyparse.grammar.haxe.format;
  *    `opt.betweenEnumCtors` knob (separate from `betweenVars` /
  *    `betweenFunctions` because enums have no var/fn split).
  *  - `beginType` — Int count, blank lines after `{` and before the first
- *    constructor. Feeds the GLOBAL `opt.beginType` knob (last-write-wins
- *    with class / interface / abstract `beginType`).
+ *    constructor. Feeds the enum-only `opt.enumBeginType` knob.
  *  - `endType` — Int count, blank lines after the last constructor and
- *    before `}`. Feeds the GLOBAL `opt.endType` knob.
+ *    before `}`. Feeds the enum-only `opt.enumEndType` knob.
  */
 @:peg typedef HxFormatEnumEmptyLinesConfig = {
 

@@ -1299,8 +1299,8 @@ final class WriterStarEmitLowering {
 			altBlockEndedFlag ? (branch.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
 			altBlockEndedFlag ? ctx.formatInfo.schemaTypePath : null,
 			altBlockEndedFlag ? TriviaBlockLowering.trailSepKeepPredicate(branch) : null, null,
-			branch.fmtHasFlag('clearExprPositionNonTail'), 'beginType', 'endType', branch.fmtHasFlag('uniformStmtBlanks'), false, null,
-			null, null, null, null, branch.fmtHasFlag('relocateTrailingComments')
+			branch.fmtHasFlag('clearExprPositionNonTail'), null, null, branch.fmtHasFlag('uniformStmtBlanks'), false, null, null, null,
+			null, null, branch.fmtHasFlag('relocateTrailingComments')
 		);
 	}
 

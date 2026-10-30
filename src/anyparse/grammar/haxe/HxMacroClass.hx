@@ -28,12 +28,12 @@ package anyparse.grammar.haxe;
  * `members` carries `@:fmt(interMemberBlankLines(...))` — the same
  * inter-member blank cascade `HxClassDecl.members` uses — so a `macro
  * class` body gets blank lines between its members (afterVars /
- * betweenFunctions) like a regular class body (emptylines/issue_377).
+ * betweenFunctions) like a regular class body (emptylines/issue_377),
+ * and `beginEndType` its own `macroClassEmptyLines` edge counts.
  * The remaining `@:fmt(…)` knobs `HxClassDecl.members` carries
  * (leftCurly / beforeDocComment / staticVarSubdivision / …) stay
  * omitted: they only shape writer output, never parsing, and no corpus
- * fixture needs them on a macro-class body yet. The hard invariant is
- * zero byte-regression on already-passing fixtures.
+ * fixture needs them on a macro-class body yet.
  *
  * `@:trivia` on `members` makes `HxMacroClass` transitively
  * trivia-bearing; the paired `HxMacroClassT` is synthesised
@@ -44,6 +44,6 @@ package anyparse.grammar.haxe;
 typedef HxMacroClass = {
 	var head: HxMacroClassHead;
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps, heritageWrap) var heritage: Array<HxHeritageClause>;
-	@:fmt(interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'), blankAroundMultilineMembers('aroundMultilineFields'),
-		relocateTrailingComments) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+	@:fmt(beginEndType('macroClassBeginType', 'macroClassEndType'), interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'),
+		blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }

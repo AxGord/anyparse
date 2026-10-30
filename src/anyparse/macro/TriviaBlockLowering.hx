@@ -493,12 +493,11 @@ final class TriviaBlockLowering {
 		// is discarded. The block's LAST statement (its yielded value) keeps the
 		// frame. False → byte-identical to the pre-slice element call.
 		clearExprPositionNonTail: Bool = false,
-		// ω-enum-begin-end: the opt field names read for the begin/end blank
-		// counts. Default class-scoped `beginType` / `endType`; a Star whose
-		// `@:fmt(beginEndType('a', 'b'))` names knobs (e.g. `HxEnumDecl.ctors`)
-		// reads those instead, so per-type-kind begin/end scopes never share.
-		beginTypeKnob: String = 'beginType',
-		endTypeKnob: String = 'endType', uniformStmtBlanks: Bool = false,
+		// The `Null<Int>` knob reads for the begin/end blank counts of a
+		// `beginEndType` Star (`WriterTriviaStarDispatch.beginEndKnobAccess`); null on
+		// every Star without the flag, whose count reads no knob.
+		?beginTypeAccess: Expr,
+		?endTypeAccess: Expr, uniformStmtBlanks: Bool = false,
 		// omega-condswitchopen-for-close: force an empty body to break its close
 		// onto its own line (the outer-block `}` of a `#if for { switch { #end`
 		// region). See `triviaBlockEmptyDocExpr`.
@@ -640,7 +639,7 @@ final class TriviaBlockLowering {
 		// trivia / ω-phase-g / ω-condcomp-stray-semi -> triviaBlockSepExprs (predicate
 		// build in triviaBlockPredCallExpr). The orchestrator now bundles every
 		// spliced Expr into a BlockStarCtx and delegates to triviaBlockMainExpr.
-		final beginEnd = triviaBlockBeginEndExpr(beginEndType, keepCurlyBlanks, beginTypeKnob, endTypeKnob);
+		final beginEnd = triviaBlockBeginEndExpr(beginEndType, keepCurlyBlanks, beginTypeAccess ?? macro null, endTypeAccess ?? macro null);
 		final between = triviaBlockBetweenExprs(blankBeforeFinalDocInLeading, betweenMultilineCommentsBlanks);
 		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath, trailSepKeepPredicate);
 		final leaf = triviaBlockLeafExprs(
@@ -842,11 +841,11 @@ final class TriviaBlockLowering {
 	 * `beforeRightCurly` Keep-policy source-blank honour.
 	 */
 	private static function triviaBlockBeginEndExpr(
-		beginEndType: Bool, keepCurlyBlanks: Bool, beginKnob: String, endKnob: String
+		beginEndType: Bool, keepCurlyBlanks: Bool, beginAccess: Expr, endAccess: Expr
 	): { final beginTypeExpr: Expr; final endTypeExpr: Expr; } {
 		final emitBeginExtras: Bool = beginEndType || keepCurlyBlanks;
-		final beginNExpr: Expr = triviaBlockBeginNExpr(beginEndType, beginKnob);
-		final endNExpr: Expr = triviaBlockEndNExpr(beginEndType, endKnob);
+		final beginNExpr: Expr = triviaBlockBeginNExpr(beginEndType, beginAccess);
+		final endNExpr: Expr = triviaBlockEndNExpr(beginEndType, endAccess);
 		final beginTypeExpr: Expr = emitBeginExtras
 			? macro {
 				final _firstSourceBlank: Bool = _arr.length > 0 && _arr[0].blankBefore;
@@ -1298,39 +1297,22 @@ final class TriviaBlockLowering {
 	}
 
 	/**
-	 * Block-Star head blank-line count (ω-class-begin-end-type / ω-bropen-keep).
-	 * Resolves the begin-side blank count: explicit `beginType` (type bodies) else
-	 * the `afterLeftCurly` Keep-policy source-blank honour.
+	 * Block-Star head blank-line count (ω-class-begin-end-type / ω-bropen-keep): `MemberGap.bodyEdge` over the type
+	 * body's stated `beginAccess` count, or — a Star without `beginEndType` — over none, which leaves the
+	 * `afterLeftCurly` Keep-policy source-blank honour.
 	 */
-	private static function triviaBlockBeginNExpr(beginEndType: Bool, beginKnob: String): Expr {
-		// ω-enumabstract-begin-end: read the enum-abstract begin knob under the
-		// `_inEnumAbstract` context flag, else the passed (default class-scoped) knob.
-		final beginAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractBeginType : $p{['opt', beginKnob]});
-		return beginEndType
-			? macro (
-				$beginAccess > 0
-					? $beginAccess
-					: opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0
-			)
-			: macro (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0);
+	private static function triviaBlockBeginNExpr(beginEndType: Bool, beginAccess: Expr): Expr {
+		final stated: Expr = beginEndType ? beginAccess : macro null;
+		return macro anyparse.format.MemberGap.bodyEdge($stated, opt.afterLeftCurly, _firstSourceBlank);
 	}
 
 	/**
-	 * Block-Star tail blank-line count (ω-class-begin-end-type / ω-bropen-keep).
-	 * Resolves the end-side blank count: explicit `endType` (type bodies) else the
-	 * `beforeRightCurly` Keep-policy source-blank honour.
+	 * Block-Star tail blank-line count (ω-class-begin-end-type / ω-bropen-keep): the `}`-side twin of
+	 * `triviaBlockBeginNExpr`, under `beforeRightCurly`.
 	 */
-	private static function triviaBlockEndNExpr(beginEndType: Bool, endKnob: String): Expr {
-		// ω-enumabstract-begin-end: read the enum-abstract end knob under the
-		// `_inEnumAbstract` context flag, else the passed (default class-scoped) knob.
-		final endAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractEndType : $p{['opt', endKnob]});
-		return beginEndType
-			? macro (
-				$endAccess > 0
-					? $endAccess
-					: opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0
-			)
-			: macro (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0);
+	private static function triviaBlockEndNExpr(beginEndType: Bool, endAccess: Expr): Expr {
+		final stated: Expr = beginEndType ? endAccess : macro null;
+		return macro anyparse.format.MemberGap.bodyEdge($stated, opt.beforeRightCurly, _trailBB && _arr.length > 0);
 	}
 
 	/**

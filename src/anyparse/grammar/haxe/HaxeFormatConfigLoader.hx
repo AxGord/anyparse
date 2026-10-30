@@ -197,6 +197,14 @@ final class HaxeFormatConfigLoader {
 			betweenEnumCtors: base.betweenEnumCtors,
 			beginType: base.beginType,
 			endType: base.endType,
+			abstractBeginType: base.abstractBeginType,
+			abstractEndType: base.abstractEndType,
+			interfaceBeginType: base.interfaceBeginType,
+			interfaceEndType: base.interfaceEndType,
+			externClassBeginType: base.externClassBeginType,
+			externClassEndType: base.externClassEndType,
+			macroClassBeginType: base.macroClassBeginType,
+			macroClassEndType: base.macroClassEndType,
 			enumBeginType: base.enumBeginType,
 			enumEndType: base.enumEndType,
 			enumAbstractBeginType: base.enumAbstractBeginType,
@@ -715,6 +723,7 @@ final class HaxeFormatConfigLoader {
 		if (externClassSection != null && externClassSection.existingBetweenFields != null)
 			opt.externExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(externClassSection.existingBetweenFields);
 		applyInterfaceEnumTypedefEmptyLines(section, opt);
+		applyTypeBodyEdges(section, opt);
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
 		if (section.beforePackage != null) opt.beforePackage = section.beforePackage;
 		if (section.afterFileHeaderComment != null) opt.afterFileHeaderComment = section.afterFileHeaderComment;
@@ -1111,8 +1120,6 @@ final class HaxeFormatConfigLoader {
 		if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
 		if (classSection.afterStaticVars != null) opt.afterStaticVars = classSection.afterStaticVars;
 		if (classSection.betweenStaticFunctions != null) opt.betweenStaticFunctions = classSection.betweenStaticFunctions;
-		if (classSection.beginType != null) opt.beginType = classSection.beginType;
-		if (classSection.endType != null) opt.endType = classSection.endType;
 	}
 
 	private static function applyInterfaceEnumTypedefEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
@@ -1127,8 +1134,6 @@ final class HaxeFormatConfigLoader {
 			if (enumSection.existingBetweenFields != null)
 				opt.existingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);
 			if (enumSection.betweenFields != null) opt.betweenEnumCtors = enumSection.betweenFields;
-			if (enumSection.beginType != null) opt.enumBeginType = enumSection.beginType;
-			if (enumSection.endType != null) opt.enumEndType = enumSection.endType;
 		}
 		// ω-typedef-between-fields: `typedefEmptyLines` routes the four
 		// sub-keys to the dedicated typedef-scoped knobs (no shared-knob
@@ -1140,8 +1145,30 @@ final class HaxeFormatConfigLoader {
 		if (typedefSection.existingBetweenFields != null)
 			opt.typedefExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(typedefSection.existingBetweenFields);
 		if (typedefSection.betweenFields != null) opt.typedefBetweenFields = typedefSection.betweenFields;
-		if (typedefSection.beginType != null) opt.typedefBeginType = typedefSection.beginType;
-		if (typedefSection.endType != null) opt.typedefEndType = typedefSection.endType;
+	}
+
+	/**
+	 * Every type kind's `beginType` / `endType` from its own `<kind>EmptyLines` section into its own knob pair. An absent
+	 * key leaves the knob `null`, so `afterLeftCurly` / `beforeRightCurly` decide from the source; a stated count, `0`
+	 * included, is exact.
+	 */
+	private static function applyTypeBodyEdges(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		opt.beginType = section.classEmptyLines?.beginType ?? opt.beginType;
+		opt.endType = section.classEmptyLines?.endType ?? opt.endType;
+		opt.abstractBeginType = section.abstractEmptyLines?.beginType ?? opt.abstractBeginType;
+		opt.abstractEndType = section.abstractEmptyLines?.endType ?? opt.abstractEndType;
+		opt.interfaceBeginType = section.interfaceEmptyLines?.beginType ?? opt.interfaceBeginType;
+		opt.interfaceEndType = section.interfaceEmptyLines?.endType ?? opt.interfaceEndType;
+		opt.externClassBeginType = section.externClassEmptyLines?.beginType ?? opt.externClassBeginType;
+		opt.externClassEndType = section.externClassEmptyLines?.endType ?? opt.externClassEndType;
+		opt.macroClassBeginType = section.macroClassEmptyLines?.beginType ?? opt.macroClassBeginType;
+		opt.macroClassEndType = section.macroClassEmptyLines?.endType ?? opt.macroClassEndType;
+		opt.enumBeginType = section.enumEmptyLines?.beginType ?? opt.enumBeginType;
+		opt.enumEndType = section.enumEmptyLines?.endType ?? opt.enumEndType;
+		opt.enumAbstractBeginType = section.enumAbstractEmptyLines?.beginType ?? opt.enumAbstractBeginType;
+		opt.enumAbstractEndType = section.enumAbstractEmptyLines?.endType ?? opt.enumAbstractEndType;
+		opt.typedefBeginType = section.typedefEmptyLines?.beginType ?? opt.typedefBeginType;
+		opt.typedefEndType = section.typedefEmptyLines?.endType ?? opt.typedefEndType;
 	}
 
 	private static function applyImportAndUsingEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {

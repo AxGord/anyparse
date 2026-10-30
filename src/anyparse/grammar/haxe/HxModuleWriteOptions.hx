@@ -377,33 +377,27 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	betweenEnumCtors: Int,
 
 	/**
-	 * Blank lines forced between a class / interface / abstract body's `{` and its first member (`endType`: before its
-	 * `}`), the fork's `classEmptyLines.beginType` / `endType`; `0` (the default) defers to `afterLeftCurly` /
-	 * `beforeRightCurly`. Enum, `enum abstract` and typedef bodies read their own dedicated knobs below, not these.
+	 * Blank lines between a type body's `{` and its first member (`…EndType`: between its last member and `}`), one
+	 * pair per type kind — the fork's `<kind>EmptyLines.beginType` / `endType`: `beginType` / `endType` for a class,
+	 * then abstract, interface, `extern class`, `macro class` reification, enum, `enum abstract`. `null` (the default)
+	 * means the config did not say, and `afterLeftCurly` / `beforeRightCurly` decide from the source; any count, `0`
+	 * included, is exact and wins over the source. Each pair is named by its grammar field's
+	 * `@:fmt(beginEndType(...))`.
 	 */
-	beginType: Int,
-
-	/**
-	 * The `}`-side twin of `beginType`.
-	 */
-	endType: Int,
-	// ω-enum-begin-end: dedicated enum-body begin/end blank knobs (fork's
-	// `enumEmptyLines: TypedefFieldsEmptyLinesConfig`, `@:default(0)`). Kept
-	// distinct from the class-scoped `beginType` / `endType` so a config that
-	// sets `classEmptyLines.beginType` (shared knob) no longer leaks a leading
-	// blank into `enum` bodies. Read only by `HxEnumDecl.ctors`' parameterised
-	// `@:fmt(beginEndType('enumBeginType', 'enumEndType'))`.
-	enumBeginType: Int,
-	enumEndType: Int,
-	// ω-enumabstract-begin-end: dedicated `enum abstract` body begin/end blank
-	// knobs (fork's `enumAbstractEmptyLines: EnumAbstractFieldsEmptyLinesConfig`,
-	// `@:default(0)`). `enum abstract` shares the `HxAbstractDecl` grammar with a
-	// plain `abstract`, so the writer distinguishes them by the transient
-	// `_inEnumAbstract` flag (set by `EnumAbstractDecl(decl)`) rather than a
-	// per-type knob-name; when set, the `beginEndType` count reads these instead
-	// of the class-scoped `beginType` / `endType`.
-	enumAbstractBeginType: Int,
-	enumAbstractEndType: Int,
+	beginType: Null<Int>,
+	endType: Null<Int>,
+	abstractBeginType: Null<Int>,
+	abstractEndType: Null<Int>,
+	interfaceBeginType: Null<Int>,
+	interfaceEndType: Null<Int>,
+	externClassBeginType: Null<Int>,
+	externClassEndType: Null<Int>,
+	macroClassBeginType: Null<Int>,
+	macroClassEndType: Null<Int>,
+	enumBeginType: Null<Int>,
+	enumEndType: Null<Int>,
+	enumAbstractBeginType: Null<Int>,
+	enumAbstractEndType: Null<Int>,
 	// ω-typedef-between-fields: dedicated typedef-RHS anon-body blank-line
 	// knobs (fork's `TypedefFieldsEmptyLinesConfig`), read only by the
 	// `@:sep`-Star force-multi branch under `_inTypedefBody`. Kept distinct
@@ -411,18 +405,19 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// path never reads) so typedef + class scopes never cross-contaminate.
 	// `typedefExistingBetweenFields` governs source-blank pass-through when
 	// `typedefBetweenFields == 0`; a positive `typedefBetweenFields` forces
-	// that exact count regardless of the policy. Defaults `0` / `0` / `Keep`
-	// / `0` are fork-parity values.
-	typedefBeginType: Int,
+	// that exact count regardless of the policy. `typedefBeginType` /
+	// `typedefEndType` follow the type-body contract above: `null` defers to
+	// the source, a count is exact.
+	typedefBeginType: Null<Int>,
 	typedefBetweenFields: Int,
 	typedefExistingBetweenFields: KeepEmptyLinesPolicy,
-	typedefEndType: Int,
+	typedefEndType: Null<Int>,
 
 	/**
 	 * `Keep` / `Remove` for the source blank between a `{` and its first item — a type body, a block body that opts in
 	 * through `@:fmt(keepCurlyBlanks)`, an anon type's fields (`beforeRightCurly`: before the matching `}`). On a type
-	 * body it is consulted only while `beginType` / `endType` is `0` — a positive count wins and inserts regardless of
-	 * source. Compiled default `Keep`; `HaxeFormatConfigLoader` re-baselines both to the fork's `Remove` on any JSON load.
+	 * body it is consulted only while that kind's `…BeginType` / `…EndType` is `null` — a stated count wins.
+	 * Compiled default `Keep`; `HaxeFormatConfigLoader` re-baselines both to the fork's `Remove` on any JSON load.
 	 */
 	afterLeftCurly: KeepEmptyLinesPolicy,
 
@@ -798,7 +793,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * 'Extern'))` when the sibling `modifiers` Star contains an `Extern` ctor. Read by
 	 * `triviaBlockStarExpr`'s `addByInterMemberExpr` to suppress `interMemberBlankLines`-driven blank
 	 * emission inside extern decls (the fork's `externClassEmptyLines`); also selects
-	 * `externExistingBetweenFields`.
+	 * `externExistingBetweenFields` and, on a class body, `externClassBeginType` / `externClassEndType`.
 	 */
 	_classExtern: Bool,
 
@@ -823,7 +818,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// ω-enumabstract-begin-end: set on the inner `HxAbstractDecl` opt when it is
 	// written as the body of an `enum abstract` (via `EnumAbstractDecl(decl)`'s
 	// `@:fmt(propagateEnumAbstractContext)`), so its `beginEndType` blank count
-	// reads `enumAbstractBeginType` / `enumAbstractEndType`. Default `false`.
+	// reads `enumAbstractBeginType` / `enumAbstractEndType` instead of the
+	// `abstract` pair. Default `false`.
 	_inEnumAbstract: Bool,
 
 	/**

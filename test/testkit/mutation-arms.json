@@ -32550,6 +32550,38 @@
 			"find": "|| theirs.children.exists(c -> find(base, c.key) == null)",
 			"replace": "&& theirs.children.exists(c -> find(base, c.key) == null)",
 			"note": "a member one side renamed and the other deleted comes back under its new name, silently, because by key a rename is a removal and an addition"
+		},
+		{
+			"name": "M-BODY-EDGE-STATED-IGNORED",
+			"type": "anyparse.format.MemberGap",
+			"method": "bodyEdge",
+			"find": "return stated ?? (policy == Keep && sourceBlank ? 1 : 0);",
+			"replace": "return policy == Keep && sourceBlank ? 1 : 0;",
+			"note": "a stated type-body edge count stops winning, so `<kind>EmptyLines.beginType: 0` leaves the source blank `afterLeftCurly: keep` carries"
+		},
+		{
+			"name": "M-TYPEDEF-EDGE-SOURCE-ADDED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepKeepCurlyOpenClose",
+			"find": "!(opt._inTypedefBody && opt.typedefBeginType != null)",
+			"replace": "true",
+			"note": "a typedef body adds the kept source blank on top of a stated `typedefEmptyLines.beginType`, so a stated 0 keeps the blank"
+		},
+		{
+			"name": "M-TYPE-BODY-EDGE-NO-SWITCH",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "beginEndKnobAccess",
+			"find": "if (args.length == KNOB_PAIR) return own;",
+			"replace": "return own;",
+			"note": "the context-flag second knob pair is never read, so an `enum abstract` takes the `abstract` edges and an `extern class` the class ones"
+		},
+		{
+			"name": "M-TYPE-BODY-EDGE-NO-INTERFACE",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyTypeBodyEdges",
+			"find": "opt.interfaceBeginType = section.interfaceEmptyLines?.beginType ?? opt.interfaceBeginType;",
+			"replace": "",
+			"note": "`interfaceEmptyLines.beginType` is parsed and dropped, so an interface body keeps the source edge"
 		}
 	]
 }

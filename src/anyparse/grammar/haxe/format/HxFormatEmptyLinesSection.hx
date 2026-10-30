@@ -3,8 +3,8 @@ package anyparse.grammar.haxe.format;
 /**
  * `emptyLines` section of a haxe-formatter `hxformat.json` config. Only keys whose runtime knob exists on
  * `HxModuleWriteOptions` are modelled; the rest (`finalNewline`, `betweenTypes`, `lineCommentsBetweenTypes`,
- * `afterReturn`, `beforeBlocks`, `enumAbstractEmptyLines`, `macroClassEmptyLines`, `conditionalsEmptyLines`,
- * …) are silently dropped by the ByName struct parser's `UnknownPolicy.Skip` and land with their writer knob.
+ * `afterReturn`, `beforeBlocks`, `conditionalsEmptyLines`, …) are silently dropped by the ByName struct parser's
+ * `UnknownPolicy.Skip` and land with their writer knob.
  * Each modelled key feeds the knob of the same name; every `Int` is an OVERRIDE of the source-captured count,
  * not a floor (`0` strips a blank the source had, `2` emits two the source lacked), except
  * `betweenSingleLineTypes`, which is insertion-only (`0` leaves the slot source-driven).
@@ -19,7 +19,9 @@ package anyparse.grammar.haxe.format;
  * `enumEmptyLines.betweenFields` feeds the dedicated `betweenEnumCtors`; `typedefEmptyLines` feeds four
  * DEDICATED `typedef*` knobs, kept separate from the class scopes' shared ones because the typedef-RHS anon
  * renders through the `@:sep`-Star writer path, not the class-body Star path (the fork's distinct
- * `TypedefFieldsEmptyLinesConfig`), all defaulting to the no-blank baseline. `importAndUsing` feeds
+ * `TypedefFieldsEmptyLinesConfig`), all defaulting to the no-blank baseline. Every type-kind section's
+ * `beginType` / `endType` — `enumAbstractEmptyLines` and `macroClassEmptyLines` carry nothing else — feeds that
+ * kind's OWN knob pair (`HaxeFormatConfigLoader.applyTypeBodyEdges`); unset, the source decides. `importAndUsing` feeds
  * `beforeUsing` / `betweenImports` / `betweenImportsLevel` / `beforeType`.
  *
  * `maxAnywhereInFile` feeds the base `WriteOptions.maxConsecutiveBlanks`, the writer's final-pass cap on
@@ -44,6 +46,10 @@ package anyparse.grammar.haxe.format;
 	@:optional var interfaceEmptyLines: HxFormatInterfaceEmptyLinesConfig;
 
 	@:optional var enumEmptyLines: HxFormatEnumEmptyLinesConfig;
+
+	@:optional var enumAbstractEmptyLines: HxFormatTypeBodyEmptyLinesConfig;
+
+	@:optional var macroClassEmptyLines: HxFormatTypeBodyEmptyLinesConfig;
 
 	@:optional var typedefEmptyLines: HxFormatTypedefEmptyLinesConfig;
 

@@ -45,6 +45,12 @@ using anyparse.macro.MetaInspect;
 	anyparse.macro.WriterPolicyLowering)
 final class WriterTriviaStarDispatch {
 
+	/** `@:fmt(beginEndType(...))` argument count naming one begin/end knob pair. */
+	private static inline final KNOB_PAIR: Int = 2;
+
+	/** `@:fmt(beginEndType(...))` argument count naming a knob pair, a context flag and the pair the flag switches to. */
+	private static inline final KNOB_PAIR_SWITCHED: Int = 5;
+
 	/**
 	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
 	 * region is ONE Star element whose Doc carries directive hardlines (flat
@@ -326,12 +332,8 @@ final class WriterTriviaStarDispatch {
 		// inside `triviaBlockStarExpr`.
 		final emptyCurlyKnob: Null<String> = fmtFirstStringArg(starNode, 'emptyCurlyBreak');
 		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
-		// ω-enum-begin-end: `@:fmt(beginEndType('a', 'b'))` names the begin/end
-		// opt knobs to read (default class-scoped `beginType` / `endType`), so
-		// `HxEnumDecl.ctors` reads its own `enumBeginType` / `enumEndType`.
-		final beginEndKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('beginEndType');
-		final beginTypeKnob: String = beginEndKnobArgs != null && beginEndKnobArgs.length >= 2 ? beginEndKnobArgs[0] : 'beginType';
-		final endTypeKnob: String = beginEndKnobArgs != null && beginEndKnobArgs.length >= 2 ? beginEndKnobArgs[1] : 'endType';
+		final beginTypeAccess: Null<Expr> = beginEndType ? beginEndKnobAccess(starNode, 0) : null;
+		final endTypeAccess: Null<Expr> = beginEndType ? beginEndKnobAccess(starNode, 1) : null;
 		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
 		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
 		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
@@ -396,7 +398,7 @@ final class WriterTriviaStarDispatch {
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
 			blockEndedFlag ? tc.formatInfo.schemaTypePath : null,
 			blockEndedFlag ? TriviaBlockLowering.trailSepKeepPredicate(starNode) : null, condLeadingDocInfo, clearExprPositionNonTail,
-			beginTypeKnob, endTypeKnob, uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn,
+			beginTypeAccess, endTypeAccess, uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn,
 			caseSiblingControlFlowFn, blankAroundOptField, starNode.fmtHasFlag('relocateTrailingComments')
 		);
 		final blockStarNested: Expr = macro {
@@ -857,6 +859,25 @@ final class WriterTriviaStarDispatch {
 			if (target != null && ownStarHasFlag(target, flag)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The `Null<Int>` knob read a `@:fmt(beginEndType(...))` type body takes its `side` count from (0 begin, 1 end):
+	 * `('b', 'e')`, that pair; `('b', 'e', 'flag', 'fb', 'fe')`, the second pair while `opt.<flag>` is set — how one
+	 * grammar type written in two roles (`abstract` and `enum abstract`, `class` and `extern class`) keeps two scopes.
+	 * The grammar always names the pair: a default here would be one grammar's knob name in the core macro.
+	 */
+	private static function beginEndKnobAccess(star: ShapeNode, side: Int): Expr {
+		final args: Null<Array<String>> = star.fmtReadStringArgs('beginEndType');
+		if (args == null || (args.length != KNOB_PAIR && args.length != KNOB_PAIR_SWITCHED))
+			Context.fatalError(
+				'@:fmt(beginEndType) names its knob pair, optionally followed by a flag and a second pair', Context.currentPos()
+			);
+		final own: Expr = macro $p{['opt', args[side]]};
+		if (args.length == KNOB_PAIR) return own;
+		final flag: Expr = macro $p{['opt', args[KNOB_PAIR]]};
+		final switched: Expr = macro $p{['opt', args[KNOB_PAIR + 1 + side]]};
+		return macro ($flag ? $switched : $own);
 	}
 
 }

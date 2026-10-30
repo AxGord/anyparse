@@ -68,6 +68,15 @@ final class MemberGap {
 		return (prevDocLed && after == One) || (nextDocLed && before == One);
 	}
 
+	/**
+	 * The blank lines at one edge of a type body — between its `{` and the first member, or the last member and its
+	 * `}`: a `stated` count is exact whatever the source holds there; `null` (the config said nothing) keeps the one
+	 * source blank `sourceBlank` reports when `policy` is `Keep`.
+	 */
+	public static inline function bodyEdge(stated: Null<Int>, policy: KeepEmptyLinesPolicy, sourceBlank: Bool): Int {
+		return stated ?? (policy == Keep && sourceBlank ? 1 : 0);
+	}
+
 	/** Whether a member's leading comments carry a doc comment (`/**`), which is what the doc-comment rule keys on. */
 	public static function docLed(leadingComments: Array<String>): Bool {
 		return leadingComments.exists(c -> c.startsWith(DOC_OPEN));

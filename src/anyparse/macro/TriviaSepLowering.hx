@@ -1671,15 +1671,24 @@ final class TriviaSepLowering {
 		// the first element AND the runtime opted into Keep; symmetric
 		// end-side push before `_trailLC` handling. Other sep-Star consumers
 		// default `keepCurlyBlanks=false` → both pushes are `macro {}`.
+		// A typedef body whose `typedefBeginType` / `typedefEndType` is stated leaves that edge to
+		// `triviaSepTypedefBlankInserts`: a stated count is exact, so the source blank is not added on top.
 		final keepCurlyBeginExpr: Expr = typedefBodyBlanks
 			? macro {
-				if (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _arr.length > 0 && _arr[0].blankBefore)
+				if (
+					!(opt._inTypedefBody && opt.typedefBeginType != null)
+					&& anyparse.format.MemberGap.bodyEdge(null, opt.afterLeftCurly, _arr.length > 0 && _arr[0].blankBefore) > 0
+				)
 					_inner.push(_dhl());
 			}
 			: macro {};
 		final keepCurlyEndExpr: Expr = typedefBodyBlanks
 			? macro {
-				if (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0) _inner.push(_dhl());
+				if (
+					!(opt._inTypedefBody && opt.typedefEndType != null)
+					&& anyparse.format.MemberGap.bodyEdge(null, opt.beforeRightCurly, _trailBB && _arr.length > 0) > 0
+				)
+					_inner.push(_dhl());
 			}
 			: macro {};
 		return {
@@ -1698,9 +1707,10 @@ final class TriviaSepLowering {
 	private static function triviaSepTypedefBlankInserts(typedefBodyBlanks: Bool): WriterLowering.SepStarTypedefInserts {
 		final typedefBeginExpr: Expr = typedefBodyBlanks
 			? macro {
-				if (opt._inTypedefBody && opt.typedefBeginType > 0 && _arr.length > 0) {
+				final _tbn: Int = opt._inTypedefBody && _arr.length > 0 ? opt.typedefBeginType ?? 0 : 0;
+				if (_tbn > 0) {
 					var _tbi: Int = 0;
-					while (_tbi < opt.typedefBeginType) {
+					while (_tbi < _tbn) {
 						_inner.push(_dhl());
 						_tbi++;
 					}
@@ -1709,9 +1719,10 @@ final class TriviaSepLowering {
 			: macro {};
 		final typedefEndExpr: Expr = typedefBodyBlanks
 			? macro {
-				if (opt._inTypedefBody && opt.typedefEndType > 0 && _arr.length > 0) {
+				final _ten: Int = opt._inTypedefBody && _arr.length > 0 ? opt.typedefEndType ?? 0 : 0;
+				if (_ten > 0) {
 					var _tei: Int = 0;
-					while (_tei < opt.typedefEndType) {
+					while (_tei < _ten) {
 						_inner.push(_dhl());
 						_tei++;
 					}

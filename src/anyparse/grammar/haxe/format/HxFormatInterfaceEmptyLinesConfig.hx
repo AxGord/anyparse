@@ -11,6 +11,9 @@ package anyparse.grammar.haxe.format;
  * matching haxe-formatter's per-decl-type Section configs
  * (`InterfaceFieldsEmptyLinesConfig` defaults `0 / 0 / 0`).
  *
+ * `beginType` / `endType` feed the interface body's own
+ * `opt.interfaceBeginType` / `opt.interfaceEndType`, never the class pair.
+ *
  * Other potential keys (`existingBetweenFields`, …) are silently
  * dropped by the ByName struct parser's `UnknownPolicy.Skip` until the
  * matching writer knob lands. Added in slice ω-iface-interblank.
@@ -22,4 +25,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var betweenFunctions: Int;
 
 	@:optional var afterVars: Int;
+
+	@:optional var beginType: Int;
+
+	@:optional var endType: Int;
 };

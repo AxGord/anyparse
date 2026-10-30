@@ -46,7 +46,9 @@ typedef HxAbstractDecl = {
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
 	@:optional @:lead('(') @:trail(')') @:fmt(tightLead) @:queryTypeSlot var underlyingType: Null<HxType>;
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps) var clauses: Array<HxAbstractClause>;
-	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines,
+	@:fmt(leftCurly, emptyCurlyBreak,
+		beginEndType('abstractBeginType', 'abstractEndType', '_inEnumAbstract', 'enumAbstractBeginType', 'enumAbstractEndType'),
+		afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines,
 		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'), staticVarSubdivision, betweenMultilineCommentsBlanks,
 		blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;

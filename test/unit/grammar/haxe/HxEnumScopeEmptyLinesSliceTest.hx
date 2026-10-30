@@ -32,12 +32,12 @@ class HxEnumScopeEmptyLinesSliceTest extends Test {
 		super();
 	}
 
-	public function testDefaultEnumScopeKnobsZero(): Void {
+	public function testDefaultEnumScopeKnobsUnset(): Void {
 		final d: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.equals(0, d.enumBeginType);
-		Assert.equals(0, d.enumEndType);
-		Assert.equals(0, d.enumAbstractBeginType);
-		Assert.equals(0, d.enumAbstractEndType);
+		Assert.isNull(d.enumBeginType);
+		Assert.isNull(d.enumEndType);
+		Assert.isNull(d.enumAbstractBeginType);
+		Assert.isNull(d.enumAbstractEndType);
 	}
 
 	public function testClassBeginEndConfigDoesNotLeakIntoEnum(): Void {
