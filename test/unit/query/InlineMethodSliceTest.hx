@@ -189,6 +189,18 @@ class InlineMethodSliceTest extends Test {
 		]);
 	}
 
+	/** Another file reaching the declaration through a static field import still calls it, so it is not inlined away. */
+	public function testRefuseInlineOfAStaticAnotherFileImports(): Void {
+		final source: String = 'package q;\n\nclass A {\n\tstatic function path(p:String):String\n\t\treturn p + "/";\n\n'
+			+ '\tstatic function u():String\n\t\treturn path("x");\n}';
+		final caller: String =
+			'package r;\n\nimport q.Fixture.A.path;\n\nclass B {\n\tstatic function w():String\n\t\treturn path("y");\n}';
+		assertRefusedWith(source, 4, 18, 'referenced from another file', [
+			{ file: FIXTURE_FILE, source: source },
+			{ file: 'B.hx', source: caller }
+		]);
+	}
+
 	/** A same-named call through a VALUE receiver may be this declaration and is not provable — still refused. */
 	public function testRefuseSameNamedCallThroughValue(): Void {
 		assertRefusedWith(

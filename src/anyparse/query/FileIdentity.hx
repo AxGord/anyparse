@@ -33,4 +33,9 @@ final class FileIdentity {
 		#end
 	}
 
+	/** Whether `a` and `b` name one file — the same spelling, or the same `realPath`. */
+	public static function same(a: String, b: String): Bool {
+		return a == b || realPath(a) == realPath(b);
+	}
+
 }

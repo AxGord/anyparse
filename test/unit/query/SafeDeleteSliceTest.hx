@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SafeDelete;
+import anyparse.runtime.Span;
 
 using StringTools;
 
@@ -66,6 +67,108 @@ class SafeDeleteSliceTest extends Test {
 		], plugin(), refShape()));
 	}
 
+	/** Another file importing the member as a static field (`import pkg.Svc.path;`) and calling it bare blocks the delete. */
+	@:pin('control')
+	@:killer('M-SAFE-DELETE-STATIC-IMPORT')
+	public function testStaticFieldImportBlocks(): Void {
+		assertReferencedFrom('other/U.hx', SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'path', true, [
+			{ file: 'pkg/Svc.hx', source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}' },
+			{
+				file: 'other/U.hx',
+				source: 'package other;\n\nimport pkg.Svc.path;\n\nclass U {\n\tstatic function go():String return path("y");\n}'
+			}
+		], plugin(), refShape()));
+	}
+
+	/** A static field import naming the member blocks the delete with no use: the import alone stops compiling without it. */
+	public function testUnusedStaticFieldImportBlocks(): Void {
+		assertReferencedFrom('other/U.hx', SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'path', true, [
+			{ file: 'pkg/Svc.hx', source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}' },
+			{ file: 'other/U.hx', source: 'package other;\n\nimport pkg.Svc.path;\n\nclass U {}' }
+		], plugin(), refShape()));
+	}
+
+	/** An alias of the member (`import pkg.Svc.path as p;`) blocks the delete. */
+	public function testStaticFieldAliasBlocks(): Void {
+		assertReferencedFrom('other/U.hx', SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'path', true, [
+			{ file: 'pkg/Svc.hx', source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}' },
+			{
+				file: 'other/U.hx',
+				source: 'package other;\n\nimport pkg.Svc.path as p;\n\nclass U {\n\tstatic function go():String return p("y");\n}'
+			}
+		], plugin(), refShape()));
+	}
+
+	/** A type wildcard over the declaring type (`import pkg.Svc.*;`) and a bare call of the member blocks the delete. */
+	@:pin('control')
+	@:killer('M-SAFE-DELETE-STATIC-WILDCARD')
+	public function testStaticWildcardImportBlocks(): Void {
+		assertReferencedFrom('other/U.hx', SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'path', true, [
+			{ file: 'pkg/Svc.hx', source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}' },
+			{
+				file: 'other/U.hx',
+				source: 'package other;\n\nimport pkg.Svc.*;\n\nclass U {\n\tstatic function go():String return path("y");\n}'
+			}
+		], plugin(), refShape()));
+	}
+
+	/** A wildcard over another type declaring its own same-named static binds the bare call to that one: the delete goes on. */
+	public function testWildcardOfAnotherTypeDoesNotBlock(): Void {
+		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'path', [
+			{ file: 'pkg/Svc.hx', source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}' },
+			{ file: 'pkg/Other.hx', source: 'package pkg;\n\nclass Other {\n\tpublic static function path(p:String):String return p;\n}' },
+			{
+				file: 'other/U.hx',
+				source: 'package other;\n\nimport pkg.Other.*;\n\nclass U {\n\tstatic function go():String return path("y");\n}'
+			}
+		]);
+		Assert.isFalse(text.contains('function path'), text);
+	}
+
+	/** A wildcard over the declaring type with no bare use of the member does not block the delete. */
+	public function testUnusedWildcardDoesNotBlock(): Void {
+		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'path', [
+			{
+				file: 'pkg/Svc.hx',
+				source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n'
+				+ '\tpublic static function other():Int return 1;\n}'
+			},
+			{
+				file: 'other/U.hx',
+				source: 'package other;\n\nimport pkg.Svc.*;\n\nclass U {\n\tstatic function go():Int return other();\n}'
+			}
+		]);
+		Assert.isFalse(text.contains('function path'), text);
+	}
+
+	/**
+	 * With no index to read the imports through, a file's own import statement naming the member — by its path or as the
+	 * path of an alias — is still a reference: deleting the member breaks it.
+	 */
+	@:pin('control')
+	@:killer('M-SAFE-DELETE-IMPORT-NO-INDEX')
+	public function testUnindexedStaticImportBlocks(): Void {
+		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}';
+		final span: Span = new Span(svc.indexOf('public static'), svc.lastIndexOf('}'));
+		for (stmt in ['import pkg.Svc.path;', 'import pkg.Svc.path as p;']) {
+			final refusal: Null<String> = SafeDelete.foreignReferenceRefusal([
+				{ file: 'pkg/Svc.hx', source: svc },
+				{ file: 'other/U.hx', source: 'package other;\n\n$stmt\n\nclass U {}' }
+			], 'pkg/Svc.hx', 'path', span, plugin(), refShape(), () -> null);
+			Assert.isTrue(refusal != null && refusal.indexOf('other/U.hx') >= 0, '$stmt: $refusal');
+		}
+	}
+
+	/** With no index, an import of another member of the type does not block the delete. */
+	public function testUnindexedImportOfAnotherMemberDoesNotBlock(): Void {
+		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}';
+		final span: Span = new Span(svc.indexOf('public static'), svc.lastIndexOf('}'));
+		Assert.isNull(SafeDelete.foreignReferenceRefusal([
+			{ file: 'pkg/Svc.hx', source: svc },
+			{ file: 'other/U.hx', source: 'package other;\n\nimport pkg.Svc.other;\n\nclass U {\n\tstatic final s:String = "path";\n}' }
+		], 'pkg/Svc.hx', 'path', span, plugin(), refShape(), () -> null));
+	}
+
 	/** A self-recursive method with no other reference is removed. */
 	public function testRecursiveRemoved(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n'
@@ -118,6 +221,16 @@ class SafeDeleteSliceTest extends Test {
 				Assert.fail('expected Err, got Ok');
 			case Err(_):
 				Assert.pass();
+		}
+	}
+
+	/** `result` is the refusal naming `file` among the files still referencing the member — not any other `Err`. */
+	private function assertReferencedFrom(file: String, result: EditResult): Void {
+		switch result {
+			case Ok(_):
+				Assert.fail('expected a refusal naming $file, got Ok');
+			case Err(message):
+				Assert.isTrue(message.indexOf('still referenced') >= 0 && message.indexOf(file) >= 0, message);
 		}
 	}
 

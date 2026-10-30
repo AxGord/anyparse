@@ -6,6 +6,9 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QualifiedReceiver.ReceiverTarget;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.ValueNameBinding.ImportedStatic;
+import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -147,7 +150,8 @@ final class SafeDelete {
 	 * `x.member` field access whose receiver is not proven to name another
 	 * type declaring its own `memberName` (`QualifiedReceiver`, read through
 	 * `index`), plus — in the declaring file — every bare reference the scope
-	 * resolver binds to the declaration. References inside the member's own
+	 * resolver binds to the declaration; in every other file, the references
+	 * its imports make (`importedReferences`). References inside the member's own
 	 * body span (`memberSpan`, `srcFile` only) are excluded so recursion does
 	 * not block deletion.
 	 */
@@ -181,9 +185,66 @@ final class SafeDelete {
 				if (h.span.from >= memberSpan.from && h.span.from < memberSpan.to) continue;
 				count++;
 			}
+			if (!inSrc) count += importedReferences(entry, memberName, memberSpan, srcFile, refShape, index);
 			if (count > 0) out.push({ file: entry.file, count: count });
 		}
 		return out;
+	}
+
+	/**
+	 * The references `entry`, a file other than the declaring one, makes to the member through its imports
+	 * (`ValueNameBinding.importedStatics`): its statement naming the member (`import p.T.m;`), and each bare use no in-file
+	 * declaration binds while an import may bring the member in (`import p.T.*;`), plus each alias of it. A static the imports
+	 * bind to another type's own declaration does not count, one whose owner the index does not hold does. With no index
+	 * entry for the file, every unbound bare use counts, and every import statement of its own tree naming the member.
+	 */
+	private static function importedReferences(
+		entry: Parsed, memberName: String, memberSpan: Span, srcFile: String, refShape: RefShape, index: () -> Null<SymbolIndex>
+	): Int {
+		if (entry.source.indexOf(memberName) < 0) return 0;
+		final unbound: Int = [
+			for (h in Refs.find(memberName, entry.tree, refShape)) if (h.kind != RefKind.Decl && h.bindingSpan == null) h
+		].length;
+		final idx: Null<SymbolIndex> = index();
+		final fi: Null<FileInfo> = idx?.fileInfo(entry.file) ?? idx?.allFiles().find(f -> FileIdentity.same(f.file, entry.file));
+		if (idx == null || fi == null) return unbound + importsNaming(entry, memberName);
+		final reaches: ImportedStatic -> Bool = s ->
+			s.member == memberName
+				&& (s.decls.length == 0
+					|| s.decls.exists(
+						d ->
+							FileIdentity.same(d.file.file, srcFile)
+							&& d.type.span.from <= memberSpan.from
+							&& memberSpan.from < d.type.span.to
+					));
+		final statics: ImportedStatics = idx.values.importedStatics(fi, memberName);
+		var count: Int = 0;
+		if (statics.unknown || statics.statics.exists(reaches)) count += unbound + (idx.fileImportsMemberName(fi.file, memberName) ? 1 : 0);
+		for (a in idx.values.fieldAliases(fi)) {
+			final target: Null<ImportedStatic> = a.target;
+			if (target == null || reaches(target)) count++;
+		}
+		return count;
+	}
+
+	/**
+	 * The import statements of `entry`'s own tree whose path, or aliased path, ends in `memberName` — read off the syntax
+	 * alone, for a file the index does not hold: deleting the member breaks each of them.
+	 */
+	private static function importsNaming(entry: Parsed, memberName: String): Int {
+		var count: Int = 0;
+		function walk(node: QueryNode): Void {
+			final name: String = node.name ?? '';
+			final span: Null<Span> = node.span;
+			if (ModuleScan.IMPORT_DECL_KINDS.contains(node.kind)) {
+				final aliased: String = span == null ? '' : ModuleScan.aliasTargetOf(entry.source.substring(span.from, span.to));
+				if (SourceText.lastSegment(name) == memberName || aliased != '' && SourceText.lastSegment(aliased) == memberName) count++;
+				return;
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(entry.tree);
+		return count;
 	}
 
 }

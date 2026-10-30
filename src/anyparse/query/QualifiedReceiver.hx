@@ -64,14 +64,9 @@ final class QualifiedReceiver {
 
 	private function classify(decl: ResolvedType, name: String): ReceiverTarget {
 		final type: TypeDeclInfo = decl.type;
-		if (sameFile(decl.file.file, _declFile) && type.span.from <= _declFrom && _declFrom < type.span.to) return DeclaringType;
+		if (FileIdentity.same(decl.file.file, _declFile) && type.span.from <= _declFrom && _declFrom < type.span.to) return DeclaringType;
 		if (type.aliasTargetRaw != null || !type.members.exists(m -> m.name == name)) return Unproven;
 		return OtherType;
-	}
-
-	/** One file whichever path form the index and the caller spell it in. */
-	private static function sameFile(a: String, b: String): Bool {
-		return a == b || FileIdentity.realPath(a) == FileIdentity.realPath(b);
 	}
 
 }

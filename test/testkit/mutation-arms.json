@@ -33236,6 +33236,30 @@
 			"note": "a receiver naming another type declaring its own member of the name still counts, so another file calling that type's member blocks the delete"
 		},
 		{
+			"name": "M-SAFE-DELETE-STATIC-IMPORT",
+			"type": "anyparse.query.SafeDelete",
+			"method": "importedReferences",
+			"find": "statics.unknown || statics.statics.exists(reaches)",
+			"replace": "statics.unknown",
+			"note": "a static the imports bind to the member no longer counts, so another file importing it and calling it bare no longer blocks the delete"
+		},
+		{
+			"name": "M-SAFE-DELETE-STATIC-WILDCARD",
+			"type": "anyparse.query.SafeDelete",
+			"method": "importedReferences",
+			"find": "count += unbound + ",
+			"replace": "count += ",
+			"note": "a bare use under an import that may bring the member in no longer counts, so a type wildcard plus a bare call no longer blocks the delete"
+		},
+		{
+			"name": "M-SAFE-DELETE-IMPORT-NO-INDEX",
+			"type": "anyparse.query.SafeDelete",
+			"method": "importedReferences",
+			"find": "unbound + importsNaming(entry, memberName)",
+			"replace": "unbound",
+			"note": "with no index, an import statement naming the member no longer counts, so an unused static import of it no longer blocks the delete"
+		},
+		{
 			"name": "M-INLINE-METHOD-SCOPE-INDEX",
 			"type": "anyparse.query.InlineMethod",
 			"method": "resolveInlineMethod",
