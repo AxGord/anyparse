@@ -1500,14 +1500,17 @@ final class WriterStarEmitLowering {
 			final _te = _arr[_si];
 			final _edParts: Array<anyparse.core.Doc> = [];
 			final _isLast: Bool = _si == _arr.length - 1;
-			// A comment that followed the previous element's separator heads this element, which puts it back
-			// after that separator: the separator itself belongs to the layout engine.
-			final _prevTc: Null<String> = _si > 0 && !_arr[_si - 1].trailingBeforeSep ? _arr[_si - 1].trailingComment : null;
+			// A block comment that followed the previous element's separator heads this element, which puts it back
+			// after that separator: the separator itself belongs to the layout engine. A line comment stays on its own
+			// element's line (below), since one heading the next element would read back as that element's comment.
+			final _prevTcRaw: Null<String> = _si > 0 && !_arr[_si - 1].trailingBeforeSep ? _arr[_si - 1].trailingComment : null;
+			final _prevTc: Null<String> = _prevTcRaw != null && !StringTools.startsWith(_prevTcRaw, '//') ? _prevTcRaw : null;
 			final _lc: Array<String> = _prevTc == null ? _te.leadingComments : [_prevTc].concat(_te.leadingComments);
 			_edParts.push(leadingCommentsBefore(_lc, _dhl(), opt));
 			_edParts.push($writeCall);
 			final _tc: Null<String> = _te.trailingComment;
-			if (_tc != null && (_te.trailingBeforeSep || _isLast)) _edParts.push(trailingCommentDocGuarded(_tc, opt));
+			if (_tc != null && (_te.trailingBeforeSep || _isLast || StringTools.startsWith(_tc, '//')))
+				_edParts.push(trailingCommentDocGuarded(_tc, opt));
 			if (_isLast) for (_oc in $orphanAccess) _edParts.push(trailingCommentDocGuarded(_oc, opt));
 			_dc(_edParts);
 		};

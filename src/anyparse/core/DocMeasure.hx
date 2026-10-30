@@ -446,6 +446,15 @@ final class DocMeasure {
 	}
 
 	/**
+	 * True when `d`'s first visible text starts with `c` and its flat rendering forces a break: with `c` a comment
+	 * opener, `d` leads with a comment that ends its line (a line comment, a multi-line block) rather than a one-line
+	 * block comment glued to what follows it.
+	 */
+	public static function leadsWithBreakingText(d: Doc, c: Int): Bool {
+		return firstVisibleTextStartsWith(d, c) && hasForcedBreak(d);
+	}
+
+	/**
 	 * True iff this rendered list item opens a preprocessor region (`#if …`): the first source
 	 * token on its left spine, past any leading comment the item carries, is `#`.
 	 */

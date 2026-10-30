@@ -115,7 +115,7 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isAltTrailOptBranch(branch)) n++; // trailPresent
 		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) n++; // sourceText
 		if (TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch)) n++; // bodyOnSameLine
-		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) n++; // wrapOpenNewline
+		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) n += 2; // wrapOpenNewline + wrapOpenTrailing
 		if (TriviaPairAltCtor.isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) n++; // chainLeadComment (chain receiver/operand comment)
@@ -452,7 +452,10 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isAltTrailOptBranch(branch)) defaults.push(macro false); // trailPresent
 		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) defaults.push(macro ''); // sourceText
 		if (TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch)) defaults.push(macro false); // bodyOnSameLine
-		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
+		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) {
+			defaults.push(macro false); // wrapOpenNewline
+			defaults.push(macro (null: Null<String>)); // wrapOpenTrailing
+		}
 		if (TriviaPairAltCtor.isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch))

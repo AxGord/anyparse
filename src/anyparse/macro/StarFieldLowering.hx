@@ -466,7 +466,7 @@ final class StarFieldLowering {
 					else
 						break;
 				}
-				final _trailComment: Null<String> = collectTrailing(ctx);
+				final _trailComment: Null<String> = collectTrailingFull(ctx);
 				final _preTrivia = collectTrivia(ctx);
 				final _kwStartPos: Int = ctx.pos;
 				if ($commitCheck) {

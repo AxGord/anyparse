@@ -30,11 +30,11 @@ class HxPatternListAndLeadCommentWriteTest extends Test {
 		assertFixedPoint(inSwitch('case /* c */ X: // t\n\t\t\t\trun();'));
 	}
 
-	public function testLineCommentAfterSeparatorStaysBeforeTheNextPattern(): Void {
-		// A line comment cannot share a line with the next pattern, so the list breaks; the comment keeps its place
-		// after the separator, and the written form is a fixed point.
+	public function testLineCommentAfterSeparatorStaysOnItsPatternsLine(): Void {
+		// A line comment stays on its pattern's line, ahead of the separator the list writes on the next line: one
+		// heading the next pattern would read back as that pattern's comment.
 		final once: Null<String> = roundTrip(inSwitch('case A, // x\n\t\t\t\tC:'));
-		Assert.equals(inSwitch('case A,\n\t\t\t\t// x\n\t\t\t\tC:'), once);
+		Assert.equals(inSwitch('case A // x\n\t\t\t\t, C:'), once);
 		Assert.equals(once, roundTrip(once ?? ''));
 	}
 
@@ -56,12 +56,13 @@ class HxPatternListAndLeadCommentWriteTest extends Test {
 	}
 
 	public function testInlineCommentBeforeFirstOfSeveralPatterns(): Void {
-		// Today's layout, pinned on purpose: the first pattern's leading comment hangs the list below `case`.
-		assertSettles(inSwitch('case /* a */ A, B:'), inSwitch('case\n\t\t\t\t/* a */ A, B\n\t\t\t:'), '/* a */');
+		// A one-line block comment glued to the first pattern keeps the list on the `case` line.
+		assertFixedPoint(inSwitch('case /* a */ A, B:'));
 	}
 
 	public function testOwnLineCommentBeforeFirstOfSeveralPatterns(): Void {
-		assertSettles(inSwitch('case\n\t\t\t// c\n\t\t\tA, B:'), inSwitch('case\n\t\t\t\t// c\n\t\t\t\tA,\n\t\t\t\tB\n\t\t\t:'), '// c');
+		// A line comment stays on the `case` line; the patterns follow one indent deeper and keep packing.
+		assertSettles(inSwitch('case\n\t\t\t// c\n\t\t\tA, B:'), inSwitch('case // c\n\t\t\t\tA, B:'), '// c');
 	}
 
 	public function testLineCommentAfterIntersectionAmpersand(): Void {

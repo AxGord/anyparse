@@ -1028,15 +1028,15 @@ class WriterCodegen {
 	 * captured between a preceding sibling's last token and an
 	 * `@:optional @:kw` keyword (e.g. `resize(); // first\nelse`). Returns
 	 * the caller's separator unchanged when `trailing` is `null`. Otherwise
-	 * concatenates ` //<body>` (via `trailingCommentDoc`) BEFORE the
-	 * separator so the comment cuddles to the prior token; the separator
-	 * (hardline or `kwBeforeDoc` output) follows and breaks back to the
-	 * parent indent before the kw.
+	 * concatenates the verbatim comment BEFORE the separator so it cuddles to the prior token; after a line
+	 * comment the separator (hardline or `kwBeforeDoc` output) breaks back to the parent indent before the kw.
 	 */
 	private static function kwBeforeTrailingDocField(): Field {
 		final body: Expr = macro {
 			if (trailing == null) return sepDoc;
-			// The comment is a `//` one by construction, so whatever follows it must start a new
+			// The comment is captured with its delimiters: a block comment ends nowhere, so the gap follows it as it is.
+			if (!StringTools.startsWith(trailing, '//')) return _dc([trailingCommentDocVerbatim(trailing, opt), sepDoc]);
+			// A line comment ends its line, so whatever follows it must start a new
 			// line. A FLAT gap (`sameLine.expressionIf: same` answers a plain space before a value
 			// `if`'s `else`) is turned into a hardline, every other gap gets the forward-looking
 			// guard that drops when it already opens with one — so every gap that was sound before
@@ -1047,7 +1047,7 @@ class WriterCodegen {
 				case Line(_), OptSpace(_), OptSpaceSkipAfterHardline: _dhl();
 				case _: _dc([_dohsbh(), sepDoc]);
 			};
-			return _dc([trailingCommentDoc(trailing, opt), _gap]);
+			return _dc([trailingCommentDocVerbatim(trailing, opt), _gap]);
 		};
 		return {
 			name: 'kwBeforeTrailingDoc',

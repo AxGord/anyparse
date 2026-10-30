@@ -658,7 +658,11 @@ final class BinaryChainEmit {
 		final lineWidth: Int = keepComments?.lineWidth ?? 0;
 		function gap(i: Int, withAfter: Bool): Array<Doc> {
 			final broken: Bool = i < breaks.length && breaks[i];
-			return keepGap(ops[i], location, broken, withAfter ? gapComment(afterComments, i) : null, gapComment(owns, i));
+			final leftLineComment: Bool = WrapList.endsWithLineComment(items[i]);
+			return keepGap(
+				ops[i], location, broken || leftLineComment, withAfter ? gapComment(afterComments, i) : null, gapComment(owns, i),
+				leftLineComment
+			);
 		}
 		// First operand stays at the call-site column (unless `headBreak`);
 		// only the continuation tail is nested at the chain's one-tab indent,
@@ -697,10 +701,13 @@ final class BinaryChainEmit {
 
 	/**
 	 * The Keep separator of one gap. A comment after the operator (`a || // c`) or an own-line run before the operand
-	 * (`a ||`, then `// c`, then `b`) ends the line at the operator whatever the location; otherwise a source break
-	 * lands where the location puts it and a glued gap stays ` op `.
+	 * (`a ||`, then `// c`, then `b`) ends the line at the operator whatever the location; otherwise a
+	 * source break lands where the location puts it, and a glued gap stays ` op `. An operand ending
+	 * in a line comment breaks before the operator whatever the location: the comment would swallow it.
 	 */
-	private static function keepGap(op: String, location: WrappingLocation, broken: Bool, after: Null<Doc>, own: Null<Doc>): Array<Doc> {
+	private static function keepGap(
+		op: String, location: WrappingLocation, broken: Bool, after: Null<Doc>, own: Null<Doc>, leftLineComment: Bool = false
+	): Array<Doc> {
 		if (after != null || own != null) {
 			final parts: Array<Doc> = [Text(' $op')];
 			if (after != null) parts.push(after);
@@ -712,7 +719,7 @@ final class BinaryChainEmit {
 			return parts;
 		}
 		if (!broken) return [Text(' $op ')];
-		return location == BeforeLast ? [Line('\n'), Text('$op ')] : [Text(' $op'), Line('\n')];
+		return location == BeforeLast || leftLineComment ? [Line('\n'), Text('$op ')] : [Text(' $op'), Line('\n')];
 	}
 
 	/**

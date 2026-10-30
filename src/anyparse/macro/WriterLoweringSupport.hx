@@ -160,6 +160,8 @@ final class WriterLoweringSupport {
 		if (TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch)) idx++;
 		if (slot == WrapOpenNewline) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) idx++;
+		if (slot == WrapOpenTrailing) return macro $i{argNames[idx]};
+		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) idx++;
 		if (slot == KwNewline) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isAltKwNewlineBranch(branch)) idx++;
 		if (slot == ChainNewline) return macro $i{argNames[idx]};
@@ -189,7 +191,7 @@ final class WriterLoweringSupport {
 			case TrailOpt: TriviaPairAltCtor.isAltTrailOptBranch(branch);
 			case CaptureSource: TriviaPairAltCtor.isCaptureSourceBranch(branch);
 			case BodyPolicyKw: TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch);
-			case WrapOpenNewline: TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
+			case WrapOpenNewline, WrapOpenTrailing: TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
 			case KwNewline: TriviaPairAltCtor.isAltKwNewlineBranch(branch);
 			case ChainNewline, ChainLeadComment: TriviaPairAltCtor.isAltChainNewlineBranch(branch);
 			case PostfixOpSpace: TriviaPairAltCtor.isPostfixOpSpaceBranch(branch);

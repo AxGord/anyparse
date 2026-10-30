@@ -419,6 +419,13 @@ class TriviaTypeSynth {
 	public static inline final WRAP_OPEN_NEWLINE_ARG_NAME: String = 'wrapOpenNewline';
 
 	/**
+	 * Positional arg name appended, beside `wrapOpenNewline`, to the same `@:fmt(captureWrapOpenNewline)` ctors: the
+	 * comment the source put on the open delimiter's line (`( // c`), verbatim with its delimiters, or `null`. The
+	 * writer keeps it right after the open delimiter instead of the round trip dropping it.
+	 */
+	public static inline final WRAP_OPEN_TRAILING_ARG_NAME: String = 'wrapOpenTrailing';
+
+	/**
 	 * ω-keep-kw-newline (increment 1b) — positional arg name appended to
 	 * paired Alt ctors carrying `@:fmt(captureKwNewline)` on the mandatory-
 	 * `@:kw` VarStmt-family enum ctors (`VarStmt` / `FinalStmt` /

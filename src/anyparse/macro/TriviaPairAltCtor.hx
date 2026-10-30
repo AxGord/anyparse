@@ -356,7 +356,7 @@ final class TriviaPairAltCtor {
 			+ (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0)
 			+ (hasBodyPolicyKw ? 1 : 0)
-			+ (hasWrapOpenNewline ? 1 : 0)
+			+ (hasWrapOpenNewline ? 2 : 0)
 			+ (hasKwNewline ? 1 : 0)
 			+ (hasChainNewline ? 1 : 0)
 			+ (hasChainLeadComment ? 1 : 0)
@@ -507,6 +507,7 @@ final class TriviaPairAltCtor {
 		if (isAltWrapOpenNewlineBranch(branch)) {
 			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 			args.push({ name: TriviaTypeSynth.WRAP_OPEN_NEWLINE_ARG_NAME, type: boolCT });
+			args.push({ name: TriviaTypeSynth.WRAP_OPEN_TRAILING_ARG_NAME, type: macro :Null<String> });
 		}
 		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family Alt
 		// branches opting into source-shape capture via `@:fmt(captureKwNewline)`

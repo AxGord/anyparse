@@ -1560,15 +1560,17 @@ final class StructSeqLowering {
 					break;
 			}
 			// ω-trivia-before-kw-trailing: probe for a single same-line
-			// `// comment` after the preceding sibling's last token
-			// (e.g. `resize(); // first\nelse`). `collectTrailing`
-			// consumes pos to end of comment on hit, rewinds otherwise.
+			// comment after the preceding sibling's last token
+			// (e.g. `resize(); // first\nelse`, `case A /* c */ if`).
+			// `collectTrailingFull` keeps its delimiters, so a block
+			// comment stays one; it consumes pos to the end of the
+			// comment on hit, rewinds otherwise.
 			// On commit-success the captured body lands in
 			// `_beforeKwTrailing_<field>` for the writer to cuddle to
 			// the prior token. On commit-miss the outer `ctx.pos =
 			// _wsPos` rewind drops the capture so the enclosing Star's
 			// next `collectTrivia` re-observes it.
-			final _trailComment: Null<String> = collectTrailing(ctx);
+			final _trailComment: Null<String> = collectTrailingFull(ctx);
 			final _preTrivia = collectTrivia(ctx);
 			final _kwStartPos: Int = ctx.pos;
 			if ($commitCheck) {

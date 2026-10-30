@@ -411,9 +411,38 @@ final class StarLoopLowering {
 						break;
 				}
 				_sepAfter = matchLit(ctx, $v{sepText});
+				$e{sepAcrossCommentGapExpr(sepText)};
 				$i{trailPresentLocal} = _sepAfter;
 			}
 			: macro {};
+	}
+
+	/**
+	 * The separator scan past a comment gap, spliced right after a trivia sep-loop's same-line `matchLit` missed: a
+	 * separator the source put on a later line, after a comment (`a // c` newline `, b`), is still this element's
+	 * separator. The gap's own-line comments ride into the next `collectTrivia` through `pendingTrivia`, so they lead the
+	 * next element (or join the orphans before the close); a gap with no comment, or no separator after it, rewinds whole.
+	 * Reads and sets the loop's `_trailingBeforeSep` / `_sepAfter` / `_sepAcrossGap` locals.
+	 */
+	private static function sepAcrossCommentGapExpr(sepText: String): Expr {
+		return macro if (!_sepAfter) {
+			final _gapPos: Int = ctx.pos;
+			final _gapPt = ctx.pendingTrivia;
+			final _gap = collectTrivia(ctx);
+			if ((_trailingBeforeSep != null || _gap.leadingComments.length > 0) && matchLit(ctx, $v{sepText})) {
+				_sepAfter = true;
+				_sepAcrossGap = true;
+				if (_gap.leadingComments.length > 0) ctx.pendingTrivia = {
+					blankBefore: false,
+					blankAfterLeadingComments: false,
+					newlineBefore: false,
+					leadingComments: _gap.leadingComments,
+				};
+			} else {
+				ctx.pos = _gapPos;
+				ctx.pendingTrivia = _gapPt;
+			}
+		}
 	}
 
 	private static function buildTriviaCloseLoopBody(
@@ -446,6 +475,7 @@ final class StarLoopLowering {
 				final _node: $elemCT = $elemCall;
 				final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
 				var _sepAfter: Bool = true;
+				var _sepAcrossGap: Bool = false;
 				$sepMatchExpr;
 				final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
 				$accumRef.push({
@@ -455,7 +485,7 @@ final class StarLoopLowering {
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
 					trailingComment: _trailing,
-					trailingBeforeSep: _trailingBeforeSep != null,
+					trailingBeforeSep: _trailingBeforeSep != null && !_sepAcrossGap,
 					sepAfter: _sepAfter,
 					leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,
 					node: _node,

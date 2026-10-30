@@ -166,6 +166,8 @@ final class KwBranchLowering {
 			// newline. Mirrors the kw-led _kwEndPos / _bodyOnSameLine
 			// pattern above.
 			if (triviaWrapOpenNewline) steps.push(macro final _leadEndPos: Int = ctx.pos);
+			// The comment on the open delimiter's line (`( // c`) is kept verbatim for the writer; `skipWs` would drop it.
+			if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenTrailing: Null<String> = collectTrailingFull(ctx));
 			steps.push(macro skipWs(ctx));
 			if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenNewline: Bool = hasNewlineIn(ctx.input, _leadEndPos, ctx.pos));
 		}
@@ -359,7 +361,10 @@ final class KwBranchLowering {
 		if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
 		if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
 		if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
-		if (triviaWrapOpenNewline) ctorArgs.push(macro _wrapOpenNewline);
+		if (triviaWrapOpenNewline) {
+			ctorArgs.push(macro _wrapOpenNewline);
+			ctorArgs.push(macro _wrapOpenTrailing);
+		}
 		if (triviaKwNewline) ctorArgs.push(macro _varKwNewline);
 		return { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
 	}

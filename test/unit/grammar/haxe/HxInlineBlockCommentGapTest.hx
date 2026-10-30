@@ -92,7 +92,9 @@ class HxInlineBlockCommentGapTest extends Test {
 			'try {\n\t\t\trun();\n\t\t} catch (e: Dynamic /* c */) {\n\t\t\trun();\n\t\t}'
 		],
 		// The case-pattern list collects per-pattern trivia (`@:trivia` + `@:fmt(inlineElemTrivia)`).
-		['case_pat', 'switch (v) {\n\t\t\tcase /* c */ 1:\n\t\t\t\trun();\n\t\t}']
+		['case_pat', 'switch (v) {\n\t\t\tcase /* c */ 1:\n\t\t\t\trun();\n\t\t}'],
+		// A comment on an expression paren's open line fills the paren's `wrapOpenTrailing` slot.
+		['paren_lead', 'var v = (/* c */ x);']
 	];
 
 	/** Seams with no capture slot — the parser drops the comment, so the round trip refuses. */
@@ -113,7 +115,6 @@ class HxInlineBlockCommentGapTest extends Test {
 		['break_trail', 'while (c) {\n\t\t\tbreak /* b */;\n\t\t}'],
 		['var_init', 'var x = /* i */ 5;'],
 		['multi_var', 'var a = 1, b = /* m */ 2;'],
-		['paren_lead', 'var v = (/* c */ x);'],
 		['paren_trail', 'var v = (x /* c */);'],
 		['binop_lhs_lead', 'var v = /* m */ a + b;'],
 		['ternary_cond', 'var v = /* q */ c ? a : b;'],

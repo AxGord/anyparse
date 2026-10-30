@@ -3058,6 +3058,7 @@ enum abstract AltSlot(Int) {
 	final TernaryCondTrail = 11;
 	final TernaryThenTrail = 12;
 	final ChainOwnComments = 13;
+	final WrapOpenTrailing = 14;
 
 }
 #end

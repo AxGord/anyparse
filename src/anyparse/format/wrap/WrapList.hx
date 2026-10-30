@@ -3489,8 +3489,10 @@ class WrapList {
 		// lays out differently: the writer stops being its own fixed point.
 		//
 		// Hand it to the leading-break variant, whose forced break after the open
-		// delim keeps the comment on the line it came from.
-		if (items.length > 0 && DocMeasure.firstVisibleTextStartsWith(items[0], '/'.code))
+		// delim keeps the comment on the line it came from. A one-line block
+		// comment glued to its item forces no break, and a list with no open
+		// delimiter has nothing to capture the comment: both stay where they are.
+		if (open.length > 0 && items.length > 0 && DocMeasure.leadsWithBreakingText(items[0], '/'.code))
 			return shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags);
 		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
 		// into chunks at every leading-hardline boundary. Within each

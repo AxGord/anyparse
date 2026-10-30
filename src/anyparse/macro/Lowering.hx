@@ -960,6 +960,7 @@ class Lowering {
 						break;
 				}
 				_sepAfter = matchLit(ctx, $v{sepText});
+				$e{StarLoopLowering.sepAcrossCommentGapExpr(sepText)};
 				_trailPresent = _sepAfter;
 			}
 		} else {
@@ -1007,6 +1008,7 @@ class Lowering {
 				// the source position instead of always after sep.
 				final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
 				var _sepAfter: Bool = true;
+				var _sepAcrossGap: Bool = false;
 				$sepMatchExpr;
 				final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
 				_items.push({
@@ -1016,7 +1018,7 @@ class Lowering {
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
 					trailingComment: _trailing,
-					trailingBeforeSep: _trailingBeforeSep != null,
+					trailingBeforeSep: _trailingBeforeSep != null && !_sepAcrossGap,
 					sepAfter: _sepAfter,
 					// ω-643-leading-block-glue: the last leading comment
 					// sat on the same source line as the element (no

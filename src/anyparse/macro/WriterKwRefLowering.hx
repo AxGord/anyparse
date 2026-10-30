@@ -310,7 +310,10 @@ final class WriterKwRefLowering {
 		// ω-paren-wrap-break: `@:wrap(open, close)` ctor (no kw, both lead
 		// and trail set) — the Group/hardline-before-close shape is built in
 		// kwRefWrapShape; null when not the wrap shape (falls through below).
-		final wrapDoc: Null<Expr> = kwRefWrapShape(kw, c, parts, wrapOpenNewlineExpr);
+		final wrapOpenTrailingExpr: Null<Expr> = kw.ctx.trivia && kw.isTriviaBearing(typePath)
+			? altSlotAccess(branch, children.length, argNames, WrapOpenTrailing)
+			: null;
+		final wrapDoc: Null<Expr> = kwRefWrapShape(kw, c, parts, wrapOpenNewlineExpr, wrapOpenTrailingExpr);
 		return wrapDoc ?? kwRefFinalDoc(kw, c, parts);
 	}
 
@@ -322,7 +325,8 @@ final class WriterKwRefLowering {
 	 * then falls through to the plain Case-3 concat).
 	 */
 	private static function kwRefWrapShape(
-		kw: KwRefCtx, c: WriterLowering.LowerBranchCtx, parts: Array<Expr>, wrapOpenNewlineExpr: Null<Expr>
+		kw: KwRefCtx, c: WriterLowering.LowerBranchCtx, parts: Array<Expr>, wrapOpenNewlineExpr: Null<Expr>,
+		wrapOpenTrailingExpr: Null<Expr>
 	): Null<Expr> {
 		final branch: ShapeNode = c.branch;
 		final leadText: Null<String> = branch.annotations[AnnotationKeys.LIT_LEAD_TEXT];
@@ -349,12 +353,44 @@ final class WriterKwRefLowering {
 		// `lead + inner + trail` concat.
 		final isWrapShape: Bool = kwLead == null && leadText != null && trailText != null && parts.length == 3;
 		if (!isWrapShape) return null;
-		final leadDoc: Expr = parts[0];
 		final innerDoc: Expr = parts[1];
 		final trailDoc: Expr = parts[2];
-		return branch.fmtHasFlag('expressionParenHardFlatten')
-			? kwRefWrapHardFlatten(leadDoc, innerDoc, trailDoc, wrapOpenNewlineExpr)
-			: kwRefWrapSourceNewline(leadDoc, innerDoc, trailDoc, wrapOpenNewlineExpr);
+		function shapeOf(leadDoc: Expr): Expr
+			return branch.fmtHasFlag('expressionParenHardFlatten')
+				? kwRefWrapHardFlatten(leadDoc, innerDoc, trailDoc, wrapOpenNewlineExpr)
+				: kwRefWrapSourceNewline(leadDoc, innerDoc, trailDoc, wrapOpenNewlineExpr);
+		return wrapOpenTrailingExpr == null
+			? shapeOf(parts[0])
+			: kwRefWrapOpenComment(parts[0], innerDoc, trailDoc, wrapOpenTrailingExpr, shapeOf);
+	}
+
+	/**
+	 * The wrap shape under a comment captured on the open delimiter's line (`wrapOpenTrailing`). A one-line block comment
+	 * rides the open delimiter and the usual shape lays out the rest; a comment that ends its line keeps the delimiter's
+	 * line, and the inner opens one indent deeper below it with the close delimiter on its own line.
+	 */
+	private static function kwRefWrapOpenComment(
+		leadDoc: Expr, innerDoc: Expr, trailDoc: Expr, comment: Expr, shapeOf: Expr -> Expr
+	): Expr {
+		final usualShape: Expr = shapeOf(macro _wotLead);
+		return macro {
+			final _wot: Null<String> = $comment;
+			final _wotText: String = _wot ?? '';
+			final _wotInline: Bool = StringTools.startsWith(_wotText, '/*') && _wotText.indexOf('\n') < 0;
+			if (_wot != null && !_wotInline) {
+				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				_dc([
+					$leadDoc,
+					trailingCommentDocVerbatim(_wotText, opt),
+					_dn(_cols, _dc([_dohsbh(), $innerDoc])),
+					_dhl(),
+					$trailDoc
+				]);
+			} else {
+				final _wotLead: anyparse.core.Doc = _wotInline ? _dc([$leadDoc, _dt(_wotText), _dt(' ')]) : $leadDoc;
+				$usualShape;
+			}
+		};
 	}
 
 	/**
