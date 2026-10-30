@@ -1249,7 +1249,8 @@ final class WriterStarEmitLowering {
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt, false,
-			trailingCommaRemovableAlt, uniformStmtBlanksAlt, complexItemsAlt, mapWrap, TriviaTailRehome.fnRefFor(c.starNode.children[0])
+			trailingCommaRemovableAlt, uniformStmtBlanksAlt, complexItemsAlt, mapWrap, TriviaTailRehome.fnRefFor(c.starNode.children[0]),
+			branch.fmtHasFlag('relocateTrailingComments')
 		);
 	}
 

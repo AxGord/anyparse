@@ -44,5 +44,5 @@ package anyparse.grammar.haxe;
 typedef HxObjectLit = {
 	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'),
 		rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits'), trailingCommaRemovable, reflowInExprPosition,
-		arrowBodyOpenPadSuppress, groupRestProbe) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields: Array<HxObjectField>;
+		arrowBodyOpenPadSuppress, groupRestProbe, relocateTrailingComments) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields: Array<HxObjectField>;
 }

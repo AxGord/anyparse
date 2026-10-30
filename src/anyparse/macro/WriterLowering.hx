@@ -2395,6 +2395,7 @@ typedef SepStarCtx = {
 	final reflowSourceMultiline: Bool;
 	final matrixWrap: Bool;
 	final uniformStmtBlanks: Bool;
+	final relocateTrailingComments: Bool;
 };
 /**
  * Output bundle of `triviaSepTypedefBlanksExprs` — the seven spliced Expr
@@ -2895,6 +2896,7 @@ typedef PostfixStarCtx = {
 	final wrapRulesField: Null<String>;
 	final methodChainField: Null<String>;
 	final elemCall: Expr;
+	final relocateTrailingComments: Bool;
 };
 
 /**

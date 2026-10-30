@@ -148,7 +148,10 @@ final class TriviaSepLowering {
 		// whose source separator the writer drops is laid out as the next parse reads it, with the comment that
 		// followed the separator moved into the element's tail (`DroppedSepComment.last`). Null → the list is written
 		// from the source tree as it was.
-		?tailRehomeFn: Expr
+		?tailRehomeFn: Expr,
+		// `@:fmt(relocateTrailingComments)`: under `comments.trailingCommentOverflow: "above"` an element's
+		// overflowing `//` comment may move above it (`triviaSepForceMultiLineExpr`). False → byte-identical.
+		relocateTrailingComments: Bool = false
 	): Expr {
 		// noqa: complexity
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
@@ -316,7 +319,8 @@ final class TriviaSepLowering {
 			noTriviaBranch: noTriviaBranch,
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
-			uniformStmtBlanks: uniformStmtBlanks
+			uniformStmtBlanks: uniformStmtBlanks,
+			relocateTrailingComments: relocateTrailingComments
 		}
 		final predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, uniformStmtBlanks, triviaElemCall);
 		final matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
@@ -472,8 +476,26 @@ final class TriviaSepLowering {
 	 * source `sepAfter` / `appendTrailingComma`, and the trailing comment
 	 * before-or-after the sep. References the runtime `_elem`/`_line`/`_si`/
 	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop.
+	 *
+	 * `relocateTrailingComments` (`@:fmt(relocateTrailingComments)`): a `//` comment may move above an element
+	 * that starts its own line and has no leading comment (`trailingCommentAboveOr`); a Keep-mode element glued
+	 * to its predecessor or a noWrap-cuddled one keeps it, since the moved comment would not end a line there.
 	 */
-	private static function triviaSepForceMultiLineExpr(appendTrailingCommaExpr: Expr, flatTrailingCommaExpr: Expr, sepText: String): Expr {
+	private static function triviaSepForceMultiLineExpr(
+		appendTrailingCommaExpr: Expr, flatTrailingCommaExpr: Expr, sepText: String, relocateTrailingComments: Bool
+	): Expr {
+		final pushExpr: Expr = relocateTrailingComments
+			? macro {
+				if (_tc == null)
+					_inner.push(_line);
+				else {
+					final _ownLine: Bool = !_noWrapFlatten && (!_keepEmit || _t.newlineBefore);
+					final _code: anyparse.core.Doc = _emitSep ? _dc([_elem, _dt($v{sepText})]) : _elem;
+					final _above: Bool = opt.trailingCommentAbove && _ownLine && _t.leadingComments.length == 0;
+					_inner.push(trailingCommentAboveOr(_above, _tc, _code, _line, opt));
+				}
+			}
+			: macro _inner.push(_line);
 		return macro {
 			var _line: anyparse.core.Doc = _elem;
 			// ω-objectlit-source-inter-sep: inter-element comma
@@ -499,7 +521,7 @@ final class TriviaSepLowering {
 			if (_tc != null && _t.trailingBeforeSep) _line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
 			if (_emitSep) _line = _dc([_line, _dt($v{sepText})]);
 			if (_tc != null && !_t.trailingBeforeSep) _line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
-			_inner.push(_line);
+			$pushExpr;
 		};
 	}
 
@@ -524,7 +546,9 @@ final class TriviaSepLowering {
 		final triviaTrailDocKeepAware: Expr = c.triviaTrailDocKeepAware;
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr();
-		final lineExpr: Expr = triviaSepForceMultiLineExpr(c.appendTrailingCommaExpr, c.flatTrailingCommaExpr, c.sepText);
+		final lineExpr: Expr = triviaSepForceMultiLineExpr(
+			c.appendTrailingCommaExpr, c.flatTrailingCommaExpr, c.sepText, c.relocateTrailingComments
+		);
 		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
 		return macro {
 			final _inner: Array<anyparse.core.Doc> = [];

@@ -371,12 +371,12 @@ final class WriterChainLowering {
 	 */
 	private static function lowerPostfixForceMultiDoc(c: PostfixStarCtx): Expr {
 		final tcExpr: Expr = c.tcExpr;
+		final relocateExpr: Expr = c.relocateTrailingComments ? lowerPostfixRelocateArgComment(c) : macro false;
 		return macro {
 			final _mInner: Array<anyparse.core.Doc> = [];
 			var _mj: Int = 0;
 			while (_mj < _docs.length) {
 				_mInner.push(_dhl());
-				_mInner.push(_docs[_mj]);
 				final _mTc: Null<String> = _args[_mj].trailingComment;
 				final _mAfterSep: Null<String> = _args[_mj].trailingBeforeSep ? null : _mTc;
 				// Between elements only when the source wrote a separator there; on the
@@ -384,8 +384,12 @@ final class WriterChainLowering {
 				// itself put one (which is what an after-separator comment proves).
 				final _mLast: Bool = _mj == _docs.length - 1;
 				final _mTrail: Bool = _mLast && $tcExpr && !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_docs[_mj]);
-				if ((!_mLast && _args[_mj].sepAfter) || _mTrail || _mAfterSep != null) _mInner.push(_dt($v{c.elemSep}));
-				if (_mAfterSep != null) _mInner.push(trailingCommentDocVerbatim(_mAfterSep, opt));
+				final _mSep: Bool = (!_mLast && _args[_mj].sepAfter) || _mTrail || _mAfterSep != null;
+				if (!$relocateExpr) {
+					_mInner.push(_docs[_mj]);
+					if (_mSep) _mInner.push(_dt($v{c.elemSep}));
+					if (_mAfterSep != null) _mInner.push(trailingCommentDocVerbatim(_mAfterSep, opt));
+				}
 				_mj++;
 			}
 			final _mCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -469,9 +473,11 @@ final class WriterChainLowering {
 	 */
 	private static function lowerPostfixPushElem(c: PostfixStarCtx): Expr {
 		final elemCall: Expr = c.elemCall;
+		final bareArgPush: Expr = c.relocateTrailingComments ? macro _bareArgs.push(_elem) : macro {};
 		return c.isTriviaStar
 			? macro {
 				final _elem: anyparse.core.Doc = $elemCall;
+				$bareArgPush;
 				final _tc: Null<String> = _args[_i].trailingComment;
 				// ω-callarg-after-sep-comment: the parser routes a same-line LINE
 				// comment that followed the separator into THIS element's trailing
@@ -578,6 +584,28 @@ final class WriterChainLowering {
 			final _dcResult: anyparse.core.Doc = $dcExpr;
 			final _trailClose: Null<String> = $closeTrailRef;
 			_trailClose != null ? _dc([_dcResult, trailingCommentDocGuarded(_trailClose, opt)]) : _dcResult;
+		};
+	}
+
+	/**
+	 * One force-multi argument line under `@:fmt(relocateTrailingComments)`: when the argument carries a `//`
+	 * comment that may move above it, push the `trailingCommentAboveOr` choice and answer true; false leaves
+	 * the line to the caller's beside-the-argument emit. The comment is the one after the separator, or the
+	 * last argument's own when no separator follows it; an argument with a leading comment keeps its trailing one.
+	 */
+	private static function lowerPostfixRelocateArgComment(c: PostfixStarCtx): Expr {
+		return macro {
+			final _rTc: Null<String> = _mAfterSep ?? (_mLast && !_mSep ? _mTc : null);
+			if (_rTc == null || !opt.trailingCommentAbove || _args[_mj].leadingComments.length > 0)
+				false;
+			else {
+				final _rCode: anyparse.core.Doc = _mSep ? _dc([_bareArgs[_mj], _dt($v{c.elemSep})]) : _bareArgs[_mj];
+				final _rFlat: anyparse.core.Doc = _mAfterSep != null
+					? _dc([_docs[_mj], _dt($v{c.elemSep}), trailingCommentDocVerbatim(_mAfterSep, opt)])
+					: _docs[_mj];
+				_mInner.push(trailingCommentAboveOr(true, _rTc, _rCode, _rFlat, opt));
+				true;
+			}
 		};
 	}
 

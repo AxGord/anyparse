@@ -1079,7 +1079,7 @@ final class TriviaBlockLowering {
 	 * measurement (`foldTrailingIntoBodyGroup`), or the bare element when it has none.
 	 *
 	 * FU12 `@:fmt(relocateTrailingComments)`: under `opt.trailingCommentAbove` the folded Doc becomes the
-	 * FLAT side of an `IfTrailingCommentOverflows` whose break side is the comment on its own line above the
+	 * FLAT side of the `trailingCommentAboveOr` choice whose break side is the comment on its own line above the
 	 * element — the comment rendered by `leadingCommentDocRun` over a one-entry run, exactly what the second
 	 * pass renders once the comment reads back as the element's only leading comment. The choice is built only
 	 * where that second pass is provably the same layout (positive list):
@@ -1101,17 +1101,10 @@ final class TriviaBlockLowering {
 			macro {
 				if (_tc == null)
 					_inner.push(_elem);
-				else if (
-					opt.trailingCommentAbove
-					&& _t.leadingComments.length == 0
-					&& anyparse.format.comment.CommentDirective.relocatableTrailing(_tc)
-				) {
-					final _tcRun: Array<String> = [_tc];
-					final _tcWidth: Int = 1 + lineCommentStr(_tcRun, 0, opt).length;
-					final _above: anyparse.core.Doc = _dc([leadingCommentDocRun(_tcRun, 0, opt), _dhl(), _elemSep]);
-					_inner.push(anyparse.core.Doc.IfTrailingCommentOverflows(opt.lineWidth, _tcWidth, _elemSep, _above, $besideExpr));
-				} else
-					_inner.push($besideExpr);
+				else
+					_inner.push(
+						trailingCommentAboveOr(opt.trailingCommentAbove && _t.leadingComments.length == 0, _tc, _elemSep, $besideExpr, opt)
+					);
 			}
 		else
 			macro _inner.push(_tc != null ? $besideExpr : _elem);

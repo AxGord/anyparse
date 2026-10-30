@@ -11,8 +11,8 @@ import utest.Test;
  * The positive list the knob acts on, each pinned below: an element of a statement block (a function body, a
  * nested `{ }`, a lambda body) or of a type's member list; a `//` comment that is not a directive; an element
  * with no leading comment of its own; code that, alone, renders as ONE line that fits. Everything else - a
- * comment inside an expression (an object field, a call argument), a case body, a block comment, a directive,
- * code that wraps or overflows on its own - keeps the pre-knob layout byte for byte.
+ * case body, a block comment, a directive, code that wraps or overflows on its own - keeps the pre-knob layout
+ * byte for byte. Object fields and call arguments: `HxTrailingCommentOverflowListSliceTest`.
  *
  * Every moved form is pinned as a fixed point: re-read, the comment is the element's leading comment and nothing
  * is left to decide. The fixtures are 60 columns wide at tab 4, so a line's width can be checked by eye.
@@ -20,30 +20,30 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxTrailingCommentOverflowSliceTest extends Test {
 
-	private static final BASE: String = '"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 60}, '
-		+ '"sameLine": {"ifBody": "fitLine"}';
+	private static final BASE: String =
+		'"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 60}, "sameLine": {"ifBody": "fitLine"}';
 	private static final CONFIG_ON: String = '{$BASE, "comments": {"trailingCommentOverflow": "above"}}';
 	private static final CONFIG_OFF: String = '{$BASE}';
 	private static final CONFIG_KEEP: String = '{$BASE, "comments": {"trailingCommentOverflow": "keep"}}';
-	private static final CONFIG_COLLAPSE_ON: String = '{$BASE, "emptyLines": {"uniformStatementBlanks": "collapse"}, '
-		+ '"comments": {"trailingCommentOverflow": "above"}}';
+	private static final CONFIG_COLLAPSE_ON: String =
+		'{$BASE, "emptyLines": {"uniformStatementBlanks": "collapse"}, "comments": {"trailingCommentOverflow": "above"}}';
 	private static final STMT_SRC: String =
 		'class C {\n\tfunction f() {\n\t\tfinal value:Int = compute(alpha, beta); // explains the computation\n\t}\n}';
-	private static final STMT_ABOVE: String = 'class C {\n\tfunction f() {\n\t\t// explains the computation\n'
-		+ '\t\tfinal value:Int = compute(alpha, beta);\n\t}\n}';
+	private static final STMT_ABOVE: String =
+		'class C {\n\tfunction f() {\n\t\t// explains the computation\n\t\tfinal value:Int = compute(alpha, beta);\n\t}\n}';
 	private static final MEMBER_SRC: String = 'class C {\n\tvar counter:Int = 0; // a member comment long enough to overflow it\n}';
 	private static final MEMBER_ABOVE: String = 'class C {\n\t// a member comment long enough to overflow it\n\tvar counter:Int = 0;\n}';
 
 	/** The knob-off canonical form: the comment is what pushed the bare body below the `if`. */
-	private static final GLUED_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (ready)\n\t\t\tgo(); // a comment on the glued body that overflows it\n'
-		+ '\t}\n}';
+	private static final GLUED_SRC: String =
+		'class C {\n\tfunction f() {\n\t\tif (ready)\n\t\t\tgo(); // a comment on the glued body that overflows it\n\t}\n}';
 
-	private static final GLUED_ABOVE: String = 'class C {\n\tfunction f() {\n\t\t// a comment on the glued body that overflows it\n'
-		+ '\t\tif (ready) go();\n\t}\n}';
-	private static final BLANK_SRC: String = 'class C {\n\tfunction f() {\n\t\tfirst();\n\n\t\trun(alphaArgument, betaArgument); // a note that is long enough\n'
-		+ '\t}\n}';
-	private static final BLANK_ABOVE: String = 'class C {\n\tfunction f() {\n\t\tfirst();\n\n\t\t// a note that is long enough\n'
-		+ '\t\trun(alphaArgument, betaArgument);\n\t}\n}';
+	private static final GLUED_ABOVE: String =
+		'class C {\n\tfunction f() {\n\t\t// a comment on the glued body that overflows it\n\t\tif (ready) go();\n\t}\n}';
+	private static final BLANK_SRC: String =
+		'class C {\n\tfunction f() {\n\t\tfirst();\n\n\t\trun(alphaArgument, betaArgument); // a note that is long enough\n\t}\n}';
+	private static final BLANK_ABOVE: String =
+		'class C {\n\tfunction f() {\n\t\tfirst();\n\n\t\t// a note that is long enough\n\t\trun(alphaArgument, betaArgument);\n\t}\n}';
 	private static final NESTED_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tb();\n'
 		+ '\t\t\tc(); // a nested block comment long enough to overflow\n\t\t}\n\t}\n}';
 	private static final NESTED_ABOVE: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tb();\n'
@@ -52,27 +52,22 @@ final class HxTrailingCommentOverflowSliceTest extends Test {
 		+ '\t\t\tnext(); // a lambda body comment that is long enough\n\t\t});\n\t}\n}';
 	private static final LAMBDA_ABOVE: String = 'class C {\n\tfunction f() {\n\t\trun(() -> {\n\t\t\tstep();\n'
 		+ '\t\t\t// a lambda body comment that is long enough\n\t\t\tnext();\n\t\t});\n\t}\n}';
-	private static final COLLAPSE_SRC: String = 'class C {\n\tfunction g() {\n\t\tone();\n\n'
-		+ '\t\ttwo(); // a note long enough to overflow the sixty columns\n\t}\n}';
-	private static final COLLAPSE_ABOVE: String = 'class C {\n\tfunction g() {\n\t\tone();\n'
-		+ '\t\t// a note long enough to overflow the sixty columns\n\t\ttwo();\n\t}\n}';
+	private static final COLLAPSE_SRC: String =
+		'class C {\n\tfunction g() {\n\t\tone();\n\n\t\ttwo(); // a note long enough to overflow the sixty columns\n\t}\n}';
+	private static final COLLAPSE_ABOVE: String =
+		'class C {\n\tfunction g() {\n\t\tone();\n\t\t// a note long enough to overflow the sixty columns\n\t\ttwo();\n\t}\n}';
 
 	/** Every comment here keeps its place under the knob: each line names the reason. */
-	private static final STAYS_SRC: String = 'class C {\n\tfunction f() {\n'
-		+ '\t\tcall(first); // fits on the line\n'
-		+ '\t\tother(); // noqa: some-rule and more text so that it overflows\n'
-		+ '\t\tthird(); // CHECKSTYLE:OFF and more text so that it overflows the line\n'
-		+ '\t\tfourth(); /* a block comment that is long enough to overflow it */\n'
-		+ '\t\t// already led by a comment\n'
+	private static final STAYS_SRC: String = 'class C {\n\tfunction f() {\n\t\tcall(first); // fits on the line\n'
+		+ '\t\tother(); // noqa: some-rule and more text so that it overflows\n\t\tthird(); // CHECKSTYLE:OFF and more text so that it '
+		+ 'overflows the line\n\t\tfourth(); /* a block comment that is long enough to overflow it */\n\t\t// already led by a comment\n'
 		+ '\t\tfifth(alpha); // and a trailing one that is long enough to overflow\n'
-		+ '\t\tfinal obj = {\n\t\t\tfieldName: someValue, // a field comment that is long enough to overflow\n\t\t\tother: 1\n\t\t};\n'
-		+ '\t\tswitch x {\n\t\t\tcase 1:\n\t\t\t\tsixth(); // a case body comment that is long enough to overflow\n\t\t}\n'
-		+ '\t\tfinal wideIdentifierName:String = anotherIdentifierName; // c\n'
-		+ '\t}\n}';
+		+ '\t\tswitch x {\n\t\t\tcase 1:\n\t\t\t\tsixth(); // a case body comment that is long enough to '
+		+ 'overflow\n\t\t}\n\t\tfinal wideIdentifierName:String = anotherIdentifierName; // c\n\t}\n}';
 
 	/** Code that spans lines on its own: the comment trails its last line, as before. */
-	private static final MULTI_LINE_SRC: String = 'class C {\n\tfunction f() {\n\t\tcall(alphaArgumentNumberOne,\n\t\t\tbetaArgumentNumberTwo,\n'
-		+ '\t\t\tgammaArgument); // trailing comment that is long\n\t}\n}';
+	private static final MULTI_LINE_SRC: String = 'class C {\n\tfunction f() {\n\t\tcall(alphaArgumentNumberOne,\n'
+		+ '\t\t\tbetaArgumentNumberTwo,\n\t\t\tgammaArgument); // trailing comment that is long\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -123,8 +118,8 @@ final class HxTrailingCommentOverflowSliceTest extends Test {
 
 	/**
 	 * Outside the positive list nothing moves: a comment that fits, a `noqa` or `CHECKSTYLE` directive, a block
-	 * comment, an element that already has a leading comment, a comment inside an object literal, a case body,
-	 * and code that is too wide without its comment.
+	 * comment, an element that already has a leading comment, a case body, and code that is too wide without its
+	 * comment.
 	 */
 	@:pin('control')
 	@:killer('M-TCO-DIRECTIVE-MOVED')

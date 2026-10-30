@@ -279,7 +279,8 @@ final class WriterTriviaStarDispatch {
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
-				uniformStmtBlanksStar, complexItemsStar, mapWrapStar, TriviaTailRehome.fnRefFor(starNode.children[0])
+				uniformStmtBlanksStar, complexItemsStar, mapWrapStar, TriviaTailRehome.fnRefFor(starNode.children[0]),
+				starNode.fmtHasFlag('relocateTrailingComments')
 			));
 			return;
 		}

@@ -58,7 +58,7 @@ class FmtFlagOwnershipTest extends Test {
 		'WriterCtorBlankLowering' => 17,
 		'WriterLowering' => 17,
 		'WriterRefLeadLowering' => 17,
-		'WriterPrattLowering' => 16,
+		'WriterPrattLowering' => 17,
 		'WriterPolicyLowering' => 10,
 		'TriviaPairSlots' => 9,
 		'TriviaPairAltCtor' => 8,

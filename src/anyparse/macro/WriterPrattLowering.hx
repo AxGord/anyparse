@@ -1138,7 +1138,8 @@ final class WriterPrattLowering {
 			callInsideClose: callInside.close,
 			wrapRulesField: wrapRulesField,
 			methodChainField: methodChainField,
-			elemCall: elemCall
+			elemCall: elemCall,
+			relocateTrailingComments: isTriviaStar && branch.fmtHasFlag('relocateTrailingComments')
 		};
 		final sepListCall: Expr = lowerPostfixSepListCall(pc, c);
 		// ω-cond-end-call-glue: a callee whose trailing visible text ends with
@@ -1170,6 +1171,8 @@ final class WriterPrattLowering {
 		// force-multi branch for the same reason. Trivia-only: plain-mode elements
 		// carry no comment slots, so the local would be dead in that writer.
 		final forceMultiDecl: Expr = c.isTriviaStar ? macro var _forceArgMulti: Bool = false : macro {};
+		// Each argument without its comments, for the force-multi layout's "comment above" choice.
+		final bareArgsDecl: Expr = c.relocateTrailingComments ? macro final _bareArgs: Array<anyparse.core.Doc> = [] : macro {};
 		// ω-callarg-empty-inner-comment: for an empty argument list carrying a
 		// captured inner comment (`f(/* c */)`), push the comment Doc into
 		// `_docs` before the sep-list renders `()` so it emits `(/* c */)`.
@@ -1200,6 +1203,7 @@ final class WriterPrattLowering {
 			final _docs: Array<anyparse.core.Doc> = [];
 			final _sepBeforeFlags: Array<Bool> = [];
 			$forceMultiDecl;
+			$bareArgsDecl;
 			var _i: Int = 0;
 			while (_i < _args.length) {
 				$sepFlagsInit;

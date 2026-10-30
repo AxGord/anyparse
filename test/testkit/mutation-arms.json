@@ -27651,7 +27651,7 @@
 			"name": "M-TCO-KNOB-IGNORED",
 			"type": "anyparse.macro.TriviaBlockLowering",
 			"method": "triviaBlockElemPushExpr",
-			"find": "opt.trailingCommentAbove\n\t\t\t\t\t&& _t.leadingComments.length == 0",
+			"find": "opt.trailingCommentAbove && _t.leadingComments.length == 0",
 			"replace": "_t.leadingComments.length == 0",
 			"note": "the runtime gate stops reading `opt.trailingCommentAbove`, so every opted-in block moves its overflowing trailing comments with the knob off"
 		},
@@ -27659,8 +27659,8 @@
 			"name": "M-TCO-LEADING-IGNORED",
 			"type": "anyparse.macro.TriviaBlockLowering",
 			"method": "triviaBlockElemPushExpr",
-			"find": "opt.trailingCommentAbove\n\t\t\t\t\t&& _t.leadingComments.length == 0",
-			"replace": "opt.trailingCommentAbove\n\t\t\t\t\t",
+			"find": "opt.trailingCommentAbove && _t.leadingComments.length == 0",
+			"replace": "opt.trailingCommentAbove",
 			"note": "an element that already carries a leading comment moves its trailing one too, where the second pass reads a longer leading list and the blank / doc / run rules may answer differently"
 		},
 		{
@@ -32336,6 +32336,54 @@
 			"find": "return pos == null ? own : declarationAt(index, pos);",
 			"replace": "return pos == null ? Resolution.Unknown : declarationAt(index, pos);",
 			"note": "without an oracle the resolver's own declaration is dropped"
+		},
+		{
+			"name": "M-TCO-FIELD-KNOB-IGNORED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "opt.trailingCommentAbove && _ownLine",
+			"replace": "_ownLine",
+			"note": "an object-literal field moves its overflowing trailing comment with the knob off"
+		},
+		{
+			"name": "M-TCO-FIELD-LEADING-IGNORED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "_ownLine && _t.leadingComments.length == 0",
+			"replace": "_ownLine",
+			"note": "a sep-list element already led by a comment moves its trailing one too, so the next pass reads a longer leading list"
+		},
+		{
+			"name": "M-TCO-FIELD-OWN-LINE-IGNORED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "!_noWrapFlatten && (!_keepEmit || _t.newlineBefore)",
+			"replace": "true",
+			"note": "a Keep-mode element glued to the open delimiter moves its comment, which then trails the delimiter instead of standing above the element"
+		},
+		{
+			"name": "M-TCO-ARG-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixRelocateArgComment",
+			"find": " || !opt.trailingCommentAbove",
+			"replace": "",
+			"note": "a force-multi call argument moves its overflowing trailing comment with the knob off"
+		},
+		{
+			"name": "M-TCO-ARG-LEADING-IGNORED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixRelocateArgComment",
+			"find": " || _args[_mj].leadingComments.length > 0",
+			"replace": "",
+			"note": "a call argument led by its own comment relocates the trailing one over the bare argument, dropping the leading comment"
+		},
+		{
+			"name": "M-TCO-ARG-LAST-STAYS",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixRelocateArgComment",
+			"find": "(_mLast && !_mSep ? _mTc : null)",
+			"replace": "null",
+			"note": "only the after-separator comment is considered, so the last argument (no separator follows it) keeps an overflowing comment"
 		}
 	]
 }

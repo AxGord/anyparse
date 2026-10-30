@@ -81,6 +81,9 @@ class WriterCodegen {
 			// looking hardline for LINE-style comments, so the next token
 			// cannot be swallowed by the comment.
 			fields.push(trailingCommentDocGuardedField());
+			// `comments.trailingCommentOverflow: "above"`: one list element's trailing
+			// comment beside it, or above it when it alone overflows the line.
+			fields.push(trailingCommentAboveOrField());
 			// ω-line-comment-indent: run-aware line-comment core. Every
 			// array-indexed leading-comment site routes through
 			// `leadingCommentDocRun` so the adapter sees the entry's
@@ -1173,6 +1176,41 @@ class WriterCodegen {
 			kind: FFun({
 				args: [{ name: 'value', type: macro :String }],
 				ret: macro :String,
+				expr: body
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * The `comments.trailingCommentOverflow: "above"` choice for ONE list element carrying a same-line trailing
+	 * comment: `flat` (the element with the comment beside it) unless `above` holds and the comment may move
+	 * (`CommentDirective.relocatableTrailing`), then the `IfTrailingCommentOverflows` whose break side is the
+	 * comment on its own line followed by `code` at the element's indent.
+	 *
+	 * `above` is the caller's proof that the moved comment reads back as the element's WHOLE leading list on the
+	 * next pass: the knob, no leading comment of its own, and an element that starts its own line.
+	 */
+	private static function trailingCommentAboveOrField(): Field {
+		final body: Expr = macro {
+			if (!above || !anyparse.format.comment.CommentDirective.relocatableTrailing(content)) return flat;
+			final _run: Array<String> = [content];
+			final _width: Int = 1 + lineCommentStr(_run, 0, opt).length;
+			final _breakDoc: anyparse.core.Doc = _dc([leadingCommentDocRun(_run, 0, opt), _dhl(), code]);
+			return anyparse.core.Doc.IfTrailingCommentOverflows(opt.lineWidth, _width, code, _breakDoc, flat);
+		};
+		return {
+			name: 'trailingCommentAboveOr',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'above', type: macro :Bool },
+					{ name: 'content', type: macro :String },
+					{ name: 'code', type: macro :anyparse.core.Doc },
+					{ name: 'flat', type: macro :anyparse.core.Doc },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+				],
+				ret: macro :anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
