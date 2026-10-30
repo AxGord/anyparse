@@ -8,11 +8,23 @@ an assignment (`=`) used as a condition — `if (a = b)`, `while (a = b)`, `do �
 
 ## `asymmetric-branch-braces`
 
-an if/else with exactly one braced branch - the other reads as an accident.
+An `if` / `else if` chain whose branches disagree: one braced, another bare. Both spellings
+compile and mean the same; which to keep is taste, so this is `Info` and DEFAULT OFF — opt in with
+`"asymmetric-branch-braces": { "enabled": true }`. It is the lint twin of the writer's
+`singleStatementBraces: "symmetric"` policy, for a project whose `fmt` does not run it, and `--fix`
+takes the same direction: the bare branches gain braces.
+
+Two bare branches are symmetric too — this is not a "brace everything" rule. An `else if` and an
+`else switch` are chain links, not branches, and are never braced. A chain is reported once.
+
+```haxe
+if (ready) { start(); log(); } else wait();
+// --fix: if (ready) { start(); log(); } else { wait(); }
+```
 
 ## `case-pattern-separator`
 
-a switch case label whose TOP-LEVEL pattern separator is not the configured one — Haxe spells the same label `case A, B:` and `case A | B:`, and a codebase mixing them reads as though the two meant different things. DEFAULT OFF (`DefaultOff`) — the rule PICKS A SIDE, so running it unasked would rewrite whichever side a codebase already settled on (309 findings over this repository, every one the same way): opt in with `"case-pattern-separator": { "enabled": true }`. `style` picks the target: `comma` (the default, and the reading of any unrecognised value) flags a pattern whose direct child is an or-pattern; `pipe` flags a branch carrying two or more leading patterns — note its layout cost on a LONG label, where the comma form fills its continuation lines while the joined form is an expression chain the writer breaks ONE OPERAND PER LINE (measured over this repository: the comma direction takes 149 lines out, the pipe direction puts 11 back). `Info`, `--fix` rewrites the separator character and leaves the spacing to the writer — except in a verbatim region (`@formatter:off`, a string-interpolation literal), where the bare character edit survives as `case A , B:`: correct, merely uncanonical, and not worth widening the edit span to rejoin lines a user pinned on purpose. Only the TOP level is touched — a nested `case Some(E | F):` has no comma spelling at all — and a MACRO QUOTATION is skipped whole: there the label is AST the macro builds, and `macro switch x { case A | B: … }` reifies as ONE `EBinop(OpOr, …)` value where `case A, B:` reifies as TWO, so respelling it silently changes what a macro reading `Case.values` sees. Splitting an or-pattern is always sound, so the comma direction flags on shape alone; JOINING is not (an `=`-capture binds looser than `|` and tighter than `,`, so `case v = A | B:` compiles where `case v = A, B:` does not), so the pipe direction gates on a positive whitelist — a constructor-spelled identifier, a dotted constant path, a constructor call over the same, a string / numeric / boolean / null literal, a negated numeric, an or-pattern over the same — and skips the WHOLE branch unless every pattern passes. Refused shapes include every capture, an extractor, an array or structure pattern, and the bare wildcard, which keeps the ubiquitous `case null, _:` idiom as written
+a switch case label whose TOP-LEVEL pattern separator is not the configured one — Haxe spells the same label `case A, B:` and `case A | B:`, and a codebase mixing them reads as though the two meant different things. DEFAULT OFF (`DefaultOff`) — the rule PICKS A SIDE, so running it unasked would rewrite whichever side a codebase already settled on (309 findings over this repository, every one the same way): opt in with `"case-pattern-separator": { "enabled": true }`. `style` picks the target: `comma` (the default, and the reading of any unrecognised value) flags a pattern whose direct child is an or-pattern; `pipe` flags a branch carrying two or more leading patterns — note its layout cost on a LONG label, where the comma form fills its continuation lines while the joined form is an expression chain the writer breaks ONE OPERAND PER LINE (over this repository the comma direction takes far more lines out than the pipe direction puts back). `Info`, `--fix` rewrites the separator character and leaves the spacing to the writer — except in a verbatim region (`@formatter:off`, a string-interpolation literal), where the bare character edit survives as `case A , B:`: correct, merely uncanonical, and not worth widening the edit span to rejoin lines a user pinned on purpose. Only the TOP level is touched — a nested `case Some(E | F):` has no comma spelling at all — and a MACRO QUOTATION is skipped whole: there the label is AST the macro builds, and `macro switch x { case A | B: … }` reifies as ONE `EBinop(OpOr, …)` value where `case A, B:` reifies as TWO, so respelling it silently changes what a macro reading `Case.values` sees. Splitting an or-pattern is always sound, so the comma direction flags on shape alone; JOINING is not (an `=`-capture binds looser than `|` and tighter than `,`, so `case v = A | B:` compiles where `case v = A, B:` does not), so the pipe direction gates on a positive whitelist — a constructor-spelled identifier, a dotted constant path, a constructor call over the same, a string / numeric / boolean / null literal, a negated numeric, an or-pattern over the same — and skips the WHOLE branch unless every pattern passes. Refused shapes include every capture, an extractor, an array or structure pattern, and the bare wildcard, which keeps the ubiquitous `case null, _:` idiom as written
 
 ## `collapse-nested-switch`
 
@@ -88,7 +100,24 @@ the CALL member of the same family: an `if / else if / … / else` chain whose e
 
 ## `prefer-case-guard`
 
-a case whose only statement is an else-less if, convertible to a case guard.
+A `case` whose whole body is one `if` without `else`; the condition moves onto the label as a
+guard: `case P: if (c) s;` becomes `case P if (c): s;`. `Info`; `--fix` rewrites it.
+
+The two forms are not interchangeable: a false guard resumes matching at the next case, while the
+`if` form consumes the match. So the rewrite is made only where nothing can catch the fall-through:
+a statement `switch` with no `default`, every pattern a plain literal or a dotted constant (not mixed),
+no later case repeating this one's pattern, and no comment between the label and the `if`. A guard
+also makes an enum switch non-exhaustive, which is a compile error, so a pattern naming an enum or
+enum abstract is refused; one the index cannot resolve (a library constant) is accepted, and the
+check is a `RiskyFix`: applied only under a `compilerOracle` that reverts a file it breaks.
+
+```haxe
+switch key {
+	case 'Enter': if (focused) submit();
+	case 'Escape': cancel();
+}
+// --fix: case 'Enter' if (focused): submit();
+```
 
 ## `prefer-case-wildcard`
 
@@ -112,11 +141,43 @@ an `if` / `else if` chain testing one expression against constant values (`if (x
 
 ## `prefer-switch-expression`
 
-a value-position ternary / if-expression chain testing one or more expressions against constants — clearer as a switch expression.
+A value-position chain that compares one expression, or one tuple of expressions, against constants — a nested ternary
+`a == P ? v1 : a == Q ? v2 : v3` or the same written as an `if` expression — that reads better as a
+`switch` expression. `Info`; `--fix` rewrites the chain in place. The statement-position twin is
+`prefer-switch`; the two never report the same site.
+
+Only a chain in a `return`, an initializer or the right side of an assignment is flagged (in a call
+argument the switch reads worse). It needs at least two rungs, each a comparison — or a conjunction of comparisons — over the same
+call-free discriminants, each constant a valid `case` pattern (a literal, or a static the index proves constant),
+and a final else value, which becomes `case _`. A tuple is rewritten as
+`switch [D1, D2] { case [P1, P2]: … }`. A chain carrying a comment stays report-only.
+
+```haxe
+return kind == 0 ? 'none' : kind == 1 ? 'one' : 'many';
+// --fix: return switch kind { case 0: 'none'; case 1: 'one'; case _: 'many'; };
+```
 
 ## `prefer-switch-expression-assignment`
 
-a switch that assigns the same target in every arm (optionally paired with its preceding local declaration), collapsible to a single switch-expression assignment.
+A statement `switch` that assigns one target in every arm, which collapses into a single
+assignment of a `switch` expression. Two shapes: a mutable local declared IMMEDIATELY before the
+switch (the declaration becomes `final`, its initializer the `case _` value when the switch has no
+default), and a standalone switch assigning one field or variable in every arm, which needs a
+default arm of its own. `Info`; `--fix` rewrites it. Arms may nest a `switch` or `if` chain whose
+every leaf assigns the target.
+
+Refused when an arm assigns with `+=` / `??=` or does anything else, when the target is read inside
+the switch or written elsewhere, when a moved initializer has side effects, when the field's receiver
+could run a getter, when an arm is under `#if`, or when a comment would be dropped.
+
+```haxe
+var sep:String = '';
+switch slash {
+	case '/': sep = '\\';
+	case '\\': sep = '/';
+}
+// --fix: final sep:String = switch slash { case '/': '\\'; case '\\': '/'; case _: ''; };
+```
 
 ## `prefer-ternary-assignment`
 
@@ -152,7 +213,7 @@ an `else` whose `if` then-branch always exits (`return` / `throw` / `break` / `c
 
 ## `return-reassign-ternary`
 
-a function-tail `if (cond) x = e; return x;` — a single-branch `if` whose body is exactly one plain `=` to a LOCAL, immediately followed by a `return` of that same local — collapsible to `return cond ? e : x;`; `Info`, DEFAULT OFF (opt in via `apqlint.json` `"rules": { "return-reassign-ternary": { "enabled": true } }`, or an explicit `--rule`), `--fix` rewrites the pair. The conditional-reassignment sibling of `join-return` (which joins an UNCONDITIONAL `x = e; return x;`) and of `prefer-ternary-assignment` (which needs an `else`). FAIL-CLOSED GATES: no `else`; the body is ONE statement, a bare `x = e;` or a `{ x = e; }` wrapping exactly one, and a PLAIN `=` (a compound `+=` / `??=` is a distinct node kind, a member path `o.x = e` never resolves to a binding); the `return` is the IMMEDIATELY next sibling of the same statement list, returning the same bare identifier; `x` resolves through `Refs` to a LOCAL or PARAM, never a field (a bare field write can run a property setter whose side effect the collapse would drop); NO reference to `x`'s binding is CAPTURED by a nested function — a lambda, a named `function g() {}` or an `inline function` (`lambdaKinds` + `localFunctionKinds` + `inlineFunctionKinds`), *captured* meaning the reference sits inside a nested function that does not enclose the declaration, so a closure could observe the dropped store after the return (a reference in the nested function that OWNS the binding is not a capture, and a pair entirely local to a lambda still fires); the enclosing function declares an EXPLICIT RETURN TYPE (`TypeResolver.functionReturnTypeSource`) — in `x = e` the r-value is typed with `x`'s declared type as the EXPECTED type, and in the ternary that expected type comes from the `return` position instead, so an INFERRED return type loses it and `var x:Map<String, Int> = null; if (c) x = [];` would emit a `return c ? [] : x;` that does not typecheck; and the ONLY write to `x` in the collapsed region is that l-value — the r-value may READ `x` (`x = x + 1` evaluates before the conceptual write, exactly as the ternary's then-branch does), but a write to `x` in the CONDITION or inside `e` is refused. An r-value that already spans LINES (an object / array literal) is not flagged at all: it keeps its brace layout inside the ternary and strands the `: x` tail past the closing `}`, reading worse than the `if` it replaces — a multi-line CONDITION is fine, since the writer re-lays the whole ternary and the merge is what un-uglifies a condition the `if` header had to wrap. The condition is parenthesised only when it binds no tighter than `?:`. A comment the rebuild would drop (on the `if (` / `) ` glue, on `x =`, on the `;`, between the two statements, or on the `return`) keeps the site REPORT-ONLY — still flagged, with a message saying so, but no edit; a comment inside the condition, the r-value or the returned identifier rides along. COMPOSITION, no chaining inside the rule: once the tail merges, `x`'s only remaining write may be its initializer, and `prefer-final` then upgrades `var x = init;` to `final x = init;` on a LATER `--fix` pass — the counter-case being an accumulator (the client reference shape), where a `+=` in a preceding loop keeps `x` a `var` and only the tail merges. A guard whose condition is a top-level built-in `!` is emitted POSITIVE, the two values swapped (`if (!c) …a… else …b…` → `c ? b : a`, a redundant paren around the operand dropped and put back by `ParenGuard` only where `?:` would capture it) — `NegatedCondition`, the gate `invert-negated-if-else` uses; a comment between the `!` and its operand keeps the condition as written; under that rule's `keepDefaultElse` a default-literal else value keeps the negation (`!c ? v : null`)
+a function-tail `if (cond) x = e; return x;` — a single-branch `if` whose body is exactly one plain `=` to a LOCAL, immediately followed by a `return` of that same local — collapsible to `return cond ? e : x;`; `Info`, DEFAULT OFF (opt in via `apqlint.json` `"rules": { "return-reassign-ternary": { "enabled": true } }`, or an explicit `--rule`), `--fix` rewrites the pair. The conditional-reassignment sibling of `join-return` (which joins an UNCONDITIONAL `x = e; return x;`) and of `prefer-ternary-assignment` (which needs an `else`). FAIL-CLOSED GATES: no `else`; the body is ONE statement, a bare `x = e;` or a `{ x = e; }` wrapping exactly one, and a PLAIN `=` (a compound `+=` / `??=` is a distinct node kind, a member path `o.x = e` never resolves to a binding); the `return` is the IMMEDIATELY next sibling of the same statement list, returning the same bare identifier; `x` resolves through `Refs` to a LOCAL or PARAM, never a field (a bare field write can run a property setter whose side effect the collapse would drop); NO reference to `x`'s binding is CAPTURED by a nested function — a lambda, a named `function g() {}` or an `inline function` (`lambdaKinds` + `localFunctionKinds` + `inlineFunctionKinds`), *captured* meaning the reference sits inside a nested function that does not enclose the declaration, so a closure could observe the dropped store after the return (a reference in the nested function that OWNS the binding is not a capture, and a pair entirely local to a lambda still fires); the enclosing function declares an EXPLICIT RETURN TYPE (`TypeResolver.functionReturnTypeSource`) — in `x = e` the r-value is typed with `x`'s declared type as the EXPECTED type, and in the ternary that expected type comes from the `return` position instead, so an INFERRED return type loses it and `var x:Map<String, Int> = null; if (c) x = [];` would emit a `return c ? [] : x;` that does not typecheck; and the ONLY write to `x` in the collapsed region is that l-value — the r-value may READ `x` (`x = x + 1` evaluates before the conceptual write, exactly as the ternary's then-branch does), but a write to `x` in the CONDITION or inside `e` is refused. An r-value that already spans LINES (an object / array literal) is not flagged at all: it keeps its brace layout inside the ternary and strands the `: x` tail past the closing `}`, reading worse than the `if` it replaces — a multi-line CONDITION is fine, since the writer re-lays the whole ternary and the merge is what un-uglifies a condition the `if` header had to wrap. The condition is parenthesised only when it binds no tighter than `?:`. A comment the rebuild would drop (on the `if (` / `) ` glue, on `x =`, on the `;`, between the two statements, or on the `return`) keeps the site REPORT-ONLY — still flagged, with a message saying so, but no edit; a comment inside the condition, the r-value or the returned identifier rides along. COMPOSITION, no chaining inside the rule: once the tail merges, `x`'s only remaining write may be its initializer, and `prefer-final` then upgrades `var x = init;` to `final x = init;` on a LATER `--fix` pass — the counter-case being an accumulator (the common real-code shape), where a `+=` in a preceding loop keeps `x` a `var` and only the tail merges. A guard whose condition is a top-level built-in `!` is emitted POSITIVE, the two values swapped (`if (!c) …a… else …b…` → `c ? b : a`, a redundant paren around the operand dropped and put back by `ParenGuard` only where `?:` would capture it) — `NegatedCondition`, the gate `invert-negated-if-else` uses; a comment between the `!` and its operand keeps the condition as written; under that rule's `keepDefaultElse` a default-literal else value keeps the negation (`!c ? v : null`)
 
 ## `simplify-boolean-branch-assignment`
 

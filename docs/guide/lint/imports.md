@@ -4,15 +4,56 @@ Imports, usings and the ambient sources that carry them. One section per rule, b
 
 ## `duplicate-import`
 
-an import / using declared more than once in the same file
+An `import` or `using` written more than once in the same file. The compiler accepts the repeat
+silently, so it is dead text that only makes the header longer and hides the real import list. `Warning`;
+`--fix` deletes every repeat and keeps the first occurrence.
+
+Two statements are duplicates only when kind, module path and alias all match: `import a.B;` and
+`using a.B;` both stay (a `using` adds static extension), as do two different aliases of one module,
+and so do the two branches of a `#if` region binding one alias to different modules.
+
+```haxe
+import haxe.io.Path;
+import haxe.Json;
+import haxe.io.Path; // reported, deleted by --fix
+```
 
 ## `empty-ambient-source`
 
-an ambient import source with no statement in it.
+An ambient import source — for Haxe an `import.hx` — that binds nothing: empty, blank, or
+holding only comments. Such a file is what an emptying fix leaves behind (`unused-import` deletes its
+last statement and the file stays), and it still costs every reader of the directory a look.
+`Warning`; `--fix` deletes the file when nothing but whitespace is left in it. A file that still carries
+comments is reported and left to a human, since deleting it would delete them too; a file carrying
+anything else, a conditional block for one, is not empty and is not reported. Which files are ambient
+sources is the grammar's answer, not a file name this rule knows.
 
 ## `hoist-common-import`
 
-an import most modules of a directory spell, which the directory's ambient source could carry — or an ambient one too few of them read, which belongs back in its readers.
+An `import` that most modules of one directory spell, and that the directory's ambient source
+(`import.hx`) could carry for all of them — or the reverse, a statement an existing ambient source carries
+that too few of its modules read. `Warning`, DEFAULT OFF: where a project keeps shared imports is a
+convention, not a defect; opt in with `"hoist-common-import": { "enabled": true }`.
+
+The share is counted per directory against the modules the ambient source would govern, with nested
+`import.hx` files and what they inherit from a parent counted in. A statement is a candidate when it
+stands in at least `threshold` percent of those modules (default `50`) and the directory holds at
+least `minModules` modules (default `3`); an ambient statement read by fewer than `sinkThreshold`
+percent (default `25`, always below `threshold`) goes back into its readers. A `using` is a
+candidate only when it is on `usingAllowList` (default `StringTools`, `Lambda`), because moving a
+`using` changes its rank among the module's own `using` lines.
+
+`--fix` creates or extends the ambient source and deletes the statement from every module it was
+hoisted from; the sink direction re-adds it to the readers and deletes a source left empty. A
+statement is refused when any module it would reach could bind the same simple name differently —
+another import, an own declaration or a guarded statement of that name. The refusals and the nesting
+rule in full: [cli-query-tool.md](../../cli-query-tool.md).
+
+```haxe
+// src/app/A.hx, B.hx, C.hx each start with
+import haxe.io.Path;
+// --fix: src/app/import.hx gains `import haxe.io.Path;` and the three lines go
+```
 
 ## `import-order`
 

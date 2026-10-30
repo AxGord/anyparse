@@ -44,7 +44,23 @@ a null guard that safe navigation replaces — the user's rule: prefer `x?.m()` 
 
 ## `prefer-safe-nav-comparison`
 
-a null-check conjunction (x != null && x.f != null) replaceable with a safe-navigation comparison (x?.f != null) (fix needs language 4.3).
+A null-check chain a safe-navigation comparison replaces: `x != null && x.b != null` becomes
+`x?.b != null`, and its dual `x == null || x.b == null` becomes `x?.b == null`. A longer run collapses
+in one step, and conjuncts around the run are kept. `Info`; `--fix` rewrites the run, and is not
+offered when the declared `languageVersion` is older than 4.3.
+
+Refused where the rewrite could change behaviour or typing: an operand holding a call, `new` or an
+assignment before the last conjunct (it would run once instead of twice); an index or call junction
+(`x[0]`), which safe navigation cannot spell; a run whose first operand is used AFTER it in the same
+function — the `&&` form narrows it under `@:nullSafety` and the `?.` form does not; any run inside
+an `inline` function, whose guard narrows its callers; and a comment the rewrite would drop. A field
+receiver backed by a getter is read once instead of twice, the same policy `prefer-null-coalescing`
+ships.
+
+```haxe
+if (node != null && node.parent != null) count++;
+// --fix: if (node?.parent != null) count++;
+```
 
 ## `redundant-null-coalescing`
 

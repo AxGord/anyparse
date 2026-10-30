@@ -255,11 +255,10 @@ process on the machine, instead of a fresh compile per run. The first lint
 spawns a detached `haxe --wait <port>`, drives its initial compile, and records
 the port and pid under the OS temp dir (`apq-oracle-<digest>.json`, keyed by the
 hxml and its compile directory); every later lint typechecks through
-`--connect`. Measured on this repo (median of 3): the oracle alone 14.6s → 0.4s,
-a single-file `hxq lint <file> --all` 17.9s → 3.2s, a whole `hxq lint src/ --all`
-45.7s → 32.5s; the very first call, which spawns the server and drives its full
-compile, costs 18.3s — one run's worth of the cold path it then replaces. It is
-opt-in because the server DELIBERATELY outlives the run
+`--connect`. The warm typecheck costs a small fraction of a cold compile, so the
+oracle stops dominating a narrow lint; the very first call, which spawns the server
+and drives its full compile, costs one run's worth of the cold path it then
+replaces. It is opt-in because the server DELIBERATELY outlives the run
 that started it — `APQ_NO_ORACLE_SERVER` (any value but empty or `0`) declines
 it per process, and the recorded pid is how a daemon you no longer want gets
 stopped. Every condition the warm path cannot decide under (nothing recorded, a
@@ -288,7 +287,7 @@ the run may write whose TEXT moved since a server's last compile is
 Only a warm ACCEPTANCE is believed: a configuration a server rejects is
 compiled again cold, its first one beside the warm compiles, because a server
 can re-emit a stale null-safety diagnostic. The `-v` compiles (baselines,
-coverage) stay cold. client: the risky phase 45.9 → 37.1 s. `APQ_NO_ORACLE_SERVER`
+coverage) stay cold; the risky phase of a full `--fix` run is what they shorten. `APQ_NO_ORACLE_SERVER`
 declines these too, as does a machine whose compile budget cannot hold one
 server per configuration.
 

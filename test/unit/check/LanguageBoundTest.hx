@@ -78,8 +78,8 @@ class LanguageBoundTest extends Test {
 		Assert.equals('haxe', RuleIndex.languageOf(new PreferLpad()));
 		Assert.equals('any', RuleIndex.languageOf(new MagicNumber()));
 		final markdown: String = RuleIndex.markdown([new PreferLpad(), new MagicNumber()]);
-		Assert.stringContains('| `prefer-lpad` | haxe | off |', markdown);
-		Assert.stringContains('| `magic-number` | any | on |', markdown);
+		Assert.stringContains('| ${RuleIndex.guideLink(new PreferLpad())} | haxe | off |', markdown);
+		Assert.stringContains('| ${RuleIndex.guideLink(new MagicNumber())} | any | on |', markdown);
 		final records: Array<{ id: String, languages: Array<String> }> =
 			haxe.Json.parse(RuleIndex.json([new PreferLpad(), new MagicNumber()]));
 		Assert.same([['haxe'], []], [for (r in records) r.languages], 'an unbound rule lists no grammar');

@@ -8,7 +8,24 @@ a string concatenation whose segmentation does not match the file's own `maxLine
 
 ## `join-string-append`
 
-a run of x += e; statements (optionally led by x = e0;) on the same target, joinable into one append.
+Two or more adjacent statements appending to the same local: a run of `x += e;`, or `x = e0;`
+followed by `x += e;` lines. The run joins into one statement whose right-hand side is the sum of the
+pieces. `Info`, DEFAULT OFF: a readability simplification; opt in with
+`"join-string-append": { "enabled": true }`. A follow-up `fold-adjacent-string-literals` pass can
+then fold the sum into one interpolated string.
+
+The target must be a bare local name — a field or index target may run a setter. A later piece that
+reads the target ends the run before itself, since the joined form would read the old value. The sum
+must be type-sound: a string literal among the pieces, or a target declared `String` or `Int`; a
+`Float` target is refused, since `+` does not associate under rounding. A comment the rewrite would
+drop refuses the run.
+
+```haxe
+str = cname;
+str += '.';
+str += meth;
+// --fix: str = cname + '.' + meth;
+```
 
 ## `magic-number`
 
@@ -32,4 +49,18 @@ a `.toString()` call sitting in a position that ALREADY stringifies, so the call
 
 ## `string-literal-dup`
 
-a plain string literal repeated many times in one file that should be a named constant.
+A plain string literal repeated at least `minOccurrences` times (default `3`) in one file — a
+value that belongs in one named constant so an edit happens once. One finding per value, at its
+first occurrence, with the count. `Info`, report-only: the constant's NAME is a human's choice, and
+`apq extract-constant` performs the hoist once it is chosen.
+
+Literals shorter than `minLength` (default `4`) are exempt, as are interpolated strings, strings in
+metadata arguments (`@:native('…')`) and entries of a data table — an array or map literal made only
+of literals, which already is the one named place. Quote style does not matter: `"foo"` and `'foo'`
+group together.
+
+```haxe
+if (mode == 'preview') … ;
+setMode('preview');
+log('preview');      // reported once: 'preview' appears 3 times
+```

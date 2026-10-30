@@ -4,27 +4,98 @@ Comments and doc comments. One section per rule, by id; each rule's language, de
 
 ## `comment-width`
 
-a comment line wider than the configured maximum line length.
+A comment line — a `//` run, a `/* … */` banner or a `/** … */` doc block — that renders wider
+than the project's own `wrapping.maxLineLength` (from `hxformat.json`). The writer owns every code
+line's width but re-emits a comment's interior byte for byte, so an over-wide comment leaves
+`fmt --list` clean and nothing else ever measures it. `Info`, DEFAULT OFF: the width is a project's
+style choice; opt in with `"comment-width": { "enabled": true }`.
+
+A line counts only when the COMMENT is what puts it over: a trailing comment on a line whose code is
+already too long is the formatter's business, not this rule's. `--fix` breaks the line at spaces into
+the same comment block, carrying the prefix (`//`, ` * `) that position needs. It leaves the line
+alone, saying why in the finding, when wrapping could change meaning or has no room: a suppression
+directive, a table row, a heading or list item, hand-indented text, a fenced code block, a comment
+trailing code, a raw `#if` region, or a line with no space inside the width (a long URL).
+
+```haxe
+// A long explanation that runs well past the configured width of this project and keeps going
+// --fix:
+// A long explanation that runs well past the configured width of this
+// project and keeps going
+```
 
 ## `doc-comment-continuation`
 
-an interior line of a block comment that breaks the continuation prefix — gutter or indentation — its own block uses.
+An interior line of a block comment that breaks the continuation prefix its own block uses. A
+star-guttered block is judged against its gutter: a line that lost its ` * `, or carries it at an
+indent the rest of the block does not use. A gutter-less block is judged against its indentation.
+`Warning`.
+
+Comments are trivia: the writer re-emits their interior byte for byte and no node-based rule sees
+them, so a doc block mangled by a text splice stays committed with every other gate clean. Only a
+block whose lines DISAGREE is reported — a block whose every line uses one prefix is a house style
+whatever indent it chose, and a markdown bullet (`*emphasis*`, `**bold**`) is not mistaken for a
+gutter. `--fix` rewrites each flagged line onto the block's majority prefix and keeps its content
+byte for byte, including any indentation beyond the prefix, so a code sample inside a doc survives.
+
+```haxe
+/**
+ * Returns the parsed value.
+Throws when the input is empty.   // reported: lost its gutter
+ */
+```
 
 ## `doc-coverage`
 
-a public API type or member without a doc comment.
+A public API declaration that carries no doc comment: a top-level type that is not `private`,
+and — when `requireMemberDoc` is on — a `public` member of one (interface members, and members of an
+extern or `@:publicFields` type, count as public). The public surface is what other modules compile
+against, so an undocumented one is a gap no intra-body rule sees. `Info`, report-only: writing the doc
+is an authoring decision.
+
+Only a `/**` block directly above the declaration, or above its modifier and metadata run, counts; a
+`//` line or a plain `/*` block does not. Enum constructors and typedef fields are documented by
+their type's doc. Options: `requireTypeDoc` (default `true`), `requireMemberDoc` (default
+`false`), `includeConstructor` (default `false` — the type doc covers construction).
+
+```haxe
+class Parser {}               // reported: no doc
+/** Reads one record. */
+class Reader {}               // documented
+```
 
 ## `doc-length`
 
-a doc block longer than the maximum number of lines the project declares.
+A doc block (`/** … */`) longer than the project's maximum. A doc states what a reader may rely
+on, in a sentence or three; past that it has become a document — a rationale belongs in `docs/` and a
+history in the commit that made it, and neither survives the next edit of the code it sits above.
+`Info`, DEFAULT OFF and report-only: which sentences are the contract is the whole of the work.
+
+Opt in and set the limit with `"doc-length": { "enabled": true, "max": N }` (lines, default `40`).
+`//` runs and plain `/* */` banners are not measured: they belong to the statements they stand
+over, not to a declaration's contract.
 
 ## `doc-measurement-claim`
 
-a comment carrying a reading of a tree — a duration, a commit hash, a slice id, a census count, a before-and-after pair.
+A comment carrying a READING of the tree rather than a contract: a duration, a percentage, an
+abbreviated commit hash, a ticket or slice id, a census count ("12 call sites"), a before-and-after
+pair, or a sentence pinning its claim to the repository's current state. A reading describes one tree
+at one moment and goes stale while the code it sits in lives on; the commit message keeps the
+numbers, the comment keeps the conclusion. `Info`, DEFAULT OFF and report-only: what the surviving
+sentence says is a judgement.
+
+A bare number is never a finding — a doc naming the code's own constant (a minimum count, a language
+version) is a contract. References are not readings either: a hash inside a path or URL, a doc tag
+pointing at one, `%` as the remainder operator, and anything inside a string literal stay silent.
+
+```haxe
+// Batched since the rewrite: 14.6s -> 0.4s on this repo.   // reported
+// Batched so one compile answers every file.                // fine
+```
 
 ## `empty-comment`
 
-a content-free comment — a `//` with only whitespace after the slashes, an empty `/* */`, or an empty doc comment (including a multi-line one whose interior is only stars and whitespace); `Warning`, `--fix` deletes it (the whole physical line(s) when the comment is alone on them, the comment plus the whitespace before it when it trails code, the comment alone when code follows it on the same line). A pure comment-token scan (`RefactorSupport.collectCommentTokens`, string-aware — a slash-slash inside a STRING literal is never visited), so no parse is needed and a conditional-compilation line, which is not a comment, never matches. Content keeps a comment, which is what leaves a dashed divider run and a `// noqa` directive alone. **The PARAGRAPH SEPARATOR is kept too**: a bare `//` on its own line with a comment-only line directly above and another directly below is the blank line of a `//` prose block — content-free by every character test, but deleting it MERGES two paragraphs, a change to what the comment says rather than a cleanup. The gate is positive and purely lexical (this token and BOTH comment-stream neighbours are line comments, each alone on its line, on three consecutive lines), so an unlisted shape fails by construction: a bare `//` at the head or tail of a run is padding and still reports, as does one whose neighbour shares its line with code, sits a blank line away (the blank already separates), or is a block comment (a block carries its paragraph breaks inside itself). Measured on this repository's own 636 files, every one of the 136 findings the rule produced WITHOUT that gate was a paragraph separator — an unguarded `--fix` would have silently reflowed 136 prose blocks. A pure trivia edit: comments never affect compilation
+a content-free comment — a `//` with only whitespace after the slashes, an empty `/* */`, or an empty doc comment (including a multi-line one whose interior is only stars and whitespace); `Warning`, `--fix` deletes it (the whole physical line(s) when the comment is alone on them, the comment plus the whitespace before it when it trails code, the comment alone when code follows it on the same line). A pure comment-token scan (`RefactorSupport.collectCommentTokens`, string-aware — a slash-slash inside a STRING literal is never visited), so no parse is needed and a conditional-compilation line, which is not a comment, never matches. Content keeps a comment, which is what leaves a dashed divider run and a `// noqa` directive alone. **The PARAGRAPH SEPARATOR is kept too**: a bare `//` on its own line with a comment-only line directly above and another directly below is the blank line of a `//` prose block — content-free by every character test, but deleting it MERGES two paragraphs, a change to what the comment says rather than a cleanup. The gate is positive and purely lexical (this token and BOTH comment-stream neighbours are line comments, each alone on its line, on three consecutive lines), so an unlisted shape fails by construction: a bare `//` at the head or tail of a run is padding and still reports, as does one whose neighbour shares its line with code, sits a blank line away (the blank already separates), or is a block comment (a block carries its paragraph breaks inside itself). WITHOUT that gate every finding the rule produced on this repository was a paragraph separator, and an unguarded `--fix` would have silently reflowed every such prose block. A pure trivia edit: comments never affect compilation
 
 ## `empty-doc-tag`
 

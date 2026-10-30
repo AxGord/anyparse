@@ -4,7 +4,24 @@ Type positions, casts, is-checks, Dynamic, exception types. One section per rule
 
 ## `avoid-dynamic`
 
-a raw Dynamic in a declared type position (field, parameter, return, type argument, or annotated local).
+A raw `Dynamic` in a declared type position — a field, parameter or return type, a type argument
+(`Map<String, Dynamic>`), or an annotated local. `Dynamic` switches static checking off at that seam;
+each one is a candidate for a narrower type or for `Any`, the sanctioned top type that requires an
+explicit cast to use. `Info`. `haxe.DynamicAccess<T>` and `Any` are not flagged; extern types are
+skipped, since interop legitimately needs `Dynamic`.
+
+The fix is a `RiskyFix`, applied only under a configured `compilerOracle` that typechecks each edit
+and reverts a breaking one. It narrows a LOCAL to the one plain class / interface / enum every write
+provably stores (an abstract or typedef is refused — its implicit conversions would change runtime
+behaviour); moves a parameter's type into the signature when every read is `(p : T)` for one `T`;
+and turns a local or private field used only through `Reflect.field` / `setField` into
+`haxe.DynamicAccess<T>` with map syntax. Fields, returns and type arguments stay report-only. A local
+initialized from `Reflect` / `Json` gets a separate "narrow where consumed" message. Options:
+`excludePaths`, `excludeMeta`, `boundaryCalls` (default `Reflect`, `Json`).
+
+```haxe
+var item:Dynamic = new Item();  // --fix (with an oracle): var item:Item = new Item();
+```
 
 ## `catch-dynamic`
 
@@ -12,7 +29,22 @@ a `catch` clause whose declared exception type is `Dynamic` (or `Any`) — a raw
 
 ## `explicit-local-type`
 
-a local var/final declared without an explicit type annotation.
+A local `var` / `final` declared without a `:Type` annotation; fields, parameters and returns
+are `explicit-type`'s. In Haxe even a literal is not self-evident (`5` may be `Int`, `Float` or an
+abstract with `@:from Int`), so the rule asks for every binding to state its type. `Warning`, DEFAULT
+OFF: a per-project style; opt in with `"explicit-local-type": { "enabled": true }`.
+
+`--fix` annotates only where the initializer pins the type, so the annotation re-states what the
+compiler already infers: a literal, `new T(…)` of a provably non-generic `T` (or with written type
+parameters), a typed cast `(x : T)`, a homogeneous non-empty array literal, a `String` method with a
+fixed return (`split`, `indexOf`), a known static call (`Date.now()`), an index into a written
+`Map<K, V>` / `Array<T>`, or a read of a binding whose type is written. The type is printed short
+when visible, with an added `import` when its name is free in the file, fully qualified otherwise.
+Anything else (`null`, a ternary, a generic call) stays report-only.
+
+```haxe
+final parts = line.split(',');   // --fix: final parts:Array<String> = line.split(',');
+```
 
 ## `explicit-type`
 
@@ -28,7 +60,18 @@ an `is` type-check `x is T` that is provably ALWAYS FALSE — `x`'s declared typ
 
 ## `prefer-is-operator`
 
-a Std.isOfType(x, T) call whose second argument names a type, replaceable with the is operator (x is T) (fix needs language 4.2).
+A two-argument `Std.isOfType(x, T)` whose second argument names a type, replaceable with the
+operator it is the sugar of, `x is T`. `Info`, Haxe only; `--fix` rewrites the call, and is not offered
+when the project's declared `languageVersion` is older than 4.2.
+
+The rewrite is made only where both spellings mean the same: `Std` must be the standard library's,
+and `T` a bare name that binds no value — `Std.isOfType(x, kind)` over a `Class<T>` parameter stays.
+Parentheses are added where the operand or a surrounding `!` needs them. A call carrying a comment,
+or sitting in a metadata argument or a macro reification, is skipped.
+
+```haxe
+if (!Std.isOfType(node, Group)) return;   // --fix: if (!(node is Group)) return;
+```
 
 ## `prefer-map-type`
 
@@ -56,7 +99,21 @@ an `is` type-check `x is T` that is provably ALWAYS TRUE — `x` is a plain iden
 
 ## `redundant-unchecked-cast`
 
-an unchecked cast whose position is already typed exactly what the operand is.
+An unchecked `cast e` whose position demands exactly the type `e` is already declared to be —
+the cast converts nothing and tests nothing. `Info`; `--fix` drops `cast` and keeps the operand.
+The position is an annotated declaration, an annotated `return`, an assignment to an annotated
+variable or a call argument whose parameter type is written; the operand is a local, parameter or own
+field with a written type, and the two must be the same written type.
+
+A cast between two different spellings is never proposed — that is what an unchecked cast usually
+exists for (an `Array<CheckBox>` passed as `Array<DisplayObject>`). A cast into `Null<T>`, `Dynamic`
+or `Any` is real work and is not reported, nor is a cast from an optional parameter (`Null<T>` inside
+the body), nor one with a comment between `cast` and its operand — that is where an author explains it.
+
+```haxe
+final sprite:Sprite = new Sprite();
+render(cast sprite);   // render(target:Sprite) — --fix: render(sprite);
+```
 
 ## `redundant-upcast`
 

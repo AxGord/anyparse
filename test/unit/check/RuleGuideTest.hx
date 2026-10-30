@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.RuleCategory;
+import anyparse.check.RuleIndex;
 
 using StringTools;
 
@@ -29,6 +30,20 @@ class RuleGuideTest extends Test {
 			];
 			Assert.equals(headings.length, sections.length, '$category.md: every second-level heading is a rule section');
 			Assert.same(expected, sections, '$category.md: one section per rule of the category, by id');
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testIndexLinksEachRuleToItsGuideSection(): Void {
+		#if (sys || nodejs)
+		final index: String = RuleIndex.markdown(Linter.builtins());
+		for (c in Linter.builtins()) {
+			final link: String = '[`${c.id()}`](guide/lint/${c.category()}.md#${c.id()})';
+			Assert.isTrue(index.contains('| $link |'), '${c.id()}: its index row links its guide section');
+			final page: String = sys.io.File.getContent('docs/guide/lint/${c.category()}.md');
+			Assert.isTrue(page.contains('\n## `${c.id()}`\n'), '${c.id()}: the linked section exists');
 		}
 		#else
 		Assert.pass('non-sys target');

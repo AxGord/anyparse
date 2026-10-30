@@ -16,8 +16,45 @@ a bare case-pattern BINDER that IS a whole pattern, takes a name already declare
 
 ## `shadowing-local`
 
-a local declaration whose name is already bound by an enclosing local, binder or parameter.
+A local declaration whose name is already bound at that point — by an enclosing local, a loop or
+`catch` binder, a local function or a parameter. Haxe accepts the redeclaration silently; a reader
+sees one name and assumes one variable, so a write meant for the outer binding lands on the inner one
+and the outer keeps its old value. `Warning`. `--fix` takes only a shadow whose hidden binding is
+never read after the declaration: a same-block redeclaration of a `var` with the same written type
+becomes a plain assignment, and any other such declaration is renamed to its written type's
+lower-camel name (`var s:Item` → `item`). A shadow whose outer binding is still read — the actual
+defect — stays report-only: which of the two names is wrong is the author's call.
+
+The scan follows real scopes: two `switch` arms each declaring `q` do not see each other, a local
+sharing its name with a FIELD is the ordinary idiom and is not reported, and neither is a declaration
+that deliberately re-derives the name it hides (`final o = withDefaults(o);`). Declarations inside a
+`#if` region are skipped, since mutually exclusive branches may each declare the name. A nested
+function's PARAMETER shadowing a binding is `shadowing-parameter`'s.
+
+```haxe
+var view:DisplayObject = null;
+if (isBox) {
+	var view:Sprite = new Sprite(); // reported: the outer view stays null
+	render(view);
+}
+if (view == null) return;           // always taken for a box
+```
 
 ## `shadowing-parameter`
 
-a function parameter whose name is already bound by an enclosing local, binder or parameter.
+A function PARAMETER — of a lambda, a function literal or a local function — whose name is already
+bound by an enclosing local, loop or `catch` binder, local function or parameter. It is the same trap
+as `shadowing-local`, one spelling over: inside the function the outer binding is invisible.
+`Warning`, DEFAULT OFF, because reusing a lambda parameter name is a common idiom; opt in with
+`"shadowing-parameter": { "enabled": true }`. It walks scopes exactly as `shadowing-local` does.
+
+`--fix` renames the parameter to its written type's lower-camel name; a parameter with no written
+nominal type (an untyped arrow parameter, `String`, `Null<Array<T>>`) stays reported.
+
+Not reported: a parameter whose name starts with `_`, and a method's or module-level function's own
+parameters (a parameter sharing a name with a field is the ordinary idiom).
+
+```haxe
+var q:Int = 1;
+final doubled = xs.map(q -> q * 2); // reported: the outer q is invisible inside
+```

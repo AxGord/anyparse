@@ -24,8 +24,9 @@ final class RuleIndex {
 		);
 		out.add(
 			'A rule\'s category is what an `apqlint.json` `"categories"` entry and `apq lint --category <id>` select it by ('
-			+ '[cli-query-tool.md](cli-query-tool.md) § "`apq lint`").\n\n'
+			+ '[cli-query-tool.md](cli-query-tool.md) § "`apq lint`"). '
 		);
+		out.add('Each rule id links to its prose in the [user guide](guide/README.md): what it flags, why, the fix, an example.\n\n');
 		out.add('| category | rules | about |\n|---|---:|---|\n');
 		final sections: Array<{ category: RuleCategory, rules: Array<Check> }> = [];
 		for (category in RuleCategory.ALL) {
@@ -43,7 +44,7 @@ final class RuleIndex {
 				final requires: String = rule is VersionGated
 					? ' (fix needs language ${(cast rule: VersionGated).minLanguageVersion()})'
 					: '';
-				out.add('| `${rule.id()}` | ${languageOf(rule)} | $state | ${cell(rule.description())}$requires |\n');
+				out.add('| ${guideLink(rule)} | ${languageOf(rule)} | $state | ${cell(rule.description())}$requires |\n');
 			}
 		}
 		return out.toString();
@@ -77,6 +78,14 @@ final class RuleIndex {
 	/** The grammars `check` runs on as a listing spells them: its `LanguageBound` languages, or `any` for a check every grammar runs. */
 	public static function languageOf(check: Check): String {
 		return check is LanguageBound ? (cast check: LanguageBound).languages().join(', ') : 'any';
+	}
+
+	/**
+	 * `check`'s id as a link to its prose section, `guide/lint/<category>.md#<id>`
+	 * — a heading's anchor is its text without the backticks.
+	 */
+	public static function guideLink(check: Check): String {
+		return '[`${check.id()}`](guide/lint/${check.category()}.md#${check.id()})';
 	}
 
 	/** `text` safe inside a markdown table cell: a pipe would end the cell. */

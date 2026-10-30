@@ -22,6 +22,20 @@ Parsing strategies are plugins (`Pratt`, `Kw`, `Lit`, `Prefix`/`Postfix`/`Ternar
   pipeline.
 - **sexpr** — S-expression writer, used for the `ast` dump output.
 
+## Known limitations
+
+- **Refactoring and typed analysis are Haxe-only.** The CLI parses every grammar that has a
+  plugin (`--lang haxe | json | mermaid`), but the scope-correct refactorings, the type-aware
+  lint rules and the binding-resolving queries are wired for the Haxe plugin alone. A JSON
+  file gets the read commands and the element edit ops ([editing.md](editing.md)); no other
+  grammar has a refactoring layer yet.
+- **The Haxe grammar is broad, not exhaustive.** Some files of the haxe-formatter regression
+  corpus still fail to parse; the current count is in the [roadmap](../roadmap.md).
+- **`buildTransform` is not format-preserving.** It walks plain typed ASTs, so comments and
+  spans do not survive a transform; a transform that carries them through is not built yet.
+  Source rewriting today goes through the CLI ops, which splice spans and re-emit through the
+  writer.
+
 ## Design goals
 
 The project deliberately started from a universal-parser framing: be ready for the next

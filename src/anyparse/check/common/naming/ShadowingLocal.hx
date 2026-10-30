@@ -18,8 +18,9 @@ using StringTools;
 
 /**
  * Flags a LOCAL declaration whose name is already bound — by an enclosing local, a loop or catch
- * binder, a local function, or a parameter — at the point it takes effect. `Warning`,
- * REPORT-ONLY: which of the two names is the wrong one is the author's call.
+ * binder, a local function, or a parameter — at the point it takes effect. `Warning`. The fix
+ * (`fixWith`) takes only a shadow whose hidden binding is never read after the declaration; one whose
+ * outer binding is still read stays report-only, since which name is wrong is the author's call.
  *
  * ## The mistake it names
  *
