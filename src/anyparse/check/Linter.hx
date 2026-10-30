@@ -206,6 +206,7 @@ import anyparse.check.haxe.loops.PreferExists;
 import anyparse.check.haxe.loops.PreferFind;
 import anyparse.check.haxe.loops.PreferForeach;
 import anyparse.check.haxe.loops.PreferMapLiteral;
+import anyparse.check.haxe.members.StaticInitOrder;
 import anyparse.check.haxe.nullsafety.NullSafetyStrict;
 import anyparse.check.haxe.types.PreferIsOperator;
 import anyparse.check.haxe.types.PreferMapType;
@@ -261,6 +262,7 @@ final class Linter {
 			new IdenticalOperands(),
 			new CPrecedenceTrap(),
 			new SubstrNegativeStart(),
+			new StaticInitOrder(),
 			new NullSafetyStrict(),
 			new SelfAssignment(),
 			new DuplicateCase(),

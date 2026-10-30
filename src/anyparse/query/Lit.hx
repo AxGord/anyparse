@@ -172,7 +172,7 @@ final class Lit {
 	 */
 	private static function unquoted(name: String, delimiter: String): Null<String> {
 		final width: Int = delimiter.length;
-		return name.length < width * 2 || name.substr(0, width) != delimiter || name.substr(name.length - width) != delimiter
+		return name.length < width * 2 || !name.startsWith(delimiter) || !name.endsWith(delimiter)
 			? null
 			: name.substring(width, name.length - width);
 	}

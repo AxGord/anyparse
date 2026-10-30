@@ -32773,6 +32773,78 @@
 			"find": "|| opt._inTypedefBody",
 			"replace": "",
 			"note": "a typedef body charges the anon-type cascade indent, which the fork never applies to a typedef RHS"
+		},
+		{
+			"name": "M-ORDERGUARD-NO-PROOF",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "provesNonNegative",
+			"find": "if (rest.terms.empty() && rest.constant >= 0 && unwritten(bound, ctx)) return true;",
+			"replace": "",
+			"note": "no enclosing bound proves a start non-negative"
+		},
+		{
+			"name": "M-ORDERGUARD-ELSE-AS-THEN",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "bounds",
+			"find": "facts(kids[0], slot == 1, region, ctx, out);",
+			"replace": "facts(kids[0], true, region, ctx, out);",
+			"note": "a ternary or if condition bounds its else branch as if it held there"
+		},
+		{
+			"name": "M-STATICINIT-ANY-ORDER",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "m.index > owner.index",
+			"replace": "m.index != owner.index",
+			"note": "a read of a static declared above the reader is flagged too"
+		},
+		{
+			"name": "M-STATICINIT-NO-DEFERRED",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "if (deferredKinds.contains(node.kind)) return null;",
+			"replace": "",
+			"note": "a read inside a function literal counts as an eager read"
+		},
+		{
+			"name": "M-STATICINIT-BY-NAME",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "declaredAt(members, name, Refs.bindingAt(name, span.from, tree, shape))",
+			"replace": "members.find(m -> m.node.name == name)",
+			"note": "an identifier is matched to a field by its spelling, not by the declaration it binds"
+		},
+		{
+			"name": "M-STATICINIT-ANY-QUALIFIER",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "kids[0].name == ownerType",
+			"replace": "true",
+			"note": "another type's static of the same name counts as a read of the field"
+		},
+		{
+			"name": "M-ORDERGUARD-WRITES-IGNORED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "unwritten",
+			"find": "WriteSites.mayOverlap(written, atom, false)",
+			"replace": "false",
+			"note": "a write in the guarded region to an operand of the bound leaves it standing"
+		},
+		{
+			"name": "M-ORDERGUARD-TEXT-ATOMS",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "linear",
+			"find": "WriteSites.accessPath(node, ctx.tree, seams.shape) ?? '?${span.from}'",
+			"replace": "text",
+			"note": "an operand is keyed by its spelling, so a shadowing local is the guard's operand"
+		},
+		{
+			"name": "M-ORDERGUARD-NO-BARRIER",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "bounds",
+			"find": "if (seams.barrierKinds.contains(node.kind)) out.resize(0);",
+			"replace": "",
+			"note": "a bound above a function literal reaches its body"
 		}
 	]
 }

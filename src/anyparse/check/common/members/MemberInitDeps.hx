@@ -3,6 +3,7 @@ package anyparse.check.common.members;
 import anyparse.check.common.members.MemberSlots.OrderedMember;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.Refs;
 
 /**
  * One member pair whose CURRENT relative order the init phase fixes: `before` must keep running
@@ -141,6 +142,45 @@ final class MemberInitDeps {
 			&& OccurrenceScan.referencedInRange(source, name, span.from, span.to, []);
 	}
 
+	/**
+	 * The first field declared after `owner`, in its initialization phase, that `owner`'s initializer READS while it runs:
+	 * an identifier `Refs` binds to that field's declaration, or an `<ownerType>.name` access. The precise twin of the
+	 * conservative `initReadsSibling`, for a caller that REPORTS: a word in a string, a comment or an object-literal key,
+	 * and another type's member, are not reads, and a read inside a `deferredKinds` subtree (a function literal) runs when
+	 * it is called. Only an initialized, non-inline field has an order to violate. Null when there is none.
+	 */
+	public static function firstEarlyRead(
+		owner: OrderedMember, members: Array<OrderedMember>, ownerType: Null<String>, tree: QueryNode, shape: RefShape,
+		deferredKinds: Array<String>
+	): Null<OrderedMember> {
+		final init: Null<QueryNode> = owner.initNode;
+		if (init == null) return null;
+		function later(m: Null<OrderedMember>): Bool {
+			return m != null && m.isField && !m.isInline && m.initNode != null && m.isStatic == owner.isStatic && m.index > owner.index;
+		}
+		function walk(node: QueryNode): Null<OrderedMember> {
+			if (deferredKinds.contains(node.kind)) return null;
+			final name: Null<String> = node.name;
+			final span: Null<Span> = node.span;
+			final kids: Array<QueryNode> = node.children;
+			final read: Null<OrderedMember> = if (name == null || span == null)
+				null
+			else if (node.kind == shape.identKind || node.kind == shape.stringInterpIdentKind)
+				declaredAt(members, name, Refs.bindingAt(name, span.from, tree, shape))
+			else if (node.kind == shape.fieldAccessKind && kids.length == 1 && kids[0].kind == shape.identKind && kids[0].name == ownerType)
+				members.find(m -> m.node.name == name && m.isStatic)
+			else
+				null;
+			if (later(read)) return read;
+			for (c in kids) {
+				final found: Null<OrderedMember> = walk(c);
+				if (found != null) return found;
+			}
+			return null;
+		}
+		return walk(init);
+	}
+
 	/** The pair as a constraint, oriented by CURRENT source position - the order the sort must keep. */
 	private static inline function constraintOf(a: OrderedMember, b: OrderedMember, kind: InitConstraintKind): InitOrderConstraint {
 		return a.index < b.index ? { before: a, after: b, kind: kind } : { before: b, after: a, kind: kind };
@@ -259,6 +299,16 @@ final class MemberInitDeps {
 		final out: Array<String> = (shape.nullableWrapperTypeNames ?? []).copy();
 		for (name in literals) if (!valueTypes.contains(name) && !out.contains(name)) out.push(name);
 		return out;
+	}
+
+	/** The member named `name` whose declaration holds the offset `binding` a `Refs` lookup answered, or null. */
+	private static function declaredAt(members: Array<OrderedMember>, name: String, binding: Null<Int>): Null<OrderedMember> {
+		return binding == null || binding < 0
+			? null
+			: members.find(m -> {
+				final span: Null<Span> = m.node.span;
+				m.node.name == name && span != null && binding >= span.from && binding < span.to;
+			});
 	}
 
 }

@@ -3841,6 +3841,13 @@ typedef ExecutionShape = {
 	@:optional var integerFoldOperators: Map<String, String>;
 
 	/**
+	 * The ordered comparison a binary node kind performs, by kind, as one of `lt`, `le`, `gt`, `ge` — what a check
+	 * reading the integer bound a condition proves (`n > k ? s.substr(n - k) : s`) evaluates. Named like
+	 * `integerFoldOperators`, for the same reason. Optional; unset makes no condition a bound.
+	 */
+	@:optional var orderedComparisonOperators: Map<String, String>;
+
+	/**
 	 * The SIMPLE names of the grammar's built-in map types (Haxe `Map`, `IntMap`, …), whose own methods
 	 * `nonMutatingMapMethods` / `mutatingMapMethods` list exactly as the array lists do for the array type:
 	 * a method in neither may be a static extension handed the map itself. Optional; unset makes every
