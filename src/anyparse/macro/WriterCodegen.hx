@@ -84,6 +84,8 @@ class WriterCodegen {
 			// `comments.trailingCommentOverflow: "above"`: one list element's trailing
 			// comment beside it, or above it when it alone overflows the line.
 			fields.push(trailingCommentAboveOrField());
+			// An infix chain operator's comments, split into the per-gap channels `BinaryChainEmit` reads.
+			fields.push(pushChainOpCommentsField());
 			// ω-line-comment-indent: run-aware line-comment core. Every
 			// array-indexed leading-comment site routes through
 			// `leadingCommentDocRun` so the adapter sees the entry's
@@ -1211,6 +1213,51 @@ class WriterCodegen {
 					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
+				expr: body
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * Push one infix chain operator's comments onto the three per-gap channels `BinaryChainEmit.emit` reads: the
+	 * same-line comment after the operator as a trailing Doc, the own-line run before the right operand, and, when
+	 * `above` and the trailing comment is a relocatable `//` one, that comment as its own line. True when the gap
+	 * carries any comment, which commits the chain to its source-faithful shape.
+	 */
+	private static function pushChainOpCommentsField(): Field {
+		final body: Expr = macro {
+			afters.push(after == null ? null : trailingCommentDocVerbatim(after, opt));
+			if (own.length == 0)
+				owns.push(null);
+			else {
+				final _run: Array<anyparse.core.Doc> = [];
+				for (_ci in 0...own.length) {
+					if (_ci > 0) _run.push(_dhl());
+					_run.push(leadingCommentDocRun(own, _ci, opt));
+				}
+				owns.push(_dc(_run));
+			}
+			if (above && after != null && anyparse.format.comment.CommentDirective.relocatableTrailing(after))
+				aboves.push(leadingCommentDocRun([after], 0, opt));
+			else
+				aboves.push(null);
+			return after != null || own.length > 0;
+		};
+		return {
+			name: 'pushChainOpComments',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'after', type: macro :Null<String> },
+					{ name: 'own', type: macro :Array<String> },
+					{ name: 'above', type: macro :Bool },
+					{ name: 'afters', type: macro :Array<Null<anyparse.core.Doc>> },
+					{ name: 'owns', type: macro :Array<Null<anyparse.core.Doc>> },
+					{ name: 'aboves', type: macro :Array<Null<anyparse.core.Doc>> },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+				],
+				ret: macro :Bool,
 				expr: body
 			}),
 			pos: Context.currentPos()

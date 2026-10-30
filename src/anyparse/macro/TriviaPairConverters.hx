@@ -119,7 +119,7 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) n++; // chainLeadComment (chain receiver/operand comment)
-		if (TriviaPairAltCtor.isInfixChainBranch(branch)) n++; // opAfterComment (infix post-operator comment)
+		if (TriviaPairAltCtor.isInfixChainBranch(branch)) n += 2; // opAfterComment + opOwnComments (infix post-operator comments)
 		if (TriviaPairAltCtor.isRhsTrailBranch(branch)) n++; // opRhsTrailComment (infix right-operand trailing comment)
 		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) n += 2; // condTrailComment + thenTrailComment (ω-keep-ternary-operand-comment)
 		if (TriviaPairAltCtor.isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
@@ -455,8 +455,10 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch))
 			defaults.push(macro (null: Null<String>)); // chainLeadComment (chain receiver/operand comment)
-		if (TriviaPairAltCtor.isInfixChainBranch(branch))
+		if (TriviaPairAltCtor.isInfixChainBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // opAfterComment (infix post-operator comment)
+			defaults.push(macro ([]: Array<String>)); // opOwnComments (own-line comments before the right operand)
+		}
 		if (TriviaPairAltCtor.isRhsTrailBranch(branch))
 			defaults.push(macro (null: Null<String>)); // opRhsTrailComment (infix right-operand trailing comment)
 		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) {

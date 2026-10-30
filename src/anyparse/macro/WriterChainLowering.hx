@@ -57,7 +57,6 @@ final class WriterChainLowering {
 	 */
 	private static function wrapChainTriviaBody(c: ChainDispatchCtx): Expr {
 		final argsListExpr: Expr = c.argsListExpr;
-		final argDocsExpr: Expr = c.argDocsExpr;
 		final chainRulesExpr: Expr = c.chainRulesExpr;
 		final writeIdent: Expr = c.writeIdent;
 		final precExpr: Expr = c.precExpr;
@@ -153,7 +152,6 @@ final class WriterChainLowering {
 						case Call(_op, _args, _trailClose, _, _, _):
 							switch _op {
 								case FieldAccess(_prev, _fld, _nl, _opTrail):
-									final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
 									final _argsDoc: anyparse.core.Doc = $argsListExpr;
 									final _segDoc: anyparse.core.Doc = _trailClose != null
 										? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])

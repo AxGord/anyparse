@@ -215,109 +215,79 @@ final class WriterPrattLowering {
 	 * current writer's value type.
 	 */
 	private static function infixChainGatherSwitch(isChainBool: Bool, isChainNullCoal: Bool, threadBreaks: Bool, leafCall: Expr): Expr {
-		// noqa: complexity
 		// `??` is left-assoc like the other chains (`NullCoal(NullCoal(a, b), c)`);
 		// the recurse-left / push-op / recurse-right gather yields items in infix
-		// order with a per-gap `_afterComments` entry, so the flat chain-emit
+		// order with per-gap comment entries, so the flat chain-emit
 		// preserves the post-`??` line comments the plain infix path used to drop.
-		return isChainNullCoal
-			? threadBreaks
-				? macro switch _e {
-					case NullCoal(_l, _r, _nl, _lc, _ac):
-						_gather(_l);
-						if (_lc != null) {
-							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-							_hasLeadComment = true;
-						}
-						_ops.push('??');
-						_breaks.push(_nl);
-						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-						if (_ac != null) _hasLeadComment = true;
-						_gather(_r);
-					case _: _items.push($leafCall);
+		final ctors: Array<{ ctor: String, op: String }> = if (isChainNullCoal)
+			[{ ctor: 'NullCoal', op: '??' }]
+		else if (isChainBool)
+			[{ ctor: 'Or', op: '||' }, { ctor: 'And', op: '&&' }]
+		else
+			[{ ctor: 'Add', op: '+' }, { ctor: 'Sub', op: '-' }];
+		final cases: Array<Case> = [
+			for (c in ctors) threadBreaks ? triviaChainGatherCase(c.ctor, c.op) : plainChainGatherCase(c.ctor, c.op)
+		];
+		cases.push({ values: [macro _], expr: macro _items.push($leafCall) });
+		return { expr: ESwitch(macro _e, cases, null), pos: Context.currentPos() };
+	}
+
+	/** One plain-mode gather arm: recurse left, push the operator, recurse right. */
+	private static function plainChainGatherCase(ctor: String, op: String): Case {
+		return {
+			values: [macro $i{ctor}(_l, _r)],
+			expr: macro {
+				_gather(_l);
+				_ops.push($v{op});
+				_gather(_r);
+			}
+		};
+	}
+
+	/**
+	 * One trivia-mode gather arm: the left operand's trailing comment rides its item, the operator's source break and
+	 * comments go onto the per-gap channels (`pushChainOpComments`), and any comment commits the chain to its Keep shape.
+	 */
+	private static function triviaChainGatherCase(ctor: String, op: String): Case {
+		return {
+			values: [macro $i{ctor}(_l, _r, _nl, _lc, _ac, _oc)],
+			expr: macro {
+				_gather(_l);
+				if (_lc != null) {
+					_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+					_hasLeadComment = true;
 				}
-				: macro switch _e {
-					case NullCoal(_l, _r):
-						_gather(_l);
-						_ops.push('??');
-						_gather(_r);
-					case _: _items.push($leafCall);
+				_ops.push($v{op});
+				_breaks.push(_nl);
+				if (pushChainOpComments(_ac, _oc, _relocateAbove, _afterComments, _ownComments, _aboveComments, opt))
+					_hasLeadComment = true;
+				_gather(_r);
+			}
+		};
+	}
+
+	/**
+	 * The chain's per-gap comment channels, declared in ONE `EVars` so they share the generated body's scope: the three
+	 * Doc arrays `pushChainOpComments` fills and whether an after-operator comment may move above its operand.
+	 */
+	private static function chainCommentChannelsDecl(relocateAboveExpr: Expr): Expr {
+		final docsCT: ComplexType = macro :Array<Null<anyparse.core.Doc>>;
+		final vars: Array<Var> = [
+			for (name in ['_afterComments', '_ownComments', '_aboveComments'])
+				{
+					name: name,
+					type: docsCT,
+					expr: macro [],
+					isFinal: true
 				}
-			: threadBreaks
-				? isChainBool
-					? macro switch _e {
-						case Or(_l, _r, _nl, _lc, _ac):
-							_gather(_l);
-							if (_lc != null) {
-								_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-								_hasLeadComment = true;
-							}
-							_ops.push('||');
-							_breaks.push(_nl);
-							_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-							if (_ac != null) _hasLeadComment = true;
-							_gather(_r);
-						case And(_l, _r, _nl, _lc, _ac):
-							_gather(_l);
-							if (_lc != null) {
-								_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-								_hasLeadComment = true;
-							}
-							_ops.push('&&');
-							_breaks.push(_nl);
-							_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-							if (_ac != null) _hasLeadComment = true;
-							_gather(_r);
-						case _: _items.push($leafCall);
-					}
-					: macro switch _e {
-						case Add(_l, _r, _nl, _lc, _ac):
-							_gather(_l);
-							if (_lc != null) {
-								_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-								_hasLeadComment = true;
-							}
-							_ops.push('+');
-							_breaks.push(_nl);
-							_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-							if (_ac != null) _hasLeadComment = true;
-							_gather(_r);
-						case Sub(_l, _r, _nl, _lc, _ac):
-							_gather(_l);
-							if (_lc != null) {
-								_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-								_hasLeadComment = true;
-							}
-							_ops.push('-');
-							_breaks.push(_nl);
-							_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-							if (_ac != null) _hasLeadComment = true;
-							_gather(_r);
-						case _: _items.push($leafCall);
-					}
-				: isChainBool
-					? macro switch _e {
-						case Or(_l, _r):
-							_gather(_l);
-							_ops.push('||');
-							_gather(_r);
-						case And(_l, _r):
-							_gather(_l);
-							_ops.push('&&');
-							_gather(_r);
-						case _: _items.push($leafCall);
-					}
-					: macro switch _e {
-						case Add(_l, _r):
-							_gather(_l);
-							_ops.push('+');
-							_gather(_r);
-						case Sub(_l, _r):
-							_gather(_l);
-							_ops.push('-');
-							_gather(_r);
-						case _: _items.push($leafCall);
-					};
+		];
+		vars.push({
+			name: '_relocateAbove',
+			type: macro :Bool,
+			expr: relocateAboveExpr,
+			isFinal: true
+		});
+		return { expr: EVars(vars), pos: Context.currentPos() };
 	}
 
 	/**
@@ -600,15 +570,20 @@ final class WriterPrattLowering {
 		// ω-keep-infix-postop-comment: per-op comment trailing the operator
 		// (parallel to _ops); null entries when no comment. Threaded to
 		// BinaryChainEmit so shapeKeep appends `OP // c` and forces a break.
-		final afterCommentsDecl: Expr = threadBreaks ? macro final _afterComments: Array<Null<anyparse.core.Doc>> = [] : macro {};
+		// ω-keep-infix-postop-comment: per-gap channels parallel to `_ops` (`pushChainOpComments`) — the comment after
+		// the operator, the own-line run before the right operand and, under `@:fmt(relocateTrailingComments)`, the
+		// after-comment as the line `trailingCommentOverflow: "above"` may move it to.
+		final relocateAboveExpr: Expr = branch.fmtHasFlag('relocateTrailingComments') ? macro opt.trailingCommentAbove : macro false;
+		final afterCommentsDecl: Expr = threadBreaks ? chainCommentChannelsDecl(relocateAboveExpr) : macro {};
 		final outerAfterComment: Null<Expr> = pc.ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainAfterComment) : null;
-		final outerAfterPush: Expr = threadBreaks && outerAfterComment != null
-			? macro {
-				final _oac: Null<String> = ${outerAfterComment};
-				_afterComments.push(_oac != null ? trailingCommentDocVerbatim(_oac, opt) : null);
-				if (_oac != null) _hasLeadComment = true;
-			}
-			: macro {};
+		final outerOwnComments: Null<Expr> = pc.ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainOwnComments) : null;
+		final outerAfterPush: Expr = if (threadBreaks && outerAfterComment != null && outerOwnComments != null) {
+			final pushed: Expr = macro pushChainOpComments(
+				$outerAfterComment, $outerOwnComments, _relocateAbove, _afterComments, _ownComments, _aboveComments, opt
+			);
+			macro if ($pushed) _hasLeadComment = true;
+		} else
+			macro {};
 		// Top-level gather: head operand, the outer operator, the outer
 		// ctor's source-newline (parallel to that operator), tail operand.
 		final outerBreakPush: Expr = threadBreaks ? macro _breaks.push(${outerChainNl}) : macro {};
@@ -639,7 +614,7 @@ final class WriterPrattLowering {
 		final emitCall: Expr = threadBreaks
 			? macro anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak, _hasLeadComment,
-				_afterComments, _restAware
+				_afterComments, _restAware, null, false, _ownComments, _aboveComments
 			)
 			: macro anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, null, false, false, null, _restAware

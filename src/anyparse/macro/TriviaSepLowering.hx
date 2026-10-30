@@ -322,7 +322,9 @@ final class TriviaSepLowering {
 			uniformStmtBlanks: uniformStmtBlanks,
 			relocateTrailingComments: relocateTrailingComments
 		}
-		final predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, uniformStmtBlanks, triviaElemCall);
+		final predicateScan: Expr = triviaSepPredicateScanExpr(
+			reflowSourceMultiline, uniformStmtBlanks, triviaElemCall, relocateTrailingComments
+		);
 		final matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
 			matrixWrap, openText, closeText, sepText, appendTrailingCommaExpr, triviaElemCall
 		);
@@ -1220,9 +1222,11 @@ final class TriviaSepLowering {
 	 * element's blank/comment/source-newline signals. References the runtime
 	 * `_keepEmit`/`_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals.
 	 */
-	private static function triviaSepPredicateScanExpr(reflowSourceMultiline: Bool, uniformStmtBlanks: Bool, triviaElemCall: Expr): Expr {
+	private static function triviaSepPredicateScanExpr(
+		reflowSourceMultiline: Bool, uniformStmtBlanks: Bool, triviaElemCall: Expr, relocateTrailingComments: Bool
+	): Expr {
 		final blankHardlineExpr: Expr = triviaSepBlankHardlineExpr(uniformStmtBlanks);
-		final gluedLeadExpr: Expr = triviaSepGluedLeadExpr();
+		final inlineableLeadExpr: Expr = triviaSepInlineableLeadExpr(relocateTrailingComments);
 		return macro {
 			var _ti: Int = 0;
 			while (_ti < _arr.length) {
@@ -1231,7 +1235,7 @@ final class TriviaSepLowering {
 				// A leading comment that ends its line rides the cascade as a hardline inside the item, which a pure
 				// `noWrap` cascade lays out flat around it; only the force-multi layout keeps it on every rewrite.
 				if (_t.leadingComments.length > 0) {
-					if (_ignoreEmit && (!_noWrapRules || $gluedLeadExpr))
+					if ($inlineableLeadExpr)
 						_hasInlineableTrivia = true;
 					else
 						_requiresHardline = true;
@@ -1280,8 +1284,24 @@ final class TriviaSepLowering {
 	 * source glued to the element do; every other leading comment ends its line. References the runtime `_t` local.
 	 */
 	private static function triviaSepGluedLeadExpr(): Expr {
-		return macro _t.leadingCommentsGlued == true
-			&& Lambda.foreach(_t.leadingComments, _c -> StringTools.startsWith(_c, '/*') && _c.indexOf('\n') < 0);
+		return macro _t.leadingCommentsGlued == true && $e{triviaSepInlineLeadExpr()};
+	}
+
+	/**
+	 * The element `_t`'s leading comments ride the cascade inside the item rather than forcing one element per line: an
+	 * Ignore-mode list that is not a pure `noWrap` cascade, or one whose comments are glued to the element. A list
+	 * that moves comments above its elements (`@:fmt(relocateTrailingComments)`) must read such a comment back one
+	 * element per line, as a call's arguments do, or the move is not a fixed point; there only a one-line block
+	 * comment rides along.
+	 */
+	private static function triviaSepInlineableLeadExpr(relocateTrailingComments: Bool): Expr {
+		final inlineLead: Expr = relocateTrailingComments ? triviaSepInlineLeadExpr() : macro true;
+		return macro _ignoreEmit && $inlineLead && (!_noWrapRules || $e{triviaSepGluedLeadExpr()});
+	}
+
+	/** Every leading comment of the element `_t` is a one-line block comment, the only kind that can share a line. */
+	private static function triviaSepInlineLeadExpr(): Expr {
+		return macro Lambda.foreach(_t.leadingComments, _c -> StringTools.startsWith(_c, '/*') && _c.indexOf('\n') < 0);
 	}
 
 	/**

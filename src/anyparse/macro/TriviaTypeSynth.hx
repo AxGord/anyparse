@@ -474,6 +474,10 @@ class TriviaTypeSynth {
 	public static inline final CHAIN_LEAD_COMMENT_ARG_NAME: String = 'chainLeadComment';
 
 	public static inline final OP_AFTER_COMMENT_ARG_NAME: String = 'opAfterComment';
+
+	/** An infix chain ctor's own-line comments between its operator and its right operand (`a ||` newline `// c` newline `b`). */
+	public static inline final OP_OWN_COMMENTS_ARG_NAME: String = 'opOwnComments';
+
 	public static inline final OP_RHS_TRAIL_COMMENT_ARG_NAME: String = 'opRhsTrailComment';
 
 	/**

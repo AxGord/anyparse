@@ -199,6 +199,35 @@ final class Parser {
 		unknownFields.push(new UnknownField(key, keyPos, known));
 	}
 
+	/** The number of comments the stash holds now: the mark `takeStashedComments` cuts at. */
+	public function stashedCommentCount(): Int {
+		final pending: Null<PendingTrivia> = pendingTrivia;
+		return pending == null ? 0 : pending.leadingComments.length;
+	}
+
+	/**
+	 * Remove and return the comments stashed since the stash held `mark` of them, for a node that owns them as its
+	 * own slot rather than as leading trivia of whatever parses next.
+	 */
+	public function takeStashedComments(mark: Int): Array<String> {
+		final pending: Null<PendingTrivia> = pendingTrivia;
+		return pending == null || pending.leadingComments.length <= mark
+			? []
+			: pending.leadingComments.splice(mark, pending.leadingComments.length - mark);
+	}
+
+	/** The run of whitespace ending at `at` holds a line break: the token at `at` starts its own source line. */
+	public function lineBreakBefore(at: Int): Bool {
+		var i: Int = at - 1;
+		while (i >= 0) {
+			final c: Int = input.charCodeAt(i);
+			if (c == '\n'.code) return true;
+			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
+			i--;
+		}
+		return false;
+	}
+
 	private static function alwaysFalse(): Bool {
 		return false;
 	}

@@ -5,7 +5,7 @@ import utest.Test;
 
 /**
  * `comments.trailingCommentOverflow: "above"` inside an expression: an object-literal field, or an argument of a
- * call already laid out one argument per line, moves an overflowing `//` comment onto its own line above it, at
+ * call or a `new` already laid out one argument per line, moves an overflowing `//` comment onto its own line above it, at
  * its indent, under the statement's positive list (`HxTrailingCommentOverflowSliceTest`): not a directive, no
  * leading comment of its own, code that alone fits on one line. A Keep-mode field glued to its predecessor keeps
  * the comment, which could not end a line above it. Every moved form is a fixed point. Fixtures are 60 columns
@@ -77,11 +77,8 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 		'};'
 	];
 
-	/**
-	 * A `new` argument list does not opt in: a non-first argument led by its own-line comment reads back as a fill
-	 * layout rather than one argument per line, so a moved comment would need a second rewrite.
-	 */
-	private static final NEW_STAYS: Array<String> = [
+	/** `new` arguments: the comment after a separator moves, a last argument's own one too, its separator stays. */
+	private static final NEW_SRC: Array<String> = [
 		'final o = new Foo(',
 		'\tfirst,',
 		'\tsecond, // another comment long enough to overflow the line',
@@ -94,6 +91,25 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 		'final q = new Foo(',
 		'\tfirst,',
 		'\tthird, // another comment long enough to overflow the line',
+		');'
+	];
+
+	private static final NEW_ABOVE: Array<String> = [
+		'final o = new Foo(',
+		'\tfirst,',
+		'\t// another comment long enough to overflow the line',
+		'\tsecond,',
+		'\tthird',
+		');',
+		'final p = new Foo(',
+		'\tfirst,',
+		'\t// another comment long enough to overflow the line',
+		'\tthird',
+		');',
+		'final q = new Foo(',
+		'\tfirst,',
+		'\t// another comment long enough to overflow the line',
+		'\tthird,',
 		');'
 	];
 
@@ -130,10 +146,7 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 		'};'
 	];
 
-	/**
-	 * A comment after a chain operator stays: an own-line comment between an operator and its operand has no slot
-	 * to read back into, so moving it would not be a fixed point.
-	 */
+	/** The head operand's operator comment stays: above the head is the statement, not the chain. */
 	private static final CHAIN: Array<String> = [
 		'return alpha(first) || // a comment long enough to overflow',
 		'\tbeta(second);'
@@ -169,10 +182,12 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 		Assert.equals(fn(TRAIL_SRC), write(fn(TRAIL_SRC), CONFIG_OFF));
 	}
 
-	/** `new` arguments keep their comments under the knob, so the canonical form is one rewrite away. */
-	@:pin('guard')
-	public function testNewArgumentCommentsStay(): Void {
-		Assert.equals(fn(NEW_STAYS), write(fn(NEW_STAYS), CONFIG_ON));
+	/** A `new` argument moves its overflowing comment as a call argument does; the knob off moves nothing. */
+	@:pin('control')
+	@:killer('M-TCO-FIELD-KNOB-IGNORED')
+	public function testOverflowingNewArgumentCommentMovesAbove(): Void {
+		Assert.equals(fn(NEW_ABOVE), write(fn(NEW_SRC), CONFIG_ON));
+		Assert.equals(fn(NEW_SRC), write(fn(NEW_SRC), CONFIG_OFF));
 	}
 
 	/** Outside the positive list nothing moves, in a literal and in an argument list alike. */
@@ -190,14 +205,14 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 		Assert.equals(fn(KEEP_ABOVE), write(fn(KEEP_SRC), CONFIG_KEEP_ON));
 	}
 
-	/** The chain operator's comment keeps its line under the knob. */
+	/** The chain head's operator comment keeps its line under the knob. */
 	public function testChainOperatorCommentStays(): Void {
 		Assert.equals(fn(CHAIN), write(fn(CHAIN), CONFIG_ON));
 	}
 
 	/** Every moved form is a fixed point of the same config. */
 	public function testMovedFormsAreFixedPoints(): Void {
-		for (canon in [FIELD_ABOVE, ARG_ABOVE, TRAIL_ABOVE]) Assert.equals(fn(canon), write(fn(canon), CONFIG_ON));
+		for (canon in [FIELD_ABOVE, ARG_ABOVE, TRAIL_ABOVE, NEW_ABOVE]) Assert.equals(fn(canon), write(fn(canon), CONFIG_ON));
 		Assert.equals(fn(KEEP_ABOVE), write(fn(KEEP_ABOVE), CONFIG_KEEP_ON));
 	}
 

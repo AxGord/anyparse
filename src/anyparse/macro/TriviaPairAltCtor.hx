@@ -362,7 +362,7 @@ final class TriviaPairAltCtor {
 			+ (hasChainLeadComment ? 1 : 0)
 			+ (hasPostfixOpSpace ? 1 : 0)
 			+ (hasPostfixCloseTrailing ? 5 : 0)
-			+ (isInfixChainBranch(branch) ? 1 : 0)
+			+ (isInfixChainBranch(branch) ? 2 : 0)
 			+ (isRhsTrailBranch(branch) ? 1 : 0)
 			+ (isTernaryTrailBranch(branch) ? 2 : 0);
 		// CHECKSTYLE:ON
@@ -556,6 +556,7 @@ final class TriviaPairAltCtor {
 			final strCT2: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT2: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT2)] });
 			args.push({ name: TriviaTypeSynth.OP_AFTER_COMMENT_ARG_NAME, type: nullStrCT2 });
+			args.push({ name: TriviaTypeSynth.OP_OWN_COMMENTS_ARG_NAME, type: macro :Array<String> });
 		}
 		// ω-keep-infix-rhs-comment: `opRhsTrailComment` slot on any @:infix ctor
 		// carrying @:fmt(captureRhsTrail) (position #3, right-operand trailing).

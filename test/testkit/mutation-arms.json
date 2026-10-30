@@ -29511,9 +29511,9 @@
 		{
 			"name": "M-NOWRAP-LEAD-IN-CASCADE",
 			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepPredicateScanExpr",
-			"find": "if (_ignoreEmit && (!_noWrapRules || $gluedLeadExpr))",
-			"replace": "if (_ignoreEmit)",
+			"method": "triviaSepInlineableLeadExpr",
+			"find": "_ignoreEmit && $inlineLead && (!_noWrapRules || $e{triviaSepGluedLeadExpr()});",
+			"replace": "_ignoreEmit && $inlineLead;",
 			"note": "a pure noWrap cascade takes an own-line comment and writes it after the previous parameter's comma"
 		},
 		{
@@ -32448,6 +32448,62 @@
 			"find": "checks.filter(c -> Linter.runsOn(c, io.plugin.langName()))",
 			"replace": "checks",
 			"note": "the scoped --list-rules lists a rule the scope's grammar never runs as a state of that scope's lint"
+		},
+		{
+			"name": "M-CHAIN-OWN-COMMENTS-UNTAKEN",
+			"type": "anyparse.runtime.Parser",
+			"method": "takeStashedComments",
+			"find": ": pending.leadingComments.splice(mark, pending.leadingComments.length - mark);",
+			"replace": ": [];",
+			"note": "a chain operator leaves its own-line comments on the stash, so they drift into whatever its operand parses next"
+		},
+		{
+			"name": "M-CHAIN-ABOVE-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "? macro opt.trailingCommentAbove : macro false",
+			"replace": "? macro true : macro false",
+			"note": "a chain operator's overflowing comment moves above its operand with the knob off"
+		},
+		{
+			"name": "M-CHAIN-ABOVE-NEXT-UNBLOCKED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeKeep",
+			"find": "&& !(prevCandidate && location == BeforeLast)",
+			"replace": "",
+			"note": "under beforeLast the operand after a moved comment still counts as opening a line after an operator, so its comment moves too and the next pass reads it back elsewhere"
+		},
+		{
+			"name": "M-CHAIN-ABOVE-LED-IGNORED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "keepStartsOwnLine",
+			"find": "&& gapComment(owns, i - 1) == null",
+			"replace": "&& true",
+			"note": "an operand already led by an own-line comment takes a moved comment above it too"
+		},
+		{
+			"name": "M-NEW-LEAD-COMMENT-INLINED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepInlineableLeadExpr",
+			"find": "relocateTrailingComments ? triviaSepInlineLeadExpr() : macro true",
+			"replace": "macro true",
+			"note": "a `new` argument led by an own-line comment rides the cascade as a fill item instead of putting the list one argument per line"
+		},
+		{
+			"name": "M-CHAIN-ARGS-CASCADE-ONLY",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "wrapWithChainDispatch",
+			"find": "_forceArgMulti ? $e{WriterChainLowering.lowerPostfixForceMultiDoc(segStar)} : $cascadeExpr;",
+			"replace": "$cascadeExpr;",
+			"note": "a method-chain segment call lays out line-commented arguments through the cascade, which has no place for an after-separator comment"
+		},
+		{
+			"name": "M-ADDSUB-BREAK-BEFORE-OP-LOST",
+			"type": "anyparse.macro.PrattPostfixLowering",
+			"method": "buildPrattBranchBody",
+			"find": ": macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || ctx.lineBreakBefore(_opStart);",
+			"replace": ": macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);",
+			"note": "an additive chain misses a source break before a non-head operator that its left operand's parse consumed, so a kept chain is glued there on the next pass"
 		}
 	]
 }

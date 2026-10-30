@@ -147,6 +147,8 @@ final class WriterLoweringSupport {
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) idx++;
 		if (slot == ChainAfterComment) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isInfixChainBranch(branch)) idx++;
+		if (slot == ChainOwnComments) return macro $i{argNames[idx]};
+		if (TriviaPairAltCtor.isInfixChainBranch(branch)) idx++;
 		if (slot == ChainRhsTrail) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isRhsTrailBranch(branch)) idx++;
 		if (slot == TernaryCondTrail) return macro $i{argNames[idx]};
@@ -170,7 +172,7 @@ final class WriterLoweringSupport {
 			case KwNewline: TriviaPairAltCtor.isAltKwNewlineBranch(branch);
 			case ChainNewline, ChainLeadComment: TriviaPairAltCtor.isAltChainNewlineBranch(branch);
 			case PostfixOpSpace: TriviaPairAltCtor.isPostfixOpSpaceBranch(branch);
-			case ChainAfterComment: TriviaPairAltCtor.isInfixChainBranch(branch);
+			case ChainAfterComment, ChainOwnComments: TriviaPairAltCtor.isInfixChainBranch(branch);
 			case ChainRhsTrail: TriviaPairAltCtor.isRhsTrailBranch(branch);
 			case TernaryCondTrail, TernaryThenTrail: TriviaPairAltCtor.isTernaryTrailBranch(branch);
 		};

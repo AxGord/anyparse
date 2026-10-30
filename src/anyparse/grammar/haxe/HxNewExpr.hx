@@ -44,5 +44,5 @@ typedef HxNewExpr = {
 	@:optional @:queryTypeArgs @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'),
 		groupRestProbe) var params: Null<Array<HxType>>;
 	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable,
-		wrapRules('callParameterWrap'), ignoreSourceNewlinesForWrap, groupRestProbe, complexItems) var args: Array<HxExpr>;
+		wrapRules('callParameterWrap'), ignoreSourceNewlinesForWrap, groupRestProbe, complexItems, relocateTrailingComments) var args: Array<HxExpr>;
 };

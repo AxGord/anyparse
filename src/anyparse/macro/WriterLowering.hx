@@ -604,7 +604,7 @@ class WriterLowering {
 			);
 		final cwf: String = callWrapField;
 		final callRulesExpr: Expr = optFieldAccess(cwf);
-		final argsListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
+		final cascadeExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
 			$v{callOpen}, $v{callClose}, $v{callSep}, _argDocs, opt, _de(), _de(), false, $callRulesExpr,
 			{ appendTrailingComma: $callTcExpr }
 		);
@@ -647,26 +647,36 @@ class WriterLowering {
 		// breaks is NOT an `isNewLineAfter(POpen)` and keeps its dot-break. Pass
 		// the runtime FLWLB fact to `MethodChainEmit.emit`.
 		final segCallLeadingBreakExpr: Expr = macro $callRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak;
-		final argDocsExpr: Expr = isCallTriviaStar
+		// A segment call's arguments are the regular call's (`lowerPostfixPushElem`): an after-separator comment rides
+		// its separator and an own-line comment its own line, both in the one-argument-per-line layout
+		// (`lowerPostfixForceMultiDoc`) that a list holding a line comment takes instead of the cascade.
+		final segStar: PostfixStarCtx = {
+			branch: cb,
+			postfixOp: callOpen,
+			postfixClose: callClose,
+			elemSep: callSep,
+			isTriviaStar: true,
+			argNames: [],
+			tcExpr: callTcExpr,
+			callInsideOpen: macro _de(),
+			callInsideClose: macro _de(),
+			wrapRulesField: cwf,
+			methodChainField: null,
+			elemCall: macro $writeIdent(_args[_i].node, _segArgOpt, -1),
+			relocateTrailingComments: false
+		};
+		final argsListExpr: Expr = isCallTriviaStar
 			? macro {
-				final _argDocs: Array<anyparse.core.Doc> = [];
+				final _docs: Array<anyparse.core.Doc> = [];
+				var _forceArgMulti: Bool = false;
 				final _segArgOpt = $segArgOpt;
-				for (_a in _args) {
-					final _aDoc: anyparse.core.Doc = $writeIdent(_a.node, _segArgOpt, -1);
-					final _aTc: Null<String> = _a.trailingComment;
-					// `trailingCommentDocGuarded` already prepends ' '. Group-closer
-					// seam (mirror of `lowerPostfixPushElem`): the segment call's `)`
-					// follows the last argument on the same Doc line, and a LINE
-					// comment there swallows it plus the whole `.next()` tail. The
-					// guard moves the `)` off the comment's line and drops before
-					// an existing hardline; inside a force-flat region the renderer
-					// drops it instead, which is why `WrapList.shapeNoWrap` skips
-					// its `Flatten` marker for a guard-bearing body. Sound seams
-					// stay byte-identical.
-					_argDocs.push(_aTc != null ? _dc([_aDoc, trailingCommentDocGuarded(_aTc, opt)]) : _aDoc);
-				}
-				_argDocs;
+				for (_i in 0..._args.length) $e{WriterChainLowering.lowerPostfixPushElem(segStar)};
+				final _argDocs: Array<anyparse.core.Doc> = _docs;
+				_forceArgMulti ? $e{WriterChainLowering.lowerPostfixForceMultiDoc(segStar)} : $cascadeExpr;
 			}
+			: cascadeExpr;
+		final argDocsExpr: Expr = isCallTriviaStar
+			? macro null
 			: macro {
 				final _segArgOpt = $segArgOpt;
 				[for (_a in _args) $writeIdent(_a, _segArgOpt, -1)];
@@ -3046,6 +3056,7 @@ enum abstract AltSlot(Int) {
 	final ChainRhsTrail = 10;
 	final TernaryCondTrail = 11;
 	final TernaryThenTrail = 12;
+	final ChainOwnComments = 13;
 
 }
 #end

@@ -442,6 +442,7 @@ final class PrattPostfixLowering {
 				ctorArgs.push(macro _chainNl);
 				ctorArgs.push(macro _opTrailComment);
 				ctorArgs.push(macro _opAfterComment);
+				ctorArgs.push(macro _opOwnComments);
 			}
 			if (captureRhsTrail) ctorArgs.push(macro _opRhsTrail);
 			final ctorCall: Expr = { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
@@ -450,13 +451,22 @@ final class PrattPostfixLowering {
 			// for `$ctorCall`. Non-capturing branches keep the legacy body.
 			final chainNlValue: Expr = isBoolChainOp
 				? macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || (ctx.pendingTrivia != null && ctx.pendingTrivia.newlineBefore)
-				: macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
+				: macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || ctx.lineBreakBefore(_opStart);
 			final commitParts: Array<Expr> = [];
+			// The operator's start, for the break before it: a higher-precedence right operand of the previous `+`
+			// (`a + b` then a newline then `+ c`) consumed that newline on its own no-match, before `_preWsPos`. Read off
+			// the whitespace run right before the operator, never the stash, whose flag can still hold a newline before a
+			// chain head that opens a paren (`!(` then a newline then `a.y + b.h`).
+			if (captureChainNl && !isBoolChainOp) commitParts.push(macro final _opStart: Int = ctx.pos - $v{opText.length});
 			// ω-keep-infix-postop-comment: capture a same-line comment trailing the
 			// operator (before the right operand) BEFORE `skipWsAndStash` stashes it
 			// into pendingTrivia (where it leaks into the next operand's parse).
 			if (captureChainNl) commitParts.push(macro final _opAfterComment: Null<String> = collectTrailingFull(ctx));
+			if (captureChainNl) commitParts.push(macro final _opStash0: Int = ctx.stashedCommentCount());
 			commitParts.push(skipCall);
+			// Own-line comments between the operator and its right operand belong to this ctor: taken back off the
+			// stash, which would otherwise hand them to whatever the operand parses next (a call's first argument).
+			if (captureChainNl) commitParts.push(macro final _opOwnComments: Array<String> = ctx.takeStashedComments(_opStash0));
 			if (captureChainNl) commitParts.push(macro final _chainNl: Bool = $chainNlValue);
 			// AFTER the `_chainNl` read (`&&`/`||` consume the very flag this drops).
 			commitParts.push(oc.stashNewlineClearExpr());

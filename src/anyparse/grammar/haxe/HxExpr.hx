@@ -344,10 +344,10 @@ enum HxExpr {
 	@:infix('%', 11) @:fmt(captureRhsTrail)
 	Mod(left: HxExpr, right: HxExpr);
 
-	@:infix('+', 9) @:fmt(captureChainNewline)
+	@:infix('+', 9) @:fmt(captureChainNewline, relocateTrailingComments)
 	Add(left: HxExpr, right: HxExpr);
 
-	@:infix('-', 9) @:fmt(captureChainNewline)
+	@:infix('-', 9) @:fmt(captureChainNewline, relocateTrailingComments)
 	Sub(left: HxExpr, right: HxExpr);
 
 	@:infix('<<', 8) @:fmt(captureRhsTrail)
@@ -371,7 +371,7 @@ enum HxExpr {
 	// Prec 6, between the bitwise tier and the comparisons, left-associative — where Haxe 4.3
 	// puts `??` (probed on 4.3.7): `a ?? b == c` is `(a ?? b) == c`, `a ?? b | c` is
 	// `a ?? (b | c)`, and `a ?? b ?? c` is `(a ?? b) ?? c`.
-	@:infix('??', 6) @:fmt(captureChainNewline)
+	@:infix('??', 6) @:fmt(captureChainNewline, relocateTrailingComments)
 	NullCoal(left: HxExpr, right: HxExpr);
 
 	@:infix('==', 5) @:fmt(captureRhsTrail)
@@ -403,10 +403,10 @@ enum HxExpr {
 	@:infix('is', 12) @:fmt(captureRhsTrail)
 	Is(left: HxExpr, right: HxType);
 
-	@:infix('&&', 3) @:fmt(captureChainNewline)
+	@:infix('&&', 3) @:fmt(captureChainNewline, relocateTrailingComments)
 	And(left: HxExpr, right: HxExpr);
 
-	@:infix('||', 2) @:fmt(captureChainNewline)
+	@:infix('||', 2) @:fmt(captureChainNewline, relocateTrailingComments)
 	Or(left: HxExpr, right: HxExpr);
 
 	// `multilineBranchInline`: `wrapping.ternaryMultilineBranch: "inline"` keeps a branch's

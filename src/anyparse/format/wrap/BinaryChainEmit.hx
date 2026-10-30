@@ -109,12 +109,12 @@ final class BinaryChainEmit {
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
 		?afterComments: Array<Null<Doc>>, restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>,
-		inlineMultilineBranch: Bool = false
+		inlineMultilineBranch: Bool = false, ?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>
 	): Doc {
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return layout(
 				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, headBreak, forceKeep, afterComments, restAware,
-				forceKeepLocation, inlineMultilineBranch
+				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments
 			);
 		}
 		return BreakCommits.offerItemBreaks(
@@ -215,7 +215,10 @@ final class BinaryChainEmit {
 		// other caller, including the infix chain whose forced comments may be
 		// inline blocks) keeps the cascade's location — byte-inert.
 		?forceKeepLocation: Null<WrappingLocation>,
-		inlineMultilineBranch: Bool = false
+		inlineMultilineBranch: Bool = false,
+		// The Keep shape's other two per-gap comment channels (`shapeKeep`); null for every caller but the infix chain.
+		?ownComments: Array<Null<Doc>>,
+		?aboveComments: Array<Null<Doc>>
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -302,7 +305,8 @@ final class BinaryChainEmit {
 
 		function shapeWith(r: { mode: WrapMode, location: WrappingLocation }, cuddleLast: Bool): Doc {
 			return shape(
-				r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware
+				r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware,
+				{ own: ownComments, above: aboveComments, lineWidth: opt.lineWidth }
 			);
 		}
 
@@ -583,7 +587,7 @@ final class BinaryChainEmit {
 	private static function shape(
 		mode: WrapMode, location: WrappingLocation, items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int,
 		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, ?afterComments: Array<Null<Doc>>, cuddleLast: Bool = false,
-		restAware: Bool = false
+		restAware: Bool = false, ?keepComments: KeepGapComments
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
@@ -602,7 +606,7 @@ final class BinaryChainEmit {
 			// When the signal is absent (null — plain mode / non-capturing
 			// ctor) shapeKeep degrades to shapeNoWrap → byte-inert.
 			case Keep:
-				shapeKeep(items, ops, cols, location, sourceBreakBefore, headBreak, afterComments);
+				shapeKeep(items, ops, cols, location, sourceBreakBefore, headBreak, afterComments, keepComments);
 			// ω-cascade-emits-comments: Ignore sister to Keep — the writer
 			// pre-empts at the trivia branch. Defensive fallback to
 			// shapeNoWrap on engine leakage.
@@ -646,53 +650,82 @@ final class BinaryChainEmit {
 	 */
 	private static function shapeKeep(
 		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, ?sourceBreakBefore: Array<Bool>,
-		headBreak: Bool = false, ?afterComments: Array<Null<Doc>>
+		headBreak: Bool = false, ?afterComments: Array<Null<Doc>>, ?keepComments: KeepGapComments
 	): Doc {
 		final breaks: Array<Bool> = sourceBreakBefore ?? [];
-		// ω-keep-infix-postop-comment: a per-op comment trailing the operator
-		// (`a || // c\n b`) — emit `OP // c` on the current line and force a
-		// break before the next operand, regardless of the chain's location.
-		inline function afterOf(i: Int): Null<Doc> return afterComments != null && i < afterComments.length ? afterComments[i] : null;
+		final owns: Null<Array<Null<Doc>>> = keepComments?.own;
+		final aboves: Null<Array<Null<Doc>>> = keepComments?.above;
+		final lineWidth: Int = keepComments?.lineWidth ?? 0;
+		function gap(i: Int, withAfter: Bool): Array<Doc> {
+			final broken: Bool = i < breaks.length && breaks[i];
+			return keepGap(ops[i], location, broken, withAfter ? gapComment(afterComments, i) : null, gapComment(owns, i));
+		}
 		// First operand stays at the call-site column (unless `headBreak`);
 		// only the continuation tail is nested at the chain's one-tab indent,
 		// so a broken gap lands its line at `base + cols` while a glued gap
 		// keeps the operands inline (mirror `shapeOnePerLineAfterFirst`).
 		final tail: Array<Doc> = [];
-		switch location {
-			case BeforeLast:
-				for (i in 0...ops.length) {
-					final ac: Null<Doc> = afterOf(i);
-					if (ac != null) {
-						tail.push(Text(' ${ops[i]}'));
-						tail.push(ac);
-						tail.push(Line('\n'));
-					} else if (i < breaks.length && breaks[i]) {
-						tail.push(Line('\n'));
-						tail.push(Text('${ops[i]} '));
-					} else {
-						tail.push(Text(' ${ops[i]} '));
-					}
-					tail.push(items[i + 1]);
-				}
-			case AfterLast:
-				for (i in 0...ops.length) {
-					final ac: Null<Doc> = afterOf(i);
-					if (ac != null) {
-						tail.push(Text(' ${ops[i]}'));
-						tail.push(ac);
-						tail.push(Line('\n'));
-					} else if (i < breaks.length && breaks[i]) {
-						tail.push(Text(' ${ops[i]}'));
-						tail.push(Line('\n'));
-					} else {
-						tail.push(Text(' ${ops[i]} '));
-					}
-					tail.push(items[i + 1]);
-				}
+		var prevCandidate: Bool = false;
+		for (i in 0...ops.length) {
+			final above: Null<Doc> = gapComment(aboves, i);
+			final candidate: Bool = keepStartsOwnLine(i, location, breaks, afterComments, owns)
+				&& !(prevCandidate && location == BeforeLast);
+			prevCandidate = candidate && above != null;
+			if (above != null && candidate) {
+				// `comments.trailingCommentOverflow: "above"`: the operator's `//` comment moves onto its own line above
+				// operand `i` when it alone carries that line past the limit. Under `BeforeLast` the gap then breaks
+				// before its operator, so the next operand no longer opens a line after one and stays out.
+				tail.pop();
+				final code: Doc = Concat([items[i], Text(' ${ops[i]}')]);
+				final flat: Doc = Concat([items[i]].concat(gap(i, true)));
+				final moved: Doc = Concat(([above, Line('\n'), items[i]]: Array<Doc>).concat(gap(i, false)));
+				tail.push(IfTrailingCommentOverflows(lineWidth, 1 + DocMeasure.flatTokenWidth(above), code, moved, flat));
+			} else {
+				for (part in gap(i, true)) tail.push(part);
+			}
+			tail.push(items[i + 1]);
 		}
 		// `headBreak` puts the head operand on its own continuation line:
 		// the whole chain (head + tail) is nested and led by a `Line('\n')`.
 		return headBreak ? Nest(cols, Concat([Line('\n'), items[0]].concat(tail))) : Concat([items[0], Nest(cols, Concat(tail))]);
+	}
+
+	/** Entry `i` of a per-gap comment channel, null when the channel or the entry is absent. */
+	private static function gapComment(channel: Null<Array<Null<Doc>>>, i: Int): Null<Doc> {
+		return channel == null || i >= channel.length ? null : channel[i];
+	}
+
+	/**
+	 * The Keep separator of one gap. A comment after the operator (`a || // c`) or an own-line run before the operand
+	 * (`a ||`, then `// c`, then `b`) ends the line at the operator whatever the location; otherwise a source break
+	 * lands where the location puts it and a glued gap stays ` op `.
+	 */
+	private static function keepGap(op: String, location: WrappingLocation, broken: Bool, after: Null<Doc>, own: Null<Doc>): Array<Doc> {
+		if (after != null || own != null) {
+			final parts: Array<Doc> = [Text(' $op')];
+			if (after != null) parts.push(after);
+			parts.push(Line('\n'));
+			if (own != null) {
+				parts.push(own);
+				parts.push(Line('\n'));
+			}
+			return parts;
+		}
+		if (!broken) return [Text(' $op ')];
+		return location == BeforeLast ? [Line('\n'), Text('$op ')] : [Text(' $op'), Line('\n')];
+	}
+
+	/**
+	 * Operand `i` of a Keep chain opens its own line right after an operator that ended the previous one, with no
+	 * comment above it yet: a comment moved above it there reads back as the previous gap's own-line run, so the move
+	 * is a fixed point. The head operand never qualifies — above it is the enclosing statement, not the chain.
+	 */
+	private static function keepStartsOwnLine(
+		i: Int, location: WrappingLocation, breaks: Array<Bool>, afterComments: Null<Array<Null<Doc>>>, owns: Null<Array<Null<Doc>>>
+	): Bool {
+		return i != 0
+			&& gapComment(owns, i - 1) == null
+			&& (gapComment(afterComments, i - 1) != null || location == AfterLast && i - 1 < breaks.length && breaks[i - 1]);
 	}
 
 	private static function shapeOnePerLineAfterFirst(
@@ -1319,4 +1352,15 @@ final class BinaryChainEmit {
 		return IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(hugItems, ops));
 	}
 
+}
+
+/**
+ * The Keep shape's per-gap comment channels besides the after-operator one, parallel to `ops`: `own` the run of
+ * own-line comments between an operator and its right operand, `above` an after-operator `//` comment as the line
+ * `comments.trailingCommentOverflow: "above"` may move it to (null where it may not), `lineWidth` the overflow limit.
+ */
+private typedef KeepGapComments = {
+	final own: Null<Array<Null<Doc>>>;
+	final above: Null<Array<Null<Doc>>>;
+	final lineWidth: Int;
 }
