@@ -152,9 +152,9 @@ final class ExtractConstantCommand implements CliCommand {
 		// The module file is not a consumer of itself: exclude it from the scan so it is
 		// not both rewritten-as-consumer and written-as-module (the second write would
 		// clobber the first, silently dropping the in-module occurrence).
-		final intoAbs: String = FileSystem.absolutePath(intoPath);
+
 		final scopeFiles: Array<{ file: String, source: String }> = [
-			for (path in paths) if (FileSystem.absolutePath(path) != intoAbs) {
+			for (path in paths) if (!FileIdentity.same(path, intoPath)) {
 				file: path,
 				source: (try CliIo.readSourceForParse(path) catch (exception: Exception) {
 					CliIo.stderr('apq extract-constant: $path: ${exception.message}\n');

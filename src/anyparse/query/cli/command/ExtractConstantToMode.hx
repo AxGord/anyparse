@@ -83,7 +83,7 @@ final class ExtractConstantToMode {
 			CliIo.stderr('apq $OP: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final intoPath: Null<String> = into == null || FileSystem.absolutePath(into) == FileSystem.absolutePath(filePath) ? null : into;
+		final intoPath: Null<String> = into == null || FileIdentity.same(into, filePath) ? null : into;
 		final dest: Null<ExtractToModule> = if (intoPath == null)
 			null
 		else

@@ -4,9 +4,6 @@ import anyparse.query.Address.AddressSpec;
 import anyparse.query.ExitCode.*;
 import anyparse.query.MoveElements;
 import haxe.ds.Either;
-#if (sys || nodejs)
-import sys.FileSystem;
-#end
 
 /**
  * `apq move-elements` — move a slice of one array literal's elements into another array literal.
@@ -54,7 +51,7 @@ final class MoveElementsCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 		final into: Null<String> = o.into;
-		final destFile: Null<String> = into == null || sameFile(into, sourceFile) ? null : into;
+		final destFile: Null<String> = into == null || FileIdentity.same(into, sourceFile) ? null : into;
 		final destSource: Null<String> = if (destFile == null)
 			null
 		else
@@ -99,11 +96,6 @@ final class MoveElementsCommand implements CliCommand {
 				CliIo.stderr('apq $OP: $message\n');
 				return EXIT_RUNTIME;
 		}
-	}
-
-	/** Whether `a` and `b` name one file. */
-	private static function sameFile(a: String, b: String): Bool {
-		return #if (sys || nodejs) FileSystem.absolutePath(a) == FileSystem.absolutePath(b) #else a == b #end;
 	}
 
 	/** The options of one run, or `Left` with the exit code a terminal case (`--help`, a usage error) ends it with. */

@@ -77,4 +77,41 @@ class MoveElementsCliTest extends Test {
 		#end
 	}
 
+	/** `--into` naming the source through a symlink is the same module: one in-place edit, not a two-file write of one file. */
+	@:pin('control')
+	@:killer('M-MOVE-ELEMENTS-INTO-BY-SPELLING')
+	public function testASymlinkedIntoIsTheSameModule(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('moveelements', [
+			{
+				name: 'A.hx',
+				source: "class A {\n\tpublic static final XS:Array<String> = ['a', 'b'];\n\tpublic static final ZS:Array<String> = ['z'];\n"
+				+ '}\n'
+			}
+		]);
+		js.node.Fs.symlinkSync('$dir/A.hx', '$dir/L.hx');
+		final rc: Int = Cli.run([
+			'move-elements',
+			'$dir/A.hx',
+			'--select',
+			'FinalMember:XS',
+			'--range',
+			'1',
+			'--into',
+			'$dir/L.hx',
+			'--append',
+			'FinalMember:ZS',
+			'--write'
+		]);
+		Assert.equals(0, rc, 'the move succeeds');
+		Assert.equals(
+			"class A {\n\tpublic static final XS:Array<String> = ['b'];\n\tpublic static final ZS:Array<String> = ['z', 'a'];\n}\n",
+			File.getContent('$dir/A.hx'), 'one edit holds both halves'
+		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('needs a symlink');
+		#end
+	}
+
 }

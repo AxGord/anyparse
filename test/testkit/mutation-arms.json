@@ -26280,6 +26280,30 @@
 			"note": "--dry-run prints the two previews instead of the entries and their digest"
 		},
 		{
+			"name": "M-EXTRACT-CONSTANT-INTO-SCAN-BY-SPELLING",
+			"type": "anyparse.query.cli.command.ExtractConstantCommand",
+			"method": "runExtractConstantInto",
+			"find": "!FileIdentity.same(path, intoPath)",
+			"replace": "sys.FileSystem.absolutePath(path) != sys.FileSystem.absolutePath(intoPath)",
+			"note": "the module reached through a symlinked scope is scanned as a consumer of itself, so its sites and the module are written from one stale source"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-TO-INTO-BY-SPELLING",
+			"type": "anyparse.query.cli.command.ExtractConstantToMode",
+			"method": "run",
+			"find": "FileIdentity.same(into, filePath)",
+			"replace": "sys.FileSystem.absolutePath(into) == sys.FileSystem.absolutePath(filePath)",
+			"note": "--into naming the source through a symlink counts as another module, so --to refuses the source's own type"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-INTO-BY-SPELLING",
+			"type": "anyparse.query.cli.command.MoveElementsCommand",
+			"method": "runMoveElements",
+			"find": "FileIdentity.same(into, sourceFile)",
+			"replace": "sys.FileSystem.absolutePath(into) == sys.FileSystem.absolutePath(sourceFile)",
+			"note": "--into naming the source through a symlink counts as a second module, so one file is staged twice and the write half-lands"
+		},
+		{
 			"name": "M-TS-SPAWN-MAIN-ARG",
 			"type": "anyparse.check.common.design.threads.ThreadStates",
 			"method": "runsOnMain",

@@ -76,4 +76,69 @@ class ExtractConstantToCliTest extends Test {
 		#end
 	}
 
+	/** `--into` naming the source through a symlink is the source itself: `--to` its own type works. */
+	@:pin('control')
+	@:killer('M-EXTRACT-CONSTANT-TO-INTO-BY-SPELLING')
+	public function testASymlinkedIntoIsTheSourceItself(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeTree('extractto', [
+			{ name: 'B.hx', source: 'class B {\n\tfunction f():Int {\n\t\treturn 42;\n\t}\n}\n' }
+		]);
+		js.node.Fs.symlinkSync('$dir/B.hx', '$dir/M.hx');
+		final rc: Int = Cli.run([
+			'extract-constant',
+			'$dir/B.hx',
+			'3:10',
+			'--name',
+			'ANSWER',
+			'--into',
+			'$dir/M.hx',
+			'--to',
+			'B',
+			'--write'
+		]);
+		Assert.equals(0, rc, 'the source type takes its own constant');
+		final b: String = File.getContent('$dir/B.hx');
+		Assert.isTrue(b.contains('private static inline final ANSWER:Int = 42;'), 'the constant is declared: $b');
+		Assert.isTrue(b.contains('return B.ANSWER;'), 'and read: $b');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('needs a symlink');
+		#end
+	}
+
+	/** A scope reached through a symlink does not scan the module as a consumer of itself. */
+	@:pin('control')
+	@:killer('M-EXTRACT-CONSTANT-INTO-SCAN-BY-SPELLING')
+	public function testAModuleReachedThroughASymlinkedScopeIsNotItsOwnConsumer(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeTree('extractinto', [
+			{ name: 'src/K.hx', source: "class K {\n\tpublic static final X:String = 'hello';\n}\n" },
+			{ name: 'src/U.hx', source: "class U {\n\tfunction f():String {\n\t\treturn 'hello';\n\t}\n}\n" }
+		]);
+		FileSystem.createDirectory('$dir/alias');
+		js.node.Fs.symlinkSync('$dir/src', '$dir/alias/s');
+		final rc: Int = Cli.run([
+			'extract-constant',
+			'$dir/src',
+			'--into',
+			'$dir/alias/s/K.hx',
+			'--name',
+			'HELLO',
+			'--literal',
+			'hello',
+			'--write',
+			'--lang',
+			'haxe'
+		]);
+		Assert.equals(0, rc, 'the run completes');
+		Assert.isTrue(File.getContent('$dir/src/U.hx').contains('K.HELLO'), 'the consumer reads the constant');
+		Assert.isTrue(File.getContent('$dir/src/K.hx').contains('HELLO'), 'the module declares it');
+		js.node.Fs.unlinkSync('$dir/alias/s');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('needs a symlink');
+		#end
+	}
+
 }
