@@ -77,29 +77,22 @@ final class SelfStatusCommand implements CliCommand {
 			showSource: false,
 			errExit: null
 		};
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new SelfStatusCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '-h', '--help':
 					printSelfStatusUsage();
 					opts.errExit = EXIT_OK;
 					return opts;
 				case '--lang':
-					opts.lang = CliArgs.expectValue(args, ++i, '--lang');
+					opts.lang = arg.value();
 				case '--strict':
 					opts.strict = true;
 				case '--source':
 					opts.showSource = true;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq self-status: unknown option "$a"\n');
-						opts.errExit = EXIT_USAGE;
-						return opts;
-					}
+				case null:
 					opts.roots.push(a);
 			}
-			i++;
 		}
 		return opts;
 	}

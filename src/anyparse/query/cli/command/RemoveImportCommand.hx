@@ -52,12 +52,11 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 		var file: Null<String> = null;
 		var modulePath: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new RemoveImportCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -69,11 +68,7 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 				case '-h', '--help':
 					printRemoveImportUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq remove-import: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (modulePath == null) {
@@ -83,7 +78,6 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (file == null || modulePath == null) {
 			CliIo.stderr('apq remove-import: expected <file> <module.path>\n');

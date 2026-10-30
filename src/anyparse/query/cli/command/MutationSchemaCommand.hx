@@ -62,16 +62,15 @@ final class MutationSchemaCommand implements CliCommand {
 	 */
 	private static function runMutationSchema(args: Array<String>): Int {
 		var planPath: Null<String> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new MutationSchemaCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					CliArgs.expectValue(args, ++i, '--lang');
+					arg.value();
 				case '-h', '--help':
 					printMutationSchemaUsage();
 					return EXIT_OK;
-				case _:
+				case null:
 					if (a.startsWith('-') || planPath != null) {
 						CliIo.stderr('apq mutation-schema: unexpected argument "$a"\n');
 						printMutationSchemaUsage();
@@ -79,7 +78,6 @@ final class MutationSchemaCommand implements CliCommand {
 					}
 					planPath = a;
 			}
-			i++;
 		}
 		if (planPath == null) {
 			CliIo.stderr('apq mutation-schema: no plan given\n');

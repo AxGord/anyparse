@@ -55,7 +55,8 @@ final class SweepCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(['--run'], ['--corpus', '--diff', '--file', '--prev', '--save']);
+		// A bare `--diff` compares with the harness's auto-rotated snapshot; a token that is no flag is its path.
+		return new CliFlags(['--run'], ['--corpus', '--file', '--prev', '--save']).withOptional('--diff', token -> !token.startsWith('--'));
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -240,42 +241,34 @@ final class SweepCommand implements CliCommand {
 		var runCorpus: Bool = false;
 		var corpusDir: Null<String> = null;
 		var lang: String = 'haxe';
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new SweepCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--file':
-					filePath = CliArgs.expectValue(args, ++i, '--file');
+					filePath = arg.value();
 				case '--prev':
-					prevPath = CliArgs.expectValue(args, ++i, '--prev');
+					prevPath = arg.value();
 				case '--diff':
-					// Allow bare `--diff` (no arg) → default to
-					// `bin/.prev-sweep.json` (auto-rotated by the corpus
-					// harness before every sweep write). The next-token
-					// check follows expectValue's contract: a `--`-prefixed
-					// token is a flag, not a value.
-					diffPath = i + 1 < args.length && !StringTools.startsWith(args[i + 1], '--')
-						? CliArgs.expectValue(args, ++i, '--diff')
-						: autoRotatedBaseline;
+					// A bare `--diff` reads `bin/.prev-sweep.json`, which the corpus harness rotates before every sweep write.
+					diffPath = arg.valueOr(autoRotatedBaseline);
 				case '--save':
-					savePath = CliArgs.expectValue(args, ++i, '--save');
+					savePath = arg.value();
 				case '--run':
 					runCorpus = true;
 				case '--corpus':
-					corpusDir = CliArgs.expectValue(args, ++i, '--corpus');
+					corpusDir = arg.value();
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; the snapshot READER needs no
 					// grammar plugin, but `--run` does — it drives the writer.
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '-h', '--help':
 					printSweepUsage();
 					return EXIT_OK;
-				case _:
-					CliIo.stderr('apq sweep: unknown option "$a"\n');
+				case null:
+					CliIo.stderr('apq sweep: unexpected argument "$a"\n');
 					printSweepUsage();
 					return EXIT_USAGE;
 			}
-			i++;
 		}
 		if (runCorpus) return runSweepRun(lang, corpusDir, prevPath, diffPath, savePath, autoRotatedBaseline);
 		final cur: Null<SweepTotals> = loadSweepJson(filePath);
@@ -525,7 +518,7 @@ final class SweepCommand implements CliCommand {
 		CliIo.sysPrint('                  $$ANYPARSE_HXFORMAT_FORK/test/testcases)\n');
 		CliIo.sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
 		CliIo.sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
-		CliIo.sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
+		CliIo.sysPrint('  --diff [<path>] Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
 		CliIo.sysPrint('                  FAIL->PASS, ADDED/REMOVED entries). Composes with --prev.\n');
 		CliIo.sysPrint('                  Auto-default: `bin/.prev-sweep.json` (the corpus harness\n');
 		CliIo.sysPrint('                  auto-rotates this before each sweep write), no path needed —\n');

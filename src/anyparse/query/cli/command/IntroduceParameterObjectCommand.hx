@@ -48,34 +48,29 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 		var matchExpr: Null<String> = null;
 		var nth: Null<Int> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new IntroduceParameterObjectCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--params':
-					params = CliArgs.expectValue(args, ++i, '--params');
+					params = arg.value();
 				case '--as':
-					typeName = CliArgs.expectValue(args, ++i, '--as');
+					typeName = arg.value();
 				case '--name':
-					objName = CliArgs.expectValue(args, ++i, '--name');
+					objName = arg.value();
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--write':
 					write = true;
 				case '-h', '--help':
 					printIntroduceParameterObjectUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq introduce-parameter-object: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (posSpec == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a)) {
@@ -85,7 +80,6 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (file == null || params == null || typeName == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
 			CliIo.stderr('apq introduce-parameter-object: need <file> (<l>:<c> | --select | --match) --params a,b --as <TypeName>\n');

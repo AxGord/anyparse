@@ -109,26 +109,22 @@ final class ChangedCommand implements CliCommand {
 		var namesOnly: Bool = false;
 		var ref: Null<String> = null;
 		final paths: Array<String> = [];
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ChangedCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--names':
 					namesOnly = true;
 				case '-h', '--help':
 					usage();
 					return null;
-				case _ if (a.startsWith('--')):
-					throw new UsageFailure('unknown option "$a"');
-				case _:
+				case null:
 					if (ref == null)
 						ref = a
 					else
 						paths.push(a);
 			}
-			i++;
 		}
 		if (ref == null) throw new UsageFailure('missing <base-ref>');
 		return {

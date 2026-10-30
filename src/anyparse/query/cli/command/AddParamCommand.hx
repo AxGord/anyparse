@@ -59,28 +59,23 @@ final class AddParamCommand implements CliCommand {
 		var nth: Null<Int> = null;
 		var paramText: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new AddParamCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--write':
 					write = true;
 				case '-h', '--help':
 					printAddParamUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq add-param: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (posSpec == null && selectExpr == null && matchExpr == null && paramText == null && CliArgs.isPosSpec(a)) {
@@ -92,7 +87,6 @@ final class AddParamCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || paramText == null) {
 			CliIo.stderr("apq add-param: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <paramText>\n");

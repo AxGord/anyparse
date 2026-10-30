@@ -1191,16 +1191,15 @@ final class LintCommand implements CliCommand {
 		var listRules: Bool = false;
 		var summary: Null<Bool> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new LintCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--rule':
-					ruleFilters.push(CliArgs.expectValue(args, ++i, '--rule'));
+					ruleFilters.push(arg.value());
 				case '--category':
-					categoryFilters.push(CliArgs.expectValue(args, ++i, a));
+					categoryFilters.push(arg.value());
 				case '--all', '-a':
 					includeInfo = true;
 				case '--flat':
@@ -1210,7 +1209,7 @@ final class LintCommand implements CliCommand {
 				case '--no-oracle':
 					noOracle = true;
 				case '--fix-probes':
-					final count: Null<Int> = Std.parseInt(CliArgs.expectValue(args, ++i, a));
+					final count: Null<Int> = Std.parseInt(arg.value());
 					if (count == null || count < 0) {
 						CliIo.stderr('apq lint: --fix-probes expects a count of typechecks, 0 or more\n');
 						return lintParseExit(EXIT_USAGE);
@@ -1228,9 +1227,9 @@ final class LintCommand implements CliCommand {
 					}
 					summary = wanted;
 				case '--baseline':
-					baseline = CliArgs.expectValue(args, ++i, '--baseline');
+					baseline = arg.value();
 				case '--range':
-					final spec: String = CliArgs.expectValue(args, ++i, '--range');
+					final spec: String = arg.value();
 					range = parseLintRange(spec);
 					if (range == null) {
 						CliIo.stderr(
@@ -1240,14 +1239,14 @@ final class LintCommand implements CliCommand {
 						return lintParseExit(EXIT_USAGE);
 					}
 				case '--fail-on':
-					final level: String = CliArgs.expectValue(args, ++i, '--fail-on');
+					final level: String = arg.value();
 					failOn = Severity.fromName(level);
 					if (failOn == null) {
 						CliIo.stderr('apq lint: unknown --fail-on value "$level" (expected error|warning|info)\n');
 						return lintParseExit(EXIT_USAGE);
 					}
 				case '--format':
-					format = CliArgs.expectValue(args, ++i, '--format');
+					format = arg.value();
 					if (![FORMAT_TEXT, FORMAT_JSON, FORMAT_CHECKSTYLE, FORMAT_MARKDOWN].contains(format)) {
 						CliIo.stderr(
 							'apq lint: unknown --format value "$format'
@@ -1260,14 +1259,9 @@ final class LintCommand implements CliCommand {
 					return lintParseExit(EXIT_OK);
 				case '--list-rules':
 					listRules = true;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq lint: unknown option "$a"\n');
-						return lintParseExit(EXIT_USAGE);
-					}
+				case null:
 					inputSpecs.push(a);
 			}
-			i++;
 		}
 		// Listing rules is terminal like `--help`, but only once the whole argv is read: the scope
 		// that narrows it to effective state may follow the flag.

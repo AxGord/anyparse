@@ -23,7 +23,7 @@ final class DeclaresCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags([], []);
+		return new CliFlags([], [], Splits);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -51,24 +51,18 @@ final class DeclaresCommand implements CliCommand {
 		// the rest are scope specs, exactly as before.
 		final scan: PositionalScan = CliArgs.beginPositionalScan(args);
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new DeclaresCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--':
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '-h', '--help':
 					printDeclaresUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq declares: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					CliArgs.routePositional(a, i, scan.separator, typeNames, scan.inputSpecs);
+				case null:
+					CliArgs.routePositional(a, arg.index, scan.separator, typeNames, scan.inputSpecs);
 			}
-			i++;
 		}
 		if (typeNames.length == 0 || scan.inputSpecs.length == 0) {
 			CliIo.stderr('apq declares: expected <type> <scope> (one or more file/dir/glob specs)\n');

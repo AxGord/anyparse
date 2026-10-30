@@ -143,16 +143,15 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 		var memberText: Null<String> = null;
 		var fromFile: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new AddMemberCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--type':
-					typeName = CliArgs.expectValue(args, ++i, '--type');
+					typeName = arg.value();
 				case '--from-file':
-					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
+					fromFile = arg.value();
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -160,11 +159,7 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 				case '-h', '--help':
 					printAddMemberUsage();
 					return addMemberParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq add-member: unknown option "$a"\n');
-						return addMemberParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (memberText == null) {
@@ -174,7 +169,6 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 						return addMemberParseExit(EXIT_USAGE);
 					}
 			}
-			i++;
 		}
 		return {
 			lang: lang,

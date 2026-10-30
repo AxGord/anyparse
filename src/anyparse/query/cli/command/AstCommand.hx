@@ -400,12 +400,11 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		var codeArg: Null<String> = null;
 		var stdinFlag: Bool = false;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new AstCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--json':
 					json = true;
 				case '--depth':
@@ -417,7 +416,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 					// the root, no children" regardless of mode. The three
 					// `Engine.truncate` callsites below pass the right
 					// subtree-root in each branch.
-					final v: String = CliArgs.expectValue(args, ++i, '--depth');
+					final v: String = arg.value();
 					final parsed: Null<Int> = Std.parseInt(v);
 					if (parsed == null) {
 						CliIo.stderr('apq ast: --depth expects an integer, got "$v"\n');
@@ -425,9 +424,9 @@ final class AstCommand implements CliCommand implements StdinDocument {
 					}
 					depth = parsed;
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--at':
-					atExpr = CliArgs.expectValue(args, ++i, '--at');
+					atExpr = arg.value();
 				case '--doc':
 					wantDoc = true;
 				case '--source':
@@ -440,7 +439,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 				case '--diff':
 					writerDiff = true;
 				case '--min-children':
-					final v: String = CliArgs.expectValue(args, ++i, '--min-children');
+					final v: String = arg.value();
 					final parsed: Null<Int> = Std.parseInt(v);
 					if (parsed == null || parsed < 0) {
 						CliIo.stderr('apq ast: --min-children expects a non-negative integer, got "$v"\n');
@@ -448,7 +447,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 					}
 					minChildren = parsed;
 				case '--max-children':
-					final v: String = CliArgs.expectValue(args, ++i, '--max-children');
+					final v: String = arg.value();
 					final parsed: Null<Int> = Std.parseInt(v);
 					if (parsed == null || parsed < 0) {
 						CliIo.stderr('apq ast: --max-children expects a non-negative integer, got "$v"\n');
@@ -461,7 +460,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 					// matches by arity, this one TRUNCATES the printed tree
 					// horizontally with an `(... N more)` sentinel). Composes
 					// with --depth N for "first N children up to depth M".
-					final v: String = CliArgs.expectValue(args, ++i, '--children-limit');
+					final v: String = arg.value();
 					final parsed: Null<Int> = Std.parseInt(v);
 					if (parsed == null || parsed < 0) {
 						CliIo.stderr('apq ast: --children-limit expects a non-negative integer, got "$v"\n');
@@ -469,7 +468,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 					}
 					childrenLimit = parsed;
 				case '--code':
-					codeArg = CliArgs.expectValue(args, ++i, '--code');
+					codeArg = arg.value();
 				case '--stdin':
 					stdinFlag = true;
 				case '--spans':
@@ -505,18 +504,13 @@ final class AstCommand implements CliCommand implements StdinDocument {
 				case '-h', '--help':
 					printAstUsage();
 					return astParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq ast: unknown option "$a"\n');
-						return astParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (file != null) {
 						reportAstTwoFilesError(file, a);
 						return astParseExit(EXIT_USAGE);
 					}
 					file = a;
 			}
-			i++;
 		}
 
 		return {

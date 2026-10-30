@@ -45,7 +45,8 @@ final class ExtractConstantCommand implements CliCommand {
 	}
 
 	private static function runExtractConstant(args: Array<String>): Int {
-		if (args.exists(a -> ADDRESSED_FLAGS.contains(a))) return ExtractConstantToMode.run(args);
+		final spec: CliFlags = new ExtractConstantCommand().flags();
+		if (ADDRESSED_FLAGS.exists(flag -> spec.given(args, flag))) return ExtractConstantToMode.run(args);
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -55,20 +56,19 @@ final class ExtractConstantCommand implements CliCommand {
 		var intoPath: Null<String> = null;
 		final scopeArgs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in spec.walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--type':
-					typeName = CliArgs.expectValue(args, ++i, '--type');
+					typeName = arg.value();
 				case '--name':
-					name = CliArgs.expectValue(args, ++i, '--name');
+					name = arg.value();
 				case '--literal':
-					literal = CliArgs.expectValue(args, ++i, '--literal');
+					literal = arg.value();
 				case '--into':
-					intoPath = CliArgs.expectValue(args, ++i, '--into');
+					intoPath = arg.value();
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -76,14 +76,9 @@ final class ExtractConstantCommand implements CliCommand {
 				case '-h', '--help':
 					printExtractConstantUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq extract-constant: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					scopeArgs.push(a);
 			}
-			i++;
 		}
 		if (name == null || literal == null) {
 			CliIo.stderr("apq extract-constant: expected --name <NAME> --literal '<text>'\n");

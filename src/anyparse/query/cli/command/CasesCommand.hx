@@ -48,33 +48,27 @@ final class CasesCommand implements CliCommand {
 		var target: Null<String> = null;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new CasesCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return EXIT_USAGE;
 					}
 				case '-h', '--help':
 					usage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq cases: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (target == null)
 						target = a;
 					else
 						inputSpecs.push(a);
 			}
-			i++;
 		}
 		if (target == null) {
 			CliIo.stderr('apq cases: missing <Ctor> argument\n');

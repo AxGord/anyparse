@@ -44,14 +44,13 @@ final class ClustersCommand implements CliCommand {
 		var output: GraphOutput = Text;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ClustersCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--hubs':
-					final raw: String = CliArgs.expectValue(args, ++i, '--hubs');
+					final raw: String = arg.value();
 					final parsed: Null<Int> = Std.parseInt(raw);
 					if (parsed == null || parsed < 0) {
 						CliIo.stderr('apq clusters: --hubs expects a non-negative integer (0 = no hub extraction)\n');
@@ -59,24 +58,19 @@ final class ClustersCommand implements CliCommand {
 					}
 					hubCount = parsed;
 				case '--kinds':
-					kinds = CliCallGraph.parseEdgeKinds('clusters', CliArgs.expectValue(args, ++i, '--kinds'));
+					kinds = CliCallGraph.parseEdgeKinds('clusters', arg.value());
 					if (kinds == null) return EXIT_USAGE;
 				case '--format':
-					output = CliCallGraph.parseGraphOutput(CliArgs.expectValue(args, ++i, '--format'));
+					output = CliCallGraph.parseGraphOutput(arg.value());
 				case '-h', '--help':
 					printClustersUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq clusters: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (target == null)
 						target = a;
 					else
 						inputSpecs.push(a);
 			}
-			i++;
 		}
 		if (target == null) {
 			CliIo.stderr('apq clusters: missing <TypeName> argument\n');

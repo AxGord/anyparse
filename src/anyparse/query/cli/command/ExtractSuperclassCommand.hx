@@ -43,28 +43,23 @@ final class ExtractSuperclassCommand implements CliCommand {
 		var srcFile: Null<String> = null;
 		var superName: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ExtractSuperclassCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--type':
-					srcType = CliArgs.expectValue(args, ++i, '--type');
+					srcType = arg.value();
 				case '--members':
-					members = CliArgs.expectValue(args, ++i, '--members');
+					members = arg.value();
 				case '--out':
-					out = CliArgs.expectValue(args, ++i, '--out');
+					out = arg.value();
 				case '--write':
 					write = true;
 				case '-h', '--help':
 					printExtractSuperclassUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq extract-superclass: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (srcFile == null) {
 						srcFile = a;
 					} else if (superName == null) {
@@ -74,7 +69,6 @@ final class ExtractSuperclassCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (srcFile == null || superName == null || members == null) {
 			CliIo.stderr('apq extract-superclass: missing required arguments (need <srcFile> <SuperName> --members m1,m2)\n');

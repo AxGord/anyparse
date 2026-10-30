@@ -55,12 +55,11 @@ final class AddImportCommand implements CliCommand {
 		var file: Null<String> = null;
 		var path: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new AddImportCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--using':
 					isUsing = true;
 				case '--write':
@@ -70,11 +69,7 @@ final class AddImportCommand implements CliCommand {
 				case '-h', '--help':
 					printAddImportUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq add-import: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (path == null) {
@@ -84,7 +79,6 @@ final class AddImportCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (file == null || path == null) {
 			CliIo.stderr('apq add-import: expected <file> <module.path> [--using]\n');

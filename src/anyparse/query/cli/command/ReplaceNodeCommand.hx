@@ -169,26 +169,25 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 		var newSource: Null<String> = null;
 		var fromFile: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ReplaceNodeCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--at':
-					atSpec = CliArgs.expectValue(args, ++i, '--at');
+					atSpec = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--kind':
-					kind = CliArgs.expectValue(args, ++i, '--kind');
+					kind = arg.value();
 				case '--with-doc':
 					withDoc = true;
 				case '--from-file':
-					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
+					fromFile = arg.value();
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -196,11 +195,7 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 				case '-h', '--help':
 					printReplaceNodeUsage();
 					return replaceNodeParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq replace-node: unknown option "$a"\n');
-						return replaceNodeParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (newSource == null) {
@@ -210,7 +205,6 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 						return replaceNodeParseExit(EXIT_USAGE);
 					}
 			}
-			i++;
 		}
 		return {
 			lang: lang,

@@ -49,25 +49,19 @@ final class SymbolsCommand implements CliCommand {
 		var kindFilter: Null<String> = null;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new SymbolsCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--kind':
-					kindFilter = CliArgs.expectValue(args, ++i, '--kind');
+					kindFilter = arg.value();
 				case '-h', '--help':
 					printSymbolsUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq symbols: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					inputSpecs.push(a);
 			}
-			i++;
 		}
 		if (inputSpecs.length == 0) {
 			CliIo.stderr('apq symbols: expected <scope> (one or more file/dir/glob specs)\n');

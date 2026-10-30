@@ -65,34 +65,32 @@ final class LintDiffCommand implements CliCommand implements LanguageFree {
 		var root: String = '';
 		var label: String = '';
 		var limit: Int = LINT_DIFF_EXAMPLE_LIMIT;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new LintDiffCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--old':
-					oldPath = CliArgs.expectValue(args, ++i, '--old');
+					oldPath = arg.value();
 				case '--new':
-					newPath = CliArgs.expectValue(args, ++i, '--new');
+					newPath = arg.value();
 				case '--root':
-					root = CliArgs.expectValue(args, ++i, '--root');
+					root = arg.value();
 				case '--label':
-					label = CliArgs.expectValue(args, ++i, '--label');
+					label = arg.value();
 				case '--limit':
-					limit = Std.parseInt(CliArgs.expectValue(args, ++i, '--limit')) ?? LINT_DIFF_EXAMPLE_LIMIT;
+					limit = Std.parseInt(arg.value()) ?? LINT_DIFF_EXAMPLE_LIMIT;
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; harmless here (lint-diff
 					// reads two JSON reports, no grammar plugin needed). Accept +
 					// consume the value to keep shim invariance, as sweep does.
-					CliArgs.expectValue(args, ++i, '--lang');
+					arg.value();
 				case '-h', '--help':
 					printLintDiffUsage();
 					return EXIT_OK;
-				case _:
+				case null:
 					CliIo.stderr('apq lint-diff: unknown option "$a"\n');
 					printLintDiffUsage();
 					return EXIT_USAGE;
 			}
-			i++;
 		}
 		if (oldPath == null || newPath == null) {
 			CliIo.stderr('apq lint-diff: both --old <path> and --new <path> are required\n');

@@ -60,26 +60,21 @@ final class ExtractVarCommand implements CliCommand {
 		var nth: Null<Int> = null;
 		var name: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ExtractVarCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--write':
 					write = true;
 				case '-h', '--help':
 					printExtractVarUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq extract-var: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (posSpec == null && matchExpr == null && name == null && CliArgs.isPosSpec(a)) {
@@ -91,7 +86,6 @@ final class ExtractVarCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (file == null || (posSpec == null && matchExpr == null) || name == null) {
 			CliIo.stderr("apq extract-var: expected <file> (<line>:<col> | --match '<expr-pattern>') <name>\n");

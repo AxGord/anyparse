@@ -181,12 +181,11 @@ final class ResolveDefineCommand implements CliCommand {
 		var define: Null<String> = null;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ResolveDefineCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--write', '-w':
 					write = true;
 				case '--list', '-l':
@@ -198,17 +197,12 @@ final class ResolveDefineCommand implements CliCommand {
 				case '-h', '--help':
 					printUsage();
 					return parseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq resolve-define: unknown option "$a"\n');
-						return parseExit(EXIT_USAGE);
-					}
+				case null:
 					if (define == null)
 						define = a;
 					else
 						inputSpecs.push(a);
 			}
-			i++;
 		}
 		return {
 			lang: lang,

@@ -6,7 +6,7 @@ import sys.FileSystem;
 #end
 
 /**
- * `CliArgs.expectValue` / `parseLimit` / `pickPlugin` throw a plain-string
+ * `CliFlags.walk` / `CliArgs.parseLimit` / `pickPlugin` throw a plain-string
  * exception when a flag is missing its value, `--limit` is unparseable, or
  * `--lang` names an unknown plugin — a usage mistake, not a bug. Before this
  * pin `Cli.run` caught only `WriteFailure`, so the throw propagated past
@@ -16,7 +16,7 @@ import sys.FileSystem;
  * throw, and `Cli.run` catches it next to `WriteFailure`.
  *
  * `apq cond … --max-body` is the reproduction the backlog named (its own
- * `--limit` already has a local try/catch; `--max-body`'s `expectValue`
+ * `--limit` already has a local try/catch; `--max-body`'s value
  * call does not); `apq lit … --lang` exercises `pickPlugin` the same way.
  */
 @:nullSafety(Strict)

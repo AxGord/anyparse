@@ -121,22 +121,21 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 		var file: Null<String> = null;
 		var meta: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new AddMetaCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--at':
-					atSpec = CliArgs.expectValue(args, ++i, '--at');
+					atSpec = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--kind':
-					kind = CliArgs.expectValue(args, ++i, '--kind');
+					kind = arg.value();
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -144,11 +143,7 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 				case '-h', '--help':
 					printAddMetaUsage();
 					return addMetaParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq add-meta: unknown option "$a"\n');
-						return addMetaParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (meta == null) {
@@ -158,7 +153,6 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 						return addMetaParseExit(EXIT_USAGE);
 					}
 			}
-			i++;
 		}
 		return {
 			lang: lang,

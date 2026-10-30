@@ -107,25 +107,21 @@ final class MergeFileCommand implements CliCommand implements LanguageFree {
 		var lang: Null<String> = null;
 		var choices: Null<String> = null;
 		final files: Array<String> = [];
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new MergeFileCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--path':
-					path = CliArgs.expectValue(args, ++i, '--path');
+					path = arg.value();
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--choices':
-					choices = CliArgs.expectValue(args, ++i, '--choices');
+					choices = arg.value();
 				case '-h', '--help':
 					usage();
 					return null;
-				case _ if (a.startsWith('--')):
-					throw new UsageFailure('unknown option "$a"');
-				case _:
+				case null:
 					files.push(a);
 			}
-			i++;
 		}
 		if (files.length != 3) throw new UsageFailure('merge-file takes <base> <ours> <theirs>, got ${files.length} file(s)');
 		return {

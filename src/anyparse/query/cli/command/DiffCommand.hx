@@ -49,27 +49,22 @@ final class DiffCommand implements CliCommand {
 		var fileA: Null<String> = null;
 		var fileB: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new DiffCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return EXIT_USAGE;
 					}
 				case '-h', '--help':
 					printDiffUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq diff: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (fileA == null) {
 						fileA = a;
 					} else if (fileB == null) {
@@ -79,7 +74,6 @@ final class DiffCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (fileA == null || fileB == null) {
 			CliIo.stderr('apq diff: missing <a> <b> arguments\n');

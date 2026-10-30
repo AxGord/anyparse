@@ -72,29 +72,23 @@ final class StdlibDupCommand implements CliCommand {
 		var work: Null<String> = null;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new StdlibDupCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--limit':
-					limit = Std.parseInt(CliArgs.expectValue(args, ++i, '--limit')) ?? 0;
+					limit = Std.parseInt(arg.value()) ?? 0;
 				case '--work':
-					work = CliArgs.expectValue(args, ++i, '--work');
+					work = arg.value();
 				case '--census':
 					censusOnly = true;
 				case '-h', '--help':
 					printStdlibDupUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq stdlib-dup: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					inputSpecs.push(a);
 			}
-			i++;
 		}
 		if (inputSpecs.length == 0) {
 			CliIo.stderr('apq stdlib-dup: expected <scope> (one or more file/dir/glob specs)\n');

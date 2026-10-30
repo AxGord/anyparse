@@ -51,7 +51,7 @@ final class SearchCommand implements CliCommand {
 
 	public function flags(): CliFlags {
 		// `--` ends the options: a pattern may spell itself like a flag.
-		return new CliFlags(['--explain', '--flat', '--json'], ['--kind', '--limit'], true);
+		return new CliFlags(['--explain', '--flat', '--json'], ['--kind', '--limit'], EndsOptions);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -273,54 +273,33 @@ final class SearchCommand implements CliCommand {
 		var pattern: Null<String> = null;
 		final inputSpecs: Array<String> = [];
 
-		// `--` is the standard end-of-options sentinel: every token after
-		// it is positional, never an option. A search pattern can legally
-		// start with `--` (`--$x` = prefix-decrement), which would
-		// otherwise be rejected as an unknown option — the sentinel is the
-		// only way to reach those patterns.
-		var optsEnded: Bool = false;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			var isOption: Bool = false;
-			if (!optsEnded) {
-				isOption = true;
-				switch a {
-					case '--lang':
-						lang = CliArgs.expectValue(args, ++i, '--lang');
-					case '--json':
-						json = true;
-					case '--kind':
-						kind = CliArgs.expectValue(args, ++i, '--kind');
-					case '--explain':
-						explain = true;
-					case '--flat':
-						flat = true;
-					case '--limit':
-						try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
-							CliIo.stderr('${e.message}\n');
-							return searchParseExit(EXIT_USAGE);
-						}
-					case '-h', '--help':
-						printSearchUsage();
-						return searchParseExit(EXIT_OK);
-					case '--':
-						optsEnded = true;
-					case _:
-						if (a.startsWith('--')) {
-							CliIo.stderr('apq search: unknown option "$a"\n');
-							return searchParseExit(EXIT_USAGE);
-						}
-						isOption = false;
-				}
+		// `--` ends the options (the spec says so), so a pattern may start with `--` (`--$x` = prefix-decrement).
+		for (arg in new SearchCommand().flags().walk(args)) {
+			switch arg.flag {
+				case '--lang':
+					lang = arg.value();
+				case '--json':
+					json = true;
+				case '--kind':
+					kind = arg.value();
+				case '--explain':
+					explain = true;
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
+						return searchParseExit(EXIT_USAGE);
+					}
+				case '-h', '--help':
+					printSearchUsage();
+					return searchParseExit(EXIT_OK);
+				case null:
+					if (pattern == null)
+						pattern = arg.token;
+					else
+						inputSpecs.push(arg.token);
 			}
-			if (!isOption) {
-				if (pattern == null)
-					pattern = a;
-				else
-					inputSpecs.push(a);
-			}
-			i++;
 		}
 		return {
 			lang: lang,

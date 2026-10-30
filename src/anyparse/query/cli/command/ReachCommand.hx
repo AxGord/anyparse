@@ -47,18 +47,17 @@ final class ReachCommand implements CliCommand {
 		final toPatterns: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ReachCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--from':
-					from = CliArgs.expectValue(args, ++i, '--from');
+					from = arg.value();
 				case '--to':
-					toPatterns.push(CliArgs.expectValue(args, ++i, '--to'));
+					toPatterns.push(arg.value());
 				case '--max-paths':
-					final raw: String = CliArgs.expectValue(args, ++i, '--max-paths');
+					final raw: String = arg.value();
 					final parsedMax: Null<Int> = Std.parseInt(raw);
 					if (parsedMax == null || parsedMax < 1) {
 						CliIo.stderr('apq reach: --max-paths expects a positive integer\n');
@@ -66,21 +65,16 @@ final class ReachCommand implements CliCommand {
 					}
 					maxPaths = parsedMax;
 				case '--kinds':
-					kinds = CliCallGraph.parseEdgeKinds('reach', CliArgs.expectValue(args, ++i, '--kinds'));
+					kinds = CliCallGraph.parseEdgeKinds('reach', arg.value());
 					if (kinds == null) return EXIT_USAGE;
 				case '--format':
-					output = CliCallGraph.parseGraphOutput(CliArgs.expectValue(args, ++i, '--format'));
+					output = CliCallGraph.parseGraphOutput(arg.value());
 				case '-h', '--help':
 					printReachUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq reach: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					inputSpecs.push(a);
 			}
-			i++;
 		}
 		if (from == null || toPatterns.length == 0) {
 			CliIo.stderr('apq reach: both --from and --to are required\n');

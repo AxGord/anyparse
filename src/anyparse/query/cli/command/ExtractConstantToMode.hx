@@ -36,37 +36,32 @@ final class ExtractConstantToMode {
 		var destType: Null<String> = null;
 		var into: Null<String> = null;
 		var annotate: Null<String> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in ExtractConstantToMode.flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					select = CliArgs.expectValue(args, ++i, '--select');
+					select = arg.value();
 				case '--match':
-					matchPattern = CliArgs.expectValue(args, ++i, '--match');
+					matchPattern = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--name':
-					name = CliArgs.expectValue(args, ++i, '--name');
+					name = arg.value();
 				case '--to':
-					destType = CliArgs.expectValue(args, ++i, '--to');
+					destType = arg.value();
 				case '--into':
-					into = CliArgs.expectValue(args, ++i, '--into');
+					into = arg.value();
 				case '--annotate':
-					annotate = CliArgs.expectValue(args, ++i, '--annotate');
+					annotate = arg.value();
 				case '--shared':
 					shared = true;
 				case '--reformat':
 					reformat = true;
 				case '--write':
 					write = true;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq $OP: "$a" is not an option of the addressed mode\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (at == null && CliArgs.isPosSpec(a)) {
@@ -76,7 +71,6 @@ final class ExtractConstantToMode {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (file == null || name == null) {
 			CliIo.stderr('apq $OP: expected <file> (<l>[:<c>] | --select \'<sel>\' | --match \'<pattern>\') --name <NAME>\n');

@@ -416,32 +416,31 @@ final class StripCommand implements CliCommand {
 		final replacements: Array<String> = [];
 		var pendingReplace: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new StripCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--replace':
 					if (pendingReplace != null) {
 						CliIo.stderr('apq strip: --replace "$pendingReplace" needs a --with before the next --replace\n');
 						return stripParseExit(EXIT_USAGE);
 					}
-					pendingReplace = CliArgs.expectValue(args, ++i, '--replace');
+					pendingReplace = arg.value();
 				case '--with':
 					if (pendingReplace == null) {
 						CliIo.stderr('apq strip: --with requires a preceding --replace\n');
 						return stripParseExit(EXIT_USAGE);
 					}
 					patterns.push(pendingReplace);
-					replacements.push(CliArgs.expectValue(args, ++i, '--with'));
+					replacements.push(arg.value());
 					pendingReplace = null;
 				case '--delete':
 					if (pendingReplace != null) {
 						CliIo.stderr('apq strip: --replace "$pendingReplace" needs a --with before --delete\n');
 						return stripParseExit(EXIT_USAGE);
 					}
-					patterns.push(CliArgs.expectValue(args, ++i, '--delete'));
+					patterns.push(arg.value());
 					replacements.push('');
 				case '--regex':
 					regexMode = true;
@@ -452,18 +451,13 @@ final class StripCommand implements CliCommand {
 				case '--per-pattern':
 					perPattern = true;
 				case '--from-cluster':
-					fromCluster = CliArgs.expectValue(args, ++i, '--from-cluster');
+					fromCluster = arg.value();
 				case '-h', '--help':
 					printStripUsage();
 					return stripParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq strip: unknown option "$a"\n');
-						return stripParseExit(EXIT_USAGE);
-					}
+				case null:
 					files.push(a);
 			}
-			i++;
 		}
 		if (pendingReplace != null) {
 			CliIo.stderr('apq strip: --replace "$pendingReplace" needs a --with\n');

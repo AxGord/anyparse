@@ -69,7 +69,9 @@ final class LitCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(['--any-kind', '--exact', '--flat', '--include-comments', '--include-directives'], ['--kind', '--limit']);
+		return new CliFlags(
+			['--any-kind', '--exact', '--flat', '--include-comments', '--include-directives'], ['--kind', '--limit'], Splits
+		);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -444,20 +446,19 @@ final class LitCommand implements CliCommand {
 		// after it a scope spec; without one the grammar is untouched.
 		final scan: PositionalScan = CliArgs.beginPositionalScan(args);
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new LitCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--':
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--exact':
 					exact = true;
 				case '--kind':
 					// Segments are trimmed like `--kinds` on the call-graph walkers trims its own, so
 					// `--kind 'Literal, Comment'` names two kinds instead of failing on `" Comment"`.
 					kindFilter = [
-						for (k in CliArgs.expectValue(args, ++i, '--kind').split(',')) k.trim()
+						for (k in arg.value().split(',')) k.trim()
 					];
 				case '--any-kind':
 					kindFilter = [];
@@ -468,21 +469,16 @@ final class LitCommand implements CliCommand {
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return litParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
 					printLitUsage();
 					return litParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq lit: unknown option "$a"\n');
-						return litParseExit(EXIT_USAGE);
-					}
-					CliArgs.routePositional(a, i, scan.separator, targets, scan.inputSpecs);
+				case null:
+					CliArgs.routePositional(a, arg.index, scan.separator, targets, scan.inputSpecs);
 			}
-			i++;
 		}
 		return {
 			lang: lang,

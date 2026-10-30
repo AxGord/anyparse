@@ -49,7 +49,7 @@ final class ModuleMoveCli {
 
 	/** Whether `args` ask for the module form (`--to`). */
 	public static inline function isModuleForm(args: Array<String>): Bool {
-		return args.contains('--to');
+		return new MoveCommand().flags().given(args, '--to');
 	}
 
 	/** Run the module form of `move`. */
@@ -257,12 +257,11 @@ final class ModuleMoveCli {
 		var verify: Bool = false;
 		var mirror: Bool = true;
 		var lang: String = 'haxe';
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in ModuleMoveCli.flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--to':
-					final dir: String = ConfigFinder.absolute(CliArgs.expectValue(args, ++i, '--to'));
+					final dir: String = ConfigFinder.absolute(arg.value());
 					if (pending.length == 0) {
 						CliIo.stderr('apq move: --to $dir follows no module\n');
 						return null;
@@ -270,7 +269,7 @@ final class ModuleMoveCli {
 					for (p in pending) moves.push({ from: p, to: Path.join([dir, Path.withoutDirectory(p)]) });
 					pending.resize(0);
 				case '--scope':
-					scopes.push(ConfigFinder.absolute(CliArgs.expectValue(args, ++i, '--scope')));
+					scopes.push(ConfigFinder.absolute(arg.value()));
 				case '--write':
 					write = true;
 				case '--verify':
@@ -278,14 +277,13 @@ final class ModuleMoveCli {
 				case '--no-mirror':
 					mirror = false;
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
-				case _ if (a.startsWith('-')):
+					lang = arg.value();
+				case null if (a.startsWith('-')):
 					CliIo.stderr('apq move: unknown option "$a" in the module form\n');
 					return null;
-				case _:
+				case null:
 					pending.push(ConfigFinder.absolute(a));
 			}
-			i++;
 		}
 		if (pending.length <= 0) return {
 			moves: moves,

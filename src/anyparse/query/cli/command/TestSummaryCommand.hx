@@ -77,31 +77,29 @@ final class TestSummaryCommand implements CliCommand implements LanguageFree {
 	private static function runTestSummary(args: Array<String>): Int {
 		var sourcePath: Null<String> = null;
 		var exitStatus: Null<Int> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new TestSummaryCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '-h', '--help':
 					printTestSummaryUsage();
 					return EXIT_OK;
 				case '--lang':
 					// Shim invariance — apq test-summary doesn't use a plugin.
-					CliArgs.expectValue(args, ++i, '--lang');
+					arg.value();
 				case '--exit-status':
-					final rawStatus: String = CliArgs.expectValue(args, ++i, '--exit-status');
+					final rawStatus: String = arg.value();
 					exitStatus = Std.parseInt(rawStatus);
 					if (exitStatus == null) {
 						CliIo.stderr('apq test-summary: --exit-status wants an integer, got "$rawStatus"\n');
 						return EXIT_USAGE;
 					}
-				case _:
+				case null:
 					if (sourcePath != null) {
 						CliIo.stderr('apq test-summary: only one positional source supported (got "$sourcePath" and "$a")\n');
 						return EXIT_USAGE;
 					}
 					sourcePath = a;
 			}
-			i++;
 		}
 		final resolved: Null<String> = sourcePath ?? Sys.getEnv(TRANSCRIPT_ENV);
 		if (resolved == null || resolved.length == 0) {

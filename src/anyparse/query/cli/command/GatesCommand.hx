@@ -467,32 +467,26 @@ final class GatesCommand implements CliCommand {
 		var mechanism: String = 'trail-opt';
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new GatesCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return gatesParseExit(EXIT_USAGE);
 					}
 				case '--mechanism':
-					mechanism = CliArgs.expectValue(args, ++i, '--mechanism');
+					mechanism = arg.value();
 				case '-h', '--help':
 					printGatesUsage();
 					return gatesParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq gates: unknown option "$a"\n');
-						return gatesParseExit(EXIT_USAGE);
-					}
+				case null:
 					inputSpecs.push(a);
 			}
-			i++;
 		}
 		return {
 			lang: lang,

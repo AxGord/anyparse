@@ -89,24 +89,19 @@ final class WriterEqualsCommand implements CliCommand {
 		var expectedPath: Null<String> = null;
 		var configPath: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new WriterEqualsCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--plain':
 					plain = true;
 				case '--config':
-					configPath = CliArgs.expectValue(args, ++i, '--config');
+					configPath = arg.value();
 				case '-h', '--help':
 					printWriterEqualsUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq writer-equals: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (inputPath == null) {
 						inputPath = a;
 					} else if (expectedPath == null) {
@@ -116,7 +111,6 @@ final class WriterEqualsCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (inputPath == null || expectedPath == null) {
 			CliIo.stderr('apq writer-equals: missing <input> and/or <expected> argument\n');

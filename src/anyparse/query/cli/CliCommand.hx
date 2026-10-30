@@ -28,8 +28,9 @@ interface CliCommand {
 	public function summary(): String;
 
 	/**
-	 * Every flag this command's parser reads, valued or not (`--lang` and `--help` are implied). The dispatcher
-	 * refuses a `--word` it does not declare, and `LanguageChoice` reads a flag's value as no file.
+	 * Every flag this command's parser reads, valued or not (`--lang` and `--help` are implied). The parser reads its
+	 * argv through it (`CliFlags.walk`), the dispatcher refuses a `--word` it does not declare, and `LanguageChoice`
+	 * reads a flag's value as no file.
 	 */
 	public function flags(): CliFlags;
 

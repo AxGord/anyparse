@@ -51,9 +51,12 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(
-			['--after', '--append', '--before', '--reformat', '--sorted', '--write'], ['--from-file', '--match', '--nth', '--select']
-		);
+		// A mode flag takes the position after it, when one follows; alone, the address comes from --select / --match.
+		final mode: CliFlags = new CliFlags(['--reformat', '--write'], ['--from-file', '--match', '--nth', '--select']);
+		return mode.withOptional('--after', CliArgs.isPosSpec)
+			.withOptional('--before', CliArgs.isPosSpec)
+			.withOptional('--append', CliArgs.isPosSpec)
+			.withOptional('--sorted', CliArgs.isPosSpec);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -218,31 +221,28 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		var code: Null<String> = null;
 		var fromFile: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new AddElementCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
-				// The mode flags take a position value only when one follows —
-				// `--after --select '<sel>'` and a trailing `--append` are valueless
-				// (the address then comes from --select / --match); '' marks the mode.
+					lang = arg.value();
+				// '' marks a mode flag that took no position.
 				case '--after':
-					afterSpec = isPosToken(args, i) ? args[++i] : '';
+					afterSpec = arg.valueOr('');
 				case '--before':
-					beforeSpec = isPosToken(args, i) ? args[++i] : '';
+					beforeSpec = arg.valueOr('');
 				case '--append':
-					appendSpec = isPosToken(args, i) ? args[++i] : '';
+					appendSpec = arg.valueOr('');
 				case '--sorted':
-					sortedSpec = isPosToken(args, i) ? args[++i] : '';
+					sortedSpec = arg.valueOr('');
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--from-file':
-					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
+					fromFile = arg.value();
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -250,11 +250,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 				case '-h', '--help':
 					printAddElementUsage();
 					return addElementParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq add-element: unknown option "$a"\n');
-						return addElementParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (code == null) {
@@ -264,7 +260,6 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 						return addElementParseExit(EXIT_USAGE);
 					}
 			}
-			i++;
 		}
 		return {
 			lang: lang,
@@ -282,20 +277,6 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 			fromFile: fromFile,
 			errExit: null
 		};
-	}
-
-	/**
-	 * Whether the token after a mode flag is a position value (`<line>[:<col>]`
-	 * starts with a digit) — an `--after` / `--before` / `--append` followed by
-	 * another flag or the stdin marker is valueless (the address then comes from
-	 * `--select` / `--match`).
-	 */
-	private static function isPosToken(args: Array<String>, i: Int): Bool {
-		if (i + 1 >= args.length) return false;
-		final next: String = args[i + 1];
-		if (next.length == 0) return false;
-		final c: Int = next.fastCodeAt(0);
-		return c >= '0'.code && c <= '9'.code;
 	}
 
 }

@@ -233,36 +233,30 @@ final class MetaCommand implements CliCommand {
 		var limit: Int = -1;
 		final positionals: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new MetaCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--json':
 					json = true;
 				case ARG_CONTAINS_FLAG:
-					argContains = CliArgs.expectValue(args, ++i, ARG_CONTAINS_FLAG);
+					argContains = arg.value();
 				case ON_FLAG:
-					onKind = CliArgs.expectValue(args, ++i, ON_FLAG);
+					onKind = arg.value();
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return metaParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
 					printMetaUsage();
 					return metaParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq meta: unknown option "$a"\n');
-						return metaParseExit(EXIT_USAGE);
-					}
+				case null:
 					positionals.push(a);
 			}
-			i++;
 		}
 		return {
 			lang: lang,

@@ -66,28 +66,23 @@ final class RemoveParamCommand implements CliCommand {
 		var nth: Null<Int> = null;
 		var indexSpec: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new RemoveParamCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--write':
 					write = true;
 				case '-h', '--help':
 					printRemoveParamUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq remove-param: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					}
@@ -103,7 +98,6 @@ final class RemoveParamCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || indexSpec == null) {
 			CliIo.stderr("apq remove-param: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <index>\n");

@@ -78,39 +78,37 @@ final class LintScoreCommand implements CliCommand implements LanguageFree {
 		var severity: Null<String> = DEFAULT_SEVERITY;
 		var format: String = 'text';
 		var limit: Int = UNLABELLED_LIMIT;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new LintScoreCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--truth':
-					truthPath = CliArgs.expectValue(args, ++i, '--truth');
+					truthPath = arg.value();
 				case '--severity':
-					final level: String = CliArgs.expectValue(args, ++i, '--severity');
+					final level: String = arg.value();
 					if (level != LintScore.ALL_SEVERITIES && !LintDiff.SEVERITY_ORDER.contains(level))
 						throw new UsageFailure('unknown --severity value "$level" (expected error|warning|info|all)');
 					severity = level == LintScore.ALL_SEVERITIES ? null : level;
 				case '--format':
-					format = CliArgs.expectValue(args, ++i, '--format');
+					format = arg.value();
 					if (format != 'text' && format != 'json')
 						throw new UsageFailure('unknown --format value "$format" (expected text|json)');
 				case '--limit':
-					final value: String = CliArgs.expectValue(args, ++i, '--limit');
+					final value: String = arg.value();
 					final parsed: Null<Int> = Std.parseInt(value);
 					if (parsed == null || '$parsed' != value || parsed < -1)
 						throw new UsageFailure('--limit expects a count, or -1 for every unlabelled key — got "$value"');
 					limit = parsed;
 				case '--lang':
 					// the hxq shim injects --lang haxe; a score reads two JSON files and needs no grammar
-					CliArgs.expectValue(args, ++i, '--lang');
+					arg.value();
 				case '-h', '--help':
 					printLintScoreUsage();
 					return null;
-				case _ if (!a.startsWith('-') && reportPath == null):
+				case null if (!a.startsWith('-') && reportPath == null):
 					reportPath = a;
-				case _:
+				case null:
 					throw new UsageFailure('lint-score: unexpected argument "$a" — see apq lint-score --help');
 			}
-			i++;
 		}
 		if (truthPath == null || reportPath == null) throw new UsageFailure('lint-score needs both --truth <truth.json> and <report.json>');
 		return {

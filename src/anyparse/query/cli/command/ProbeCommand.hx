@@ -35,7 +35,8 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 
 	/** `ast`'s flags and `--writer-probe`: every other flag is forwarded to `ast`, with its value when `ast` says it takes one. */
 	public function flags(): CliFlags {
-		return new AstCommand().flags().with(new CliFlags(['--writer-probe'], []));
+		// A `--` is forwarded to `ast`, which refuses it there.
+		return new AstCommand().flags().with(new CliFlags(['--writer-probe'], [], Splits));
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -102,11 +103,10 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 			return EXIT_OK;
 		}
 		// The `hxq` shim auto-injects `--lang haxe` after the subcommand,
-		// so the code arg is NOT always at args[0]. Walk the array and
-		// pick the FIRST non-flag positional (skipping every `--flag`
-		// AND its value-bearing successor). All flags are forwarded to
-		// `runAst` verbatim; the positional becomes `--code <s>` (or
-		// switches to `--stdin` when literal `-`).
+		// so the code arg is NOT always at args[0]: the one positional is
+		// the code. Every flag is forwarded to `runAst` with the value it
+		// took; the positional becomes `--code <s>` (or switches to
+		// `--stdin` when literal `-`).
 		var codeArg: Null<String> = null;
 		final forwarded: Array<String> = [];
 		// `--writer-probe` is a probe-only flag that diverts the source to
@@ -117,41 +117,25 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 		// forwarded because `pickPlugin` needs it.
 		var writerProbeMode: Bool = false;
 		var lang: String = 'haxe';
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			if (a == '-h' || a == '--help') {
-				printProbeUsage();
-				return EXIT_OK;
+		for (arg in new ProbeCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
+				case '-h', '--help':
+					printProbeUsage();
+					return EXIT_OK;
+				case '--writer-probe':
+					writerProbeMode = true;
+				case null:
+					if (codeArg != null) {
+						CliIo.stderr('apq probe: only one code argument supported (got "$codeArg" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					codeArg = a;
+				case _:
+					if (a == '--lang') lang = arg.value();
+					forwarded.push(a);
+					if (arg.hasValue()) forwarded.push(arg.value());
 			}
-			if (a == '--writer-probe') {
-				writerProbeMode = true;
-				i++;
-				continue;
-			}
-			if (a == '--lang') {
-				lang = CliArgs.expectValue(args, ++i, '--lang');
-				forwarded.push('--lang');
-				forwarded.push(lang);
-				i++;
-				continue;
-			}
-			if (a.startsWith('--')) {
-				forwarded.push(a);
-				// Forward the option's value too, when `ast` declares one, so a switch never eats the code positional.
-				if (new AstCommand().flags().takesValue(a) && i + 1 < args.length) {
-					forwarded.push(args[i + 1]);
-					i++;
-				}
-				i++;
-				continue;
-			}
-			if (codeArg != null) {
-				CliIo.stderr('apq probe: only one code argument supported (got "$codeArg" and "$a")\n');
-				return EXIT_USAGE;
-			}
-			codeArg = a;
-			i++;
 		}
 		if (codeArg == null) {
 			CliIo.stderr('apq probe: missing <code> argument\n');

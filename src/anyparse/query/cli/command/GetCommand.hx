@@ -78,23 +78,20 @@ final class GetCommand implements CliCommand implements StdinDocument {
 		var select: Null<String> = null;
 		var nth: Null<Int> = null;
 		final positionals: Array<String> = [];
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new GetCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					select = CliArgs.expectValue(args, ++i, '--select');
+					select = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '-h', '--help':
 					return null;
-				case _:
-					if (a.startsWith('--')) throw new UsageFailure('unknown option "$a"');
+				case null:
 					positionals.push(a);
 			}
-			i++;
 		}
 		if (positionals.length == 0 || positionals.length > 2 || (positionals.length == 1 && select == null))
 			throw new UsageFailure("expected <file|-> <path> (or --select '<sel>' [<path>])");

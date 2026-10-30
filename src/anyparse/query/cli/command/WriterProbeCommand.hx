@@ -55,27 +55,21 @@ final class WriterProbeCommand implements CliCommand {
 	private static function runWriterProbe(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var file: Null<String> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new WriterProbeCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '-h', '--help':
 					printWriterProbeUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq writer-probe: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file != null) {
 						CliIo.stderr('apq writer-probe: only one file argument supported (got "$file" and "$a")\n');
 						return EXIT_USAGE;
 					}
 					file = a;
 			}
-			i++;
 		}
 		if (file == null) {
 			CliIo.stderr('apq writer-probe: missing <file> argument\n');

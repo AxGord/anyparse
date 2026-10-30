@@ -53,7 +53,7 @@ final class MentionsCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(['--flat'], ['--limit']);
+		return new CliFlags(['--flat'], ['--limit'], Splits);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -178,31 +178,25 @@ final class MentionsCommand implements CliCommand {
 		// it a scope spec; without one the grammar is untouched.
 		final scan: WalkerScan = CliArgs.beginWalkerScan(args);
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new MentionsCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--':
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--flat':
 					scan.flat = true;
 				case '--limit':
-					try scan.limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try scan.limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return mentionsParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
 					printMentionsUsage();
 					return mentionsParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq mentions: unknown option "$a"\n');
-						return mentionsParseExit(EXIT_USAGE);
-					}
-					CliArgs.routePositional(a, i, scan.separator, scan.names, scan.inputSpecs);
+				case null:
+					CliArgs.routePositional(a, arg.index, scan.separator, scan.names, scan.inputSpecs);
 			}
-			i++;
 		}
 		return {
 			lang: lang,

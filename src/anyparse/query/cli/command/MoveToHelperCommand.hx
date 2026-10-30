@@ -41,25 +41,19 @@ final class MoveToHelperCommand implements CliCommand {
 		final opts: Map<String, String> = [];
 		final flags: Array<String> = [];
 		final positional: Array<String> = [];
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new MoveToHelperCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang', '--type', '--to', '--scope', '--file', '--param', '--arms':
-					opts[a] = CliArgs.expectValue(args, ++i, a);
+					opts[a] = arg.value();
 				case '--write', '--dry-run':
 					flags.push(a);
 				case '-h', '--help':
 					printUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq move-to-helper: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					positional.push(a);
 			}
-			i++;
 		}
 		final helper: Null<String> = opts['--to'];
 		final scopeDir: Null<String> = opts['--scope'];

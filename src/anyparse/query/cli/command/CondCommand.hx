@@ -58,12 +58,11 @@ final class CondCommand implements CliCommand {
 		var define: Null<String> = null;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new CondCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--flat':
 					flat = true;
 				case '--names':
@@ -73,12 +72,12 @@ final class CondCommand implements CliCommand {
 				case '--inactive':
 					inactive = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return EXIT_USAGE;
 					}
 				case '--max-body':
-					final raw: String = CliArgs.expectValue(args, ++i, '--max-body');
+					final raw: String = arg.value();
 					final parsed: Null<Int> = SourceText.parseStrictInt(raw);
 					if (parsed == null || parsed < 0) {
 						CliIo.stderr('apq cond: --max-body expects a non-negative line budget, got "$raw"\n');
@@ -88,17 +87,12 @@ final class CondCommand implements CliCommand {
 				case '-h', '--help':
 					usage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq cond: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (define == null)
 						define = a;
 					else
 						inputSpecs.push(a);
 			}
-			i++;
 		}
 		if (define == null) {
 			CliIo.stderr('apq cond: missing <DEFINE> argument\n');

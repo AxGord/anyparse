@@ -44,28 +44,23 @@ final class PullUpCommand implements CliCommand {
 		var srcFile: Null<String> = null;
 		var memberName: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new PullUpCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--type':
-					srcType = CliArgs.expectValue(args, ++i, '--type');
+					srcType = arg.value();
 				case '--to':
-					targetType = CliArgs.expectValue(args, ++i, '--to');
+					targetType = arg.value();
 				case '--scope':
-					scopeDir = CliArgs.expectValue(args, ++i, '--scope');
+					scopeDir = arg.value();
 				case '--write':
 					write = true;
 				case '-h', '--help':
 					printInheritanceMoveUsage(up);
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq $cmd: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (srcFile == null) {
 						srcFile = a;
 					} else if (memberName == null) {
@@ -75,7 +70,6 @@ final class PullUpCommand implements CliCommand {
 						return EXIT_USAGE;
 					}
 			}
-			i++;
 		}
 		if (srcFile == null || memberName == null || targetType == null || scopeDir == null) {
 			CliIo.stderr('apq $cmd: missing required arguments\n');

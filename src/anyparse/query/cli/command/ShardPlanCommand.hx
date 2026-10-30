@@ -57,31 +57,29 @@ final class ShardPlanCommand implements CliCommand {
 		var shardsText: Null<String> = null;
 		var format: String = 'lines';
 		var lang: String = 'haxe';
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ShardPlanCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--runner':
-					runner = CliArgs.expectValue(args, ++i, '--runner');
+					runner = arg.value();
 				case '--classes':
-					classesPath = CliArgs.expectValue(args, ++i, '--classes');
+					classesPath = arg.value();
 				case '--weights':
-					weightsPath = CliArgs.expectValue(args, ++i, '--weights');
+					weightsPath = arg.value();
 				case '--shards':
-					shardsText = CliArgs.expectValue(args, ++i, '--shards');
+					shardsText = arg.value();
 				case '--format':
-					format = CliArgs.expectValue(args, ++i, '--format');
+					format = arg.value();
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '-h', '--help':
 					printShardPlanUsage();
 					return EXIT_OK;
-				case _:
+				case null:
 					CliIo.stderr('apq shard-plan: unexpected argument "$a" — the class list is named by --runner or --classes\n');
 					printShardPlanUsage();
 					return EXIT_USAGE;
 			}
-			i++;
 		}
 		if (runner != null && classesPath != null) {
 			CliIo.stderr('apq shard-plan: --runner and --classes are mutually exclusive — one class list per plan\n');

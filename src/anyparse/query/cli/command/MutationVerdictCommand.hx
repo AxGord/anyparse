@@ -67,23 +67,22 @@ final class MutationVerdictCommand implements CliCommand implements LanguageFree
 		final logPaths: Array<String> = [];
 		var expectCsv: String = '';
 		var buildLog: Bool = false;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new MutationVerdictCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--build':
 					buildLog = true;
 				case '--expect':
-					expectCsv = CliArgs.expectValue(args, ++i, '--expect');
+					expectCsv = arg.value();
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; no grammar plugin is
 					// involved in reading a transcript. Consume it, as lint-diff
 					// and sweep do, to keep shim invariance.
-					CliArgs.expectValue(args, ++i, '--lang');
+					arg.value();
 				case '-h', '--help':
 					printMutationVerdictUsage();
 					return EXIT_OK;
-				case _:
+				case null:
 					if (a.startsWith('-')) {
 						CliIo.stderr('apq mutation-verdict: unknown option "$a"\n');
 						printMutationVerdictUsage();
@@ -91,7 +90,6 @@ final class MutationVerdictCommand implements CliCommand implements LanguageFree
 					}
 					logPaths.push(a);
 			}
-			i++;
 		}
 		if (logPaths.length == 0) {
 			CliIo.stderr('apq mutation-verdict: no transcript given\n');

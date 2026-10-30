@@ -55,18 +55,17 @@ final class SetModifierCommand implements CliCommand {
 		var nth: Null<Int> = null;
 		final changes: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new SetModifierCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -74,11 +73,7 @@ final class SetModifierCommand implements CliCommand {
 				case '-h', '--help':
 					printSetModifierUsage();
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq set-modifier: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (file == null)
 						file = a;
 					else if (pos == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a))
@@ -86,7 +81,6 @@ final class SetModifierCommand implements CliCommand {
 					else
 						changes.push(a);
 			}
-			i++;
 		}
 		if (file == null || (pos == null && selectExpr == null && matchExpr == null) || changes.length == 0) {
 			CliIo.stderr(

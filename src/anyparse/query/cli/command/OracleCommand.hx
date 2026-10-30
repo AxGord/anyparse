@@ -52,18 +52,17 @@ final class OracleCommand implements CliCommand {
 	private static function runOracle(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		final specs: Array<String> = [];
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new OracleCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; the scope is resolved through the same
 					// helper `lint` uses, so accept + consume the value to keep shim invariance.
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '-h', '--help':
 					printOracleUsage();
 					return EXIT_OK;
-				case _:
+				case null:
 					if (a.startsWith('-')) {
 						CliIo.stderr('apq oracle: unknown option "$a"\n');
 						printOracleUsage();
@@ -71,7 +70,6 @@ final class OracleCommand implements CliCommand {
 					}
 					specs.push(a);
 			}
-			i++;
 		}
 		if (specs.length == 0) {
 			CliIo.stderr('apq oracle: expected <scope> (one or more file/dir/glob specs)\n');

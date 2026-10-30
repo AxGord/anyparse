@@ -224,28 +224,27 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 		var fromFile: Null<String> = null;
 		var batch: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new PatchCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--at':
-					atSpec = CliArgs.expectValue(args, ++i, '--at');
+					atSpec = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--kind':
-					kind = CliArgs.expectValue(args, ++i, '--kind');
+					kind = arg.value();
 				case '--sep':
-					sep = CliArgs.expectValue(args, ++i, '--sep');
+					sep = arg.value();
 				case '--from-file':
-					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
+					fromFile = arg.value();
 				case '--batch':
-					batch = CliArgs.expectValue(args, ++i, '--batch');
+					batch = arg.value();
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -255,11 +254,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 				case '-h', '--help':
 					printPatchUsage();
 					return patchParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq patch: unknown option "$a"\n');
-						return patchParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (payload == null) {
@@ -269,7 +264,6 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 						return patchParseExit(EXIT_USAGE);
 					}
 			}
-			i++;
 		}
 		return {
 			lang: lang,

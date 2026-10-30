@@ -139,12 +139,11 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 		var name: Null<String> = null;
 		var member: Bool = false;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ExtractMethodCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -154,11 +153,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 				case '-h', '--help':
 					printExtractMethodUsage();
 					return extractMethodParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq extract-method: unknown option "$a"\n');
-						return extractMethodParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (startSpec == null) {
@@ -172,7 +167,6 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 						return extractMethodParseExit(EXIT_USAGE);
 					}
 			}
-			i++;
 		}
 		if (file == null || startSpec == null || endSpec == null || name == null) {
 			CliIo.stderr('apq extract-method: expected <file> <startLine>:<col> <endLine>:<col> <name>\n');

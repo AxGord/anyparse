@@ -80,7 +80,7 @@ final class RefsCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(['--decls', '--doc', '--flat', '--json', '--reads', '--source', '--writes'], ['--limit']);
+		return new CliFlags(['--decls', '--doc', '--flat', '--json', '--reads', '--source', '--writes'], ['--limit'], Splits);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -248,13 +248,10 @@ final class RefsCommand implements CliCommand {
 		// positional is the name, the rest are scope specs.
 		final scan: WalkerScan = CliArgs.beginWalkerScan(args);
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--':
+		for (arg in new RefsCommand().flags().walk(args)) {
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--json':
 					json = true;
 				case '--decls':
@@ -270,21 +267,16 @@ final class RefsCommand implements CliCommand {
 				case '--flat':
 					scan.flat = true;
 				case '--limit':
-					try scan.limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try scan.limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return refsParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
 					printRefsUsage();
 					return refsParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq refs: unknown option "$a"\n');
-						return refsParseExit(EXIT_USAGE);
-					}
-					CliArgs.routePositional(a, i, scan.separator, scan.names, scan.inputSpecs);
+				case null:
+					CliArgs.routePositional(arg.token, arg.index, scan.separator, scan.names, scan.inputSpecs);
 			}
-			i++;
 		}
 		return {
 			lang: lang,

@@ -88,7 +88,6 @@ final class GraphCommand implements CliCommand {
 
 	public function flags(): CliFlags {
 		return new CliFlags(['--external', '--mutual'], [
-			'--diff',
 			'--edges',
 			'--focus',
 			'--format',
@@ -98,7 +97,7 @@ final class GraphCommand implements CliCommand {
 			'--min-weight',
 			'--package-depth',
 			'--radius'
-		]);
+		]).withValues('--diff', 2);
 	}
 
 	public function usage(): Void {
@@ -178,54 +177,49 @@ final class GraphCommand implements CliCommand {
 		final centring: Array<String> = [];
 		final focus: Array<String> = [];
 		final inputSpecs: Array<String> = [];
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new GraphCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, a);
+					lang = arg.value();
 				case '--level':
-					level = levelOf(CliArgs.expectValue(args, ++i, a));
+					level = levelOf(arg.value());
 				case '--edges':
-					source = sourceOf(CliArgs.expectValue(args, ++i, a));
+					source = sourceOf(arg.value());
 				case '--kinds':
-					kinds = CliArgs.expectValue(args, ++i, a);
+					kinds = arg.value();
 				case '--min-weight':
-					minWeight = count(CliArgs.expectValue(args, ++i, a), a, 1);
+					minWeight = count(arg.value(), a, 1);
 					pruning.push(a);
 				case '--package-depth':
-					packageDepth = count(CliArgs.expectValue(args, ++i, a), a, 1);
+					packageDepth = count(arg.value(), a, 1);
 					pruning.push(a);
 				case '--focus':
-					focus.push(CliArgs.expectValue(args, ++i, a));
+					focus.push(arg.value());
 					pruning.push(a);
 					centring.push(a);
 				case '--radius':
-					radius = count(CliArgs.expectValue(args, ++i, a), a, 0);
+					radius = count(arg.value(), a, 0);
 					pruning.push(a);
 					centring.push(a);
 				case '--mutual':
 					mutualOnly = true;
 					pruning.push(a);
 				case '--diff':
-					final earlier: String = CliArgs.expectValue(args, ++i, a);
-					diff = [earlier, CliArgs.expectValue(args, ++i, a)];
+					diff = [arg.valueAt(0), arg.valueAt(1)];
 				case '--external':
 					external = true;
 				case '--format':
-					output = CliCallGraph.parseGraphOutput(CliArgs.expectValue(args, ++i, a));
+					output = CliCallGraph.parseGraphOutput(arg.value());
 					formatted = true;
 				case '--html':
-					html = CliArgs.expectValue(args, ++i, a);
+					html = arg.value();
 				case '-h', '--help':
 					printGraphUsage();
 					return null;
-				case _ if (a.startsWith('--')):
-					throw new UsageFailure('unknown option "$a"');
-				case _:
+				case null:
 					inputSpecs.push(a);
 			}
-			i++;
 		}
 		if (inputSpecs.length == 0) throw new UsageFailure('missing <file-or-dir-or-glob> argument');
 		if (html != null) {

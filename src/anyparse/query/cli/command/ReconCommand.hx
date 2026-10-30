@@ -533,14 +533,13 @@ final class ReconCommand implements CliCommand {
 		var writerEqualsAfter: Bool = false;
 		var writerEqualsPlain: Bool = false;
 		var expectedPath: Null<String> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new ReconCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--top':
-					final v: Null<Int> = Std.parseInt(CliArgs.expectValue(args, ++i, '--top'));
+					final v: Null<Int> = Std.parseInt(arg.value());
 					if (v == null || v <= 0) {
 						CliIo.stderr('apq recon: --top requires a positive integer\n');
 						return reconParseExit(EXIT_USAGE);
@@ -549,11 +548,11 @@ final class ReconCommand implements CliCommand {
 				case '--all':
 					topN = CliArgs.MAX_INT;
 				case '--probe':
-					probePath = CliArgs.expectValue(args, ++i, '--probe');
+					probePath = arg.value();
 				case '--cluster':
-					clusterFilter = CliArgs.expectValue(args, ++i, '--cluster');
+					clusterFilter = arg.value();
 				case '--no-target-cluster':
-					noTargetClusterFilter = CliArgs.expectValue(args, ++i, '--no-target-cluster');
+					noTargetClusterFilter = arg.value();
 				case '--source':
 					showSource = true;
 				case '--predict-strip':
@@ -565,27 +564,27 @@ final class ReconCommand implements CliCommand {
 				case '--permissive-construct':
 					permissiveConstruct = true;
 				case '--candidates':
-					candidatesRegex = CliArgs.expectValue(args, ++i, '--candidates');
+					candidatesRegex = arg.value();
 				case '--replace':
 					if (pendingReplace != null) {
 						CliIo.stderr('apq recon: --replace "$pendingReplace" needs a --with before the next --replace\n');
 						return reconParseExit(EXIT_USAGE);
 					}
-					pendingReplace = CliArgs.expectValue(args, ++i, '--replace');
+					pendingReplace = arg.value();
 				case '--with':
 					if (pendingReplace == null) {
 						CliIo.stderr('apq recon: --with requires a preceding --replace\n');
 						return reconParseExit(EXIT_USAGE);
 					}
 					patterns.push(pendingReplace);
-					replacements.push(CliArgs.expectValue(args, ++i, '--with'));
+					replacements.push(arg.value());
 					pendingReplace = null;
 				case '--delete':
 					if (pendingReplace != null) {
 						CliIo.stderr('apq recon: --replace "$pendingReplace" needs a --with before --delete\n');
 						return reconParseExit(EXIT_USAGE);
 					}
-					patterns.push(CliArgs.expectValue(args, ++i, '--delete'));
+					patterns.push(arg.value());
 					replacements.push('');
 				case '--regex':
 					regexMode = true;
@@ -595,22 +594,17 @@ final class ReconCommand implements CliCommand {
 					writerEqualsAfter = true;
 					writerEqualsPlain = true;
 				case '--expected':
-					expectedPath = CliArgs.expectValue(args, ++i, '--expected');
+					expectedPath = arg.value();
 				case '-h', '--help':
 					printReconUsage();
 					return reconParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq recon: unknown option "$a"\n');
-						return reconParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (rootDir != null) {
 						CliIo.stderr('apq recon: only one positional <dir> argument supported (got "$rootDir" and "$a")\n');
 						return reconParseExit(EXIT_USAGE);
 					}
 					rootDir = a;
 			}
-			i++;
 		}
 		final o: ReconOpts = {
 			lang: lang,

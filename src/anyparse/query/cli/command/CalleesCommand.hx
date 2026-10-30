@@ -48,14 +48,13 @@ final class CalleesCommand implements CliCommand {
 		var output: GraphOutput = Text;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new CalleesCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--depth':
-					final raw: String = CliArgs.expectValue(args, ++i, '--depth');
+					final raw: String = arg.value();
 					final parsedDepth: Null<Int> = Std.parseInt(raw);
 					if (parsedDepth == null || parsedDepth < 1) {
 						CliIo.stderr('apq $cmd: --depth expects a positive integer\n');
@@ -63,29 +62,24 @@ final class CalleesCommand implements CliCommand {
 					}
 					depth = parsedDepth;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (exception: Exception) {
+					try limit = CliArgs.parseLimit(arg.value()) catch (exception: Exception) {
 						CliIo.stderr('${exception.message}\n');
 						return EXIT_USAGE;
 					}
 				case '--kinds':
-					kinds = CliCallGraph.parseEdgeKinds(cmd, CliArgs.expectValue(args, ++i, '--kinds'));
+					kinds = CliCallGraph.parseEdgeKinds(cmd, arg.value());
 					if (kinds == null) return EXIT_USAGE;
 				case '--format':
-					output = CliCallGraph.parseGraphOutput(CliArgs.expectValue(args, ++i, '--format'));
+					output = CliCallGraph.parseGraphOutput(arg.value());
 				case '-h', '--help':
 					printCallChainsUsage(cmd, outward);
 					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq $cmd: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
+				case null:
 					if (target == null)
 						target = a;
 					else
 						inputSpecs.push(a);
 			}
-			i++;
 		}
 		if (target == null) {
 			CliIo.stderr('apq $cmd: missing <Type.method|method> argument\n');

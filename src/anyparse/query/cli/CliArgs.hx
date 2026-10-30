@@ -14,7 +14,7 @@ import anyparse.runtime.Span;
  * directory into the file list a walk visits.
  *
  * These are the members `hxq clusters` reports with the highest fan-in after
- * IO (`expectValue` 67, `pickPlugin` 51), for the obvious reason: every one of
+ * IO (`pickPlugin` first), for the obvious reason: every one of
  * the 69 commands parses arguments before it does anything. Reaching them from
  * outside `Cli` is what lets a command move onto the `CliCommand` registry
  * without dragging the whole god type behind it.
@@ -272,11 +272,6 @@ final class CliArgs {
 		return section.length > 0 && section.charAt(section.length - 1) == '\n' ? section.substr(0, section.length - 1) : section;
 	}
 
-	public static function expectValue(args: Array<String>, idx: Int, flag: String): String {
-		if (idx >= args.length) throw new UsageFailure('$flag requires a value');
-		return args[idx];
-	}
-
 	/**
 	 * Expand one-or-more file/dir/glob specs into a deduped path list,
 	 * order-preserving. `singleFile` (parse-fail becomes a hard error,
@@ -302,14 +297,8 @@ final class CliArgs {
 		return { paths: paths, singleFile: singleFile, unmatched: unmatched };
 	}
 
-	/**
-	 * Parse `--limit <n>` at position `i` (the flag itself already
-	 * matched). Returns the parsed non-negative count, or throws the
-	 * same way `expectValue` does on a missing/!int value — callers
-	 * surface it as a usage error.
-	 */
-	public static function parseLimit(args: Array<String>, idx: Int): Int {
-		final v: String = expectValue(args, idx, '--limit');
+	/** `--limit`'s value as a non-negative count; anything else throws a usage failure. */
+	public static function parseLimit(v: String): Int {
 		final n: Null<Int> = Std.parseInt(v);
 		if (n == null || n < 0) throw new UsageFailure('--limit expects a non-negative integer, got "$v"');
 		return n;

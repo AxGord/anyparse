@@ -26219,7 +26219,7 @@
 			"name": "M-EXTRACT-CONSTANT-ADDRESSED-UNROUTED",
 			"type": "anyparse.query.cli.command.ExtractConstantCommand",
 			"method": "runExtractConstant",
-			"find": "if (args.exists(a -> ADDRESSED_FLAGS.contains(a))) return ExtractConstantToMode.run(args);",
+			"find": "if (ADDRESSED_FLAGS.exists(flag -> spec.given(args, flag))) return ExtractConstantToMode.run(args);",
 			"replace": "",
 			"note": "the addressed flags reach the literal modes, which reject them"
 		},
@@ -33340,9 +33340,9 @@
 		{
 			"name": "M-CLI-FLAGS-SWITCH-TAKES-VALUE",
 			"type": "anyparse.query.cli.CliFlags",
-			"method": "positionals",
-			"find": "if (takesValue(token))",
-			"replace": "if (takesValue(token) || isLongFlag(token))",
+			"method": "scan",
+			"find": "if (takesValue(token)) {",
+			"replace": "if (takesValue(token) || isLongFlag(token)) {",
 			"note": "every long flag reads as taking a value, so `fmt --list A.hx b.json` drops A.hx and formats a Haxe file as JSON"
 		},
 		{
@@ -33382,6 +33382,21 @@
 			"find": ": fields.join(',\\n');",
 			"replace": ": fields.join('\\n');",
 			"note": "bare anon-struct fields joined by a newline alone parse leniently but the compiler rejects them, so a created typedef would not build"
+		},
+		{
+			"name": "M-CLI-OPTIONAL-VALUE-NEVER-TAKEN",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "acceptsOptionalValue",
+			"force": "false",
+			"note": "an optional-value flag never takes the token after it, so `add-element F.hx --after 3:4 x` reads the position as the code"
+		},
+		{
+			"name": "M-CLI-SEPARATOR-ALWAYS-ADMITTED",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "scan",
+			"find": "} else if (token == SEPARATOR && _separator == Refused) {",
+			"replace": "} else if (false) {",
+			"note": "every spec admits a bare `--`, so `fmt --list -- F.hx` runs and a parser with no `--` arm drops it silently"
 		}
 	]
 }

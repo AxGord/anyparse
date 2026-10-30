@@ -59,7 +59,8 @@ final class NewCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(['--class', '--open', '--raw', '--write'], [
+		// `--raw -` names stdin, the only source `--raw` reads; a bare `--raw` reads it too.
+		return new CliFlags(['--class', '--open', '--write'], [
 			'--bodies',
 			'--extends',
 			'--field',
@@ -69,7 +70,7 @@ final class NewCommand implements CliCommand {
 			'--kind',
 			'--to',
 			'--underlying'
-		]);
+		]).withOptional('--raw', token -> token == '-');
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -291,52 +292,46 @@ final class NewCommand implements CliCommand {
 		final fields: Array<String> = [];
 		var path: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new NewCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--class':
 					asClass = true;
 				case '--kind':
-					kind = CliArgs.expectValue(args, ++i, '--kind');
+					kind = arg.value();
 					// An explicit `--kind class` is intent, same as `--class`;
 					// without this it collapses to the default and runNew's
 					// hasIntent check rejects it.
 					if (kind == 'class') asClass = true;
 				case '--extends':
-					extendsList.push(CliArgs.expectValue(args, ++i, '--extends'));
+					extendsList.push(arg.value());
 				case '--underlying':
-					underlying = CliArgs.expectValue(args, ++i, '--underlying');
+					underlying = arg.value();
 				case '--from':
-					fromList.push(CliArgs.expectValue(args, ++i, '--from'));
+					fromList.push(arg.value());
 				case '--to':
-					toList.push(CliArgs.expectValue(args, ++i, '--to'));
+					toList.push(arg.value());
 				case '--open':
 					open = true;
 				case '--raw':
 					raw = true;
-					if (i + 1 < args.length && args[i + 1] == '-') i++;
 
 				case '--implements':
-					iface = CliArgs.expectValue(args, ++i, '--implements');
+					iface = arg.value();
 				case '--field':
-					fields.push(CliArgs.expectValue(args, ++i, '--field'));
+					fields.push(arg.value());
 				case '--bodies':
-					bodiesArg = CliArgs.expectValue(args, ++i, '--bodies');
+					bodiesArg = arg.value();
 				case '--from-file':
-					bodiesFromFile = CliArgs.expectValue(args, ++i, '--from-file');
+					bodiesFromFile = arg.value();
 				case '--write':
 					write = true;
 				case '-h', '--help':
 					printNewUsage();
 					return newParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq new: unknown option "$a"\n');
-						return newParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (path == null) {
 						path = a;
 					} else {
@@ -344,7 +339,6 @@ final class NewCommand implements CliCommand {
 						return newParseExit(EXIT_USAGE);
 					}
 			}
-			i++;
 		}
 		return {
 			lang: lang,

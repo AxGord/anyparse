@@ -122,26 +122,25 @@ final class MoveElementsCommand implements CliCommand {
 		var into: Null<String> = null;
 		var appendTo: Null<String> = null;
 		var sortedInto: Null<String> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new MoveElementsCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					select = CliArgs.expectValue(args, ++i, '--select');
+					select = arg.value();
 				case '--match':
-					matchPattern = CliArgs.expectValue(args, ++i, '--match');
+					matchPattern = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--range':
-					range = CliArgs.expectValue(args, ++i, '--range');
+					range = arg.value();
 				case '--into':
-					into = CliArgs.expectValue(args, ++i, '--into');
+					into = arg.value();
 				case '--append':
-					appendTo = CliArgs.expectValue(args, ++i, '--append');
+					appendTo = arg.value();
 				case '--sorted':
-					sortedInto = CliArgs.expectValue(args, ++i, '--sorted');
+					sortedInto = arg.value();
 				case '--dry-run':
 					dryRun = true;
 				case '--write':
@@ -151,8 +150,7 @@ final class MoveElementsCommand implements CliCommand {
 				case '-h', '--help':
 					printMoveElementsUsage();
 					return Left(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) return usageError('unknown option "$a"');
+				case null:
 					if (file == null)
 						file = a;
 					else if (at == null && CliArgs.isPosSpec(a))
@@ -160,7 +158,6 @@ final class MoveElementsCommand implements CliCommand {
 					else
 						return usageError('unexpected extra argument "$a"');
 			}
-			i++;
 		}
 		if (file == null) return usageError('expected <file>');
 		final sourceFile: String = file;

@@ -206,12 +206,11 @@ final class CommentRewriteCommand implements CliCommand {
 		var replace: Null<String> = null;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new CommentRewriteCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--write', '-w':
 					write = true;
 				case '--list', '-l':
@@ -225,11 +224,7 @@ final class CommentRewriteCommand implements CliCommand {
 				case '-h', '--help':
 					printCommentRewriteUsage();
 					return commentRewriteParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq comment-rewrite: unknown option "$a"\n');
-						return commentRewriteParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (find == null)
 						find = a;
 					else if (replace == null)
@@ -237,7 +232,6 @@ final class CommentRewriteCommand implements CliCommand {
 					else
 						inputSpecs.push(a);
 			}
-			i++;
 		}
 		return {
 			lang: lang,

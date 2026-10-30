@@ -254,30 +254,25 @@ final class MoveCommand implements CliCommand {
 		var nth: Null<Int> = null;
 		var destFileArg: Null<String> = null;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new MoveCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--select':
-					selectExpr = CliArgs.expectValue(args, ++i, '--select');
+					selectExpr = arg.value();
 				case '--match':
-					matchExpr = CliArgs.expectValue(args, ++i, '--match');
+					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(arg.value());
 				case '--write':
 					write = true;
 				case '--scope':
-					scope = CliArgs.expectValue(args, ++i, '--scope');
+					scope = arg.value();
 				case '-h', '--help':
 					printMoveUsage();
 					return moveParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq move: unknown option "$a"\n');
-						return moveParseExit(EXIT_USAGE);
-					}
+				case null:
 					if (file == null) {
 						file = a;
 					} else if (posSpec == null && selectExpr == null && matchExpr == null && destFileArg == null && CliArgs.isPosSpec(a)) {
@@ -289,7 +284,6 @@ final class MoveCommand implements CliCommand {
 						return moveParseExit(EXIT_USAGE);
 					}
 			}
-			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || destFileArg == null) {
 			CliIo.stderr("apq move: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <dest-file>\n");

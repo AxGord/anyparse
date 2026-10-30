@@ -491,12 +491,11 @@ final class FmtCommand implements CliCommand {
 		var onePass: Bool = false;
 		final inputSpecs: Array<String> = [];
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new FmtCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--lang':
-					lang = CliArgs.expectValue(args, ++i, '--lang');
+					lang = arg.value();
 				case '--write', '-w':
 					write = true;
 				case '--list', '-l':
@@ -508,14 +507,9 @@ final class FmtCommand implements CliCommand {
 				case '-h', '--help':
 					printFmtUsage();
 					return fmtParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq fmt: unknown option "$a"\n');
-						return fmtParseExit(EXIT_USAGE);
-					}
+				case null:
 					inputSpecs.push(a);
 			}
-			i++;
 		}
 		return {
 			lang: lang,

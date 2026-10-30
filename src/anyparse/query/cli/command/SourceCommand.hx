@@ -234,16 +234,15 @@ final class SourceCommand implements CliCommand {
 			file: null,
 			errExit: null
 		};
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
+		for (arg in new SourceCommand().flags().walk(args)) {
+			final a: String = arg.token;
+			switch arg.flag {
 				case '--range':
-					opts.range = CliArgs.expectValue(args, ++i, '--range');
+					opts.range = arg.value();
 				case '--select':
-					opts.selectExprs.push(CliArgs.expectValue(args, ++i, '--select'));
+					opts.selectExprs.push(arg.value());
 				case '--at':
-					opts.atSpec = CliArgs.expectValue(args, ++i, '--at');
+					opts.atSpec = arg.value();
 				case '--number', '-n':
 					opts.number = true;
 				case '--raw':
@@ -251,17 +250,12 @@ final class SourceCommand implements CliCommand {
 				case '--all':
 					opts.all = true;
 				case '--lang':
-					opts.lang = CliArgs.expectValue(args, ++i, '--lang');
+					opts.lang = arg.value();
 				case '-h', '--help':
 					printSourceUsage();
 					opts.errExit = EXIT_OK;
 					return opts;
-				case _:
-					if (a.startsWith('--')) {
-						CliIo.stderr('apq source: unknown option "$a"\n');
-						opts.errExit = EXIT_USAGE;
-						return opts;
-					}
+				case null:
 					if (opts.file != null) {
 						CliIo.stderr('apq source: only one file argument supported (got "${opts.file}" and "$a")\n');
 						opts.errExit = EXIT_USAGE;
@@ -269,7 +263,6 @@ final class SourceCommand implements CliCommand {
 					}
 					opts.file = a;
 			}
-			i++;
 		}
 		return opts;
 	}
