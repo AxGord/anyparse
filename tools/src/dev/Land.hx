@@ -30,7 +30,12 @@ using StringTools;
 final class Land {
 
 	public static inline final USAGE: String = 'usage: dev land <branch> [-m <message>] [--no-battery] [--full] [--allow-blast] '
-		+ '[--allow <row>]... [--snapshot] [--logs <dir>] [--repo <tree>]';
+		+ '[--allow <row>]... [--snapshot] [--rounds <n>] [--tokens <n>] [--logs <dir>] [--repo <tree>]';
+
+	/** The trailers a landing carries its review rounds and the tokens the slice cost under, which `dev slice-stats` reads. */
+	public static inline final ROUNDS_TRAILER: String = 'Review-Rounds';
+
+	public static inline final TOKENS_TRAILER: String = 'Tokens';
 
 	/** Every this-many-th landing runs the battery in full, whatever it touched. */
 	public static inline final FULL_EVERY: Int = 10;
@@ -77,6 +82,9 @@ final class Land {
 	private final _merged: MergedPaths;
 	private final _print: String -> Void;
 
+	/** The trailers the commit carries beside `Slice`, each `<key>: <value>`. */
+	private final _trailers: Array<String>;
+
 	/** Whether the pick of this run has begun, so a failed step rolls the tree back. */
 	private var _picking: Bool = false;
 
@@ -97,6 +105,7 @@ final class Land {
 		_exec = options.exec;
 		_merged = options.merged;
 		_print = options.print;
+		_trailers = options.trailers ?? [];
 	}
 
 	/**
@@ -215,7 +224,7 @@ final class Land {
 
 	/**
 	 * The pick committed under `message`, or the message of the branch's commit, with the author and date of that commit and
-	 * a `Slice: <ID>` trailer unless the message names a slice already.
+	 * a `Slice: <ID>` trailer unless the message names a slice already, and the trailers of the run (`metricTrailers`).
 	 */
 	private function commit(message: Null<String>): Outcome {
 		final file: String = Path.join([_logs, 'commit-message.txt']);
@@ -230,6 +239,13 @@ final class Land {
 			file
 		]);
 		if (!trailer.ok) return Failed(trailer.firstError());
+		final markers: Array<String> = [];
+		for (marker in _trailers) {
+			markers.push('--trailer');
+			markers.push(marker);
+		}
+		final marked: Result = git(['interpret-trailers', '--in-place', '--if-exists', 'replace'].concat(markers).concat([file]));
+		if (!marked.ok) return Failed(marked.firstError());
 		final author: String = git(['log', '-1', '--format=%an <%ae>', _branch]).out.trim();
 		final date: String = git(['log', '-1', '--format=%aI', _branch]).out.trim();
 		final commit: Result = git(['commit', '-F', file, '--author', author, '--date', date]);
@@ -300,6 +316,7 @@ final class Land {
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final message: Null<String> = args.option('-m');
+		final trailers: Array<String> = metricTrailers(args.option('--rounds'), args.option('--tokens'));
 		final noBattery: Bool = args.flag(NO_BATTERY);
 		final request: BatteryRequest = {
 			allowBlast: args.flag('--allow-blast'),
@@ -322,6 +339,7 @@ final class Land {
 			branch: branch,
 			logs: logs,
 			message: message,
+			trailers: trailers,
 			battery: noBattery ? null : request,
 			compile: (tree, log) -> Binaries.compileWith(tree, log, [], Lease.ofEnvironment()),
 			exec: execBattery,
@@ -408,6 +426,21 @@ final class Land {
 		return flags;
 	}
 
+	/**
+	 * The trailers that mark a landing with its review rounds and the tokens it cost, from `--rounds` and `--tokens`; a value
+	 * that is not a count is refused.
+	 */
+	public static function metricTrailers(rounds: Null<String>, tokens: Null<String>): Array<String> {
+		final out: Array<String> = [];
+		for (marker in [{ key: ROUNDS_TRAILER, value: rounds }, { key: TOKENS_TRAILER, value: tokens }]) {
+			final value: Null<String> = marker.value;
+			if (value == null) continue;
+			if (!~/^[0-9]+$/.match(value)) throw new UsageError('${marker.key} takes a count, not `$value`');
+			out.push('${marker.key}: $value');
+		}
+		return out;
+	}
+
 	/** Why the battery of a base left no snapshot. */
 	private static function why(outcome: Outcome): String {
 		return switch outcome {
@@ -447,6 +480,9 @@ typedef LandOptions = {
 	var branch: String;
 	var logs: String;
 	var message: Null<String>;
+
+	/** The trailers the commit carries beside `Slice` (`metricTrailers`); none when absent. */
+	@:optional var trailers: Array<String>;
 
 	/** The battery to run; null runs none. */
 	var battery: Null<BatteryRequest>;

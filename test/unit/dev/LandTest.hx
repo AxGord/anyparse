@@ -196,6 +196,18 @@ final class LandTest extends Test {
 		Assert.equals('asked for\n\nSlice: S1', run.message);
 	}
 
+	public function testTheMetricTrailersFollowTheSliceTrailer(): Void {
+		final trailers: Array<String> = Land.metricTrailers('2', '150000');
+		Assert.same(['Review-Rounds: 2', 'Tokens: 150000'], trailers);
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { trailers: trailers });
+		Assert.equals('side\n\nSlice: S1\nReview-Rounds: 2\nTokens: 150000', run.message);
+	}
+
+	public function testAMetricThatIsNoCountIsRefused(): Void {
+		Assert.same([], Land.metricTrailers(null, null));
+		Assert.raises(() -> Land.metricTrailers('two', null), devkit.Args.UsageError);
+	}
+
 	public function testTheSliceIdIsTheBranchNameWithoutItsPrefix(): Void {
 		Assert.equals('LAND-2', Land.sliceId('batch/hxqb-LAND-2'));
 		Assert.equals('FB2b', Land.sliceId('hxqb-FB2b'));
@@ -426,6 +438,7 @@ final class LandTest extends Test {
 				branch: BRANCH,
 				logs: logs,
 				message: shape.message,
+				trailers: shape.trailers,
 				battery: request,
 				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
 				exec: (words, tree, log) -> {
@@ -651,6 +664,9 @@ private typedef Setup = {
 	/** The message of the branch's commit, and the `-m` of the landing. */
 	@:optional var sideMessage: String;
 	@:optional var message: String;
+
+	/** The trailers the landing marks its commit with beside `Slice`. */
+	@:optional var trailers: Array<String>;
 
 	/** What the user does in the repository while the binaries are built, and whether the branch is landed a second time. */
 	@:optional var during: (repo:String) -> Void;

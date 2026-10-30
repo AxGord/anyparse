@@ -76,7 +76,7 @@ final class EdgeDiff {
 	}
 
 	/** Every `.hx` file under `dir`, read. */
-	private static function collect(dir: String, into: Array<{ file: String, source: String }>): Void {
+	public static function collect(dir: String, into: Array<{ file: String, source: String }>): Void {
 		if (!FileSystem.exists(dir)) return;
 		for (entry in FileSystem.readDirectory(dir)) {
 			final path: String = Path.join([dir, entry]);
@@ -89,8 +89,9 @@ final class EdgeDiff {
 
 	/** The records of node `id` in `g`: `<kind> <target> @<offset>`, `unresolved <reason> @<offset>`, `access <member> @<offset>`. */
 	private static function records(g: CallGraph, id: String): Array<String> {
-		final out: Array<String> = [];
-		for (e in g.outEdges(id)) if (e.kind != Contains) out.push('${e.kind.label()} ${e.to} @${e.span?.from ?? -1}');
+		final out: Array<String> = [
+			for (e in g.outEdges(id)) if (e.kind != Contains) '${e.kind.label()} ${e.to} @${e.span?.from ?? -1}'
+		];
 		for (u in g.unresolved) if (u.from == id)
 			out.push('unresolved ${u.reason.getName()}(${u.reason.getParameters().join(',')}) @${u.span?.from ?? -1}');
 		for (a in g.unresolvedAccess) if (a.from == id) out.push('access ${a.member} @${a.span?.from ?? -1}');
