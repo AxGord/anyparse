@@ -95,6 +95,37 @@ class GraphDiffCliTest extends Test {
 		#end
 	}
 
+	/**
+	 * An absolute scope named through a symlinked directory and gone from the disk reads like the same scope named
+	 * relatively: both sides of the cwd-relative path are one file identity, so the linked spelling is no path outside the
+	 * repository.
+	 */
+	@:pin('control') @:killer('M-GIT-REVISION-SPEC-UNRESOLVED')
+	public function testALinkedAbsoluteScopeGoneFromTheDiskReadsAsItsRelativeSpelling(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeTree('apq_graphdifflink', [{ name: 'repo/p/A.hx', source: GraphFixture.DIFF_BEFORE }]);
+		final repo: String = '$root/repo';
+		js.node.Fs.symlinkSync(repo, '$root/link');
+		CliFixture.always(() -> {
+			js.node.Fs.unlinkSync('$root/link');
+			CliFixture.removeDir(root);
+		}, () -> {
+			CliFixture.git(repo, ['init', '-q']);
+			CliFixture.git(repo, ['add', '-A']);
+			CliFixture.git(repo, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']);
+			File.saveContent('$repo/p/A.hx', GraphFixture.DIFF_AFTER);
+			CliFixture.git(repo, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'tip']);
+			sys.FileSystem.deleteFile('$repo/p/A.hx');
+			sys.FileSystem.deleteDirectory('$repo/p');
+			final linked: CliRun = CliFixture.runIn(repo, ['graph', '$root/link/p', '--diff', 'HEAD~1', 'HEAD']);
+			Assert.equals(ExitCode.EXIT_OK, linked.code);
+			Assert.equals(GraphFixture.DIFF_REPORT, linked.out);
+		});
+		#else
+		Assert.pass('a git child process needs the nodejs target');
+		#end
+	}
+
 	/** A module-level function, which the call graph places in a type named for its module, changes under that name. */
 	@:killer('M-GRAPH-DIFF-MODULE-FUNCTION-UNNAMED')
 	@:pin('control')

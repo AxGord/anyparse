@@ -141,37 +141,6 @@ class LintReportChannelSliceTest extends Test {
 	}
 
 	/**
-	 * `realPath` never answers null or empty, whatever it is handed.
-	 *
-	 * The call inside it does not promise that. `sys.FileSystem.fullPath` is DECLARED to return a
-	 * non-null `String` and on hxnodejs RETURNS NULL for a path that is not there — it does not
-	 * throw, so the `catch` alone never sees it and `@:nullSafety(Strict)` trusts the declaration.
-	 * The value is a Map KEY here, so an unbridged null keys every unresolvable path under the one
-	 * string "null": a report path and a library path that both fail collapse onto it and the
-	 * library file is silently dropped from the resolution scope.
-	 *
-	 * RED against the first draft of this slice, which caught and fell back but never tested for
-	 * null. The existing symlink arm in `ResolutionScopeCliTest` cannot reach this — every path it
-	 * gives exists, which is exactly the branch where `fullPath` succeeds.
-	 */
-	public function testRealPathNeverAnswersNullForAPathThatIsNotThere(): Void {
-		#if (sys || nodejs)
-		final missing: String = LintCommand.realPath('/private/tmp/apq-s9-no-such-dir/NoSuchFile.hx');
-		Assert.notNull(missing);
-		Assert.notEquals('', missing);
-		Assert.notEquals('null', missing, 'a null that reached string conversion would key the dedup map under "null"');
-		Assert.isTrue(haxe.io.Path.isAbsolute(missing), 'the fallback still normalises: $missing');
-		// A path that DOES resolve is the discriminator — green before the bridge and after it, so
-		// it separates "the fallback works" from "the fallback replaced the real answer".
-		final here: String = LintCommand.realPath('.');
-		Assert.notNull(here);
-		Assert.isTrue(haxe.io.Path.isAbsolute(here), here);
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
-
-	/**
 	 * A spec is quoted in the diagnostics, so an argument carrying whitespace cannot pass for a
 	 * list of arguments.
 	 *
@@ -261,7 +230,7 @@ class LintReportChannelSliceTest extends Test {
 		]);
 		final args: Array<String> = ['lint', '--rule', 'magic-number', '--no-oracle', dir];
 		var summary: String = '';
-		final noise: String = CliFixture.captureStderr(() -> summary = captureStdout(() -> Cli.run(args)));
+		final noise: String = CliFixture.captureStderr(() -> summary = captureStdout(Cli.run.bind(args)));
 		Assert.isTrue(summary.startsWith('magic-number  3  warning  1 file(s)\n'), 'three findings over a threshold of 2: $summary');
 		Assert.equals(-1, summary.indexOf(':6:'), 'and no finding is listed: $summary');
 		Assert.isTrue(noise.indexOf('the full list: --full') != -1, 'stderr names the way back: $noise');

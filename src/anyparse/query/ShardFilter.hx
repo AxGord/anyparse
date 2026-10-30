@@ -56,8 +56,8 @@ final class ShardFilter {
 			test: null
 		};
 		final slice: Array<String> = raw.substr(at + 1).split(SLICE_SEPARATOR);
-		final part: Int = (slice.length == 2 ? digits(slice[0]) : null) ?? -1;
-		final parts: Int = (slice.length == 2 ? digits(slice[1]) : null) ?? 0;
+		final part: Int = slice.length == 2 ? (digits(slice[0]) ?? -1) : -1;
+		final parts: Int = slice.length == 2 ? (digits(slice[1]) ?? 0) : 0;
 		if (part < 0 || part >= parts) throw 'APQ_TEST token "$raw": a slice is #<i>/<k> with 0 <= i < k';
 		return {
 			cls: raw.substr(0, at),

@@ -34,6 +34,7 @@ import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.check.oracle.ReachBuildsCache;
 import anyparse.check.RuleCategory;
 import anyparse.check.RuleIndex;
+import anyparse.query.FileIdentity;
 
 using Lambda;
 
@@ -729,11 +730,11 @@ final class LintCommand implements CliCommand {
 		// `absolutePath` alone is NOT enough, and the gap is not exotic: it only prefixes the CWD, so a
 		// root reached through a symlink (a `resolutionRoots` entry naming a linked tree, a report path
 		// spelled through macOS's `/tmp` -> `/private/tmp`) keeps a different string for the same file
-		// and the whole dedup misses. `realPath` resolves the link.
+		// and the whole dedup misses. `FileIdentity.realPath` resolves the link.
 		// A MAP, not an array: the library always carries the std files, so a linear `contains` over
 		// the report would be one string compare per (report x library) pair, for a lookup that is
 		// answered in one hash.
-		final reportPaths: Map<String, Bool> = [for (f in files) realPath(f.file) => true];
+		final reportPaths: Map<String, Bool> = [for (f in files) FileIdentity.realPath(f.file) => true];
 		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
 		var declaredLibrary: Null<Array<{ file: String, source: String }>> = null;
@@ -779,32 +780,6 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * `path` as the one string that names its file however the path was spelled — absolute, and with
-	 * every symlink on the way resolved.
-	 *
-	 * The identity the resolution-scope dedup compares by. `absolutePath` only prefixes the CWD, so
-	 * two spellings that traverse a symlink differently stay two strings for one file, which is a
-	 * dedup that misses in silence.
-	 *
-	 * Never null and never empty, whatever `path` was — see the body for why that is not what the
-	 * declared type of the call inside it promises.
-	 */
-	public static function realPath(path: String): String {
-		// `FileSystem.fullPath` is DECLARED to return a non-null `String` and on hxnodejs RETURNS NULL
-		// for a path that does not exist — it does not throw, so a bare try/catch never sees it and
-		// `@:nullSafety` trusts the declaration (the same fact is recorded at `OracleCoverage.hx`).
-		// Unbridged, a path that fails to resolve keys this map under
-		// the string "null", and two such paths — one report, one library — collapse onto ONE key, which
-		// silently drops a library file. The catch stays for the targets where it DOES throw.
-		//
-		// NOT also guarded against `''`, unlike `OracleCoverage.canonical`: probed on node,
-		// `fs.realpathSync('')` and `path.resolve('')` both answer the cwd, so neither branch can
-		// produce one, and a guard no input can reach is a claim about behaviour nobody probed.
-		final full: Null<String> = try FileSystem.fullPath(path) catch (exception: Exception) null;
-		return full ?? FileSystem.absolutePath(path);
-	}
-
-	/**
 	 * Read every `.hx` under the project's declared `resolutionRoots`, excluding the run's own report
 	 * files (`reportPaths`, keyed by `realPath`) — the PROJECT half of the resolution scope.
 	 *
@@ -838,7 +813,7 @@ final class LintCommand implements CliCommand {
 				continue;
 			}
 			for (entry in readExpanded(paths, seen)) {
-				seen[realPath(entry.file)] = true;
+				seen[FileIdentity.realPath(entry.file)] = true;
 				out.push(entry);
 			}
 		}
@@ -893,9 +868,9 @@ final class LintCommand implements CliCommand {
 			for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) spec
 		];
 		final exclude: Map<String, Bool> = reportPaths.copy();
-		for (entry in alreadyRead) exclude[realPath(entry.file)] = true;
+		for (entry in alreadyRead) exclude[FileIdentity.realPath(entry.file)] = true;
 		final declared: Array<{ file: String, source: String }> = readResolutionSources(scanRoots, exclude);
-		for (entry in declared) exclude[realPath(entry.file)] = true;
+		for (entry in declared) exclude[FileIdentity.realPath(entry.file)] = true;
 		return { declared: declared, std: stdSpecs.length == 0 ? [] : readResolutionSources(stdSpecs, exclude) };
 	}
 
@@ -909,7 +884,7 @@ final class LintCommand implements CliCommand {
 	/** Read each of `paths`, skipping any whose `realPath` is in `exclude` and any that cannot be read. */
 	private static function readExpanded(paths: Array<String>, exclude: Map<String, Bool>): Array<{ file: String, source: String }> {
 		final out: Array<{ file: String, source: String }> = [];
-		for (path in paths) if (!exclude.exists(realPath(path))) {
+		for (path in paths) if (!exclude.exists(FileIdentity.realPath(path))) {
 			final src: Null<String> = try CliIo.readSourceForParse(path) catch (exception: Exception) null;
 			if (src != null) out.push({ file: path, source: src });
 		}

@@ -4,6 +4,7 @@ import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.oracle.OracleCache.HxmlRefs;
 import anyparse.check.oracle.OracleGenerationLock.Holder;
 import anyparse.query.ConfigFinder;
+import anyparse.query.FileIdentity;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -491,9 +492,9 @@ final class OracleGeneration {
 	 */
 	public static function stateDir(group: GenerationGroup): String {
 		#if (sys || nodejs)
-		final hxmls: Array<String> = group.hxmls.map(OracleDeclaration.realPath);
+		final hxmls: Array<String> = group.hxmls.map(FileIdentity.realPath);
 		hxmls.sort(Reflect.compare);
-		final declaring: String = OracleDeclaration.realPath(absolute(Sys.getCwd(), group.generate.root));
+		final declaring: String = FileIdentity.realPath(absolute(Sys.getCwd(), group.generate.root));
 		final home: String = ConfigFinder.projectRoot(declaring) ?? declaring;
 		return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\n'))]);
 		#else

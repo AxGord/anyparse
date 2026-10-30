@@ -449,7 +449,7 @@ final class CliIo {
 		var target: String = path;
 		var staged: String = path + STAGED_WRITE_SUFFIX;
 		try {
-			// Bridged through `Null<String>` like every other `fullPath` in the tree (`StdResolver.resolveSymlink`):
+			// Bridged through `Null<String>` like every other `fullPath` in the tree (`FileIdentity.realPath`):
 			// on hxnodejs it RETURNS null for a path that vanished since `exists`, and a compilation server reads
 			// the inlined call as nullable — unbridged, this line failed every warm build of the suite, which is
 			// what `dev mutation-check` builds each track through.

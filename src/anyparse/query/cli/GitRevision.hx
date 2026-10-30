@@ -1,9 +1,9 @@
 package anyparse.query.cli;
 
 import anyparse.check.oracle.HaxeSpawn;
+import anyparse.query.FileIdentity;
 import anyparse.query.Glob;
 import haxe.io.Path;
-import sys.FileSystem;
 
 using Lambda;
 
@@ -114,13 +114,13 @@ final class GitRevision {
 	}
 
 	/**
-	 * `spec` relative to the cwd, `..` where it lies outside, as git lists paths; a relative one as written. An absolute
-	 * path that exists is resolved through its links first, as the cwd is, so a linked prefix does not hide a common one.
+	 * `spec` relative to the cwd, `..` where it lies outside, as git lists paths; a relative one as written. Both sides are one file
+	 * identity (`FileIdentity.realPath`), so a linked prefix, of a path on the disk or gone from it, does not hide a common one.
 	 */
 	private static function cwdRelative(spec: String): String {
 		if (!Path.isAbsolute(spec)) return spec;
-		final here: Array<String> = segments(FileSystem.fullPath(Sys.getCwd()));
-		final there: Array<String> = segments(FileSystem.exists(spec) ? FileSystem.fullPath(spec) : spec);
+		final here: Array<String> = segments(FileIdentity.realPath(Sys.getCwd()));
+		final there: Array<String> = segments(FileIdentity.realPath(spec));
 		var common: Int = 0;
 		while (common < here.length && common < there.length && here[common] == there[common]) common++;
 		final parts: Array<String> = [for (_ in common ... here.length) '..'].concat(there.slice(common));

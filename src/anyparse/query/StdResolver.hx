@@ -219,7 +219,7 @@ final class StdResolver {
 	 * scope and the std-derived tables alike — so `Cli.resolutionThunk`'s null branch and the
 	 * table-only fallbacks stay reachable on a Haxe-equipped box instead of being dead in CI.
 	 */
-	private static function declined(): Bool return EnvFlag.isSet('APQ_NO_STD');
+	private static inline function declined(): Bool return EnvFlag.isSet('APQ_NO_STD');
 
 	/**
 	 * Whether `dir` really IS a Haxe std — it carries the toplevel `Std.hx` every std ships —
@@ -258,7 +258,7 @@ final class StdResolver {
 	 * names. Null on any failure (no `haxe` on PATH, a non-zero exit, none with a std beside it).
 	 */
 	private static function whichHaxeSiblingStd(): Null<String> {
-		return firstSiblingStd(whichHaxe(), resolveSymlink, dirExists);
+		return firstSiblingStd(whichHaxe(), FileIdentity.realPath, dirExists);
 	}
 
 	/**
@@ -296,20 +296,6 @@ final class StdResolver {
 		}
 		#else
 		return null;
-		#end
-	}
-
-	/** Resolve a symlink chain to its canonical target; the input path on any failure (an unreadable / broken link degrades gracefully). */
-	private static function resolveSymlink(path: String): String {
-		#if (sys || nodejs)
-		// `FileSystem.fullPath` is DECLARED to return a non-null `String`, but a module restored
-		// from a compilation-server cache has that read as nullable, and the mismatch surfaces as
-		// a null-safety error on warm compiles only. Bridging the result explicitly makes the
-		// function correct under either reading instead of only the fresh-compile one.
-		final full: Null<String> = try FileSystem.fullPath(path) catch (exception: haxe.Exception) null;
-		return full ?? path;
-		#else
-		return path;
 		#end
 	}
 

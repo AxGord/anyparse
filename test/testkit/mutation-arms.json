@@ -4224,7 +4224,7 @@
 			"name": "M-GENERATE-STATE-BY-SPELLING",
 			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "stateDir",
-			"find": "group.hxmls.map(OracleDeclaration.realPath)",
+			"find": "group.hxmls.map(FileIdentity.realPath)",
 			"replace": "group.hxmls.copy()",
 			"note": "the generation state is keyed by the hxml as spelled, so a symlinked spelling of one tree takes a second lock"
 		},
@@ -4248,7 +4248,7 @@
 			"name": "M-GENERATE-RIVAL-BY-SPELLING",
 			"type": "anyparse.check.oracle.OracleDeclaration",
 			"method": "withoutRivalCommands",
-			"find": "realPath(entry.config.hxml)",
+			"find": "FileIdentity.realPath(entry.config.hxml)",
 			"replace": "entry.config.hxml",
 			"note": "two spellings of one hxml under two commands are not seen as rivals, so both commands run into one tree"
 		},
@@ -31109,7 +31109,7 @@
 			"name": "M-SCOPE-FILES-BY-SPELLING",
 			"type": "anyparse.query.cli.CliArgs",
 			"method": "collectScopeFiles",
-			"find": "final at: Int = keys.indexOf(OracleDeclaration.realPath(extra));",
+			"find": "final at: Int = keys.indexOf(FileIdentity.realPath(extra));",
 			"replace": "final at: Int = paths.indexOf(extra);",
 			"note": "a named file the scope walk holds under another spelling is indexed twice"
 		},
@@ -33040,6 +33040,30 @@
 			"find": "final unlisted: Null<Array<String>> = unseenAsNone ? [] : null;",
 			"replace": "final unlisted: Null<Array<String>> = null;",
 			"note": "a typedef the index cannot follow is unlisted for the printer too, so an import of its module vetoes every short name in the file"
+		},
+		{
+			"name": "M-FILE-IDENTITY-SYMLINK",
+			"type": "anyparse.query.FileIdentity",
+			"method": "realPath",
+			"find": "return resolved == null || resolved == '' ? absolute : Path.normalize(resolved);",
+			"replace": "return absolute;",
+			"note": "an existing file named through a symlinked directory keeps the link's spelling, so two spellings of one file key apart"
+		},
+		{
+			"name": "M-FILE-IDENTITY-ANCESTOR",
+			"type": "anyparse.query.FileIdentity",
+			"method": "realPath",
+			"find": "Path.join([realPath(parent), Path.withoutDirectory(absolute)])",
+			"replace": "absolute",
+			"note": "a file that does not exist yet keeps its spelling instead of resolving its nearest existing ancestor, so a missing file under a symlinked directory keys apart from its target spelling"
+		},
+		{
+			"name": "M-GIT-REVISION-SPEC-UNRESOLVED",
+			"type": "anyparse.query.cli.GitRevision",
+			"method": "cwdRelative",
+			"find": "segments(FileIdentity.realPath(spec))",
+			"replace": "segments(sys.FileSystem.exists(spec) ? sys.FileSystem.fullPath(spec) : spec)",
+			"note": "an absolute scope gone from the disk keeps its linked spelling while the cwd is resolved, so git is handed a path outside the repository"
 		}
 	]
 }

@@ -7,10 +7,10 @@ import sys.io.File;
 import anyparse.check.LintConfig;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.OracleDeclaration;
 import anyparse.check.oracle.OracleGeneration;
 import anyparse.check.oracle.OracleGenerationLock;
 import anyparse.query.Cli;
+import anyparse.query.FileIdentity;
 import anyparse.query.cli.command.LintFixVerify;
 import haxe.io.Path;
 
@@ -35,6 +35,9 @@ final class OracleGenerationTest extends Test {
 	/** Writes a valid hxml and appends one line to `runs.txt`. */
 	private static final WRITE: String = "printf '%s\\n' '-cp .' '-main Main' > gen.hxml && echo run >> runs.txt";
 	#end
+
+	/** The `APQ_ORACLE_LOCK_WAIT` this suite found, restored after every test. */
+	private var _declaredLockWait: Null<String> = null;
 
 	/**
 	 * A changed `generateInputs` file regenerates; the SAME call with the input unchanged does not —
@@ -122,33 +125,6 @@ final class OracleGenerationTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
-
-	#if (sys || nodejs)
-	private static function fixture(): String {
-		return CliFixture.writeDir('oraclegen', [{ name: 'Main.hx', source: MAIN }, { name: 'input.txt', source: 'one' }]);
-	}
-
-	/** One configuration whose hxml `command` writes in `dir`. */
-	private static function entry(dir: String, command: String, inputs: Null<Array<String>>): OracleConfig {
-		return {
-			hxml: '$dir/gen.hxml',
-			dir: dir,
-			defines: [],
-			generate: {
-				command: command,
-				root: dir,
-				inputs: inputs,
-				probeDir: false
-			}
-		};
-	}
-
-	/** How many times the fixture's command ran. */
-	private static function runs(dir: String): Int {
-		final path: String = '$dir/runs.txt';
-		return FileSystem.exists(path) ? [for (line in File.getContent(path).split('\n')) if (line != '') line].length : 0;
-	}
-	#end
 
 	/**
 	 * An input edited WHILE the command runs is a change the next run sees: the recorded hash is the one taken BEFORE
@@ -255,9 +231,8 @@ final class OracleGenerationTest extends Test {
 			{ name: 'mylib/1,0,0/templates/haxe/ApplicationMain.hx', source: '// template\n' }
 		]);
 		File.saveContent('$dir/extra.hxml', '-D extra\n');
-		final command: String = "printf '%s\\n' '-cp .' '-main Main' '-cp "
-			+ repo
-			+ "/mylib/1,0,0/src' 'extra.hxml' > gen.hxml && echo run >> runs.txt";
+		final command: String =
+			'printf \'%s\\n\' \'-cp .\' \'-main Main\' \'-cp $repo/mylib/1,0,0/src\' \'extra.hxml\' > gen.hxml && echo run >> runs.txt';
 		final config: OracleConfig = entry(dir, command, ['$dir/input.txt']);
 		OracleGeneration.prepare([config]);
 		OracleGeneration.prepare([config]);
@@ -334,7 +309,7 @@ final class OracleGenerationTest extends Test {
 			'{"compilerOracle":[{"hxml":"g.hxml","generate":"true","generateInputs":["no-such-input.txt"]}]}', '/tmp'
 		);
 		Assert.equals(1, missing.compilerOracles()[0].generate?.inputs?.length, 'the missing input is kept');
-		Assert.isTrue(Lambda.exists(missing.drops(), d -> d.contains('no-such-input.txt')), 'and named: ${missing.drops()}');
+		Assert.isTrue(missing.drops().exists(d -> d.contains('no-such-input.txt')), 'and named: ${missing.drops()}');
 	}
 
 	/**
@@ -473,7 +448,7 @@ final class OracleGenerationTest extends Test {
 			{ name: 'src/Lib.hx', source: 'class Lib {}\n' }
 		]);
 		File.saveContent('$repo/my-lib/.dev', lib);
-		final command: String = "printf '%s\\n' '-cp .' '-main Main' '-cp " + lib + "/src' > gen.hxml && echo run >> runs.txt";
+		final command: String = 'printf \'%s\\n\' \'-cp .\' \'-main Main\' \'-cp $lib/src\' > gen.hxml && echo run >> runs.txt';
 		final config: OracleConfig = entry(dir, command, ['$dir/input.txt']);
 		final declared: Null<String> = Sys.getEnv('HAXELIB_PATH');
 		Sys.putEnv('HAXELIB_PATH', repo);
@@ -507,7 +482,7 @@ final class OracleGenerationTest extends Test {
 			{ name: 'mylib/1,0,0/haxelib.json', source: '{"name":"mylib","version":"1.0.0"}' },
 			{ name: 'mylib/1,0,0/src/Lib.hx', source: 'class Lib {}\n' }
 		]);
-		final write: String = "printf '%s\\n' '-cp .' '-main Main' '-cp " + repo + "/mylib/1,0,0/src' > gen.hxml && echo run >> runs.txt";
+		final write: String = 'printf \'%s\\n\' \'-cp .\' \'-main Main\' \'-cp $repo/mylib/1,0,0/src\' > gen.hxml && echo run >> runs.txt';
 		OracleGeneration.prepare([entry(dir, write, ['$dir/input.txt'])]);
 		final switching: OracleConfig = entry(dir, '$write && echo 1.0.1 > $repo/mylib/.current', ['$dir/input.txt']);
 		final raced: PreparedOracles = OracleGeneration.prepare([switching]);
@@ -554,41 +529,14 @@ final class OracleGenerationTest extends Test {
 		OracleGeneration.prepare(pair);
 		Assert.equals(
 			10, OracleGeneration.hashReads - before,
-			'three fonts once and each hxml once per judging (before, and again under the compile hold): 2 × (3 + 2), not 2 × (3 + 1 + 3 + 1)'
+			'three fonts once and each hxml once per judging (before, and again under the compile hold): 2 × (3 + 2), not 2 × ('
+			+ '3 + 1 + 3 + 1)'
 		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
-
-	#if nodejs
-	/** The generation lock of `config`'s group. */
-	private static function lockOf(config: OracleConfig): String {
-		return OracleGeneration.lockDir(OracleGeneration.groupsOf([config])[0]);
-	}
-
-	/** Stand `pid` / `start` in as the exclusive holder of `lock`, as another run would. */
-	private static function holdAsWriter(lock: String, pid: Null<Int>, start: String): Void {
-		FileSystem.createDirectory('$lock/writer');
-		File.saveContent('$lock/writer/owner', '$pid\n$start\n${Date.now().getTime()}');
-	}
-
-	/** Stand `pid` / `start` in as a shared holder of `lock`. */
-	private static function holdAsReader(lock: String, pid: Null<Int>, start: String): Void {
-		FileSystem.createDirectory('$lock/readers');
-		File.saveContent('$lock/readers/$pid', start);
-	}
-
-	/** The pid of a process that has already exited. */
-	private static function exitedPid(): Null<Int> {
-		final gone: Dynamic = js.node.ChildProcess.spawnSync('sh', ['-c', "echo $$"]);
-		return Std.parseInt(Std.string(gone.stdout).trim());
-	}
-	#end
-
-	/** The `APQ_ORACLE_LOCK_WAIT` this suite found, restored after every test. */
-	private var _declaredLockWait: Null<String> = null;
 
 	/** A lock nobody releases fails a test in seconds, not after the ten-minute production wait. */
 	public function setup(): Void {
@@ -641,7 +589,7 @@ final class OracleGenerationTest extends Test {
 					dir: dir,
 					defines: [],
 					generate: {
-						command: "sleep 1 && printf '%s\\n' '-cp .' '-main Main' > " + name + ".hxml && echo run >> runs.txt",
+						command: "sleep 1 && printf '%s\\n' '-cp .' '-main Main' > " + name + '.hxml && echo run >> runs.txt',
 						root: dir,
 						inputs: ['$dir/$name.input'],
 						probeDir: false
@@ -725,7 +673,7 @@ final class OracleGenerationTest extends Test {
 		final started: Dynamic = js.node.ChildProcess.spawnSync(
 			'sh', ['-c', "perl -e 'setpgrp(0, 0); exec q(sleep), 30' >/dev/null 2>&1 & echo $!"], { encoding: 'utf8' }
 		);
-		final job: Null<Int> = Std.parseInt(StringTools.trim('${started.stdout}'));
+		final job: Null<Int> = Std.parseInt('${started.stdout}'.trim());
 		Assert.notNull(job, 'the left-over job runs');
 		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)');
 		File.saveContent('$lock/writer/job', '$job\n${job == null ? '' : OracleGenerationLock.startTime(job)}');
@@ -785,7 +733,7 @@ final class OracleGenerationTest extends Test {
 			};
 		}
 		OracleGeneration.prepare([at(write)]);
-		final editing: OracleConfig = at(write + " && echo '-D b' > extra.hxml");
+		final editing: OracleConfig = at('$write && echo \'-D b\' > extra.hxml');
 		OracleGeneration.prepare([editing]);
 		Assert.equals(2, runs(dir), 'the changed command ran once, and the include moved under it');
 		OracleGeneration.prepare([editing]);
@@ -878,7 +826,7 @@ final class OracleGenerationTest extends Test {
 		CliFixture.always(() -> Sys.putEnv('TMPDIR', declared ?? ''), () -> OracleGeneration.prepare([config]));
 		Assert.equals(1, runs(dir), 'the second run, under another TMPDIR, found the generation current');
 		Assert.isTrue(
-			OracleGeneration.stateDir(OracleGeneration.groupsOf([config])[0]).startsWith('${OracleDeclaration.realPath(dir)}/'),
+			OracleGeneration.stateDir(OracleGeneration.groupsOf([config])[0]).startsWith('${FileIdentity.realPath(dir)}/'),
 			'its state is in the project'
 		);
 		CliFixture.removeDir(other);
@@ -979,7 +927,7 @@ final class OracleGenerationTest extends Test {
 		final started: Dynamic = js.node.ChildProcess.spawnSync(
 			'sh', ['-c', "perl -e 'setpgrp(0, 0); exec q(sleep), 30' >/dev/null 2>&1 & echo $!"], { encoding: 'utf8' }
 		);
-		final job: Null<Int> = Std.parseInt(StringTools.trim('${started.stdout}'));
+		final job: Null<Int> = Std.parseInt('${started.stdout}'.trim());
 		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)');
 		File.saveContent('$lock/writer/job', '$job\n');
 		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 5000).oracles;
@@ -992,23 +940,6 @@ final class OracleGenerationTest extends Test {
 		Assert.pass('non-node target');
 		#end
 	}
-
-	#if (sys || nodejs)
-	/** A configuration whose `command` writes `hxml` (a file name) in `dir`, with no inputs. */
-	private static function declared(dir: String, command: String, hxml: String): OracleConfig {
-		return {
-			hxml: '$dir/$hxml',
-			dir: dir,
-			defines: [],
-			generate: {
-				command: command,
-				root: dir,
-				inputs: null,
-				probeDir: false
-			}
-		};
-	}
-	#end
 
 	/**
 	 * An entry with no `generateInputs` regenerates once per run and is USABLE after it: the compile hold asks whether the
@@ -1069,7 +1000,8 @@ final class OracleGenerationTest extends Test {
 		rival.command = 'the rival command';
 		File.saveContent('$dir/rival.json', haxe.Json.stringify(rival));
 		final other: OracleConfig = declared(
-			dir, "printf '%s\\n' '-cp .' '-main Main' > o.hxml && echo '# rival' >> gen.hxml && cp rival.json '" + record + "'", 'o.hxml'
+			dir, 'printf \'%s\\n\' \'-cp .\' \'-main Main\' > o.hxml && echo \'# rival\' >> gen.hxml && cp rival.json \'$record\'',
+			'o.hxml'
 		);
 		final ready: Array<OracleConfig> = OracleGeneration.prepare([current, other]).oracles;
 		OracleGeneration.release([current, other]);
@@ -1131,7 +1063,7 @@ final class OracleGenerationTest extends Test {
 			return;
 		}
 		Assert.isTrue(
-			(ready[0]?.unavailable ?? '').contains('cannot create its generation state under ${OracleDeclaration.realPath(dir)}/.apq'),
+			(ready[0]?.unavailable ?? '').contains('cannot create its generation state under ${FileIdentity.realPath(dir)}/.apq'),
 			'the reason is given: ${ready[0]?.unavailable}'
 		);
 		CliFixture.removeDir(dir);
@@ -1151,7 +1083,7 @@ final class OracleGenerationTest extends Test {
 	@:killer('M-GENERATE-STATE-IN-OUTPUT-DIR')
 	public function testEveryConfigOverOneTreeMeetsOneLock(): Void {
 		#if nodejs
-		final dir: String = OracleDeclaration.realPath(CliFixture.writeTree('oraclegenxroot', [
+		final dir: String = FileIdentity.realPath(CliFixture.writeTree('oraclegenxroot', [
 			{ name: 'proj/.git/HEAD', source: 'ref: refs/heads/main\n' },
 			{ name: 'proj/gen/haxelib.json', source: '{}' },
 			{ name: 'proj/sub/S.hx', source: 'class S {}\n' },
@@ -1237,9 +1169,9 @@ final class OracleGenerationTest extends Test {
 		}
 		final write: String = "mkdir -p out && printf '%s\\n' '-cp .' '-main Main' 'extra.hxml' > out/gen.hxml && echo run >> runs.txt";
 		OracleGeneration.prepare([tree('out/gen.hxml', write)]);
-		final unrecorded: OracleConfig = tree('out/gen.hxml', write + " && echo '-D b' > extra.hxml");
+		final unrecorded: OracleConfig = tree('out/gen.hxml', '$write && echo \'-D b\' > extra.hxml');
 		final epoch: String = OracleGeneration.epochFile(OracleGeneration.groupsOf([unrecorded])[0]);
-		final other: OracleConfig = tree('c.hxml', "printf '%s\\n' '-cp .' '-main Main' > c.hxml && echo another-run > '" + epoch + "'");
+		final other: OracleConfig = tree('c.hxml', 'printf \'%s\\n\' \'-cp .\' \'-main Main\' > c.hxml && echo another-run > \'$epoch\'');
 		OracleGeneration.prepare([other]);
 		final wiping: OracleConfig = tree('b.hxml', "rm -f c.hxml && printf '%s\\n' '-cp .' '-main Main' > b.hxml");
 		final ready: Array<OracleConfig> = OracleGeneration.prepare([unrecorded, wiping, other]).oracles;
@@ -1319,7 +1251,7 @@ final class OracleGenerationTest extends Test {
 	@:killer('M-GENERATE-STATE-ROOT-FROM-HXML')
 	public function testAMarkerInTheOutputTreeDoesNotHoldTheState(): Void {
 		#if (sys || nodejs)
-		final dir: String = OracleDeclaration.realPath(CliFixture.writeTree('oraclegenmarker', [
+		final dir: String = FileIdentity.realPath(CliFixture.writeTree('oraclegenmarker', [
 			{ name: 'proj/.git/HEAD', source: 'ref: refs/heads/main\n' },
 			{ name: 'proj/out/haxelib.json', source: '{"name":"genlib"}' },
 			{ name: 'proj/out/haxe/a.hxml', source: '-cp .\n' }
@@ -1351,7 +1283,7 @@ final class OracleGenerationTest extends Test {
 	@:killer('M-GENERATE-STATE-ROOT-FROM-HXML')
 	public function testATopLevelHxmlKeepsItsStateInItsOwnProject(): Void {
 		#if (sys || nodejs)
-		final dir: String = OracleDeclaration.realPath(CliFixture.writeTree('oraclegenouter', [
+		final dir: String = FileIdentity.realPath(CliFixture.writeTree('oraclegenouter', [
 			{ name: '.git/HEAD', source: 'ref: refs/heads/main\n' },
 			{ name: 'proj/.git/HEAD', source: 'ref: refs/heads/main\n' },
 			{ name: 'proj/i.txt', source: 'one' }
@@ -1374,5 +1306,72 @@ final class OracleGenerationTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	#if (sys || nodejs)
+	private static function fixture(): String {
+		return CliFixture.writeDir('oraclegen', [{ name: 'Main.hx', source: MAIN }, { name: 'input.txt', source: 'one' }]);
+	}
+
+	/** One configuration whose hxml `command` writes in `dir`. */
+	private static function entry(dir: String, command: String, inputs: Null<Array<String>>): OracleConfig {
+		return {
+			hxml: '$dir/gen.hxml',
+			dir: dir,
+			defines: [],
+			generate: {
+				command: command,
+				root: dir,
+				inputs: inputs,
+				probeDir: false
+			}
+		};
+	}
+
+	/** How many times the fixture's command ran. */
+	private static function runs(dir: String): Int {
+		final path: String = '$dir/runs.txt';
+		return FileSystem.exists(path) ? [for (line in File.getContent(path).split('\n')) if (line != '') line].length : 0;
+	}
+
+	/** A configuration whose `command` writes `hxml` (a file name) in `dir`, with no inputs. */
+	private static function declared(dir: String, command: String, hxml: String): OracleConfig {
+		return {
+			hxml: '$dir/$hxml',
+			dir: dir,
+			defines: [],
+			generate: {
+				command: command,
+				root: dir,
+				inputs: null,
+				probeDir: false
+			}
+		};
+	}
+	#end
+
+	#if nodejs
+	/** The generation lock of `config`'s group. */
+	private static function lockOf(config: OracleConfig): String {
+		return OracleGeneration.lockDir(OracleGeneration.groupsOf([config])[0]);
+	}
+
+	/** Stand `pid` / `start` in as the exclusive holder of `lock`, as another run would. */
+	private static function holdAsWriter(lock: String, pid: Null<Int>, start: String): Void {
+		FileSystem.createDirectory('$lock/writer');
+		File.saveContent('$lock/writer/owner', '$pid\n$start\n${Date.now().getTime()}');
+	}
+
+	/** Stand `pid` / `start` in as a shared holder of `lock`. */
+	private static function holdAsReader(lock: String, pid: Null<Int>, start: String): Void {
+		FileSystem.createDirectory('$lock/readers');
+		File.saveContent('$lock/readers/$pid', start);
+	}
+
+	/** The pid of a process that has already exited. */
+	private static function exitedPid(): Null<Int> {
+		final gone: Dynamic = js.node.ChildProcess.spawnSync('sh', ['-c', "echo $$"]);
+		return Std.parseInt(Std.string(gone.stdout).trim());
+	}
+	#end
 
 }

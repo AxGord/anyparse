@@ -1,9 +1,9 @@
 package anyparse.query.cli;
 
-import anyparse.check.oracle.OracleDeclaration;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.grammar.mermaid.MermaidQueryPlugin;
+import anyparse.query.FileIdentity;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliArgs.ExpandedInputs;
 import anyparse.query.cli.CliArgs.PositionalScan;
@@ -338,12 +338,12 @@ final class CliArgs {
 		final paths: Array<String> = expanded.paths;
 		// An extra file the scope walk already holds under another spelling (absolute against a relative scope) takes that
 		// entry's place: the caller looks its own spelling up, and a second entry would index the file twice.
-		final keys: Array<String> = [for (path in paths) OracleDeclaration.realPath(path)];
+		final keys: Array<String> = [for (path in paths) FileIdentity.realPath(path)];
 		for (extra in extraFiles) {
-			final at: Int = keys.indexOf(OracleDeclaration.realPath(extra));
+			final at: Int = keys.indexOf(FileIdentity.realPath(extra));
 			if (at < 0) {
 				paths.push(extra);
-				keys.push(OracleDeclaration.realPath(extra));
+				keys.push(FileIdentity.realPath(extra));
 			} else {
 				paths[at] = extra;
 			}

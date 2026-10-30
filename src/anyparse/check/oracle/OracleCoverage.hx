@@ -3,6 +3,7 @@ package anyparse.check.oracle;
 import anyparse.check.oracle.CompilerOracle.OracleExclusion;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CondRegionLiveness;
+import anyparse.query.FileIdentity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
@@ -558,23 +559,16 @@ final class OracleCoverage {
 	 * `path` resolved against `root` when relative, then symlink-resolved. Both sides of
 	 * the membership test go through this: the compiler prints paths against ITS working
 	 * directory and the lint run names files against the PROCESS one, and on a host whose
-	 * temp dir is a symlink (`/tmp` on macOS) the two spellings of one file differ. An
-	 * unresolvable path keeps its normalised form rather than failing the lookup.
+	 * temp dir is a symlink (`/tmp` on macOS) the two spellings of one file differ. A path that does not exist
+	 * keys through its nearest existing ancestor (`FileIdentity.realPath`) rather than failing the lookup.
 	 */
 	public static function canonical(root: String, path: String): String {
 		// `root` is absolutised FIRST, so a relative one cannot produce a key the membership
-		// test can never match: `covers` resolves against the process cwd, and when the file
-		// does not exist `fullPath` throws and the normalised join is all that is left — a
-		// relative `pkg/C.hx` on one side against an absolute `/…/pkg/C.hx` on the other.
+		// test can never match: `covers` resolves against the process cwd, and a relative `pkg/C.hx`
+		// on one side would meet an absolute `/…/pkg/C.hx` on the other.
 		final base: String = Path.isAbsolute(root) ? root : Path.join([Sys.getCwd(), root]);
 		final joined: String = Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path]));
-		// `fullPath` is declared `String` and RETURNS NULL on hxnodejs for a path that does
-		// not exist — it does not throw, so the catch alone never sees it and `@:nullSafety`
-		// trusts the declaration. Left unhandled every unresolvable path collapses to one
-		// value and `covers` answers TRUE for all of them: the dangerous direction, and the
-		// exact vacuity this class exists to refuse.
-		final resolved: Null<String> = try sys.FileSystem.fullPath(joined) catch (_exception: haxe.Exception) null;
-		return resolved == null || resolved == '' ? joined : resolved;
+		return FileIdentity.realPath(joined);
 	}
 
 	/**

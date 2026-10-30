@@ -2,6 +2,7 @@ package anyparse.check.oracle;
 
 import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
+import anyparse.query.FileIdentity;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -70,24 +71,6 @@ final class OracleDeclaration {
 			if (pathExists(Path.normalize(Path.join([config, rel])))) configHits++;
 		}
 		return configHits > ownHits ? config : own;
-	}
-
-	/**
-	 * `path` absolute with every symlink resolved — the identity of a file however a config spells it. A path that does
-	 * not exist yet (an hxml before its first generation) resolves its nearest existing ancestor and keeps the rest.
-	 */
-	public static function realPath(path: String): String {
-		#if (sys || nodejs)
-		final absolute: String = Path.removeTrailingSlashes(Path.normalize(sys.FileSystem.absolutePath(path)));
-		if (sys.FileSystem.exists(absolute)) {
-			final resolved: Null<String> = try sys.FileSystem.fullPath(absolute) catch (exception: Exception) null;
-			return resolved == null ? absolute : Path.normalize(resolved);
-		}
-		final parent: String = Path.directory(absolute);
-		return parent == '' || parent == absolute ? absolute : Path.join([realPath(parent), Path.withoutDirectory(absolute)]);
-		#else
-		return path;
-		#end
 	}
 
 	/**
@@ -283,7 +266,7 @@ final class OracleDeclaration {
 	 */
 	private static function withoutRivalCommands(entries: Array<IndexedOracle>, drops: Array<String>): Array<OracleConfig> {
 		final claims: Map<String, Array<String>> = [];
-		final trees: Array<String> = [for (entry in entries) realPath(entry.config.hxml)];
+		final trees: Array<String> = [for (entry in entries) FileIdentity.realPath(entry.config.hxml)];
 		for (i => entry in entries) {
 			final command: Null<String> = entry.config.generate?.command;
 			if (command == null) continue;

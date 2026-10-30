@@ -343,8 +343,8 @@ final class ShardPlan {
 		final out: Map<String, ClassWeight> = [];
 		for (line in text.split('\n')) {
 			final cells: Array<String> = line.split('\t');
-			final ms: Int = (cells.length == 3 ? Std.parseInt(cells[0]) : null) ?? -1;
-			final tests: Int = (cells.length == 3 ? Std.parseInt(cells[1]) : null) ?? -1;
+			final ms: Int = cells.length == 3 ? (Std.parseInt(cells[0]) ?? -1) : -1;
+			final tests: Int = cells.length == 3 ? (Std.parseInt(cells[1]) ?? -1) : -1;
 			if (ms < 0 || tests < 0) continue;
 			final cls: String = cells[2].trim();
 			final before: ClassWeight = out[cls] ?? { ms: 0, tests: 0 };
