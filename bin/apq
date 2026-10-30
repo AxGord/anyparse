@@ -216,6 +216,15 @@ if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
     fi
 fi
 
+# `hxq` passes `--lang-default haxe` right after the command; an engine built
+# before that option existed (a slice worktree's private build on an older
+# base) rejects it, so such an engine gets the `--lang haxe` it understands.
+if [ "${2:-}" = "--lang-default" ] && ! grep -qF -- 'lang-default' "$binary" 2>/dev/null; then
+    cmd="$1"
+    shift 2
+    set -- "$cmd" --lang "$@"
+fi
+
 # Node flags. A 64 MB young generation (V8's default is 16 MB) collects less
 # often and promotes fewer short-lived objects: measured 2026-10-18 on the client corpus
 # (N37) at -1.6% on `lint --all` and -2.6% on `lint --fix` for +5% RSS
