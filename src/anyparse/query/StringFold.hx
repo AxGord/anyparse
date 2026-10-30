@@ -98,6 +98,13 @@ interface StringFoldSupport {
 	public function requoteVerbatim(literal: StringLiteral, quote: String): Null<String>;
 
 	/**
+	 * The string `literal` denotes, its escapes decoded, or null where the grammar does not name it from the text alone
+	 * — an interpolation, or an escape it leaves undecoded. An ordering of literals by VALUE reads this, never the raw
+	 * content, whose escapes sort apart from what they spell.
+	 */
+	public function valueOf(literal: StringLiteral): Null<String>;
+
+	/**
 	 * `node` decomposed into its `ConcatSegment` pieces when it IS a string literal,
 	 * else null. A plain literal yields its text cut at each line-break escape and each
 	 * separator boundary; an interpolated one yields its child sequence mapped

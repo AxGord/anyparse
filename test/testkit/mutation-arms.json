@@ -25267,9 +25267,9 @@
 		},
 		{
 			"name": "M-SORTED-RAW-ESCAPES",
-			"type": "anyparse.query.AddElement",
-			"method": "sortKeyOf",
-			"find": "literal.content.contains('\\\\') || literal.content.contains('$$') ? null : literal.content",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "valueOf",
+			"find": "literal.content.contains('\\\\') || HxStringEscape.carriesDollar(literal.content) ? null : literal.content",
 			"replace": "literal.content",
 			"note": "an escaped or interpolated literal sorts by its RAW text, which is not its value"
 		},
@@ -33327,6 +33327,29 @@
 			"method": "unknownFlag",
 			"force": "null",
 			"note": "an undeclared `--word` passes the dispatcher, so each command's own parser decides whether it is refused, read as a path, or swallowed"
+		},
+		{
+			"name": "M-SAMEFILE-TAIL-ONLY",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "sameFile",
+			"find": " || identity(indexed) == identity(resolved)",
+			"replace": "",
+			"note": "an indexed path spelled other than as a tail of the resolved one (`./`, a directory lint) is not matched, so an ambient source becomes its own provider"
+		},
+		{
+			"name": "M-JSON-VALUE-RAW",
+			"type": "anyparse.grammar.json.JsonStringFold",
+			"method": "valueOf",
+			"force": "literal.content",
+			"note": "a JSON string sorts by its raw spelling, so an escape sorts apart from the character it spells"
+		},
+		{
+			"name": "M-SAMEFILE-TAIL-MATCH",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "sameFile",
+			"find": "resolved == indexed ||",
+			"replace": "resolved == indexed || resolved.endsWith('/$indexed') ||",
+			"note": "a relative indexed path that is a tail of another root's same-named ambient source is taken for it, so that root's chain reads the wrong statements"
 		}
 	]
 }

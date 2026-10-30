@@ -8,7 +8,6 @@ import anyparse.check.Severity;
 import anyparse.check.common.imports.ShortenTypeRef;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import unit.check.FixedNameOracle;
 
 /**
  * The `shorten-type-ref` check: a DOTTED type reference the file itself spells differently.

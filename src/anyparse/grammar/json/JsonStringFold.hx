@@ -1,15 +1,19 @@
 package anyparse.grammar.json;
 
+import anyparse.format.text.TextFormat.UnescapeResult;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
+import haxe.Exception;
+
+using StringTools;
 
 /**
  * The `json` grammar's string-literal seam — what `add-element --sorted` reads to order the
- * entries of a JSON array of strings (`AddElement.insertSorted` asks `literalOf` for each
- * element's quote and raw content).
+ * entries of a JSON array of strings (`AddElement.insertSorted` asks `literalOf`
+ * for each element and `valueOf` for the decoded string it sorts by).
  *
  * JSON has ONE string spelling, the double-quoted literal, and no concatenation, interpolation
  * or conversion operand, so every question beyond `literalOf` answers "none": the fold check is
@@ -62,6 +66,26 @@ final class JsonStringFold implements StringFoldSupport {
 
 	public function readsArgumentsAsSyntax(name: String): Bool {
 		return false;
+	}
+
+	/** The content with every escape decoded by the format's own `unescapeChar`; null for an escape JSON does not define. */
+	public function valueOf(literal: StringLiteral): Null<String> {
+		final raw: String = literal.content;
+		final out: StringBuf = new StringBuf();
+		var i: Int = 0;
+		while (i < raw.length) {
+			final c: Int = raw.fastCodeAt(i);
+			if (c != '\\'.code) {
+				out.addChar(c);
+				i++;
+				continue;
+			}
+			final decoded: Null<UnescapeResult> = try JsonFormat.instance.unescapeChar(raw, i + 1) catch (_: Exception) null;
+			if (decoded == null) return null;
+			out.addChar(decoded.char);
+			i += 1 + decoded.consumed;
+		}
+		return out.toString();
 	}
 
 }

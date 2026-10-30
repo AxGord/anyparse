@@ -1,5 +1,6 @@
 package unit.query;
 
+import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.query.AddElement;
 import anyparse.query.CanonicalEdit.EditResult;
 
@@ -98,6 +99,22 @@ class AddElementSortedTest extends Test {
 		assertRefused(
 			'class C {\n\tfunction f():Void {\n\t\tg(\'a\');\n\t}\n}\n', "'b'", 'not on the first token of an array literal', 3, 3
 		);
+	}
+
+	/**
+	 * A JSON array sorts by the strings its elements DENOTE: an element holding an escape is no refusal, and `c` sorts
+	 * as the `c` it spells, not as its backslash.
+	 */
+	@:pin('control')
+	@:killer('M-JSON-VALUE-RAW')
+	public function testJsonEscapesSortByTheirDecodedValue(): Void {
+		final source: String = '{\n\t"a": ["b", "\\u0063", "it\'s \\"q\\"", "z"]\n}\n';
+		switch AddElement.insertSorted(source, 2, 7, '"a", "d"', false, new JsonQueryPlugin()) {
+			case Ok(text):
+				Assert.equals('{\n\t"a": ["a", "b", "\\u0063", "d", "it\'s \\"q\\"", "z"]\n}\n', text);
+			case Err(message):
+				Assert.fail('expected the insert to apply, got: $message');
+		}
 	}
 
 	/** `class C { static final A:Array<String> = [<items>]; }`, canonical, its array at 2:33. */

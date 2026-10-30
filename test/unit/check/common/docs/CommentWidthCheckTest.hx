@@ -363,7 +363,7 @@ class CommentWidthCheckTest extends Test {
 	}
 
 	/** A class carrying one doc block whose single content line is `line`. */
-	private function doc(line: String): String { // noqa: default-repeated-argument
+	private function doc(line: String): String {
 		return 'class C {\n\t/**\n\t * $line\n\t */\n\tfunction f() {}\n}';
 	}
 

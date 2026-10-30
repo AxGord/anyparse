@@ -623,12 +623,12 @@ final class AddElement {
 	/**
 	 * The string VALUE of a constant string element: a plain literal (`StringFoldSupport.literalOf`) or a
 	 * concatenation of them (`StringFoldSupport.concatKind`), the spelling an entry too wide for its line
-	 * takes. Null for anything else — and for content holding a `\` or a `$`, whose raw text is not its value
-	 * (an escape, an interpolation), so its position would be a guess.
+	 * takes. The key is the VALUE the grammar decodes (`StringFoldSupport.valueOf`), never the raw spelling;
+	 * null for anything else and for a literal the grammar cannot decode, whose position would be a guess.
 	 */
 	private static function sortKeyOf(node: QueryNode, source: String, fold: StringFoldSupport): Null<String> {
 		final literal: Null<StringLiteral> = fold.literalOf(node, source);
-		if (literal != null) return literal.content.contains('\\') || literal.content.contains('$$') ? null : literal.content;
+		if (literal != null) return fold.valueOf(literal);
 		if (node.kind != fold.concatKind() || node.children.length != 2) return null;
 		final left: Null<String> = sortKeyOf(node.children[0], source, fold);
 		if (left == null) return null;

@@ -4,7 +4,6 @@ import anyparse.check.LintConfig;
 import anyparse.check.common.imports.ShortenTypeRef;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import unit.check.FixedNameOracle;
 import unit.cli.CliFixture;
 
 /**

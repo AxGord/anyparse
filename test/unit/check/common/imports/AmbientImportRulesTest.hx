@@ -206,6 +206,24 @@ class AmbientImportRulesTest extends Test {
 		}
 	];
 
+	/** An ambient source whose statement one module under it needs and another repeats. */
+	private static final DIR_LINT_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'w/Helper.hx', source: 'package w;\n\nclass Helper {}\n' },
+		{ name: 'app/sub/import.hx', source: 'import w.Helper;\n' },
+		{ name: 'app/sub/C.hx', source: 'package app.sub;\n\nclass C {\n\n\tvar h:Helper;\n\n}\n' },
+		{ name: 'app/sub/D.hx', source: 'package app.sub;\n\nimport w.Helper;\n\nclass D {\n\n\tvar h:Helper;\n\n}\n' }
+	];
+
+	/** Two roots, each with an `app/import.hx` binding a different module, and a module of the second needing its own import. */
+	private static final TWO_ROOT_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/w/A.hx', source: 'package w;\n\nclass A {}\n' },
+		{ name: 'src/w/B.hx', source: 'package w;\n\nclass B {}\n' },
+		{ name: 'src/app/import.hx', source: 'import w.A;\n' },
+		{ name: 'src/app/C2.hx', source: 'package app;\n\nclass C2 {\n\n\tvar a:A;\n\n}\n' },
+		{ name: 'test/app/import.hx', source: 'import w.B;\n' },
+		{ name: 'test/app/C.hx', source: 'package app;\n\nimport w.A;\n\nclass C {\n\n\tvar a:A;\n\tvar b:B;\n\n}\n' }
+	];
+
 	@:pin('control')
 	@:killer('M-AMBIENT-GOVERNANCE-BLIND')
 	public function testAnAmbientImportAModuleUnderItUsesIsNotReported(): Void {
@@ -416,6 +434,55 @@ class AmbientImportRulesTest extends Test {
 			{ file: 'apq_absent_tree/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
 		];
 		Assert.equals('', reported(files, ''), 'an ambient source whose readers could not be enumerated is judged on nothing');
+	}
+
+	/**
+	 * A directory lint spells every file from `.` while the ambient chain is resolved to absolute paths: the source is
+	 * still its own chain member, never its own provider, so the statement `C` needs is not deleted on its own account.
+	 */
+	@:pin('control')
+	@:killer('M-SAMEFILE-TAIL-ONLY')
+	public function testAnAmbientSourceLintedThroughItsDirectoryIsNotItsOwnProvider(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_ambient_dir_lint', DIR_LINT_TREE);
+		var out: String = '';
+		CliFixture.always(
+			CliFixture.removeDir.bind(root), () -> out = CliFixture.inDir(root, ['lint', '.', '--rule', 'redundant-import', '--no-oracle'])
+		);
+		Assert.isFalse(out.contains('import.hx:'), out);
+		Assert.isTrue(out.contains('D.hx:'), 'the module repeating the ambient statement is still reported: $out');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A relative path indexed from one root is a tail of the same-named ambient source of another root, and no evidence
+	 * that the two are one file: the second root's chain must not read the first root's statements.
+	 */
+	@:pin('control')
+	@:killer('M-SAMEFILE-TAIL-MATCH')
+	public function testASameNamedAmbientSourceOfAnotherRootIsNotThisOne(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_ambient_two_roots', TWO_ROOT_TREE);
+		var out: String = '';
+		CliFixture.always(
+			CliFixture.removeDir.bind(root), () -> out = CliFixture.inDir('$root/src', [
+				'lint',
+				'app/C2.hx',
+				'app/import.hx',
+				'w/A.hx',
+				'w/B.hx',
+				'../test/app/C.hx',
+				'--rule',
+				'redundant-import',
+				'--no-oracle'
+			])
+		);
+		Assert.isFalse(out.contains('C.hx:'), out);
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
 	/**

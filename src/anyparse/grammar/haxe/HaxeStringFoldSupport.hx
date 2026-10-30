@@ -261,6 +261,11 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		}
 	}
 
+	/** The raw content where it is its own value: no escape and no `$`, which an interpolation or its `$$` escape spells. */
+	public function valueOf(literal: StringLiteral): Null<String> {
+		return literal.content.contains('\\') || HxStringEscape.carriesDollar(literal.content) ? null : literal.content;
+	}
+
 	/** The raw source between the literal's two quote characters. */
 	private static inline function inner(source: String, span: Span): String {
 		return source.substring(span.from + 1, span.to - 1);

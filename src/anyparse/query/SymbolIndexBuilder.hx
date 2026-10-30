@@ -179,15 +179,6 @@ final class SymbolIndexBuilder {
 		return info;
 	}
 
-	/**
-	 * Whether an INDEXED path and an ambient source's path name one file. The index carries paths as
-	 * the caller spelled them, the chain carries what the walk resolved, so equality alone answers
-	 * only when both are absolute; a relative indexed path is the tail of its own absolute form.
-	 */
-	private static inline function sameFile(indexed: String, resolved: String): Bool {
-		return resolved == indexed || resolved.endsWith('/$indexed');
-	}
-
 	/** Whether `kind` is a metadata node — a bare `@:x` (`Meta`) or an argument-bearing `@:x(...)` (`MetaCall`). */
 	private static inline function isMetaNodeKind(kind: String): Bool {
 		return kind == 'Meta' || kind == 'MetaCall';
@@ -207,6 +198,15 @@ final class SymbolIndexBuilder {
 	/** Whether `pendingMeta` holds the grammar's (optional) tag `name` — false when the grammar names none. */
 	private static inline function carriesMeta(pendingMeta: Array<String>, name: Null<String>): Bool {
 		return name != null && pendingMeta.contains(name);
+	}
+
+	/**
+	 * Whether an INDEXED path and an ambient source's path name one file. The index carries paths as
+	 * the caller spelled them, the chain carries what the walk resolved, so anything short of equality is compared by `FileIdentity`
+	 * through `identity`, the caller's run-local memo of it. Never by a tail match: two roots holding `app/import.hx` share every tail.
+	 */
+	private static function sameFile(indexed: String, resolved: String, identity: (String) -> String): Bool {
+		return resolved == indexed || identity(indexed) == identity(resolved);
 	}
 
 	/**
@@ -1055,6 +1055,8 @@ final class SymbolIndexBuilder {
 	): Void {
 		final chains: Map<String, AmbientImports> = [];
 		final extracted: Map<String, Null<Array<ImportInfo>>> = [];
+		final identities: Map<String, String> = [];
+		final identity: (String) -> String = path -> identities[path] ?? (identities[path] = FileIdentity.realPath(path));
 		for (fi in infos) {
 			final key: String = '${Path.directory(fi.file)}#${fi.pkg}';
 			var chain: Null<AmbientImports> = chains[key];
@@ -1064,9 +1066,9 @@ final class SymbolIndexBuilder {
 			}
 			var bounded: Bool = chain.bounded;
 			final groups: Array<AmbientImportGroup> = [];
-			for (ambient in chain.sources) if (!sameFile(fi.file, ambient.file)) {
+			for (ambient in chain.sources) if (!sameFile(fi.file, ambient.file, identity)) {
 				final imports: Null<Array<ImportInfo>> = ambientImportsOf(
-					ambient, infos, extracted, plugin, shape, memberSeams, abstractKinds, provider
+					ambient, infos, extracted, identity, plugin, shape, memberSeams, abstractKinds, provider
 				);
 				// A source that does not PARSE is a chain member whose bindings are unknown, which is the
 				// same state as one that could not be read: the reader must not be pinned against it, and
@@ -1093,13 +1095,14 @@ final class SymbolIndexBuilder {
 	 * does not parse contributes nothing.
 	 */
 	private static function ambientImportsOf(
-		ambient: AmbientImportSource, infos: Array<FileInfo>, extracted: Map<String, Null<Array<ImportInfo>>>, plugin: GrammarPlugin,
-		shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>, provider: Null<TypeInfoProvider>
+		ambient: AmbientImportSource, infos: Array<FileInfo>, extracted: Map<String, Null<Array<ImportInfo>>>,
+		identity: (String) -> String, plugin: GrammarPlugin, shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>,
+		provider: Null<TypeInfoProvider>
 	): Null<Array<ImportInfo>> {
 		// The memo comes FIRST: one ambient source serves every file below it, so the scan for its
 		// indexed record runs once per source rather than once per reader.
 		if (extracted.exists(ambient.file)) return extracted[ambient.file];
-		final indexed: Null<FileInfo> = infos.find(f -> sameFile(f.file, ambient.file));
+		final indexed: Null<FileInfo> = infos.find(f -> sameFile(f.file, ambient.file, identity));
 		final tree: Null<QueryNode> = indexed != null ? null : try plugin.parseFile(ambient.source) catch (_: Exception) null;
 		final imports: Null<Array<ImportInfo>> = if (indexed != null)
 			indexed.imports;
