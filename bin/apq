@@ -4,7 +4,7 @@
 # through the code-cache launcher. It names no language: the engine takes
 # `--lang`, or reads it off the file arguments' extensions (the grammar
 # registry, `CliArgs.grammars`) or off a document on stdin. `hxq` is the
-# Haxe preset and runs this script with `--lang haxe`.
+# Haxe preset and runs this script with `--lang-default haxe`.
 #
 # Engine dispatch: runs the JS build `bin/apq.js` via node. That is the
 # only engine — the CLI reaches for `js.node` to spawn processes, and the

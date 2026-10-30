@@ -1,5 +1,6 @@
 package unit.cli;
 
+import anyparse.query.Cli;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.LanguageChoice;
@@ -8,6 +9,7 @@ import anyparse.query.cli.command.GetCommand;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.SweepCommand;
 import anyparse.query.cli.command.TestSummaryCommand;
+import sys.FileSystem;
 
 /**
  * Which grammar a process-level call names with no `--lang`: the registry's extension of its files, else the
@@ -80,6 +82,71 @@ class LanguageChoiceTest extends Test {
 			UsageFailure
 		);
 		Assert.isFalse(read);
+	}
+
+	/**
+	 * `hxq`'s `--lang-default` is a default, not an override: a file another grammar's extension names is read by that
+	 * grammar. Files of two grammars read as the preset's, as they did before it yielded.
+	 */
+	@:killer('M-LANG-PRESET-OVERRIDES')
+	@:pin('control')
+	public function testAPresetYieldsToAFileExtension(): Void {
+		Assert.same(['--lang', 'json', 'a.json'], choose(new LintCommand(), ['--lang-default', 'haxe', 'a.json']).args);
+		Assert.same(['--lang', 'haxe', 'A.hx', '--all'], choose(new LintCommand(), ['--lang-default', 'haxe', 'A.hx', '--all']).args);
+		Assert.same(['--lang', 'haxe', 'a.json', 'B.hx'], choose(new LintCommand(), ['--lang-default', 'haxe', 'a.json', 'B.hx']).args);
+	}
+
+	/** With no file naming a grammar the preset names it — a directory, an unknown extension, stdin — and stdin is not read for it. */
+	@:killer('M-LANG-PRESET-IGNORED')
+	@:pin('control')
+	public function testAPresetNamesTheGrammarNoFileNames(): Void {
+		Assert.same(['--lang', 'haxe', 'src'], choose(new LintCommand(), ['--lang-default', 'haxe', 'src']).args);
+		Assert.same(['--lang', 'haxe', 'notes.txt'], choose(new LintCommand(), ['notes.txt', '--lang-default', 'haxe']).args);
+		Assert.same(['--lang', 'haxe', '-', 'a'], choose(new GetCommand(), ['--lang-default', 'haxe', '-', 'a']).args);
+		Assert.same(['--lang', 'haxe', 'log.txt'], choose(new TestSummaryCommand(), ['--lang-default', 'haxe', 'log.txt']).args);
+	}
+
+	/** An explicit `--lang` beats the preset, and a preset with no name is a usage error. */
+	public function testAnExplicitLangBeatsThePreset(): Void {
+		Assert.same(['--lang', 'json', 'x'], choose(new LintCommand(), ['--lang-default', 'haxe', '--lang', 'json', 'x']).args);
+		Assert.raises(() -> choose(new LintCommand(), ['A.hx', '--lang-default']), UsageFailure);
+	}
+
+	/** The argv `bin/hxq` builds formats a `.json` file as `apq` does, and a `.hx` file as Haxe — never a parse error. */
+	public function testHxqFormatsJsonAsApqDoes(): Void {
+		final json: String = CliFixture.writeAs('hxqlang', 'json', '{"a": [1, 2]}\n');
+		final hx: String = CliFixture.write('hxqlang', 'class A {}\n');
+		CliFixture.always(() -> {
+			FileSystem.deleteFile(json);
+			FileSystem.deleteFile(hx);
+		}, () -> {
+			var code: Int = -1;
+			final viaHxq: String = CliFixture.captureStdout(() -> code = Cli.run(['fmt', '--lang-default', 'haxe', json], true));
+			Assert.equals(0, code);
+			Assert.equals(CliFixture.captureStdout(() -> Cli.run(['fmt', json], true)), viaHxq);
+			Assert.stringContains('"a"', viaHxq);
+			final hxOut: String = CliFixture.captureStdout(() -> code = Cli.run(['fmt', '--lang-default', 'haxe', hx], true));
+			Assert.equals(0, code);
+			Assert.stringContains('class A', hxOut);
+		});
+	}
+
+	/** A preset reads files of two grammars as its own; without one they stay a usage error. */
+	@:killer('M-LANG-PRESET-MIXED-REFUSED')
+	@:pin('control')
+	public function testAPresetReadsMixedFilesAsItsOwn(): Void {
+		Assert.same(
+			['--lang', 'haxe', 'A.hx', 'apqlint.json'], choose(new LintCommand(), ['A.hx', 'apqlint.json', '--lang-default', 'haxe']).args
+		);
+		Assert.raises(() -> choose(new LintCommand(), ['A.hx', 'apqlint.json']), UsageFailure);
+	}
+
+	/** `--` ends the options, so the path after it is a file, not that flag's value. */
+	@:killer('M-LANG-END-OF-OPTIONS-VALUE')
+	@:pin('control')
+	public function testAPathAfterEndOfOptionsCounts(): Void {
+		Assert.same(['--lang', 'haxe', 'x', '--', 'A.hx'], choose(new LintCommand(), ['--lang-default', 'haxe', 'x', '--', 'A.hx']).args);
+		Assert.same(['--lang', 'json', 'x', '--', 'a.json'], choose(new LintCommand(), ['x', '--', 'a.json']).args);
 	}
 
 	private static function choose(command: CliCommand, args: Array<String>): LanguageChoiceResult {

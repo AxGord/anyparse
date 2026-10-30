@@ -31867,6 +31867,37 @@
 			"note": "a flag value such as `sweep --save base.json` names the grammar, so a Haxe command silently runs on the JSON grammar"
 		},
 		{
+			"name": "M-LANG-PRESET-OVERRIDES",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "choose",
+			"find": "if (ofFiles.length == 1) return",
+			"replace": "if (preset == null && ofFiles.length == 1) return",
+			"note": "a preset's grammar overrides the file extensions, so `hxq fmt arms.json` reads JSON as Haxe and fails with a parse error"
+		},
+		{
+			"name": "M-LANG-PRESET-IGNORED",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "presetAt",
+			"force": "null",
+			"note": "`--lang-default` is dropped unread, so every `hxq` call on a directory or an extension no grammar registers becomes a usage error"
+		},
+		{
+			"name": "M-LANG-PRESET-MIXED-REFUSED",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "choose",
+			"find": "if (ofFiles.length > 1 && preset == null)",
+			"replace": "if (ofFiles.length > 1)",
+			"note": "files of two grammars are refused under a preset too, so `hxq lint F.hx apqlint.json` exits 2 where it read both as Haxe"
+		},
+		{
+			"name": "M-LANG-END-OF-OPTIONS-VALUE",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "isFileArgument",
+			"find": "args[i - 1] == END_OF_OPTIONS || ",
+			"replace": "",
+			"note": "`--` reads as a flag taking a value, so the first path after it names no grammar and a call picks the grammar of the paths after"
+		},
+		{
 			"name": "M-GET-WALKABLE-ALWAYS",
 			"type": "anyparse.query.cli.DataPath",
 			"method": "walkable",

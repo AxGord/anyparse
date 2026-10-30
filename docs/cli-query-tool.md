@@ -9,13 +9,13 @@ A command-line tool over source files in any language anyparse has a grammar for
 ## Naming convention
 
 - `apq` is the engine and the canonical command, `bin/apq` its launcher: the ONE place that picks the engine (`HXQ_BIN`, a worktree's own `bin/apq.js`, else the one beside the script), rebuilds a stale one, and runs it through the code cache.
-- `hxq` is the Haxe preset: `hxq <cmd> <args>` is `apq <cmd> --lang haxe <args>`, and `bin/hxq` does nothing else.
+- `hxq` is the Haxe preset: `hxq <cmd> <args>` is `apq <cmd> --lang-default haxe <args>`, and `bin/hxq` does nothing else. A preset is a default, not an override: `hxq fmt arms.json` reads JSON, exactly as `apq fmt arms.json` does (§ "Which grammar a call names").
 
 Future language presets follow the same pattern: `as3q`, `pyq`, etc. Each preset is a one-line alias; the engine binary is always `apq`.
 
 ### Which grammar a call names
 
-`--lang <name>` names it. Without one, a process call takes the grammar whose registered extension its file arguments carry — the registry is `CliArgs.grammars`, each row the `LANG` / `EXTENSIONS` (and an optional content test) its grammar plugin declares: `haxe` `.hx`, `json` `.json`, `mermaid` `.mmd` `.mermaid`. A command that reads its document from stdin (`get -`, `probe -`, `ast --stdin`) with no `--lang` reads stdin first and takes the one grammar whose content test accepts it — JSON when the first non-space character is `{` or `[`. There is NO default grammar: no file of a known extension (a directory, an unknown extension), files of two grammars, or stdin no grammar recognises is a usage error, exit 2, that lists the registered names. A file argument right after a `--flag` does not count — it may be that flag's value (`sweep --save base.json`). A command that parses no grammar (`lint-diff`, `lint-score`, `mutation-verdict`, `test-summary`) is never asked. The choice is made only at the process entry; an in-process `Cli.run` keeps its argv as given. An extension also wins over `--lang` for the commands that read one file (`pickPluginFor`), which is how `hxq add-element arms.json …` edits JSON.
+`--lang <name>` names it. Without one, a process call takes the grammar whose registered extension its file arguments carry — the registry is `CliArgs.grammars`, each row the `LANG` / `EXTENSIONS` (and an optional content test) its grammar plugin declares: `haxe` `.hx`, `json` `.json`, `mermaid` `.mmd` `.mermaid`. A command that reads its document from stdin (`get -`, `probe -`, `ast --stdin`) with no `--lang` reads stdin first and takes the one grammar whose content test accepts it — JSON when the first non-space character is `{` or `[`. A preset's `--lang-default <name>` (`hxq` passes `haxe`) names the grammar only when no file argument names one — before stdin is consulted, so `hxq get - …` stays Haxe — an explicit `--lang` beats it, and files of two grammars read as the preset's grammar. Without a preset there is NO default grammar: no file of a known extension (a directory, an unknown extension), files of two grammars, or stdin no grammar recognises is a usage error, exit 2, that lists the registered names. A file argument right after a `--flag` does not count — it may be that flag's value (`sweep --save base.json`) — unless that flag is `--`, after which every positional is a path; a path right after a flag that takes no value (`fmt --list A.hx`) is not counted either. A command that parses no grammar (`lint-diff`, `lint-score`, `mutation-verdict`, `test-summary`) is never asked. The choice is made only at the process entry; an in-process `Cli.run` keeps its argv as given. An extension also wins over `--lang` for the commands that read one file (`pickPluginFor`), which is how `hxq add-element arms.json …` edits JSON.
 
 ## Launch and the code cache
 
@@ -839,7 +839,7 @@ bin/
   hxq                   # shell alias script
 ```
 
-The library code lives inside `src/anyparse/` (no separate haxelib package). `bin/apq-js.hxml` produces the single-file `bin/apq.js`; `hxq` is a tiny shell wrapper that prepends `--lang haxe`. The Phase-1 neko target (`bin/apq.hxml`) is gone: the CLI spawns processes through `js.node`, and the neko artifact it built died at module load before it ran a query.
+The library code lives inside `src/anyparse/` (no separate haxelib package). `bin/apq-js.hxml` produces the single-file `bin/apq.js`; `hxq` is a tiny shell wrapper that prepends `--lang-default haxe`. The Phase-1 neko target (`bin/apq.hxml`) is gone: the CLI spawns processes through `js.node`, and the neko artifact it built died at module load before it ran a query.
 
 ## Resolved decisions (Phase 0)
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-# `hxq` — the Haxe preset of `apq`: `hxq <cmd> <args>` is `apq <cmd> --lang haxe <args>`.
+# `hxq` — the Haxe preset of `apq`: `hxq <cmd> <args>` is `apq <cmd> --lang-default haxe <args>`:
+# Haxe unless a file argument's extension names another registered grammar (a `.json` is read as JSON).
 # Everything else — which engine runs (HXQ_BIN, a worktree's own build), the stale-engine
 # rebuild, the code cache, node flags — is `bin/apq`'s, in that one place.
 #
@@ -20,11 +21,11 @@ while [ -h "$src" ]; do
 done
 here=$(cd -P "$(dirname "$src")" && pwd)
 
-# With no args `apq` prints its usage; otherwise `--lang haxe` goes right after the
+# With no args `apq` prints its usage; otherwise `--lang-default haxe` goes right after the
 # subcommand, where every command's own parser reads it.
 if [ "$#" -gt 0 ]; then
     cmd="$1"
     shift
-    set -- "$cmd" --lang haxe "$@"
+    set -- "$cmd" --lang-default haxe "$@"
 fi
 exec sh "$here/apq" "$@"
