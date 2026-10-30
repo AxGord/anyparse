@@ -3,7 +3,6 @@ package anyparse.query.cli;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.GitRevision.RevisionFile;
-import anyparse.query.cli.UsageFailure;
 import anyparse.query.format.GraphJson;
 import anyparse.query.format.GraphMermaid;
 import anyparse.query.graph.CodeGraph;

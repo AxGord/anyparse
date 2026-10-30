@@ -5,7 +5,6 @@ import anyparse.check.scan.IfExpressionChain.CarryGap;
 import anyparse.check.scan.IfExpressionChain.CarrySeat;
 import anyparse.check.scan.IfExpressionChain.IfChain;
 import anyparse.check.scan.IfExpressionChain.TernaryTail;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ShapeVocab;
 
 /**

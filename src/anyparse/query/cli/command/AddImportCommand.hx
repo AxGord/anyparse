@@ -2,7 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.ProjectResolution;
 
 /**
  * `apq add-import` — add an import / using to a module (writer-formatted, canonical-gated).

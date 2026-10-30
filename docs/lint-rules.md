@@ -28,7 +28,7 @@ imports, usings and the ambient sources that carry them.
 | [`hoist-common-import`](guide/lint/imports.md#hoist-common-import) | any | off | an import most modules of a directory spell, which the directory's ambient source could carry — or an ambient one too few of them read, which belongs back in its readers |
 | [`import-order`](guide/lint/imports.md#import-order) | any | off | a block of plain imports carrying no recognisable order, or split by a `using` |
 | [`import-outside-guard`](guide/lint/imports.md#import-outside-guard) | any | on | an import or using declared above the #if region that guards the module's whole body |
-| [`redundant-import`](guide/lint/imports.md#redundant-import) | any | on | a sub-type import already bound by a plain import of its module |
+| [`redundant-import`](guide/lint/imports.md#redundant-import) | any | on | an import binding nothing the module does not already see: a sub-type of an imported module, a type of its own or a parent package |
 | [`shorten-type-ref`](guide/lint/imports.md#shorten-type-ref) | any | on | a dotted type reference whose short name resolves to the same type here, or that repeats often enough to import |
 | [`unused-import`](guide/lint/imports.md#unused-import) | any | on | import whose bound name is never referenced in the file |
 

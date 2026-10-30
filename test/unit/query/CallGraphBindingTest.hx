@@ -3,7 +3,6 @@ package unit.query;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.SymbolIndex;
-import unit.QueryTestHelpers;
 
 /**
  * What the call graph reads a written name as on the shared binding layers (task B3, review L3 G2 / G5 / G6): a supertype
@@ -78,8 +77,10 @@ class CallGraphBindingTest extends Test {
 		Assert.same(['Lock.wait'], targets(list, 'C.top'), 'a root List.hx is the project\'s: its iterator() yields utils.Lock');
 		final vector: CallGraph = graphOf([
 			lock,
-			'package haxe.ds; class Vector<T> { public function new(n:Int) {} public function iterator():Iterator<utils.Lock> return null; }',
-			'import haxe.ds.Vector; class C { static function vec():Void { final v:Vector<sys.thread.Lock> = null; for (x in v) x.wait(); } }'
+			'package haxe.ds; class Vector<T> { public function new(n:Int) {} '
+			+ 'public function iterator():Iterator<utils.Lock> return null; }',
+			'import haxe.ds.Vector; class C { static function vec():Void { final v:Vector<sys.thread.Lock> = null; for (x in v) '
+			+ 'x.wait(); } }'
 		]);
 		Assert.same(['Lock.wait'], targets(vector, 'C.vec'), 'a project haxe/ds/Vector.hx shadows the std\'s');
 		final crossFile: CallGraph = graphOf([

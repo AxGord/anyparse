@@ -1,6 +1,5 @@
 package anyparse.check.common.design.threads;
 
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 

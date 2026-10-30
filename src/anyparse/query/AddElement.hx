@@ -5,7 +5,6 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan.ElementHit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;

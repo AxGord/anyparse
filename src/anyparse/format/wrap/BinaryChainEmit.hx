@@ -5,7 +5,6 @@ import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
-import anyparse.format.WriteOptions;
 
 using StringTools;
 using Lambda;

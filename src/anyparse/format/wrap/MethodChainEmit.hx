@@ -4,7 +4,6 @@ import anyparse.core.BreakCommits;
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
-import anyparse.format.WriteOptions;
 
 using StringTools;
 

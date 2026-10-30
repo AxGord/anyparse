@@ -1,7 +1,5 @@
 package anyparse.format.binary;
 
-import anyparse.format.Format;
-
 /**
  * Binary format interface: the format-wide conventions of a binary
  * layout — endianness, the tag space, the length encodings. `ArFormat`

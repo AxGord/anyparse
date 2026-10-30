@@ -2,7 +2,6 @@ package anyparse.check.scan;
 
 import anyparse.query.BinderScan;
 import anyparse.query.BoolExprShape;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.RefactorSupport;

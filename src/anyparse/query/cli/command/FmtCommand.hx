@@ -7,7 +7,6 @@ import anyparse.query.CondRegionScan.OpaqueCondRegion;
 import anyparse.query.ExitCode.*;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.OrphanContinuation;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.runtime.Span;
 

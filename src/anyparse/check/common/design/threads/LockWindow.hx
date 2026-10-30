@@ -1,7 +1,6 @@
 package anyparse.check.common.design.threads;
 
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ShapeVocab;
 
 /** What one lock acquisition holds along the paths of the function body it sits in. */

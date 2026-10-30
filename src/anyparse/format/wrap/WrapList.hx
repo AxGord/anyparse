@@ -7,10 +7,7 @@ import anyparse.core.D.groupOrRestProbe;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
-import anyparse.format.BodyAllman;
-import anyparse.format.BodyFit;
 import anyparse.format.IndentChar;
-import anyparse.format.WriteOptions;
 
 using StringTools;
 using Lambda;

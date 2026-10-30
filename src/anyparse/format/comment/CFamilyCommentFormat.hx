@@ -3,7 +3,6 @@ package anyparse.format.comment;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.Encoding;
 import anyparse.format.TrailingCommaPolicy;
-import anyparse.format.WriteOptions;
 import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
 import anyparse.format.text.MissingPolicy;

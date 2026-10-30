@@ -4,7 +4,6 @@ import anyparse.query.Cli.TestSummaryFailureKind;
 import anyparse.query.Cli.TestSummaryFailureLocus;
 import anyparse.query.Cli.TestSummaryHeader;
 import anyparse.query.Cli.TestSummaryResult;
-import anyparse.query.SourceText;
 
 using Lambda;
 

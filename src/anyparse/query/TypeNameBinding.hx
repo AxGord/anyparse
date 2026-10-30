@@ -166,11 +166,20 @@ final class TypeNameBinding {
 	 * cannot read, `Free` when it binds a declaration outside the index (a built-in, a std or library type) or nothing at all.
 	 * The offset decides a `#if`-guarded statement: a use inside the statement's own branch is compiled only by the builds
 	 * that hold the statement (`coGuarded`); without one, the other builds are asked too (`bothBuilds`).
+	 *
+	 * With `without`, one of the file's own statements, the order is asked as if it were deleted — what a rule removing a
+	 * statement as redundant asks: the deletion changes no name exactly where both readings bind the same declarations.
 	 */
-	public function tierOf(name: String, fi: FileInfo, ?at: Int): Tier {
+	public function tierOf(name: String, fi: FileInfo, ?at: Int, ?without: ImportInfo): Tier {
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
 		if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);
-		return switch explicitFrom(name, fi, orderOf(fi, at), 0, false) {
+		final order: StatementOrder = orderOf(fi, at);
+		final asked: StatementOrder = without == null ? order : {
+			explicit: order.explicit.filter(o -> o != without),
+			wildcards: order.wildcards.filter(o -> o != without),
+			use: order.use
+		};
+		return switch explicitFrom(name, fi, asked, 0, false) {
 			case Decls(decls): Bound(decls);
 			case Unreadable(_), Either(_): Unknown;
 			case Outside(_), Pass: Free;
@@ -213,6 +222,30 @@ final class TypeNameBinding {
 			case Unknown: return false;
 		};
 		return decls.foreach(own) && !shadowedOnDisk(name, fi.pkg, fi.file);
+	}
+
+	/**
+	 * The types the file's own `statement` brings into simple-name scope, when deleting it changes what none of them binds in
+	 * `fi`: the order read with and `without` it binds each name to the same declarations, and where the binding comes from
+	 * the file's package or a parent one, no nearer package holds a same-named module on disk the index did not read. Null
+	 * when the statement brings no type the index lists, or any reading differs or is not known.
+	 */
+	public function keptWithout(statement: ImportInfo, fi: FileInfo): Null<Array<ResolvedType>> {
+		final types: Null<Array<ResolvedType>> = statement.kind == ImportKind.Import ? importedTypes(statement.raw) : null;
+		if (types == null || types.length == 0) return null;
+		for (t in types) {
+			final name: String = t.type.name;
+			final kept: Array<ResolvedType> = switch tierOf(name, fi, null, statement) {
+				case Bound(decls): decls;
+				case Unknown, Free: return null;
+			};
+			if (!sameDecls(kept, types.filter(o -> o.type.name == name))) return null;
+			final pkg: String = kept[0].file.pkg;
+			final enclosing: Bool = pkg == '' || fi.pkg == pkg || fi.pkg.startsWith('$pkg.');
+			final below: Int = pkg == '' ? 1 : pkg.split('.').length + 1;
+			if (enclosing && shadowedOnDisk(name, fi.pkg, fi.file, below)) return null;
+		}
+		return types;
 	}
 
 	/**
@@ -664,9 +697,10 @@ final class TypeNameBinding {
 	 * Whether a module named `typeName` may sit in the package of `file` or a parent one, where the compiler reads it ahead
 	 * of the std's toplevel type and where a run that did not read it cannot see it. A name the always-imported std module
 	 * declares (`TypeNameBinding.STD_TYPE_NAMES`) is bound before any package is asked. A file whose directory does not end
-	 * in its package's path places no source root, and counts as shadowed.
+	 * in its package's path places no source root, and counts as shadowed. `fromDepth` skips the packages above that many
+	 * segments — a caller holding the binding in one of them asks only the nearer ones.
 	 */
-	public static function shadowedOnDisk(typeName: String, pkg: String, file: String): Bool {
+	public static function shadowedOnDisk(typeName: String, pkg: String, file: String, fromDepth: Int = 0): Bool {
 		if (TypeNameBinding.STD_TYPE_NAMES.contains(typeName)) return false;
 		final segments: Array<String> = pkg == '' ? [] : pkg.split('.');
 		final dirs: Array<String> = Path.normalize(Path.directory(file)).split('/');
@@ -674,7 +708,7 @@ final class TypeNameBinding {
 		if (rootLength < 0 || dirs.slice(rootLength).join('/') != segments.join('/')) return true;
 		final root: String = dirs.slice(0, rootLength).join('/');
 		final moduleFile: String = '$typeName.${Path.extension(file)}';
-		return [for (depth in 0...segments.length
+		return [for (depth in fromDepth ... segments.length
 			+ 1) depth].exists(depth -> FileSystem.exists(Path.join([root].concat(segments.slice(0, depth)).concat([moduleFile]))));
 	}
 

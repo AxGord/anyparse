@@ -6,7 +6,8 @@ import anyparse.check.common.loops.ElementLoopRewrite;
 import anyparse.check.common.loops.PreferValueLoop;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import unit.QueryTestHelpers;
+
+using StringTools;
 
 /**
  * The `prefer-value-loop` check: `for (i in 0...X.length)` whose index is read ONLY as `X[i]` is
@@ -315,9 +316,7 @@ class PreferValueLoopCheckTest extends Test {
 				'\n\n\tfunction refresh():Void items.push(new Item());'
 			);
 			final decline: String = declineOf(src) ?? '';
-			Assert.isTrue(
-				StringTools.startsWith(decline, ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('C.refresh') >= 0, decline
-			);
+			Assert.isTrue(decline.startsWith(ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('C.refresh') >= 0, decline);
 		}
 		// `super.refresh()` runs the base body, which dispatches `grow()` back to this class's override.
 		final viaSuper: String = 'class B {\n\tpublic function new() {}\n\n\tpublic function refresh():Void grow();\n\n'
@@ -326,9 +325,7 @@ class PreferValueLoopCheckTest extends Test {
 			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) {\n\t\t\tsuper.refresh();\n'
 			+ '\t\t\tsink.use(items[i]);\n\t\t}\n\t}\n}$SUPPORT';
 		final superDecline: String = declineOf(viaSuper) ?? '';
-		Assert.isTrue(
-			StringTools.startsWith(superDecline, ElementLoopRewrite.SELF_CALL_DECLINE) && superDecline.indexOf('C.grow') >= 0, superDecline
-		);
+		Assert.isTrue(superDecline.startsWith(ElementLoopRewrite.SELF_CALL_DECLINE) && superDecline.indexOf('C.grow') >= 0, superDecline);
 		final param: String = wrap('items:Array<Item>, sink:Sink', 'for (i in 0...items.length) sink.use(items[i]);');
 		Assert.isTrue(StringTools.startsWith(declineOf(param) ?? '', ElementLoopRewrite.SELF_CALL_DECLINE));
 	}
@@ -387,9 +384,7 @@ class PreferValueLoopCheckTest extends Test {
 				+ '\t\tfor (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\t$call;\n\t\t}\n\t}\n}\n\n'
 				+ 'class Grower {\n\tpublic function new() Main.grow();\n}$SUPPORT';
 			final decline: String = declineOf(src) ?? '';
-			Assert.isTrue(
-				StringTools.startsWith(decline, ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Main.grow') >= 0, decline
-			);
+			Assert.isTrue(decline.startsWith(ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Main.grow') >= 0, decline);
 		}
 	}
 

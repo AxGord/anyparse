@@ -2,8 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.ReplaceNode;
-import anyparse.query.cli.CliUsage;
-import anyparse.query.cli.PostWriteFix;
 #if (sys || nodejs)
 import sys.io.File;
 #end

@@ -1,7 +1,6 @@
 package anyparse.check.common.expressions;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.query.GrammarPlugin.PrecedenceDivergence;
 import anyparse.query.SymbolIndex;
 
 using StringTools;

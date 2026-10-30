@@ -33235,6 +33235,29 @@
 			"find": "source, decl, parent, declSpanNN, true,",
 			"replace": "source, decl, parent, declSpanNN, false,",
 			"note": "the inlined declaration doc comment stays behind and documents the next member"
+		},
+		{
+			"name": "M-KEPTWITHOUT-NULL",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "keptWithout",
+			"force": "null",
+			"note": "no statement is ever read as deletable without changing a name, so redundant-import misses an import of a type its own package already shows"
+		},
+		{
+			"name": "M-KEPTWITHOUT-STATEMENT-KEPT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "keptWithout",
+			"find": "tierOf(name, fi, null, statement)",
+			"replace": "tierOf(name, fi)",
+			"note": "the order is read with the statement still in place, so every import reads as keeping its own binding and a nearer same-named module is never seen"
+		},
+		{
+			"name": "M-KEPTWITHOUT-NO-DISK",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "keptWithout",
+			"find": "if (enclosing && shadowedOnDisk(name, fi.pkg, fi.file, below)) return null;",
+			"replace": "",
+			"note": "a nearer package module on disk the run never indexed is not asked, so an import that decides the name is read as deletable"
 		}
 	]
 }

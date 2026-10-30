@@ -9,7 +9,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.io.File;
-import unit.ConfigTrees;
 
 using StringTools;
 
@@ -310,7 +309,6 @@ class CommentWidthCheckTest extends Test {
 		Assert.isTrue(check is DefaultOff);
 	}
 
-	/** Run the check over `src` as if it were `file`, whose own `hxformat.json` supplies the width. */
 	/**
 	 * FU12: a tab past a line's first character lines a column up (`@param\tname\t\tdescription`). The
 	 * continuation would land at the bare gutter under none of the columns, so the row is reported and kept.
@@ -365,7 +363,7 @@ class CommentWidthCheckTest extends Test {
 	}
 
 	/** A class carrying one doc block whose single content line is `line`. */
-	private function doc(line: String): String {
+	private function doc(line: String): String { // noqa: default-repeated-argument
 		return 'class C {\n\t/**\n\t * $line\n\t */\n\tfunction f() {}\n}';
 	}
 

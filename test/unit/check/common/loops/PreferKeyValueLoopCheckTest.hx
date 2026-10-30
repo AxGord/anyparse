@@ -7,7 +7,8 @@ import anyparse.check.common.loops.PreferKeyValueLoop;
 import anyparse.check.common.loops.PreferValueLoop;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import unit.QueryTestHelpers;
+
+using StringTools;
 
 /**
  * The `prefer-keyvalue-loop` check: `for (i in 0...X.length)` whose body opens with
@@ -21,8 +22,10 @@ import unit.QueryTestHelpers;
  */
 class PreferKeyValueLoopCheckTest extends Test {
 
-	/** The types `wrapSink` fixtures call into, declared so the body's calls can be followed. */
-	/** Members of `C` that grow `items`, directly (`refresh`) and through a second hop (`relay`). */
+	/**
+	 * The types `wrapSink` fixtures call into, declared so the body's calls can be followed.
+	 * Members of `C` that grow `items`, directly (`refresh`) and through a second hop (`relay`).
+	 */
 	private static inline final GROWS: String =
 		'\n\n\tfunction refresh(i:Int):Void items.push(null);\n\n\tfunction relay(i:Int):Void refresh(i);';
 
@@ -228,15 +231,12 @@ class PreferKeyValueLoopCheckTest extends Test {
 	public function testSetterRunByTheBodyIsFollowed(): Void {
 		// `_points[i].pos = …` RUNS `set_pos`, and this one grows `_points`: the property write is a call the
 		// key-value iterator would see the effect of, so the fix is withheld and the decline names the setter.
-		final src: String = 'class C {\n\tpublic final _points:Array<Item> = [];\n\n'
-			+ '\tfunction set(value:Array<Pos>):Void {\n\t\tfor (i in 0..._points.length) {\n\t\t\t_points[i].pos = value[i].clone();\n'
-			+ '\t\t\ttrace(i);\n\t\t}\n\t}\n}\n\nclass Item {\n\tpublic var owner:C;\n\n\tpublic var pos(default, set):Pos;\n\n'
-			+ '\tfunction set_pos(p:Pos):Pos {\n\t\towner._points.push(this);\n\t\treturn pos = p;\n\t}\n}\n\n'
-			+ 'class Pos {\n\tpublic function clone():Pos return this;\n}';
+		final src: String = 'class C {\n\tpublic final _points:Array<Item> = [];\n\n\tfunction set(value:Array<Pos>):Void {\n'
+			+ '\t\tfor (i in 0..._points.length) {\n\t\t\t_points[i].pos = value[i].clone();\n\t\t\ttrace(i);\n\t\t}\n\t}\n}\n\n'
+			+ 'class Item {\n\tpublic var owner:C;\n\n\tpublic var pos(default, set):Pos;\n\n\tfunction set_pos(p:Pos):Pos {\n'
+			+ '\t\towner._points.push(this);\n\t\treturn pos = p;\n\t}\n}\n\nclass Pos {\n\tpublic function clone():Pos return this;\n}';
 		final decline: String = declineOf(src) ?? '';
-		Assert.isTrue(
-			StringTools.startsWith(decline, ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Item.set_pos') >= 0, decline
-		);
+		Assert.isTrue(decline.startsWith(ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Item.set_pos') >= 0, decline);
 	}
 
 	public function testNoOpenerMessageNamesBinder(): Void {
@@ -379,7 +379,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		final grows: String = declineOf(
 			wrapSink('for (i in 0...items.length) {\n\t\t\trefresh(i);\n\t\t\tsink.use(items[i]);\n\t\t}', GROWS)
 		) ?? '';
-		Assert.isTrue(StringTools.startsWith(grows, ElementLoopRewrite.SELF_CALL_DECLINE) && grows.indexOf('C.refresh') >= 0, grows);
+		Assert.isTrue(grows.startsWith(ElementLoopRewrite.SELF_CALL_DECLINE) && grows.indexOf('C.refresh') >= 0, grows);
 		Assert.equals(
 			'no singular of `stuff` names the element',
 			declineOf(
@@ -472,14 +472,14 @@ class PreferKeyValueLoopCheckTest extends Test {
 		// `Main.grow()` pushes onto the static collection the key-value iterator would then follow.
 		for (call in ['Main.grow()', 'pkg.Main.grow()']) {
 			final decline: String = declineOf(staticSource('sink.use(i, items[i]);\n\t\t\t$call;')) ?? '';
-			Assert.isTrue(StringTools.startsWith(decline, ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Main.grow') >= 0, call);
+			Assert.isTrue(decline.startsWith(ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Main.grow') >= 0, call);
 		}
 	}
 
 	@:pin('control') @:killer('M-ELEMENT-LOOP-NEW-EXPR')
 	public function testConstructorCallIsReportOnly(): Void {
 		final decline: String = declineOf(staticSource('sink.use(i, items[i]);\n\t\t\tnew Grower();')) ?? '';
-		Assert.isTrue(StringTools.startsWith(decline, ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Main.grow') >= 0, decline);
+		Assert.isTrue(decline.startsWith(ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Main.grow') >= 0, decline);
 	}
 
 	@:pin('control') @:killer('M-KV-OPENER-SELF-CALL')
@@ -572,9 +572,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 	/** A no-opener loop over the STATIC `Main.items`, `statements` its body, with `Main.grow()` and `new Grower()` both growing it. */
 	private function staticSource(statements: String): String {
 		return 'class Main {\n\tstatic final items:Array<Item> = [];\n\n\tstatic final sink:Sink = new Sink();\n\n'
-			+ '\tpublic static function grow():Void items.push(null);\n\n\tfunction f():Void {\n'
-			+ '\t\tfor (i in 0...items.length) {\n\t\t\t$statements\n\t\t}\n\t}\n}\n\n'
-			+ 'class Grower {\n\tpublic function new() Main.grow();\n}$SUPPORT';
+			+ '\tpublic static function grow():Void items.push(null);\n\n\tfunction f():Void {\n\t\tfor (i in 0...items.length) {\n\t\t\t'
+			+ '$statements\n\t\t}\n\t}\n}\n\nclass Grower {\n\tpublic function new() Main.grow();\n}$SUPPORT';
 	}
 
 	/** The plugin a `lint` run over a one-file project with matched `resolutionRoots` hands its checks. */
@@ -599,8 +598,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 
 	/** A class with a `_vals` field around a method taking `vals`, `keys` and a sink. */
 	private function withVals(body: String): String {
-		return
-			'class C {\n\tvar _vals:Array<Int> = [];\n\n\tfunction f(vals:Array<Int>, keys:Array<Int>, sink:Sink):Void {\n\t\t$body\n\t}\n}';
+		return 'class C {\n\tvar _vals:Array<Int> = [];\n\n\tfunction f(vals:Array<Int>, keys:Array<Int>, sink:Sink):Void {\n\t\t$body\n'
+			+ '\t}\n}';
 	}
 
 	/** The canonical text after this rule's fix over every finding of `src`. */

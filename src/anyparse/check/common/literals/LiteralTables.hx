@@ -1,7 +1,5 @@
 package anyparse.check.common.literals;
 
-import anyparse.query.GrammarPlugin.RefShape;
-
 /**
  * The literal-TABLE shapes the checks share: a collection literal of plain data (`isCollectionTable`)
  * and a `switch` that maps literal keys to literal values (`isSwitchTable`). A table's literals are data,

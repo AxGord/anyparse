@@ -1,8 +1,6 @@
 package anyparse.query.cli;
 
 import anyparse.check.oracle.HaxeSpawn;
-import anyparse.query.FileIdentity;
-import anyparse.query.Glob;
 import haxe.io.Path;
 
 using Lambda;

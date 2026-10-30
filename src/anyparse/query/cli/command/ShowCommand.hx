@@ -1,6 +1,5 @@
 package anyparse.query.cli.command;
 
-import anyparse.query.cli.CliCommand;
 import anyparse.query.ExitCode.*;
 
 /**

@@ -4,7 +4,6 @@ package unit.grammar.haxe;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import unit.grammar.haxe.HxFormatterCorpusHelpers.HxTestCase;
 
 /**
  * One parsed `.hxtest` golden file — three sections separated by

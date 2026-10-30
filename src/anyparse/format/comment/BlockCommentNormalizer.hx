@@ -4,7 +4,6 @@ import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.format.CommentStyle;
 import anyparse.format.IndentChar;
-import anyparse.format.WriteOptions;
 import anyparse.runtime.CommonPrefix;
 
 using StringTools;

@@ -2,8 +2,6 @@ package anyparse.query.cli;
 
 using Lambda;
 
-import anyparse.query.cli.CliWalk.QuerySkip;
-import anyparse.query.cli.CliWalk.SkipEntry;
 import anyparse.runtime.EditDistance;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;

@@ -4,7 +4,6 @@ import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
-import unit.QueryTestHelpers;
 
 using Lambda;
 
@@ -576,14 +575,14 @@ class NominalTypesTest extends Test {
 	private static function returnedBy(node: QueryNode, fn: String): Null<QueryNode> {
 		if (node.kind == 'FnMember' && node.name == fn) {
 			// an expression body returns its expression; a block, what its own `return` does, else the first one nested in it
-			final body: Null<QueryNode> = Lambda.find(node.children, c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
+			final body: Null<QueryNode> = node.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
 			final ret: Null<QueryNode> = if (body == null)
 				null
 			else if (body.kind == 'ExprBody')
 				body.children[0]
 			else
 				body.children.find(c -> c.kind == 'ReturnStmt') ?? nestedReturn(body);
-			return ret == null ? null : ret.children[0];
+			return ret?.children[0];
 		}
 		for (c in node.children) {
 			final hit: Null<QueryNode> = returnedBy(c, fn);

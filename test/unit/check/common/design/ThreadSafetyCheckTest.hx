@@ -5,9 +5,9 @@ import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.PositiveSinks;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ReachLiveness.ReachConfiguration;
-import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -166,7 +166,8 @@ class ThreadSafetyCheckTest extends Test {
 	public function testAShortLockTakenOnMainIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], lockFindings([
-			'class A { static final m:Mutex = new Mutex(); static var n:Int = 0; static function main():Void { m.acquire(); n++; m.release(); } }'
+			'class A { static final m:Mutex = new Mutex(); static var n:Int = 0; static function main():Void {'
+			+ ' m.acquire(); n++; m.release(); } }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -303,7 +304,8 @@ class ThreadSafetyCheckTest extends Test {
 			heldBy(
 				'B.work',
 				lockFindings(aliasFixture(
-					'public function make():B return new Sub(m); public function other():Any return Type.createInstance(Type.resolveClass("X"), []);',
+					'public function make():B return new Sub(m); public function other():Any return '
+					+ 'Type.createInstance(Type.resolveClass("X"), []);',
 					'p', '_l = p;'
 				))
 			)
@@ -323,8 +325,8 @@ class ThreadSafetyCheckTest extends Test {
 				'B.work',
 				lockFindings(
 					aliasFixture(
-						'final k:Mutex = new Mutex(); public function make():B return new Sub(m); function kind():Class<Other> return cast null;'
-						+ ' public function other():Other return Type.createInstance(kind(), [k]);',
+						'final k:Mutex = new Mutex(); public function make():B return new Sub(m); function kind():Class<Other> return '
+						+ 'cast null; public function other():Other return Type.createInstance(kind(), [k]);',
 						'p', '_l = p;'
 					).concat(['class Other { public function new(x:Mutex) {} }'])
 				)
@@ -370,8 +372,8 @@ class ThreadSafetyCheckTest extends Test {
 					MUTEX,
 					'class A { static var s:Mutex = new Mutex(); public static function renew():Void s = new Mutex();'
 					+ ' public static function make():B return new B(s); public static function take():Void { s.acquire(); s.release(); }'
-					+ ' public static function slow():Void { s.acquire(); Sys.sleep(1); s.release(); }'
-					+ ' public static function main():Void { take(); final b:B = make(); renew(); Runner.create(() -> { slow(); b.work(); }); } }',
+					+ ' public static function slow():Void { s.acquire(); Sys.sleep(1); s.release(); } public static function main():Void {'
+					+ ' take(); final b:B = make(); renew(); Runner.create(() -> { slow(); b.work(); }); } }',
 					'class B { final _l:Mutex; public function new(p:Mutex) { _l = p; }'
 					+ ' public function work():Void { _l.acquire(); A.take(); _l.release(); } }',
 					'class Runner { public static function create(fn:()->Void):Void {} }'
@@ -555,12 +557,10 @@ class ThreadSafetyCheckTest extends Test {
 			return lockFindings([
 				'class Runner { public static function create(fn:()->Void):Void {} }',
 				'class Other { public function new() {} }',
-				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
-				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
-				+ ' public function alias(k:String, o:Other):Void { final x:Dynamic = o; $alias }'
-				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
-				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); d.alias("_l", new Other());'
-				+ ' d.quick(); } }'
+				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {} '
+				+ 'public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); } public function alias(k:String, o:Other):Void '
+				+ '{ final x:Dynamic = o; $alias } public function quick():Void { _l.acquire(); _l.release(); } public static function '
+				+ 'main():Void { final d:D = new D(); Runner.create(() -> d.work()); d.alias("_l", new Other()); d.quick(); } }'
 			]);
 		}
 		inline function quickTakes(alias: String): Int {
@@ -675,7 +675,8 @@ class ThreadSafetyCheckTest extends Test {
 			// `a` waives the builtin `Sys.sleep`, which `b`'s call, judged by the root chain, keeps
 			{
 				name: 'a/apqlint.json',
-				source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Gate.block"],"nonBlocking":["Sys.sleep a/ sleeps on purpose"]}}}'
+				source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Gate.block"],'
+					+ '"nonBlocking":["Sys.sleep a/ sleeps on purpose"]}}}'
 			},
 			{ name: 'a/A.hx', source: 'class A { static function main():Void { Sys.sleep(1); Gate.block(); B.f(); } }' },
 			{ name: 'a/Gate.hx', source: 'class Gate { public static function block():Void {} }' },
@@ -836,9 +837,8 @@ class ThreadSafetyCheckTest extends Test {
 	public function testAConditionalReleaseIsNoWrapper(): Void {
 		#if (sys || nodejs)
 		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
-			'class A { static final m:Mutex = new Mutex(); static function lockIt():Void m.acquire();'
-			+ ' static function unlockIt(c:Bool):Void if (c) m.release();'
-			+ ' static function main():Void { lockIt(); unlockIt(true); Sys.sleep(1); } }'
+			'class A { static final m:Mutex = new Mutex(); static function lockIt():Void m.acquire(); static function '
+			+ 'unlockIt(c:Bool):Void if (c) m.release(); static function main():Void { lockIt(); unlockIt(true); Sys.sleep(1); } }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -1030,7 +1030,6 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-
 	/** A hold of a `reentrantLocks` lock may take that same lock again: the re-take inside it blocks nothing. */
 	@:pin('control') @:killer('M-TS-REENTRANT-IGNORED')
 	public function testARetakeOfAHeldReentrantLockIsNoBlockingCall(): Void {
@@ -1120,76 +1119,6 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	#if (sys || nodejs)
-	/** The hold findings of `holder` among `found`. */
-	private static function heldBy(holder: String, found: Array<String>): Array<String> {
-		return found.filter(f -> f.indexOf('"$holder" holds') == 0);
-	}
-
-	/**
-	 * Instance locks of two objects: `slow` holds its own across a sleep on a background thread, so `C._m` is long;
-	 * `transfer`/`transfer2` take another object's under their own, `cross` its own under another's, `nested` its own twice.
-	 */
-	private function objectFixture(): Array<String> {
-		final found: Array<String> = [
-			for (v in violations(
-				'{"rules":{"thread-safety":{"reentrantLocks":["Mutex.acquire"],"sinks":["Mutex.acquire","Sys.sleep"],'
-				+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}',
-				[
-					MUTEX,
-					'class C { public static final a:C = new C(); public static final b:C = new C(); final _m:Mutex = new Mutex();'
-					+ ' public function new() {} public function lockIt():Void _m.acquire(); public function unlockIt():Void _m.release();'
-					+ ' public function slow():Void { _m.acquire(); Sys.sleep(5); _m.release(); }'
-					+ ' public function transfer(o:C):Void { _m.acquire(); o._m.acquire(); o._m.release(); _m.release(); }'
-					+ ' public function transfer2(o:C):Void { lockIt(); o.lockIt(); o.unlockIt(); unlockIt(); }'
-					+ ' public function cross(o:C):Void { o._m.acquire(); _m.acquire(); _m.release(); o._m.release(); }'
-					+ ' public function nested():Void { _m.acquire(); inner(); this.lockIt(); this.unlockIt(); _m.release(); }'
-					+ ' function inner():Void { _m.acquire(); _m.release(); }'
-					+ ' public static function main():Void { Runner.create(() -> b.slow()); a.transfer(b); a.transfer2(b); a.cross(b);'
-					+ ' a.nested(); Runner.create(() -> { a.transfer(b); a.transfer2(b); a.cross(b); a.nested(); }); } }',
-					'class Runner { public static function create(fn:()->Void):Void {} }'
-				]
-			)) v.message
-		];
-		found.sort(Reflect.compare);
-		return found;
-	}
-
-	/** `A.main` holding `A.m` across `A.inner`, which takes `A.m` again, while a background thread sleeps under it. */
-	private function reentrantFixture(extraConfig: String): Array<String> {
-		final found: Array<String> = [
-			for (v in violations(
-				'{"rules":{"thread-safety":{$extraConfig"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
-				+ '"lockPairs":["Mutex.acquire/release"]}}}',
-				[
-					MUTEX,
-					'class A { static final m:Mutex = new Mutex(); static function main():Void { Runner.create(work); m.acquire();'
-					+ ' inner(); m.release(); } static function inner():Void { m.acquire(); m.release(); }'
-					+ ' static function work():Void { m.acquire(); Sys.sleep(1); m.release(); } }',
-					'class Runner { public static function create(fn:()->Void):Void {} }'
-				]
-			)) v.message
-		];
-		found.sort(Reflect.compare);
-		return found;
-	}
-	/**
-	 * `A.m`, taken by `A.tick` on the main thread, handed by `members` of `A` to `Sub`, whose constructor forwards its
-	 * parameter to `B`'s `param`; `B`'s constructor runs `store`, and `B.work` holds `_l` across a sleep on a background
-	 * thread.
-	 */
-	private static function aliasFixture(members: String, param: String, store: String): Array<String> {
-		return [
-			'class A { final m:Mutex = new Mutex(); public function new() {} $members public function tick():Void { m.acquire(); m.release(); }'
-				+ ' public static function main():Void { final a:A = new A(); Runner.create(() -> a.make().work()); a.tick(); } }',
-			'class B { final _l:Mutex; public function new($param:Mutex) { $store }'
-				+ ' public function work():Void { _l.acquire(); Sys.sleep(1); _l.release(); } }',
-			'class Sub extends B { public function new(q:Mutex) { super(q); } }',
-			'class Runner { public static function create(fn:()->Void):Void {} }'
-		];
-	}
-	#end
-
 	/**
 	 * the client's deadlock: the main thread's `save` holds `_mutation` and takes `_batch` inside `Db.add`, while the spawned
 	 * `download` holds `_batch` and calls `save`, which takes `_mutation`. One finding, at the call where the main
@@ -1261,16 +1190,14 @@ class ThreadSafetyCheckTest extends Test {
 	public function testAHelperTakingTwoLocksHoldsThemInItsCaller(): Void {
 		#if (sys || nodejs)
 		Assert.same([], orderFindings([
-			'class Fs { final _mutation:Mutex = new Mutex(); final _batch:Mutex = new Mutex(); final w:W = new W(); public function new() {}'
-			+ ' function acquireLocks():Void { _batch.acquire(); _mutation.acquire(); }'
+			'class Fs { final _mutation:Mutex = new Mutex(); final _batch:Mutex = new Mutex(); final w:W = new W(); public function '
+			+ 'new() {} function acquireLocks():Void { _batch.acquire(); _mutation.acquire(); }'
 			+ ' function releaseLocks():Void { _mutation.release(); _batch.release(); }'
-			+ ' public function rename():Void { acquireLocks(); w.rename(this); releaseLocks(); }'
-			+ ' public function createFolder():Void { acquireLocks(); releaseLocks(); }'
-			+ ' public function stamp():Void { _mutation.acquire(); w.touch(); _mutation.release(); }'
+			+ ' public function rename():Void { acquireLocks(); w.rename(this); releaseLocks(); } public function createFolder():Void {'
+			+ ' acquireLocks(); releaseLocks(); } public function stamp():Void { _mutation.acquire(); w.touch(); _mutation.release(); }'
 			+ ' public static function main():Void { final fs:Fs = new Fs(); Runner.create(fs.stamp); fs.rename(); } }',
-			'class W { final _tree:Mutex = new Mutex(); public function new() {}'
-			+ ' public function rename(fs:Fs):Void { _tree.acquire(); fs.createFolder(); _tree.release(); }'
-			+ ' public function touch():Void { _tree.acquire(); _tree.release(); } }'
+			'class W { final _tree:Mutex = new Mutex(); public function new() {} public function rename(fs:Fs):Void {'
+			+ ' _tree.acquire(); fs.createFolder(); _tree.release(); } public function touch():Void { _tree.acquire(); _tree.release(); } }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -1288,9 +1215,8 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.same([], orderFindings([
 			'class A { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
 			+ ' public function ui():Void { _a.acquire(); register(); _a.release(); } function register():Void Ui.defer(takeB);'
-			+ ' function takeB():Void { _b.acquire(); _b.release(); }'
-			+ ' public function bg():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); }'
-			+ ' public static function main():Void { final a:A = new A(); Runner.create(a.bg); a.ui(); } }',
+			+ ' function takeB():Void { _b.acquire(); _b.release(); } public function bg():Void { _b.acquire(); _a.acquire(); '
+			+ '_a.release(); _b.release(); } public static function main():Void { final a:A = new A(); Runner.create(a.bg); a.ui(); } }',
 			'class Ui { public static function defer(fn:()->Void):Void {} }'
 		]));
 		#else
@@ -1305,8 +1231,8 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.same([], orderFindings([
 			'class A { final _b:Mutex = new Mutex(); public function new() {}'
 			+ ' public function ui(m:Mutex):Void { m.acquire(); _b.acquire(); _b.release(); m.release(); }'
-			+ ' public function bg(m:Mutex):Void { _b.acquire(); m.acquire(); m.release(); _b.release(); }'
-			+ ' public static function main():Void { final a:A = new A(); final m:Mutex = new Mutex(); Runner.create(() -> a.bg(m)); a.ui(m); } }'
+			+ ' public function bg(m:Mutex):Void { _b.acquire(); m.acquire(); m.release(); _b.release(); } public static function '
+			+ 'main():Void { final a:A = new A(); final m:Mutex = new Mutex(); Runner.create(() -> a.bg(m)); a.ui(m); } }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -1322,9 +1248,8 @@ class ThreadSafetyCheckTest extends Test {
 			orderFindings([
 				'class A { static final _a:Mutex = new Mutex(); static final _b:Mutex = new Mutex();'
 				+ ' static function p(x:Bool):Void { _a.acquire(); q(x); _a.release(); }'
-				+ ' static function q(x:Bool):Void { if (x) p(x); _b.acquire(); _b.release(); }'
-				+ ' static function bg():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); }'
-				+ ' public static function main():Void Runner.create(bg); }'
+				+ ' static function q(x:Bool):Void { if (x) p(x); _b.acquire(); _b.release(); } static function bg():Void {'
+				+ ' _b.acquire(); _a.acquire(); _a.release(); _b.release(); } public static function main():Void Runner.create(bg); }'
 			]).length
 		);
 		#else
@@ -1337,11 +1262,9 @@ class ThreadSafetyCheckTest extends Test {
 	public function testATakeInTheOwnersConstructorOrdersNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same([], orderFindings([
-			'class A { final _a:Mutex = new Mutex(); static final b:Mutex = new Mutex();'
-			+ ' public function new() { _a.acquire(); B.take(); _a.release(); }'
-			+ ' public function work():Void { _a.acquire(); _a.release(); }'
-			+ ' static function bg():Void { b.acquire(); new A().work(); b.release(); }'
-			+ ' public static function main():Void { Runner.create(bg); new A(); } }',
+			'class A { final _a:Mutex = new Mutex(); static final b:Mutex = new Mutex(); public function new() { _a.acquire(); '
+			+ 'B.take(); _a.release(); } public function work():Void { _a.acquire(); _a.release(); } static function bg():Void {'
+			+ ' b.acquire(); new A().work(); b.release(); } public static function main():Void { Runner.create(bg); new A(); } }',
 			'class B { public static function take():Void { A.b.acquire(); A.b.release(); } }'
 		]));
 		#else
@@ -1357,15 +1280,13 @@ class ThreadSafetyCheckTest extends Test {
 	public function testAHelperGivingBackTwoLocksEndsTheirHolds(): Void {
 		#if (sys || nodejs)
 		Assert.same([], orderFindings([
-			'class Fs { final _mutation:Mutex = new Mutex(); final _batch:Mutex = new Mutex(); final w:W = new W(); public function new() {}'
-			+ ' function acquireLocks():Void { _batch.acquire(); _mutation.acquire(); }'
-			+ ' function releaseLocks():Void { _mutation.release(); _batch.release(); }'
-			+ ' public function ui():Void { acquireLocks(); releaseLocks(); w.touch(); }'
-			+ ' public function stamp():Void { w.lockTree(); _mutation.acquire(); _mutation.release(); w.unlockTree(); }'
-			+ ' public static function main():Void { final fs:Fs = new Fs(); Runner.create(fs.stamp); fs.ui(); } }',
-			'class W { final _tree:Mutex = new Mutex(); public function new() {}'
-			+ ' public function lockTree():Void { _tree.acquire(); } public function unlockTree():Void { _tree.release(); }'
-			+ ' public function touch():Void { _tree.acquire(); _tree.release(); } }'
+			'class Fs { final _mutation:Mutex = new Mutex(); final _batch:Mutex = new Mutex(); final w:W = new W(); public function '
+			+ 'new() {} function acquireLocks():Void { _batch.acquire(); _mutation.acquire(); }'
+			+ ' function releaseLocks():Void { _mutation.release(); _batch.release(); } public function ui():Void { acquireLocks(); '
+			+ 'releaseLocks(); w.touch(); } public function stamp():Void { w.lockTree(); _mutation.acquire(); _mutation.release(); '
+			+ 'w.unlockTree(); } public static function main():Void { final fs:Fs = new Fs(); Runner.create(fs.stamp); fs.ui(); } }',
+			'class W { final _tree:Mutex = new Mutex(); public function new() {} public function lockTree():Void { _tree.acquire(); } '
+			+ 'public function unlockTree():Void { _tree.release(); } public function touch():Void { _tree.acquire(); _tree.release(); } }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -1551,6 +1472,53 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	#if (sys || nodejs)
+	/**
+	 * Instance locks of two objects: `slow` holds its own across a sleep on a background thread, so `C._m` is long;
+	 * `transfer`/`transfer2` take another object's under their own, `cross` its own under another's, `nested` its own twice.
+	 */
+	private function objectFixture(): Array<String> {
+		final found: Array<String> = [
+			for (v in violations(
+				'{"rules":{"thread-safety":{"reentrantLocks":["Mutex.acquire"],"sinks":["Mutex.acquire","Sys.sleep"],'
+				+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}',
+				[
+					MUTEX,
+					'class C { public static final a:C = new C(); public static final b:C = new C(); final _m:Mutex = new Mutex();'
+					+ ' public function new() {} public function lockIt():Void _m.acquire(); public function unlockIt():Void _m.release();'
+					+ ' public function slow():Void { _m.acquire(); Sys.sleep(5); _m.release(); }'
+					+ ' public function transfer(o:C):Void { _m.acquire(); o._m.acquire(); o._m.release(); _m.release(); }'
+					+ ' public function transfer2(o:C):Void { lockIt(); o.lockIt(); o.unlockIt(); unlockIt(); } public function '
+					+ 'cross(o:C):Void { o._m.acquire(); _m.acquire(); _m.release(); o._m.release(); } public function nested():Void {'
+					+ ' _m.acquire(); inner(); this.lockIt(); this.unlockIt(); _m.release(); } function inner():Void { _m.acquire(); '
+					+ '_m.release(); } public static function main():Void { Runner.create(() -> b.slow()); a.transfer(b); a.transfer2(b); '
+					+ 'a.cross(b); a.nested(); Runner.create(() -> { a.transfer(b); a.transfer2(b); a.cross(b); a.nested(); }); } }',
+					'class Runner { public static function create(fn:()->Void):Void {} }'
+				]
+			)) v.message
+		];
+		found.sort(Reflect.compare);
+		return found;
+	}
+
+	/** `A.main` holding `A.m` across `A.inner`, which takes `A.m` again, while a background thread sleeps under it. */
+	private function reentrantFixture(extraConfig: String): Array<String> {
+		final found: Array<String> = [
+			for (v in violations(
+				'{"rules":{"thread-safety":{$extraConfig"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
+				+ '"lockPairs":["Mutex.acquire/release"]}}}',
+				[
+					MUTEX,
+					'class A { static final m:Mutex = new Mutex(); static function main():Void { Runner.create(work); m.acquire();'
+					+ ' inner(); m.release(); } static function inner():Void { m.acquire(); m.release(); }'
+					+ ' static function work():Void { m.acquire(); Sys.sleep(1); m.release(); } }',
+					'class Runner { public static function create(fn:()->Void):Void {} }'
+				]
+			)) v.message
+		];
+		found.sort(Reflect.compare);
+		return found;
+	}
+
 	/** Every finding over `tree` with the run's files listed in `order`, as sorted `<relative path>: <message>` lines. */
 	private function chainFindings(tree: Array<{ name: String, source: String }>, order: Array<String>): Array<String> {
 		final root: String = CliFixture.writeTree('threadsafetychains', tree);
@@ -1559,7 +1527,7 @@ class ThreadSafetyCheckTest extends Test {
 		];
 		final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
 		final found: Array<String> = [
-			for (v in vs) if (!(v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE)))
+			for (v in vs) if (!(v.file == '' && v.message.startsWith(PositiveSinks.NOTICE)))
 				'${v.file.substring(root.length + 1)}: ${v.message}'
 		];
 		found.sort(Reflect.compare);
@@ -1580,6 +1548,16 @@ class ThreadSafetyCheckTest extends Test {
 		return found;
 	}
 
+	/** The messages of every throw-escape finding of a `Mutex.acquire` run over `sources`, `throwers` as given. */
+	private function throwFindings(throwers: String, sources: Array<String>): Array<String> {
+		return [
+			for (v in violations(
+				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"throwers":[$throwers]}}}',
+				[MUTEX].concat(sources)
+			)) if (v.message.indexOf('when it throws') != -1) v.message
+		];
+	}
+
 	/** `W.make` holds `_m` across `prepare`, whose body is `body`; `ensure` makes a directory. */
 	public static function watcherFixture(body: String): String {
 		return 'class W { final _m:Mutex = new Mutex(); public function new() {}'
@@ -1594,20 +1572,9 @@ class ThreadSafetyCheckTest extends Test {
 	public static function orderFindings(sources: Array<String>): Array<Violation> {
 		return violations(
 			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"registers":["Ui.defer"],'
-			+ '"lockPairs":["Mutex.acquire/release"],'
-			+ '"reentrantLocks":["Mutex.acquire"]}}}',
+			+ '"lockPairs":["Mutex.acquire/release"],"reentrantLocks":["Mutex.acquire"]}}}',
 			[MUTEX, 'class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources)
 		).filter(v -> v.message.indexOf('lock-order inversion') != -1);
-	}
-
-	/** The messages of every throw-escape finding of a `Mutex.acquire` run over `sources`, `throwers` as given. */
-	private function throwFindings(throwers: String, sources: Array<String>): Array<String> {
-		return [
-			for (v in violations(
-				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"throwers":[$throwers]}}}',
-				[MUTEX].concat(sources)
-			)) if (v.message.indexOf('when it throws') != -1) v.message
-		];
 	}
 
 	/**
@@ -1617,14 +1584,12 @@ class ThreadSafetyCheckTest extends Test {
 	 */
 	public static function storeFixture(body: String, start: String): Array<String> {
 		return [
-			'class Db { final _batch:Mutex = new Mutex(); public function new() {}'
-				+ ' public function batchLock():Void { _batch.acquire(); } public function batchUnlock():Void { _batch.release(); }'
-				+ ' public function add(batch:Bool):Void { if (!batch) _batch.acquire(); work(); if (!batch) _batch.release(); }'
-				+ ' function work():Void {} }',
+			'class Db { final _batch:Mutex = new Mutex(); public function new() {} public function batchLock():Void {'
+				+ ' _batch.acquire(); } public function batchUnlock():Void { _batch.release(); } public function add(batch:Bool):Void {'
+				+ ' if (!batch) _batch.acquire(); work(); if (!batch) _batch.release(); } function work():Void {} }',
 			'class Fs { final _mutation:Mutex = new Mutex(); final db:Db = new Db(); public function new() {}'
 				+ ' function acquireMutation():Void { _mutation.acquire(); } function releaseMutation():Void { _mutation.release(); }'
-				+ ' public function save():Void { $body }'
-				+ ' public function download():Void { db.batchLock(); save(); db.batchUnlock(); }'
+				+ ' public function save():Void { $body } public function download():Void { db.batchLock(); save(); db.batchUnlock(); }'
 				+ ' public static function main():Void { final fs:Fs = new Fs(); $start } }'
 		];
 	}
@@ -1653,7 +1618,29 @@ class ThreadSafetyCheckTest extends Test {
 		final result: Array<Violation> = Linter.run(files, plugin, [new ThreadSafety()]);
 		CliFixture.removeDir(dir);
 		// every reporting run says once which builtin sinks it applied (`ThreadSafetyPositiveSinksTest` reads it)
-		return withNotice ? result : result.filter(v -> !(v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE)));
+		return withNotice ? result : result.filter(v -> !(v.file == '' && v.message.startsWith(PositiveSinks.NOTICE)));
+	}
+
+	/** The hold findings of `holder` among `found`. */
+	private static function heldBy(holder: String, found: Array<String>): Array<String> {
+		return found.filter(f -> f.indexOf('"$holder" holds') == 0);
+	}
+
+	/**
+	 * `A.m`, taken by `A.tick` on the main thread, handed by `members` of `A` to `Sub`, whose constructor forwards its
+	 * parameter to `B`'s `param`; `B`'s constructor runs `store`, and `B.work` holds `_l` across a sleep on a background
+	 * thread.
+	 */
+	private static function aliasFixture(members: String, param: String, store: String): Array<String> {
+		return [
+			'class A { final m:Mutex = new Mutex(); public function new() {} $members'
+				+ ' public function tick():Void { m.acquire(); m.release(); }'
+				+ ' public static function main():Void { final a:A = new A(); Runner.create(() -> a.make().work()); a.tick(); } }',
+			'class B { final _l:Mutex; public function new($param:Mutex) { $store }'
+				+ ' public function work():Void { _l.acquire(); Sys.sleep(1); _l.release(); } }',
+			'class Sub extends B { public function new(q:Mutex) { super(q); } }',
+			'class Runner { public static function create(fn:()->Void):Void {} }'
+		];
 	}
 	#end
 

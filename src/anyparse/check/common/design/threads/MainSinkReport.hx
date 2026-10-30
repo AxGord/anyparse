@@ -4,7 +4,6 @@ import anyparse.check.Check.FindingData;
 import anyparse.check.Check.RepeatSite;
 import anyparse.check.common.design.ThreadSafety.CostNote;
 import anyparse.check.common.design.ThreadSafety.FindingFamily;
-import anyparse.check.common.design.ThreadSafety.ThreadSafety;
 import anyparse.check.common.design.threads.BoundedRepeats.BoundedRepeat;
 import anyparse.check.common.design.threads.ErrorPaths.PathCosts;
 import anyparse.check.common.design.threads.LockTaint.BlockingTrail;

@@ -13,7 +13,6 @@ import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.EditJournal;
 import anyparse.query.ExitCode.*;
-import anyparse.query.IndexScope;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
 import anyparse.query.cli.command.LintCommand.LintRange;

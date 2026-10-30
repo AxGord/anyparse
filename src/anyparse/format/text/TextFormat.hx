@@ -1,7 +1,5 @@
 package anyparse.format.text;
 
-import anyparse.format.Format;
-
 /**
  * Shape of an inline block comment delimiter pair (the format's
  * declaration of which delimiters it uses; the actual per-line

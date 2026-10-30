@@ -1,6 +1,5 @@
 package anyparse.check.common.nullsafety;
 
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 

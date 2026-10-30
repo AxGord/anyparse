@@ -5,7 +5,6 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
-import unit.CheckFixture.FixRun;
 
 /**
  * The `avoid-dynamic` PARAMETER arm: a `Dynamic` parameter of a type-member function whose

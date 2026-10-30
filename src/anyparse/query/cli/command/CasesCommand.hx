@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.query.Cases.CasesHit;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
-import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliWalk.SkipEntry;
 
 /**

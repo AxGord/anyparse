@@ -9,7 +9,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding;
 import haxe.Exception;
 import unit.CheckFixture;
-import unit.QueryTestHelpers;
 
 /**
  * The ONE reading of a simple type name (`TypeNameBinding`, which `TypeRefIndex.resolveTypeRefAll` answers a simple
@@ -364,39 +363,6 @@ class TypeNameBindingTest extends Test {
 		);
 	}
 
-	/** The index over `files` (path => source), each path its module's. */
-	private static function indexOf(files: Map<String, String>): SymbolIndex {
-		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
-		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
-		return CheckFixture.index(entries, new HaxeQueryPlugin());
-	}
-
-	/** `name` as `from` binds it: each declaration `file#Type`, else `Unknown` or `Free`. */
-	private static function tierText(index: SymbolIndex, name: String, from: String): String {
-		final fi: Null<FileInfo> = index.fileInfo(from);
-		if (fi == null) throw new Exception('the fixture must index $from');
-		return switch index.refs.names.tierOf(name, fi) {
-			case Bound(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
-			case Unknown: 'Unknown';
-			case Free: 'Free';
-		};
-	}
-
-	/** The candidates an `Unknown` of `name` in `from` carries (`unknownCandidates`), each `file#Type` or its path; else `open`. */
-	private static function candidatesText(index: SymbolIndex, name: String, from: String): String {
-		final fi: Null<FileInfo> = index.fileInfo(from);
-		if (fi == null) throw new Exception('the fixture must index $from');
-		final targets: Null<Array<NameTarget>> = index.refs.names.unknownCandidates(name, fi);
-		return targets == null
-			? 'open'
-			: [
-				for (t in targets) switch t {
-					case InIndex(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
-					case OutOfIndex(path): path;
-				}
-			].join(' | ');
-	}
-
 	/**
 	 * What a caller dispatching on every build's type asks (`bindingsOf`): the binding the order reads, then the types a
 	 * `#if`-guarded statement binds on its builds and a wildcard the order cannot list may supply. A module nothing reads
@@ -459,6 +425,39 @@ class TypeNameBindingTest extends Test {
 		Assert.equals('Mod@p.Mod', at('p.Mod'), 'a main type at its module\'s path');
 		Assert.equals('Sub@p.Mod.Sub', at('p.Mod.Sub'), 'a sub-type at its module\'s path and its own name');
 		Assert.equals('', at('p.Sub'), 'a sub-type is at no package path (4.3.7: `Type not found : p.Sub`)');
+	}
+
+	/** The index over `files` (path => source), each path its module's. */
+	private static function indexOf(files: Map<String, String>): SymbolIndex {
+		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
+		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
+		return CheckFixture.index(entries, new HaxeQueryPlugin());
+	}
+
+	/** `name` as `from` binds it: each declaration `file#Type`, else `Unknown` or `Free`. */
+	private static function tierText(index: SymbolIndex, name: String, from: String): String {
+		final fi: Null<FileInfo> = index.fileInfo(from);
+		if (fi == null) throw new Exception('the fixture must index $from');
+		return switch index.refs.names.tierOf(name, fi) {
+			case Bound(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+			case Unknown: 'Unknown';
+			case Free: 'Free';
+		};
+	}
+
+	/** The candidates an `Unknown` of `name` in `from` carries (`unknownCandidates`), each `file#Type` or its path; else `open`. */
+	private static function candidatesText(index: SymbolIndex, name: String, from: String): String {
+		final fi: Null<FileInfo> = index.fileInfo(from);
+		if (fi == null) throw new Exception('the fixture must index $from');
+		final targets: Null<Array<NameTarget>> = index.refs.names.unknownCandidates(name, fi);
+		return targets == null
+			? 'open'
+			: [
+				for (t in targets) switch t {
+					case InIndex(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+					case OutOfIndex(path): path;
+				}
+			].join(' | ');
 	}
 
 	/** `bindingsOf`'s answer as `bound|guarded|unlisted`, each target a declaration `file#Name` or an outside path. */

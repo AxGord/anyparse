@@ -1,7 +1,6 @@
 package anyparse.check.haxe;
 
 import anyparse.check.Check.LanguageBound;
-import anyparse.check.RuleBase;
 import anyparse.check.RuleCategory;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 

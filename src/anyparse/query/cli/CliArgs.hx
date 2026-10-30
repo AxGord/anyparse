@@ -3,11 +3,6 @@ package anyparse.query.cli;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.grammar.mermaid.MermaidQueryPlugin;
-import anyparse.query.FileIdentity;
-import anyparse.query.SourceText;
-import anyparse.query.cli.CliArgs.ExpandedInputs;
-import anyparse.query.cli.CliArgs.PositionalScan;
-import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.merge.StructuralMerge.MergeShape;
 import anyparse.runtime.Span;
 

@@ -1,7 +1,6 @@
 package anyparse.check.common.control;
 
 import anyparse.check.scan.CaseValueKey;
-import anyparse.check.scan.CheckScan.NegationSeams;
 import anyparse.check.scan.NegationScan;
 import anyparse.check.scan.OperatorSelection;
 import anyparse.query.BoolExprShape;

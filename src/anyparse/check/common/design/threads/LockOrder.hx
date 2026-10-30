@@ -1,7 +1,6 @@
 package anyparse.check.common.design.threads;
 
 import anyparse.check.common.design.ThreadSafety.FindingFamily;
-import anyparse.check.common.design.ThreadSafety.ThreadSafety;
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.query.CallGraph;
 

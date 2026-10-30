@@ -1,7 +1,5 @@
 package anyparse.check.common.design.threads;
 
-import anyparse.query.GrammarPlugin.RefShape;
-
 /**
  * Which declaration a bare name read in a function body means, as far as the body's own text decides it. A positive
  * whitelist: a name means a declaration of the body only where nothing else in the body declares it, and a parameter

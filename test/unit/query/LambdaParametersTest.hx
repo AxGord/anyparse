@@ -1,7 +1,5 @@
 package unit.query;
 
-import unit.QueryTestHelpers;
-
 /**
  * The type the index host gives a lambda's parameter written with none (`LambdaParameters`): the parameter at its position
  * of the function type the lambda is expected to be — a declaration's type, a callee's parameter with the receiver's type

@@ -2,7 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.LintScore.LintScoreResult;
-import anyparse.query.cli.UsageFailure;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.LintTruthJson;
 

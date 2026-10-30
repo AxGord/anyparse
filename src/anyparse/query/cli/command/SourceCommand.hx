@@ -2,8 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.Address;
 import anyparse.query.ExitCode.*;
-import anyparse.query.SourceText;
-import anyparse.query.cli.CliEdit;
 import anyparse.runtime.CommonPrefix;
 import anyparse.runtime.Span;
 

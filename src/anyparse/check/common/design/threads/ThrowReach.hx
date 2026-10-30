@@ -2,7 +2,6 @@ package anyparse.check.common.design.threads;
 
 import anyparse.check.common.design.threads.LockSites.LockEscape;
 import anyparse.query.CallGraph;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ShapeVocab;
 
 /**

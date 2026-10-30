@@ -3,7 +3,6 @@ package unit.check.common.loops;
 import anyparse.check.Severity;
 import anyparse.check.common.loops.MapKeysLookup;
 import anyparse.query.CanonicalEdit;
-import unit.QueryTestHelpers;
 
 /**
  * The `map-keys-lookup` check: a `for (k in m.keys())` loop whose body re-looks-up the

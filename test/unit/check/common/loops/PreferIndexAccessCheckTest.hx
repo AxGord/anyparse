@@ -2,7 +2,6 @@ package unit.check.common.loops;
 
 import anyparse.check.Severity;
 import anyparse.check.common.loops.PreferIndexAccess;
-import unit.QueryTestHelpers;
 
 /**
  * The `prefer-index-access` check: a `Map`-abstract `m.get(k)` / `m.set(k, v)` call is

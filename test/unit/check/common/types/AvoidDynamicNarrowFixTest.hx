@@ -3,7 +3,6 @@ package unit.check.common.types;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.query.CanonicalEdit;
-import unit.CheckFixture.FixRun;
 
 /**
  * The `avoid-dynamic` usage-inference autofix (D3). It narrows a WHOLE-type

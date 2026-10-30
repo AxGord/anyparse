@@ -2,7 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.ImportSpelling.ImportSpelled;
-import anyparse.query.cli.PostWriteFix;
 
 /**
  * `apq remove-import` — remove an import / using by module path (backend of lint --fix).

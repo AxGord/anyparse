@@ -5,7 +5,6 @@ import anyparse.query.FormatConfigDiscovery;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import unit.ConfigTrees;
 
 /**
  * `FormatConfigDiscovery.discover` walks UP from a file's own directory to the

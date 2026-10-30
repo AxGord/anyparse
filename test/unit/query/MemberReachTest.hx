@@ -11,7 +11,8 @@ import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.ReachProject;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
-import unit.QueryTestHelpers;
+
+using Lambda;
 
 /**
  * `MemberReach`: may the code an entry runs change member M? Each case writes the entry as a REGION
@@ -169,11 +170,11 @@ class MemberReachTest extends Test {
 			+ 'class Bag { public static var items:Array<Int> = []; }';
 		proven(ask([region, other]), 'an alias of `Bag.items`');
 		// a local, and a member of the enclosing type, bind the name before the import does
-		final local: String = 'import F0.C.items as stuff;\nclass D { public static function go():Void { var stuff:Array<Int> = []; '
-			+ 'stuff.push(1); } }';
+		final local: String =
+			'import F0.C.items as stuff;\nclass D { public static function go():Void { var stuff:Array<Int> = []; stuff.push(1); } }';
 		proven(ask([region, local]), 'a local `stuff`');
-		final member: String = 'import F0.C.items as stuff;\nclass D { static var stuff:Array<Int> = []; '
-			+ 'public static function go():Void stuff.push(1); }';
+		final member: String =
+			'import F0.C.items as stuff;\nclass D { static var stuff:Array<Int> = []; public static function go():Void stuff.push(1); }';
 		proven(ask([region, member]), 'a member `stuff`');
 	}
 
@@ -224,8 +225,8 @@ class MemberReachTest extends Test {
 
 	@:pin('control') @:killer('M-REACH-NATIVE')
 	public function testNativeCodeIsUnknown(): Void {
-		final src: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } '
-			+ "function g():Void js.Syntax.code('run()'); }";
+		final src: String =
+			'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } function g():Void js.Syntax.code(\'run()\'); }';
 		assertMatch(ask([src]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
@@ -266,8 +267,8 @@ class MemberReachTest extends Test {
 		// The library's `LibSub` does not parse, so the index lists no override of `Base.go` there — yet it spells both.
 		final src: String = 'class C { public static var items:Array<Int> = []; var b:Base; function f():Void { /*<*/ b.go(); /*>*/ } }';
 		final base: String = 'class Base { public function new() {} public function go():Void {} }';
-		final sub: String = 'class LibSub extends Base {\n#if js\noverride function go():Void {\n#else\noverride function go():Void {\n#end\n'
-			+ 'C.items.push(9); } }';
+		final sub: String = 'class LibSub extends Base {\n#if js\noverride function go():Void {\n#else\noverride function go():Void {\n'
+			+ '#end\nC.items.push(9); } }';
 		assertMatch(ask([src], [base, sub]), r -> r.match(Unknown(SkipParse('LibSub.hx'))));
 		assertMatch(ask([src], [base]), r -> r.match(Proven));
 	}
@@ -313,9 +314,9 @@ class MemberReachTest extends Test {
 		// `j.items` names `J`'s declaration, yet a `J` may be the `C` whose `items` the loop walks — as may a structure
 		// or a typedef of one, so the read lets `items` escape; a receiver typed by a class unrelated to `C` reaches another field.
 		function poke(param: String, decls: String): String {
-			return 'class C implements J { public var items:Array<Int> = []; public var me:J; '
-				+ 'function f():Void { /*<*/ poke(this); /*>*/ } static function poke(s:$param):Void { var a:Array<Int> = s.items; '
-				+ 'a.push(9); } } $decls';
+			return
+				'class C implements J { public var items:Array<Int> = []; public var me:J; function f():Void { /*<*/ poke(this); /*>*/ } '
+					+ 'static function poke(s:$param):Void { var a:Array<Int> = s.items; a.push(9); } } $decls';
 		}
 		assertMatch(ask([poke('J', 'interface J { var items:Array<Int>; }')]), r -> !r.match(Proven));
 		assertMatch(ask([poke('{items:Array<Int>}', 'interface J {}')]), r -> !r.match(Proven));
@@ -356,12 +357,12 @@ class MemberReachTest extends Test {
 		// the `Other` parameter cannot hold a `C`.
 		final other: String = 'class Other { public var items:Array<Int> = []; public function new() {} }';
 		final poker: String = 'class Poker { public static function poke(o:Other):Void { o.items.push(9); } }';
-		final keep: String = 'class Keep { public static function put(o:Dynamic):Void {} public static function run(f:() -> Dynamic):Void {} '
-			+ 'public static function later(f:() -> Void):Void {} }';
+		final keep: String = 'class Keep { public static function put(o:Dynamic):Void {} public static function run(f:() '
+			+ '-> Dynamic):Void {} public static function later(f:() -> Void):Void {} }';
 		final holder: String = 'class Holder { public var c:C; public function new(c:C) this.c = c; }';
-		function source(field: String, escape: String, ?header: String, ?extra: String): String {
-			return 'class C ${header ?? ''} { public var items:Array<Int> = []; var me:$field; public function new() { $escape } '
-				+ '${extra ?? ''} function f():Void {} function loop():Void { /*<*/ Poker.poke(me); /*>*/ } }';
+		function source(field: String, escape: String, header: String = '', extra: String = ''): String {
+			return 'class C ${header} { public var items:Array<Int> = []; var me:$field; public function new() { $escape } '
+				+ '${extra} function f():Void {} function loop():Void { /*<*/ Poker.poke(me); /*>*/ } }';
 		}
 		function run(src: String, ?library: Array<String>): ReachResult {
 			return ask([src, other, poker, keep, holder], library);
@@ -404,10 +405,9 @@ class MemberReachTest extends Test {
 			+ 'class Holder2 { public var o:Other; public function new() {} }';
 		final lib: String = 'class LibBase { public function new() {} } class LibMath { public static function abs(v:Int):Int return v; '
 			+ 'public static function keep(o:Dynamic):Void {} } class LibRaw { static function r():Void untyped 0; }';
-		function source(escape: String, ?header: String, ?extra: String): String {
-			return 'class C ${header ?? ''} { public var items:Array<Int> = []; var me:Dynamic; public function new() { $escape } '
-				+ '${extra ?? ''} function f():Void {} static function g():Void {} '
-				+ 'function loop():Void { /*<*/ Poker.poke(me); /*>*/ } }';
+		function source(escape: String, header: String = '', extra: String = ''): String {
+			return 'class C $header { public var items:Array<Int> = []; var me:Dynamic; public function new() { $escape } $extra'
+				+ ' function f():Void {} static function g():Void {} function loop():Void { /*<*/ Poker.poke(me); /*>*/ } }';
 		}
 		function run(src: String, ?more: Array<String>): ReachResult {
 			return ask([src, other, poker, keep, holders].concat(more ?? []), [lib]);
@@ -488,10 +488,10 @@ class MemberReachTest extends Test {
 		final other: String = 'class Other { public var items:Array<Int> = []; public function new() {} }';
 		final poker: String = 'class Poker { public static function poke(o:Other):Void { o.items.push(9); } }';
 		final keep: String = 'class Keep { public static function put(o:Dynamic):Void {} } typedef Dyns = Array<Dynamic>;';
-		function source(escape: String, ?extra: String): String {
+		function source(escape: String, extra: String = ''): String {
 			return
 				'class C { public var items:Array<Int> = []; var arr:Array<Dynamic> = []; var al:Dyns; public function new() { $escape } '
-					+ '${extra ?? ''} function loop():Void { /*<*/ Poker.poke(arr[0]); /*>*/ } }';
+					+ '${extra} function loop():Void { /*<*/ Poker.poke(arr[0]); /*>*/ } }';
 		}
 		function run(src: String): ReachResult {
 			return ask([src, other, poker, keep]);
@@ -666,8 +666,8 @@ class MemberReachTest extends Test {
 	@:pin('control') @:killer('M-REACH-CTOR-NOT-DISPATCHED')
 	public function testConstructorOfALibrarySubclassIsNotADispatchTarget(): Void {
 		// Library code reaches a subclass through its overrides, never through its constructor.
-		final src: String = 'class C extends Lib { var items:Array<Int> = []; var lib:Lib; public function new() { super(); items.push(1); } '
-			+ 'function f():Void { /*<*/ lib.run(); /*>*/ } }';
+		final src: String = 'class C extends Lib { var items:Array<Int> = []; var lib:Lib; public function new() {'
+			+ ' super(); items.push(1); } function f():Void { /*<*/ lib.run(); /*>*/ } }';
 		final lib: String = 'class Lib { public var cb:() -> Void; public function new() {} public function run():Void cb(); }';
 		assertMatch(ask([src], [lib]), r -> r.match(Proven));
 	}
@@ -750,7 +750,8 @@ class MemberReachTest extends Test {
 			+ 'return kept; return []; } }',
 			'class Line { var kept:Array<Int> = []; public function new() {} public function all():Array<Int> { final out:Array<Int> = []; '
 			+ 'kept = out; return out; } }',
-			'class Line { public function new() {} public function all():Array<Int> { final out:Array<Int> = []; keep(out); return out; } }',
+			'class Line { public function new() {} public function all():Array<Int> {'
+			+ ' final out:Array<Int> = []; keep(out); return out; } }',
 			'class Line { public function new() {} public dynamic function all():Array<Int> return []; }'
 		]) assertMatch(askLocalIn([src, line], 'xs'), r -> !r.match(Proven));
 	}
@@ -822,8 +823,8 @@ class MemberReachTest extends Test {
 		final pt: String = '@:structInit class Pt { public final x:Int; public function new(x:Int) { this.x = x; C.items.push(0); } }';
 		assertReachedAt(ask([src, pt]), 'Pt.new');
 		// Through a function value the graph names no parameter to type the literal by; the compiler still does.
-		final viaValue: String = 'class C { public static var items:Array<Int> = []; var cb:Pt->Void; '
-			+ 'function f():Void { /*<*/ cb({x: 1}); /*>*/ } }';
+		final viaValue: String =
+			'class C { public static var items:Array<Int> = []; var cb:Pt->Void; function f():Void { /*<*/ cb({x: 1}); /*>*/ } }';
 		assertReachedAt(ask([viaValue, pt]), 'Pt.new');
 	}
 
@@ -1051,8 +1052,8 @@ class MemberReachTest extends Test {
 	@:pin('control') @:killer('M-REACH-RERUN-END')
 	public function testEscapeLaterInAnEnclosingLoopPrecedesTheNextRun(): Void {
 		// `sink = xs` runs after the inner loop, but the outer loop runs the inner one again with `xs` shared.
-		final src: String = 'class C { static var sink:Array<Int>; static function grow():Void sink.push(9); '
-			+ 'static function f():Void { final xs:Array<Int> = [1]; for (r in 0...2) { /*<*/ grow(); var y:Int = xs[0]; /*>*/ sink = xs; } } }';
+		final src: String = 'class C { static var sink:Array<Int>; static function grow():Void sink.push(9); static function f():Void {'
+			+ ' final xs:Array<Int> = [1]; for (r in 0...2) { /*<*/ grow(); var y:Int = xs[0]; /*>*/ sink = xs; } } }';
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
@@ -1086,17 +1087,15 @@ class MemberReachTest extends Test {
 		// its untyped read, its touch, the conversion it makes are the node's, though its first declaration holds none
 		function region(twin: String): String {
 			return 'class C { public static var it:C; public var items:Array<Int> = []; var o:O; function f():Void { /*<*/ g(); /*>*/ }\n'
-				+ '#if other\nfunction g():Void {}\n#else\nfunction g():Void { '
-				+ twin
-				+ ' }\n#end\n}';
+				+ '#if other\nfunction g():Void {}\n#else\nfunction g():Void { $twin }\n#end\n}';
 		}
 		final o: String = 'class O { public function new() {} public function toString():String { C.it.items.push(1); return ""; } }';
 		assertMatch(ask([region('var z:Dynamic = untyped this.zz;'), o]), r -> r.match(Unknown(Untyped(_, _))));
 		assertReachedAt(ask([region('items.push(1);'), o]), 'C.g');
 		assertReachedAt(ask([region('var s:String = "" + o;'), o]), 'O.toString');
 		// a shared collection's region calling `g` is refused for what the second declaration changes
-		final local: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void { /*<*/ var y:Int = xs[0]; g(); /*>*/ }\n'
-			+ '#if other\nfunction g():Void {}\n#else\nfunction g():Void all[0] = 1;\n#end\n}';
+		final local: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void { /*<*/ var y:Int = xs[0]; g(); '
+			+ '/*>*/ }\n#if other\nfunction g():Void {}\n#else\nfunction g():Void all[0] = 1;\n#end\n}';
 		assertMatch(askLocal(local, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
@@ -1105,7 +1104,7 @@ class MemberReachTest extends Test {
 		// `new D()` runs `D`'s field initializers: an element write, a string conversion and untyped code call nothing, yet
 		// each is code the construction runs — in every branch of a region that declares the field
 		function construct(fields: String): String {
-			return 'class D { static var o:O; public function new() {}\n' + fields + '\n}';
+			return 'class D { static var o:O; public function new() {}\n$fields\n}';
 		}
 		final src: String =
 			'class C { public static var it:C; public var items:Array<Int> = []; function f():Void { /*<*/ new D(); /*>*/ } }';
@@ -1231,8 +1230,8 @@ class MemberReachTest extends Test {
 		final mapped: String = 'class C { var items:Array<Int> = []; function f(o:Array<Int>):Void { '
 			+ 'final g:Int->Int = v -> { items.push(0); return v; }; /*<*/ o.map(g); /*>*/ } }';
 		assertMatch(ask([mapped]), r -> r.match(Reached(_)));
-		final sorted: String = 'class C { var items:Array<Int> = []; function f():Void { '
-			+ 'final cmp:(Int, Int) -> Int = (a, b) -> { items.push(0); return a - b; }; final t:Array<Int> = [2, 1]; /*<*/ t.sort(cmp); /*>*/ } }';
+		final sorted: String = 'class C { var items:Array<Int> = []; function f():Void { final cmp:(Int, Int) -> Int = (a, b) -> {'
+			+ ' items.push(0); return a - b; }; final t:Array<Int> = [2, 1]; /*<*/ t.sort(cmp); /*>*/ } }';
 		assertMatch(ask([sorted]), r -> r.match(Reached(_)));
 	}
 
@@ -1339,7 +1338,7 @@ class MemberReachTest extends Test {
 			{ file: 'F2.hx', source: 'class H { public var c:C; public function run():Void c.grow(); }' }
 		];
 		final plugin: CachingGrammarPlugin = QueryTestHelpers.projectPlugin(files);
-		final grows: CallGraph -> Bool = g -> Lambda.exists(g.outEdges('H.run'), e -> e.file == 'F2.hx' && e.to == 'C.grow');
+		final grows: CallGraph -> Bool = g -> g.outEdges('H.run').exists(e -> e.file == 'F2.hx' && e.to == 'C.grow');
 		Assert.isTrue(grows(MemberReach.forRun(plugin, 'F0.hx', src).graph()), 'the second declaration records no edge');
 		files[1].source = 'class H { public var c:C; public function run():Void { trace(1); } }';
 		Assert.isTrue(grows(MemberReach.forRun(plugin, 'F0.hx', src).graph()), 'an edit to the first file lost the second\'s edge');
@@ -1379,8 +1378,8 @@ class MemberReachTest extends Test {
 			'class C { function f(text:Array<Int>):Void { final xs:Array<Int> = text.copy().map(v -> v); /*<*/ anything(xs[0]); /*>*/ } }';
 		assertMatch(askLocal(chained, 'xs'), r -> r.match(Proven));
 		// the receiver typed by the shared walk: a local written with no type holds its initializer's
-		final viaLocal: String =
-			'class C { function f(text:String):Void { var s = text; final xs:Array<String> = s.split(","); /*<*/ anything(xs[0]); /*>*/ } }';
+		final viaLocal: String = 'class C { function f(text:String):Void {'
+			+ ' var s = text; final xs:Array<String> = s.split(","); /*<*/ anything(xs[0]); /*>*/ } }';
 		assertMatch(askLocal(viaLocal, 'xs'), r -> r.match(Proven));
 	}
 
@@ -1440,8 +1439,9 @@ class MemberReachTest extends Test {
 	public function testFreshMethodMustBeTheReceiverTypesOwn(): Void {
 		// `'k'.copy()` and `seed.split(",")` on an array are `using` extensions — String has no `copy`, Array no `split` —
 		// which may return a shared array.
-		final ext: String = 'class Ext { public static var list:Array<Int> = []; public static function copy(s:String):Array<Int> return list; '
-			+ 'public static function split(a:Array<Int>, sep:String):Array<Int> return list; public static function poke():Void list.push(0); }';
+		final ext: String = 'class Ext { public static var list:Array<Int> = []; public static function copy(s:String):Array<Int> return '
+			+ 'list; public static function split(a:Array<Int>, sep:String):Array<Int> return list; public static function '
+			+ 'poke():Void list.push(0); }';
 		final copy: String =
 			'using Ext; class C { function f():Void { final xs:Array<Int> = "k".copy(); /*<*/ Ext.poke(); var y:Int = xs[0]; /*>*/ } }';
 		final at: Int = copy.lastIndexOf('xs', copy.indexOf(REGION_CLOSE));
@@ -1449,8 +1449,8 @@ class MemberReachTest extends Test {
 			reachOf([copy, ext], null, true).mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(copy)),
 			r -> r.match(Unknown(Aliased(_, _, _, _)))
 		);
-		final split: String = 'using Ext; class C { function f():Void { final seed:Array<Int> = [5]; final xs:Array<Int> = seed.split(","); '
-			+ '/*<*/ Ext.poke(); var y:Int = xs[0]; /*>*/ } }';
+		final split: String = 'using Ext; class C { function f():Void {'
+			+ ' final seed:Array<Int> = [5]; final xs:Array<Int> = seed.split(","); /*<*/ Ext.poke(); var y:Int = xs[0]; /*>*/ } }';
 		final from: Int = split.lastIndexOf('xs', split.indexOf(REGION_CLOSE));
 		assertMatch(
 			reachOf([split, ext], null, true).mayMutateNamed('F0.hx', 'xs', new Span(from, from + 2), regionOf(split)),
@@ -1466,8 +1466,8 @@ class MemberReachTest extends Test {
 		final stamp: String = 'extern class Stamp { public function new(t:Float):Void; public function getTime():Float; '
 			+ 'public function toString():String; public static function now():Stamp; }';
 		// a STATIC `toString` is an ordinary call, never an implicit one
-		final dump: String = 'class Dump { public static var all:Array<Int> = []; public static function toString(x:Int):String { all.push(x); '
-			+ 'return ""; } }';
+		final dump: String = 'class Dump { public static var all:Array<Int> = []; public static function toString(x:Int):String {'
+			+ ' all.push(x); return ""; } }';
 		final at: Int = src.lastIndexOf('xs', src.indexOf(REGION_CLOSE));
 		assertMatch(
 			reachOf([src], [stamp, dump], true).mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src)), r -> r.match(Proven)
@@ -1550,8 +1550,8 @@ class MemberReachTest extends Test {
 		final base: String =
 			'package sys.net; class Base { var ip:String; public function new() {} public function toString():String return ip; }';
 		final std: String = 'package sys.net; extern class Host { public function toString():String; }';
-		final below: String =
-			'class Below extends sys.net.Host { var ip:String; public function new() {} override public function toString():String return ip; }';
+		final below: String = 'class Below extends sys.net.Host { var ip:String; public function new() {} '
+			+ 'override public function toString():String return ip; }';
 		final at: Int = src.lastIndexOf('xs', src.indexOf(REGION_CLOSE));
 		function askWith(library: Array<String>): ReachResult {
 			return reachOf([src], library, true).mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src));
@@ -1609,9 +1609,9 @@ class MemberReachTest extends Test {
 		];
 		final head: String = 'class C { var items:Array<Int> = []; var x:Dynamic; var b:Base; var it:Iterable<Int>; '
 			+ 'public function new() Factory.cb = () -> items.push(0); ';
-		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = "" + x; /*>*/ } }'], lib), r -> r.match(Reached(_)));
-		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = "" + b; /*>*/ } }'], lib), r -> r.match(Reached(_)));
-		assertMatch(ask([head + 'function f():Void { /*<*/ for (e in it) trace(e); /*>*/ } }'], lib), r -> r.match(Reached(_)));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = "" + x; /*>*/ } }'], lib), r -> r.match(Reached(_)));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = "" + b; /*>*/ } }'], lib), r -> r.match(Reached(_)));
+		assertMatch(ask(['${head}function f():Void { /*<*/ for (e in it) trace(e); /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-REACH-QUESTION-ENTERED')
@@ -1623,9 +1623,8 @@ class MemberReachTest extends Test {
 			'class Factory { public static var cb:() -> Void; public static function make():Dynamic return new Hidden(); }',
 			'abstract Loud(Int) from Int { @:to public function toText():String { Factory.cb(); return ""; } }'
 		];
-		final src: String = 'class C { public static var items:Array<Int> = []; var x:Dynamic; '
-			+ 'public function new() Factory.cb = () -> items.push(0); '
-			+ 'function f():Void { /*<*/ var s:String = "" + x; /*>*/ } function g():Void { /*<*/ var y:Int = 1; /*>*/ } '
+		final src: String = 'class C { public static var items:Array<Int> = []; var x:Dynamic; public function new() Factory.cb = () '
+			+ '-> items.push(0); function f():Void { /*<*/ var s:String = "" + x; /*>*/ } function g():Void { /*<*/ var y:Int = 1; /*>*/ } '
 			+ 'function h():Void { /*<*/ var l:Loud = 1; Factory.make(); /*>*/ } }';
 		final regions: Array<Span> = regionsOf(src);
 		final member: MemberRef = { owner: 'C', name: 'items' };
@@ -1647,8 +1646,8 @@ class MemberReachTest extends Test {
 		final src: String = 'class C { var items:Array<Int> = []; public function toJSON(k:Dynamic):Dynamic { items.push(0); return 1; } '
 			+ 'function f():Void { /*<*/ var s:String = NJ.stringify(this); /*>*/ } }';
 		assertReachedAt(ask([src], [nj]), 'C.toJSON');
-		final other: String = 'class C { var items:Array<Int> = []; var o:Other; public function toJSON(k:Dynamic):Dynamic { items.push(0); '
-			+ 'return 1; } function f():Void { /*<*/ var s:String = NJ.stringify(o); /*>*/ } }';
+		final other: String = 'class C { var items:Array<Int> = []; var o:Other; public function toJSON(k:Dynamic):Dynamic {'
+			+ ' items.push(0); return 1; } function f():Void { /*<*/ var s:String = NJ.stringify(o); /*>*/ } }';
 		final otherType: String = 'class Other { public function new() {} public function toJSON(k:Dynamic):Dynamic return 2; }';
 		assertMatch(ask([other, otherType], [nj]), r -> r.match(Proven));
 	}
@@ -1691,10 +1690,10 @@ class MemberReachTest extends Test {
 			region('enum E { Num(n:Int); Nothing; } class Holder { public var e:E; public function new() {} }'), r -> r.match(Proven)
 		);
 		// the same walk when library code builds and hands the value: no project value leaves the type system
-		final lib: String = 'class Lib { public static function dump():String { var h:LHolder = LHolder.make(); return NJ.stringify(h); } } '
-			+ 'enum LE { Box(o:LChild); Nothing; } '
-			+ 'class LHolder { public var e:LE; function new(e:LE) this.e = e; public static function make():LHolder return null; } '
-			+ 'class LChild { public function new() {} public function toJSON(k:Dynamic):Dynamic { C.grow(); return 1; } }';
+		final lib: String = 'class Lib { public static function dump():String { var h:LHolder = LHolder.make(); return NJ.stringify(h); } '
+			+ '} enum LE { Box(o:LChild); Nothing; } class LHolder { public var e:LE; function new(e:LE) '
+			+ 'this.e = e; public static function make():LHolder return null; } class LChild { public function new() {} '
+			+ 'public function toJSON(k:Dynamic):Dynamic { C.grow(); return 1; } }';
 		final call: String = 'class C { public static var items:Array<Int> = []; public static function grow():Void items.push(0); '
 			+ 'function f():Void { /*<*/ Lib.dump(); /*>*/ } }';
 		assertMatch(ask([call], [nj, lib, '@:coreType abstract Int {}']), r -> r.match(Reached(_)));
@@ -1756,8 +1755,8 @@ class MemberReachTest extends Test {
 			'class Lib { public static var cb:() -> Void; public static function make():Dynamic return new Bag(); }'
 		];
 		final head: String = 'class C { var items:Array<Int> = []; var d:Dynamic; public function new() Lib.cb = () -> items.push(0); ';
-		assertMatch(ask([head + 'function f():Void { /*<*/ var y:Int = d[0]; /*>*/ } }'], lib), r -> r.match(Proven));
-		assertMatch(ask([head + 'function f():Void { /*<*/ for (e in d) trace(e); /*>*/ } }'], lib), r -> r.match(Reached(_)));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var y:Int = d[0]; /*>*/ } }'], lib), r -> r.match(Proven));
+		assertMatch(ask(['${head}function f():Void { /*<*/ for (e in d) trace(e); /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-REACH-TYPED-SITE')
@@ -1769,10 +1768,10 @@ class MemberReachTest extends Test {
 			'class Quiet { public function new() {} public function toString():String return "Q"; }',
 			'class Lib { public static var cb:() -> Void; public static function make():Dynamic return new Loud(); }'
 		];
-		final head: String = 'class C { var items:Array<Int> = []; var q:Quiet; var d:Dynamic; '
-			+ 'public function new() Lib.cb = () -> items.push(0); ';
-		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = "" + q; /*>*/ } }'], lib), r -> r.match(Proven));
-		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = "" + d; /*>*/ } }'], lib), r -> r.match(Reached(_)));
+		final head: String =
+			'class C { var items:Array<Int> = []; var q:Quiet; var d:Dynamic; public function new() Lib.cb = () -> items.push(0); ';
+		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = "" + q; /*>*/ } }'], lib), r -> r.match(Proven));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = "" + d; /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-REACH-ABSTRACT-VISIBLE') @:killer('M-REACH-MEMBER-READ') @:killer('M-REACH-INFERRED-MEMBER')
@@ -1786,9 +1785,9 @@ class MemberReachTest extends Test {
 				+ 'public static var plain:Int = 1; }'
 		];
 		final head: String = 'class C { public static var items:Array<Int> = []; public function new() Keeper.cb = () -> items.push(0); ';
-		assertMatch(ask([head + 'function f():Void { /*<*/ var y:Int = Keeper.plain; /*>*/ } }'], lib), r -> r.match(Proven));
-		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = Keeper.loud; /*>*/ } }'], lib), r -> r.match(Reached(_)));
-		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = Keeper.guess; /*>*/ } }'], lib), r -> r.match(Reached(_)));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var y:Int = Keeper.plain; /*>*/ } }'], lib), r -> r.match(Proven));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = Keeper.loud; /*>*/ } }'], lib), r -> r.match(Reached(_)));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = Keeper.guess; /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-REACH-INFERRED-ANON-METHOD')
@@ -1833,20 +1832,20 @@ class MemberReachTest extends Test {
 			'class Built { public static function build():Array<Dynamic> return null; }',
 			'@:build(Built.build()) class Gen { public function new() {} }'
 		];
-		final head: String = 'using Ext; class C { public static var items:Array<Int> = []; var n:Int; var b:Box; var g:Gen; '
-			+ 'public function new() {} ';
-		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = b.loudOf(); /*>*/ } }', loud], lib), r -> r.match(Reached(_)));
-		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = g.made; /*>*/ } }', loud], lib), r -> r.match(Reached(_)));
-		assertMatch(ask([head + 'function f():Void { /*<*/ var y:Int = n; /*>*/ } }', loud], lib), r -> r.match(Proven));
+		final head: String =
+			'using Ext; class C { public static var items:Array<Int> = []; var n:Int; var b:Box; var g:Gen; public function new() {} ';
+		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = b.loudOf(); /*>*/ } }', loud], lib), r -> r.match(Reached(_)));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = g.made; /*>*/ } }', loud], lib), r -> r.match(Reached(_)));
+		assertMatch(ask(['${head}function f():Void { /*<*/ var y:Int = n; /*>*/ } }', loud], lib), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-REACH-COMPOUND-OPERATOR') @:killer('M-REACH-UNDECLARED-PRIMITIVE')
 	public function testCompoundAssignmentRunsTheBinaryOperatorOverload(): Void {
 		// `acc += 1` runs an `@:op(A + B)` overload: no `+` node is written.
-		final acc: String = 'abstract Acc(Int) from Int { public static var cb:() -> Void; '
-			+ '@:op(A + B) function add(o:Acc):Acc { cb(); return this; } }';
-		final src: String = 'class C { public static var items:Array<Int> = []; var acc:Acc; public function new() Acc.cb = () -> items.push(0); '
-			+ 'function f():Void { /*<*/ acc += 1; /*>*/ } }';
+		final acc: String =
+			'abstract Acc(Int) from Int { public static var cb:() -> Void; @:op(A + B) function add(o:Acc):Acc { cb(); return this; } }';
+		final src: String = 'class C { public static var items:Array<Int> = []; var acc:Acc; public function new() Acc.cb = () '
+			+ '-> items.push(0); function f():Void { /*<*/ acc += 1; /*>*/ } }';
 		assertMatch(ask([src], [acc]), r -> r.match(Reached(_)));
 	}
 
@@ -1915,8 +1914,8 @@ class MemberReachTest extends Test {
 		final src: String = 'class C { var items:Array<Int> = []; var d:Dynamic; public function new() Loud.cb = () -> items.push(0); '
 			+ 'function f():Void { /*<*/ var s:String = "" + d; var t:Dynamic = d #if js .x #end; /*>*/ } '
 			+ 'function g():Void { var z:String = "" + d; } function h():Void { items.push(1); } }';
-		final loud: String = 'class Loud { public static var cb:() -> Void; public static var one:Loud = new Loud(); public function new() {} '
-			+ 'public function toString():String { cb(); return ""; } }';
+		final loud: String = 'class Loud { public static var cb:() -> Void; public static var one:Loud = new Loud(); public function '
+			+ 'new() {} public function toString():String { cb(); return ""; } }';
 		var probes: Int = 0;
 		function reach(parsesLoud: Bool): MemberReach {
 			final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
@@ -2012,108 +2011,6 @@ class MemberReachTest extends Test {
 		Assert.equals(0, probes, 'facts missing a configuration sent an unproved question to the builds');
 		assertMatch(ask(false), r -> r.match(Reached(_)));
 		Assert.equals(1, probes, 'with compiler facts an unproved question was not asked under the builds exactly once');
-	}
-
-	/** `ask` under the builds `configurations`. */
-	private function configuredAsk(
-		project: Array<String>, library: Null<Array<String>>, configurations: Array<ReachConfiguration>
-	): ReachResult {
-		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
-		final libs: Array<{ file: String, source: String }> = [
-			for (i in 0...(library ?? []).length) { file: 'L$i.hx', source: (library ?? [])[i] }
-		];
-		libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
-		final reach: MemberReach = new MemberReach(
-			plugin, files, CheckFixture.index(files.concat(libs), plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED,
-			configurations, () -> true
-		);
-		return reach.mayReach(Region('F0.hx', regionOf(project[0])), { owner: 'C', name: 'items' }, Mutate);
-	}
-
-	/** Every call node of `tree` whose callee is the bare name `name`. */
-	private static function callsNamed(tree: QueryNode, name: String): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
-		function walk(n: QueryNode): Void {
-			if (n.kind == 'Call' && n.children.length > 0 && n.children[0].name == name) out.push(n);
-			for (c in n.children) walk(c);
-		}
-		walk(tree);
-		return out;
-	}
-
-	/** Ask whether the region of `project[0]` may mutate `C.items`. */
-	private function ask(project: Array<String>, ?library: Array<String>, scopeKnown: Bool = true): ReachResult {
-		return reachOf(project, library, scopeKnown).mayReach(Region('F0.hx', regionOf(project[0])), { owner: 'C', name: 'items' }, Mutate);
-	}
-
-	/** Ask whether the region of `src` may mutate what the local or parameter `name` holds. */
-	private function askLocal(src: String, name: String): ReachResult {
-		return askLocalIn([src], name);
-	}
-
-	/** `askLocal` over the whole `project`, whose first file holds the region. */
-	private function askLocalIn(project: Array<String>, name: String): ReachResult {
-		return mutatesNamed(reachOf(project, null, true), project[0], name);
-	}
-
-	/** Ask `reach` whether the region of `src` (the file `F0.hx`) may mutate what `name`, read last in it, holds. */
-	private static function mutatesNamed(reach: MemberReach, src: String, name: String): ReachResult {
-		final at: Int = src.lastIndexOf(name, src.indexOf(REGION_CLOSE));
-		return reach.mayMutateNamed('F0.hx', name, new Span(at, at + name.length), regionOf(src));
-	}
-
-	private function reachOf(project: Array<String>, library: Null<Array<String>>, scopeKnown: Bool): MemberReach {
-		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
-		final libs: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(library ?? []);
-		libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
-		return new MemberReach(
-			plugin, files, CheckFixture.index(files.concat(libs), plugin), scopeKnown, MemberReach.MAX_LIBRARY_FILES,
-			MemberReach.MAX_VISITED, null, () -> true
-		);
-	}
-
-	/** Every region of `src`, in order. */
-	private static function regionsOf(src: String): Array<Span> {
-		final out: Array<Span> = [];
-		var at: Int = src.indexOf(REGION_OPEN);
-		while (at >= 0) {
-			final from: Int = at + REGION_OPEN.length;
-			out.push(new Span(from, src.indexOf(REGION_CLOSE, from)));
-			at = src.indexOf(REGION_OPEN, from);
-		}
-		return out;
-	}
-
-	private static function regionOf(src: String): Span {
-		final from: Int = src.indexOf(REGION_OPEN) + REGION_OPEN.length;
-		return new Span(from, src.indexOf(REGION_CLOSE));
-	}
-
-	/** Assert that `result` is `Proven`, naming `why`. */
-	private static function proven(result: ReachResult, why: String): Void {
-		Assert.isTrue(result.match(Proven), '$why: got $result');
-	}
-
-	/** Assert that `result` is not `Proven`, naming `why`. */
-	private static function refused(result: ReachResult, why: String): Void {
-		Assert.isFalse(result.match(Proven), '$why: got Proven');
-	}
-
-	private static function assertMatch(result: ReachResult, expected: ReachResult -> Bool, ?pos: haxe.PosInfos): Void {
-		Assert.isTrue(expected(result), 'got $result', pos);
-	}
-
-	private static function assertReachedAt(result: ReachResult, last: String): Void {
-		switch result {
-			case Reached(path):
-				Assert.isTrue(path.length > 0 && path[path.length - 1].to == last, [for (s in path) '${s.from}->${s.to}:${s.kind}'].join(
-					' '
-				));
-			case _:
-				Assert.fail('expected a path ending in $last, got $result');
-		}
 	}
 
 	/**
@@ -2222,6 +2119,108 @@ class MemberReachTest extends Test {
 		Assert.notNull(scope.declarationOf('Quiet'));
 		Assert.isNull(scope.siteOf('Host'));
 		Assert.isNull(scope.siteOf('Absent'));
+	}
+
+	/** `ask` under the builds `configurations`. */
+	private function configuredAsk(
+		project: Array<String>, library: Null<Array<String>>, configurations: Array<ReachConfiguration>
+	): ReachResult {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
+		final libs: Array<{ file: String, source: String }> = [
+			for (i in 0...(library ?? []).length) { file: 'L$i.hx', source: (library ?? [])[i] }
+		];
+		libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
+		final reach: MemberReach = new MemberReach(
+			plugin, files, CheckFixture.index(files.concat(libs), plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED,
+			configurations, () -> true
+		);
+		return reach.mayReach(Region('F0.hx', regionOf(project[0])), { owner: 'C', name: 'items' }, Mutate);
+	}
+
+	/** Ask whether the region of `project[0]` may mutate `C.items`. */
+	private function ask(project: Array<String>, ?library: Array<String>, scopeKnown: Bool = true): ReachResult {
+		return reachOf(project, library, scopeKnown).mayReach(Region('F0.hx', regionOf(project[0])), { owner: 'C', name: 'items' }, Mutate);
+	}
+
+	/** Ask whether the region of `src` may mutate what the local or parameter `name` holds. */
+	private function askLocal(src: String, name: String): ReachResult {
+		return askLocalIn([src], name);
+	}
+
+	/** `askLocal` over the whole `project`, whose first file holds the region. */
+	private function askLocalIn(project: Array<String>, name: String): ReachResult {
+		return mutatesNamed(reachOf(project, null, true), project[0], name);
+	}
+
+	private function reachOf(project: Array<String>, library: Null<Array<String>>, scopeKnown: Bool): MemberReach {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
+		final libs: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(library ?? []);
+		libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
+		return new MemberReach(
+			plugin, files, CheckFixture.index(files.concat(libs), plugin), scopeKnown, MemberReach.MAX_LIBRARY_FILES,
+			MemberReach.MAX_VISITED, null, () -> true
+		);
+	}
+
+	/** Every call node of `tree` whose callee is the bare name `name`. */
+	private static function callsNamed(tree: QueryNode, name: String): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		function walk(n: QueryNode): Void {
+			if (n.kind == 'Call' && n.children.length > 0 && n.children[0].name == name) out.push(n);
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return out;
+	}
+
+	/** Ask `reach` whether the region of `src` (the file `F0.hx`) may mutate what `name`, read last in it, holds. */
+	private static function mutatesNamed(reach: MemberReach, src: String, name: String): ReachResult {
+		final at: Int = src.lastIndexOf(name, src.indexOf(REGION_CLOSE));
+		return reach.mayMutateNamed('F0.hx', name, new Span(at, at + name.length), regionOf(src));
+	}
+
+	/** Every region of `src`, in order. */
+	private static function regionsOf(src: String): Array<Span> {
+		final out: Array<Span> = [];
+		var at: Int = src.indexOf(REGION_OPEN);
+		while (at >= 0) {
+			final from: Int = at + REGION_OPEN.length;
+			out.push(new Span(from, src.indexOf(REGION_CLOSE, from)));
+			at = src.indexOf(REGION_OPEN, from);
+		}
+		return out;
+	}
+
+	private static function regionOf(src: String): Span {
+		final from: Int = src.indexOf(REGION_OPEN) + REGION_OPEN.length;
+		return new Span(from, src.indexOf(REGION_CLOSE));
+	}
+
+	/** Assert that `result` is `Proven`, naming `why`. */
+	private static function proven(result: ReachResult, why: String): Void {
+		Assert.isTrue(result.match(Proven), '$why: got $result');
+	}
+
+	/** Assert that `result` is not `Proven`, naming `why`. */
+	private static function refused(result: ReachResult, why: String): Void {
+		Assert.isFalse(result.match(Proven), '$why: got Proven');
+	}
+
+	private static function assertMatch(result: ReachResult, expected: ReachResult -> Bool, ?pos: haxe.PosInfos): Void {
+		Assert.isTrue(expected(result), 'got $result', pos);
+	}
+
+	private static function assertReachedAt(result: ReachResult, last: String): Void {
+		switch result {
+			case Reached(path):
+				Assert.isTrue(path.length > 0 && path[path.length - 1].to == last, [for (s in path) '${s.from}->${s.to}:${s.kind}'].join(
+					' '
+				));
+			case _:
+				Assert.fail('expected a path ending in $last, got $result');
+		}
 	}
 
 }

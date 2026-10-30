@@ -6,7 +6,6 @@ import anyparse.check.common.design.threads.EdgeConditions;
 import anyparse.check.common.design.threads.FunctionTrees;
 import anyparse.query.CallGraph;
 import anyparse.query.ReachLiveness.ReachConfiguration;
-import unit.QueryTestHelpers;
 
 /**
  * The `thread-safety` check's path conditions: a call cut by what the code around it says — a value stored into a
@@ -436,35 +435,6 @@ class ThreadSafetyConditionsTest extends Test {
 		#end
 	}
 
-	#if (sys || nodejs)
-	/** `S.save(batch)` runs `body`; the main thread saves a batch, a worker a single one. */
-	private static function savesUnder(body: String): String {
-		return 'class S { var ready:Bool = true; var c:Bool = true; public function new() {} function use(b:Bool):Void {}'
-			+ ' function save(batch:Bool):Void { $body }'
-			+ ' public static function main():Void { final s:S = new S(); s.save(true); Runner.create(() -> s.save(false)); } }';
-	}
-
-	/**
-	 * Every message of a `Sys.sleep` run over `sources` (plus `Runner`, whose `create` is a spawn), `extra` added to the
-	 * rule's options (`"key":value,…` or empty), with `library` held by the
-	 * resolution scope only — under builds setting `defines`, one per entry — sorted.
-	 */
-	private static function sleepFindings(
-		extra: String, sources: Array<String>, ?library: Array<String>, ?defines: Array<ReachConfiguration>
-	): Array<String> {
-		final found: Array<String> = [
-			for (v in ThreadSafetyCheckTest.violations(
-				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Lock.wait","Mutex.acquire"],"spawns":["Runner.create"]'
-				+ (extra.length > 0 ? ',$extra' : '')
-				+ '}}}',
-				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources), null, false, library, defines
-			)) v.message
-		];
-		found.sort(Reflect.compare);
-		return found;
-	}
-	#end
-
 	/** A `Bool` handed to a constructor decides its branches as one handed to a method does (`new W(false)`). */
 	@:pin('control') @:killer('M-TS-NEW-UNBOUND')
 	public function testAConstructionArgumentDecidesTheConstructorsBranch(): Void {
@@ -841,5 +811,34 @@ class ThreadSafetyConditionsTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	#if (sys || nodejs)
+	/** `S.save(batch)` runs `body`; the main thread saves a batch, a worker a single one. */
+	private static function savesUnder(body: String): String {
+		return 'class S { var ready:Bool = true; var c:Bool = true; public function new() {} function use(b:Bool):Void {}'
+			+ ' function save(batch:Bool):Void { $body }'
+			+ ' public static function main():Void { final s:S = new S(); s.save(true); Runner.create(() -> s.save(false)); } }';
+	}
+
+	/**
+	 * Every message of a `Sys.sleep` run over `sources` (plus `Runner`, whose `create` is a spawn), `extra` added to the
+	 * rule's options (`"key":value,…` or empty), with `library` held by the
+	 * resolution scope only — under builds setting `defines`, one per entry — sorted.
+	 */
+	private static function sleepFindings(
+		extra: String, sources: Array<String>, ?library: Array<String>, ?defines: Array<ReachConfiguration>
+	): Array<String> {
+		final found: Array<String> = [
+			for (v in ThreadSafetyCheckTest.violations(
+				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Lock.wait","Mutex.acquire"],"spawns":["Runner.create"]'
+				+ (extra.length > 0 ? ',$extra' : '')
+				+ '}}}',
+				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources), null, false, library, defines
+			)) v.message
+		];
+		found.sort(Reflect.compare);
+		return found;
+	}
+	#end
 
 }

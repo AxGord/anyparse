@@ -6,7 +6,6 @@ import anyparse.check.common.members.MemberSpacing;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import haxe.io.Path;
-import unit.ConfigTrees;
 
 using StringTools;
 

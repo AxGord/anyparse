@@ -14,7 +14,6 @@ import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import sys.io.File;
-import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
 
 /**

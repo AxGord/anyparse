@@ -19,12 +19,9 @@ import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CompilerFacts;
-import anyparse.query.FactsEscapes;
-import anyparse.query.LintBaseline;
 import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
 import anyparse.query.ReachLiveness.ReachBuilds;
-import anyparse.query.SourceText;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
@@ -34,7 +31,6 @@ import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.check.oracle.ReachBuildsCache;
 import anyparse.check.RuleCategory;
 import anyparse.check.RuleIndex;
-import anyparse.query.FileIdentity;
 
 using Lambda;
 

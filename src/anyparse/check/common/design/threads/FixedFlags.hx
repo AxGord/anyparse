@@ -1,7 +1,5 @@
 package anyparse.check.common.design.threads;
 
-import anyparse.query.GrammarPlugin.RefShape;
-
 /**
  * The parameters of a function that decide two or more of its `if`s, that nothing in it writes and whose name
  * nothing else in it declares (`BareNames.stable`: a local, a loop binder, a `catch` variable or a nested

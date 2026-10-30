@@ -1,9 +1,7 @@
 package anyparse.query.graph;
 
 import anyparse.query.ConfigFinder;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeRefIndex;
 import anyparse.query.graph.CodeGraph.GraphLevel;
 import haxe.io.Path;
 

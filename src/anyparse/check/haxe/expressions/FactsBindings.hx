@@ -2,7 +2,6 @@ package anyparse.check.haxe.expressions;
 
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.query.CasePatterns;
-import anyparse.query.GrammarPlugin.RefShape;
 
 /**
  * Which bindings the compiler typed the moment it bound them, read off its facts (`FactsTypeOracle`): a binding no later

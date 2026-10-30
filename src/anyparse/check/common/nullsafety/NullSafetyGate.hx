@@ -1,7 +1,5 @@
 package anyparse.check.common.nullsafety;
 
-import anyparse.check.scan.NullFlow.NullFacts;
-import anyparse.query.GrammarPlugin.RefShape;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.io.File;

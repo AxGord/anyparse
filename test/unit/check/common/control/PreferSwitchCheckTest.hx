@@ -5,7 +5,6 @@ import anyparse.check.common.control.PreferSwitch;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
-import unit.QueryTestHelpers;
 
 /**
  * The `prefer-switch` check: a STATEMENT-position `if` / `else if` chain testing one

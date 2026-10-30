@@ -4,7 +4,6 @@ import anyparse.check.Severity;
 import anyparse.check.common.control.SimplifyNegatedCompound;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import unit.QueryTestHelpers;
 
 /**
  * The `simplify-negated-compound` check over its two arms. A logical-not is flagged `Info` and

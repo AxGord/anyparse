@@ -1,6 +1,5 @@
 package anyparse.format.comment;
 
-import anyparse.format.WriteOptions;
 import anyparse.runtime.CommonPrefix;
 
 using StringTools;

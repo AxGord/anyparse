@@ -1,7 +1,6 @@
 package anyparse.check.common.design.threads;
 
 import anyparse.query.CallGraph;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.LineIndex;
 

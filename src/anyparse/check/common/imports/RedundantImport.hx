@@ -63,7 +63,12 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 	private static final RULE_ID: String = 'redundant-import';
 
 	public function new() {
-		super(RULE_ID, 'a sub-type import already bound by a plain import of its module', RuleCategory.Imports);
+		super(
+			RULE_ID,
+			'an import binding nothing the module does not already see: a sub-type of an imported module, a type of its own or a parent '
+			+ 'package',
+			RuleCategory.Imports
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -94,6 +99,9 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 				final ambient: Null<String> = module != null
 					? null
 					: ambientProviderOf(info, imp, resolveIndex, publicTypes, bindings, contests);
+				final visible: Null<String> = module != null || ambient != null
+					? null
+					: visibleWithoutOf(info, imp, resolveIndex, publicTypes, bindings, plugin);
 				if (module != null)
 					violations.push({
 						file: info.file,
@@ -112,6 +120,14 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 						message: 'redundant '
 						+ (imp.kind == ImportKind.Using ? 'using' : 'import')
 						+ ' \'${imp.raw}\': \'$ambient\' already puts the same statement in force in every module here'
+					});
+				else if (visible != null)
+					violations.push({
+						file: info.file,
+						span: imp.span,
+						rule: RULE_ID,
+						severity: Severity.Warning,
+						message: 'redundant import \'${imp.raw}\': its types resolve to the same declarations without it — $visible'
 					});
 			}
 		}
@@ -141,6 +157,48 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 	 */
 	private static inline function providesModule(o: ImportInfo, module: String): Bool {
 		return !o.guarded && (o.kind == ImportKind.Import || o.kind == ImportKind.Using) && o.raw == module;
+	}
+
+	/**
+	 * What already makes every type `imp` names visible in `info` without it, as a phrase for the message, or null when
+	 * deleting it could change what a name means.
+	 *
+	 * The typing layer reads the order with and without the statement (`TypeNameBinding.keptWithout`); the deletion is a
+	 * no-op exactly where both bind the same declarations — typically a main type of the module's own package or a parent
+	 * one, which the compiler reads after every statement. Refused besides: a statement binding a VALUE (an enum
+	 * constructor, an enum-abstract value, a module-level field), which a package lookup never brings; another own statement
+	 * binding one of the names, where two flagged statements could each be deleted on the other's account; and an ambient
+	 * source, whose statements bind for the modules it governs.
+	 */
+	private static function visibleWithoutOf(
+		info: FileInfo, imp: ImportInfo, index: SymbolIndex, publicTypes: Map<String, Array<String>>, bindings: ImportBindings,
+		plugin: GrammarPlugin
+	): Null<String> {
+		if (imp.guarded || imp.kind != ImportKind.Import || plugin.ambientImportGovernance(info.file) != null) return null;
+		if (!ImportBindings.bindsNoValue(bindings.ofImport(imp.raw))) return null;
+		final simple: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
+		if (simple == null) return null;
+		for (o in info.imports) if (
+			(o.span.from != imp.span.from || o.span.to != imp.span.to) && SymbolIndex.bindsAnyOf(o, simple, publicTypes)
+		)
+			return null;
+		final kept: Null<Array<ResolvedType>> = index.refs.names.keptWithout(imp, info);
+		if (kept == null) return null;
+		final decl: ResolvedType = kept[0];
+		final pkg: String = decl.file.pkg;
+		final ambient: Null<AmbientImportGroup> = nearestBinder(info, decl.type.name, publicTypes);
+		return if (decl.file.file == info.file)
+			'this module declares them'
+		else if (ambient != null)
+			'\'${ambient.file}\' imports them'
+		else if (!decl.type.isMain || pkg != '' && info.pkg != pkg && !info.pkg.startsWith('$pkg.'))
+			'a wildcard import binds them'
+		else if (pkg == info.pkg)
+			'this module\'s own package \'$pkg\' holds them'
+		else if (pkg == '')
+			'the root package holds them'
+		else
+			'the parent package \'$pkg\' holds them';
 	}
 
 	/**

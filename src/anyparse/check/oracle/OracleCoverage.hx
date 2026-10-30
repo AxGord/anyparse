@@ -4,7 +4,6 @@ import anyparse.check.oracle.CompilerOracle.OracleExclusion;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CondRegionLiveness;
 import anyparse.query.FileIdentity;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 import haxe.io.Path;
