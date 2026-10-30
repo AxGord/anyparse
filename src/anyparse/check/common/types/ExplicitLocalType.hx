@@ -205,7 +205,7 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 	/**
 	 * Builtin type names a cross-file type SOURCE may be copied verbatim as: the source is
 	 * spelled in the DECLARING file, so every component must resolve identically in ANY
-	 * consumer with no import. Deliberately NARROWER than `TypeRefPrinter.ALWAYS_IN_SCOPE` —
+	 * consumer with no import. Deliberately NARROWER than `StdTypes.toplevelPath` —
 	 * that list answers "may the printer shorten TO this name here", a question it re-checks
 	 * against the resolution index, while this one is an unindexed verbatim copy and can only
 	 * trust names no project realistically redeclares.
@@ -644,7 +644,7 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 	 * a `fieldAccessKind` init whose single receiver child is an upper-initial `identKind`
 	 * TYPE reference (not a value binding) — looked up in the cross-file `index`
 	 * (`memberTypeSourceOf`, `Null<…>` preserved). Returned ONLY when EVERY nominal
-	 * component of that source is an ALWAYS-IN-SCOPE builtin (`ALWAYS_IN_SCOPE`): the
+	 * component of that source is an ALWAYS-IN-SCOPE builtin (`StdTypes.toplevelPath`): the
 	 * source is spelled in the field's DECLARING file, so a non-builtin name may not
 	 * resolve in the consumer's import scope (a copied `Foo` needs an `import` the consumer
 	 * may lack, or could bind to a different `Foo`) — a builtin is unambiguously in scope

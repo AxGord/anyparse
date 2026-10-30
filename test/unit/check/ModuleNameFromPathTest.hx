@@ -44,7 +44,7 @@ final class ModuleNameFromPathTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-PRINTER-MODULE-FROM-FIRST-DECL')
+	@:killer('M-PRINTER-HYBRID-REPAIR-BLIND')
 	public function testExplicitTypeOraclePrintsTheSubTypeShortBehindAHelperTypedef(): Void {
 		final out: String = annotateParams(HELPER_FIRST);
 		Assert.isTrue(out.indexOf('function cb(c:Content):Int') != -1, 'short name, got: $out');
@@ -57,7 +57,7 @@ final class ModuleNameFromPathTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-PRINTER-MODULE-FROM-FIRST-DECL')
+	@:killer('M-PRINTER-HYBRID-REPAIR-BLIND')
 	public function testExplicitLocalTypeOraclePrintsTheSubTypeShortBehindAHelperTypedef(): Void {
 		final out: String = annotateLocals(HELPER_FIRST);
 		Assert.isTrue(out.indexOf('var v:Content = load();') != -1, 'short name, got: $out');
@@ -65,7 +65,7 @@ final class ModuleNameFromPathTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-PRINTER-MODULE-FROM-FIRST-DECL')
+	@:killer('M-INDEX-MODULE-FROM-FIRST-DECL')
 	public function testShortenTypeRefShortensTheSubTypeBehindAHelperTypedef(): Void {
 		final src: String = HELPER_FIRST.replace('take(c:Content)', 'take(c:$CANONICAL)');
 		final report: Array<{ file: String, source: String }> = beside(src);

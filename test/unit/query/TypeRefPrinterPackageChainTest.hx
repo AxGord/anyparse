@@ -34,10 +34,23 @@ class TypeRefPrinterPackageChainTest extends Test {
 			{ file: 'pkg/Entity.hx', source: 'package pkg;\n\nclass Entity<T> {}\n' },
 			{ file: 'pkg/sub/Entity.hx', source: 'package pkg.sub;\n\nclass Entity<T> {}\n' }
 		]);
-		final p: TypeRefPrinter = printerWith('package pkg.sub.deep;\n\nclass C {}\n', index, 'pkg/sub/deep/C.hx');
+		final file: String = 'package pkg.sub.deep;\n\nclass C {}\n';
 		// The bare name means the NEARER `pkg.sub.Entity`; an import, which outranks the package chain, is the short route left.
+		Assert.equals('import pkg.Entity', spelled(printerWith(file, index, 'pkg/sub/deep/C.hx'), 'pkg.Entity'));
+		Assert.equals('Entity', spelled(printerWith(file, index, 'pkg/sub/deep/C.hx'), 'pkg.sub.Entity'));
+	}
+
+	/** An import the printer promised is an import of the file once spliced: it outranks the package chain for every later print. */
+	@:pin('control')
+	@:killer('M-PRINTER-PENDING-IMPORT-BLIND')
+	public function testAPendingImportOutranksThePackageChain(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/Entity.hx', source: 'package pkg;\n\nclass Entity<T> {}\n' },
+			{ file: 'pkg/sub/Entity.hx', source: 'package pkg.sub;\n\nclass Entity<T> {}\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package pkg.sub.deep;\n\nclass C {}\n', index, 'pkg/sub/deep/C.hx');
 		Assert.equals('import pkg.Entity', spelled(p, 'pkg.Entity'));
-		Assert.equals('Entity', spelled(p, 'pkg.sub.Entity'));
+		Assert.equals('pkg.sub.Entity', spelled(p, 'pkg.sub.Entity'));
 	}
 
 	public function testSecondaryTypeOfAnEnclosingPackageBindsNothing(): Void {
@@ -45,11 +58,27 @@ class TypeRefPrinterPackageChainTest extends Test {
 			{ file: 'pkg/Entity.hx', source: 'package pkg;\n\nclass Entity<T> {}\n' },
 			{ file: 'pkg/sub/Mod.hx', source: 'package pkg.sub;\n\nclass Mod {}\n\nclass Entity<T> {}\n' }
 		]);
-		// Inside `pkg.sub` itself the secondary `Entity` still vetoes, conservatively; one package deeper it is skipped.
-		Assert.equals('pkg.Entity', spelled(printerWith('package pkg.sub;\n\nclass C {}\n', index, 'pkg/sub/C.hx'), 'pkg.Entity'));
+		// A secondary type binds no bare name outside its module, in its own package too: the chain goes on to `pkg.Entity`.
+		Assert.equals('Entity', spelled(printerWith('package pkg.sub;\n\nclass C {}\n', index, 'pkg/sub/C.hx'), 'pkg.Entity'));
 		Assert.equals('Entity', spelled(printerWith('package pkg.sub.deep;\n\nclass C {}\n', index, 'pkg/sub/deep/C.hx'), 'pkg.Entity'));
 	}
 
+	/** A root module's SECONDARY type is not visible by its bare name (4.3.7: `Type not found : ValueType`); an import is. */
+	@:pin('control')
+	@:killer('M-RESOLVE-BARE-SECONDARY-ROOT')
+	public function testASecondaryTypeOfARootModuleNeedsAnImport(): Void {
+		final index: SymbolIndex = indexOf([{ file: 'Type.hx', source: 'class Type {}\n\nenum ValueType {\n\tTNull;\n}\n' }]);
+		Assert.equals('import Type.ValueType', spelled(printerWith('package unit;\n\nclass C {}\n', index, 'unit/C.hx'), 'Type.ValueType'));
+	}
+
+	/** A `using` imports its module too, so the module's main type is already visible by its bare name. */
+	public function testAUsingMakesItsModulesTypeVisible(): Void {
+		final index: SymbolIndex = indexOf([{ file: 'u/Tools.hx', source: 'package u;\n\nclass Tools {}\n' }]);
+		Assert.equals('Tools', spelled(printerWith('package app;\n\nusing u.Tools;\n\nclass C {}\n', index, 'app/C.hx'), 'u.Tools'));
+	}
+
+	@:pin('control')
+	@:killer('M-RESOLVE-BARE-GUARDED-DECL')
 	public function testGuardedEnclosingTypeProvesNothing(): Void {
 		final index: SymbolIndex = indexOf([
 			{ file: 'q/Thing.hx', source: 'package q;\n\n#if never\nclass Thing {}\n#else\nclass Thing {}\n#end\n' }
@@ -74,7 +103,8 @@ class TypeRefPrinterPackageChainTest extends Test {
 		final index: SymbolIndex = indexOf(STD_MAP);
 		final nested: TypeRefPrinter = printerWith('package pkg.sub;\n\nclass C {}\n', index, 'pkg/sub/C.hx');
 		Assert.equals('Map<String, Int>', nested.printTypeExpr('haxe.ds.Map<String, Int>'));
-		Assert.equals('Map', printerWith('class C {}\n', index, 'C.hx').print('haxe.ds.Map').text);
+		Assert.isFalse(nested.hasPendingImports(), 'the root alias reaches the target with no import');
+		Assert.equals('Map', spelled(printerWith('class C {}\n', index, 'C.hx'), 'haxe.ds.Map'));
 	}
 
 	public function testReorderingRootAliasShadowsItsTarget(): Void {
@@ -82,7 +112,8 @@ class TypeRefPrinterPackageChainTest extends Test {
 			{ file: 'Map.hx', source: 'typedef Map<K, V> = haxe.ds.Map<V, K>;\n' },
 			{ file: 'haxe/ds/Map.hx', source: 'package haxe.ds;\n\nabstract Map<K, V>(Dynamic) {}\n' }
 		]);
-		Assert.equals('haxe.ds.Map', printerWith('package pkg;\n\nclass C {}\n', index, 'pkg/C.hx').print('haxe.ds.Map').text);
+		// The root `Map` is another type here, so the bare name needs the import that outranks it.
+		Assert.equals('import haxe.ds.Map', spelled(printerWith('package pkg;\n\nclass C {}\n', index, 'pkg/C.hx'), 'haxe.ds.Map'));
 	}
 
 	/** A printer over `source` read as the file `file`, whose path names the module and package it resolves from. */

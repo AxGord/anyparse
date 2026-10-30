@@ -3,7 +3,7 @@ package anyparse.query;
 import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypingService.BareBinding;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -38,43 +38,6 @@ typedef PendingImportEdit = {
 @:nullSafety(Strict)
 final class TypeRefPrinter {
 
-	/**
-	 * Simple names available in EVERY Haxe file with no import, mapped to the ONE path each
-	 * denotes — the std top-level module set (whose path IS the simple name) plus `Map`, which
-	 * lives at `haxe.ds.Map` yet is reachable unqualified everywhere. The value half is
-	 * load-bearing: matching on the name alone would shorten `haxe.macro.Type` to `Type` and
-	 * `foo.Any` to `Any`, silently rebinding both to the builtin — and the `Any` case typechecks,
-	 * so no verification pass would catch it.
-	 */
-	private static final ALWAYS_IN_SCOPE: Map<String, String> = [
-		'Int' => 'Int',
-		'UInt' => 'UInt',
-		'Float' => 'Float',
-		'Bool' => 'Bool',
-		'String' => 'String',
-		'Void' => 'Void',
-		'Dynamic' => 'Dynamic',
-		'Any' => 'Any',
-		'Null' => 'Null',
-		'Array' => 'Array',
-		'Map' => 'haxe.ds.Map',
-		'Class' => 'Class',
-		'Enum' => 'Enum',
-		'EnumValue' => 'EnumValue',
-		'Date' => 'Date',
-		'DateTools' => 'DateTools',
-		'Math' => 'Math',
-		'Reflect' => 'Reflect',
-		'Std' => 'Std',
-		'StringBuf' => 'StringBuf',
-		'StringTools' => 'StringTools',
-		'Sys' => 'Sys',
-		'Type' => 'Type',
-		'EReg' => 'EReg',
-		'Lambda' => 'Lambda',
-		'Xml' => 'Xml'
-	];
-
 	/** Paths `print` promised an import for, in first-promised order. */
 	private final _pendingImports: Array<String> = [];
 
@@ -104,6 +67,13 @@ final class TypeRefPrinter {
 
 	/** The cross-file index for same-package / root-package / canonical-path resolution, or null when the run has none. */
 	private final _index: Null<SymbolIndex>;
+
+	/**
+	 * This file's declarations and statements: the index's own record when the index read this very text, else read off
+	 * it (`IndexScope.declarationsOf`) — a printed file need not be one the index holds, and a fix run prints into text the
+	 * index read before. Null in the `importsOnly` form.
+	 */
+	private final _ownInfo: Null<FileInfo>;
 
 	/** Whether a fresh import has a legal splice point in this file (see the constructor). */
 	private final _canAnchorImports: Bool;
@@ -145,6 +115,12 @@ final class TypeRefPrinter {
 		_plugin = plugin;
 		_importMap = importMap;
 		_index = index;
+		_ownInfo = if (file == null || source == null || plugin == null)
+			null
+		else if (index != null && index.sourceOf(file) == source)
+			index.fileInfo(file) ?? IndexScope.declarationsOf(file, source, plugin)
+		else
+			IndexScope.declarationsOf(file, source, plugin);
 		_pkg = root == null ? null : ModuleScan.packageOf(root);
 		_module = root == null || file == null ? null : ModuleScan.moduleOf(root, file);
 		_aliasTargets = source == null || root == null ? [] : ModuleScan.aliasTargetsOf(source, root);
@@ -350,15 +326,36 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * Whether THIS module's own top level declares `simple` AND that declaration is `canonical` — the
-	 * MODULE-LOCAL binding, which outranks every import in Haxe's resolution order. Asked at two
-	 * priorities (`shadowedByModuleImport` exempts it, `shadowedLocally` short-circuits on it), so it
-	 * lives here rather than being spelled twice: the two sites must never drift apart about what
-	 * "the file declares this type itself" means.
+	 * Whether THIS module's own top level declares `simple` AND that declaration is `canonical` — the MODULE-LOCAL binding,
+	 * which outranks every import in Haxe's resolution order — read where the printer has no index (with one, the typing
+	 * layer's reading holds it). Asked at two priorities (`visibleNameFor` takes it, `shadowedLocally` exempts the bulk arm on
+	 * it), so it lives here rather than being spelled twice.
 	 */
-	private inline function moduleLocalBinds(canonical: String, simple: String): Bool {
-		final root: Null<QueryNode> = _root;
-		return root != null && ModuleScan.declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) == canonical;
+	private function moduleLocalBinds(canonical: String, simple: String): Bool {
+		final info: Null<FileInfo> = _ownInfo;
+		return info != null && info.types.exists(t -> t.name == simple) && moduleLocalPathOf(simple) == canonical;
+	}
+
+	/**
+	 * Whether a binding reached with no import holds `simple` against `canonical` — a builtin, a wildcard's, a package
+	 * chain's or a module-local type of the name: with an index the whole reading of the bare name (`bareBinding`), without
+	 * one the std's toplevel alone.
+	 */
+	private function heldWithoutImport(canonical: String, simple: String): Bool {
+		final binding: Null<BareBinding> = bareBinding(canonical, simple, false);
+		if (binding != null) return binding == Other;
+		final builtin: Null<String> = StdTypes.toplevelPath(simple);
+		return builtin != null && builtin != canonical;
+	}
+
+	/**
+	 * How the bare `simple` reads in this file against `canonical` (`TypingService.bareBinding`; `fileOnly`, against the
+	 * file's own types and statements alone), or null when the printer has no index to read it with.
+	 */
+	private function bareBinding(canonical: String, simple: String, fileOnly: Bool): Null<BareBinding> {
+		final index: Null<SymbolIndex> = _index;
+		final info: Null<FileInfo> = _ownInfo;
+		return index == null || info == null ? null : index.typing.bareBinding(info, simple, canonical, fileOnly);
 	}
 
 	/**
@@ -471,8 +468,8 @@ final class TypeRefPrinter {
 	/**
 	 * The name to write when `canonical` is ALREADY visible in this file, else null. Covers, in
 	 * order: an always-in-scope builtin / root-package type, an exact plain import, an alias
-	 * whose target is this path, a type declared in this module, and the main type of a module
-	 * in this package or, through `packageChainVerdict`, in an enclosing one. A same-package
+	 * whose target is this path, a type declared in this module, and the main type of a module in this package or an enclosing one — with
+	 * an index, every route but the alias is the typing layer's reading of the bare name (`TypingService.bareBinding`). A same-package
 	 * SUB-module type is deliberately NOT here: it needs an import.
 	 *
 	 * `shadowedLocally` gates the WHOLE set, not just the builtin arm: Haxe's own resolution
@@ -484,60 +481,31 @@ final class TypeRefPrinter {
 	private function visibleNameFor(canonical: String, simple: String): Null<String> {
 		for (alias => target in _aliasTargets) if (target == canonical) return alias;
 		if (shadowedLocally(canonical, simple)) return null;
-		// A builtin is reached LAST, after every enclosing package, so a nearer package's own type of the name outranks it.
-		if (alwaysInScope(canonical, simple) && packageChainVerdict(canonical, simple) != false) return simple;
-		if (_importMap[simple] == canonical) return simple;
-		if (moduleImportBinds(canonical, simple)) return simple;
-		final root: Null<QueryNode> = _root;
-		if (root != null && ModuleScan.declaresTypeNamed(root, simple) && canonical == moduleLocalPathOf(simple)) return simple;
+		final binding: Null<BareBinding> = bareBinding(canonical, simple, false);
+		// An import of a module the index never saw proves the module, and so the sub-type it names: nothing contradicts it.
+		if (binding != null) return binding == Same || binding == Unreadable && moduleImportBinds(canonical) ? simple : null;
+		// Without an index only what the file itself shows proves a binding; a builtin, read last, is the std's toplevel.
+		if (StdTypes.toplevelPath(simple) == canonical) return simple;
+		if (_importMap[simple] == canonical || moduleImportBinds(canonical) || moduleLocalBinds(canonical, simple)) return simple;
 		final pkg: Null<String> = _pkg;
-		return pkg != null && canonical == (pkg == '' ? simple : '$pkg.$simple') || packageChainVerdict(canonical, simple) == true
-			? simple
-			: null;
+		return pkg != null && canonical == (pkg == '' ? simple : '$pkg.$simple') ? simple : null;
 	}
 
 	/**
-	 * Whether a plain `import <module>;` ALREADY in this file binds `simple` to `canonical` — i.e.
-	 * `canonical` is `<module>.<simple>`, a SECONDARY top-level type of a module the file imports.
-	 * A module import brings in every top-level type the module declares, not only its main one, so
-	 * the short name is already visible and a fresh `import <module>.<simple>;` would be pure noise
-	 * (the shape `redundant-import` reports; without this route the printer was the thing WRITING
-	 * it — `import fs.DiskSystemInterface.DiskSystemCloudAction;` into a file already carrying
-	 * `import fs.DiskSystemInterface;`).
+	 * Whether a plain `import <module>;` or an unguarded top-level `using <module>;` ALREADY in this file names `canonical`'s
+	 * parent path — `canonical` is then `<module>.<simple>`, a type of a module the file imports, which a module import binds
+	 * whatever else the module declares. Only a MODULE may be plainly imported, so the statement itself proves the parent path
+	 * is one. An ALIASED module import never qualifies: an alias binds only the alias.
 	 *
-	 * A `using <module>;` qualifies on the same terms — it IS an `import <module>;` plus static
-	 * extension — but only UNGUARDED and at the top level, since a `#if`-guarded one binds the name
-	 * in one build configuration and not another. An ALIASED module import never qualifies: it is
-	 * absent from `_importMap` by construction, and correctly so, an alias binds only the alias.
-	 *
-	 * A PENDING import of a different path claiming `simple` refuses the route, the same collision
-	 * `canAddImport` refuses on: the pending line will be spliced into this same file, and Haxe lets
-	 * the LAST import of a simple name win.
-	 *
-	 * The INDEX is consulted as a VETO, not as the evidence: only a MODULE may be plainly imported,
-	 * so the import statement itself proves the parent path is one, and a module-qualified path
-	 * under it can only name that module's sub-type. An index that knows the simple name and places
-	 * it in OTHER modules only contradicts that reading, and the route steps aside for route 2 —
-	 * which prints the same short name but ALSO writes an import, so the file at least states which
-	 * type it means (whether that import wins is a position question `anchorFor` decides). An index
-	 * that has never heard of the name — the module outside the resolution scope — vetoes nothing:
-	 * route 2's alternative is `import <module>.<simple>;`, exactly as unproven, and a wrong short
-	 * name there fails LOUD at the verification pass rather than binding something else.
-	 *
-	 * A COMPETING binder of `simple` is not this predicate's job — `shadowedLocally` runs first in
-	 * `visibleNameFor` and owns every shadow, module-import secondaries included
-	 * (`shadowedByModuleImport`).
+	 * The textual half of the reading: without an index it is all there is, and with one it answers only where the index never
+	 * saw the module (`visibleNameFor`) — a fresh `import <module>.<simple>;` there would be exactly as unproven, and is the
+	 * shape `redundant-import` reports.
 	 */
-	private function moduleImportBinds(canonical: String, simple: String): Bool {
+	private function moduleImportBinds(canonical: String): Bool {
 		final dot: Int = canonical.lastIndexOf('.');
 		if (dot <= 0) return false;
 		final module: String = canonical.substring(0, dot);
-		if (_importMap[SourceText.lastSegment(module)] != module && !_usingModules.contains(module)) return false;
-		if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return false;
-		final index: Null<SymbolIndex> = _index;
-		if (index == null) return true;
-		final declarers: Array<FileInfo> = index.refs.declaringFiles(simple);
-		return declarers.length == 0 || declarers.exists(f -> f.module == module);
+		return _importMap[SourceText.lastSegment(module)] == module || _usingModules.contains(module);
 	}
 
 	/**
@@ -566,10 +534,9 @@ final class TypeRefPrinter {
 		if (!importReachesSite()) return false;
 		if (shadowedLocally(canonical, simple)) return false;
 		if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return false;
-		// Shortening WRITTEN text takes the name only where nothing reaches it without an import: a builtin or a package-chain
-		// main type of the name would be outranked by the fresh import, which compiles but moves what the bare name means.
-		final builtin: Null<String> = ALWAYS_IN_SCOPE[simple];
-		if (owned != null && (builtin != null && builtin != canonical || packageChainVerdict(canonical, simple) == false)) return false;
+		// Shortening WRITTEN text takes the name only where nothing reaches it without an import: a builtin, a wildcard's or a
+		// package-chain type of the name would be outranked by the fresh import, which compiles but moves what the bare name means.
+		if (owned != null && heldWithoutImport(canonical, simple)) return false;
 		// A mention in INERT text — a comment, or the literal text of a string / regex — is masked
 		// out: the scan asks whether anything in this file BINDS the name, and neither binds
 		// anything, while an unmasked reading refuses the import on the strength of a word in a
@@ -686,140 +653,54 @@ final class TypeRefPrinter {
 	/** Whether the index knows a type named `simple` whose own import path IS `path` — i.e. `path` is real and needs no repair. */
 	private function declaredAtPath(path: String, simple: String): Bool {
 		final index: Null<SymbolIndex> = _index;
-		return index != null && index.refs.declaringFiles(simple).exists(f -> ModuleScan.pathOfTypeIn(f, simple) == path);
+		return index != null && SourceText.lastSegment(path) == simple && index.refs.resolveQualifiedRefAll(path).length > 0;
 	}
 
 	/**
-	 * Whether the bare `simple` denotes `canonical` with no import anywhere: the builtin whose
-	 * OWN path is `canonical`, or — with an index — a type declared in a ROOT-package file,
-	 * which Haxe makes globally visible. The caller (`visibleNameFor`) has already ruled out a
-	 * local shadow. Matching `canonical`, not just the name, is what keeps `haxe.macro.Type` and
-	 * `foo.Any` from collapsing onto the builtins (see `ALWAYS_IN_SCOPE`).
-	 */
-	private function alwaysInScope(canonical: String, simple: String): Bool {
-		if (ALWAYS_IN_SCOPE[simple] == canonical) return true;
-		final index: Null<SymbolIndex> = _index;
-		return index != null
-			&& index.refs.declaringFiles(simple).exists(f -> f.pkg == '' && ModuleScan.pathOfTypeIn(f, simple) == canonical);
-	}
-
-	/**
-	 * Whether something IN THIS FILE'S SCOPE binds `simple` to something other than `canonical` —
-	 * an import or alias, an imported enum's CONSTRUCTOR (`importedMemberNames`), a module-local
-	 * declaration, a same-package type, a BULK import (`import pkg.*;` / `using pkg.Module;`, via
-	 * `shadowedByBulkImport`), or (globally) a root-package one. Such a binding shadows the bare
-	 * name, so neither the builtin short-circuit nor a fresh import may use it.
-	 *
-	 * The gate covers the WHOLE route set for the reason `visibleNameFor` documents, and its
-	 * internal ORDER is Haxe's own: the bulk arm runs last and is short-circuited by an explicit
-	 * import or a module-local declaration that already binds `simple` to `canonical`, because the
-	 * compiler ranks both of those above a wildcard.
+	 * Whether something IN THIS FILE'S SCOPE that a fresh import does not outrank binds `simple` to something other than
+	 * `canonical`: an imported enum's CONSTRUCTOR (`importedMemberNames`), an import this printer already promised, and — with
+	 * an index — the module's own types and the file's own statements as the typing layer reads them (`TypingService.bareBinding`,
+	 * `fileOnly`). Without an index the file's text is read instead: a plain, aliased or `#if`-guarded import, a module-local
+	 * declaration, a BULK import (`shadowedByBulkImport`), the last short-circuited by an explicit import or a module-local
+	 * declaration binding `simple` to `canonical`, which the compiler ranks above a wildcard.
 	 */
 	private function shadowedLocally(canonical: String, simple: String): Bool {
+		final valueNames: Null<Array<String>> = importedMemberNames();
+		if (valueNames == null || valueNames.contains(simple)) return true;
+		// A pending line is an import of this file once spliced, and the last import of a simple name wins.
+		if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return true;
+		// A fresh import outranks every tier below the file's own statements, so only those can hold the name against it.
+		final binding: Null<BareBinding> = bareBinding(canonical, simple, true);
+		if (binding != null) return binding == Other;
 		final bound: Null<String> = _importMap[simple];
 		if (bound != null && bound != canonical) return true;
 		final aliased: Null<String> = _aliasTargets[simple];
-		if (aliased != null && aliased != canonical) return true;
-		final valueNames: Null<Array<String>> = importedMemberNames();
-		if (valueNames == null || valueNames.contains(simple)) return true;
-		if (shadowedByGuardedImport(canonical, simple)) return true;
-		if (shadowedByModuleImport(canonical, simple)) return true;
-		final root: Null<QueryNode> = _root;
-		if (root != null && ModuleScan.declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) != canonical) return true;
-		if (_pkg != null && packageDeclaresOtherType(canonical, simple)) return true;
-		final index: Null<SymbolIndex> = _index;
-		if (index != null && index.refs.declaringFiles(simple).exists(f -> f.pkg == '' && !declaresAs(f, simple, canonical))) return true;
+		if (aliased != null && aliased != canonical || shadowedByGuardedImport(canonical, simple)) return true;
+		final info: Null<FileInfo> = _ownInfo;
+		if (info != null && info.types.exists(t -> t.name == simple) && moduleLocalPathOf(simple) != canonical) return true;
 		// An EXPLICIT import or a module-local declaration that binds `simple` to `canonical`
 		// OUTRANKS a bulk import in Haxe's own resolution order (verified against the compiler:
 		// `import q.*;` + `import p.Foo;` resolves a bare `Foo` to `p.Foo`, and a module-local
 		// `Foo` wins over both). The bulk arm may only veto what a wildcard genuinely outranks —
 		// the same-package, builtin and root-package routes below it.
-		return _importMap[simple] != canonical && !moduleLocalBinds(canonical, simple) && shadowedByBulkImport(canonical, simple);
+		return _importMap[simple] != canonical && !moduleLocalBinds(canonical, simple) && shadowedByBulkImport(simple);
 	}
 
 	/**
-	 * Whether a plain `import <module>;` in this file binds `simple` to a type OTHER than
-	 * `canonical`. `_importMap` is keyed by the imported path's LAST SEGMENT, so it answers only for
-	 * a module's MAIN type and for an explicitly imported sub-type — a module whose SECONDARY type
-	 * carries the name is invisible to it, the mirror of the gap `moduleImportBinds` closes on the
-	 * visibility side. Left open, the printer ASSERTED visibility from a module import while staying
-	 * BLIND to one as a shadow, and a bare `other.Sub` printed into a file carrying
-	 * `import pkg.Mod;` — whose `Mod` declares its own `Sub` — silently named the wrong type.
+	 * Whether a BULK import — `import pkg.*;` or a `using pkg.Module;` — could bind `simple` to a type other than `canonical`,
+	 * read WITHOUT an index (with one, `TypingService.bareBinding` reads both). Neither form NAMES what it brings in, so
+	 * `_importMap` (built from plain imports) is blind to both: a wildcard is unanswerable and shadows unconditionally, a
+	 * `using` is read textually — only its module's own main-type name is derivable, so a sub-module type it also binds is a
+	 * KNOWN miss on this path.
 	 *
-	 * Two imports binding one simple name are legal in Haxe and the LAST one wins, so WHICH type the
-	 * bare name means is a statement-ORDER question this predicate does not try to answer: it reports
-	 * the ambiguity as a shadow, which costs only the short form (the caller falls back to the
-	 * fully-qualified path) and never emits a name bound to something else. It therefore vetoes ABOVE
-	 * the EXPLICIT-import short-circuit at the end of `shadowedLocally` — unlike a wildcard, a
-	 * competing module import genuinely can outrank an explicit import.
-	 *
-	 * It does NOT outrank a MODULE-LOCAL declaration, which is why that route is exempted here rather
-	 * than left to the same short-circuit: a type the file's own module declares wins over every
-	 * import unconditionally (verified on 4.3.7 — a module-local `typedef Sub = Int` beside an
-	 * `import pkg.Mod;` whose `Mod` declares its own `Sub` resolves the bare name to the LOCAL one).
-	 * Vetoing there cost the module-local short form in every file that imported any module carrying
-	 * one of its type names.
-	 *
-	 * Needs the index — only it knows what a module declares. Without one the question is
-	 * unanswerable and the arm stays silent, the reading every caller had before it existed.
+	 * This arm sits BELOW the explicit-import and module-local routes on purpose (see `shadowedLocally`): Haxe ranks both above
+	 * a wildcard. A true here only ever costs the short form and falls back to the fully-qualified path, which always resolves.
 	 */
-	private function shadowedByModuleImport(canonical: String, simple: String): Bool {
-		final index: Null<SymbolIndex> = _index;
-		if (index == null) return false;
-		if (moduleLocalBinds(canonical, simple)) return false;
-		final imported: Array<String> = [for (path in _importMap) path];
-		return index.refs.declaringFiles(simple)
-			.exists(f -> imported.contains(f.module) && ModuleScan.pathOfTypeIn(f, simple) != canonical);
-	}
-
-	/**
-	 * Whether a BULK import — `import pkg.*;` or a `using pkg.Module;` — could bind `simple` to a
-	 * type other than `canonical`. Neither form NAMES what it brings in, so `_importMap` (built
-	 * from plain imports) is blind to both.
-	 *
-	 * The two forms bind different things, verified against the compiler rather than assumed. A
-	 * package wildcard `import pkg.*;` binds the MAIN type of each module in that package and
-	 * NOTHING else — a secondary type of `pkg.Mod` stays unreachable, so the arm matches only a
-	 * main-type declaration. A module wildcard `import pkg.Mod.*;` binds no type name at all (it
-	 * imports statics and enum constructors), so it can never shadow and is not tested for. A
-	 * `using pkg.Mod;` is an `import pkg.Mod;` plus static extension, so it binds that module's
-	 * types.
-	 *
-	 * WITHOUT an index a wildcard is unanswerable and shadows unconditionally; a `using` is read
-	 * textually — only its module's own main-type name is derivable, so a sub-module type it also
-	 * binds is a KNOWN miss on that path.
-	 *
-	 * This arm sits BELOW the explicit-import and module-local routes on purpose (see
-	 * `shadowedLocally`): Haxe ranks both above a wildcard, so vetoing them here would refuse a
-	 * short name the compiler resolves exactly as intended. It gates the same-package, builtin and
-	 * root-package routes, which a wildcard genuinely outranks.
-	 *
-	 * The conservative direction is the same for every caller: a true here only ever costs the
-	 * short form and falls back to the fully-qualified path, which always resolves.
-	 */
-	private function shadowedByBulkImport(canonical: String, simple: String): Bool {
-		if (_root == null) return false;
-		final index: Null<SymbolIndex> = _index;
-		// One index scan per question, not one per bulk statement: `declaringFiles` filters EVERY
-		// indexed file (the std is in the default resolution scope), and the argument is loop-invariant.
-		final declarers: Array<FileInfo> = index == null ? [] : index.refs.declaringFiles(simple);
-		if (index != null && declarers.length == 0) return false;
+	private function shadowedByBulkImport(simple: String): Bool {
 		for (c in _bulkImports) {
 			final path: Null<String> = c.name;
 			if (path == null) continue;
-			if (c.kind == ModuleScan.WILDCARD_IMPORT_KIND) {
-				// An unindexed wildcard is unanswerable — nothing can enumerate what it brings in.
-				if (index == null) return true;
-				final prefix: String = SourceText.parentPath(path);
-				if (declarers.exists(
-					f -> f.pkg == prefix && ModuleScan.isMainTypeIn(f, simple) && ModuleScan.pathOfTypeIn(f, simple) != canonical
-				))
-					return true;
-			} else if (index == null) {
-				if (SourceText.lastSegment(path) == simple) return true;
-			} else if (declarers.exists(f -> f.module == path && ModuleScan.pathOfTypeIn(f, simple) != canonical)) {
-				return true;
-			}
+			if (c.kind == ModuleScan.WILDCARD_IMPORT_KIND || SourceText.lastSegment(path) == simple) return true;
 		}
 		return false;
 	}
@@ -865,47 +746,6 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * Whether the index knows a type named `simple` in THIS file's package that is NOT
-	 * `canonical` — such a type shadows the bare name. The type being printed is excluded on
-	 * purpose: a same-package SUB-module type (`pkg.Mod.Sub`, printed from inside `pkg`) is
-	 * declared in this package yet still needs an import, so vetoing on its own declaration
-	 * would make route 2 unreachable for it.
-	 */
-	private function packageDeclaresOtherType(canonical: String, simple: String): Bool {
-		final index: Null<SymbolIndex> = _index;
-		final pkg: Null<String> = _pkg;
-		return index != null
-			&& pkg != null
-			&& index.refs.declaringFiles(simple).exists(f -> f.pkg == pkg && !declaresAs(f, simple, canonical));
-	}
-
-	/**
-	 * What the bare `simple` means through the PACKAGE CHAIN — this file's package, then each enclosing package, then the
-	 * root, nearest first, where only a module's MAIN type answers (verified on 4.3.7: from `a.b.c`, `a.b.E` outranks `a.E`,
-	 * which outranks a root `E`, and a secondary `E` of an `a.b` module binds nothing). True when the first binding on the
-	 * chain IS `canonical`, false when it is another type (or a `#if`-guarded one, whose other branches nothing here models),
-	 * null when nothing on the chain is known to bind the name — always the answer without an index, except for `canonical`
-	 * in this file's own package, which the compiler looks up first.
-	 */
-	private function packageChainVerdict(canonical: String, simple: String): Null<Bool> {
-		final pkg: Null<String> = _pkg;
-		if (pkg == null) return null;
-		final index: Null<SymbolIndex> = _index;
-		final declarers: Array<FileInfo> = index == null ? [] : index.refs.declaringFiles(simple);
-		var prefix: String = pkg;
-		while (true) {
-			final module: String = prefix == '' ? simple : '$prefix.$simple';
-			final file: Null<FileInfo> = declarers.find(f -> f.module == module);
-			final decl: Null<TypeDeclInfo> = file?.types.find(t -> t.name == simple && t.isMain);
-			if (file != null && decl != null) return !decl.guarded && declaresAs(file, simple, canonical);
-			// An unindexed path that IS `canonical` proves a main type only in this file's own package (see `visibleNameFor`).
-			if (module == canonical) return prefix == pkg ? true : null;
-			if (prefix == '') return null;
-			prefix = SourceText.parentPath(prefix);
-		}
-	}
-
-	/**
 	 * The dotted path a type named `simple` declared in THIS module carries:
 	 * `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type.
 	 */
@@ -937,21 +777,6 @@ final class TypeRefPrinter {
 	 */
 	public static function importsOnly(importMap: Map<String, String>): TypeRefPrinter {
 		return new TypeRefPrinter(null, null, importMap, null, null, null);
-	}
-
-	/**
-	 * Whether `file`'s type `simple` IS `canonical`: declared at that path, or a plain `typedef` re-pointing at `canonical`
-	 * with its OWN type parameters in order — a transparent alias such as the std top-level
-	 * `typedef Map<K, V> = haxe.ds.Map<K, V>`, through which the alias name and `canonical` are one type. The alias target
-	 * has to be written fully qualified: a short one resolves in the DECLARING file's scope, which this printer does not model.
-	 */
-	private static function declaresAs(file: FileInfo, simple: String, canonical: String): Bool {
-		if (ModuleScan.pathOfTypeIn(file, simple) == canonical) return true;
-		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == simple);
-		final written: Null<String> = decl?.aliasTargetWritten;
-		if (decl == null || written == null || decl.aliasTargetRaw != canonical) return false;
-		final params: Array<String> = decl.typeParamNames;
-		return written.replace(' ', '') == (params.length == 0 ? canonical : '$canonical<${params.join(',')}>');
 	}
 
 }

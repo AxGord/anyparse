@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeNameBinding.NameTarget;
+import anyparse.query.TypeNameBinding.NameTargets;
 import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -124,6 +125,33 @@ final class TypingService {
 	 */
 	public function resolve(file: FileInfo, spelling: String, at: Int): Resolution {
 		return single(reading(file, spelling, at, TypePosition));
+	}
+
+	/**
+	 * BODY: how the bare `name` written in `file` reads against the type at the path `canonical`, the builds of every
+	 * `#if`-guarded statement included (`TypeNameBinding.bindingsOf`): `Same` when what binds it on every build is that type
+	 * or a transparent alias of it, `Other` when another type, or a `#if`-guarded declaration, may take it,
+	 * `Unreadable` when only a statement the index cannot read may, `Unbound` when nothing does. `fileOnly` reads the
+	 * module's own types and the file's own statements alone — what a fresh import of the file competes with, since it
+	 * outranks every later tier. A std toplevel type the index does not hold binds its name too (`StdTypes.toplevelPath`).
+	 */
+	public function bareBinding(file: FileInfo, name: String, canonical: String, fileOnly: Bool = false): BareBinding {
+		final targets: NameTargets = _refs.names.bindingsOf(name, file, null, fileOnly);
+		final bound: Null<NameTarget> = targets.bound;
+		final candidates: Array<NameTarget> = targets.guarded.concat(targets.unlisted);
+		if (candidates.exists(t -> !denotes(t, canonical))) return Other;
+		if (bound != null) return denotes(bound, canonical) ? Same : Other;
+		if (fileOnly || candidates.length > 0) return Unbound;
+		// An ambient chain the index could not bound may bind the name, which nothing here reads.
+		if (!file.ambientImportsBounded) return Other;
+		if (_refs.names.tierOf(name, file).match(Tier.Unknown)) return Unreadable;
+		final std: Null<String> = StdTypes.toplevelPath(name);
+		return if (std == null)
+			Unbound
+		else if (std == canonical)
+			Same
+		else
+			Other;
 	}
 
 	/**
@@ -428,6 +456,31 @@ final class TypingService {
 		return span == null ? null : node;
 	}
 
+	/** Whether the binding `target` of the bare `name` is the type at `canonical` (`aliases`). */
+	private static function denotes(target: NameTarget, canonical: String): Bool {
+		return switch target {
+			case InIndex(decls):
+				decls.length > 0 && decls.foreach(d -> aliases(d, canonical));
+			case OutOfIndex(path): path == canonical;
+		};
+	}
+
+	/**
+	 * Whether the declaration `decl` IS the type at `canonical`: declared at that path, or a plain `typedef` re-pointing at
+	 * `canonical` with its OWN type parameters in order — a transparent alias such as the std toplevel
+	 * `typedef Map<K, V> = haxe.ds.Map<K, V>`, through which the alias name and `canonical` are one type. The target has to be
+	 * written fully qualified: a short one resolves in the declaring file's scope, which is not read here.
+	 */
+	private static function aliases(decl: ResolvedType, canonical: String): Bool {
+		// The index keeps one declaration per name, and another `#if` branch may declare it differently or not at all.
+		if (decl.type.guarded) return false;
+		if (TypeRefIndex.importPathFor(decl.file, decl.type) == canonical) return true;
+		final written: Null<String> = decl.type.aliasTargetWritten;
+		if (written == null || decl.type.aliasTargetRaw != canonical) return false;
+		final params: Array<String> = decl.type.typeParamNames;
+		return written.replace(' ', '') == (params.length == 0 ? canonical : '$canonical<${params.join(',')}>');
+	}
+
 }
 
 /** Where a name is written, as `TypingService.resolve` reads it. */
@@ -449,6 +502,23 @@ enum Resolution {
 
 	/** Nothing proves one declaration of the index: a type outside it, a tier nothing here reads, a name naming no type. */
 	Unknown;
+
+}
+
+/** How a bare name reads against one type path (`TypingService.bareBinding`). */
+enum BareBinding {
+
+	/** What binds the name, on every build, is that type. */
+	Same;
+
+	/** Another type binds the name, or may on some build. */
+	Other;
+
+	/** Nothing readable binds the name, and a statement the index cannot read — an import of a module it never saw — may. */
+	Unreadable;
+
+	/** Nothing binds the name. */
+	Unbound;
 
 }
 

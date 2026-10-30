@@ -469,13 +469,13 @@ class TypeRefPrinterTest extends Test {
 		Assert.isFalse(p.hasPendingImports());
 	}
 
-	public function testSamePackageTypeVetoesBuiltinShortening(): Void {
-		// A same-package `pkg.Map` shadows the bare `Map` inside `package pkg;` — the builtin
-		// short-circuit must not fire, and no import can rescue it.
+	public function testASamePackageTypeOfABuiltinNameNeedsAnImport(): Void {
+		// A same-package `pkg.Map` takes the bare `Map` inside `package pkg;`, so the builtin is no short route; an import,
+		// which outranks the package, is.
 		final index: SymbolIndex = indexOf([{ file: 'pkg/Map.hx', source: 'package pkg;\n\nclass Map {}\n' }]);
 		final p: TypeRefPrinter = printerWith('package pkg;\n\nclass C {}\n', index);
-		Assert.equals('haxe.ds.Map', p.print('haxe.ds.Map').text);
-		Assert.isFalse(p.hasPendingImports());
+		Assert.equals('Map', p.print('haxe.ds.Map').text);
+		Assert.equals('import haxe.ds.Map;', importText(p));
 	}
 
 	public function testSameNamedTypeOutsideScopeDoesNotVetoBuiltin(): Void {
@@ -487,10 +487,15 @@ class TypeRefPrinterTest extends Test {
 		Assert.isFalse(p.hasPendingImports());
 	}
 
-	public function testSamePackageTypeBlocksImport(): Void {
+	public function testAnImportOutranksASamePackageType(): Void {
 		final index: SymbolIndex = indexOf([{ file: 'pkg/Widget.hx', source: 'package pkg;\n\nclass Widget {}\n' }]);
-		final src: String = 'package pkg;\n\nclass C {}\n';
-		Assert.equals('other.Widget', printerWith(src, index).print('other.Widget').text);
+		final p: TypeRefPrinter = printerWith('package pkg;\n\nclass C {}\n', index);
+		Assert.equals('Widget', p.print('other.Widget').text);
+		Assert.equals('import other.Widget;', importText(p));
+		// The import is safe only where nothing else reads the bare name: a file already using the same-package `Widget` keeps it.
+		final reads: TypeRefPrinter = printerWith('package pkg;\n\nclass C {\n\tvar w:Widget;\n}\n', index);
+		Assert.equals('other.Widget', reads.print('other.Widget').text);
+		Assert.isFalse(reads.hasPendingImports());
 	}
 
 	// --- import insertion position ---
@@ -747,17 +752,24 @@ class TypeRefPrinterTest extends Test {
 
 	// --- bulk imports: a name source neither the import map nor the package routes model ---
 
-	public function testWildcardImportShadowsASameNamedType(): Void {
-		// `import other.*;` binds `Foo` to `other.Foo`; a bare `Foo` here would rebind the
-		// reference, and the wildcard names nothing the import map can see.
+	public function testAWildcardOfTheNameNeedsAnImport(): Void {
+		// `import other.*;` binds `Foo` to `other.Foo`, so the bare name is no route to `pkg.deep.Foo`; an explicit import,
+		// which outranks a wildcard, is.
 		final index: SymbolIndex = indexOf([
 			{ file: 'pkg/deep/Foo.hx', source: 'package pkg.deep;\n\nclass Foo {}\n' },
 			{ file: 'other/Foo.hx', source: 'package other;\n\nclass Foo {}\n' }
 		]);
-		final src: String = 'package app;\n\nimport other.*;\n\nclass C {}\n';
-		final p: TypeRefPrinter = printerWith(src, index);
-		Assert.equals('pkg.deep.Foo', p.print('pkg.deep.Foo').text);
-		Assert.isFalse(p.hasPendingImports());
+		final p: TypeRefPrinter = printerWith('package app;\n\nimport other.*;\n\nclass C {}\n', index);
+		Assert.equals('Foo', p.print('pkg.deep.Foo').text);
+		Assert.equals('import pkg.deep.Foo;', importText(p));
+		// A bare `Foo` the file already reads through the wildcard would change meaning under the import, so none is added.
+		final reads: TypeRefPrinter = printerWith('package app;\n\nimport other.*;\n\nclass C {\n\tvar f:Foo;\n}\n', index);
+		Assert.equals('pkg.deep.Foo', reads.print('pkg.deep.Foo').text);
+		Assert.isFalse(reads.hasPendingImports());
+		Assert.equals(
+			'other.Foo',
+			printerWith('package app;\n\nimport other.*;\n\nimport pkg.deep.Foo;\n\nclass C {}\n', index).print('other.Foo').text
+		);
 	}
 
 	public function testWildcardImportOfAnUnrelatedPackageDoesNotShadow(): Void {
@@ -819,18 +831,20 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals('import pkg.deep.Foo;', importText(p));
 	}
 
-	public function testGuardedWildcardImportStillShadows(): Void {
-		// A `#if`-guarded bulk import is nested under a `Conditional`, not left at the top level.
-		// Missing it is the FALSE-NEGATIVE direction: the short name would bind another type in
-		// the build where the guard holds.
+	public function testAGuardedWildcardOfTheNameNeedsAnImport(): Void {
+		// A `#if`-guarded bulk import is nested under a `Conditional`, not left at the top level; under its guard it binds
+		// `Foo`, so the bare name is no route there and only an explicit import, which outranks it on every build, is.
 		final index: SymbolIndex = indexOf([
 			{ file: 'pkg/deep/Foo.hx', source: 'package pkg.deep;\n\nclass Foo {}\n' },
 			{ file: 'other/Foo.hx', source: 'package other;\n\nclass Foo {}\n' }
 		]);
-		final src: String = 'package app;\n\n#if js\nimport other.*;\n#end\n\nclass C {}\n';
-		final p: TypeRefPrinter = printerWith(src, index);
-		Assert.equals('pkg.deep.Foo', p.print('pkg.deep.Foo').text, 'a guarded wildcard binds under its guard');
-		Assert.isFalse(p.hasPendingImports());
+		final p: TypeRefPrinter = printerWith('package app;\n\n#if js\nimport other.*;\n#end\n\nclass C {}\n', index);
+		Assert.equals('Foo', p.print('pkg.deep.Foo').text);
+		Assert.equals('import pkg.deep.Foo;', importText(p));
+		// In `pkg.deep` itself the guarded wildcard outranks the package under `js`, so even the own package's type is no route.
+		final own: TypeRefPrinter = printerWith('package pkg.deep;\n\n#if js\nimport other.*;\n#end\n\nclass C {}\n', index);
+		Assert.equals('Foo', own.print('pkg.deep.Foo').text);
+		Assert.equals('import pkg.deep.Foo;', importText(own));
 	}
 
 	// --- bulk imports rank BELOW an explicit import and a module-local type ---
@@ -846,13 +860,15 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals('Foo', printerWith(src, index).print('p.Foo').text, 'the explicit import wins');
 	}
 
-	public function testExplicitImportOutranksAUsing(): Void {
+	public function testTheLastStatementWinsBetweenAnImportAndAUsing(): Void {
 		final index: SymbolIndex = indexOf([
 			{ file: 'p/Foo.hx', source: 'package p;\n\nclass Foo {}\n' },
 			{ file: 'q/Foo.hx', source: 'package q;\n\nclass Foo {}\n' }
 		]);
 		final src: String = 'package app;\n\nimport p.Foo;\nusing q.Foo;\n\nclass C {}\n';
-		Assert.equals('Foo', printerWith(src, index).print('p.Foo').text, 'the explicit import wins');
+		// A `using` is an import of its module too, and the later statement binds the bare name (4.3.7 types it `q.Foo`).
+		Assert.equals('p.Foo', printerWith(src, index).print('p.Foo').text);
+		Assert.equals('Foo', printerWith(src, index).print('q.Foo').text);
 	}
 
 	public function testModuleLocalTypeOutranksAWildcard(): Void {

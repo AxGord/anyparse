@@ -269,9 +269,11 @@ final class TypeNameBinding {
 	 * it can read the binding (null where nothing readable binds it); `guarded`, what it binds instead on the builds a
 	 * `#if`-guarded statement holds; `unlisted`, what a package wildcard the order cannot list may supply. A binding is a
 	 * declaration set of the index or the path of a type outside it (`InIndex`, `OutOfIndex`). The package tier reads the
-	 * std core's modules beside the index's, package by package, as the compiler finds either on its class paths.
+	 * std core's modules beside the index's, package by package, as the compiler finds either
+	 * on its class paths. `fileOnly` reads the module's own types and the file's own statements
+	 * alone — what a fresh import of the file competes with, since it outranks every later tier.
 	 */
-	public function bindingsOf(name: String, fi: FileInfo, ?at: Int): NameTargets {
+	public function bindingsOf(name: String, fi: FileInfo, ?at: Int, fileOnly: Bool = false): NameTargets {
 		final out: NameTargets = { bound: null, guarded: [], unlisted: [] };
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
 		if (own.length > 0) {
@@ -279,7 +281,7 @@ final class TypeNameBinding {
 			return out;
 		}
 		final order: StatementOrder = orderOf(fi, at);
-		for (imp in order.explicit) {
+		for (imp in order.explicit) if (!fileOnly || fi.imports.contains(imp)) {
 			final answer: Answer = statementAnswer(name, imp);
 			// a module the order cannot read may hold the name as a sub-type, which no reading lists: a binding only of the
 			// type the statement itself names
@@ -291,7 +293,7 @@ final class TypeNameBinding {
 			}
 			if (binding != null) out.guarded.push(binding);
 		}
-		if (!fi.ambientImportsBounded) return out;
+		if (fileOnly || !fi.ambientImportsBounded) return out;
 		final std: Answer = stdTypesAnswer(name);
 		if (!std.match(Pass)) {
 			out.bound = bindingOf(std);

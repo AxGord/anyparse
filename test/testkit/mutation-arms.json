@@ -20664,8 +20664,8 @@
 			"name": "M-TS-WILD-EXPLICIT-FIRST",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "bindingsOf",
-			"find": "for (imp in order.explicit) {",
-			"replace": "for (imp in order.explicit.slice(0, 0)) {",
+			"find": "for (imp in order.explicit) if (",
+			"replace": "for (imp in order.explicit.slice(0, 0)) if (",
 			"note": "a wildcard import outranks an explicit one"
 		},
 		{
@@ -31252,34 +31252,75 @@
 		},
 		{
 			"name": "M-PRINTER-PACKAGE-CHAIN-BLIND",
-			"type": "anyparse.query.TypeRefPrinter",
-			"method": "packageChainVerdict",
-			"force": "null",
-			"note": "the package chain answers nothing, so a type of an ENCLOSING package is written fully qualified although its bare name resolves to it here"
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "out.bound = bindingOf(packageAnswer(name, fi.pkg, false, true));",
+			"replace": "out.bound = null;",
+			"note": "the package chain binds nothing, so a type of an ENCLOSING package is written fully qualified although its bare name resolves to it here"
 		},
 		{
 			"name": "M-PRINTER-PACKAGE-CHAIN-FIRST-HIT",
-			"type": "anyparse.query.TypeRefPrinter",
-			"method": "packageChainVerdict",
-			"find": "if (file != null && decl != null) return !decl.guarded && declaresAs(file, simple, canonical);",
-			"replace": "if (file != null && decl != null && declaresAs(file, simple, canonical)) return !decl.guarded;",
-			"note": "the chain walk steps over a NEARER package's own type of the name, so an enclosing package's path is printed short where the bare name means the nearer type"
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageAnswer",
+			"find": "chain.push('');",
+			"replace": "chain.push(''); chain.reverse();",
+			"note": "the chain is walked from the toplevel inward, stepping over a NEARER package's own type of the name, so an enclosing package's path is printed short where the bare name means the nearer type"
 		},
 		{
 			"name": "M-PRINTER-PACKAGE-CHAIN-BUILTIN",
-			"type": "anyparse.query.TypeRefPrinter",
-			"method": "visibleNameFor",
-			"find": "if (alwaysInScope(canonical, simple) && packageChainVerdict(canonical, simple) != false) return simple;",
-			"replace": "if (alwaysInScope(canonical, simple)) return simple;",
-			"note": "a builtin is printed short even where an enclosing package declares its own type of the name, which the compiler reaches first"
+			"type": "anyparse.query.TypingService",
+			"method": "bareBinding",
+			"find": "if (bound != null) return denotes(bound, canonical) ? Same : Other;",
+			"replace": "if (bound != null && StdTypes.toplevelPath(name) != canonical) return denotes(bound, canonical) ? Same : Other;",
+			"note": "a builtin is read as the bare name's binding even where an enclosing package declares its own type of the name, which the compiler reaches first"
 		},
 		{
 			"name": "M-PRINTER-TRANSPARENT-ALIAS",
-			"type": "anyparse.query.TypeRefPrinter",
-			"method": "declaresAs",
-			"find": "decl.aliasTargetRaw != canonical) return false;",
+			"type": "anyparse.query.TypingService",
+			"method": "aliases",
+			"find": "decl.type.aliasTargetRaw != canonical) return false;",
 			"replace": "true) return false;",
 			"note": "a transparent root alias reads as a shadow of its own target, so `haxe.ds.Map` is never printed as `Map` once the std is indexed"
+		},
+		{
+			"name": "M-PRINTER-PENDING-IMPORT-BLIND",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "shadowedLocally",
+			"find": "if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return true;",
+			"replace": "if (_pendingImports.exists(p -> false)) return true;",
+			"note": "an import the printer promised is not read as binding its name, so a later print spells that name short for another type the spliced import then outranks"
+		},
+		{
+			"name": "M-RESOLVE-BARE-GUARDED-DECL",
+			"type": "anyparse.query.TypingService",
+			"method": "aliases",
+			"find": "if (decl.type.guarded) return false;",
+			"replace": "",
+			"note": "a #if-guarded declaration is read as the bare name's binding on every build, so a type another branch may not declare is printed short"
+		},
+		{
+			"name": "M-RESOLVE-BARE-SECONDARY-ROOT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageAnswer",
+			"find": "final mains: Array<ResolvedType> = typesIn(packages[scope] ?? [], name, true);",
+			"replace": "final mains: Array<ResolvedType> = typesIn(packages[scope] ?? [], name, false);",
+			"note": "a secondary type of a package's module is read as binding its bare name package-wide, so `Type.ValueType` is printed `ValueType`, which the compiler does not find"
+		},
+		{
+			"name": "M-INDEX-MODULE-FROM-FIRST-DECL",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "extractFileInfo",
+			"find": "final module: String = pkg == '' ? basename : '$pkg.$basename';",
+			"replace": "final first: String = types.length > 0 ? types[0].name : basename; final module: String = pkg == '' ? first : '$pkg.$first';",
+			"note": "the index names a module by its first declaration instead of its file, so a sub-type declared beside a leading helper type is read at a path the compiler never gives it"
+		},
+		{
+			"name": "M-PRINTER-HYBRID-REPAIR-BLIND",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "canonicalize",
+			"find": "return matches.length == 1 ? matches[0] : raw;",
+			"replace": "return raw;",
+			"note": "a compiler's `pack.SubType` hybrid is never repaired to its module path, so a sub-type the file declares beside its module's main type is printed as the hybrid instead of its short name"
 		},
 		{
 			"name": "M-SHORTEN-VALUE-SITE-BLIND",
@@ -31547,18 +31588,18 @@
 		{
 			"name": "M-SHORTEN-IMPORT-CHAIN-CONFLICT-BLIND",
 			"type": "anyparse.query.TypeRefPrinter",
-			"method": "canAddImport",
-			"find": " || packageChainVerdict(canonical, simple) == false",
-			"replace": "",
+			"method": "heldWithoutImport",
+			"find": "if (binding != null) return binding == Other;",
+			"replace": "if (binding != null) return false;",
 			"note": "a fresh import takes a simple name an enclosing package's own type already holds, so the bare name stops meaning that type"
 		},
 		{
 			"name": "M-SHORTEN-IMPORT-BUILTIN-BLIND",
-			"type": "anyparse.query.TypeRefPrinter",
-			"method": "canAddImport",
-			"find": "builtin != null && builtin != canonical || ",
-			"replace": "",
-			"note": "a fresh import takes a builtin's simple name, so the bare name stops meaning the standard type"
+			"type": "anyparse.query.TypingService",
+			"method": "bareBinding",
+			"find": "return if (std == null)",
+			"replace": "return if (std == null || std != canonical)",
+			"note": "a builtin the index does not hold binds no name, so a fresh import takes a builtin's simple name and the bare name stops meaning the standard type"
 		},
 		{
 			"name": "M-SHORTEN-IMPORT-QUALIFIED-TAIL-VETOES",

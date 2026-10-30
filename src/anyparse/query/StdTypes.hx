@@ -23,6 +23,40 @@ final class StdTypes {
 	/** How deep a member is looked for through supertypes and typedef targets. */
 	private static inline final MAX_DEPTH: Int = 8;
 
+	/**
+	 * The std's toplevel types every module reaches with no import, each mapped to the ONE path it denotes — its own name, or
+	 * `haxe.ds.Map` for the root `Map` typedef that re-points at it: what the toplevel binds where the index does not hold the
+	 * std (`toplevelPath`). The value half is load-bearing: matching the name alone would read `haxe.macro.Type` as `Type`.
+	 */
+	private static final TOPLEVEL: Map<String, String> = [
+		'Int' => 'Int',
+		'UInt' => 'UInt',
+		'Float' => 'Float',
+		'Bool' => 'Bool',
+		'String' => 'String',
+		'Void' => 'Void',
+		'Dynamic' => 'Dynamic',
+		'Any' => 'Any',
+		'Null' => 'Null',
+		'Array' => 'Array',
+		'Map' => 'haxe.ds.Map',
+		'Class' => 'Class',
+		'Enum' => 'Enum',
+		'EnumValue' => 'EnumValue',
+		'Date' => 'Date',
+		'DateTools' => 'DateTools',
+		'Math' => 'Math',
+		'Reflect' => 'Reflect',
+		'Std' => 'Std',
+		'StringBuf' => 'StringBuf',
+		'StringTools' => 'StringTools',
+		'Sys' => 'Sys',
+		'Type' => 'Type',
+		'EReg' => 'EReg',
+		'Lambda' => 'Lambda',
+		'Xml' => 'Xml'
+	];
+
 	/** Every std core module path, for resolving a simple name written inside one. */
 	private static final modulePaths: Map<String, Bool> = [];
 
@@ -40,6 +74,11 @@ final class StdTypes {
 
 	/** The std root `_modules` lists — a discovery that answers another (`StdResolver.resetCache`) lists again. */
 	private static var _listedRoot: Null<String> = null;
+
+	/** The path the std's toplevel type `name` denotes with no import (`TOPLEVEL`), or null for a name the toplevel holds none of. */
+	public static inline function toplevelPath(name: String): Null<String> {
+		return TOPLEVEL[name];
+	}
 
 	/**
 	 * What `member` of the std type `typeName` (a simple name, or a module path) is: the module path of the type it

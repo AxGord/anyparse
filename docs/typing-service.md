@@ -31,6 +31,7 @@ its hosts are functions of their arguments, and every remembered answer is insta
 | `inference` (`InferencePolicy`; `Monomorphs`, `TypeTerm`) | body | the language's reading of an inference: a call's type parameters as the cells `Monomorphs` binds, a written type as a `TypeTerm`, the arcs a unification reads a given type through (Haxe's: `HaxeInferencePolicy`) |
 | `typeWalk` + `TypingHost` | body | the type an expression carries: the walk owns the shapes, a host answers each in its own currency |
 | `resolve` / `resolveAt` | body | the declaration a name written at a position denotes, or `Unknown` (below: name resolution) |
+| `bareBinding` | body | how a bare name written in a file reads against one type path — `Same`, `Other`, `Unreadable`, `Unbound`; `fileOnly`, against what a fresh import of the file competes with (`TypeRefPrinter` asks it) |
 | `cache` (`QueryCache`) | — | the remembered answers, one `DeclarationQuery` table per question |
 
 A SIGNATURE question reads declarations only — `FileInfo` / `TypeDeclInfo` / `MemberInfo`, which the index builds from a
@@ -57,6 +58,12 @@ name read as a value (an expression, or the head of a path of field reads, `Mod.
 parsed file — `resolveAt(index, plugin, file, at)`, `readingAt` for the tier — since only the tree proves its head binds no
 value (`ValueDoors.bindsNoValue`): a local, a parameter or a field of that name takes the name first. The order is
 `TypeNameBinding`'s: `tierOf` for a simple name, `dottedTierOf` for a dotted one.
+
+A caller holding a type PATH and asking whether its bare last segment reaches it here — the printer choosing between a
+short name, a fresh import and the qualified path — asks `bareBinding`: every binding the order reads on some build
+(`TypeNameBinding.bindingsOf`) must be that type or a transparent alias of it, a `#if`-guarded declaration never is, and
+where the index does not hold the std its toplevel types bind their names (`StdTypes.toplevelPath`). A fresh import
+outranks every tier below the file's own statements, so the import question reads those alone (`fileOnly`).
 
 - A path led by a package (`p.Mod`, `p.Mod.Sub`) names its module and its type; a `p.Sub` binds the type an import of the
   file brings whose package is `p` and whose name is `Sub` (an import of `p.M` makes `p.Sub` the sub-type of `p.M`).
