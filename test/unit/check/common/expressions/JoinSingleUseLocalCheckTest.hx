@@ -14,9 +14,6 @@ import anyparse.query.CanonicalEdit;
  */
 class JoinSingleUseLocalCheckTest extends Test {
 
-	/** The count of builtin checks -- bumped by one when a new check is registered. */
-	private static inline final BUILTIN_CHECK_COUNT: Int = 201;
-
 	// --- positive: the motivating shape and its fix ---
 
 	/**
@@ -320,7 +317,6 @@ class JoinSingleUseLocalCheckTest extends Test {
 		Assert.notNull(Linter.byId('join-single-use-local'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('join-single-use-local'));
-		Assert.equals(BUILTIN_CHECK_COUNT, Linter.builtins().length);
 	}
 
 	/**

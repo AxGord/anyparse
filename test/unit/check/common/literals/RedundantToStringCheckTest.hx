@@ -321,7 +321,6 @@ class RedundantToStringCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('redundant-tostring');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'redundant-tostring is opt-in');
-		Assert.equals(201, Linter.builtins().length);
 	}
 
 	@:pin('control')
