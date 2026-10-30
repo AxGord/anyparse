@@ -28,6 +28,9 @@ final class Lease {
 	/** The budget on the first line of `wf-run --status`. */
 	private static final BUDGET_LINE: EReg = ~/^pool .*: budget (\d+),/m;
 
+	/** A priority as the pool reads it: an integer, nothing around it. */
+	private static final INTEGER: EReg = ~/^-?\d+$/;
+
 	/** The mode of this process's environment: its caller's lease (`WF_THREADS`), else the pool a workflow exec reaches. */
 	public static function ofEnvironment(): LeaseMode {
 		return modeOf(PoolLease.threads(), Sys.getEnv('WF_PLUGIN_ROOT'), budgetThrough);
@@ -67,9 +70,19 @@ final class Lease {
 					flexible ? '${ask.min}-${ask.max}' : '${ask.max}'
 				];
 				if (flexible) prefix.push('--wait-full=$WAIT_FULL_SECONDS');
+				if (ask.priority != null) prefix.push('--priority=${ask.priority}');
 				command.under(prefix.concat(['--label', label, '--']));
 			case _: command;
 		};
+	}
+
+	/**
+	 * The pool priority one step ahead of the caller's own (`WF_PRIORITY`, 0 when it names none): a lease asked at it queues
+	 * before every lease the caller's run asks at its own priority, whenever either arrived.
+	 */
+	public static function ahead(): Int {
+		final own: String = Sys.getEnv('WF_PRIORITY') ?? '';
+		return (INTEGER.match(own) ? Std.parseInt(own) ?? 0 : 0) + 1;
 	}
 
 	/** The pool's budget as `wf-run --status` names it, or null when the status does not come. */
@@ -98,4 +111,10 @@ enum LeaseMode {
 typedef Ask = {
 	var min: Int;
 	var max: Int;
+
+	/**
+	 * The pool priority the lease queues at, or null for the caller's own (`WF_PRIORITY`). A priority given here is no longer
+	 * re-ranked with the caller's level.
+	 */
+	@:optional var priority: Int;
 }

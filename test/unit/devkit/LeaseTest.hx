@@ -6,6 +6,7 @@ import devkit.Result;
 import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -89,6 +90,22 @@ final class LeaseTest extends Test {
 			final run: Result = Lease.take(Own(wfRun, 10), command, { min: 2, max: 6 }, 'probe').run();
 			Assert.equals('kept|3', run.out, run.err);
 		});
+	}
+
+	/** A lease asked ahead queues one priority step above the caller's own `WF_PRIORITY`, read as the pool reads it. */
+	public function testAheadIsOneStepAboveTheCallersPriority(): Void {
+		final own: Null<String> = Sys.getEnv('WF_PRIORITY');
+		final read: Array<Int> = [];
+		CliFixture.always(() -> Sys.putEnv('WF_PRIORITY', own ?? ''), () -> {
+			for (value in ['5', '-100', '', 'high', '5x']) {
+				Sys.putEnv('WF_PRIORITY', value);
+				read.push(Lease.ahead());
+			}
+		});
+		Assert.same([6, -99, 1, 1, 1], read);
+		final argv: Array<String> = Lease.take(Own('/p/scripts/wf-run', 10), Command.of(['true']), { min: 1, max: 1, priority: 7 }, 'x')
+			.argv;
+		Assert.contains('--priority=7', argv);
 	}
 
 	/** A workflow plugin root in `dir` whose `scripts/wf-run` is the fake one. */

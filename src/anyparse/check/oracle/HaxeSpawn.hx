@@ -136,8 +136,10 @@ final class HaxeSpawn {
 	 * `shell` command line when it names one. With `argv[3]` = `1` a job that fails (any status but 0) kills every LATER
 	 * job still running and starts none after it, so the first failure in job order is always one that ran to its end.
 	 * Off Windows every job leads a process group of its own and a kill reaches the whole group — a shell's children (a
-	 * build tool it started) die with it instead of writing on after their job was answered. A SIGINT, SIGTERM or SIGHUP
-	 * to the driver kills every live job group before it exits: the groups are detached, so a Ctrl-C at the terminal no
+	 * build tool it started) die with it instead of writing on after their job was answered. A kill is a SIGTERM to the group,
+	 * then a SIGKILL to what is left of it after a grace: a job that runs its command in a group of its own (a pool lease
+	 * wrapper) forwards the SIGTERM, which a SIGKILL leaves it no handler to do. A SIGINT, SIGTERM or SIGHUP to the driver ends
+	 * every live job group so, waiting out the grace, before it exits: the groups are detached, so a Ctrl-C at the terminal no
 	 * longer reaches them by itself. The driver also watches its parent: once `apq` is gone (its ppid changes — a SIGKILL leaves no
 	 * handler to run) it does the same. A job naming a `groupFile` gets its process group leader written there
 	 * (pid, then start time), so a run that takes over an abandoned generation can end the job the dead run left.
@@ -164,13 +166,22 @@ final class HaxeSpawn {
 		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]); const stop = process.argv[3] === '1';"
 		+ "const group = process.platform !== 'win32';"
 		+ 'const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;'
-		+ 'function kill(c) { if (c.tethered && !group) { c.stdin.destroy(); return; }'
-		+ " try { if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill(); }"
-		+ " catch (err) { try { c.kill('SIGKILL'); } catch (ignored) {} } }"
+		+ 'let dying = false, reaping = 0; const GRACE = 3000;'
+		+ 'function signal(c, s) { try { if (group) process.kill(-c.pid, s); else c.kill(s); }'
+		+ ' catch (err) { try { c.kill(s); } catch (ignored) {} } }'
+		+ 'function grouped(c) { if (!group) return false; try { process.kill(-c.pid, 0); return true; }'
+		+ " catch (err) { return err.code === 'EPERM'; } }"
+		+ "function kill(c) { if (c.tethered && !group) { c.stdin.destroy(); return; } signal(c, 'SIGTERM');"
+		+ ' if (c.reaper) return; reaping++; const until = Date.now() + GRACE;'
+		+ ' c.reaper = setInterval(() => { const left = grouped(c); if (left && Date.now() < until) return;'
+		+ " if (left) signal(c, 'SIGKILL'); clearInterval(c.reaper); reaping--; settle(); }, 100); }"
+		+ 'function settle() { if (dying && running === 0 && reaping === 0) process.exit(1); }'
 		+ 'function killAll() { for (const c of kids) if (c) kill(c); }'
-		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); drop(); process.exit(1); });"
+		+ 'function die() { if (dying) return; dying = true; next = jobs.length; killAll(); drop(); settle();'
+		+ " setTimeout(() => { for (const c of kids) if (c) signal(c, 'SIGKILL'); process.exit(1); }, 2 * GRACE); }"
+		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, die);"
 		+ 'const parent = process.ppid;'
-		+ 'setInterval(() => { if (process.ppid !== parent) { killAll(); drop(); process.exit(1); } }, 500).unref();'
+		+ 'setInterval(() => { if (process.ppid !== parent) die(); }, 500).unref();'
 		+ "function recordGroup(j, c) { if (j.groupFile == null || c.pid == null) return; let st = '';"
 		+ " try { if (group) st = cp.execFileSync('ps', ['-o', 'lstart=', '-p', String(c.pid)], { encoding: 'utf8' }).trim(); } catch (err) {}"
 		+ " try { require('fs').writeFileSync(j.groupFile, c.pid + '\\n' + st); } catch (err) {} }"
@@ -181,7 +192,7 @@ final class HaxeSpawn {
 		+ "', overflowed: false,"
 		+ ' cancelled: true, unstarted: true }; done++; } } next = jobs.length; }'
 		+ 'function finish(i, rec) { if (out[i]) return; out[i] = rec; if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);'
-		+ ' kids[i] = null; running--; done++;'
+		+ ' kids[i] = null; running--; done++; if (dying) { settle(); return; }'
 		+ ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
 		+ ' if (done === jobs.length) emit(JSON.stringify(out)); else start(); }'
 		+ 'function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;'

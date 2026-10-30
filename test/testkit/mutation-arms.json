@@ -3919,8 +3919,8 @@
 			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
-			"find": "if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill();",
-			"replace": "c.kill('SIGKILL');",
+			"find": "if (group) process.kill(-c.pid, s); else c.kill(s);",
+			"replace": "c.kill(s);",
 			"note": "a kill reaches only the shell, so a build tool it started keeps writing into the generated tree after its job was cancelled"
 		},
 		{
@@ -3992,7 +3992,7 @@
 			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
-			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); drop(); process.exit(1); });",
+			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, die);",
 			"replace": "",
 			"note": "a signalled driver exits without its detached job groups, so Ctrl-C leaves a build tool writing into dist/oracle"
 		},
@@ -4095,9 +4095,27 @@
 			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
-			"find": "setInterval(() => { if (process.ppid !== parent) { killAll(); drop(); process.exit(1); } }, 500).unref();",
+			"find": "setInterval(() => { if (process.ppid !== parent) die(); }, 500).unref();",
 			"replace": "",
 			"note": "a driver whose apq was SIGKILLed keeps its jobs running, so the next run regenerates concurrently with an orphaned build tool"
+		},
+		{
+			"name": "M-DRIVER-KILLS-WITHOUT-GRACE",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "signal(c, 'SIGTERM');",
+			"replace": "signal(c, 'SIGKILL');",
+			"note": "a killed job gets a bare SIGKILL again, so a pool lease wrapper cannot forward its end and the command it runs in a group of its own outlives the run with its threads"
+		},
+		{
+			"name": "M-DRIVER-NO-HARD-KILL",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (left) signal(c, 'SIGKILL'); ",
+			"replace": "",
+			"note": "a job group that ignores the SIGTERM is never SIGKILLed after the grace, so a stubborn tool keeps running until the driver's last-resort exit or forever"
 		},
 		{
 			"name": "M-GENERATE-SHARE-WITHOUT-REJUDGE",
@@ -32230,6 +32248,30 @@
 			"find": "if (held != null) return Held(held);",
 			"replace": "",
 			"note": "a run under its caller's lease asks the pool for more, so a waiter queued ahead of it for the threads it holds waits for ever"
+		},
+		{
+			"name": "M-BRANCHES-LIGHT-NOT-AHEAD",
+			"type": "devkit.Branches",
+			"method": "leased",
+			"find": "{ min: threads, max: threads, priority: ahead }",
+			"replace": "{ min: threads, max: threads }",
+			"note": "the light branches queue at the heavy one's priority, so on a busy pool the heavy one's whole-share wait closes the free threads to its own siblings and the lint and the probes wait for the pool to drain"
+		},
+		{
+			"name": "M-GATE-BRANCH-OWN-LEASE",
+			"type": "dev.SliceGate",
+			"method": "leaseModeOf",
+			"find": "rows == null ? Lease.ofEnvironment() : Unpooled",
+			"replace": "Lease.ofEnvironment()",
+			"note": "a gate's branch inside a workflow asks the pool for its own threads although its gate already leased them, so the branch's build and suite take a second lease or wait behind their own gate"
+		},
+		{
+			"name": "M-GATE-DEMAND-LISTS-NONE",
+			"type": "dev.SliceGate",
+			"method": "demandOf",
+			"find": "case 'lists': facts.recording ? 0 : 1;",
+			"replace": "case 'lists': 0;",
+			"note": "the branch of the short rows holds no thread in a gate run, so the heavy branch asks for the thread the lists, fmt and scrub rows run on and the gate oversubscribes the pool"
 		},
 		{
 			"name": "M-RESOLVE-VALUE-FALLS-THROUGH",

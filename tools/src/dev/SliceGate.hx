@@ -37,24 +37,24 @@ final class SliceGate {
 	public static inline final USAGE: String = 'usage: dev slice-gate <worktree> [--baseline [--frozen <dir>]... [--infra-tree <dir>]...] '
 		+ '[--arm <NAME>]... [--no-arms] [--allow <gate>]... [--logs <dir>]';
 
-	/** What a branch may run before it is killed: a wedged run, not a slow one. */
-	private static inline final BRANCH_TIMEOUT_MS: Int = 2 * 60 * 60 * 1000;
-
-	/** The registries `bin/test.js` lists, each counted in the lists row. */
-	private static final LISTINGS: Array<String> = ['classes', 'pins', 'arms', 'claims', 'dead', 'bases'];
-
 	/**
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote,
 	 * and `arms` follows them so the two heavy rows take the same threads one after the other; the three short rows share
 	 * one branch, so they hold one thread between them.
 	 */
-	private static final GATE_BRANCHES: Array<Array<String>> = [
+	public static final GATE_BRANCHES: Array<Array<String>> = [
 		['suite', 'corpus', 'arms'],
 		['lists', 'fmt', 'scrub'],
 		['lint'],
 		['jvm'],
 		['infra4']
 	];
+
+	/** What a branch may run before it is killed: a wedged run, not a slow one. */
+	private static inline final BRANCH_TIMEOUT_MS: Int = 2 * 60 * 60 * 1000;
+
+	/** The registries `bin/test.js` lists, each counted in the lists row. */
+	private static final LISTINGS: Array<String> = ['classes', 'pins', 'arms', 'claims', 'dead', 'bases'];
 
 	/** The branches' rows in table order; `decisions`, `frozen` and `porcelain` follow, once every branch has ended. */
 	private static final GATE_ROWS: Array<String> = ['suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'arms', 'infra4', 'scrub'];
@@ -199,33 +199,16 @@ final class SliceGate {
 		return _gate.log('rows/${rows[0]}.json');
 	}
 
-	/**
-	 * The threads the branch running `rows` holds: null for the heavy one (the suite and the arms), which takes what the
-	 * others leave; one for the short rows; the lint row's two lints; the jvm probe; a lint per tree INFRA gate 4 reads beside
-	 * the base tree's, which a `--baseline` run lints in its own row — each 0 when its rows will skip.
-	 */
+	/** The threads the branch running `rows` holds in this run (`demandOf`). */
 	private function demand(rows: Array<String>): Null<Int> {
-		final recording: Bool = _gate.options.baseline;
-		final infra: Int = _gate.options.infra.length;
-		return switch rows[0] {
-			case 'suite': null;
-			case 'lists': recording ? 0 : 1;
-			case 'lint': recording ? Std.int(Math.min(1, infra)) : touchedLints();
-			case 'jvm': _gate.jvmMoved() ? 1 : 0;
-			case 'infra4': recording ? infra : infraLints();
-			case _: 0;
-		};
-	}
-
-	/** The lints the lint row of a gate run holds at once: the touched files' at the base and now, when it lints any. */
-	private function touchedLints(): Int {
-		return _gate.touched.exists(f -> f.endsWith('.hx')) ? 2 : 0;
-	}
-
-	/** The lints INFRA gate 4 of a gate run holds at once: the base tree's and one per infra tree, when rule code moved. */
-	private function infraLints(): Int {
 		final baseline: Null<Baseline> = _gate.baseline;
-		return _gate.ruleCodeMoved() && baseline != null ? 1 + baseline.infra.length : 0;
+		return demandOf({
+			recording: _gate.options.baseline,
+			infra: _gate.options.infra.length,
+			touchedHx: _gate.touched.exists(f -> f.endsWith('.hx')),
+			jvmMoved: _gate.jvmMoved(),
+			ruleInfra: _gate.ruleCodeMoved() && baseline != null ? baseline.infra.length : null
+		}, rows);
 	}
 
 	/** The build every gate needs: both binaries and the developer CLI, at once. A failure ends the run. */
@@ -439,9 +422,39 @@ final class SliceGate {
 			noArms: noArms,
 			threads: threads != null && threads > 0 ? threads : null,
 			run: run
-		}, rows == null ? Lease.ofEnvironment() : Unpooled);
+		}, leaseModeOf(rows));
 		if (rows != null) return gate.runBranch(rows.split(','));
 		return baseline ? gate.recordBaseline() : gate.check();
+	}
+
+	/**
+	 * The threads the branch running `rows` holds under `facts`: null for the heavy one (the suite and the arms), which takes
+	 * what the others leave; one for the short rows; the lint row's two lints (the touched files at the base and now); the
+	 * jvm probe; a lint per tree INFRA gate 4 reads beside the base tree's, which a `--baseline` run lints in its own row —
+	 * each 0 when its rows will skip.
+	 */
+	public static function demandOf(facts: GateDemand, rows: Array<String>): Null<Int> {
+		return switch rows[0] {
+			case 'suite': null;
+			case 'lists': facts.recording ? 0 : 1;
+			case 'lint': if (facts.recording)
+				Std.int(Math.min(1, facts.infra))
+			else if (facts.touchedHx)
+				2
+			else
+				0;
+			case 'jvm': facts.jvmMoved ? 1 : 0;
+			case 'infra4': facts.recording ? facts.infra : 1 + (facts.ruleInfra ?? -1);
+			case _: 0;
+		};
+	}
+
+	/**
+	 * The lease mode of a run: a `--rows` branch (`rows` given) runs inside the lease its gate took for it, or none, and never
+	 * asks the pool itself; the gate reads its environment.
+	 */
+	public static function leaseModeOf(rows: Null<String>): LeaseMode {
+		return rows == null ? Lease.ofEnvironment() : Unpooled;
 	}
 
 	/** Whether the corpus harness runs: the fork it reads is named. */
@@ -468,6 +481,23 @@ typedef Baseline = {
 
 	var infra: Array<InfraSnapshot>;
 	var frozen: Array<FrozenTree>;
+}
+
+/** What the threads of a slice gate's branches depend on (`SliceGate.demandOf`). */
+typedef GateDemand = {
+	/** Whether the run is a `--baseline` one. */
+	var recording: Bool;
+
+	/** The infra trees the run was given. */
+	var infra: Int;
+
+	/** Whether the slice touched a `.hx` file, which the lint row lints at the base and now. */
+	var touchedHx: Bool;
+
+	var jvmMoved: Bool;
+
+	/** The infra trees of the baseline when rule code moved, or null when INFRA gate 4 does not run. */
+	var ruleInfra: Null<Int>;
 }
 
 /** A tree outside this one and its lint by the base engine. */

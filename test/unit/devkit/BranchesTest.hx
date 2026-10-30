@@ -2,12 +2,18 @@ package unit.devkit;
 
 import devkit.Branches;
 import devkit.Command;
+import devkit.Lease;
 import devkit.Lease.LeaseMode;
+import devkit.Pool;
+import devkit.Result;
 import devkit.Summary;
 import devkit.TempDir;
 import haxe.io.Path;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
+using Lambda;
 
 /** `devkit.Branches`: a branch report survives its round trip, a lease is shared, and a branch that left no report fails its steps. */
 @:nullSafety(Strict)
@@ -104,6 +110,55 @@ final class BranchesTest extends Test {
 			Assert.same(['b', 'a'], [for (step in summary.steps()) step.name]);
 			Assert.isTrue(summary.steps()[0].outcome.match(NotRun(_)));
 			Assert.isTrue(summary.steps()[1].outcome.match(Passed));
+		});
+	}
+
+	/** A light branch queues a priority step ahead of the caller's own; the heavy one at the caller's own. */
+	@:pin('control')
+	@:killer('M-BRANCHES-LIGHT-NOT-AHEAD')
+	public function testTheLightBranchesQueueAheadOfTheHeavyOne(): Void {
+		final leased: Array<String> -> Command = Branches.leased(
+			Own('/p/scripts/wf-run', 10), [['heavy'], ['light']],
+			rows -> rows[0] == 'heavy' ? null : 2, rows -> Command.of(['node', rows[0]]), 'gate'
+		);
+		Assert.contains('--priority=${Lease.ahead()}', leased(['light']).argv);
+		Assert.isFalse(leased(['heavy']).argv.exists(a -> a.startsWith('--priority')), 'the heavy one queues at the caller\'s own');
+	}
+
+	/**
+	 * On a busy pool the heavy branch waits for its whole share with every free thread closed behind it: its light sibling,
+	 * which fits in what is free, is granted at once, not once the pool drains. Runs the workflow engine's own `wf-run` over a
+	 * pool of its own, the heavy branch arriving first; passes as skipped outside a workflow.
+	 */
+	public function testOnABusyPoolTheLightBranchIsNotHeldBehindTheHeavyOne(): Void {
+		final root: String = Sys.getEnv('WF_PLUGIN_ROOT') ?? '';
+		final wfRun: String = Path.join([root, 'scripts/wf-run']);
+		if (root == '' || !sys.FileSystem.exists(wfRun)) {
+			Assert.pass('no workflow engine to run a pool — skipped');
+			return;
+		}
+		TempDir.with(dir -> {
+			sys.io.File.saveContent(dir.file('config.json'), '{"budget": 6, "load_threshold": 1000}');
+			final started: Float = Date.now().getTime();
+			final elapsed: String = 'console.log(Date.now() - ${Std.string(started)})';
+			final after: Float -> Command -> Command = (seconds, command) ->
+				command.under(['sh', '-c', 'sleep $seconds; exec "$$@"', 'sh']);
+			final leased: Array<String> -> Command = Branches.leased(
+				Own(wfRun, 6), [['heavy'], ['light']],
+				rows -> rows[0] == 'heavy' ? null : 2, rows -> Command.of(['node', '-e', elapsed]), 'busy'
+			);
+			final holder: Command = Command.of([wfRun, '--threads', '3', '--label', 'holder', '--', 'sleep', '4']);
+			final runs: Array<Result> = Pool.of(3).run([
+				holder.env('WF_POOL_DIR', dir.path),
+				after(0.3, leased(['heavy'])).env('WF_POOL_DIR', dir.path),
+				after(0.6, leased(['light'])).env('WF_POOL_DIR', dir.path)
+			]);
+			final light: Null<Int> = Std.parseInt(runs[2].out.trim());
+			final heavy: Null<Int> = Std.parseInt(runs[1].out.trim());
+			Assert.isTrue(
+				light != null && light < 3000, 'the light branch ran while the holder still held its threads: ${runs[2].out}${runs[2].err}'
+			);
+			Assert.isTrue(heavy != null && heavy >= 3000, 'the heavy one waited for its whole share: ${runs[1].out}${runs[1].err}');
 		});
 	}
 

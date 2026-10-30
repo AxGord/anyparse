@@ -52,24 +52,6 @@ final class HaxeSpawnTest extends Test {
 		Assert.equals(#if nodejs true #else false #end, HaxeSpawn.honoursCwd());
 	}
 
-	#if nodejs
-	/**
-	 * An overflow says the compiler RAN. `status` is null either way, so without `overflowed`
-	 * this is indistinguishable from a missing binary — and the two send a reader to opposite
-	 * places. One byte of buffer against `haxe --version` is the smallest way to produce it.
-	 */
-	public function testAnOverflowIsToldApartFromAMissingBinary(): Void {
-		final run: HaxeRun = HaxeSpawn.run(['--version'], null, 1);
-		if (!run.overflowed && run.failure.indexOf('could not launch') != -1) {
-			Assert.pass('haxe unavailable — skipped');
-			return;
-		}
-		Assert.isTrue(run.overflowed, 'got: ${run.failure}');
-		Assert.isNull(run.status);
-		Assert.isTrue(run.failure.indexOf('output buffer') != -1, 'and the sentence names the buffer: ${run.failure}');
-	}
-	#end
-
 	/**
 	 * `stopAfterFailure` ends every LATER job: a fast failure cancels a slow job declared after it (killed while running
 	 * with two slots, never started with one), so a rejection does not wait for — or pay for — a compile that cannot
@@ -175,27 +157,6 @@ final class HaxeSpawnTest extends Test {
 		Assert.pass('the process driver needs the node target');
 		#end
 	}
-
-	#if nodejs
-	/** The pid written to `path` once it appears, polling up to five seconds. */
-	private static function waitForPid(path: String): Null<Int> {
-		for (_ in 0...50) {
-			final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
-			final pid: Null<Int> = Std.parseInt(StringTools.trim(text ?? ''));
-			if (pid != null) return pid;
-			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
-		}
-		return null;
-	}
-
-	/** Whether `pid` answers a signal-0 probe. */
-	private static function signalable(pid: Null<Int>): Bool {
-		return pid != null && try {
-			js.Syntax.code('process.kill({0}, 0)', pid);
-			true;
-		} catch (exception: haxe.Exception) false;
-	}
-	#end
 
 	/**
 	 * A driver whose `apq` parent is SIGKILLed — no handler runs in a killed process — notices its parent is gone and
@@ -304,5 +265,114 @@ final class HaxeSpawnTest extends Test {
 		final open: Array<SpawnJob> = [{ args: [], cwd: null }];
 		Assert.isTrue(HaxeSpawn.driverBound(open, 1) > HaxeSpawn.driverBound([{ args: [], cwd: null, timeout: 60000 }], 1));
 	}
+
+	/**
+	 * A killed job may run its command in a process group of its own, as a pool lease wrapper does: the driver ends it with a
+	 * SIGTERM the wrapper forwards, never a bare SIGKILL that leaves it no handler, so the command dies with the driver.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-KILLS-WITHOUT-GRACE')
+	public function testAKilledJobForwardsItsEndToItsOwnGroup(): Void {
+		#if nodejs
+		final forwarder: String = 'const cp = require("child_process");const c = cp.spawn("sleep", ["30"], {'
+			+ ' detached: true, stdio: "ignore" });require("fs").writeFileSync("child.txt", String(c.pid));'
+			+ 'for (const s of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(s, () => { try { process.kill(-c.pid, s); } catch (err) {} });'
+			+ 'c.on("exit", code => process.exit(code === null ? 1 : code));';
+		final shell: String = 'exec \'${js.Node.process.execPath}\' forward.js';
+		final outlived: Null<Float> = childOutlivesDriver('spawnforward', [{ name: 'forward.js', source: forwarder }], shell, 5000);
+		Assert.notNull(outlived, 'the command the job started in its own group died with the driver');
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/**
+	 * A job that ignores the SIGTERM is SIGKILLed once the grace is out, its whole group with it: the driver waits for it
+	 * rather than exiting with the group alive.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-NO-HARD-KILL')
+	public function testAJobIgnoringTheTermIsKilledAfterTheGrace(): Void {
+		#if nodejs
+		final outlived: Null<Float> = childOutlivesDriver('spawnstubborn', [], "trap '' TERM; sleep 30 & echo $! > child.txt; wait", 5000);
+		Assert.notNull(outlived, 'the job\'s child died once the grace was out');
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/**
+	 * Start the process driver on the one shell job `shell` in a fresh directory holding `files`, wait for the job to write
+	 * its child's pid to `child.txt`, SIGTERM the driver, and answer how long the child outlived the signal in ms; null when
+	 * it never started or was alive `waitMs` later, when it is SIGKILLed here.
+	 */
+	private static function childOutlivesDriver(
+		prefix: String, files: Array<{ name: String, source: String }>, shell: String, waitMs: Int
+	): Null<Float> {
+		#if nodejs
+		final dir: String = CliFixture.writeDir(prefix, files);
+		sys.io.File.saveContent('$dir/jobs.json', haxe.Json.stringify([{ args: [], cwd: dir, shell: shell }]));
+		final driver: js.node.child_process.ChildProcess = js.node.ChildProcess.spawn(
+			js.Node.process.execPath, HaxeSpawn.driverArgs(1, ROOMY, false, { result: '', jobs: '$dir/jobs.json' }), { stdio: 'ignore' }
+		);
+		final child: Null<Int> = waitForPid('$dir/child.txt');
+		if (child == null) {
+			driver.kill('SIGKILL');
+			CliFixture.removeDir(dir);
+			return null;
+		}
+		final signalled: Float = Date.now().getTime();
+		driver.kill('SIGTERM');
+		var outlived: Null<Float> = null;
+		while (outlived == null && Date.now().getTime() - signalled < waitMs) {
+			if (signalable(child))
+				js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+			else
+				outlived = Date.now().getTime() - signalled;
+		}
+		if (outlived == null) js.Syntax.code('process.kill({0}, "SIGKILL")', child);
+		CliFixture.removeDir(dir);
+		return outlived;
+		#else
+		return null;
+		#end
+	}
+
+	#if nodejs
+	/**
+	 * An overflow says the compiler RAN. `status` is null either way, so without `overflowed`
+	 * this is indistinguishable from a missing binary — and the two send a reader to opposite
+	 * places. One byte of buffer against `haxe --version` is the smallest way to produce it.
+	 */
+	public function testAnOverflowIsToldApartFromAMissingBinary(): Void {
+		final run: HaxeRun = HaxeSpawn.run(['--version'], null, 1);
+		if (!run.overflowed && run.failure.indexOf('could not launch') != -1) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		Assert.isTrue(run.overflowed, 'got: ${run.failure}');
+		Assert.isNull(run.status);
+		Assert.isTrue(run.failure.indexOf('output buffer') != -1, 'and the sentence names the buffer: ${run.failure}');
+	}
+
+	/** The pid written to `path` once it appears, polling up to five seconds. */
+	private static function waitForPid(path: String): Null<Int> {
+		for (_ in 0...50) {
+			final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
+			final pid: Null<Int> = Std.parseInt(StringTools.trim(text ?? ''));
+			if (pid != null) return pid;
+			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+		}
+		return null;
+	}
+
+	/** Whether `pid` answers a signal-0 probe. */
+	private static function signalable(pid: Null<Int>): Bool {
+		return pid != null && try {
+			js.Syntax.code('process.kill({0}, 0)', pid);
+			true;
+		} catch (exception: haxe.Exception) false;
+	}
+	#end
 
 }
