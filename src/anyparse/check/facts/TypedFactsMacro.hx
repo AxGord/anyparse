@@ -13,6 +13,7 @@ import haxe.macro.TypeTools;
 import sys.io.File;
 import sys.io.FileOutput;
 import anyparse.check.facts.TypedFactsTypeStrings.*;
+import anyparse.query.FileIdentity;
 
 /**
  * The compile-time half of `TypedFactsProbe`: an `onAfterTyping` hook that writes what the compiler typed as JSON Lines
@@ -218,10 +219,10 @@ final class TypedFactsMacro {
 	public function reflectionModule(file: String): Bool {
 		final known: Null<Bool> = _reflectionFiles[file];
 		if (known != null) return known;
-		final full: String = canonicalFile(file);
+		final full: String = FileIdentity.realPath(file);
 		final answer: Bool = Lambda.exists(['Reflect.hx', 'Type.hx'], m -> {
 			final resolved: Null<String> = try Context.resolvePath(m) catch (exception: haxe.Exception) null;
-			resolved != null && canonicalFile(resolved) == full;
+			resolved != null && FileIdentity.realPath(resolved) == full;
 		});
 		_reflectionFiles[file] = answer;
 		return answer;
@@ -516,11 +517,6 @@ final class TypedFactsMacro {
 		var best: Null<InlineMethod> = null;
 		for (f in methods) if (f.min <= min && max <= f.max && (best == null || f.max - f.min < best.max - best.min)) best = f;
 		return best;
-	}
-
-	private static function canonicalFile(path: String): String {
-		final full: Null<String> = try sys.FileSystem.fullPath(path) catch (exception: haxe.Exception) null;
-		return haxe.io.Path.normalize(full ?? path);
 	}
 
 	/**

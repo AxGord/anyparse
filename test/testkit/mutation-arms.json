@@ -33105,6 +33105,14 @@
 			"note": "a file that does not exist yet keeps its spelling instead of resolving its nearest existing ancestor, so a missing file under a symlinked directory keys apart from its target spelling"
 		},
 		{
+			"name": "M-EDGEDIFF-LIBRARY-BARE-FULLPATH",
+			"type": "dev.EdgeDiff",
+			"method": "libraryOnly",
+			"find": "[for (f in project) FileIdentity.realPath(f.file) => true]",
+			"replace": "[for (f in project) FileSystem.fullPath(f.file) => true]",
+			"note": "the project side keys by a bare fullPath, null for a missing path, so a missing project file and every missing library file look alike and the library filter drops or keeps the wrong files"
+		},
+		{
 			"name": "M-GIT-REVISION-SPEC-UNRESOLVED",
 			"type": "anyparse.query.cli.GitRevision",
 			"method": "cwdRelative",

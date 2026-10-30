@@ -13,8 +13,8 @@ import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.ComposedValues;
 import anyparse.query.CtorFieldFold;
+import anyparse.query.FileIdentity;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.HaxelibResolver;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NominalTypes;
@@ -299,7 +299,7 @@ final class TyperConformance {
 				typeAt(report, area, label, unescape(TYPE_ASSERT.matched(1)), typer, node);
 		} else if (POSITION_ASSERT.match(statement)) {
 			final expected: Null<Span> = rangeOf(markers, POSITION_ASSERT.matched(1), POSITION_ASSERT.matched(2));
-			final at: Null<Int> = markers[group(POSITION_ASSERT, QUERY_MARKER_GROUP)];
+			final at: Null<Int> = markers[group(POSITION_ASSERT)];
 			if (expected != null && at != null) report.score(area, label, positionVerdict(expected, typer.definitionAt(at)));
 		} else if (USAGE_ASSERT.match(statement)) {
 			final at: Null<Int> = markers[group(USAGE_ASSERT, 2)];
@@ -307,7 +307,7 @@ final class TyperConformance {
 			if (at != null) report.score(area, label, usageVerdict(expected, typer.usagesAt(at), false));
 		} else if (FIRST_USAGE_ASSERT.match(statement)) {
 			final expected: Null<Span> = rangeOf(markers, FIRST_USAGE_ASSERT.matched(1), FIRST_USAGE_ASSERT.matched(2));
-			final at: Null<Int> = markers[group(FIRST_USAGE_ASSERT, QUERY_MARKER_GROUP)];
+			final at: Null<Int> = markers[group(FIRST_USAGE_ASSERT)];
 			if (expected != null && at != null) report.score(area, label, usageVerdict([expected], typer.usagesAt(at), true));
 		} else {
 			report.score(area, label, Unknown);
@@ -331,14 +331,18 @@ final class TyperConformance {
 		final typers: Map<String, Null<FileTyper>> = [];
 		final projectName: String = Path.withoutDirectory(dir);
 		final lines: Array<String> = File.getContent(stderr).split('\n');
-		for (at => line in lines) {
-			if (!MESSAGE.match(line.trim())) continue;
+		for (at => line in lines) if (MESSAGE.match(line.trim())) {
 			final file: String = Path.normalize(MESSAGE.matched(1));
 			final text: String = MESSAGE.matched(MESSAGE_TEXT_GROUP);
 			// a `... ` line continues the chain of the error above it, about a part of that type, not the expression's
 			if (text.startsWith('... ')) continue;
 			final warning: Bool = TYPE_WARNING.match(text);
-			final expected: Null<String> = warning ? TYPE_WARNING.matched(1) : SHOULD_BE.match(text) ? SHOULD_BE.matched(1) : null;
+			final expected: Null<String> = if (warning)
+				TYPE_WARNING.matched(1)
+			else if (SHOULD_BE.match(text))
+				SHOULD_BE.matched(1)
+			else
+				null;
 			final area: String = warning ? 'misc/$$type' : 'misc/should-be';
 			final label: String = '$projectName/${Path.withoutDirectory(stderr)}: ${line.trim()}';
 			if (expected == null) {
@@ -408,12 +412,12 @@ final class TyperConformance {
 		final config: LintConfig = LintConfig.discover(Path.join([Sys.getCwd(), 'TyperConformance.hx']));
 		final project: Array<{ file: String, source: String }> = [];
 		for (root in config.resolutionRoots()) collect(root, project);
-		final library: Array<{ file: String, source: String }> = libraryOf(config, project);
+		final library: Array<{ file: String, source: String }> = EdgeDiff.libraryOf(config, project);
 		final asked: Array<OracleConfig> = [
 			for (o in config.compilerOracles()) if (configuration == null || o.hxml.contains(configuration)) o
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final sources: Map<String, String> = [for (f in project) FileSystem.fullPath(f.file) => f.source];
+		final sources: Map<String, String> = [for (f in project) FileIdentity.realPath(f.file) => f.source];
 		final oracle: Null<FactsTypeOracle> = switch TypedFactsProbe.probeAll(OracleGeneration.prepare(asked).oracles) {
 			case null: null;
 			case table: new FactsTypeOracle(table, key -> sources[key], null, plugin);
@@ -434,7 +438,7 @@ final class TyperConformance {
 		final before: Int = report.scored();
 		var compiledFiles: Int = 0;
 		for (f in project) {
-			final key: String = FileSystem.fullPath(f.file);
+			final key: String = FileIdentity.realPath(f.file);
 			final typer: Null<FileTyper> = FileTyper.within(plugin, index, f.file, f.source);
 			if (typer == null || !oracle.facts.compiled(key)) continue;
 			compiledFiles++;
@@ -448,21 +452,6 @@ final class TyperConformance {
 			compiled: compiledFiles,
 			cases: report.scored() - before
 		};
-	}
-
-	/** The libraries and the standard library the project in `config` resolves against, its own files left out. */
-	private static function libraryOf(
-		config: LintConfig, project: Array<{ file: String, source: String }>
-	): Array<{ file: String, source: String }> {
-		final libs: Array<{ file: String, source: String }> = [];
-		for (name in config.resolutionLibs()) {
-			final dir: Null<String> = HaxelibResolver.libSourceDir(name);
-			if (dir != null) collect(dir, libs);
-		}
-		final std: Null<String> = StdResolver.stdDir();
-		if (std != null) collect(std, libs);
-		final held: Map<String, Bool> = [for (f in project) FileSystem.fullPath(f.file) => true];
-		return [for (f in libs) if (!held.exists(FileSystem.fullPath(f.file))) f];
 	}
 
 	/**
@@ -600,9 +589,12 @@ final class TyperConformance {
 	}
 
 	private static function positionVerdict(expected: Span, found: Null<Span>): Verdict {
-		return found == null
-			? Unknown
-			: found.from == expected.from && found.to == expected.to ? Match : Different('${found.from}-${found.to}');
+		return if (found == null)
+			Unknown
+		else if (found.from == expected.from && found.to == expected.to)
+			Match
+		else
+			Different('${found.from}-${found.to}');
 	}
 
 	/** `found` against `expected`, the whole list or (`firstOnly`) its first range. */
@@ -634,7 +626,7 @@ final class TyperConformance {
 	}
 
 	/** `r`'s group `n` read as a number, -1 when it is none. */
-	private static function group(r: EReg, n: Int): Int {
+	private static function group(r: EReg, n: Int = QUERY_MARKER_GROUP): Int {
 		return Std.parseInt(r.matched(n)) ?? -1;
 	}
 
@@ -959,11 +951,10 @@ private final class FileTyper {
 		final out: Array<Span> = [];
 		for (h in Refs.find(hit.name, _tree, _shape)) {
 			final b: Null<Span> = h.bindingSpan;
-			if (h.kind != Decl && b != null && b.from == bound.from && b.to == bound.to) {
-				final name: Null<Span> = nameIn(h.span, h.name);
-				if (name == null) return null;
-				out.push(name);
-			}
+			if (h.kind == Decl || (b == null || b.from != bound.from || b.to != bound.to)) continue;
+			final name: Null<Span> = nameIn(h.span, h.name);
+			if (name == null) return null;
+			out.push(name);
 		}
 		return out;
 	}
@@ -1031,8 +1022,7 @@ private final class FileTyper {
 		file: String
 	): Null<FileTyper> {
 		final own: Null<{ file: String, source: String }> = files.find(f -> f.file == file);
-		if (own == null) return null;
-		return within(plugin, IndexScope.over(files.concat(std), plugin, [for (f in std) f.file]), file, own.source);
+		return own == null ? null : within(plugin, IndexScope.over(files.concat(std), plugin, [for (f in std) f.file]), file, own.source);
 	}
 
 	/** The typer of `file` over `index`; null when it does not parse. */
@@ -1553,11 +1543,9 @@ private final class TypeText {
 			_at++;
 			// one unnamed type in parentheses before an arrow groups an argument of an old-style chain (4.3.7:
 			// `(A -> B) -> C -> D` takes two arguments), any other list is a new-style function's
-			if (peek() == '->' && !(plain && items.length == 1)) {
-				_at++;
-				return ['(${items.join(',')})->${type()}'];
-			}
-			return items;
+			if (peek() != '->' || plain && items.length == 1) return items;
+			_at++;
+			return ['(${items.join(',')})->${type()}'];
 		}
 		if (t == '{') return [structure()];
 		if (t == '?') return ['?' + primary().join(',')];

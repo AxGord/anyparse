@@ -8,6 +8,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
 import anyparse.query.FactsView;
+import anyparse.query.FileIdentity;
 import anyparse.query.HaxelibResolver;
 import anyparse.query.ReachProject;
 import anyparse.query.StdResolver;
@@ -38,17 +39,9 @@ final class EdgeDiff {
 		}
 		final cwd: String = Sys.getCwd();
 		final config: LintConfig = LintConfig.discover(Path.join([cwd, 'EdgeDiff.hx']));
-		final project: Array<{ file: String, source: String }> = [];
+		final project: Array<SourceFile> = [];
 		for (root in config.resolutionRoots()) collect(root, project);
-		final libs: Array<{ file: String, source: String }> = [];
-		for (name in config.resolutionLibs()) {
-			final dir: Null<String> = HaxelibResolver.libSourceDir(name);
-			if (dir != null) collect(dir, libs);
-		}
-		final std: Null<String> = StdResolver.stdDir();
-		if (std != null) collect(std, libs);
-		final held: Map<String, Bool> = [for (f in project) FileSystem.fullPath(f.file) => true];
-		final library: Array<{ file: String, source: String }> = [for (f in libs) if (!held.exists(FileSystem.fullPath(f.file))) f];
+		final library: Array<SourceFile> = libraryOf(config, project);
 		final oracles: Array<OracleConfig> = OracleGeneration.prepare(config.compilerOracles()).oracles;
 		final started: Float = Sys.time();
 		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
@@ -76,7 +69,7 @@ final class EdgeDiff {
 	}
 
 	/** Every `.hx` file under `dir`, read. */
-	public static function collect(dir: String, into: Array<{ file: String, source: String }>): Void {
+	public static function collect(dir: String, into: Array<SourceFile>): Void {
 		if (!FileSystem.exists(dir)) return;
 		for (entry in FileSystem.readDirectory(dir)) {
 			final path: String = Path.join([dir, entry]);
@@ -85,6 +78,24 @@ final class EdgeDiff {
 			else if (StringTools.endsWith(entry, '.hx'))
 				into.push({ file: path, source: File.getContent(path) });
 		}
+	}
+
+	/** The files of `libs` that are not also a file of `project`, by identity, so paths that do not resolve never merge into one. */
+	public static function libraryOnly(project: Array<SourceFile>, libs: Array<SourceFile>): Array<SourceFile> {
+		final held: Map<String, Bool> = [for (f in project) FileIdentity.realPath(f.file) => true];
+		return [for (f in libs) if (!held.exists(FileIdentity.realPath(f.file))) f];
+	}
+
+	/** The libraries and the standard library the project in `config` resolves against, its own files left out. */
+	public static function libraryOf(config: LintConfig, project: Array<SourceFile>): Array<SourceFile> {
+		final libs: Array<SourceFile> = [];
+		for (name in config.resolutionLibs()) {
+			final dir: Null<String> = HaxelibResolver.libSourceDir(name);
+			if (dir != null) collect(dir, libs);
+		}
+		final std: Null<String> = StdResolver.stdDir();
+		if (std != null) collect(std, libs);
+		return libraryOnly(project, libs);
 	}
 
 	/** The records of node `id` in `g`: `<kind> <target> @<offset>`, `unresolved <reason> @<offset>`, `access <member> @<offset>`. */
