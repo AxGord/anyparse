@@ -49,6 +49,30 @@ class StaticInitOrderCheckTest extends Test {
 		Assert.equals(0, violations('static var a:Array<Int> = [for (b in [1, 2]) b];\n\tstatic var b:Int = 1;').length);
 	}
 
+	/** A static method the initializer calls runs right there: a later field its body reads, however deep, is read early. */
+	@:pin('control')
+	@:killer('M-STATICINIT-CALLS-NOT-ENTERED')
+	public function testReadThroughCalledMethodFlagged(): Void {
+		final vs: Array<Violation> = violations('static var a:Int = f();\n\tstatic function f():Int return b;\n\tstatic var b:Int = 5;');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('`b`') >= 0);
+		Assert.equals(
+			1,
+			violations(
+				'static var a:Int = C.f() + 1;\n\tstatic function f():Int return g();\n\tstatic function g():Int return C.b;\n'
+				+ '\tstatic var b:Int = 5;'
+			).length
+		);
+		Assert.equals(0, violations('static var a:Int = f();\n\tstatic function f():Int return f();\n\tstatic var b:Int = 5;').length);
+	}
+
+	/** A method named as a value is not run, so its body reads nothing at initialization. */
+	@:pin('control')
+	@:killer('M-STATICINIT-REFERENCE-RUNS')
+	public function testMethodReferenceNotEntered(): Void {
+		Assert.equals(0, violations('static var a:() -> Int = f;\n\tstatic function f():Int return b;\n\tstatic var b:Int = 5;').length);
+	}
+
 	/** One finding per initializer, however many later fields it reads. */
 	public function testOneFindingPerInitializer(): Void {
 		Assert.equals(1, violations('static var a:Int = b + c;\n\tstatic var b:Int = 1;\n\tstatic var c:Int = 2;').length);

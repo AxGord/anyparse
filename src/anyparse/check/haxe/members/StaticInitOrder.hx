@@ -11,7 +11,8 @@ import anyparse.query.SymbolIndex;
 /**
  * Flags a static field initializer that reads a static field of the same type declared BELOW it. Haxe runs static
  * initializers in declaration order, so the read sees the later field before its own initializer ran: `null` on the
- * interpreter, `undefined` on js, the type's zero on a static target — even for a non-inline `static final` constant.
+ * interpreter, `undefined` on js, the type's zero on a static target — even for a non-inline `static final`
+ * constant. A static method the initializer calls runs right there, so a read in its body counts too.
  *
  * A read inside a function literal runs when the function is called and is left alone, as is a read of an `inline`
  * field (folded at compile time) or of a field with no initializer (no order to violate). A read is a binding, not a

@@ -1,6 +1,7 @@
 package anyparse.check.scan;
 
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.WriteSites;
 
 /** An integer sum of operands plus a constant: `len - k + 1` is `{len: 1, k: -1}` and `1`, each operand by its storage key. */
@@ -9,10 +10,14 @@ typedef LinearTerm = {
 	final constant: Int;
 };
 
-/** A term known `>= 0` throughout `region`, the code its condition guards. */
+/**
+ * A term known `>= 0` throughout `region`, the code its condition guards. `cause` is the condition that proved it, which
+ * runs between the comparison and the region, so a write or call there may change an operand too.
+ */
 typedef Bound = {
 	final term: LinearTerm;
 	final region: Span;
+	final cause: Null<Span>;
 };
 
 /** One file's inputs to `OrderGuards.provesNonNegative`, built by `OrderGuards.contextOf`. */
@@ -21,6 +26,27 @@ typedef OrderContext = {
 	final tree: QueryNode;
 	final source: String;
 	final writes: Array<WriteSite>;
+	final effects: CallEffects;
+	final calls: Array<CallSite>;
+	final functions: Array<Span>;
+	final survivors: Map<String, Bool>;
+};
+
+/** What the caller's typing knows about calls, for a bound over storage a call might change. */
+typedef CallEffects = {
+
+	/** Whether the call or construction `call` changes no storage the program can read. */
+	final effectFree: (call:QueryNode) -> Bool;
+
+	/** Whether the value `receiver` reads cannot change in place, so a member read off it changes only with the receiver. */
+	final immutable: (receiver:QueryNode) -> Bool;
+};
+
+/** A call or construction, with the span of the innermost function literal or declaration holding it. */
+typedef CallSite = {
+	final node: QueryNode;
+	final span: Span;
+	final within: Null<Span>;
 };
 
 /** The grammar kinds `OrderGuards` reads, gathered once per run by `seamsOf`. */
@@ -41,6 +67,8 @@ typedef OrderSeams = {
 	final blockKinds: Array<String>;
 	final exitKinds: Array<String>;
 	final barrierKinds: Array<String>;
+	final callKinds: Array<String>;
+	final memberKinds: Array<String>;
 };
 
 /**
@@ -52,8 +80,12 @@ typedef OrderSeams = {
  *
  * An operand is the storage it reads, keyed by `WriteSites.accessPath`, so a shadowing local or lambda parameter is
  * another operand, and one the binder cannot name matches nothing. A bound holds only while no write in the region it
- * guards may change one of its operands (`WriteSites.mayOverlap`), and no bound crosses a function literal, which may run
- * after any write. An ordered comparison is read as total, which holds for the integer operands an integer expression
+ * guards, or in the condition that proved it, may change one of its operands (`WriteSites.mayOverlap`), and no bound
+ * crosses a function literal, which may run after any write. A call there voids a bound over storage a callee may change
+ * — a field, a static, a member read through a mutable receiver, a local a function literal writes — unless the caller's
+ * typing knows it effect-free (`CallEffects`). Only a written call is seen: a property getter or setter, an implicit
+ * `toString`, an abstract's operator overload run code no call node shows, and keep a bound they may void. An ordered
+ * comparison is read as total, which holds for the integer operands an integer expression
  * shares with its guard (a `null` operand fails the expression too).
  */
 @:nullSafety(Strict)
@@ -78,17 +110,39 @@ final class OrderGuards {
 			blockKinds: [for (k in [shape.blockStmtKind, shape.blockBodyKind]) if (k != null) k],
 			exitKinds: shape.controlExitKinds ?? [],
 			barrierKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? [])
-				.concat([for (k in [shape.namedFnExprKind]) if (k != null) k])
+				.concat([for (k in [shape.namedFnExprKind]) if (k != null) k]),
+			callKinds: [for (k in [shape.callKind, shape.newExprKind]) if (k != null) k],
+			memberKinds: ShapeVocab.memberAccessKinds(shape)
 		};
 	}
 
-	/** One file's inputs: its tree and source, and every write in it. */
-	public static function contextOf(tree: QueryNode, source: String, seams: OrderSeams): OrderContext {
+	/** One file's inputs: its tree and source, every write and call in it, and what `effects` knows of the calls. */
+	public static function contextOf(tree: QueryNode, source: String, seams: OrderSeams, effects: CallEffects): OrderContext {
+		final calls: Array<CallSite> = [];
+		final functions: Array<Span> = [];
+		function walk(node: QueryNode, within: Null<Span>): Void {
+			final span: Null<Span> = node.span;
+			var inner: Null<Span> = within;
+			if (span != null && seams.barrierKinds.contains(node.kind)) {
+				functions.push(span);
+				inner = span;
+			}
+			if (span != null && seams.callKinds.contains(node.kind)) {
+				final at: Span = span;
+				calls.push({ node: node, span: at, within: within });
+			}
+			for (c in node.children) walk(c, inner);
+		}
+		walk(tree, null);
 		return {
 			seams: seams,
 			tree: tree,
 			source: source,
-			writes: WriteSites.of(tree, seams.shape)
+			writes: WriteSites.of(tree, seams.shape),
+			effects: effects,
+			calls: calls,
+			functions: functions,
+			survivors: []
 		};
 	}
 
@@ -101,7 +155,7 @@ final class OrderGuards {
 		if (value.terms.empty()) return value.constant >= 0;
 		for (bound in bounds(expr, path, ctx)) {
 			final rest: LinearTerm = difference(value, bound.term);
-			if (rest.terms.empty() && rest.constant >= 0 && unwritten(bound, ctx)) return true;
+			if (rest.terms.empty() && rest.constant >= 0 && unwritten(bound, ctx) && uncalled(bound, path, ctx)) return true;
 		}
 		return false;
 	}
@@ -126,9 +180,9 @@ final class OrderGuards {
 			if (seams.barrierKinds.contains(node.kind)) out.resize(0);
 			if (slot < 0 || region == null) continue;
 			if ((node.kind == seams.andKind || node.kind == seams.orKind) && slot == 1)
-				facts(kids[0], node.kind == seams.andKind, region, ctx, out);
+				facts(kids[0], node.kind == seams.andKind, region, kids[0].span, ctx, out);
 			else if ((node.kind == seams.ternaryKind || seams.ifKinds.contains(node.kind)) && slot > 0)
-				facts(kids[0], slot == 1, region, ctx, out);
+				facts(kids[0], slot == 1, region, kids[0].span, ctx, out);
 			else if (node.kind == seams.forKind && slot == kids.length - 1)
 				rangeFacts(node, region, ctx, out);
 			else if (seams.blockKinds.contains(node.kind))
@@ -151,8 +205,8 @@ final class OrderGuards {
 			: Refs.bindingAt(binder, declared.from, ctx.tree, ctx.seams.shape);
 		if (binder == null || binding == null || ends.length != 2) return;
 		final i: LinearTerm = { terms: ['$binder@$binding' => 1], constant: 0 };
-		out.push({ term: difference(i, linear(ends[0], ctx)), region: body });
-		out.push({ term: minusOne(difference(linear(ends[1], ctx), i)), region: body });
+		out.push({ term: difference(i, linear(ends[0], ctx)), region: body, cause: range?.span });
+		out.push({ term: minusOne(difference(linear(ends[1], ctx), i)), region: body, cause: range?.span });
 	}
 
 	/** The bounds an `if (c) <exit>` with no else hands the rest of `block`: `c` is false there. */
@@ -164,19 +218,21 @@ final class OrderGuards {
 		final body: QueryNode = kids[1];
 		final run: Array<QueryNode> = ctx.seams.blockKinds.contains(body.kind) ? body.children : [body];
 		if (run.length > 0 && ctx.seams.exitKinds.contains(run[run.length - 1].kind))
-			facts(kids[0], false, new Span(guard.to, whole.to), ctx, out);
+			facts(kids[0], false, new Span(guard.to, whole.to), kids[0].span, ctx, out);
 	}
 
 	/** The bounds `cond` evaluating to `truth` proves over `region`, pushed onto `out`. */
-	private static function facts(cond: QueryNode, truth: Bool, region: Span, ctx: OrderContext, out: Array<Bound>): Void {
+	private static function facts(
+		cond: QueryNode, truth: Bool, region: Span, cause: Null<Span>, ctx: OrderContext, out: Array<Bound>
+	): Void {
 		final seams: OrderSeams = ctx.seams;
 		final kids: Array<QueryNode> = cond.children;
-		if (cond.kind == seams.parenKind && kids.length == 1) return facts(kids[0], truth, region, ctx, out);
-		if (cond.kind == seams.notKind && kids.length == 1) return facts(kids[0], !truth, region, ctx, out);
+		if (cond.kind == seams.parenKind && kids.length == 1) return facts(kids[0], truth, region, cause, ctx, out);
+		if (cond.kind == seams.notKind && kids.length == 1) return facts(kids[0], !truth, region, cause, ctx, out);
 		if (kids.length != 2) return;
 		if ((cond.kind == seams.andKind && truth) || (cond.kind == seams.orKind && !truth)) {
-			facts(kids[0], truth, region, ctx, out);
-			facts(kids[1], truth, region, ctx, out);
+			facts(kids[0], truth, region, cause, ctx, out);
+			facts(kids[1], truth, region, cause, ctx, out);
 			return;
 		}
 		final relation: Null<String> = seams.relations[cond.kind];
@@ -187,14 +243,14 @@ final class OrderGuards {
 		final leftAbove: Bool = (relation == 'gt' || relation == 'ge') == truth;
 		final strict: Bool = (relation == 'lt' || relation == 'gt') == truth;
 		final gap: LinearTerm = leftAbove ? difference(left, right) : difference(right, left);
-		out.push({ term: strict ? minusOne(gap) : gap, region: region });
+		out.push({ term: strict ? minusOne(gap) : gap, region: region, cause: cause });
 	}
 
 	/** Whether no write inside `bound`'s region may change one of its operands; a write no path names may change any. */
 	private static function unwritten(bound: Bound, ctx: OrderContext): Bool {
 		for (w in ctx.writes) {
 			final at: Null<Span> = w.node.span;
-			if (at == null || at.from < bound.region.from || at.from >= bound.region.to) continue;
+			if (at == null || !covers(bound, at.from)) continue;
 			final written: Null<String> = w.path;
 			if (written == null) return false;
 			for (atom in bound.term.terms.keys()) if (WriteSites.mayOverlap(written, atom, false)) return false;
@@ -224,7 +280,10 @@ final class OrderGuards {
 			if (op == 'multiply' && a.terms.empty()) return scaled(b, a.constant);
 			if (op == 'multiply' && b.terms.empty()) return scaled(a, b.constant);
 		}
-		return { terms: [(WriteSites.accessPath(node, ctx.tree, seams.shape) ?? '?${span.from}') => 1], constant: 0 };
+		final key: Null<String> = WriteSites.accessPath(node, ctx.tree, seams.shape);
+		if (key == null) return { terms: ['?${span.from}' => 1], constant: 0 };
+		if (!ctx.survivors.exists(key)) ctx.survivors[key] = survivesCalls(node, ctx);
+		return { terms: [key => 1], constant: 0 };
 	}
 
 	/** `a - b`, dropping a zero coefficient. */
@@ -245,6 +304,59 @@ final class OrderGuards {
 		return factor == 0
 			? { terms: [], constant: 0 }
 			: { terms: [for (atom => k in t.terms) atom => k * factor], constant: t.constant * factor };
+	}
+
+	/**
+	 * Whether no call inside `bound`'s region may change one of its operands: a call enclosing the use (on `path`) runs after
+	 * its arguments are read, a call inside a function literal of the region runs only when another call does, and an
+	 * effect-free one changes nothing. Only an operand `survivesCalls` refuses can be changed by a call.
+	 */
+	private static function uncalled(bound: Bound, path: Array<QueryNode>, ctx: OrderContext): Bool {
+		if ([for (atom in bound.term.terms.keys()) if (ctx.survivors[atom] != true) atom].length == 0) return true;
+		for (c in ctx.calls) if (covers(bound, c.span.from) && !path.contains(c.node)) {
+			final within: Null<Span> = c.within;
+			if (within != null && covers(bound, within.from)) continue;
+			if (!ctx.effects.effectFree(c.node)) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether the storage `node` reads can change only by a write in the code that reads it, never by a call: a local no
+	 * function literal writes, or a member of an immutable value read off such a local. A field, a static and a member
+	 * reached through anything else are storage a callee may change.
+	 */
+	private static function survivesCalls(node: QueryNode, ctx: OrderContext): Bool {
+		final seams: OrderSeams = ctx.seams;
+		final kids: Array<QueryNode> = node.children;
+		if (node.kind == seams.parenKind && kids.length == 1) return survivesCalls(kids[0], ctx);
+		if (seams.memberKinds.contains(node.kind) && kids.length == 1) return survivesCalls(kids[0], ctx) && ctx.effects.immutable(kids[0]);
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (node.kind != seams.shape.identKind || name == null || span == null || name == seams.shape.selfReferenceText) return false;
+		final binding: Null<Int> = Refs.bindingAt(name, span.from, ctx.tree, seams.shape);
+		final key: Null<String> = WriteSites.accessPath(node, ctx.tree, seams.shape);
+		return binding != null
+			&& key != null
+			&& ctx.functions.exists(f -> f.from < binding && binding < f.to)
+			&& !captured(key, binding, ctx);
+	}
+
+	/** Whether a function literal or local function that does not declare the local at `binding` writes it: a call may run it. */
+	private static function captured(key: String, binding: Int, ctx: OrderContext): Bool {
+		for (w in ctx.writes) {
+			final written: Null<String> = w.path;
+			final at: Null<Span> = w.node.span;
+			if (at == null || (written != null && !WriteSites.mayOverlap(written, key, false))) continue;
+			if (ctx.functions.exists(f -> f.from <= at.from && at.from < f.to && !(f.from <= binding && binding < f.to))) return true;
+		}
+		return false;
+	}
+
+	/** Whether `at` lies in the code a write or call there may change `bound` from: its region or the condition that proved it. */
+	private static function covers(bound: Bound, at: Int): Bool {
+		final cause: Null<Span> = bound.cause;
+		return (at >= bound.region.from && at < bound.region.to) || (cause != null && at >= cause.from && at < cause.to);
 	}
 
 }

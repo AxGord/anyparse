@@ -82,6 +82,65 @@ class SubstrNegativeStartCheckTest extends Test {
 		Assert.equals(0, violations(body('[1].map(m -> m > k ? s.substr(m - k) : s);')).length);
 	}
 
+	/** A call in the guarded region may change a field, a static or a member read through a mutable receiver: the bound is void. */
+	@:pin('control')
+	@:killer('M-ORDERGUARD-CALLS-IGNORED')
+	public function testCallVoidsABoundOverMutableStorage(): Void {
+		Assert.equals(1, violations(members('if (this.n > k) { shrink(); t = s.substr(this.n - k); }')).length);
+		Assert.equals(1, violations(members('if (n > k) { shrink(); t = s.substr(n - k); }')).length);
+		Assert.equals(1, violations(members('if (m > k) { shrink(); t = s.substr(m - k); }')).length);
+		Assert.equals(1, violations(members('if (C.m > k) { shrink(); t = s.substr(C.m - k); }')).length);
+		Assert.equals(1, violations(members('if (o.v > k) { mutate(o); t = s.substr(o.v - k); }')).length);
+		Assert.equals(1, violations(members('if (arr.length > k) { arr.pop(); t = s.substr(arr.length - k); }')).length);
+		Assert.equals(0, violations(members('if (this.n > k) { t = s.substr(this.n - k); }')).length);
+	}
+
+	/** The condition that proved a bound runs after its comparison: a call or write there voids the bound as one in the region does. */
+	@:pin('control')
+	@:killer('M-ORDERGUARD-CAUSE-UNSCANNED')
+	public function testChangeInTheProvingConditionVoidsTheBound(): Void {
+		Assert.equals(1, violations(members('if (this.n >= k && this.consume()) trace(s.substr(this.n - k));')).length);
+		Assert.equals(1, violations(members('if (this.n < k || !this.consume()) return; trace(s.substr(this.n - k));')).length);
+		Assert.equals(1, violations(members('var b = this.n >= k && consume() && s.substr(this.n - k) == t;')).length);
+		Assert.equals(1, violations(members('var q = 5; if (q >= k && (q -= 9) < 100) trace(s.substr(q - k));')).length);
+		Assert.equals(0, violations(members('if (this.n >= k && s.length > 0) trace(s.substr(this.n - k));')).length);
+	}
+
+	/** A local is changed only by a write the region holds, so a call leaves a bound over locals standing. */
+	@:pin('control')
+	@:killer('M-ORDERGUARD-LOCALS-VOLATILE')
+	public function testCallKeepsABoundOverLocals(): Void {
+		Assert.equals(0, violations(members('if (k > 3) { shrink(); t = s.substr(k - 3); }')).length);
+	}
+
+	/** A string changes only by rebinding, so the length of a local string keeps its bound across a call. */
+	@:pin('control')
+	@:killer('M-ORDERGUARD-STRING-MUTABLE')
+	public function testCallKeepsALocalStringLength(): Void {
+		Assert.equals(0, violations(members('if (s.length > k) { trace(s); t = s.substr(s.length - k); }')).length);
+	}
+
+	/** A function literal writing a local is code a call runs: the local is storage a call changes. */
+	@:pin('control')
+	@:killer('M-ORDERGUARD-CAPTURE-IGNORED')
+	public function testCapturedLocalVoidsTheBound(): Void {
+		Assert.equals(1, violations(members('var q = 5; final dec = () -> q--; if (q > k) { dec(); t = s.substr(q - k); }')).length);
+	}
+
+	/** An effect-free std call changes nothing, so the bound stands. */
+	@:pin('control')
+	@:killer('M-ORDERGUARD-EFFECT-FREE-IGNORED')
+	public function testEffectFreeCallKeepsTheBound(): Void {
+		Assert.equals(0, violations(members('if (this.n > k) { s.indexOf(t); t = s.substr(this.n - k); }')).length);
+	}
+
+	/** A call inside a function literal of the region runs only when another call does. */
+	@:pin('control')
+	@:killer('M-ORDERGUARD-DEFERRED-CALLS-RUN')
+	public function testCallInsideFunctionLiteralKeepsTheBound(): Void {
+		Assert.equals(0, violations(members('if (this.n > k) { final g = () -> shrink(); t = s.substr(this.n - k); }')).length);
+	}
+
 	/** The receiver's own `length - 1` is negative only on an empty string, where `substr` returns it empty anyway. */
 	public function testLastCharacterStartNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('s.substr(s.length - 1)')).length);
@@ -112,6 +171,12 @@ class SubstrNegativeStartCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new SubstrNegativeStart(), src);
+	}
+
+	private function members(statements: String): String {
+		return 'class C {\n\tvar n:Int;\n\tstatic var m:Int;\n\tfunction shrink():Void {}\n\tfunction mutate(o:{v:Int}):Void {}\n'
+			+ '\tfunction consume():Bool return true;\n\tfunction f(s:String, t:String, k:Int, o:{v:Int}, arr:Array<Int>):Void {\n\t\t'
+			+ '$statements\n\t}\n}';
 	}
 
 }

@@ -4,7 +4,10 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.scan.OrderGuards;
 import anyparse.check.scan.RunScan;
+import anyparse.query.IndexScope;
+import anyparse.query.StdlibPurity;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypingService;
 
 /**
  * Flags a `substr` call whose start is a subtraction — an index that goes negative once the subtrahend outgrows the
@@ -41,13 +44,17 @@ final class SubstrNegativeStart extends HaxeRule implements NoAutofix {
 			for (kind => op in shape.execution?.integerFoldOperators ?? []) if (op == 'subtract') kind
 		];
 		final guards: OrderSeams = OrderGuards.seamsOf(shape);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
+		final text: Null<String> = TypingService.stringType(shape);
 		return callKind == null || fieldAccessKind == null || subtractKinds.length == 0
 			? []
 			: RunScan.collect(files, plugin, (entry, tree, out) -> {
 				final path: Array<QueryNode> = [];
 				var ctx: Null<OrderContext> = null;
 				function proved(start: QueryNode, call: QueryNode): Bool {
-					final c: OrderContext = ctx ?? OrderGuards.contextOf(tree, entry.source, guards);
+					final c: OrderContext = ctx ?? OrderGuards.contextOf(
+						tree, entry.source, guards, effectsOf(entry, tree, plugin, index, text)
+					);
 					ctx = c;
 					return OrderGuards.provesNonNegative(start, path.concat([call]), c);
 				}
@@ -110,6 +117,33 @@ final class SubstrNegativeStart extends HaxeRule implements NoAutofix {
 	private static function textOf(node: QueryNode, source: String): String {
 		final span: Null<Span> = node.span;
 		return span == null ? '' : source.substring(span.from, span.to);
+	}
+
+	/**
+	 * What the typing knows of a file's calls: an effect-free std callee (`StdlibPurity`), and a `String` receiver, a value no
+	 * call changes in place, so `s.length` of a local `s` keeps its bound across a call.
+	 */
+	private static function effectsOf(
+		entry: { file: String, source: String }, tree: QueryNode, plugin: GrammarPlugin, index: () -> Null<SymbolIndex>, text: Null<String>
+	): CallEffects {
+		final shape: RefShape = plugin.refShape();
+		var declared: Null<Map<Int, String>> = null;
+		var typeOf: Null<(QueryNode) -> Null<String>> = null;
+		return {
+			effectFree: call -> {
+				final idx: Null<SymbolIndex> = index();
+				final types: Map<Int, String> = declared ?? RunScan.typeInfoOf(plugin)?.declaredTypes(entry.source) ?? [];
+				declared = types;
+				idx != null && call.kind == shape.callKind && StdlibPurity.isEffectFreeCallee(call, tree, shape, types, idx);
+			},
+			immutable: receiver -> {
+				final read: Null<(QueryNode) -> Null<String>> = typeOf ?? CheckScan.typeNominalResolver(
+					entry.source, plugin, tree, entry.file, index()
+				);
+				typeOf = read;
+				text != null && read != null && read(receiver) == text;
+			}
+		};
 	}
 
 }

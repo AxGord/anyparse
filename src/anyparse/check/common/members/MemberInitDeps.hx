@@ -144,7 +144,8 @@ final class MemberInitDeps {
 
 	/**
 	 * The first field declared after `owner`, in its initialization phase, that `owner`'s initializer READS while it runs:
-	 * an identifier `Refs` binds to that field's declaration, or an `<ownerType>.name` access. The precise twin of the
+	 * an identifier `Refs` binds to that field's declaration, or an `<ownerType>.name` access, in the
+	 * initializer or in the body of a same-phase method it calls (transitively). The precise twin of the
 	 * conservative `initReadsSibling`, for a caller that REPORTS: a word in a string, a comment or an object-literal key,
 	 * and another type's member, are not reads, and a read inside a `deferredKinds` subtree (a function literal) runs when
 	 * it is called. Only an initialized, non-inline field has an order to violate. Null when there is none.
@@ -158,20 +159,22 @@ final class MemberInitDeps {
 		function later(m: Null<OrderedMember>): Bool {
 			return m != null && m.isField && !m.isInline && m.initNode != null && m.isStatic == owner.isStatic && m.index > owner.index;
 		}
+		final entered: Array<OrderedMember> = [];
+		function memberAt(node: QueryNode): Null<OrderedMember> {
+			return memberNamed(node, members, ownerType, tree, shape);
+		}
 		function walk(node: QueryNode): Null<OrderedMember> {
 			if (deferredKinds.contains(node.kind)) return null;
-			final name: Null<String> = node.name;
-			final span: Null<Span> = node.span;
 			final kids: Array<QueryNode> = node.children;
-			final read: Null<OrderedMember> = if (name == null || span == null)
-				null
-			else if (node.kind == shape.identKind || node.kind == shape.stringInterpIdentKind)
-				declaredAt(members, name, Refs.bindingAt(name, span.from, tree, shape))
-			else if (node.kind == shape.fieldAccessKind && kids.length == 1 && kids[0].kind == shape.identKind && kids[0].name == ownerType)
-				members.find(m -> m.node.name == name && m.isStatic)
-			else
-				null;
+			final read: Null<OrderedMember> = memberAt(node);
 			if (later(read)) return read;
+			// A method of the same phase the initializer calls runs its body right there.
+			final ran: Null<OrderedMember> = node.kind == shape.callKind && kids.length > 0 ? memberAt(kids[0]) : null;
+			if (ran != null && !ran.isField && ran.isStatic == owner.isStatic && !entered.contains(ran)) {
+				entered.push(ran);
+				final found: Null<OrderedMember> = walk(ran.node);
+				if (found != null) return found;
+			}
 			for (c in kids) {
 				final found: Null<OrderedMember> = walk(c);
 				if (found != null) return found;
@@ -309,6 +312,23 @@ final class MemberInitDeps {
 				final span: Null<Span> = m.node.span;
 				m.node.name == name && span != null && binding >= span.from && binding < span.to;
 			});
+	}
+
+	/** The member of `members` the identifier or `<ownerType>.name` access `node` binds, or null. */
+	private static function memberNamed(
+		node: QueryNode, members: Array<OrderedMember>, ownerType: Null<String>, tree: QueryNode, shape: RefShape
+	): Null<OrderedMember> {
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		final kids: Array<QueryNode> = node.children;
+		return if (name == null || span == null)
+			null
+		else if (node.kind == shape.identKind || node.kind == shape.stringInterpIdentKind)
+			declaredAt(members, name, Refs.bindingAt(name, span.from, tree, shape))
+		else if (node.kind == shape.fieldAccessKind && kids.length == 1 && kids[0].kind == shape.identKind && kids[0].name == ownerType)
+			members.find(m -> m.node.name == name && m.isStatic)
+		else
+			null;
 	}
 
 }

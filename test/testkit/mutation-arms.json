@@ -32778,7 +32778,7 @@
 			"name": "M-ORDERGUARD-NO-PROOF",
 			"type": "anyparse.check.scan.OrderGuards",
 			"method": "provesNonNegative",
-			"find": "if (rest.terms.empty() && rest.constant >= 0 && unwritten(bound, ctx)) return true;",
+			"find": "if (rest.terms.empty() && rest.constant >= 0 && unwritten(bound, ctx) && uncalled(bound, path, ctx)) return true;",
 			"replace": "",
 			"note": "no enclosing bound proves a start non-negative"
 		},
@@ -32786,8 +32786,8 @@
 			"name": "M-ORDERGUARD-ELSE-AS-THEN",
 			"type": "anyparse.check.scan.OrderGuards",
 			"method": "bounds",
-			"find": "facts(kids[0], slot == 1, region, ctx, out);",
-			"replace": "facts(kids[0], true, region, ctx, out);",
+			"find": "facts(kids[0], slot == 1, region, kids[0].span, ctx, out);",
+			"replace": "facts(kids[0], true, region, kids[0].span, ctx, out);",
 			"note": "a ternary or if condition bounds its else branch as if it held there"
 		},
 		{
@@ -32809,7 +32809,7 @@
 		{
 			"name": "M-STATICINIT-BY-NAME",
 			"type": "anyparse.check.common.members.MemberInitDeps",
-			"method": "firstEarlyRead",
+			"method": "memberNamed",
 			"find": "declaredAt(members, name, Refs.bindingAt(name, span.from, tree, shape))",
 			"replace": "members.find(m -> m.node.name == name)",
 			"note": "an identifier is matched to a field by its spelling, not by the declaration it binds"
@@ -32817,7 +32817,7 @@
 		{
 			"name": "M-STATICINIT-ANY-QUALIFIER",
 			"type": "anyparse.check.common.members.MemberInitDeps",
-			"method": "firstEarlyRead",
+			"method": "memberNamed",
 			"find": "kids[0].name == ownerType",
 			"replace": "true",
 			"note": "another type's static of the same name counts as a read of the field"
@@ -32834,8 +32834,8 @@
 			"name": "M-ORDERGUARD-TEXT-ATOMS",
 			"type": "anyparse.check.scan.OrderGuards",
 			"method": "linear",
-			"find": "WriteSites.accessPath(node, ctx.tree, seams.shape) ?? '?${span.from}'",
-			"replace": "text",
+			"find": "final key: Null<String> = WriteSites.accessPath(node, ctx.tree, seams.shape);",
+			"replace": "final key: Null<String> = text;",
 			"note": "an operand is keyed by its spelling, so a shadowing local is the guard's operand"
 		},
 		{
@@ -32893,6 +32893,75 @@
 			"find": "if (e.change == null && mutual[i])",
 			"replace": "if (mutual[i])",
 			"note": "a changed edge closing a cycle is drawn red after its change colour, so a comparison hides the change on every edge of a cycle"
+		},
+		{
+			"name": "M-ORDERGUARD-CALLS-IGNORED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "uncalled",
+			"force": "true",
+			"note": "a call in the guarded region never voids a bound, so a field, a static or a member a callee changes keeps a proof it lost"
+		},
+		{
+			"name": "M-ORDERGUARD-LOCALS-VOLATILE",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "survivesCalls",
+			"force": "false",
+			"note": "every operand reads as storage a call may change, so a call beside a bound over locals voids a proof that holds"
+		},
+		{
+			"name": "M-ORDERGUARD-STRING-MUTABLE",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "survivesCalls",
+			"find": "survivesCalls(kids[0], ctx) && ctx.effects.immutable(kids[0])",
+			"replace": "false",
+			"note": "a member read off an immutable local reads as changeable by a call, so a local string's length loses its bound across any call"
+		},
+		{
+			"name": "M-ORDERGUARD-CAPTURE-IGNORED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "captured",
+			"force": "false",
+			"note": "a local a function literal writes reads as one no call changes, so calling that literal keeps a bound it voided"
+		},
+		{
+			"name": "M-ORDERGUARD-EFFECT-FREE-IGNORED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "uncalled",
+			"find": "if (!ctx.effects.effectFree(c.node)) return false;",
+			"replace": "return false;",
+			"note": "an effect-free std call voids a bound as any call does, so a proof that holds is lost"
+		},
+		{
+			"name": "M-ORDERGUARD-DEFERRED-CALLS-RUN",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "uncalled",
+			"find": "if (within != null && covers(bound, within.from)) continue;",
+			"replace": "if (false) continue;",
+			"note": "a call inside a function literal of the region reads as run there, so a literal that is only defined voids a bound"
+		},
+		{
+			"name": "M-STATICINIT-CALLS-NOT-ENTERED",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "if (ran != null && !ran.isField",
+			"replace": "if (false && ran != null && !ran.isField",
+			"note": "a static method the initializer calls is never entered, so a later field its body reads is missed"
+		},
+		{
+			"name": "M-STATICINIT-REFERENCE-RUNS",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "node.kind == shape.callKind && kids.length > 0 ? memberAt(kids[0]) : null",
+			"replace": "memberAt(node)",
+			"note": "a method named as a value reads as run, so its body's reads are flagged though nothing calls it at initialization"
+		},
+		{
+			"name": "M-ORDERGUARD-CAUSE-UNSCANNED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "covers",
+			"find": "|| (cause != null && at >= cause.from && at < cause.to)",
+			"replace": "",
+			"note": "a write or call in the condition that proved a bound, after its comparison, is never seen, so the bound outlives the change"
 		}
 	]
 }
