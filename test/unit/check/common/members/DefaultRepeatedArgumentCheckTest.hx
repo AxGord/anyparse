@@ -60,6 +60,26 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	}
 
 	/**
+	 * Haxe refuses an `inline` string concatenation or interpolation as a default (`Default argument value should be
+	 * constant`); a `null` it would take, and the rule refuses by its own choice. String and numeric literals are flagged.
+	 */
+	@:pin('control')
+	@:killer('M-DRA-NONLITERAL-INLINE')
+	public function testInlineConstantWithANonLiteralInitializerNotFlagged(): Void {
+		inline function count(type: String, init: String): Int
+			return violations(
+				'class K {\n\tpublic static inline final A:$type = $init;\n}\nclass S {\n\tpublic static function d(s:$type'
+				+ '):Bool return true;\n}\nclass U {\n\tfunction f():Void {\n\t\tS.d(K.A);\n\t\tS.d(K.A);\n\t}\n}'
+			).length;
+		Assert.equals(0, count('String', "'x' + 'y'"), 'a concatenation');
+		Assert.equals(0, count('String', "'a${K.B}'"), 'an interpolation');
+		Assert.equals(0, count('Null<String>', 'null'), 'a typed null');
+		Assert.equals(1, count('String', "'xy'"), 'a string literal');
+		Assert.equals(1, count('Int', '-3'), 'a negated literal');
+		Assert.equals(1, count('Int', '0x1F'), 'a hex literal');
+	}
+
+	/**
 	 * Visibility is checked from the DECLARATION: a bare constant is the CALLER's own member, so it
 	 * only works as a default when caller and callee share a type. The same-type twin is flagged.
 	 */
@@ -113,12 +133,12 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	public function testFixPassesNeverShiftArguments(): Void {
 		final wide: String = 'samples(WIDE_LEFT, WIDE_TOP, WIDE_RIGHT, WIDE_BOTTOM, WIDE_STEP)';
 		final fixed: String = fixToFixpoint(
-			'class G {\n\tstatic inline final W:Float = 800;\n\tstatic inline final H:Float = 600;\n\tstatic inline final COARSE_STEP:Float = 8;\n'
-			+ '\tstatic inline final WIDE_LEFT:Float = -1;\n\tstatic inline final WIDE_TOP:Float = -2;\n\tstatic inline final WIDE_RIGHT:Float = 9;\n'
-			+ '\tstatic inline final WIDE_BOTTOM:Float = 7;\n\tstatic inline final WIDE_STEP:Float = 4;\n'
-			+ '\tstatic function samples(left:Float, top:Float, right:Float, bottom:Float, step:Float):Int return 0;\n'
-			+ '\tfunction f():Void {\n\t\tsamples(0, 0, W, H, COARSE_STEP);\n\t\tsamples(0, 0, W, H, COARSE_STEP);\n'
-			+ '\t\tsamples(0, 0, W, H, COARSE_STEP);\n\t\t$wide;\n\t\t$wide;\n\t}\n}'
+			'class G {\n\tstatic inline final W:Float = 800;\n\tstatic inline final H:Float = 600;\n'
+			+ '\tstatic inline final COARSE_STEP:Float = 8;\n\tstatic inline final WIDE_LEFT:Float = -1;\n'
+			+ '\tstatic inline final WIDE_TOP:Float = -2;\n\tstatic inline final WIDE_RIGHT:Float = 9;\n\tstatic inline final '
+			+ 'WIDE_BOTTOM:Float = 7;\n\tstatic inline final WIDE_STEP:Float = 4;\n\tstatic function samples(left:Float, top:Float, '
+			+ 'right:Float, bottom:Float, step:Float):Int return 0;\n\tfunction f():Void {\n\t\tsamples(0, 0, W, H, COARSE_STEP);\n'
+			+ '\t\tsamples(0, 0, W, H, COARSE_STEP);\n\t\tsamples(0, 0, W, H, COARSE_STEP);\n\t\t$wide;\n\t\t$wide;\n\t}\n}'
 		);
 		Assert.equals(2, fixed.split(wide).length - 1);
 		Assert.isTrue(fixed.contains('step:Float = COARSE_STEP'));
@@ -224,8 +244,8 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	@:pin('control')
 	public function testNullArgumentSiteBlocks(): Void {
 		final src: String = 'class C {\n\tprivate static inline final GHOST_ID:Int = 34236;\n\n'
-			+ '\tprivate function seedGhost(cloudId:Null<Int>):Void {}\n\n'
-			+ '\tfunction f():Void {\n\t\tseedGhost(GHOST_ID);\n\t\tseedGhost(GHOST_ID);\n\t\tseedGhost(GHOST_ID);\n\t\tseedGhost(null);\n\t}\n}';
+			+ '\tprivate function seedGhost(cloudId:Null<Int>):Void {}\n\n\tfunction f():Void {\n\t\tseedGhost(GHOST_ID);\n'
+			+ '\t\tseedGhost(GHOST_ID);\n\t\tseedGhost(GHOST_ID);\n\t\tseedGhost(null);\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 		Assert.equals(0, editCount(src));
 	}
@@ -256,8 +276,9 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 
 	/** An argument proven non-null keeps its site and leaves the finding: a literal, a negated one, a `new`, a comparison. */
 	public function testProvenNonNullSitesDoNotBlock(): Void {
-		final src: String = '${CONST}class S {\n\tpublic static function d(ms:Dynamic):Bool return true;\n}\n'
-			+ 'class U {\n\tfunction f(a:Int):Void {\n\t\tS.d(K.T);\n\t\tS.d(K.T);\n\t\tS.d(-1);\n\t\tS.d(new U());\n\t\tS.d(a > 0);\n\t\tS.d(\'s\');\n\t}\n}';
+		final src: String = '${CONST}class S {\n\tpublic static function d(ms:Dynamic):Bool return true;\n}\nclass U {\n'
+			+ '\tfunction f(a:Int):Void {\n\t\tS.d(K.T);\n\t\tS.d(K.T);\n\t\tS.d(-1);\n\t\tS.d(new U());\n\t\tS.d(a > 0);\n'
+			+ '\t\tS.d(\'s\');\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(3, editCount(src));
 	}
@@ -287,10 +308,11 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 			final check: DefaultRepeatedArgument = new DefaultRepeatedArgument();
 			final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: text }];
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-			final edits: Array<{ span: Span, text: String }> = [];
-			for (group in check.crossFileFix(files, CheckFixture.violationsIn(check, files, plugin), plugin))
-				for (slice in group)
-					for (e in slice.edits) edits.push(e);
+			final edits: Array<{ span: Span, text: String }> = [
+				for (group in check.crossFileFix(
+					files, CheckFixture.violationsIn(check, files, plugin), plugin
+				)) for (slice in group) for (e in slice.edits) e
+			];
 			if (edits.length == 0) return text;
 			text = CanonicalEdit.applyEdits(text, edits);
 		}

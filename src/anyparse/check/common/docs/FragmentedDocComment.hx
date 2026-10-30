@@ -17,7 +17,9 @@ import anyparse.query.SymbolIndex;
  * (consecutive lines) form a fragmented run. A blank line between blocks, a line
  * comment, or any code breaks the run — those are treated as deliberately separate.
  * Behaviour-safe: comments never affect compilation, and the merged body keeps every
- * block's text.
+ * block's text. Only a SPLIT doc is merged — every block but at most one opens with a lower-case letter, continuing
+ * the text before it. Two blocks that each open a doc stay report-only: an earlier one may be the orphan of a member
+ * that moved, and merging would hand its text to this declaration.
  */
 @:nullSafety(Strict)
 final class FragmentedDocComment extends RuleBase {
@@ -33,6 +35,13 @@ final class FragmentedDocComment extends RuleBase {
 	 * consumer.
 	 */
 	private static inline final BLOCK_COUNT_LEAD: String = 'documented by ';
+
+	/**
+	 * Why two blocks that each open a doc are not merged: the compiler reads only the last, and an earlier one may be
+	 * the orphan of a member that moved, so which text this declaration keeps is the author's call.
+	 */
+	private static inline final TWO_DOCS: String =
+		'several blocks each open a doc of their own — an earlier one may belong to another member';
 
 	public function new() {
 		super('fragmented-doc-comment', 'a declaration documented by several adjacent comment blocks instead of one', RuleCategory.Docs);
@@ -59,6 +68,10 @@ final class FragmentedDocComment extends RuleBase {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (run in adjacentBlockRuns(source, plugin.lexicalRegions(source))) if (flagged.contains(run[0].from)) {
 			final bodies: Array<String> = run.map(cleanBlockBody.bind(source));
+			if (bodies.count(opensADoc) > 1) {
+				for (v in violations) if (v.span?.from == run[0].from) v.declineReason = TWO_DOCS;
+				continue;
+			}
 			edits.push({ span: new Span(run[0].from, run[run.length - 1].to), text: SourceComments.docComment(bodies.join('\n')) });
 		}
 		return edits;
@@ -108,6 +121,15 @@ final class FragmentedDocComment extends RuleBase {
 	private static function cleanBlockBody(source: String, tok: CommentTok): String {
 		final body: Span = SourceComments.commentBody(source, tok);
 		return SourceComments.trimBlankEdges(source.substring(body.from, body.to).split('\n').map(stripMarker)).join('\n');
+	}
+
+	/**
+	 * Whether a block's body opens a doc of its own: only a block whose first character is a lower-case letter
+	 * continues an earlier one's text, so a capital, a code span, a digit or a tag opens a doc.
+	 */
+	private static function opensADoc(body: String): Bool {
+		final first: String = body.ltrim().charAt(0);
+		return first == first.toUpperCase();
 	}
 
 	/** Strip a line's leading whitespace and a single leading doc marker, plus trailing whitespace. */

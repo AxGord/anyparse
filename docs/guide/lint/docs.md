@@ -107,7 +107,7 @@ a comment (line, block, or doc) containing a NON-LATIN LETTER — the user's rul
 
 ## `fragmented-doc-comment`
 
-a declaration documented by SEVERAL adjacent doc-comment blocks (each opened and closed separately, on consecutive lines) instead of one — a confusing duplicate, usually from a doc edit that inserted a second block rather than replacing the first; `Info`, `--fix` merges the run into a single doc comment (block bodies concatenated). A pure comment-token scan (comments are dropped from the query projection). Only `/**` DOC blocks join a run: a plain block (license header, section banner), a blank line, a line comment, or any code between blocks breaks it — so license/section comments are never absorbed. Behaviour-safe (comments never affect compilation)
+a declaration documented by SEVERAL adjacent doc-comment blocks (each opened and closed separately, on consecutive lines) instead of one — a confusing duplicate, usually from a doc edit that inserted a second block rather than replacing the first; `Info`, `--fix` merges the run into a single doc comment (block bodies concatenated). A pure comment-token scan (comments are dropped from the query projection). Only `/**` DOC blocks join a run: a plain block (license header, section banner), a blank line, a line comment, or any code between blocks breaks it — so license/section comments are never absorbed. Behaviour-safe (comments never affect compilation). Only a SPLIT doc is merged — every block but at most one opens with a lower-case letter, continuing the text before it; two blocks that each open a doc stay report-only (an earlier one may be the orphan of a member that moved, and merging would hand its text to this declaration)
 
 ## `misplaced-type-doc`
 

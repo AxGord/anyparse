@@ -2425,7 +2425,7 @@
 			"method": "initTypeIsNonNull",
 			"find": "if (NullFlow.NON_NULL_RHS_KINDS.contains(init.kind)) return true;",
 			"replace": "if (NullFlow.NON_NULL_RHS_KINDS.contains('')) return true;",
-			"note": "a bare literal arm is judged by the chain resolver alone, which types an Int literal but not an array literal, so a ternary with a [] branch stays seeded"
+			"note": "a bare literal arm is judged by the chain resolver alone, which types an Int literal and an array or object literal by its slot type but not against a typedef it cannot see, so a ternary with such a [] or {} branch stays seeded"
 		},
 		{
 			"name": "M-DECL-INIT-RECEIVER-MODE-NOMINAL",
@@ -23994,9 +23994,8 @@
 		{
 			"name": "M-DEFAULT-ARG-NULL-CONST-NONNULL",
 			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
-			"method": "collectMembers",
-			"find": "scope.constants['$owner.$name'] = child.children.length == 0 || child.children[0].kind != seams.nullLiteralKind;",
-			"replace": "scope.constants['$owner.$name'] = true;",
+			"method": "literalInitializer",
+			"force": "true",
 			"note": "an inline constant whose value is null proves its argument non-null"
 		},
 		{
@@ -33258,6 +33257,22 @@
 			"find": "if (enclosing && shadowedOnDisk(name, fi.pkg, fi.file, below)) return null;",
 			"replace": "",
 			"note": "a nearer package module on disk the run never indexed is not asked, so an import that decides the name is read as deletable"
+		},
+		{
+			"name": "M-DRA-NONLITERAL-INLINE",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "literalInitializer",
+			"find": "&& ConstantFieldScan.isConstantLiteral(init, entry.source, constantFields)",
+			"replace": "",
+			"note": "any inline constant other than null reads as a default, so the fix writes a concatenated string constant as a default Haxe refuses as not constant"
+		},
+		{
+			"name": "M-FRAGMENTED-DOC-MERGES-ORPHAN",
+			"type": "anyparse.check.common.docs.FragmentedDocComment",
+			"method": "fix",
+			"find": "if (bodies.count(opensADoc) > 1) {",
+			"replace": "if (false) {",
+			"note": "two blocks that each open a doc are merged, so an orphan doc of a moved member becomes part of the next declaration's doc"
 		}
 	]
 }

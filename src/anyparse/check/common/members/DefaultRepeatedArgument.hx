@@ -4,6 +4,8 @@ import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.ConstantFieldScan;
+import anyparse.check.scan.NullFlow;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -32,7 +34,8 @@ import anyparse.query.TypeResolver;
  * Haxe accepts only a compile-time constant as a default, and a plain `static final` is NOT one —
  * `function f(ms:Int = K.NI)` where `NI` is a non-inline `static final` is
  * `Default argument value should be constant`. So the rule must read the
- * constant's own declaration, and `inline` is the gate. The second reason is division of labour: a
+ * constant's own declaration, and `inline` over a LITERAL initializer is the gate (`inline` also folds a string
+ * concatenation, which a default refuses). The second reason is division of labour: a
  * repeated LITERAL argument is `magic-number`'s finding, and hoisting it into a named constant is
  * that rule's fix, after which this one sees it.
  *
@@ -170,6 +173,11 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 		return out;
 	}
 
+	/** Whether a parameter must be passed — no default, not optional, not rest. */
+	private static inline function required(param: QueryNode, seams: Seams): Bool {
+		return param.children.length == 0 && param.kind != seams.optionalParamKind && param.kind != seams.restParamKind;
+	}
+
 	/** One plan's edits, grouped by the file each falls in. */
 	private static function slices(plan: Plan): Array<CrossFileEdits> {
 		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
@@ -263,11 +271,6 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 		if (!required(member.params[index], seams)) return false;
 		for (i in index + 1...member.params.length) if (required(member.params[i], seams)) return false;
 		return true;
-	}
-
-	/** Whether a parameter must be passed — no default, not optional, not rest. */
-	private static function required(param: QueryNode, seams: Seams): Bool {
-		return param.children.length == 0 && param.kind != seams.optionalParamKind && param.kind != seams.restParamKind;
 	}
 
 	/**
@@ -386,8 +389,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 				if (seams.functionKinds.contains(child.kind))
 					addMember(child, owner, name, run, blocked, entry, scope, seams);
 				else if (isInlineConstant(run, seams))
-					// One whose value is `null` is no default worth writing, and no proof an argument is non-null.
-					scope.constants['$owner.$name'] = child.children.length == 0 || child.children[0].kind != seams.nullLiteralKind;
+					scope.constants['$owner.$name'] = literalInitializer(NullFlow.declInit(child, seams.declTypeChildKinds), entry, seams);
 			}
 			run.resize(0);
 			blocked = false;
@@ -413,6 +415,16 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 			&& !rebindable(run, seams)
 			&& decl.children.exists(c -> seams.bodyKinds.contains(c.kind))
 		});
+	}
+
+	/**
+	 * Whether an `inline` constant's initializer is a literal Haxe also takes as a default: `inline` folds a string
+	 * concatenation or an interpolation, a default refuses both (`Default argument value should be constant`). A `null`
+	 * is no such literal: it is no default worth writing, and no proof an argument is non-null.
+	 */
+	private static function literalInitializer(init: Null<QueryNode>, entry: Parsed, seams: Seams): Bool {
+		final constantFields: Null<ConstantFieldSeams> = seams.constantFields;
+		return init != null && constantFields != null && ConstantFieldScan.isConstantLiteral(init, entry.source, constantFields);
 	}
 
 	/** Whether a modifier run marks a constant this rule may spell as a default — `static inline`. */
@@ -466,6 +478,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 			collectBinders(entry.tree, binders, seams);
 			out.push({
 				file: entry.file,
+				source: entry.source,
 				tree: entry.tree,
 				shape: shape,
 				binders: binders,
@@ -526,7 +539,9 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 			overrideModifierKind: shape.overrideModifierKind,
 			conditionalMemberKind: shape.conditionalMemberKind,
 			constructorName: shape.constructorName,
-			bodyKinds: shape.functionBodyKinds ?? []
+			bodyKinds: shape.functionBodyKinds ?? [],
+			declTypeChildKinds: shape.declTypeChildKinds ?? [],
+			constantFields: ConstantFieldScan.seams(plugin)
 		};
 	}
 
@@ -567,6 +582,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 /** One parsed file plus the per-file tables the census reads. */
 private typedef Parsed = {
 	final file: String;
+	final source: String;
 	final tree: QueryNode;
 	final shape: RefShape;
 	final binders: Map<String, Bool>;
@@ -638,4 +654,10 @@ private typedef Seams = {
 	final conditionalMemberKind: Null<String>;
 	final constructorName: Null<String>;
 	final bodyKinds: Array<String>;
+
+	/** `RefShape.declTypeChildKinds` — what tells a declaration's type annotation from its initializer. */
+	final declTypeChildKinds: Array<String>;
+
+	/** The literal test an `inline` constant's initializer passes to be spelled as a default; null when unset. */
+	final constantFields: Null<ConstantFieldSeams>;
 };

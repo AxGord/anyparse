@@ -3,6 +3,8 @@ package unit.check.common.nullsafety;
 import anyparse.check.Severity;
 import anyparse.check.common.nullsafety.UnguardedNullableDeref;
 
+using StringTools;
+
 /**
  * The `unguarded-nullable-deref` check (mechanism A): a local bound from a nullable
  * source (`map[key]`, `Array` / `List` `pop` / `shift`, a `Null<T>`-returning call)
@@ -633,12 +635,15 @@ class UnguardedNullableDerefTest extends Test {
 			0, violations('class C { function f(flag:Bool, a:Foo) { final p: Null<Foo> = flag ? a : 0; p.foo; } }').length,
 			'a bare literal arm is non-null by kind'
 		);
-		// The chain resolver now types an `Int` literal itself, so `0` no longer tells the kind gate from it; an array
-		// literal it cannot give a nominal type is what only the kind gate proves.
+		// The chain resolver types an `Int` literal itself, and an array or object literal by the type its slot expects, so
+		// only a literal whose slot names a type the resolver cannot see (a typedef declared elsewhere) is left to the kind gate.
 		Assert.equals(
-			0,
-			violations('class C { function f(flag:Bool, a:Array<Int>) { final p: Null<Array<Int>> = flag ? a : []; p.length; } }').length,
-			'an array-literal arm is non-null by kind — the chain resolver says nothing about `[]`'
+			0, violations('class C { function f(flag:Bool, a:IntList) { final p: Null<IntList> = flag ? a : []; p.length; } }').length,
+			'an array-literal arm is non-null by kind — the resolver cannot type `[]` against an unseen typedef'
+		);
+		Assert.equals(
+			0, violations('class C { function f(flag:Bool, a:Point) { final p: Null<Point> = flag ? a : {x: 1}; p.x; } }').length,
+			'an object-literal arm is non-null by kind'
 		);
 		Assert.equals(
 			1, violations('class C { function f(t:Tex) { final e: Null<Char> = t.getChar(1); e.width; } }').length,
@@ -726,7 +731,7 @@ class UnguardedNullableDerefTest extends Test {
 			],
 			[
 				'inline function check(i:Null<Item>):Bool\n\t\treturn i != null;',
-				'function check(i:Null<Item>):Bool return true;\n\t\t' + guarded
+				'function check(i:Null<Item>):Bool return true;\n\t\t$guarded'
 			],
 			[
 				'inline function check(i:Null<Item>):Bool\n\t\treturn i != null;',
@@ -752,21 +757,19 @@ class UnguardedNullableDerefTest extends Test {
 	public function testPredicateAcrossAConversionStillFlagged(): Void {
 		final from: String = 'abstract Name(String) to String {\n\tinline function new(s:String)\n\t\tthis = s;\n\n'
 			+ '\t@:from public static function fromMaybe(s:Null<String>):Name\n\t\treturn new Name(s == null ? \'anon\' : s);\n}\n\n'
-			+ 'class C {\n\tstatic function valid(n:Null<Name>):Bool\n\t\treturn n != null;\n\n'
-			+ '\tfunction f(src:{ v:Null<String> }):Void {\n\t\tfinal s:Null<String> = src.v;\n\t\tif (!valid(s)) return;\n\t\ts.length;\n\t}\n}\n';
+			+ 'class C {\n\tstatic function valid(n:Null<Name>):Bool\n\t\treturn n != null;\n\n\tfunction f(src:{ v:Null<String> }):Void {'
+			+ '\n\t\tfinal s:Null<String> = src.v;\n\t\tif (!valid(s)) return;\n\t\ts.length;\n\t}\n}\n';
 		Assert.equals(1, violations(from).length);
 		// The control: the same guard over an argument written with the parameter's own type.
-		Assert.equals(0, violations(StringTools.replace(from, 'final s:Null<String> = src.v;', 'final s:Null<Name> = src.v;')).length);
+		Assert.equals(0, violations(from.replace('final s:Null<String> = src.v;', 'final s:Null<Name> = src.v;')).length);
 		final to: String = 'class Item {\n\tpublic var id:Null<Int>;\n}\n\nabstract Tag(String) {\n'
 			+ '\t@:to public function toItem():Null<Item>\n\t\treturn new Item();\n}\n\n'
 			+ 'class C {\n\tstatic function check(i:Null<Item>):Bool\n\t\treturn i != null;\n\n'
-			+ '\tfunction f(src:{ v:Null<Tag> }):Void {\n\t\tfinal t:Null<Tag> = src.v;\n\t\tif (!check(t)) return;\n\t\tt.toItem();\n\t}\n}\n';
+			+ '\tfunction f(src:{ v:Null<Tag> }):Void {\n\t\tfinal t:Null<Tag> = src.v;\n\t\tif (!check(t)) return;\n\t\tt.toItem();\n'
+			+ '\t}\n}\n';
 		Assert.equals(1, violations(to).length);
 		Assert.equals(
-			0,
-			violations(StringTools.replace(
-				StringTools.replace(to, 'final t:Null<Tag> = src.v;', 'final t:Null<Item> = src.v;'), 't.toItem()', 't.id'
-			)).length
+			0, violations(to.replace('final t:Null<Tag> = src.v;', 'final t:Null<Item> = src.v;').replace('t.toItem()', 't.id')).length
 		);
 	}
 

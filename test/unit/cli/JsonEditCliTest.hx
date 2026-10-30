@@ -41,6 +41,24 @@ class JsonEditCliTest extends Test {
 		);
 	}
 
+	/**
+	 * A string value's quote characters are its content: an apostrophe inside a JSON string, which JSON never escapes,
+	 * survives both an appended entry and an added member.
+	 */
+	public function testApostropheInAStringValueSurvives(): Void {
+		assertEdit([
+			'add-element',
+			'--append',
+			'--select',
+			'Member:registers > JArray',
+			'"a \'b\' c"'
+		], CONFIG.replace('"addEventListener"\n', '"addEventListener",\n\t\t\t\t"a \'b\' c"\n'));
+		assertEdit(
+			['add-element', '--after', '--select', 'Member:n', '"m": "it\'s \\"q\\""'],
+			CONFIG.replace('"n": 3\n', '"n": 3,\n\t\t\t"m": "it\'s \\"q\\""\n')
+		);
+	}
+
 	/** `--after` the SOLE entry of an array: the array is a comma container, so the entry is joined with a `,`. */
 	@:killer('M-COMMA-CONTAINER-KINDS-UNREAD')
 	@:pin('control')

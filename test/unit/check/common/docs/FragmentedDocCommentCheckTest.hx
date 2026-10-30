@@ -36,6 +36,28 @@ class FragmentedDocCommentCheckTest extends Test {
 		Assert.equals(1, countOccurrences(fixed, '/**'), 'exactly one doc block now: $fixed');
 	}
 
+	/**
+	 * Two blocks that each open a doc — an orphan of a moved helper above the next member's own doc — stay as written,
+	 * and the finding says why; a later block continuing the earlier one's text is still merged.
+	 */
+	@:pin('control')
+	@:killer('M-FRAGMENTED-DOC-MERGES-ORPHAN')
+	public function testTwoWholeDocsAreNotMerged(): Void {
+		final src: String = 'class C {\n\t/** Run the check over `src`. */\n\t/**\n\t * Tabs are kept.\n\t */\n\tpublic var x:Int = 0;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(src, fixedSource(src));
+		final check: FragmentedDocComment = new FragmentedDocComment();
+		final found: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, found, new HaxeQueryPlugin()).length);
+		Assert.notNull(found[0].declineReason);
+		final codeSpans: String = 'class C {\n\t/** `helper` reads the cache. */\n\t/** `x` is the width. */\n\tpublic var x:Int = 0;\n}';
+		Assert.equals(codeSpans, fixedSource(codeSpans), 'a doc opening with a code span is a doc of its own');
+		Assert.equals(
+			1, countOccurrences(fixedSource('class C {\n\t/** Run the check */\n\t/** over `src`. */\n\tpublic var x:Int = 0;\n}'), '/**')
+		);
+	}
+
 	public function testThreeBlocksMergedToOne(): Void {
 		final src: String = 'class C {\n\t/** a */\n\t/** b */\n\t/** c */\n\tpublic var x:Int = 0;\n}';
 		Assert.equals(1, violations(src).length);
