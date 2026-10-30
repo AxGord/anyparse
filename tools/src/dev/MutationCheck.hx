@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.core.PoolLease;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.FixtureCache;
@@ -101,13 +102,12 @@ final class MutationCheck {
 			for (row in rows) if (!FileSystem.exists(row.patch)) 'track \'${row.name}\': patch \'${row.patch}\' not found'
 		];
 		if (missing.length > 0) return refuse(missing);
-		final asked: Null<String> = job.jobs;
-		final jobs: Int = if (asked != null) {
-			final n: Int = (~/^[0-9]+$/.match(asked) ? Std.parseInt(asked) : null) ?? 0;
-			if (n < 1) return refuse(['--jobs must be a positive integer, got \'$asked\'']);
-			n;
-		} else {
-			defaultJobs(js.node.Os.cpus().length, js.node.Os.totalmem());
+		final jobs: Int = switch jobsFor(job.jobs, PoolLease.threads(), js.node.Os.cpus().length, js.node.Os.totalmem()) {
+			case Count(n, note):
+				if (note != null) Sys.stderr().writeString('dev mutation-check: $note\n');
+				n;
+			case Unusable(why):
+				return refuse([why]);
 		};
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		final workroot: String = dirs.claimAfterSweep(WORK_PREFIX, job.repo);
@@ -150,11 +150,26 @@ final class MutationCheck {
 
 	/**
 	 * The job slots a machine of `cores` cores and `memory` bytes runs by default: every core but `SPARE_CORES`, at most
-	 * one per `GIB_PER_JOB` of memory, at least one. Memory is the binding term on a large machine.
+	 * one per `GIB_PER_JOB` of memory, at least one. Memory is the binding term on a large machine. Under a pool lease of
+	 * `held` threads the lease replaces the cores: the pool, not the machine, says how many processes may run.
 	 */
-	public static function defaultJobs(cores: Int, memory: Float): Int {
+	public static function defaultJobs(cores: Int, memory: Float, ?held: Int): Int {
 		final byMemory: Int = Std.int(Math.ffloor(memory / BYTES_PER_GIB) / GIB_PER_JOB);
-		return Std.int(Math.max(1, Math.min(cores - SPARE_CORES, byMemory)));
+		return Std.int(Math.max(1, Math.min(held ?? cores - SPARE_CORES, byMemory)));
+	}
+
+	/**
+	 * The slot count for `asked` (the `--jobs` text) on a machine of `cores` cores and `memory` bytes: the default when
+	 * nothing is asked, else the number asked. Under a pool lease of `held` threads no more than `held` slots run, however
+	 * many are asked — an ask above the lease is clamped, and says so — so the lease bounds the real processes.
+	 */
+	public static function jobsFor(asked: Null<String>, held: Null<Int>, cores: Int, memory: Float): JobCount {
+		if (asked == null) return Count(defaultJobs(cores, memory, held), null);
+		final n: Int = (~/^[0-9]+$/.match(asked) ? Std.parseInt(asked) : null) ?? 0;
+		if (n < 1) return Unusable('--jobs must be a positive integer, got \'$asked\'');
+		return held != null && n > held
+			? Count(held, '--jobs $n exceeds the pool lease of $held thread(s): running $held')
+			: Count(n, null);
 	}
 
 	/** The report row of one track. */
@@ -374,6 +389,12 @@ typedef TrackRow = {
 	var patch: String;
 	var filter: String;
 	var expected: String;
+}
+
+/** The job slots a run takes: their count and a note when an ask was cut down, or why the ask is refused. */
+enum JobCount {
+	Count(n: Int, note: Null<String>);
+	Unusable(why: String);
 }
 
 /** A manifest read: its tracks, or why a line of it is refused. */

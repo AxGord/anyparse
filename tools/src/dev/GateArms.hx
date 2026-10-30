@@ -14,8 +14,9 @@ using StringTools;
 
 /**
  * The arms row of a slice gate: `dev mutation-arm --fast` over the arms the slice added or re-encoded, every arm on
- * a type it touched, every arm a pin of a touched test class names, and each `--arm`. The registry's whole `--all` is a
- * release run, never a slice gate.
+ * a type it touched, every arm a pin of a touched test class names, and each `--arm`. An arm whose only claim is a touched
+ * file that `hxq changed` classes as layout only runs `--apply-only` instead: its cut must still apply, and no test can see
+ * a change of layout. The registry's whole `--all` is a release run, never a slice gate.
  */
 @:nullSafety(Strict)
 final class GateArms {
@@ -35,27 +36,78 @@ final class GateArms {
 		final now: RecordFile = MergeArms.parse(File.getContent(Path.join([gate.tree, ARMS_REGISTRY])));
 		final shown: Result = cmd('git -C ${gate.tree} show ${gate.base}:$ARMS_REGISTRY').run();
 		final old: Null<RecordFile> = shown.ok ? MergeArms.parse(shown.out) : null;
-		final modules: Array<String> = [for (file in gate.touched) moduleOf(file)].filter(m -> m != '');
-		final killers: Array<String> = pinnedKillers(gate, modules);
+		final layout: Array<String> = [for (file in layoutFiles(gate)) moduleOf(file)].filter(m -> m != '');
+		final modules: Array<String> = [for (file in gate.touched) moduleOf(file)].filter(m -> m != '' && !layout.contains(m));
 		final extra: Array<String> = gate.options.arms;
-		final names: Array<String> = [
-			for (record in now.records)
-				if (changed(record, old) || onModule(record, modules) || killers.contains(record.key) || extra.contains(record.key))
-					record.key
-		];
-		for (name in extra) if (!names.contains(name)) return Failed('--arm $name names no arm in $ARMS_REGISTRY');
-		if (names.length == 0) return Skipped('no arm added, re-encoded or on a touched type');
+		final picked: ArmSelection = select(now.records, old, modules, layout, pinnedKillers(gate, modules), extra);
+		for (name in extra) if (!picked.fast.contains(name)) return Failed('--arm $name names no arm in $ARMS_REGISTRY');
+		if (picked.fast.length + picked.applyOnly.length == 0) return Skipped('no arm added, re-encoded or on a touched type');
+		final applied: Outcome = picked.applyOnly.length == 0 ? Passed : applyOutcome(gate, picked.applyOnly);
+		return picked.fast.length == 0 || !applied.match(Passed) ? applied : fastOutcome(gate, picked.fast);
+	}
+
+	/**
+	 * The arms to run for the records `now` (`old` is the base's): `fast` get the kill run — every arm added or re-encoded,
+	 * on a `modules` file whose behaviour may have moved, pinned by a touched test (`killers`) or asked for (`extra`).
+	 * `applyOnly` are the other arms on a `layout` file, whose cut only has to still apply: the writer emits the same text
+	 * for both versions of that file, so no test can see it.
+	 */
+	public static function select(
+		now: Array<ArmRecord>, old: Null<RecordFile>, modules: Array<String>, layout: Array<String>, killers: Array<String>,
+		extra: Array<String>
+	): ArmSelection {
+		final fast: Array<String> = [];
+		final applyOnly: Array<String> = [];
+		for (record in now) {
+			if (changed(record, old) || onModule(record, modules) || killers.contains(record.key) || extra.contains(record.key))
+				fast.push(record.key);
+			else if (onModule(record, layout))
+				applyOnly.push(record.key);
+		}
+		return { fast: fast, applyOnly: applyOnly };
+	}
+
+	/** The paths a `hxq changed` report `text` classes as `layout`, a moved file by the path it has now. */
+	public static function layoutOf(text: String): Array<String> {
+		final row: EReg = ~/^\S+ (.+?)(?:  <- .+)?  layout$/;
+		return [for (line in text.split('\n')) if (row.match(line)) row.matched(1)];
+	}
+
+	/** The files `hxq changed` classes as layout only among the touched files of `gate` that are tracked `.hx` files. */
+	private static function layoutFiles(gate: GateTree): Array<String> {
+		final files: Array<String> = gate.touched.filter(f -> f.endsWith('.hx'));
+		if (files.length == 0) return [];
+		final report: Result = gate.hxq(gate.tree, ['changed', gate.base].concat(files)).run();
+		return report.ok ? layoutOf(report.out) : [];
+	}
+
+	/** The `--apply-only` run of `names`: every cut still applies to a scratch copy of the base. */
+	private static function applyOutcome(gate: GateTree, names: Array<String>): Outcome {
+		final run: Result = gate.inTree(cmd('node bin/dev.js mutation-arm $names --apply-only'));
+		File.saveContent(gate.log('arms-apply.log'), run.out + run.err);
+		final tally: EReg = ~/^\d+ arms: \d+ apply, (\d+) did not apply$/m;
+		if (!tally.match(run.out)) return Failed('no apply verdict line — ${GateTree.quote(run)}');
+		gate.summary.detail('${tally.matched(0)} on layout-only files (${elided(names)})');
+		return run.ok && tally.matched(1) == '0' ? Passed : Failed(GateTree.clip('${tally.matched(0)} — ${gate.log('arms-apply.log')}'));
+	}
+
+	/** The `--fast` kill run of `names`, the heavy rows' threads as its jobs. */
+	private static function fastOutcome(gate: GateTree, names: Array<String>): Outcome {
 		final threads: Null<Int> = gate.options.threads;
 		final jobs: Array<String> = threads == null ? [] : ['--jobs', '$threads'];
 		final run: Result = gate.inTree(cmd('node bin/dev.js mutation-arm $names --fast $jobs'));
 		File.saveContent(gate.log('arms.log'), run.out + run.err);
 		final tally: EReg = ~/^(\d+) tracks: (\d+) killed, .*$/m;
 		if (!tally.match(run.out)) return Failed('no verdict line — ${GateTree.quote(run)}');
-		final list: String = names.slice(0, ARMS_SHOWN).join(', ') + (names.length > ARMS_SHOWN ? ', …' : '');
-		gate.summary.detail('${tally.matched(0)} ($list)');
+		gate.summary.detail('${tally.matched(0)} (${elided(names)})');
 		return run.ok && tally.matched(1) == tally.matched(2)
 			? Passed
 			: Failed(GateTree.clip('${tally.matched(0)} — ${gate.log('arms.log')}'));
+	}
+
+	/** The first `ARMS_SHOWN` of `names`, then an ellipsis when there are more. */
+	private static function elided(names: Array<String>): String {
+		return names.slice(0, ARMS_SHOWN).join(', ') + (names.length > ARMS_SHOWN ? ', …' : '');
 	}
 
 	/**
@@ -92,4 +144,10 @@ final class GateArms {
 		return root == null || !file.endsWith('.hx') ? '' : file.substring(root.length, file.length - '.hx'.length).replace('/', '.');
 	}
 
+}
+
+/** The arms of a slice gate by how they run: the kill run, and the apply check of arms on layout-only files. */
+typedef ArmSelection = {
+	var fast: Array<String>;
+	var applyOnly: Array<String>;
 }

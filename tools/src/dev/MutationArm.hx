@@ -2,6 +2,7 @@ package dev;
 
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.PendingRuns;
+import anyparse.core.PoolLease;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -28,7 +29,7 @@ using StringTools;
 final class MutationArm {
 
 	public static inline final USAGE: String = 'usage: dev mutation-arm <ARM>... | --all | --list [--jobs N] [--fast] [--keep] [--check-apply] '
-		+ '[--working-tree] [--repo <tree>]';
+		+ '[--apply-only] [--working-tree] [--repo <tree>]';
 
 	/** The arm registry, from the tree's root. */
 	public static inline final REGISTRY: String = 'test/testkit/mutation-arms.json';
@@ -65,11 +66,13 @@ final class MutationArm {
 		final list: Bool = args.flag('--list');
 		final all: Bool = args.flag('--all');
 		final checkApply: Bool = args.flag('--check-apply');
+		final applyOnly: Bool = args.flag('--apply-only');
 		final fast: Bool = args.flag('--fast');
 		final keep: Bool = args.flag('--keep');
 		final workingTree: Bool = args.flag('--working-tree');
 		final jobs: Null<String> = args.option('--jobs');
 		final named: Array<String> = args.rest([]);
+		if (checkApply && applyOnly) return refuse(['--check-apply builds the cuts and --apply-only does not: pick one']);
 		final bins: Null<ArmBinaries> = binaries(repo);
 		if (bins == null) return 2;
 		if (list) {
@@ -95,8 +98,14 @@ final class MutationArm {
 			fast: fast,
 			keep: keep,
 			checkApply: checkApply,
+			applyOnly: applyOnly,
 			base: base
 		});
+	}
+
+	/** The verdict line of an `--apply-only` run: `applies` cuts applied to a scratch copy, `failed` did not. */
+	public static function applyTally(applies: Int, failed: Int): String {
+		return '${applies + failed} arms: $applies apply, $failed did not apply';
 	}
 
 	/** Every arm name the registry `text` declares, in registry order. */
@@ -256,7 +265,7 @@ final class MutationArm {
 		// the private engine renders the cuts, through every `hxq` this run starts
 		Sys.putEnv('HXQ_BIN', job.apq);
 		Sys.putEnv('APQ_NO_CONFIG_WARN', '1');
-		final cores: Int = js.node.Os.cpus().length;
+		final cores: Int = PoolLease.threads() ?? js.node.Os.cpus().length;
 		final cuts: Map<String, ArmCut> = cuts(File.getContent(job.registry), job.names, job.registry);
 		final targets: Map<String, ArmTarget> = render(job, cuts, gen, workroot, cores);
 		final applyFail: Array<String> = [];
@@ -269,12 +278,13 @@ final class MutationArm {
 			}
 			final failed: Null<String> = targets[name]?.failure;
 			if (failed != null) {
-				if (!job.checkApply) return refuse([failed]);
+				if (!job.checkApply && !job.applyOnly) return refuse([failed]);
 				applyFail.push('APPLY-FAIL  ${name.rpad(' ', NAME_WIDTH)} $failed');
 				continue;
 			}
 			rendered.push(name);
 		}
+		if (job.applyOnly) return reportApplied(rendered.length, applyFail);
 		final manifest: String = Path.join([workroot, 'manifest']);
 		final lines: Null<Array<String>> = manifestLines(job, rendered, workroot);
 		if (lines == null) return 2;
@@ -645,6 +655,13 @@ final class MutationArm {
 		return k + 1;
 	}
 
+	/** Print the rows of the cuts that did not apply and the tally of `applied` that did; answers 1 when any did not. */
+	private static function reportApplied(applied: Int, failures: Array<String>): Int {
+		for (row in failures) Sys.println(row);
+		Sys.println(applyTally(applied, failures.length));
+		return failures.length > 0 ? 1 : 0;
+	}
+
 	/** Print each of `lines` as this tool's refusal. */
 	private static function say(lines: Array<String>): Void {
 		for (line in lines) Sys.stderr().writeString('dev mutation-arm: $line\n');
@@ -714,6 +731,9 @@ typedef ArmJob = {
 	var fast: Bool;
 	var keep: Bool;
 	var checkApply: Bool;
+
+	/** Render and apply every cut to a scratch copy and stop: no build, no suite. */
+	var applyOnly: Bool;
 
 	/** The commit the cuts are rendered against and every slot is made from. */
 	var base: String;

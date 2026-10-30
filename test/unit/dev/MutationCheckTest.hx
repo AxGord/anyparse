@@ -85,6 +85,23 @@ final class MutationCheckTest extends Test {
 		);
 	}
 
+	public function testALeaseBoundsTheDefaultJobsAndAnExplicitAsk(): Void {
+		final gib: Float = 1024 * 1024 * 1024;
+		Assert.equals(4, MutationCheck.defaultJobs(16, 64 * gib, 4), 'a lease replaces the cores');
+		Assert.equals(2, MutationCheck.defaultJobs(16, 12 * gib, 4), 'memory still binds under a lease');
+		Assert.equals(1, MutationCheck.defaultJobs(16, 64 * gib, 1));
+		Assert.same(Count(12, null), MutationCheck.jobsFor(null, null, 16, 64 * gib), 'no lease, no ask: the machine default');
+		Assert.same(Count(4, null), MutationCheck.jobsFor(null, 4, 16, 64 * gib), 'no ask under a lease: the lease');
+		Assert.same(Count(3, null), MutationCheck.jobsFor('3', 4, 16, 64 * gib), 'an ask within the lease stands');
+		Assert.same(Count(4, '--jobs 12 exceeds the pool lease of 4 thread(s): running 4'), MutationCheck.jobsFor('12', 4, 16, 64 * gib));
+		Assert.same(Count(12, null), MutationCheck.jobsFor('12', null, 16, 64 * gib), 'outside a lease the ask is not clamped');
+	}
+
+	public function testAJobsAskThatIsNoPositiveIntegerIsRefusedWhateverTheLease(): Void {
+		for (asked in ['0', '00', '-1', 'two']) for (held in [null, 4])
+			Assert.same(Unusable('--jobs must be a positive integer, got \'$asked\''), MutationCheck.jobsFor(asked, held, 16, 1e12));
+	}
+
 	private static function parsed(text: String): Array<TrackRow> {
 		return switch MutationCheck.parseManifest(text, 'm', '/m') {
 			case Rows(rows): rows;

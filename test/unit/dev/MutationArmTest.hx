@@ -1,6 +1,11 @@
 package unit.dev;
 
 import dev.MutationArm;
+import devkit.Cmd.cmd;
+import devkit.TempDir;
+import haxe.io.Path;
+import sys.FileSystem;
+import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
@@ -83,6 +88,40 @@ final class MutationArmTest extends Test {
 		Assert.same([['b\t1', 'b\t2'], ['b\t3', 'c\t1'], ['a\t1']], MutationArm.deal(rows, 3, 2));
 		Assert.same([rows.slice(1, 4).concat(['a\t1', 'c\t1'])], MutationArm.deal(rows, 1, 16), 'one batch takes everything');
 		Assert.same([], MutationArm.deal([], 4, 16));
+	}
+
+	public function testTheApplyTallyCountsEveryArmOnce(): Void {
+		Assert.equals('3 arms: 2 apply, 1 did not apply', MutationArm.applyTally(2, 1));
+		Assert.equals('0 arms: 0 apply, 0 did not apply', MutationArm.applyTally(0, 0));
+	}
+
+	public function testApplyOnlyAnswersWhetherEveryCutStillApplies(): Void {
+		TempDir.with(dir -> {
+			final repo: String = dir.file('repo');
+			FileSystem.createDirectory(Path.join([repo, 'src/a']));
+			FileSystem.createDirectory(Path.join([repo, 'test/testkit']));
+			File.saveContent(
+				Path.join([repo, 'src/a/B.hx']), 'package a;\n\nclass B {\n\n\tpublic static function f():Int {\n\t\treturn 1;\n\t}\n\n}\n'
+			);
+			final ok: String = '{"name": "M-OK", "type": "a.B", "method": "f", "find": "return 1;", "replace": "return 2;"}';
+			final rotted: String = '{"name": "M-ROT", "type": "a.B", "method": "f", "find": "return 7;", "replace": "return 2;"}';
+			File.saveContent(Path.join([repo, 'test/testkit/mutation-arms.json']), '{"arms": [$ok, $rotted]}');
+			cmd('git -C $repo init --quiet').check();
+			cmd('git -C $repo add -A').check();
+			cmd('git -C $repo -c user.name=t -c user.email=t@t commit --quiet -m fixture').check();
+			final engine: String = Path.join([Path.directory(FileSystem.fullPath(js.Node.__filename)), 'apq.js']);
+			final pinned: String = Sys.getEnv('HXQ_BIN') ?? '';
+			Sys.putEnv('HXQ_BIN', engine);
+			final applies: Int = MutationArm.main(['M-OK', '--apply-only', '--repo', repo]);
+			final rots: Int = MutationArm.main(['M-OK', 'M-ROT', '--apply-only', '--repo', repo]);
+			Sys.putEnv('HXQ_BIN', pinned);
+			Assert.equals(0, applies, 'a cut that applies is a pass, and nothing is built');
+			Assert.equals(1, rots, 'a find the code no longer holds fails the run');
+		});
+	}
+
+	public function testApplyOnlyAndCheckApplyAreAlternatives(): Void {
+		Assert.equals(2, MutationArm.main(['M-X', '--apply-only', '--check-apply', '--repo', '.']));
 	}
 
 }
