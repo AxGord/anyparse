@@ -33374,6 +33374,14 @@
 			"find": "resolved == indexed ||",
 			"replace": "resolved == indexed || resolved.endsWith('/$indexed') ||",
 			"note": "a relative indexed path that is a tail of another root's same-named ambient source is taken for it, so that root's chain reads the wrong statements"
+		},
+		{
+			"name": "M-NEWFILE-STRUCT-FIELDS-UNSEPARATED",
+			"type": "anyparse.query.NewFile",
+			"method": "structBody",
+			"find": ": fields.join(',\\n');",
+			"replace": ": fields.join('\\n');",
+			"note": "bare anon-struct fields joined by a newline alone parse leniently but the compiler rejects them, so a created typedef would not build"
 		}
 	]
 }

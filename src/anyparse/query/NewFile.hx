@@ -68,6 +68,21 @@ final class NewFile {
 	/** Type kinds for which `--extends` is meaningful (class superclass / interface + typedef structural extension). */
 	private static final EXTENDABLE_KINDS: Array<String> = ['class', 'interface', 'typedef'];
 
+	/** A struct field's trailing statement/field separators, dropped before `structBody` adds the ones its form needs. */
+	private static final TRAILING_SEPARATORS: EReg = ~/[;,\s]+$/;
+
+	/** The keyword anon-field form: optional meta, then `var` or `final` (the only spelling that carries meta or `final`). */
+	private static final KEYWORD_FIELD: EReg = ~/^(\/\*[\s\S]*?\*\/\s*)*(@\S+\s+)*(var|final)\s/;
+
+	/** The doc / block comments a field opens with; the field's own declaration starts after them. */
+	private static final LEADING_COMMENTS: EReg = ~/^(\/\*[\s\S]*?\*\/\s*)*/;
+
+	/** A meta tag with no spaced arguments, and the whitespace after it. */
+	private static final META_TAGS: EReg = ~/^(@\S+\s+)*/;
+
+	/** What opens a class member that has no anon-struct spelling: a function keyword or an access / storage modifier. */
+	private static final NON_FIELD_START: EReg = ~/^(function|public|private|static|inline|override|extern|dynamic|macro)\b/;
+
 	/** Import-declaration kinds carried verbatim from the interface file. */
 	private static final IMPORT_KINDS: Array<String> = [
 		'ImportDecl',
@@ -259,7 +274,8 @@ final class NewFile {
 			case 'abstract':
 				buf.add('abstract ${spec.className}$abstractClause {\n\n$body\n}\n');
 			case 'typedef':
-				final structLines: Array<String> = [for (e in extendsSimple) '> $e,'].concat(members);
+				final inherited: Array<String> = [for (e in extendsSimple) '> $e,'];
+				final structLines: Array<String> = inherited.concat([structBody(members)]);
 				buf.add('typedef ${spec.className} = {\n\n${structLines.join('\n')}\n}\n');
 
 			case _:
@@ -410,6 +426,61 @@ final class NewFile {
 	}
 
 	/**
+	 * The anon-struct fields as source. The bare `name: Type` form joins with commas; the keyword form `[meta] var|final name: Type;`
+	 * ends every field with `;` and cannot be mixed with it, so a mixed set is converted to the keyword form (`?a` carries `@:optional`).
+	 */
+	private static function structBody(members: Array<String>): String {
+		final fields: Array<String> = members.map(structField);
+		return fields.exists(f -> KEYWORD_FIELD.match(f)) ? fields.map(keywordField).join('\n') : fields.join(',\n');
+	}
+
+	/** `field` in the keyword form, `;`-ended; the keyword goes after the field's leading comments, which stay attached to it. */
+	private static function keywordField(field: String): String {
+		if (KEYWORD_FIELD.match(field)) return '$field;';
+		final comments: String = LEADING_COMMENTS.match(field) ? LEADING_COMMENTS.matched(0) : '';
+		final declaration: String = field.substr(comments.length);
+		return comments + (declaration.startsWith('?') ? '@:optional var ${declaration.substr(1).ltrim()};' : 'var $declaration;');
+	}
+
+	/** The field without the doc / block comments it opens with. */
+	private static function declarationOf(field: String): String {
+		return LEADING_COMMENTS.match(field) ? field.substr(LEADING_COMMENTS.matched(0).length) : field;
+	}
+
+	/** Why `spec` has no typedef spelling: an `@@ members` block or a `--field` that is no plain struct field, or null. */
+	private static function typedefError(spec: NewFileSpec): Null<String> {
+		if ((spec.bodiesRaw ?? '').indexOf('@@ $MEMBERS_SECTION') >= 0)
+			return 'a typedef takes its fields from --field, not from an @@ members block';
+		for (field in spec.fields) {
+			final error: Null<String> = structFieldError(field);
+			if (error != null) return error;
+		}
+		return null;
+	}
+
+	/**
+	 * A field as written without its trailing `;` / `,`: `structBody` re-adds the separator its form needs, and
+	 * `structFieldError` has already refused what has no spelling in either form.
+	 */
+	private static function structField(member: String): String {
+		return TRAILING_SEPARATORS.replace(member.trim(), '');
+	}
+
+	/** Why `member` has no anon-struct spelling (method, modifier, meta on a bare field, initializer, several fields), or null. */
+	private static function structFieldError(member: String): Null<String> {
+		final field: String = structField(member);
+		final declaration: String = declarationOf(field);
+		return declaration == ''
+			|| field.indexOf(';') >= 0
+			|| field.indexOf('//') >= 0
+			|| NON_FIELD_START.match(declaration)
+			|| (declaration.startsWith('@') && !KEYWORD_FIELD.match(field))
+			|| META_TAGS.replace(declaration, '').indexOf('=') >= 0
+			? 'a typedef field is `name: Type` or `[meta] var|final name: Type`, no modifier, initializer or `//` (got `${member.trim()}`)'
+			: null;
+	}
+
+	/**
 	 * Validate that the chosen `kind` is compatible with the supplied options:
 	 * `--implements` requires a class, `--extends` applies only to extendable
 	 * kinds and a class extends at most one type, and `--kind abstract` requires
@@ -425,6 +496,8 @@ final class NewFile {
 			'a class extends at most one type (got ${extendsList.length})'
 		else if (kind == 'abstract' && spec.underlying == null)
 			'--kind abstract requires --underlying <T>'
+		else if (kind == 'typedef')
+			typedefError(spec)
 		else
 			null;
 	}

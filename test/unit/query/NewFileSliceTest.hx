@@ -203,7 +203,107 @@ class NewFileSliceTest extends Test {
 			fields: ['var x: Int;', 'var y: Int;']
 		}));
 		Assert.isTrue(text.contains('typedef Point = {'));
-		Assert.isTrue(text.contains('var x'));
+		Assert.isTrue(text.contains('var x:Int;\n\tvar y:Int;\n}'));
+	}
+
+	/** Bare fields (trailing `;` / `,` dropped, optional `?` kept) join with commas, so the struct is valid Haxe. */
+	@:pin('control')
+	@:killer('M-NEWFILE-STRUCT-FIELDS-UNSEPARATED')
+	public function testTypedefFieldsCommaSeparated(): Void {
+		final text: String = okText(create({
+			className: 'P',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: ['a: Int', 'b: String', '?c: Int,']
+		}));
+		Assert.isTrue(text.contains('a:Int,\n\tb:String,\n\t?c:Int\n}'));
+	}
+
+	/** A member with no anon-struct spelling is refused, never emitted as source the compiler rejects. */
+	public function testTypedefRefusesNonFields(): Void {
+		for (bad in [
+			'function f(): Void',
+			'public var x: Int',
+			'a: Int; b: Int',
+			'',
+			'@:optional x: Int',
+			'x: Int // c',
+			'final x: Int = 3',
+			'x: Int = 3'
+		]) Assert.isTrue(
+			isErr(create({
+				className: 'P',
+				pkg: 'p',
+				kind: 'typedef',
+				fields: [bad]
+			})),
+			bad
+		);
+		Assert.isTrue(isErr(create({
+			className: 'P',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: [],
+			bodiesRaw: '@@ members\nvar x: Int;'
+		})));
+	}
+
+	/** The keyword form keeps its meta, `final` and own `;`, and a set mixing both forms is converted to it (a struct cannot mix them). */
+	public function testTypedefKeywordAndMixedForms(): Void {
+		final keyword: String = okText(create({
+			className: 'K',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: ['@:optional var x: Int;', 'final y: Int;']
+		}));
+		Assert.isTrue(keyword.contains('@:optional var x:Int;\n\tfinal y:Int;\n}'));
+		final mixed: String = okText(create({
+			className: 'M',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: ['a: Int', '?b: Int', 'final c: Int;']
+		}));
+		Assert.isTrue(mixed.contains('var a:Int;\n\t@:optional var b:Int;\n\tfinal c:Int;\n}'));
+		final docAlone: String = okText(create({
+			className: 'D',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: ['/** d */ final x: Int']
+		}));
+		Assert.isTrue(docAlone.contains('/** d */ final x:Int;\n}'));
+		final docBeside: String = okText(create({
+			className: 'D2',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: ['/** d */ @:optional var x: Int', 'b: Int']
+		}));
+		Assert.isTrue(docBeside.contains('/** d */ @:optional var x:Int;\n\tvar b:Int;\n}'));
+		final docBare: String = okText(create({
+			className: 'D3',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: ['/** d */ b: Int', '/** e */ ?c: Int', 'final x: Int']
+		}));
+		Assert.isTrue(docBare.contains('/** d */ var b:Int;'));
+		Assert.isTrue(docBare.contains('/** e */ @:optional var c:Int;'));
+	}
+
+	/** A comma inside a field type is not a field separator: function, nested-struct and generic types stay whole. */
+	public function testTypedefCompoundTypesStayWhole(): Void {
+		final text: String = okText(create({
+			className: 'C',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: [
+				'f: Int->Void',
+				'g: (a:Int, b:String)->Void',
+				'n: {a: {b: Int}, c: String}',
+				'm: Map<String, Int>'
+			]
+		}));
+		Assert.isTrue(text.contains('f:Int->Void,'));
+		Assert.isTrue(text.contains('Map<String, Int>\n}'));
+		Assert.isFalse(text.contains('var '));
 	}
 
 	/** A class with `--extends` inherits its super's constructor (no auto `new()`), and a qualified base is imported. */
@@ -258,7 +358,7 @@ class NewFileSliceTest extends Test {
 		Assert.isTrue(text.contains('typedef E = {'));
 		Assert.isTrue(text.contains('> Base,'));
 		Assert.isTrue(text.contains('> Other,'));
-		Assert.isTrue(text.contains('var x'));
+		Assert.isTrue(text.contains('x:Int'));
 	}
 
 	/** `--kind abstract` emits `abstract N(U) from .. to ..` with members and no auto-constructor. */
