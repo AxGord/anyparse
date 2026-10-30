@@ -3,9 +3,13 @@ package anyparse.query.format;
 import anyparse.query.graph.CodeGraph;
 import haxe.ds.ArraySort;
 
+using Lambda;
+
 /**
  * A `CodeGraph` as a text report: a count line, then the pairs of nodes that depend on each other with the weight
- * each way, then every edge heaviest first. A node reads as its qualified name, an external one marked so.
+ * each way, then every edge heaviest first. A node reads as its qualified name, an external one marked so. A graph
+ * comparing two versions (`GraphDiff`) lists its changed nodes after the count line and marks each edge line `+` added,
+ * `-` removed, `~` changed (with its earlier weight) or a blank.
  */
 @:nullSafety(Strict)
 final class GraphText {
@@ -26,8 +30,15 @@ final class GraphText {
 		final heaviest: Array<GraphEdge> = edges.copy();
 		// a stable sort keeps the graph's own order among edges of one weight
 		ArraySort.sort(heaviest, (x, y) -> y.weight - x.weight);
+		final changedNodes: Array<GraphNode> = graph.nodes().filter(n -> n.change != null);
+		// a graph comparing two versions marks every edge line, an unchanged one with a blank
+		final diff: Bool = changedNodes.length > 0 || edges.exists(e -> e.change != null);
 		final out: StringBuf = new StringBuf();
 		out.add('${graph.nodes().length} node(s), ${edges.length} edge(s), ${pairs.length} mutual pair(s)\n');
+		if (changedNodes.length > 0) {
+			out.add('changed:\n');
+			for (n in changedNodes) out.add('  ${marker(n.change)} ${n.level} ${display(graph, n.id)}\n');
+		}
 		if (pairs.length > 0) {
 			out.add('mutual:\n');
 			for (p in pairs)
@@ -38,7 +49,11 @@ final class GraphText {
 		}
 		if (heaviest.length > 0) {
 			out.add('edges:\n');
-			for (e in heaviest) out.add('  ${display(graph, e.from)} -> ${display(graph, e.to)}  ${e.kind} ${e.weight}\n');
+			for (e in heaviest) {
+				final mark: String = diff ? '${marker(e.change)} ' : '';
+				final was: String = e.change == Changed ? ' (was ${e.before})' : '';
+				out.add('  $mark${display(graph, e.from)} -> ${display(graph, e.to)}  ${e.kind} ${e.weight}$was\n');
+			}
 		}
 		return out.toString();
 	}
@@ -50,6 +65,11 @@ final class GraphText {
 			1
 		else
 			0;
+	}
+
+	/** The sign of `change`, a blank for no change. */
+	private static inline function marker(change: Null<GraphChange>): String {
+		return change == null ? ' ' : change.sign();
 	}
 
 	private static function pairWeight(graph: CodeGraph, p: { a: String, b: String }): Int {

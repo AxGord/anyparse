@@ -154,6 +154,17 @@ final class MemberGraphBuilder {
 		return builder.graph;
 	}
 
+	/**
+	 * `whole` with every member the scope declares a node, an edge or none: what `GraphDiff` compares, where a member
+	 * no edge reaches still has a text that may change.
+	 */
+	public static function declared(calls: CallGraph, kinds: Null<Array<EdgeKind>>): CodeGraph {
+		final builder: MemberGraphBuilder = new MemberGraphBuilder(calls);
+		for (id => fn in calls.nodes) if (!fn.isExternal) builder.member(id);
+		for (e in calls.edges) if (kinds == null || kinds.length == 0 || kinds.contains(e.kind)) builder.edge(e);
+		return builder.graph;
+	}
+
 	/** The graph `reach` draws: the edges of every path found, each path's two ends focused. */
 	public static function paths(calls: CallGraph, found: Array<Array<CallEdge>>): CodeGraph {
 		final builder: MemberGraphBuilder = new MemberGraphBuilder(calls);

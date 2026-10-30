@@ -110,6 +110,68 @@ final class GraphFixture {
 		''
 	].join('\n');
 
+	/**
+	 * One module at the earlier of two versions: `run` calls `step` twice, `gone` is still there, `B` calls `run`.
+	 */
+	public static final DIFF_BEFORE: String = [
+		'package p;',
+		'class A {',
+		'\tpublic function new() {}',
+		'\tpublic function run():Void { step(); step(); helper(); run(); }',
+		'\tfunction step():Void {}',
+		'\tfunction helper():Void {}',
+		'\tfunction gone():Void { step(); }',
+		'}',
+		'class B {',
+		'\tpublic function work():Void { new A().run(); }',
+		'\tpublic function idle():Void {}',
+		'}',
+		''
+	].join('\n');
+
+	/**
+	 * The later version: `run` changed and calls `step` once and the new `fresh`,
+	 * `step` laid out anew, `gone` removed, the new type `C` calls `run`.
+	 */
+	public static final DIFF_AFTER: String = [
+		'package p;',
+		'class A {',
+		'\tpublic function new() {}',
+		'\tpublic function run():Void { step(); helper(); fresh(); run(); }',
+		'\tfunction step() : Void {   }',
+		'\tfunction helper():Void {}',
+		'\tfunction fresh():Void {}',
+		'}',
+		'class B {',
+		'\tpublic function work():Void { new A().run(); }',
+		'\tpublic function idle():Void {}',
+		'}',
+		'class C {',
+		'\tpublic function go():Void { new A().run(); }',
+		'}',
+		''
+	].join('\n');
+
+	/** `DIFF_BEFORE` against `DIFF_AFTER` as the text report reads it, `run` the one member whose text changed. */
+	public static final DIFF_REPORT: String = [
+		'8 node(s), 7 edge(s), 0 mutual pair(s)',
+		'changed:',
+		'  + member p.A.fresh',
+		'  - member p.A.gone',
+		'  ~ member p.A.run',
+		'  + member p.C.go',
+		'  + type p.C',
+		'edges:',
+		'  ~ p.A.run -> p.A  call 2 (was 3)',
+		'  - p.A.gone -> p.A  call 1',
+		'  + p.A.run -> p.A.fresh  call 1',
+		'    p.A.run -> p.A.run  call 1',
+		'  + p.C.go -> p.A.run  call 1',
+		'  + p.C.go -> p.A  new 1',
+		'    p.B -> p.A.run  call 1',
+		''
+	].join('\n');
+
 	/** The call graph over `FILES`. */
 	public static function calls(): CallGraph {
 		return CallGraph.build(FILES, new HaxeQueryPlugin());

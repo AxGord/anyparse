@@ -24,6 +24,23 @@ class GlobExpandTest extends Test {
 	private var _root: Null<String> = null;
 	#end
 
+	/** Over a listed path set a spec names what it names over a tree: a file, a directory's files by extension, a glob's matches. */
+	public function testExpandListedReadsASpecAsExpandDoes(): Void {
+		final listed: Array<String> = ['a/B.hx', 'a/notes.txt', 'a/sub/C.hx', 'ab/D.hx', 'E.hx'];
+		Assert.equals('a/B.hx,a/sub/C.hx', Glob.expandListed('a', '.hx', listed).join(','));
+		Assert.equals('a/B.hx,a/sub/C.hx', Glob.expandListed('./a/', '.hx', listed).join(','), 'a leading ./ and a trailing / read alike');
+		Assert.equals(
+			'a/notes.txt', Glob.expandListed('a/notes.txt', '.hx', listed).join(','), 'a file named is kept whatever its extension'
+		);
+		Assert.equals('E.hx,a/B.hx,a/sub/C.hx,ab/D.hx', Glob.expandListed('.', '.hx', listed).join(','));
+		Assert.equals('a/B.hx', Glob.expandListed('a/*.hx', '.hx', listed).join(','), 'a star stays within one segment');
+		Assert.equals('a/B.hx,a/sub/C.hx', Glob.expandListed('a/**/*.hx', '.hx', listed).join(','));
+		Assert.equals('a', Glob.walkRoot('a/**/*.hx'));
+		Assert.equals('.', Glob.walkRoot('*.hx'));
+		Assert.equals('.', Glob.walkRoot('./'));
+		Assert.equals('a/sub', Glob.walkRoot('./a/sub/'));
+	}
+
 	public function testSingleStarWithinSegment(): Void {
 		#if (sys || nodejs)
 		final root: String = makeTree();

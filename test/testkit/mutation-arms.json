@@ -32606,6 +32606,62 @@
 			"find": "subtractKinds.contains(start.kind)",
 			"replace": "true",
 			"note": "every substr start is flagged, not only a subtraction"
+		},
+		{
+			"name": "M-GRAPH-DIFF-UNCHANGED-UNFOLDED",
+			"type": "anyparse.query.graph.GraphDiff",
+			"method": "folded",
+			"find": "|| status[id] != null ? id :",
+			"replace": "|| true ? id :",
+			"note": "every member stays a node of its own, so the comparison of a large scope is every member it declares instead of what changed"
+		},
+		{
+			"name": "M-GRAPH-DIFF-WEIGHT-IGNORED",
+			"type": "anyparse.query.graph.GraphDiff",
+			"method": "edgeChange",
+			"find": "was.weight != now.weight",
+			"replace": "false",
+			"note": "an edge both versions hold reads unchanged whatever its weight, so a call site added or removed beside another one goes unseen"
+		},
+		{
+			"name": "M-GRAPH-DIFF-UNCHANGED-EDGE-KEPT",
+			"type": "anyparse.query.graph.GraphDiff",
+			"method": "compare",
+			"find": "if (change == null && status[e.from] == null && status[e.to] == null) continue;",
+			"replace": "",
+			"note": "every edge between unchanged types is drawn, burying the change in the whole graph of the scope"
+		},
+		{
+			"name": "M-GRAPH-DIFF-MODULE-FUNCTION-UNNAMED",
+			"type": "anyparse.query.cli.command.GraphCommand",
+			"method": "changedMembers",
+			"find": "if (change.depth == 0) names.push(",
+			"replace": "if (false) names.push(",
+			"note": "a module-level function is named without the module type the call graph places it in, so a change to its text is never seen"
+		},
+		{
+			"name": "M-GRAPH-DIFF-INVERSION-AS-CYCLE",
+			"type": "anyparse.query.graph.CodeGraph",
+			"method": "isMutual",
+			"find": "(e.change != Added && back.change != Added) || (e.change != Removed && back.change != Removed)",
+			"replace": "true",
+			"note": "a dependency removed one way and added the other reads as a cycle, though neither version holds both ways"
+		},
+		{
+			"name": "M-GRAPH-DIFF-RENAME-UNPAIRED",
+			"type": "anyparse.query.cli.command.GraphCommand",
+			"method": "changedMembers",
+			"find": "earlier.sources[renamed[f.file] ?? f.file]",
+			"replace": "earlier.sources[f.file]",
+			"note": "a file renamed between the revisions is paired by path, finds no earlier text, and every edit inside it goes unseen"
+		},
+		{
+			"name": "M-GRAPH-DIFF-ABSOLUTE-SPEC-UNREAD",
+			"type": "anyparse.query.cli.GitRevision",
+			"method": "filesAt",
+			"find": "specs.map(cwdRelative)",
+			"replace": "specs",
+			"note": "an absolute scope is compared with the cwd-relative paths git lists and names nothing at either revision"
 		}
 	]
 }

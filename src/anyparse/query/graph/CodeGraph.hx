@@ -1,5 +1,7 @@
 package anyparse.query.graph;
 
+using Lambda;
+
 /**
  * The scale a graph node stands at. A package holds types, a type holds members; a group holds
  * whatever an analysis partitions together (a component of a cluster report) and is no declaration.
@@ -40,6 +42,27 @@ enum abstract GraphEdgeKind(String) to String {
 }
 
 /**
+ * How a node or an edge of a graph comparing two versions differs between them (`GraphDiff`): only the later version
+ * holds it, only the earlier one does, or both do and it differs — a member's text, an edge's weight.
+ */
+enum abstract GraphChange(String) to String {
+
+	final Added = 'added';
+	final Removed = 'removed';
+	final Changed = 'changed';
+
+	/** The sign a report marks the change with: `+`, `-` or `~`. */
+	public function sign(): String {
+		return switch (cast this: GraphChange) {
+			case Added: '+';
+			case Removed: '-';
+			case Changed: '~';
+		};
+	}
+
+}
+
+/**
  * One node. `id` is derived from `level`, `name` and `external` alone (`CodeGraph.idOf`), so the same
  * declaration gets the same id in every graph and every run, and the id is a valid Mermaid node id as it stands.
  */
@@ -62,6 +85,9 @@ typedef GraphNode = {
 
 	/** A node the query asked about: a `callees` target, a `reach` end. */
 	var focus: Bool;
+
+	/** How the node differs between two versions, in a graph comparing them; absent everywhere else and when it does not. */
+	var ?change: GraphChange;
 }
 
 /** One edge per (from, to, kind): `weight` counts the sites it stands for. */
@@ -71,6 +97,12 @@ typedef GraphEdge = {
 	final to: String;
 	final kind: GraphEdgeKind;
 	var weight: Int;
+
+	/** How the edge differs between two versions, in a graph comparing them; absent everywhere else and when it does not. */
+	var ?change: GraphChange;
+
+	/** The weight the earlier version gives a `Changed` edge; `weight` is the later version's. */
+	var ?before: Int;
 }
 
 /**
@@ -89,10 +121,18 @@ final class CodeGraph {
 	/** `from to` -> the weight of every edge from `from` to `to`, whatever its kind. */
 	private final _directed: Map<String, Int> = [];
 
+	/** `from to` -> every edge from `from` to `to`, one per kind. */
+	private final _pairs: Map<String, Array<GraphEdge>> = [];
+
 	public function new() {}
 
 	public inline function node(id: String): Null<GraphNode> {
 		return _nodes[id];
+	}
+
+	/** The edge of `kind` from `from` to `to`, or null when none. */
+	public inline function edge(from: String, to: String, kind: GraphEdgeKind): Null<GraphEdge> {
+		return _edges['$from $to $kind'];
 	}
 
 	/** The weight of every edge from `from` to `to`, whatever its kind; 0 when none joins them. */
@@ -100,9 +140,16 @@ final class CodeGraph {
 		return _directed['$from $to'] ?? 0;
 	}
 
-	/** Whether `e` joins two nodes that depend on each other: an edge of any kind runs back from its target to its source. */
-	public inline function isMutual(e: GraphEdge): Bool {
-		return e.from != e.to && _directed.exists('${e.to} ${e.from}');
+	/**
+	 * Whether `e` joins two nodes that depend on each other: an edge of any kind runs back from its target to its source.
+	 * In a graph comparing two versions both ways must stand in one version: an edge removed one way and added the other
+	 * is a dependency inverted, not a cycle.
+	 */
+	public function isMutual(e: GraphEdge): Bool {
+		return e.from != e.to
+			&& (_pairs['${e.to} ${e.from}'] ?? []).exists(
+				back -> (e.change != Added && back.change != Added) || (e.change != Removed && back.change != Removed)
+			);
 	}
 
 	/** Add the node at `level` named `name` unless the graph holds it, and answer its id; the first addition's fields stay. */
@@ -146,6 +193,11 @@ final class CodeGraph {
 				weight: weight
 			};
 			_edges[key] = added;
+			final sameWay: Null<Array<GraphEdge>> = _pairs['$from $to'];
+			if (sameWay == null)
+				_pairs['$from $to'] = [added]
+			else
+				sameWay.push(added);
 		}
 		final pair: String = '$from $to';
 		_directed[pair] = (_directed[pair] ?? 0) + weight;

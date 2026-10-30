@@ -25,6 +25,7 @@ final class GraphJson {
 						focus: n.focus
 					};
 					if (n.parent != null) node.parent = n.parent;
+					if (n.change != null) node.change = n.change;
 					node;
 				}
 			],
@@ -37,6 +38,8 @@ final class GraphJson {
 						weight: e.weight
 					};
 					if (graph.isMutual(e)) edge.mutual = true;
+					if (e.change != null) edge.change = e.change;
+					if (e.before != null) edge.before = e.before;
 					edge;
 				}
 			]

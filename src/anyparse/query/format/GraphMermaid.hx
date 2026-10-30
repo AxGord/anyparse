@@ -14,7 +14,8 @@ import anyparse.query.graph.CodeGraph;
  * A `CodeGraph` as a Mermaid flowchart, built as the Mermaid grammar's AST and written by its writer:
  * a node that holds others is a subgraph, any other a vertex shaped by its level, and the edges follow
  * at the top level, labelled by kind (a call or an import is unlabelled) and
- * by weight above one; an edge whose ends depend on each other is drawn red.
+ * by weight above one; an edge whose ends depend on each other is drawn red. A graph comparing two versions
+ * (`GraphDiff`) colours each added, removed or changed vertex and link, and signs a changed subgraph's title.
  *
  * Every label is `MmdLabel.Plain`, the text a reader sees, so the label codec escapes whatever Mermaid
  * would read as syntax or markup — a type label `Map<String, Int>` renders as written.
@@ -35,6 +36,18 @@ final class GraphMermaid {
 	/** The style of an edge whose ends depend on each other (`CodeGraph.isMutual`). */
 	private static inline final MUTUAL_STYLE: String = 'stroke:#d33,stroke-width:2px';
 
+	/**
+	 * The styles of a node, and of a link, a graph comparing two versions
+	 * marks added, removed or changed; the class is the change's name.
+	 */
+	private static inline final ADDED_NODE_STYLE: String = 'fill:#dfd,stroke:#2a2';
+
+	private static inline final REMOVED_NODE_STYLE: String = 'fill:#eee,stroke:#999,stroke-dasharray:4 3';
+	private static inline final CHANGED_NODE_STYLE: String = 'fill:#ffd,stroke:#d90';
+	private static inline final ADDED_LINK_STYLE: String = 'stroke:#2a2,stroke-width:2px';
+	private static inline final REMOVED_LINK_STYLE: String = 'stroke:#999,stroke-dasharray:4 3';
+	private static inline final CHANGED_LINK_STYLE: String = 'stroke:#d90,stroke-width:2px';
+
 	/** The flowchart of `graph`, after a `%%` comment line holding `caption` when one is given. */
 	public static function flowchart(graph: CodeGraph, ?caption: String): MmdFlowchart {
 		final statements: Array<MmdStatement> = [];
@@ -52,9 +65,12 @@ final class GraphMermaid {
 		final leaves: Array<GraphNode> = graph.nodes().filter(n -> !byParent.exists(n.id));
 		classed(statements, FOCUS_CLASS, FOCUS_STYLE, leaves.filter(n -> n.focus));
 		classed(statements, EXTERNAL_CLASS, EXTERNAL_STYLE, leaves.filter(n -> n.external));
+		final changes: Array<GraphChange> = [Added, Removed, Changed];
+		for (change in changes) classed(statements, change, nodeStyle(change), leaves.filter(n -> n.change == change));
 		// a link's ordinal is its place among the chart's links, and every edge is one chain of one link
-		final mutual: Array<String> = [for (i => e in edges) if (graph.isMutual(e)) '$i'];
-		if (mutual.length > 0) statements.push(LinkStyle({ links: mutual.join(','), curve: null, styles: MUTUAL_STYLE }));
+		for (change in changes) linkStyled(statements, [for (i => e in edges) if (e.change == change) '$i'], linkStyle(change));
+		// last, so a link both changed and mutual is drawn as the cycle it closes
+		linkStyled(statements, [for (i => e in edges) if (graph.isMutual(e)) '$i'], MUTUAL_STYLE);
 		return { first: statements[0], rest: statements.slice(1) };
 	}
 
@@ -72,7 +88,7 @@ final class GraphMermaid {
 		final children: Null<Array<GraphNode>> = byParent[n.id];
 		return children == null
 			? Chain({ head: group(vertex(n)), links: [] })
-			: Subgraph({ head: Titled({ name: n.id, title: Plain(n.label) }), body: [for (c in children) declaration(byParent, c)] });
+			: Subgraph({ head: Titled({ name: n.id, title: Plain(titleOf(n)) }), body: [for (c in children) declaration(byParent, c)] });
 	}
 
 	/** `n` as a vertex: a member rounded, a type a subroutine box, a package or group a rectangle, an external node a stadium. */
@@ -101,7 +117,35 @@ final class GraphMermaid {
 		final parts: Array<String> = [];
 		if (e.kind != Call && e.kind != Import) parts.push(e.kind);
 		if (e.weight > 1) parts.push('${e.weight}');
+		if (e.change == Changed) parts.push('was ${e.before}');
 		return parts.length == 0 ? null : Plain(parts.join(' '));
+	}
+
+	/** A `linkStyle` statement giving the links of ordinals `links` the style `styles`, when there are any. */
+	private static function linkStyled(statements: Array<MmdStatement>, links: Array<String>, styles: String): Void {
+		if (links.length > 0) statements.push(LinkStyle({ links: links.join(','), curve: null, styles: styles }));
+	}
+
+	/** A subgraph's title: its label, after the sign of its change in a graph comparing two versions, whose colours mark a vertex alone. */
+	private static function titleOf(n: GraphNode): String {
+		final change: Null<GraphChange> = n.change;
+		return change == null ? n.label : '${change.sign()} ${n.label}';
+	}
+
+	private static function nodeStyle(change: GraphChange): String {
+		return switch change {
+			case Added: ADDED_NODE_STYLE;
+			case Removed: REMOVED_NODE_STYLE;
+			case Changed: CHANGED_NODE_STYLE;
+		};
+	}
+
+	private static function linkStyle(change: GraphChange): String {
+		return switch change {
+			case Added: ADDED_LINK_STYLE;
+			case Removed: REMOVED_LINK_STYLE;
+			case Changed: CHANGED_LINK_STYLE;
+		};
 	}
 
 	/** A `classDef` and a `class` statement giving `nodes` the class `name`, when there are any. */

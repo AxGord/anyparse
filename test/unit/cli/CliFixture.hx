@@ -1,6 +1,8 @@
 package unit.cli;
 
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.core.TempScratch;
+import anyparse.query.Cli;
 #if (sys || nodejs)
 import haxe.Exception;
 import haxe.io.Path;
@@ -238,25 +240,6 @@ final class CliFixture {
 	}
 
 	/**
-	 * A fresh `apq-suite.XXXXXX` directory under `root`, created ATOMICALLY — `mkdtemp`
-	 * fails rather than adopting an existing entry, which a `createDirectory` on a
-	 * predictable name would silently do (hxnodejs swallows `EEXIST` whenever the path
-	 * stats as a directory, symlinks followed). The name is `mktemp -d`'s exactly because
-	 * `devkit.TmpLifecycle` will only ever remove `<prefix>.` plus six characters.
-	 */
-	private static function makeScratchRoot(root: String): String {
-		#if nodejs
-		return js.node.Fs.mkdtempSync('$root/$SCRATCH_PREFIX.');
-		#else
-		// No portable `mkdtemp`; a six-digit draw keeps the shape mktemp gives and the
-		// collision odds, and this branch never runs — the suite's only runner is node.
-		final dir: String = '$root/$SCRATCH_PREFIX.${SCRATCH_TOKEN_LOW + Std.random(SCRATCH_TOKEN_SPAN)}';
-		FileSystem.createDirectory(dir);
-		return dir;
-		#end
-	}
-
-	/**
 	 * Run `fn` with stdout captured, and answer what it printed.
 	 *
 	 * The sibling of `captureStderr`, and the same mechanism: `CliIo.sysPrint`
@@ -306,4 +289,52 @@ final class CliFixture {
 		return null;
 	}
 
+	public static function git(root: String, args: Array<String>): Void {
+		final run: HaxeRun = HaxeSpawn.exec({ cmd: 'git', args: args, cwd: root }, 1 << 20);
+		if (run.failure != '' || run.status != 0) throw 'git ${args.join(' ')}: ${run.failure}${run.err}';
+	}
+
+	/** The command's stdout, run from `dir` — `changed` reads its paths relative to the working directory. */
+	public static function inDir(dir: String, args: Array<String>): String {
+		return runIn(dir, args).out;
+	}
+
+	/** The command's exit code and stdout, run from `dir`. */
+	public static function runIn(dir: String, args: Array<String>): CliRun {
+		final previous: String = Sys.getCwd();
+		Sys.setCwd(dir);
+		var code: Int = -1;
+		final out: String = try CliFixture.captureStdout(() -> code = Cli.run(args)) catch (exception: haxe.Exception) {
+			Sys.setCwd(previous);
+			throw exception;
+		}
+		Sys.setCwd(previous);
+		return { code: code, out: out };
+	}
+
+	/**
+	 * A fresh `apq-suite.XXXXXX` directory under `root`, created ATOMICALLY — `mkdtemp`
+	 * fails rather than adopting an existing entry, which a `createDirectory` on a
+	 * predictable name would silently do (hxnodejs swallows `EEXIST` whenever the path
+	 * stats as a directory, symlinks followed). The name is `mktemp -d`'s exactly because
+	 * `devkit.TmpLifecycle` will only ever remove `<prefix>.` plus six characters.
+	 */
+	private static function makeScratchRoot(root: String): String {
+		#if nodejs
+		return js.node.Fs.mkdtempSync('$root/$SCRATCH_PREFIX.');
+		#else
+		// No portable `mkdtemp`; a six-digit draw keeps the shape mktemp gives and the
+		// collision odds, and this branch never runs — the suite's only runner is node.
+		final dir: String = '$root/$SCRATCH_PREFIX.${SCRATCH_TOKEN_LOW + Std.random(SCRATCH_TOKEN_SPAN)}';
+		FileSystem.createDirectory(dir);
+		return dir;
+		#end
+	}
+
+}
+
+/** What one `apq` run left: its exit code and its stdout. */
+typedef CliRun = {
+	final code: Int;
+	final out: String;
 }

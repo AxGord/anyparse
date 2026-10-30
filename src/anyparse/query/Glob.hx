@@ -67,6 +67,39 @@ final class Glob {
 	}
 
 	/**
+	 * The paths of `listed` the input `spec` names, as `expand` reads it over a file tree: a path equal to it, every path
+	 * ending in `extension` below it as a directory, or every path a glob matches. `listed` holds slash-separated paths
+	 * as a revision lists them (`GitRevision`); a leading `./` of `spec`, and `.` alone, name them from the top.
+	 */
+	public static function expandListed(spec: String, extension: String, listed: Array<String>): Array<String> {
+		final norm: String = listedForm(spec);
+		final out: Array<String> = if (isGlob(norm)) {
+			final re: EReg = globToRegex(norm, '/');
+			listed.filter(p -> re.match(p));
+		} else {
+			listed.filter(p -> p == norm || ((norm == '' || p.startsWith('$norm/')) && p.endsWith(extension)));
+		};
+		out.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
+		return out;
+	}
+
+	/** Where a walk for `spec` starts: the literal part of a glob before its first wildcard, else `spec`; `.` for the top. */
+	public static function walkRoot(spec: String): String {
+		final norm: String = listedForm(spec);
+		final root: String = isGlob(norm) ? globBase(norm) : norm;
+		return root == '' ? '.' : root;
+	}
+
+	private static inline function isGlobChar(c: String): Bool {
+		return c == '*' || c == '?' || c == '[';
+	}
+
+	/**
 	 * Strip trailing `/` from a user-supplied path so downstream
 	 * `dir + '/' + name` concatenations don't produce `foo//bar`. Keeps
 	 * the root `'/'` and a bare `'.'` unchanged.
@@ -130,6 +163,33 @@ final class Glob {
 		return new EReg(buf.toString(), '');
 	}
 
+	/** `spec` as a listed path reads: no trailing `/`, no leading `./`, and empty for `.`. */
+	private static function listedForm(spec: String): String {
+		var norm: String = stripTrailingSlash(spec);
+		while (norm.startsWith('./')) norm = norm.substr(2);
+		return norm == '.' ? '' : norm;
+	}
+
+	private static function isGlob(spec: String): Bool {
+		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) return true;
+		return false;
+	}
+
+	/**
+	 * Literal directory prefix preceding the first glob metacharacter,
+	 * with no trailing slash. `''` when the pattern starts globbing
+	 * before any `/` (walk root is the cwd).
+	 */
+	private static function globBase(spec: String): String {
+		var firstGlob: Int = spec.length;
+		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) {
+			firstGlob = i;
+			break;
+		}
+		final lastSlash: Int = spec.substr(0, firstGlob).lastIndexOf('/');
+		return lastSlash < 0 ? '' : spec.substr(0, lastSlash);
+	}
+
 	#if (sys || nodejs)
 	private static function collect(dir: String, extension: String, into: Array<String>): Void {
 		for (name in FileSystem.readDirectory(dir)) {
@@ -155,30 +215,6 @@ final class Glob {
 			else if (re.match(rel))
 				into.push(rel);
 		}
-	}
-
-	private static inline function isGlobChar(c: String): Bool {
-		return c == '*' || c == '?' || c == '[';
-	}
-
-	private static function isGlob(spec: String): Bool {
-		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) return true;
-		return false;
-	}
-
-	/**
-	 * Literal directory prefix preceding the first glob metacharacter,
-	 * with no trailing slash. `''` when the pattern starts globbing
-	 * before any `/` (walk root is the cwd).
-	 */
-	private static function globBase(spec: String): String {
-		var firstGlob: Int = spec.length;
-		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) {
-			firstGlob = i;
-			break;
-		}
-		final lastSlash: Int = spec.substr(0, firstGlob).lastIndexOf('/');
-		return lastSlash < 0 ? '' : spec.substr(0, lastSlash);
 	}
 	#end
 

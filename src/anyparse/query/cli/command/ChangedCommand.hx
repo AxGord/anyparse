@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.cli.DeclarationDelta;
+import anyparse.query.cli.GitRevision;
 
 /** What `apq changed` was asked. */
 private typedef ChangedOpts = {
@@ -18,13 +19,6 @@ private typedef FileReading = {
 	final ?failure: String;
 }
 
-/** One path `git diff --name-status` reports: its status letter, its path now, and its path at the base revision. */
-private typedef ChangedPath = {
-	final status: String;
-	final path: String;
-	final basePath: String;
-}
-
 /**
  * `apq changed` — what each file changed against a git revision, by meaning: layout only, imports only, one consistent
  * rename, or the declarations added, removed and changed, matched by name (`DeclarationDelta`).
@@ -33,9 +27,6 @@ private typedef ChangedPath = {
  */
 @:nullSafety(Strict)
 final class ChangedCommand implements CliCommand {
-
-	/** The output cap of one `git` child: a `git show` of a large file must not truncate. */
-	private static inline final GIT_BUFFER: Int = 256 * 1024 * 1024;
 
 	public function new() {}
 
@@ -55,12 +46,12 @@ final class ChangedCommand implements CliCommand {
 			CliIo.stderr('apq changed: "${opts.ref}" names no revision range git can resolve\n');
 			return ExitCode.EXIT_RUNTIME;
 		}
-		final listed: HaxeRun = git(['diff', '--name-status', '-z', '-M', '--relative'].concat(range).concat(['--']).concat(opts.paths));
+		final listed: HaxeRun = GitRevision.diffNameStatus(range, opts.paths);
 		if (listed.failure != '' || listed.status != 0) {
 			CliIo.stderr('apq changed: git diff against "${opts.ref}" failed: ${listed.failure}${listed.err}\n');
 			return ExitCode.EXIT_RUNTIME;
 		}
-		final entries: Array<ChangedPath> = parseNameStatus(listed.out);
+		final entries: Array<ChangedPath> = GitRevision.parseNameStatus(listed.out);
 		final names: Array<String> = [];
 		final report: Array<String> = [];
 		final tally: Map<String, Int> = [];
@@ -146,14 +137,14 @@ final class ChangedCommand implements CliCommand {
 
 	/** Both versions of `entry` and what changed between them; the working tree stands in for a missing `tip`. */
 	private static function readEntry(entry: ChangedPath, base: String, tip: Null<String>, lang: String): FileReading {
-		final before: Null<String> = entry.status == 'A' ? '' : sourceAt(base, entry.basePath);
+		final before: Null<String> = entry.status == 'A' ? '' : GitRevision.sourceAt(base, entry.basePath);
 		if (before == null) return { names: [], failure: '${entry.basePath} is not readable at "$base"' };
 		final now: Null<String> = if (entry.status == 'D')
 			''
 		else if (tip == null)
 			CliIo.readFile(entry.path)
 		else
-			sourceAt(tip, entry.path);
+			GitRevision.sourceAt(tip, entry.path);
 		if (now == null) return { names: [], failure: '${entry.path} is not readable at "$tip"' };
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor(lang, entry.path);
 		if (!entry.path.toLowerCase().endsWith(CliArgs.sourceExtensionOf(plugin.langName())))
@@ -183,7 +174,7 @@ final class ChangedCommand implements CliCommand {
 		final from: String = sides[0] == '' ? 'HEAD' : sides[0];
 		final to: String = sides[1] == '' ? 'HEAD' : sides[1];
 		if (!symmetric) return [from, to];
-		final base: HaxeRun = git(['merge-base', from, to]);
+		final base: HaxeRun = GitRevision.git(['merge-base', from, to]);
 		return base.failure == '' && base.status == 0 ? [base.out.trim(), to] : null;
 	}
 
@@ -208,36 +199,6 @@ final class ChangedCommand implements CliCommand {
 			out.add('    ${change.status} ${change.selector}  $size\n');
 		}
 		return out.toString();
-	}
-
-	/** `git diff --name-status -z` records: a status field, then one path, or two for a rename or a copy. */
-	private static function parseNameStatus(out: String): Array<ChangedPath> {
-		final fields: Array<String> = out.split('\x00');
-		final entries: Array<ChangedPath> = [];
-		var i: Int = 0;
-		while (i < fields.length) {
-			final status: String = fields[i];
-			if (status.length == 0) {
-				i++;
-				continue;
-			}
-			final letter: String = status.charAt(0);
-			final pathCount: Int = letter == 'R' || letter == 'C' ? 2 : 1;
-			if (i + pathCount >= fields.length) break;
-			entries.push({ status: letter, basePath: fields[i + 1], path: fields[i + pathCount] });
-			i += 1 + pathCount;
-		}
-		return entries;
-	}
-
-	/** `path` as revision `ref` holds it, or null when it holds none. */
-	private static function sourceAt(ref: String, path: String): Null<String> {
-		final shown: HaxeRun = git(['show', '$ref:./$path']);
-		return shown.failure == '' && shown.status == 0 ? shown.out : null;
-	}
-
-	private static function git(args: Array<String>): HaxeRun {
-		return HaxeSpawn.exec({ cmd: 'git', args: args, cwd: null }, GIT_BUFFER);
 	}
 
 }

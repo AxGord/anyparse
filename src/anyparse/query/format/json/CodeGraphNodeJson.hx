@@ -22,4 +22,7 @@ typedef CodeGraphNodeJson = {
 	var external: Bool;
 
 	var focus: Bool;
+
+	/** In a graph comparing two versions, how the node differs (`added`, `removed`, `changed`); absent when it does not. */
+	@:optional var change: Null<String>;
 };

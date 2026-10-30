@@ -2,6 +2,7 @@ package anyparse.query.cli;
 
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.cli.CliArgs;
+import anyparse.query.cli.GitRevision.RevisionFile;
 import anyparse.query.cli.UsageFailure;
 import anyparse.query.format.GraphJson;
 import anyparse.query.format.GraphMermaid;
@@ -50,8 +51,52 @@ final class CliCallGraph {
 	): Null<{ graph: CallGraph, sources: Map<String, String> }> {
 		final scope: Null<GraphScope> = readScope(cmd, inputSpecs, lang);
 		if (scope == null) return null;
+		final graph: Null<CallGraph> = callGraphOf(cmd, scope);
+		return graph == null ? null : { graph: graph, sources: scope.sources };
+	}
+
+	/** The call graph of `scope`, warning of every file that failed to parse; null when the one file named did (message printed). */
+	public static function callGraphOf(cmd: String, scope: GraphScope): Null<CallGraph> {
 		final graph: CallGraph = CallGraph.build(scope.files, scope.plugin);
-		return skippedEndRun(cmd, graph.skippedFiles, scope) ? null : { graph: graph, sources: scope.sources };
+		return skippedEndRun(cmd, graph.skippedFiles, scope) ? null : graph;
+	}
+
+	/**
+	 * The files of a graph command's scope as revision `ref` holds them (`GitRevision.filesAt`), none when it holds
+	 * none, each parsed once into the caching plugin returned with them. `texts` maps an object id to its text, shared
+	 * by the revisions one run reads so a file both hold alike is read once. Null when a file cannot be read or git
+	 * lists no tree for `ref` (message printed).
+	 */
+	public static function revisionScope(
+		cmd: String, ref: String, inputSpecs: Array<String>, lang: String, texts: Map<String, String>
+	): Null<GraphScope> {
+		final cached: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final listed: Null<Array<RevisionFile>> = GitRevision.filesAt(ref, inputSpecs, CliArgs.sourceExtensionOf(cached.langName()));
+		if (listed == null) {
+			CliIo.stderr('apq $cmd: git lists no tree for "$ref"\n');
+			return null;
+		}
+		final files: Array<{ file: String, source: String }> = [];
+		final sources: Map<String, String> = [];
+		var scanned: Int = 0;
+		for (f in listed) {
+			final source: Null<String> = texts[f.blob] ?? GitRevision.blobText(f.blob);
+			if (source == null) {
+				CliIo.stderr('apq $cmd: ${f.path} is not readable at "$ref"\n');
+				return null;
+			}
+			texts[f.blob] = source;
+			files.push({ file: f.path, source: source });
+			sources[f.path] = source;
+			try cached.parseFile(source) catch (exception: ParseError) {} catch (exception: Exception) {}
+			CliIo.streamProgress(cmd, ++scanned, listed.length, false);
+		}
+		return {
+			files: files,
+			sources: sources,
+			plugin: cached,
+			singleFile: false
+		};
 	}
 
 	/**

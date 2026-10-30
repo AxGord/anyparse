@@ -17,4 +17,10 @@ typedef CodeGraphEdgeJson = {
 
 	/** Present and true when an edge runs back from `to` to `from`: the two ends depend on each other. */
 	@:optional var mutual: Null<Bool>;
+
+	/** In a graph comparing two versions, how the edge differs (`added`, `removed`, `changed`); absent when it does not. */
+	@:optional var change: Null<String>;
+
+	/** The earlier version's weight of a `changed` edge; `weight` is the later one's. */
+	@:optional var before: Null<Int>;
 };
