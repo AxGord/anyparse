@@ -37,7 +37,7 @@ class SafeDeleteSliceTest extends Test {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n\tpublic function used():Int return 1;\n}';
 		final client: String =
 			'package pkg;\n\nclass Client {\n\tpublic function new() {}\n\tpublic function go(s:Svc):Int return s.used();\n}';
-		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'used', false, [
+		assertReferencedFrom('pkg/Client.hx', SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'used', false, [
 			{ file: 'pkg/Svc.hx', source: svc },
 			{ file: 'pkg/Client.hx', source: client }
 		], plugin(), refShape()));
@@ -60,7 +60,7 @@ class SafeDeleteSliceTest extends Test {
 
 	/** A call through the declaring type's own name from another file still blocks the delete. */
 	public function testDeclaringTypeQualifiedCallBlocks(): Void {
-		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'path', false, [
+		assertReferencedFrom('pkg/Client.hx', SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'path', false, [
 			{ file: 'pkg/Svc.hx', source: 'package pkg;\n\nclass Svc {\n\tpublic static function path(p:String):String return p;\n}' },
 			{ file: 'pkg/Other.hx', source: 'package pkg;\n\nclass Other {\n\tpublic static function path(p:String):String return p;\n}' },
 			{ file: 'pkg/Client.hx', source: 'package pkg;\n\nclass Client {\n\tstatic function go():String return Svc.path("x");\n}' }
@@ -181,20 +181,29 @@ class SafeDeleteSliceTest extends Test {
 	public function testThisAccessBlocks(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n'
 			+ '\tpublic function bump():Void this.count = this.count + 1;\n}';
-		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'count', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape()));
+		assertReferencedFrom(
+			'pkg/Svc.hx',
+			SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'count', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape())
+		);
 	}
 
 	/** A bare in-type reference blocks the deletion. */
 	public function testBareReferenceBlocks(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n\tpublic function helper():Int return 1;\n'
 			+ '\tpublic function calc():Int return helper() + 1;\n}';
-		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'helper', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape()));
+		assertReferencedFrom(
+			'pkg/Svc.hx',
+			SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'helper', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape())
+		);
 	}
 
 	/** A missing member is refused. */
 	public function testNoSuchMemberRefused(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'nope', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape()));
+		assertRefusal(
+			'no member "nope"',
+			SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'nope', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape())
+		);
 	}
 
 	private function okRemove(
@@ -215,12 +224,13 @@ class SafeDeleteSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: EditResult): Void {
+	/** `result` is a refusal whose message contains `reason`. */
+	private function assertRefusal(reason: String, result: EditResult): Void {
 		switch result {
 			case Ok(_):
 				Assert.fail('expected Err, got Ok');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

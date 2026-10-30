@@ -129,13 +129,13 @@ class RemoveParamSliceTest extends Test {
 	/** Refuse an index past the last parameter (out of range). */
 	public function testRefuseIndexOutOfRange(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n}';
-		assertRefused(source, 2, 9, 5);
+		assertRefused('index 5 is out of range', source, 2, 9, 5);
 	}
 
 	/** Refuse a negative index (out of range). */
 	public function testRefuseNegativeIndex(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n}';
-		assertRefused(source, 2, 9, -1);
+		assertRefused('index -1 is out of range', source, 2, 9, -1);
 	}
 
 	/**
@@ -146,7 +146,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseParamStillUsedInBody(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {\n\t\ttrace(b);\n\t}\n}';
 		// Remove `b` (index 1), but `b` is read in the body.
-		assertRefused(source, 2, 9, 1);
+		assertRefused('is still used in the body', source, 2, 9, 1);
 	}
 
 	/**
@@ -157,7 +157,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseParamUsedInLaterDefault(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int = a):Void {}\n}';
 		// Remove `a` (index 0), but `b`'s default references `a`.
-		assertRefused(source, 2, 9, 0);
+		assertRefused('is still used in the body', source, 2, 9, 0);
 	}
 
 	/**
@@ -168,7 +168,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseNonThisReceiverCall(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller(o:C):Void {\n\t\tf(1, 2);\n'
 			+ '\t\to.f(3, 4);\n\t}\n}';
-		assertRefused(source, 2, 9, 1);
+		assertRefused('cannot resolve receiver-qualified call', source, 2, 9, 1);
 	}
 
 	/**
@@ -181,7 +181,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseAmbiguousLocalFunctionName(): Void {
 		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int return x;\n\t\tvar r = '
 			+ 'add(1, 2);\n\t\t{\n\t\t\tfunction add(p:Int, q:Int):Int return p;\n\t\t\tvar z = add(3, 4);\n\t\t}\n\t}\n}';
-		assertRefused(source, 3, 12, 1);
+		assertRefused('is ambiguous', source, 3, 12, 1);
 	}
 
 	/**
@@ -192,13 +192,13 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseArityMismatchCall(): Void {
 		final source: String =
 			'class C {\n\tpublic function f(a:Int, ?b:Int):Void {}\n\tpublic function caller():Void {\n\t\tf(1, 2);\n\t\tf(7);\n\t}\n}';
-		assertRefused(source, 2, 9, 0);
+		assertRefused('omitted optional arguments', source, 2, 9, 0);
 	}
 
 	/** Refuse a cursor that is not on a function (a plain field). */
 	public function testRefuseCursorOnNonFunction(): Void {
 		final source: String = 'class C {\n\tvar field:Int = 0;\n}';
-		assertRefused(source, 2, 6, 0);
+		assertRefused('is not a function', source, 2, 6, 0);
 	}
 
 	/**
@@ -210,7 +210,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseMethodReferencedAsValue(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller():Void {\n\t\tf(1, 2);\n'
 			+ '\t\tvar fn = f;\n\t}\n}';
-		assertRefused(source, 2, 9, 1);
+		assertRefused('is referenced as a value', source, 2, 9, 1);
 	}
 
 	/**
@@ -224,7 +224,7 @@ class RemoveParamSliceTest extends Test {
 	 */
 	public function testRefuseParamUsedOnlyInInterpolation(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int):Void {\n\t\ttrace(\'value: $$a\');\n\t}\n}';
-		assertRefused(source, 2, 9, 0);
+		assertRefused('is still used in the body', source, 2, 9, 0);
 	}
 
 	/**
@@ -237,7 +237,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseCallInsideUnparsedConditionalRegion(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller(c:Bool):Void {\n'
 			+ '\t\t#if flash if (c) f(1, 2); else #end f(3, 4);\n\t}\n}';
-		assertRefused(source, 2, 9, 1);
+		assertRefused('unparsed conditional-compilation region', source, 2, 9, 1);
 	}
 
 	/**
@@ -306,13 +306,13 @@ class RemoveParamSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, line: Int, col: Int, index: Int): Void {
+	private function assertRefused(reason: String, source: String, line: Int, col: Int, index: Int): Void {
 		final result: RemoveParamResult = removeOf(source, line, col, index);
 		switch result {
 			case Ok(text, _):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

@@ -84,7 +84,7 @@ class InlineMethodSliceTest extends Test {
 	/** A multi-statement body cannot be reduced to one expression — refused. */
 	public function testRefuseMultiStatementBody(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int):Int { var t = a; return t + 1; }\n\tfunction u() { f(1); }\n}';
-		assertRefused(source, 2, 11);
+		assertRefused('not a single return expression', source, 2, 11);
 	}
 
 	/** A recursive body would outlive the deleted declaration — refused. */
@@ -216,13 +216,13 @@ class InlineMethodSliceTest extends Test {
 	public function testRefuseDroppedImpureArgument(): Void {
 		final source: String =
 			'class C {\n\tfunction ignore(a:Int):Int return 0;\n\tfunction side():Int return 9;\n\tfunction u() { ignore(side()); }\n}';
-		assertRefused(source, 2, 11);
+		assertRefused('not side-effect-free', source, 2, 11);
 	}
 
 	/** A call omitting an optional argument has the wrong arity — refused. */
 	public function testRefuseArityMismatch(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, ?b:Int):Int return a;\n\tfunction u() { f(1); }\n}';
-		assertRefused(source, 2, 11);
+		assertRefused('cannot fill omitted optional', source, 2, 11);
 	}
 
 	/**
@@ -231,7 +231,7 @@ class InlineMethodSliceTest extends Test {
 	 */
 	public function testRefuseSimpleInterpolation(): Void {
 		final source: String = 'class C {\n\tfunction interp(a:Int):String return \'x=$$a\';\n\tfunction u() { interp(7); }\n}';
-		assertRefused(source, 2, 11);
+		assertRefused('string interpolation', source, 2, 11);
 	}
 
 	/**
@@ -242,7 +242,7 @@ class InlineMethodSliceTest extends Test {
 	public function testRefuseShadowByDeclaratorContinuation(): Void {
 		final source: String = 'class C {\n\tfunction run():Int {\n\t\tfunction f(p:Int) return { var a = 1, p = 2; a + p; };\n'
 			+ '\t\treturn f(3) + f(4);\n\t}\n}';
-		assertRefused(source, 3, 12);
+		assertRefused('is shadowed inside the body', source, 3, 12);
 	}
 
 	/**
@@ -273,7 +273,7 @@ class InlineMethodSliceTest extends Test {
 	/** A cursor not on a function declaration / call is refused. */
 	public function testRefuseCursorNotOnFn(): Void {
 		final source: String = 'class C {\n\tvar n:Int = 0;\n}';
-		assertRefused(source, 2, 6);
+		assertRefused('is not a function', source, 2, 6);
 	}
 
 	private function assertInline(
@@ -289,14 +289,8 @@ class InlineMethodSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, line: Int, col: Int): Void {
-		final result: EditResult = methodOf(source, line, col);
-		switch result {
-			case Ok(text):
-				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
-				Assert.pass();
-		}
+	private function assertRefused(reason: String, source: String, line: Int, col: Int): Void {
+		assertRefusedWith(source, line, col, reason);
 	}
 
 	/** Refused, and refused AS recursion rather than for a reason that would mask a lost recursion check. */

@@ -193,7 +193,7 @@ class MoveMemberSliceTest extends Test {
 	public function testDestCollisionRefused(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic static function util(x:Int):Int return x * 9;\n}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+		assertRefusal('already declares a member', move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b }
 		]));
@@ -203,7 +203,7 @@ class MoveMemberSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final user: String = 'package pkg;\n\nusing pkg.A;\n\nclass User {\n\tfunction go():Int return 1.util();\n}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+		assertRefusal('extension-call sites are not findable', move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 			{ file: 'pkg/User.hx', source: user }
@@ -214,7 +214,7 @@ class MoveMemberSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final user: String = 'package app;\n\nimport pkg.A.util;\n\nclass User {\n\tfunction go():Int return util(1);\n}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+		assertRefusal('has a static import', move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 			{ file: 'app/User.hx', source: user }
@@ -224,7 +224,7 @@ class MoveMemberSliceTest extends Test {
 	public function testCrossPackageInstanceRefused(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic function new() {}\n\tpublic function util():Int return 1;\n}';
 		final b: String = 'package other;\n\nclass B {}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+		assertRefusal('supports static members only', move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'other/B.hx', source: b }
 		]));
@@ -249,7 +249,7 @@ class MoveMemberSliceTest extends Test {
 	public function testUnknownMemberRefused(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		assertErr(move('pkg/A.hx', 'A', 'nope', 'B', [
+		assertRefusal('has no member "nope"', move('pkg/A.hx', 'A', 'nope', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b }
 		]));
@@ -272,12 +272,12 @@ class MoveMemberSliceTest extends Test {
 
 	public function testUnknownDestRefused(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'Nope', [{ file: 'pkg/A.hx', source: a }]));
+		assertRefusal('no type "Nope"', move('pkg/A.hx', 'A', 'util', 'Nope', [{ file: 'pkg/A.hx', source: a }]));
 	}
 
 	public function testSameTypeRefused(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'A', [{ file: 'pkg/A.hx', source: a }]));
+		assertRefusal('are the same', move('pkg/A.hx', 'A', 'util', 'A', [{ file: 'pkg/A.hx', source: a }]));
 	}
 
 	public function testStaticVarMoves(): Void {
@@ -364,12 +364,12 @@ class MoveMemberSliceTest extends Test {
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
 		];
-		assertErr(move('pkg/A.hx', 'A', 'm', 'B', scope));
+		assertRefusal('must declare them as same-named final fields', move('pkg/A.hx', 'A', 'm', 'B', scope));
 		final scopeVar: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {\n\tprivate var _k:Int;\n}' }
 		];
-		assertErr(move('pkg/A.hx', 'A', 'm', 'B', scopeVar));
+		assertRefusal('must declare them as same-named final fields', move('pkg/A.hx', 'A', 'm', 'B', scopeVar));
 	}
 
 	public function testInstanceMutableFieldDepRefused(): Void {
@@ -647,7 +647,7 @@ class MoveMemberSliceTest extends Test {
 	public function testSkipParseScopeFileRefused(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+		assertRefusal('do not parse', move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 			{ file: 'pkg/Broken.hx', source: 'class {{{' }
@@ -663,7 +663,7 @@ class MoveMemberSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tstatic function run(o:Null<Int>):Int return switch o {\n\t\tcase util: util;\n'
 			+ '\t\tcase _: 0;\n\t}\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+		assertRefusal('binds "util"', move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b }
 		]));
@@ -718,7 +718,7 @@ class MoveMemberSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final user: String = 'package pkg;\n\nusing pkg.B;\n\nclass User {}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+		assertRefusal('could hijack extension calls', move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 			{ file: 'pkg/User.hx', source: user }
@@ -1431,13 +1431,9 @@ class MoveMemberSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: MoveResult): Void {
-		switch result {
-			case Ok(changes, _):
-				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_):
-				Assert.pass();
-		}
+	/** `result` is a refusal whose message mentions `reason` — not any other `Err`. */
+	private function assertRefusal(reason: String, result: MoveResult): Void {
+		assertErrContains(result, reason);
 	}
 
 	private function assertErrContains(result: MoveResult, needle: String): Void {

@@ -183,7 +183,7 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b }
 		], plugin(), typeRefShape());
-		assertErr(result);
+		assertRefusal('is not on a type declaration', result);
 	}
 
 	/**
@@ -216,7 +216,7 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'other/B.hx', source: b },
 			{ file: 'pkg/User.hx', source: user }
 		], plugin(), typeRefShape());
-		assertErr(result);
+		assertRefusal('by its fully-qualified path', result);
 	}
 
 	/**
@@ -232,7 +232,7 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'pkg/B.hx', source: b },
 			{ file: 'pkg/Broken.hx', source: broken }
 		], plugin(), typeRefShape());
-		assertErr(result);
+		assertRefusal('do not parse', result);
 	}
 
 	/**
@@ -248,7 +248,7 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'pkg/Dup.hx', source: dup },
 			{ file: 'pkg/B.hx', source: b }
 		], plugin(), typeRefShape());
-		assertErr(result);
+		assertRefusal('is declared in 2 files', result);
 	}
 
 	/** Refusal: source and destination are the same file. */
@@ -257,7 +257,7 @@ class MoveSymbolSliceTest extends Test {
 		final result: MoveResult = MoveSymbol.moveType(
 			'pkg/A.hx', 3, 7, 'pkg/A.hx', [{ file: 'pkg/A.hx', source: a }], plugin(), typeRefShape()
 		);
-		assertErr(result);
+		assertRefusal('are the same file', result);
 	}
 
 	/** Refusal: the destination file is not in the scope set. */
@@ -266,7 +266,7 @@ class MoveSymbolSliceTest extends Test {
 		final result: MoveResult = MoveSymbol.moveType(
 			'pkg/A.hx', 3, 7, 'pkg/Missing.hx', [{ file: 'pkg/A.hx', source: a }], plugin(), typeRefShape()
 		);
-		assertErr(result);
+		assertRefusal('is not a parseable file', result);
 	}
 
 	/**
@@ -535,7 +535,7 @@ class MoveSymbolSliceTest extends Test {
 		Assert.isTrue(
 			changeFor(changes, 'pkg/AsUser.hx').newSource.contains('import other.B.Foo as F;'), 'the alias importer is repointed'
 		);
-		assertErr(MoveSymbol.moveType('pkg/A.hx', 3, 7, 'other/B.hx', files.concat([
+		assertRefusal('by its fully-qualified path', MoveSymbol.moveType('pkg/A.hx', 3, 7, 'other/B.hx', files.concat([
 			{ file: 'pkg/Fqn.hx', source: 'package pkg;\n\nclass Fqn {\n\tvar f:pkg.A.Foo;\n}' }
 		]), plugin(), typeRefShape()));
 	}
@@ -2878,13 +2878,9 @@ class MoveSymbolSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: MoveResult): Void {
-		switch result {
-			case Ok(changes, _):
-				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_):
-				Assert.pass();
-		}
+	/** `result` is a refusal whose message mentions `reason` — not any other `Err`. */
+	private function assertRefusal(reason: String, result: MoveResult): Void {
+		assertErrContains(result, reason);
 	}
 
 	/**

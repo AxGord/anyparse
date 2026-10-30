@@ -44,7 +44,7 @@ class InheritanceMoveSliceTest extends Test {
 	public function testPullUpStrandedRefused(): Void {
 		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n'
 			+ '\tpublic function bark():String return \'woof\';\n\tpublic function describe():String return bark();\n}';
-		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'describe', 'Animal', [
+		assertRefusal('references subclass member', InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'describe', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
 			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
@@ -66,7 +66,7 @@ class InheritanceMoveSliceTest extends Test {
 	public function testNotSubclassRefused(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic function new() {}\n\tpublic function m():Void {}\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
-		assertErr(InheritanceMove.pullUp('pkg/A.hx', 'A', 'm', 'B', [
+		assertRefusal('does not directly extend', InheritanceMove.pullUp('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b }
 		], plugin()));
@@ -76,7 +76,7 @@ class InheritanceMoveSliceTest extends Test {
 	public function testStaticRefused(): Void {
 		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n'
 			+ '\tpublic static function make():Dog return new Dog(\'x\');\n}';
-		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'make', 'Animal', [
+		assertRefusal('is static', InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'make', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
 			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
@@ -88,7 +88,7 @@ class InheritanceMoveSliceTest extends Test {
 			'package pkg;\n\nclass Animal {\n\tpublic function new() {}\n\tpublic function speak():String return \'?\';\n}';
 		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new() { super(); }\n'
 			+ '\toverride public function speak():String return \'woof\';\n}';
-		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'speak', 'Animal', [
+		assertRefusal('is an override', InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'speak', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: animal },
 			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
@@ -97,7 +97,7 @@ class InheritanceMoveSliceTest extends Test {
 	/** A constructor is refused. */
 	public function testConstructorRefused(): Void {
 		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n}';
-		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'new', 'Animal', [
+		assertRefusal('cannot move a constructor', InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'new', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
 			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
@@ -109,7 +109,7 @@ class InheritanceMoveSliceTest extends Test {
 			'package pkg;\n\nclass Animal {\n\tpublic function new() {}\n\tpublic function tag():String return \'a\';\n}';
 		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new() { super(); }\n'
 			+ '\tpublic function tag():String return \'d\';\n}';
-		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'tag', 'Animal', [
+		assertRefusal('already declares a member', InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'tag', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: animal },
 			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
@@ -119,7 +119,10 @@ class InheritanceMoveSliceTest extends Test {
 	public function testNoSuchTargetRefused(): Void {
 		final dog: String =
 			'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic function d():Void {}\n}';
-		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'd', 'Missing', [{ file: 'pkg/Dog.hx', source: dog }], plugin()));
+		assertRefusal(
+			'no unique class "Missing"',
+			InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'd', 'Missing', [{ file: 'pkg/Dog.hx', source: dog }], plugin())
+		);
 	}
 
 	private function okChanges(result: MoveResult): Array<MoveChange> {
@@ -141,12 +144,13 @@ class InheritanceMoveSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: MoveResult): Void {
+	/** `result` is a refusal whose message mentions `reason` — not any other `Err`. */
+	private function assertRefusal(reason: String, result: MoveResult): Void {
 		switch result {
 			case Ok(changes, _):
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

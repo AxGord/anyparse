@@ -99,7 +99,7 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseNonThisReceiverCall(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n\tpublic function caller(o:C):Void {\n\t\tg(1, 2);\n'
 			+ '\t\to.g(3, 4);\n\t}\n}';
-		assertRefused(source, 2, 9, '1,0');
+		assertRefused('cannot resolve receiver-qualified call', source, 2, 9, '1,0');
 	}
 
 	/**
@@ -109,43 +109,43 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseArityMismatchCall(): Void {
 		final source: String =
 			'class C {\n\tpublic function g(a:Int, ?b:Int):Void {}\n\tpublic function caller():Void {\n\t\tg(1, 2);\n\t\tg(7);\n\t}\n}';
-		assertRefused(source, 2, 9, '1,0');
+		assertRefused('omitted optional arguments', source, 2, 9, '1,0');
 	}
 
 	/** Refuse the identity permutation — a no-op. */
 	public function testRefuseIdentityPerm(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int, c:Int):Void {}\n}';
-		assertRefused(source, 2, 9, '0,1,2');
+		assertRefused('is the identity', source, 2, 9, '0,1,2');
 	}
 
 	/** Refuse a malformed (non-integer) permutation. */
 	public function testRefuseMalformedPerm(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n}';
-		assertRefused(source, 2, 9, 'a,b');
+		assertRefused('non-integer index', source, 2, 9, 'a,b');
 	}
 
 	/** Refuse a permutation whose arity does not match the parameter count. */
 	public function testRefuseWrongArityPerm(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int, c:Int):Void {}\n}';
-		assertRefused(source, 2, 9, '1,0');
+		assertRefused('lists 2 indices', source, 2, 9, '1,0');
 	}
 
 	/** Refuse a permutation that repeats an index (not a true permutation). */
 	public function testRefuseRepeatedPermIndex(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int, c:Int):Void {}\n}';
-		assertRefused(source, 2, 9, '0,0,1');
+		assertRefused('repeats index 0', source, 2, 9, '0,0,1');
 	}
 
 	/** Refuse a cursor that is not on a function (a plain field). */
 	public function testRefuseCursorOnNonFunction(): Void {
 		final source: String = 'class C {\n\tvar field:Int = 0;\n}';
-		assertRefused(source, 2, 6, '1,0');
+		assertRefused('is not a function', source, 2, 6, '1,0');
 	}
 
 	/** Refuse a function with fewer than two parameters — nothing to reorder. */
 	public function testRefuseFewerThanTwoParams(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int):Void {}\n}';
-		assertRefused(source, 2, 9, '1,0');
+		assertRefused('fewer than 2 parameters', source, 2, 9, '1,0');
 	}
 
 	/**
@@ -159,7 +159,7 @@ class ChangeSigSliceTest extends Test {
 		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
 			+ '\t\tvar r = add(1, 2);\n\t\t{\n\t\t\tfunction add(p:Int, q:Int):Int return p - q;\n'
 			+ '\t\t\tvar z = add(3, 4);\n\t\t}\n\t}\n}';
-		assertRefused(source, 3, 12, '1,0');
+		assertRefused('is ambiguous', source, 3, 12, '1,0');
 	}
 
 	/**
@@ -171,7 +171,7 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseMethodReferencedAsValue(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n\tpublic function caller():Void {\n\t\tg(1, 2);\n'
 			+ '\t\tvar fn = g;\n\t}\n}';
-		assertRefused(source, 2, 9, '1,0');
+		assertRefused('is referenced as a value', source, 2, 9, '1,0');
 	}
 
 	/**
@@ -182,7 +182,7 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseLocalFunctionReferencedAsValue(): Void {
 		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
 			+ '\t\tvar r = add(1, 2);\n\t\tvar fn = add;\n\t}\n}';
-		assertRefused(source, 3, 12, '1,0');
+		assertRefused('is referenced as a value', source, 3, 12, '1,0');
 	}
 
 	/**
@@ -194,7 +194,7 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseMethodCapturedViaThis(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n\tpublic function caller():Void {\n'
 			+ '\t\tthis.g(1, 2);\n\t\tvar f = this.g;\n\t}\n}';
-		assertRefused(source, 2, 9, '1,0');
+		assertRefused('via `this.g`', source, 2, 9, '1,0');
 	}
 
 	/**
@@ -269,13 +269,13 @@ class ChangeSigSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, line: Int, col: Int, perm: String): Void {
+	private function assertRefused(reason: String, source: String, line: Int, col: Int, perm: String): Void {
 		final result: ChangeSigResult = changeSigOf(source, line, col, perm);
 		switch result {
 			case Ok(text, _):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 
