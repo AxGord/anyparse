@@ -333,6 +333,8 @@ final class TriviaPairConverters {
 				entries.push({ field: fieldName + TriviaTypeSynth.BEFORE_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
 			if (TriviaPairSlots.isBeforeLeadRef(child, child == origNode.children[0]))
 				entries.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEAD_SUFFIX, expr: macro (null: Null<String>) });
+			if (TriviaPairSlots.isAfterLeadRef(child))
+				entries.push({ field: fieldName + TriviaTypeSynth.AFTER_LEAD_SUFFIX, expr: macro ([]: Array<String>) });
 			if (TriviaPairSlots.isPadTrailingTerminalRef(child))
 				entries.push({ field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro false });
 			// ω-condition-wrap-keep: raw→paired upcast default for the

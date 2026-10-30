@@ -38,7 +38,9 @@ class HxInlineBlockCommentGapTest extends Test {
 		['return_type_body_gap', 'class Foo {\n\tfunction bar(): Int /* r */ {}\n}\n'],
 		['return_type', 'class Foo {\n\tfunction bar(): /* r */ Void {}\n}\n'],
 		// An enum constructor's parameters are the trivia list a function's are, so the comment rides the element slot.
-		['enum_ctor_arg', 'enum Foo {\n\tA(/* c */ x: Int);\n}\n']
+		['enum_ctor_arg', 'enum Foo {\n\tA(/* c */ x: Int);\n}\n'],
+		// The gap after a typedef's `=` fills the `<field>AfterLead` slot (`@:fmt(captureAfterLead)`).
+		['typedef_assign', 'typedef T = /* c */ Int;\n']
 	];
 
 	/** Seams the Trivia parser captures — the round trip keeps the comment. */
@@ -88,7 +90,9 @@ class HxInlineBlockCommentGapTest extends Test {
 		[
 			'catch_param_trail',
 			'try {\n\t\t\trun();\n\t\t} catch (e: Dynamic /* c */) {\n\t\t\trun();\n\t\t}'
-		]
+		],
+		// The case-pattern list collects per-pattern trivia (`@:trivia` + `@:fmt(inlineElemTrivia)`).
+		['case_pat', 'switch (v) {\n\t\t\tcase /* c */ 1:\n\t\t\t\trun();\n\t\t}']
 	];
 
 	/** Seams with no capture slot — the parser drops the comment, so the round trip refuses. */
@@ -98,7 +102,6 @@ class HxInlineBlockCommentGapTest extends Test {
 		['do_while', 'do {\n\t\t\trun();\n\t\t} while (/* d */ c);'],
 		['for_iter', 'for (i in /* f */ list) {\n\t\t\trun();\n\t\t}'],
 		['switch_subj', 'switch (/* s */ v) {\n\t\t\tcase 1:\n\t\t\t\trun();\n\t\t}'],
-		['case_pat', 'switch (v) {\n\t\t\tcase /* c */ 1:\n\t\t\t\trun();\n\t\t}'],
 		[
 			'catch_type',
 			'try {\n\t\t\trun();\n\t\t} catch (/* c */ e: Dynamic) {\n\t\t\trun();\n\t\t}'

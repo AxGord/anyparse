@@ -268,7 +268,7 @@ final class StructFieldTrailLowering {
 	private static function emitPreFieldWs(
 		parseSteps: Array<Expr>, triviaEofStar: Bool, isOptionalRef: Bool, isOptionalKwStar: Bool, optStarWithLead: Bool,
 		hasBeforeLeadingSlot: Bool, hasBeforeNewlineSlot: Bool, beforeNlLocal: String, beforeLeadingLocal: String,
-		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String, beforeBlankLocal: Null<String>
+		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String, beforeBlankLocal: Null<String>, afterLeadLocal: Null<String>
 	): Void {
 		if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
 			if (hasBeforeLeadingSlot) {
@@ -340,6 +340,9 @@ final class StructFieldTrailLowering {
 					]),
 					pos: Context.currentPos()
 				});
+			} else if (afterLeadLocal != null) {
+				// The gap after the field's lead literal: its comments go to the `<field>AfterLead` slot.
+				parseSteps.push(macro final $afterLeadLocal: Array<String> = collectTrivia(ctx).leadingComments);
 			} else {
 				parseSteps.push(macro skipWs(ctx));
 			}

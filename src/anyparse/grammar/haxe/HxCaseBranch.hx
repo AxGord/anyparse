@@ -5,7 +5,10 @@ package anyparse.grammar.haxe;
  * enum-branch level (`@:kw('case')` on `HxSwitchCase.CaseBranch`).
  *
  * `patterns` is a `@:sep(',') @:trail(':')` Star of `HxCasePattern`; each element's `expr` parses as `HxExpr`
- * and carries the optional `if (cond)` guard (see `HxCasePattern`). `@:fmt(wrapRules('casePatternWrap'))`
+ * and carries the optional `if (cond)` guard (see `HxCasePattern`). `@:trivia` gives every pattern its own
+ * comment slots (`case A, /* B, *\/ C:`), and `@:fmt(inlineElemTrivia)` keeps the list on the plain wrap
+ * cascade with those comments glued around each pattern rather than breaking
+ * the list on the first comment. `@:fmt(wrapRules('casePatternWrap'))`
  * routes the list through `WrapList.emit` with the `casePatternWrap` cascade; the Star has no `@:lead`, so the
  * first pattern stays inline. `@:fmt(beforeNewlineSlotFirst)` (ω-casepattern-keep) opts this FIRST field into
  * the source-newline-before capture (paired with `@:fmt(forwardNewlineForBody)` on the parent ctor): the synth
@@ -37,7 +40,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCaseBranch = {
-	@:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap'), beforeNewlineSlotFirst, captureTrailComment) var patterns: Array<HxCasePattern>;
+	@:trivia @:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap'), beforeNewlineSlotFirst, captureTrailComment, inlineElemTrivia) var patterns: Array<HxCasePattern>;
 	@:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
 		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot) var body: Array<HxStatement>;

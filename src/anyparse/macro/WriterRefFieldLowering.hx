@@ -1843,6 +1843,8 @@ final class WriterRefFieldLowering {
 		final beforeLead: Null<Expr> = beforeLeadSlotAccess(ctx, child, isFirstField, fieldAccess, typePath);
 		if (beforeLead != null) parts.push(beforeLeadDoc(beforeLead));
 		emitMandatoryLead(child, parts, leadText, fieldAccess);
+		final afterLead: Null<Expr> = afterLeadSlotAccess(ctx, child, fieldAccess, typePath);
+		if (afterLead != null) parts.push(afterLeadDoc(afterLead));
 	}
 
 	/**
@@ -1922,6 +1924,29 @@ final class WriterRefFieldLowering {
 		} else {
 			parts.push(macro _dt($v{kwLead + ' '}));
 		}
+	}
+
+	/**
+	 * The `value.<field>AfterLead` access for a `TriviaPairSlots.isAfterLeadRef` host in a trivia-bearing rule,
+	 * or null when the field has no such slot.
+	 */
+	private static function afterLeadSlotAccess(ctx: RefFieldCtx, child: ShapeNode, fieldAccess: Expr, typePath: String): Null<Expr> {
+		if (!ctx.ctx.trivia || !ctx.isTriviaBearing(typePath) || !TriviaPairSlots.isAfterLeadRef(child)) return null;
+		return switch fieldAccess.expr {
+			case EField(base, name): { expr: EField(base, name + TriviaTypeSynth.AFTER_LEAD_SUFFIX), pos: fieldAccess.pos };
+			case _: null;
+		};
+	}
+
+	/**
+	 * The Doc for a `<field>AfterLead` run, emitted right after the lead literal and its own spacing: an inline
+	 * block comment is followed by a space, anything else by a line break one indent deeper, so the field's value
+	 * never lands inside a line comment. Nothing when the run is empty.
+	 */
+	private static function afterLeadDoc(access: Expr): Expr {
+		return macro leadingCommentsBefore(
+			$access, _dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl()), opt
+		);
 	}
 
 }

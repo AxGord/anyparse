@@ -53,6 +53,30 @@ final class TriviaPairSlots {
 		return buildNullStringSlot(child, pos, TriviaTypeSynth.BEFORE_LEAD_SUFFIX);
 	}
 
+	/** The `<field>AfterLead:Array<String>` slot — see `TriviaTypeSynth.AFTER_LEAD_SUFFIX`. */
+	public static function buildAfterLeadSlot(child: ShapeNode, pos: Position): Field {
+		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
+		return {
+			name: fieldName + TriviaTypeSynth.AFTER_LEAD_SUFFIX,
+			kind: FVar(macro :Array<String>),
+			pos: pos,
+			access: []
+		};
+	}
+
+	/**
+	 * Hosts of `<field>AfterLead`: a mandatory Ref carrying a `@:lead` literal and no `@:kw`, opted in with
+	 * `@:fmt(captureAfterLead)`. One predicate for the synth, the parse capture
+	 * (`StructFieldTrailLowering.emitPreFieldWs`) and the writer seat (`WriterRefFieldLowering.emitFieldLeadIn`).
+	 */
+	public static function isAfterLeadRef(child: ShapeNode): Bool {
+		return child.kind == Ref
+			&& child.annotations[AnnotationKeys.BASE_OPTIONAL] != true
+			&& child.readMetaString(':kw') == null
+			&& child.readMetaString(':lead') != null
+			&& child.fmtHasFlag('captureAfterLead');
+	}
+
 	public static function buildStructField(child: ShapeNode, pos: Position, synthPack: Array<String>): Field {
 		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
 		final ct: ComplexType = TriviaTypeSynth.shapeToComplexType(child, synthPack);

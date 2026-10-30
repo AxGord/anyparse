@@ -39,5 +39,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxIntersectionClause = {
-	@:fmt(typedefIntersection, typedefIntersectionBreak) @:lead('&') var type: HxType;
+	@:fmt(typedefIntersection, typedefIntersectionBreak, captureAfterLead) @:lead('&') var type: HxType;
 }

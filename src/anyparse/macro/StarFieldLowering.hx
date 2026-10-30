@@ -850,6 +850,7 @@ final class StarFieldLowering {
 		// try-parse mode have no close literal and skip this capture
 		// entirely.
 		final trailCloseLocal: String = trailingCloseLocalName(localName);
+		final trailCloseCapture: Expr = trailCloseCaptureExpr(starNode);
 		final nullStrCT: ComplexType = TPath({
 			pack: [],
 			name: 'Null',
@@ -860,7 +861,7 @@ final class StarFieldLowering {
 				{
 					name: trailCloseLocal,
 					type: nullStrCT,
-					expr: macro collectTrailingFull(ctx),
+					expr: trailCloseCapture,
 					isFinal: true
 				}
 			]),
@@ -1232,6 +1233,15 @@ final class StarFieldLowering {
 			final _skip: Null<anyparse.runtime.BodySkip> = ctx.bodySkip;
 			if (_skip != null) ctx.pos = _skip.closeAt(ctx.input, ctx.pos, $v{open}, $v{close});
 		});
+	}
+
+	/**
+	 * The `<field>TrailingClose` capture after a trivia Star's close literal. A `captureTrailComment` Star hands
+	 * that comment to its `<field>AfterTrail` slot instead, which the next sibling's writer cuddles to the literal;
+	 * capturing it here too would leave that slot empty.
+	 */
+	private static function trailCloseCaptureExpr(starNode: ShapeNode): Expr {
+		return starNode.fmtHasFlag('captureTrailComment') ? macro null : macro collectTrailingFull(ctx);
 	}
 
 }

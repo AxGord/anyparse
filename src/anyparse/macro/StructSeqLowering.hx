@@ -172,10 +172,11 @@ final class StructSeqLowering {
 			// ω-region-prefix-blank: opt-in third slot of the pre-field gap.
 			final hasBeforeBlankSlot: Bool = hasBeforeBlankSlotFor(child, hasBeforeLeadingSlot);
 			final beforeBlankLocal: String = beforeBlankLocalName(fieldName);
+			final afterLeadLocal: Null<String> = afterLeadLocalFor(sc, child, typePath, fieldName);
 			emitPreFieldWs(
 				parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot, hasBeforeNewlineSlot,
 				beforeNlLocal, beforeLeadingLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal,
-				hasBeforeBlankSlot ? beforeBlankLocal : null
+				hasBeforeBlankSlot ? beforeBlankLocal : null, afterLeadLocal
 			);
 			// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
 			// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
@@ -247,6 +248,7 @@ final class StructSeqLowering {
 				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
 				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix, hasBeforeNewlineSlot, beforeLeadLocal
 			);
+			if (triviaEofStar) emitTriviaStarBeforeNewline(parseSteps, hasBeforeNewlineSlot, beforeNlLocal, localName);
 			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
 			// already emitted the close literal as part of the loop wrappers.
 			// Mandatory Ref path: the close + same-line `// comment`
@@ -311,8 +313,7 @@ final class StructSeqLowering {
 				newlineAfterLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal,
 				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeTrailSlot, beforeTrailLocal
 			);
-			if (beforeLeadLocal != null)
-				structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEAD_SUFFIX, expr: macro $i{beforeLeadLocal} });
+			pushLeadSlotEntries(structFields, fieldName, beforeLeadLocal, afterLeadLocal);
 			// pushStructFieldEntries pushes the field value + every applicable
 			// trivia/source-shape sidecar slot (TrailPresent / AfterTrail /
 			// BeforeNewline / BeforeLeading / NewlineAfter / CondOpenNewline / the
@@ -1581,6 +1582,32 @@ final class StructSeqLowering {
 				null;
 			}
 		};
+	}
+
+	/** The `<field>AfterLead` capture local of a `TriviaPairSlots.isAfterLeadRef` host in a trivia-bearing rule, else null. */
+	private static function afterLeadLocalFor(sc: StructSeqCtx, child: ShapeNode, typePath: String, fieldName: String): Null<String> {
+		return sc.ctx.trivia && sc.isTriviaBearing(typePath) && TriviaPairSlots.isAfterLeadRef(child) ? '_afterLead_$fieldName' : null;
+	}
+
+	/**
+	 * A lead-less trivia Star scans its own first gap inside its loop, so the pre-field `BeforeNewline` capture never
+	 * ran for it: the first element's `newlineBefore` is the same source fact.
+	 */
+	private static function emitTriviaStarBeforeNewline(
+		parseSteps: Array<Expr>, hasBeforeNewlineSlot: Bool, beforeNlLocal: String, localName: String
+	): Void {
+		if (!hasBeforeNewlineSlot) return;
+		parseSteps.push(macro final $beforeNlLocal: Bool = $i{localName}.length > 0 && $i{localName}[0].newlineBefore);
+	}
+
+	/** Push the `<field>BeforeLead` / `<field>AfterLead` entries whose capture locals the field declared (null = no slot). */
+	private static function pushLeadSlotEntries(
+		structFields: Array<ObjectField>, fieldName: String, beforeLeadLocal: Null<String>, afterLeadLocal: Null<String>
+	): Void {
+		if (beforeLeadLocal != null)
+			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEAD_SUFFIX, expr: macro $i{beforeLeadLocal} });
+		if (afterLeadLocal != null)
+			structFields.push({ field: fieldName + TriviaTypeSynth.AFTER_LEAD_SUFFIX, expr: macro $i{afterLeadLocal} });
 	}
 
 }

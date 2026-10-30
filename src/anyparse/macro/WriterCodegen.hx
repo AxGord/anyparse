@@ -93,6 +93,7 @@ class WriterCodegen {
 			// fallback the three helpers above used to inline.
 			fields.push(lineCommentStrField());
 			fields.push(leadingCommentDocRunField());
+			fields.push(leadingCommentsBeforeDocField());
 			// ω₆c: BodyGroup trailing-comment folder. Used by
 			// `triviaBlockStarExpr` / `triviaEofStarExpr` to splice
 			// a trailing comment into the body's FitLine measure.
@@ -1258,6 +1259,38 @@ class WriterCodegen {
 					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :Bool,
+				expr: body
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * Generate `leadingCommentsBefore(run, brk, opt)`: a captured run of comments laid out in front of the token
+	 * that follows them. An inline block comment keeps that token on its line behind one space; anything else (a
+	 * line comment, a multi-line block) is followed by `brk`, the caller's own line break, so the token never lands
+	 * inside the comment.
+	 */
+	private static function leadingCommentsBeforeDocField(): Field {
+		final body: Expr = macro {
+			final parts: Array<anyparse.core.Doc> = [];
+			for (i in 0...run.length) {
+				final c: String = run[i];
+				parts.push(leadingCommentDocRun(run, i, opt));
+				parts.push(StringTools.startsWith(c, '/*') && c.indexOf('\n') < 0 ? _dt(' ') : brk);
+			}
+			return _dc(parts);
+		};
+		return {
+			name: 'leadingCommentsBefore',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'run', type: macro :Array<String> },
+					{ name: 'brk', type: macro :anyparse.core.Doc },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+				],
+				ret: macro :anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()

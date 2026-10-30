@@ -165,6 +165,14 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_LEAD_SUFFIX: String = 'BeforeLead';
 
 	/**
+	 * Every comment in the gap between a mandatory Ref field's own `@:lead(LIT)` literal and the field's first
+	 * token — the `/* c *\/` in `typedef T = /* c *\/ {…}` and `A & /* c *\/ B`. The field's pre-value `skipWs`
+	 * swallowed that gap, so the writer round trip refused the file. Hosts: `TriviaPairSlots.isAfterLeadRef`,
+	 * an opt-in (`@:fmt(captureAfterLead)`); the writer re-emits the run right after the lead literal.
+	 */
+	public static inline final AFTER_LEAD_SUFFIX: String = 'AfterLead';
+
+	/**
 	 * ω-issue-48-v2 — source-shape slot synthesised on paired Seq types
 	 * alongside bare non-first Ref fields (no `@:optional`, no `@:kw`, no
 	 * `@:lead`). Records whether the source had a newline in the gap
@@ -614,6 +622,8 @@ class TriviaTypeSynth {
 					// optional Ref's `@:lead` commit literal. See BEFORE_LEAD_SUFFIX.
 					if (TriviaPairSlots.isBeforeLeadRef(child, child == origNode.children[0]))
 						fields.push(TriviaPairSlots.buildBeforeLeadSlot(child, pos));
+					// The comment run on the other side of the same literal. See AFTER_LEAD_SUFFIX.
+					if (TriviaPairSlots.isAfterLeadRef(child)) fields.push(TriviaPairSlots.buildAfterLeadSlot(child, pos));
 					// ω-cond-comp-expr-multiline: bare Ref fields opted in via
 					// `@:fmt(captureSourceNewlineAfter)` grow a `NewlineAfter:Bool`
 					// slot capturing whether the source had a newline AFTER

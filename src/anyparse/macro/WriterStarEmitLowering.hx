@@ -60,6 +60,13 @@ using anyparse.macro.MetaInspect;
 final class WriterStarEmitLowering {
 
 	/**
+	 * `@:fmt(inlineElemTrivia)` on a close-peek `@:trivia` sep Star: the list keeps the plain sep-list layout
+	 * (`emitSepStarList`), and each element's captured comments are glued around its own Doc instead of
+	 * routing the whole list through the trivia sep emitter, whose comment-bearing branch breaks every element.
+	 */
+	private static inline final INLINE_ELEM_TRIVIA: String = 'inlineElemTrivia';
+
+	/**
 	 * The three-way blockEnded predicate channel, shared by the plain
 	 * writer's sep-elision sites: no predicate → inert `false`; an
 	 * `astPreds` format → the generated typed predicate of the build's
@@ -256,15 +263,13 @@ final class WriterStarEmitLowering {
 		// upstream — valid modes are block (close + no sep), EOF (no
 		// close, last field), and try-parse (no close, last field,
 		// `@:tryparse`).
-		if (isTriviaStar) {
+		final inlineElemTrivia: Bool = isInlineElemTriviaStar(isTriviaStar, starNode, closeText, sepText);
+		if (isTriviaStar != inlineElemTrivia) {
 			WriterTriviaStarEmitLowering.emitTriviaStar(ctx, args, parts);
 			return;
 		}
 
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro opt]),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = plainStarElemCall(elemFn, starNode, inlineElemTrivia);
 		final plainCtx: PlainStarCtx = {
 			starNode: starNode,
 			fieldAccess: fieldAccess,
@@ -1473,6 +1478,53 @@ final class WriterStarEmitLowering {
 			final _abk: Int = $predCall;
 			final _abp: anyparse.format.WhitespacePolicy = $policyExpr;
 			$spaceSwitch;
+		};
+	}
+
+	/**
+	 * The per-element Doc of an `inlineElemTrivia` Star: the element's own Doc with its leading comments before it
+	 * (an inline block glued by a space, anything else on its own line) and its trailing comment after it through
+	 * the guarded emitter, which keeps the following separator off a line comment. The last element also carries
+	 * the orphan comments the loop scanned before the close literal, so no captured comment is left unwritten.
+	 */
+	private static function inlineTriviaElemCall(elemFn: String, fieldName: String): Expr {
+		final writeCall: Expr = {
+			expr: ECall(macro $i{elemFn}, [macro _te.node, macro opt]),
+			pos: Context.currentPos()
+		};
+		final orphanAccess: Expr = {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
+			pos: Context.currentPos()
+		};
+		return macro {
+			final _te = _arr[_si];
+			final _edParts: Array<anyparse.core.Doc> = [];
+			final _isLast: Bool = _si == _arr.length - 1;
+			// A comment that followed the previous element's separator heads this element, which puts it back
+			// after that separator: the separator itself belongs to the layout engine.
+			final _prevTc: Null<String> = _si > 0 && !_arr[_si - 1].trailingBeforeSep ? _arr[_si - 1].trailingComment : null;
+			final _lc: Array<String> = _prevTc == null ? _te.leadingComments : [_prevTc].concat(_te.leadingComments);
+			_edParts.push(leadingCommentsBefore(_lc, _dhl(), opt));
+			_edParts.push($writeCall);
+			final _tc: Null<String> = _te.trailingComment;
+			if (_tc != null && (_te.trailingBeforeSep || _isLast)) _edParts.push(trailingCommentDocGuarded(_tc, opt));
+			if (_isLast) for (_oc in $orphanAccess) _edParts.push(trailingCommentDocGuarded(_oc, opt));
+			_dc(_edParts);
+		};
+	}
+
+	/** Whether a trivia Star takes the plain sep-list layout with its comments glued per element (`INLINE_ELEM_TRIVIA`). */
+	private static function isInlineElemTriviaStar(
+		isTriviaStar: Bool, starNode: ShapeNode, closeText: Null<String>, sepText: Null<String>
+	): Bool {
+		return isTriviaStar && closeText != null && sepText != null && starNode.fmtHasFlag(INLINE_ELEM_TRIVIA);
+	}
+
+	/** The per-element write call of a plain-layout Star: the bare element, or its `Trivial` wrapper with its comments. */
+	private static function plainStarElemCall(elemFn: String, starNode: ShapeNode, inlineElemTrivia: Bool): Expr {
+		return inlineElemTrivia ? inlineTriviaElemCall(elemFn, starNode.annotations[AnnotationKeys.BASE_FIELD_NAME]) : {
+			expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro opt]),
+			pos: Context.currentPos()
 		};
 	}
 

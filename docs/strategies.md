@@ -96,7 +96,7 @@ blankLinesBetweenSameCtorHeadTransparent(…), blankLinesBetweenSameCtorIfNot(�
 blankLinesBetweenSameCtorTailTransparent(…), blankLinesOnTransitionAcross(…), blockBodyKeepsInline[(…)],
 blockShape, bodyAllmanIndentForCtor(…), bodyAwareCompactIndent, bodyBreak(…), bodyPolicy(…),
 bodyPolicyForCtor(…), bodyPolicyOverride(…), bodyPolicySingleLine(…), bracketKindPad,
-breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, captureChainNewline,
+breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, captureAfterLead, captureChainNewline,
 captureCondOpenNewline, captureKwNewline, capturePostfixOpSpace, captureRhsTrail, captureSource(…),
 captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
 caseSiblingSymmetry(…), catchParensGap, catchParensInsideClose, catchParensInsideOpen, chainNestSuppress,
@@ -108,7 +108,7 @@ elseIf, elseIfCommentReflow, elseSwitch(…), emptyBlockBreak, emptyCurlyBreak[(
 expressionParenHardFlatten, fillItems, fillParts, fillSeam, fitLineIfWithElse, flatChildOpt(…), forceInlineSep,
 forceMultiInTypedef, forPolicy, forwardNewlineForBody, funcParamParens, functionTypeHaxe3, functionTypeHaxe4,
 groupRestProbe, heritageWrap, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
-inlineBlockBodyIfFlag(…), inlineSep, interMemberBlankLines(…), interMemberCondLookThrough(…), intervalPolicy,
+inlineBlockBodyIfFlag(…), inlineElemTrivia, inlineSep, interMemberBlankLines(…), interMemberCondLookThrough(…), intervalPolicy,
 keepBlankAfterStarCtor(…), keepCurlyBlanks, keepInnerWhenEmpty(…), kwPolicy(…), leftCurly[(…)],
 leftCurlyAnonFnOverride(…), lineLengthAwareSeps, loopBodyIfElseNext(…), mapWrapRules(…),
 measuredMultilineDecls, metaBlockGlue(…), metaLineEndPolicy(…), methodChain(…), multilineCtor,
@@ -151,7 +151,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 |---|---|
 | `WriterRefFieldLowering` | 45 |
 | `WriterTriviaStarDispatch` | 43 |
-| `WriterStarEmitLowering` | 41 |
+| `WriterStarEmitLowering` | 42 |
 | `WriterKwRefLowering` | 31 |
 | `WriterTriviaStarEmitLowering` | 28 |
 | `WriterCtorBlankLowering` | 17 |
@@ -159,14 +159,14 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterPrattLowering` | 17 |
 | `WriterRefLeadLowering` | 17 |
 | `WriterPolicyLowering` | 10 |
-| `TriviaPairSlots` | 9 |
+| `TriviaPairSlots` | 10 |
 | `TriviaPairAltCtor` | 8 |
 | `StructSeqLowering` | 7 |
 | `WriterBraceSymmetryLowering` | 6 |
 | `WriterFieldSepLowering` | 6 |
 | `PrattPostfixLowering` | 4 |
 | `Lowering` | 4 |
-| `StarFieldLowering` | 3 |
+| `StarFieldLowering` | 4 |
 | `WriterBodyPolicyLowering` | 3 |
 | `WriterLoweringSupport` | 3 |
 | `WriterCodegen` | 2 |
