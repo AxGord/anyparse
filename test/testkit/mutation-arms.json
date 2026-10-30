@@ -32662,6 +32662,29 @@
 			"find": "specs.map(cwdRelative)",
 			"replace": "specs",
 			"note": "an absolute scope is compared with the cwd-relative paths git lists and names nothing at either revision"
+		},
+		{
+			"name": "M-GRAPH-VIEW-OPENING-INSIDE-TWICE",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "opening",
+			"find": "if (e.from != id && inside.exists(e.from)) continue;",
+			"replace": "if (false) continue;",
+			"note": "an edge between two nodes inside the node opened is counted from both its ends and drawn at twice its weight"
+		},
+		{
+			"name": "M-GRAPH-IMPORT-TYPE-UNNESTED",
+			"type": "anyparse.query.graph.ImportGraph",
+			"method": "nodeOf",
+			"find": "type, packageId, false)",
+			"replace": "type, null, false)",
+			"note": "a type of the import graph stands outside its package, so a page has no package to open and draws one flat view"
+		},
+		{
+			"name": "M-GRAPH-HTML-SCRIPT-UNCLOSED",
+			"type": "anyparse.query.format.GraphHtml",
+			"method": "inlined",
+			"force": "script",
+			"note": "a `</script` inside the inlined library closes the element holding it, and the rest of the library spills into the page as text"
 		}
 	]
 }

@@ -56,6 +56,17 @@ class ImportGraphTest extends Test {
 		);
 	}
 
+	/** At the type level a type nests in its package, as the call graph lifted to the type level nests it. */
+	@:killer('M-GRAPH-IMPORT-TYPE-UNNESTED')
+	@:pin('control')
+	public function testATypeNestsInItsPackage(): Void {
+		final graph: CodeGraph = ImportGraph.build(indexOf(FILES), Type);
+		Assert.equals('pkg.a', graph.node(graph.node(CodeGraph.idOf(Type, 'pkg.a.Alpha'))?.parent ?? '')?.name);
+		final held: Array<String> = [for (n in graph.held(CodeGraph.idOf(Package, 'pkg.b'))) n.name];
+		held.sort(Reflect.compare);
+		Assert.equals('pkg.b.Beta,pkg.b.Gamma', held.join(','));
+	}
+
 	/**
 	 * Two imports between one pair of packages are one edge of weight 2, written
 	 * as the edge's label; the two packages importing each other are drawn red.

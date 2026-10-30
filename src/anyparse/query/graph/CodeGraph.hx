@@ -124,6 +124,12 @@ final class CodeGraph {
 	/** `from to` -> every edge from `from` to `to`, one per kind. */
 	private final _pairs: Map<String, Array<GraphEdge>> = [];
 
+	/** node id -> the nodes it holds, in the order they were added. */
+	private final _held: Map<String, Array<GraphNode>> = [];
+
+	/** node id -> every edge with an end at it, in the order they were added. */
+	private final _touching: Map<String, Array<GraphEdge>> = [];
+
 	public function new() {}
 
 	public inline function node(id: String): Null<GraphNode> {
@@ -167,6 +173,7 @@ final class CodeGraph {
 				focus: false
 			};
 			_nodes[id] = added;
+			if (parent != null) listed(_held, parent, added);
 		}
 		return id;
 	}
@@ -193,14 +200,22 @@ final class CodeGraph {
 				weight: weight
 			};
 			_edges[key] = added;
-			final sameWay: Null<Array<GraphEdge>> = _pairs['$from $to'];
-			if (sameWay == null)
-				_pairs['$from $to'] = [added]
-			else
-				sameWay.push(added);
+			listed(_pairs, '$from $to', added);
+			listed(_touching, from, added);
+			if (to != from) listed(_touching, to, added);
 		}
 		final pair: String = '$from $to';
 		_directed[pair] = (_directed[pair] ?? 0) + weight;
+	}
+
+	/** The nodes `id` holds, in no set order: a walk down the nesting reads them, never a scan of every node. */
+	public function held(id: String): Array<GraphNode> {
+		return _held[id] ?? [];
+	}
+
+	/** Every edge with an end at `id`, in no set order. */
+	public function touching(id: String): Array<GraphEdge> {
+		return _touching[id] ?? [];
 	}
 
 	/** Every node, ordered by id. */
@@ -278,6 +293,15 @@ final class CodeGraph {
 			1
 		else
 			0;
+	}
+
+	/** Add `value` to the list `key` names in `lists`, opening the list when there is none. */
+	private static function listed<T>(lists: Map<String, Array<T>>, key: String, value: T): Void {
+		final list: Null<Array<T>> = lists[key];
+		if (list == null)
+			lists[key] = [value]
+		else
+			list.push(value);
 	}
 
 }

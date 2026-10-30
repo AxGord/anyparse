@@ -9,3 +9,6 @@ docs/decisions.md merge=union
 # Without the driver git falls back to its ordinary line merge.
 *.hx merge=anyparse
 *.json merge=anyparse
+
+# A vendored third-party file is kept byte-for-byte as published: no text diff, no line-ending conversion.
+tools/vendor/** -text -diff

@@ -4,6 +4,8 @@ import anyparse.query.graph.CodeGraph.GraphEdge;
 import anyparse.query.graph.CodeGraph.GraphLevel;
 import anyparse.query.graph.CodeGraph.GraphNode;
 
+using Lambda;
+
 /**
  * What a view keeps of a graph: a weight floor, the nodes to centre on and
  * how far to reach from them, mutual pairs only, the nodes outside the scope.
@@ -27,8 +29,9 @@ typedef GraphFilter = {
 }
 
 /**
- * Views of a `CodeGraph`: the graph lifted to a coarser level, and the graph pruned by a `GraphFilter`. Each answers a
- * new graph and leaves its input as it was; a node keeps its id, so a view and its source name a declaration alike.
+ * Views of a `CodeGraph`: the graph lifted to a coarser level or opened node by node, and the graph pruned by a
+ * `GraphFilter`. Each answers a new graph and leaves its input as it was; a node keeps its id, so a view and its source
+ * name a declaration alike.
  */
 @:nullSafety(Strict)
 final class GraphView {
@@ -40,21 +43,40 @@ final class GraphView {
 	 * member no type declares) is left out with its edges.
 	 */
 	public static function lift(graph: CodeGraph, level: GraphLevel): CodeGraph {
-		final lifted: CodeGraph = new CodeGraph();
-		// node id -> the id it folds into, null when it folds into none
-		final folded: Map<String, Null<String>> = [];
-		for (n in graph.nodes()) {
-			final into: Null<GraphNode> = ancestorAt(graph, n, level);
-			folded[n.id] = into == null ? null : copy(graph, lifted, into);
-			if (into != null && n.focus) lifted.markFocus(into.id);
+		return foldInto(graph, n -> ancestorAt(graph, n, level));
+	}
+
+	/**
+	 * `graph` with the nodes of `open` opened, the view of a reader drilling down: each node folds into the outermost of
+	 * itself and the nodes holding it that is not open, so a closed node stands whole and an open one shows what it holds,
+	 * and an edge folds as `lift` folds it. An open node itself stays, holding what it shows.
+	 */
+	public static function opened(graph: CodeGraph, open: Map<String, Bool>): CodeGraph {
+		return foldInto(graph, n -> outermostClosed(graph, n, open));
+	}
+
+	/**
+	 * The part of `opened(graph, open)` that `holder`, a node of `open` with the nodes holding it, opens: the nodes it
+	 * holds and every edge with an end inside it, each end folded as `opened` folds it. It walks what `holder` holds and
+	 * the edges touching that, never the whole graph, so a view per node of a large graph stays cheap.
+	 */
+	public static function opening(graph: CodeGraph, holder: String, open: Map<String, Bool>): CodeGraph {
+		final view: CodeGraph = new CodeGraph();
+		for (n in graph.held(holder)) copy(graph, view, n);
+		final inside: Map<String, Bool> = [];
+		final pending: Array<String> = [holder];
+		while (pending.length > 0) for (n in graph.held(pending.pop() ?? '')) {
+			inside[n.id] = true;
+			pending.push(n.id);
 		}
-		for (e in graph.edges()) {
-			final from: Null<String> = folded[e.from];
-			final to: Null<String> = folded[e.to];
-			if (from == null || to == null || (from == to && !isOwnRecursion(e, from))) continue;
-			lifted.addEdge(from, to, e.kind, e.weight);
+		for (id in inside.keys()) for (e in graph.touching(id)) {
+			// an edge between two nodes inside is counted from its source alone
+			if (e.from != id && inside.exists(e.from)) continue;
+			final from: String = copy(graph, view, outermostClosed(graph, nodeOf(graph, e.from), open));
+			final to: String = copy(graph, view, outermostClosed(graph, nodeOf(graph, e.to), open));
+			if (from != to || isOwnRecursion(e, from)) view.addEdge(from, to, e.kind, e.weight);
 		}
-		return lifted;
+		return view;
 	}
 
 	/**
@@ -120,6 +142,42 @@ final class GraphView {
 	/** Whether `e`, both of whose ends fold into `into`, is the recursion of `into` itself rather than an edge folded shut. */
 	private static inline function isOwnRecursion(e: GraphEdge, into: String): Bool {
 		return e.from == e.to && e.from == into;
+	}
+
+	/**
+	 * `graph` with each node folded into the node `into` answers for it, or left out with its edges when it answers null;
+	 * an edge counts on the nodes its ends fold into, weights summed per kind, and one whose ends fold into one node is
+	 * dropped unless that node is its own end.
+	 */
+	private static function foldInto(graph: CodeGraph, into: (n:GraphNode) -> Null<GraphNode>): CodeGraph {
+		final lifted: CodeGraph = new CodeGraph();
+		// node id -> the id it folds into, null when it folds into none
+		final folded: Map<String, Null<String>> = [];
+		for (n in graph.nodes()) {
+			final target: Null<GraphNode> = into(n);
+			folded[n.id] = target == null ? null : copy(graph, lifted, target);
+			if (target != null && n.focus) lifted.markFocus(target.id);
+		}
+		for (e in graph.edges()) {
+			final from: Null<String> = folded[e.from];
+			final to: Null<String> = folded[e.to];
+			if (from == null || to == null || (from == to && !isOwnRecursion(e, from))) continue;
+			lifted.addEdge(from, to, e.kind, e.weight);
+		}
+		return lifted;
+	}
+
+	/** The outermost of `n` and the nodes holding it that is not in `open`; `n` itself when every one of them is. */
+	private static function outermostClosed(graph: CodeGraph, n: GraphNode, open: Map<String, Bool>): GraphNode {
+		final chain: Array<GraphNode> = [n];
+		var parent: Null<String> = n.parent;
+		while (parent != null) {
+			final holder: GraphNode = nodeOf(graph, parent);
+			chain.push(holder);
+			parent = holder.parent;
+		}
+		chain.reverse();
+		return chain.find(c -> !open.exists(c.id)) ?? n;
 	}
 
 	/** Every node within `radius` edges of a node of `seeds`, the edges walked either way. */

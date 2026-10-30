@@ -110,7 +110,10 @@ class GraphCliTest extends Test {
 			['--level', 'member', '--edges', 'imports'],
 			['--kinds', 'call'],
 			['--level', 'module'],
-			['--min-weight', '0']
+			['--min-weight', '0'],
+			['--html', 'x.html', '--focus', 'Alpha'],
+			['--html', 'x.html', '--diff', 'HEAD', 'HEAD'],
+			['--html', 'x.html', '--format', 'json']
 		]) {
 			var code: Int = -1;
 			CliFixture.captureStderr(() -> code = Cli.run(['graph', root].concat(args)));
@@ -118,6 +121,29 @@ class GraphCliTest extends Test {
 		});
 		#else
 		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `--html` writes one page holding the vendored Mermaid library and a view per node a reader can open — the imports
+	 * open the two packages into their types, the call graph also the three types into their members — and says where.
+	 */
+	public function testTheHtmlPage(): Void {
+		#if nodejs
+		withFixture(root -> {
+			final file: String = '$root/imports.html';
+			var code: Int = -1;
+			final out: String = CliFixture.captureStdout(() -> code = Cli.run(['graph', root, '--html', file]));
+			Assert.equals(0, code);
+			Assert.equals('apq graph: wrote $file, 3 views\n', out);
+			Assert.isTrue(sys.io.File.getContent(file).indexOf('__esbuild_esm_mermaid_nm') >= 0, 'the library is inlined');
+			final calls: String = '$root/calls.html';
+			final said: String = CliFixture.captureStdout(() -> code = Cli.run(['graph', root, '--edges', 'calls', '--html', calls]));
+			Assert.equals(0, code);
+			Assert.equals('apq graph: wrote $calls, 6 views\n', said);
+		});
+		#else
+		Assert.pass('stdout capture is node-only');
 		#end
 	}
 

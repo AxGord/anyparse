@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.macro.EmbeddedSource;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraphNames;
 import anyparse.query.ExitCode.EXIT_OK;
@@ -8,12 +9,18 @@ import anyparse.query.ExitCode.EXIT_USAGE;
 import anyparse.query.cli.CliCallGraph.GraphOutput;
 import anyparse.query.cli.CliCallGraph.GraphScope;
 import anyparse.query.cli.DeclarationDelta;
+import anyparse.query.format.GraphHtml;
 import anyparse.query.format.GraphText;
+import anyparse.query.format.json.GraphPageJson;
 import anyparse.query.graph.CodeGraph;
 import anyparse.query.graph.GraphDiff;
 import anyparse.query.graph.GraphView;
 import anyparse.query.graph.ImportGraph;
 import anyparse.query.graph.MemberGraphBuilder;
+import haxe.io.BytesInput;
+import haxe.zip.InflateImpl;
+import sys.FileSystem;
+import sys.io.File;
 
 /** What a `graph` draws its edges from: the scope's imports, or its call graph lifted to the level asked. */
 enum abstract GraphEdgeSource(String) to String {
@@ -41,6 +48,9 @@ typedef GraphRequest = {
 	final external: Bool;
 	final output: GraphOutput;
 
+	/** The file `--html` writes the page to; null for the report on stdout. */
+	final html: Null<String>;
+
 	/** The two revisions `--diff` compares, the earlier first; null for the graph of the working tree. */
 	final diff: Null<Array<String>>;
 	final inputSpecs: Array<String>;
@@ -57,6 +67,14 @@ final class GraphCommand implements CliCommand {
 
 	private static inline final COMMAND: String = 'graph';
 	private static inline final DEFAULT_RADIUS: Int = 1;
+
+	/**
+	 * The Mermaid library a page inlines: the npm package's `dist/mermaid.min.js`, vendored with its version in the
+	 * directory's name and located in the tree the engine is built from, so a page reads with no network. It is kept
+	 * zlib-deflated, a binary file, so a text rewrite of the repository's history cannot alter the published bytes; its
+	 * name holds no `.js.`, which a js build's class path lookup reads as a platform-specific file and does not find.
+	 */
+	private static final MERMAID: String = EmbeddedSource.located('../tools/vendor/mermaid-11.17.2/mermaid.zz');
 
 	public function new() {}
 
@@ -85,11 +103,14 @@ final class GraphCommand implements CliCommand {
 			printView(request.output, changes, '$COMMAND --diff ${revisions[0]} ${revisions[1]} --level member --edges calls');
 			return ctx.emptyExit(changes.nodes().length == 0);
 		}
+		final page: Null<String> = request.html;
+		// a page opens its nodes down to the finest level the edges reach, so it draws that level
 		final drawn: Null<CodeGraph> = request.edges == Imports
-			? importGraph(request.inputSpecs, request.lang, request.level)
-			: callGraph(request.inputSpecs, request.lang, request.level, kinds);
+			? importGraph(request.inputSpecs, request.lang, page == null ? request.level : Type)
+			: callGraph(request.inputSpecs, request.lang, page == null ? request.level : Member, kinds);
 		if (drawn == null) return EXIT_RUNTIME;
 		final full: CodeGraph = request.packageDepth > 0 ? GraphView.foldPackages(drawn, request.packageDepth) : drawn;
+		if (page != null) return writePage(request, full, page, ctx);
 		final focusIds: Array<String> = [];
 		for (query in request.focus) {
 			final found: Array<GraphNode> = GraphView.named(full, query, request.level);
@@ -125,6 +146,10 @@ final class GraphCommand implements CliCommand {
 		var mutualOnly: Bool = false;
 		var external: Bool = false;
 		var output: GraphOutput = Text;
+		var formatted: Bool = false;
+		var html: Null<String> = null;
+		// the options that centre one view, which a page drawing a view per node it opens does not take
+		final centring: Array<String> = [];
 		final focus: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 		var i: Int = 0;
@@ -148,9 +173,11 @@ final class GraphCommand implements CliCommand {
 				case '--focus':
 					focus.push(CliArgs.expectValue(args, ++i, a));
 					pruning.push(a);
+					centring.push(a);
 				case '--radius':
 					radius = count(CliArgs.expectValue(args, ++i, a), a, 0);
 					pruning.push(a);
+					centring.push(a);
 				case '--mutual':
 					mutualOnly = true;
 					pruning.push(a);
@@ -161,6 +188,9 @@ final class GraphCommand implements CliCommand {
 					external = true;
 				case '--format':
 					output = CliCallGraph.parseGraphOutput(CliArgs.expectValue(args, ++i, a));
+					formatted = true;
+				case '--html':
+					html = CliArgs.expectValue(args, ++i, a);
 				case '-h', '--help':
 					printGraphUsage();
 					return null;
@@ -172,6 +202,11 @@ final class GraphCommand implements CliCommand {
 			i++;
 		}
 		if (inputSpecs.length == 0) throw new UsageFailure('missing <file-or-dir-or-glob> argument');
+		if (html != null) {
+			if (diff != null) throw new UsageFailure('--html draws one graph: it does not combine with --diff');
+			if (centring.length > 0) throw new UsageFailure('${centring[0]} centres one view: --html draws a view of each node it opens');
+			if (formatted) throw new UsageFailure('--format chooses the report on stdout: --html writes a page instead');
+		}
 		if (diff != null) {
 			if (level != null && level != Member) throw new UsageFailure('--diff compares members: it draws --level member');
 			if (source == Imports) throw new UsageFailure('--diff compares the call graph: it draws --edges calls');
@@ -195,6 +230,7 @@ final class GraphCommand implements CliCommand {
 			mutualOnly: mutualOnly,
 			external: external,
 			output: output,
+			html: html,
 			inputSpecs: inputSpecs,
 			diff: diff
 		};
@@ -288,6 +324,27 @@ final class GraphCommand implements CliCommand {
 		return names;
 	}
 
+	/**
+	 * Write the page of `full` (`GraphHtml`) to `file`, its first view at the level asked, with the Mermaid library
+	 * vendored in the tree the engine was built from; `EXIT_RUNTIME` when the library cannot be read (message printed).
+	 */
+	private static function writePage(request: GraphRequest, full: CodeGraph, file: String, ctx: CliContext): Int {
+		if (!FileSystem.exists(MERMAID)) {
+			CliIo.stderr('apq $COMMAND: no Mermaid library at $MERMAID — rebuild the engine from a tree that vendors it\n');
+			return EXIT_RUNTIME;
+		}
+		final data: GraphPageJson = GraphHtml.data(full, request.level, {
+			minWeight: request.minWeight,
+			focus: [],
+			radius: 0,
+			mutualOnly: request.mutualOnly,
+			external: request.external
+		}, '$COMMAND --level ${request.level} --edges ${request.edges}');
+		CliIo.writeFile(file, GraphHtml.page(data, InflateImpl.run(new BytesInput(File.getBytes(MERMAID))).toString()));
+		CliIo.sysPrint('apq $COMMAND: wrote $file, ${data.views.length} view${CliIo.plural(data.views.length)}\n');
+		return ctx.emptyExit(full.edges().length == 0);
+	}
+
 	/** `view` as `output` asks: the text report, or the graph as Mermaid headed by `caption`, or as JSON. */
 	private static function printView(output: GraphOutput, view: CodeGraph, caption: String): Void {
 		if (output == Text)
@@ -343,6 +400,11 @@ final class GraphCommand implements CliCommand {
 		CliIo.sysPrint('                    into its type, and an edge between unchanged nodes is left out. Takes --kinds,\n');
 		CliIo.sysPrint('                    --external, --format, --lang; refuses the pruning options and another level\n');
 		CliIo.sysPrint('  --format <f>      text (the report, default), mermaid or json\n');
+		CliIo.sysPrint('  --html <file>     Write one page that reads with no network instead of the report: the graph at\n');
+		CliIo.sysPrint('                    the level asked, a click on a package or a type opening what it holds and\n');
+		CliIo.sysPrint('                    what that touches, light and dark, a legend; the Mermaid library inlined.\n');
+		CliIo.sysPrint('                    Takes --kinds, --package-depth, --min-weight, --mutual, --external; refuses\n');
+		CliIo.sysPrint('                    --focus, --radius, --diff and --format\n');
 		CliIo.sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
 	}
 

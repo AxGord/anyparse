@@ -2,6 +2,7 @@ package anyparse.query.format;
 
 import anyparse.grammar.mermaid.MermaidFormat;
 import anyparse.grammar.mermaid.MermaidWriter;
+import anyparse.grammar.mermaid.MmdDirection;
 import anyparse.grammar.mermaid.MmdFlowchart;
 import anyparse.grammar.mermaid.MmdLabel;
 import anyparse.grammar.mermaid.MmdLinkLit;
@@ -48,11 +49,14 @@ final class GraphMermaid {
 	private static inline final REMOVED_LINK_STYLE: String = 'stroke:#999,stroke-dasharray:4 3';
 	private static inline final CHANGED_LINK_STYLE: String = 'stroke:#d90,stroke-width:2px';
 
-	/** The flowchart of `graph`, after a `%%` comment line holding `caption` when one is given. */
-	public static function flowchart(graph: CodeGraph, ?caption: String): MmdFlowchart {
+	/**
+	 * The flowchart of `graph` laid out toward `direction`, left to right when none, after a `%%` comment line holding
+	 * `caption` when one is given.
+	 */
+	public static function flowchart(graph: CodeGraph, ?caption: String, ?direction: MmdDirection): MmdFlowchart {
 		final statements: Array<MmdStatement> = [];
 		if (caption != null) statements.push(Comment('%% ${caption.replace('\r', ' ').replace('\n', ' ')}'));
-		statements.push(Header(Flowchart(LR)));
+		statements.push(Header(Flowchart(direction ?? LR)));
 		final byParent: Map<String, Array<GraphNode>> = graph.nodesByParent();
 		for (n in byParent[''] ?? []) statements.push(declaration(byParent, n));
 		final edges: Array<GraphEdge> = graph.edges();
@@ -75,8 +79,8 @@ final class GraphMermaid {
 	}
 
 	/** The flowchart of `graph` as Mermaid text. */
-	public static function write(graph: CodeGraph, ?caption: String): String {
-		return MermaidWriter.write(flowchart(graph, caption), MermaidFormat.instance.defaultWriteOptions);
+	public static function write(graph: CodeGraph, ?caption: String, ?direction: MmdDirection): String {
+		return MermaidWriter.write(flowchart(graph, caption, direction), MermaidFormat.instance.defaultWriteOptions);
 	}
 
 	private static inline function group(vertex: MmdNode): MmdNodeGroup {

@@ -120,6 +120,41 @@ class GraphViewTest extends Test {
 		Assert.equals('p.a.A', [for (n in GraphView.named(lifted, 'A', Type)) n.name].join(','));
 	}
 
+	/** Opened down to a type, the type shows its members and every other node stands whole, its edges summed on it. */
+	public function testOpenedShowsWhatTheOpenNodesHold(): Void {
+		final view: CodeGraph = GraphView.opened(members(), openSet('p.a', 'p.a.A'));
+		Assert.equals(
+			'p.a.A.m1 -> p.a.A.m1 call 1|p.a.A.m1 -> p.a.A.m2 call 1|p.a.A.m1 -> p.b call 2|p.a.A.m2 -> p.b call 1'
+			+ '|p.a.A.m2 -> p.b new 1|p.b -> String ref 1',
+			edges(view)
+		);
+		Assert.equals('String,p.a.A.m1,p.a.A.m2,p.a,p.b,p.a.A', names(view));
+		Assert.equals(
+			edges(GraphView.lift(members(), Package)),
+			edges(GraphView.filter(GraphView.opened(members(), []), filter(1, [], false, false)))
+		);
+	}
+
+	/**
+	 * Opening one node is the part of the opened graph touching what it holds: an edge between two nodes inside counts
+	 * once, an edge between two nodes outside not at all.
+	 */
+	@:killer('M-GRAPH-VIEW-OPENING-INSIDE-TWICE')
+	@:pin('control')
+	public function testOpeningIsThePartTouchingTheHolder(): Void {
+		final view: CodeGraph = GraphView.opening(members(), CodeGraph.idOf(Type, 'p.a.A'), openSet('p.a', 'p.a.A'));
+		Assert.equals(
+			'p.a.A.m1 -> p.a.A.m1 call 1|p.a.A.m1 -> p.a.A.m2 call 1|p.a.A.m1 -> p.b call 2|p.a.A.m2 -> p.b call 1|p.a.A.m2 -> p.b new 1',
+			edges(view)
+		);
+		Assert.equals('p.a.A.m1,p.a.A.m2,p.a,p.b,p.a.A', names(view));
+	}
+
+	/** The open set naming the package `pkg` and the type `type`. */
+	private static function openSet(pkg: String, type: String): Map<String, Bool> {
+		return [CodeGraph.idOf(Package, pkg) => true, CodeGraph.idOf(Type, type) => true];
+	}
+
 	/** A member graph over packages `p.a` and `p.b`: `A.m1` calls `A.m2`, itself and `B.n`, `B.n` reaches an external member. */
 	private static function members(): CodeGraph {
 		final graph: CodeGraph = new CodeGraph();

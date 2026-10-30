@@ -18,7 +18,7 @@ import haxe.io.Path;
  * counts for the type it aliases. An import inside one package (type) joins nothing and is left out. An
  * ambient source — a file whose imports reach other files unwritten, which declares no package of its own —
  * counts once for each package of the files it reaches (`ownersOf`); the type level leaves it out, as it
- * declares no type.
+ * declares no type. A type nests in its package, as the call graph lifted to the type level nests it.
  */
 @:nullSafety(Strict)
 final class ImportGraph {
@@ -91,9 +91,8 @@ final class ImportGraph {
 
 	private static function nodeOf(graph: CodeGraph, level: GraphLevel, pkg: String, type: String): String {
 		final packageLabel: String = pkg == '' ? ROOT_PACKAGE_LABEL : pkg;
-		return level == Package
-			? graph.addNode(Package, pkg, packageLabel, null, false)
-			: graph.addNode(Type, pkg == '' ? type : '$pkg.$type', type, null, false);
+		final packageId: String = graph.addNode(Package, pkg, packageLabel, null, false);
+		return level == Package ? packageId : graph.addNode(Type, pkg == '' ? type : '$pkg.$type', type, packageId, false);
 	}
 
 }
