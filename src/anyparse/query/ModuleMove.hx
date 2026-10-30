@@ -846,7 +846,8 @@ final class ModuleMove {
 				for (grant in grantedPaths(tree, e.source, tags, metaKinds))
 					for (p in planned)
 						if (
-							isPackagePath(grant.path, shape) && covers(grant.path, p.rename.oldPath)
+							isPackagePath(grant.path, shape)
+							&& covers(grant.path, p.rename.oldPath)
 							&& !covers(grant.path, p.rename.newPath)
 						)
 							out.push(

@@ -230,7 +230,9 @@ final class FactsNativeReach {
 		var start: Int = -1;
 		for (i in 0...code.length + 1) {
 			final c: Int = i < code.length ? code.fastCodeAt(i) : 0;
-			final word: Bool = c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
+			final word: Bool = c == '_'.code
+				|| (c >= 'a'.code && c <= 'z'.code)
+				|| (c >= 'A'.code && c <= 'Z'.code)
 				|| (start >= 0 && c >= '0'.code && c <= '9'.code);
 			if (word && start < 0) start = i;
 			if (word || start < 0) continue;

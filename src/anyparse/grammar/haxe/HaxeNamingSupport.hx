@@ -600,7 +600,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * alone decides, and it is never proven unreached.
 	 */
 	private static function isEntryPoint(category: NamingCategory, name: String, node: QueryNode, mods: Array<String>): Bool {
-		return category == NamingCategory.Method && name == 'main' && mods.contains('static')
+		return category == NamingCategory.Method
+			&& name == 'main'
+			&& mods.contains('static')
 			&& !node.children.exists(c -> categoryOf(c, []) == NamingCategory.Param);
 	}
 
@@ -817,7 +819,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * and reached only by a project config strict enough to reject an underscore.
 	 */
 	private static function isReservedName(category: NamingCategory, name: String): Bool {
-		return DISCARD_NAME_PATTERN.match(name) || DUNDER_NAME_PATTERN.match(name) || category == NamingCategory.Method
+		return DISCARD_NAME_PATTERN.match(name)
+			|| DUNDER_NAME_PATTERN.match(name)
+			|| category == NamingCategory.Method
 			&& isAccessorName(name);
 	}
 

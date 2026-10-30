@@ -355,7 +355,9 @@ final class PreferIfExpressionReturn extends RuleBase {
 	): Void {
 		final span: Null<Span> = node.span;
 		if (
-			span != null && s.ifKinds.contains(node.kind) && !IfExpressionChain.isElseIfLink(node, parent, s.ifKinds)
+			span != null
+			&& s.ifKinds.contains(node.kind)
+			&& !IfExpressionChain.isElseIfLink(node, parent, s.ifKinds)
 			&& flagged.contains(IfExpressionChain.spanKey(span))
 		) {
 			final m: Null<Match> = match(node, source, comments, s, false);

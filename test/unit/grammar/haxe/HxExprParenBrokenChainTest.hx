@@ -138,7 +138,8 @@ final class HxExprParenBrokenChainTest extends Test {
 
 	private static function comprehensionShape(k: Int): String {
 		return 'class M {\n\tfunction f() {\n\t\tvar y = (baseValue + [for (x in xs) {alpha: x.aaaaaaaaaaaaaaaaaaaaa, k: \''
-			+ ''.lpad('k', k) + '\'}].length) * factorValue;\n\t}\n}';
+			+ ''.lpad('k', k)
+			+ '\'}].length) * factorValue;\n\t}\n}';
 	}
 
 	/** `head`, four `TERM`s and a source break, `indent`, two more `TERM`s and `tail`: a statement over the line limit. */

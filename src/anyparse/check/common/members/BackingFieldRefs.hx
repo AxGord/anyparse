@@ -184,7 +184,8 @@ final class BackingFieldRefs {
 		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return true;
 		if (node == allowStmt) return true;
 		if (
-			node.kind != shape.exprStatementKind || node.children.length != 1
+			node.kind != shape.exprStatementKind
+			|| node.children.length != 1
 			|| FieldRefScan.writeTargetField(node.children[0], shape) != field
 		)
 			return FieldRefScan.writeTargetField(node, shape) != field

@@ -178,7 +178,10 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 		final span: Null<Span> = tail.span;
 		final thenBraced: Bool = tail.children[THEN_BRANCH_INDEX].kind == seams.blockStmtKind;
 		return if (
-			last == null || span == null || thenBraced == (last.kind == seams.blockStmtKind) || thenBraced
+			last == null
+			|| span == null
+			|| thenBraced == (last.kind == seams.blockStmtKind)
+			|| thenBraced
 			&& seams.exemptElseKinds.contains(last.kind)
 		)
 			null

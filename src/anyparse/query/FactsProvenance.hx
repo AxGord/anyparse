@@ -284,7 +284,9 @@ final class FactsProvenance {
 			// an abstract's constructor, which the text calls by constructing the abstract
 			final constructed: Bool = _view.graphMember(owner, field) == constructorName()
 				&& body.spellsConstruction(constructorName(), _view.graphType(owner));
-			final verdict: Bool = body.spellsCall(field) || (property != null && body.spellsName(property)) || implicitlyCalled(method.id)
+			final verdict: Bool = body.spellsCall(field)
+				|| (property != null && body.spellsName(property))
+				|| implicitlyCalled(method.id)
 				|| constructed;
 			verdicts[method.id] = verdict;
 			return verdict;
@@ -327,12 +329,17 @@ final class FactsProvenance {
 		final written: Array<ExpansionFact> = [for (x in n.expansions) if (expansionWritten(n, x, body, outer)) x];
 		final inlined: (FactPos) -> Bool = outer ?? (_ -> false);
 		function own(p: FactPos, onText: Bool, ?name: String): Bool {
-			return onText || FactSites.spliceOf(n, p) != null || inlined(p) || joined(n, p, name, body)
+			return onText
+				|| FactSites.spliceOf(n, p) != null
+				|| inlined(p)
+				|| joined(n, p, name, body)
 				|| written.exists(x -> holds(x.declared, p));
 		}
 		final iterationCalls: Array<String> = _scope.shape.execution?.implicitCallNames ?? [];
 		for (c in n.calls) if (c.access != INLINED) {
-			final onText: Bool = callOnText(c, body, iterationCalls) || convertsJoined(n, c, body) || body.comprehends(c)
+			final onText: Bool = callOnText(c, body, iterationCalls)
+				|| convertsJoined(n, c, body)
+				|| body.comprehends(c)
 				|| (convertsToString(c) && body.converts(c.at));
 			if (!own(c.at, onText, calledName(c))) return false;
 		}
@@ -340,7 +347,8 @@ final class FactsProvenance {
 		for (x in n.news) {
 			final built: String = _view.graphType(x.type);
 			final generic: Null<String> = x.generic;
-			final onText: Bool = body.spells(x.at, built) || body.builds(x.at, built, constructions)
+			final onText: Bool = body.spells(x.at, built)
+				|| body.builds(x.at, built, constructions)
 				|| _view.typedefsOf(x.type).exists(name -> body.mentions(x.at, name))
 				|| (generic != null && body.spells(x.at, _view.graphType(generic)));
 			if (!own(x.at, onText)) return false;
@@ -403,7 +411,8 @@ final class FactsProvenance {
 		}
 		return n.splices.exists(
 			other ->
-				other != splice && other.sites.exists(o -> splice.sites.exists(site -> site.from == o.from && site.to == o.to))
+				other != splice
+				&& other.sites.exists(o -> splice.sites.exists(site -> site.from == o.from && site.to == o.to))
 				&& spells(other.body)
 		);
 	}
@@ -457,7 +466,10 @@ final class FactsProvenance {
 	private function readJoined(n: FactNode, p: FactPos, body: BodyText): Bool {
 		return n.fields.exists(
 			f ->
-				!f.write && f.at.file == p.file && f.at.span.from == p.span.from && f.at.span.to == p.span.to
+				!f.write
+				&& f.at.file == p.file
+				&& f.at.span.from == p.span.from
+				&& f.at.span.to == p.span.to
 				&& joined(n, f.at, f.field, body)
 		);
 	}
@@ -494,8 +506,11 @@ final class FactsProvenance {
 		if (target == null || c.access == 'value' || c.access == 'local' || c.access == 'ident') return true;
 		final member: String = memberOf(target);
 		final spelled: String = _view.accessorProperty(member) ?? member;
-		return body.mentions(c.at, spelled) || body.mentions(c.at, member) || (body.lowered(c.at) && iterationCalls.contains(member))
-			|| implicitlyCalled(target) || runsNoCode(target);
+		return body.mentions(c.at, spelled)
+			|| body.mentions(c.at, member)
+			|| (body.lowered(c.at) && iterationCalls.contains(member))
+			|| implicitlyCalled(target)
+			|| runsNoCode(target);
 	}
 
 	/**
@@ -526,12 +541,18 @@ final class FactsProvenance {
 
 	/** Whether every fact of the typed body `n` sits on `body`'s text as its own (see `bodyIsSource`). */
 	private function factsMatch(n: FactNode, body: BodyText): Bool {
-		return !n.generated && n.incomplete.length <= 0 && n.natives.length <= 0 && !n.reflection.exists(r -> r.isValue)
-			&& callsMatch(n, body) && n.news.foreach(x -> body.spells(x.at, SourceText.lastSegment(CompilerFacts.baseId(x.type))))
+		return !n.generated
+			&& n.incomplete.length <= 0
+			&& n.natives.length <= 0
+			&& !n.reflection.exists(r -> r.isValue)
+			&& callsMatch(n, body)
+			&& n.news.foreach(x -> body.spells(x.at, SourceText.lastSegment(CompilerFacts.baseId(x.type))))
 			&& n.fields.foreach(f -> body.holds(f.at) && (body.mentions(f.at, f.field) || (!f.write && body.lowered(f.at))))
 			&& n.vars.foreach(v -> body.spells(v.at, v.name))
-			&& n.reads.foreach(r -> body.holds(r.at) && (body.bare(r.at) || body.lowered(r.at))) && n.flows.foreach(f -> body.holds(f.at))
-			&& n.strings.foreach(x -> body.holds(x.at)) && n.iterations.foreach(i -> body.holds(i.at));
+			&& n.reads.foreach(r -> body.holds(r.at) && (body.bare(r.at) || body.lowered(r.at)))
+			&& n.flows.foreach(f -> body.holds(f.at))
+			&& n.strings.foreach(x -> body.holds(x.at))
+			&& n.iterations.foreach(i -> body.holds(i.at));
 	}
 
 	/**
@@ -559,9 +580,17 @@ final class FactsProvenance {
 	 */
 	private static function madeConstructor(n: FactNode): Bool {
 		final own: (FactPos) -> Bool = p -> p.file == n.at.file && p.span.from == n.at.span.from && p.span.to == n.at.span.to;
-		return n.kind == 'ctor' && n.calls.foreach(c -> c.access == SUPER) && n.news.length == 0 && n.fields.length == 0
-			&& n.elementWrites.length == 0 && n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at)) && n.strings.length == 0
-			&& n.iterations.length == 0 && n.reflection.length == 0 && n.natives.length == 0 && n.fns.length == 0;
+		return n.kind == 'ctor'
+			&& n.calls.foreach(c -> c.access == SUPER)
+			&& n.news.length == 0
+			&& n.fields.length == 0
+			&& n.elementWrites.length == 0
+			&& n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at))
+			&& n.strings.length == 0
+			&& n.iterations.length == 0
+			&& n.reflection.length == 0
+			&& n.natives.length == 0
+			&& n.fns.length == 0;
 	}
 
 	/**
@@ -694,7 +723,9 @@ private final class BodyText {
 		return holds(p)
 			&& _literals.exists(
 				l ->
-					l.span.from == p.span.from && p.span.to <= l.span.to && FLAGS.match(_text.substring(p.span.to, l.span.to))
+					l.span.from == p.span.from
+					&& p.span.to <= l.span.to
+					&& FLAGS.match(_text.substring(p.span.to, l.span.to))
 					&& constructions[l.kind] == built
 			);
 	}
@@ -706,7 +737,9 @@ private final class BodyText {
 	 */
 	public function comprehends(c: CallFact): Bool {
 		final receiver: Null<FactPos> = c.receiverAt;
-		return receiver != null && holds(c.at) && holds(receiver)
+		return receiver != null
+			&& holds(c.at)
+			&& holds(receiver)
 			&& _comprehensions.exists(x -> x.span.from == receiver.span.from && x.span.to == receiver.span.to && x.call == c.target);
 	}
 

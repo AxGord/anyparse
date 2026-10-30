@@ -313,7 +313,8 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 	private static function zeroBasedBound(loop: QueryNode, kind: String, ctx: FileCtx): Null<QueryNode> {
 		if (loop.kind != kind || loop.name == null || loop.children.length != FOR_CHILD_COUNT) return null;
 		final range: QueryNode = loop.children[0];
-		return range.kind != ctx.seams.intervalKind || range.children.length != BINARY_CHILD_COUNT
+		return range.kind != ctx.seams.intervalKind
+			|| range.children.length != BINARY_CHILD_COUNT
 			|| !LoopScan.isZeroLiteral(range.children[0], ctx.source, ctx.seams.core)
 			? null
 			: range.children[1];
@@ -326,7 +327,9 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		final call: QueryNode = stmt.children[0];
 		if (call.kind != s.core.callKind || call.children.length != BINARY_CHILD_COUNT) return null;
 		final callee: QueryNode = call.children[0];
-		return callee.kind == s.core.fieldAccessKind && callee.name == s.appendMethod && callee.children.length == 1
+		return callee.kind == s.core.fieldAccessKind
+			&& callee.name == s.appendMethod
+			&& callee.children.length == 1
 			&& isPlainRef(callee.children[0], name, s)
 			? call
 			: null;
@@ -337,7 +340,9 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		final s: Seams = ctx.seams;
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		return assign.kind == s.assignKind && assign.children.length == BINARY_CHILD_COUNT && isEmptyArray(assign.children[1], s)
+		return assign.kind == s.assignKind
+			&& assign.children.length == BINARY_CHILD_COUNT
+			&& isEmptyArray(assign.children[1], s)
 			&& isPlainRef(assign.children[0], name, s)
 			? assign
 			: null;
@@ -345,15 +350,23 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 
 	/** Whether `node` is the bare `name` or `this.name`. */
 	private static function isPlainRef(node: QueryNode, name: String, s: Seams): Bool {
-		return node.kind == s.core.identKind && node.name == name || node.kind == s.core.fieldAccessKind && node.name == name
-			&& node.children.length == 1 && node.children[0].kind == s.core.identKind && s.selfText != null
+		return node.kind == s.core.identKind
+			&& node.name == name
+			|| node.kind == s.core.fieldAccessKind
+			&& node.name == name
+			&& node.children.length == 1
+			&& node.children[0].kind == s.core.identKind
+			&& s.selfText != null
 			&& node.children[0].name == s.selfText;
 	}
 
 	/** Whether `node` builds an EMPTY array of the built-in type: `[]` or `new Array()` with no argument. */
 	private static function isEmptyArray(node: QueryNode, s: Seams): Bool {
-		return node.kind == s.arrayLiteralKind && node.children.length == 0 || node.kind == s.newExprKind
-			&& s.arrayTypes.contains(node.name ?? '') && !node.children.exists(c -> !s.typeArgKinds.contains(c.kind));
+		return node.kind == s.arrayLiteralKind
+			&& node.children.length == 0
+			|| node.kind == s.newExprKind
+			&& s.arrayTypes.contains(node.name ?? '')
+			&& !node.children.exists(c -> !s.typeArgKinds.contains(c.kind));
 	}
 
 	/** Whether the type declared at `declSpan`, when there is one, is the type `source` builds. */
@@ -489,8 +502,10 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		function visit(node: QueryNode, parent: Null<QueryNode>): Void {
 			if (s.core.opaqueKinds.contains(node.kind)) return;
 			if (
-				node.kind == s.core.indexAccessKind && node.children.length == BINARY_CHILD_COUNT
-				&& isRef(node.children[0], name, owner, isField, s) && !isWriteTarget(node, parent, s)
+				node.kind == s.core.indexAccessKind
+				&& node.children.length == BINARY_CHILD_COUNT
+				&& isRef(node.children[0], name, owner, isField, s)
+				&& !isWriteTarget(node, parent, s)
 			) {
 				final k: Null<Int> = offset(node.children[1]);
 				if (k != null && (reach == null || k > (reach ?? 0))) reach = k;

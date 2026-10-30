@@ -1530,7 +1530,10 @@ final class WriterRefFieldLowering {
 		// it. Each is re-emitted on the signature line, a LINE comment with its
 		// forward hardline, so the brace / body placement that follows is decided
 		// exactly as it would be after the params' close-trailing comment.
-		final hasBeforeLeadingSlot: Bool = ctx.ctx.trivia && ctx.isTriviaBearing(typePath) && !isFirstField && kwLead == null
+		final hasBeforeLeadingSlot: Bool = ctx.ctx.trivia
+			&& ctx.isTriviaBearing(typePath)
+			&& !isFirstField
+			&& kwLead == null
 			&& leadText == null;
 		if (hasBeforeLeadingSlot) {
 			final leadAccess: Expr = beforeLeadingAccess(fieldName);

@@ -318,7 +318,8 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				// slot nobody did, and a struct extension nested in an annotation (`Array<{ > T, }>`)
 				// projected its fields' types and never `T` (N35).
 				final rule: Null<ShapeNode> = _shape.rules[ref];
-				final nominal: Bool = fieldNameOf(child) == PairedShapeLowering.TYPE_FIELD && rule != null
+				final nominal: Bool = fieldNameOf(child) == PairedShapeLowering.TYPE_FIELD
+					&& rule != null
 					&& seqField(rule, PairedShapeLowering.NAME_FIELD) != null;
 				final head: Null<Expr> = nominal ? nameOfValue(child, access) : null;
 				if (!_typeRefRules.contains(ref))

@@ -277,7 +277,8 @@ class ThreadSafetyDominanceTest extends Test {
 			'warning B D.slow | D._outer'
 		], holds(run(
 			'public function slow(batch:Bool):Void { if (!batch) _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release();'
-			+ ' if (!batch) _outer.release(); }' + ' public function outer():Void { _outer.acquire(); slow(true); _outer.release(); }',
+			+ ' if (!batch) _outer.release(); }'
+			+ ' public function outer():Void { _outer.acquire(); slow(true); _outer.release(); }',
 			'd.slow(false); d.outer();', true, CLOSED
 		)));
 		#else
@@ -320,7 +321,8 @@ class ThreadSafetyDominanceTest extends Test {
 			+ ' public function slow($params):Void { _outer.acquire(); $rest }'
 			+ ' public function quick():Void { _outer.acquire(); _inner.acquire(); _inner.release(); _outer.release(); }'
 			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow($args));'
-			+ (background == '' ? '' : ' Runner.create(() -> $background);') + ' $main d.quick(); } }'
+			+ (background == '' ? '' : ' Runner.create(() -> $background);')
+			+ ' $main d.quick(); } }'
 		]);
 	}
 

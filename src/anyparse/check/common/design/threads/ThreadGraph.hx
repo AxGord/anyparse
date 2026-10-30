@@ -29,7 +29,8 @@ final class ThreadGraph {
 	 */
 	public static function madeWhereHanded(graph: CallGraph, edge: CallEdge): Bool {
 		final at: Null<Span> = edge.span;
-		return edge.via == null && at != null
+		return edge.via == null
+			&& at != null
 			&& graph.outEdges(edge.from)
 				.exists(
 					o -> o != edge && o.kind == Ref && o.to == edge.to && o.via != null && o.span?.from == at.from && o.span?.to == at.to

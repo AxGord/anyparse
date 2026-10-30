@@ -691,7 +691,9 @@ final class HxAstPredLowering extends AstPredLowering {
 				true;
 			else {
 				final nc: Int = StringTools.fastCodeAt(raw, after);
-				!((nc >= 'a'.code && nc <= 'z'.code) || (nc >= 'A'.code && nc <= 'Z'.code) || (nc >= '0'.code && nc <= '9'.code)
+				!((nc >= 'a'.code && nc <= 'z'.code)
+					|| (nc >= 'A'.code && nc <= 'Z'.code)
+					|| (nc >= '0'.code && nc <= '9'.code)
 					|| nc == '_'.code);
 			}
 		};

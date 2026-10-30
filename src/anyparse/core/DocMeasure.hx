@@ -705,8 +705,13 @@ final class DocMeasure {
 	 * a close `)` (`f()()`), or a type-param close `>` (`f<T>()`).
 	 */
 	private static inline function isCallPrefixChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
-			|| c == '$'.code || c == ')'.code || c == '>'.code;
+		return (c >= 'a'.code && c <= 'z'.code)
+			|| (c >= 'A'.code && c <= 'Z'.code)
+			|| (c >= '0'.code && c <= '9'.code)
+			|| c == '_'.code
+			|| c == '$'.code
+			|| c == ')'.code
+			|| c == '>'.code;
 	}
 
 	/**

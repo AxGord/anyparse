@@ -488,7 +488,8 @@ class Lowering {
 		final branches: Array<ShapeNode> = atomsOnly ? [
 			for (b in node.children)
 				if (
-					b.annotations.get(AnnotationKeys.PRATT_PREC) == null && b.annotations.get(AnnotationKeys.POSTFIX_OP) == null
+					b.annotations.get(AnnotationKeys.PRATT_PREC) == null
+					&& b.annotations.get(AnnotationKeys.POSTFIX_OP) == null
 					&& b.annotations.get(AnnotationKeys.TERNARY_OP) == null
 				)
 					b
@@ -1099,7 +1100,8 @@ class Lowering {
 		// `(\n<inner>\n)` (open broken; preserves authored shape on
 		// chain inners) and `(<inner>\n)` (glued; unchanged default).
 		// Trivia-only; plain mode keeps the original ctor arity.
-		final triviaWrapOpenNewline: Bool = _ctx.trivia && isTriviaBearing(typePath)
+		final triviaWrapOpenNewline: Bool = _ctx.trivia
+			&& isTriviaBearing(typePath)
 			&& TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
 		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
 		// ctors with `@:fmt(captureKwNewline)` carry a positional

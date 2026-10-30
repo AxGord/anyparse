@@ -344,7 +344,9 @@ final class CrossRenameMember {
 							// is an EXPLICIT `static` inside an `enum abstract` — the same probe, one host
 							// kind over: `public static final PX: Colour = RED;` is `Identifier 'PX' is not
 							// part of Colour`. A value is the member that says no modifier at all.
-							isEnumValue: isCtor || decl.kind == refShape.enumAbstractDeclKind && !saysStatic
+							isEnumValue: isCtor
+								|| decl.kind == refShape.enumAbstractDeclKind
+								&& !saysStatic
 								&& MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape),
 							isEnumCtor: isCtor,
 							srcDecl: decl
@@ -1179,7 +1181,8 @@ final class CrossRenameMember {
 		// changed `pick(): Colour return same;` from the field's value to the constant SILENTLY —
 		// the one failure mode this operation forbids. So an unresolvable chain refuses.
 		return index.typing.members.typeDeclaresMember(owner, memberName)
-			|| index.typing.members.supertypeDeclaresMember(owner, memberName) || !index.subtypes.supertypeChainResolved(owner);
+			|| index.typing.members.supertypeDeclaresMember(owner, memberName)
+			|| !index.subtypes.supertypeChainResolved(owner);
 	}
 
 }

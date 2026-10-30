@@ -173,7 +173,10 @@ final class FactText {
 			while (before >= 0 && text.isSpace(before)) before--;
 			final start: Int = before + 1 - keyword.length;
 			if (
-				bounded && before < from - 1 && start >= 0 && text.substring(start, before + 1) == keyword
+				bounded
+				&& before < from - 1
+				&& start >= 0
+				&& text.substring(start, before + 1) == keyword
 				&& (start == 0 || !isWordChar(text.fastCodeAt(start - 1)))
 			)
 				return true;

@@ -313,7 +313,8 @@ class UnusedCaseBinderCheckTest extends Test {
 	 */
 	public function testNestedShadowingBinderStillFlagged(): Void {
 		final src: String = 'class C {\n\tfunction f(e: Dynamic, v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase Node(e): r();'
-			+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}' + ENUMS;
+			+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}'
+			+ ENUMS;
 		Assert.equals(1, violations(src).length);
 		Assert.stringContains('case Node(_)', applyFixOnce(src));
 	}

@@ -292,7 +292,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 
 	private static function config(entry: String, budget: Bool): String {
 		return '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Disk.stat"],"shortSinks":["Disk.stat"],'
-			+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],' + (budget ? '"repeatBudgetMs":50,' : '')
+			+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],'
+			+ (budget ? '"repeatBudgetMs":50,' : '')
 			+ '"boundedRepeats":[$entry]}}}';
 	}
 

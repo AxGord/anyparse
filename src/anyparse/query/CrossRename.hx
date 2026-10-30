@@ -343,7 +343,8 @@ final class CrossRename {
 		source: String, recv: QueryNode, typeName: String, qualified: Array<String>, valueResolved: Array<Int>
 	): Int {
 		final recvSpan: Null<Span> = recv.span;
-		return recvSpan == null || recv.kind != MemberKinds.IDENT_EXPR_KIND
+		return recvSpan == null
+			|| recv.kind != MemberKinds.IDENT_EXPR_KIND
 			|| !RefactorSupport.receiverIsTypeNamespace(recv, typeName, qualified, valueResolved)
 			? -1
 			: SourceText.identTokenOffset(source, recvSpan, typeName);

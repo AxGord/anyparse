@@ -177,7 +177,9 @@ final class ProseClaims {
 
 	/** Letter, digit or underscore — the boundary `containsWord` refuses to break on. */
 	private static function isWordChar(code: Int): Bool {
-		return (code >= 'a'.code && code <= 'z'.code) || (code >= 'A'.code && code <= 'Z'.code) || (code >= '0'.code && code <= '9'.code)
+		return (code >= 'a'.code && code <= 'z'.code)
+			|| (code >= 'A'.code && code <= 'Z'.code)
+			|| (code >= '0'.code && code <= '9'.code)
 			|| code == '_'.code;
 	}
 

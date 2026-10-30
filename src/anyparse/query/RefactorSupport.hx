@@ -406,7 +406,8 @@ final class RefactorSupport {
 				final nameSpan: Null<Span> = m.nameNode.span;
 				final onNameStart: Bool = nameSpan != null && nameSpan.from == cursor;
 				if (
-					cursor >= span.from && cursor < span.to
+					cursor >= span.from
+					&& cursor < span.to
 					&& (identTokenContains(m.nameNode, cursor, source) || span.from == cursor || onNameStart)
 				)
 					best = m;
@@ -616,8 +617,10 @@ final class RefactorSupport {
 	public static function isPrivateMemberConfined(
 		owner: String, member: String, source: String, index: SymbolIndex, ?grants: Null<Array<String>>, ?ownerFile: String
 	): Bool {
-		return privateMemberScanIsSound(source, index, member, grants) && !index.subtypes.hasSubtype(owner, ownerFile)
-			&& !index.text.hasAccessGrant(owner) && !index.text.privilegeMayReference(owner, member);
+		return privateMemberScanIsSound(source, index, member, grants)
+			&& !index.subtypes.hasSubtype(owner, ownerFile)
+			&& !index.text.hasAccessGrant(owner)
+			&& !index.text.privilegeMayReference(owner, member);
 	}
 
 	/**

@@ -483,7 +483,9 @@ final class TypedFactsMacro {
 
 	/** Whether `code` may continue an identifier. */
 	private static function isWordCode(code: Int): Bool {
-		return code == '_'.code || (code >= '0'.code && code <= '9'.code) || (code >= 'a'.code && code <= 'z'.code)
+		return code == '_'.code
+			|| (code >= '0'.code && code <= '9'.code)
+			|| (code >= 'a'.code && code <= 'z'.code)
 			|| (code >= 'A'.code && code <= 'Z'.code);
 	}
 

@@ -106,7 +106,8 @@ final class UnreachableCatch extends RuleBase {
 				final duplicate: Bool = TypeResolver.sameTypeSource(laterRaw, earlierRaw, importMap);
 				// Both types are resolved where the clauses write them, so neither a namesake in the later type's chain nor a later type
 				// sharing a project subtype's name (the std `haxe.io.Eof` beside a project `Eof`) is covered.
-				final subtype: Bool = laterSimple != null && earlierSimple != null
+				final subtype: Bool = laterSimple != null
+					&& earlierSimple != null
 					&& index.subtypes.isSubtype(
 						laterRaw.trim(), earlierRaw.trim(), entry.file, clauses[j].span?.from, entry.file, clauses[i].span?.from
 					);

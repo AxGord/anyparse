@@ -76,8 +76,10 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	/** A dot-broken chain whose links carry only plain args and expression-bodied arrows — nothing in it forces a hardline. */
 	private static final PLAIN_ARGS_EXPLODED: String = 'class PlainChain {\n\tprivate function f():Void {\n'
 		+ '\t\tvalueSource.map(v -> v + 1)\n\t\t\t.filter(v -> v > 2)\n\t\t\t.sort(cmp)\n'
-		+ '\t\t\t.join(sepValue)\n\t\t\t.trim()\n\t\t\t.toLowerCase()\n\t\t\t.substr(0, 10)\n' + '\t\t\t.split(\',\')\n\t\t\t.concat(o);\n'
-		+ '\t}\n' + '}';
+		+ '\t\t\t.join(sepValue)\n\t\t\t.trim()\n\t\t\t.toLowerCase()\n\t\t\t.substr(0, 10)\n'
+		+ '\t\t\t.split(\',\')\n\t\t\t.concat(o);\n'
+		+ '\t}\n'
+		+ '}';
 
 	/** A chain whose first two links end multi-line and whose last three carry plain args. Pre-knob: every link on its own line. */
 	private static final MIXED_EXPLODED: String = 'class MixedChain {\n\tprivate function f():Void {\n\t\tremoteClient.first(null, {\n'
@@ -94,27 +96,38 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	/** A dot-broken chain whose ONLY block-arg link is the last one — no gap follows it, so nothing can cuddle. */
 	private static final TERMINAL_BLOCK: String = 'class TailBlockChain {\n\tprivate function f():Void {\n'
 		+ '\t\tremoteClient.third(plainArgumentValue)\n\t\t\t.fourth(anotherPlainArgumentValue)\n'
-		+ '\t\t\t.fifth(yetAnotherPlainArgumentValue)\n' + '\t\t\t.second((r:ResponsePayload) -> {\n' + '\t\t\t\thandleResult(r);\n'
-		+ '\t\t\t});\n' + '\t}\n' + '}';
+		+ '\t\t\t.fifth(yetAnotherPlainArgumentValue)\n'
+		+ '\t\t\t.second((r:ResponsePayload) -> {\n'
+		+ '\t\t\t\thandleResult(r);\n'
+		+ '\t\t\t});\n'
+		+ '\t}\n'
+		+ '}';
 
 	/** Two dot-broken chains, the inner one living inside the outer one's lambda body. Pre-knob: both exploded. */
 	private static final NESTED_EXPLODED: String = 'class NestedChain {\n\tprivate function f():Void {\n'
 		+ '\t\touterService.beginRequest(null, {\n\t\t\talphaField: alphaValue,\n\t\t\tbetaField: '
 		+ 'betaValue,\n\t\t})\n\t\t\t.completed((outerResult:svc.types.OutcomeBase12) -> {\n'
 		+ '\t\t\t\tinnerService.beginRequest(null, {\n\t\t\t\t\tgammaField: gammaValue,\n'
-		+ '\t\t\t\t\tdeltaField: deltaValue,\n\t\t\t\t})\n' + '\t\t\t\t\t.completed((innerResult:svc.types.OutcomeBase12) -> {\n'
-		+ '\t\t\t\t\t\thandleInnerSuccess(innerResult);\n\t\t\t\t\t})\n' + '\t\t\t\t\t.failed((innerError:svc.types.FaultResponse) -> {\n'
+		+ '\t\t\t\t\tdeltaField: deltaValue,\n\t\t\t\t})\n'
+		+ '\t\t\t\t\t.completed((innerResult:svc.types.OutcomeBase12) -> {\n'
+		+ '\t\t\t\t\t\thandleInnerSuccess(innerResult);\n\t\t\t\t\t})\n'
+		+ '\t\t\t\t\t.failed((innerError:svc.types.FaultResponse) -> {\n'
 		+ '\t\t\t\t\t\treportInnerFailure(innerError);\n\t\t\t\t\t});\n\t\t\t})\n'
-		+ '\t\t\t.failed((outerError:svc.types.FaultResponse) -> {\n' + '\t\t\t\treportOuterFailure(outerError);\n\t\t\t});\n\t}\n}';
+		+ '\t\t\t.failed((outerError:svc.types.FaultResponse) -> {\n'
+		+ '\t\t\t\treportOuterFailure(outerError);\n\t\t\t});\n\t}\n}';
 
 	/** Both chains compacted, each against its OWN base indent — the inner one at the outer lambda body's level. */
 	private static final NESTED_CUDDLED: String = 'class NestedChain {\n\tprivate function f():Void {\n'
 		+ '\t\touterService.beginRequest(null, {\n\t\t\talphaField: alphaValue,\n'
 		+ '\t\t\tbetaField: betaValue,\n\t\t}).completed((outerResult:svc.types.OutcomeBase12) -> {\n'
-		+ '\t\t\tinnerService.beginRequest(null, {\n\t\t\t\tgammaField: gammaValue,\n' + '\t\t\t\tdeltaField: deltaValue,\n'
-		+ '\t\t\t}).completed((innerResult:svc.types.OutcomeBase12) -> {\n' + '\t\t\t\thandleInnerSuccess(innerResult);\n'
-		+ '\t\t\t}).failed((innerError:svc.types.FaultResponse) -> {\n' + '\t\t\t\treportInnerFailure(innerError);\n\t\t\t});\n'
-		+ '\t\t}).failed((outerError:svc.types.FaultResponse) -> {\n' + '\t\t\treportOuterFailure(outerError);\n\t\t});\n\t}\n}';
+		+ '\t\t\tinnerService.beginRequest(null, {\n\t\t\t\tgammaField: gammaValue,\n'
+		+ '\t\t\t\tdeltaField: deltaValue,\n'
+		+ '\t\t\t}).completed((innerResult:svc.types.OutcomeBase12) -> {\n'
+		+ '\t\t\t\thandleInnerSuccess(innerResult);\n'
+		+ '\t\t\t}).failed((innerError:svc.types.FaultResponse) -> {\n'
+		+ '\t\t\t\treportInnerFailure(innerError);\n\t\t\t});\n'
+		+ '\t\t}).failed((outerError:svc.types.FaultResponse) -> {\n'
+		+ '\t\t\treportOuterFailure(outerError);\n\t\t});\n\t}\n}';
 
 	/**
 	 * A chain that BREAKS before it cuddles: `.second` / `.third` carry plain args, `.fourth` is the block-arg link, `.fifth` rides its
@@ -122,14 +135,23 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	 */
 	private static final BREAK_THEN_CUDDLE_EXPLODED: String = 'class BreakThenCuddle {\n\tprivate function f():Void {\n'
 		+ '\t\tremoteClient.first(plainArgumentValue)\n\t\t\t.second(anotherPlainArgumentValue)\n'
-		+ '\t\t\t.third(yetAnotherPlainArgumentValue)\n' + '\t\t\t.fourth((r:ResponsePayload) -> {\n' + '\t\t\t\thandleResult(r);\n'
-		+ '\t\t\t})\n' + '\t\t\t.fifth(oneMorePlainArgumentValue);\n' + '\t}\n' + '}';
+		+ '\t\t\t.third(yetAnotherPlainArgumentValue)\n'
+		+ '\t\t\t.fourth((r:ResponsePayload) -> {\n'
+		+ '\t\t\t\thandleResult(r);\n'
+		+ '\t\t\t})\n'
+		+ '\t\t\t.fifth(oneMorePlainArgumentValue);\n'
+		+ '\t}\n'
+		+ '}';
 
 	/** Same chain with `.fifth` riding `.fourth`'s `})` INSIDE the broken run, so both stay at base + 1 and the body at base + 2. */
 	private static final BREAK_THEN_CUDDLE_CUDDLED: String = 'class BreakThenCuddle {\n\tprivate function f():Void {\n'
 		+ '\t\tremoteClient.first(plainArgumentValue)\n\t\t\t.second(anotherPlainArgumentValue)\n'
-		+ '\t\t\t.third(yetAnotherPlainArgumentValue)\n' + '\t\t\t.fourth((r:ResponsePayload) -> {\n' + '\t\t\t\thandleResult(r);\n'
-		+ '\t\t\t}).fifth(oneMorePlainArgumentValue);\n' + '\t}\n' + '}';
+		+ '\t\t\t.third(yetAnotherPlainArgumentValue)\n'
+		+ '\t\t\t.fourth((r:ResponsePayload) -> {\n'
+		+ '\t\t\t\thandleResult(r);\n'
+		+ '\t\t\t}).fifth(oneMorePlainArgumentValue);\n'
+		+ '\t}\n'
+		+ '}';
 
 	/**
 	 * Under a forced-`onePerLine` cascade, a chain whose RECEIVER is a call with a broken object-literal argument — the only shape whose
@@ -139,12 +161,15 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	 */
 	private static final RECEIVER_EXPLODED: String = 'class OnePerLineChain {\n\tprivate function f():Void {\n\t\tbuildSource({\n'
 		+ '\t\t\talphaField: alphaValue,\n\t\t\tbetaField: betaValue,\n\t\t})\n'
-		+ '\t\t\t.second(anotherPlainArgumentValue)\n\t\t\t.third(yetAnotherPlainArgumentValue);\n' + '\t}\n}';
+		+ '\t\t\t.second(anotherPlainArgumentValue)\n\t\t\t.third(yetAnotherPlainArgumentValue);\n'
+		+ '\t}\n}';
 
 	/** Same chain with `.second` riding the receiver's `})` at BASE indent (no run open yet), `.third` still breaking to base + 1. */
 	private static final RECEIVER_CUDDLED: String = 'class OnePerLineChain {\n\tprivate function f():Void {\n\t\tbuildSource({\n'
 		+ '\t\t\talphaField: alphaValue,\n\t\t\tbetaField: betaValue,\n\t\t}).second(anotherPlainArgumentValue)\n'
-		+ '\t\t\t.third(yetAnotherPlainArgumentValue);\n' + '\t}\n' + '}';
+		+ '\t\t\t.third(yetAnotherPlainArgumentValue);\n'
+		+ '\t}\n'
+		+ '}';
 
 	/** A chain carrying a trailing line comment after its first link — routed through `shapeKeep` by the comment-forced break mask. */
 	private static final COMMENT_CHAIN: String = 'class CommentChain {\n\tprivate function f():Void {\n'

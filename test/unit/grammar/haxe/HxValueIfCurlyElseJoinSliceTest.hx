@@ -78,8 +78,10 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 	/** A value-`if` whose branch is an object literal: not a block ctor, so the shape-aware switch forces the break. */
 	private static final OBJ: String = 'class DIVerifier {\n\tprivate static function describe(existingResolvedReference: Null<Int>): '
 		+ 'Dynamic {\n\t\treturn if (existingResolvedReference != null)\n\t\t\t{\n'
-		+ '\t\t\t\townerClassNameValue: existingResolvedReference,\n' + '\t\t\t\tdeclaredFieldNameValue: existingResolvedReference,\n'
-		+ '\t\t\t\tsourceModulePathValue: existingResolvedReference\n\t\t\t}\n\t\telse\n\t\t\tnull;\n' + '\t}\n}';
+		+ '\t\t\t\townerClassNameValue: existingResolvedReference,\n'
+		+ '\t\t\t\tdeclaredFieldNameValue: existingResolvedReference,\n'
+		+ '\t\t\t\tsourceModulePathValue: existingResolvedReference\n\t\t\t}\n\t\telse\n\t\t\tnull;\n'
+		+ '\t}\n}';
 
 	/** A value-`if` whose branch is a `[ … ]` list: a block ctor, but not a curly one, so the source shape stands. */
 	private static final BRACKET: String = 'class DIVerifier {\n\tprivate static function widths(declaredArgumentCount: Int): Array<Int> {'

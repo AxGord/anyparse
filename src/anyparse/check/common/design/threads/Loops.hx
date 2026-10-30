@@ -142,7 +142,10 @@ final class Loops {
 		final reaching: Map<String, Bool> = sinkward();
 		return _graph.outEdges(fn).exists(
 			e ->
-				e.kind != Contains && e.span != null && e.span.from >= span.from && e.span.to <= span.to
+				e.kind != Contains
+				&& e.span != null
+				&& e.span.from >= span.from
+				&& e.span.to <= span.to
 				&& (reaching.exists(e.to) || _listsOf(e.file).sinkIds.contains(e.to))
 		);
 	}

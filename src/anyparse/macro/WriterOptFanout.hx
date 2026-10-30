@@ -1387,7 +1387,8 @@ final class WriterOptFanout {
 		// `_setCondWrapChainMode` only records a condition wrap's mode. Emitted when the opt typedef declares
 		// `_chainModeOverride:Null<WrapMode>` AND carries both `opBoolChainWrap` and `opAddSubChainWrap`.
 		if (
-			optionsHasField(optionsTypePath, '_chainModeOverride') && optionsHasField(optionsTypePath, 'opBoolChainWrap')
+			optionsHasField(optionsTypePath, '_chainModeOverride')
+			&& optionsHasField(optionsTypePath, 'opBoolChainWrap')
 			&& optionsHasField(optionsTypePath, 'opAddSubChainWrap')
 		) {
 			fields.push(setChainModeOverrideField(optionsCT, true));

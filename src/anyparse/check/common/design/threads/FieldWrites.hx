@@ -568,7 +568,9 @@ final class FieldWrites {
 	public static function ownMemberRead(node: QueryNode, shape: RefShape): Bool {
 		return node.kind == shape.identKind
 			? node.name != shape.selfReferenceText
-			: accessKind(node.kind, shape) && node.children.length > 0 && node.children[0].kind == shape.identKind
+			: accessKind(node.kind, shape)
+				&& node.children.length > 0
+				&& node.children[0].kind == shape.identKind
 				&& node.children[0].name == shape.selfReferenceText;
 	}
 

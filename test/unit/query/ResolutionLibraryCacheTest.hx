@@ -42,7 +42,8 @@ class ResolutionLibraryCacheTest extends Test {
 		'package servelib;\nclass ServeBase {\n\tpublic function new() {}\n\tpublic function ping(): Void {}\n}';
 
 	private static final SERVE_DERIVED: String = 'package proj;\n\nimport servelib.ServeBase;\n\nclass ServeDerived extends ServeBase {\n\n'
-		+ '\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n\t\tthis.ping();\n' + '\t}\n\n}\n';
+		+ '\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n\t\tthis.ping();\n'
+		+ '\t}\n\n}\n';
 	#end
 
 	/**

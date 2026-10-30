@@ -238,7 +238,9 @@ final class OccurrenceScan {
 		final skip: String = skipReceiver;
 		inline function qualifiedBySkip(dotAt: Int): Bool {
 			final start: Int = dotAt - skip.length;
-			return skip.length > 0 && start >= 0 && source.substr(start, skip.length) == skip
+			return skip.length > 0
+				&& start >= 0
+				&& source.substr(start, skip.length) == skip
 				&& (start == 0 || !SourceText.isIdentChar(source.fastCodeAt(start - 1)));
 		}
 		var i: Int = 0;
@@ -425,7 +427,10 @@ final class OccurrenceScan {
 			final afterIdx: Int = at + len;
 			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
 			if (
-				beforeOk && afterOk && !offsetWithinAny(at, excluded) && !qualifiedBefore(source, at, commentRegions)
+				beforeOk
+				&& afterOk
+				&& !offsetWithinAny(at, excluded)
+				&& !qualifiedBefore(source, at, commentRegions)
 				&& (matchMask == null || !offsetWithinSorted(at, matchMask))
 			)
 				return true;
@@ -457,7 +462,9 @@ final class OccurrenceScan {
 		if (commentRegions == null) return false;
 		var j: Int = at - 1;
 		while (j >= 0 && SourceText.isSpace(source.fastCodeAt(j))) j--;
-		return j >= 0 && source.fastCodeAt(j) == '.'.code && (j <= 0 || source.fastCodeAt(j - 1) != '.'.code)
+		return j >= 0
+			&& source.fastCodeAt(j) == '.'.code
+			&& (j <= 0 || source.fastCodeAt(j - 1) != '.'.code)
 			&& !offsetWithinAny(j, commentRegions);
 	}
 

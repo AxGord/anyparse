@@ -64,7 +64,8 @@ final class QuietLocks {
 		final type: String = pair.substring(0, pair.lastIndexOf('.') + 1);
 		final answer: Bool = pair != '' && takes.foreach(a -> {
 			final lists: ChainLists = _listsOf(a.edge.file);
-			a.pair.lockId == pair && !lists.sharedIds.contains(pair)
+			a.pair.lockId == pair
+				&& !lists.sharedIds.contains(pair)
 				&& !lists.pairs.exists(p -> p.lockId != pair && p.lockId.substring(0, p.lockId.lastIndexOf('.') + 1) == type);
 		});
 		_exclusive[lock] = answer;

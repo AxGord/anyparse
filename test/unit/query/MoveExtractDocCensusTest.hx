@@ -52,7 +52,8 @@ class MoveExtractDocCensusTest extends Test {
 	 * A member-level destination whose last member is documented, so an append lands under a doc.
 	 */
 	private static final DST: String = 'package;\n\nclass Dst {\n\t/** Doc for first. */\n\tpublic static function first():Int {\n'
-		+ '\t\treturn 10;\n\t}\n\n\t/** Doc for last. */\n\tpublic static function last():Int {\n' + '\t\treturn 11;\n\t}\n}\n';
+		+ '\t\treturn 10;\n\t}\n\n\t/** Doc for last. */\n\tpublic static function last():Int {\n'
+		+ '\t\treturn 11;\n\t}\n}\n';
 
 	/** Three module-level typedefs: their spans are GREEDY, so A's span ends AFTER Mover's doc. */
 	private static final MODULE: String = 'package;\n\n/** Doc for A. */\ntypedef A = {\n\tfinal a:Int;\n}\n\n/** Doc for Mover. */\n'

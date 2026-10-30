@@ -297,7 +297,10 @@ final class TriviaEofLowering {
 				final _isBlock: Bool = StringTools.startsWith(_lc, '/*');
 				final _isLast: Bool = _ci + 1 == _t.leadingComments.length;
 				var _override: Int = 0;
-				final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _ci == 0 && _isBlock
+				final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}
+					&& _si == 0
+					&& _ci == 0
+					&& _isBlock
 					&& (_headIsPiu || _t.leadingComments.length >= 2);
 				if (_firstSlot) {
 					_override = opt.afterFileHeaderComment;
@@ -380,7 +383,8 @@ final class TriviaEofLowering {
 		return betweenMultilineCommentsBlanks
 			? macro {
 				if (
-					_ti < _trailLC.length - 1 && StringTools.startsWith(_trailLC[_ti], '/*')
+					_ti < _trailLC.length - 1
+					&& StringTools.startsWith(_trailLC[_ti], '/*')
 					&& StringTools.startsWith(_trailLC[_ti + 1], '/*')
 				) {
 					var _bbi: Int = 0;

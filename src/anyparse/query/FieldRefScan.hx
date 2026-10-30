@@ -92,7 +92,8 @@ final class FieldRefScan {
 	public static function hidesBindingNamed(node: QueryNode, span: Null<Span>, source: String, field: String, shape: RefShape): Bool {
 		final continuations: Array<String> = shape.localDeclContinuationKinds ?? [];
 		if ((shape.localDeclKinds ?? []).contains(node.kind) && !continuations.contains(node.kind)) {
-			return span == null || node.children.exists(c -> continuations.contains(c.kind))
+			return span == null
+				|| node.children.exists(c -> continuations.contains(c.kind))
 				&& SourceText.identTokenOffset(source, span, field) >= 0;
 		}
 		final selfScoped: Array<String> = (shape.iterationBindingKinds ?? []).concat(shape.iterationValueBinderKinds ?? []);

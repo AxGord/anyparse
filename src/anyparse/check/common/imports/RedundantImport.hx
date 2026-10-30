@@ -109,7 +109,8 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 						span: imp.span,
 						rule: RULE_ID,
 						severity: Severity.Warning,
-						message: 'redundant ' + (imp.kind == ImportKind.Using ? 'using' : 'import')
+						message: 'redundant '
+						+ (imp.kind == ImportKind.Using ? 'using' : 'import')
 						+ ' \'${imp.raw}\': \'$ambient\' already puts the same statement in force in every module here'
 					});
 			}

@@ -186,8 +186,11 @@ final class Metavar {
 			// (`0...n`) or a spread (`f(...arr)`) has an operand on one side
 			// and is copied through as ordinary source.
 			if (
-				c == '.'.code && i + PatternStar.TOKEN_LENGTH <= len && source.fastCodeAt(i + 1) == '.'.code
-				&& source.fastCodeAt(i + 2) == '.'.code && PatternStar.isStarSlot(source, i)
+				c == '.'.code
+				&& i + PatternStar.TOKEN_LENGTH <= len
+				&& source.fastCodeAt(i + 1) == '.'.code
+				&& source.fastCodeAt(i + 2) == '.'.code
+				&& PatternStar.isStarSlot(source, i)
 			) {
 				buf.add(PatternStar.PLACEHOLDER);
 				i += PatternStar.TOKEN_LENGTH;
@@ -409,7 +412,8 @@ final class PatternStar {
 	private static final ROOT_STAR_REFUSAL: String = 'pattern: `...` alone matches every node — it is a wildcard, not a pattern ('
 		+ 'use `$$_` for "any ONE node", or put the `...` inside a call / constructor / literal: `f(...)`, `new T(...)`, `[...]`)';
 	private static final NAME_SLOT_REFUSAL: String = 'pattern: `...` cannot stand where the grammar needs a name — it marks a run of '
-		+ 'CHILDREN, so it belongs inside the brackets (' + '`new T(...)`), not in place of the type or callee';
+		+ 'CHILDREN, so it belongs inside the brackets ('
+		+ '`new T(...)`), not in place of the type or callee';
 	private static final TWO_STARS_REFUSAL: String = 'pattern: two `...` in one child list — the matcher anchors one prefix and one suffix '
 		+ 'around a SINGLE star, so a second one has nothing to anchor against (a constructor\'s type arguments are a list '
 		+ 'of their own: `new $$T<...>(...)` is one star in each)';

@@ -127,7 +127,8 @@ final class DocCommentContinuation extends RuleBase {
 
 	/** Whether the block comment token is closed by `*\/` — an unterminated one has no interior to judge. */
 	private static inline function closed(source: String, tok: CommentTok): Bool {
-		return tok.to >= tok.from + SHORTEST_CLOSED_BLOCK && source.fastCodeAt(tok.to - 2) == '*'.code
+		return tok.to >= tok.from + SHORTEST_CLOSED_BLOCK
+			&& source.fastCodeAt(tok.to - 2) == '*'.code
 			&& source.fastCodeAt(tok.to - 1) == '/'.code;
 	}
 

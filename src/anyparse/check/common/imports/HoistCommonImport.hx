@@ -560,7 +560,10 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	private static function justified(violations: Array<Violation>, spelled: Spelled): Bool {
 		return violations.exists(v -> {
 			final span: Null<Span> = v.span;
-			return v.rule == RULE_ID && v.file == spelled.file && span != null && span.from == spelled.span.from
+			return v.rule == RULE_ID
+				&& v.file == spelled.file
+				&& span != null
+				&& span.from == spelled.span.from
 				&& span.to == spelled.span.to;
 		});
 	}

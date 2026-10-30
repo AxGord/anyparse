@@ -387,9 +387,13 @@ final class OptionalParamShorthand extends RuleBase {
 	 * constructor or a `static`. A conservative miss, not a correctness gap.
 	 */
 	private static function isUnoverridable(fn: QueryNode, fnParent: QueryNode, seams: Seams): Bool {
-		return seams.constructorName != null && fn.name == seams.constructorName || seams.localFunctionKinds.contains(fn.kind)
-			|| seams.inlineFunctionKinds.contains(fn.kind) || seams.finalModifierMemberKind != null
-			&& fn.kind == seams.finalModifierMemberKind || hasModifier(fn, fnParent, seams, seams.staticModifierKind)
+		return seams.constructorName != null
+			&& fn.name == seams.constructorName
+			|| seams.localFunctionKinds.contains(fn.kind)
+			|| seams.inlineFunctionKinds.contains(fn.kind)
+			|| seams.finalModifierMemberKind != null
+			&& fn.kind == seams.finalModifierMemberKind
+			|| hasModifier(fn, fnParent, seams, seams.staticModifierKind)
 			|| hasModifier(fn, fnParent, seams, seams.inlineModifierKind);
 	}
 
@@ -738,7 +742,9 @@ final class OptionalParamShorthand extends RuleBase {
 	): Null<String> {
 		final span: Null<Span> = node.span;
 		if (span == null || node.kind == seams.nullLitKind) return null;
-		final negated: Bool = seams.negationKind != null && node.kind == seams.negationKind && node.children.length == 1
+		final negated: Bool = seams.negationKind != null
+			&& node.kind == seams.negationKind
+			&& node.children.length == 1
 			&& seams.numericKinds.contains(node.children[0].kind);
 		final literal: Bool = seams.constLiteralKinds.contains(node.kind) || negated || seams.stringFold?.literalOf(node, source) != null;
 		final fits: Bool = literal
@@ -764,7 +770,9 @@ final class OptionalParamShorthand extends RuleBase {
 		final name: Null<String> = node.name;
 		if (identKind == null || name == null) return false;
 		return if (
-			seams.fieldAccessKind != null && node.kind == seams.fieldAccessKind && node.children.length == 1
+			seams.fieldAccessKind != null
+			&& node.kind == seams.fieldAccessKind
+			&& node.children.length == 1
 			&& node.children[0].kind == identKind
 		)
 			isConstantMember(node.children[0].name, name, seams, scope)

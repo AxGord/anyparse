@@ -85,7 +85,8 @@ final class TypedFactsTypeStrings {
 						'{'
 							+ [
 								for (f in fields) (f.meta.has(':optional') ? '?' : '') + f.name + ':' + typeString(f.type, depth + 1)
-							].join(',') + '}';
+							].join(',')
+							+ '}';
 				}
 		};
 	}

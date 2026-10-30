@@ -497,9 +497,16 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		return switchKinds.length == 0 || ifKinds.length == 0 || numericKinds.length + stringKinds.length == 0
-			|| exhaustiveKinds.length == 0 || caseBranchKind == null || plainKind == null || parenKind == null || blockStmtKind == null
-			|| fieldAccessKind == null || stringFold == null
+		return switchKinds.length == 0
+			|| ifKinds.length == 0
+			|| numericKinds.length + stringKinds.length == 0
+			|| exhaustiveKinds.length == 0
+			|| caseBranchKind == null
+			|| plainKind == null
+			|| parenKind == null
+			|| blockStmtKind == null
+			|| fieldAccessKind == null
+			|| stringFold == null
 			? null
 			: {
 				switchKinds: switchKinds,

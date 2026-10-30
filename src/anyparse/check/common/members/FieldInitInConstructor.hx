@@ -309,7 +309,8 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 	 * naming those two is either wrong (`-5` is computed) or redundant (a chain is already a name).
 	 */
 	private static function isBareLiteral(node: QueryNode, shape: RefShape): Bool {
-		return (shape.numericLiteralKinds ?? []).contains(node.kind) || node.kind == shape.boolLitKind
+		return (shape.numericLiteralKinds ?? []).contains(node.kind)
+			|| node.kind == shape.boolLitKind
 			|| (shape.stringLiteralKinds ?? []).contains(node.kind);
 	}
 

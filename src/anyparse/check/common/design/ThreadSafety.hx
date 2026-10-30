@@ -571,7 +571,9 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	private static function runsNothing(
 		graph: CallGraph, sealedSlots: Array<String>, stored: StoredValues, listsOf: (String) -> ChainLists, edge: CallEdge
 	): Bool {
-		return sealedSlots.contains(edge.storedInto ?? '') || stored.stored(edge) || neverInvoked(edge, listsOf(edge.file))
+		return sealedSlots.contains(edge.storedInto ?? '')
+			|| stored.stored(edge)
+			|| neverInvoked(edge, listsOf(edge.file))
 			|| ThreadGraph.madeWhereHanded(graph, edge);
 	}
 
@@ -844,7 +846,10 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			final fn: String = r.hold.edge.from;
 			final around: Array<WarnedHold> = warned.filter(
 				w ->
-					w != r && !suppressed(w.finding) && w.hold.lock == r.hold.lock && w.hold.edge.from != fn
+					w != r
+					&& !suppressed(w.finding)
+					&& w.hold.lock == r.hold.lock
+					&& w.hold.edge.from != fn
 					&& w.calls.exists(c -> w.taint.blockingTrail(w.hold, c, w.held)?.path.contains(fn) == true)
 			);
 			if (around.length == 0) continue;
@@ -950,7 +955,10 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		for (inner in reported) if (!inner.handOff) {
 			final outer: Null<WarnedHold> = reported.find(
 				o ->
-					o.hold != inner.hold && !suppressed(o.finding) && !turned.contains(o.hold) && o.hold.edge.from == inner.hold.edge.from
+					o.hold != inner.hold
+					&& !suppressed(o.finding)
+					&& !turned.contains(o.hold)
+					&& o.hold.edge.from == inner.hold.edge.from
 					&& (o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))
 					&& inner.calls.foreach(c -> o.hold.window.contains(c))
 			);

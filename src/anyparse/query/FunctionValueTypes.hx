@@ -275,7 +275,8 @@ final class FunctionValueTypes {
 		final hierarchy: Array<String> = [];
 		for (o in owners) for (t in [o].concat(_view._table.subtypesOf(o))) if (!hierarchy.contains(t)) hierarchy.push(t);
 		// a constructor and the pseudo-nodes running a type's initializers are no field any read names
-		final initializers: Bool = name == CallGraph.INIT_NAME || name == CallGraph.STATIC_INIT_NAME
+		final initializers: Bool = name == CallGraph.INIT_NAME
+			|| name == CallGraph.STATIC_INIT_NAME
 			|| name == (_scope.shape.constructorName ?? 'new');
 		final statics: Bool = name != null
 			&& owners.exists(o -> _view._table.type(o)?.fields.exists(f -> f.name == name && f.isStatic) == true);

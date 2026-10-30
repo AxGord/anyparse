@@ -93,7 +93,10 @@ final class LintWarn {
 		for (candidate in candidates) if (candidate != '') {
 			final path: String = candidate.startsWith('/') ? normalised(candidate) : '$root/$candidate';
 			if (
-				path.startsWith('$root/') && path.endsWith('.hx') && FileSystem.exists(path) && !FileSystem.isDirectory(path)
+				path.startsWith('$root/')
+				&& path.endsWith('.hx')
+				&& FileSystem.exists(path)
+				&& !FileSystem.isDirectory(path)
 				&& !files.contains(path)
 			)
 				files.push(path);

@@ -246,7 +246,8 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 		for (i in 1...body.children.length) {
 			final stmt: QueryNode = body.children[i];
 			if (
-				LoopScan.declares(stmt, keyVar, core) || LoopScan.declares(stmt, valueVar, core)
+				LoopScan.declares(stmt, keyVar, core)
+				|| LoopScan.declares(stmt, valueVar, core)
 				|| LoopScan.declares(stmt, collection, core)
 			)
 				return false;

@@ -129,28 +129,32 @@ final class HxCondExprFitRegionFixedPointTest extends Test {
 
 	private static function callArgument(k: Int): String {
 		return statement(
-			'var y = foo(aaaa, #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'' + ''.lpad('k', k)
+			'var y = foo(aaaa, #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \''
+			+ ''.lpad('k', k)
 			+ '\'} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end);'
 		);
 	}
 
 	private static function lambdaComprehension(k: Int): String {
 		return statement(
-			'var f = () -> [for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'' + ''.lpad('k', k)
+			'var f = () -> [for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \''
+			+ ''.lpad('k', k)
 			+ '\'} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end];'
 		);
 	}
 
 	private static function chainComprehension(head: String, k: Int): String {
 		return statement(
-			'var y = $head.withItems([for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'' + ''.lpad('k', k)
+			'var y = $head.withItems([for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \''
+			+ ''.lpad('k', k)
 			+ '\'} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end]).build();'
 		);
 	}
 
 	private static function elseifComprehension(k: Int): String {
 		return statement(
-			'var y = [for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'' + ''.lpad('k', k)
+			'var y = [for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \''
+			+ ''.lpad('k', k)
 			+ '\'} #elseif foo {alpha: x.bbbbbbbbbbbbbbb} #end];'
 		);
 	}

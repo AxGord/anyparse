@@ -305,7 +305,8 @@ final class PreferIndexAccess extends RuleBase {
 				if (TypeResolver.isInferenceFragileNullGuard(fallback, site, root, cfg.shape, declaredTypes)) return true;
 			}
 		}
-		return node.kind == cfg.nullCoalKind && node.children.length == 2
+		return node.kind == cfg.nullCoalKind
+			&& node.children.length == 2
 			&& TypeResolver.isInferenceFragileNullGuard(node.children[1], site, root, cfg.shape, declaredTypes)
 			|| node.children.exists(c -> containsFragileNullGuard(c, site, root, declaredTypes, cfg));
 	}

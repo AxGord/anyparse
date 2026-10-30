@@ -220,10 +220,12 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 	 * the whitelist is what keeps the two apart.
 	 */
 	private static function guardedPrefixRun(node: QueryNode, seams: Seams): Bool {
-		return node.kind == seams.conditionalKind && node.children.length != 0
+		return node.kind == seams.conditionalKind
+			&& node.children.length != 0
 			&& node.children.foreach(
 				child ->
-					CheckScan.isLeadingAnnotation(child, seams.modifiers) || seams.metaKinds.contains(child.kind)
+					CheckScan.isLeadingAnnotation(child, seams.modifiers)
+					|| seams.metaKinds.contains(child.kind)
 					|| seams.declPrefixKeywords.contains(child.kind)
 			);
 	}

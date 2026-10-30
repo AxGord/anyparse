@@ -21,7 +21,10 @@ final class BareNames {
 		if (node.kind == shape.caseBranchKind && node.children.length > 0 && readsName(node.children[0], name, shape)) into.push(node);
 		for (k in node.children) {
 			if (
-				k.name == name && k.kind != shape.identKind && k.kind != shape.stringInterpIdentKind && k.kind != shape.objectFieldKind
+				k.name == name
+				&& k.kind != shape.identKind
+				&& k.kind != shape.stringInterpIdentKind
+				&& k.kind != shape.objectFieldKind
 				&& !isAccess(k.kind, shape)
 			)
 				into.push(k);
@@ -75,7 +78,10 @@ final class BareNames {
 	/** Whether something in `node`'s subtree writes the identifier `name`: an assignment to it, an increment. */
 	public static function writes(node: QueryNode, name: String, shape: RefShape): Bool {
 		final kids: Array<QueryNode> = node.children;
-		return shape.writeParentKinds.contains(node.kind) && kids.length > 0 && kids[0].kind == shape.identKind && kids[0].name == name
+		return shape.writeParentKinds.contains(node.kind)
+			&& kids.length > 0
+			&& kids[0].kind == shape.identKind
+			&& kids[0].name == name
 			|| kids.exists(k -> writes(k, name, shape));
 	}
 

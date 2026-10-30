@@ -130,8 +130,11 @@ final class PreferIsOperator extends RuleBase implements VersionGated {
 	private static function proven(args: CallArgs, proof: Proof): Bool {
 		final index: Null<SymbolIndex> = proof.index();
 		final fi: Null<FileInfo> = index?.fileInfo(proof.file);
-		return index != null && fi != null && !index.typing.expectations.unifiesUnderExpectation(args.value)
-			&& receiverIsStd(args.receiver, index, fi, proof) && namesType(args.type, index, fi, proof);
+		return index != null
+			&& fi != null
+			&& !index.typing.expectations.unifiesUnderExpectation(args.value)
+			&& receiverIsStd(args.receiver, index, fi, proof)
+			&& namesType(args.type, index, fi, proof);
 	}
 
 	/**
@@ -141,7 +144,8 @@ final class PreferIsOperator extends RuleBase implements VersionGated {
 	private static function receiverIsStd(receiver: QueryNode, index: SymbolIndex, fi: FileInfo, proof: Proof): Bool {
 		final span: Null<Span> = receiver.span;
 		final name: String = proof.seams.owner;
-		return span != null && ValueDoors.bindsNoValue(receiver, name, span, fi, proof.root, proof.shape, proof.file, index)
+		return span != null
+			&& ValueDoors.bindsNoValue(receiver, name, span, fi, proof.root, proof.shape, proof.file, index)
 			&& index.refs.names.bindsStdDeclaration(name, fi, span.from);
 	}
 

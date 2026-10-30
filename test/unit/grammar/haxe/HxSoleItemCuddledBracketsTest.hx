@@ -49,7 +49,8 @@ final class HxSoleItemCuddledBracketsTest extends Test {
 
 	/** A sole plain call element in the exploded leading-break layout. */
 	private static final SOLE_CALL_EXPLODED: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n\t\t\tmakeEntryRecord({\n'
-		+ '\t\t\t\tcaptionValue: sourceValue.captionValue,\n' + '\t\t\t\tdetailValue: sourceValue.detailValue,\n'
+		+ '\t\t\t\tcaptionValue: sourceValue.captionValue,\n'
+		+ '\t\t\t\tdetailValue: sourceValue.detailValue,\n'
 		+ '\t\t\t\torderValue: sourceValue.orderValue\n\t\t\t})\n\t\t];\n\t}\n}';
 
 	/** The same call cuddled — tight brackets, since an array literal pads nothing. */

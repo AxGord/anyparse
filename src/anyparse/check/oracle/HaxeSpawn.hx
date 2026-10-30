@@ -151,7 +151,10 @@ final class HaxeSpawn {
 	 * job's group is its own, so that kill does not reach it. Off Windows a tethered job is killed like any other; on
 	 * Windows, where a kill reaches the tether alone, its stdin is closed instead and the tether ends the job itself.
 	 */
-	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');" + "const TETHER = '" + TETHER + "';"
+	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
+		+ "const TETHER = '"
+		+ TETHER
+		+ "';"
 		+ "const jobs = JSON.parse(require('fs').readFileSync(process.argv[5], 'utf8'));"
 		+ "if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}"
 		+ "function drop() { if (process.argv[4]) try { require('fs').rmSync(require('path').dirname(process.argv[4]),"
@@ -173,17 +176,21 @@ final class HaxeSpawn {
 		+ " try { require('fs').writeFileSync(j.groupFile, c.pid + '\\n' + st); } catch (err) {} }"
 		+ 'function cancelAfter(i) { for (let k = i + 1; k < jobs.length; k++) { if (out[k]) continue;'
 		+ ' if (kids[k]) { kids[k].cancelled = true; kill(kids[k]); }'
-		+ " else if (k >= next) { out[k] = { status: null, out: '', err: '', failure: '" + NOT_STARTED + "', overflowed: false,"
+		+ " else if (k >= next) { out[k] = { status: null, out: '', err: '', failure: '"
+		+ NOT_STARTED
+		+ "', overflowed: false,"
 		+ ' cancelled: true, unstarted: true }; done++; } } next = jobs.length; }'
 		+ 'function finish(i, rec) { if (out[i]) return; out[i] = rec; if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);'
-		+ ' kids[i] = null; running--; done++;' + ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
+		+ ' kids[i] = null; running--; done++;'
+		+ ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
 		+ ' if (done === jobs.length) emit(JSON.stringify(out)); else start(); }'
 		+ 'function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;'
 		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const prog = j.cmd == null ? 'haxe' : j.cmd;"
 		+ " const what = j.shell == null ? prog : 'the command'; let input = j.tethered ? 'pipe' : 'ignore';"
 		+ " if (j.stdin != null && !j.tethered) try { input = require('fs').openSync(j.stdin, 'r'); } catch (err) {"
 		+ " finish(i, { status: null, out: '', err: '', failure: 'could not open ' + j.stdin + ' as the standard input of ' + what,"
-		+ ' overflowed: false }); continue; }' + " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: [input, 'pipe', 'pipe'],"
+		+ ' overflowed: false }); continue; }'
+		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: [input, 'pipe', 'pipe'],"
 		+ ' env: j.env == null ? undefined : Object.assign({}, process.env, j.env), detached: group };'
 		+ " const c = j.tethered ? cp.spawn(process.execPath, ['-e', TETHER, '--', group ? '1' : '0', JSON.stringify(j.shell == null"
 		+ ' ? { cmd: prog, args: j.args } : { cmd: j.shell, args: [], shell: true })], opts)'
@@ -194,7 +201,8 @@ final class HaxeSpawn {
 		+ " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; kill(c); } else o.push(d); });"
 		+ " c.stderr.on('data', d => e.push(d));"
 		+ " c.on('error', err => finish(i, { status: null, out: '', err: '', failure: 'could not launch ' + what + ' (' + err.message + ')',"
-		+ ' overflowed: false }));' + " c.on('close', code => finish(i, { status: over || c.cancelled || c.timedOut ? null : code,"
+		+ ' overflowed: false }));'
+		+ " c.on('close', code => finish(i, { status: over || c.cancelled || c.timedOut ? null : code,"
 		+ " out: Buffer.concat(o).toString('utf8'), err: Buffer.concat(e).toString('utf8'),"
 		+ " failure: c.cancelled ? 'cancelled — an earlier job failed' : c.timedOut ? what + ' timed out after ' + j.timeout + ' ms'"
 		+ " : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '', overflowed: over, cancelled: c.cancelled === true })); } }"

@@ -208,9 +208,13 @@ final class LoopScan {
 	): Bool {
 		if (stmt.kind != exprStmtKind || stmt.children.length != 1) return false;
 		final step: QueryNode = stmt.children[0];
-		return step.children.length > 0 && bareIdentName(step.children[0], s) == name
-			&& (incrementKinds.contains(step.kind) || addAssignKind != null && step.kind == addAssignKind
-				&& step.children.length == COMPOUND_ASSIGN_CHILD_COUNT && isNumericLiteral(step.children[1], ONE_LITERAL, source, s));
+		return step.children.length > 0
+			&& bareIdentName(step.children[0], s) == name
+			&& (incrementKinds.contains(step.kind)
+				|| addAssignKind != null
+				&& step.kind == addAssignKind
+				&& step.children.length == COMPOUND_ASSIGN_CHILD_COUNT
+				&& isNumericLiteral(step.children[1], ONE_LITERAL, source, s));
 	}
 
 	/**
@@ -294,7 +298,9 @@ final class LoopScan {
 	 */
 	public static function bindsName(node: QueryNode, name: String, s: LoopSeams): Bool {
 		return !s.opaqueKinds.contains(node.kind)
-			&& (node.name == name && !isReadKind(node.kind, s) && !s.textLiteralKinds.contains(node.kind)
+			&& (node.name == name
+				&& !isReadKind(node.kind, s)
+				&& !s.textLiteralKinds.contains(node.kind)
 				|| node.children.exists(c -> bindsName(c, name, s)));
 	}
 
@@ -343,7 +349,8 @@ final class LoopScan {
 
 	/** Whether `node` is an index access whose receiver is the bare identifier `name`. */
 	public static function isIndexAccessOf(node: QueryNode, name: String, s: LoopSeams): Bool {
-		return node.kind == s.indexAccessKind && node.children.length == INDEX_ACCESS_CHILD_COUNT
+		return node.kind == s.indexAccessKind
+			&& node.children.length == INDEX_ACCESS_CHILD_COUNT
 			&& bareIdentName(node.children[0], s) == name;
 	}
 

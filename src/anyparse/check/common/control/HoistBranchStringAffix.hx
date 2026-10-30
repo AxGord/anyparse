@@ -266,7 +266,10 @@ final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 	private static function walk(node: QueryNode, parent: Null<QueryNode>, out: Array<Violation>, file: String, ctx: Ctx): Void {
 		final span: Null<Span> = node.span;
 		if (
-			span != null && node.kind == ctx.seams.condKind && parent != null && ctx.seams.blockKinds.contains(parent.kind)
+			span != null
+			&& node.kind == ctx.seams.condKind
+			&& parent != null
+			&& ctx.seams.blockKinds.contains(parent.kind)
 			&& match(node, ctx) != null
 		) out.push({
 			file: file,
@@ -488,7 +491,8 @@ final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 		// The middle slice starts and ends at the seam an eaten operand leaves behind, so the `+` that
 		// joined it is dropped with it.
 		final middle: String = ctx.source.substring(openEaten ? b.secondFrom : b.head.close, closeEaten ? b.penultimateTo : b.tail.open);
-		return (openEaten ? '' : q + ctx.source.substring(start, b.head.to) + q) + middle
+		return (openEaten ? '' : q + ctx.source.substring(start, b.head.to) + q)
+			+ middle
 			+ (closeEaten ? '' : q + ctx.source.substring(b.tail.from, end) + q);
 	}
 

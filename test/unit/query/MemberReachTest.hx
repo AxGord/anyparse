@@ -1086,7 +1086,9 @@ class MemberReachTest extends Test {
 		// its untyped read, its touch, the conversion it makes are the node's, though its first declaration holds none
 		function region(twin: String): String {
 			return 'class C { public static var it:C; public var items:Array<Int> = []; var o:O; function f():Void { /*<*/ g(); /*>*/ }\n'
-				+ '#if other\nfunction g():Void {}\n#else\nfunction g():Void { ' + twin + ' }\n#end\n}';
+				+ '#if other\nfunction g():Void {}\n#else\nfunction g():Void { '
+				+ twin
+				+ ' }\n#end\n}';
 		}
 		final o: String = 'class O { public function new() {} public function toString():String { C.it.items.push(1); return ""; } }';
 		assertMatch(ask([region('var z:Dynamic = untyped this.zz;'), o]), r -> r.match(Unknown(Untyped(_, _))));

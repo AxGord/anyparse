@@ -247,8 +247,10 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 		// The narrowing-guard refusal fires only for a bool-literal collapse (see
 		// RefactorSupport.refusesNullNarrowingBoolCollapse).
 		return BoolExprShape.refusesNullNarrowingBoolCollapse(thenValue, elseValue, ifNode.children[0], shape)
-			|| BoolExprShape.pendingBooleanTernaryTail(thenValue, shape) || BoolExprShape.pendingBooleanTernaryTail(elseValue, shape)
-			|| BoolExprShape.statementLikeValue(thenValue, shape) || BoolExprShape.statementLikeValue(elseValue, shape)
+			|| BoolExprShape.pendingBooleanTernaryTail(thenValue, shape)
+			|| BoolExprShape.pendingBooleanTernaryTail(elseValue, shape)
+			|| BoolExprShape.statementLikeValue(thenValue, shape)
+			|| BoolExprShape.statementLikeValue(elseValue, shape)
 			|| isStuckBooleanCollapse(thenValue, elseValue, shape, retType)
 			|| strandsCascadeComment(
 				// BEFORE the cascade claim, because it answers from spans this frame already has while

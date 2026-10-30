@@ -200,7 +200,8 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 		final elseSpan: Null<Span> = tight(elseBranch, scan);
 		if (swap == null || condSpan == null || thenSpan == null || elseSpan == null) return Skip;
 		final source: String = scan.site.source;
-		return swap.dropsComment || SourceComments.hasCommentMarker(source, condSpan.to, thenSpan.from)
+		return swap.dropsComment
+			|| SourceComments.hasCommentMarker(source, condSpan.to, thenSpan.from)
 			|| SourceComments.hasCommentMarker(source, thenSpan.to, elseSpan.from)
 			? CommentBlocked(swap)
 			: Fixable(swap);

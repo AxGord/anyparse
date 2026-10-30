@@ -233,7 +233,8 @@ final class ParseProf {
 				'${s.file}\t${s.source.length}\t${lineCount(s.source)}\t${Math.round(parseUs / reps)}\t${Math.round(rtUs / reps)}\t$nodes'
 				+ '\t${group(kinds, ['Conditional'])}\t${group(kinds, ['Meta', 'MetaCall', 'MetaStmt', 'MetaExpr'])}\t'
 				+ '${group(kinds, ['DoubleStringExpr', 'SingleStringExpr', 'StringExpr', 'InterpStringExpr'])}\t'
-				+ '${group(kinds, ['FnMember', 'FnDecl'])}\t' + group(kinds, [
+				+ '${group(kinds, ['FnMember', 'FnDecl'])}\t'
+				+ group(kinds, [
 					'ClassDecl',
 					'ClassForm',
 					'InterfaceDecl',

@@ -449,7 +449,8 @@ final class ValueEscapes {
 		// the value an arrow lambda's body yields: an expression, or a block's last statement unless that one yields none
 		function bodyValue(body: QueryNode): Void {
 			final last: Null<QueryNode> = body.children.length > 0 ? body.children[body.children.length - 1] : null;
-			final block: Bool = body.kind == shape.blockBodyKind || body.kind == shape.blockStmtKind
+			final block: Bool = body.kind == shape.blockBodyKind
+				|| body.kind == shape.blockStmtKind
 				|| statementKinds.contains(last?.kind ?? '');
 			if (!block)
 				value(body);
@@ -517,7 +518,10 @@ final class ValueEscapes {
 				final owner: Null<String> = isTypeName(receiver) ? RefactorSupport.flattenPath(receiver) : typeOf(receiver);
 				if (owner == null || libraryMember(SourceText.lastSegment(owner), name)) return false;
 			} else if (
-				target.kind == shape.identKind && name != null && at != null && TypeResolver.bindingNodeFrom(name, at, tree, shape) == null
+				target.kind == shape.identKind
+				&& name != null
+				&& at != null
+				&& TypeResolver.bindingNodeFrom(name, at, tree, shape) == null
 				&& libraryMember(TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name, name)
 			) {
 				return false;
@@ -586,10 +590,12 @@ final class ValueEscapes {
 			for (t in fi.types)
 				for (m in t.members)
 					if (
-						functionKinds.contains(m.kind) && m.returnNominal == classType
+						functionKinds.contains(m.kind)
+						&& m.returnNominal == classType
 						&& m.paramTypeSources.exists(
 							p -> p != null && NominalTypes.outerNominalOf(StringTools.trim(p), _scope.plugin.typeSyntax) == stringType
-						) && !producers.contains(m.name)
+						)
+						&& !producers.contains(m.name)
 					)
 						producers.push(m.name);
 		if (producers.length == 0) return true;
@@ -607,7 +613,8 @@ final class ValueEscapes {
 			function walk(node: QueryNode, parent: Null<QueryNode>, index: Int): Void {
 				if (!ok) return;
 				final name: Null<String> = node.name;
-				final named: Bool = name != null && producers.contains(name)
+				final named: Bool = name != null
+					&& producers.contains(name)
 					&& (node.kind == _shape.identKind || _hazards.isAccess(node.kind));
 				if (named && (parent?.kind != _shape.callKind || index != 0)) ok = false;
 				if (named && parent != null && parent.kind == _shape.callKind && index == 0) for (arg in parent.children.slice(1)) {

@@ -399,7 +399,9 @@ final class FactsMethodValues {
 		final declared: Null<FieldDeclFact> = dot < 0
 			? null
 			: table.type(target.substr(0, dot))?.fields.find(f -> f.name == target.substr(dot + 1));
-		return declared != null && declared.types.length > 0 && !declared.overloads.exists(o -> o > 0)
+		return declared != null
+			&& declared.types.length > 0
+			&& !declared.overloads.exists(o -> o > 0)
 			&& declared.types.foreach(t -> switch FactsTypeTree.read(t) {
 				case Function(_, Named(result, [])): VALUE_RESULTS.contains(result);
 				case _: false;

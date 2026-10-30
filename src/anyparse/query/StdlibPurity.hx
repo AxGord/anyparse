@@ -162,7 +162,8 @@ final class StdlibPurity {
 		final receiver: QueryNode = callee.children[0];
 		final typeName: Null<String> = receiver.name;
 		if (
-			typeName != null && TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)
+			typeName != null
+			&& TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)
 			&& index.refs.declaringFiles(typeName).length == 0
 		) {
 			final qualified: String = '$typeName.$method';

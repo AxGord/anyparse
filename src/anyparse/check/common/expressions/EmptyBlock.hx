@@ -109,7 +109,10 @@ final class EmptyBlock extends RuleBase {
 	private static function walk(scan: EmptyScan, node: QueryNode, parent: Null<QueryNode>): Void {
 		final span: Null<Span> = node.span;
 		if (
-			span != null && node.children.length == 0 && scan.flagKinds.contains(node.kind) && SourceText.isBlankSpan(span, scan.source)
+			span != null
+			&& node.children.length == 0
+			&& scan.flagKinds.contains(node.kind)
+			&& SourceText.isBlankSpan(span, scan.source)
 			&& !isDrainLoopBody(node, parent, scan)
 		) scan.out.push({
 			file: scan.file,
@@ -127,7 +130,8 @@ final class EmptyBlock extends RuleBase {
 	 * the loop's work is its condition, so an empty body is what it means.
 	 */
 	private static function isDrainLoopBody(node: QueryNode, parent: Null<QueryNode>, scan: EmptyScan): Bool {
-		return parent != null && scan.conditionLoops.contains(parent.kind)
+		return parent != null
+			&& scan.conditionLoops.contains(parent.kind)
 			&& parent.children.exists(c -> c != node && !MemberKinds.isSideEffectFree(c, scan.shape));
 	}
 

@@ -690,7 +690,9 @@ final class MemberTouchScan {
 		final statementForms: Array<String> = (shape.ifStatementKinds ?? []).concat(shape.switchStatementKinds ?? [])
 			.concat(shape.tryStatementKinds ?? []);
 		// an arm or a catch is climbed to its `switch` / `try`, which decides for itself
-		final climbs: Bool = kind == shape.blockStmtKind || statementForms.contains(kind) || (shape.branchScopeKinds ?? []).contains(kind)
+		final climbs: Bool = kind == shape.blockStmtKind
+			|| statementForms.contains(kind)
+			|| (shape.branchScopeKinds ?? []).contains(kind)
 			|| kind == shape.catchClauseKind;
 		return climbs && valueDiscarded(lineage, at - 1);
 	}
@@ -815,7 +817,9 @@ final class MemberTouchScan {
 			final target: Null<ImportedStatic> = a.target;
 			// a static of a type declared once, which declares `name` itself, is provably not `declaring`'s
 			final other: Bool = target != null
-				&& (target.member != name || target.owner != declaring && target.decls.length == 1
+				&& (target.member != name
+					|| target.owner != declaring
+					&& target.decls.length == 1
 					&& target.decls[0].type.members.exists(m -> m.name == name));
 			if (!other && a.alias != name && !out.contains(a.alias)) out.push(a.alias);
 		}
@@ -849,7 +853,9 @@ final class MemberTouchScan {
 	 * an inlined call spliced in (`FactSites.spliceOf`), whose method's own text answers for it.
 	 */
 	private static function expansionCode(g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView): Bool {
-		return view.truth && FactMarkers.carries(n, m -> m.match(MacroExpansion)) && declarationHolding(g, node.id, at, view) == null
+		return view.truth
+			&& FactMarkers.carries(n, m -> m.match(MacroExpansion))
+			&& declarationHolding(g, node.id, at, view) == null
 			&& view.spliceOf(n, at) == null;
 	}
 

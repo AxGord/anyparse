@@ -93,7 +93,9 @@ final class GuardedImportCarry {
 		return carryForProviders([
 			for (imp in cursorInfo.imports)
 				if (
-					imp.guarded && CARRIABLE_KINDS.contains(imp.kind) && SymbolIndex.pathImportedBy(imp) != null
+					imp.guarded
+					&& CARRIABLE_KINDS.contains(imp.kind)
+					&& SymbolIndex.pathImportedBy(imp) != null
 					&& SourceText.lastSegment(imp.raw) == dep
 				)
 					imp

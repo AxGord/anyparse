@@ -341,7 +341,11 @@ final class LintDiff {
 		for (key in pool.tally.order) {
 			final row: LintDiffRow = rowOf(pool.tally, key);
 			if (
-				row.identity && row.file == file && row.rule == rule && row.severity == severity && (pool.counts[key] ?? 0) > 0
+				row.identity
+				&& row.file == file
+				&& row.rule == rule
+				&& row.severity == severity
+				&& (pool.counts[key] ?? 0) > 0
 				&& (pool.messages[key] ?? []).contains(message)
 			)
 				return spendOwn(pool, key, message);

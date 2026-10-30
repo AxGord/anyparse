@@ -200,7 +200,8 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 	private static function claimedByKeyValueLoop(
 		body: QueryNode, collection: String, index: String, indexReads: Int, core: LoopSeams
 	): Bool {
-		return body.children.length >= MIN_KEY_VALUE_STATEMENTS && indexReads == CONSUMED_INDEX_READS
+		return body.children.length >= MIN_KEY_VALUE_STATEMENTS
+			&& indexReads == CONSUMED_INDEX_READS
 			&& LoopScan.opensWithIndexBinding(body, collection, index, core);
 	}
 

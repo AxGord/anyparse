@@ -371,7 +371,10 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		index: Null<SymbolIndex>, className: Null<String>, field: String, selfBacked: Bool, inlineGetter: Null<QueryNode>,
 		plugin: GrammarPlugin
 	): Bool {
-		return !selfBacked && inlineGetter == null && index != null && className != null
+		return !selfBacked
+			&& inlineGetter == null
+			&& index != null
+			&& className != null
 			&& (index.subtypes.subtypeReferencesField(className, field)
 				|| MemberWriteScan.accessGrantMayReference(className, field, index, plugin));
 	}
@@ -711,7 +714,8 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 						if (child.kind == 'VarMember') {
 							final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
 							if (
-								access != null && access.read == 'get'
+								access != null
+								&& access.read == 'get'
 								&& (access.write == WRITE_NEVER || access.write == 'null' || access.write == 'set')
 							) properties.push({
 								name: name,

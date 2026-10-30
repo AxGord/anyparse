@@ -126,7 +126,11 @@ final class ReachAdmission {
 	private function handedObjects(g: CallGraph, node: FnNode): Bool {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
-		return type != null && name != null && node.isBodyless && g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name)
+		return type != null
+			&& name != null
+			&& node.isBodyless
+			&& g.types.meta.isExtern(type)
+			&& !_g.library.externQuiet(g, type, name)
 			&& _g.library.externTakesObject(g, type, name);
 	}
 
@@ -138,7 +142,10 @@ final class ReachAdmission {
 	private function valueAdmitted(g: CallGraph, node: FnNode): Bool {
 		if (node.isExternal) return false;
 		final ctorName: String = _scope.shape.constructorName ?? 'new';
-		return node.name == null || node.id.indexOf('#') >= 0 || node.isDynamic || g.inEdges(node.id).exists(e -> e.kind == Ref)
+		return node.name == null
+			|| node.id.indexOf('#') >= 0
+			|| node.isDynamic
+			|| g.inEdges(node.id).exists(e -> e.kind == Ref)
 			|| (node.name != ctorName && (overridesLibrary(g, node) || obtainedUntyped(g, node)));
 	}
 

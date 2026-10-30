@@ -69,7 +69,8 @@ final class MemberWriteScan {
 			.subtypes.subtypeDeclMatches(
 				owner, name,
 				(subtype, src, span, redeclares) ->
-					redeclares || writeIndex.writtenAnywhere(subtype, name)
+					redeclares
+					|| writeIndex.writtenAnywhere(subtype, name)
 					|| subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
 			);
 	}
@@ -95,7 +96,8 @@ final class MemberWriteScan {
 			.subtypes.subtypeDeclMatches(
 				owner, name,
 				(subtype, src, span, redeclares) ->
-					redeclares || mayReference(src, name, span.from, span.to)
+					redeclares
+					|| mayReference(src, name, span.from, span.to)
 					|| scopeOf(index, plugin)
 						.text.accessGrantMatches(subtype, name, granted -> mayReference(granted, name, 0, granted.length))
 			);
@@ -120,7 +122,8 @@ final class MemberWriteScan {
 	public static inline function referencesConfined(
 		owner: String, name: String, source: String, index: SymbolIndex, plugin: GrammarPlugin
 	): Bool {
-		return RefactorSupport.privateMemberScanIsSound(source, index, name) && !subtypeMayReference(owner, name, index, plugin)
+		return RefactorSupport.privateMemberScanIsSound(source, index, name)
+			&& !subtypeMayReference(owner, name, index, plugin)
 			&& !accessGrantMayReference(owner, name, index, plugin);
 	}
 
@@ -335,9 +338,15 @@ final class MemberWriteScan {
 		final start: Int = i;
 		while (i < n && isOperatorChar(source.fastCodeAt(i))) i++;
 		final token: String = source.substring(start, i);
-		return token == '++' || token == '--'
-			|| (token.length != 0 && token.fastCodeAt(token.length - 1) == '='.code && token != '==' && token != '<=' && token != '>='
-				&& token != '!=' && token != '=>');
+		return token == '++'
+			|| token == '--'
+			|| (token.length != 0
+				&& token.fastCodeAt(token.length - 1) == '='.code
+				&& token != '=='
+				&& token != '<='
+				&& token != '>='
+				&& token != '!='
+				&& token != '=>');
 	}
 
 }

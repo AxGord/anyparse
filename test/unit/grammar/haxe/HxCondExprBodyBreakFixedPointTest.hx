@@ -164,7 +164,8 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	}
 
 	private static function conditional(k: Int): String {
-		return '#if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'' + ''.lpad('k', k)
+		return '#if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \''
+			+ ''.lpad('k', k)
 			+ '\'} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end';
 	}
 

@@ -443,7 +443,10 @@ final class FactsTypeOracle implements TypeOracle {
 		return [
 			for (n in site.facts.nodesIn(site.file))
 				if (
-					MEMBER_FUNCTION_KINDS.contains(n.kind) && !n.generated && n.inlinedFrom == null && owners.contains(n.owner)
+					MEMBER_FUNCTION_KINDS.contains(n.kind)
+					&& !n.generated
+					&& n.inlinedFrom == null
+					&& owners.contains(n.owner)
 					&& memberOf(n) == name
 				)
 					n

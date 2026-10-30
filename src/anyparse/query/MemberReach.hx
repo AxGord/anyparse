@@ -723,9 +723,14 @@ final class MemberReach {
 		final name: Null<String> = target.name;
 		if (type == null || name == null || target.isExternal || target.isBodyless || target.isDynamic) return false;
 		final g: CallGraph = graph();
-		return _projectSources.exists(target.file) && g.types.declarationCount(type) == 1 && declaredOnce(target.file, type, name)
-			&& g.declarationsOf(target.id).length == 1 && _carriers.subtypesKnown(type) && !(g.virtualTargets(type, name).length > 0)
-			&& !overriddenInFacts(g, type, name) && (_g.rewrittenBy(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true);
+		return _projectSources.exists(target.file)
+			&& g.types.declarationCount(type) == 1
+			&& declaredOnce(target.file, type, name)
+			&& g.declarationsOf(target.id).length == 1
+			&& _carriers.subtypesKnown(type)
+			&& !(g.virtualTargets(type, name).length > 0)
+			&& !overriddenInFacts(g, type, name)
+			&& (_g.rewrittenBy(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true);
 	}
 
 	/**
@@ -1038,7 +1043,8 @@ final class MemberReach {
 		final out: Array<ReachHazard> = [
 			for (h in _hazards.hazardsIn(file, tree, source, span))
 				if (
-					_live.live(file, source, h.span) && (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))
+					_live.live(file, source, h.span)
+					&& (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))
 					&& !guardedDead(file, tree, h.span)
 				)
 					h
@@ -1421,7 +1427,9 @@ final class MemberReach {
 		// copies of one type on several class paths, every one's code folded into the node, are no other type's
 		if (_g.oneTypeEverywhere(g, node)) return false;
 		final facts: Null<FactsView> = _scope.facts;
-		return facts == null || facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null)
+		return facts == null
+			|| facts.soleType(type) == null
+			&& (name == null || facts.soleMember(type, name) == null)
 			&& ownTypes(g, node) == null;
 	}
 
@@ -2510,7 +2518,8 @@ final class MemberReach {
 		// element or of the array, and no function value it was handed before
 		final arrayOwn: Bool = (_shape.arrayTypeNames ?? []).contains(type)
 			&& ((_shape.execution?.nonMutatingArrayMethods ?? []).contains(name)
-				|| (_shape.execution?.mutatingArrayMethods ?? []).contains(name) || name == (_shape.constructorName ?? 'new'));
+				|| (_shape.execution?.mutatingArrayMethods ?? []).contains(name)
+				|| name == (_shape.constructorName ?? 'new'));
 		if (arrayOwn) site.values = _g.library.callsItsArgument(g, type, name);
 		// target code handed an object carrying the member may write it by its name — a blind spot, as at a code site — unless it
 		// writes no member by name: the built-in array's own methods, which store and convert what they hold, a call known to run
@@ -3027,8 +3036,14 @@ final class MemberReach {
 
 	/** Whether `site` runs nothing but the function values a call of a value of a function type, no `dynamic` method's, may run. */
 	private static inline function onlyValues(site: AdmissionSite): Bool {
-		return site.values && site.called != null && site.stored == null && !site.constructors && site.all != true
-			&& site.names.length == 0 && (site.ids ?? []).length == 0 && (site.owned ?? []).length == 0;
+		return site.values
+			&& site.called != null
+			&& site.stored == null
+			&& !site.constructors
+			&& site.all != true
+			&& site.names.length == 0
+			&& (site.ids ?? []).length == 0
+			&& (site.owned ?? []).length == 0;
 	}
 
 	/** The spans of the entry's own code: the region, or each call site. */

@@ -19,14 +19,18 @@ using StringTools;
 class JoinOverrideChainCheckTest extends Test {
 
 	/** Two consecutive partial-writer switches over one declared local — the motivating shape. */
-	private static inline final CHAIN: String = 'class C {\n\tfunction f(a:E, b:E) {\n' + '\t\tvar x:String = null;\n'
+	private static inline final CHAIN: String = 'class C {\n\tfunction f(a:E, b:E) {\n'
+		+ '\t\tvar x:String = null;\n'
 		+ '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase 2: x = \'q\';\n\t\t\tcase _:\n\t\t}\n'
-		+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}\n' + '\t}\n}\n';
+		+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}\n'
+		+ '\t}\n}\n';
 
 	/** The same chain written INSIDE a `macro …` quotation, where the switches are AST the macro builds. */
 	private static inline final QUOTED: String = 'class C {\n\tfunction f(a:E, b:E) {\n\t\tfinal e = macro {\n'
-		+ '\t\t\tvar x:String = null;\n' + '\t\t\tswitch a.k {\n\t\t\t\tcase 1: x = \'p\';\n\t\t\t\tcase _:\n\t\t\t}\n'
-		+ '\t\t\tswitch b.k {\n\t\t\t\tcase 3: x = \'r\';\n\t\t\t\tcase _:\n\t\t\t}\n\t\t};\n' + '\t}\n}\n';
+		+ '\t\t\tvar x:String = null;\n'
+		+ '\t\t\tswitch a.k {\n\t\t\t\tcase 1: x = \'p\';\n\t\t\t\tcase _:\n\t\t\t}\n'
+		+ '\t\t\tswitch b.k {\n\t\t\t\tcase 3: x = \'r\';\n\t\t\t\tcase _:\n\t\t\t}\n\t\t};\n'
+		+ '\t}\n}\n';
 
 	public function testRegisteredAndDefaultOff(): Void {
 		final check: Null<Check> = Linter.byId('join-override-chain');

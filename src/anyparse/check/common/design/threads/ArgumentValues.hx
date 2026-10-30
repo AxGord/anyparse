@@ -511,8 +511,12 @@ final class ArgumentValues {
 		final affix: Null<{ module: String, suffix: String, prefix: String }> = _shape.stringAffixTests;
 		final callee: Null<QueryNode> = expr.kind == _shape.callKind && expr.children.length == 2 ? expr.children[0] : null;
 		final method: Null<String> = callee?.name;
-		return affix == null || callee == null || callee.kind != _shape.fieldAccessKind || callee.children.length != 1
-			|| method != affix.suffix && method != affix.prefix
+		return affix == null
+			|| callee == null
+			|| callee.kind != _shape.fieldAccessKind
+			|| callee.children.length != 1
+			|| method != affix.suffix
+			&& method != affix.prefix
 			? null
 			: callee.children[0];
 	}
@@ -538,8 +542,11 @@ final class ArgumentValues {
 		if (fn == null || type == null || name == null) return false;
 		if (!graph.types.isStatic(type, name)) return true;
 		final callee: QueryNode = call.children[0];
-		return callee.kind == shape.identKind || callee.kind == shape.fieldAccessKind && callee.children.length == 1
-			&& callee.children[0].kind == shape.identKind && callee.children[0].name == type;
+		return callee.kind == shape.identKind
+			|| callee.kind == shape.fieldAccessKind
+			&& callee.children.length == 1
+			&& callee.children[0].kind == shape.identKind
+			&& callee.children[0].name == type;
 	}
 
 	/** The kinds of a value built where it is written, never null: a construction, an object or array literal. */

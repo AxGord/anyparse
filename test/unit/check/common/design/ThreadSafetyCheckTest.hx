@@ -1061,12 +1061,15 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.same(
 			[
 				'"A.main" holds "A.m" across 11 calls that can block: Sys.sleep; '
-				+ [for (n in names.slice(0, 7)) 'A.$n -> Sys.sleep'].join('; ') + '; +2 more'
+				+ [for (n in names.slice(0, 7)) 'A.$n -> Sys.sleep'].join('; ')
+				+ '; +2 more'
 			],
 			heldBy('A.main', lockFindings([
 				'class A { static final m:Mutex = new Mutex(); static function main():Void { m.acquire(); Sys.sleep(1); '
-				+ [for (n in names) '$n();'].join(' ') + ' Sys.sleep(2); m.release(); } '
-				+ [for (n in names) 'static function $n():Void Sys.sleep(1);'].join(' ') + ' }'
+				+ [for (n in names) '$n();'].join(' ')
+				+ ' Sys.sleep(2); m.release(); } '
+				+ [for (n in names) 'static function $n():Void Sys.sleep(1);'].join(' ')
+				+ ' }'
 			]))
 		);
 		#else
@@ -1591,7 +1594,8 @@ class ThreadSafetyCheckTest extends Test {
 	public static function orderFindings(sources: Array<String>): Array<Violation> {
 		return violations(
 			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"registers":["Ui.defer"],'
-			+ '"lockPairs":["Mutex.acquire/release"],' + '"reentrantLocks":["Mutex.acquire"]}}}',
+			+ '"lockPairs":["Mutex.acquire/release"],'
+			+ '"reentrantLocks":["Mutex.acquire"]}}}',
 			[MUTEX, 'class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources)
 		).filter(v -> v.message.indexOf('lock-order inversion') != -1);
 	}

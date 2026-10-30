@@ -663,8 +663,10 @@ class OversizedTypeCheckTest extends Test {
 	/** A class named `C` with `methods` methods `m0`… and `fields` fields of its own, implementing `I` or not. */
 	private static function implementor(methods: Int, fields: Int, implementsIface: Bool): String {
 		return 'class C${implementsIface ? ' implements I' : ''} {\n'
-			+ [for (i in 0...methods) '\tpublic function m$i():Void {}'].join('\n') + '\n'
-			+ [for (i in 0...fields) '\tvar v$i:Int;'].join('\n') + '\n}';
+			+ [for (i in 0...methods) '\tpublic function m$i():Void {}'].join('\n')
+			+ '\n'
+			+ [for (i in 0...fields) '\tvar v$i:Int;'].join('\n')
+			+ '\n}';
 	}
 
 	/** A parseable class named `C` with exactly `n` field members, one per line. */
@@ -677,7 +679,8 @@ class OversizedTypeCheckTest extends Test {
 		return 'class C {\n'
 			+ [
 				for (i in 0...n) '\tfunction m$i():Int { return m${(i + 1) % n}() + m${(i + 2) % n}(); }'
-			].join('\n') + '\n}';
+			].join('\n')
+			+ '\n}';
 	}
 
 	/** `n` methods in TWO rings that never call across — a real member-reference seam. */
@@ -690,7 +693,8 @@ class OversizedTypeCheckTest extends Test {
 					final high: Int = i < cut ? cut : n;
 					'\tfunction m$i():Int { return m${low + (i - low + 1) % (high - low)}(); }';
 				}
-			].join('\n') + '\n}';
+			].join('\n')
+			+ '\n}';
 	}
 
 	/** A class named `C` with exactly 50 field members — AT the member limit — and `extra` declared after them. */

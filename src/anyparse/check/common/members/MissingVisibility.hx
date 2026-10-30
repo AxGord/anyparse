@@ -220,7 +220,9 @@ final class MissingVisibility extends RuleBase {
 			} else if (ctx.seams.members.contains(child.kind)) {
 				final span: Null<Span> = child.span;
 				if (
-					!sawVisibility && !statesOwnVisibility(child, ctx.seams) && span != null
+					!sawVisibility
+					&& !statesOwnVisibility(child, ctx.seams)
+					&& span != null
 					&& !EnumAbstractForms.isValue(span, ctx.guarded)
 				) ctx.out.push({
 					file: ctx.file,
@@ -370,7 +372,9 @@ final class MissingVisibility extends RuleBase {
 		// visibility would otherwise get a second keyword prepended — the invalid `private final
 		// private function f()` this whole guard exists to stop.
 		if (
-			span == null || !ctx.flagged.contains(span.from) || EnumAbstractForms.isValue(span, ctx.guarded)
+			span == null
+			|| !ctx.flagged.contains(span.from)
+			|| EnumAbstractForms.isValue(span, ctx.guarded)
 			|| statesOwnVisibility(member, ctx.seams)
 		)
 			return;

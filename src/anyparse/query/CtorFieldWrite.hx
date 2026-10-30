@@ -654,9 +654,15 @@ final class CtorFieldWrite {
 	 * statement per candidate FIELD, so building the union per call would allocate for nothing.
 	 */
 	private static function completesNormally(kind: String, shape: RefShape): Bool {
-		return kind == shape.exprStatementKind || CondRegionScan.isConditionalKind(kind, shape) || kindIn(shape.localDeclKinds, kind)
-			|| kindIn(shape.staticLocalDeclKinds, kind) || kindIn(shape.ifStatementKinds, kind) || kindIn(shape.switchKinds, kind)
-			|| kindIn(shape.tryStatementKinds, kind) || kindIn(shape.localFunctionKinds, kind) || kindIn(shape.inlineFunctionKinds, kind);
+		return kind == shape.exprStatementKind
+			|| CondRegionScan.isConditionalKind(kind, shape)
+			|| kindIn(shape.localDeclKinds, kind)
+			|| kindIn(shape.staticLocalDeclKinds, kind)
+			|| kindIn(shape.ifStatementKinds, kind)
+			|| kindIn(shape.switchKinds, kind)
+			|| kindIn(shape.tryStatementKinds, kind)
+			|| kindIn(shape.localFunctionKinds, kind)
+			|| kindIn(shape.inlineFunctionKinds, kind);
 	}
 
 	/**
@@ -671,7 +677,8 @@ final class CtorFieldWrite {
 	): Void {
 		final enclosed: Bool = inClosure || closures.contains(node.kind);
 		if (
-			node.kind == assignKind && node.children.length >= 2
+			node.kind == assignKind
+			&& node.children.length >= 2
 			&& ctorTargetIsField(node.children[0], fieldFrom, fieldName, container, shape)
 		) out.push({
 			assign: node,
@@ -714,7 +721,8 @@ final class CtorFieldWrite {
 	private static function reachesThroughOperands(node: QueryNode, writeFrom: Int, transparent: Array<String>): Bool {
 		final span: Null<Span> = node.span;
 		return span != null
-			&& (span.from == writeFrom || transparent.contains(node.kind)
+			&& (span.from == writeFrom
+				|| transparent.contains(node.kind)
 				&& node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent)));
 	}
 

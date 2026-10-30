@@ -455,7 +455,8 @@ class ThreadSafetyConditionsTest extends Test {
 		final found: Array<String> = [
 			for (v in ThreadSafetyCheckTest.violations(
 				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Lock.wait","Mutex.acquire"],"spawns":["Runner.create"]'
-				+ (extra.length > 0 ? ',$extra' : '') + '}}}',
+				+ (extra.length > 0 ? ',$extra' : '')
+				+ '}}}',
 				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources), null, false, library, defines
 			)) v.message
 		];

@@ -221,7 +221,8 @@ final class ExtractConstant {
 		// the region as "no member at all" (which this scan used to do when every member was guarded)
 		// sent the caller down the append path instead.
 		for (child in decl.nameNode.children) if (
-			MemberKinds.isFieldMemberKind(child.kind) || MemberKinds.FN_DECL_KINDS.contains(child.kind)
+			MemberKinds.isFieldMemberKind(child.kind)
+			|| MemberKinds.FN_DECL_KINDS.contains(child.kind)
 			|| (condKind != null && child.kind == condKind)
 		) {
 			final span: Null<Span> = child.span;

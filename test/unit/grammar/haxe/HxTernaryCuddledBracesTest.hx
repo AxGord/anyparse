@@ -397,7 +397,8 @@ final class HxTernaryCuddledBracesTest extends Test {
 	 */
 	private static final TAIL_OPEN_GLUE_FITS_CUDDLED: String = 'class T {\n\tprivate function f():Void {\n\t\tregisterHandler(\n\t\t\tflag'
 		+ '\n\t\t\t\t? {\n\t\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
-		+ '\t\t\t\t\tgamm' + 'aFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n'
+		+ '\t\t\t\t\tgamm'
+		+ 'aFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n'
 		+ '\t\t\t\t} : { alphaFieldNameThatIsQuiteLong: 9876543, '
 		+ 'betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 }\n\t\t);\n\t}\n}';
 
@@ -406,7 +407,8 @@ final class HxTernaryCuddledBracesTest extends Test {
 	 */
 	private static final TAIL_OPEN_GLUE_FITS_SEPARATE: String = 'class T {\n\tprivate function f():Void {\n\t\tregisterHandler(\n\t\t\tfla'
 		+ 'g\n\t\t\t\t? {\n\t\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
-		+ '\t\t\t\t\tgam' + 'maFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t\t}\n'
+		+ '\t\t\t\t\tgam'
+		+ 'maFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t\t}\n'
 		+ '\t\t\t\t: { alphaFieldNameThatIsQuiteLong:'
 		+ ' 9876543, betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 }\n\t\t);\n\t}\n}';
 
@@ -416,7 +418,8 @@ final class HxTernaryCuddledBracesTest extends Test {
 	 */
 	private static final TAIL_OPEN_ELSE_FITS_ALONE_SEPARATE: String = 'class T {\n\tprivate function f():Void {\n\t\tregisterHandler(\n\t'
 		+ '\t\tflag\n\t\t\t\t? {\n\t\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
-		+ '\t\t\t' + '\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t\t}\n'
+		+ '\t\t\t'
+		+ '\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t\t}\n'
 		+ '\t\t\t\t: { alphaFieldNameThatIsQui'
 		+ 'teLong: 9876543, betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 }\n\t\t);\n\t}\n}';
 
@@ -427,28 +430,42 @@ final class HxTernaryCuddledBracesTest extends Test {
 	 * sits inside it rather than on an edge. Identical with the knob on and off.
 	 */
 	private static final TAIL_GLUED_CALL_ELSE_FITS_ALONE_SEPARATE: String = 'class T {\n\tprivate function f():Void {\n'
-		+ '\t\tregisterHandler(flag\n\t\t\t? {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
-		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n' + '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
-		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t}\n' + '\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, beta'
-		+ 'FieldNameIsLong: 8765432, ' + 'gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 });\n\t}\n}';
+		+ '\t\tregisterHandler(flag\n\t\t\t? {\n'
+		+ '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
+		+ '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
+		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t}\n'
+		+ '\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, beta'
+		+ 'FieldNameIsLong: 8765432, '
+		+ 'gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 });\n\t}\n}';
 
 	/**
 	 * The free cuddle at the glued-call host: the else breaks either way, so the separator line buys nothing and the knob removes it.
 	 */
 	private static final TAIL_GLUED_CALL_ELSE_BREAKS_CUDDLED: String = 'class T {\n\tprivate function f():Void {\n'
-		+ '\t\tregisterHandler(flag\n\t\t\t? {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
-		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n' + '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
-		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t} : {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 9876543,\n\t\t\t'
-		+ '\tbetaFieldNameIsLong: 8765432,\n' + '\t\t\t\tgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7\n' + '\t\t\t});\n\t}\n}';
+		+ '\t\tregisterHandler(flag\n\t\t\t? {\n'
+		+ '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
+		+ '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
+		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t} : {\n'
+		+ '\t\t\t\talphaFieldNameThatIsQuiteLong: 9876543,\n\t\t\t'
+		+ '\tbetaFieldNameIsLong: 8765432,\n'
+		+ '\t\t\t\tgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7\n'
+		+ '\t\t\t});\n\t}\n}';
 
 	/**
 	 * The same input with the knob absent.
 	 */
 	private static final TAIL_GLUED_CALL_ELSE_BREAKS_SEPARATE: String = 'class T {\n\tprivate function f():Void {\n'
-		+ '\t\tregisterHandler(flag\n\t\t\t? {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
-		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n' + '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
-		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t}\n\t\t\t: {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 9876543,\n'
-		+ '\t\t\t\tbetaFieldNameIsLong: 8765432,\n' + '\t\t\t\tgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7\n' + '\t\t\t});\n\t}\n}';
+		+ '\t\tregisterHandler(flag\n\t\t\t? {\n'
+		+ '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
+		+ '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
+		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t}\n\t\t\t: {\n'
+		+ '\t\t\t\talphaFieldNameThatIsQuiteLong: 9876543,\n'
+		+ '\t\t\t\tbetaFieldNameIsLong: 8765432,\n'
+		+ '\t\t\t\tgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7\n'
+		+ '\t\t\t});\n\t}\n}';
 
 	public function new(): Void {
 		super();

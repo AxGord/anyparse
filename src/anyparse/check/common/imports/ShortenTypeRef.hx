@@ -565,8 +565,9 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		if (index == null || info == null || site == null) return false;
 		final source: String = context.source;
 		return !OccurrenceScan.referencedUnqualifiedInRange(
-				source, name, 0, source.length, context.typeSpans.concat(context.inert), context.comments
-			) && ValueDoors.bindsNoValue(site, name, o.span, info, context.tree, context.shape, file, index);
+			source, name, 0, source.length, context.typeSpans.concat(context.inert), context.comments
+		)
+			&& ValueDoors.bindsNoValue(site, name, o.span, info, context.tree, context.shape, file, index);
 	}
 
 	/** A printer over `source` with the file's plain-import map and the run's resolution index. */

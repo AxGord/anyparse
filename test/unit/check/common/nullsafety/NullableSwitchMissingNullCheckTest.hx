@@ -205,7 +205,8 @@ class NullableSwitchMissingNullCheckTest extends Test {
 			1,
 			violations(mod(
 				'function f(b:Box):Void { final u:Colour = b.cache[\'k\']; switch u { case Red: trace(1); case Green: trace(2); } }'
-			) + '\n$box').length,
+			)
+			+ '\n$box').length,
 			'a field-path receiver'
 		);
 	}

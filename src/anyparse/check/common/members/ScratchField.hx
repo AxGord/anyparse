@@ -381,7 +381,9 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			if (s.statementListKinds.contains(node.kind)) for (stmt in node.children) {
 				final assign: Null<QueryNode> = stmt.kind == s.exprStmtKind && stmt.children.length == 1 ? stmt.children[0] : null;
 				if (
-					assign == null || assign.kind != s.assignKind || assign.children.length != BINARY_CHILD_COUNT
+					assign == null
+					|| assign.kind != s.assignKind
+					|| assign.children.length != BINARY_CHILD_COUNT
 					|| assign.children[0] != first
 				)
 					continue;
@@ -419,16 +421,23 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	): String {
 		var bare: String = name;
 		while (bare.length > 1 && bare.charAt(0) == '_') bare = bare.substr(1);
-		final usable: Bool = bare != name && ~/^[a-z][A-Za-z0-9_]*$/.match(bare) && !s.reservedWords.contains(bare)
-			&& !refs.exists(r -> r.kind == s.interpIdentKind) && !container.children.exists(m -> m.name == bare)
+		final usable: Bool = bare != name
+			&& ~/^[a-z][A-Za-z0-9_]*$/.match(bare)
+			&& !s.reservedWords.contains(bare)
+			&& !refs.exists(r -> r.kind == s.interpIdentKind)
+			&& !container.children.exists(m -> m.name == bare)
 			&& !OccurrenceScan.referencedInRange(source, bare, method.from, method.to, []);
 		return usable ? bare : name;
 	}
 
 	/** Whether `node` is `this.name`. */
 	private static function isSelfAccess(node: QueryNode, name: String, s: Seams): Bool {
-		return node.kind == s.fieldAccessKind && node.name == name && node.children.length == 1 && node.children[0].kind == s.identKind
-			&& s.selfText != null && node.children[0].name == s.selfText;
+		return node.kind == s.fieldAccessKind
+			&& node.name == name
+			&& node.children.length == 1
+			&& node.children[0].kind == s.identKind
+			&& s.selfText != null
+			&& node.children[0].name == s.selfText;
 	}
 
 	/** The trimmed source text of `node`. */
@@ -508,9 +517,12 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	private static function lifetimeInert(ref: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, s: Seams): Bool {
 		if (parent == null) return false;
 		final member: Bool = s.accessKinds.contains(parent.kind) && parent.children.length == 1;
-		return s.writeParentKinds.contains(parent.kind) || member
-			&& (grand == null || !s.invocationKinds.contains(grand.kind) || grand.children[0] != parent) || !member
-			&& s.invocationKinds.contains(parent.kind) && parent.children.indexOf(ref) > 0;
+		return s.writeParentKinds.contains(parent.kind)
+			|| member
+			&& (grand == null || !s.invocationKinds.contains(grand.kind) || grand.children[0] != parent)
+			|| !member
+			&& s.invocationKinds.contains(parent.kind)
+			&& parent.children.indexOf(ref) > 0;
 	}
 
 	/**
@@ -616,8 +628,11 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			if (assign == null || assign.kind != shape.assignKind || assign.children.length != BINARY_CHILD_COUNT) return false;
 			final target: QueryNode = assign.children[0];
 			final bare: Bool = target.kind == shape.identKind;
-			final throughSelf: Bool = target.kind == shape.fieldAccessKind && target.children.length == 1
-				&& target.children[0].kind == shape.identKind && self != null && target.children[0].name == self;
+			final throughSelf: Bool = target.kind == shape.fieldAccessKind
+				&& target.children.length == 1
+				&& target.children[0].kind == shape.identKind
+				&& self != null
+				&& target.children[0].name == self;
 			final name: String = target.name ?? '';
 			return (throughSelf && fields.contains(name) || bare && (fields.contains(name) || params.contains(name)))
 				&& MemberKinds.isSideEffectFree(assign.children[1], shape);

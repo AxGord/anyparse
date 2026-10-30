@@ -609,7 +609,10 @@ final class PreferMapType extends RuleBase implements RiskyFix implements Groupe
 
 	/** Whether `code` may appear in a plain nominal type reference — an identifier character or the path `.`. */
 	private static function isNominalChar(code: Int): Bool {
-		return code == '.'.code || code == '_'.code || (code >= 'a'.code && code <= 'z'.code) || (code >= 'A'.code && code <= 'Z'.code)
+		return code == '.'.code
+			|| code == '_'.code
+			|| (code >= 'a'.code && code <= 'z'.code)
+			|| (code >= 'A'.code && code <= 'Z'.code)
 			|| (code >= '0'.code && code <= '9'.code);
 	}
 

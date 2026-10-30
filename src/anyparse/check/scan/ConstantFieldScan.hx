@@ -35,8 +35,13 @@ final class ConstantFieldScan {
 		final staticKind: Null<String> = shape.staticModifierKind;
 		final literalKinds: Array<String> = shape.inlineConstantLiteralKinds ?? [];
 		if (
-			containers.length == 0 || members.length == 0 || fieldKinds.length == 0 || visibility.length == 0 || defaultVis == null
-			|| staticKind == null || literalKinds.length == 0
+			containers.length == 0
+			|| members.length == 0
+			|| fieldKinds.length == 0
+			|| visibility.length == 0
+			|| defaultVis == null
+			|| staticKind == null
+			|| literalKinds.length == 0
 		)
 			return null;
 		final finalFieldKinds: Array<String> = [for (k in fieldKinds) if (!mutable.contains(k)) k];
@@ -80,8 +85,11 @@ final class ConstantFieldScan {
 
 	/** Whether `init` is a basic scalar literal in `inlineConstantLiteralKinds`, or a negation wrapping a numeric one (`-5`). */
 	public static function isScalarLiteral(init: QueryNode, seams: ConstantFieldSeams): Bool {
-		return seams.literalKinds.contains(init.kind) || seams.negationKind != null && init.kind == seams.negationKind
-			&& init.children.length == 1 && seams.numericKinds.contains(init.children[0].kind);
+		return seams.literalKinds.contains(init.kind)
+			|| seams.negationKind != null
+			&& init.kind == seams.negationKind
+			&& init.children.length == 1
+			&& seams.numericKinds.contains(init.children[0].kind);
 	}
 
 	/**

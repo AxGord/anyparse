@@ -180,7 +180,9 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 			final listSpan: Null<Span> = ancestors[k].span;
 			final childSpan: Null<Span> = ancestors[k + 1].span;
 			if (
-				listSpan != null && childSpan != null && scan.statementListKinds.contains(ancestors[k].kind)
+				listSpan != null
+				&& childSpan != null
+				&& scan.statementListKinds.contains(ancestors[k].kind)
 				&& reads.exists(r -> r.from >= childSpan.to && r.to <= listSpan.to)
 			)
 				return true;

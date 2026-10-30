@@ -577,7 +577,10 @@ final class WriterBlankLowering {
 		return macro {
 			final _csW0: Null<anyparse.core.Doc> = _csWidest;
 			if (
-				_csW0 != null && _csMax != anyparse.format.BodyFit.SIBLING_FORCE_BREAK && _csMax > _csSecond && _csWidestK < _arr.length
+				_csW0 != null
+				&& _csMax != anyparse.format.BodyFit.SIBLING_FORCE_BREAK
+				&& _csMax > _csSecond
+				&& _csWidestK < _arr.length
 				&& _csUnits[_csWidestK] == _arr[_csWidestK].node
 			) {
 				_csO = anyparse.format.BodyFit.siblingBreakOffer(_csW0, _csSecond, $controlFlow);

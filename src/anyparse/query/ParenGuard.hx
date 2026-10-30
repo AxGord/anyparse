@@ -209,9 +209,8 @@ final class ParenGuard {
 		source: String, edits: Array<GuardedEdit>, sites: Array<Site>, delims: ParenDelimiters, plugin: GrammarPlugin
 	): Array<Bool> {
 		return [
-			for (p in 0...maxPosition(sites) + 1) parseVariant(
-				source, edits, ([for (s in sites) s.position == p]: Array<Bool>), delims, plugin
-			) != null
+			for (p in 0...maxPosition(sites)
+				+ 1) parseVariant(source, edits, ([for (s in sites) s.position == p]: Array<Bool>), delims, plugin) != null
 		];
 	}
 
@@ -445,7 +444,8 @@ final class ParenGuard {
 			}
 			final found: Null<QueryNode> = nodeAtSpan(built.text, tree, built.spans[i]);
 			out.push(
-				found != null && sameIgnoringInserted(found, built.text, built.pairs, reference, probe.refText, probe.refPairs)
+				found != null
+				&& sameIgnoringInserted(found, built.text, built.pairs, reference, probe.refText, probe.refPairs)
 				&& (wrap[i] || !continuedPastCloser(probe, built.text, tree, built.spans[i]))
 			);
 		}

@@ -730,7 +730,8 @@ class CallGraphTest extends Test {
 			'class SubA extends A { override public function m():Void {} }',
 			'class B { public function m():Void {} }',
 			'class Shadow<T:A> { var item:T; function methodShadow<T:B>(x:T):Void item.m(); '
-			+ 'function localShadow(x:T):Void { function g<T:B>(y:T):Void x.m(); } ' + 'function own<T:B>(x:T):Void x.m(); }'
+			+ 'function localShadow(x:T):Void { function g<T:B>(y:T):Void x.m(); } '
+			+ 'function own<T:B>(x:T):Void x.m(); }'
 		]);
 		for (fn in ['Shadow.methodShadow', 'Shadow.localShadow#g']) {
 			Assert.equals(1, edges(g, fn, 'A.m', Call).length, fn);

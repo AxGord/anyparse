@@ -162,7 +162,8 @@ final class UnnecessaryBlock extends RuleBase {
 		}
 		final block: Null<QueryNode> = only;
 		if (
-			block != null && block.children.length <= CheckScan.BARE_BLOCK_MAX_STATEMENTS
+			block != null
+			&& block.children.length <= CheckScan.BARE_BLOCK_MAX_STATEMENTS
 			&& !ScopeFrames.collidesWithScope(block.children, seams.localDeclKinds, scopeNames)
 		)
 			out.push(block);

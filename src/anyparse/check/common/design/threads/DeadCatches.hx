@@ -54,7 +54,9 @@ final class DeadCatches {
 			final kids: Array<QueryNode> = node.children;
 			final inner: Null<QueryNode> = kids.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
 			if (inner == null) break;
-			dead = _tryKinds.contains(node.kind) && inner.kind == _shape.catchClauseKind && kids.length > 0
+			dead = _tryKinds.contains(node.kind)
+				&& inner.kind == _shape.catchClauseKind
+				&& kids.length > 0
 				&& throwsNothing(edge.file, kids[0]);
 			node = inner;
 		}
@@ -75,8 +77,11 @@ final class DeadCatches {
 		if (kind == _shape.identKind) return node.children.length == 0 && plainRead(file, node);
 		if ((_shape.caseLiteralKinds ?? []).contains(kind) || (_shape.stringLiteralKinds ?? []).contains(kind))
 			return node.children.foreach(c -> inertSegment(c.kind));
-		final passes: Bool = _blockKinds.contains(kind) || kind == _shape.exprStatementKind || kind == _shape.parenKind
-			|| (_shape.comparisonKinds ?? []).contains(kind) || CondRegionScan.isConditionalKind(kind, _shape);
+		final passes: Bool = _blockKinds.contains(kind)
+			|| kind == _shape.exprStatementKind
+			|| kind == _shape.parenKind
+			|| (_shape.comparisonKinds ?? []).contains(kind)
+			|| CondRegionScan.isConditionalKind(kind, _shape);
 		return passes && node.children.foreach(c -> throwsNothing(file, c));
 	}
 
@@ -113,7 +118,9 @@ final class DeadCatches {
 	 * function and no member of the running type holds (a type, a package). A receiver that is a value is not read.
 	 */
 	private function staticCallee(file: String, callee: QueryNode): Bool {
-		return callee.kind == _shape.identKind || callee.kind == _shape.fieldAccessKind && callee.children.length == 1
+		return callee.kind == _shape.identKind
+			|| callee.kind == _shape.fieldAccessKind
+			&& callee.children.length == 1
 			&& staticPath(file, callee.children[0]);
 	}
 

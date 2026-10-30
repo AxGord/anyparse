@@ -316,8 +316,10 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 
 	/** Whether the grammar supplies the kind-sets the check needs. */
 	private static function applicable(shape: RefShape): Bool {
-		return (shape.visibilityContainerKinds ?? []).length > 0 && (shape.memberDeclKinds ?? []).length > 0
-			&& (shape.visibilityModifierKinds ?? []).length > 0 && shape.defaultVisibilityModifierText != null;
+		return (shape.visibilityContainerKinds ?? []).length > 0
+			&& (shape.memberDeclKinds ?? []).length > 0
+			&& (shape.visibilityModifierKinds ?? []).length > 0
+			&& shape.defaultVisibilityModifierText != null;
 	}
 
 	/** Walk `node`; flag each container whose members are out of canonical order or whose rank groups are not blank-line separated. */
@@ -454,7 +456,8 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 			// `reorderRefusal` here — is what keeps the container's other order findings reported;
 			// `prev` still advances, so every later member is compared as before.
 			if (
-				prev != null && (elseExempt ? m.rank < prev.rank : compareOrder(m, prev, plan) < 0)
+				prev != null
+				&& (elseExempt ? m.rank < prev.rank : compareOrder(m, prev, plan) < 0)
 				&& !MemberInitDeps.initReadsSibling(m, prev, source)
 			)
 				return m;
@@ -620,7 +623,8 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 	 */
 	private static function conditionalRegionsCovered(members: Array<OrderedMember>, source: String): Bool {
 		final conditional: Array<OrderedMember> = [for (m in members) if (m.condition != null) m];
-		return conditional.length == 0 || regionContentCovered(conditional, members, source)
+		return conditional.length == 0
+			|| regionContentCovered(conditional, members, source)
 			&& uncoveredIsDirectiveOnly(source, members[0].regionFrom, members[members.length - 1].regionTo, coveredSlotSpans(members));
 	}
 

@@ -197,7 +197,8 @@ class LexicalCodegen {
 		for (h in 0...spec.body.length) steps.push(atomExpr(spec.body[h], k, h));
 		final closeTest: Expr = literalTest(spec.close);
 		final flagStep: Array<Expr> = spec.flagLow < 0 ? [] : [
-			macro while (i < limit && StringTools.fastCodeAt(source, i) >= $v{spec.flagLow}
+			macro while (i < limit
+				&& StringTools.fastCodeAt(source, i) >= $v{spec.flagLow}
 				&& StringTools.fastCodeAt(source, i) <= $v{spec.flagHigh}) i++
 		];
 		steps.push(macro if ($closeTest) {

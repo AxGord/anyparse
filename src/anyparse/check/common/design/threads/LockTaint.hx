@@ -420,8 +420,12 @@ final class LockTaint {
 
 	/** Whether `edge` calls, on an object other than its caller's, a function taking the long instance lock `held` on its own. */
 	public function retakesElsewhere(edge: CallEdge, held: Null<String>): Bool {
-		return held != null && blockingLocks().contains(held) && !_sites.isStaticLock(held) && _threads.runsFrom(edge)
-			&& selfTakers(held).contains(edge.to) && !_sites.selfCall(edge);
+		return held != null
+			&& blockingLocks().contains(held)
+			&& !_sites.isStaticLock(held)
+			&& _threads.runsFrom(edge)
+			&& selfTakers(held).contains(edge.to)
+			&& !_sites.selfCall(edge);
 	}
 
 	/** Whether `edge` is a call to a sink `lockPairs` names a lock of: one whose cost is the wait for that lock. */
@@ -438,7 +442,8 @@ final class LockTaint {
 	/** Whether a call that blocks counts toward this taint's question: every one for the plain taint, else a long or `repeats` one. */
 	private inline function counts(edge: CallEdge, held: Null<String>, repeats: Bool, valuation: String): Bool {
 		final cost: Null<TaintCost> = _cost;
-		return cost == null || (cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held)))
+		return cost == null
+			|| (cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held)))
 			&& (repeats || costsLong(edge, held, valuation));
 	}
 
@@ -472,7 +477,8 @@ final class LockTaint {
 	 * cost, a re-take of that lock on its object by a `reentrantLocks` take, or a take of a lock it dominates there.
 	 */
 	private inline function briefUnder(under: Null<String>, edge: CallEdge): Bool {
-		return under != null && takesLock(edge)
+		return under != null
+			&& takesLock(edge)
 			&& _cost?.dominance.briefUnder(under, edge, listsOf(edge.file).reentrantIds.contains(edge.to)) == true;
 	}
 

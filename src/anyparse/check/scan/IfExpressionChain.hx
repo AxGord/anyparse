@@ -298,7 +298,9 @@ final class IfExpressionChain {
 	 * skipped when the walk reaches it on its own.
 	 */
 	public static function isElseIfLink(node: QueryNode, parent: Null<QueryNode>, ifKinds: Array<String>): Bool {
-		return parent != null && ifKinds.contains(parent.kind) && parent.children.length == IF_ELSE_CHILD_COUNT
+		return parent != null
+			&& ifKinds.contains(parent.kind)
+			&& parent.children.length == IF_ELSE_CHILD_COUNT
 			&& parent.children[2] == node;
 	}
 
@@ -312,7 +314,9 @@ final class IfExpressionChain {
 		// compares literal content, so requiring both leaves exactly token identity.
 		// Same pairing as `tail-merge`'s `sameStatement` and `redundant-case-body`'s
 		// `sameBody`, for the same reason `CheckScan.normalizeSpan`'s doc gives.
-		return aSpan != null && bSpan != null && MemberKinds.structurallyEqual(a, b)
+		return aSpan != null
+			&& bSpan != null
+			&& MemberKinds.structurallyEqual(a, b)
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
 	}
 

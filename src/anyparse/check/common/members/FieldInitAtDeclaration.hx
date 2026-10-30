@@ -621,7 +621,10 @@ final class FieldInitAtDeclaration extends RuleBase {
 		if (!fields.contains(member.kind)) return null;
 		final span: Null<Span> = member.span;
 		final name: Null<String> = member.name;
-		return span == null || name == null || statics.contains(span.from) || member.children.length >= 1
+		return span == null
+			|| name == null
+			|| statics.contains(span.from)
+			|| member.children.length >= 1
 			|| source.substring(span.from, span.to).indexOf('(') >= 0
 			? null
 			: {
@@ -834,7 +837,10 @@ final class FieldInitAtDeclaration extends RuleBase {
 		if (CondRegionScan.isConditionalKind(member.kind, shape)) return true;
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final span: Null<Span> = member.span;
-		return span != null && fields.contains(member.kind) && !statics.contains(span.from) && member.children.length >= 1
+		return span != null
+			&& fields.contains(member.kind)
+			&& !statics.contains(span.from)
+			&& member.children.length >= 1
 			&& !CtorFieldWrite.contextFreeRhs(member.children[0], container, statics, shape, false, mayBeInherited);
 	}
 
@@ -975,8 +981,11 @@ final class FieldInitAtDeclaration extends RuleBase {
 		final annotation: Null<Span> = member.type?.span;
 		final declared: Null<TypeSyntax> = annotation == null ? null : plugin.typeSyntax(source.substring(annotation.from, annotation.to));
 		// An annotation the grammar cannot read proves nothing about the value it holds.
-		return (annotation == null || declared != null) && inertCollection(rhs, plugin, shape) && faultingFieldType(declared, shape)
-			&& !coreNameShadowed(host, file, declared) && !MemberKinds.fieldExposed(tree, member, container, plugin, shape)
+		return (annotation == null || declared != null)
+			&& inertCollection(rhs, plugin, shape)
+			&& faultingFieldType(declared, shape)
+			&& !coreNameShadowed(host, file, declared)
+			&& !MemberKinds.fieldExposed(tree, member, container, plugin, shape)
 			&& !ReflectionScan.runtimeName(ReflectionScan.reflectionSurface(files, plugin), name)
 			&& !readObservableInScope(files, plugin, scope, file, name, span.from);
 	}
@@ -1055,7 +1064,9 @@ final class FieldInitAtDeclaration extends RuleBase {
 		node: QueryNode, parent: Null<QueryNode>, index: Int, container: Null<QueryNode>, inTry: Bool, scan: EarlyReadScan
 	): Bool {
 		if (
-			node.name == scan.name && scan.occurrenceKinds.contains(node.kind) && (inTry || !faultsOnNull(parent, index, scan))
+			node.name == scan.name
+			&& scan.occurrenceKinds.contains(node.kind)
+			&& (inTry || !faultsOnNull(parent, index, scan))
 			&& !(scan.writesCounted && parent != null && index == 0 && parent.kind == scan.shape.assignKind)
 			&& mayDenoteField(node, container, scan)
 		)
@@ -1131,7 +1142,8 @@ final class FieldInitAtDeclaration extends RuleBase {
 		return switch declared?.shape {
 			case null, Structure(_): true;
 			case Nominal(head, _):
-				head == shape.rawDynamicTypeName || (shape.arrayTypeNames ?? []).contains(head)
+				head == shape.rawDynamicTypeName
+					|| (shape.arrayTypeNames ?? []).contains(head)
 					|| (shape.mapAbstractTypeNames ?? []).contains(head);
 			case _: false;
 		};

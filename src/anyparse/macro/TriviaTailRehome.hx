@@ -271,7 +271,8 @@ final class TriviaTailRehome {
 		if (branch.hasMeta(':infix')) return children.length == 2 && onlyMetas(branch, [':infix', ':fmt']) ? Operand(1) : None;
 		if (branch.hasMeta(':ternary')) return children.length == 3 && onlyMetas(branch, [':ternary', ':fmt']) ? Operand(2) : None;
 		if (branch.hasMeta(':prefix')) return children.length == 1 && onlyMetas(branch, [':prefix', ':fmt']) ? Operand(0) : None;
-		final single: Bool = children.length == 1 && children[0].kind == Ref
+		final single: Bool = children.length == 1
+			&& children[0].kind == Ref
 			&& children[0].annotations[AnnotationKeys.BASE_OPTIONAL] != true;
 		return single && onlyMetas(branch, TRANSPARENT_BRANCH_METAS) ? Operand(0) : None;
 	}

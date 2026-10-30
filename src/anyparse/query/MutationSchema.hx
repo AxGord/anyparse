@@ -240,7 +240,8 @@ final class MutationSchema {
 		// The cut is an `hxq patch` of this member, so outside the member the mutated file is the original.
 		final tail: Int = source.length - m.span.to;
 		if (
-			!arm.mutated.startsWith(source.substring(0, m.span.from)) || !arm.mutated.endsWith(source.substring(m.span.to))
+			!arm.mutated.startsWith(source.substring(0, m.span.from))
+			|| !arm.mutated.endsWith(source.substring(m.span.to))
 			|| arm.mutated.length < m.span.from + tail
 		)
 			return 'the cut reached outside the method';
@@ -327,8 +328,11 @@ final class MutationSchema {
 		var i: Int = parent.children.indexOf(member) - 1;
 		while (i >= 0) {
 			final sibling: QueryNode = parent.children[i];
-			final modifier: Bool = sibling.kind == 'Meta' || sibling.kind == 'MetaCall' || sibling.kind == 'Override'
-				|| KEPT_MODIFIERS.contains(sibling.kind) || REFUSED_MODIFIERS.contains(sibling.kind);
+			final modifier: Bool = sibling.kind == 'Meta'
+				|| sibling.kind == 'MetaCall'
+				|| sibling.kind == 'Override'
+				|| KEPT_MODIFIERS.contains(sibling.kind)
+				|| REFUSED_MODIFIERS.contains(sibling.kind);
 			if (!modifier || sibling.span == null) break;
 			out.unshift(sibling);
 			i--;

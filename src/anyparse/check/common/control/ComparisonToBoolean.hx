@@ -424,7 +424,8 @@ final class ComparisonToBoolean extends RuleBase {
 	 * one — makes that walk itself answer null.
 	 */
 	private static function memberLookupIsPinned(recvType: String, field: String, index: SymbolIndex): Bool {
-		return !index.typing.structural.isAnonStructType(recvType) && typeNameIsPinned(recvType, index)
+		return !index.typing.structural.isAnonStructType(recvType)
+			&& typeNameIsPinned(recvType, index)
 			&& index.typing.members.memberDeclarationsOf(recvType, field).foreach(declaration -> !(declaration.member.guarded));
 	}
 
@@ -485,7 +486,8 @@ final class ComparisonToBoolean extends RuleBase {
 		other: QueryNode, root: QueryNode, shape: RefShape, nullity: Null<DeclaredNullity>, boolOpKinds: Array<String>,
 		fallbackReport: Bool
 	): Bool {
-		return BoolExprShape.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || other.kind == shape.identKind
+		return BoolExprShape.provablyBoolOperand(other, boolOpKinds, shape.parenKind)
+			|| other.kind == shape.identKind
 			&& (nullity == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, nullity));
 	}
 
@@ -503,7 +505,9 @@ final class ComparisonToBoolean extends RuleBase {
 	 */
 	private static function negate(operand: QueryNode, src: String, seams: Seams): String {
 		final shape: RefShape = seams.shape;
-		final atomic: Bool = operand.kind == shape.identKind || operand.kind == shape.parenKind || operand.kind == shape.fieldAccessKind
+		final atomic: Bool = operand.kind == shape.identKind
+			|| operand.kind == shape.parenKind
+			|| operand.kind == shape.fieldAccessKind
 			|| operand.kind == seams.callKind;
 		return atomic ? '!$src' : '!($src)';
 	}

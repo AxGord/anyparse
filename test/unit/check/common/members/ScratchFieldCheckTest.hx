@@ -289,7 +289,8 @@ class ScratchFieldCheckTest extends Test {
 			+ '\tfunction move(v:Float):Float {\n\t\t_point = new P(v * 2);\n\t\treturn if (_point.x < 0) 0 else _point.x + this._point.x;\n\t}\n\n'
 			+ '\tfunction sum(n:Int):Int {\n\t\t_tmp = n;\n\t\tfor (i in 0...n) _tmp += i;\n\t\treturn _tmp;\n\t}\n\n'
 			+ '\tstatic function main():Void {\n\t\tfinal m:Main = new Main();\n\t\tSys.println(m.move(3) + " " + m.sum(4) + " " + m.move(-1));\n'
-			+ '\t}\n}\n\n' + SUPPORT;
+			+ '\t}\n}\n\n'
+			+ SUPPORT;
 		final dir: String = CliFixture.writeTree('scratchfield', [{ name: 'Main.hx', source: main }]);
 		final before: HaxeRun = HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
 		if (before.status != 0) {

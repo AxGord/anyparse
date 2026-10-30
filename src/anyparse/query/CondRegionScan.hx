@@ -343,7 +343,8 @@ final class CondRegionScan {
 	 * leaving `enum` standing in front of the next declaration (`Unexpected @`).
 	 */
 	public static function isConditionalModifierRegion(node: QueryNode): Bool {
-		return node.kind == MemberKinds.CONDITIONAL_REGION_KIND && node.children.length > 0
+		return node.kind == MemberKinds.CONDITIONAL_REGION_KIND
+			&& node.children.length > 0
 			&& node.children.foreach(
 				c -> MemberKinds.MODIFIER_META_KINDS.contains(c.kind) || MemberKinds.COND_DECL_PREFIX_KEYWORD_KINDS.contains(c.kind)
 			);

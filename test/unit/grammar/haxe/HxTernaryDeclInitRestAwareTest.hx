@@ -19,7 +19,8 @@ import utest.Test;
 final class HxTernaryDeclInitRestAwareTest extends Test {
 
 	private static final CFG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,'
-		+ '"alignInlineSwitchCaseBody":true},' + '"emptyLines":{"maxAnywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove",'
+		+ '"alignInlineSwitchCaseBody":true},'
+		+ '"emptyLines":{"maxAnywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove",'
 		+ '"beforeRightCurly":"remove","classEmptyLines":{"beginType":1,"endType":1},'
 		+ '"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,'
 		+ '"endType":1},"uniformStatementBlanks":"collapse"},"wrapping":{"comprehensionCuddledOpen":true,'
@@ -39,7 +40,8 @@ final class HxTernaryDeclInitRestAwareTest extends Test {
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},'
 		+ '"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength",'
 		+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],'
-		+ '"type":"fillLine","location":"beforeLast"}]},' + '"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"type":"fillLine","location":"beforeLast"}]},'
+		+ '"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},'
 		+ '"whitespace":{"addLineCommentSpace":false,"normalizeLineCommentIndent":true,'
 		+ '"commaPolicy":"after","ifPolicy":"around","forPolicy":"around","whilePolicy":"around",'

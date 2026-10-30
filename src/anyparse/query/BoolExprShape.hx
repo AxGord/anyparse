@@ -126,7 +126,8 @@ final class BoolExprShape {
 		final boolLitKind: Null<String> = shape.boolLitKind;
 		if (ternaryKind == null || boolLitKind == null) return false;
 		final n: QueryNode = unwrapParens(operand, shape.parenKind);
-		return n.kind == ternaryKind && n.children.length == 3
+		return n.kind == ternaryKind
+			&& n.children.length == 3
 			&& (n.children[1].kind == boolLitKind) != (n.children[2].kind == boolLitKind);
 	}
 

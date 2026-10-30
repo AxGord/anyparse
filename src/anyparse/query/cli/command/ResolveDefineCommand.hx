@@ -104,8 +104,10 @@ final class ResolveDefineCommand implements CliCommand {
 		final left: Int = tally.undecided.length;
 		final verb: String = o.write ? 'rewrote' : 'would rewrite';
 		CliIo.stderr(
-			'apq resolve-define: $verb ${tally.changed} file(s), ${tally.regions} region(s)' + (failed > 0 ? ', $failed failed' : '')
-			+ (left > 0 ? ', $left region(s) left undecided' : '') + '\n'
+			'apq resolve-define: $verb ${tally.changed} file(s), ${tally.regions} region(s)'
+			+ (failed > 0 ? ', $failed failed' : '')
+			+ (left > 0 ? ', $left region(s) left undecided' : '')
+			+ '\n'
 		);
 		// "0 region(s)" reads as "the regions were already folded", which is the one thing it never
 		// means. Say that nothing MATCHED, and say what the matching question was: a region answers

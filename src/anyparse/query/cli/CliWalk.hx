@@ -587,7 +587,9 @@ final class CliWalk {
 		if (!firstOk) return null;
 		for (idx in 1...tail.length) {
 			final c: Int = tail.fastCodeAt(idx);
-			final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
+			final ok: Bool = (c >= 'a'.code && c <= 'z'.code)
+				|| (c >= 'A'.code && c <= 'Z'.code)
+				|| (c >= '0'.code && c <= '9'.code)
 				|| c == '_'.code;
 			if (!ok) return null;
 		}
@@ -605,7 +607,9 @@ final class CliWalk {
 			if (!firstOk) return null;
 			for (idx in 1...p.length) {
 				final c: Int = p.fastCodeAt(idx);
-				final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
+				final ok: Bool = (c >= 'a'.code && c <= 'z'.code)
+					|| (c >= 'A'.code && c <= 'Z'.code)
+					|| (c >= '0'.code && c <= '9'.code)
 					|| c == '_'.code;
 				if (!ok) return null;
 			}

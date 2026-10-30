@@ -150,7 +150,8 @@ final class BinaryChainEmit {
 	 * numerator, so `endsWithCloseDelim` refuses it and the chain breaks `beforeLast` instead.
 	 */
 	private static inline function hasBareParenTail(items: Array<Doc>): Bool {
-		return leadingOperandOpensDelim(items[items.length - 1], true) && WrapList.endsWithCloseDelim(items[items.length - 1])
+		return leadingOperandOpensDelim(items[items.length - 1], true)
+			&& WrapList.endsWithCloseDelim(items[items.length - 1])
 			&& !leadingOperandOpensDelim(items[0]);
 	}
 
@@ -571,7 +572,8 @@ final class BinaryChainEmit {
 		// (`a && xs.exists(x -> {`, `|| [`) when the glued line up to its break fits and ends at a delimiter the operand
 		// opened, rather than counting the operand's own break as the chain's overflow. A break of another kind (a line
 		// comment, a `#if` line) keeps the broken chain, whose nest indents the operand's continuation.
-		final hugsLast: Bool = isChainOps(ops) && !items.slice(0, items.length - 1).exists(item -> WrapList.flatLength(item) < 0)
+		final hugsLast: Bool = isChainOps(ops)
+			&& !items.slice(0, items.length - 1).exists(item -> WrapList.flatLength(item) < 0)
 			&& evalAt(false, []).mode == NoWrap;
 		if (!hugsLast) return broken;
 		final glued: Doc = shapeNoWrap(items, ops);
@@ -910,7 +912,9 @@ final class BinaryChainEmit {
 		//    paren-expr/array that itself leads with an open delim (excludes
 		//    condition_first_operand_paren_no_merge, where the fork breaks
 		//    the chain instead of gluing to operand-1's `(`).
-		final unwrapCandidate: Bool = condWrapForced && isChainOps(ops) && !leadingOperandOpensDelim(items[0])
+		final unwrapCandidate: Bool = condWrapForced
+			&& isChainOps(ops)
+			&& !leadingOperandOpensDelim(items[0])
 			&& laterOperandContainsArrow(items);
 		// A cascade whose flat answer is itself a break mode lays the chain out
 		// broken even where it fits — pivot the NoWrap UNWRAP shape against it.

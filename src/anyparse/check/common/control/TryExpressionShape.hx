@@ -204,7 +204,8 @@ final class TryExpressionShape {
 	 * asks whether it captures a name the TERMINATOR it moves inward reads.
 	 */
 	public static function referencesName(node: QueryNode, name: String, identKind: String, stringInterpKind: Null<String>): Bool {
-		return (node.kind == identKind || node.kind == stringInterpKind) && node.name == name
+		return (node.kind == identKind || node.kind == stringInterpKind)
+			&& node.name == name
 			|| node.children.exists(c -> referencesName(c, name, identKind, stringInterpKind));
 	}
 

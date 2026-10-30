@@ -382,7 +382,8 @@ final class CliArgs {
 			CliIo.stderr(
 				'apq: ${expanded.unmatched.length} of ${specs.length} scope argument(s) matched no .hx files and were skipped: '
 				+ quotedSpecs(expanded.unmatched)
-				+ (suggestSeparator ? ' — if they are QUERIES, put a bare `--` between them and the scope' : '') + '\n'
+				+ (suggestSeparator ? ' — if they are QUERIES, put a bare `--` between them and the scope' : '')
+				+ '\n'
 			);
 		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
 	}

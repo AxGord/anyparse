@@ -404,7 +404,8 @@ final class RawSourceScan {
 		final fi: Null<FileInfo> = _files.find(f -> f.file == file);
 		if (fi == null || fi.accessGrants.length == 0) return false;
 		final src: Null<String> = _sources[file];
-		return src == null || OccurrenceScan.referencedInRange(src, name, 0, src.length, [])
+		return src == null
+			|| OccurrenceScan.referencedInRange(src, name, 0, src.length, [])
 			|| fi.types.exists(t -> _traits.buildClosureSpells(t.name, file, name));
 	}
 

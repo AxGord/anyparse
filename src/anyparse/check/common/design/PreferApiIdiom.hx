@@ -240,8 +240,13 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	private static function isMethodOf(owned: Null<OwnedMember>, arity: Int, fieldKinds: Array<String>, memberKinds: Array<String>): Bool {
 		if (owned == null) return false;
 		final m: MemberInfo = owned.member;
-		return memberKinds.contains(m.kind) && !fieldKinds.contains(m.kind) && !m.isStatic && !m.isOverload && !m.hasOverloadMeta
-			&& !m.isMacro && m.paramTypeSources.length == arity;
+		return memberKinds.contains(m.kind)
+			&& !fieldKinds.contains(m.kind)
+			&& !m.isStatic
+			&& !m.isOverload
+			&& !m.hasOverloadMeta
+			&& !m.isMacro
+			&& m.paramTypeSources.length == arity;
 	}
 
 	/** Whether the copy method `owned`'s one parameter is written as the idiom type, read in the declaring file's scope. */
@@ -266,8 +271,14 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
-		return exprStmtKind == null || assignKind == null || fieldKind == null || identKind == null || fieldKinds.length == 0
-			|| memberKinds.length == 0 || typed == null || blockKinds.length == 0
+		return exprStmtKind == null
+			|| assignKind == null
+			|| fieldKind == null
+			|| identKind == null
+			|| fieldKinds.length == 0
+			|| memberKinds.length == 0
+			|| typed == null
+			|| blockKinds.length == 0
 			? null
 			: {
 				shape: shape,
@@ -393,7 +404,8 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 
 	/** Whether a receiver of type `recvType` is one `idiom` speaks for: the declared type, or a subtype when it opts in. */
 	private static function receiverMatches(recvType: ResolvedType, idiom: Idiom, index: SymbolIndex): Bool {
-		return ConfiguredTypes.same(index, recvType, idiom.type) || idiom.spec.subtypes
+		return ConfiguredTypes.same(index, recvType, idiom.type)
+			|| idiom.spec.subtypes
 			&& ConfiguredTypes.inherits(index, recvType, idiom.type) == true;
 	}
 
@@ -432,7 +444,8 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 			span: new Span(from, last.span.to),
 			text: text,
 			width: window.length,
-			message: 'writes of $recvText.' + fields.join(', $recvText.')
+			message: 'writes of $recvText.'
+				+ fields.join(', $recvText.')
 				+ ' are one ${idiom.spec.type}.$method call — write $recvText.$method(…)'
 		};
 	}
@@ -490,7 +503,8 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		if (names.length == 0) return false;
 		final name: Null<String> = node.name;
 		if (
-			name != null && names.contains(name)
+			name != null
+			&& names.contains(name)
 			&& (node.kind == seams.fieldKind || node.kind == seams.identKind || node.kind == seams.interpIdentKind)
 		)
 			return true;

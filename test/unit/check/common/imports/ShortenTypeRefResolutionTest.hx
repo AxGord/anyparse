@@ -197,7 +197,9 @@ class ShortenTypeRefResolutionTest extends Test {
 			{ file: 'a/Paint.hx', source: 'package a;\n\nenum Paint {\n\tRed;\n\tBlue;\n}\n' },
 			{ file: 'z/Color.hx', source: 'package z;\n\nenum Color {\n\tRed;\n\tGreen;\n}\n' }
 		]);
-		final src: String = 'package pkg.sub;\n\nimport a.Paint;\n\nclass Holder {\n' + twice('z.Color') + twice('lib.deep.Gadget')
+		final src: String = 'package pkg.sub;\n\nimport a.Paint;\n\nclass Holder {\n'
+			+ twice('z.Color')
+			+ twice('lib.deep.Gadget')
 			+ '\n\tpublic static function f():Void {\n\t\ttrace(Red);\n\t}\n}\n';
 		final out: String = applyFix(src, extra);
 		Assert.equals(-1, out.indexOf('import z.Color;'), 'Red would change meaning, got: $out');
@@ -212,7 +214,9 @@ class ShortenTypeRefResolutionTest extends Test {
 			{ file: 'z/Thing.hx', source: 'package z;\n\nclass Thing {}\n\nclass Helper {}\n' },
 			{ file: 'Helper.hx', source: 'class Helper {}\n' }
 		]);
-		final src: String = 'package pkg.sub;\n\nclass Holder {\n' + twice('z.Thing') + twice('lib.deep.Gadget')
+		final src: String = 'package pkg.sub;\n\nclass Holder {\n'
+			+ twice('z.Thing')
+			+ twice('lib.deep.Gadget')
 			+ '\n\tpublic static function f():Void {\n\t\ttrace(Helper);\n\t}\n}\n';
 		final out: String = applyFix(src, extra);
 		Assert.equals(-1, out.indexOf('import z.Thing;'), 'Helper would change meaning, got: $out');

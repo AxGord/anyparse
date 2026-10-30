@@ -19,7 +19,8 @@ class BuildFailureTest extends Test {
 
 	/** The real line from cutting `region: region` to `region: span`. */
 	private static final NULL_SAFETY_STRUCTURE: String = 'src/anyparse/query/CondRegionScan.hx:107: lines 107-112 : Null safety: Cannot '
-		+ 'unify { region : Null<anyparse.runtime.Span>, kind : String, gaps : ' + 'Array<anyparse.runtime.Span>,'
+		+ 'unify { region : Null<anyparse.runtime.Span>, kind : String, gaps : '
+		+ 'Array<anyparse.runtime.Span>,'
 		+ ' formatted : Array<anyparse.runtime.Span> } with anyparse.query.OpaqueCondRegion';
 
 	/** utest emits this on every build of this project — it must never be read as the failure. */

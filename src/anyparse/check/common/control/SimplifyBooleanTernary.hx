@@ -100,7 +100,8 @@ final class SimplifyBooleanTernary extends RuleBase {
 		node: QueryNode, source: String, ternaryKind: String, support: BooleanLogicSupport, shape: RefShape, retType: Null<String>,
 		isReturnValue: Bool
 	): Bool {
-		return node.kind == ternaryKind && !condGuarded(node, shape)
+		return node.kind == ternaryKind
+			&& !condGuarded(node, shape)
 			&& support.simplifyBooleanTernary(node, source, null, boolReturnLicence(node, source, shape, retType, isReturnValue)) != null;
 	}
 

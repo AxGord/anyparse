@@ -88,27 +88,32 @@ final class HxComprehensionAllmanGluedSpaceTest extends Test {
 	}
 
 	private static function fieldHead(k: Int): String {
-		return 'class M {\n\tfunction f() {\n\t\tfinal x = {\n\t\t\ttypes' + ''.lpad('k', k) + ': [for (entry in collectionOfThings) '
+		return 'class M {\n\tfunction f() {\n\t\tfinal x = {\n\t\t\ttypes'
+			+ ''.lpad('k', k)
+			+ ': [for (entry in collectionOfThings) '
 			+ '{alpha: entry.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, beta: entry.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}]\n\t\t};\n\t}\n}';
 	}
 
 	private static function innerComprehension(k: Int): String {
 		return statement(
-			'var y = [for (a in xs) [for (b in a' + ''.lpad('k', k)
+			'var y = [for (a in xs) [for (b in a'
+			+ ''.lpad('k', k)
 			+ ') {alpha: b.aaaaaaaaaaaaaaaaaaaaaaaaa, beta: b.bbbbbbbbbbbbbbbbbbbbbbbbbbbbb}]];'
 		);
 	}
 
 	private static function longIterator(k: Int): String {
 		return statement(
-			'var y = [for (entry in someFunction(argumentNumberOne, argumentNumberTwo, argumentNumberThree' + ''.lpad('k', k)
+			'var y = [for (entry in someFunction(argumentNumberOne, argumentNumberTwo, argumentNumberThree'
+			+ ''.lpad('k', k)
 			+ ')) {alpha: entry.aaaaaaaaaaaaaaaa, beta: entry.bbbbbbbbbbbbbbbbbbbb}];'
 		);
 	}
 
 	private static function nestedFor(k: Int): String {
 		return statement(
-			'var y = [for (a in xs) for (b in ys) {alpha: a.aaaaaaaaaaaaaaaaaa, beta: b.bbbbbbbbbbbbbbbbbbbbbb, k: \'' + ''.lpad('k', k)
+			'var y = [for (a in xs) for (b in ys) {alpha: a.aaaaaaaaaaaaaaaaaa, beta: b.bbbbbbbbbbbbbbbbbbbbbb, k: \''
+			+ ''.lpad('k', k)
 			+ '\'}];'
 		);
 	}

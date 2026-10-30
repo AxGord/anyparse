@@ -32,23 +32,27 @@ import utest.Test;
 final class HxArrowValueIfReflowSliceTest extends Test {
 
 	private static final CONFIG_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "sameLine": {' + '"expressionIf": "next", "ifBody": "fitLine", "expressionIfArrowBodyReflow": true}}';
+		+ '"maxLineLength": 140}, "sameLine": {'
+		+ '"expressionIf": "next", "ifBody": "fitLine", "expressionIfArrowBodyReflow": true}}';
 	private static final CONFIG_OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140}, "sameLine": {"expressionIf": "next", "ifBody": "fitLine"}}';
 
 	/** Padded object-literal braces, for the refusal's effect on a SIBLING knob. */
 	private static final CONFIG_OBJECT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "sameLine": {' + '"expressionIf": "next", "ifBody": "fitLine", "expressionIfArrowBodyReflow": true}, '
+		+ '"maxLineLength": 140}, "sameLine": {'
+		+ '"expressionIf": "next", "ifBody": "fitLine", "expressionIfArrowBodyReflow": true}, '
 		+ '"whitespace": {"bracesConfig": {"objectLiteralBraces": {'
 		+ '"openingPolicy": "around", "closingPolicy": "around", "arrowBodyReflow": true}}}}';
 
 	private static final CONFIG_OBJECT_OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140}, "sameLine": {"expressionIf": "next", "ifBody": "fitLine"}, "whitespace": {'
-		+ '"bracesConfig": {"objectLiteralBraces": {' + '"openingPolicy": "around", "closingPolicy": "around", "arrowBodyReflow": true}}}}';
+		+ '"bracesConfig": {"objectLiteralBraces": {'
+		+ '"openingPolicy": "around", "closingPolicy": "around", "arrowBodyReflow": true}}}}';
 
 	/** `ifBody: "next"` - the only setting under which the no-else gate is visible. */
 	private static final CONFIG_NEXT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "sameLine": {' + '"expressionIf": "next", "ifBody": "next", "expressionIfArrowBodyReflow": true}}';
+		+ '"maxLineLength": 140}, "sameLine": {'
+		+ '"expressionIf": "next", "ifBody": "next", "expressionIfArrowBodyReflow": true}}';
 
 	private static final CONFIG_NEXT_OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140}, "sameLine": {"expressionIf": "next", "ifBody": "next"}}';
@@ -73,7 +77,8 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 		+ 'secondary.orderKeyValue) -1 else if (primary.orderKeyValue > secondary.orderKeyValue) 1 else 0);\n\t}\n}';
 	private static final MID_REFLOWED: String = 'class C {\n\tfunction test() {\n\t\titemCollection.rankEntries((primary:ItemEntry, '
 		+ 'secondary:ItemEntry) ->\n\t\t\tif (primary.orderKeyValue < secondary.orderKeyValue) -1 else if ('
-		+ 'primary.orderKeyValue > secondary.orderKeyValue) 1 else 0\n' + '\t\t);\n\t}\n}';
+		+ 'primary.orderKeyValue > secondary.orderKeyValue) 1 else 0\n'
+		+ '\t\t);\n\t}\n}';
 	private static final COMMENT_OUTER_SRC: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if ('
 		+ 'p.orderKeyVal < q.orderKeyVal)\n\t\t\t// ascending\n\t\t\t-1\n'
 		+ '\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t1\n\t\telse\n\t\t\t0);\n\t}\n}';
@@ -98,7 +103,8 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 
 	/** Same slot, two-arm chain - the reported `NetRequest2` shape. */
 	private static final TRAIL_ON_ELSE_VALUE_SRC: String = 'class C {\n\tfunction test() {\n\t\tAPIToken.instance.waitToken(success ->\n'
-		+ '\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n' + '\t\t\t\ttokenError() // Call error handlers\n\t\t);\n\t}\n}';
+		+ '\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n'
+		+ '\t\t\t\ttokenError() // Call error handlers\n\t\t);\n\t}\n}';
 
 	private static final BLOCK_SRC: String =
 		'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok) { first(); } else { second(); });\n\t}\n}';
@@ -113,7 +119,8 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 	private static final OBJECT_SRC: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok)\n\t\t\t// pick '
 		+ 'first\n\t\t\t{ alpha: p.a, beta: p.b }\n\t\telse\n\t\t\t{ alpha: q.a, beta: q.b });\n\t}\n}';
 	private static final OBJECT_CANON: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok)\n'
-		+ '\t\t\t// pick first\n\t\t\t{alpha: p.a, beta: p.b }\n\t\telse\n\t\t\t{alpha: q.a, beta: q.b });\n' + '\t}\n}';
+		+ '\t\t\t// pick first\n\t\t\t{alpha: p.a, beta: p.b }\n\t\telse\n\t\t\t{alpha: q.a, beta: q.b });\n'
+		+ '\t}\n}';
 	private static final NO_ELSE_SRC: String =
 		'class C {\n\tfunction test() {\n\t\tfinal kept = items.map(p -> if (p.orderKeyVal > 0) p.orderKeyVal);\n\t}\n}';
 	private static final NO_ELSE_CANON: String =

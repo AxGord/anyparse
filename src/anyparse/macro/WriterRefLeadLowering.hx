@@ -259,7 +259,8 @@ final class WriterRefLeadLowering {
 			// differently. Normalise here too, before the paren pad reads the text.
 			final _condStr: String = anyparse.format.DirectiveCondition.spaceOperators(($fieldAccess: String), opt.condDirectiveOpSpacing);
 			if (
-				_condStr.length >= 2 && StringTools.fastCodeAt(_condStr, 0) == '('.code
+				_condStr.length >= 2
+				&& StringTools.fastCodeAt(_condStr, 0) == '('.code
 				&& StringTools.fastCodeAt(_condStr, _condStr.length - 1) == ')'.code
 			) {
 				final _inner: String = _condStr.substr(1, _condStr.length - 2);

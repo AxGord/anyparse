@@ -27,7 +27,8 @@ class AddressCliTest extends Test {
 	 * (type, member) pair rather than narrowing the removal to one branch.
 	 */
 	private static final MEMBER_FIXTURE: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n\n'
-		+ '\tfunction g():Int\n' + '\t\treturn 2;\n\n\t#if js\n\tfunction h():Int\n\t\treturn 3;\n\t#else\n\tfunction h():Int\n'
+		+ '\tfunction g():Int\n'
+		+ '\t\treturn 2;\n\n\t#if js\n\tfunction h():Int\n\t\treturn 3;\n\t#else\n\tfunction h():Int\n'
 		+ '\t\treturn 4;\n\t#end\n}\n';
 
 	/**

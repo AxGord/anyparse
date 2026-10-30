@@ -305,7 +305,8 @@ final class EdgeConditions {
 	private function isMainCheck(expr: QueryNode, fnId: String, file: String): Bool {
 		final span: Null<Span> = expr.span;
 		final checks: Array<String> = _checksOf(file);
-		return span != null && checks.length > 0
+		return span != null
+			&& checks.length > 0
 			&& _graph.outEdges(fnId).exists(
 				e -> e.kind.isInvocation() && checks.contains(e.to) && e.span != null && e.span.from == span.from && e.span.to == span.to
 			);

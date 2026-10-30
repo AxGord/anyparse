@@ -168,7 +168,10 @@ final class WriteSites {
 
 	/** Whether `node` can head an access chain: a root, a member or index access, parentheses. */
 	private static function isChainHead(node: QueryNode, shape: RefShape): Bool {
-		return isRoot(node, shape) || node.kind == shape.indexAccessKind || node.kind == shape.parenKind || isCast(node, shape)
+		return isRoot(node, shape)
+			|| node.kind == shape.indexAccessKind
+			|| node.kind == shape.parenKind
+			|| isCast(node, shape)
 			|| ShapeVocab.memberAccessKinds(shape).contains(node.kind);
 	}
 

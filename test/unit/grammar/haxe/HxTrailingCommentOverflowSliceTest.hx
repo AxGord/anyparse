@@ -58,14 +58,17 @@ final class HxTrailingCommentOverflowSliceTest extends Test {
 		+ '\t\t// a note long enough to overflow the sixty columns\n\t\ttwo();\n\t}\n}';
 
 	/** Every comment here keeps its place under the knob: each line names the reason. */
-	private static final STAYS_SRC: String = 'class C {\n\tfunction f() {\n' + '\t\tcall(first); // fits on the line\n'
+	private static final STAYS_SRC: String = 'class C {\n\tfunction f() {\n'
+		+ '\t\tcall(first); // fits on the line\n'
 		+ '\t\tother(); // noqa: some-rule and more text so that it overflows\n'
 		+ '\t\tthird(); // CHECKSTYLE:OFF and more text so that it overflows the line\n'
-		+ '\t\tfourth(); /* a block comment that is long enough to overflow it */\n' + '\t\t// already led by a comment\n'
+		+ '\t\tfourth(); /* a block comment that is long enough to overflow it */\n'
+		+ '\t\t// already led by a comment\n'
 		+ '\t\tfifth(alpha); // and a trailing one that is long enough to overflow\n'
 		+ '\t\tfinal obj = {\n\t\t\tfieldName: someValue, // a field comment that is long enough to overflow\n\t\t\tother: 1\n\t\t};\n'
 		+ '\t\tswitch x {\n\t\t\tcase 1:\n\t\t\t\tsixth(); // a case body comment that is long enough to overflow\n\t\t}\n'
-		+ '\t\tfinal wideIdentifierName:String = anotherIdentifierName; // c\n' + '\t}\n}';
+		+ '\t\tfinal wideIdentifierName:String = anotherIdentifierName; // c\n'
+		+ '\t}\n}';
 
 	/** Code that spans lines on its own: the comment trails its last line, as before. */
 	private static final MULTI_LINE_SRC: String = 'class C {\n\tfunction f() {\n\t\tcall(alphaArgumentNumberOne,\n\t\t\tbetaArgumentNumberTwo,\n'

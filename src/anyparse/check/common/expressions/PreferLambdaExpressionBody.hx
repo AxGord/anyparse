@@ -442,7 +442,8 @@ final class PreferLambdaExpressionBody extends RuleBase {
 		final divergence: Int = firstDivergence(before, after);
 		final head: String = trimmedAt(before, divergence);
 		final collapsedHead: String = trimmedAt(after, divergence);
-		return collapsedHead.length > head.length || headOnlyLostItsBrace(head, collapsedHead)
+		return collapsedHead.length > head.length
+			|| headOnlyLostItsBrace(head, collapsedHead)
 			&& interiorSurvives(before, after, divergence);
 	}
 
@@ -537,7 +538,8 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	 * a brace" ends and "reflowed the enclosing construct" begins.
 	 */
 	private static function headOnlyLostItsBrace(head: String, collapsedHead: String): Bool {
-		return head.length > BODY_BRACE_TAIL.length && head.substr(head.length - BODY_BRACE_TAIL.length) == BODY_BRACE_TAIL
+		return head.length > BODY_BRACE_TAIL.length
+			&& head.substr(head.length - BODY_BRACE_TAIL.length) == BODY_BRACE_TAIL
 			&& collapsedHead == head.substr(0, head.length - BODY_BRACE_TAIL.length);
 	}
 
@@ -696,7 +698,8 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	 * and a `--fix` fixpoint cannot oscillate across it.
 	 */
 	private static function branchesInternally(stmt: QueryNode, s: Seams): Bool {
-		return s.branchingKinds.contains(stmt.kind) || s.shield.conditionalKinds.contains(stmt.kind)
+		return s.branchingKinds.contains(stmt.kind)
+			|| s.shield.conditionalKinds.contains(stmt.kind)
 			&& stmt.children.length >= IF_ELSE_CHILD_COUNT;
 	}
 

@@ -395,7 +395,9 @@ final class ShadowingLocal extends RuleBase {
 		collectNestedFnSpans(decl, nested, seams);
 		return Refs.find(name, root, seams.shape).exists(
 			hit ->
-				hit.kind == RefKind.Read && within(hit.span, declSpan) && !nested.exists(fn -> within(hit.span, fn))
+				hit.kind == RefKind.Read
+				&& within(hit.span, declSpan)
+				&& !nested.exists(fn -> within(hit.span, fn))
 				&& bindsOutside(hit.bindingSpan, declSpan)
 		);
 	}
@@ -510,7 +512,9 @@ final class ShadowingLocal extends RuleBase {
 		return frameSpan == null
 			|| hits.exists(
 				hit ->
-					hit.kind == RefKind.Read && hit.span.from >= declSpan.to && within(hit.span, frameSpan)
+					hit.kind == RefKind.Read
+					&& hit.span.from >= declSpan.to
+					&& within(hit.span, frameSpan)
 					&& !bindsWithin(hit.bindingSpan, declSpan)
 			);
 	}
@@ -535,9 +539,13 @@ final class ShadowingLocal extends RuleBase {
 		final initSpan: Null<Span> = init?.span;
 		if (outerSpan == null || init == null || initSpan == null || innerType == null || outerType == null) return null;
 		if (
-			outerType.trim() != innerType.trim() || hidden.label != LOCAL_LABEL || hidden.frame != ancestors[ancestors.length - 1]
-			|| !(shape.mutableLocalDeclKinds ?? []).contains(outer.kind) || SourceText.isMultiDeclarator(outer, continuation)
-			|| continuation.contains(init.kind) || capturedInNestedFunction(hits, outerSpan, hidden.frame, site.seams)
+			outerType.trim() != innerType.trim()
+			|| hidden.label != LOCAL_LABEL
+			|| hidden.frame != ancestors[ancestors.length - 1]
+			|| !(shape.mutableLocalDeclKinds ?? []).contains(outer.kind)
+			|| SourceText.isMultiDeclarator(outer, continuation)
+			|| continuation.contains(init.kind)
+			|| capturedInNestedFunction(hits, outerSpan, hidden.frame, site.seams)
 			|| !declaratorPrefixOnly(site, span, initSpan, name, innerType)
 		)
 			return null;
@@ -613,7 +621,9 @@ final class ShadowingLocal extends RuleBase {
 			frameSpan == null
 			|| regions.exists(
 				r ->
-					r.kind == LexRegionKind.StringLit && r.from >= frameSpan.from && r.to <= frameSpan.to
+					r.kind == LexRegionKind.StringLit
+					&& r.from >= frameSpan.from
+					&& r.to <= frameSpan.to
 					&& SourceText.mentionsIdent(site.source, new Span(r.from, r.to), name)
 			)
 		)
@@ -653,7 +663,9 @@ final class ShadowingLocal extends RuleBase {
 	private static function typeNamedLocal(written: String): Null<String> {
 		final path: String = written.trim();
 		final simple: String = path.substr(path.lastIndexOf('.') + 1);
-		return SourceText.isIdentifier(path.replace('.', '')) && simple.length > 0 && simple.charAt(0) != simple.charAt(0).toLowerCase()
+		return SourceText.isIdentifier(path.replace('.', ''))
+			&& simple.length > 0
+			&& simple.charAt(0) != simple.charAt(0).toLowerCase()
 			&& !TypeNameBinding.AMBIENT_TYPE_NAMES.contains(simple)
 			? SourceText.lowerCamel(simple)
 			: null;

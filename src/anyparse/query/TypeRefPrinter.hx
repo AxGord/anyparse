@@ -880,7 +880,8 @@ final class TypeRefPrinter {
 	private function packageDeclaresOtherType(canonical: String, simple: String): Bool {
 		final index: Null<SymbolIndex> = _index;
 		final pkg: Null<String> = _pkg;
-		return index != null && pkg != null
+		return index != null
+			&& pkg != null
 			&& index.refs.declaringFiles(simple).exists(f -> f.pkg == pkg && !declaresAs(f, simple, canonical));
 	}
 

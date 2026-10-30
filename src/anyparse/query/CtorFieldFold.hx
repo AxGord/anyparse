@@ -442,7 +442,8 @@ final class CtorFieldFold {
 
 	/** Whether `node`'s subtree carries a string-interpolation hole, which reads surrounding bindings. */
 	private static function containsInterpolation(node: QueryNode, shape: RefShape): Bool {
-		return node.kind == shape.stringInterpIdentKind || (shape.interpolationKinds ?? []).contains(node.kind)
+		return node.kind == shape.stringInterpIdentKind
+			|| (shape.interpolationKinds ?? []).contains(node.kind)
 			|| node.children.exists(child -> containsInterpolation(child, shape));
 	}
 
@@ -597,7 +598,9 @@ final class CtorFieldFold {
 		final exitKinds: Array<String> = shape.controlExitKinds ?? [];
 		// An unset exit-kind set would turn the scan below into a no-op and silently accept
 		// every early return, so its completeness is load-bearing here — refuse without it.
-		return body != null && bodySpan != null && exitKinds.length != 0
+		return body != null
+			&& bodySpan != null
+			&& exitKinds.length != 0
 			&& !OccurrenceScan.referencedInRange(source, name, bodySpan.from, guardFrom, [])
 			&& !CtorFieldWrite.kindStartsBefore(body, exitKinds, guardFrom);
 	}

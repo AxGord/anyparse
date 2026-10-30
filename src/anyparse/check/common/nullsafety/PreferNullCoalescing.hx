@@ -168,7 +168,8 @@ final class PreferNullCoalescing extends RuleBase implements RiskyFix implements
 		);
 		if (res == null) return null;
 		final span: Null<Span> = ternary.span;
-		return declaredTypes != null && span != null
+		return declaredTypes != null
+			&& span != null
 			&& TypeResolver.isInferenceFragileNullGuard(res.fallback, span, root, shape, declaredTypes)
 			? null
 			: res;

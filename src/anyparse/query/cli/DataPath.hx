@@ -102,7 +102,8 @@ final class DataPath {
 		if (value.kind == shape.objectLiteralKind) return '{'
 			+ [
 				for (entry in value.children) Json.stringify(entry.name ?? '') + ':${json(valueOf(entry, shape), source, shape)}'
-			].join(',') + '}';
+			].join(',')
+			+ '}';
 		if (value.kind == shape.arrayLiteralKind)
 			return '[' + [for (element in value.children) json(valueOf(element, shape), source, shape)].join(',') + ']';
 		final span: Null<Span> = value.span;

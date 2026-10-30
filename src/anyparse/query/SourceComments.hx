@@ -567,7 +567,9 @@ final class SourceComments {
 			return 'a bullet';
 		var digits: Int = 0;
 		while (digits < text.length && text.fastCodeAt(digits) >= '0'.code && text.fastCodeAt(digits) <= '9'.code) digits++;
-		final numbered: Bool = digits > 0 && digits + 1 < text.length && text.fastCodeAt(digits) == '.'.code
+		final numbered: Bool = digits > 0
+			&& digits + 1 < text.length
+			&& text.fastCodeAt(digits) == '.'.code
 			&& text.fastCodeAt(digits + 1) == ' '.code;
 		return numbered ? 'a numbered list item' : null;
 	}
@@ -1052,7 +1054,8 @@ final class SourceComments {
 			final line: String = raw.length > 0 && raw.fastCodeAt(raw.length - 1) == '\r'.code ? raw.substring(0, raw.length - 1) : raw;
 			final lead: String = i == 0 ? head : '';
 			final tailCols: Int = i == last ? closerCols : 0;
-			final cols: Int = CheckScan.displayColumn(lead, 0, lead.length, tab) + CheckScan.displayColumn(line, 0, line.length, tab)
+			final cols: Int = CheckScan.displayColumn(lead, 0, lead.length, tab)
+				+ CheckScan.displayColumn(line, 0, line.length, tab)
 				+ tailCols;
 			if (cols > width) out.push(cols);
 		}

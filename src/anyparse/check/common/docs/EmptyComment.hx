@@ -123,8 +123,14 @@ final class EmptyComment extends RuleBase {
 		final tok: CommentToken = toks[i];
 		final prev: CommentToken = toks[i - 1];
 		final next: CommentToken = toks[i + 1];
-		return tok.isLine && prev.isLine && next.isLine && !isEmpty(source, prev) && aloneOnLine(source, tok.from)
-			&& aloneOnLine(source, prev.from) && aloneOnLine(source, next.from) && oneLineApart(source, prev.to, tok.from)
+		return tok.isLine
+			&& prev.isLine
+			&& next.isLine
+			&& !isEmpty(source, prev)
+			&& aloneOnLine(source, tok.from)
+			&& aloneOnLine(source, prev.from)
+			&& aloneOnLine(source, next.from)
+			&& oneLineApart(source, prev.to, tok.from)
 			&& oneLineApart(source, tok.to, next.from);
 	}
 

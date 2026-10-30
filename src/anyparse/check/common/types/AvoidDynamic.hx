@@ -673,7 +673,8 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 		final kids: Array<QueryNode> = node.children;
 		if (kids.length == 0) return false;
 		final last: QueryNode = kids[kids.length - 1];
-		return last.kind == ctx.callKind && last.children.length != 0
+		return last.kind == ctx.callKind
+			&& last.children.length != 0
 			&& NodeShape.calleePath(last.children[0], ctx.fieldAccessKind, ctx.identKind).exists(seg -> boundaryCalls.contains(seg));
 	}
 

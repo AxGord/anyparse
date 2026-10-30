@@ -136,7 +136,11 @@ final class BindingScope {
 		function walk(n: QueryNode): Void {
 			final s: Null<Span> = n.span;
 			if (
-				s != null && s.from <= pos && pos < s.to && kinds.contains(n.kind) && s.from > bestFrom
+				s != null
+				&& s.from <= pos
+				&& pos < s.to
+				&& kinds.contains(n.kind)
+				&& s.from > bestFrom
 				&& (s.from != excludeFrom || s.to != excludeTo)
 			) {
 				bestFrom = s.from;

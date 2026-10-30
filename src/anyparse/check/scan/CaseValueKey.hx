@@ -110,7 +110,10 @@ final class CaseValueKey {
 	 * or not `of` can key it (an escaped or interpolated string is still a literal here).
 	 */
 	public static function isLiteral(kind: String, text: String, seams: CaseValueSeams): Bool {
-		return seams.numericKinds.contains(kind) || seams.stringKinds.contains(kind) || kind == seams.boolKind || kind == seams.nullKind
+		return seams.numericKinds.contains(kind)
+			|| seams.stringKinds.contains(kind)
+			|| kind == seams.boolKind
+			|| kind == seams.nullKind
 			|| numberOf(kind, text, seams) != null;
 	}
 

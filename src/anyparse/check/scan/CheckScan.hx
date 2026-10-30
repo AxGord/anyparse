@@ -902,7 +902,9 @@ final class CheckScan {
 	): String {
 		final whole: String = source.substring(bs.from, bs.to);
 		if (
-			ifParent == null || body.kind != seams.blockStmtKind || body.children.length == 0
+			ifParent == null
+			|| body.kind != seams.blockStmtKind
+			|| body.children.length == 0
 			|| body.children.length > BARE_BLOCK_MAX_STATEMENTS
 		)
 			return whole;

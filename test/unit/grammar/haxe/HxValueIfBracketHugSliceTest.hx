@@ -143,7 +143,8 @@ final class HxValueIfBracketHugSliceTest extends Test {
 
 	/** A BLOCK-valued value-`if` closed by `};` — the knob is about `[`, so this one is a fixed point under it. */
 	private static final BLOCK_SEMI: String = 'class C {\n\tpublic function f(d: Int): Int {\n\t\treturn if (d > 0) {\n'
-		+ '\t\t\ttraceSomethingHere(1);\n\t\t\t1;\n\t\t};\n\t\telse {\n\t\t\ttraceSomethingHere(2);\n\t\t\t2;\n' + '\t\t}\n\t}\n}';
+		+ '\t\t\ttraceSomethingHere(1);\n\t\t\t1;\n\t\t};\n\t\telse {\n\t\t\ttraceSomethingHere(2);\n\t\t\t2;\n'
+		+ '\t\t}\n\t}\n}';
 
 	/**
 	 * What ω-same-on-block makes of `BLOCK_SEMI` under either config: the curly close joins its `else` and the
@@ -151,7 +152,8 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	 * `SameOnBlock` for the gap, and the bracket knob is not what decides it.
 	 */
 	private static final BLOCK_JOINED: String = 'class C {\n\tpublic function f(d: Int): Int {\n\t\treturn if (d > 0) {\n'
-		+ '\t\t\ttraceSomethingHere(1);\n\t\t\t1;\n\t\t} else {\n\t\t\ttraceSomethingHere(2);\n\t\t\t2;\n' + '\t\t}\n\t}\n}';
+		+ '\t\t\ttraceSomethingHere(1);\n\t\t\t1;\n\t\t} else {\n\t\t\ttraceSomethingHere(2);\n\t\t\t2;\n'
+		+ '\t\t}\n\t}\n}';
 
 	/** A STATEMENT-`if` whose then-body owns the `;` — valid idiomatic Haxe the knob must never reach. */
 	private static final STMT_SEMI: String = 'class C {\n\tpublic function f(d: Int): Void {\n\t\tif (d > 0)\n'

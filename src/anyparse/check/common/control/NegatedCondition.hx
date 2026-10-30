@@ -203,7 +203,10 @@ final class NegatedCondition {
 		if (!d.turnableKinds.contains(written.kind)) return null;
 		final first: ArmValue = armValue(thenArm, site);
 		final last: ArmValue = armValue(elseArm, site);
-		return first.returned != last.returned || !isDefault(first.value, site) || isLiteral(last.value, site) || !site.defaultLast()
+		return first.returned != last.returned
+			|| !isDefault(first.value, site)
+			|| isLiteral(last.value, site)
+			|| !site.defaultLast()
 			|| !builtin(written, d.negationKinds, site)
 			? null
 			: NegationScan.negateConditionText(written, site.source, d.negation, d.support);
@@ -308,7 +311,8 @@ final class NegatedCondition {
 	private static function isLiteral(value: QueryNode, site: InversionSite): Bool {
 		final d: DefaultElseSeams = site.seams.defaults;
 		final span: Null<Span> = value.span;
-		return span != null && CaseValueKey.isLiteral(value.kind, site.source.substring(span.from, span.to), d.values)
+		return span != null
+			&& CaseValueKey.isLiteral(value.kind, site.source.substring(span.from, span.to), d.values)
 			&& !value.children.exists(c -> d.interpolationKinds.contains(c.kind));
 	}
 

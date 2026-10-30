@@ -276,7 +276,10 @@ final class DeadStore extends RuleBase {
 				final expr: QueryNode = stmt.children[0];
 				final stmtSpan: Null<Span> = stmt.span;
 				if (
-					expr.kind == ctx.assignKind && isFlagged(ctx, expr) && expr.children.length >= 2 && stmtSpan != null
+					expr.kind == ctx.assignKind
+					&& isFlagged(ctx, expr)
+					&& expr.children.length >= 2
+					&& stmtSpan != null
 					&& rhsSafeToDelete(expr.children[1], ctx.root, ctx.shape, ctx.declaredTypes, ctx.index)
 				)
 					deletions.push({ span: ElementSpan.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
@@ -464,7 +467,10 @@ final class DeadStore extends RuleBase {
 			final span: Null<Span> = node.span;
 			final init: Null<QueryNode> = NullFlow.declInit(node, ctx.declTypeChildKinds);
 			if (
-				init != null && span != null && ctx.mutableLocalDeclKinds.contains(node.kind) && !live.contains(name)
+				init != null
+				&& span != null
+				&& ctx.mutableLocalDeclKinds.contains(node.kind)
+				&& !live.contains(name)
 				&& !NullFlow.isMultiBinding(node, ctx.localDeclContinuationKinds, ctx.declTypeChildKinds)
 				&& referencedOutsideDecl(ctx, name, scope, span)
 			) ctx.out.push({
@@ -545,7 +551,10 @@ final class DeadStore extends RuleBase {
 	 */
 	private static function isSafeNavCall(node: QueryNode, ctx: LiveCtx): Bool {
 		final navKind: Null<String> = ctx.safeNavKind;
-		return ctx.callKind != null && node.kind == ctx.callKind && node.children.length >= 2 && navKind != null
+		return ctx.callKind != null
+			&& node.kind == ctx.callKind
+			&& node.children.length >= 2
+			&& navKind != null
 			&& containsKind(node.children[0], navKind);
 	}
 
@@ -589,7 +598,8 @@ final class DeadStore extends RuleBase {
 		function walkR(n: QueryNode): Void {
 			final name: Null<String> = n.name;
 			if (
-				name != null && (n.kind == ctx.identKind || (ctx.interpIdentKind != null && n.kind == ctx.interpIdentKind))
+				name != null
+				&& (n.kind == ctx.identKind || (ctx.interpIdentKind != null && n.kind == ctx.interpIdentKind))
 				&& !out.contains(name)
 			)
 				out.push(name);
@@ -652,7 +662,8 @@ final class DeadStore extends RuleBase {
 	private static function rhsSafeToDelete(
 		rhs: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>
 	): Bool {
-		return MemberKinds.isSideEffectFree(rhs, shape) || index != null
+		return MemberKinds.isSideEffectFree(rhs, shape)
+			|| index != null
 			&& TypeResolver.isDeletionPure(rhs, root, shape, declaredTypes, index);
 	}
 

@@ -41,7 +41,8 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 
 	/** the client's `hxformat.json`, minified. */
 	private static final CFG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,'
-		+ '"alignInlineSwitchCaseBody":true},' + '"emptyLines":{"maxAnywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove",'
+		+ '"alignInlineSwitchCaseBody":true},'
+		+ '"emptyLines":{"maxAnywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove",'
 		+ '"beforeRightCurly":"remove","classEmptyLines":{"beginType":1,"endType":1},'
 		+ '"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,'
 		+ '"endType":1},"uniformStatementBlanks":"collapse"},"wrapping":{"comprehensionCuddledOpen":true,'
@@ -61,7 +62,8 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},'
 		+ '"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength",'
 		+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],'
-		+ '"type":"fillLine","location":"beforeLast"}]},' + '"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"type":"fillLine","location":"beforeLast"}]},'
+		+ '"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},'
 		+ '"whitespace":{"addLineCommentSpace":false,"normalizeLineCommentIndent":true,'
 		+ '"commaPolicy":"after","ifPolicy":"around","forPolicy":"around","whilePolicy":"around",'
@@ -79,7 +81,8 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 		+ '"anonFuncParamParens":{"openingPolicy":"none","closingPolicy":"none"},'
 		+ '"forLoopParens":{"openingPolicy":"before","closingPolicy":"after"},'
 		+ '"expressionParens":{"openingPolicy":"none","closingPolicy":"none"},'
-		+ '"switchSubjectParens":"remove"}},"lineEnds":{"emptyCurly":"noBreak"},' + '"comments":{"blockCommentStyle":"javadoc"},'
+		+ '"switchSubjectParens":"remove"}},"lineEnds":{"emptyCurly":"noBreak"},'
+		+ '"comments":{"blockCommentStyle":"javadoc"},'
 		+ '"sameLine":{"caseBody":"fitLine","expressionCase":"fitLine","ifBody":"fitLine",'
 		+ '"forBody":"fitLine","whileBody":"fitLine","functionBody":"fitLine","expressionIf":"next",'
 		+ '"expressionIfArrowBodyReflow":true,"elseIfCommentReflow":true,"comprehensionFor":"fitLine"}}';

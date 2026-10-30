@@ -509,7 +509,8 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 	private static function applicableRule(decl: NamedDecl, policy: NamingPolicy): Null<NamingRule> {
 		return policy.find(
 			rule ->
-				rule.category == decl.category && rule.requireMods.foreach(m -> decl.mods.contains(m))
+				rule.category == decl.category
+				&& rule.requireMods.foreach(m -> decl.mods.contains(m))
 				&& !rule.forbidMods.exists(m -> decl.mods.contains(m))
 		);
 	}

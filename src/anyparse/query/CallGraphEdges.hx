@@ -191,7 +191,8 @@ final class CallGraphEdges {
 
 		/** True for every field-access spelling a callee can wear: plain, null-safe, force-unwrapped. */
 		function isAccessKind(kind: String): Bool {
-			return kind == fieldAccessKind || (safeAccessKind != null && kind == safeAccessKind)
+			return kind == fieldAccessKind
+				|| (safeAccessKind != null && kind == safeAccessKind)
 				|| (forceAccessKind != null && kind == forceAccessKind);
 		}
 
@@ -700,7 +701,8 @@ final class CallGraphEdges {
 				if (name == selfText) {
 					final underlying: Null<String> = selfTypeOf(currentType);
 					// an abstract over one of its own type parameters (`abstract W<T:A>(T)`) is a value of that bound
-					final self: Null<String> = underlying != null && currentType != null
+					final self: Null<String> = underlying != null
+						&& currentType != null
 						&& g.types.generics.declaresTypeParam(currentType, underlying)
 						? (member == null ? null : boundType(underlying, currentType, member, MEMBER_SCOPE))
 						: underlying;
@@ -1111,7 +1113,9 @@ final class CallGraphEdges {
 				return null;
 			}
 			if (
-				resolved == null && recv.isValue && g.types.chainFullyIndexed(recv.typeName)
+				resolved == null
+				&& recv.isValue
+				&& g.types.chainFullyIndexed(recv.typeName)
 				&& g.types.memberOnChain(recv.typeName, calleeName) == null
 			) {
 				// no indexed type on the chain declares it: a static extension a `using` brings in, else unresolved
@@ -1161,9 +1165,11 @@ final class CallGraphEdges {
 				if (calleeId != null) {
 					final implicitThis: Array<String> = implicitThisTargets(currentType, calleeName, calleeId);
 					// a placeholder for a member a supertype not loaded yet declares is on the chain too
-					final placeholder: Bool = g.nodes[calleeId]?.isExternal == true && currentType != null
+					final placeholder: Bool = g.nodes[calleeId]?.isExternal == true
+						&& currentType != null
 						&& g.types.declaringTypeOf(currentType, calleeName) == g.nodes[calleeId]?.typeName;
-					final dispatched: Bool = currentType != null && (g.memberOnChain(currentType, calleeName) == calleeId || placeholder)
+					final dispatched: Bool = currentType != null
+						&& (g.memberOnChain(currentType, calleeName) == calleeId || placeholder)
 						&& !g.types.isStatic(g.nodes[calleeId]?.typeName ?? currentType, calleeName);
 					g.addEdge(from, calleeId, Call, null, file, span, dispatched ? currentType : null);
 					// a bare call to an instance member IS `this.m()` — same dispatch, same edges
@@ -1371,7 +1377,9 @@ final class CallGraphEdges {
 				final written: Null<String> = recv.kind != identKind ? null : typeSourceOf(recv, currentType);
 				final declared: Null<String> = written == null ? null : nominalOf(written, currentType);
 				if (
-					isAccessKind(node.kind) && declared != null && !nullableWrappers.contains(declared)
+					isAccessKind(node.kind)
+					&& declared != null
+					&& !nullableWrappers.contains(declared)
 					&& g.types.declarationCount(declared) == 0
 				)
 					stdAccessors(declared);
@@ -1485,7 +1493,8 @@ final class CallGraphEdges {
 
 		/** Whether child `i` of `node` is a call / constructor ARGUMENT value slot, which `scanArgs` / `handleNew` own. */
 		function argumentSlot(node: QueryNode, i: Int, inArgument: Bool): Bool {
-			return (node.kind == callKind && i >= 1) || (newExprKind != null && node.kind == newExprKind && i >= node.typeArgCount)
+			return (node.kind == callKind && i >= 1)
+				|| (newExprKind != null && node.kind == newExprKind && i >= node.typeArgCount)
 				|| (inArgument && (node.kind == parenKind || (node.kind == ternaryKind && i >= 1)));
 		}
 

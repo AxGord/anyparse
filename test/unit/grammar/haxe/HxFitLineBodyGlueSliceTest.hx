@@ -30,23 +30,27 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 		+ '\tpublic function collectRemaining(knownItems:SampleEntryBundles):SampleEntryBundles {\n'
 		+ '\t\treturn {\n\t\t\tfirst: [ for (item in _owner.PrimaryList)\n'
 		+ '\t\t\t\tif (!knownItems.first.exists((u:SamplePrimaryEntryKind) -> u.email == item.Email))\n'
-		+ '\t\t\t\t\t({\n\t\t\t\t\t\talphaName: item.AlphaName,\n' + '\t\t\t\t\t\tbetaName: item.BetaName,\n\t\t\t\t\t\tid: item.ItemId,\n'
+		+ '\t\t\t\t\t({\n\t\t\t\t\t\talphaName: item.AlphaName,\n'
+		+ '\t\t\t\t\t\tbetaName: item.BetaName,\n\t\t\t\t\t\tid: item.ItemId,\n'
 		+ '\t\t\t\t\t\temail: item.Email,\n\t\t\t\t\t\taccess: VIEW,\n'
 		+ '\t\t\t\t\t\timage: item.Image\n\t\t\t\t\t})\n\t\t\t]\n\t\t};\n\t}\n}';
 
 	/** The same comprehension with the body glued to the `if` head - one line and one indent level cheaper. */
 	private static final COMPREHENSION_GLUED: String = 'class SampleContainer {\n\tpublic function '
 		+ 'collectRemaining(knownItems:SampleEntryBundles):SampleEntryBundles {\n\t\treturn {\n'
-		+ '\t\t\tfirst: [ for (item in _owner.PrimaryList)\n' + '\t\t\t\tif (!knownItems.first.exists((u:SamplePrimaryEntryKind) '
+		+ '\t\t\tfirst: [ for (item in _owner.PrimaryList)\n'
+		+ '\t\t\t\tif (!knownItems.first.exists((u:SamplePrimaryEntryKind) '
 		+ '-> u.email == item.Email)) ({\n\t\t\t\t\talphaName: item.AlphaName, betaName: '
-		+ 'item.BetaName, id: item.ItemId, email: item.Email, access: VIEW, image: item.Image\n' + '\t\t\t\t})\n\t\t\t]\n\t\t};\n\t}\n}';
+		+ 'item.BetaName, id: item.ItemId, email: item.Email, access: VIEW, image: item.Image\n'
+		+ '\t\t\t\t})\n\t\t\t]\n\t\t};\n\t}\n}';
 
 	/** A sibling filter body that DOES fit one line deeper - the population the knob must leave alone. */
 	private static final RESCUED_BODY: String = 'class SampleContainer {\n'
 		+ '\tpublic function collectRemaining(knownItems:SampleEntryBundles):SampleEntryBundles {\n'
 		+ '\t\treturn {\n\t\t\tsecond: [ for (item in _owner.SecondaryItems)\n'
 		+ '\t\t\t\tif (!knownItems.second.exists((u:SampleSecondEntryKinds) -> u.email == item.Email))\n'
-		+ '\t\t\t\t\t({ id: 0, email: item.Email, access: VIEW, extraFlag: false })\n\t\t\t]\n\t\t};\n' + '\t}\n}';
+		+ '\t\t\t\t\t({ id: 0, email: item.Email, access: VIEW, extraFlag: false })\n\t\t\t]\n\t\t};\n'
+		+ '\t}\n}';
 
 	/** An `if` whose body is a call the next line cannot rescue either - the call paren cuddles to the head. */
 	private static final CALL_BODY_BELOW: String = 'class C {\n\tfunction test() {\n\t\tif (needsUpdate)\n\t\t\tattachCollectedLabel(\n'
@@ -68,7 +72,10 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 	private static final ARROW_BODY_GLUED: String = 'class C {\n\tfunction test() {\n\t\t_entryList.dataSource = '
 		+ 'sourceModel.entryViewModels.map(model -> ({\n\t\t\tlabel: model.entryData != null ? '
 		+ 'model.entryData.name : throw new Exception(\'Entry data not set\'),\n\t\t\tpath: model.path,\n'
-		+ '\t\t\treadonly: model.readonly\n' + '\t\t}));\n' + '\t}\n' + '}';
+		+ '\t\t\treadonly: model.readonly\n'
+		+ '\t\t}));\n'
+		+ '\t}\n'
+		+ '}';
 
 	/** A short arrow body that fits on the header line — the knob must not touch it. */
 	private static final ARROW_BODY_FLAT: String = 'class C {\n\tfunction test() {\n'

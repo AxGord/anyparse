@@ -85,7 +85,8 @@ final class LiteralTables {
 	 * still reads it as logic.
 	 */
 	public static function isSwitchTable(node: QueryNode, source: String, t: LiteralTableShape): Bool {
-		return t.switchKinds.contains(node.kind) && node.children.length >= 2
+		return t.switchKinds.contains(node.kind)
+			&& node.children.length >= 2
 			&& node.children.slice(1).foreach(arm -> isTableArm(arm, source, t));
 	}
 

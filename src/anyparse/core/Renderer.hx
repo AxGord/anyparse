@@ -724,7 +724,8 @@ class Renderer {
 	 * cannot be — flipping this call's argument still leaves every gate green.
 	 */
 	private static inline function selfBreakingBraceBody(flatDoc: Doc): Bool {
-		return DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code) && DocMeasure.hasForcedBreak(flatDoc)
+		return DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code)
+			&& DocMeasure.hasForcedBreak(flatDoc)
 			&& flatTokenWidthFirstLine(flatDoc) <= 1;
 	}
 
@@ -3425,7 +3426,8 @@ class Renderer {
 		// ω-fill-after-collection: the whole tail is measured against the
 		// LAST item's reserve — the post-Fill content lands after it, not
 		// after the item being probed now.
-		final afterCollection: Bool = f.fillLineStart >= 0 && startsCollection(fillRest[idx - 1])
+		final afterCollection: Bool = f.fillLineStart >= 0
+			&& startsCollection(fillRest[idx - 1])
 			&& !fitsFlat(width - ctx.col - flatTokenWidthOfRestStack(stack) - 1, f.indent, remainingFlat(fillRest, fillSep, idx));
 		final embW: Int = embeddedFirstLineWidth(Concat([fillSep, fillRest[idx]]));
 		final fits: Bool = !prevWrapped && !afterCollection && (

@@ -226,7 +226,8 @@ final class MainSinkReport {
 		}
 		for (lock => list in byLock) if (list.length > 1) {
 			final rank: ({ edge: CallEdge, finding: Violation }) -> String = t ->
-				(suppressed(t.finding) ? '1' : '0') + (sites.acquires.exists(a -> a.edge == t.edge && a.delegated) ? '0' : '1')
+				(suppressed(t.finding) ? '1' : '0')
+					+ (sites.acquires.exists(a -> a.edge == t.edge && a.delegated) ? '0' : '1')
 					+ '${ThreadSafety.memberOf(graph, t.edge.from)}\n${t.edge.file}';
 			list.sort(
 				(a, b) -> rank(a) == rank(b) ? (a.edge.span?.from ?? 0) - (b.edge.span?.from ?? 0) : Reflect.compare(rank(a), rank(b))
@@ -514,7 +515,8 @@ final class MainSinkReport {
 	private static function fill(owned: OwnedFinding): Void {
 		final sorted: Array<String> = ThreadSafety.sortedIds(owned.sinks);
 		owned.sinks = sorted;
-		owned.finding.message = 'main thread repeats short blocking ' + [for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)
+		owned.finding.message = 'main thread repeats short blocking '
+			+ [for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)
 			+ ' at this call: ${ThreadStates.chainText(owned.path, ThreadSafety.CHAIN_CAP)} -> '
 			+ sorted.join(ThreadSafety.SUBJECT_SEPARATOR);
 		final data: Null<FindingData> = owned.finding.data;

@@ -22,7 +22,8 @@ import unit.cli.CliFixture;
 class ApqAstChildCountTest extends Test {
 
 	private static inline final FIXTURE: String = 'enum X {\n	Zero;\n	One(a:Int);\n	Two(a:Int, b:Int);\n'
-		+ '	Three(a:Int, b:Int, c:Int);\n' + '}\n';
+		+ '	Three(a:Int, b:Int, c:Int);\n'
+		+ '}\n';
 
 	public function testMinChildrenKeepsMultiArgOnly(): Void {
 		#if (sys || nodejs)

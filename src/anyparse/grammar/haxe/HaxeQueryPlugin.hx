@@ -418,7 +418,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// every meta pattern relied on. Reject it so the ladder falls
 			// through; real `@:meta <keyword-stmt>` patterns keep matching.
 			if (
-				attempt.category == PatternCategory.Stmt && extracted.kind == 'MetaStmt' && extracted.children.length > 0
+				attempt.category == PatternCategory.Stmt
+				&& extracted.kind == 'MetaStmt'
+				&& extracted.children.length > 0
 				&& extracted.children[extracted.children.length - 1].kind == 'EmptyStmt'
 			)
 				continue;

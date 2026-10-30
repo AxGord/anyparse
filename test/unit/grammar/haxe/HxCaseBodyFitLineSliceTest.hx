@@ -69,7 +69,10 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		+ '\t\t\tcase [KindData.KIND_RECTANGLE_SHAPE, KindData.KIND_RECTANGLE_STROKE]: '
 		+ 'LineTint(current ? cast(node, RectangleShape).lineTint : tint);\n'
 		+ '\t\t\tcase [KindData.KIND_OVAL_SHAPE, KindData.KIND_OVAL_STROKE]: LineTint(current ? cast(node, OvalShape).lineTint : tint);\n'
-		+ '\t\t\tcase _: Tint(current ? node.tint : tint);\n' + '\t\t};\n' + '\t}\n' + '}\n';
+		+ '\t\t\tcase _: Tint(current ? node.tint : tint);\n'
+		+ '\t\t};\n'
+		+ '\t}\n'
+		+ '}\n';
 
 	/**
 	 * ω-case-body-fitline-idempotence — a case body whose value is an

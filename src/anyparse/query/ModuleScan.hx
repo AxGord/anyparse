@@ -87,7 +87,8 @@ final class ModuleScan {
 			return null;
 		}
 		final guard: Null<QueryNode> = region;
-		return guard != null && regionDeclaresType(guard, regionKind)
+		return guard != null
+			&& regionDeclaresType(guard, regionKind)
 			&& singleBranchRegion(guard, source, shape, plugin.lexicalRegions(source))
 			? guard
 			: null;

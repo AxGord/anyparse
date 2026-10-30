@@ -911,8 +911,11 @@ final class StructSeqLowering {
 		hasBeforeLeadingSlot: Bool,
 		optStarWithLead: Bool
 	} {
-		final triviaEofStar: Bool = isStar && child.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true
-			&& child.readMetaString(':lead') == null && child.readMetaString(':kw') == null && sc.ctx.trivia;
+		final triviaEofStar: Bool = isStar
+			&& child.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true
+			&& child.readMetaString(':lead') == null
+			&& child.readMetaString(':kw') == null
+			&& sc.ctx.trivia;
 		// Slice ω₆a: an @:optional Ref field takes ownership of its own
 		// pre-field ws handling so the commit-check can rewind over the
 		// just-consumed whitespace (and any comments inside it, in trivia
@@ -1093,7 +1096,11 @@ final class StructSeqLowering {
 		// local fresh post-trail (`final … = collectTrailing(ctx)`)
 		// — the names collide harmlessly because the mandatory and
 		// optional paths are mutually exclusive per field.
-		final hasOptionalRefAfterTrailSlot: Bool = child.kind == Ref && isOptional && !isStar && trailText != null && sc.ctx.trivia
+		final hasOptionalRefAfterTrailSlot: Bool = child.kind == Ref
+			&& isOptional
+			&& !isStar
+			&& trailText != null
+			&& sc.ctx.trivia
 			&& sc.isTriviaBearing(typePath);
 		if (hasOptionalRefAfterTrailSlot) {
 			parseSteps.push({
@@ -1122,8 +1129,11 @@ final class StructSeqLowering {
 		// Phase 4 will read this on the writer side to gate trail
 		// re-emission on source presence; until then the captured
 		// value is unobserved and Δsweep stays 0.
-		final hasStructFieldTrailOptSlot: Bool = child.kind == Ref && !isStar
-			&& child.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true && sc.ctx.trivia && sc.isTriviaBearing(typePath);
+		final hasStructFieldTrailOptSlot: Bool = child.kind == Ref
+			&& !isStar
+			&& child.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true
+			&& sc.ctx.trivia
+			&& sc.isTriviaBearing(typePath);
 		if (hasStructFieldTrailOptSlot) {
 			parseSteps.push({
 				expr: EVars([
@@ -1246,8 +1256,12 @@ final class StructSeqLowering {
 		sc: StructSeqCtx, child: ShapeNode, typePath: String, fieldName: Null<String>, isStar: Bool, trailText: Null<String>,
 		parseSteps: Array<Expr>
 	): { hasNewlineAfterSlot: Bool, newlineAfterLocal: String } {
-		final hasNewlineAfterSlot: Bool = child.kind == Ref && !isStar && trailText == null && sc.ctx.trivia
-			&& sc.isTriviaBearing(typePath) && child.fmtHasFlag('captureSourceNewlineAfter');
+		final hasNewlineAfterSlot: Bool = child.kind == Ref
+			&& !isStar
+			&& trailText == null
+			&& sc.ctx.trivia
+			&& sc.isTriviaBearing(typePath)
+			&& child.fmtHasFlag('captureSourceNewlineAfter');
 		final newlineAfterLocal: String = '_newlineAfter_$fieldName';
 		if (hasNewlineAfterSlot) {
 			parseSteps.push({
@@ -1265,7 +1279,9 @@ final class StructSeqLowering {
 				final _captured = collectTrivia(ctx);
 				$i{newlineAfterLocal} = _captured.newlineBefore;
 				if (
-					_captured.newlineBefore || _captured.blankBefore || _captured.blankAfterLeadingComments
+					_captured.newlineBefore
+					|| _captured.blankBefore
+					|| _captured.blankAfterLeadingComments
 					|| _captured.leadingComments.length > 0
 				) {
 					ctx.pendingTrivia = {
@@ -1289,8 +1305,14 @@ final class StructSeqLowering {
 	private static function hasCondOpenNewlineField(
 		sc: StructSeqCtx, child: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, leadText: Null<String>
 	): Bool {
-		return child.kind == Ref && !isStar && !isOptional && leadText != null && sc.ctx.trivia && sc.isTriviaBearing(typePath)
-			&& child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline');
+		return child.kind == Ref
+			&& !isStar
+			&& !isOptional
+			&& leadText != null
+			&& sc.ctx.trivia
+			&& sc.isTriviaBearing(typePath)
+			&& child.fmtHasFlag('condWrap')
+			&& child.fmtHasFlag('captureCondOpenNewline');
 	}
 
 	/**
@@ -1315,7 +1337,9 @@ final class StructSeqLowering {
 		// Mandatory Ref with @:trail, OR a @:fmt(captureTrailComment)-opted Star
 		// (case-pattern list ending in `:`) — capture a same-line comment after
 		// the trail literal so it stays cuddled to that token.
-		return trailText != null && sc.ctx.trivia && sc.isTriviaBearing(typePath)
+		return trailText != null
+			&& sc.ctx.trivia
+			&& sc.isTriviaBearing(typePath)
 			&& ((child.kind == Ref && !isStar) || (isStar && child.fmtHasFlag('captureTrailComment')));
 	}
 

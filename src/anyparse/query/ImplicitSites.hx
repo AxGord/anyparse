@@ -189,7 +189,8 @@ final class ImplicitSites {
 		if (kind == _shape.uncheckedCastKind || (_shape.untypedKinds ?? []).contains(kind)) return true;
 		// a comparison or a negation is a boolean, an interpolated string a string
 		if (
-			(_shape.comparisonKinds ?? []).contains(kind) || kind == _shape.notKind
+			(_shape.comparisonKinds ?? []).contains(kind)
+			|| kind == _shape.notKind
 			|| (_shape.interpolatingStringKinds ?? []).contains(kind)
 		)
 			return false;
@@ -212,7 +213,9 @@ final class ImplicitSites {
 	 * checked (`landings`).
 	 */
 	private function mayConvertAt(place: Null<String>): Bool {
-		return place == null || !(_shape.catchAllTypeNames ?? []).contains(place) && !(_shape.nonNullableTypeNames ?? []).contains(place)
+		return place == null
+			|| !(_shape.catchAllTypeNames ?? []).contains(place)
+			&& !(_shape.nonNullableTypeNames ?? []).contains(place)
 			&& ((_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place));
 	}
 

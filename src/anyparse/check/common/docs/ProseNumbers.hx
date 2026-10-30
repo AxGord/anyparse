@@ -213,8 +213,11 @@ final class ProseNumbers {
 		final previous: Int = wordStartBefore(source, from, last);
 		if (BOUND_PAIRS.contains('${source.substring(previous, trimmedEnd(source, previous, last)).toLowerCase()} $lastWord')) return true;
 		final digits: Int = leadingDigits(source, to, at);
-		return digits >= STANDARD_DIGITS && isAcronym(source, last, trimmedEnd(source, last, at)) || digits == YEAR_DIGITS
-			&& isYear(source.substr(at, YEAR_DIGITS)) || BOUND_TAILS.exists(tail -> matchesIgnoringCase(source, to, end, tail));
+		return digits >= STANDARD_DIGITS
+			&& isAcronym(source, last, trimmedEnd(source, last, at))
+			|| digits == YEAR_DIGITS
+			&& isYear(source.substr(at, YEAR_DIGITS))
+			|| BOUND_TAILS.exists(tail -> matchesIgnoringCase(source, to, end, tail));
 	}
 
 	/** `code` as its lower-case self, for the ASCII letters every marker is written in. */
@@ -233,7 +236,9 @@ final class ProseNumbers {
 	private static function continuesWord(source: String, to: Int, at: Int): Bool {
 		if (at >= to) return false;
 		final c: Int = source.fastCodeAt(at);
-		return SourceText.isIdentChar(c) || (c == '-'.code || c == '\''.code) && at + 1 < to
+		return SourceText.isIdentChar(c)
+			|| (c == '-'.code || c == '\''.code)
+			&& at + 1 < to
 			&& SourceText.isIdentChar(source.fastCodeAt(at + 1));
 	}
 

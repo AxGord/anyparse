@@ -352,10 +352,19 @@ final class TriviaPairAltCtor {
 		final hasPostfixCloseTrailing: Bool = isPostfixCloseTrailingBranch(branch);
 		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
 		// CHECKSTYLE:OFF
-		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
-			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
-			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 5 : 0)
-			+ (isInfixChainBranch(branch) ? 1 : 0) + (isRhsTrailBranch(branch) ? 1 : 0) + (isTernaryTrailBranch(branch) ? 2 : 0);
+		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
+			+ (hasOpenTrailing ? 3 : 0)
+			+ (hasArrayLitTrailPresent ? 1 : 0)
+			+ (hasBodyPolicyKw ? 1 : 0)
+			+ (hasWrapOpenNewline ? 1 : 0)
+			+ (hasKwNewline ? 1 : 0)
+			+ (hasChainNewline ? 1 : 0)
+			+ (hasChainLeadComment ? 1 : 0)
+			+ (hasPostfixOpSpace ? 1 : 0)
+			+ (hasPostfixCloseTrailing ? 5 : 0)
+			+ (isInfixChainBranch(branch) ? 1 : 0)
+			+ (isRhsTrailBranch(branch) ? 1 : 0)
+			+ (isTernaryTrailBranch(branch) ? 2 : 0);
 		// CHECKSTYLE:ON
 	}
 

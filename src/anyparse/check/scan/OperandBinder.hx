@@ -254,7 +254,9 @@ final class OperandBinder {
 			final span: Null<Span> = node.span;
 			if (span == null || at.from < span.from || at.to > span.to) return span == null && node.children.exists(walk);
 			final inside: Bool = from >= span.from && from < span.to;
-			return node.kind == branchKind && !inside && CasePatterns.scan(node, _shape, []).idents.exists(ident -> ident.name == name)
+			return node.kind == branchKind
+				&& !inside
+				&& CasePatterns.scan(node, _shape, []).idents.exists(ident -> ident.name == name)
 				|| node.children.exists(walk);
 		}
 		return walk(_tree);
@@ -463,8 +465,14 @@ final class OperandBinder {
 		final fi: Null<FileInfo> = _index.fileInfo(_file);
 		final resolvers: Array<MemberInfo> = fieldKind == null ? [] : t.members.filter(m -> m.operatorOverloads.contains(fieldKind));
 		if (
-			fi == null || resolvers.length != 1 || !(_shape.underlyingThisTypeKinds ?? []).contains(t.kind) || t.hasBuild || t.hasAutoBuild
-			|| t.guarded || !_index.typing.members.declarationFreeOfExtensionTypes(owner) || _index.typing.extensions.maySupply(fi, name)
+			fi == null
+			|| resolvers.length != 1
+			|| !(_shape.underlyingThisTypeKinds ?? []).contains(t.kind)
+			|| t.hasBuild
+			|| t.hasAutoBuild
+			|| t.guarded
+			|| !_index.typing.members.declarationFreeOfExtensionTypes(owner)
+			|| _index.typing.extensions.maySupply(fi, name)
 		)
 			return Unknown;
 		return boundMembers(resolvers, owner, true);

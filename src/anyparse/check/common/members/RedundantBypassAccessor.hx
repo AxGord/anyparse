@@ -156,8 +156,12 @@ final class RedundantBypassAccessor extends RuleBase {
 		return if (lhs.kind == ctx.identKind)
 			lhs.name
 		else if (
-			ctx.fieldAccessKind != null && ctx.self != null && lhs.kind == ctx.fieldAccessKind && lhs.children.length == 1
-			&& lhs.children[0].kind == ctx.identKind && lhs.children[0].name == ctx.self
+			ctx.fieldAccessKind != null
+			&& ctx.self != null
+			&& lhs.kind == ctx.fieldAccessKind
+			&& lhs.children.length == 1
+			&& lhs.children[0].kind == ctx.identKind
+			&& lhs.children[0].name == ctx.self
 		)
 			lhs.name
 		else
@@ -175,7 +179,8 @@ final class RedundantBypassAccessor extends RuleBase {
 		if (span == null) return false;
 		var best: Null<TypeDeclInfo> = null;
 		for (type in info.types) if (
-			type.span.from <= span.from && span.to <= type.span.to
+			type.span.from <= span.from
+			&& span.to <= type.span.to
 			&& (best == null || type.span.to - type.span.from < best.span.to - best.span.from)
 		)
 			best = type;

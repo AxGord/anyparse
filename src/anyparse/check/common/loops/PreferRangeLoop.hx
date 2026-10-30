@@ -444,7 +444,8 @@ final class PreferRangeLoop extends RuleBase {
 
 	/** Whether a numeric literal's source is float syntax — a `.` or a decimal exponent (hex literals are `Int`). */
 	private static function isFloatSyntax(text: String): Bool {
-		return !text.startsWith('0x') && !text.startsWith('0X')
+		return !text.startsWith('0x')
+			&& !text.startsWith('0X')
 			&& (text.indexOf('.') != -1 || text.indexOf('e') != -1 || text.indexOf('E') != -1);
 	}
 

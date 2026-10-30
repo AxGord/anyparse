@@ -41,7 +41,9 @@ final class HxObjectLitForcedNoWrapProbeTest extends Test {
 	public function testOneWriteIsAFixedPointAtEveryWidth(): Void {
 		for (k in 1...MAX_K + 1) {
 			final src: String = 'class M {\n\tfunction f() {\n\t\tvar y = [for (x in xs) if (x != null) {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, '
-				+ 'beta: x.bbbbbbbbbbbbbbbbbbbb, k: \'' + ''.lpad('k', k) + '\'}];\n\t}\n}';
+				+ 'beta: x.bbbbbbbbbbbbbbbbbbbb, k: \''
+				+ ''.lpad('k', k)
+				+ '\'}];\n\t}\n}';
 			final once: String = HxWriteFixture.triviaWrite(src, CFG);
 			Assert.equals(once, HxWriteFixture.triviaWrite(once, CFG), 'k=$k\n$src');
 			var widest: Int = 0;

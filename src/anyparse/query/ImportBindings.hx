@@ -202,7 +202,10 @@ final class ImportBindings {
 		final declared: Array<TypeDeclInfo> = typesNamed(target);
 		if (declared.length != 1) return null;
 		final type: TypeDeclInfo = declared[0];
-		final opaque: Bool = type.kind == TYPEDEF_KIND || type.hasBuild || type.hasAutoBuild || type.supertypes.length > 0
+		final opaque: Bool = type.kind == TYPEDEF_KIND
+			|| type.hasBuild
+			|| type.hasAutoBuild
+			|| type.supertypes.length > 0
 			|| type.interfaces.length > 0;
 		if (opaque) return null;
 		final statics: Bool = CLASS_KINDS.contains(type.kind);

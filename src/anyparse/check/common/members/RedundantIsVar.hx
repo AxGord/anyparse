@@ -170,7 +170,9 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 			MemberKinds.META_KINDS.contains(n.kind) && n.name == IS_VAR_META && n.children.length == 0
 		)?.span;
 		final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
-		return metaSpan != null && access != null && AccessorClauseText.storageless(access)
+		return metaSpan != null
+			&& access != null
+			&& AccessorClauseText.storageless(access)
 			&& CtorFieldFold.declInitializer(member, shape) == null
 			? { name: name, meta: metaSpan }
 			: null;

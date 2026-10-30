@@ -71,7 +71,8 @@ final class FixVerifierCoverageE2ETest extends Test {
 	 * `canonicalize` refuses the source before any candidate exists.
 	 */
 	private static final DRIFTED: String = 'class Other {\n    public function new() {}\n    public function run():Void {\n'
-		+ '        final a:Other = new Other();\n        var x:Dynamic = a;\n        var y:Other = x;\n        trace(y);\n' + '    }\n}\n';
+		+ '        final a:Other = new Other();\n        var x:Dynamic = a;\n        var y:Other = x;\n        trace(y);\n'
+		+ '    }\n}\n';
 	#end
 
 	/** Direction 1: outside the compiled set — declined, untouched, and named. */

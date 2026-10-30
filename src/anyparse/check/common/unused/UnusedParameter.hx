@@ -261,7 +261,9 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
 		if (
-			functionKinds.contains(node.kind) && parent != null && !isContractCandidate(parent, supertypeClauseKinds)
+			functionKinds.contains(node.kind)
+			&& parent != null
+			&& !isContractCandidate(parent, supertypeClauseKinds)
 			&& !hasNoBody(node, noBodyKind)
 		)
 			out.push({ fn: node, parent: parent });
@@ -306,7 +308,8 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		final isLocal: Bool = fn.kind == 'LocalFnStmt';
 		final ownerName: Null<String> = parent.name;
 		final eligible: Bool = isLocal
-			|| (ownerName != null && !isPublicDecl(fn, parent, source, visibilityKinds, modifierKinds)
+			|| (ownerName != null
+				&& !isPublicDecl(fn, parent, source, visibilityKinds, modifierKinds)
 				&& RefactorSupport.isPrivateMemberConfined(ownerName, fnName ?? '', source, index));
 		final capturedAsValue: Bool = fnName != null && captured.contains(fnName);
 		final params: Array<QueryNode> = CallSites.leadingParams(fn, shape);
@@ -316,7 +319,8 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 			if (name == null || pspan == null) continue;
 			if (name.startsWith('_')) continue;
 			if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan], matchMask)) continue;
-			final autofixable: Bool = eligible && fnName != null
+			final autofixable: Bool = eligible
+				&& fnName != null
 				&& RemoveParam.paramSlotEdits(source, tree, fn, pi, fnName, fnSpan.from, shape).error == null;
 			if (!autofixable && capturedAsValue) continue;
 			out.push({

@@ -303,7 +303,8 @@ final class CallGraphKeys {
 	public static function memberMayBind(g: CallGraph, currentType: Null<String>, name: String): Bool {
 		final types: CallGraphTypes = g.types;
 		return currentType != null
-			&& (!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null
+			&& (!types.chainFullyIndexed(currentType)
+				|| types.declaringTypeOf(currentType, name) != null
 				&& !staticOfSupertype(g, currentType, name));
 	}
 

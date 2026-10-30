@@ -47,7 +47,10 @@ final class MoveMemberFields {
 			final slices: String = [for (c in cuts) srcSource.substring(c.from, c.to)].join('\n');
 			final candidates: Array<MemberGroup> = all.filter(g -> {
 				final nm: String = g.member.name ?? '';
-				return nm != '' && !names.contains(nm) && !added.contains(nm) && slices.indexOf(nm) != -1
+				return nm != ''
+					&& !names.contains(nm)
+					&& !added.contains(nm)
+					&& slices.indexOf(nm) != -1
 					&& ownableField(g, srcDecl, srcSource, destDecl, destSource, plugin);
 			});
 			final owned: Array<String> = ownedBy(candidates, cuts, srcTree, trees, shape);
@@ -95,7 +98,8 @@ final class MoveMemberFields {
 		} else
 			false;
 		final shape: RefShape = plugin.refShape();
-		return plain && !MemberBranchScan.isGuardedMember(srcDecl, shape, srcSource, g.member, plugin.lexicalRegions.bind(srcSource))
+		return plain
+			&& !MemberBranchScan.isGuardedMember(srcDecl, shape, srcSource, g.member, plugin.lexicalRegions.bind(srcSource))
 			&& MoveMember.memberGroupOf(destDecl, name, destSource, shape, plugin.lexicalRegions) == null;
 	}
 

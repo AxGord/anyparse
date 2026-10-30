@@ -508,7 +508,8 @@ final class Patch {
 
 	/** Whether `node` declares `name` — itself, or, for a conditional-compilation region, any declaration in any of its branches. */
 	private static function declaresName(node: QueryNode, name: String, shape: RefShape): Bool {
-		return declName(node) == name || CondRegionScan.isConditionalKind(node.kind, shape)
+		return declName(node) == name
+			|| CondRegionScan.isConditionalKind(node.kind, shape)
 			&& node.children.exists(c -> declaresName(c, name, shape));
 	}
 

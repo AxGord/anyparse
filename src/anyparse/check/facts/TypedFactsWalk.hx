@@ -959,8 +959,11 @@ final class TypedFactsWalk {
 			case _:
 		}
 		final kind: String = calledKind(fa, targetName, access.kind);
-		final declared: Bool = declaring != null && kind == access.kind && DECLARED_CALLS.contains(kind)
-			&& !TypedFactsShapes.REFLECTION_CLASSES.contains(declaring) && !TypedFactsShapes.SYNTAX_CLASSES.contains(declaring);
+		final declared: Bool = declaring != null
+			&& kind == access.kind
+			&& DECLARED_CALLS.contains(kind)
+			&& !TypedFactsShapes.REFLECTION_CLASSES.contains(declaring)
+			&& !TypedFactsShapes.SYNTAX_CLASSES.contains(declaring);
 		final chosen: String = _host.overloaded(targetName) ? ',"sig":${q(str(callee.t))}' : '';
 		return {
 			fact: '{"t":${q(targetName)},"a":"$kind"$chosen,"r":${q(str(receiver.t))},"rp":${at(receiver.pos)},$head}',

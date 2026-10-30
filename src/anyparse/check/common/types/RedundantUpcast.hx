@@ -60,7 +60,10 @@ final class RedundantUpcast extends RuleBase {
 						// Both types resolve in this file: a namesake in the operand's chain proves nothing, and neither does an operand
 						// type sharing a project subtype's name.
 						if (
-							sName != null && tName != null && sSource != null && tSource != null
+							sName != null
+							&& tName != null
+							&& sSource != null
+							&& tSource != null
 							&& index.subtypes.isSubtype(sSource.trim(), tSource.trim(), entry.file, span.from, entry.file, binding)
 						) violations.push({
 							file: entry.file,

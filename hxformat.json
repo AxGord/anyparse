@@ -46,44 +46,12 @@
 				}
 			]
 		},
-		"opBoolChain": {
-			"defaultWrap": "noWrap",
-			"rules": [
-				{
-					"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}],
-					"type": "noWrap"
-				},
-				{
-					"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}],
-					"type": "noWrap"
-				},
-				{
-					"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}],
-					"type": "fillLine",
-					"location": "beforeLast"
-				}
-			]
-		},
 		"expressionWrapping": {
 			"defaultWrap": "fillLineWithLeadingBreak",
 			"rules": [
 				{
 					"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}],
 					"type": "noWrap"
-				}
-			]
-		},
-		"opAddSubChain": {
-			"defaultWrap": "noWrap",
-			"rules": [
-				{
-					"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}],
-					"type": "noWrap"
-				},
-				{
-					"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}],
-					"type": "fillLine",
-					"location": "beforeLast"
 				}
 			]
 		},

@@ -272,7 +272,8 @@ final class AncestorTable {
 			if (up == null || !same(up, host) && chainTo(up, host, []) == null) continue;
 			final ancestor: ResolvedType = up;
 			final args: Array<String> = link.args ?? [];
-			return link.args != null && args.foreach(a -> _refs.readsAlike(a, cur.file, reading, cur.type.typeParamNames, _typeSyntax))
+			return link.args != null
+				&& args.foreach(a -> _refs.readsAlike(a, cur.file, reading, cur.type.typeParamNames, _typeSyntax))
 				&& chainAlikeFrom(ancestor, host, reading, seen);
 		}
 		return false;

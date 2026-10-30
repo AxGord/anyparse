@@ -64,7 +64,9 @@ final class CmdTemplate {
 	/** Whether `code` may stand in an identifier — as its first character when `first`. */
 	private static inline function isIdentChar(code: Null<Int>, first: Bool): Bool {
 		return code != null
-			&& (code == '_'.code || (code >= 'a'.code && code <= 'z'.code) || (code >= 'A'.code && code <= 'Z'.code)
+			&& (code == '_'.code
+				|| (code >= 'a'.code && code <= 'z'.code)
+				|| (code >= 'A'.code && code <= 'Z'.code)
 				|| (!first && code >= '0'.code && code <= '9'.code));
 	}
 

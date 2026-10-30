@@ -635,7 +635,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 				+ ' public static var box:Box = null; public static var crate:Crate = null;'
 				+ ' public static var gen:Gen<D> = null; public static var twin:Twin = null; public function new() {}'
 				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
-				+ ' public function alias(k:String):Void { $alias }' + ' public function quick():Void { _l.acquire(); _l.release(); }'
+				+ ' public function alias(k:String):Void { $alias }'
+				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
 				+ ' public static function main():Void { final d:D = new D(); owners.add(d); arr.push(d);'
 				+ ' Runner.create(() -> d.work()); d.alias("_l"); d.quick(); } }'
 			])) v.message

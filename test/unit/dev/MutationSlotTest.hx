@@ -162,7 +162,8 @@ final class MutationSlotTest extends Test {
 			'execution time: 0.01',
 			'',
 			ok ? 'results: ALL TESTS OK (success: true)' : 'results: FAILED (success: false)'
-		].concat(rows).join('\n') + '\n';
+		].concat(rows).join('\n')
+			+ '\n';
 	}
 
 	/** The files a parent writes for its slots: the rows, their deal order and the owner pid. */

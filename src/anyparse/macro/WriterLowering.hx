@@ -1129,8 +1129,14 @@ class WriterLowering {
 			// cond iff it is the mandatory bare-Ref bodyPolicy body immediately
 			// following the condWrap field (mirrors emitMandatoryRefField's
 			// emitBodyPolicyBareRef dispatch predicate).
-			final condFitGroupConsumer: Bool = condFitGroupStartIdx >= 0 && !isCondFitSetter && child.kind == Ref && !isOptional
-				&& bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw;
+			final condFitGroupConsumer: Bool = condFitGroupStartIdx >= 0
+				&& !isCondFitSetter
+				&& child.kind == Ref
+				&& !isOptional
+				&& bodyPolicyFlag != null
+				&& kwLead == null
+				&& leadText == null
+				&& !isRaw;
 			// omega-try-brace-symmetry: the construct group's START field is a body in the same sense
 			// the condWrap consumer is - its FitLine layout must be the group's soft line, not a
 			// self-contained one - but it must NOT close a group here: the splice happens at the END
@@ -1160,7 +1166,9 @@ class WriterLowering {
 							+ ' — the body-policy emit path owns the separator (field "$fieldName" of $typePath)',
 							Context.currentPos()
 						);
-					final optBareSep: Null<Expr> = bareSepOptIn && kwLead == null && leadText == null
+					final optBareSep: Null<Expr> = bareSepOptIn
+						&& kwLead == null
+						&& leadText == null
 						&& (!isFirstField || child.fmtHasFlag(BEFORE_NEWLINE_SLOT_FIRST))
 						? buildBareRefLeadingSep(
 							_fieldSep, child, fieldName, typePath, prevAnyStarNonEmpty, prevPadTrailing,
@@ -1654,8 +1662,11 @@ class WriterLowering {
 		// struct-typedef Ref field carrying `@:trailOpt(LIT)` reads
 		// `value.<field>TrailPresent:Null<Bool>` (synth slot) so the writer
 		// preserves source presence of the trail rather than always re-emitting it.
-		final hasStructFieldTrailOptSlot: Bool = !isStar && child.kind == Ref
-			&& child.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true && _ctx.trivia && isTriviaBearing(typePath);
+		final hasStructFieldTrailOptSlot: Bool = !isStar
+			&& child.kind == Ref
+			&& child.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true
+			&& _ctx.trivia
+			&& isTriviaBearing(typePath);
 		final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot ? {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
 			pos: Context.currentPos()

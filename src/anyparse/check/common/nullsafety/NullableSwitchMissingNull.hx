@@ -246,7 +246,8 @@ final class NullableSwitchMissingNull extends RuleBase implements NoAutofix {
 			if (assertedNonNullBefore(subject, from, ctx)) return false;
 			final declared: Null<String> = ctx.declaredTypes[from];
 			if (
-				declared != null && s.nullMarkers.contains(declared)
+				declared != null
+				&& s.nullMarkers.contains(declared)
 				&& TypeResolver.mayBeLocalOrParam(ctx.root, from, s.localDeclKinds, s.paramKinds)
 			)
 				return true;

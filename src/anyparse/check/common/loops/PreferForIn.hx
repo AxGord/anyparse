@@ -243,7 +243,8 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		if (loopSpan == null || bodySpan == null || bindSpan == null) return null;
 		final source: String = ctx.source;
 		final interior: String = source.substring(bodySpan.from, bodySpan.from + 1)
-			+ source.substring(bodySpan.from + 1, bindSpan.from).rtrim() + source.substring(bindSpan.to, bodySpan.to);
+			+ source.substring(bodySpan.from + 1, bindSpan.from).rtrim()
+			+ source.substring(bindSpan.to, bodySpan.to);
 		final inlined: Null<Match> = inlineDeclaration(prev, scope, loopSpan, iterator, binder, interior, ctx);
 		return inlined ?? { span: loopSpan, text: 'for ($binder in $iterator) $interior' };
 	}
@@ -274,7 +275,9 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		// it was refused before this arm existed and stays refused, since rewriting it buys the
 		// reader nothing and the dead binding is `unused-local`'s finding, not this rule's.
 		if (
-			body.kind == s.blockStmtKind && body.children.length < MIN_BODY_STATEMENTS && body.children.length == 1
+			body.kind == s.blockStmtKind
+			&& body.children.length < MIN_BODY_STATEMENTS
+			&& body.children.length == 1
 			&& s.localDeclKinds.contains(body.children[0].kind)
 		)
 			return null;

@@ -111,8 +111,11 @@ final class ExhaustiveSwitches {
 	private function catchAll(branch: QueryNode): Bool {
 		if (branch.kind == _shape.defaultBranchKind) return true;
 		final pattern: Null<QueryNode> = branch.kind == _shape.caseBranchKind && branch.children.length > 0 ? branch.children[0] : null;
-		return pattern != null && pattern.kind == _shape.plainCasePatternKind && pattern.children.length == 1
-			&& pattern.children[0].kind == _shape.identKind && pattern.children[0].name == '_';
+		return pattern != null
+			&& pattern.kind == _shape.plainCasePatternKind
+			&& pattern.children.length == 1
+			&& pattern.children[0].kind == _shape.identKind
+			&& pattern.children[0].name == '_';
 	}
 
 	/** The bare names the patterns of the case `branch` match, its guard-free `Plain` patterns only. */
@@ -260,7 +263,9 @@ final class ExhaustiveSwitches {
 
 	/** Whether `read` reads a field off `this`. */
 	private function isSelf(read: QueryNode): Bool {
-		return isAccess(read.kind) && read.children.length == 1 && read.children[0].kind == _shape.identKind
+		return isAccess(read.kind)
+			&& read.children.length == 1
+			&& read.children[0].kind == _shape.identKind
 			&& read.children[0].name == _shape.selfReferenceText;
 	}
 
@@ -315,7 +320,9 @@ final class ExhaustiveSwitches {
 		_judging.push(key);
 		final info: Null<MemberInfo> = _graph.types.memberOnChain(owner, member);
 		final decl: Null<HeldDecl> = _trees.typeDecl(owner);
-		final holds: Bool = info != null && decl != null && info.typeSource == closed.name
+		final holds: Bool = info != null
+			&& decl != null
+			&& info.typeSource == closed.name
 			&& (info.hasGetter ? getterHolds(decl, owner, member, closed) : storedHolds(decl, owner, member, closed));
 		_judging.pop();
 		// an answer that leaned on a member or a parameter still being judged is kept only once nothing is
@@ -476,7 +483,8 @@ final class ExhaustiveSwitches {
 		final optional: Bool = param.kind == _shape.optionalParamKind;
 		final passes: Bool = _graph.inEdges(id).foreach(e -> e.kind == Contains || e.kind.isInvocation() && {
 			final args: Null<{ values: Array<QueryNode>, at: ValueContext }> = argumentsAt(e);
-			args != null && (args.values.length == params.length || args.values.length == 0 || !skippable)
+			args != null
+				&& (args.values.length == params.length || args.values.length == 0 || !skippable)
 				&& (index >= args.values.length ? optional : handsValue(args.values[index], args.at, closed, optional));
 		});
 		_passing.pop();

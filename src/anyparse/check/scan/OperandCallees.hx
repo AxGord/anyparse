@@ -172,7 +172,8 @@ final class OperandCallees {
 	): Null<CalleeParams> {
 		final host: ResolvedType = declared.host;
 		if (
-			declared.members.length != 1 || binder._index.sourceOf(host.file.file) == null
+			declared.members.length != 1
+			|| binder._index.sourceOf(host.file.file) == null
 			|| host.type.typeParamArity != host.type.typeParamNames.length
 		)
 			return null;

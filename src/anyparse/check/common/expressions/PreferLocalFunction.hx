@@ -319,7 +319,9 @@ final class PreferLocalFunction extends RuleBase {
 
 	/** Whether `node` is a plain `<ident> = <function literal>` assignment. */
 	private static function isBinding(node: QueryNode, s: Seams): Bool {
-		return node.kind == s.assignKind && node.children.length == ASSIGN_CHILD_COUNT && node.children[0].kind == s.identKind
+		return node.kind == s.assignKind
+			&& node.children.length == ASSIGN_CHILD_COUNT
+			&& node.children[0].kind == s.identKind
 			&& s.literalKinds.contains(node.children[1].kind);
 	}
 
@@ -449,7 +451,8 @@ final class PreferLocalFunction extends RuleBase {
 	 * hoist would turn a call to another function into unbounded recursion.
 	 */
 	private static function readsName(fn: QueryNode, name: String, s: Seams): Bool {
-		return (fn.kind == s.identKind || fn.kind == s.stringInterpKind) && fn.name == name
+		return (fn.kind == s.identKind || fn.kind == s.stringInterpKind)
+			&& fn.name == name
 			|| fn.children.exists(c -> readsName(c, name, s));
 	}
 

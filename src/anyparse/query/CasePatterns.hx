@@ -50,7 +50,8 @@ final class CasePatterns {
 	 * (`RefShape.upperInitialNeverCaptures`).
 	 */
 	public static function isCaptureSpelling(name: String, shape: RefShape): Bool {
-		return name.length > 0 && name != shape.wildcardPatternName
+		return name.length > 0
+			&& name != shape.wildcardPatternName
 			&& !(shape.upperInitialNeverCaptures == true && SourceText.isUpperInitial(name));
 	}
 
@@ -375,7 +376,9 @@ final class CasePatterns {
 		final aliases: Array<String> = shape.aliasingDeclKinds ?? [];
 		final kinds: Array<String> = (shape.typeDeclKinds ?? []).concat(closed);
 		function walk(node: QueryNode): Bool {
-			return node.name == name && kinds.contains(node.kind) && (closed.contains(node.kind) || !aliases.contains(node.kind))
+			return node.name == name
+				&& kinds.contains(node.kind)
+				&& (closed.contains(node.kind) || !aliases.contains(node.kind))
 				|| node.children.exists(walk);
 		}
 		return walk(root);

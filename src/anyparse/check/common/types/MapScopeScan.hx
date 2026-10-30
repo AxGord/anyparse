@@ -93,7 +93,8 @@ final class MapScopeScan {
 		};
 		collectScope(tree, typeDecls, shape.aliasingDeclKinds ?? [], nameHosts, scope);
 		final boundMap: Null<String> = scope.imports[UNIFIED_MAP];
-		scope.mapFree = !scope.declared.contains(UNIFIED_MAP) && !scope.aliases.contains(UNIFIED_MAP)
+		scope.mapFree = !scope.declared.contains(UNIFIED_MAP)
+			&& !scope.aliases.contains(UNIFIED_MAP)
 			&& (boundMap == null || boundMap == QUALIFIED_PREFIX + UNIFIED_MAP);
 		return scope;
 	}

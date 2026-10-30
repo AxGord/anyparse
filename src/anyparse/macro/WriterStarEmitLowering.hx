@@ -586,7 +586,9 @@ final class WriterStarEmitLowering {
 		// the `case ` trailing space drops cleanly before the hardline.
 		// Mirrors the bare-Ref first-field channel (`HxTryCatchStmt.body`
 		// / `bodyPolicyWrap` Next branch `_dn(_cols, [_dhl, body])`).
-		final firstStarNlKeep: Bool = isFirstField && ctx.ctx.trivia && ctx.isTriviaBearing(typePath)
+		final firstStarNlKeep: Bool = isFirstField
+			&& ctx.ctx.trivia
+			&& ctx.isTriviaBearing(typePath)
 			&& starNode.fmtHasFlag(WriterLowering.BEFORE_NEWLINE_SLOT_FIRST);
 		final patternListExpr: Expr = if (firstStarNlKeep) {
 			final nlFieldName: String = starNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
@@ -1049,7 +1051,8 @@ final class WriterStarEmitLowering {
 		// loop's terminal `_lead` is discarded on close-peek break, and
 		// `collectTrivia`'s newline-anchored scan skips same-line
 		// comments after the open lit anyway.
-		final hasOrphan: Bool = TriviaPairAltCtor.isAltCloseTrailingBranch(branch) && branch.readMetaString(':lead') != null
+		final hasOrphan: Bool = TriviaPairAltCtor.isAltCloseTrailingBranch(branch)
+			&& branch.readMetaString(':lead') != null
 			&& !branch.hasMeta(':tryparse');
 		final trailCloseAccess: Null<Expr> = TriviaPairAltCtor.isAltCloseTrailingBranch(branch) ? macro $i{argNames[1]} : null;
 		final trailOpenAccess: Null<Expr> = hasOrphan ? macro $i{argNames[2]} : null;

@@ -300,7 +300,8 @@ final class TriviaBlockLowering {
 	 */
 	private static function triviaBlockSubdivVarFnArmExpr(afterVarsAccess: Expr): Expr {
 		return macro ((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4)) // noqa: magic-number
-				|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3))) && $afterVarsAccess > 0); // noqa
+			|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3)))
+			&& $afterVarsAccess > 0); // noqa
 	}
 
 	/**
@@ -324,7 +325,8 @@ final class TriviaBlockLowering {
 	 */
 	private static function triviaBlockInterMemberPlainExpr(betweenVarsAccess: Expr, betweenFnAccess: Expr, afterVarsAccess: Expr): Expr {
 		return macro (!opt._classExtern
-			&& ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0) || (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
+			&& ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
+				|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
 				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)));
 	}
 
@@ -365,7 +367,8 @@ final class TriviaBlockLowering {
 			// Byte-inert when the Star carries no `beforeDocCommentEmptyLines` flag
 			// (`$vetoByDocExpr` is the compile-time literal `false`) or the
 			// runtime policy is not `None`.
-			final _addBlank: Bool = !$vetoByDocExpr && !$addSuppressOnSplitLeadingExpr
+			final _addBlank: Bool = !$vetoByDocExpr
+				&& !$addSuppressOnSplitLeadingExpr
 				&& ($addByDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
 			final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) {
@@ -606,7 +609,10 @@ final class TriviaBlockLowering {
 		// computation entirely.
 		final interMember: Bool = interMemberInfo != null;
 		final uniformBetween: Bool = uniformBetweenOptField != null;
-		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments || existingBetweenFields || beforeDocCommentEmptyLines || interMember
+		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments
+			|| existingBetweenFields
+			|| beforeDocCommentEmptyLines
+			|| interMember
 			|| uniformBetween;
 		// ω-extern-existing-between-split-leading / ω-cond-leading-doc-lookthrough /
 		// ω-class-static-var-cascade / ω-abstract-static-fn-cascade: the per-element
@@ -879,7 +885,8 @@ final class TriviaBlockLowering {
 		final leadingSplitGateExpr: Expr = blankBeforeFinalDocInLeading
 			? macro {
 				if (
-					_ci > 0 && StringTools.startsWith(_t.leadingComments[_ci], '/**')
+					_ci > 0
+					&& StringTools.startsWith(_t.leadingComments[_ci], '/**')
 					&& StringTools.startsWith(_t.leadingComments[_ci - 1], '//')
 				) {
 					var _isLastDoc: Bool = true;
@@ -898,7 +905,8 @@ final class TriviaBlockLowering {
 		final blockLeadingBetweenExpr: Expr = betweenMultilineCommentsBlanks
 			? macro {
 				if (
-					_ci + 1 < _t.leadingComments.length && StringTools.startsWith(_t.leadingComments[_ci], '/*')
+					_ci + 1 < _t.leadingComments.length
+					&& StringTools.startsWith(_t.leadingComments[_ci], '/*')
 					&& StringTools.startsWith(_t.leadingComments[_ci + 1], '/*')
 				) {
 					var _bbi: Int = 0;
@@ -912,7 +920,8 @@ final class TriviaBlockLowering {
 		final blockTrailBetweenExpr: Expr = betweenMultilineCommentsBlanks
 			? macro {
 				if (
-					_ti + 1 < _trailLC.length && StringTools.startsWith(_trailLC[_ti], '/*')
+					_ti + 1 < _trailLC.length
+					&& StringTools.startsWith(_trailLC[_ti], '/*')
 					&& StringTools.startsWith(_trailLC[_ti + 1], '/*')
 				) {
 					var _bbi: Int = 0;
@@ -1093,7 +1102,8 @@ final class TriviaBlockLowering {
 				if (_tc == null)
 					_inner.push(_elem);
 				else if (
-					opt.trailingCommentAbove && _t.leadingComments.length == 0
+					opt.trailingCommentAbove
+					&& _t.leadingComments.length == 0
 					&& anyparse.format.comment.CommentDirective.relocatableTrailing(_tc)
 				) {
 					final _tcRun: Array<String> = [_tc];

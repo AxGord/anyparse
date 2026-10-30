@@ -453,8 +453,11 @@ final class JoinArrayPushes extends RuleBase {
 		final name: Null<String> = receiver.name;
 		if (argSpan == null || receiverSpan == null || name == null) return null;
 		final self: Null<String> = s.selfText;
-		final qualified: Bool = receiver.kind == s.fieldAccessKind && self != null && receiver.children.length == 1
-			&& receiver.children[0].kind == s.identKind && receiver.children[0].name == self;
+		final qualified: Bool = receiver.kind == s.fieldAccessKind
+			&& self != null
+			&& receiver.children.length == 1
+			&& receiver.children[0].kind == s.identKind
+			&& receiver.children[0].name == self;
 		return receiver.kind != s.identKind && !qualified ? null : {
 			name: name,
 			stmt: stmtSpan,
@@ -733,7 +736,9 @@ final class JoinArrayPushes extends RuleBase {
 	 * subtree answers TRUE, since nothing about its contents can be proven.
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
-		return s.opaqueKinds.contains(node.kind) || node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)
+		return s.opaqueKinds.contains(node.kind)
+			|| node.name == name
+			&& (node.kind == s.identKind || node.kind == s.interpIdentKind)
 			|| node.children.exists(child -> referencesName(child, name, s));
 	}
 

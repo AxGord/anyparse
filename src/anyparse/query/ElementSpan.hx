@@ -706,7 +706,8 @@ final class ElementSpan {
 	 */
 	private static function isAnnotationElement(node: QueryNode): Bool {
 		return MemberKinds.META_KINDS.contains(node.kind)
-			|| (node.kind == MemberKinds.CONDITIONAL_REGION_KIND && node.children.length > 0
+			|| (node.kind == MemberKinds.CONDITIONAL_REGION_KIND
+				&& node.children.length > 0
 				&& node.children.foreach(c -> MemberKinds.META_KINDS.contains(c.kind)));
 	}
 
@@ -737,8 +738,12 @@ final class ElementSpan {
 	public static function literalWrapperOf(node: QueryNode, parent: QueryNode): Null<QueryNode> {
 		final nodeSpan: Null<Span> = node.span;
 		final parentSpan: Null<Span> = parent.span;
-		return node.kind == 'Literal' && parent.children.length == 1 && nodeSpan != null && parentSpan != null
-			&& parentSpan.from < nodeSpan.from && nodeSpan.to < parentSpan.to
+		return node.kind == 'Literal'
+			&& parent.children.length == 1
+			&& nodeSpan != null
+			&& parentSpan != null
+			&& parentSpan.from < nodeSpan.from
+			&& nodeSpan.to < parentSpan.to
 			? parent
 			: null;
 	}

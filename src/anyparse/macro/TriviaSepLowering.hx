@@ -549,7 +549,8 @@ final class TriviaSepLowering {
 					// the legacy hardline. Default-false (every non-trivia
 					// -sep-Star producer) preserves the pre-slice break.
 					final _isLastLead: Bool = _ci == _t.leadingComments.length - 1;
-					final _glueLead: Bool = _isLastLead && _t.leadingCommentsGlued == true
+					final _glueLead: Bool = _isLastLead
+						&& _t.leadingCommentsGlued == true
 						&& StringTools.startsWith(_t.leadingComments[_ci], '/*');
 					_inner.push(_glueLead ? _dt(' ') : _dhl());
 					_ci++;
@@ -885,7 +886,9 @@ final class TriviaSepLowering {
 		final keepMatrixComputeExpr: Expr = matrixWrap
 			? macro {
 				if (
-					_keepEmit && !_requiresHardline && _hasSourceNewlines
+					_keepEmit
+					&& !_requiresHardline
+					&& _hasSourceNewlines
 					&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap
 				) {
 					final _kdocs: Array<anyparse.core.Doc> = [];
@@ -1105,7 +1108,8 @@ final class TriviaSepLowering {
 				// to the fit one — `wrapping.arrayWrap`'s `totalItemLength <= n` is just as
 				// width-blind — so it rides on the WIDER flag. `_comprehensionFit` implies
 				// `_isComprehension` by the line below, so that is a strict widening.
-				final _isComprehension: Bool = $v{c.reflowSourceMultiline} && _arr.length > 0
+				final _isComprehension: Bool = $v{c.reflowSourceMultiline}
+					&& _arr.length > 0
 					&& anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_arr[0]);
 				final _comprehensionFit: Bool = _isComprehension && opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After;
 				final _effRules: anyparse.format.wrap.WrapRules = _comprehensionFit
@@ -1267,7 +1271,10 @@ final class TriviaSepLowering {
 		matrixWrap: Bool, openText: String, closeText: String, sepText: String, appendTrailingCommaExpr: Expr, triviaElemCall: Expr
 	): Expr {
 		return macro if (
-			$v{matrixWrap} && _noWrapFlat && !_anyMultilineItem && !_requiresHardline
+			$v{matrixWrap}
+			&& _noWrapFlat
+			&& !_anyMultilineItem
+			&& !_requiresHardline
 			&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap
 		) {
 			final _pdocs: Array<anyparse.core.Doc> = [];
@@ -1459,7 +1466,11 @@ final class TriviaSepLowering {
 			// source-multiline shape. It is disabled ONLY when the array
 			// actually flattens (`_noWrapFlatten`), so the flatten routes
 			// through the force-multi flat loop below instead of reflow.
-			final _smlKeep: Bool = $v{c.reflowSourceMultiline} && _hasSourceNewlines && !_requiresHardline && !_keepEmit && !_ignoreEmit
+			final _smlKeep: Bool = $v{c.reflowSourceMultiline}
+				&& _hasSourceNewlines
+				&& !_requiresHardline
+				&& !_keepEmit
+				&& !_ignoreEmit
 				&& !_noWrapFlatten;
 			final _forceMulti: Bool = (_hasTrivia && !_smlKeep) || _noWrapFlatten;
 			// ω-arraymatrix-keep: attempt the matrix grid BEFORE the keep

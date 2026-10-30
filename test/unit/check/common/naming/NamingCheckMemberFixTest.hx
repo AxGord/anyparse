@@ -158,7 +158,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 */
 	public function testFixKeepsBareReadsOutOfTheOwnerBoundMerge(): Void {
 		final src: String = 'package pkg;\nclass C {\n\tprivate var __id:Int = 0;\n\n\tpublic function add():Int {\n\t\treturn __id;\n\t}\n'
-			+ '\n\tpublic function remove(__id:Int):Void {\n\t\tremoveAt(__id);\n\t}\n\n\t' + 'private function removeAt(x:Int):Void {}\n}';
+			+ '\n\tpublic function remove(__id:Int):Void {\n\t\tremoveAt(__id);\n\t}\n\n\t'
+			+ 'private function removeAt(x:Int):Void {}\n}';
 		assertRenamedSingle(src, 'removeAt(id)', '__id');
 	}
 

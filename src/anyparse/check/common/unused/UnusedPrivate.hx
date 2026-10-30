@@ -226,9 +226,12 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		// `new M()` through an alias, a waived `C.new` reference and a grantee's construction
 		// spell no `new C` the raw scan can read.
 		for (c in ctorCandidates) if (
-			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className, c.file)
-			&& !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
-			&& !usedAsValue(c.className, files, plugin, index) && !isAliased(c.className, scopeIndex)
+			!index.text.skippedMayReference(c.className)
+			&& !index.subtypes.hasSubtype(c.className, c.file)
+			&& !isInstantiatedAnywhere(c.className, files)
+			&& !mentionedInStrings(c.className, reflected)
+			&& !usedAsValue(c.className, files, plugin, index)
+			&& !isAliased(c.className, scopeIndex)
 			&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')
 		) violations.push({
 			file: c.file,
@@ -524,7 +527,10 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		// driver `extends GameBase extends MonoBehaviour` with only `GameBase` outside the report
 		// scope would have its declared `Start` proposed for deletion.
 		if (
-			decl.mods.contains('public') || decl.mods.contains('override') || decl.mods.contains('abstract') || decl.implicitReach != null
+			decl.mods.contains('public')
+			|| decl.mods.contains('override')
+			|| decl.mods.contains('abstract')
+			|| decl.implicitReach != null
 			|| support.frameworkReachable(decl, () -> scopeIndex, contracts)
 		)
 			return null;
@@ -816,7 +822,9 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		final shape: RefShape = plugin.refShape();
 		function valueUse(node: QueryNode, parent: Null<QueryNode>, names: Array<String>): Bool {
 			final isReceiver: Bool = parent != null && parent.kind == shape.fieldAccessKind && parent.children[0] == node;
-			final named: Bool = node.kind == shape.identKind && names.contains(node.name ?? '') || node.kind == shape.fieldAccessKind
+			final named: Bool = node.kind == shape.identKind
+				&& names.contains(node.name ?? '')
+				|| node.kind == shape.fieldAccessKind
 				&& node.name == className;
 			return named && !isReceiver || node.children.exists(c -> valueUse(c, node, names));
 		}

@@ -159,9 +159,15 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 		final parentKind: String = parent != null ? parent.kind : '';
 		final here: Bool = inFunction || cfg.functionKinds.contains(node.kind);
 		if (
-			here && cfg.numericKinds.contains(node.kind) && !cfg.localDeclKinds.contains(parentKind) && parentKind != cfg.objectFieldKind
-			&& !isArrayIndex(parent, cfg) && !hasSizeFieldSibling(node, parent, cfg, cfg.comparisonKinds)
-			&& !hasSizeFieldSibling(node, parent, cfg, cfg.additiveKinds) && !positionCtx && !keyCtx
+			here
+			&& cfg.numericKinds.contains(node.kind)
+			&& !cfg.localDeclKinds.contains(parentKind)
+			&& parentKind != cfg.objectFieldKind
+			&& !isArrayIndex(parent, cfg)
+			&& !hasSizeFieldSibling(node, parent, cfg, cfg.comparisonKinds)
+			&& !hasSizeFieldSibling(node, parent, cfg, cfg.additiveKinds)
+			&& !positionCtx
+			&& !keyCtx
 		)
 			flag(out, file, node, exempt.values);
 		if (exempt.tables) {
@@ -317,7 +323,8 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 		if (LiteralTables.isCollectionTable(node, source, cfg.tables)) return parent != null && cfg.localDeclKinds.contains(parent.kind);
 		if (!cfg.functionBodyKinds.contains(node.kind) || node.children.length != 1) return false;
 		final ret: QueryNode = node.children[0];
-		return cfg.valueReturnKinds.contains(ret.kind) && ret.children.length == 1
+		return cfg.valueReturnKinds.contains(ret.kind)
+			&& ret.children.length == 1
 			&& LiteralTables.isCollectionTable(ret.children[0], source, cfg.tables);
 	}
 

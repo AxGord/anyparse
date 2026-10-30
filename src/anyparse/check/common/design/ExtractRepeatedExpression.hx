@@ -517,7 +517,8 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 	private static function isSubsumed(g: Group, groups: Array<Group>): Bool {
 		return groups.exists(
 			h ->
-				h.render != g.render && h.occ.length >= g.occ.length
+				h.render != g.render
+				&& h.occ.length >= g.occ.length
 				&& g.occ.foreach(go -> h.occ.exists(ho -> strictlyContains(ho.span, go.span)))
 		);
 	}

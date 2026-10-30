@@ -293,8 +293,10 @@ final class MetaCommand implements CliCommand {
 			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
 			final filtered: Array<MetaHit> = raw.filter(
 				h ->
-					(filter.annotation == null || h.annotation == filter.annotation) && argMatches(h.args, filter.argContains)
-					&& argFilterMatches(h.args, filter.argFilter) && (filter.onKind == null || h.declKind == filter.onKind)
+					(filter.annotation == null || h.annotation == filter.annotation)
+					&& argMatches(h.args, filter.argContains)
+					&& argFilterMatches(h.args, filter.argFilter)
+					&& (filter.onKind == null || h.declKind == filter.onKind)
 			);
 			if (filtered.length == 0) continue;
 			allEntries.push({ file: path, source: source, hits: filtered });

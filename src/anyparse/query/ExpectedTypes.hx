@@ -80,7 +80,10 @@ final class ExpectedTypes {
 		final kind: String = value.kind;
 		return kind == _parenKind && value.children.length == 1
 			? unifiesUnderExpectation(value.children[0])
-			: kind == _ternaryKind || kind == _arrayLiteralKind || _ifExprKinds.contains(kind) || _switchKinds.contains(kind)
+			: kind == _ternaryKind
+				|| kind == _arrayLiteralKind
+				|| _ifExprKinds.contains(kind)
+				|| _switchKinds.contains(kind)
 				|| _tryExprKinds.contains(kind);
 	}
 
@@ -154,8 +157,11 @@ final class ExpectedTypes {
 
 	/** Whether the expectation of child `index` of a node of `kind` is the node's own: parentheses, an arm, a block's value. */
 	private function passesThrough(kind: String, index: Int, last: Bool): Bool {
-		return kind == _parenKind || (kind == _ternaryKind && index >= 1) || (_ifExprKinds.contains(kind) && index >= 1)
-			|| (_switchKinds.contains(kind) && index >= 1) || ((kind == _caseBranchKind || _blockKinds.contains(kind)) && last);
+		return kind == _parenKind
+			|| (kind == _ternaryKind && index >= 1)
+			|| (_ifExprKinds.contains(kind) && index >= 1)
+			|| (_switchKinds.contains(kind) && index >= 1)
+			|| ((kind == _caseBranchKind || _blockKinds.contains(kind)) && last);
 	}
 
 	/** The parameter child `index` of the call or construction `holder` binds as an argument (`ExpectationHost.argument`). */

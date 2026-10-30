@@ -522,7 +522,8 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 		// expression, so no fixture can reach the else side in Haxe (`()` does not
 		// parse). It guards a grammar whose paren kind is shaped differently.
 		if (
-			node.kind == slots.parenKind && node.children.length == 1
+			node.kind == slots.parenKind
+			&& node.children.length == 1
 			&& (dropsParens(node.children[0], slots, slot, opaque, prefixed) || node.children[0].kind == slots.parenKind)
 			&& !triviaInsideParens(source, node, slots)
 		) {

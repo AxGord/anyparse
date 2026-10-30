@@ -271,7 +271,8 @@ final class IntroduceParameterObject {
 				+ [
 					for (i in prep.rng.start ... prep.rng.end + 1)
 						'${prep.fields[i - prep.rng.start].name}: ${source.substring(firstSpan(args[i]).from, firstSpan(args[i]).to)}'
-				].join(', ') + ' }';
+				].join(', ')
+				+ ' }';
 			edits.push({ span: new Span(from, to), text: literal });
 		}
 		return null;

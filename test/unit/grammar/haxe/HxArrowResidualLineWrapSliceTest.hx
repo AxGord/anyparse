@@ -36,7 +36,8 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},'
 		+ '"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength",'
 		+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],'
-		+ '"type":"fillLine","location":"beforeLast"}]},' + '"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"type":"fillLine","location":"beforeLast"}]},'
+		+ '"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},'
 		+ '"whitespace":{"addLineCommentSpace":false,"commaPolicy":"after","ifPolicy":"around",'
 		+ '"forPolicy":"around","whilePolicy":"around","switchPolicy":"around","catchPolicy":"around",'
@@ -53,7 +54,8 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		+ '"conditionParens":{"openingPolicy":"before","closingPolicy":"after"},'
 		+ '"anonFuncParamParens":{"openingPolicy":"none","closingPolicy":"none"},'
 		+ '"forLoopParens":{"openingPolicy":"before","closingPolicy":"after"},'
-		+ '"expressionParens":{"openingPolicy":"none","closingPolicy":"none"}}},' + '"lineEnds":{"emptyCurly":"noBreak"},'
+		+ '"expressionParens":{"openingPolicy":"none","closingPolicy":"none"}}},'
+		+ '"lineEnds":{"emptyCurly":"noBreak"},'
 		+ '"sameLine":{"ifBody":"fitLine","forBody":"fitLine","whileBody":"fitLine",'
 		+ '"functionBody":"fitLine","expressionIf":"next","comprehensionFor":"fitLine"}}';
 

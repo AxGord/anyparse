@@ -292,8 +292,10 @@ final class DependencyCarry {
 	private static function unguardedProviderOf(dep: String, cursorInfo: FileInfo): Null<ImportInfo> {
 		return cursorInfo.imports.find(
 			imp ->
-				!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
-				&& SymbolIndex.pathImportedBy(imp) != null && SourceText.lastSegment(imp.raw) == dep
+				!imp.guarded
+				&& (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
+				&& SymbolIndex.pathImportedBy(imp) != null
+				&& SourceText.lastSegment(imp.raw) == dep
 		);
 	}
 
@@ -334,7 +336,8 @@ final class DependencyCarry {
 	private static function destAlreadyHolds(destInfo: FileInfo, provider: ImportInfo): Bool {
 		return destInfo.imports.exists(
 			imp ->
-				imp.kind == provider.kind && imp.raw == provider.raw
+				imp.kind == provider.kind
+				&& imp.raw == provider.raw
 				&& SymbolIndex.pathImportedBy(imp) == SymbolIndex.pathImportedBy(provider)
 		);
 	}
@@ -748,8 +751,12 @@ final class DependencyCarry {
 		final name: Null<String> = node.name;
 		final span: Null<Span> = node.span;
 		if (
-			name != null && span != null && typeRefShape.typeRefKinds.contains(node.kind) && span.from >= declSpan.from
-			&& span.to <= declSpan.to && name != typeName
+			name != null
+			&& span != null
+			&& typeRefShape.typeRefKinds.contains(node.kind)
+			&& span.from >= declSpan.from
+			&& span.to <= declSpan.to
+			&& name != typeName
 		)
 			pushNameSpan(out, name, span);
 		for (c in node.children) collectDependencyNames(c, declSpan, typeRefShape, typeName, out);
@@ -781,8 +788,13 @@ final class DependencyCarry {
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
 			if (
-				name != null && span != null && child.kind == identKind && SourceText.isUpperInitial(name) && span.from >= declSpan.from
-				&& span.to <= declSpan.to && name != typeName
+				name != null
+				&& span != null
+				&& child.kind == identKind
+				&& SourceText.isUpperInitial(name)
+				&& span.from >= declSpan.from
+				&& span.to <= declSpan.to
+				&& name != typeName
 			)
 				pushNameSpan(out, name, span);
 		}
@@ -1161,8 +1173,13 @@ final class DependencyCarry {
 		final name: Null<String> = node.name;
 		final span: Null<Span> = node.span;
 		if (
-			name != null && span != null && node.kind == identKind && span.from >= declSpan.from && span.to <= declSpan.to
-			&& candidates.contains(name) && !out.contains(name)
+			name != null
+			&& span != null
+			&& node.kind == identKind
+			&& span.from >= declSpan.from
+			&& span.to <= declSpan.to
+			&& candidates.contains(name)
+			&& !out.contains(name)
 		)
 			out.push(name);
 		for (c in node.children) collectBareMentions(c, declSpan, identKind, candidates, out);

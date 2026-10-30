@@ -107,7 +107,11 @@ final class HoldGrade {
 		final lock: Null<String> = a.lock;
 		// the calls alone: a value handed on that may give the lock back proves no give here — the hold stays handed off
 		final calls: Array<CallEdge> = a.window.filter(e -> e.kind.isInvocation());
-		return lock != null && a.leaks && !a.delegated && !a.untraced && calls.length != 0
+		return lock != null
+			&& a.leaks
+			&& !a.delegated
+			&& !a.untraced
+			&& calls.length != 0
 			&& !sites.gives.exists(g -> g.edge.from == a.edge.from && g.lock == lock)
 			&& !calls.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to));
 	}

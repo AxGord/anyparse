@@ -218,7 +218,10 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 
 	/** Whether `c` continues a dotted type-reference token — a letter, digit, `_` or `.`. */
 	private static inline function isNominalPart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+		return (c >= 'a'.code && c <= 'z'.code)
+			|| (c >= 'A'.code && c <= 'Z'.code)
+			|| (c >= '0'.code && c <= '9'.code)
+			|| c == '_'.code
 			|| c == '.'.code;
 	}
 
@@ -246,7 +249,9 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 				final span: Null<Span> = v.span;
 				final best: Null<Span> = owner?.span;
 				if (
-					span != null && span.from <= e.span.from && e.span.from <= span.to
+					span != null
+					&& span.from <= e.span.from
+					&& e.span.from <= span.to
 					&& (best == null || best.from <= span.from && span.to <= best.to)
 				)
 					owner = v;
@@ -472,7 +477,8 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 			// (a caller may use the call as a value), so `: Void` would be unsound — leave it
 			// report-only, as with a value-return.
 			if (
-				body == null || MemberKinds.subtreeContainsKindStopping(body, valueReturns, stop)
+				body == null
+				|| MemberKinds.subtreeContainsKindStopping(body, valueReturns, stop)
 				|| MemberKinds.subtreeContainsKindStopping(body, throwKinds, stop)
 			)
 				return;

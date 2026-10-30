@@ -117,8 +117,12 @@ final class WriterFieldSepLowering {
 		// grammar triggers this combo (first non-bearing `@:optional @:kw` is
 		// `HxIfExpr.elseBranch`, which has no `@:fmt(sameLine)`), but closing
 		// the gap preemptively avoids recurrence of the Lowering fix pattern.
-		final hasKeepSlot: Bool = ctx.ctx.trivia && ctx.isTriviaBearing(typePath) && fieldName != null && child.kind == Ref
-			&& child.annotations[AnnotationKeys.BASE_OPTIONAL] == true && child.readMetaString(':kw') != null;
+		final hasKeepSlot: Bool = ctx.ctx.trivia
+			&& ctx.isTriviaBearing(typePath)
+			&& fieldName != null
+			&& child.kind == Ref
+			&& child.annotations[AnnotationKeys.BASE_OPTIONAL] == true
+			&& child.readMetaString(':kw') != null;
 		final keepExpr: Expr = if (hasKeepSlot) {
 			final slotAccess: Expr = {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),

@@ -19,7 +19,8 @@ class TailMergeCheckTest extends Test {
 	/** The reference shape: two inner branches whose tails repeat the run after the outer `if`. */
 	private static final REFERENCE_SHAPE: String = 'class C {\n\tfunction set_p(v:String):String {\n\t\tif (cond1) {\n\t\t\tif (c2) {\n'
 		+ '\t\t\t\twork();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t} else if (c3) {\n'
-		+ '\t\t\t\twork2();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\t}\n\t\thelper(v);\n' + '\t\treturn v;\n\t}\n}';
+		+ '\t\t\t\twork2();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\t}\n\t\thelper(v);\n'
+		+ '\t\treturn v;\n\t}\n}';
 
 	public function testReferenceShapeFlagsBothBranches(): Void {
 		final vs: Array<Violation> = violations(REFERENCE_SHAPE);

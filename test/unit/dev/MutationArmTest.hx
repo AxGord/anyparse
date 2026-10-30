@@ -22,7 +22,8 @@ final class MutationArmTest extends Test {
 		+ '{"name": "M-PAIRS", "type": "a.B", "method": "g", "kind": "FinalMember", "find": ["p", "q"], "replace": ["P", "Q"]},'
 		+ '{"name": "M-CUT", "type": "a.B", "method": "h", "find": "gone"},'
 		+ '{"name": "M-ODD", "type": "a.B", "method": "h", "find": ["p", "q"], "replace": ["P"]},'
-		+ '{"name": "M-FORCE", "type": "a.C", "method": "k", "force": "true"}' + ']}';
+		+ '{"name": "M-FORCE", "type": "a.C", "method": "k", "force": "true"}'
+		+ ']}';
 
 	public function testEveryArmIsReadInRegistryOrder(): Void {
 		Assert.same(['M-ONE', 'M-PAIRS', 'M-CUT', 'M-ODD', 'M-FORCE'], MutationArm.armNames(REGISTRY));

@@ -17,7 +17,8 @@ class HoistBranchStringAffixCheckTest extends Test {
 	private static inline final REGION: String = 'class C {\n\tpublic function f():String {\n'
 		+ '\t\t#if flash\n\t\treturn \'Data$${sep()}{$${sep()}  A: $$a$${sep()}}\';\n'
 		+ '\t\t#elseif mobile\n\t\treturn \'Data$${sep()}{$${sep()}  B: $$b$${sep()}}\';\n'
-		+ '\t\t#else\n\t\treturn \'Data$${sep()}{$${sep()}  C: $$c$${sep()}}\';\n' + '\t\t#end\n\t}\n}\n';
+		+ '\t\t#else\n\t\treturn \'Data$${sep()}{$${sep()}  C: $$c$${sep()}}\';\n'
+		+ '\t\t#end\n\t}\n}\n';
 
 	/** Two branches sharing only a head — the tail differs, so only one side is hoisted. */
 	private static inline final PREFIX_ONLY: String = 'class C {\n\tpublic function f():String {\n'

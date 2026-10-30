@@ -92,7 +92,9 @@ final class CommentProse {
 		if (!lines.exists(line -> line != '')) return true;
 		if (lines.length != 1) return false;
 		final text: String = StringTools.trim(lines[0]);
-		return text.length > 0 && isRuleChar(text.fastCodeAt(0)) && isRuleChar(text.fastCodeAt(text.length - 1))
+		return text.length > 0
+			&& isRuleChar(text.fastCodeAt(0))
+			&& isRuleChar(text.fastCodeAt(text.length - 1))
 			&& wordCount(stripRuleChars(text)) <= DECORATED_LABEL_WORDS;
 	}
 
@@ -145,7 +147,8 @@ final class CommentProse {
 	public static function readsAsProse(text: String): Bool {
 		final bare: String = maskQuotedSpans(text);
 		final head: String = firstWord(bare);
-		return !CODE_HEAD_KEYWORDS.contains(head) && !(CONTROL_HEAD_KEYWORDS.contains(head) && opensBracket(bare.substr(head.length)))
+		return !CODE_HEAD_KEYWORDS.contains(head)
+			&& !(CONTROL_HEAD_KEYWORDS.contains(head) && opensBracket(bare.substr(head.length)))
 			&& !hasCodePunctuation(bare, text);
 	}
 

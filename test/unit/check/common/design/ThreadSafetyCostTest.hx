@@ -277,7 +277,8 @@ class ThreadSafetyCostTest extends Test {
 	public function testTheNearestRepeatingCallerOwnsTheWarning(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | for (j in 0...10)'], graded(run([
-			'class A { public static function main():Void { row(); page(); }' + ' static function row():Void for (j in 0...10) icon(j);'
+			'class A { public static function main():Void { row(); page(); }'
+			+ ' static function row():Void for (j in 0...10) icon(j);'
 			+ ' static function page():Void for (j in 0...10) cell(j); static function cell(i:Int):Void icon(i);'
 			+ ' static function icon(i:Int):Void FileSystem.stat("a"); }'
 		])));

@@ -28,7 +28,8 @@ final class CloneCensusTest extends Test {
 	private static inline final T2: String = 'A.hx:1:1: [info] 2 statements duplicated from line 9 — x (duplicate-code-renamed)\n'
 		+ 'A.hx:2:1: [info] 2 statements duplicated from B.hx:5 — x (duplicate-code-renamed)\n'
 		+ 'A.hx:4:1: [info] 1 statements duplicated from line 9 — x (duplicate-code-renamed)\n'
-		+ 'A.hx:7:1: [info] 2 statements duplicated from line 1 — x (duplicate-code-renamed)\n' + 'A.hx:3:1: [warning] something else\n';
+		+ 'A.hx:7:1: [info] 2 statements duplicated from line 1 — x (duplicate-code-renamed)\n'
+		+ 'A.hx:3:1: [warning] something else\n';
 
 	/** The same type-2 report without its cross-file finding, plus one new finding, as `--format json`. */
 	private static inline final T2_AFTER: String = ' [{"file":"A.hx","line":1,"col":1,"message":"2 statements duplicated from line 9 — x"},'

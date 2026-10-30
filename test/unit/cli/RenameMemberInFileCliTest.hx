@@ -128,7 +128,8 @@ class RenameMemberInFileCliTest extends Test {
 		final out: String = File.getContent(path);
 		Assert.isTrue(
 			out.indexOf('public function choose(): String {\n\t\treturn "m";') >= 0
-			&& out.indexOf('public function choose(): String {\n\t\treturn "d";') >= 0 && out.indexOf('return b.choose();') >= 0
+			&& out.indexOf('public function choose(): String {\n\t\treturn "d";') >= 0
+			&& out.indexOf('return b.choose();') >= 0
 		);
 		Assert.equals(-1, out.indexOf('pick'));
 		FileSystem.deleteFile(path);
@@ -205,7 +206,8 @@ class RenameMemberInFileCliTest extends Test {
 		Assert.equals(0, rc);
 		final out: String = File.getContent(path);
 		Assert.isTrue(
-			out.indexOf('public function sum(): Int') >= 0 && out.indexOf('final total: Int = 2;') >= 0
+			out.indexOf('public function sum(): Int') >= 0
+			&& out.indexOf('final total: Int = 2;') >= 0
 			&& out.indexOf('return total + a.sum();') >= 0
 		);
 		FileSystem.deleteFile(path);
@@ -229,7 +231,9 @@ class RenameMemberInFileCliTest extends Test {
 		Assert.equals(0, rc);
 		final out: String = File.getContent(path);
 		Assert.isTrue(
-			out.indexOf('\tAlpha(x: Int);') >= 0 && out.indexOf('return Alpha(1);') >= 0 && out.indexOf('case Alpha(x):') >= 0
+			out.indexOf('\tAlpha(x: Int);') >= 0
+			&& out.indexOf('return Alpha(1);') >= 0
+			&& out.indexOf('case Alpha(x):') >= 0
 			&& out.indexOf('trace(E.Alpha(2));') >= 0,
 			out
 		);

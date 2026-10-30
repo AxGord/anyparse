@@ -63,7 +63,8 @@ final class DuplicateTernaryBranches extends RuleBase {
 
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String): Void {
 		if (
-			node.kind == ternaryKind && node.children.length == TERNARY_CHILD_COUNT
+			node.kind == ternaryKind
+			&& node.children.length == TERNARY_CHILD_COUNT
 			&& MemberKinds.sameSource(node.children[1], node.children[2], source)
 		) {
 			final span: Null<Span> = node.span;

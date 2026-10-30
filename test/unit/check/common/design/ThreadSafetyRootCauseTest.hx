@@ -489,7 +489,8 @@ class ThreadSafetyRootCauseTest extends Test {
 			DISK,
 			'class A { final _x:Mutex = new Mutex(); public function new() {}'
 			+ ' public function f():Void { _x.acquire(); shared(); _x.release(); _x.acquire(); both(); _x.release(); }'
-			+ ' function both():Void { $body }' + ' function deep():Void Sys.sleep(1); function shared():Void Disk.read("x");'
+			+ ' function both():Void { $body }'
+			+ ' function deep():Void Sys.sleep(1); function shared():Void Disk.read("x");'
 			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> s.f());'
 			+ ' s._x.acquire(); s._x.release(); } }'
 		]);
@@ -533,7 +534,8 @@ class ThreadSafetyRootCauseTest extends Test {
 			'class A { final _x:Mutex = new Mutex(); public function new() {}'
 			+ ' public function a():Void { _x.acquire(); v(); _x.release(); } function v():Void w(); function w():Void Sys.sleep(1);'
 			+ ' public function z():Void { _x.acquire(); w(); _x.release(); }'
-			+ ' public static function main():Void { final s:A = new A(); $running' + ' s._x.acquire(); s._x.release(); } }'
+			+ ' public static function main():Void { final s:A = new A(); $running'
+			+ ' s._x.acquire(); s._x.release(); } }'
 		]);
 	}
 	/** `S` with locks `_a` and `_b`, `work` and `more` declared, a worker running `background`, and the main thread taking both. */

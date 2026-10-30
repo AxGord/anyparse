@@ -244,9 +244,9 @@ final class PreferFind extends RuleBase {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final v: Null<Violation> = tryReturnForm(kids[i], kids[i + 1], file, source, s, probe) ?? tryBreakForm(
-				kids[i], kids[i + 1], file, source, s, probe
-			) ?? tryGuardedBreakForm(kids[i], kids[i + 1], file, source, s, probe);
+			final v: Null<Violation> = tryReturnForm(kids[i], kids[i
+			+ 1], file, source, s, probe) ?? tryBreakForm(kids[i], kids[i
+			+ 1], file, source, s, probe) ?? tryGuardedBreakForm(kids[i], kids[i + 1], file, source, s, probe);
 			if (v != null) out.push(v);
 		}
 		for (c in kids) walk(c, file, source, s, probe, out);
@@ -335,7 +335,9 @@ final class PreferFind extends RuleBase {
 	 * subtree counts as a possible occurrence (conservative).
 	 */
 	private static function mentionsName(node: QueryNode, name: String, s: Seams): Bool {
-		return s.opaqueKinds.contains(node.kind) || node.kind == s.identKind && node.name == name
+		return s.opaqueKinds.contains(node.kind)
+			|| node.kind == s.identKind
+			&& node.name == name
 			|| node.children.exists(c -> mentionsName(c, name, s));
 	}
 
@@ -547,7 +549,10 @@ final class PreferFind extends RuleBase {
 			if (headA != null) {
 				final returned: Null<QueryNode> = returnValue(headA.then, s);
 				if (
-					returned != null && returned.kind == s.identKind && returned.name == headA.loopVar && b.kind == s.returnKind
+					returned != null
+					&& returned.kind == s.identKind
+					&& returned.name == headA.loopVar
+					&& b.kind == s.returnKind
 					&& b.children.length >= 1
 				) {
 					final span: Null<Span> = a.span;
@@ -654,8 +659,12 @@ final class PreferFind extends RuleBase {
 	 */
 	private static function condIsPure(node: QueryNode, s: Seams): Bool {
 		final k: String = node.kind;
-		return !k.endsWith('Assign') && k.indexOf('Incr') == -1 && k.indexOf('Decr') == -1 && k != s.newExprKind
-			&& (k != s.callKind || calleeIsAccessor(node, s)) && node.children.foreach(c -> condIsPure(c, s));
+		return !k.endsWith('Assign')
+			&& k.indexOf('Incr') == -1
+			&& k.indexOf('Decr') == -1
+			&& k != s.newExprKind
+			&& (k != s.callKind || calleeIsAccessor(node, s))
+			&& node.children.foreach(c -> condIsPure(c, s));
 	}
 
 	/**
@@ -697,8 +706,14 @@ final class PreferFind extends RuleBase {
 	 * (no wrapping parens needed); a looser operator (ternary / binary) iterable is wrapped.
 	 */
 	private static function postfixSafe(kind: String, s: Seams): Bool {
-		return kind == s.identKind || kind == s.fieldAccessKind || kind == s.nullSafeAccessKind || kind == s.forceFieldAccessKind
-			|| kind == s.indexAccessKind || kind == s.parenKind || kind == s.callKind || kind == s.newExprKind;
+		return kind == s.identKind
+			|| kind == s.fieldAccessKind
+			|| kind == s.nullSafeAccessKind
+			|| kind == s.forceFieldAccessKind
+			|| kind == s.indexAccessKind
+			|| kind == s.parenKind
+			|| kind == s.callKind
+			|| kind == s.newExprKind;
 	}
 
 	/**

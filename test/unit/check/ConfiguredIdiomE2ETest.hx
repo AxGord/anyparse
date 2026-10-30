@@ -43,7 +43,8 @@ final class ConfiguredIdiomE2ETest extends Test {
 		'\t\ty = p.y;',
 		'\t}',
 		'}'
-	].join('\n') + '\n';
+	].join('\n')
+		+ '\n';
 	private static final POINT_MAIN: String = [
 		'import geom.Point;',
 		'',
@@ -62,7 +63,8 @@ final class ConfiguredIdiomE2ETest extends Test {
 		'\t\tSys.println(p.x + \',\' + p.y);',
 		'\t}',
 		'}'
-	].join('\n') + '\n';
+	].join('\n')
+		+ '\n';
 	private static final POINT_CONFIG: String = '{"compilerOracle":"check.hxml","resolutionRoots":["."],"rules":{"prefer-api-idiom":'
 		+ '{"idioms":[{"type":"geom.Point","fields":["x","y"],"method":"setTo"},{'
 		+ '"type":"geom.Point","fields":["x","y"],"copy":"copyFrom"}]}}}';
@@ -96,7 +98,8 @@ final class ConfiguredIdiomE2ETest extends Test {
 		'\t\treturn e -> {};',
 		'\t}',
 		'}'
-	].join('\n') + '\n';
+	].join('\n')
+		+ '\n';
 	private static final EVENT_CONFIG: String = '{"compilerOracle":"check.hxml","resolutionRoots":["."],"rules":{"typed-event-constant":'
 		+ '{"eventBase":"ev.Event","typeAbstract":"ev.EventType","listenerMethods":["addEventListener"]}}}';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';

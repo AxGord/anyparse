@@ -171,7 +171,9 @@ final class NullableSource {
 		receiver: QueryNode, cfg: NullableSourceCfg, nominalOf: Null<(QueryNode) -> Null<String>>
 	): Null<String> {
 		if (
-			cfg.indexAccessKind == null || cfg.nullableIndexTypes.length == 0 || receiver.kind != cfg.indexAccessKind
+			cfg.indexAccessKind == null
+			|| cfg.nullableIndexTypes.length == 0
+			|| receiver.kind != cfg.indexAccessKind
 			|| receiver.children.length < 1
 		)
 			return null;

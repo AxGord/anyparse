@@ -724,7 +724,10 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final an: Null<String> = a.name;
 		final bn: Null<String> = b.name;
 		if (a.kind != b.kind || an == null || bn == null || an != bn) return false;
-		return a.kind == s.identKind || a.kind == s.fieldAccessKind && a.children.length == 1 && b.children.length == 1
+		return a.kind == s.identKind
+			|| a.kind == s.fieldAccessKind
+			&& a.children.length == 1
+			&& b.children.length == 1
 			&& sameSubject(a.children[0], b.children[0], s);
 	}
 
@@ -762,7 +765,9 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * reification subtree counts as a possible mention (conservative).
 	 */
 	private static function mentionsOutsideRoot(node: QueryNode, root: QueryNode, subject: QueryNode, s: Seams): Bool {
-		return s.opaqueKinds.contains(node.kind) || node != root && denotesSubject(node, subject, s)
+		return s.opaqueKinds.contains(node.kind)
+			|| node != root
+			&& denotesSubject(node, subject, s)
 			|| node.children.exists(c -> mentionsOutsideRoot(c, root, subject, s));
 	}
 
@@ -788,7 +793,9 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		return if (node.kind == s.identKind)
 			node.name == s.selfText ? null : node.name
 		else if (
-			node.kind == s.fieldAccessKind && node.children.length == 1 && node.children[0].kind == s.identKind
+			node.kind == s.fieldAccessKind
+			&& node.children.length == 1
+			&& node.children[0].kind == s.identKind
 			&& node.children[0].name == s.selfText
 		)
 			node.name

@@ -220,9 +220,17 @@ final class PreferBind extends RuleBase {
 		final m: MemberInfo = members[0];
 		final generic: Null<String> = shape.genericFunctionMetaName;
 		final index: Null<SymbolIndex> = ctx.index();
-		return index != null && !index.isThirdParty(owner.file.file) && !owner.type.isExtern
-			&& (shape.functionKinds ?? []).contains(m.kind) && !m.guarded && !m.isDynamic && !m.isMacro && !m.isOverload
-			&& !m.hasOverloadMeta && !(m.isInline && m.isExtern) && (generic == null || !m.metaNames.contains(generic))
+		return index != null
+			&& !index.isThirdParty(owner.file.file)
+			&& !owner.type.isExtern
+			&& (shape.functionKinds ?? []).contains(m.kind)
+			&& !m.guarded
+			&& !m.isDynamic
+			&& !m.isMacro
+			&& !m.isOverload
+			&& !m.hasOverloadMeta
+			&& !(m.isInline && m.isExtern)
+			&& (generic == null || !m.metaNames.contains(generic))
 			&& (isStatic == null || isStatic == m.isStatic);
 	}
 
@@ -263,7 +271,8 @@ final class PreferBind extends RuleBase {
 
 	/** Whether a declaration of `kind` binds a local or a parameter — not a field, whose value any code may change. */
 	private static function isLocalOrParam(kind: String, shape: RefShape): Bool {
-		return (shape.localDeclKinds ?? []).contains(kind) || (shape.localDeclContinuationKinds ?? []).contains(kind)
+		return (shape.localDeclKinds ?? []).contains(kind)
+			|| (shape.localDeclContinuationKinds ?? []).contains(kind)
 			|| (shape.paramKinds ?? []).contains(kind);
 	}
 

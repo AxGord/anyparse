@@ -259,8 +259,11 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
 
 	/** Whether a lambda parameter node is a plain binder — the bare arrow form, or a non-optional, non-rest, undefaulted declared one. */
 	private static function plainBinder(param: QueryNode, seams: Seams): Bool {
-		return param.kind == seams.identKind || seams.paramKinds.contains(param.kind) && param.kind != seams.optionalParamKind
-			&& param.kind != seams.restParamKind && param.children.length == 0;
+		return param.kind == seams.identKind
+			|| seams.paramKinds.contains(param.kind)
+			&& param.kind != seams.optionalParamKind
+			&& param.kind != seams.restParamKind
+			&& param.children.length == 0;
 	}
 
 	/** Whether `name` occurs anywhere in `node`'s subtree, in ANY slot — the deliberately blunt reading of "used nowhere else". */
@@ -412,8 +415,12 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
 				final signature: Signature = {
 					arity: countParams(child, seams),
 					isStatic: staticKind != null && run.contains(staticKind),
-					safe: !blocked && !closureless(run, seams) && !out.exists(name) && seams.functionKinds.contains(child.kind)
-						&& name != seams.constructorName && plainParams(child, seams)
+					safe: !blocked
+						&& !closureless(run, seams)
+						&& !out.exists(name)
+						&& seams.functionKinds.contains(child.kind)
+						&& name != seams.constructorName
+						&& plainParams(child, seams)
 				};
 				out[name] = signature;
 			}

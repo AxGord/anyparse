@@ -43,7 +43,9 @@ final class HxObjectLitLineLengthRuleFixedPointTest extends Test {
 	public function testAWidthRuleLiteralInAComprehensionSettlesInOneWrite(): Void {
 		for (k in 1...MAX_K + 1) {
 			final src: String = 'class M {\n\tfunction f() {\n\t\tvar y = [for (t in xs) {alpha: t.aaaaaaaaaaaaaaaaaaaaaaa, '
-				+ 'beta: t.bbbbbbbbbbbbbbbbbbbbbbb, kind: \'' + ''.lpad('k', k) + '\'}];\n\t}\n}';
+				+ 'beta: t.bbbbbbbbbbbbbbbbbbbbbbb, kind: \''
+				+ ''.lpad('k', k)
+				+ '\'}];\n\t}\n}';
 			final once: String = HxWriteFixture.triviaWrite(src, CFG);
 			Assert.equals(once, HxWriteFixture.triviaWrite(once, CFG), 'k=$k\n$src');
 			var widest: Int = 0;

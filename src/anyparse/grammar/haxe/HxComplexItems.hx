@@ -116,7 +116,8 @@ final class HxComplexItems {
 		}
 		// `Reflect.isObject` answers true for String on several targets, and a
 		// string's "fields" are its methods — walking them is pure cost.
-		return !Std.isOfType(v, String) && Reflect.isObject(v)
+		return !Std.isOfType(v, String)
+			&& Reflect.isObject(v)
 			&& Reflect.fields(v).exists(name -> subtreeHasCallOrNew(Reflect.field(v, name), depth + 1));
 	}
 

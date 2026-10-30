@@ -68,7 +68,8 @@ final class HxCaseGuardFitSliceTest extends Test {
 	 */
 	public function testOverflowGuardLadderKeepsIndent(): Void {
 		final src: String = 'class M {\n\tfunction f(keyCodeVariable:Int):Void {\n\t\tswitch keyCodeVariable {\n\t\t\tcase 1:\n'
-			+ '\t\t\t\tfoo();\n\t\t\t\tbar();\n' + '\t\t\tcase _ if ((keyCodeVariable >= \'0\'.code && keyCodeVariable <= \'9\'.code) || ('
+			+ '\t\t\t\tfoo();\n\t\t\t\tbar();\n'
+			+ '\t\t\tcase _ if ((keyCodeVariable >= \'0\'.code && keyCodeVariable <= \'9\'.code) || ('
 			+ 'keyCodeVariable >= \'A\'.code && keyCodeVariable <= \'Z\'.code)):\n\t\t\t\ttrace(2);\n\t\t}\n\t}\n}\n';
 		final out: String = write(src, CONFIG);
 		for (line in out.split('\n')) if (line.length != 0)

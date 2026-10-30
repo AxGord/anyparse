@@ -410,8 +410,10 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 	 */
 	private static function bodyAdmitsRewrite(body: QueryNode, counter: String, collection: String, s: Seams): Bool {
 		final core: LoopSeams = s.core;
-		return LoopScan.countWrites(body, counter, core) == COUNTER_WRITES && !LoopScan.containsKind(body, s.continueKind, core)
-			&& !LoopScan.declares(body, counter, core) && LoopScan.usedOnlyAsStableCollection(body, collection, LENGTH_MEMBER, core);
+		return LoopScan.countWrites(body, counter, core) == COUNTER_WRITES
+			&& !LoopScan.containsKind(body, s.continueKind, core)
+			&& !LoopScan.declares(body, counter, core)
+			&& LoopScan.usedOnlyAsStableCollection(body, collection, LENGTH_MEMBER, core);
 	}
 
 	/**

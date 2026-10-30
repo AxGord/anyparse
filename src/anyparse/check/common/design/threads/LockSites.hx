@@ -312,7 +312,10 @@ final class LockSites {
 				final at: Null<Span> = g.edge.span;
 				final other: Null<String> = lockOf(g.edge);
 				if (
-					at != null && g.pair == pair && g.edge.from == edge.from && g.edge.file == edge.file
+					at != null
+					&& g.pair == pair
+					&& g.edge.from == edge.from
+					&& g.edge.file == edge.file
 					&& (lock == null || other == null || other == lock)
 				)
 					at.from;
@@ -380,13 +383,16 @@ final class LockSites {
 		final fn: Null<FnNode> = _graph.node(edge.from);
 		final owner: String = SourceText.parentPath(lock);
 		if (
-			fn == null || fn.name != _ctorName || fn.typeName != owner || _graph.types.isStatic(owner, memberName(lock))
+			fn == null
+			|| fn.name != _ctorName
+			|| fn.typeName != owner
+			|| _graph.types.isStatic(owner, memberName(lock))
 			|| _aliasedLocks.contains(lock)
 		)
 			return false;
 		final superclass: Null<String> = _graph.types.superclassOf(owner);
 		return !_graph.outEdges(edge.from)
-				.exists(e -> e.kind == Ref || e.dispatchType == owner || superclass != null && _graph.node(e.to)?.typeName == superclass)
+			.exists(e -> e.kind == Ref || e.dispatchType == owner || superclass != null && _graph.node(e.to)?.typeName == superclass)
 			&& !passesSelf(body, null);
 	}
 
@@ -399,7 +405,10 @@ final class LockSites {
 		final out: Array<BlindCall> = [];
 		final at: Null<Span> = node.span;
 		if (
-			at != null && node.kind == _shape.callKind && at.from != start && !releases.contains(at.from)
+			at != null
+			&& node.kind == _shape.callKind
+			&& at.from != start
+			&& !releases.contains(at.from)
 			&& !_graph.outEdges(edge.from).exists(e -> e.kind.isInvocation() && e.span?.from == at.from)
 		) {
 			final site: Span = at;
@@ -493,9 +502,16 @@ final class LockSites {
 		if (!(node.kind == _shape.identKind || isAccess(node.kind)) || parent == null) return true;
 		final host: QueryNode = parent;
 		final call: Null<QueryNode> = grand;
-		final receiver: Bool = call != null && isAccess(host.kind) && host.children[0] == node && call.kind == _shape.callKind
-			&& call.children[0] == host && namedCalls.contains('${call.span?.from}:${node.name}');
-		return receiver || host.kind == _shape.assignKind && host.children.length == 2 && host.children[0] == node
+		final receiver: Bool = call != null
+			&& isAccess(host.kind)
+			&& host.children[0] == node
+			&& call.kind == _shape.callKind
+			&& call.children[0] == host
+			&& namedCalls.contains('${call.span?.from}:${node.name}');
+		return receiver
+			|| host.kind == _shape.assignKind
+			&& host.children.length == 2
+			&& host.children[0] == node
 			&& host.children[1].kind == _shape.newExprKind;
 	}
 
@@ -530,7 +546,8 @@ final class LockSites {
 		for (id => list in WrapperOps.opsByFunction(takes, gives)) if (list.length > 1 && mayWrap(id, pairIds, unresolved)) {
 			final fn: Null<QueryNode> = _trees.ofEdge(list[0].call.edge);
 			if (
-				fn == null || !WrapperOps.plainCallsOnly(_graph, id)
+				fn == null
+				|| !WrapperOps.plainCallsOnly(_graph, id)
 				|| !WrapperOps.lockTrafficOnly(_graph, { shape: _shape, nested: _nestedFnKinds }, id, fn, list)
 			)
 				continue;
@@ -561,7 +578,8 @@ final class LockSites {
 	/** Whether `call` works a named lock on every path of `fn`: in, for a take; out, for a give. */
 	private function onEveryPath(walker: LockWindow, fn: QueryNode, call: LockCall, takes: Bool): Bool {
 		final at: Null<Span> = call.edge.span;
-		return at != null && lockOf(call.edge) != null
+		return at != null
+			&& lockOf(call.edge) != null
 			&& (takes ? walker.runsOnEveryPath(fn, at.from) : walker.releasesOnEveryPath(fn, [at.from]));
 	}
 
@@ -634,8 +652,11 @@ final class LockSites {
 		final name: Null<String> = fn?.name;
 		final type: Null<String> = fn?.typeName;
 		if (fn == null || name == null || type == null || fn.isExternal || fn.isBodyless || fn.isDynamic) return false;
-		return id.indexOf('#') < 0 && !pairIds.contains(id) && !unresolvedNames.contains(name)
-			&& !_graph.inEdges(id).exists(e -> e.kind == Ref) && !_graph.types.supertypesOf(type).exists(t -> declaredOutside(t, name));
+		return id.indexOf('#') < 0
+			&& !pairIds.contains(id)
+			&& !unresolvedNames.contains(name)
+			&& !_graph.inEdges(id).exists(e -> e.kind == Ref)
+			&& !_graph.types.supertypesOf(type).exists(t -> declaredOutside(t, name));
 	}
 
 	/**
@@ -747,7 +768,8 @@ private class WrapperOps {
 		function runsOther(node: QueryNode): Bool {
 			if (node != fn && kinds.nested.contains(node.kind)) return false;
 			final at: Null<Span> = node.span;
-			return (node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at))
+			return (node.kind == shape.callKind || node.kind == shape.newExprKind)
+				&& !sites.contains(LockReleasers.callKey(at))
 				|| node.children.exists(runsOther);
 		}
 		return !runsOther(fn);

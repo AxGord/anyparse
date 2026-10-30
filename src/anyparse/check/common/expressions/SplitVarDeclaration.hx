@@ -208,7 +208,8 @@ final class SplitVarDeclaration extends RuleBase {
 	 * reached as a CHILD of the head, never as a statement of the list.
 	 */
 	private static function isMultiDeclaratorHead(stmt: QueryNode, s: Seams): Bool {
-		return s.localDeclKinds.contains(stmt.kind) && !s.continuationKinds.contains(stmt.kind)
+		return s.localDeclKinds.contains(stmt.kind)
+			&& !s.continuationKinds.contains(stmt.kind)
 			&& SourceText.isMultiDeclarator(stmt, s.continuationKinds);
 	}
 

@@ -155,7 +155,8 @@ final class TypeTraits {
 		return buildClosureAny(
 			typeName, fromFile,
 			source ->
-				source == null || MemberWriteScan.carriesBuildMacro(source)
+				source == null
+				|| MemberWriteScan.carriesBuildMacro(source)
 				&& OccurrenceScan.referencedInRange(source, name, 0, source.length, [])
 		);
 	}

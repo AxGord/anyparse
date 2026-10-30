@@ -76,7 +76,8 @@ final class MergeArms {
 			result.insert(at, record);
 		}
 		if (conflicts.length > 0) throw new MergeConflict('both sides changed arm(s) ${conflicts.join(', ')} differently');
-		return '${side3(b.head, o.head, t.head, 'the text before the records')}' + [for (record in result) record.text].join(o.separator)
+		return '${side3(b.head, o.head, t.head, 'the text before the records')}'
+			+ [for (record in result) record.text].join(o.separator)
 			+ side3(b.tail, o.tail, t.tail, 'the text after the records');
 	}
 

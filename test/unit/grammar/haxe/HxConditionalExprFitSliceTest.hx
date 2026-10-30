@@ -46,8 +46,10 @@ final class HxConditionalExprFitSliceTest extends Test {
 	private static final LADDER: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
 		+ '\t\treturn #if ios\n\t\t\tDEVICETYPE_IPAD\n'
 		+ '\t\t#elseif android\n\t\t\tThinClientUtils.isThinClient() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET\n'
-		+ '\t\t#elseif macos\n\t\t\tDEVICETYPE_MACOSXPC\n' + '\t\t#elseif (windows || linux)\n\t\t\tDEVICETYPE_WINDOWSPC\n'
-		+ '\t\t#else\n\t\t\tDEVICETYPE_WEB\n' + '\t\t#end;\n\t}\n}';
+		+ '\t\t#elseif macos\n\t\t\tDEVICETYPE_MACOSXPC\n'
+		+ '\t\t#elseif (windows || linux)\n\t\t\tDEVICETYPE_WINDOWSPC\n'
+		+ '\t\t#else\n\t\t\tDEVICETYPE_WEB\n'
+		+ '\t\t#end;\n\t}\n}';
 
 	/** A conditional value that fits its line — the knob must leave it alone. */
 	private static final SHORT_FLAT: String =

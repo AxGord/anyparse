@@ -185,8 +185,10 @@ final class _ReconSkipParse { // noqa: naming
 				var j: Int = i + 1;
 				while (j < raw.length) {
 					final cj: Int = raw.fastCodeAt(j);
-					final isIdCont: Bool = (cj >= 'a'.code && cj <= 'z'.code) || (cj >= 'A'.code && cj <= 'Z'.code)
-						|| (cj >= '0'.code && cj <= '9'.code) || cj == '_'.code;
+					final isIdCont: Bool = (cj >= 'a'.code && cj <= 'z'.code)
+						|| (cj >= 'A'.code && cj <= 'Z'.code)
+						|| (cj >= '0'.code && cj <= '9'.code)
+						|| cj == '_'.code;
 					if (!isIdCont) break;
 					j++;
 				}

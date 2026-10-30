@@ -20,9 +20,12 @@ using StringTools;
 class FixtureCompileCacheTest extends Test {
 
 	/** A probe macro that prints and writes paths of both roots, so a replay that keeps the recorded run's paths shows. */
-	private static inline final PROBE: String = 'class AnyparseReachDefinesProbe {\n' + '\tpublic static function run(out:String):Void {\n'
-		+ '\t\tSys.println("cwd " + Sys.getCwd());\n' + '\t\tSys.println("out " + out);\n'
-		+ '\t\tsys.io.File.saveContent(out, "main " + sys.FileSystem.fullPath("Main.hx"));\n' + '\t}\n}\n';
+	private static inline final PROBE: String = 'class AnyparseReachDefinesProbe {\n'
+		+ '\tpublic static function run(out:String):Void {\n'
+		+ '\t\tSys.println("cwd " + Sys.getCwd());\n'
+		+ '\t\tSys.println("out " + out);\n'
+		+ '\t\tsys.io.File.saveContent(out, "main " + sys.FileSystem.fullPath("Main.hx"));\n'
+		+ '\t}\n}\n';
 
 	private static inline final MAIN: String = 'class Main { static function main() {} }\n';
 

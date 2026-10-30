@@ -145,7 +145,8 @@ final class ConstantHoist {
 	public static function constantRule(policy: NamingPolicy, mods: Array<String>): Null<NamingRule> {
 		return policy.find(
 			rule ->
-				rule.category == NamingCategory.Constant && rule.requireMods.foreach(m -> mods.contains(m))
+				rule.category == NamingCategory.Constant
+				&& rule.requireMods.foreach(m -> mods.contains(m))
 				&& !rule.forbidMods.exists(m -> mods.contains(m))
 		);
 	}
@@ -388,7 +389,8 @@ final class ConstantHoist {
 	): Bool {
 		return !staticsForbidden(ctx.tree, match, ctx.plugin)
 			&& ctx.index.typing.members.typeProvablyLacksMember(ownerName, name, ctx.file)
-			&& !conditionalBetween(match.nameNode, declSpan.from, ctx.shape) && !commentAbove(ctx.source, declSpan, regions)
+			&& !conditionalBetween(match.nameNode, declSpan.from, ctx.shape)
+			&& !commentAbove(ctx.source, declSpan, regions)
 			&& occupiesNameAlone(name, declSpan.from, ctx);
 	}
 

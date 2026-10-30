@@ -226,8 +226,10 @@ final class ElementLoopRewrite {
 	 * closure reads `X[i]` when it RUNS, a binder holds the element of the iteration that made it.
 	 */
 	public static function bodyAdmitsElementLoop(h: IndexedLoopHeader, source: String, sizeMember: String, core: LoopSeams): Bool {
-		return LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core) && !LoopScan.bindsName(h.body, h.index, core)
-			&& !LoopScan.bindsName(h.body, h.collection, core) && !LoopScan.capturedByClosure(h.body, source, h.collection, core);
+		return LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core)
+			&& !LoopScan.bindsName(h.body, h.index, core)
+			&& !LoopScan.bindsName(h.body, h.collection, core)
+			&& !LoopScan.capturedByClosure(h.body, source, h.collection, core);
 	}
 
 	/**

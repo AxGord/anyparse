@@ -173,7 +173,9 @@ final class RedundantElse extends RuleBase {
 		final ifSpan: Null<Span> = ifNode.span;
 		final thenSpan: Null<Span> = ifNode.children[1].span;
 		final run: Null<Span> = deNestedRun(ifNode.children[2], source, seams);
-		return ifSpan != null && thenSpan != null && run != null
+		return ifSpan != null
+			&& thenSpan != null
+			&& run != null
 			&& comments.exists(tok -> tok.from >= thenSpan.to && tok.to <= ifSpan.to && (tok.to <= run.from || tok.from >= run.to));
 	}
 
@@ -241,7 +243,10 @@ final class RedundantElse extends RuleBase {
 	private static function receiverName(node: QueryNode, seams: Seams): Null<String> {
 		if (node.kind == seams.identKind) return node.name;
 		final self: Null<String> = seams.selfRef;
-		return node.kind == seams.fieldAccessKind && self != null && node.children.length > 0 && node.children[0].kind == seams.identKind
+		return node.kind == seams.fieldAccessKind
+			&& self != null
+			&& node.children.length > 0
+			&& node.children[0].kind == seams.identKind
 			&& node.children[0].name == self
 			? node.name
 			: null;
@@ -301,7 +306,8 @@ final class RedundantElse extends RuleBase {
 	 * needs resolution this check does not have, and the wrong direction here is a build failure.
 	 */
 	private static function narrowingLapses(ifNode: QueryNode, elseNode: QueryNode, seams: Seams, narrowed: Array<String>): Bool {
-		return narrowed.length != 0 && subtreeHasKind(ifNode.children[1], seams.resetKinds)
+		return narrowed.length != 0
+			&& subtreeHasKind(ifNode.children[1], seams.resetKinds)
 			&& narrowed.exists(subject -> dereferences(elseNode, subject, seams));
 	}
 
@@ -312,7 +318,9 @@ final class RedundantElse extends RuleBase {
 
 	/** Whether `node`'s subtree reads a member off `subject` — a field access whose receiver is that subject. */
 	private static function dereferences(node: QueryNode, subject: String, seams: Seams): Bool {
-		return node.kind == seams.fieldAccessKind && node.children.length > 0 && receiverName(node.children[0], seams) == subject
+		return node.kind == seams.fieldAccessKind
+			&& node.children.length > 0
+			&& receiverName(node.children[0], seams) == subject
 			|| node.children.exists(child -> dereferences(child, subject, seams));
 	}
 

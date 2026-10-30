@@ -837,8 +837,10 @@ final class NamingRenames {
 
 	/** Whether `decl` is a MEMBER of a type `owner` provably unrelated to `ownerName` in either direction - see `foreignBoundSpans`. */
 	private static function unrelatedMember(decl: NamedDecl, owner: Null<String>, ownerName: String, index: SymbolIndex): Bool {
-		return RenameRefusal.isConfinableMemberCategory(decl.category) && owner != null
-			&& index.subtypes.provablyNotSubtype(owner, ownerName) && index.subtypes.provablyNotSubtype(ownerName, owner);
+		return RenameRefusal.isConfinableMemberCategory(decl.category)
+			&& owner != null
+			&& index.subtypes.provablyNotSubtype(owner, ownerName)
+			&& index.subtypes.provablyNotSubtype(ownerName, owner);
 	}
 
 	/**
@@ -1187,7 +1189,9 @@ final class NamingRenames {
 			final receiver: QueryNode = node.children[0];
 			final rspan: Null<Span> = receiver.span;
 			if (
-				receiver.kind == shape.identKind && receiver.name == name && rspan != null
+				receiver.kind == shape.identKind
+				&& receiver.name == name
+				&& rspan != null
 				&& TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)
 			) {
 				final off: Int = SourceText.identTokenOffset(source, rspan, name);

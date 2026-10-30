@@ -254,7 +254,10 @@ final class CallRepetition {
 		final lists: ChainLists = _listsOf(edge.file);
 		if (listed(edge, lists.iterateIds, lists.iterateNames)) return true;
 		final via: String = edge.via ?? '';
-		return !(runsOnce(edge, lists) || registered(edge) || lists.spawnIds.contains(via) || lists.marshalIds.contains(via)
+		return !(runsOnce(edge, lists)
+			|| registered(edge)
+			|| lists.spawnIds.contains(via)
+			|| lists.marshalIds.contains(via)
 			|| listed(edge, lists.neverInvokeIds, lists.neverInvokeNames));
 	}
 
@@ -362,7 +365,9 @@ final class CallRepetition {
 	 */
 	private function initializerRun(edge: CallEdge): Bool {
 		final node: Null<FnNode> = _graph.node(edge.to);
-		return edge.span == null && node != null && node.span == null
+		return edge.span == null
+			&& node != null
+			&& node.span == null
 			&& (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 

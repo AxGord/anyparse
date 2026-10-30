@@ -605,7 +605,10 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 				// Numbering restarts at every window, so a name's index is a property of the window
 				// and not of where the block happens to declare it.
 				names.resize(0);
-				final key: String = renumbered(stmts[i], names) + GRAM_SEP + renumbered(stmts[i + 1], names) + GRAM_SEP
+				final key: String = renumbered(stmts[i], names)
+					+ GRAM_SEP
+					+ renumbered(stmts[i + 1], names)
+					+ GRAM_SEP
 					+ renumbered(stmts[i + 2], names);
 				final bucket: Null<Array<DupPos>> = grams[key];
 				if (bucket == null)
@@ -672,7 +675,9 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 		if (k.declKinds.contains(stmt.kind)) return isBareDecl(k, stmt);
 		if (stmt.kind != k.shape.exprStatementKind || stmt.children.length != 1) return false;
 		final assign: QueryNode = stmt.children[0];
-		return assign.kind == k.shape.assignKind && assign.children.length == 2 && isName(k, assign.children[0])
+		return assign.kind == k.shape.assignKind
+			&& assign.children.length == 2
+			&& isName(k, assign.children[0])
 			&& isSlotValue(k, assign.children[1]);
 	}
 

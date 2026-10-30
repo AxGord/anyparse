@@ -234,7 +234,11 @@ class BuiltinFixClassCensusTest extends Test {
 	 * later reopens the hole, and the list is where a reader looking for it will be.
 	 */
 	private inline function carriesAFixSeam(check: Check): Bool {
-		return check is RiskyFix || check is OracleAssisted || check is CrossFileFix || check is GroupedFix || check is CarryingFix
+		return check is RiskyFix
+			|| check is OracleAssisted
+			|| check is CrossFileFix
+			|| check is GroupedFix
+			|| check is CarryingFix
 			|| check is VersionGated;
 	}
 

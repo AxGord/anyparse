@@ -14,7 +14,8 @@ using StringTools;
 class DeclarationDeltaTest extends Test {
 
 	private static final BASE: String = 'package p;\n\nimport a.B;\n\nclass C {\n\tpublic function f(): Int {\n\t\treturn 1;\n\t}\n\n'
-		+ '\tpublic function g(): Int {\n\t\treturn 2;\n\t}\n\n\tpublic function h(): Int {\n\t\treturn 3;\n' + '\t}\n}\n';
+		+ '\tpublic function g(): Int {\n\t\treturn 2;\n\t}\n\n\tpublic function h(): Int {\n\t\treturn 3;\n'
+		+ '\t}\n}\n';
 	private static final BRACE: String = 'package p;\n\nimport a.B;\n\nclass C {\n\tpublic function f(a: Bool): Void {\n\t\tif (a) {\n'
 		+ '\t\t\tfoo();\n\t\t}\n\t\tbar();\n\t}\n\n\tpublic function g(): Void {}\n}\n';
 

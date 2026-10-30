@@ -288,7 +288,8 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		}
 		final source: String = 'class C { static function makeLock():sys.thread.Lock return null;'
 			+ ' static function stdin():Void { final i = Sys.stdin(); i.readLine(); }'
-			+ ' static function made():Void { var l = makeLock(); l.wait(); }' + ' static var lock: sys.thread.Lock;'
+			+ ' static function made():Void { var l = makeLock(); l.wait(); }'
+			+ ' static var lock: sys.thread.Lock;'
 			+ ' static function field():Void { var f = lock; f.wait(); }'
 			+ ' static function alias():Void { var a = makeLock(); var b = a; b.wait(); }'
 			+ ' static function main():Void { stdin(); made(); field(); alias(); } }';

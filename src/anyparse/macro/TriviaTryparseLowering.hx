@@ -873,7 +873,9 @@ final class TriviaTryparseLowering {
 	 * (`HxMemberModifier` / `HxModifier`).
 	 */
 	private static function triviaTryparseForceInlineSepCond(forceInlineSep: Bool): Expr {
-		return macro _si > 0 && $v{forceInlineSep} && Type.enumParameters(cast _arr[_si - 1].node).length == 0
+		return macro _si > 0
+			&& $v{forceInlineSep}
+			&& Type.enumParameters(cast _arr[_si - 1].node).length == 0
 			&& Type.enumParameters(cast _t.node).length == 0;
 	}
 
@@ -1271,7 +1273,8 @@ final class TriviaTryparseLowering {
 			final stmtOptExpr: Expr = WriterOptFanout.statementListElemOpt(macro _writerOpt);
 			macro (
 				_si == _arr.length - 1 ? (
-					$caseTailBarrier && !opt._inExprPosition
+					$caseTailBarrier
+						&& !opt._inExprPosition
 						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
 							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine)
 						? _clearExprPosition($stmtOptExpr)
@@ -1306,7 +1309,8 @@ final class TriviaTryparseLowering {
 		// opt untouched). Flag off ⇒ `macro {}` (no local — `triviaElemCall`
 		// uses `_writerOpt` directly, byte-identical to the pre-slice loop).
 		final elemOptInit: Expr = operandBreakAfterMultilineBrace
-			? macro final _elemOpt = _priorElemDoc != null && anyparse.format.wrap.WrapList.flatLength(_priorElemDoc) < 0
+			? macro final _elemOpt = _priorElemDoc != null
+				&& anyparse.format.wrap.WrapList.flatLength(_priorElemDoc) < 0
 				&& anyparse.format.wrap.WrapList.endsWithCloseDelim(_priorElemDoc)
 				? _setIntersectionBreak(_writerOpt)
 				: _writerOpt
@@ -1399,7 +1403,8 @@ final class TriviaTryparseLowering {
 			: sepText != null && blockEnded
 				? macro {
 					if (
-						_si > 0 && _priorElemDoc != null
+						_si > 0
+						&& _priorElemDoc != null
 						&& (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc) && !$priorCondProbe))
 					) {
 						_docs.push(_dt($v{sepText}));
@@ -1427,7 +1432,9 @@ final class TriviaTryparseLowering {
 			: sepText != null && blockEnded
 				? macro {
 					if (
-						_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
+						_arr.length > 0
+						&& _priorElemDoc != null
+						&& _arr[_arr.length - 1].sepAfter
 						&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)
 					) {
 						_docs.push(_dt($v{sepText}));

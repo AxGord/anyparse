@@ -299,7 +299,10 @@ final class NullGuardedCode {
 		for (call in facts.calls[id] ?? []) if (call.access != STATIC_ACCESS || !handsNull(call.at, index, count)) return false;
 		return (facts.fields[id] ?? []).foreach(
 			read ->
-				read.fact.write || read.fact.use == COMPARE || read.fact.use == VALUE && !read.fact.held
+				read.fact.write
+				|| read.fact.use == COMPARE
+				|| read.fact.use == VALUE
+				&& !read.fact.held
 				&& neverCalled(read.node, read.fact.at, 0)
 		);
 	}
@@ -309,8 +312,13 @@ final class NullGuardedCode {
 	 * with one signature, not exposed to code outside the program, of a class that is not extern.
 	 */
 	private function callable(type: TypeFact, field: FieldDeclFact): Bool {
-		return type.kind == CLASS_KIND && type.alike && !type.isExtern && field.kinds.foreach(k -> k == METHOD_KIND)
-			&& !field.overloads.exists(o -> o > 0) && !field.meta.contains(EXPOSE) && !type.meta.contains(EXPOSE);
+		return type.kind == CLASS_KIND
+			&& type.alike
+			&& !type.isExtern
+			&& field.kinds.foreach(k -> k == METHOD_KIND)
+			&& !field.overloads.exists(o -> o > 0)
+			&& !field.meta.contains(EXPOSE)
+			&& !type.meta.contains(EXPOSE);
 	}
 
 	/** Whether the call at `at` hands the literal `null` as its `index`-th of `count` arguments, read off its text. */
@@ -553,8 +561,11 @@ final class NullGuardedCode {
 			case Named(CATCH_ALL, []), Structure(_), Function(_, _): true;
 			case Named(id, _):
 				final fact: Null<TypeFact> = _view.type(id);
-				fact != null && fact.alike
-					&& (NOMINAL_KINDS.contains(fact.kind) || fact.kind == TYPEDEF_KIND && fact.targets.length > 0
+				fact != null
+					&& fact.alike
+					&& (NOMINAL_KINDS.contains(fact.kind)
+						|| fact.kind == TYPEDEF_KIND
+						&& fact.targets.length > 0
 						&& fact.targets.foreach(target -> builtinEquality(FactsTypeTree.read(target), depth + 1)));
 			case _: false;
 		};
@@ -585,8 +596,11 @@ final class NullGuardedCode {
 		if (i < 3) return false;
 		final place: QueryNode = chain[i - 1];
 		final assign: QueryNode = chain[i - 2];
-		return place.kind == _shape.indexAccessKind && place.children[0] == chain[i] && assign.kind == _shape.assignKind
-			&& assign.children[0] == place && chain[i - 3].kind == _shape.exprStatementKind;
+		return place.kind == _shape.indexAccessKind
+			&& place.children[0] == chain[i]
+			&& assign.kind == _shape.assignKind
+			&& assign.children[0] == place
+			&& chain[i - 3].kind == _shape.exprStatementKind;
 	}
 
 	/**

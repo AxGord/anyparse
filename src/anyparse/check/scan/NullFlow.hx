@@ -725,8 +725,11 @@ final class NullFlow {
 		inline function carries(kind: Null<String>): Bool return kind != null && modifiers.exists(m -> m.kind == kind);
 		final overloadMeta: Null<String> = shape.signatureOverloadMetaName;
 		if (
-			carries(shape.dynamicModifierKind) || carries(shape.macroModifierKind) || carries(shape.overloadModifierKind)
-			|| overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
+			carries(shape.dynamicModifierKind)
+			|| carries(shape.macroModifierKind)
+			|| carries(shape.overloadModifierKind)
+			|| overloadMeta != null
+			&& modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
 		)
 			return false;
 		return fn.kind == shape.finalModifierMemberKind || carries(shape.inlineModifierKind) || carries(shape.staticModifierKind);
@@ -1169,8 +1172,11 @@ final class NullFlow {
 
 	/** Whether `a` and `b` hold the same items in every array a `NullFacts` reads (`factsOver`, `indexPresentIn`). */
 	private static function sameReadState(a: FlowState, b: FlowState): Bool {
-		return SameItems.of(a.nonNull, b.nonNull) && SameItems.of(a.unseen, b.unseen) && SameItems.of(a.known, b.known)
-			&& SameItems.of(a.maybe, b.maybe) && SameItems.of(a.present, b.present);
+		return SameItems.of(a.nonNull, b.nonNull)
+			&& SameItems.of(a.unseen, b.unseen)
+			&& SameItems.of(a.known, b.known)
+			&& SameItems.of(a.maybe, b.maybe)
+			&& SameItems.of(a.present, b.present);
 	}
 
 	/** The facts `state` answers for the unit `ctx` walks. */
@@ -1578,8 +1584,13 @@ final class NullFlow {
 	 * state (a loop's post-state is its entry with every loop-written name cleared).
 	 */
 	private static function armExits(arm: QueryNode, ctx: FlowCtx): Bool {
-		return ctx.controlExitKinds.contains(arm.kind) || isLoopJump(arm, ctx) || arm.kind == ctx.exprStmtKind && arm.children.length == 1
-			&& isLoopJump(arm.children[0], ctx) || ctx.blockKinds.contains(arm.kind) && arm.children.length > 0
+		return ctx.controlExitKinds.contains(arm.kind)
+			|| isLoopJump(arm, ctx)
+			|| arm.kind == ctx.exprStmtKind
+			&& arm.children.length == 1
+			&& isLoopJump(arm.children[0], ctx)
+			|| ctx.blockKinds.contains(arm.kind)
+			&& arm.children.length > 0
 			&& armExits(arm.children[arm.children.length - 1], ctx);
 	}
 
@@ -1686,9 +1697,16 @@ final class NullFlow {
 	 * what was visible before it.
 	 */
 	private static function ownsVisibility(kind: String, ctx: FlowCtx): Bool {
-		return ctx.blockKinds.contains(kind) || kind == ctx.exprStmtKind || ctx.writeKinds.contains(kind)
-			|| ctx.localDeclKinds.contains(kind) || kind == ctx.callKind || kind == ctx.parenKind || kind == ARRAY_KIND
-			|| ctx.ifKinds.contains(kind) || ctx.switchKinds.contains(kind) || ctx.tryKinds.contains(kind);
+		return ctx.blockKinds.contains(kind)
+			|| kind == ctx.exprStmtKind
+			|| ctx.writeKinds.contains(kind)
+			|| ctx.localDeclKinds.contains(kind)
+			|| kind == ctx.callKind
+			|| kind == ctx.parenKind
+			|| kind == ARRAY_KIND
+			|| ctx.ifKinds.contains(kind)
+			|| ctx.switchKinds.contains(kind)
+			|| ctx.tryKinds.contains(kind);
 	}
 
 	/** The `nonNull` names `state` proves visibly. */
@@ -1920,7 +1938,9 @@ final class NullFlow {
 	private static function pureRefPath(node: QueryNode, ctx: FlowCtx): Bool {
 		if (constantExpr(node, ctx)) return true;
 		final kind: String = node.kind;
-		final structural: Bool = kind == ctx.identKind || kind == ctx.fieldAccessKind || kind == ctx.indexAccessKind
+		final structural: Bool = kind == ctx.identKind
+			|| kind == ctx.fieldAccessKind
+			|| kind == ctx.indexAccessKind
 			|| (ctx.parenKind != null && kind == ctx.parenKind);
 		return structural && node.children.foreach(c -> pureRefPath(c, ctx));
 	}

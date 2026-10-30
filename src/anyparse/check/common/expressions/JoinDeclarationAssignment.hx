@@ -178,7 +178,8 @@ final class JoinDeclarationAssignment extends RuleBase {
 	 * single-quoted string, which projects as a distinct kind, not `identKind`).
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
-		return (node.kind == s.identKind || node.kind == s.stringInterpKind) && node.name == name
+		return (node.kind == s.identKind || node.kind == s.stringInterpKind)
+			&& node.name == name
 			|| node.children.exists(c -> referencesName(c, name, s));
 	}
 

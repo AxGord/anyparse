@@ -148,7 +148,9 @@ final class SimplifyBooleanBranchAssignment extends RuleBase {
 		s: Seams, ?parent: QueryNode
 	): Void {
 		if (
-			s.ifKinds.contains(node.kind) && parent != null && s.blockKinds.contains(parent.kind)
+			s.ifKinds.contains(node.kind)
+			&& parent != null
+			&& s.blockKinds.contains(parent.kind)
 			&& match(node, source, comments, s) != null
 		) {
 			final span: Null<Span> = node.span;

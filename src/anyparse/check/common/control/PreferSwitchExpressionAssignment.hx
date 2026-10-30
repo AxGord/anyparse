@@ -262,7 +262,9 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 	private static function assignsFinalLocal(
 		name: String, lvalue: QueryNode, root: QueryNode, switchStmt: QueryNode, switchSpan: Span, leafCount: Int, s: Seams
 	): Bool {
-		return lvalue.kind == s.identKind && lvalue.name == name && writtenOnlyByArms(name, root, switchSpan, leafCount, s)
+		return lvalue.kind == s.identKind
+			&& lvalue.name == name
+			&& writtenOnlyByArms(name, root, switchSpan, leafCount, s)
 			&& !Refs.readsName(name, switchStmt, s.shape);
 	}
 
@@ -318,7 +320,8 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 	 * a distinct kind). Mirrors `JoinDeclarationAssignment.referencesName`.
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
-		return (node.kind == s.identKind || node.kind == s.stringInterpKind) && node.name == name
+		return (node.kind == s.identKind || node.kind == s.stringInterpKind)
+			&& node.name == name
 			|| node.children.exists(c -> referencesName(c, name, s));
 	}
 

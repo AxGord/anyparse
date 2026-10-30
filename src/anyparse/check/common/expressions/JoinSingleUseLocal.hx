@@ -549,7 +549,9 @@ final class JoinSingleUseLocal extends RuleBase {
 	 */
 	private static function readPositionIsSafe(next: QueryNode, readSpan: Span, init: QueryNode, s: Seams): Bool {
 		final path: Null<Array<QueryNode>> = pathToSpan(next, readSpan);
-		return path != null && evaluatedOnceEagerly(path, s) && nothingImpureBefore(path, s)
+		return path != null
+			&& evaluatedOnceEagerly(path, s)
+			&& nothingImpureBefore(path, s)
 			&& (init.kind == s.identKind || !pathIsConditional(path, s));
 	}
 
@@ -614,7 +616,8 @@ final class JoinSingleUseLocal extends RuleBase {
 	private static function commentBlocksDrop(
 		source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, dropSpan: Span, later: Bool
 	): Bool {
-		return comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to) || later
+		return comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to)
+			|| later
 			&& SourceComments.ownLineCommentAbove(source, comments, dropSpan.from, false) >= 0;
 	}
 

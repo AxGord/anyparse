@@ -215,8 +215,11 @@ final class PreferInterpolation extends RuleBase {
 		final seams: Seams = ctx.seams;
 		final arg: Null<QueryNode> = matchArg(node, seams.callKind, seams.fieldAccessKind, seams.identKind);
 		if (
-			arg != null && !deferredToFold(chain, inMeta || inString, ctx.source, seams, ctx.shape) && (ctx.relaxed || isSafeArg(arg, ctx))
-			&& flagMatch(out, ctx, node, arg, sole) && !ctx.collectNested
+			arg != null
+			&& !deferredToFold(chain, inMeta || inString, ctx.source, seams, ctx.shape)
+			&& (ctx.relaxed || isSafeArg(arg, ctx))
+			&& flagMatch(out, ctx, node, arg, sole)
+			&& !ctx.collectNested
 		)
 			return;
 		final concatKind: Null<String> = seams.concatKind;
@@ -289,7 +292,9 @@ final class PreferInterpolation extends RuleBase {
 	 */
 	private static function deferredToFold(chain: Null<QueryNode>, foldBlind: Bool, source: String, seams: Seams, shape: RefShape): Bool {
 		final concatKind: Null<String> = seams.concatKind;
-		return !foldBlind && chain != null && concatKind != null
+		return !foldBlind
+			&& chain != null
+			&& concatKind != null
 			&& FoldStringLiterals.ownsChain(chain, source, concatKind, shape.stringLiteralKinds ?? []);
 	}
 
@@ -323,7 +328,8 @@ final class PreferInterpolation extends RuleBase {
 			final paramKinds: Null<Array<String>> = shape.paramKinds;
 			final nullLiteralKind: Null<String> = shape.nullLiteralKind;
 			if (
-				paramKinds != null && nullLiteralKind != null
+				paramKinds != null
+				&& nullLiteralKind != null
 				&& TypeResolver.bindingIsNullInitialised(ctx.root, bindingFrom, paramKinds, nullLiteralKind)
 			)
 				return false;

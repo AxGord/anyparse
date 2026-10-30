@@ -790,8 +790,10 @@ final class ReachGraph {
 	 * simple name or a subtype's is spelled in the code the index reads.
 	 */
 	private function textlessInPlay(facts: FactsView, id: String): Bool {
-		return facts.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))
-			|| mentioned(facts.graphType(id), null) || facts.subtypesOf(id).exists(sub -> mentioned(facts.graphType(sub), null));
+		return facts.type(id)?.isExtern == true
+			|| reflectiveProducers().exists(p -> mentioned(p.name, p.file))
+			|| mentioned(facts.graphType(id), null)
+			|| facts.subtypesOf(id).exists(sub -> mentioned(facts.graphType(sub), null));
 	}
 
 	/**
@@ -1072,7 +1074,8 @@ final class ReachGraph {
 	private function constructible(c: ImplicitCandidate): Bool {
 		final cached: Null<Bool> = _inPlay[c.type];
 		if (cached != null) return cached;
-		final answer: Bool = reflectiveProducers().exists(p -> mentioned(p.name, p.file)) || mentioned(c.type, c.file)
+		final answer: Bool = reflectiveProducers().exists(p -> mentioned(p.name, p.file))
+			|| mentioned(c.type, c.file)
 			|| _scope.index.subtypes.subtypeNames(c.type).exists(sub -> mentioned(sub, _scope.siteOf(sub)?.file));
 		_inPlay[c.type] = answer;
 		return answer;
@@ -1106,8 +1109,11 @@ final class ReachGraph {
 				) {
 					final receiver: Null<QueryNode> = node.children[0];
 					final rs: Null<Span> = receiver?.span;
-					final staticOwner: Null<String> = receiver != null && rs != null && receiver.kind == shape.identKind
-						&& receiver.name != null && CallGraphNames.isTypeLike(receiver.name ?? '')
+					final staticOwner: Null<String> = receiver != null
+						&& rs != null
+						&& receiver.kind == shape.identKind
+						&& receiver.name != null
+						&& CallGraphNames.isTypeLike(receiver.name ?? '')
 						&& TypeResolver.bindingNodeFrom(receiver.name ?? '', rs, tree, shape) == null
 						? receiver.name
 						: null;

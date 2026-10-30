@@ -236,7 +236,8 @@ final class MustHeld {
 		final covered: String = cover ?? '';
 		return points.exists(
 			pos ->
-				pos > from && (pos < at || loops.exists(l -> l.from > from && l.from <= pos && pos < l.to))
+				pos > from
+				&& (pos < at || loops.exists(l -> l.from > from && l.from <= pos && pos < l.to))
 				&& (covered == '' || !coveredAt(id, valuation, file, covered, pos, at))
 		);
 	}
@@ -276,7 +277,10 @@ final class MustHeld {
 		final around: Array<Span> = loops;
 		return (_givesIn[id] ?? []).exists(g -> {
 			final given: Int = g.edge.span?.to ?? pos + 1;
-			g.lock == cover && given <= pos && runs(id, valuation, g.edge) && runsBefore(g.edge, valuation, pos)
+			g.lock == cover
+				&& given <= pos
+				&& runs(id, valuation, g.edge)
+				&& runsBefore(g.edge, valuation, pos)
 				&& !(_holdsIn[id] ?? []).exists(a -> {
 					final take: Int = a.edge.span?.from ?? -1;
 					a.lock == cover && (take > given && take < at || around.exists(l -> l.from <= take && take < l.to));
@@ -386,8 +390,11 @@ final class MustHeld {
 	private function enteredUnknown(
 		id: String, node: FnNode, inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>, seedable: (String) -> Bool
 	): Bool {
-		return _states.assumed.exists(id) || !_graph.inEdges(id).exists(e -> e.kind.isInvocation())
-			|| unresolvedNames.contains(node.name ?? '') || _graph.inEdges(id).exists(e -> e.kind == Ref && !inertRef(e)) || seedable(id);
+		return _states.assumed.exists(id)
+			|| !_graph.inEdges(id).exists(e -> e.kind.isInvocation())
+			|| unresolvedNames.contains(node.name ?? '')
+			|| _graph.inEdges(id).exists(e -> e.kind == Ref && !inertRef(e))
+			|| seedable(id);
 	}
 
 	/** The meet over the solved callers of the state `id` under `valuation`, sorted; null while none is solved. */

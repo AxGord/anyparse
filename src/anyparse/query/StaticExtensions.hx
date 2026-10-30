@@ -128,7 +128,8 @@ final class StaticExtensions {
 	public function maySupply(fi: FileInfo, name: String): Bool {
 		return !fi.ambientImportsBounded || usingsOf(fi).exists(u -> {
 			final hosts: Null<UsingHosts> = usingHosts(u.raw);
-			hosts == null || hosts.moduleFields.exists(f -> f.name == name)
+			hosts == null
+				|| hosts.moduleFields.exists(f -> f.name == name)
 				|| hosts.types.exists(h -> h.type.members.exists(m -> m.name == name && m.isStatic));
 		});
 	}

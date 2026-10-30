@@ -667,9 +667,12 @@ final class WriterKwRefLowering {
 		// the kw trailing space. Symbol leads (`(`, `{`, `:`, `->`, …) stay
 		// tight under the strip.
 		final leadIsWord: Bool = leadText != null && isWordStart(leadText);
-		final stripKwTrailingSpace: Bool = ctorBodyPolicyFlag != null || subStructStartsWithBodyPolicy(kw, refName)
-			|| subStructStartsWithBodyBreak(kw, refName) || subStructStartsWithBareBodyBreaks(kw, refName)
-			|| subStructStartsWithTightLead(kw, refName) || branch.fmtHasFlag('tightKw')
+		final stripKwTrailingSpace: Bool = ctorBodyPolicyFlag != null
+			|| subStructStartsWithBodyPolicy(kw, refName)
+			|| subStructStartsWithBodyBreak(kw, refName)
+			|| subStructStartsWithBareBodyBreaks(kw, refName)
+			|| subStructStartsWithTightLead(kw, refName)
+			|| branch.fmtHasFlag('tightKw')
 			|| (leadText != null && !leadIsWord && !branch.fmtHasFlag('spaceBeforeLead'));
 		// ω-if-policy / ω-control-flow-policies / ω-try-policy /
 		// ω-anon-fn-paren-policy: a branch with a `@:fmt(<flag>)` whose
@@ -817,7 +820,8 @@ final class WriterKwRefLowering {
 			macro {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				if (
-					$optAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next
+					$optAccess
+					&& $leftCurlyAccess == anyparse.format.BracePlacement.Next
 					&& Type.enumConstructor($valueAccess) == $v{ctorName}
 				)
 					_dc([_dop(' '), _dn(_cols, $subCall)])
@@ -944,8 +948,11 @@ final class WriterKwRefLowering {
 	 */
 	private static function subStructStartsWithBodyPolicy(kw: KwRefCtx, refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(kw, refName);
-		return first != null && first.kind == Ref && first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
-			&& first.readMetaString(':kw') == null && first.readMetaString(':lead') == null
+		return first != null
+			&& first.kind == Ref
+			&& first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
+			&& first.readMetaString(':kw') == null
+			&& first.readMetaString(':lead') == null
 			&& first.fmtReadStringArgs('bodyPolicy') != null;
 	}
 
@@ -962,8 +969,12 @@ final class WriterKwRefLowering {
 	 */
 	private static function subStructStartsWithBodyBreak(kw: KwRefCtx, refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(kw, refName);
-		return first != null && first.kind == Ref && first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
-			&& first.readMetaString(':kw') == null && first.readMetaString(':lead') == null && first.fmtReadString('bodyBreak') != null;
+		return first != null
+			&& first.kind == Ref
+			&& first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
+			&& first.readMetaString(':kw') == null
+			&& first.readMetaString(':lead') == null
+			&& first.fmtReadString('bodyBreak') != null;
 	}
 
 	/**
@@ -980,8 +991,12 @@ final class WriterKwRefLowering {
 	 */
 	private static function subStructStartsWithBareBodyBreaks(kw: KwRefCtx, refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(kw, refName);
-		return first != null && first.kind == Ref && first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
-			&& first.readMetaString(':kw') == null && first.readMetaString(':lead') == null && first.fmtHasFlag('bareBodyBreaks');
+		return first != null
+			&& first.kind == Ref
+			&& first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
+			&& first.readMetaString(':kw') == null
+			&& first.readMetaString(':lead') == null
+			&& first.fmtHasFlag('bareBodyBreaks');
 	}
 
 	/**
@@ -1007,7 +1022,8 @@ final class WriterKwRefLowering {
 		return rule == null || rule.kind != Alt ? [] : [
 			for (b in rule.children)
 				if (
-					b.annotations.get(AnnotationKeys.PRATT_PREC) != null || b.annotations.get(AnnotationKeys.POSTFIX_OP) != null
+					b.annotations.get(AnnotationKeys.PRATT_PREC) != null
+					|| b.annotations.get(AnnotationKeys.POSTFIX_OP) != null
 					|| b.annotations.get(AnnotationKeys.TERNARY_OP) != null
 				)
 					(b.annotations.get(AnnotationKeys.BASE_CTOR): String)

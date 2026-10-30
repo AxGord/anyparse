@@ -22,15 +22,20 @@ import anyparse.query.CachingGrammarPlugin;
 class NullableSourceResolutionScopeTest extends Test {
 
 	/** A library type whose `find` returns `Null<Item>` and whose `all` does not — the discriminator pair. */
-	private static inline final LIB: String = 'class Lib {\n' + '\tpublic function find(k:String):Null<Item> { return null; }\n'
-		+ '\tpublic function all():Array<Item> { return []; }\n' + '\tpublic static function make():Null<Item> { return null; }\n' + '}\n';
+	private static inline final LIB: String = 'class Lib {\n'
+		+ '\tpublic function find(k:String):Null<Item> { return null; }\n'
+		+ '\tpublic function all():Array<Item> { return []; }\n'
+		+ '\tpublic static function make():Null<Item> { return null; }\n'
+		+ '}\n';
 
 	/** The item `Lib.find` may or may not hand back. */
 	private static inline final ITEM: String = 'class Item {\n\tpublic var name:String;\n}\n';
 
 	/** The std collection the exclusion list names, declared where the resolution index can see it. */
-	private static inline final ARRAY: String = 'class Array<T> {\n' + '\tpublic function pop():Null<T> { return null; }\n'
-		+ '\tpublic function shift():Null<T> { return null; }\n' + '}\n';
+	private static inline final ARRAY: String = 'class Array<T> {\n'
+		+ '\tpublic function pop():Null<T> { return null; }\n'
+		+ '\tpublic function shift():Null<T> { return null; }\n'
+		+ '}\n';
 
 	/**
 	 * The whole point of the redirect: `Lib` is declared in the LIBRARY half, so the report index

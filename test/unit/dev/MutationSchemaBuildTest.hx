@@ -12,8 +12,10 @@ import utest.Test;
 final class MutationSchemaBuildTest extends Test {
 
 	/** Two arms composed into one file (copies at 50-60 and 61-70, dispatched from 10 and 20), one into another. */
-	private static inline final PLACEMENTS: String = '1\tok\tsrc/a/B.hx\t10\t50\t60\tB\n' + '2\tok\tsrc/a/B.hx\t20\t61\t70\tB\n'
-		+ '3\tok\tsrc/a/C.hx\t5\t30\t40\tCHelper\n' + '4\tskip\tsrc/a/D.hx\tnot composed\n';
+	private static inline final PLACEMENTS: String = '1\tok\tsrc/a/B.hx\t10\t50\t60\tB\n'
+		+ '2\tok\tsrc/a/B.hx\t20\t61\t70\tB\n'
+		+ '3\tok\tsrc/a/C.hx\t5\t30\t40\tCHelper\n'
+		+ '4\tskip\tsrc/a/D.hx\tnot composed\n';
 
 	public function testAnErrorInACopyOrOnItsDispatchNamesThatArm(): Void {
 		Assert.same([2], MutationSchemaBuild.culprits(PLACEMENTS, 'src/a/B.hx:65: characters 1-2 : Unknown identifier : x\n'));

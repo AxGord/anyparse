@@ -104,8 +104,14 @@ final class CasePatternScan {
 		final callKind: Null<String> = shape.callKind;
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		if (
-			switchKinds.length == 0 || caseBranchKind == null || plainKind == null || wildcard == null || parenKind == null
-			|| assignKind == null || callKind == null || fieldAccessKind == null
+			switchKinds.length == 0
+			|| caseBranchKind == null
+			|| plainKind == null
+			|| wildcard == null
+			|| parenKind == null
+			|| assignKind == null
+			|| callKind == null
+			|| fieldAccessKind == null
 		)
 			return null;
 		final leaves: Array<String> = CasePatterns.constantLeafKinds(shape);

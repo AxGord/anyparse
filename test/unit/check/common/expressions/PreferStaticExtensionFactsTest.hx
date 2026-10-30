@@ -356,7 +356,8 @@ class PreferStaticExtensionFactsTest extends Test {
 			final seen: Null<Map<String, String>> =
 				verdicts([[]], ALIAS_MAIN, ALIAS_MAIN, BUILD, '{"rules": {"prefer-static-extension": {"types": ["Util"]}}}', [
 					'Base.hx' => 'class Base {\n\tpublic var n:Int = 1;\n\n\tpublic function new() {}\n\n\tpublic static function touch():String\n\t\treturn Util.f(new Base());\n}\n',
-					'Other.hx' => 'class Other {\n\t' + meta
+					'Other.hx' => 'class Other {\n\t'
+					+ meta
 					+ 'public static inline function f(x:Base):String\n\t\treturn "Other.f " + x.n;\n}\n',
 					'Util.hx' => 'class Util {\n\tpublic static inline function f(x:Base):String\n\t\treturn "Util.f " + x.n;\n}\n'
 				]);

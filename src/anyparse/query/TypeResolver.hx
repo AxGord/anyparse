@@ -282,7 +282,9 @@ final class TypeResolver {
 		while (root.kind == fieldAccessKind && root.children.length == 1) root = root.children[0];
 		final rootName: Null<String> = root.name;
 		final rootSpan: Null<Span> = root.span;
-		return root.kind == identKind && rootName != null && rootSpan != null
+		return root.kind == identKind
+			&& rootName != null
+			&& rootSpan != null
 			&& resolveBindingFrom(rootName, rootSpan, tree, shape) == null;
 	}
 
@@ -907,7 +909,10 @@ final class TypeResolver {
 
 	/** Whether `c` is a character of a plain nominal type reference — `[A-Za-z0-9_.]`. */
 	private static inline function isNominalChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+		return (c >= 'a'.code && c <= 'z'.code)
+			|| (c >= 'A'.code && c <= 'Z'.code)
+			|| (c >= '0'.code && c <= '9'.code)
+			|| c == '_'.code
 			|| c == '.'.code;
 	}
 
@@ -1014,7 +1019,11 @@ final class TypeResolver {
 			if (found != null) return;
 			final s: Null<Span> = n.span;
 			if (
-				s != null && s.from == naiveFrom && n.name == name && localDeclKinds.contains(n.kind) && s.from <= opSpan.from
+				s != null
+				&& s.from == naiveFrom
+				&& n.name == name
+				&& localDeclKinds.contains(n.kind)
+				&& s.from <= opSpan.from
 				&& opSpan.to <= s.to
 			) {
 				found = s;

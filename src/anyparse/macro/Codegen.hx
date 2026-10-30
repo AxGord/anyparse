@@ -419,8 +419,10 @@ class Codegen {
 	 * call or an indexed read would be evaluated seven times.
 	 */
 	private static function isWordCharExpr(code: Expr): Expr {
-		return macro ($code >= 'a'.code && $code <= 'z'.code) || ($code >= 'A'.code && $code <= 'Z'.code)
-			|| ($code >= '0'.code && $code <= '9'.code) || $code == '_'.code;
+		return macro ($code >= 'a'.code && $code <= 'z'.code)
+			|| ($code >= 'A'.code && $code <= 'Z'.code)
+			|| ($code >= '0'.code && $code <= '9'.code)
+			|| $code == '_'.code;
 	}
 
 	private static function matchLitField(): Field {
@@ -1041,8 +1043,11 @@ class Codegen {
 	 * which covers the dotted `#if haxe.something` form.
 	 */
 	private static function condAtomByteTestExpr(): Expr {
-		return macro (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
-			|| c == '_'.code || c == '.'.code;
+		return macro (c >= 'a'.code && c <= 'z'.code)
+			|| (c >= 'A'.code && c <= 'Z'.code)
+			|| (c >= '0'.code && c <= '9'.code)
+			|| c == '_'.code
+			|| c == '.'.code;
 	}
 
 	/**
@@ -1053,8 +1058,20 @@ class Codegen {
 	 * only property the own-line gate needs.
 	 */
 	private static function infixOpByteTestExpr(): Expr {
-		return macro c == '+'.code || c == '-'.code || c == '*'.code || c == '/'.code || c == '%'.code || c == '='.code || c == '!'.code
-			|| c == '<'.code || c == '>'.code || c == '&'.code || c == '|'.code || c == '^'.code || c == '?'.code || c == ':'.code
+		return macro c == '+'.code
+			|| c == '-'.code
+			|| c == '*'.code
+			|| c == '/'.code
+			|| c == '%'.code
+			|| c == '='.code
+			|| c == '!'.code
+			|| c == '<'.code
+			|| c == '>'.code
+			|| c == '&'.code
+			|| c == '|'.code
+			|| c == '^'.code
+			|| c == '?'.code
+			|| c == ':'.code
 			|| c == '.'.code;
 	}
 

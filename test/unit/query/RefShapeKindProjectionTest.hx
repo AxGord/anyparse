@@ -1644,8 +1644,14 @@ final class RefShapeKindProjectionTest extends Test {
 		if (!((head >= 'a'.code && head <= 'z'.code) || (head >= 'A'.code && head <= 'Z'.code) || head == '_'.code)) return false;
 		for (i in 0...text.length) {
 			final c: Int = text.fastCodeAt(i);
-			final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
-				|| c == '_'.code || c == '.'.code || c == '<'.code || c == '>'.code || c == ','.code;
+			final ok: Bool = (c >= 'a'.code && c <= 'z'.code)
+				|| (c >= 'A'.code && c <= 'Z'.code)
+				|| (c >= '0'.code && c <= '9'.code)
+				|| c == '_'.code
+				|| c == '.'.code
+				|| c == '<'.code
+				|| c == '>'.code
+				|| c == ','.code;
 			if (!ok) return false;
 		}
 		return true;
@@ -1672,7 +1678,8 @@ final class RefShapeKindProjectionTest extends Test {
 	 * as its NAME, as the head of its name, or merely inside its span.
 	 */
 	private static function capturesToken(node: QueryNode, source: String, probe: TokenProbe, token: String): Bool {
-		return node.kind == probe.kind && carriesToken(node, source, probe.names, token)
+		return node.kind == probe.kind
+			&& carriesToken(node, source, probe.names, token)
 			|| node.children.exists(child -> capturesToken(child, source, probe, token));
 	}
 

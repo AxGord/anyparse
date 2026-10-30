@@ -466,8 +466,10 @@ final class HxCasePredLowering extends AstPredLowering {
 				for (k in 0...kl) if (StringTools.fastCodeAt(s, at + k) != StringTools.fastCodeAt(kw, k)) return false;
 				if (at + kl >= s.length) return true;
 				final next: Int = StringTools.fastCodeAt(s, at + kl);
-				return !((next >= 'a'.code && next <= 'z'.code) || (next >= 'A'.code && next <= 'Z'.code)
-					|| (next >= '0'.code && next <= '9'.code) || next == '_'.code);
+				return !((next >= 'a'.code && next <= 'z'.code)
+					|| (next >= 'A'.code && next <= 'Z'.code)
+					|| (next >= '0'.code && next <= '9'.code)
+					|| next == '_'.code);
 			}
 			final n: Int = raw.length;
 			var atLineStart: Bool = true;

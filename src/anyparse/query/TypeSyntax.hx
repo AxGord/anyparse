@@ -112,7 +112,8 @@ final class TypeSyntax {
 			case [Nominal(p, xs), Nominal(q, ys)]:
 				p == q && xs.length == ys.length && [for (i in 0...xs.length) i].foreach(i -> xs[i].spellsAs(ys[i]));
 			case [Function(ps, r, _), Function(qs, s, _)]:
-				ps.length == qs.length && r.spellsAs(s)
+				ps.length == qs.length
+					&& r.spellsAs(s)
 					&& [for (i in 0...ps.length) i].foreach(i -> ps[i].optional == qs[i].optional && ps[i].type.spellsAs(qs[i].type));
 			case _: ~/\s+/g.replace(text, '') == ~/\s+/g.replace(other.text, '');
 		};

@@ -235,7 +235,8 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 		// `prefer-if-expression-chain` then reports — on code this fix just wrote. Asked of that rule
 		// directly, gates and all, so a shape it refuses keeps its finding here.
 		return BoolExprShape.refusesNullNarrowingBoolCollapse(m.thenRhs, m.elseRhs, condition, s.shape)
-			|| droppedComment(ifNode, m, comments) || PreferIfExpressionAssignment.claims(ifNode, source, comments, s.shape)
+			|| droppedComment(ifNode, m, comments)
+			|| PreferIfExpressionAssignment.claims(ifNode, source, comments, s.shape)
 			? null
 			: m;
 	}
@@ -268,7 +269,9 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 	private static function sameLvalue(a: QueryNode, b: QueryNode, source: String): Bool {
 		final aSpan: Null<Span> = a.span;
 		final bSpan: Null<Span> = b.span;
-		return aSpan != null && bSpan != null && MemberKinds.structurallyEqual(a, b)
+		return aSpan != null
+			&& bSpan != null
+			&& MemberKinds.structurallyEqual(a, b)
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
 	}
 
@@ -360,7 +363,9 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 	 * ternaries rather than a switch).
 	 */
 	private static function isElseIfLink(node: QueryNode, parent: Null<QueryNode>, s: Seams): Bool {
-		return parent != null && s.ifKinds.contains(parent.kind) && parent.children.length == IF_ELSE_CHILD_COUNT
+		return parent != null
+			&& s.ifKinds.contains(parent.kind)
+			&& parent.children.length == IF_ELSE_CHILD_COUNT
 			&& parent.children[2] == node;
 	}
 

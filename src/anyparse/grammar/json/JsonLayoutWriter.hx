@@ -112,7 +112,8 @@ final class JsonLayoutWriter {
 		final gaps: MemberGaps = memberGaps(member);
 		_out += slice(new Span(spanOf(member).from, gaps.before.from));
 		final sep: Null<KeySep> = style?.keySep;
-		_out += (sep != null && isDirty(gaps.before) ? sep.before : slice(gaps.before)) + keyValueSep()
+		_out += (sep != null && isDirty(gaps.before) ? sep.before : slice(gaps.before))
+			+ keyValueSep()
 			+ (sep != null && isDirty(gaps.after) ? sep.after : slice(gaps.after));
 		writeValue(value, isNew(value) ? valueModel(object, member) : null, expanded);
 	}

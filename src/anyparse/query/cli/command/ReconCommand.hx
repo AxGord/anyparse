@@ -291,7 +291,11 @@ final class ReconCommand implements CliCommand {
 			}
 		}
 		if (
-			o.candidatesRegex == null || o.probePath == null && !o.predictStrip && o.clusterFilter == null && !o.regressionProbe
+			o.candidatesRegex == null
+			|| o.probePath == null
+			&& !o.predictStrip
+			&& o.clusterFilter == null
+			&& !o.regressionProbe
 			&& !o.predictRelax
 		)
 			return null;
@@ -353,8 +357,14 @@ final class ReconCommand implements CliCommand {
 			}
 		}
 		if (
-			!o.permissiveConstruct || o.probePath == null && !o.predictStrip && !o.predictRelax && !o.regressionProbe
-			&& o.clusterFilter == null && o.candidatesRegex == null && o.patterns.length <= 0
+			!o.permissiveConstruct
+			|| o.probePath == null
+			&& !o.predictStrip
+			&& !o.predictRelax
+			&& !o.regressionProbe
+			&& o.clusterFilter == null
+			&& o.candidatesRegex == null
+			&& o.patterns.length <= 0
 		)
 			return null;
 		CliIo.stderr(
@@ -1235,8 +1245,10 @@ final class ReconCommand implements CliCommand {
 				var j: Int = i + 1;
 				while (j < raw.length) {
 					final cj: Int = raw.fastCodeAt(j);
-					final isIdCont: Bool = (cj >= 'a'.code && cj <= 'z'.code) || (cj >= 'A'.code && cj <= 'Z'.code)
-						|| (cj >= '0'.code && cj <= '9'.code) || cj == '_'.code;
+					final isIdCont: Bool = (cj >= 'a'.code && cj <= 'z'.code)
+						|| (cj >= 'A'.code && cj <= 'Z'.code)
+						|| (cj >= '0'.code && cj <= '9'.code)
+						|| cj == '_'.code;
 					if (!isIdCont) break;
 					j++;
 				}

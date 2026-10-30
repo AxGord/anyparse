@@ -26,7 +26,8 @@ class NamingCheckBranchTwinFixTest extends NamingCheckTestBase {
 	/** Both branch declarations of one member reach the same new name, in one edit set. */
 	public function testFixRenamesBothExclusiveBranchDeclarations(): Void {
 		final src: String = 'package pkg;\nclass C {\n\t#if ios\n\tprivate static final _key:String = \'i\';\n'
-			+ '\t#elseif android\n\tprivate static final _key:String = \'a\';\n\t#end\n\n' + '\tpublic function f():String return _key;\n}';
+			+ '\t#elseif android\n\tprivate static final _key:String = \'a\';\n\t#end\n\n'
+			+ '\tpublic function f():String return _key;\n}';
 		assertFixed(src, ['final key:String = \'i\'', 'final key:String = \'a\'', 'return key;'], '_key');
 	}
 
@@ -37,7 +38,8 @@ class NamingCheckBranchTwinFixTest extends NamingCheckTestBase {
 	 */
 	public function testFixMatchesTheSpellingTheExclusiveBranchAlreadyUses(): Void {
 		final src: String = 'package pkg;\nclass C {\n\t#if ios\n\tprivate static final key:String = \'i\';\n'
-			+ '\t#elseif android\n\tprivate static final _key:String = \'a\';\n\t#end\n\n' + '\tpublic function f():String return key;\n}';
+			+ '\t#elseif android\n\tprivate static final _key:String = \'a\';\n\t#end\n\n'
+			+ '\tpublic function f():String return key;\n}';
 		assertFixed(src, ['final key:String = \'a\''], '_key');
 	}
 
@@ -47,7 +49,8 @@ class NamingCheckBranchTwinFixTest extends NamingCheckTestBase {
 	 */
 	public function testFixStillTreatsASameBranchTwinAsACollision(): Void {
 		final src: String = 'package pkg;\nclass C {\n\t#if ios\n\tprivate static final key:String = \'i\';\n'
-			+ '\tprivate static final _key:String = \'a\';\n\t#end\n\n' + '\tpublic function f():String return key + _key;\n}';
+			+ '\tprivate static final _key:String = \'a\';\n\t#end\n\n'
+			+ '\tpublic function f():String return key + _key;\n}';
 		assertFixed(src, ['final KEY:String = \'a\'', 'return key + KEY;'], 'final _key');
 	}
 

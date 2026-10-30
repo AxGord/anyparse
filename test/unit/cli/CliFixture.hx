@@ -133,7 +133,8 @@ final class CliFixture {
 	public static function removeScratchRoot(dir: String): Void {
 		final trimmed: String = Path.removeTrailingSlashes(dir);
 		final base: String = Path.withoutDirectory(trimmed);
-		final claimed: Bool = base.length == SCRATCH_PREFIX.length + 7 && base.indexOf('$SCRATCH_PREFIX.') == 0
+		final claimed: Bool = base.length == SCRATCH_PREFIX.length + 7
+			&& base.indexOf('$SCRATCH_PREFIX.') == 0
 			&& Path.directory(trimmed) != '';
 		if (!claimed) throw new Exception('refusing to remove "$dir" — not a claimed $SCRATCH_PREFIX scratch root');
 		removeDir(dir);

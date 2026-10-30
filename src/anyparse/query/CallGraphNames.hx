@@ -165,7 +165,9 @@ final class CallGraphNames {
 		// `?p` and `p = v` alike are skippable; a grammar naming no optional kind may skip any
 		var skippable: Int = 0;
 		while (
-			optionalKind != null && skippable < params.length && params[skippable].kind != optionalKind
+			optionalKind != null
+			&& skippable < params.length
+			&& params[skippable].kind != optionalKind
 			&& !params[skippable].children.exists(c -> !annotationKinds.contains(c.kind))
 		)
 			skippable++;

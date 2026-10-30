@@ -67,8 +67,12 @@ final class HxExprParenObjectLitGlueTest extends Test {
 		+ '\t\t\taccessValue: VIEWVALUE,\n\t\t\tpictureValue: elementValue.pictureValue\n\t\t}));\n'
 		+ '\t\treturn ({\n\t\t\tcaptionValue: elementValue.captionValue,\n'
 		+ '\t\t\tdetailValue: elementValue.detailValue,\n\t\t\tidentityValue: '
-		+ 'elementValue.identityValue,\n\t\t\taddressValue: elementValue.addressValue,\n' + '\t\t\taccessValue: VIEWVALUE,\n'
-		+ '\t\t\tpictureValue: elementValue.pictureValue\n' + '\t\t});\n' + '\t}\n' + '}';
+		+ 'elementValue.identityValue,\n\t\t\taddressValue: elementValue.addressValue,\n'
+		+ '\t\t\taccessValue: VIEWVALUE,\n'
+		+ '\t\t\tpictureValue: elementValue.pictureValue\n'
+		+ '\t\t});\n'
+		+ '\t}\n'
+		+ '}';
 
 	/** The reported real-world shape: a comprehension filter body wrapping its object literal in parens, exploded. */
 	private static final COMPREHENSION_EXPLODED: String = 'class SampleContainer {\n'
@@ -78,14 +82,16 @@ final class HxExprParenObjectLitGlueTest extends Test {
 		+ '\t\t\t\t\t(\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\talphaName: item.AlphaName,\n'
 		+ '\t\t\t\t\t\t\tbetaName: item.BetaName,\n\t\t\t\t\t\t\tid: item.ItemId,\n'
 		+ '\t\t\t\t\t\t\temail: item.Email,\n\t\t\t\t\t\t\taccess: VIEW,\n'
-		+ '\t\t\t\t\t\t\timage: item.Image\n\t\t\t\t\t\t}\n\t\t\t\t\t)\n\t\t\t]\n\t\t};\n' + '\t}\n}';
+		+ '\t\t\t\t\t\t\timage: item.Image\n\t\t\t\t\t\t}\n\t\t\t\t\t)\n\t\t\t]\n\t\t};\n'
+		+ '\t}\n}';
 
 	/** The same comprehension with the filter body's paren glued. */
 	private static final COMPREHENSION_GLUED: String = 'class SampleContainer {\n'
 		+ '\tpublic function collectRemaining(knownItems:SampleEntryBundles):SampleEntryBundles {\n'
 		+ '\t\treturn {\n\t\t\tfirst: [ for (item in _owner.PrimaryList)\n'
 		+ '\t\t\t\tif (!knownItems.first.exists((u:SamplePrimaryEntryKind) -> u.email == item.Email))\n'
-		+ '\t\t\t\t\t({\n\t\t\t\t\t\talphaName: item.AlphaName,\n' + '\t\t\t\t\t\tbetaName: item.BetaName,\n\t\t\t\t\t\tid: item.ItemId,\n'
+		+ '\t\t\t\t\t({\n\t\t\t\t\t\talphaName: item.AlphaName,\n'
+		+ '\t\t\t\t\t\tbetaName: item.BetaName,\n\t\t\t\t\t\tid: item.ItemId,\n'
 		+ '\t\t\t\t\t\temail: item.Email,\n\t\t\t\t\t\taccess: VIEW,\n'
 		+ '\t\t\t\t\t\timage: item.Image\n\t\t\t\t\t})\n\t\t\t]\n\t\t};\n\t}\n}';
 
@@ -106,9 +112,14 @@ final class HxExprParenObjectLitGlueTest extends Test {
 
 	/** The array-literal inner breaks INSIDE its own brackets, paren glued on both sides. */
 	private static final ARRAY_GLUED: String = 'class C {\n\tfunction test() {\n\t\tfinal arrayValue = ([\n'
-		+ '\t\t\tfirstElementValueNameLonger,\n\t\t\tsecondElementValueNameLonger,\n' + '\t\t\tthirdElementValueNameLonger,\n'
-		+ '\t\t\tfourthElementValueNameLonger,\n' + '\t\t\tfifthElementValueNameLonger,\n' + '\t\t\tsixthElementValueNameLonger\n'
-		+ '\t\t]);\n' + '\t}\n' + '}';
+		+ '\t\t\tfirstElementValueNameLonger,\n\t\t\tsecondElementValueNameLonger,\n'
+		+ '\t\t\tthirdElementValueNameLonger,\n'
+		+ '\t\t\tfourthElementValueNameLonger,\n'
+		+ '\t\t\tfifthElementValueNameLonger,\n'
+		+ '\t\t\tsixthElementValueNameLonger\n'
+		+ '\t\t]);\n'
+		+ '\t}\n'
+		+ '}';
 
 	public function new(): Void {
 		super();

@@ -97,10 +97,12 @@ class MemberReachFactsTest extends Test {
 	 * The region runs `lib.Vec.splice` (`sharedNameLibrary`) through `Box.put`, and `Walker.next` replaces `Main.items`. The
 	 * walk reads `lib/Vec.hx` for `VecIter.zero`, called first: a simple name two types share names no one file to read.
 	 */
-	private static inline final SHARED_NAME_MAIN: String = 'import lib.Vec;\nimport lib.Vec.VecIter;\n\n' + LOOP_HEAD
+	private static inline final SHARED_NAME_MAIN: String = 'import lib.Vec;\nimport lib.Vec.VecIter;\n\n'
+		+ LOOP_HEAD
 		+ '\tstatic function main() {\n\t\tvar w:Walker = new Walker();\n'
 		+ '\t\tfor (i in 0...items.length) { /*<*/ Box.put(); /*>*/ }\n\t}\n}\n'
-		+ 'class Box {\n\tpublic static function put():Void {\n\t\tVecIter.zero();\n\t\tVec.splice(1);\n\t}\n}\n' + CLEARING_WALKER;
+		+ 'class Box {\n\tpublic static function put():Void {\n\t\tVecIter.zero();\n\t\tVec.splice(1);\n\t}\n}\n'
+		+ CLEARING_WALKER;
 
 	/** `AE`, an abstract whose `==` replaces `Main.items`. */
 	private static inline final CLEARING_EQ: String = 'abstract AE(Int) {\n\tpublic function new(i:Int) this = i;\n\n'
@@ -114,15 +116,19 @@ class MemberReachFactsTest extends Test {
 	 * `h.grow()` runs the `inline` `Helper.grow`, which changes `items` — `mk()` declares no return type, so the syntax
 	 * cannot resolve the call.
 	 */
-	private static final INLINED_GROW: String = LOOP_HEAD + '\tstatic function mk() return new Helper();\n'
+	private static final INLINED_GROW: String = LOOP_HEAD
+		+ '\tstatic function mk() return new Helper();\n'
 		+ '\tstatic function main() {\n\t\tvar h = mk();\n\t\tfor (i in 0...items.length) { /*<*/ h.grow(); /*>*/ }\n\t}\n}\n'
 		+ 'class Helper {\n\tpublic function new() {}\n\tpublic inline function grow():Void Main.items.push(9);\n}\n';
 
 	/** The region converts a `String` to a `Quiet` by the `inline` `@:from` `conversion`, a `@:from` of `Quiet`'s own. */
 	private static function inlineConversion(conversion: String): String {
-		return LOOP_HEAD + '\tstatic function main() {\n\t\tvar l:Loud = 1;\n'
+		return LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar l:Loud = 1;\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ var q:Quiet = "x"; /*>*/ }\n\t}\n}\n'
-			+ 'abstract Quiet(String) {\n\t@:from static inline function of(s:String):Quiet ' + conversion + '\n}\n'
+			+ 'abstract Quiet(String) {\n\t@:from static inline function of(s:String):Quiet '
+			+ conversion
+			+ '\n}\n'
 			+ 'abstract Loud(Int) {\n\t@:from static function of(i:Int):Loud {\n\t\tMain.items.push(i);\n\t\treturn cast i;\n\t}\n}\n';
 	}
 
@@ -132,15 +138,19 @@ class MemberReachFactsTest extends Test {
 		+ '\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n}\n';
 
 	/** `pick` returns a `Safe`, whose `grow` changes nothing, and in a build defining `other` a `Grower`, whose `grow` does. */
-	private static final CALLEE_PER_BUILD: String = LOOP_HEAD + '\tstatic function pick() {\n\t\t#if other\n\t\treturn new Grower();\n'
+	private static final CALLEE_PER_BUILD: String = LOOP_HEAD
+		+ '\tstatic function pick() {\n\t\t#if other\n\t\treturn new Grower();\n'
 		+ '\t\t#else\n\t\treturn new Safe();\n\t\t#end\n\t}\n'
 		+ '\tstatic function main() {\n\t\tvar s = pick();\n\t\tfor (i in 0...items.length) { /*<*/ s.grow(); /*>*/ }\n\t}\n}\n'
 		+ 'class Safe {\n\tpublic function new() {}\n\tpublic function grow():Void {}\n}\n'
 		+ 'class Grower {\n\tpublic function new() {}\n\tpublic function grow():Void Main.items.push(1);\n}\n';
 
 	/** `w.grow()` runs the extension `Ext.grow`, or in a build defining `other` the `grow` `W` declares there. */
-	private static final MEMBER_PER_BUILD: String = 'using Main.Ext;\n' + LOOP_HEAD + '\tstatic function mk() return new W();\n'
-		+ '\tstatic function main() {\n\t\tvar w = mk();\n' + '\t\tfor (i in 0...items.length) { /*<*/ w.grow(); /*>*/ }\n\t}\n}\n'
+	private static final MEMBER_PER_BUILD: String = 'using Main.Ext;\n'
+		+ LOOP_HEAD
+		+ '\tstatic function mk() return new W();\n'
+		+ '\tstatic function main() {\n\t\tvar w = mk();\n'
+		+ '\t\tfor (i in 0...items.length) { /*<*/ w.grow(); /*>*/ }\n\t}\n}\n'
 		+ 'class W {\n\tpublic function new() {}\n\t#if other\n\tpublic function grow():Void Main.items.push(1);\n\t#end\n}\n'
 		+ 'class Ext {\n\tpublic static function grow(w:W):Void {}\n}\n';
 
@@ -153,7 +163,8 @@ class MemberReachFactsTest extends Test {
 			+ 'class Main {\n\tstatic function main() {\n\t\tRunner.run(new W());\n\t}\n}\n'
 			+ 'class Runner {\n\tpublic static function run(w:W):Void {\n'
 			+ '\t\tfor (i in 0...Store.items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n',
-		'Ext.hx' => 'class Ext {}\n' + 'class W {\n\tpublic function new() {}\n}\n'
+		'Ext.hx' => 'class Ext {}\n'
+			+ 'class W {\n\tpublic function new() {}\n}\n'
 			+ 'class Store {\n\tpublic static var items:Array<Int> = [1, 2];\n}\n'
 			+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
 			+ 'class Loud {\n\tpublic static function go(w:W):Void Store.items.push(1);\n}\n'
@@ -164,8 +175,10 @@ class MemberReachFactsTest extends Test {
 	 * argument and changes `items`.
 	 */
 	private static final IMPORT_PER_BUILD: Map<String, String> = [
-		'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ R.f(o); /*>*/ }\n\t}\n}\n' + 'class Obj {\n\tpublic function new() {}\n}\n',
+		'Main.hx' => LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ R.f(o); /*>*/ }\n\t}\n}\n'
+			+ 'class Obj {\n\tpublic function new() {}\n}\n',
 		'R.hx' => '#if other\nimport a.T;\n#else\nimport b.T;\n#end\n\nclass R {\n\tpublic static function f(x:T):Void {}\n}\n',
 		'a/T.hx' => 'package a;\n\nabstract T(Dynamic) {\n\t@:from static function fromObj(o:Obj):T {\n\t\tMain.items.push(1);\n'
 			+ '\t\treturn cast o;\n\t}\n}\n',
@@ -173,8 +186,10 @@ class MemberReachFactsTest extends Test {
 	];
 
 	/** `w.go()` runs `Quiet.go`, or in a build defining `other`, which puts `@:using(Main.Loud)` on `W`, `Loud.go`. */
-	private static final USING_PER_BUILD: String = 'using Main.Quiet;\n' + LOOP_HEAD
-		+ '\tstatic function main() {\n\t\tvar w:W = new W();\n' + '\t\tfor (i in 0...items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n'
+	private static final USING_PER_BUILD: String = 'using Main.Quiet;\n'
+		+ LOOP_HEAD
+		+ '\tstatic function main() {\n\t\tvar w:W = new W();\n'
+		+ '\t\tfor (i in 0...items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n'
 		+ '#if other\n@:using(Main.Loud)\n#end\nclass W {\n\tpublic function new() {}\n}\n'
 		+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
 		+ 'class Loud {\n\tpublic static function go(w:W):Void Main.items.push(1);\n}\n';
@@ -191,10 +206,12 @@ class MemberReachFactsTest extends Test {
 	private static final BUILD_MACROS: String = 'import haxe.macro.Context;\nimport haxe.macro.Expr;\n\nclass Mac {\n'
 		+ '\tpublic static macro function keep():Array<Field> return Context.getBuildFields();\n\n'
 		+ '\tpublic static macro function bind():Array<Field> {\n\t\tif (!Context.getLocalClass().get().meta.has(":bind")) return null;\n'
-		+ '\t\treturn Context.getBuildFields();\n\t}\n\n' + '\tpublic static macro function hub():Array<Field> {\n'
+		+ '\t\treturn Context.getBuildFields();\n\t}\n\n'
+		+ '\tpublic static macro function hub():Array<Field> {\n'
 		+ '\t\tfinal c = Context.getLocalClass()?.get();\n'
 		+ '\t\tif (c == null || c.pack.length > 0 || c.isExtern || c.module != c.name) return null;\n'
-		+ '\t\treturn Context.getBuildFields();\n\t}\n\n' + '\tpublic static macro function rewrite():Array<Field> {\n'
+		+ '\t\treturn Context.getBuildFields();\n\t}\n\n'
+		+ '\tpublic static macro function rewrite():Array<Field> {\n'
 		+ '\t\tfinal fields:Array<Field> = Context.getBuildFields();\n\t\tfor (f in fields) if (f.name == "calm") switch f.kind {\n'
 		+ '\t\t\tcase FFun(fn): fn.expr = macro Main.items.push(1);\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
 		+ '\tpublic static macro function add():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
@@ -203,13 +220,15 @@ class MemberReachFactsTest extends Test {
 		+ '\tpublic static macro function prop():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
 		+ '\t\tfor (f in fields) if (f.name == "items") switch f.kind {\n'
 		+ '\t\t\tcase FVar(t, e):\n\t\t\t\tf.kind = FProp("get", "default", t, e);\n\t\t\t\tf.meta.push({ name: ":isVar", pos: f.pos });\n'
-		+ '\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n' + '\tpublic static macro function recall():Array<Field> {\n'
+		+ '\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
+		+ '\tpublic static macro function recall():Array<Field> {\n'
 		+ '\t\tfinal fields:Array<Field> = Context.getBuildFields();\n\t\tfor (f in fields) if (f.name == "all") switch f.kind {\n'
 		+ '\t\t\tcase FFun(fn): fn.expr = macro @:pos(fn.expr.pos) return Main.make();\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
 		+ '\tpublic static macro function dyn():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
 		+ '\t\tfields.push({\n\t\t\tname: "added",\n\t\t\tpos: Context.currentPos(),\n\t\t\taccess: [APublic],\n'
 		+ '\t\t\tkind: FFun({ args: [], ret: macro:Void, expr: macro (cast null : Dynamic).items(1) })\n\t\t});\n'
-		+ '\t\treturn fields;\n\t}\n\n' + '\tpublic static macro function loop():Array<Field> {\n'
+		+ '\t\treturn fields;\n\t}\n\n'
+		+ '\tpublic static macro function loop():Array<Field> {\n'
 		+ '\t\tfinal fields:Array<Field> = Context.getBuildFields();\n\t\tfor (f in fields) if (f.name == "f") switch f.kind {\n'
 		+ '\t\t\tcase FFun(fn): fn.expr = macro Store.items.push(1);\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
 		+ '\tpublic static macro function leak():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
@@ -223,8 +242,11 @@ class MemberReachFactsTest extends Test {
 	 */
 	private static function helperBuiltBy(builder: String, region: String): Map<String, String> {
 		return [
-			'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfinal h:Helper = new Helper();\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n',
+			'Main.hx' => LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tfinal h:Helper = new Helper();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ region
+				+ ' /*>*/ }\n\t}\n}\n',
 			'Helper.hx' => 'class Helper extends Base {\n\tpublic function calm():Void {}\n}\n',
 			'Base.hx' => '@:autoBuild(Mac.' + builder + '())\nclass Base {\n\tpublic function new() {}\n}\n',
 			'Mac.hx' => BUILD_MACROS
@@ -244,12 +266,16 @@ class MemberReachFactsTest extends Test {
 			? 'class Grid {\n\tpublic var items:Array<Int> = [];\n\n\tpublic function new() {}\n'
 			: 'class Grid extends Base {\n\tpublic function new() super();\n';
 		final files: Map<String, String> = [
-			'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfinal g:a.Grid = new a.Grid();\n\t\tg.f();\n'
+			'Main.hx' => LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tfinal g:a.Grid = new a.Grid();\n\t\tg.f();\n'
 				+ '\t\tfor (i in 0...g.items.length) { /*<*/ var n:Int = i; /*>*/ }\n\t\tnew b.Grid().calm();\n\t}\n}\n',
-			'a/Grid.hx' => 'package a;\n\n' + built(mine) + head
+			'a/Grid.hx' => 'package a;\n\n'
+				+ built(mine)
+				+ head
 				+ '\n\tpublic function f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ var n:Int = i; /*>*/ }\n\t}\n\n'
 				+ '\tpublic function calm():Void {}\n}\n',
-			'b/Grid.hx' => 'package b;\n\n' + built(other)
+			'b/Grid.hx' => 'package b;\n\n'
+				+ built(other)
 				+ 'class Grid {\n\tpublic var items:Array<Int> = [];\n\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n}\n',
 			'Mac.hx' => BUILD_MACROS
 		];
@@ -284,8 +310,12 @@ class MemberReachFactsTest extends Test {
 	 * is read as a value into `Main.keep`; `more` statements run before the loop.
 	 */
 	private static function poolFixture(args: String, more: String): String {
-		return LOOP_HEAD + '\tpublic static var keep:Null<(Int)->Void> = null;\n\n\tstatic function grow(x:Int):Void items.push(x);\n\n'
-			+ '\tstatic function main() {\n\t\tkeep = grow;\n\t\tfinal p:Pool = new Pool(' + args + ');\n' + more
+		return LOOP_HEAD
+			+ '\tpublic static var keep:Null<(Int)->Void> = null;\n\n\tstatic function grow(x:Int):Void items.push(x);\n\n'
+			+ '\tstatic function main() {\n\t\tkeep = grow;\n\t\tfinal p:Pool = new Pool('
+			+ args
+			+ ');\n'
+			+ more
 			+ '\t\tfor (i in 0...items.length) { /*<*/ p.release(1); /*>*/ }\n\t}\n}\n'
 			+ 'class Pool {\n\tpublic function new(?make:()->Int, ?clean:(Int)->Void) {\n\t\tif (clean != null) this.clean = clean;\n\t}\n\n'
 			+ '\tpublic dynamic function clean(x:Int):Void {}\n\n\tpublic function release(x:Int):Void clean(x);\n\n'
@@ -306,8 +336,10 @@ class MemberReachFactsTest extends Test {
 	 * statements run before the loop.
 	 */
 	private static function hookFixture(more: String): String {
-		return LOOP_HEAD + '\tpublic static var keep:Null<(Int)->Void> = null;\n\n\tstatic function grow(x:Int):Void items.push(x);\n\n'
-			+ '\tstatic function main() {\n\t\tkeep = grow;\n\t\tfinal h:Hook = new Hook();\n\t\th.run = x -> {};\n' + more
+		return LOOP_HEAD
+			+ '\tpublic static var keep:Null<(Int)->Void> = null;\n\n\tstatic function grow(x:Int):Void items.push(x);\n\n'
+			+ '\tstatic function main() {\n\t\tkeep = grow;\n\t\tfinal h:Hook = new Hook();\n\t\th.run = x -> {};\n'
+			+ more
 			+ '\t\tfor (i in 0...items.length) { /*<*/ h.fire(); /*>*/ }\n\t}\n}\n'
 			+ 'class Hook {\n\tpublic function new() {}\n\n\tpublic dynamic function run(x:Int):Void {}\n\n'
 			+ '\tpublic function fire():Void run(1);\n}\n';
@@ -326,7 +358,10 @@ class MemberReachFactsTest extends Test {
 	 * `Clear`, whose `toString` grows `items`.
 	 */
 	private static function expandedBefore(statement: String): String {
-		return LOOP_HEAD + '\tpublic static var obj:Clear = new Clear();\n\n\tstatic function main() {\n\t\t' + statement + '\n'
+		return LOOP_HEAD
+			+ '\tpublic static var obj:Clear = new Clear();\n\n\tstatic function main() {\n\t\t'
+			+ statement
+			+ '\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ var n:Int = i; /*>*/ }\n\t}\n}\n'
 			+ 'class Clear {\n\tpublic function new() {}\n\n\tpublic function toString():String {\n\t\tMain.items.push(1);\n\t\treturn "c";\n\t}\n}\n';
 	}
@@ -411,8 +446,11 @@ class MemberReachFactsTest extends Test {
 	 */
 	private static function hubFixture(region: String, more: Map<String, String>): Map<String, String> {
 		final files: Map<String, String> = [
-			'Main.hx' => LOOP_HEAD + '\tpublic static function sink(x:Dynamic):Void {}\n\n\tstatic function main() {\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n',
+			'Main.hx' => LOOP_HEAD
+				+ '\tpublic static function sink(x:Dynamic):Void {}\n\n\tstatic function main() {\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ region
+				+ ' /*>*/ }\n\t}\n}\n',
 			'Mac.hx' => BUILD_MACROS
 		];
 		for (name => text in more) files[name] = text;
@@ -463,10 +501,14 @@ class MemberReachFactsTest extends Test {
 	 * `body` — by default, an expression macro's expansion and a local function reading `label` — after `idle`.
 	 */
 	private static function genCopy(label: String, ?meta: String, ?body: String): String {
-		return (meta ?? '') + 'class Gen {\n\tpublic static var label:String = "' + label + '";\n\n'
+		return (meta ?? '')
+			+ 'class Gen {\n\tpublic static var label:String = "'
+			+ label
+			+ '";\n\n'
 			+ '\tpublic static function idle():Void {\n\t\ttrace("an idle method of a length past the copies\' difference");\n\t}\n\n'
 			+ '\tpublic static function calm():Void {\n\t\t'
-			+ (body ?? 'Words.say(Mac.t("x"));\n\t\tfinal f:Int->Int = n -> n + label.length;\n\t\ttrace(f(1));') + '\n\t}\n}\n';
+			+ (body ?? 'Words.say(Mac.t("x"));\n\t\tfinal f:Int->Int = n -> n + label.length;\n\t\ttrace(f(1));')
+			+ '\n\t}\n}\n';
 	}
 
 	/** `Other`, whose `dump` returns `access`: a member of its own object read by the name `n` it is handed. */
@@ -531,7 +573,8 @@ class MemberReachFactsTest extends Test {
 	public function testTheCompilerResolvesACallTheSyntaxCannot(): Void {
 		// `pick()` declares no return type, so the syntax cannot tell which `grow` runs and admits every one so named; the
 		// facts name `Safe.grow`
-		final main: String = LOOP_HEAD + '\tstatic function pick() return new Safe();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function pick() return new Safe();\n'
 			+ '\tstatic function main() {\n\t\tvar s = pick();\n\t\tfor (i in 0...items.length) { /*<*/ s.grow(); /*>*/ }\n\t\tnew Grower().grow();\n\t}\n}\n'
 			+ 'class Safe {\n\tpublic function new() {}\n\tpublic function grow():Void {}\n}\n'
 			+ 'class Grower {\n\tpublic function new() {}\n\tpublic function grow():Void Main.items.push(1);\n}\n';
@@ -543,7 +586,8 @@ class MemberReachFactsTest extends Test {
 	public function testABodyHoldingADirectiveIsReadFromTheFactsOfTheListedBuilds(): Void {
 		// `main` holds a directive: a build the list does not name may type it otherwise, so only under the whole list of builds
 		// do the facts, the union of every branch a build takes, name `Safe.grow` for it
-		final main: String = LOOP_HEAD + '\tstatic function pick() return new Safe();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function pick() return new Safe();\n'
 			+ '\tstatic function main() {\n\t\tvar s = pick();\n\t\t#if other\n\t\ttrace(s);\n\t\t#end\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ s.grow(); /*>*/ }\n\t\tnew Grower().grow();\n\t}\n}\n'
 			+ 'class Safe {\n\tpublic function new() {}\n\tpublic function grow():Void {}\n}\n'
@@ -557,8 +601,11 @@ class MemberReachFactsTest extends Test {
 		// the syntax reads both `using`s and names `Loud.go` for `w.go()` as well as `Quiet.go`, which the compiler picks —
 		// `Loud.go` takes a `String`: `main` is read through its facts either way, but only under the whole list of builds does
 		// the syntax's edge at a site they type go
-		final main: String = 'using Main.Quiet;\nusing Main.Loud;\n' + LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:W = new W();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n' + 'class W {\n\tpublic function new() {}\n}\n'
+		final main: String = 'using Main.Quiet;\nusing Main.Loud;\n'
+			+ LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar w:W = new W();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n'
+			+ 'class W {\n\tpublic function new() {}\n}\n'
 			+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
 			+ 'class Loud {\n\tpublic static function go(s:String):Void Main.items.push(1);\n}\n';
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, null, null, true), r -> r.match(Proven));
@@ -569,7 +616,8 @@ class MemberReachFactsTest extends Test {
 	public function testABoundMethodRunsWheneverItsClosureIsCalled(): Void {
 		// `g.grow.bind(1)` is a closure the compiler makes and the graph holds no node for: calling it runs `Grower.grow`,
 		// which the syntax cannot name — `mk()` declares no return type
-		final main: String = LOOP_HEAD + '\tstatic function mk() return new Grower();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function mk() return new Grower();\n'
 			+ '\tstatic function main() {\n\t\tvar g = mk();\n\t\tvar f = g.grow.bind(1);\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ f(); /*>*/ }\n\t}\n}\n'
 			+ 'class Grower {\n\tpublic function new() {}\n\tpublic function grow(n:Int):Void Main.items.push(n);\n}\n';
@@ -622,7 +670,8 @@ class MemberReachFactsTest extends Test {
 		// `Mutator` extends `Worker` through an alias the name-based hierarchy does not see through: only the facts know the
 		// override a dispatch on `Worker` reaches. The alias is declared once per `#if` branch — a plain `typedef W = Worker`
 		// is resolved by the shared type-name resolution now, so it no longer told the facts' edge from the syntax's.
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Worker = new Mutator();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar w:Worker = new Mutator();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ w.run(); /*>*/ }\n\t}\n}\n'
 			+ '#if !nope typedef W = Worker; #else typedef W = Main; #end\n'
 			+ 'class Worker {\n\tpublic function new() {}\n\tpublic function run():Void {}\n}\n'
@@ -633,7 +682,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-REACH-VALUE')
 	public function testACallOfAValueAdmitsTheValueChannel(): Void {
 		// `hook` holds whatever function was stored in it: the call is no edge, but any function used as a value may run
-		final main: String = LOOP_HEAD + '\tstatic var hook:() -> Void = () -> {};\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var hook:() -> Void = () -> {};\n'
 			+ '\tstatic function main() {\n\t\thook = () -> { items.push(1); };\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ hook(); /*>*/ }\n\t}\n}\n';
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
@@ -676,7 +726,9 @@ class MemberReachFactsTest extends Test {
 		// `Helper.grow` is spliced into `run` at `Helper.hx`'s ranges, which in `Main.hx` fall in a branch no build compiles: an
 		// edge filed under `Main.hx` at such a range would be read as dead code there, and `run` as running nothing
 		final dead: String = '#if never\n/*' + StringTools.lpad('', 'x', 200) + '*/\n#end\n';
-		final main: String = dead + LOOP_HEAD + '\tstatic function mk() return new Helper();\n\tstatic function run():Void mk().grow();\n'
+		final main: String = dead
+			+ LOOP_HEAD
+			+ '\tstatic function mk() return new Helper();\n\tstatic function run():Void mk().grow();\n'
 			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ run(); /*>*/ }\n\t}\n}\n';
 		final helper: String = 'class Helper {\n\tpublic function new() {}\n\tpublic inline function grow():Void Main.items.push(9);\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main, 'Helper.hx' => helper]), r -> r.match(Reached(_)));
@@ -726,7 +778,8 @@ class MemberReachFactsTest extends Test {
 	public function testUnderTheTruthASplicedStringConversionIsTheRegions(): Void {
 		// `b.add(o)` splices `StringBuf.add`, whose `+=` converts `o` to a string: the facts place that conversion in
 		// `StringBuf.hx`, and the region runs it — `Obj.toString` changes `items`
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar o = new Obj();\n\t\tvar b = new StringBuf();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar o = new Obj();\n\t\tvar b = new StringBuf();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ b.add(o); /*>*/ }\n\t}\n}\n'
 			+ 'class Obj {\n\tpublic function new() {}\n\tpublic function toString():String {\n\t\tMain.items.push(1);\n\t\treturn "o";\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
@@ -736,7 +789,9 @@ class MemberReachFactsTest extends Test {
 	public function testUnderTheTruthAnInlinedReflectiveCallIsADynamicName(): Void {
 		// `sf` is `Reflect.setField`, `inline` on js: its splice leaves no reflective call among the facts, and the syntax
 		// does not see one under another name
-		final main: String = 'import Reflect.setField as sf;\n' + MEMBER_HEAD + '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
+		final main: String = 'import Reflect.setField as sf;\n'
+			+ MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ sf(this, n, [1]); /*>*/ }\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
@@ -748,7 +803,8 @@ class MemberReachFactsTest extends Test {
 		// of `charCodeAt` off a structure: each splice is a call of a function that runs no project code, whose edge answers
 		// for all it does — the target code and the unresolved call its body spells are none of the region's, even where that
 		// target code spells the member's own name (`parseFloat({0})`, asked of `Main.parseFloat`)
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ var f = Std.parseFloat("1"); /*>*/ }\n\t}\n}\n';
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, null, null, true, STD_STD), r -> r.match(Proven));
 		final local: String = 'class Main {\n\tstatic function main() run([1], "ab");\n'
@@ -767,7 +823,8 @@ class MemberReachFactsTest extends Test {
 	public function testUnderTheTruthASpliceElsewhereInTheFunctionIsNoneOfTheRegions(): Void {
 		// the `inline` `@:from` of `Quiet` that changes `items` is spliced into `main` before the loop: it runs where its call
 		// stood, which the region does not hold. Read by its syntax, `main` admits every conversion in play
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar q:Quiet = "x";\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar q:Quiet = "x";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ k(); /*>*/ }\n\t}\n\tstatic function k():Void {}\n}\n'
 			+ 'abstract Quiet(String) {\n\t@:from static inline function of(s:String):Quiet {\n\t\tMain.items.push(1);\n'
 			+ '\t\treturn cast s;\n\t}\n}\n';
@@ -809,7 +866,8 @@ class MemberReachFactsTest extends Test {
 	public function testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes(): Void {
 		// the compiler types a local `inline function` into its caller: the only function body inside its text is the
 		// lambda it hands on, whose facts say nothing of the `g.grow()` beside it, which the syntax admits by name
-		final main: String = LOOP_HEAD + '\tstatic function mk() return new Grower();\n\tstatic function later(f:() -> Void):Void {}\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function mk() return new Grower();\n\tstatic function later(f:() -> Void):Void {}\n'
 			+ '\tstatic function main() {\n\t\tinline function run():Void {\n\t\t\tlater(() -> {});\n\t\t\tvar g = mk();\n\t\t\tg.grow();\n\t\t}\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ run(); /*>*/ }\n\t}\n}\n'
 			+ 'class Grower {\n\tpublic function new() {}\n\tpublic function grow():Void Main.items.push(1);\n}\n';
@@ -1001,7 +1059,9 @@ class MemberReachFactsTest extends Test {
 		function holder(code: String): Map<String, String> {
 			return [
 				'Holder.hx' => 'class Holder {\n\tvar held:Main.Obj;\n\n\tpublic function new(o:Main.Obj) this.held = o;\n\n'
-					+ '\tpublic function show():Void js.Syntax.code("' + code + '");\n}\n'
+					+ '\tpublic function show():Void js.Syntax.code("'
+					+ code
+					+ '");\n}\n'
 			];
 		}
 		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('console.log(this)')), r -> !r.match(Proven));
@@ -1033,7 +1093,9 @@ class MemberReachFactsTest extends Test {
 		function holder(meta: String): Map<String, String> {
 			return [
 				'Holder.hx' => 'class Holder {\n\tvar held:Main.Obj;\n\n\tpublic function new(o:Main.Obj) this.held = o;\n\n'
-					+ '\t@:functionCode(' + meta + ')\n\tpublic function show():Void {}\n}\n'
+					+ '\t@:functionCode('
+					+ meta
+					+ ')\n\tpublic function show():Void {}\n}\n'
 			];
 		}
 		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('"this"')), r -> !r.match(Proven));
@@ -1186,7 +1248,8 @@ class MemberReachFactsTest extends Test {
 	@:killer('M-GRAPH-FACTS-EXPANSION-CALL')
 	public function testAMacroExpansionIsAnsweredFromItsFactsUnderTheTruth(): Void {
 		// the client's `t('…')`: the expansion calls `Words.tr`, which changes nothing — and, in the twin, `Loud.tr`, which does
-		final quiet: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.f(); /*>*/ }\n\t}\n}\n'
+		final quiet: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.f(); /*>*/ }\n\t}\n}\n'
 			+ 'class Util {\n\tpublic static function f():Void Words.say(Mac.t(\'x\'));\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => quiet, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => WORDS]), r -> r.match(Proven));
 		// written in the region itself, beside a `Clear` whose `toString` grows `items`: the expansion converts nothing
@@ -1369,7 +1432,8 @@ class MemberReachFactsTest extends Test {
 		// `Runner`'s constructor calls its parameter `f`, which the region's construction hands `keep`, holding `grow`: a
 		// constructor is invoked by a `new`, which no call fact records — and once the one construction hands it a function
 		// expression that grows nothing, nothing else is `f`
-		final main: String = LOOP_HEAD + '\tpublic static var keep:Null<(Int)->Void> = null;\n\n'
+		final main: String = LOOP_HEAD
+			+ '\tpublic static var keep:Null<(Int)->Void> = null;\n\n'
 			+ '\tstatic function grow(x:Int):Void items.push(x);\n\n\tstatic function main() {\n\t\tkeep = grow;\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ new Runner(keep); /*>*/ }\n\t}\n}\n'
 			+ 'class Runner {\n\tpublic function new(f:Null<(Int)->Void>) f(1);\n}\n';
@@ -1409,8 +1473,10 @@ class MemberReachFactsTest extends Test {
 		// `grow`; `apply`'s `f` is a `(A)->String`, which an `(Rx)->String` is once `A` is bound
 		final initialized: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n'
 			+ '\tstatic var d:Dynamic = Grower.put;\n\n\tstatic function main() {\n\t\tfinal r:Rx = new Rx();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ r.map(x -> "a"); /*>*/ }\n\t}\n}\n' + 'class Rx {\n\tpublic function new() {}\n\n\t'
-			+ BY_TYPE + '\n}\n';
+			+ '\t\tfor (i in 0...items.length) { /*<*/ r.map(x -> "a"); /*>*/ }\n\t}\n}\n'
+			+ 'class Rx {\n\tpublic function new() {}\n\n\t'
+			+ BY_TYPE
+			+ '\n}\n';
 		final grower: String = 'class Grower {\n\tpublic function new() {}\n\n'
 			+ '\tpublic static function put(g:Grower):Void Main.items.push(1);\n\n'
 			+ '\tpublic function grow(n:Int, x:Rx):String {\n\t\tMain.items.push(n);\n\t\treturn "";\n\t}\n}\n';
@@ -1435,9 +1501,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => escaped]), r -> !r.match(Proven));
 		final holder: String = 'class Holder {\n\tpublic var cb:Null<(String)->Void> = null;\n\n\tpublic function new() {}\n}\n';
 		final held: String = valueCallFixture(
-				'(String)->Void', '(s:String) -> { items.push(1); }',
-				'\t\tfinal o:Holder = new Holder();\n\t\to.cb = keep;\n\t\tvar d:Dynamic = o;\n', null, null, BY_TYPE
-			) + holder;
+			'(String)->Void', '(s:String) -> { items.push(1); }',
+			'\t\tfinal o:Holder = new Holder();\n\t\to.cb = keep;\n\t\tvar d:Dynamic = o;\n', null, null, BY_TYPE
+		)
+			+ holder;
 		assertMatch(interpAsk(['Main.hx' => held]), r -> !r.match(Proven));
 	}
 
@@ -1480,9 +1547,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => main], null, ['Rx', 'Grower']), r -> !r.match(Proven));
 		// a literal still names its one member, whatever the project declares
 		final named: String = valueCallFixture(
-				'(Rx)->String', 'null', '\t\tvar o:Dynamic = new Grower();\n\t\tkeep = Reflect.field(o, "grow");\n', 'r.map(keep);', null,
-				BY_TYPE
-			) + grower;
+			'(Rx)->String', 'null', '\t\tvar o:Dynamic = new Grower();\n\t\tkeep = Reflect.field(o, "grow");\n', 'r.map(keep);', null,
+			BY_TYPE
+		)
+			+ grower;
 		assertMatch(interpAsk(['Main.hx' => named], null, ['Rx']), r -> !r.match(Proven));
 	}
 
@@ -1519,7 +1587,8 @@ class MemberReachFactsTest extends Test {
 		final main: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
 			+ '\tstatic function sink(x:Dynamic):Void {}\n\tstatic function main() { sink(new Main()); }\n'
 			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n'
-			+ '\t}\n}\n' + reflectingOther('Reflect.getProperty(this, n)');
+			+ '\t}\n}\n'
+			+ reflectingOther('Reflect.getProperty(this, n)');
 		assertMatch(reflectAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 		assertMatch(reflectAsk(['Main.hx' => main], false, ['Main']), r -> r.match(Proven));
 		assertMatch(reflectAsk(['Main.hx' => main], false, ['Other']), r -> r.match(Unknown(DynamicName(_, _))));
@@ -1538,7 +1607,8 @@ class MemberReachFactsTest extends Test {
 		final read: String = '\t\tvar o:Dynamic = new Grower();\n\t\tkeep = Reflect.field(o, "look");\n\t\tCmp.same(o);\n'
 			+ '\t\tnew Grower().grow("x");\n';
 		function compared(body: String): String {
-			return valueCallFixture('(Rx)->String', 'null', read, 'r.map(keep);', null, BY_TYPE) + grower
+			return valueCallFixture('(Rx)->String', 'null', read, 'r.map(keep);', null, BY_TYPE)
+				+ grower
 				+ 'class Cmp {\n\tpublic static function same(a:Dynamic):Bool return $body;\n}\n';
 		}
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => compared('Type.enumEq(a, a)')]), r -> r.match(Proven));
@@ -1554,7 +1624,8 @@ class MemberReachFactsTest extends Test {
 		// `Reflect.copy`, spliced by its call site, returns the object it copied, a value that may hold a member's: no
 		// declaration clears it
 		function fixture(spliced: String): String {
-			return LOOP_HEAD + '\tstatic function mk():E return E.A;\n\tstatic function main() {\n\t\tvar k:Dynamic = $spliced;\n'
+			return LOOP_HEAD
+				+ '\tstatic function mk():E return E.A;\n\tstatic function main() {\n\t\tvar k:Dynamic = $spliced;\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ k = i; /*>*/ }\n\t}\n}\nenum E {\n\tA;\n}\n';
 		}
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => fixture('Type.enumIndex(mk())')]), r -> r.match(Proven));
@@ -1565,7 +1636,8 @@ class MemberReachFactsTest extends Test {
 	public function testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth(): Void {
 		// the declaration bounds the methods such a name obtains, not the variables it reads: an `Other` extending `Main`
 		// carries `items`, which `dump` may read
-		final sub: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+		final sub: String = MEMBER_HEAD
+			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
 			+ 'class Other extends Main {\n\tpublic function new() super();\n\n'
 			+ '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
@@ -1583,14 +1655,19 @@ class MemberReachFactsTest extends Test {
 			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n'
 			+ '\t}\n}\n';
 		final dump: String = '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n';
-		final growing: String = head + 'class Other {\n\tpublic function new() {}\n\n' + dump
+		final growing: String = head
+			+ 'class Other {\n\tpublic function new() {}\n\n'
+			+ dump
 			+ '\n\tpublic function grow(m:Main):Void m.items.push(1);\n}\n';
 		assertMatch(reflectAsk(['Main.hx' => growing]), r -> !r.match(Proven));
 		assertMatch(reflectAsk(['Main.hx' => growing], false, ['Main']), r -> r.match(Proven));
 		assertMatch(reflectAsk(['Main.hx' => growing], false, ['Other']), r -> !r.match(Proven));
 		// a property access by that name runs the accessor of any class, declared or not
-		final getting: String = head + 'class Other {\n\tpublic static var shared:Main = null;\n\n\tpublic var size(get, never):Int;\n\n'
-			+ '\tpublic function new() {}\n\n\tfunction get_size():Int {\n\t\tshared.items.push(1);\n\t\treturn 0;\n\t}\n\n' + dump + '}\n';
+		final getting: String = head
+			+ 'class Other {\n\tpublic static var shared:Main = null;\n\n\tpublic var size(get, never):Int;\n\n'
+			+ '\tpublic function new() {}\n\n\tfunction get_size():Int {\n\t\tshared.items.push(1);\n\t\treturn 0;\n\t}\n\n'
+			+ dump
+			+ '}\n';
 		assertMatch(reflectAsk(['Main.hx' => getting], false, ['Main']), r -> !r.match(Proven));
 		// an object of exactly a declared class runs the methods it inherits too
 		final inherited: String = StringTools.replace(head, 'o.dump(n);', 'Reflect.getProperty(o, n);')
@@ -1604,7 +1681,8 @@ class MemberReachFactsTest extends Test {
 	public function testAConfigurationWithoutFactsLeavesTheSyntax(): Void {
 		// one configuration fails to compile: the table holds less than the builds do, so nothing is read through it — not
 		// even `main`, which every configuration typed alike
-		final main: String = LOOP_HEAD + '\tstatic function pick() return new Safe();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function pick() return new Safe();\n'
 			+ '\tstatic function main() {\n\t\tvar s = pick();\n\t\tfor (i in 0...items.length) { /*<*/ s.grow(); /*>*/ }\n'
 			+ '\t\tnew Grower().grow();\n\t\tBroken.f();\n\t}\n}\n'
 			+ 'class Safe {\n\tpublic function new() {}\n\tpublic function grow():Void {}\n}\n'
@@ -1616,7 +1694,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-REACH-REFLECT-VALUE')
 	public function testAReflectiveMemberReadAsAValueIsUnknown(): Void {
 		// `f` is `Reflect.field`: whatever calls it reaches a member by a name nothing here sees
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Dynamic = {};\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar o:Dynamic = {};\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ var f = Reflect.field; f(o, "x"); /*>*/ }\n\t}\n}\n';
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
@@ -1624,7 +1703,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-REACH-BUILDS') @:killer('M-REACH-REWRITTEN-UNTRUE')
 	public function testABuildMacroOnlyTheCompilerSawIsUnknown(): Void {
 		// a global `addGlobalMetadata` puts a `@:build` on `Main` its text never spells
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n'
 			+ '\tstatic function helper():Void {}\n}\n';
 		final mac: String = 'class Mac {\n\tpublic static macro function b():Array<haxe.macro.Expr.Field> return null;\n}\n';
 		final build: String = BUILD + '--macro addGlobalMetadata("Main", "@:build(Mac.b())", false)\n';
@@ -1635,7 +1715,8 @@ class MemberReachFactsTest extends Test {
 	public function testAGenericInstanceIsItsGenericClass(): Void {
 		// the compiler builds `Box_Int` for `Box<Int>`: its call is `Box`'s method, which the syntax cannot name — `mk()`
 		// declares no return type
-		final main: String = LOOP_HEAD + '\tstatic function mk() return new Box<Int>();\n\tstatic function main() {\n\t\tvar b = mk();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function mk() return new Box<Int>();\n\tstatic function main() {\n\t\tvar b = mk();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ b.grow(); /*>*/ }\n\t}\n}\n'
 			+ '@:generic class Box<T> {\n\tpublic function new() {}\n\tpublic function grow():Void Main.items.push(1);\n}\n';
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
@@ -1644,7 +1725,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-REACH-NATIVE-IDENT')
 	public function testANativeIdentifierAdmitsWhatItMayCall(): Void {
 		// `trace` is the compiler's own identifier: it runs `haxe.Log.trace`, which the program may replace
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\thaxe.Log.trace = (v, ?p) -> { items.push(1); };\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\thaxe.Log.trace = (v, ?p) -> { items.push(1); };\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ trace(i); /*>*/ }\n\t}\n}\n';
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
@@ -1653,8 +1735,10 @@ class MemberReachFactsTest extends Test {
 	public function testAConstructionRunsTheInitializersOfItsGeneratedConstructor(): Void {
 		// `Kid` declares no constructor: `new K()` runs its initializers, one of which grows `items` — through an alias the
 		// syntax does not construct through
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ new K(); /*>*/ }\n\t}\n}\n'
-			+ 'typedef K = Kid;\n' + 'class Base {\n\tpublic function new() {}\n}\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ new K(); /*>*/ }\n\t}\n}\n'
+			+ 'typedef K = Kid;\n'
+			+ 'class Base {\n\tpublic function new() {}\n}\n'
 			+ 'class Kid extends Base {\n\tvar x:Int = Main.items.push(1);\n}\n';
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
@@ -1695,7 +1779,8 @@ class MemberReachFactsTest extends Test {
 	public function testALibraryDynamicMethodNotReadYetIsFollowed(): Void {
 		// `LibObj.grow` is a `dynamic` method of a library file the graph has not read: the call is a read of the field, and
 		// its body — the value it holds until replaced — grows `items`; the syntax, which cannot type `o`, names no `grow`
-		final main: String = LOOP_HEAD + '\tstatic function mk() return new LibObj();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function mk() return new LibObj();\n'
 			+ '\tstatic function main() {\n\t\tvar o = mk();\n\t\tfor (i in 0...items.length) { /*<*/ o.grow(); /*>*/ }\n\t}\n}\n';
 		final lib: String = 'class LibObj {\n\tpublic function new() {}\n\tpublic dynamic function grow():Void Main.items.push(1);\n}\n';
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, ['LibObj.hx' => lib]), r -> !r.match(Proven));
@@ -1705,7 +1790,8 @@ class MemberReachFactsTest extends Test {
 	public function testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes(): Void {
 		// the library abstract `Wrap`'s own `toString` converts the value it wraps, as `Any`'s does, and the walk never enters
 		// it: it reaches no toucher by an edge; `a.string()` is `Std.string(a)`, which the syntax does not name
-		final main: String = 'using Std;\n' + LOOP_HEAD
+		final main: String = 'using Std;\n'
+			+ LOOP_HEAD
 			+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n\t\tvar s:String = "";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ final a:Wrap = o; s += a.string(); /*>*/ }\n\t}\n}\n'
 			+ 'class Obj {\n\tpublic function new() {}\n\tpublic function toString():String {\n\t\tMain.items.push(1);\n\t\treturn "o";\n\t}\n}\n';
@@ -1767,7 +1853,8 @@ class MemberReachFactsTest extends Test {
 	public function testALibraryFileNoBuildCompilesHidesNoOverride(): Void {
 		// `Broken.hx` does not parse and spells both `Worker` and `run`, but no build reads it: the facts say so, and it
 		// holds no override of `Worker.run`. Without the facts it stays a blind spot
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Worker = new Worker();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar w:Worker = new Worker();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ w.run(); /*>*/ }\n\t}\n}\n';
 		final library: Map<String, String> = [
 			'Worker.hx' => 'class Worker {\n\tpublic function new() {}\n\tpublic function run():Void {}\n}\n',
@@ -1781,7 +1868,8 @@ class MemberReachFactsTest extends Test {
 		// no oracle list vouches for the classpath, but under the listed builds the facts name every subtype of `Worker`: none,
 		// so a dispatch on it reaches no override the index cannot see — unless a compiled subtype the index does not hold
 		// overrides `run`
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Worker = new Worker();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar w:Worker = new Worker();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ w.run(); /*>*/ }\n\t}\n}\n';
 		final library: Map<String, String> = [
 			'Worker.hx' => 'class Worker {\n\tpublic function new() {}\n\tpublic function run():Void {}\n}\n'
@@ -1798,7 +1886,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-REACH-UNREAD-VALUE')
 	public function testAStoredFunctionValueMayConvertWhatItIsHanded(): Void {
 		// `fmt` holds a lambda the walk never enters — it reaches no toucher by an edge — whose `Std.string` runs `toString`
-		final main: String = LOOP_HEAD + '\tstatic var fmt:Dynamic -> String = v -> Std.string(v);\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var fmt:Dynamic -> String = v -> Std.string(v);\n'
 			+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n\t\tvar s:String = "";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ s += fmt(o); /*>*/ }\n\t}\n}\n'
 			+ 'class Obj {\n\tpublic function new() {}\n\tpublic function toString():String {\n\t\tMain.items.push(1);\n\t\treturn "o";\n\t}\n}\n';
@@ -1824,7 +1913,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-REACH-UNREAD-IMPLICIT')
 	public function testAStoredFunctionValueMayRunAnOperatorOverload(): Void {
 		// `f` holds a lambda the walk never enters — it reaches no toucher by an edge — whose `==` runs `AE.eq`
-		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool = a -> a == a;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var f:AE -> Bool = a -> a == a;\n'
 			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
 			+ 'abstract AE(Int) {\n\tpublic inline function new(i:Int) this = i;\n\n'
 			+ '\t@:op(A == B) public function eq(b:AE):Bool return Main.items.push(1) == 0;\n}\n';
@@ -1836,9 +1926,11 @@ class MemberReachFactsTest extends Test {
 		// string conversion the facts keep as a site, which the walk never enters. `Obj.toString` runs from the call itself
 		// too — what a value call is handed is admitted at the call — so this pins no arm: the unread admission's own string
 		// conversions are pinned where nothing else admits the member (`testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth`)
-		final main: String = LOOP_HEAD + '\tstatic var fmt:Dynamic -> String;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var fmt:Dynamic -> String;\n'
 			+ '\tstatic function main() {\n\t\tfmt = v -> "<" + v;\n\t\tvar o:Obj = new Obj();\n\t\tvar s:String = "";\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ s += fmt(o); /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+			+ '\t\tfor (i in 0...items.length) { /*<*/ s += fmt(o); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_OBJ;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
@@ -1846,9 +1938,11 @@ class MemberReachFactsTest extends Test {
 		// the lambda `f` holds iterates a structure, which runs the `next` of whatever it holds: a site the facts keep, in code
 		// the walk never enters. `Walker.next` runs from the call itself too — what a value call is handed is admitted at the
 		// call — so the unread admission's own iteration is pinned where the lambda iterates what it holds (below)
-		final main: String = LOOP_HEAD + '\tstatic var f:Iterator<Int> -> Int;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var f:Iterator<Int> -> Int;\n'
 			+ '\tstatic function main() {\n\t\tf = it -> {\n\t\t\tvar n:Int = 0;\n\t\t\tfor (x in it) n++;\n\t\t\tn;\n\t\t};\n'
-			+ '\t\tvar w:Walker = new Walker();\n\t\tfor (i in 0...items.length) { /*<*/ f(w); /*>*/ }\n\t}\n}\n' + CLEARING_WALKER;
+			+ '\t\tvar w:Walker = new Walker();\n\t\tfor (i in 0...items.length) { /*<*/ f(w); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_WALKER;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
@@ -1856,15 +1950,18 @@ class MemberReachFactsTest extends Test {
 	public function testAStoredFunctionValueMayIterateWhatItHoldsUnderTheTruth(): Void {
 		// the lambda `f` holds iterates `held`, a `Walker` the call hands it nothing of: the walk never enters the lambda — it
 		// reaches no toucher by an edge — so only the iterations its facts keep as sites run `Walker.next`
-		final main: String = LOOP_HEAD + '\tstatic var f:Int -> Int;\n\tstatic var held:Walker = new Walker();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var f:Int -> Int;\n\tstatic var held:Walker = new Walker();\n'
 			+ '\tstatic function main() {\n\t\tf = k -> {\n\t\t\tvar n:Int = k;\n\t\t\tfor (x in held) n++;\n\t\t\tn;\n\t\t};\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ f(i); /*>*/ }\n\t}\n}\n' + CLEARING_WALKER;
+			+ '\t\tfor (i in 0...items.length) { /*<*/ f(i); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_WALKER;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
 	public function testAStoredFunctionValueMayRunAnOperatorOverloadOnlyThroughItsFactsUnderTheTruth(): Void {
 		// the lambda `f` holds runs `AE.eq` through the `==` its facts name as a call: an edge, by which it reaches the toucher
-		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var f:AE -> Bool;\n'
 			+ '\tstatic function main() {\n\t\tf = a -> a == a;\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
 			+ CLEARING_EQ;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
@@ -1875,7 +1972,8 @@ class MemberReachFactsTest extends Test {
 	public function testCodeReadThroughItsFactsRunsNoOperatorOverloadItNamesNoCallOfUnderTheTruth(): Void {
 		// the lambda `f` holds compares nothing: code read by its syntax might run `AE.eq` with no call the graph holds, code
 		// read through its facts, where they are the truth, names every operator it runs as a call
-		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var f:AE -> Bool;\n'
 			+ '\tstatic function main() {\n\t\tf = a -> true;\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
 			+ CLEARING_EQ;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
@@ -1891,12 +1989,17 @@ class MemberReachFactsTest extends Test {
 		// `Ext` and `Std` hold code the walk cannot read. A name computed at run time obtains a method of no class here
 		// (`holders`), as in a project declaring its reflective method holders
 		function fixture(stored: String): String {
-			return LOOP_HEAD + '\tstatic function touch():Void\n\t\tnew lib.Thing();\n\n'
+			return LOOP_HEAD
+				+ '\tstatic function touch():Void\n\t\tnew lib.Thing();\n\n'
 				+ '\tstatic function show(x:Int):Int {\n\t\tvar s:String = "" + new Obj();\n\t\treturn x;\n\t}\n\n'
-				+ '\tstatic function main() {\n\t\tlib.Caller.go();\n' + '\t\tfor (i in 0...items.length) { /*<*/ new Runner().apply('
-				+ stored + '); /*>*/ }\n\t}\n}\n'
+				+ '\tstatic function main() {\n\t\tlib.Caller.go();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ new Runner().apply('
+				+ stored
+				+ '); /*>*/ }\n\t}\n}\n'
 				+ 'class Runner {\n\tpublic function new() {}\n\n\tpublic function apply(f:Int -> Int):Int {\n\t\tvar c:Null<Conv> = null;\n'
-				+ '\t\treturn f(1);\n\t}\n}\n' + CLEARING_OBJ + 'abstract Conv(Int) {\n\tinline function new(i:Int) this = i;\n\n'
+				+ '\t\treturn f(1);\n\t}\n}\n'
+				+ CLEARING_OBJ
+				+ 'abstract Conv(Int) {\n\tinline function new(i:Int) this = i;\n\n'
 				+ '\t@:from static function fromString(s:String):Conv {\n\t\tMain.items = [];\n\t\treturn new Conv(0);\n\t}\n}\n'
 				+ 'class Base {\n\tpublic function new() {}\n\n\tpublic function show():Void {}\n}\n'
 				+ 'class Sub extends Base {\n\tpublic function new() super();\n\n'
@@ -1908,7 +2011,8 @@ class MemberReachFactsTest extends Test {
 		final text: String = 'package lib;\n\nclass Text {\n\tpublic static function show(x:Int):Int {\n'
 			+ '\t\tvar s:String = "" + new Main.Obj();\n\t\treturn x;\n\t}\n\n\tpublic static function calm(x:Int):Int\n\t\treturn x;\n}\n';
 		function caller(handed: String): String {
-			return 'package lib;\n\nclass Caller {\n\tpublic static function go():Int\n\t\treturn new Main.Runner().apply(' + handed
+			return 'package lib;\n\nclass Caller {\n\tpublic static function go():Int\n\t\treturn new Main.Runner().apply('
+				+ handed
 				+ ');\n}\n';
 		}
 		function truthAsk(main: String, handed: String = 'x -> x * 2'): ReachResult {
@@ -1950,8 +2054,11 @@ class MemberReachFactsTest extends Test {
 		// `Sys.getEnv` reads the process environment, no callback on any target: the function `Runner.apply` is handed runs no
 		// conversion of an `Obj`, whose `toString` replaces `items` — as it may once it hands one to `Sys.println`
 		function fixture(stored: String): String {
-			return LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ new Runner().apply(' + stored + '); /*>*/ }\n\t}\n}\n'
+			return LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tnew Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ new Runner().apply('
+				+ stored
+				+ '); /*>*/ }\n\t}\n}\n'
 				+ 'class Runner {\n\tpublic function new() {}\n\n\tpublic function apply(f:Int -> Int):Int\n\t\treturn f(1);\n}\n'
 				+ CLEARING_OBJ;
 		}
@@ -1969,9 +2076,11 @@ class MemberReachFactsTest extends Test {
 	public function testFactsThatAreNotTheTruthNarrowNothingCodeTheWalkNeverEntersRuns(): Void {
 		// the lambda `f` holds is read through facts that hold for every build either way; only under a list of builds declared
 		// whole does the walk take them for all that code it never enters runs
-		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var f:AE -> Bool;\n'
 			+ '\tstatic function main() {\n\t\tf = a -> true;\n\t\tvar a:AE = cast 1;\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ f(a); /*>*/ }\n\t}\n}\n' + CLEARING_EQ;
+			+ '\t\tfor (i in 0...items.length) { /*<*/ f(a); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_EQ;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
@@ -1981,15 +2090,18 @@ class MemberReachFactsTest extends Test {
 		// the lambda `f` holds is an expression macro's expansion, read through its facts like any code.
 		// `Twin.k` folds the declarations of two types sharing a simple name, which no one type's facts read: a function value
 		// read by its syntax, which the call of a value may run
-		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var f:AE -> Bool;\n'
 			+ '\tstatic function main() {\n\t\tf = a -> Mac.yes();\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
 			+ CLEARING_EQ;
 		final mac: String = 'class Mac {\n\tpublic static macro function yes() return macro Math.random() < 2;\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main, 'Mac.hx' => mac]), r -> !r.match(Proven));
-		final folded: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n\tstatic var g:Int -> Bool;\n'
+		final folded: String = LOOP_HEAD
+			+ '\tstatic var f:AE -> Bool;\n\tstatic var g:Int -> Bool;\n'
 			+ '\tstatic function main() {\n\t\tf = a -> true;\n\t\tg = Twin.k;\n\t\tother.Twin.k(0);\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
-			+ 'class Twin {\n\tpublic static function k(i:Int):Bool return i == 0;\n}\n' + CLEARING_EQ;
+			+ 'class Twin {\n\tpublic static function k(i:Int):Bool return i == 0;\n}\n'
+			+ CLEARING_EQ;
 		final twin: String = 'package other;\n\nclass Twin {\n\tpublic static function k(i:Int):Bool return i == 1;\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => folded, 'other/Twin.hx' => twin]), r -> !r.match(Proven));
 	}
@@ -1999,7 +2111,8 @@ class MemberReachFactsTest extends Test {
 	public function testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth(): Void {
 		// the string conversions the facts leave implicit may run the library `Thing.toString`, whose file the walk has not
 		// read: once the graph holds it, code the walk cannot see may run any implicitly-called member
-		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n\tstatic var t:lib.Thing = null;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic var f:AE -> Bool;\n\tstatic var t:lib.Thing = null;\n'
 			+ '\tstatic function main() {\n\t\tf = a -> true;\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
 			+ CLEARING_EQ;
 		final thing: String = 'package lib;\n\nclass Thing {\n\tpublic function new() {}\n\n'
@@ -2010,8 +2123,10 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-THROW-TEXT') @:killer('M-SITES-THROW-TEXT')
 	public function testAThrownValueIsConvertedToAString(): Void {
 		// the exception wrapping the compiler adds after typing hands `o` to `Std.string`, which runs `Obj.toString`
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ try throw o catch (e:Dynamic) {} /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ try throw o catch (e:Dynamic) {} /*>*/ }\n\t}\n}\n'
+			+ CLEARING_OBJ;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> !r.match(Proven));
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 		assertMatch(ask(['Main.hx' => main], null, false), r -> !r.match(Proven));
@@ -2019,8 +2134,10 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-ITER')
 	public function testALoopOverAProjectIteratorRunsItsNextUnderTheTruth(): Void {
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Walker = new Walker();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ for (x in w) {} /*>*/ }\n\t}\n}\n' + CLEARING_WALKER;
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar w:Walker = new Walker();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ for (x in w) {} /*>*/ }\n\t}\n}\n'
+			+ CLEARING_WALKER;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
@@ -2058,9 +2175,11 @@ class MemberReachFactsTest extends Test {
 		// the loop iterates a `FeedAlias`, a typedef naming `Feed`: no typed class owns the site, so the types of the iterated
 		// value answer, and `Feed`'s `next` returns a `Walker` — an element, which the loop runs nothing on. Without the truth
 		// what an iterator method returns may be iterated in turn, and `Walker.next` replaces `items`
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar c:FeedAlias = new Feed();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar c:FeedAlias = new Feed();\n'
 			+ '\t\tvar n:Int = 0;\n\t\tfor (i in 0...items.length) { /*<*/ for (w in c) n++; /*>*/ }\n\t}\n}\n'
-			+ 'typedef FeedAlias = Feed;\n\n' + 'class Feed {\n\tpublic function new() {}\n\n'
+			+ 'typedef FeedAlias = Feed;\n\n'
+			+ 'class Feed {\n\tpublic function new() {}\n\n'
 			+ '\tpublic function hasNext():Bool return false;\n\n\tpublic function next():Walker return new Walker();\n}\n'
 			+ CLEARING_WALKER;
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
@@ -2072,7 +2191,8 @@ class MemberReachFactsTest extends Test {
 	public function testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds(): Void {
 		// the facts of every build of a list declared whole, none dropped, are what every build the project ships resolves;
 		// builds no list names vouch for nothing, and a configuration that left no facts leaves no view at all
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tBroken.f();\n\t}\n}\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tBroken.f();\n\t}\n}\n'
 			+ 'class Broken {\n\tpublic static function f():Void {\n\t\t#if APQ_BROKEN nope(); #end\n\t}\n}\n';
 		function truth(configurations: Array<Array<String>>, listed: Bool): Null<Bool> {
 			return withReach(
@@ -2160,7 +2280,8 @@ class MemberReachFactsTest extends Test {
 		// `g` expands a macro that places the code it builds in a file no build read: a fact of `g` has no place
 		// (`stale-foreign`), so `g` is read by its syntax, and its untyped expression stays a blind spot however whole the list
 		// of builds
-		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
 			+ '\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t\tMac.nop();\n\t}\n}\n';
 		final mac: String = 'class Mac {\n\tpublic static macro function nop()\n'
 			+ '\t\treturn macro @:pos(haxe.macro.Context.makePosition({ file: "Gone.hx", min: 0, max: 1 })) Math.abs(1);\n}\n';
@@ -2172,7 +2293,8 @@ class MemberReachFactsTest extends Test {
 		// `g` is declared twice, one declaration per branch: the graph folds the two into one node, whose facts are those of
 		// `Main.g` over every build — under the whole list of them, only the first branch is compiled, and its untyped read is a
 		// field access the compiler typed. With no such list `g` is read by its syntax
-		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
 			+ '#if !other\n\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t}\n#else\n\tfunction g():Void {}\n#end\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
@@ -2183,7 +2305,8 @@ class MemberReachFactsTest extends Test {
 		// the branch holding the untyped read is the second declaration of `g`: read by its text wherever the facts do not
 		// replace the syntax — with no facts, and with facts the list of builds is not the whole of — and under the whole list
 		// by the facts of the one branch the builds compile, whose read the compiler typed
-		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
 			+ '#if other\n\tfunction g():Void {}\n#else\n\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t}\n#end\n}\n';
 		assertMatch(ask(['Main.hx' => main], null, false), r -> r.match(Unknown(Untyped(_, _))));
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
@@ -2195,11 +2318,14 @@ class MemberReachFactsTest extends Test {
 		// `stuff` is `Main.items` imported under another name, pushed to by the declaration of `go` the build compiles — the
 		// second of the two the graph folds: the facts of that declaration are the node's, though its first holds none. The
 		// syntax follows the alias too; a push through a local holding the member it reads as the value stored, an escape
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.go(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.go(); /*>*/ }\n'
 			+ '\t\tOther.go();\n\t}\n}\n';
 		for (body in ['stuff.push(1);', '{\n\t\tfinal l:Array<Int> = stuff;\n\t\tl.push(1);\n\t}']) {
 			final other: String = 'import Main.items as stuff;\n\nclass Other {\n#if other\n\tpublic static function go():Void {}\n#else\n'
-				+ '\tpublic static function go():Void ' + body + '\n#end\n}\n';
+				+ '\tpublic static function go():Void '
+				+ body
+				+ '\n#end\n}\n';
 			assertMatch(compiledTruthAsk(['Main.hx' => main, 'Other.hx' => other]), r -> r.match(Reached(_)));
 		}
 	}
@@ -2209,7 +2335,9 @@ class MemberReachFactsTest extends Test {
 		// the build defining `other` declares `items` with a getter, the other one without: a reader of `items` there sees
 		// what the getter hands out, so the builds together do not read it straight from its storage
 		function fixture(other: String): Map<String, String> {
-			final main: String = 'class Main {\n#if other\n\t@:isVar public var items(' + other + '):Array<Int> = [];\n#else\n'
+			final main: String = 'class Main {\n#if other\n\t@:isVar public var items('
+				+ other
+				+ '):Array<Int> = [];\n#else\n'
 				+ '\t@:isVar public var items(default, set):Array<Int> = [];\n#end\n\tpublic function new() {}\n'
 				+ '\tfunction set_items(v:Array<Int>):Array<Int> {\n\t\titems = v;\n\t\treturn v;\n\t}\n'
 				+ '\tfunction get_items():Array<Int> return items;\n'
@@ -2241,7 +2369,9 @@ class MemberReachFactsTest extends Test {
 		// the facts name `js.Syntax.code` whatever spells it; a class of the project merely named `Syntax` is no native code,
 		// though the syntax cannot tell; a native-code meta is nothing the facts record, so the syntax keeps it
 		function region(code: String): String {
-			return MEMBER_HEAD + '\tstatic function g():Void {}\n\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
+			return MEMBER_HEAD
+				+ '\tstatic function g():Void {}\n\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
 				+ ' /*>*/ }\n\t}\n}\nclass Syntax {\n\tpublic static function code(s:String):Void {}\n}\n';
 		}
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("items");')]), r -> r.match(Unknown(NativeCode(_, _))));
@@ -2261,9 +2391,14 @@ class MemberReachFactsTest extends Test {
 		// text computed at run time, it may; handed what `cb` holds, `g`, which nothing the walk enters reads, it may call it,
 		// and `g` changes `items`. Without the truth every native site is a blind spot
 		function region(code: String, held: String = 'null'): String {
-			return MEMBER_HEAD + '\tstatic var last:Main;\n\n\tstatic var cb:Void->Void = ' + held + ';\n\n'
+			return MEMBER_HEAD
+				+ '\tstatic var last:Main;\n\n\tstatic var cb:Void->Void = '
+				+ held
+				+ ';\n\n'
 				+ '\tstatic function g():Void\n\t\tlast.items.push(1);\n\n\tstatic function peek():Void\n\t\tjs.Syntax.code("items");\n\n'
-				+ '\tfunction f():Void {\n\t\tvar c:String = "0";\n\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n';
+				+ '\tfunction f():Void {\n\t\tvar c:String = "0";\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n';
 		}
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Proven));
 		assertMatch(truthAsk(['Main.hx' => region('untyped console.log();')]), r -> r.match(Proven));
@@ -2287,9 +2422,12 @@ class MemberReachFactsTest extends Test {
 		// alias, and js keeps whatever lands anywhere — a write by its name may have put a `Main` in an `Int` field. Code whose
 		// text is computed, `c`, names what is not known
 		function region(code: String): String {
-			return MEMBER_HEAD + '\tstatic function leak(m:Main):Dynamic\n\t\treturn m;\n\n'
-				+ '\tfunction f(t:Small, n:Tiny, o:Other, c:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
-				+ ' /*>*/ }\n\t}\n}\n' + '@:coreType @:notNull abstract Tiny from Int to Int {}\ntypedef Small = Null<Tiny>;\n'
+			return MEMBER_HEAD
+				+ '\tstatic function leak(m:Main):Dynamic\n\t\treturn m;\n\n'
+				+ '\tfunction f(t:Small, n:Tiny, o:Other, c:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n'
+				+ '@:coreType @:notNull abstract Tiny from Int to Int {}\ntypedef Small = Null<Tiny>;\n'
 				+ 'class Other {\n\tpublic function new() {}\n}\n';
 		}
 		function cpp(code: String): ReachResult {
@@ -2377,7 +2515,9 @@ class MemberReachFactsTest extends Test {
 				+ '\tpublic static var last:Main = new Main();\n\n\tstatic function main()\n\t\tnew Main().f();\n\n'
 				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ new Sub().poke(1); /*>*/ }\n\t}\n}\n'
 				+ '@:native("Peer") extern class Peer {\n\tpublic function new();\n\n\tpublic function poke(x:Int):Void;\n\n'
-				+ '\tpublic function other():Void;\n}\n' + 'class Sub extends Peer {\n\tpublic function new()\n\t\tsuper();\n\n\t' + sub
+				+ '\tpublic function other():Void;\n}\n'
+				+ 'class Sub extends Peer {\n\tpublic function new()\n\t\tsuper();\n\n\t'
+				+ sub
 				+ '\n}\n';
 		}
 		final grow: String = '\n\t\tMain.last.items.push(1);';
@@ -2396,8 +2536,11 @@ class MemberReachFactsTest extends Test {
 			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\n'
 				+ '\tstatic function main()\n\t\tnew Main().f();\n\n'
 				+ '\tfunction f():Void {\n\t\tvar a:Array<Main> = [];\n\t\tvar box:Box<Main> = new Box<Main>();\n'
-				+ '\t\tvar bag:Box<Array<Main>> = new Box<Array<Main>>();\n' + '\t\tfor (i in 0...items.length) { /*<*/ ' + code
-				+ ' /*>*/ }\n\t}\n}\n' + 'extern class Native {\n\t@:native("dyn") public static function dyn(a:Dynamic):Void;\n}\n'
+				+ '\t\tvar bag:Box<Array<Main>> = new Box<Array<Main>>();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n'
+				+ 'extern class Native {\n\t@:native("dyn") public static function dyn(a:Dynamic):Void;\n}\n'
 				+ '@:native("Box") extern class Box<T> {\n\tpublic function new();\n\n\tpublic function put(x:T):Void;\n}\n';
 		}
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => handing('Native.dyn(this);')]), r -> r.match(Unknown(NativeCode(_, _))));
@@ -2418,7 +2561,9 @@ class MemberReachFactsTest extends Test {
 				+ '\tpublic static var last:Main = new Main();\n\n\tstatic function main()\n\t\tnew Main().f();\n\n'
 				+ '\tstatic function h1():Void\n\t\tNative.obj(1);\n\n\tstatic function h2():Void\n\t\tNative.obj(new Other());\n\n'
 				+ '\tstatic function h():Void {\n\t\tNative.obj(1);\n\t\tNative.obj(new Other());\n\t}\n\n'
-				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n'
+				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ region
+				+ ' /*>*/ }\n\t}\n}\n'
 				+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function run():Void\n\t\tMain.last.items.push(1);\n}\n'
 				+ 'extern class Native {\n\t@:native("obj") public static function obj(o:Dynamic):Void;\n}\n';
 		}
@@ -2464,9 +2609,12 @@ class MemberReachFactsTest extends Test {
 		// `console.log()` is target code handed nothing: no dynamic call by a name that may run a function value, so `g`, which
 		// `cb` holds and which changes `items`, does not run there — as it may at a call by name off a value of no class
 		function region(code: String): String {
-			return MEMBER_HEAD + '\tstatic var last:Main;\n\n\tstatic var cb:Void->Void = g;\n\n\tstatic function g():Void\n'
+			return MEMBER_HEAD
+				+ '\tstatic var last:Main;\n\n\tstatic var cb:Void->Void = g;\n\n\tstatic function g():Void\n'
 				+ '\t\tlast.items.push(1);\n\n\tfunction f():Void {\n\t\tvar c:String = "0";\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n';
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n';
 		}
 		assertMatch(compiledTruthAsk(['Main.hx' => region('untyped console.log();')]), r -> r.match(Proven));
 		assertMatch(compiledTruthAsk(['Main.hx' => region('(cast c : Dynamic).log(1);')]), r -> r.match(Reached(_)));
@@ -2479,13 +2627,16 @@ class MemberReachFactsTest extends Test {
 		// call the syntax sees keeps the literal name it reads, and is read once: where one build computes its name and the
 		// other reads the literal `"poke"`, the name stays computed, bounded by what the receiver may be — an `Other`, which has
 		// no `poke`. Read a second time off the facts, the literal would name `Main.poke`, which pushes onto `items`
-		final main: String = 'import Reflect.field as rf;\n' + MEMBER_HEAD + '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
+		final main: String = 'import Reflect.field as rf;\n'
+			+ MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ rf(this, n); /*>*/ }\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 		final seen: String = MEMBER_HEAD
 			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ Reflect.field(this, "other"); /*>*/ }\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => seen]), r -> !r.match(Unknown(DynamicName(_, _))));
-		final split: String = MEMBER_HEAD + '\t#if other\n\tstatic var NAME:String = "x" + Std.random(2);\n\t#else\n'
+		final split: String = MEMBER_HEAD
+			+ '\t#if other\n\tstatic var NAME:String = "x" + Std.random(2);\n\t#else\n'
 			+ '\tstatic inline final NAME:String = "poke";\n\t#end\n\n\tpublic function poke():Void\n\t\titems.push(1);\n\n'
 			+ '\tfunction f():Void {\n\t\tfinal o:Other = new Other();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ Reflect.field(o, NAME); /*>*/ }\n\t}\n}\n'
@@ -2506,7 +2657,9 @@ class MemberReachFactsTest extends Test {
 			return [
 				'Main.hx' => 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
 					+ '\tstatic function main() { var e:Dynamic = new Main(); }\n\tfunction f(n:String, o:Peek):Void {\n'
-					+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n',
+					+ '\t\tfor (i in 0...items.length) { /*<*/ '
+					+ code
+					+ ' /*>*/ }\n\t}\n}\n',
 				'Peek.hx' => 'class Peek {\n\tpublic function new() {}\n\n'
 					+ '\tpublic inline function has(name:String):Bool return Reflect.hasField(this, name);\n\n'
 					+ '\tpublic inline function put(name:String):Void Reflect.setField(this, name, "v");\n}\n'
@@ -2524,7 +2677,11 @@ class MemberReachFactsTest extends Test {
 		// is a name computed at run time in both. Where a build defining `other` declares `NAME` a variable, that build reads a
 		// name computed at run time at the same call
 		function region(code: String, name: String = 'static inline final NAME:String = "other";'): String {
-			return MEMBER_HEAD + '\t' + name + '\n\n\tfunction f(n:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
+			return MEMBER_HEAD
+				+ '\t'
+				+ name
+				+ '\n\n\tfunction f(n:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
 				+ ' /*>*/ }\n\t}\n}\n';
 		}
 		final named: String = 'Reflect.hasField(this, NAME);';
@@ -2543,7 +2700,8 @@ class MemberReachFactsTest extends Test {
 	public function testAReflectiveAccessOnAnObjectOfAnUnrelatedClassReachesNoneOfTheMemberUnderTheTruth(): Void {
 		// `Other.dump` reads a property of its own object by a name it is handed: under the truth that object is an `Other`,
 		// which carries no `items`; without it the name may be any member's
-		final main: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n';
 		final spelled: String = main + reflectingOther('Reflect.getProperty(this, n)');
 		assertMatch(reflectAsk(['Main.hx' => spelled]), r -> r.match(Proven));
@@ -2555,7 +2713,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-REACH-REFLECT-RELATED') @:killer('M-GRAPH-REFLECT-SUBTYPES')
 	public function testAReflectiveAccessOnAnObjectThatMayCarryTheMemberIsADynamicNameUnderTheTruth(): Void {
 		// an `Other` extending `Main` carries `items` itself; `this` of `Base` may be a `Main`, which extends it
-		final sub: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+		final sub: String = MEMBER_HEAD
+			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
 			+ 'class Other extends Main {\n\tpublic function new() super();\n\n'
 			+ '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
@@ -2576,7 +2735,8 @@ class MemberReachFactsTest extends Test {
 		function region(code: String): String {
 			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
 				+ '\tstatic function main() { var e:Dynamic = new Main(); }\n'
-				+ '\tfunction f(n:String, d:Dynamic, s:{ x:Int }):Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
+				+ '\tfunction f(n:String, d:Dynamic, s:{ x:Int }):Void {\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
 				+ ' /*>*/ }\n\t}\n}\n';
 		}
 		assertMatch(reflectAsk(['Main.hx' => region('Reflect.getProperty(d, n);')]), r -> r.match(Unknown(DynamicName(_, _))));
@@ -2590,8 +2750,12 @@ class MemberReachFactsTest extends Test {
 		function fixture(escape: String, region: String): String {
 			return
 				'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\tstatic function sink(x:Dynamic):Void {}\n'
-					+ '\tstatic function main() {' + escape + '}\n\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
-					+ '\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n'
+					+ '\tstatic function main() {'
+					+ escape
+					+ '}\n\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+					+ '\t\tfor (i in 0...items.length) { /*<*/ '
+					+ region
+					+ ' /*>*/ }\n\t}\n}\n'
 					+ reflectingOther('Reflect.getProperty(this, n)')
 					+ 'class Peek {\n\tpublic static function at(o:Other, n:String):Dynamic return Reflect.getProperty(o, n);\n}\n';
 		}
@@ -2606,8 +2770,11 @@ class MemberReachFactsTest extends Test {
 		// `Main` extends `Other`: an `Other` handed in may be a `Main`, one built here is an `Other`
 		function fixture(code: String): String {
 			return 'class Main extends Other {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() super();\n'
-				+ '\tstatic function main() {}\n\tfunction f(n:String, o:Other):Void {\n' + '\t\tfor (i in 0...items.length) { /*<*/ '
-				+ code + ' /*>*/ }\n\t}\n}\n' + 'class Other {\n\tpublic function new() {}\n}\n';
+				+ '\tstatic function main() {}\n\tfunction f(n:String, o:Other):Void {\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n'
+				+ 'class Other {\n\tpublic function new() {}\n}\n';
 		}
 		assertMatch(reflectAsk(['Main.hx' => fixture('Reflect.getProperty(new Other(), n);')]), r -> r.match(Proven));
 		assertMatch(reflectAsk(['Main.hx' => fixture('Reflect.getProperty(o, n);')]), r -> r.match(Unknown(DynamicName(_, _))));
@@ -2617,7 +2784,8 @@ class MemberReachFactsTest extends Test {
 	public function testAReflectiveAccessRunsTheAccessorsOfTheTypeItReachesUnderTheTruth(): Void {
 		// a property read by a name it computes may run `Other.get_v`, which changes `items` of a `Main` it holds; `this` is an
 		// `Other` where no call rebinds a method (`INTERP_BUILD`)
-		final main: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
 			+ 'class Other {\n\tpublic static var held:Main = new Main();\n\tpublic var v(get, never):Int;\n\n\tpublic function new() {}\n\n'
 			+ '\tfunction get_v():Int {\n\t\theld.items.push(1);\n\t\treturn 0;\n\t}\n\n'
@@ -2640,8 +2808,11 @@ class MemberReachFactsTest extends Test {
 					+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
 					+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function dump(n:String):Void Reflect.setProperty(this, n, null);\n}\n'
 					+ 'class Third {\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n}\n'
-					+ 'class Rebind {\n\tpublic static function run(o:Other, n:String):Void {\n\t\t' + read
-					+ '\n\t\tReflect.callMethod(new Main(), ' + taken + ', ["items"]);\n\t}\n}\n'
+					+ 'class Rebind {\n\tpublic static function run(o:Other, n:String):Void {\n\t\t'
+					+ read
+					+ '\n\t\tReflect.callMethod(new Main(), '
+					+ taken
+					+ ', ["items"]);\n\t}\n}\n'
 			];
 		}
 		assertMatch(reflectAsk(fixture('o.dump')), r -> r.match(Unknown(DynamicName(_, _))));
@@ -2681,7 +2852,9 @@ class MemberReachFactsTest extends Test {
 					+ '\tfunction f(n:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ new Other(n); /*>*/ }\n\t}\n}\n'
 					+ 'class Other {\n\tpublic function new(n:String) Reflect.setProperty(this, n, null);\n}\n'
 					+ 'class Third {\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n}\n'
-					+ 'class Rebind {\n\tpublic static function run():Void ' + rebind + '\n}\n'
+					+ 'class Rebind {\n\tpublic static function run():Void '
+					+ rebind
+					+ '\n}\n'
 			];
 		}
 		assertMatch(
@@ -2697,9 +2870,12 @@ class MemberReachFactsTest extends Test {
 		// into an array of strings element by element; js and eval keep the value there. `d` holds an `Obj`, whose `toString`
 		// replaces `items`: each place converts it on C++ alone
 		function region(code: String): String {
-			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\tstatic var held:String = null;\n\n'
+			return LOOP_HEAD
+				+ '\tstatic var d:Dynamic = null;\n\tstatic var held:String = null;\n\n'
 				+ '\tstatic function takes(s:String):Void {}\n\n\tstatic function gives():String return d;\n\n'
-				+ '\tstatic function main() {\n\t\td = new Obj();\n\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n'
+				+ '\tstatic function main() {\n\t\td = new Obj();\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n'
 				+ CLEARING_OBJ;
 		}
 		for (code in [
@@ -2721,9 +2897,12 @@ class MemberReachFactsTest extends Test {
 		// `H.s` is a `String`: hxcpp's `__SetField` converts what a reflective write or a write through a catch-all puts there, so
 		// `Obj.toString`, which replaces `items`, runs; the interpreter keeps the value
 		function region(code: String): String {
-			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\tstatic var h:Dynamic = null;\n\n'
-				+ '\tstatic function main() {\n\t\td = new Obj();\n\t\th = new H();\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
-				+ ' /*>*/ }\n\t}\n}\nclass H {\n\tpublic var s:String = null;\n\n\tpublic function new() {}\n}\n' + CLEARING_OBJ;
+			return LOOP_HEAD
+				+ '\tstatic var d:Dynamic = null;\n\tstatic var h:Dynamic = null;\n\n'
+				+ '\tstatic function main() {\n\t\td = new Obj();\n\t\th = new H();\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\nclass H {\n\tpublic var s:String = null;\n\n\tpublic function new() {}\n}\n'
+				+ CLEARING_OBJ;
 		}
 		for (code in ['Reflect.setField(h, "s", d);', 'h.s = d;']) {
 			assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => region(code)]), r -> r.match(Reached(_)));
@@ -2739,9 +2918,13 @@ class MemberReachFactsTest extends Test {
 		// place of a catch-all, of a primitive other than the string type or of a class converts nothing, and nor does a value
 		// the syntax types as a string
 		function region(code: String): String {
-			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\tstatic var held:String = null;\n\n'
+			return LOOP_HEAD
+				+ '\tstatic var d:Dynamic = null;\n\tstatic var held:String = null;\n\n'
 				+ '\tstatic function takes(s:String):Void {}\n\n\tstatic function main() {\n\t\td = new Obj();\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n'
+				+ CLEARING_OBJ;
 		}
 		for (code in ['held = d;', 'var s:String = d;', 'takes(d);'])
 			assertMatch(ask(['Main.hx' => region(code)], null, false), r -> r.match(Reached(_)));
@@ -2755,10 +2938,12 @@ class MemberReachFactsTest extends Test {
 		// them, which runs no `toString` — though `Obj`'s, which replaces `items`, is in play, and the syntax reads `b` as an
 		// array of elements of no known type. The interpreter keeps whatever lands there, any object that left the type system
 		function main(): String {
-			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n\t\td = new Obj();\n'
+			return LOOP_HEAD
+				+ '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n\t\td = new Obj();\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ new Buf().text(); /*>*/ }\n\t}\n}\n'
 				+ 'class Buf {\n\tprivate var b:Array<String>;\n\n\tpublic function new() b = ["a"];\n\n'
-				+ '\tpublic function text():String return b.join("");\n}\n' + CLEARING_OBJ;
+				+ '\tpublic function text():String return b.join("");\n}\n'
+				+ CLEARING_OBJ;
 		}
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main()]), r -> r.match(Proven));
 		assertMatch(interpAsk(['Main.hx' => main()]), r -> !r.match(Proven));
@@ -2768,7 +2953,8 @@ class MemberReachFactsTest extends Test {
 	public function testJoiningAnArrayRunsItsElementsToStringAloneUnderTheTruth(): Void {
 		// the built-in array's `join` converts each element of `a`, a `Calm`: its `toString` runs, and no other member of it by its
 		// name — `grow`, which replaces `items`, never does
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.go(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.go(); /*>*/ }\n'
 			+ '\t}\n}\nclass Util {\n\tpublic static function go():String {\n\t\tvar a = [new Calm()];\n\t\treturn a.join("");\n\t}\n}\n'
 			+ 'class Calm {\n\tpublic function new() {}\n\n\tpublic function toString():String return "c";\n\n'
 			+ '\tpublic function grow():Void Main.items = [];\n}\n';
@@ -2783,9 +2969,12 @@ class MemberReachFactsTest extends Test {
 		// other function runs; an array of `Obj` converts one. hxcpp converts what lands in a `String`; the interpreter keeps
 		// it, so an element may be any object that left the type system there
 		function region(local: String): String {
-			return LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n'
+			return LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tnew Obj();\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ Util.go("a,b"); /*>*/ }\n\t}\n}\n'
-				+ 'class Util {\n\tpublic static function go(s:String):String {\n\t\t' + local + '\n\t\treturn a.join("");\n\t}\n}\n'
+				+ 'class Util {\n\tpublic static function go(s:String):String {\n\t\t'
+				+ local
+				+ '\n\t\treturn a.join("");\n\t}\n}\n'
 				+ CLEARING_OBJ;
 		}
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => region('var a = s.split(",");')], STD_STRING), r -> r.match(Proven));
@@ -2799,10 +2988,12 @@ class MemberReachFactsTest extends Test {
 		// `Obj.toString` nor `Clear.run`, read as a value, runs — though both change `items`. The compiler's reading of what an
 		// extern is handed says so (`MemberReach.externHanded`); without the truth the syntax does, for the built-in array's own
 		// constructor
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n\t\tvar f:Void->Void = Clear.run;\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tnew Obj();\n\t\tvar f:Void->Void = Clear.run;\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ Util.make(); /*>*/ }\n\t}\n}\n'
 			+ 'class Util {\n\tpublic static function make():Array<Int> return new Array<Int>();\n}\n'
-			+ 'class Clear {\n\tpublic static function run():Void Main.items = [];\n}\n' + CLEARING_OBJ;
+			+ 'class Clear {\n\tpublic static function run():Void Main.items = [];\n}\n'
+			+ CLEARING_OBJ;
 		assertMatch(interpAsk(['Main.hx' => main]), r -> r.match(Proven));
 		assertMatch(ask(['Main.hx' => main], null, true, null, true, INTERP_BUILD), r -> r.match(Proven));
 	}
@@ -2811,8 +3002,12 @@ class MemberReachFactsTest extends Test {
 		// a construction's children are its arguments: the target code of `new Ext(o)` holds `o`, an `Obj`, whose `toString`
 		// changes `items` — read by the syntax, where nothing else says so
 		function main(region: String): String {
-			return LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n' + '\t\tfor (i in 0...items.length) { /*<*/ '
-				+ region + ' /*>*/ }\n\t}\n}\n' + '@:native("Object") extern class Ext {\n\tpublic function new(?o:Obj);\n}\n'
+			return LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ region
+				+ ' /*>*/ }\n\t}\n}\n'
+				+ '@:native("Object") extern class Ext {\n\tpublic function new(?o:Obj);\n}\n'
 				+ CLEARING_OBJ;
 		}
 		assertMatch(ask(['Main.hx' => main('new Ext(o);')], null, false), r -> r.match(Reached(_)));
@@ -2823,11 +3018,13 @@ class MemberReachFactsTest extends Test {
 		// types share, and `b.Color`'s changes `items`
 		function files(clears: Bool): Map<String, String> {
 			return [
-				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tnew a.Color();\n\t\tnew b.Color();\n\t\tvar d:Dynamic = 1;\n'
+				'Main.hx' => LOOP_HEAD
+					+ '\tstatic function main() {\n\t\tnew a.Color();\n\t\tnew b.Color();\n\t\tvar d:Dynamic = 1;\n'
 					+ '\t\tfor (i in 0...items.length) { /*<*/ Std.string(d); /*>*/ }\n\t}\n}\n',
 				'a/Color.hx' => 'package a;\n\nclass Color {\n\tpublic function new() {}\n\n\tpublic function toString():String return "a";\n}\n',
 				'b/Color.hx' => 'package b;\n\nclass Color {\n\tpublic function new() {}\n\n\tpublic function toString():String {\n\t\t'
-					+ (clears ? 'Main.items = [];\n\t\t' : '') + 'return "b";\n\t}\n}\n'
+					+ (clears ? 'Main.items = [];\n\t\t' : '')
+					+ 'return "b";\n\t}\n}\n'
 			];
 		}
 		assertMatch(truthAsk(files(false)), r -> r.match(Proven));
@@ -2840,8 +3037,11 @@ class MemberReachFactsTest extends Test {
 		// called member, `Obj.toString` and the `@:from` of `Loud` `main` runs among them — and the `@:from` of `Loud` the
 		// compiler calls for `1` changes `items`
 		function region(field: String): String {
-			return LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n\t\tvar l:Loud = 2;\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ new Holder(); /*>*/ }\n\t}\n}\n' + 'class Holder {\n\t' + field
+			return LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tnew Obj();\n\t\tvar l:Loud = 2;\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ new Holder(); /*>*/ }\n\t}\n}\n'
+				+ 'class Holder {\n\t'
+				+ field
 				+ '\n\n\tpublic function new() {}\n}\n'
 				+ 'abstract Loud(Int) {\n\t@:from static function of(i:Int):Loud {\n\t\tMain.items.push(i);\n\t\treturn cast i;\n\t}\n}\n'
 				+ CLEARING_OBJ;
@@ -2855,7 +3055,8 @@ class MemberReachFactsTest extends Test {
 	public function testAProjectFileNoBuildCompilesRunsNothing(): Void {
 		// no build compiles `Dead.hx` — nothing imports it — so under the whole list of builds its touch runs nowhere and its
 		// text, which does not even parse, hides nothing; with no such list a build may compile it
-		final main: String = MEMBER_HEAD + '\tfunction f(s:Shape):Void {\n\t\tfor (i in 0...items.length) { /*<*/ s.draw(this); /*>*/ }\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f(s:Shape):Void {\n\t\tfor (i in 0...items.length) { /*<*/ s.draw(this); /*>*/ }\n'
 			+ '\t}\n}\ninterface Shape {\n\tfunction draw(m:Main):Void;\n}\n'
 			+ 'class Live implements Shape {\n\tpublic function new() {}\n\tpublic function draw(m:Main):Void {}\n}\n';
 		final dead: String = 'class Dead implements Shape {\n\tpublic function new() {}\n'
@@ -2873,7 +3074,8 @@ class MemberReachFactsTest extends Test {
 	public function testAFileTheRunWroteMayBeCompiled(): Void {
 		// a file the run wrote after the compiles — one a fix created, say — holds text no build read: it may be compiled
 		final broken: String = 'class Broken {\n\tfunction f() { ( }\n}\n';
-		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
 			+ '\tfunction g():Void {}\n}\n';
 		final result: ReachResult = withReach(
 			['Main.hx' => main, 'Broken.hx' => broken], null, true, false, null, null, null, true, (reach, dir) -> {
@@ -2891,7 +3093,8 @@ class MemberReachFactsTest extends Test {
 		// `poke` calls a function named `items`, so its facts leave it to the syntax, which asks the escapes. Under the truth
 		// those are read off the facts alone (`FactsEscapes`), where such a file has none: no arm can kill this, the syntactic
 		// escapes' skip of it (`ValueEscapes.compute`) is unreachable there, see docs/decisions.md
-		final main: String = MEMBER_HEAD + '\tfunction f(o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ Poker.poke(o); /*>*/ }\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f(o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ Poker.poke(o); /*>*/ }\n'
 			+ '\t}\n}\nclass Other {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n'
 			+ 'class Poker {\n\tstatic function items():Void {}\n'
 			+ '\tpublic static function poke(o:Other):Void {\n\t\titems();\n\t\to.items.push(9);\n\t}\n}\n';
@@ -2903,7 +3106,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-REACH-DEAD-FILE-ENTRY') @:killer('M-REACH-DEAD-FILE-LOCAL-ENTRY')
 	public function testCodeNoBuildCompilesHasNoAnswerUnderTheTruth(): Void {
 		// the graph holds nothing of `Dead.hx`, so no call from it is walked: an answer would read "proven" off nothing
-		final main: String = MEMBER_HEAD + '\tpublic static function grow(xs:Array<Int>):Void {\n\t\txs.push(1);\n\t}\n'
+		final main: String = MEMBER_HEAD
+			+ '\tpublic static function grow(xs:Array<Int>):Void {\n\t\txs.push(1);\n\t}\n'
 			+ '\tpublic static function touch():Void {\n\t\tnew Main().items.push(1);\n\t}\n}\n';
 		final dead: String =
 			'class Dead {\n\tstatic function run(xs:Array<Int>):Void {\n\t\t/*<*/ Main.touch(); Main.grow(xs); /*>*/\n\t}\n}\n';
@@ -2926,7 +3130,8 @@ class MemberReachFactsTest extends Test {
 		// nothing imports `dead/Main.hx` or `dead/Grid.hx`, so no build compiles the second `Main` or the second `Grid`: under
 		// the whole list of builds each name is the one type they typed, the member's owner and the type the walk enters
 		// alike. With no such list a build may compile the other one, and a name declared twice is ambiguous
-		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ Grid.run(); /*>*/ }\n\t}\n}\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ Grid.run(); /*>*/ }\n\t}\n}\n'
 			+ 'class Grid {\n\tpublic static function run():Void {}\n}\n';
 		final owner: Map<String, String> = [
 			'Main.hx' => main,
@@ -2952,8 +3157,11 @@ class MemberReachFactsTest extends Test {
 			return 'package $pack;\n\nclass Grid {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n';
 		}
 		function question(made: String, files: Map<String, String>, ?build: String, ?unindexed: Map<String, String>): ReachResult {
-			files['Main.hx'] = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t}\n'
-				+ '\tfunction calm():Void {}\n\tstatic function other():Void {\n\t\t' + made + '\n\t}\n}\n';
+			files['Main.hx'] = MEMBER_HEAD
+				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t}\n'
+				+ '\tfunction calm():Void {}\n\tstatic function other():Void {\n\t\t'
+				+ made
+				+ '\n\t}\n}\n';
 			final builds: Null<Array<Array<String>>> = build == null ? null : [[], ['other']];
 			return ask(files, builds, true, { owner: 'Grid', name: 'items' }, false, build, null, unindexed, true);
 		}
@@ -3027,14 +3235,21 @@ class MemberReachFactsTest extends Test {
 		function question(mine: Null<String>, other: String, listed: Bool, region: String = 'a.Endian.calm();'): ReachResult {
 			final built: String = mine == null ? '' : '@:build(Mac.' + mine + '())\n';
 			final files: Map<String, String> = [
-				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n'
+				'Main.hx' => LOOP_HEAD
+					+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ '
+					+ region
+					+ ' /*>*/ }\n'
 					+ '\t\tnew b.Endian().calm();\n\t}\n}\n',
-				'a/Endian.hx' => 'package a;\n\n' + built + 'enum abstract Endian(Null<Int>) {\n\tvar BIG = 0;\n\tvar LITTLE = 1;\n\n'
+				'a/Endian.hx' => 'package a;\n\n'
+					+ built
+					+ 'enum abstract Endian(Null<Int>) {\n\tvar BIG = 0;\n\tvar LITTLE = 1;\n\n'
 					+ '\tpublic static function calm():Void {}\n}\n',
 				'Mac.hx' => BUILD_MACROS
 			];
 			final unindexed: Map<String, String> = [
-				'b/Endian.hx' => 'package b;\n\n@:build(Mac.' + other + '())\nclass Endian {\n\tpublic function new() {}\n\n'
+				'b/Endian.hx' => 'package b;\n\n@:build(Mac.'
+					+ other
+					+ '())\nclass Endian {\n\tpublic function new() {}\n\n'
 					+ '\tpublic function calm():Void {}\n}\n'
 			];
 			final result: ReachResult = ask(files, null, true, null, false, null, null, unindexed, listed);
@@ -3057,7 +3272,8 @@ class MemberReachFactsTest extends Test {
 		function question(declaration: String, indexed: Bool, build: String = 'rewrite', listed: Bool = true): ReachResult {
 			final root: String = '@:build(Mac.' + build + '())\nclass Endian {\n\tpublic static function calm():Void {}\n}\n';
 			final files: Map<String, String> = [
-				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Endian.calm(); /*>*/ }\n'
+				'Main.hx' => LOOP_HEAD
+					+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Endian.calm(); /*>*/ }\n'
 					+ '\t\tnew a.Endian.Holder();\n\t}\n}\n',
 				'a/Endian.hx' => 'package a;\n\n' + declaration + 'class Holder {\n\tpublic function new() {}\n}\n',
 				'Mac.hx' => BUILD_MACROS
@@ -3087,9 +3303,12 @@ class MemberReachFactsTest extends Test {
 		// is given
 		function question(branch: String, listed: Bool = true, marked: Bool = false): ReachResult {
 			final main: String = LOOP_HEAD
-				+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ lib.Stack.str(); /*>*/ }\n' + '\t}\n}\n';
+				+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ lib.Stack.str(); /*>*/ }\n'
+				+ '\t}\n}\n';
 			final stack: String = 'package lib;\n\nclass Stack {\n\tpublic static function str():String\n\t\treturn\n\t\t\t#if never\n'
-				+ '\t\t\t\t"a";\n\t\t\t#else\n\t\t\t\t' + branch + ';\n\t\t\t#end\n}\n';
+				+ '\t\t\t\t"a";\n\t\t\t#else\n\t\t\t\t'
+				+ branch
+				+ ';\n\t\t\t#end\n}\n';
 			function run(): ReachResult {
 				final result: ReachResult = ask(
 					['Main.hx' => main], null, true, null, false, null, ['lib/Stack.hx' => stack], null, listed
@@ -3142,11 +3361,19 @@ class MemberReachFactsTest extends Test {
 		// value the region only reads is asked of its edge alone: the call of one is also an implicit call of `Endian` code
 		function question(region: String, ?before: String, ?more: String, ?indexed: Bool, ?loud: Bool): ReachResult {
 			final push: String = loud == false ? '' : 'Main.items.push(1); ';
-			final endian: String = 'class Endian {\n\tpublic function new() { ' + push + '}\n\n'
-				+ '\tpublic static function calm():Void { ' + push + '}\n\n' + '\tpublic function toString():String { ' + push
+			final endian: String = 'class Endian {\n\tpublic function new() { '
+				+ push
+				+ '}\n\n'
+				+ '\tpublic static function calm():Void { '
+				+ push
+				+ '}\n\n'
+				+ '\tpublic function toString():String { '
+				+ push
 				+ 'return ""; }\n}\n';
-			final sub: String = 'class Sub extends Base {\n\tpublic function new() super();\n\n' + '\toverride public function f():Void { '
-				+ push + '}\n}\n';
+			final sub: String = 'class Sub extends Base {\n\tpublic function new() super();\n\n'
+				+ '\toverride public function f():Void { '
+				+ push
+				+ '}\n}\n';
 			final twins: String = '#if never\nclass Endian {\n\tpublic function new() {}\n\n\tpublic static function calm():Void {}\n\n'
 				+ '\tpublic function toString():String return "";\n}\n\nclass Sub extends Base {\n\tpublic function new() super();\n\n'
 				+ '\toverride public function f():Void {}\n}\n#end\n';
@@ -3192,12 +3419,18 @@ class MemberReachFactsTest extends Test {
 		function question(region: String, mode: String, ?members: String, ?more: String): ReachResult {
 			final push: String = mode == 'calm' ? '' : 'Main.items.push(1); ';
 			final endian: String = 'class Endian {\n\tpublic function new() {}\n\n' + (
-				members ?? '\tpublic static function calm():Void { ' + push + '}\n\n\tpublic function toString():String { ' + push
+				members ?? '\tpublic static function calm():Void { '
+					+ push
+					+ '}\n\n\tpublic function toString():String { '
+					+ push
 					+ 'return ""; }\n'
 			) + '}\n' + (more ?? '');
 			final files: Map<String, String> = [
-				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfinal e:Endian = new Endian();\n'
-					+ '\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n'
+				'Main.hx' => LOOP_HEAD
+					+ '\tstatic function main() {\n\t\tfinal e:Endian = new Endian();\n'
+					+ '\t\tfor (i in 0...items.length) { /*<*/ '
+					+ region
+					+ ' /*>*/ }\n\t}\n}\n'
 			];
 			final indexed: Bool = mode != 'unindexed' && mode != 'syntax' && mode != 'plain';
 			if (indexed) files['Endian.hx'] = endian;
@@ -3232,7 +3465,8 @@ class MemberReachFactsTest extends Test {
 		// an interface the index declares nowhere declares no code: a conversion of a held type implementing it runs the
 		// held type's own `toString`
 		final shown: Map<String, String> = ['Shown.hx' => 'interface Shown {\n\tfunction toString():String;\n}\n'];
-		final implementing: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfinal o:Obj = new Obj();\n'
+		final implementing: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfinal o:Obj = new Obj();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ final s:String = "" + o; /*>*/ }\n\t}\n}\n\n'
 			+ 'class Obj implements Shown {\n\tpublic function new() {}\n\n\tpublic function toString():String return "o";\n}\n';
 		assertMatch(ask(['Main.hx' => implementing], null, true, null, false, null, null, shown, true), r -> r.match(Proven));
@@ -3274,7 +3508,8 @@ class MemberReachFactsTest extends Test {
 		// A type the index declares nowhere that declares no `toString` runs none
 		function question(indexed: Bool, members: String): ReachResult {
 			final obj: String = 'class Obj {\n\tpublic function new() {}\n' + members + '}\n';
-			final main: String = LOOP_HEAD + '\tstatic var fmt:Dynamic -> String;\n'
+			final main: String = LOOP_HEAD
+				+ '\tstatic var fmt:Dynamic -> String;\n'
 				+ '\tstatic function main() {\n\t\tfmt = v -> "<" + v;\n\t\tvar o:Obj = new Obj();\n\t\tvar s:String = "";\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ s += fmt(o); /*>*/ }\n\t}\n}\n';
 			final files: Map<String, String> = ['Main.hx' => main];
@@ -3296,7 +3531,8 @@ class MemberReachFactsTest extends Test {
 		// the walk has not read the library `Thing`, so code it cannot see may run any implicitly-called member: `AE`'s `==`,
 		// which the builds compile and the index declares nowhere, among them
 		function question(indexed: Bool): ReachResult {
-			final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n\tstatic var t:lib.Thing = null;\n'
+			final main: String = LOOP_HEAD
+				+ '\tstatic var f:AE -> Bool;\n\tstatic var t:lib.Thing = null;\n'
 				+ '\tstatic var ae:AE = new AE(1);\n\tstatic function main() {\n\t\tf = a -> true;\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ f(ae); /*>*/ }\n\t}\n}\n';
 			final thing: String = 'package lib;\n\nclass Thing {\n\tpublic function new() {}\n\n'
@@ -3319,8 +3555,10 @@ class MemberReachFactsTest extends Test {
 		// them. Held by the index, `Wrap` answers as its text says
 		function question(indexed: Bool, loud: Bool): ReachResult {
 			final wrap: String = 'abstract Wrap(Int) {\n\tpublic function new(i:Int) this = i;\n\n\t@:to public function text():String {\n\t\t'
-				+ (loud ? 'Main.items.push(1);\n\t\t' : '') + 'return "w";\n\t}\n}\n';
-			final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Wrap = new Wrap(1);\n'
+				+ (loud ? 'Main.items.push(1);\n\t\t' : '')
+				+ 'return "w";\n\t}\n}\n';
+			final main: String = LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tvar w:Wrap = new Wrap(1);\n'
 				+ '\t\tinline function run():Void {\n\t\t\tvar n:Int = 1;\n\t\t}\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ run(); /*>*/ }\n\t}\n}\n';
 			final files: Map<String, String> = ['Main.hx' => main];
@@ -3342,10 +3580,14 @@ class MemberReachFactsTest extends Test {
 		// no ambiguity, only a type with no one declaration site. With no such list the syntax reads them, and a name the index
 		// declares twice is ambiguous
 		function grid(called: String): String {
-			return 'class Grid {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\tpublic function run():Void ' + called
-				+ '();\n\tfunction ' + called + '():Void {}\n}\n';
+			return 'class Grid {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\tpublic function run():Void '
+				+ called
+				+ '();\n\tfunction '
+				+ called
+				+ '():Void {}\n}\n';
 		}
-		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t}\n'
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t}\n'
 			+ '\tfunction calm():Void {}\n\tstatic function other():Void {\n\t\tnew Grid().run();\n\t}\n}\n';
 		final both: Array<Array<String>> = [[], ['other']];
 		final branches: Map<String, String> = ['Main.hx' => main + '#if other\n' + grid('a') + '#else\n' + grid('b') + '#end\n'];
@@ -3376,15 +3618,19 @@ class MemberReachFactsTest extends Test {
 		function library(getter: String, other: String): Map<String, String> {
 			return [
 				'lib/Vec.hx' => 'package lib;\n\nabstract Vec(Array<Int>) {\n\tpublic var length(get, never):Int;\n\n'
-					+ '\tpublic function new() this = [];\n\n\t' + getter + '\n}\n',
+					+ '\tpublic function new() this = [];\n\n\t'
+					+ getter
+					+ '\n}\n',
 				'other/Vec.hx' => 'package other;\n\nabstract Vec(Array<Int>) {\n\tpublic var length(get, never):Int;\n\n'
-					+ '\tpublic function new() this = [];\n\n\tfunction get_length():Int {\n\t\t' + other
+					+ '\tpublic function new() this = [];\n\n\tfunction get_length():Int {\n\t\t'
+					+ other
 					+ '\n\t\treturn this.length;\n\t}\n}\n',
 				'lib/Label.hx' => 'package lib;\n\nclass Label {\n\tpublic static var v:Vec = new Vec();\n\n'
 					+ '\tpublic static function size():Int return v.length;\n}\n'
 			];
 		}
-		final main: String = 'import lib.Label;\n\n' + LOOP_HEAD
+		final main: String = 'import lib.Label;\n\n'
+			+ LOOP_HEAD
 			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Label.size(); /*>*/ }\n'
 			+ '\t\ttrace(new other.Vec().length);\n\t}\n}\n';
 		final inlined: String = 'inline function get_length():Int return this.length;';
@@ -3404,11 +3650,17 @@ class MemberReachFactsTest extends Test {
 		// `b.Grid.run` storing `Main.items` under a name no text of it spells lets its value go, which only its facts show
 		function files(called: String, other: String, ?bRuns: String): Map<String, String> {
 			return [
-				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ ' + called
-					+ '.Grid.run(); /*>*/ }\n\t\t' + other + '.Grid.run();\n\t}\n}\n',
+				'Main.hx' => LOOP_HEAD
+					+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ '
+					+ called
+					+ '.Grid.run(); /*>*/ }\n\t\t'
+					+ other
+					+ '.Grid.run();\n\t}\n}\n',
 				'a/Grid.hx' => 'package a;\n\nclass Grid {\n\tpublic static function run():Void Main.items.push(1);\n}\n',
 				'b/Grid.hx' => 'package b;\n\nimport Main.items as stuff;\n\nclass Grid {\n\tpublic static var keep:Array<Int> = null;\n\n'
-					+ '\tpublic static function run():Void {' + (bRuns ?? '') + '}\n}\n'
+					+ '\tpublic static function run():Void {'
+					+ (bRuns ?? '')
+					+ '}\n}\n'
 			];
 		}
 		assertMatch(truthAsk(files('b', 'a')), r -> r.match(Proven));
@@ -3436,18 +3688,23 @@ class MemberReachFactsTest extends Test {
 		// is not. With no whole list of builds nothing tells the two apart
 		function files(body: String, twin: Bool, built: Bool): Map<String, String> {
 			final out: Map<String, String> = [
-				'Main.hx' => LOOP_HEAD + '\tpublic static function grow(s:String):Void items.push(1);\n\n\tstatic function main() {\n'
-					+ '\t\tHook.keep = grow;\n\t\tb.Grid.make();\n' + (twin ? '\t\ta.Grid.make();\n' : '')
+				'Main.hx' => LOOP_HEAD
+					+ '\tpublic static function grow(s:String):Void items.push(1);\n\n\tstatic function main() {\n'
+					+ '\t\tHook.keep = grow;\n\t\tb.Grid.make();\n'
+					+ (twin ? '\t\ta.Grid.make();\n' : '')
 					+ '\t\tfor (i in 0...items.length) { /*<*/ Runner.run(); /*>*/ }\n\t}\n}\n'
 					+ 'class Hook {\n\tpublic static var keep:String->Void;\n\tpublic static var flag:Bool->Void;\n}\n'
 					+ 'class Runner {\n\tpublic static var call:Int->Void;\n\n\tpublic static function run():Void {\n'
 					+ '\t\tfinal c:Int->Void = call;\n\t\tc(1);\n\t}\n}\n',
 				'b/Grid.hx' => 'package b;\n\nimport Main.Hook;\nimport Main.Runner;\n\nclass Grid {\n\tpublic static function make():Void {\n'
-					+ '\t\tRunner.call = n -> {\n\t\t\t' + body + '\n\t\t};\n\t}\n}\n',
+					+ '\t\tRunner.call = n -> {\n\t\t\t'
+					+ body
+					+ '\n\t\t};\n\t}\n}\n',
 				'Mac.hx' => BUILD_MACROS
 			];
 			if (twin)
-				out['a/Grid.hx'] = 'package a;\n\n' + (built ? '@:build(Mac.rewrite())\n' : '')
+				out['a/Grid.hx'] = 'package a;\n\n'
+					+ (built ? '@:build(Mac.rewrite())\n' : '')
 					+ 'class Grid {\n\tpublic static function make():Void {}\n\n\tpublic static function calm():Void {}\n}\n';
 			return out;
 		}
@@ -3474,15 +3731,18 @@ class MemberReachFactsTest extends Test {
 			final out: Map<String, String> = [
 				'Main.hx' => 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
 					+ '\tpublic function grow():Int {\n\t\titems.push(1);\n\t\treturn 0;\n\t}\n\n\tstatic function main() {\n'
-					+ '\t\tfinal m:Main = new Main();\n\t\tHook.main = m;\n' + (twin ? '\t\tnew a.Grid();\n' : '')
+					+ '\t\tfinal m:Main = new Main();\n\t\tHook.main = m;\n'
+					+ (twin ? '\t\tnew a.Grid();\n' : '')
 					+ (unbuilt ? '\t\tc.Grid.Other.f();\n' : '')
 					+ '\t\tfor (i in 0...m.items.length) { /*<*/ new b.Grid(); /*>*/ }\n\t}\n}\n'
 					+ 'class Hook {\n\tpublic static var main:Main;\n}\n',
-				'b/Grid.hx' => 'package b;\n\nimport Main.Hook;\n\nclass Grid {\n\tpublic var xs:Int = ' + mine
+				'b/Grid.hx' => 'package b;\n\nimport Main.Hook;\n\nclass Grid {\n\tpublic var xs:Int = '
+					+ mine
 					+ ';\n\n\tpublic function new() {}\n}\n'
 			];
 			if (twin)
-				out['a/Grid.hx'] = 'package a;\n\nimport Main.Hook;\n\nclass Grid {\n\tpublic var n:Int = ' + initial
+				out['a/Grid.hx'] = 'package a;\n\nimport Main.Hook;\n\nclass Grid {\n\tpublic var n:Int = '
+					+ initial
 					+ ';\n\n\tpublic function new() {}\n}\n';
 			if (unbuilt)
 				out['c/Grid.hx'] = 'package c;\n\n#if never\nclass Grid {\n\tpublic var k:Int = 1;\n}\n#end\n'
@@ -3536,7 +3796,9 @@ class MemberReachFactsTest extends Test {
 		function question(bDeclares: Array<String>, pushes: Bool = false): ReachResult {
 			final grid: String = 'package a;\n\nclass Grid {\n\tpublic static function go():Void {\n'
 				+ '\t\tfor (i in 0...Main.items.length) { /*<*/ run(); /*>*/ }\n\t}\n\n\tpublic static function run():Void {'
-				+ (pushes ? ' Push.one(); ' : '') + '}\n}\n' + 'class Push {\n\tpublic static function one():Void Main.items.push(1);\n}\n';
+				+ (pushes ? ' Push.one(); ' : '')
+				+ '}\n}\n'
+				+ 'class Push {\n\tpublic static function one():Void Main.items.push(1);\n}\n';
 			final members: String = [for (m in bDeclares) '\tpublic static function $m():Void {}\n'].join('');
 			final files: Map<String, String> = [
 				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\ta.Grid.go();\n\t\tb.Grid.n++;\n\t}\n}\n',
@@ -3558,8 +3820,11 @@ class MemberReachFactsTest extends Test {
 	public function testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth(): Void {
 		// `d` is `Dynamic`, `Std.string`'s parameter type, so handing it on records no flow: the flow of the other branch is one
 		// leaf of the argument, not the value converted, which may be an `Obj`, whose `toString` replaces `Main.items`
-		final main: String = 'import lib.Text;\n\n' + LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ Text.fail(); /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		final main: String = 'import lib.Text;\n\n'
+			+ LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ Text.fail(); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_OBJ;
 		function converting(argument: String): ReachResult {
 			final thrown: String = 'var d:Dynamic = null;\n\t\tStd.string(' + argument + ');';
 			return ask(['Main.hx' => main], null, true, null, false, null, plainText(thrown), null, true);
@@ -3579,8 +3844,12 @@ class MemberReachFactsTest extends Test {
 			+ '\tpublic function add(x:String):Void {\n\t\tif (s == null) s = Std.string(x); else s += Std.string(x);\n\t}\n\n'
 			+ '\tpublic function show(x:Main.Obj):Void {\n\t\tif (s == null) s = Std.string(x); else s += Std.string(x);\n\t}\n}\n';
 		function region(code: String): String {
-			return LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n\t\tvar b:Buf = new Buf();\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+			return LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n\t\tvar b:Buf = new Buf();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n'
+				+ CLEARING_OBJ;
 		}
 
 		function question(code: String): ReachResult {
@@ -3604,18 +3873,23 @@ class MemberReachFactsTest extends Test {
 					+ '\tpublic inline function new(v:IVec) this = v;\n\n\tinline function get_length():Int return this.length;\n}\n\n'
 					+ 'interface IVec {\n\tvar length(get, never):Int;\n}\n',
 				'lib/IntVec.hx' => 'package lib;\n\nimport lib.Vec.IVec;\n\nclass IntVec implements IVec {\n'
-					+ '\tpublic var length(get, never):Int;\n\n\tpublic function new() {}\n\n\tfunction get_length():Int {\n\t\t' + intVec
+					+ '\tpublic var length(get, never):Int;\n\n\tpublic function new() {}\n\n\tfunction get_length():Int {\n\t\t'
+					+ intVec
 					+ '\n\t\treturn 0;\n\t}\n}\n',
-				'lib/Base.hx' => 'package lib;\n\nclass Base {\n\tpublic function new() {}\n\n\tfunction get_length():Int {\n\t\t' + base
+				'lib/Base.hx' => 'package lib;\n\nclass Base {\n\tpublic function new() {}\n\n\tfunction get_length():Int {\n\t\t'
+					+ base
 					+ '\n\t\treturn 0;\n\t}\n}\n',
 				'lib/Sub.hx' => 'package lib;\n\nimport lib.Vec.IVec;\n\nclass Sub extends Base implements IVec {\n'
-					+ '\tpublic var length(get, never):Int;\n' + (spelled ? '\t// the get_length it runs is Base\'s\n' : '') + '}\n',
+					+ '\tpublic var length(get, never):Int;\n'
+					+ (spelled ? '\t// the get_length it runs is Base\'s\n' : '')
+					+ '}\n',
 				'lib/Label.hx' => 'package lib;\n\nclass Label {\n\tpublic static var failing:Bool = false;\n\n'
 					+ '\tpublic static var v:Vec = new Vec(failing ? new IntVec() : new Sub());\n\n'
 					+ '\tpublic static function size():Int return v.length;\n}\n'
 			];
 		}
-		final main: String = 'import lib.Label;\n\n' + LOOP_HEAD
+		final main: String = 'import lib.Label;\n\n'
+			+ LOOP_HEAD
 			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Label.size(); /*>*/ }\n\t}\n}\n';
 		final touch: String = 'Main.items.push(1);';
 		function truth(intVec: String, base: String): ReachResult {
@@ -3645,7 +3919,12 @@ class MemberReachFactsTest extends Test {
 		final crate: String = '#if never_defined\nclass Bag {}\n#else\nclass Crate {\n\tpublic function new() {}\n\n'
 			+ '\tpublic var size(get, never):Int;\n\n\tfunction get_size():Int {\n\t\tMain.items.push(1);\n\t\treturn 0;\n\t}\n}\n#end\n';
 		function read(type: String, declared: String): ReachResult {
-			final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar b:' + type + ' = new ' + type + '();\n'
+			final main: String = LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tvar b:'
+				+ type
+				+ ' = new '
+				+ type
+				+ '();\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ var n:Int = b.size; /*>*/ }\n\t}\n}\n';
 			return ask(['Main.hx' => main, type + '.hx' => declared], null, false, null, true);
 		}
@@ -3659,7 +3938,8 @@ class MemberReachFactsTest extends Test {
 		// as `lib.Vec`'s without qualifying it (openfl's `Vector.splice` beside `haxe.ds.Vector`); `lib.Vec`'s build macro hands
 		// its fields back as they are, which its facts show. Asked by the simple name, the build macro is any `Vec`'s
 		final files: Map<String, String> = [
-			'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ lib.Vec.splice(1); /*>*/ }\n'
+			'Main.hx' => LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ lib.Vec.splice(1); /*>*/ }\n'
 				+ '\t\ttrace(new other.Vec());\n\t}\n}\n',
 			'lib/Vec.hx' => 'package lib;\n\n@:build(Mac.keep())\nclass Vec {\n\tpublic static function splice(n:Int):Int return n;\n}\n',
 			'other/Vec.hx' => 'package other;\n\nclass Vec {\n\tpublic function new() {}\n}\n',
@@ -3742,12 +4022,14 @@ class MemberReachFactsTest extends Test {
 			+ '\tstatic function calm():Void {}\n}\n\n'
 			+ '#if never_defined\n@:build(Nope.build())\nclass Dead {\n\tpublic static function go():Void {}\n}\n#end\n';
 		final clearing: String = 'class Clearing {\n\tpublic static function go(n:Int):Void Main.items.push(n);\n}\n';
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Lib.run(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Lib.run(); /*>*/ }\n'
 			+ '\t\tClearing.go(0);\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main, 'Lib.hx' => lib, 'Clearing.hx' => clearing]), r -> r.match(Proven));
 		// a node is still met where no edge leads: `d.go()` on a catch-all admits every `go` by its name, `Dead.go` among them.
 		// `Dead` is declared only where no build compiles, so the node runs nothing — not even the build macro of its own type
-		final named: String = LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n'
+		final named: String = LOOP_HEAD
+			+ '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ d.go(); /*>*/ }\n\t\tClearing.wipe();\n\t}\n}\n'
 			+ 'class Clearing {\n\tpublic static function wipe():Void Main.items.push(1);\n}\n\n'
 			+ '#if never_defined\n@:build(Nope.build())\nclass Dead {\n\tpublic function go():Void Clearing.wipe();\n}\n#end\n';
@@ -3764,14 +4046,21 @@ class MemberReachFactsTest extends Test {
 		// them; and so may an operand of a type an instance of the other escaped into
 		function files(converting: String, aBody: String, bBody: String, ?more: String): Map<String, String> {
 			return [
-				'Main.hx' => 'import b.Color;\n\n' + LOOP_HEAD + '\tstatic var c:Color = new Color();\n\n'
-					+ '\tstatic function main() {\n\t\tvar other:a.Color = new a.Color();\n\t\tvar d:Dynamic = null;\n' + (more ?? '')
-					+ '\t\tfor (i in 0...items.length) { /*<*/ ' + converting + ' /*>*/ }\n\t}\n}\n',
+				'Main.hx' => 'import b.Color;\n\n'
+					+ LOOP_HEAD
+					+ '\tstatic var c:Color = new Color();\n\n'
+					+ '\tstatic function main() {\n\t\tvar other:a.Color = new a.Color();\n\t\tvar d:Dynamic = null;\n'
+					+ (more ?? '')
+					+ '\t\tfor (i in 0...items.length) { /*<*/ '
+					+ converting
+					+ ' /*>*/ }\n\t}\n}\n',
 				'Helper.hx' => 'class Helper {\n\tpublic static function clear():Void Main.items.push(1);\n}\n',
 				'a/Color.hx' => 'package a;\n\nclass Color {\n\tpublic function new() {}\n\n\tpublic function toString():String {\n\t\t'
-					+ aBody + '\n\t\treturn "a";\n\t}\n}\n',
+					+ aBody
+					+ '\n\t\treturn "a";\n\t}\n}\n',
 				'b/Color.hx' => 'package b;\n\nclass Color {\n\tpublic function new() {}\n\n\tpublic function toString():String {\n\t\t'
-					+ bBody + '\n\t\treturn "b";\n\t}\n}\n'
+					+ bBody
+					+ '\n\t\treturn "b";\n\t}\n}\n'
 			];
 		}
 		// `a.Color.toString` changes the member through `Helper.clear`, so its folded node reaches a function that does
@@ -3790,7 +4079,8 @@ class MemberReachFactsTest extends Test {
 		// `stuff` is `Main.items` imported under another name: no text of `Other.grow` spells `items`, the facts name the
 		// field it pushes to — and the syntax follows the alias too. `Other.hold` pushes through a local holding it, which the
 		// syntax reads as the value stored, an escape. `Bag.items` is another type's field of the same name
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.REGION(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.REGION(); /*>*/ }\n'
 			+ '\t\tOther.grow();\n\t\tOther.calm();\n\t}\n}\n';
 		final other: String = 'import Main.items as stuff;\n\nclass Other {\n\tpublic static function grow():Void stuff.push(1);\n\n'
 			+ '\tpublic static function calm():Void Bag.items.push(1);\n\n'
@@ -3823,7 +4113,8 @@ class MemberReachFactsTest extends Test {
 		// reads them: under the truth no value escapes, while the syntax sees a store into a local. A push on either local
 		// (`walk` run by the region), handing it on, capturing it, returning it, or a push on the outer `l` past a block
 		// declaring a `l` of its own, does change or share the member
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ REGION /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ REGION /*>*/ }\n'
 			+ '\t\twalk("h");\n\t}\n\tstatic function calm():Void {}\n\tstatic var kept:Array<Int> = null;\n\tstatic function keep(a:Array<Int>):Void kept = a;\n'
 			+ '\tstatic function walk(c:String):Array<Int> {\n'
 			+ '\t\tvar other:Array<Int> = [3];\n\t\tvar l:Array<Int> = null;\n\t\tif (c == "h") l = items; else if (c == "v") l = other;\n'
@@ -3852,7 +4143,9 @@ class MemberReachFactsTest extends Test {
 		// the store lies before the loop and the push through the local inside it: the touch the facts record at the store is
 		// one of a local read anywhere in the function, the region's included
 		for (store in ['var l:Array<Int> = items;', 'var l:Array<Int> = null;\n\t\tl = items;']) {
-			final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\t' + store
+			final main: String = LOOP_HEAD
+				+ '\tstatic function main() {\n\t\t'
+				+ store
 				+ '\n\t\tfor (i in 0...items.length) { /*<*/ if (l.length < 3) l.push(1); /*>*/ }\n\t}\n}\n';
 			assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 		}
@@ -3876,7 +4169,8 @@ class MemberReachFactsTest extends Test {
 		for (store in stores) {
 			function files(use: String, region: String = 'calm();'): Map<String, String> {
 				return [
-					'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ $region /*>*/ }\n'
+					'Main.hx' => LOOP_HEAD
+						+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ $region /*>*/ }\n'
 						+ '\t\twalk("h");\n\t}\n\tstatic function calm():Void {}\n\tstatic var kept:Array<Int> = null;\n\tstatic function keep(a:Array<Int>):Void kept = a;\n'
 						+ '\tstatic function walk(c:String):Void {\n\t\t$store\n\t\tfor (x in l) trace(x + l.length + l[0]);\n\t\t$use\n\t}\n}\n'
 				];
@@ -3898,7 +4192,8 @@ class MemberReachFactsTest extends Test {
 		// value, while the syntax reads every argument as an escape. A method that stores it, returns it, captures it, hands it to
 		// an extern or to a method that stores it, or an override that stores it, does let it escape; one that pushes onto it
 		// changes it where it is called
-		final main: String = 'using Lambda;\n\n' + LOOP_HEAD
+		final main: String = 'using Lambda;\n\n'
+			+ LOOP_HEAD
 			+ '\tstatic var kept:Array<Int> = null;\n\n\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ REGION /*>*/ }\n'
 			+ '\t\tUSE\n\t}\n\n\tstatic function calm():Void {}\n\n'
 			+ '\tstatic function sum(a:Array<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in a) n += x;\n\t\treturn n + a.length + a[0];\n\t}\n\n'
@@ -3983,7 +4278,8 @@ class MemberReachFactsTest extends Test {
 			'touch -',
 			'- escape'
 		], [for (k in known) verdict(k.split(' ')[0], k.split(' ')[1])]);
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\tsum(items);\n\t}\n\n\tstatic function calm():Void {}\n\n'
 			+ '\tstatic function sum(a:Array<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in a) n += x;\n\t\treturn n + a.length + a[0];\n\t}\n}\n';
 		function ask(rewrite: (String, String) -> String): ReachResult {
@@ -4005,7 +4301,8 @@ class MemberReachFactsTest extends Test {
 	public function testAMarkerTheFactsReaderDoesNotKnowKeepsItsBodysSyntaxUnderTheTruth(): Void {
 		// a node's markers are a closed list (`FactMarker`): one no reader names may say a fact of the node lost its place, so
 		// `other` keeps its syntax — where `sum(items)`, an argument, escapes — instead of its facts
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\tother();\n\t}\n\n\tstatic function calm():Void {}\n\n\tstatic function other():Void {\n\t\tsum(items);\n\t}\n\n'
 			+ '\tstatic function sum(a:Array<Int>):Int return a.length;\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
@@ -4016,7 +4313,8 @@ class MemberReachFactsTest extends Test {
 	public function testAMarkerTheFactsReaderDoesNotKnowIsABlindSpotUnderTheTruth(): Void {
 		// a node meeting the region whose marker no reader names may stand for code no text holds, as a macro's expansion does:
 		// its syntax, which changes nothing, answers for nothing
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t}\n\n\tstatic function calm():Void {}\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
 		assertMatch(
@@ -4109,7 +4407,8 @@ class MemberReachFactsTest extends Test {
 	public function testAFieldAccessTheFactsReaderDoesNotKnowIsUnresolvedUnderTheTruth(): Void {
 		// a field fact's access is a closed list (`FieldFact.access`): through one this reader does not name, any accessor of
 		// the name may run, so the graph records the read as an unresolved access, as one off a dynamic receiver
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t}\n\n\tstatic function calm():Void {}\n}\n';
 		function unresolved(access: String): Bool {
 			return rewrittenTruth(
@@ -4128,7 +4427,8 @@ class MemberReachFactsTest extends Test {
 	public function testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth(): Void {
 		// `d.items(1)` calls whatever a dynamic receiver's `items` holds: the facts record a call and no field read, so `poke`
 		// is read by its syntax, where the receiver may be the one holding the member and its value is handed to a call
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\tpoke(null);\n\t}\n\tstatic function calm():Void {}\n\tstatic function poke(d:Dynamic):Void d.items(1);\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
 	}
@@ -4136,7 +4436,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-TOUCH-TYPED-FRESH') @:killer('M-TOUCH-TYPED-SYNTAX-TOO')
 	public function testAWriteTheCompilerSeesStoringOnlyFreshValuesLetsNothingEscape(): Void {
 		// every value `reset` stores is built right there, which the syntax cannot see through the conditional
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\treset(true);\n\t}\n\tstatic function calm():Void {}\n'
 			+ '\tstatic function reset(c:Bool):Void {\n\t\titems = c ? [] : null;\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
@@ -4159,7 +4460,9 @@ class MemberReachFactsTest extends Test {
 		// `items` declares no type, so the index cannot say `items.indexOf` is the array's own reader and not a method that
 		// changes it; the facts type it `Array<Int>`. A `Bag` with an `indexOf` of its own is no array
 		function fixture(init: String): Map<String, String> {
-			final main: String = 'class Main {\n\tpublic var items = ' + init + ';\n\tpublic function new() {}\n'
+			final main: String = 'class Main {\n\tpublic var items = '
+				+ init
+				+ ';\n\tpublic function new() {}\n'
 				+ '\tstatic function main() {\n\t\tvar m = new Main();\n\t\tm.items.push(1);\n\t\tm.f();\n\t}\n'
 				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ var k = items.indexOf(i); /*>*/ }\n\t}\n}\n'
 				+ 'class Bag {\n\tpublic var length:Int = 0;\n\tpublic function new() {}\n\tpublic function push(v:Int):Void length++;\n'
@@ -4178,12 +4481,15 @@ class MemberReachFactsTest extends Test {
 		// a write of `items` runs `set_items`, a call the facts name, whose body writes the storage by a field access, and a
 		// read reads the storage itself; a getter decides what a reader sees whatever the storage holds, `@:isVar` or not
 		function fixture(accessors: String, region: String): Map<String, String> {
-			final main: String = 'class Main {\n\t@:isVar public var items(' + accessors
+			final main: String = 'class Main {\n\t@:isVar public var items('
+				+ accessors
 				+ '):Array<Int> = [];\n\tpublic function new() {}\n'
 				+ '\tfunction set_items(v:Array<Int>):Array<Int> {\n\t\titems = v;\n\t\treturn v;\n\t}\n'
 				+ '\tfunction get_items():Array<Int> return items;\n'
 				+ '\tstatic function main() {\n\t\tvar m = new Main();\n\t\tm.f();\n\t\tm.g();\n\t}\n'
-				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n'
+				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ '
+				+ region
+				+ ' /*>*/ }\n\t}\n'
 				+ '\tfunction h():Void {}\n\tfunction g():Void {\n\t\titems = [1];\n\t}\n}\n';
 			return ['Main.hx' => main];
 		}
@@ -4456,7 +4762,8 @@ class MemberReachFactsTest extends Test {
 		final box: String = 'enum En {\n\tA;\n}\n\nclass Box {\n\tpublic var e:En = A;\n\n\tpublic function new() {}\n}\n';
 		// the doc puts `.e` past every offset of `Map.get` in `Map.hx`: the compiler keeps the smaller start and the larger end of
 		// the parts it joins, whatever their files, so the range starts in `Map.hx` and ends in `Util.hx` only then, as in the client corpus
-		final doc: String = '/**\n\t * ' + [for (i in 0...70) 'The enum value of the box a key maps to, converted.'].join('\n\t * ')
+		final doc: String = '/**\n\t * '
+			+ [for (i in 0...70) 'The enum value of the box a key maps to, converted.'].join('\n\t * ')
 			+ '\n\t */\n\t';
 		final files: Map<String, String> = utilWith(
 			doc + 'public static function other(m:Map<String, Box>, k:String):String return \'x $${m[k].e}\';', ['Box.hx' => box]
@@ -4468,7 +4775,8 @@ class MemberReachFactsTest extends Test {
 	public function testALibraryClassTheWalkEntersIsItsTextUnderTheTruth(): Void {
 		// openfl's `DisplayObject`, rebuilt from its own fields by a global macro: the walk enters `Disp.calm`, of a class whose
 		// `check` tests a type and whose `made` constructs a `Map`
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfinal d:Disp = new Disp();\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfinal d:Disp = new Disp();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ d.calm(); /*>*/ }\n\t}\n}\n';
 		final disp: String = 'class Disp {\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n\n'
 			+ '\tpublic function check(o:Dynamic):Bool return o is Disp;\n\n'
@@ -4735,7 +5043,8 @@ class MemberReachFactsTest extends Test {
 			final doc: String = [
 				for (i in 0...padding) '\t * The frame of the first element of what it is handed, read off it.'
 			].join('\n');
-			return 'class Pa {\n' + (padding == 0 ? '' : '\t/**\n' + doc + '\n\t */\n')
+			return 'class Pa {\n'
+				+ (padding == 0 ? '' : '\t/**\n' + doc + '\n\t */\n')
 				+ '\tpublic static inline function frameOf(a:Ro.RoArr):Int {\n\t\treturn a[0].frame;\n\t}\n}\n';
 		}
 		for (padding in [0, 8]) {
@@ -4780,7 +5089,8 @@ class MemberReachFactsTest extends Test {
 	public function testABuildMacroOnlyTheCompilerSawChangingNothingIsNoneUnderTheTruth(): Void {
 		// the listed twin of `testABuildMacroOnlyTheCompilerSawIsUnknown`: the `@:build` a global `addGlobalMetadata` puts on
 		// `Main` hands back no fields, so what every build compiled is `Main`'s text
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n'
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n'
 			+ '\tstatic function helper():Void {}\n}\n';
 		final mac: String = 'class Mac {\n\tpublic static macro function b():Array<haxe.macro.Expr.Field> return null;\n}\n';
 		final build: String = BUILD + '--macro addGlobalMetadata("Main", "@:build(Mac.b())", false)\n';
@@ -4818,7 +5128,8 @@ class MemberReachFactsTest extends Test {
 			+ '\tfunction g():Void {\n\t\tfor (i => p in _points) p.x = i;\n\t\tfor (p in _points) p.x = 0;\n'
 			+ '\t\tit = _points.iterator();\n\t}\n'
 			+ '\tfunction f():Void {\n\t\tfor (i in 0..._points.length) { /*<*/ _points[i].x = i; poke(); /*>*/ }\n\t}\n'
-			+ '\tfunction poke():Void Other.poke(this);\n}\n' + 'class P {\n\tpublic var x:Int = 0;\n\tpublic function new() {}\n}\n'
+			+ '\tfunction poke():Void Other.poke(this);\n}\n'
+			+ 'class P {\n\tpublic var x:Int = 0;\n\tpublic function new() {}\n}\n'
 			+ 'class Other {\n\tpublic static var seen:Null<Main> = null;\n\tpublic static function poke(m:Main):Void seen = m;\n}\n';
 		final points: MemberRef = { owner: 'Main', name: '_points' };
 		assertMatch(ask(['Main.hx' => main], null, true, points, false, null, null, null, true), r -> r.match(Proven));
@@ -4835,7 +5146,9 @@ class MemberReachFactsTest extends Test {
 		function fixture(use: String): Map<String, String> {
 			final main: String = 'class Main {\n\tprivate final _points:Array<Int> = [];\n\tpublic function new() {}\n'
 				+ '\tstatic function main() {\n\t\tfinal m = new Main();\n\t\tm.f();\n\t\tm.g(new Keeper());\n\t}\n'
-				+ '\tfunction g(k:Keeper):Void {\n\t\t' + use + '\n\t}\n'
+				+ '\tfunction g(k:Keeper):Void {\n\t\t'
+				+ use
+				+ '\n\t}\n'
 				+ '\tfunction f():Void {\n\t\tfor (i in 0..._points.length) { /*<*/ Keeper.grow(); /*>*/ }\n\t}\n}\n'
 				+ 'class Keeper {\n\tpublic static var held:Array<Int> = [];\n\tpublic var it:Null<Walk> = null;\n'
 				+ '\tpublic var count:Int = 0;\n\tpublic function new() {}\n\tpublic static function grow():Void held.push(1);\n'
@@ -4856,8 +5169,12 @@ class MemberReachFactsTest extends Test {
 	 */
 	private static function escapingObj(escape: String): Map<String, String> {
 		return [
-			'Main.hx' => 'import lib.Text;\n\n' + LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
-				+ '\t\tText.keep(o);\n\t\t' + escape + '\n\t\tfor (i in 0...items.length) { /*<*/ Text.fail(); /*>*/ }\n\t}\n}\n'
+			'Main.hx' => 'import lib.Text;\n\n'
+				+ LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+				+ '\t\tText.keep(o);\n\t\t'
+				+ escape
+				+ '\n\t\tfor (i in 0...items.length) { /*<*/ Text.fail(); /*>*/ }\n\t}\n}\n'
 				+ CLEARING_OBJ
 		];
 	}
@@ -4870,8 +5187,10 @@ class MemberReachFactsTest extends Test {
 		return [
 			'lib/Text.hx' => 'package lib;\n\nclass Plain {\n\tpublic function new() {}\n}\n\nclass Text {\n'
 				+ '\tpublic static var last:Plain = new Plain();\n\n\tpublic static var failing:Bool = false;\n\n'
-				+ '\tpublic static function keep<A>(x:A):Void {}\n\n\tpublic static function fail():Void {\n' + '\t\tif (failing) {\n\t\t'
-				+ thrown + '\n\t\t}\n\t}\n}\n'
+				+ '\tpublic static function keep<A>(x:A):Void {}\n\n\tpublic static function fail():Void {\n'
+				+ '\t\tif (failing) {\n\t\t'
+				+ thrown
+				+ '\n\t\t}\n\t}\n}\n'
 		];
 	}
 
@@ -5011,11 +5330,21 @@ class MemberReachFactsTest extends Test {
 	private static function valueCallFixture(
 		type: String, stored: String, more: String, ?region: String, ?base: String, ?map: String
 	): String {
-		return 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n\tpublic static var keep:Null<' + type + '> = null;\n\n'
-			+ '\tstatic function main() {\n\t\tkeep = ' + stored + ';\n' + more + '\t\tfinal r:Rx = new Rx();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ ' + (region ?? 'r.map(x -> "a");') + ' /*>*/ }\n\t}\n}\n'
-			+ (base ?? 'class Base {\n\tpublic function new() {}\n}\n') + 'class Rx extends Base {\n\tpublic function new() super();\n\n\t'
-			+ (map ?? 'public function map(f:(Rx)->String):String return f(this);') + '\n}\n';
+		return 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n\tpublic static var keep:Null<'
+			+ type
+			+ '> = null;\n\n'
+			+ '\tstatic function main() {\n\t\tkeep = '
+			+ stored
+			+ ';\n'
+			+ more
+			+ '\t\tfinal r:Rx = new Rx();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ '
+			+ (region ?? 'r.map(x -> "a");')
+			+ ' /*>*/ }\n\t}\n}\n'
+			+ (base ?? 'class Base {\n\tpublic function new() {}\n}\n')
+			+ 'class Rx extends Base {\n\tpublic function new() super();\n\n\t'
+			+ (map ?? 'public function map(f:(Rx)->String):String return f(this);')
+			+ '\n}\n';
 	}
 
 	/** `truthAsk` of `files` built by `INTERP_BUILD`, which must compile, the library declarations `declared` indexed. */
@@ -5224,7 +5553,9 @@ class MemberReachFactsTest extends Test {
 			+ '\tstatic function main() {\n\t\t${main ?? ''}\n\t\tnew Main().f();\n\t\tcb();\n\t\th1();\n\t\tk();\n'
 			+ '\t\tnew Holder();\n\t\tnew Maker();\n\t\tnew Sub().run();\n\t}\n\n'
 			+ '\tfunction f():Void {\n\t\tvar d:Dynamic = 1;\n\t\tvar a:Null<Array<Int>> = [1];\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ '
+			+ code
+			+ ' /*>*/ }\n\t}\n}\n'
 			+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function run():Void\n\t\tMain.g();\n}\n'
 			+ 'class Holder {\n\tpublic var f:Void->Void = Main.g;\n\n\tpublic function new() {}\n}\n'
 			+ 'class Maker {\n\tpublic function new()\n\t\tMain.g();\n}\n'
@@ -5358,8 +5689,12 @@ class MemberReachFactsTest extends Test {
 	 */
 	public function testAReturnOfANestedFunctionLandsAtItsOwnReturnType(): Void {
 		function region(code: String): String {
-			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n\t\td = new Obj();\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+			return LOOP_HEAD
+				+ '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n\t\td = new Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n'
+				+ CLEARING_OBJ;
 		}
 		for (code in [
 			'final g = function named():String { return d; };',
@@ -5392,8 +5727,14 @@ class MemberReachFactsTest extends Test {
 	@:killer('M-SITES-EXPR-RETURN-NO-LANDING')
 	public function testAnExpressionBodiedReturnLandsAtItsFunctionsReturnType(): Void {
 		function region(code: String, member: String): String {
-			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\n' + member + '\tstatic function main() {\n\t\td = new Obj();\n'
-				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+			return LOOP_HEAD
+				+ '\tstatic var d:Dynamic = null;\n\n'
+				+ member
+				+ '\tstatic function main() {\n\t\td = new Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code
+				+ ' /*>*/ }\n\t}\n}\n'
+				+ CLEARING_OBJ;
 		}
 		assertMatch(
 			ask(['Main.hx' => region('inline function named():String return d; named();', '')], null, false), r -> r.match(Reached(_))

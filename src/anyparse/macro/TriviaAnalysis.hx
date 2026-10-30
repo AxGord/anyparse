@@ -97,8 +97,11 @@ class TriviaAnalysis {
 		// Detect: branch.base.meta has `:postfix` with 2 args (open, close)
 		// AND children = [Ref operand, Star args]. Mark the Star.
 		if (
-			node.kind == Seq && hasPostfixPair(node.annotations[AnnotationKeys.BASE_META]) && node.children.length == 2
-			&& node.children[0].kind == Ref && node.children[1].kind == Star
+			node.kind == Seq
+			&& hasPostfixPair(node.annotations[AnnotationKeys.BASE_META])
+			&& node.children.length == 2
+			&& node.children[0].kind == Ref
+			&& node.children[1].kind == Star
 		) {
 			node.children[1].annotations.set(AnnotationKeys.TRIVIA_STAR_COLLECTS, true);
 		}

@@ -224,7 +224,8 @@ final class MoveToHelper {
 
 	private static function isPrivateConstant(g: MemberGroup): Bool {
 		final kinds: Array<String> = g.modifiers.map(m -> m.kind);
-		return kinds.contains('Static') && !kinds.contains('Public')
+		return kinds.contains('Static')
+			&& !kinds.contains('Public')
 			&& (MoveMember.FINAL_FIELD_KINDS.contains(g.member.kind) || (g.member.kind == 'VarMember' && kinds.contains('Inline')));
 	}
 

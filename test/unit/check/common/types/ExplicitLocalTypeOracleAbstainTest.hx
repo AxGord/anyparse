@@ -43,10 +43,14 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 	 * path is the only spelling on offer), and `loose`, whose `Reflect.field` answer is `Dynamic`.
 	 */
 	private static final MAIN: String = 'package pkg;\n\nclass Main {\n\n\tpublic static function run():Void {\n'
-		+ '\t\tfinal winmap:Map<String, String> = [\n\t\t\tfor (e in [\'a@1\', \'b@2\']) {\n' + '\t\t\t\tfinal a = e.split(\'@\');\n'
-		+ '\t\t\t\ta[0] => a[1];\n\t\t\t}\n\t\t];\n' + '\t\tfinal t = new Thing(1);\n\t\tfinal t = t.next();\n'
-		+ '\t\tfinal bag:Dynamic = {n: 1};\n' + '\t\tfinal loose = Reflect.field(bag, \'n\');\n'
-		+ '\t\tfinal mapped = [\'a\', \'b\'].map(s -> s.length);\n' + '\t\ttrace(winmap, t, loose, mapped);\n\t}\n\n}\n\n'
+		+ '\t\tfinal winmap:Map<String, String> = [\n\t\t\tfor (e in [\'a@1\', \'b@2\']) {\n'
+		+ '\t\t\t\tfinal a = e.split(\'@\');\n'
+		+ '\t\t\t\ta[0] => a[1];\n\t\t\t}\n\t\t];\n'
+		+ '\t\tfinal t = new Thing(1);\n\t\tfinal t = t.next();\n'
+		+ '\t\tfinal bag:Dynamic = {n: 1};\n'
+		+ '\t\tfinal loose = Reflect.field(bag, \'n\');\n'
+		+ '\t\tfinal mapped = [\'a\', \'b\'].map(s -> s.length);\n'
+		+ '\t\ttrace(winmap, t, loose, mapped);\n\t}\n\n}\n\n'
 		+ 'class Thing {\n\n\tpublic final n:Int;\n\n\tpublic function new(n:Int) {\n\t\tthis.n = n;\n\t}\n\n'
 		+ '\tpublic function next():Thing {\n\t\treturn new Thing(n + 1);\n\t}\n\n}\n';
 

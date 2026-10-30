@@ -255,7 +255,8 @@ final class OracleGenerationTest extends Test {
 			{ name: 'mylib/1,0,0/templates/haxe/ApplicationMain.hx', source: '// template\n' }
 		]);
 		File.saveContent('$dir/extra.hxml', '-D extra\n');
-		final command: String = "printf '%s\\n' '-cp .' '-main Main' '-cp " + repo
+		final command: String = "printf '%s\\n' '-cp .' '-main Main' '-cp "
+			+ repo
 			+ "/mylib/1,0,0/src' 'extra.hxml' > gen.hxml && echo run >> runs.txt";
 		final config: OracleConfig = entry(dir, command, ['$dir/input.txt']);
 		OracleGeneration.prepare([config]);

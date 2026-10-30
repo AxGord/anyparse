@@ -75,7 +75,8 @@ class LintExplainLongCliTest extends Test {
 	public function testUnresolvedCallsAndQuietTakes(): Void {
 		#if nodejs
 		final source: String = 'class A { final _m:Mutex = new Mutex(); final _s:Mutex = new Mutex(); public function new() {}\n'
-			+ ' function work(f:() -> Void):Void { _m.acquire();\n' + ' f(); _m.release(); }\n'
+			+ ' function work(f:() -> Void):Void { _m.acquire();\n'
+			+ ' f(); _m.release(); }\n'
 			+ ' function shutdown():Void { _s.acquire(); tick(); _s.release(); } function tick():Void {} }';
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],'
 			+ '"quietRoots":["A.shutdown"]}}}';

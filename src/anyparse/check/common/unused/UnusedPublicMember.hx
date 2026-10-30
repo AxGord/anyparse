@@ -414,7 +414,9 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 	 * double-claim it.
 	 */
 	private static function reportableName(name: String): Bool {
-		return !IMPLICIT_NAMES.contains(name) && !name.startsWith(CheckScan.GET_PREFIX) && !name.startsWith(CheckScan.SET_PREFIX)
+		return !IMPLICIT_NAMES.contains(name)
+			&& !name.startsWith(CheckScan.GET_PREFIX)
+			&& !name.startsWith(CheckScan.SET_PREFIX)
 			&& !(name.startsWith(DUNDER) && name.endsWith(DUNDER));
 	}
 

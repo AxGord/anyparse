@@ -324,7 +324,9 @@ final class GuardContinue extends RuleBase {
 		if (h == null) return false;
 		if (stmt.kind != h.exprStmtKind || stmt.children.length != 1) return false;
 		final assign: QueryNode = stmt.children[0];
-		return assign.kind == h.assignKind && assign.children.length == 2 && assign.children[0].kind == h.identKind
+		return assign.kind == h.assignKind
+			&& assign.children.length == 2
+			&& assign.children[0].kind == h.identKind
 			&& h.literalKinds.contains(assign.children[1].kind);
 	}
 
@@ -364,7 +366,9 @@ final class GuardContinue extends RuleBase {
 	 */
 	private static function mentionsName(node: QueryNode, name: String, s: Seams): Bool {
 		final h: Null<HoistSeams> = s.hoist;
-		return h == null || (node.kind == h.identKind || node.kind == h.interpIdentKind) && node.name == name
+		return h == null
+			|| (node.kind == h.identKind || node.kind == h.interpIdentKind)
+			&& node.name == name
 			|| node.children.exists(c -> mentionsName(c, name, s));
 	}
 
@@ -557,7 +561,12 @@ final class GuardContinue extends RuleBase {
 	/** Whether `code` is an identifier character; a null code (out of range) is a boundary, not a word character. */
 	private static function isWordCode(code: Null<Int>): Bool {
 		return code != null
-			&& (code >= '0'.code && code <= '9'.code || code >= 'A'.code && code <= 'Z'.code || code >= 'a'.code && code <= 'z'.code
+			&& (code >= '0'.code
+				&& code <= '9'.code
+				|| code >= 'A'.code
+				&& code <= 'Z'.code
+				|| code >= 'a'.code
+				&& code <= 'z'.code
 				|| code == '_'.code);
 	}
 

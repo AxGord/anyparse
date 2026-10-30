@@ -131,8 +131,10 @@ final class FixtureCache {
 	}
 
 	private static function isPrunable(name: String): Bool {
-		return name.endsWith('.json.gz') || (name.startsWith('fixture-cache-') && name.endsWith('.js'))
-			|| (name.startsWith('build-') && name.endsWith('.log')) || name.endsWith('.tmp');
+		return name.endsWith('.json.gz')
+			|| (name.startsWith('fixture-cache-') && name.endsWith('.js'))
+			|| (name.startsWith('build-') && name.endsWith('.log'))
+			|| name.endsWith('.tmp');
 	}
 
 	private static function isExecutable(path: String): Bool {

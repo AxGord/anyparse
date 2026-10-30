@@ -354,7 +354,10 @@ final class StructuralTypes {
 		final ret: Null<String> = found?.member.returnNominal;
 		final written: Null<String> = found?.member.returnSource;
 		final path: Null<String> = written == null ? ret : NominalTypes.outerPathOf(written, [], _typeSyntax) ?? ret;
-		return found != null && ret != null && path != null && found.member.firstParamTypeSource == null
+		return found != null
+			&& ret != null
+			&& path != null
+			&& found.member.firstParamTypeSource == null
 			&& (ret == ITERATOR_TYPE_NAME || satisfiesIterator(path, found.file));
 	}
 

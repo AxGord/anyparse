@@ -173,8 +173,11 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 		final src: String = 'class Whiles {\n\tprivate function run():Void {\n\t\tfinal drainedNodes:Array<SceneNode<NodePayload>> = ['
 			+ 'while (_pendingQueue.hasNext()) if (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()];\n\t}\n}';
 		final expected: String = 'class Whiles {\n\tprivate function run():Void {\n\t\tfinal drainedNodes:Array<SceneNode<NodePayload>> = ['
-			+ '\n\t\t\twhile (_pendingQueue.hasNext()) if (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()\n\t\t];' + '\n' + '\t}'
-			+ '\n' + '}';
+			+ '\n\t\t\twhile (_pendingQueue.hasNext()) if (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()\n\t\t];'
+			+ '\n'
+			+ '\t}'
+			+ '\n'
+			+ '}';
 		assertWrite(expected, src, CFG);
 	}
 

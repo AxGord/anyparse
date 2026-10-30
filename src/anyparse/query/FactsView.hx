@@ -634,7 +634,8 @@ final class FactsView {
 		final at: Null<FnDeclaration> = g.declarationAt(file, span.from);
 		if (at == null || span.to > at.span.to) return false;
 		final key: String = CallGraphNames.normalizePath(file);
-		final reads: Bool = node != null && g.facts?.qualified[node]?.node == at.id
+		final reads: Bool = node != null
+			&& g.facts?.qualified[node]?.node == at.id
 			&& g.declarationsOf(node).exists(d -> CallGraphNames.normalizePath(d.file) == key && sameRange(d.span, at.span));
 		return g.facts?.faceted.exists(reads && node != null ? node : at.id) == true;
 	}
@@ -703,7 +704,10 @@ final class FactsView {
 			final target: Null<String> = c.target;
 			final dot: Int = target == null ? -1 : target.lastIndexOf('.');
 			if (
-				target != null && c.access == INLINED && dot > 0 && REFLECTION_CLASSES.contains(target.substr(0, dot))
+				target != null
+				&& c.access == INLINED
+				&& dot > 0
+				&& REFLECTION_CLASSES.contains(target.substr(0, dot))
 				&& !out.contains(target)
 			)
 				out.push(target);
@@ -836,7 +840,9 @@ final class FactsView {
 	 */
 	public function externMethod(owner: String, member: String): Bool {
 		final fact: Null<TypeFact> = _table.type(CompilerFacts.baseId(owner));
-		return fact != null && fact.isExtern && fact.alike
+		return fact != null
+			&& fact.isExtern
+			&& fact.alike
 			&& fact.fields.exists(f -> f.name == member && f.kinds.exists(k -> METHOD_KINDS.contains(k)));
 	}
 
@@ -1055,7 +1061,9 @@ final class FactsView {
 		for (fi in _scope.index.allFiles())
 			for (t in fi.types)
 				if (
-					t.name == type && !CallGraphNames.selfAlias(t) && t.members.exists(m -> m.name == name)
+					t.name == type
+					&& !CallGraphNames.selfAlias(t)
+					&& t.members.exists(m -> m.name == name)
 					&& !roots.contains(declaredId(fi, t))
 				)
 					return null;
@@ -1593,7 +1601,8 @@ final class FactsView {
 				answer = false;
 				continue;
 			}
-			final alias: Bool = info != null && (_scope.shape.aliasingDeclKinds ?? []).contains(info.kind)
+			final alias: Bool = info != null
+				&& (_scope.shape.aliasingDeclKinds ?? []).contains(info.kind)
 				&& !(_scope.shape.underlyingThisTypeKinds ?? []).contains(info.kind);
 			final header: Span = info == null || alias
 				? text.span
@@ -1806,7 +1815,10 @@ final class FactsView {
 			case Named(NULLABLE, [inner]): classlessType(inner, depth);
 			case Named(id, _) if (depth < MAX_TYPEDEF_DEPTH):
 				final declared: Null<TypeFact> = _table.type(id);
-				declared != null && declared.alike && declared.kind == TYPEDEF_KIND && declared.targets.length > 0
+				declared != null
+					&& declared.alike
+					&& declared.kind == TYPEDEF_KIND
+					&& declared.targets.length > 0
 					&& declared.targets.foreach(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
 						read != null && classlessType(read, depth + 1);

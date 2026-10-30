@@ -232,7 +232,8 @@ class RedundantElseCheckTest extends Test {
 	 */
 	public function testSiblingRegionLocalIsACollision(): Void {
 		final src: String = 'class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#end\n\t\t#if B\n\t\tif (c) return 1;\n'
-			+ '\t\telse {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t\t#end\n\t\t#if A\n\t\treturn n;\n\t\t#end\n\t\treturn 0;\n' + '\t}\n}';
+			+ '\t\telse {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t\t#end\n\t\t#if A\n\t\treturn n;\n\t\t#end\n\t\treturn 0;\n'
+			+ '\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}

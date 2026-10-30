@@ -1748,7 +1748,8 @@ class WrapList {
 			),
 			breakAsOnePerLine, true
 		);
-		final cascadeForcesBreak: Bool = probeMode == OnePerLine || probeMode == OnePerLineAfterFirst
+		final cascadeForcesBreak: Bool = probeMode == OnePerLine
+			|| probeMode == OnePerLineAfterFirst
 			|| probeMode == FillLineWithLeadingBreak;
 		final compactCont: Bool = cascadeForcesBreak || compactContinuation;
 		return baseCols * (compactCont && additional > 0 ? additional : 1 + additional);
@@ -2376,7 +2377,9 @@ class WrapList {
 	private static function shapeSoleArrowUniform(
 		mode: WrapMode, open: String, close: String, openInside: Doc, closeInside: Doc, items: Array<Doc>
 	): Null<Doc> {
-		return items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0])
+		return items.length == 1
+			&& isArrowBodyMarker(items[0])
+			&& !arrowBodyIsBlock(items[0])
 			&& (mode == FillLine || (mode == FillLineWithLeadingBreak && arrowBodyBreaks(items[0])))
 			? arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0])
 			: null;
@@ -2409,7 +2412,10 @@ class WrapList {
 		appendTrailingComma: Bool, lineWidth: Int
 	): Null<Doc> {
 		if (
-			mode == FillLineWithLeadingBreak && items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0])
+			mode == FillLineWithLeadingBreak
+			&& items.length == 1
+			&& isArrowBodyMarker(items[0])
+			&& !arrowBodyIsBlock(items[0])
 			&& !arrowBodyBreaks(items[0])
 		) {
 			final body: Null<Doc> = arrowBodyDoc(items[0]);
@@ -3103,7 +3109,9 @@ class WrapList {
 			case Concat(arr):
 				var hit: Bool = false;
 				for (k in 0...arr.length) if (!hit) switch arr[k] {
-					case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code && k + 1 < arr.length
+					case Line(flat) if (flat.length > 0
+						&& flat.fastCodeAt(0) == '\n'.code
+						&& k + 1 < arr.length
 						&& DocMeasure.firstVisibleTextStartsWith(arr[k + 1], '.'.code)):
 						hit = true;
 					// Follow ONLY a bare chain-tail `Nest` (where MethodChainEmit
@@ -3445,7 +3453,8 @@ class WrapList {
 	private static function startsChunk(
 		items: Array<Doc>, i: Int, sepBeforeFlags: Null<Array<Bool>>, complexItemKinds: Null<Array<Int>>
 	): Bool {
-		return hasLeadingHardline(items[i]) || regionAfterElidedSep(items, i, sepBeforeFlags)
+		return hasLeadingHardline(items[i])
+			|| regionAfterElidedSep(items, i, sepBeforeFlags)
 			|| chunkBreakBefore(items, complexItemKinds, i);
 	}
 
@@ -3614,7 +3623,10 @@ class WrapList {
 		// mirrors fork's `wrapFillLine2AfterLast` accounting where each
 		// item carries its trailing comma in `firstLineLength`
 		// (slice ω-fill-tail-reserve).
-		final lastChunkTailReserve: Int = sep.length + 1 + (appendTrailingComma ? sep.length : 0) + DocMeasure.flatTokenWidth(closeInside)
+		final lastChunkTailReserve: Int = sep.length
+			+ 1
+			+ (appendTrailingComma ? sep.length : 0)
+			+ DocMeasure.flatTokenWidth(closeInside)
 			+ close.length;
 		final bodyParts: Array<Doc> = [];
 		var chunkStart: Int = 0;

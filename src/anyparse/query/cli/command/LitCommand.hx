@@ -212,7 +212,8 @@ final class LitCommand implements CliCommand {
 		// without the identifier kind) deliberately stays comment-free —
 		// a silent `--include-comments`-by-default would flood
 		// doc-comment-heavy queries with noise.
-		final scanComments: Bool = o.includeComments || (kindFilter != null && kindFilter.length == 0)
+		final scanComments: Bool = o.includeComments
+			|| (kindFilter != null && kindFilter.length == 0)
 			|| effectiveKindFilter.contains(COMMENT_KIND);
 		// Directive scan is OPT-IN ONLY: `--include-directives`, or `Directive` named in an
 		// explicit `--kind`. Unlike the comment scan it deliberately does NOT ride `--any-kind` —

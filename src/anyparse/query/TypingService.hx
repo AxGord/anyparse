@@ -211,7 +211,8 @@ final class TypingService {
 	 */
 	public static function isArithmetic(node: QueryNode, shape: RefShape): Bool {
 		final kind: String = node.kind;
-		final binary: Bool = (shape.arithmeticKinds ?? []).contains(kind) || (shape.booleanOperatorKinds ?? []).contains(kind)
+		final binary: Bool = (shape.arithmeticKinds ?? []).contains(kind)
+			|| (shape.booleanOperatorKinds ?? []).contains(kind)
 			|| shape.execution?.compoundAssignOperators?.exists(kind) == true;
 		return binary && node.children.length == 2 || (kind == shape.negationKind || kind == shape.notKind) && node.children.length == 1;
 	}
@@ -253,7 +254,9 @@ final class TypingService {
 		final construction: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.construction;
 		if (kind == shape.newExprKind && node.name != null && construction != null) return construction(node, ctx);
 		final contextual: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.contextual;
-		final dependent: Bool = kind == shape.arrayLiteralKind || kind == shape.objectLiteralKind || kind == shape.ternaryKind
+		final dependent: Bool = kind == shape.arrayLiteralKind
+			|| kind == shape.objectLiteralKind
+			|| kind == shape.ternaryKind
 			|| (shape.ifExpressionKinds ?? []).contains(kind);
 		return dependent && contextual != null ? contextual(node, ctx) : arithmeticType(node, shape, host, ctx);
 	}

@@ -138,7 +138,8 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 		final name: String = named;
 		final span: Span = at;
 		if (
-			CtorFieldFold.declInitializer(property, shape) != null || ReflectionScan.runtimeName(reflection, name)
+			CtorFieldFold.declInitializer(property, shape) != null
+			|| ReflectionScan.runtimeName(reflection, name)
 			|| PropertyStorage.storageReachable(r.storage, name)
 		)
 			return;

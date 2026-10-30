@@ -345,14 +345,17 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 		return unreadable.length == 0
 			? null
 			: 'the deletion is unproven: ${unreadable.length} file(s) in scope did not parse, and their text cannot be shown free of a '
-				+ 'reference to \'$name\', of a subtype declaring \'$prop\', or of a computed accessor name: ' + unreadable.join(', ');
+				+ 'reference to \'$name\', of a subtype declaring \'$prop\', or of a computed accessor name: '
+				+ unreadable.join(', ');
 	}
 
 	private static function deletable(ctx: Ctx, kept: Bool, name: String): Bool {
 		// A LITERAL FRAGMENT of an interpolated string (`Reflect.field(o, 'get_$suffix')`) is only
 		// ever part of the runtime name, so containment is asked the other way round — the shared
 		// `runtimeNameFragment`, which also owns the floor below which a fragment carries no intent.
-		return !kept && !ctx.referenced.contains(name) && !ctx.reflected.exists(content -> content.indexOf(name) >= 0)
+		return !kept
+			&& !ctx.referenced.contains(name)
+			&& !ctx.reflected.exists(content -> content.indexOf(name) >= 0)
 			&& !ReflectionScan.runtimeNameFragment(ctx.fragments, name);
 	}
 
@@ -448,7 +451,9 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 	private static function collectReferences(node: QueryNode, kinds: Array<String>, out: Array<String>): Void {
 		final name: Null<String> = node.name;
 		if (
-			name != null && kinds.contains(node.kind) && (name.startsWith(CheckScan.GET_PREFIX) || name.startsWith(CheckScan.SET_PREFIX))
+			name != null
+			&& kinds.contains(node.kind)
+			&& (name.startsWith(CheckScan.GET_PREFIX) || name.startsWith(CheckScan.SET_PREFIX))
 			&& !out.contains(name)
 		)
 			out.push(name);

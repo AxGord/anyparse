@@ -326,7 +326,11 @@ final class CondQuery {
 		if (span != null && (span.to <= body.from || span.from >= body.to)) return;
 		final name: Null<String> = node.name;
 		if (
-			name != null && !carriesLiteralText(node.kind, shape) && symbolRow(name, shape) && span != null && span.from >= body.from
+			name != null
+			&& !carriesLiteralText(node.kind, shape)
+			&& symbolRow(name, shape)
+			&& span != null
+			&& span.from >= body.from
 			&& span.to <= body.to
 		) {
 			final row: String = '${node.kind} $name';

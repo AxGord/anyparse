@@ -38,8 +38,11 @@ final class PropertyStorage {
 		final methodName: Null<String> = method.name;
 		final methodSpan: Null<Span> = method.span;
 		if (
-			methodName == null || methodSpan == null || !CheckScan.METHOD_KINDS.contains(method.kind)
-			|| !methodName.startsWith(CheckScan.SET_PREFIX) || method.children.length == 0
+			methodName == null
+			|| methodSpan == null
+			|| !CheckScan.METHOD_KINDS.contains(method.kind)
+			|| !methodName.startsWith(CheckScan.SET_PREFIX)
+			|| method.children.length == 0
 			|| method.children[method.children.length - 1].kind == noBodyKind
 		)
 			return null;
@@ -48,7 +51,8 @@ final class PropertyStorage {
 		final propertySpan: Null<Span> = property?.span;
 		if (property == null || propertySpan == null) return null;
 		final clause: Null<AccessorClause> = AccessorClauseText.accessorClause(source, propertySpan);
-		return clause != null && AccessorClauseText.readsFieldWritesThroughSetter(clause)
+		return clause != null
+			&& AccessorClauseText.readsFieldWritesThroughSetter(clause)
 			&& !SourceText.mentionsIdent(source, methodSpan, name)
 			? property
 			: null;
@@ -109,7 +113,8 @@ final class PropertyStorage {
 		final accessor: Bool = nodeName != null && CheckScan.METHOD_KINDS.contains(node.kind) && accessors.contains(nodeName);
 		final bypass: Bool = node.children.exists(c -> MemberKinds.META_KINDS.contains(c.kind) && c.name == BYPASS_META);
 		if (
-			span != null && (accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))
+			span != null
+			&& (accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))
 			&& SourceText.mentionsIdent(source, span, name)
 		)
 			return true;
@@ -123,8 +128,11 @@ final class PropertyStorage {
 	private static function plainWriteToken(node: QueryNode, source: String, name: String, shape: RefShape): Null<Span> {
 		final target: Null<QueryNode> = node.kind == shape.assignKind && node.children.length > 0 ? node.children[0] : null;
 		final span: Null<Span> = target?.span;
-		return target != null && span != null && target.name == name
-			&& (target.kind == shape.identKind || target.kind == shape.fieldAccessKind) && span.to - name.length >= span.from
+		return target != null
+			&& span != null
+			&& target.name == name
+			&& (target.kind == shape.identKind || target.kind == shape.fieldAccessKind)
+			&& span.to - name.length >= span.from
 			&& source.substring(span.to - name.length, span.to) == name
 			? new Span(span.to - name.length, span.to)
 			: null;

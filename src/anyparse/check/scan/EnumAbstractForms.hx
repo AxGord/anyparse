@@ -95,7 +95,9 @@ final class EnumAbstractForms {
 
 	/** Whether `region` holds a declaration-prefix keyword or the enum-abstract meta in any branch. */
 	private static function carriesEnumMarker(region: QueryNode, seams: Seams): Bool {
-		return seams.prefixKinds.contains(region.kind) || seams.metaName != null && region.name == seams.metaName
+		return seams.prefixKinds.contains(region.kind)
+			|| seams.metaName != null
+			&& region.name == seams.metaName
 			|| region.children.exists(child -> carriesEnumMarker(child, seams));
 	}
 

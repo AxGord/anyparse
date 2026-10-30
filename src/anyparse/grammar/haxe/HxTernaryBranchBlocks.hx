@@ -70,7 +70,8 @@ final class HxTernaryBranchBlocks {
 			return arr.exists(item -> holdsBlock(item, depth + 1));
 		}
 		// `Reflect.isObject` answers true for String on several targets; a string has no blocks.
-		return !Std.isOfType(v, String) && Reflect.isObject(v)
+		return !Std.isOfType(v, String)
+			&& Reflect.isObject(v)
 			&& Reflect.fields(v).exists(name -> holdsBlock(Reflect.field(v, name), depth + 1));
 	}
 

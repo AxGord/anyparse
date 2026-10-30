@@ -501,7 +501,9 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	 * of which a kind test can see. Both positions above verified against Haxe 4.3.7.
 	 */
 	private static function skipsSubtree(seams: Seams, node: QueryNode): Bool {
-		return seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind) || node.kind == seams.patternKind
+		return seams.opaqueKinds.contains(node.kind)
+			|| seams.metaKinds.contains(node.kind)
+			|| node.kind == seams.patternKind
 			|| seams.paramKinds.contains(node.kind);
 	}
 
@@ -610,8 +612,10 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	private static function unwrapped(ctx: PlanContext, decomposition: Decomposition, filled: Array<Int>, budget: Int): Null<Plan> {
 		final span: Span = decomposition.editSpan;
 		if (!SameItems.of(filled, decomposition.current) || !overLong(ctx, span)) return { groups: filled, budget: budget };
-		final own: Int = ctx.metrics.lineWidth - columnWidth(ctx, SourceText.lineStartAt(ctx.source, span.from), span.from)
-			- GROUP_JOIN.length + 1;
+		final own: Int = ctx.metrics.lineWidth
+			- columnWidth(ctx, SourceText.lineStartAt(ctx.source, span.from), span.from)
+			- GROUP_JOIN.length
+			+ 1;
 		if (own >= budget) return { groups: filled, budget: budget };
 		final refilled: Null<Array<Int>> = fill(ctx, decomposition, own);
 		return refilled == null ? null : { groups: refilled, budget: own };
@@ -1014,7 +1018,9 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	 * bare operands.
 	 */
 	private static function steerable(decomposition: Decomposition, from: Int, end: Int): Bool {
-		return from > 0 || decomposition.startsBare || decomposition.locked.contains(end)
+		return from > 0
+			|| decomposition.startsBare
+			|| decomposition.locked.contains(end)
 			|| !isBareGroup(decomposition.segments, from, end);
 	}
 
@@ -1165,7 +1171,10 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 
 		if (scope != null) {
 			final source: String = ctx.source;
-			final spliced: String = scope.head + source.substring(scope.from, span.from) + candidate + source.substring(span.to, scope.to)
+			final spliced: String = scope.head
+				+ source.substring(scope.from, span.from)
+				+ candidate
+				+ source.substring(span.to, scope.to)
 				+ scope.tail;
 			return widestDiffering(scope.baseline, ctx.write(spliced), ctx.metrics.indentWidth);
 		}
@@ -1196,7 +1205,8 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		while (prefix < lines.length && prefix < original.length && lines[prefix] == original[prefix]) prefix++;
 		var suffix: Int = 0;
 		while (
-			suffix < lines.length - prefix && suffix < original.length - prefix
+			suffix < lines.length - prefix
+			&& suffix < original.length - prefix
 			&& lines[lines.length - 1 - suffix] == original[original.length - 1 - suffix]
 		)
 			suffix++;
@@ -1692,7 +1702,10 @@ private class PlanContext {
 	private function statementSpanOf(span: Span, member: Span): Null<Span> {
 		var best: Null<Span> = null;
 		for (statement in statementSpans()) if (
-			member.from <= statement.from && statement.to <= member.to && statement.from <= span.from && span.to <= statement.to
+			member.from <= statement.from
+			&& statement.to <= member.to
+			&& statement.from <= span.from
+			&& span.to <= statement.to
 			&& (best == null || statement.to - statement.from < best.to - best.from)
 		)
 			best = statement;

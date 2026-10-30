@@ -113,8 +113,12 @@ final class SelfAssignment extends RuleBase {
 		}
 		final span: Null<Span> = node.span;
 		if (
-			span != null && node.kind == assignKind && node.children.length == 2 && node.children[0].kind == identKind
-			&& node.children[1].kind == identKind && MemberKinds.sameSource(node.children[0], node.children[1], source)
+			span != null
+			&& node.kind == assignKind
+			&& node.children.length == 2
+			&& node.children[0].kind == identKind
+			&& node.children[1].kind == identKind
+			&& MemberKinds.sameSource(node.children[0], node.children[1], source)
 		) {
 			final c0: Null<Span> = node.children[0].span;
 			if (c0 != null) candidates.push({ span: span, name: source.substring(c0.from, c0.to) });

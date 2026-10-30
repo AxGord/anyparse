@@ -208,7 +208,8 @@ final class CondRegionMerge extends RuleBase {
 		final elseKeyword: String = branchKeyword(shape) ?? '';
 		if (merge.complements && elseKeyword == '') return null;
 		final tailsClean: Bool = source.substring(close.span.to, closeLineTo).trim() == ''
-			&& source.substring(openTo, openLineTo).trim() == '' && !hasComment(comments, closeLineTo, openLineFrom);
+			&& source.substring(openTo, openLineTo).trim() == ''
+			&& !hasComment(comments, closeLineTo, openLineFrom);
 		final gap: String = source.substring(closeLineTo, openLineFrom);
 		final indent: String = source.substring(closeLineFrom, closeFrom);
 		final replacement: String = merge.complements
@@ -290,7 +291,9 @@ final class CondRegionMerge extends RuleBase {
 
 	/** The line break ending the line that stops at `lineTo` - `\r\n` when the file uses it, `\n` otherwise. */
 	private static function lineTerminator(source: String, lineTo: Int): String {
-		final crlf: Bool = lineTo > 1 && lineTo <= source.length && source.fastCodeAt(lineTo - 1) == '\n'.code
+		final crlf: Bool = lineTo > 1
+			&& lineTo <= source.length
+			&& source.fastCodeAt(lineTo - 1) == '\n'.code
 			&& source.fastCodeAt(lineTo - 2) == '\r'.code;
 		return crlf ? '\r\n' : '\n';
 	}

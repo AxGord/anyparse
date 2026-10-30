@@ -140,7 +140,9 @@ final class ArgumentUses {
 		if (type == null || !type.alike || type.isExtern || !BODIED_TYPES.contains(type.kind) || type.code.length > 0) return null;
 		final declared: Null<FieldDeclFact> = type.fields.find(f -> f.name == field && f.isStatic == isStatic);
 		if (
-			declared == null || !declared.kinds.foreach(k -> BODIED_KINDS.contains(k)) || declared.overloads.exists(o -> o != 0)
+			declared == null
+			|| !declared.kinds.foreach(k -> BODIED_KINDS.contains(k))
+			|| declared.overloads.exists(o -> o != 0)
 			|| declared.code.length > 0
 		)
 			return null;

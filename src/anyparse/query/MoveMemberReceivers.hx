@@ -114,7 +114,10 @@ final class MoveMemberReceivers {
 		final path: Null<Array<String>> = NominalTypes.pathOf(recv, MemberKinds.IDENT_EXPR_KIND, MemberKinds.FIELD_ACCESS_KIND);
 		final root: Null<QueryNode> = rootOf(recv);
 		if (
-			path != null && root != null && root.name != 'this' && SourceText.isUpperInitial(path[path.length - 1])
+			path != null
+			&& root != null
+			&& root.name != 'this'
+			&& SourceText.isUpperInitial(path[path.length - 1])
 			&& TypeResolver.identBindingFrom(root, tree, prep.shape) == null
 		)
 			return LEAVE;

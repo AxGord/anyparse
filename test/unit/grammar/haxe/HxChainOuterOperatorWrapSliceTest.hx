@@ -141,7 +141,8 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath FROM items WHERE bucket = '
 			+ "' + (\n\t\t\t\tbucket\n\t\t\t\t\t? '1 AND bucket_entry_id = '\n"
 			+ "\t\t\t\t\t: '0 AND yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy'\n"
-			+ '\t\t\t));\n' + TAIL;
+			+ '\t\t\t));\n'
+			+ TAIL;
 		assertWrite(expected, src);
 	}
 
@@ -182,7 +183,8 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 			'$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath FROM items WHERE bucket = \' + $tail);\n$TAIL';
 		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n\t\t\t\t\'SELECT itempath FROM items WHERE '
 			+ "bucket = ' + (\n\t\t\t\t\tbucket\n\t\t\t\t\t\t? '1 AND bucket_entry_id = '\n\t\t\t\t\t\t: '0 AND "
-			+ 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\'\n\t\t\t\t)\n' + '\t\t\t);\n$TAIL';
+			+ 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\'\n\t\t\t\t)\n'
+			+ '\t\t\t);\n$TAIL';
 		assertWrite(expected, src);
 	}
 

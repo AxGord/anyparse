@@ -373,7 +373,8 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 	private static function hazardMentions(ctx: FileCtx, node: QueryNode, name: String): Bool {
 		final span: Null<Span> = node.span;
 		if (
-			span != null && (ctx.s.hazardKinds.contains(node.kind) || NativeCodeScan.isCarrier(node, ctx.s.shape, ctx.fold))
+			span != null
+			&& (ctx.s.hazardKinds.contains(node.kind) || NativeCodeScan.isCarrier(node, ctx.s.shape, ctx.fold))
 			&& SourceText.mentionsIdent(ctx.source, span, name)
 		)
 			return true;

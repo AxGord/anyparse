@@ -1318,11 +1318,13 @@ class ApqRefsTest extends Test {
 	}
 
 	private static function describe(hits: Array<RefHit>): String {
-		return '[' + hits.map(h -> {
-			final base: String = '${h.kind.toString()}${h.interpolated ? '(interp)' : ''}:${h.name}@${h.span.from}-${h.span.to}';
-			final b: Null<Span> = h.bindingSpan;
-			return b == null ? base : '$base->bind@${b.from}-${b.to}';
-		}).join(', ') + ']';
+		return '['
+			+ hits.map(h -> {
+				final base: String = '${h.kind.toString()}${h.interpolated ? '(interp)' : ''}:${h.name}@${h.span.from}-${h.span.to}';
+				final b: Null<Span> = h.bindingSpan;
+				return b == null ? base : '$base->bind@${b.from}-${b.to}';
+			}).join(', ')
+			+ ']';
 	}
 
 	/**

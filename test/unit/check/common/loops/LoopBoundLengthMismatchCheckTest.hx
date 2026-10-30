@@ -241,8 +241,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	public function testADeclaredTypeOtherThanTheBuiltOneRefuses(): Void {
 		Assert.equals(
 			0,
-			violations(fn('final xs:Null<Array<Int>> = [];\n\t\tfor (k in 0...n) xs.push(k);\n' + '\t\tfor (i in 0...n + 1) trace(xs[i]);'))
-				.length
+			violations(fn('final xs:Null<Array<Int>> = [];\n\t\tfor (k in 0...n) xs.push(k);\n'
+			+ '\t\tfor (i in 0...n + 1) trace(xs[i]);')).length
 		);
 		Assert.equals(0, violations(fn('final v:Array<Int> = new haxe.ds.Vector(3);\n\t\tfor (i in 0...n) trace(v[i]);')).length);
 	}

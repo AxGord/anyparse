@@ -402,7 +402,9 @@ final class WriterBodyPolicyLowering {
 			macro {
 				final _body: anyparse.core.Doc = $writeCall;
 				if (
-					!$optAccess && $lcAccess == anyparse.format.BracePlacement.Next && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
+					!$optAccess
+					&& $lcAccess == anyparse.format.BracePlacement.Next
+					&& Type.enumConstructor($bodyValueExpr) == $v{ctorName}
 					&& anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				)
 					_dc([${valueIfGapExpr(softGap, macro _body)}, _body])
@@ -578,7 +580,9 @@ final class WriterBodyPolicyLowering {
 		return macro {
 			final _eicrBody: anyparse.core.Doc = $writeCall;
 			final _eicrLead: Array<String> = $kwLeadingExpr;
-			final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow && $afterKwExpr == null && _eicrLead.length == 1
+			final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow
+				&& $afterKwExpr == null
+				&& _eicrLead.length == 1
 				&& StringTools.startsWith(_eicrLead[0], '//')
 				? anyparse.format.ElseIfCommentReflow.insertHeadTrail(_eicrBody, trailingCommentDocGuarded(_eicrLead[0], opt))
 				: null;

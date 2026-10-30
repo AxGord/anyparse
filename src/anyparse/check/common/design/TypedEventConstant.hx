@@ -287,7 +287,9 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 		if (seams.classKinds.contains(node.kind) && name != null) {
 			final decl: Null<ResolvedType> = index.refs.findDeclaredType(p.file, name);
 			if (
-				decl != null && !decl.type.guarded && decl.type.typeParamArity == 0
+				decl != null
+				&& !decl.type.guarded
+				&& decl.type.typeParamArity == 0
 				&& ConfiguredTypes.inherits(index, decl, types.base) == true
 			) for (member in node.children) {
 				final candidate: Null<Candidate> = candidateOf(member, decl, p, seams);
@@ -488,8 +490,10 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 			final first: Null<String> = written == null ? null : firstParamText(written, seams.typeSyntax);
 			return first == null ? null : ConfiguredTypes.resolveWritten(index, first, p.info, seams.wrappers, seams.typeSyntax);
 		}
-		final viaSelf: Bool = handler.kind == seams.fieldKind && handler.children.length == 1
-			&& handler.children[0].kind == seams.identKind && handler.children[0].name == seams.selfText;
+		final viaSelf: Bool = handler.kind == seams.fieldKind
+			&& handler.children.length == 1
+			&& handler.children[0].kind == seams.identKind
+			&& handler.children[0].name == seams.selfText;
 		if (!viaSelf && handler.kind != seams.identKind) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(p.tree, span);
 		final owner: Null<ResolvedType> = enclosing == null ? null : index.refs.findDeclaredType(p.file, enclosing);

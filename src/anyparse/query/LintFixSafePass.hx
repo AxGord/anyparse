@@ -489,7 +489,8 @@ final class LintFixSafePass {
 		return culprit.kept == null
 			? 'apq lint --fix: safe-fix REVERTED ${culprit.file} ($rules)\n'
 			: 'apq lint --fix: safe-fix REVERTED the edits $rules made in ${culprit.file}, KEPT the first-pass edits of '
-				+ culprit.keptRules.join(', ') + '\n';
+				+ culprit.keptRules.join(', ')
+				+ '\n';
 	}
 
 	/** The verdict a settled cut amounts to: `Bisected` when a file kept part of its edits, the arm it started from otherwise. */

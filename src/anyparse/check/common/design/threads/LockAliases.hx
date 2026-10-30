@@ -190,7 +190,10 @@ final class LockAliases {
 	private function storedParameter(o: Occurrence): Null<String> {
 		final assign: Null<QueryNode> = o.parent;
 		if (
-			assign == null || assign.kind != _shape.assignKind || assign.children.length != 2 || assign.children[0] != o.node
+			assign == null
+			|| assign.kind != _shape.assignKind
+			|| assign.children.length != 2
+			|| assign.children[0] != o.node
 			|| !_sites.readsOwnMember(o.node)
 		)
 			return null;
@@ -485,7 +488,10 @@ final class LockAliases {
 		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
 			final name: Null<String> = node.name;
 			if (
-				node.kind == _shape.identKind && name != null && !found.contains(name) && _graph.types.declarationCount(name) > 0
+				node.kind == _shape.identKind
+				&& name != null
+				&& !found.contains(name)
+				&& _graph.types.declarationCount(name) > 0
 				&& !(parent != null && _sites.isAccess(parent.kind) && parent.children[0] == node)
 			)
 				found.push(name);

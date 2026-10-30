@@ -407,7 +407,10 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 			name: name,
 			params: [for (c in decl.children) if (seams.paramKinds.contains(c.kind)) c],
 			isStatic: staticKind != null && run.contains(staticKind),
-			plain: !blocked && name != seams.constructorName && !overriding(run, seams) && !rebindable(run, seams)
+			plain: !blocked
+			&& name != seams.constructorName
+			&& !overriding(run, seams)
+			&& !rebindable(run, seams)
 			&& decl.children.exists(c -> seams.bodyKinds.contains(c.kind))
 		});
 	}
@@ -436,7 +439,9 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 		final name: Null<String> = node.name;
 		final isCallee: Bool = parent != null && parent.kind == seams.callKind && index == 0;
 		if (
-			name != null && !isCallee && (node.kind == seams.identKind || node.kind == seams.fieldAccessKind)
+			name != null
+			&& !isCallee
+			&& (node.kind == seams.identKind || node.kind == seams.fieldAccessKind)
 			&& scope.memberOwners.exists(name)
 		)
 			scope.valueReferenced[name] = true;

@@ -71,7 +71,8 @@ class FieldInitAcrossSuperE2ETest extends Test {
 		'\t\treturn _part.label + _tag.label + _n;',
 		'\t}',
 		'}'
-	].join('\n') + '\n';
+	].join('\n')
+		+ '\n';
 	private static final REFUSE_MAIN: String = [
 		'class Main {',
 		'\tstatic function main() {',
@@ -313,7 +314,8 @@ class FieldInitAcrossSuperE2ETest extends Test {
 		'\t\treturn \'$$seen,$${_part.at}\';',
 		'\t}',
 		'}'
-	].join('\n') + '\n';
+	].join('\n')
+		+ '\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final COMPLETE: String =
 		'{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}';

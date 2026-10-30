@@ -23,7 +23,8 @@ class HxFillLeadingCommentTest extends Test {
 
 	/** Enough items to select the fill rule, with a line comment before the first. */
 	private static final SRC: String = 'class C {\n\tstatic final data:Array<Int> = [\n\t\t// a leading line comment\n'
-		+ [for (i in 0...24) '\t\t${i}'].join(',\n') + '\n\t];\n}';
+		+ [for (i in 0...24) '\t\t${i}'].join(',\n')
+		+ '\n\t];\n}';
 
 	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
 		+ '"arrayWrap": {"defaultWrap": "ignore", "rules": ['

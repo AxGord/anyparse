@@ -276,13 +276,18 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 			final host: QueryNode = parent;
 			final blockKind: Null<String> = seams.stringInterpBlockKind;
 			if (
-				blockKind != null && grand != null && host.kind == blockKind && host.children.length == 1
+				blockKind != null
+				&& grand != null
+				&& host.kind == blockKind
+				&& host.children.length == 1
 				&& seams.stringLiteralKinds.contains(grand.kind)
 			)
 				return Interpolation(host, grand);
 			final concatKind: Null<String> = seams.concatKind;
 			if (
-				concatKind != null && host.kind == concatKind && host.children.length == 2
+				concatKind != null
+				&& host.kind == concatKind
+				&& host.children.length == 2
 				&& isStringTyped(host.children[0] == node ? host.children[1] : host.children[0], ctx)
 			)
 				return Concat;
@@ -353,7 +358,8 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 		final callee: QueryNode = call.children[0];
 		if (callee.kind != seams.fieldAccessKind || callee.name != STD_METHOD || callee.children.length != 1) return false;
 		final receiver: QueryNode = callee.children[0];
-		return receiver.kind == seams.identKind && receiver.name == STD_TYPE
+		return receiver.kind == seams.identKind
+			&& receiver.name == STD_TYPE
 			&& TypeResolver.receiverRootIsUnboundType(receiver, ctx.root, seams.shape);
 	}
 
@@ -368,10 +374,13 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 		if (seams.stringLiteralKinds.contains(node.kind)) return true;
 		final stringTypeName: Null<String> = seams.stringTypeName;
 		if (node.kind == seams.identKind)
-			return stringTypeName != null && TypeResolver.identTypeName(node, ctx.root, seams.shape, ctx.declaredTypes) == stringTypeName
+			return stringTypeName != null
+				&& TypeResolver.identTypeName(node, ctx.root, seams.shape, ctx.declaredTypes) == stringTypeName
 				&& isBuiltinBinding(ctx.binder?.tierOf(node), stringTypeName);
 		final concatKind: Null<String> = seams.concatKind;
-		return concatKind != null && node.kind == concatKind && node.children.length == 2
+		return concatKind != null
+			&& node.kind == concatKind
+			&& node.children.length == 2
 			&& (isStringTyped(node.children[0], ctx) || isStringTyped(node.children[1], ctx));
 	}
 

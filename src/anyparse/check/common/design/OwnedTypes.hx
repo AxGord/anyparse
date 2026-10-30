@@ -488,7 +488,8 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 	 * its outside paths ends in the subject's name — the reading a dotted spelling nothing resolves gets.
 	 */
 	private static function denotes(scan: FileScan, named: Denoted, subject: OwnedSubject): Bool {
-		return named.open || named.decls.exists(t -> subject.keys.contains(scan.index.refs.seenKey(t)))
+		return named.open
+			|| named.decls.exists(t -> subject.keys.contains(scan.index.refs.seenKey(t)))
 			|| named.outside.exists(path -> SourceText.lastSegment(path) == subject.simple);
 	}
 

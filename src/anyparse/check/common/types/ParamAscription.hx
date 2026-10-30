@@ -129,8 +129,11 @@ final class ParamAscription {
 		// handled by refusing a generic method outright).
 		final path: Null<String> = headOfTypeSource(withoutNullableWrapper(written, shape, symbols.typeSyntax), symbols.typeSyntax);
 		if (
-			path == null || !DynamicShape.isNominalName(path) || !DynamicShape.acceptableType(path, dynName)
-			|| typeParameterOf(host, path, symbols) || !symbols.resolvesToConversionFreeType(path)
+			path == null
+			|| !DynamicShape.isNominalName(path)
+			|| !DynamicShape.acceptableType(path, dynName)
+			|| typeParameterOf(host, path, symbols)
+			|| !symbols.resolvesToConversionFreeType(path)
 		)
 			return null;
 		final edits: Null<Array<FixEdit>> = unwrapEdits(pinned, source);
@@ -194,8 +197,10 @@ final class ParamAscription {
 		final dispatched: Array<String> = shape.dispatchedMemberMetaNames ?? [];
 		// A compiler-DISPATCHED member is selected by the static type of its operands, at sites that
 		// name neither it nor its type, so its parameter type is the dispatch key and cannot move.
-		final pinnedByItsDeclaration: Bool = carries(mods, shape.overrideModifierKind) || carries(mods, shape.dynamicModifierKind)
-			|| carries(mods, shape.macroModifierKind) || run.metas.exists(meta -> dispatched.contains(meta));
+		final pinnedByItsDeclaration: Bool = carries(mods, shape.overrideModifierKind)
+			|| carries(mods, shape.dynamicModifierKind)
+			|| carries(mods, shape.macroModifierKind)
+			|| run.metas.exists(meta -> dispatched.contains(meta));
 		if (method == null || pinnedByItsDeclaration || declaresTypeParameters(owner, shape, typeParams)) return null;
 		// A bodyless member is an interface method or an `abstract` one: the signature is a contract
 		// the implementors already match. Haxe admits no other bodiless member, so this gate alone
@@ -210,7 +215,8 @@ final class ParamAscription {
 		// supertype or implemented interface declaring the name pins it from above, and there a family
 		// scan looks in the wrong direction entirely. An ancestor the closure cannot reach proves neither.
 		final family: Null<Array<OverrideFamilyMember>> = symbols.subtypes.overrideFamilyOf(owning.name, method);
-		return family != null && family.length == 0
+		return family != null
+			&& family.length == 0
 			&& symbols.typing.members.supertypeMemberProof(owning.name, method) == SupertypeProof.Absent
 			? owning
 			: null;
@@ -267,7 +273,10 @@ final class ParamAscription {
 	): Bool {
 		final s: Null<Span> = node.span;
 		if (
-			node.kind == shape.identKind && node.name == name && s != null && targetKeys.exists('${s.from}:${s.to}')
+			node.kind == shape.identKind
+			&& node.name == name
+			&& s != null
+			&& targetKeys.exists('${s.from}:${s.to}')
 			&& !recordParamRead(node, parent, shape, castTargets, reads)
 		)
 			return false;
