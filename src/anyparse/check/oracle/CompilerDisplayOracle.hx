@@ -1,5 +1,6 @@
 package anyparse.check.oracle;
 
+import anyparse.query.FileIdentity;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService;
@@ -62,6 +63,12 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 
 	/** Output the server may write before its batch's driver ends it — far more than a `--wait` server ever prints. */
 	private static inline final SERVER_OUTPUT: Int = 256 * 1024 * 1024;
+
+	/** The compiler's reply to a display request whose cursor lies in no file it takes for the display file. */
+	private static inline final NO_COMPLETION_POINT: String = 'No completion point was found';
+
+	/** The compiler flag a display request is spelled with. */
+	private static inline final DISPLAY: String = '--display';
 
 	private final _hxml: String;
 	private final _cwd: Null<String>;
@@ -135,6 +142,33 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	public function stop(): Void {
 		#if nodejs
 		_server.cancel();
+		#end
+	}
+
+	/**
+	 * Where the compiler on `port` (a server of `hxml` run from `cwd` under `defines`) says the declaration of the name at
+	 * offset `at` of `content` is written, `content` being read as the text of `file` in place of its bytes on disk
+	 * (`-D display-stdin`); null when it names none. The caller drops the server's cached module of `file` first: a module
+	 * a compile cached is answered from instead of the text handed in.
+	 */
+	public static function positionOver(
+		port: Int, hxml: String, cwd: Null<String>, defines: Array<String>, file: String, content: String, at: Int
+	): Null<TypeReplyPosition> {
+		invocations++;
+		#if nodejs
+		final bytePos: Int = haxe.io.Bytes.ofString(content.substring(0, at)).length;
+		final forms: Array<String> = [FileIdentity.realPath(file)];
+		for (form in formsOf(file, cwd)) addForm(forms, form);
+		for (form in forms) {
+			final reply: String = CompilerServer.connect(
+				port, hxml, cwd, ['-D', 'display-stdin', DISPLAY, '$form@$bytePos@position'], defines, content
+			)?.output ?? '';
+			// A path the compiler does not take for the display file's has it read the disk text, where the cursor names nothing.
+			if (reply.indexOf(NO_COMPLETION_POINT) == -1) return parsePositionResponse(reply);
+		}
+		return null;
+		#else
+		return null;
 		#end
 	}
 
@@ -308,7 +342,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	 * reject still proves the form resolves, so the winning form is cached once either way.
 	 */
 	private function queryReply(path: String, bytePos: Int): Null<String> {
-		final out: Null<String> = connectRun(['--display', '$path@$bytePos@type']);
+		final out: Null<String> = connectRun([DISPLAY, '$path@$bytePos@type']);
 		return out != null && parseTypeResponse(out) != null ? out : null;
 	}
 
@@ -347,15 +381,20 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	 * `file`: the oracleDir-joined absolute, the process-cwd absolute (`absPath`, when oracleDir
 	 * differs from the process cwd), the cwd-relative, and the raw path. Deduped, order = likeliest first.
 	 */
-	private function pathForms(file: String): Array<String> {
+	private inline function pathForms(file: String): Array<String> {
+		return formsOf(file, _cwd);
+	}
+
+	/** `pathForms` for a client run from `cwd`. */
+	private static function formsOf(file: String, cwd: Null<String>): Array<String> {
 		final out: Array<String> = [];
 		if (haxe.io.Path.isAbsolute(file)) {
 			addForm(out, file);
 		} else {
-			if (_cwd != null) addForm(out, joinCwd(_cwd, file));
+			if (cwd != null) addForm(out, joinCwd(cwd, file));
 			addForm(out, absPath(file));
 		}
-		addForm(out, relativeToCwd(file, _cwd));
+		addForm(out, relativeToCwd(file, cwd));
 		addForm(out, file);
 		return out;
 	}

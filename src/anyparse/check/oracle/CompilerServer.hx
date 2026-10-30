@@ -5,6 +5,9 @@ import anyparse.core.TempScratch;
 import anyparse.query.FileIdentity;
 import haxe.crypto.Md5;
 import haxe.io.Path;
+#if nodejs
+import js.node.Buffer;
+#end
 
 /**
  * One `haxe --connect` round trip: the client's exit status (null when the spawn
@@ -132,6 +135,12 @@ final class CompilerServer {
 	 */
 	private static inline final MAX_INVALIDATIONS: Int = 128;
 
+	/** The encoding every text crossing the client process boundary is read and written in. */
+	private static inline final UTF8: String = 'utf8';
+
+	/** The width of the length prefix a `-D display-stdin` client reads before the display file's text. */
+	private static inline final STDIN_LENGTH_BYTES: Int = 4;
+
 	/** Milliseconds per second — the compilation server compares modification times in whole seconds. */
 	private static inline final MS_PER_SECOND: Float = 1000;
 
@@ -227,16 +236,18 @@ final class CompilerServer {
 	 * The defines lead, followed by `--each`, so they reach every `--next` arm of the hxml —
 	 * `CompilerOracle.oracleArgs` spells the same discipline for the cold spawn, and a trailing
 	 * `-D` would land in one arm only. `--connect` sits AFTER `--each` because it is a
-	 * client-side flag and must not be duplicated into the arms.
+	 * client-side flag and must not be duplicated into the arms. A non-null `stdin` is handed to the
+	 * client as the display file's text (`displayStdin`); the caller adds `-D display-stdin` to `extra`.
 	 */
 	public static function connect(
-		port: Int, hxml: String, cwd: Null<String>, extra: Array<String>, ?defines: Array<String>
+		port: Int, hxml: String, cwd: Null<String>, extra: Array<String>, ?defines: Array<String>, ?stdin: String
 	): Null<ConnectResult> {
 		#if nodejs
 		try {
 			final args: Array<String> = connectArgs(port, hxml, extra, defines ?? []);
-			final opts: Dynamic = { encoding: 'utf8', env: HaxeSpawn.childEnv() };
+			final opts: Dynamic = { encoding: UTF8, env: HaxeSpawn.childEnv() };
 			if (cwd != null) Reflect.setField(opts, 'cwd', cwd);
+			if (stdin != null) Reflect.setField(opts, 'input', displayStdin(stdin));
 			final res: Dynamic = js.node.ChildProcess.spawnSync('haxe', args, opts);
 			if (res.error != null) return null;
 			final status: Null<Int> = res.status;
@@ -315,6 +326,16 @@ final class CompilerServer {
 
 	#if nodejs
 	/**
+	 * Ask the server to drop its cached module for `file`, and confirm the answer came from
+	 * a compilation server at all. False when the port answered as something else — the
+	 * check that keeps a stray listener from passing for a warm server.
+	 */
+	public static function invalidate(port: Int, hxml: String, cwd: Null<String>, file: String, defines: Array<String>): Bool {
+		final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--display', invalidateRequest(file)], defines);
+		return res != null && isServerReply(res.output);
+	}
+
+	/**
 	 * The recorded server when it is still alive AND still answers as a Haxe compilation
 	 * server, with every possibly-stale linted file invalidated first. Null when there is
 	 * no usable server: nothing recorded, the process is gone, the port answers as
@@ -371,16 +392,6 @@ final class CompilerServer {
 			killChild(child);
 		}
 		return null;
-	}
-
-	/**
-	 * Ask the server to drop its cached module for `file`, and confirm the answer came from
-	 * a compilation server at all. False when the port answered as something else — the
-	 * check that keeps a stray listener from passing for a warm server.
-	 */
-	private static function invalidate(port: Int, hxml: String, cwd: Null<String>, file: String, defines: Array<String>): Bool {
-		final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--display', invalidateRequest(file)], defines);
-		return res != null && isServerReply(res.output);
 	}
 
 	/**
@@ -448,7 +459,7 @@ final class CompilerServer {
 	 * temp dir) points at a RECYCLED pid, and this class kills what it believes it owns.
 	 */
 	private static function isOurServer(pid: Int, port: Int): Bool {
-		final res: Dynamic = js.node.ChildProcess.spawnSync('ps', ['-p', '$pid', '-o', 'command='], { encoding: 'utf8' });
+		final res: Dynamic = js.node.ChildProcess.spawnSync('ps', ['-p', '$pid', '-o', 'command='], { encoding: UTF8 });
 		return text(res.stdout).indexOf('--wait $port') != -1;
 	}
 
@@ -483,6 +494,17 @@ final class CompilerServer {
 	/** `file` resolved against the process cwd (node-normalised, NOT symlink-followed), or `file` on failure. */
 	private static function absolute(file: String): String {
 		return try sys.FileSystem.absolutePath(file) catch (exception: haxe.Exception) file;
+	}
+
+	/**
+	 * `content` framed as the client reads it under `-D display-stdin`: a little-endian 32-bit byte length, then a `\x01`
+	 * and the text — the server takes what follows `\x01` as the display file's source instead of the bytes on disk.
+	 */
+	private static function displayStdin(content: String): Buffer {
+		final body: Buffer = Buffer.from('\x01$content', UTF8);
+		final head: Buffer = Buffer.alloc(STDIN_LENGTH_BYTES);
+		head.writeInt32LE(body.length, 0);
+		return Buffer.concat([head, body]);
 	}
 	#end
 

@@ -3,8 +3,11 @@ package anyparse.check.common.imports;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.NameOracle;
+import anyparse.check.Check.NameOracleAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.CheckScan;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.InertRegions;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
@@ -55,6 +58,9 @@ private typedef PathPlan = {
 	var importPath: Null<String>;
 	var proven: Bool;
 	var targets: Array<Span>;
+
+	/** The targets that are VALUE sites — the ones a fix rewrites only where the compiler answers for them. */
+	var valueTargets: Array<Span>;
 }
 
 /**
@@ -216,15 +222,17 @@ private typedef ScanContext = {
  * breaks, and with no `compilerOracle` configured the rule stays report-only wholesale. This is
  * also what makes true the claim `TypeRefPrinter` makes about all of its callers.
  *
- * ## Default ON for type positions — value positions opt-in
+ * ## Value positions — answered by the compiler
  *
- * Every type position is on by default, the add-import arm included. A static-access chain in a
- * VALUE position is skipped wholesale unless the project opts in with
- * `"shorten-type-ref": { "valuePositions": true }`; `importMinUses` overrides the add-import
- * threshold.
+ * Type and value positions are both on by default, the add-import arm included;
+ * `"shorten-type-ref": { "valuePositions": false }` skips the static-access chains, and `importMinUses` overrides the
+ * add-import threshold. A value site is REPORTED on the static proof (`valueNameFree`), but a build macro the build
+ * configuration attaches (`--macro addGlobalMetadata`) can add the very field the short name would read, and no source
+ * door shows it. So a value site is REWRITTEN only where the compiler, asked over the text before and after the rewrite
+ * under every judging configuration, names one declaration for both (`NameOracle`); anything else is a decline.
  */
 @:nullSafety(Strict)
-final class ShortenTypeRef extends RuleBase implements ConfigAware implements RiskyFix implements GroupedFix {
+final class ShortenTypeRef extends RuleBase implements ConfigAware implements RiskyFix implements GroupedFix implements NameOracleAware {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shorten-type-ref';
@@ -262,6 +270,10 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	private static inline final DECLINE_UNPROVEN: String =
 		'report-only by design: the resolution index does not prove the shorter spelling names the same declaration';
 
+	/** What the fix ledger is told about a value site the compiler did not confirm keeps naming the same declaration. */
+	private static inline final DECLINE_VALUE_UNANSWERED: String =
+		'the compiler does not confirm that the short name at this value position names the same declaration';
+
 	/**
 	 * Where the backward scan for a `macro` modifier stops: the first preceding sibling that is not
 	 * a bare modifier node. A modifier projects as a childless, nameless sibling, so anything with a
@@ -272,6 +284,9 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
+	/** The compiler's answer for a value site, installed by the verified fix pass; null outside it. */
+	private var _nameOracle: Null<NameOracle> = null;
 
 	public function new() {
 		super(
@@ -367,25 +382,29 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		// violations it built itself.
 		final scope: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final file: String = violations[0].file;
-		final plan: Null<FilePlan> = planFor(source, plugin, scope, wanted, file, optionsFor(file));
-		if (plan == null) return [];
-		// One bucket can serve SEVERAL paths (the printer merges imports landing on one anchor), so
-		// the group is the bucket and every path in it binds its own rewrites to that same unit.
-		final importEdits: Array<PendingImportEdit> = plan.printer.pendingImportEdits();
-		final byPath: Map<String, Int> = [];
-		for (group => importEdit in importEdits) for (importPath in importEdit.paths) byPath[importPath] = group;
-		final edits: Array<GroupedEdit> = [
-			for (path in plan.plans) if (path.proven)
-				for (target in path.targets) if (wanted.contains(spanKey(target)))
-					{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
-		];
-		// Every promised import belongs to a path that contributed rewrites above: `planFor` was
-		// handed `wanted`, so it only promised one for a path with at least `importMinUses`
-		// SURVIVING targets, and such a path always comes back with a changed spelling — so each of
-		// those targets is one of the edits just built. With no rewrites there are no imports
-		// either, which is why the empty case needs no early-out of its own.
-		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
-		return edits;
+		final options: RuleOptions = optionsFor(file);
+		// A value site the compiler does not answer for leaves the surviving set and the plan is taken again without it, since
+		// it may have been what bought an import. Each round drops at least one site or ends, so the loop terminates.
+		final refused: Array<String> = [];
+		while (true) {
+			final kept: Array<String> = wanted.filter(key -> !refused.contains(key));
+			final plan: Null<FilePlan> = planFor(source, plugin, scope, kept, file, options);
+			if (plan == null) {
+				declineRefused(violations, refused);
+				return [];
+			}
+			final edits: Array<GroupedEdit> = editsOf(plan, kept);
+			final lost: Array<String> = unansweredValueSites(source, file, plan.plans, edits);
+			if (lost.length == 0) {
+				declineRefused(violations, refused);
+				return edits;
+			}
+			for (key in lost) refused.push(key);
+		}
+	}
+
+	public function setNameOracle(oracle: Null<NameOracle>): Void {
+		_nameOracle = oracle;
 	}
 
 	/** The options `file`'s own project declares, each defaulted when it declares none. */
@@ -393,8 +412,33 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
 		return {
 			importMinUses: config.intOption(RULE_ID, IMPORT_MIN_USES_KEY) ?? DEFAULT_IMPORT_MIN_USES,
-			valuePositions: config.boolOption(RULE_ID, VALUE_POSITIONS_KEY) ?? false
+			valuePositions: config.boolOption(RULE_ID, VALUE_POSITIONS_KEY) ?? true
 		};
+	}
+
+	/**
+	 * The keys of the value-site rewrites among `edits` the compiler does not confirm: the name at the head of the type's last
+	 * segment, read in `source` and again in `source` with every one of `edits` applied, must be declared at one place
+	 * (`NameOracle.sameDeclaration`). Static doors cannot see a field a build macro adds from the build configuration, so
+	 * a value lookup is answered by the compiler or not at all; with no oracle installed every value-site rewrite is unanswered.
+	 */
+	private function unansweredValueSites(source: String, file: String, plans: Array<PathPlan>, edits: Array<GroupedEdit>): Array<String> {
+		final rewrites: Array<{ site: Span, text: String }> = [
+			for (plan in plans) if (plan.proven)
+				for (site in plan.valueTargets) if (edits.exists(e -> e.span == site)) { site: site, text: plan.text }
+		];
+		if (rewrites.length == 0) return [];
+		final oracle: Null<NameOracle> = _nameOracle;
+		if (oracle == null) return [for (r in rewrites) spanKey(r.site)];
+		final after: String = CanonicalEdit.applyEdits(source, [for (e in edits) { span: e.span, text: e.text }]);
+		final out: Array<String> = [];
+		for (r in rewrites) {
+			final from: Int = r.site.from;
+			final beforeAt: Int = from + source.substring(from, r.site.to).lastIndexOf('.') + 1;
+			final afterAt: Int = shiftedStart(from, edits) + r.text.lastIndexOf('.') + 1;
+			if (!oracle.sameDeclaration(file, source, beforeAt, after, afterAt)) out.push(spanKey(r.site));
+		}
+		return out;
 	}
 
 	/**
@@ -417,6 +461,43 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */
 	private static inline function spanKey(span: Span): String {
 		return '${span.from}:${span.to}';
+	}
+
+	/**
+	 * The edits of `plan` for the surviving findings `wanted`: each proven rewrite, then each import the printer promised, one
+	 * atomic GROUP per import bucket. One bucket can serve SEVERAL paths (the printer merges imports landing on one anchor), so
+	 * the group is the bucket and every path in it binds its own rewrites to that same unit.
+	 *
+	 * Every promised import belongs to a path that contributes rewrites: `planFor` was handed `wanted`, so it only promised one
+	 * for a path with at least `importMinUses` SURVIVING targets, and such a path always comes back with a changed spelling.
+	 * With no rewrites there are no imports either.
+	 */
+	private static function editsOf(plan: FilePlan, wanted: Array<String>): Array<GroupedEdit> {
+		final importEdits: Array<PendingImportEdit> = plan.printer.pendingImportEdits();
+		final byPath: Map<String, Int> = [];
+		for (group => importEdit in importEdits) for (importPath in importEdit.paths) byPath[importPath] = group;
+		final edits: Array<GroupedEdit> = [
+			for (path in plan.plans) if (path.proven)
+				for (target in path.targets) if (wanted.contains(spanKey(target)))
+					{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
+		];
+		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
+		return edits;
+	}
+
+	/** Record `DECLINE_VALUE_UNANSWERED` on each of `violations` whose span is among `refused`. */
+	private static function declineRefused(violations: Array<Violation>, refused: Array<String>): Void {
+		for (violation in violations) {
+			final span: Null<Span> = violation.span;
+			if (span != null && refused.contains(spanKey(span))) violation.declineReason = DECLINE_VALUE_UNANSWERED;
+		}
+	}
+
+	/** Where offset `at` of the original text lands once `edits` (none of them spanning `at`) are applied. */
+	private static function shiftedStart(at: Int, edits: Array<GroupedEdit>): Int {
+		var shifted: Int = at;
+		for (e in edits) if (e.span.from < at) shifted += e.text.length - (e.span.to - e.span.from);
+		return shifted;
 	}
 
 	/** Which of the three messages `plan` earns — unproven first, then the import-free arm, then the add-import one. */
@@ -516,7 +597,8 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 				text: printed.text,
 				importPath: printed.importPath,
 				proven: proven,
-				targets: kept
+				targets: kept,
+				valueTargets: valueSpans(mine, kept)
 			});
 		}
 		return { printer: printer, plans: plans };
@@ -550,6 +632,11 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 				)
 					o.span
 		];
+	}
+
+	/** The spans of `kept` that belong to a VALUE site of `mine`. */
+	private static function valueSpans(mine: Array<Occurrence>, kept: Array<Span>): Array<Span> {
+		return [for (o in mine) if (o.valueSite != null && kept.contains(o.span)) o.span];
 	}
 
 	/**

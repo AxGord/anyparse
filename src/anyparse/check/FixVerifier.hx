@@ -3,8 +3,10 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.NameOracleAware;
 import anyparse.check.Check.RiskyArm;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.oracle.CompilerNameProof;
 import anyparse.check.oracle.CompilerOracle.CompilerOracle;
 import anyparse.check.oracle.CompilerOracle.OracleBaseline;
 import anyparse.check.oracle.CompilerOracle.OracleExclusion;
@@ -305,10 +307,29 @@ private enum EntryVerdict {
 @:nullSafety(Strict)
 final class FixVerifier {
 
+	/**
+	 * Verify `riskyChecks`' edits over `files` against `oracles` (see the type doc). A `NameOracleAware` check is handed a
+	 * `CompilerNameProof` over the judging configurations and the run's warm servers for the duration of the pass.
+	 */
 	public static function verify(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
 		write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: Array<ConfigCoverage>,
 		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
+	): FixVerifyResult {
+		final names: CompilerNameProof = new CompilerNameProof();
+		final aware: Array<NameOracleAware> = [for (check in riskyChecks) if (check is NameOracleAware) cast check];
+		for (check in aware) check.setNameOracle(names);
+		final result: FixVerifyResult = verifyWith(
+			names, files, riskyChecks, plugin, oracles, write, optsByFile, coverage, resolveConfig, applyEnablement
+		);
+		for (check in aware) check.setNameOracle(null);
+		return result;
+	}
+
+	private static function verifyWith(
+		names: CompilerNameProof, files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin,
+		oracles: Array<OracleConfig>, write: (String, String) -> Void, optsByFile: Null<Map<String, Null<String>>>,
+		coverage: Null<Array<ConfigCoverage>>, resolveConfig: Null<(String) -> LintConfig>, applyEnablement: Bool
 	): FixVerifyResult {
 		final applied: Array<String> = [];
 		final reverted: Array<FixVerifyRevert> = [];
@@ -356,6 +377,9 @@ final class FixVerifier {
 		// only leaves the snapshot conservative — and re-probing per file would cost one
 		// compile each, which is the whole expense this gate exists to avoid.
 		final coverageMemo: OracleCoverageMemo = { probes: (coverage ?? []).copy(), usable: null };
+		// The same memoised answer the candidates are judged by: a check asking about a site before its first candidate
+		// exists settles the probe here, and the loop below reads it back.
+		names.answerFor(OracleCoverage.usableOnce.bind(coverageMemo, judging, excluded), plugin);
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		// One WHOLE-SET run per check, findings then grouped per file: a risky check's
 		// soundness gates can be whole-project (prefer-inline's subtype-override /

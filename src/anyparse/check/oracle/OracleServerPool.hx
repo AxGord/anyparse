@@ -1,5 +1,6 @@
 package anyparse.check.oracle;
 
+import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerServer.ConnectResult;
 import anyparse.check.oracle.HaxeSpawn.SpawnJob;
 import anyparse.core.EnvFlag;
@@ -85,6 +86,33 @@ final class OracleServerPool {
 		return PhaseTimings.measure('oracle warm compile', compileTimed.bind(oracles));
 	}
 
+	/**
+	 * Where `oracle`'s server says the declaration of the name at offset `at` of `content` is written, `content` being read
+	 * as the text of `file` in place of its bytes on disk (`CompilerDisplayOracle.positionOver`); null when the pool holds
+	 * no server for it, a server did not take an invalidation, or the compiler names none. As before a compile, every path
+	 * the run may write whose text moved is dropped first, and then `file` itself, whose cached module the server would
+	 * answer from instead of `content`; `file` then counts as moved, so the next compile re-reads it.
+	 */
+	public function positionIn(oracle: OracleConfig, file: String, content: String, at: Int): Null<TypeReplyPosition> {
+		#if nodejs
+		final server: Null<PoolServer> = _servers[keyOf(oracle)];
+		if (server == null) return null;
+		_warming?.await();
+		final now: Map<String, Null<String>> = texts();
+		final replies: Array<HaxeRun> = HaxeSpawn.runAll([
+			for (path in moved(server.seen, now).concat([file])) invalidation(server, oracle, path)
+		], BUFFER, HaxeSpawn.parallelism());
+		if (!replies.foreach(reply -> CompilerServer.isServerReply(reply.out + reply.err))) {
+			_servers.remove(keyOf(oracle));
+			return null;
+		}
+		server.seen = [for (path => text in now) if (path != file) path => text];
+		return CompilerDisplayOracle.positionOver(server.port, oracle.hxml, oracle.dir, oracle.defines, file, content, at);
+		#else
+		return null;
+		#end
+	}
+
 	/** Whether any server of the pool answers compiles. */
 	public function running(): Bool {
 		return _servers.keys().hasNext();
@@ -135,24 +163,15 @@ final class OracleServerPool {
 		for (i in asked) {
 			final oracle: OracleConfig = oracles[i];
 			final server: Null<PoolServer> = _servers[keyOf(oracle)];
-			if (server != null) for (path in moved(server.seen, now)) invalidations.push({
-				index: i,
-				job: {
-					args: CompilerServer.connectArgs(
-						server.port, oracle.hxml,
-						['--display', CompilerServer.invalidateRequest(path)],
-						oracle.defines
-					),
-					cwd: oracle.dir
-				}
-			});
+			if (server != null) for (path in moved(server.seen, now))
+				invalidations.push({ index: i, job: invalidation(server, oracle, path) });
 		}
 		final replies: Array<HaxeRun> = HaxeSpawn.runAll([for (v in invalidations) v.job], BUFFER, HaxeSpawn.parallelism());
 		final unheard: Array<Int> = [];
-		for (k in 0...invalidations.length) if (!CompilerServer.isServerReply(replies[k].out + replies[k].err)) {
-			final i: Int = invalidations[k].index;
-			if (!unheard.contains(i)) unheard.push(i);
-		}
+		for (k => asking in invalidations) if (
+			!CompilerServer.isServerReply(replies[k].out + replies[k].err) && !unheard.contains(asking.index)
+		)
+			unheard.push(asking.index);
 		// a server that did not take every invalidation may hold a text that is gone: it answers nothing from here on
 		for (i in unheard) _servers.remove(keyOf(oracles[i]));
 		final compiled: Array<Int> = [for (i in asked) if (!unheard.contains(i)) i];
@@ -214,6 +233,18 @@ final class OracleServerPool {
 	/** The client arguments of a typecheck of `oracle` through the server on `port`. */
 	private static function compileArgs(port: Int, oracle: OracleConfig): Array<String> {
 		return CompilerServer.connectArgs(port, oracle.hxml, ['--no-output'], oracle.defines);
+	}
+
+	/** The `server/invalidate` request dropping `path` from `server`, the server of `oracle`. */
+	private static function invalidation(server: PoolServer, oracle: OracleConfig, path: String): SpawnJob {
+		return {
+			args: CompilerServer.connectArgs(
+				server.port, oracle.hxml,
+				['--display', CompilerServer.invalidateRequest(path)],
+				oracle.defines
+			),
+			cwd: oracle.dir
+		};
 	}
 
 	/** Whether `run` never reached a server: the client's own refusal, which is no verdict. */

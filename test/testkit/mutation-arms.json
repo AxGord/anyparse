@@ -11041,7 +11041,7 @@
 		{
 			"name": "M-FIXVERIFY-DISCOVERS-CONFIG",
 			"type": "anyparse.check.FixVerifier",
-			"method": "verify",
+			"method": "verifyWith",
 			"find": "Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)",
 			"replace": "Linter.collect(files, plugin, [check], null, applyEnablement)",
 			"note": "the risky checks' file gate resolves each file's config by an unmemoised discover instead of the run's resolver"
@@ -11049,7 +11049,7 @@
 		{
 			"name": "M-FIXVERIFY-CHECK-DISCOVERS-CONFIG",
 			"type": "anyparse.check.FixVerifier",
-			"method": "verify",
+			"method": "verifyWith",
 			"find": "(cast check: ConfigAware).setConfigResolver(resolveConfig);",
 			"replace": "{};",
 			"note": "a ConfigAware risky check reads its own options by an unmemoised discover instead of the run's resolver"
@@ -11120,7 +11120,7 @@
 		{
 			"name": "M-FIXVERIFY-ENABLEMENT-DROPPED",
 			"type": "anyparse.check.FixVerifier",
-			"method": "verify",
+			"method": "verifyWith",
 			"find": "Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)",
 			"replace": "Linter.collect(files, plugin, [check], resolveConfig, false)",
 			"note": "the risky verifier rewrites a file whose config disables the rule"
@@ -33112,6 +33112,91 @@
 			"find": "segments(FileIdentity.realPath(spec))",
 			"replace": "segments(sys.FileSystem.exists(spec) ? sys.FileSystem.fullPath(spec) : spec)",
 			"note": "an absolute scope gone from the disk keeps its linked spelling while the cwd is resolved, so git is handed a path outside the repository"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-POSITIONS-DEFAULT-OFF",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "optionsFor",
+			"find": "VALUE_POSITIONS_KEY) ?? true",
+			"replace": "VALUE_POSITIONS_KEY) ?? false",
+			"note": "value positions are skipped unless the project opts them in, so a static call whose short name the compiler confirms stays qualified"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-UNANSWERED-SKIPPED",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "unansweredValueSites",
+			"force": "[]",
+			"note": "a value-site rewrite needs no compiler answer, so a build macro's static can silently take over the shortened call"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-REFUSAL-NOT-REPLANNED",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "fixGrouped",
+			"find": "for (key in lost) refused.push(key);",
+			"replace": "return edits.filter(e -> !lost.contains(spanKey(e.span)));",
+			"note": "a refused value site is dropped without planning again, so the import it helped buy stays behind for a single rewrite"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-OFFSET-UNSHIFTED",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "shiftedStart",
+			"force": "at",
+			"note": "the compiler is asked at the original offset in the rewritten text, past the import the same rewrite adds, so it answers about another name"
+		},
+		{
+			"name": "M-NAME-PROOF-ALWAYS-SAME",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "sameDeclaration",
+			"force": "true",
+			"note": "every value-site rewrite reads as confirmed, so a call a build macro of the build configuration re-points is shortened"
+		},
+		{
+			"name": "M-FIXVERIFIER-NAMES-NOT-INSTALLED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verify",
+			"find": "for (check in aware) check.setNameOracle(names);",
+			"replace": "",
+			"note": "the verified pass hands no name oracle to the rules that ask one, so no value site is ever rewritten"
+		},
+		{
+			"name": "M-DISPLAY-STDIN-DROPPED",
+			"type": "anyparse.check.oracle.CompilerDisplayOracle",
+			"method": "positionOver",
+			"find": "defines, content",
+			"replace": "defines",
+			"note": "the text handed in never reaches the compiler, so a rewrite not yet on disk is never asked about"
+		},
+		{
+			"name": "M-DISPLAY-STDIN-NOT-INVALIDATED",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "positionIn",
+			"find": "moved(server.seen, now).concat([file])",
+			"replace": "moved(server.seen, now)",
+			"note": "the module the warm compile cached is answered from, so the text handed in is ignored"
+		},
+		{
+			"name": "M-POOL-POSITION-STALE-WRITES",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "positionIn",
+			"find": "moved(server.seen, now).concat([file])",
+			"replace": "[file]",
+			"note": "a path the run wrote within the second the server last read it is answered at its old text, since the server compares modification times in whole seconds"
+		},
+		{
+			"name": "M-NAME-PROOF-NO-ASK-AGREES",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "sameDeclaration",
+			"find": "return asked.length > 0;",
+			"replace": "return true;",
+			"note": "a site no configuration compiles reads as confirmed, so a rewrite nothing typechecked the meaning of is applied"
+		},
+		{
+			"name": "M-NAME-PROOF-NO-ANSWER-AGREES",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "sameDeclaration",
+			"find": "if (was == null || !samePosition(",
+			"replace": "if (was != null && !samePosition(",
+			"note": "a configuration naming no declaration for the original reads as agreement, so a broken display answer confirms any rewrite"
 		}
 	]
 }

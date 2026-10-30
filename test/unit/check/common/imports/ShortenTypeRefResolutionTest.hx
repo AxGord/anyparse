@@ -4,6 +4,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.common.imports.ShortenTypeRef;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.check.FixedNameOracle;
 import unit.cli.CliFixture;
 
 /**
@@ -320,10 +321,11 @@ class ShortenTypeRefResolutionTest extends Test {
 		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(valueRule(), report, plugin(report, extra)).edits);
 	}
 
-	/** The rule with VALUE positions opted in, so the value-site pins exercise their gates. */
+	/** The rule with VALUE positions on and a name oracle that confirms every rewrite, so the value-site pins exercise the static gates. */
 	private static function valueRule(): ShortenTypeRef {
 		final rule: ShortenTypeRef = new ShortenTypeRef();
 		rule.setConfigResolver(_ -> LintConfig.parse('{"rules":{"shorten-type-ref":{"valuePositions":true}}}'));
+		rule.setNameOracle(FixedNameOracle.agreeing());
 		return rule;
 	}
 

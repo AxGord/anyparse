@@ -434,6 +434,29 @@ interface OracleAssisted {
 }
 
 /**
+ * The compiler's answer to whether a rewrite keeps what a written name means: the name at `beforeAt` of `before` and the
+ * one at `afterAt` of `after`, both read as the text of `file`, name the same declaration under every configuration that
+ * compiles the site. False on any disagreement and wherever no configuration answers — never a guess.
+ */
+@:nullSafety(Strict)
+interface NameOracle {
+
+	public function sameDeclaration(file: String, before: String, beforeAt: Int, after: String, afterAt: Int): Bool;
+
+}
+
+/**
+ * A check whose fix asks a `NameOracle` while it computes its edits. `FixVerifier` installs one for the verified pass and
+ * removes it afterwards; a check left with none treats every such question as unanswered.
+ */
+@:nullSafety(Strict)
+interface NameOracleAware {
+
+	public function setNameOracle(oracle: Null<NameOracle>): Void;
+
+}
+
+/**
  * One file's slice of a cross-file rename: the file path plus the raw
  * `{span, text}` edits that fall within THAT file's source. A `CrossFileFix`
  * groups its edits this way so `apq lint --fix` can canonicalize each affected

@@ -2,11 +2,13 @@ package unit.check.common.imports;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.NameOracle;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.ShortenTypeRef;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.check.FixedNameOracle;
 
 /**
  * The `shorten-type-ref` check: a DOTTED type reference the file itself spells differently.
@@ -493,13 +495,60 @@ class ShortenTypeRefCheckTest extends Test {
 	/** Out of the box only TYPE positions are rewritten: a static-access chain is neither reported nor counted toward an import. */
 	@:pin('control')
 	@:killer('M-SHORTEN-VALUE-POSITIONS-ALWAYS')
-	public function testValuePositionsAreOffByDefault(): Void {
+	public function testValuePositionsOffSkipsTheValueSite(): Void {
+		final off: String = '{"rules":{"shorten-type-ref":{"valuePositions":false}}}';
 		final src: String = inClass('import pkg.deep.Foo;\n\n', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n');
-		final vs: Array<Violation> = optionViolations(src, '{}');
-		Assert.equals(1, vs.length);
-		final out: String = optionFix(src, '{}');
+		Assert.equals(1, optionViolations(src, off).length);
+		final out: String = optionFix(src, off);
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.make());') != -1 && out.indexOf('final v:Foo = g();') != -1, 'type site only, got: $out');
-		Assert.equals(0, optionViolations(inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n'), '{}').length);
+		Assert.equals(0, optionViolations(inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n'), off).length);
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-POSITIONS-DEFAULT-OFF')
+	public function testValuePositionsAreOnByDefault(): Void {
+		final src: String = inClass('import pkg.deep.Foo;\n\n', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n');
+		Assert.equals(2, optionViolations(src, '{}').length);
+		final out: String = optionFix(src, '{}');
+		Assert.isTrue(out.indexOf('g(Foo.make());') != -1 && out.indexOf('final v:Foo = g();') != -1, 'both sites, got: $out');
+	}
+
+	/** With no name oracle a value site is still reported and its rewrite declined with the reason; the type site still goes short. */
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-UNANSWERED-SKIPPED')
+	public function testWithoutANameOracleTheValueSiteIsDeclined(): Void {
+		final src: String = inClass('import pkg.deep.Foo;\n\n', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n');
+		final asked: AskedFix = askedWith(null, src);
+		final out: String = CanonicalEdit.applyEdits(src, [for (e in asked.edits) { span: e.span, text: e.text }]);
+		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.make());') != -1 && out.indexOf('final v:Foo = g();') != -1, 'type site only, got: $out');
+		Assert.equals(2, asked.findings.length);
+		Assert.equals(
+			'the compiler does not confirm that the short name at this value position names the same declaration',
+			asked.findings.filter(v -> v.declineReason != null)[0].declineReason
+		);
+	}
+
+	/** Two value sites buy an import together; the compiler refusing one leaves the other below the threshold: no import, no rewrite. */
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-REFUSAL-NOT-REPLANNED')
+	public function testARefusedValueSiteGivesBackItsImport(): Void {
+		final src: String = inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tg(pkg.deep.Foo.other());\n');
+		final refusing: FixedNameOracle = new FixedNameOracle((after, at) -> after.substr(at, 'Foo.make'.length) != 'Foo.make');
+		final asked: AskedFix = askedWith(refusing, src);
+		Assert.equals(0, asked.edits.length, 'nothing left to pay for the import, got: ${[for (e in asked.edits) e.text]}');
+		Assert.isTrue(refusing.asked > 0, 'the oracle was asked');
+	}
+
+	/** The compiler is asked at the short name's first byte in the rewritten text, past the import the same rewrite adds. */
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-OFFSET-UNSHIFTED')
+	public function testTheOracleIsAskedAtTheShortNameOfTheRewrittenText(): Void {
+		final src: String = inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tg(pkg.deep.Foo.other());\n');
+		final exact: FixedNameOracle = new FixedNameOracle((after, at) -> after.substr(at, 'Foo.'.length) == 'Foo.');
+		final out: String = CanonicalEdit.applyEdits(src, [for (e in askedWith(exact, src).edits) { span: e.span, text: e.text }]);
+		Assert.isTrue(
+			out.indexOf('import pkg.deep.Foo;') != -1 && out.indexOf('g(Foo.make());') != -1, 'confirmed at the short name, got: $out'
+		);
 	}
 
 	@:pin('control')
@@ -1016,6 +1065,16 @@ class ShortenTypeRefCheckTest extends Test {
 		return CanonicalEdit.applyEdits(src, [for (e in suppressedEdits(src)) { span: e.span, text: e.text }]);
 	}
 
+	/** The grouped edits and the findings they were asked for, by a value-positions rule carrying `oracle` (none when null). */
+	private function askedWith(oracle: Null<NameOracle>, src: String): AskedFix {
+		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
+		final plugin: CachingGrammarPlugin = scopedPlugin(report);
+		final check: ShortenTypeRef = valueRule();
+		check.setNameOracle(oracle);
+		final findings: Array<Violation> = Linter.collect(report, plugin, [check]);
+		return { edits: check.fixGrouped(src, findings, plugin), findings: findings };
+	}
+
 	private function applyFixWith(src: String, plugin: CachingGrammarPlugin, report: Array<{ file: String, source: String }>): String {
 		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(valueRule(), report, plugin).edits);
 	}
@@ -1025,11 +1084,18 @@ class ShortenTypeRefCheckTest extends Test {
 		return configuredRule('{"rules":{"shorten-type-ref":{"valuePositions":true}}}');
 	}
 
-	/** The rule reading `json` as every file's project config. */
+	/** The rule reading `json` as every file's project config, with a name oracle that confirms every value-site rewrite. */
 	private static function configuredRule(json: String): ShortenTypeRef {
 		final rule: ShortenTypeRef = new ShortenTypeRef();
 		rule.setConfigResolver(_ -> LintConfig.parse(json));
+		rule.setNameOracle(FixedNameOracle.agreeing());
 		return rule;
 	}
 
+}
+
+/** A fix call's grouped edits and the findings it was handed, which carry the decline reasons it wrote. */
+private typedef AskedFix = {
+	var edits: Array<GroupedEdit>;
+	var findings: Array<Violation>;
 }
