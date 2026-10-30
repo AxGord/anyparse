@@ -685,7 +685,7 @@ class MoveSymbolSliceTest extends Test {
 	 * simple name (`Type not found : Dep` on 4.3.7), so it binds nothing and the move proceeds.
 	 */
 	@:pin('control')
-	@:killer('M-MOVE-PACKAGE-CHAIN-ANY')
+	@:killer('M-BINDING-PACKAGE-TIER-CUT')
 	public function testBareSamePackageDependencyIsPricedToo(): Void {
 		inline function move(extra: Array<{ file: String, source: String }>, host: String): MoveResult {
 			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', [
@@ -1152,7 +1152,7 @@ class MoveSymbolSliceTest extends Test {
 	 * rung and this test alone flips.
 	 */
 	@:pin('control')
-	@:killer('M-MOVE-PRIVATE-SIBLING-BINDS')
+	@:killer('M-BINDING-PRIVATE-VISIBLE')
 	public function testPrivateSiblingMainTypeIsNotABinding(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 's/Date.hx', source: 'package s;\n\nprivate class Date {}\n\nclass DateHelper {}' },
@@ -2183,7 +2183,7 @@ class MoveSymbolSliceTest extends Test {
 	 * this case from the one above.
 	 */
 	@:pin('control')
-	@:killer('M-MOVE-PACKAGE-CHAIN-ANY')
+	@:killer('M-BINDING-PACKAGE-CHAIN-ANY')
 	public function testASiblingPackageIsNotAnAncestorSoItIsLeftAlone(): Void {
 		final changes: Array<MoveChange> = okChanges('p/Moved.hx', 3, 7, 'p/Dest.hx', [
 			{ file: 'p/Moved.hx', source: 'package p;\n\nclass Moved {}' },

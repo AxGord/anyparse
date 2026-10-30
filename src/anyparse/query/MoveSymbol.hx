@@ -1098,7 +1098,7 @@ final class MoveSymbol {
 			if (editsByFile.exists(info.file)) continue;
 			final src: Null<String> = sourceOf[info.file];
 			if (src == null) continue;
-			if (DependencyCarry.bindingOf(target.typeName, info, files)?.path != oldImportPath) continue;
+			if (DependencyCarry.bindingOf(target.typeName, info, index.refs.names)?.path != oldImportPath) continue;
 			// The same scan the repoint walk runs, over the same names — the moved type's own plus the
 			// enum constructors an importer may be the only thing to spell. No cut: nothing of this
 			// file moves.

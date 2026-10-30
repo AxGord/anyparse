@@ -2036,14 +2036,6 @@
 			"note": "a repointed alias import loses its binding suffix, so a file that only ever names the type through the alias is left with no binding for it"
 		},
 		{
-			"name": "M-MOVE-PRIVATE-SIBLING-BINDS",
-			"type": "anyparse.query.DependencyCarry",
-			"method": "packageOrTopLevelBinding",
-			"find": "if (t.name == name && t.isMain && !t.isPrivate) return fi.module;",
-			"replace": "if (t.name == name && t.isMain) return fi.module;",
-			"note": "a module-private main type counts as a same-package binding, which is a binding Haxe does not have, so the unnameable-source arm refuses a correct move"
-		},
-		{
 			"name": "M-MOVE-NAMESCAN-COMMENT-COUNTED",
 			"type": "anyparse.query.NameMentionScan",
 			"method": "sourceNamesAny",
@@ -2066,14 +2058,6 @@
 			"find": "for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == sourceModule) {",
 			"replace": "for (imp in destInfo.imports) if (SymbolIndex.pathImportedBy(imp) == sourceModule) {",
 			"note": "a plain destination module IMPORT is mirrored like a `using`, so a secondary move writes the destination a statement for a type its own module now declares"
-		},
-		{
-			"name": "M-MOVE-PACKAGE-CHAIN-ANY",
-			"type": "anyparse.query.DependencyCarry",
-			"method": "packageOrTopLevelBinding",
-			"find": "for (pkg in packageChainOf(info.pkg)) for (fi in files) if (fi.pkg == pkg && fi.file != info.file) {",
-			"replace": "for (pkg in packageChainOf(info.pkg)) for (fi in files) if (fi.file != info.file) {",
-			"note": "every package reads as an ancestor of every file, so a SIBLING package binds a name it never reached by a simple name"
 		},
 		{
 			"name": "M-MOVE-RECEIVER-ANY-IDENT",
@@ -22956,7 +22940,7 @@
 		{
 			"name": "M-CARRY-OWN-SUB-UNCARRIED",
 			"type": "anyparse.query.DependencyCarry",
-			"method": "dependencyImportLinesToCarry",
+			"method": "sourceBindingOf",
 			"find": "final ownSub: Null<String> = ownSubModuleImport(dep, wanted, provider, cursorInfo);",
 			"replace": "final ownSub: Null<String> = null;",
 			"note": "a sub-module type of the source module is carried by no statement, and the move refuses with \"no import to carry\" over a type `import <module>.<Sub>;` names"
@@ -33494,11 +33478,35 @@
 			"note": "a run that is a used block's value is wrapped in a Void guard, which no longer compiles"
 		},
 		{
-			"name": "M-CARRY-BINDS-ALIKE-NEVER",
+			"name": "M-CARRY-AMBIENT-PROVIDER-NONE",
 			"type": "anyparse.query.DependencyCarry",
-			"method": "bindsAlike",
-			"force": "false",
-			"note": "the move's collision gate stops comparing the declarations the two files bind and falls back to path spellings, so a dependency the source reaches through an ambient import.hx and the destination imports by name reads as a rebind and the move is refused"
+			"method": "ambientProviderOf",
+			"force": "null",
+			"note": "a dependency the source binds only through its ambient import.hx chain has no statement to carry, so a destination outside that chain loses the binding and the move refuses or writes code that does not compile"
+		},
+		{
+			"name": "M-CARRY-HOLDS-GUARDED-COUNTS",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "destAlreadyHolds",
+			"find": "!imp.guarded",
+			"replace": "true",
+			"note": "a #if-guarded copy of the statement at the destination reads as holding it, so the carry is skipped and the moved code does not compile in the builds without that condition"
+		},
+		{
+			"name": "M-BINDING-NO-AMBIENT-CHAIN",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "orderOf",
+			"find": "[fi.imports].concat([for (group in fi.ambientImports) group.imports])",
+			"replace": "[fi.imports]",
+			"note": "the ambient import.hx chain is not asked for a simple type name, so a move reads a dependency only import.hx binds as unknown and refuses a destination that binds the same type"
+		},
+		{
+			"name": "M-BINDING-PACKAGE-CHAIN-ANY",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageAnswer",
+			"find": "for (scope in chain) {",
+			"replace": "for (scope in chain.concat([for (k in packages.keys()) k])) {",
+			"note": "every package is read after the file's own chain, so a SIBLING package binds a name it never reached by a simple name"
 		}
 	]
 }
