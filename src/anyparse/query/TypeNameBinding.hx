@@ -712,6 +712,16 @@ final class TypeNameBinding {
 			+ 1) depth].exists(depth -> FileSystem.exists(Path.join([root].concat(segments.slice(0, depth)).concat([moduleFile]))));
 	}
 
+	/** Whether two answers name the same declarations, as files and spans. */
+	public static function sameDecls(a: Array<ResolvedType>, b: Array<ResolvedType>): Bool {
+		inline function keys(decls: Array<ResolvedType>): Array<String> {
+			final out: Array<String> = [for (d in decls) '${d.file.file}#${d.type.span.from}'];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		return keys(a).join('|') == keys(b).join('|');
+	}
+
 	/** The path an import of module `module` names its type `name` by: the module's own for its main type. */
 	private static inline function pathIn(module: String, name: String): String {
 		return name == SourceText.lastSegment(module) ? module : '$module.$name';
@@ -797,16 +807,6 @@ final class TypeNameBinding {
 			for (f in files) for (t in f.types) if ((name == null || t.name == name) && (!mainOnly || t.isMain) && !t.isPrivate)
 				{ file: f, type: t }
 		];
-	}
-
-	/** Whether two answers name the same declarations, as files and spans. */
-	private static function sameDecls(a: Array<ResolvedType>, b: Array<ResolvedType>): Bool {
-		inline function keys(decls: Array<ResolvedType>): Array<String> {
-			final out: Array<String> = [for (d in decls) '${d.file.file}#${d.type.span.from}'];
-			out.sort(Reflect.compare);
-			return out;
-		}
-		return keys(a).join('|') == keys(b).join('|');
 	}
 
 }

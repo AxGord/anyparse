@@ -33421,6 +33421,13 @@
 			"find": "roots.length < 2 || (tailUsed && last == kids.length - 1)",
 			"replace": "roots.length < 2",
 			"note": "a run that is a used block's value is wrapped in a Void guard, which no longer compiles"
+		},
+		{
+			"name": "M-CARRY-BINDS-ALIKE-NEVER",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "bindsAlike",
+			"force": "false",
+			"note": "the move's collision gate stops comparing the declarations the two files bind and falls back to path spellings, so a dependency the source reaches through an ambient import.hx and the destination imports by name reads as a rebind and the move is refused"
 		}
 	]
 }

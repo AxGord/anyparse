@@ -11,6 +11,7 @@ import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -139,7 +140,7 @@ final class DependencyCarry {
 			// the source binding is then merely unnameable, and it is exactly the case the base engine
 			// fell through on for a stdlib name, a package wildcard and a `#if`-guarded import alike.
 			final collision: Null<String> = carryCollision(
-				dep, wanted, cursorInfo, destInfo, destSource, files, provider != null || ownSub != null, destRegions
+				dep, wanted, cursorInfo, destInfo, destSource, index, files, provider != null || ownSub != null, destRegions
 			);
 			if (collision != null) return CarryErr(collision);
 			if (ownSub != null) {
@@ -631,9 +632,10 @@ final class DependencyCarry {
 	 * destination's own code — and only when it names `dep`.
 	 */
 	private static function carryCollision(
-		dep: String, wanted: Null<String>, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, files: Array<FileInfo>,
-		hasProvider: Bool, regions: Array<LexRegion>
+		dep: String, wanted: Null<String>, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, index: SymbolIndex,
+		files: Array<FileInfo>, hasProvider: Bool, regions: Array<LexRegion>
 	): Null<String> {
+		if (bindsAlike(dep, cursorInfo, destInfo, index)) return null;
 		final standing: Null<NameBinding> = bindingOf(dep, destInfo, files);
 		final guardedDest: Null<String> = guardedImportPath(dep, destInfo);
 		if (wanted == null) return unnameableSourceCollision(dep, cursorInfo, destInfo, files, standing, guardedDest);
@@ -881,7 +883,11 @@ final class DependencyCarry {
 			// Skipping cannot rebind a TYPE name. It can leave the moved body's `x.f()` on whatever
 			// extension the destination already supplies — the same residual `carriedDestEdits` names —
 			// and otherwise it is a missing extension, which is loud.
-			if (carryCollision(SourceText.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, files, true, destRegions) != null)
+			if (
+				carryCollision(
+					SourceText.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, index, files, true, destRegions
+				) != null
+			)
 				continue;
 			final line: String = DependencyCarry.importLineFor(imp, source);
 			if (!carried.contains(line)) carried.push(line);
@@ -1192,6 +1198,18 @@ final class DependencyCarry {
 	private static function moduleMemberNames(files: Array<FileInfo>, module: String): Null<Array<String>> {
 		final info: Null<FileInfo> = files.find(f -> f.module == module);
 		return info == null ? null : [for (t in info.types) for (m in t.members) m.name];
+	}
+
+	/**
+	 * Whether the resolution index pins `dep` to the very same declarations in the source and in the destination
+	 * (`TypeNameBinding.bind`, by any tier — the ambient chain included, which no statement of the source spells). Then nothing
+	 * rebinds, whichever side a carried line lands on: the collision gate compares declarations, never the spellings of
+	 * `bindingOf`'s partial ladder.
+	 */
+	private static function bindsAlike(dep: String, cursorInfo: FileInfo, destInfo: FileInfo, index: SymbolIndex): Bool {
+		final mine: Null<Array<ResolvedType>> = index.refs.names.bind(dep, cursorInfo);
+		final theirs: Null<Array<ResolvedType>> = index.refs.names.bind(dep, destInfo);
+		return mine != null && theirs != null && TypeNameBinding.sameDecls(mine, theirs);
 	}
 
 }
