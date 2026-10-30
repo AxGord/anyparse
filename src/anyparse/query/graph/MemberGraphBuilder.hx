@@ -147,6 +147,13 @@ final class MemberGraphBuilder {
 		return builder.graph;
 	}
 
+	/** The graph of a whole scope `graph --level member` draws: every edge of `calls` of a kind in `kinds`, null or empty being all. */
+	public static function whole(calls: CallGraph, kinds: Null<Array<EdgeKind>>): CodeGraph {
+		final builder: MemberGraphBuilder = new MemberGraphBuilder(calls);
+		for (e in calls.edges) if (kinds == null || kinds.length == 0 || kinds.contains(e.kind)) builder.edge(e);
+		return builder.graph;
+	}
+
 	/** The graph `reach` draws: the edges of every path found, each path's two ends focused. */
 	public static function paths(calls: CallGraph, found: Array<Array<CallEdge>>): CodeGraph {
 		final builder: MemberGraphBuilder = new MemberGraphBuilder(calls);

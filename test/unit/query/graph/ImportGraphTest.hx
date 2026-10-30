@@ -37,6 +37,7 @@ class ImportGraphTest extends Test {
 		'p_pkg_db --> p_pkg_da',
 		'p_pkg_dc -->|2| p_pkg_da',
 		'p_pkg_dc --> p_pkg_db',
+		'linkStyle 0,1 stroke:#d33,stroke-width:2px',
 		''
 	].join('\n');
 
@@ -55,7 +56,10 @@ class ImportGraphTest extends Test {
 		);
 	}
 
-	/** Two imports between one pair of packages are one edge of weight 2, written as the edge's label. */
+	/**
+	 * Two imports between one pair of packages are one edge of weight 2, written
+	 * as the edge's label; the two packages importing each other are drawn red.
+	 */
 	public function testPackageMapAsMermaid(): Void {
 		final weighted: Array<{ file: String, source: String }> = FILES.concat([
 			{ file: 'pkg/c/Epsilon.hx', source: 'package pkg.c;\n\nimport pkg.a.Alpha;\n\nclass Epsilon {}\n' }

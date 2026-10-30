@@ -1,6 +1,7 @@
 package anyparse.query.format;
 
 import anyparse.grammar.json.JsonFormat;
+import anyparse.query.format.json.CodeGraphEdgeJson;
 import anyparse.query.format.json.CodeGraphJson;
 import anyparse.query.format.json.CodeGraphJsonWriter;
 import anyparse.query.format.json.CodeGraphNodeJson;
@@ -28,13 +29,16 @@ final class GraphJson {
 				}
 			],
 			edges: [
-				for (e in graph.edges())
-					{
+				for (e in graph.edges()) {
+					final edge: CodeGraphEdgeJson = {
 						from: e.from,
 						to: e.to,
 						kind: e.kind,
 						weight: e.weight
-					}
+					};
+					if (graph.isMutual(e)) edge.mutual = true;
+					edge;
+				}
 			]
 		};
 	}

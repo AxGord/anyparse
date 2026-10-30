@@ -7,9 +7,7 @@ import anyparse.grammar.mermaid.MmdLabel;
 import anyparse.grammar.mermaid.MmdStatement;
 import anyparse.query.format.GraphMermaid;
 import anyparse.query.graph.CodeGraph;
-import anyparse.query.graph.MemberGraphBuilder;
 import unit.grammar.MermaidAst;
-import unit.query.graph.GraphFixture;
 
 /**
  * `GraphMermaid` — a code graph written through the Mermaid grammar's writer: what it writes parses back
@@ -67,7 +65,10 @@ class GraphMermaidTest extends Test {
 		Assert.equals(GraphFixture.CALLEES_MERMAID, GraphMermaid.write(graph, 'callees Alpha.run --depth 3'));
 	}
 
-	/** Kinds and weights label an edge; a call or an import of one site is unlabelled; an external node is classed. */
+	/**
+	 * Kinds and weights label an edge; a call or an import of one site is unlabelled; an
+	 * external node is classed; the edges of a pair depending on each other are drawn red.
+	 */
 	public function testEdgeLabelsAndClasses(): Void {
 		final graph: CodeGraph = new CodeGraph();
 		final a: String = graph.addNode(Member, 'a', 'a', null, false);
@@ -87,6 +88,7 @@ class GraphMermaidTest extends Test {
 			'class m_a focus',
 			'classDef external stroke-dasharray:4 3',
 			'class em_b external',
+			'linkStyle 0,1,2 stroke:#d33,stroke-width:2px',
 			''
 		].join('\n'), GraphMermaid.write(graph));
 	}

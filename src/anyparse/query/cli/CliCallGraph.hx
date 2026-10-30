@@ -8,6 +8,14 @@ import anyparse.query.format.GraphMermaid;
 import anyparse.query.graph.CodeGraph;
 import anyparse.runtime.ParseError;
 
+/** The scope a graph command reads: its files with their sources, the caching plugin that parsed them, whether one file was named. */
+typedef GraphScope = {
+	final files: Array<{ file: String, source: String }>;
+	final sources: Map<String, String>;
+	final plugin: GrammarPlugin;
+	final singleFile: Bool;
+}
+
 /**
  * What a call-graph command prints: its text report, or the graph it walked as a Mermaid flowchart or
  * a JSON document (`anyparse.query.graph`).
@@ -40,6 +48,17 @@ final class CliCallGraph {
 	public static function buildCallGraphScope(
 		cmd: String, inputSpecs: Array<String>, lang: String
 	): Null<{ graph: CallGraph, sources: Map<String, String> }> {
+		final scope: Null<GraphScope> = readScope(cmd, inputSpecs, lang);
+		if (scope == null) return null;
+		final graph: CallGraph = CallGraph.build(scope.files, scope.plugin);
+		return skippedEndRun(cmd, graph.skippedFiles, scope) ? null : { graph: graph, sources: scope.sources };
+	}
+
+	/**
+	 * The files of a graph command's scope, read, each parsed once into the caching plugin returned with them, with
+	 * progress feedback. Null on an empty scope (message already printed).
+	 */
+	public static function readScope(cmd: String, inputSpecs: Array<String>, lang: String): Null<GraphScope> {
 		final cached: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		final expanded: ExpandedInputs = CliArgs.expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
@@ -57,15 +76,25 @@ final class CliCallGraph {
 			try cached.parseFile(source) catch (exception: ParseError) {} catch (exception: Exception) {}
 			CliIo.streamProgress(cmd, ++scanned, paths.length, expanded.singleFile);
 		}
-		final graph: CallGraph = CallGraph.build(files, cached);
-		if (graph.skippedFiles.length > 0) {
-			final shown: Array<String> = graph.skippedFiles.slice(0, CliWalk.SKIP_PATHS_SHOWN);
-			CliIo.stderr('apq $cmd: WARNING ${graph.skippedFiles.length} file(s) failed to parse and are invisible to the graph:\n');
-			for (p in shown) CliIo.stderr('  $p\n');
-			if (graph.skippedFiles.length > shown.length) CliIo.stderr('  ... +${graph.skippedFiles.length - shown.length} more\n');
-			if (expanded.singleFile) return null;
-		}
-		return { graph: graph, sources: sources };
+		return {
+			files: files,
+			sources: sources,
+			plugin: cached,
+			singleFile: expanded.singleFile
+		};
+	}
+
+	/**
+	 * Warn that the files of `skipped` failed to parse and are invisible to the graph, and answer whether the run ends:
+	 * it does when the scope is one named file, which leaves no graph to draw.
+	 */
+	public static function skippedEndRun(cmd: String, skipped: Array<String>, scope: GraphScope): Bool {
+		if (skipped.length == 0) return false;
+		final shown: Array<String> = skipped.slice(0, CliWalk.SKIP_PATHS_SHOWN);
+		CliIo.stderr('apq $cmd: WARNING ${skipped.length} file(s) failed to parse and are invisible to the graph:\n');
+		for (p in shown) CliIo.stderr('  $p\n');
+		if (skipped.length > shown.length) CliIo.stderr('  ... +${skipped.length - shown.length} more\n');
+		return scope.singleFile;
 	}
 
 	/** Parse a `--kinds call,ref,new,virtual,contains,accessor` value. Null on an unknown kind (message printed). */

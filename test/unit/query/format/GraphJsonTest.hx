@@ -4,9 +4,7 @@ import anyparse.query.format.GraphJson;
 import anyparse.query.format.json.CodeGraphJson;
 import anyparse.query.format.json.CodeGraphJsonParser;
 import anyparse.query.graph.CodeGraph;
-import anyparse.query.graph.MemberGraphBuilder;
 import haxe.Exception;
-import unit.query.graph.GraphFixture;
 
 /**
  * `GraphJson` — a code graph written through its `@:schema` type and the JSON grammar's writer: the
@@ -62,6 +60,21 @@ class GraphJsonTest extends Test {
 	/** A record missing a key the schema requires does not read as a graph. */
 	public function testTheSchemaRefusesAMissingKey(): Void {
 		Assert.raises(() -> CodeGraphJsonParser.parse('{"nodes":[{"id":"m_a"}],"edges":[]}'), Exception);
+	}
+
+	/** An edge with a way back carries `mutual: true`; any other edge carries no `mutual` key, and the key reads back. */
+	public function testAMutualEdgeIsMarked(): Void {
+		final graph: CodeGraph = new CodeGraph();
+		final a: String = graph.addNode(Package, 'a', 'a', null, false);
+		final b: String = graph.addNode(Package, 'b', 'b', null, false);
+		final c: String = graph.addNode(Package, 'c', 'c', null, false);
+		graph.addEdge(a, b, Import);
+		graph.addEdge(b, a, Import);
+		graph.addEdge(b, c, Import);
+		final text: String = GraphJson.write(graph);
+		Assert.equals(2, text.split('"mutual":true').length - 1);
+		Assert.equals(-1, text.indexOf('"mutual":false'));
+		Assert.equals('true,true,null', [for (e in CodeGraphJsonParser.parse(text).edges) '${e.mutual}'].join(','));
 	}
 
 }

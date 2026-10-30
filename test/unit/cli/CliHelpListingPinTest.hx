@@ -88,6 +88,7 @@ class CliHelpListingPinTest extends Test {
 		'  callers       Transitive call tree INTO a function (approximate call graph)',
 		'  reach         Shortest call path(s) --from A --to B over the call graph',
 		'  clusters      Partition a type\'s members by call-edge connectivity (hub bucket + components)',
+		'  graph         Dependency graph of a scope by package, type or member (weights, focus, mutual pairs)',
 		'  stdlib-dup    Report pure functions a differential run proves equal to a stdlib call',
 		'  gates         List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names',
 		'  diff          Structural AST diff between two files',
@@ -174,6 +175,7 @@ class CliHelpListingPinTest extends Test {
 		'  callers       Transitive call tree INTO a function (approximate call graph)',
 		'  reach         Shortest call path(s) --from A --to B over the call graph',
 		'  clusters      Partition a type\'s members by call-edge connectivity (hub bucket + components)',
+		'  graph         Dependency graph of a scope by package, type or member (weights, focus, mutual pairs)',
 		'  stdlib-dup    Report pure functions a differential run proves equal to a stdlib call',
 		'  gates         List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names',
 		'  diff          Structural AST diff between two files',
@@ -233,7 +235,8 @@ class CliHelpListingPinTest extends Test {
 
 	/** `apq set-doc --help`, from the base binary. */
 	private static final BASE_USAGE_SET_DOC: Array<String> = [
-		'Usage: apq set-doc <file> (<line>[:<col>] | --select \'<sel>\' | --match \'<pattern>\') (<text> | --from-file <path> | -) [--reformat] [--write]',
+		'Usage: apq set-doc <file> (<line>[:<col>] | --select \'<sel>\' | --match \'<pattern>\') (<text> | --from-file <path> | -) '
+			+ '[--reformat] [--write]',
 		'',
 		'Addressing:',
 		'  <line>[:<col>]      1-based position; column omitted = the line\'s first',

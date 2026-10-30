@@ -26,6 +26,7 @@ import anyparse.query.cli.command.ExtractVarCommand;
 import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.GatesCommand;
 import anyparse.query.cli.command.GetCommand;
+import anyparse.query.cli.command.GraphCommand;
 import anyparse.query.cli.command.ImportersCommand;
 import anyparse.query.cli.command.InlineCommand;
 import anyparse.query.cli.command.InlineMethodCommand;
@@ -166,6 +167,7 @@ final class CliRegistry {
 			new CallersCommand(),
 			new ReachCommand(),
 			new ClustersCommand(),
+			new GraphCommand(),
 			new StdlibDupCommand(),
 			new GatesCommand(),
 			new DiffCommand(),

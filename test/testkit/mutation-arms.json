@@ -32384,6 +32384,30 @@
 			"find": "(_mLast && !_mSep ? _mTc : null)",
 			"replace": "null",
 			"note": "only the after-separator comment is considered, so the last argument (no separator follows it) keeps an overflowing comment"
+		},
+		{
+			"name": "M-GRAPH-VIEW-BACK-EDGE-HIDDEN",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "filter",
+			"find": " || graph.weightBetween(e.to, e.from) >= filter.minWeight",
+			"replace": "",
+			"note": "a weight floor judges each direction alone, so the light way back of a heavy pair disappears and the cycle it closes is hidden"
+		},
+		{
+			"name": "M-GRAPH-VIEW-FOLDED-EDGE-AS-RECURSION",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "isOwnRecursion",
+			"find": "e.from == e.to && e.from == into",
+			"replace": "e.from == into",
+			"note": "an edge from a package into its own subpackage folds into a self-loop of the ancestor, a recursion nobody wrote"
+		},
+		{
+			"name": "M-GRAPH-VIEW-NAMED-ANY-LEVEL",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "named",
+			"find": "graph.nodes().filter(n -> n.level == level)",
+			"replace": "graph.nodes()",
+			"note": "a focus at the type level names the package a lift brought in above the types, and the view silently centres on it"
 		}
 	]
 }

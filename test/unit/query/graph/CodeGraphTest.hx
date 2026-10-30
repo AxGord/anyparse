@@ -96,4 +96,26 @@ class CodeGraphTest extends Test {
 		Assert.raises(graph.markFocus.bind('m_nowhere'), Exception);
 	}
 
+	/**
+	 * Two nodes depend on each other when an edge of any kind runs each way; a
+	 * node's own recursion is no pair, and the weight each way sums the kinds.
+	 */
+	public function testMutualEdgesAreThoseWithAWayBack(): Void {
+		final graph: CodeGraph = new CodeGraph();
+		final a: String = graph.addNode(Member, 'a', 'a', null, false);
+		final b: String = graph.addNode(Member, 'b', 'b', null, false);
+		final c: String = graph.addNode(Member, 'c', 'c', null, false);
+		graph.addEdge(a, b, Call, 2);
+		graph.addEdge(a, b, Ref);
+		graph.addEdge(b, a, New);
+		graph.addEdge(a, c, Call);
+		graph.addEdge(c, c, Call);
+		Assert.equals('m_a m_b call true|m_a m_b ref true|m_a m_c call false|m_b m_a new true|m_c m_c call false', [
+			for (e in graph.edges()) '${e.from} ${e.to} ${e.kind} ${graph.isMutual(e)}'
+		].join('|'));
+		Assert.equals(3, graph.weightBetween(a, b));
+		Assert.equals(1, graph.weightBetween(b, a));
+		Assert.equals(0, graph.weightBetween(c, a));
+	}
+
 }

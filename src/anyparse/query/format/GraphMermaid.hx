@@ -13,7 +13,8 @@ import anyparse.query.graph.CodeGraph;
 /**
  * A `CodeGraph` as a Mermaid flowchart, built as the Mermaid grammar's AST and written by its writer:
  * a node that holds others is a subgraph, any other a vertex shaped by its level, and the edges follow
- * at the top level, labelled by kind (a call or an import is unlabelled) and by weight above one.
+ * at the top level, labelled by kind (a call or an import is unlabelled) and
+ * by weight above one; an edge whose ends depend on each other is drawn red.
  *
  * Every label is `MmdLabel.Plain`, the text a reader sees, so the label codec escapes whatever Mermaid
  * would read as syntax or markup — a type label `Map<String, Int>` renders as written.
@@ -31,6 +32,9 @@ final class GraphMermaid {
 
 	private static inline final EXTERNAL_STYLE: String = 'stroke-dasharray:4 3';
 
+	/** The style of an edge whose ends depend on each other (`CodeGraph.isMutual`). */
+	private static inline final MUTUAL_STYLE: String = 'stroke:#d33,stroke-width:2px';
+
 	/** The flowchart of `graph`, after a `%%` comment line holding `caption` when one is given. */
 	public static function flowchart(graph: CodeGraph, ?caption: String): MmdFlowchart {
 		final statements: Array<MmdStatement> = [];
@@ -38,7 +42,8 @@ final class GraphMermaid {
 		statements.push(Header(Flowchart(LR)));
 		final byParent: Map<String, Array<GraphNode>> = graph.nodesByParent();
 		for (n in byParent[''] ?? []) statements.push(declaration(byParent, n));
-		for (e in graph.edges()) statements.push(Chain({
+		final edges: Array<GraphEdge> = graph.edges();
+		for (e in edges) statements.push(Chain({
 			head: group(Id(e.from)),
 			links: [
 				{ edge: Arrow({ link: linkOf(e.kind), label: edgeLabel(e) }), target: group(Id(e.to)) }
@@ -47,6 +52,9 @@ final class GraphMermaid {
 		final leaves: Array<GraphNode> = graph.nodes().filter(n -> !byParent.exists(n.id));
 		classed(statements, FOCUS_CLASS, FOCUS_STYLE, leaves.filter(n -> n.focus));
 		classed(statements, EXTERNAL_CLASS, EXTERNAL_STYLE, leaves.filter(n -> n.external));
+		// a link's ordinal is its place among the chart's links, and every edge is one chain of one link
+		final mutual: Array<String> = [for (i => e in edges) if (graph.isMutual(e)) '$i'];
+		if (mutual.length > 0) statements.push(LinkStyle({ links: mutual.join(','), curve: null, styles: MUTUAL_STYLE }));
 		return { first: statements[0], rest: statements.slice(1) };
 	}
 

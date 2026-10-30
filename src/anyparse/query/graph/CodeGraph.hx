@@ -86,10 +86,23 @@ final class CodeGraph {
 	private final _nodes: Map<String, GraphNode> = [];
 	private final _edges: Map<String, GraphEdge> = [];
 
+	/** `from to` -> the weight of every edge from `from` to `to`, whatever its kind. */
+	private final _directed: Map<String, Int> = [];
+
 	public function new() {}
 
 	public inline function node(id: String): Null<GraphNode> {
 		return _nodes[id];
+	}
+
+	/** The weight of every edge from `from` to `to`, whatever its kind; 0 when none joins them. */
+	public inline function weightBetween(from: String, to: String): Int {
+		return _directed['$from $to'] ?? 0;
+	}
+
+	/** Whether `e` joins two nodes that depend on each other: an edge of any kind runs back from its target to its source. */
+	public inline function isMutual(e: GraphEdge): Bool {
+		return e.from != e.to && _directed.exists('${e.to} ${e.from}');
 	}
 
 	/** Add the node at `level` named `name` unless the graph holds it, and answer its id; the first addition's fields stay. */
@@ -134,6 +147,8 @@ final class CodeGraph {
 			};
 			_edges[key] = added;
 		}
+		final pair: String = '$from $to';
+		_directed[pair] = (_directed[pair] ?? 0) + weight;
 	}
 
 	/** Every node, ordered by id. */
