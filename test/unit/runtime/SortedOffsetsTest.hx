@@ -22,7 +22,9 @@ final class SortedOffsetsTest extends Test {
 		Assert.equals(-1, SortedOffsets.firstIn(OFFSETS, 41, 50));
 	}
 
-	@:pin('guard')
+	/** M-SORTED-OFFSETS-UPPER-BLIND drops only the upper bound; every expected offset here lies below it, so it stays green. */
+	@:pin('guard') // noqa: guard-pin-arm-reach
+	@:killer('M-SORTED-OFFSETS-LOWER-BLIND')
 	public function testTheLowerBoundIsInclusive(): Void {
 		Assert.equals(3, SortedOffsets.firstIn(OFFSETS, 3, 4));
 		Assert.equals(40, SortedOffsets.firstIn(OFFSETS, 18, 41));

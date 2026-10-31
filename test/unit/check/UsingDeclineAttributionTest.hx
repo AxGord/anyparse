@@ -90,13 +90,15 @@ class UsingDeclineAttributionTest extends Test {
 	}
 
 	/** The witnessed twin: an offset INSIDE the region is covered, so the same header answers `InScope`. */
-	@:pin('guard')
+	// Its arm flips only an EMPTY offset list to InScope; this case passes one, so it stays green.
+	@:pin('guard') // noqa: guard-pin-arm-reach
 	public function testOffsetInsideTheGuardedRegionIsInScope(): Void {
 		Assert.equals(UsingScope.InScope, UsingScan.usingScopeAt(headerOf(GUARDED), 'StringTools', [GUARDED.indexOf('using')]));
 	}
 
 	/** And an offset OUTSIDE it still refuses — the refusal is about coverage, not about the empty array. */
-	@:pin('guard')
+	// Its arm flips only an EMPTY offset list to InScope; this case passes one, so it stays green.
+	@:pin('guard') // noqa: guard-pin-arm-reach
 	public function testOffsetOutsideTheGuardedRegionRefuses(): Void {
 		Assert.equals(UsingScope.Guarded, UsingScan.usingScopeAt(headerOf(GUARDED), 'StringTools', [GUARDED.indexOf('class C')]));
 	}
@@ -107,7 +109,8 @@ class UsingDeclineAttributionTest extends Test {
 	 * whole job. Without this, turning the empty case into a blanket refusal would silently stop
 	 * every insert into a file with no `using` at all.
 	 */
-	@:pin('guard')
+	// An undeclared module answers Absent before the offsets are read, so the empty-offset arm never runs here.
+	@:pin('guard') // noqa: guard-pin-arm-reach
 	public function testEmptyOffsetsStillAnswerAbsentForAnUndeclaredModule(): Void {
 		Assert.equals(UsingScope.Absent, UsingScan.usingScopeAt(headerOf(GUARDED), 'Lambda', []));
 	}

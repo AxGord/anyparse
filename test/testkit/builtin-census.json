@@ -50,6 +50,7 @@
 	"fragmented-doc-comment",
 	"group-safe-nav",
 	"guard-continue",
+	"guard-pin-arm-reach",
 	"guard-return",
 	"hoist-branch-string-affix",
 	"hoist-common-import",
@@ -167,6 +168,7 @@
 	"redundant-unchecked-cast",
 	"redundant-upcast",
 	"redundant-void-return",
+	"refusal-assert-ignores-message",
 	"return-reassign-ternary",
 	"scratch-field",
 	"self-assignment",
@@ -205,6 +207,7 @@
 	"unused-private",
 	"unused-public-member",
 	"unused-return-value",
-	"while-true-condition"
+	"while-true-condition",
+	"zero-count-unparsed-fixture"
 ]
 }

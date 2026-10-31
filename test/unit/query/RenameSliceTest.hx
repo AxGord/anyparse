@@ -212,7 +212,8 @@ class RenameSliceTest extends Test {
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err on whitespace position, got Ok:\n$text');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}
@@ -227,7 +228,8 @@ class RenameSliceTest extends Test {
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err on delimiter position, got Ok:\n$text');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}
@@ -238,7 +240,8 @@ class RenameSliceTest extends Test {
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err on invalid new name, got Ok:\n$text');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}

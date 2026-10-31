@@ -227,6 +227,7 @@ final class MutationArmsTest extends Test {
 	 * existing fragment record — and every `--list-arms` row they produce — byte-unchanged.
 	 */
 	@:pin('guard')
+	@:killer('M-ARM-ANYNAME')
 	public function testAMultiPairCutCarriesEveryFragment(): Void {
 		final table: ArmTable = MutationArms.parse(TWO_PAIRS);
 		Assert.same([], table.errors, 'the second table is clean, so the fixture reaches the read');

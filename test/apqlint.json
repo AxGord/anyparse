@@ -9,6 +9,34 @@
         },
         "duplicate-code": false,
         "prefer-typed-throw": false,
-        "owned-types": false
+        "owned-types": false,
+        "refusal-assert-ignores-message": {
+            "refusalConstructors": [
+                "Err"
+            ],
+            "passCalls": [
+                "Assert.pass"
+            ]
+        },
+        "zero-count-unparsed-fixture": {
+            "zeroAsserts": [
+                "Assert.equals"
+            ],
+            "countFields": [
+                "length"
+            ],
+            "sourceFields": [
+                "source"
+            ],
+            "skipParseTests": [
+                "testSkipParseNoCrash"
+            ]
+        },
+        "guard-pin-arm-reach": {
+            "pinMeta": "@:pin",
+            "guardArgument": "guard",
+            "killerMeta": "@:killer",
+            "armRegistry": "testkit/mutation-arms.json"
+        }
     }
 }

@@ -144,18 +144,6 @@ class AddParamSliceTest extends Test {
 		assertRefused(source, 2, 6, '?flag:Bool');
 	}
 
-	private function assertAdd(source: String, line: Int, col: Int, paramText: String, expected: String): Void {
-		final result: AddParamResult = addOf(source, line, col, paramText);
-		switch result {
-			case Ok(text):
-				Assert.equals(expected, text);
-				// Every accepted rewrite must itself re-parse.
-				assertReparses(text);
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
-	}
-
 	/**
 	 * PIN. Canonical in, canonical out: a signature that fitted no longer does once the parameter is added, and the raw
 	 * insertion used to leave it one over-long line the next writer-emit op refuses as drifted.
@@ -178,12 +166,25 @@ class AddParamSliceTest extends Test {
 		Assert.equals(canonical(text), text, 'and the file is canonical');
 	}
 
+	private function assertAdd(source: String, line: Int, col: Int, paramText: String, expected: String): Void {
+		final result: AddParamResult = addOf(source, line, col, paramText);
+		switch result {
+			case Ok(text):
+				Assert.equals(expected, text);
+				// Every accepted rewrite must itself re-parse.
+				assertReparses(text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	private function assertRefused(source: String, line: Int, col: Int, paramText: String): Void {
 		final result: AddParamResult = addOf(source, line, col, paramText);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}

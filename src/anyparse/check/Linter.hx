@@ -60,12 +60,15 @@ import anyparse.check.common.design.Complexity;
 import anyparse.check.common.design.DuplicateCode;
 import anyparse.check.common.design.DuplicateCodeRenamed;
 import anyparse.check.common.design.ExtractRepeatedExpression;
+import anyparse.check.common.design.GuardPinArmReach;
 import anyparse.check.common.design.ListenerSymmetry;
 import anyparse.check.common.design.OversizedType;
 import anyparse.check.common.design.OwnedTypes;
 import anyparse.check.common.design.PreferApiIdiom;
+import anyparse.check.common.design.RefusalAssertIgnoresMessage;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.TypedEventConstant;
+import anyparse.check.common.design.ZeroCountUnparsedFixture;
 import anyparse.check.common.docs.CommentWidth;
 import anyparse.check.common.docs.DocCommentContinuation;
 import anyparse.check.common.docs.DocCoverage;
@@ -555,6 +558,10 @@ final class Linter {
 			// contain the other's. Both are report-only, so registry order carries no meaning.
 			new DuplicateCodeRenamed(),
 			new ListenerSymmetry(),
+			// Test-quality rules: report-only and inert until a test tree's config names their assertion and pin spellings.
+			new RefusalAssertIgnoresMessage(),
+			new ZeroCountUnparsedFixture(),
+			new GuardPinArmReach(),
 			// Inert without its `eventBase` / `typeAbstract` declaration. Its one edit is the written `String` of a static
 			// final field, a type no other rule rewrites — `shorten-type-ref` only touches a QUALIFIED reference, which is
 			// what this rule writes when the abstract is not yet imported, so the two compose across passes.

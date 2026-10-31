@@ -18,7 +18,8 @@ class MemberGapBodyEdgeTest extends Test {
 		Assert.equals(2, MemberGap.bodyEdge(2, KeepEmptyLinesPolicy.Remove, false));
 	}
 
-	@:pin('guard')
+	/** M-BODY-EDGE-STATED-IGNORED drops only a STATED count; this case states none, so it stays green. */
+	@:pin('guard') // noqa: guard-pin-arm-reach
 	public function testAnUnstatedCountFollowsThePolicyAndTheSource(): Void {
 		Assert.equals(1, MemberGap.bodyEdge(null, KeepEmptyLinesPolicy.Keep, true));
 		Assert.equals(0, MemberGap.bodyEdge(null, KeepEmptyLinesPolicy.Keep, false));

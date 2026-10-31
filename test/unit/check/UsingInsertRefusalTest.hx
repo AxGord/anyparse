@@ -66,7 +66,8 @@ class UsingInsertRefusalTest extends Test {
 	}
 
 	/** The same call with a rewrite that does NOT cover the anchor still inserts — the refusal is about the overlap, not the module. */
-	@:pin('guard')
+	// The arms of this class change only a COVERED insert; this anchor is uncovered, so every one leaves it green.
+	@:pin('guard') // noqa: guard-pin-arm-reach
 	public function testUncoveredAnchorStillInserts(): Void {
 		final header: UsingHeader = headerOf();
 		final anchor: Int = anchorOf(header);
@@ -100,7 +101,8 @@ class UsingInsertRefusalTest extends Test {
 	}
 
 	/** The uncovered twin: the rewrite and the `using` come back as ONE atomic group. */
-	@:pin('guard')
+	// The arms of this class change only a COVERED insert; this anchor is uncovered, so every one leaves it green.
+	@:pin('guard') // noqa: guard-pin-arm-reach
 	@:access(anyparse.check.haxe.loops.LambdaLoopScan)
 	public function testBoolLoopUncoveredAnchorGroupsTheInsert(): Void {
 		final header: UsingHeader = headerOf();
@@ -130,7 +132,8 @@ class UsingInsertRefusalTest extends Test {
 	}
 
 	/** The uncovered twin: both modules land as one merged zero-width edit at the anchor. */
-	@:pin('guard')
+	// The arms of this class change only a COVERED insert; this anchor is uncovered, so every one leaves it green.
+	@:pin('guard') // noqa: guard-pin-arm-reach
 	@:access(anyparse.check.haxe.expressions.PreferStaticExtension)
 	public function testStaticExtensionUncoveredAnchorAppendsOneEdit(): Void {
 		final header: UsingHeader = headerOf();

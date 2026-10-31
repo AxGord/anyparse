@@ -21,7 +21,7 @@ final class OracleRunWiringTest extends Test {
 	#if (sys || nodejs)
 	private static final GOOD: String = 'class Good {\n\tpublic function new() {}\n\n\tstatic function main() {\n\t\tfinal a:Good = new '
 		+ 'Good();\n\t\tvar x:Dynamic = a;\n\t\tvar y:Good = x;\n\t\ttrace(y);\n\t}\n}\n';
-	private static final HXML: String = '-cp .\n-main Good\n' + CompileCounter.MACRO;
+	private static final HXML: String = '-cp .\n-main Good\n${CompileCounter.MACRO}';
 	private static final APQLINT: String = '{"compilerOracle":"check.hxml","rules":{"avoid-dynamic":{"enabled":true}}}';
 	private static final LIB_A: String = 'package lib;\n\nclass A {\n\tpublic var x:Int = 1;\n\n\tpublic function new() {}\n}\n';
 	#end
@@ -89,7 +89,8 @@ final class OracleRunWiringTest extends Test {
 		Assert.isTrue(LintCommand.startsFactsEarly(true, 1, false, false, true));
 	}
 
-	@:pin('guard')
+	/** M-FACTS-NEVER-EARLY answers false everywhere, which is what this case expects, so it stays green. */
+	@:pin('guard') // noqa: guard-pin-arm-reach
 	public function testAReportANarrowedOrAnOracleLessRunAsksOnDemand(): Void {
 		Assert.isFalse(LintCommand.startsFactsEarly(true, 1, false, false, false), 'a report, whose checks never ask');
 		Assert.isFalse(LintCommand.startsFactsEarly(true, 1, false, true, true), 'a --rule run');

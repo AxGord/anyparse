@@ -1,16 +1,20 @@
 package anyparse.check.common.design;
 
 import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import haxe.Exception;
 
 /**
  * The readers of the rule options that DECLARE framework knowledge rather than tune a threshold —
- * `prefer-api-idiom`'s `idioms` and `typed-event-constant`'s event types. Their shapes are richer than the typed option
+ * `prefer-api-idiom`'s `idioms` and `typed-event-constant`'s event types — and of the mutation-arm
+ * registry document `guard-pin-arm-reach` names. Their shapes are richer than the typed option
  * accessors of `LintConfig` read (a list of objects, a key whose wrong type must be NAMED rather than dropped), so the
  * raw JSON is walked here, on the config side of the layer boundary, and the rules receive only plain records.
  *
  * Per-entry lenient like `frameworks`: an entry or key this reader cannot use is dropped or ignored, and every such
  * decision appends one line to `problems` — a dropped declaration that says nothing is indistinguishable from one that
- * works. The caller decides where the lines go; the rules print each once per process.
+ * works. The caller decides where the lines go; the rules print each once per process. The arm-registry reader is the
+ * exception: it drops a malformed record, or a document that is no JSON, without a line, since its one rule is report-only.
  */
 @:nullSafety(Strict)
 final class RuleDeclaration {
@@ -74,6 +78,28 @@ final class RuleDeclaration {
 		return declaredListeners.length == 0
 			? null
 			: { eventBase: declaredBase, typeAbstract: declaredAbstract, listenerMethods: declaredListeners };
+	}
+
+	/**
+	 * The `arms` records of a mutation-arm registry document `content` by name — each a `{name, type, method}` object, any
+	 * other key ignored — for `guard-pin-arm-reach`; null when the text is no JSON object holding an `arms` array.
+	 */
+	public static function armRegistry(content: String): Null<Map<String, ArmTarget>> {
+		final document: Null<JValue> = try JValueParser.parse(content) catch (_: Exception) null;
+		final records: Null<Array<JValue>> = switch document {
+			case JObject(entries): switch entries.find(e -> e.key == 'arms')?.value {
+				case JArray(items): items;
+				case _: null;
+			}
+			case _: null;
+		};
+		if (records == null) return null;
+		final out: Map<String, ArmTarget> = [];
+		for (record in records) {
+			final arm: Null<ArmTarget> = armOf(record);
+			if (arm != null) out[arm.name] = arm;
+		}
+		return out;
 	}
 
 	/** A type-path key of rule `ruleId`'s options, or null when absent; a value that is no non-empty string is named. */
@@ -146,6 +172,27 @@ final class RuleDeclaration {
 		return null;
 	}
 
+	/** One registry record as a target, or null when it lacks a string `name`, `type` or `method`. */
+	private static function armOf(record: JValue): Null<ArmTarget> {
+		var name: Null<String> = null;
+		var type: Null<String> = null;
+		var method: Null<String> = null;
+		switch record {
+			case JObject(entries):
+				for (e in entries) switch [(e.key: String), e.value] {
+					case ['name', JString(v)]:
+						name = v;
+					case ['type', JString(v)]:
+						type = v;
+					case ['method', JString(v)]:
+						method = v;
+					case _:
+				}
+			case _:
+		}
+		return name == null || type == null || method == null ? null : { name: name, type: type, method: method };
+	}
+
 }
 
 /** One `prefer-api-idiom` entry as declared — see `PreferApiIdiom` for the shape. */
@@ -162,4 +209,11 @@ typedef EventSpec = {
 	final eventBase: String;
 	final typeAbstract: String;
 	final listenerMethods: Array<String>;
+}
+
+/** One mutation arm of a registry: its name and the member it cuts. */
+typedef ArmTarget = {
+	final name: String;
+	final type: String;
+	final method: String;
 }

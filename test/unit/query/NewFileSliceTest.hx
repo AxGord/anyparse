@@ -490,7 +490,8 @@ class NewFileSliceTest extends Test {
 		switch NewFile.createRaw('package p;\nclass C {', new HaxeQueryPlugin()) {
 			case Ok(_):
 				Assert.fail('expected Err');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}

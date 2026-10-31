@@ -274,7 +274,8 @@ class ExtractConstantSliceTest extends Test {
 		switch result {
 			case Ok(_, _, _):
 				Assert.fail('expected Err, got Ok');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}

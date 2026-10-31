@@ -33991,6 +33991,62 @@
 			"find": ": macro !${AstPredLowering",
 			"replace": ": macro false && !${AstPredLowering",
 			"note": "every lifted value loses its `;`, so a wrapped `3` or `[1, 2]` comes out unterminated before the block's `}`"
+		},
+		{
+			"name": "M-REFUSAL-ASSERT-BINDER-READ-IGNORED",
+			"type": "anyparse.check.common.design.RefusalAssertIgnoresMessage",
+			"method": "silentRefusal",
+			"find": "for (group in groups) if (CasePatternScan.mentionCount(seams, arm, group[0].name) > group.length) return null;",
+			"replace": "if (groups.length < 0) return null;",
+			"note": "a binder the arm reads no longer spares it, so a test that checks the refusal's message is reported as passing on any refusal"
+		},
+		{
+			"name": "M-REFUSAL-ASSERT-PASS-UNREQUIRED",
+			"type": "anyparse.check.common.design.RefusalAssertIgnoresMessage",
+			"method": "silentRefusal",
+			"find": "return body.exists(node -> callsAny(seams, node, options.passes)) ? ctor : null;",
+			"replace": "return ctor;",
+			"note": "an arm is reported whatever its body does, so the arm that FAILS on an unexpected refusal reads as a pass"
+		},
+		{
+			"name": "M-ZERO-FIXTURE-PARSE-IGNORED",
+			"type": "anyparse.check.common.design.ZeroCountUnparsedFixture",
+			"method": "parses",
+			"find": "return text == null || ParseGate.parseOrNull(scan.plugin, text) != null;",
+			"replace": "return text == null;",
+			"note": "every fixture reads as unparseable, so a zero-count assertion over a well-formed file is reported"
+		},
+		{
+			"name": "M-ZERO-FIXTURE-WRAP-FOLLOWED",
+			"type": "anyparse.check.common.design.ZeroCountUnparsedFixture",
+			"method": "reachesSource",
+			"find": "if (parent.kind != seams.callKind || hops >= MAX_HOPS) return false;",
+			"replace": "if (parent.kind != seams.callKind || hops >= MAX_HOPS) return true;",
+			"note": "a value concatenated into the source on the way counts as the source itself, so a member snippet a helper wraps in a class reads as an unparseable fixture"
+		},
+		{
+			"name": "M-ZERO-FIXTURE-SKIP-IGNORED",
+			"type": "anyparse.check.common.design.ZeroCountUnparsedFixture",
+			"method": "fixtures",
+			"find": "if (inside != null && scan.options.skipParseTests.contains(inside)) return out;",
+			"replace": "",
+			"note": "a declared skip-parse test is read like any other, so its deliberately unparseable fixture is reported"
+		},
+		{
+			"name": "M-GUARD-PIN-OWN-KILLER-COUNTED",
+			"type": "anyparse.check.common.design.GuardPinArmReach",
+			"method": "checkClass",
+			"find": "!own.contains(k.arm.name)",
+			"replace": "own.length >= 0",
+			"note": "an arm the guard names as its own killer counts as a hidden one, so a declared kill is reported"
+		},
+		{
+			"name": "M-GUARD-PIN-TYPE-UNREAD",
+			"type": "anyparse.check.common.design.GuardPinArmReach",
+			"method": "checkClass",
+			"find": "&& names(scan, guarded, SourceText.lastSegment(k.arm.type))",
+			"replace": "",
+			"note": "a member name alone reaches an arm, so a guard calling a same-named member of another type is reported"
 		}
 	]
 }

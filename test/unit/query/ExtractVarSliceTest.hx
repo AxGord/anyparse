@@ -184,7 +184,8 @@ class ExtractVarSliceTest extends Test {
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}

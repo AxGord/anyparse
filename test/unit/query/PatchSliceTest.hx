@@ -1090,7 +1090,8 @@ class PatchSliceTest extends Test {
 		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}
@@ -1108,7 +1109,8 @@ class PatchSliceTest extends Test {
 		switch Patch.patchNode(source, target, oldText, newText, false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
 				Assert.pass();
 		}
 	}

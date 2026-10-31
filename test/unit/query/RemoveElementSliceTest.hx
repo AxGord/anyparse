@@ -150,41 +150,6 @@ class RemoveElementSliceTest extends Test {
 		}
 	}
 
-	private function assertRemove(source: String, line: Int, col: Int, reformat: Bool, expected: String): Void {
-		final result: EditResult = removeOf(source, line, col, reformat);
-		switch result {
-			case Ok(text):
-				Assert.equals(expected, text);
-				assertReparses(text);
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
-	}
-
-	private function assertRefused(source: String, line: Int, col: Int, reformat: Bool): Void {
-		switch removeOf(source, line, col, reformat) {
-			case Ok(text):
-				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
-				Assert.pass();
-		}
-	}
-
-	private function assertReparses(text: String): Void {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		try {
-			plugin.parseFile(text);
-			Assert.pass();
-		} catch (exception: Exception) {
-			Assert.fail('remove-element output failed to re-parse: ${exception.message}\n$text');
-		}
-	}
-
-	private static function removeOf(source: String, line: Int, col: Int, reformat: Bool): EditResult {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return RemoveElement.removeElement(source, line, col, reformat, plugin);
-	}
-
 	/**
 	 * A `--select` on a string `Literal` resolves the text BETWEEN the quotes, so the cut took the content and
 	 * left `''` at rc 0 while the position form removed the item. The literal that is a whole list item lifts
@@ -213,6 +178,37 @@ class RemoveElementSliceTest extends Test {
 		assertSelectRefused(ret, 'Literal:r', 'ReturnStmt');
 	}
 
+	private function assertRemove(source: String, line: Int, col: Int, reformat: Bool, expected: String): Void {
+		final result: EditResult = removeOf(source, line, col, reformat);
+		switch result {
+			case Ok(text):
+				Assert.equals(expected, text);
+				assertReparses(text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private function assertRefused(source: String, line: Int, col: Int, reformat: Bool): Void {
+		switch removeOf(source, line, col, reformat) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			// Any refusal passes here: the callers name no expected reason yet.
+			case Err(_): // noqa: refusal-assert-ignores-message
+				Assert.pass();
+		}
+	}
+
+	private function assertReparses(text: String): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		try {
+			plugin.parseFile(text);
+			Assert.pass();
+		} catch (exception: Exception) {
+			Assert.fail('remove-element output failed to re-parse: ${exception.message}\n$text');
+		}
+	}
+
 	private function assertSelectRemove(source: String, selector: String, expected: String): Void {
 		switch RemoveElement.removeTarget(source, ReplaceTarget.BySelector(selector), true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -230,6 +226,11 @@ class RemoveElementSliceTest extends Test {
 			case Err(message):
 				Assert.isTrue(message.indexOf('not a whole element') >= 0 && message.indexOf('inside $container') >= 0, message);
 		}
+	}
+
+	private static function removeOf(source: String, line: Int, col: Int, reformat: Bool): EditResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return RemoveElement.removeElement(source, line, col, reformat, plugin);
 	}
 
 }

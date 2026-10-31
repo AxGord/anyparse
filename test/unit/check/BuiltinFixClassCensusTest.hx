@@ -143,6 +143,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'duplicate-code-renamed',
 			'english-comments',
 			'extract-repeated-expression',
+			'guard-pin-arm-reach',
 			'identical-operands',
 			'impossible-cast',
 			'loop-bound-length-mismatch',
@@ -153,6 +154,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'oversized-type',
 			'owned-types',
 			'possible-null-dereference',
+			'refusal-assert-ignores-message',
 			'shadowing-case-binder',
 			'static-init-order',
 			'string-literal-dup',
@@ -161,7 +163,8 @@ class BuiltinFixClassCensusTest extends Test {
 			'thread-safety',
 			'unchecked-nullable',
 			'unguarded-nullable-deref',
-			'unused-return-value'
+			'unused-return-value',
+			'zero-count-unparsed-fixture'
 		], idsImplementing(c -> c is NoAutofix));
 	}
 
