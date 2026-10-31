@@ -13,28 +13,35 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+using Lambda;
 using StringTools;
 
 /**
- * `dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--threads <n>] [--repo <tree>]` — a reviewer's probe
+ * `dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--strict] [--threads <n>] [--repo <tree>]` — a reviewer's probe
  * kit run on ONE engine. A kit is a `dev parity` suite whose invocations each carry what an engine answered when the kit was
  * recorded: exit status, digests of both streams and of the files the invocation wrote, and whether the fixture then compiles
  * with haxe under each declared define set; with `run` in the compile spec it also runs the fixture and the files the invocation
  * started from, and records whether both print the same. Only the
  * invocations that deviate are printed, then one count line; exits 1 when one
- * does. `--record` writes what the engine answers into the kit instead.
+ * does (`--strict`: or when a known-defect row moved). `--record` writes what the engine answers into the kit instead.
  */
 @:nullSafety(Strict)
 final class Probe {
 
 	public static inline final USAGE: String =
-		'usage: dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--threads <n>] [--repo <tree>]';
+		'usage: dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--strict] [--threads <n>] [--repo <tree>]';
 
 	/** Where a kit named by its area lives, from the tree's root: `<KITS>/<area>/kit.json`. */
 	public static inline final KITS: String = 'test/probes';
 
+	/** The file of a kit inside its area's directory. */
+	public static inline final KIT_FILE: String = 'kit.json';
+
 	/** What stands in a recorded stream or file for the directory the invocation ran in, which differs on every run. */
 	public static inline final FIXTURE_MARK: String = '<fixture>';
+
+	/** The threads a gate's or a battery's kit run holds (`checkAll`). */
+	public static inline final GATE_THREADS: Int = 2;
 
 	/** How long one haxe compile may run before it is killed and answers a failure. */
 	private static inline final COMPILE_TIMEOUT_MS: Int = 120000;
@@ -47,13 +54,20 @@ final class Probe {
 	/** How much of a deviating stream's first line a report row quotes. */
 	private static inline final QUOTE_WIDTH: Int = 120;
 
+	/** Whether `verdict` passes: nothing deviates and, when `strict`, no known-defect row has moved either. */
+	public static inline function holds(verdict: Verdict, strict: Bool): Bool {
+		return verdict.deviating == 0 && !(strict && verdict.knownMoved > 0);
+	}
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final repo: String = Repo.resolve(args.option('--repo'));
 		final threadsGiven: Null<String> = args.option('--threads');
 		final threads: Null<Int> = threadsGiven == null ? DEFAULT_THREADS : Std.parseInt(threadsGiven);
 		final record: Bool = args.flag('--record');
-		final compile: Bool = record || args.flag('--compile');
+		final compileGiven: Bool = args.flag('--compile');
+		final strict: Bool = args.flag('--strict');
+		final compile: Bool = record || compileGiven;
 		final engineGiven: String = args.option('--engine') ?? Path.join([repo, 'bin', 'apq.js']);
 		final given: Array<String> = args.positionals(['<area|kit.json>']);
 		if (threads == null || threads < 1) throw new UsageError('--threads is a positive count, not $threadsGiven');
@@ -74,15 +88,15 @@ final class Probe {
 		final counts: String =
 			'${verdict.deviating} of ${seen.length} invocations deviate, ${verdict.knownMoved} known-defect row(s) moved';
 		Sys.println('probe: $counts$compiled — kit $kitFile, engine $engine');
-		return verdict.deviating == 0 ? 0 : 1;
+		return holds(verdict, strict) ? 0 : 1;
 	}
 
 	/** The kit file `given` names: a path to a kit file or to a directory holding `kit.json`, else an area under `KITS`. */
 	public static function kitPath(repo: String, given: String): String {
 		final candidates: Array<String> = [
 			given,
-			Path.join([given, 'kit.json']),
-			Path.join([repo, KITS, given, 'kit.json'])
+			Path.join([given, KIT_FILE]),
+			Path.join([repo, KITS, given, KIT_FILE])
 		];
 		for (candidate in candidates) if (FileSystem.exists(candidate) && !FileSystem.isDirectory(candidate))
 			return FileSystem.fullPath(candidate);
@@ -102,7 +116,9 @@ final class Probe {
 						compile: row.compile ?? raw.compile,
 						expect: row.expect,
 						knownDefect: row.knownDefect,
-						fixpoint: row.fixpoint
+						fixpoint: row.fixpoint,
+						outShape: row.outShape,
+						outMinLines: row.outMinLines
 					}
 			]
 		};
@@ -116,7 +132,7 @@ final class Probe {
 				for (i => outcome in outcomes) {
 					final dir: String = work.file('$i');
 					{
-						answer: answerOf(kit.invocations[i].files, outcome, dir),
+						answer: answerOf(kit.invocations[i].files, outcome, dir, kit.cases[i].outShape, kit.cases[i].outMinLines),
 						out: normalize(outcome.out, dir),
 						err: normalize(outcome.err, dir)
 					};
@@ -129,7 +145,9 @@ final class Probe {
 	}
 
 	/** What one outcome answers, its streams and written files digested with the run's directory `dir` normalized away. */
-	public static function answerOf(before: Map<String, String>, outcome: Outcome, dir: String): Expectation {
+	public static function answerOf(
+		before: Map<String, String>, outcome: Outcome, dir: String, ?shape: String, minLines: Int = 1
+	): Expectation {
 		final written: Array<String> = [];
 		final names: Array<String> = [for (name in outcome.files.keys()) name];
 		for (name in before.keys()) if (!outcome.files.exists(name)) names.push(name);
@@ -139,9 +157,10 @@ final class Probe {
 			if (after == before[name]) continue;
 			written.push('$name\n${after == null ? '<removed>' : normalize(after, dir)}');
 		}
+		final shown: String = normalize(outcome.out + outcome.failure, dir);
 		return {
 			exit: outcome.status,
-			out: digest(normalize(outcome.out + outcome.failure, dir)),
+			out: digest(shape == null ? shown : shapeOf(shown, shape, minLines)),
 			err: digest(normalize(outcome.err, dir)),
 			files: digest(written.join('\n\u0000\n'))
 		};
@@ -235,6 +254,57 @@ final class Probe {
 		}
 		found.sort(Reflect.compare);
 		return found;
+	}
+
+	/**
+	 * Every area of `repo` run with its compile checks on the tree's own engine: the one answer to "does every probe kit still
+	 * answer as recorded" for the slice gate and the battery. A row that deviates and a known-defect row that moved both fail
+	 * (the slice that fixed a defect re-records the row and drops the field).
+	 */
+	public static function checkAll(repo: String, threads: Int): KitsReport {
+		final engine: String = FileSystem.fullPath(Path.join([repo, 'bin', 'apq.js']));
+		final report: KitsReport = {
+			areas: 0,
+			invocations: 0,
+			failing: 0,
+			failed: [],
+			lines: []
+		};
+		for (area in areas(repo)) {
+			final kit: Kit = load(kitPath(repo, area));
+			final seen: Array<Seen> = observe(repo, engine, kit, true, threads);
+			final verdict: Verdict = judge(kit, seen, true);
+			report.areas++;
+			report.invocations += seen.length;
+			if (holds(verdict, true)) continue;
+			report.failing += verdict.deviating + verdict.knownMoved;
+			report.failed.push(area);
+			for (line in verdict.lines) report.lines.push(line.startsWith('  ') ? line : '[$area] $line');
+		}
+		return report;
+	}
+
+	/** The areas of `repo` that hold a kit (`KITS/<area>/` + `KIT_FILE`), sorted. */
+	public static function areas(repo: String): Array<String> {
+		final root: String = Path.join([repo, KITS]);
+		if (!FileSystem.exists(root)) return [];
+		final found: Array<String> = [
+			for (name in FileSystem.readDirectory(root)) if (FileSystem.exists(Path.join([root, name, KIT_FILE]))) name
+		];
+		found.sort(Reflect.compare);
+		return found;
+	}
+
+	/**
+	 * What `text` says of the line `shape` (a regular expression) describes: one word for every non-empty line fitting it, one for a
+	 * line that does not, one for fewer than `minLines` lines. A row whose
+	 * output is a list that grows with the product records this, not the list.
+	 */
+	public static function shapeOf(text: String, shape: String, minLines: Int = 1): String {
+		final line: EReg = new EReg(shape, '');
+		final lines: Array<String> = text.split('\n').filter(l -> l != '');
+		if (lines.length < minLines) return 'too few lines';
+		return lines.exists(l -> !line.match(l)) ? 'a line off the shape' : 'every line fits';
 	}
 
 	/** Each case's fixture as its invocation left it, compiled by haxe under each of its define sets; fills `seen[i].answer.compiles`. */
@@ -331,6 +401,12 @@ typedef ProbeCase = {
 	var expect: Null<Expectation>;
 	var knownDefect: Null<String>;
 	var fixpoint: Null<String>;
+
+	/** A regular expression every stdout line fits: the row records that, not the list (`shapeOf`). */
+	var ?outShape: String;
+
+	/** The fewest non-empty stdout lines a row with an `outShape` may print: a floor under a list that only grows. */
+	var ?outMinLines: Int;
 }
 
 /** A haxe compile of an invocation's fixture: the arguments, run in `dir` of it, once per define set (one empty set by default). */
@@ -378,6 +454,8 @@ typedef KitRow = {
 	var ?expect: Expectation;
 	var ?knownDefect: String;
 	var ?fixpoint: String;
+	var ?outShape: String;
+	var ?outMinLines: Int;
 }
 
 /** A run's report lines, the invocations that deviate, and the known-defect rows that moved. */
@@ -385,4 +463,13 @@ typedef Verdict = {
 	var lines: Array<String>;
 	var deviating: Int;
 	var knownMoved: Int;
+}
+
+/** What `Probe.checkAll` read: the areas and invocations run, the rows that fail, the areas holding them, and their report lines. */
+typedef KitsReport = {
+	var areas: Int;
+	var invocations: Int;
+	var failing: Int;
+	var failed: Array<String>;
+	var lines: Array<String>;
 }

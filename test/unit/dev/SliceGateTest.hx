@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.Probe;
 import dev.SliceGate;
 import devkit.Branches;
 import devkit.Lease.LeaseMode;
@@ -46,7 +47,7 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
-	 * What every branch of a gate run but the heavy one holds is one thread for the short rows, two for the lint row when a
+	 * What every branch of a gate run but the heavy one holds is one thread for the short rows, the kits row's, two for the lint row when a
 	 * `.hx` file moved, one for the jvm probe when it runs, and the base tree's lint plus one per infra tree when rule code
 	 * moved.
 	 */
@@ -61,7 +62,11 @@ final class SliceGateTest extends Test {
 				jvmMoved: jvmMoved,
 				ruleInfra: ruleInfra
 			};
-			final expected: Int = 1 + (touchedHx ? 2 : 0) + (jvmMoved ? 1 : 0) + (ruleInfra == null ? 0 : 1 + ruleInfra);
+			final expected: Int = 1
+				+ Probe.GATE_THREADS
+				+ (touchedHx ? 2 : 0)
+				+ (jvmMoved ? 1 : 0)
+				+ (ruleInfra == null ? 0 : 1 + ruleInfra);
 			Assert.equals(expected, Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts, rows)), '$facts');
 		}
 		Assert.isNull(SliceGate.demandOf({

@@ -2863,6 +2863,9 @@
 		},
 		{
 			"name": "hxq lint --list-rules",
+			"note": "the list grows with every rule: the row records that each line is a rule name and its description, not the list",
+			"outShape": "^[a-z][a-z0-9-]* +\\S",
+			"outMinLines": 200,
 			"argv": [
 				"hxq",
 				"lint",
@@ -2871,7 +2874,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "d3900c6105fa80e6",
+				"out": "006bbabcf71d39e7",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}

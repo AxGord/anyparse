@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.Parity.Outcome;
 import dev.Probe;
 import dev.Repo;
 import devkit.TempDir;
@@ -172,6 +173,83 @@ final class ProbeTest extends Test {
 	public function testTheCommentsAreAMultisetOfLineAndBlockComments(): Void {
 		Assert.same(['/* b c */', '// a', '// a'], Probe.commentsOf('x // a\ny /* b\n   c */ z // a\n'));
 		Assert.same([], Probe.commentsOf('no comment'));
+	}
+
+	/** `--record` takes `--compile` as it takes every flag the other modes do, and the compile verdicts land in the kit. */
+	public function testRecordAcceptsCompileAndWritesTheVerdicts(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final kitFile: String = dir.file('kit.json');
+			File.saveContent(
+				kitFile, Json.stringify({
+					compile: { args: ['--version'], defines: [[], ['--no-such-haxe-flag']] },
+					invocations: [{ name: 'echoes', argv: ['apq', 'echo', 'y'], stdin: 'in' }]
+				})
+			);
+			final status: Int = Probe.main([
+				kitFile,
+				'--engine',
+				engine(dir.file('a.js'), 'A'),
+				'--record',
+				'--compile',
+				'--repo',
+				tree
+			]);
+			Assert.equals(0, status);
+			Assert.same([true, false], Probe.load(kitFile).cases[0].expect?.compiles);
+		});
+	}
+
+	/** A row recording a shape holds when the list changes under it and deviates when a line leaves the shape. */
+	public function testAShapeRowIgnoresWhatTheListHoldsAndNotesALineOffTheShape(): Void {
+		final shape: String = '^[a-z]+ +\\S';
+		Assert.equals(Probe.digest('every line fits'), Probe.digest(Probe.shapeOf('abc  one\nxy  two\n', shape)));
+		Assert.equals(Probe.shapeOf('abc  one\n', shape), Probe.shapeOf('abc  one\nxy  two\nzz  three\n', shape));
+		Assert.notEquals(Probe.shapeOf('abc  one\n', shape), Probe.shapeOf('abc  one\n!oops\n', shape));
+		Assert.notEquals(Probe.shapeOf('abc  one\n', shape), Probe.shapeOf('\n', shape), 'an empty list is not the shape');
+		Assert.equals('every line fits', Probe.shapeOf('abc  one\nxy  two\n', shape, 2));
+		Assert.notEquals('every line fits', Probe.shapeOf('abc  one\n', shape, 2), 'a list under its floor is not the shape');
+		final outcome: Outcome = {
+			status: 0,
+			failure: '',
+			out: 'abc  one\nxy  two\n',
+			err: '',
+			files: []
+		};
+		final shorter: Outcome = {
+			status: 0,
+			failure: '',
+			out: 'abc  one\n',
+			err: '',
+			files: []
+		};
+		Assert.equals(Probe.answerOf([], outcome, '/d', shape).out, Probe.answerOf([], shorter, '/d', shape).out);
+		Assert.notEquals(
+			Probe.answerOf([], outcome, '/d').out, Probe.answerOf([], shorter, '/d').out, 'without a shape the list is the answer'
+		);
+	}
+
+	/**
+	 * A kit run fails on a deviating row and, when strict, on a known-defect
+	 * row that moved; the areas are the directories holding a kit.
+	 */
+	public function testAStrictRunFailsOnAMovedKnownDefectAndTheAreasAreTheKitDirectories(): Void {
+		Assert.isTrue(Probe.holds({ lines: [], deviating: 0, knownMoved: 1 }, false));
+		Assert.isFalse(Probe.holds({ lines: [], deviating: 0, knownMoved: 1 }, true));
+		Assert.isFalse(Probe.holds({ lines: [], deviating: 1, knownMoved: 0 }, false));
+		TempDir.with(dir -> {
+			final kits: String = dir.file(Probe.KITS);
+			sys.FileSystem.createDirectory(dir.file('test'));
+			sys.FileSystem.createDirectory(kits);
+			for (area in ['z', 'a', 'empty']) sys.FileSystem.createDirectory(Path.join([kits, area]));
+			for (area in ['z', 'a']) File.saveContent(Path.join([kits, area, Probe.KIT_FILE]), '{}');
+			Assert.same(['a', 'z'], Probe.areas(dir.file('')));
+			Assert.same([], Probe.areas(dir.file('no-such-tree')));
+		});
 	}
 
 	/** A stand-in engine at `file`: echoes its arguments, standard input and run directory, and writes `mark` on `write`. */

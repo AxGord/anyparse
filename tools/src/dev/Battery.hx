@@ -83,7 +83,7 @@ final class Battery {
 		['suite', 'corpus'],
 		['fmt', 'fmt xconfig'],
 		['typer probes', 'jvm probe'],
-		['oracle', 'lint', 'blast']
+		['oracle', 'lint', 'blast', 'kit probes']
 	];
 
 	/** What the static-target probe compiles: a change under any of them since the base runs it. */
@@ -187,6 +187,7 @@ final class Battery {
 			case 'oracle': oracle;
 			case 'lint': lint;
 			case 'blast': blast;
+			case 'kit probes': () -> KitsRow.outcome(_plan.repo, _summary, lines -> Sys.println(lines.join('\n')));
 			case _: () -> NotRun('no step named $name');
 		};
 	}
@@ -697,12 +698,13 @@ final class Battery {
 
 	/**
 	 * The threads the branch running `rows` holds: null for the suite's, which takes what the others leave; the two
-	 * lints of the lint branch; one for each other.
+	 * lints of the lint branch, which also run its kit probes (`Probe.GATE_THREADS`, the same two); one for each other.
 	 */
 	private static function branchThreads(rows: Array<String>): Null<Int> {
 		return switch rows[0] {
 			case 'suite': null;
 			case 'oracle': 2;
+
 			case _: 1;
 		};
 	}

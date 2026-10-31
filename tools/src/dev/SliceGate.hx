@@ -47,7 +47,8 @@ final class SliceGate {
 		['lists', 'fmt', 'scrub'],
 		['lint'],
 		['jvm'],
-		['infra4']
+		['infra4'],
+		['kits']
 	];
 
 	/** What a branch may run before it is killed: a wedged run, not a slow one. */
@@ -57,7 +58,9 @@ final class SliceGate {
 	private static final LISTINGS: Array<String> = ['classes', 'pins', 'arms', 'claims', 'dead', 'bases'];
 
 	/** The branches' rows in table order; `decisions`, `frozen` and `porcelain` follow, once every branch has ended. */
-	private static final GATE_ROWS: Array<String> = ['suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'arms', 'infra4', 'scrub'];
+	private static final GATE_ROWS: Array<String> = [
+		'suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'arms', 'infra4', 'scrub', 'kits'
+	];
 
 	/** The branches of a `--baseline` run; `frozen` follows them. */
 	private static final BASELINE_BRANCHES: Array<Array<String>> = [['suite', 'corpus'], ['lists'], ['lint'], ['infra4']];
@@ -145,6 +148,8 @@ final class SliceGate {
 			case 'jvm': jvmOutcome;
 			case 'arms': GateArms.outcome.bind(_gate);
 			case 'scrub': scrubOutcome;
+			case 'kits': () ->
+				KitsRow.outcome(_gate.tree, _gate.summary, lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n'));
 			case _: () -> NotRun('no row named $name');
 		};
 	}
@@ -444,6 +449,7 @@ final class SliceGate {
 			else
 				0;
 			case 'jvm': facts.jvmMoved ? 1 : 0;
+			case 'kits': facts.recording ? 0 : Probe.GATE_THREADS;
 			case 'infra4': facts.recording ? facts.infra : 1 + (facts.ruleInfra ?? -1);
 			case _: 0;
 		};
