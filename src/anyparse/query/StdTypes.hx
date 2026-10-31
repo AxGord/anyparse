@@ -144,6 +144,17 @@ final class StdTypes {
 	}
 
 	/**
+	 * The simple names of the std core modules directly in `pkg` — every name a wildcard `import pkg.*;` may bring in from the
+	 * core. Null when that cannot be told, as for `declaresModule`.
+	 */
+	public static function moduleNamesIn(pkg: String): Null<Array<String>> {
+		final modules: Map<String, Array<String>> = listed();
+		return packages.exists(pkg) ? [
+			for (name => paths in modules) if (paths.exists(p -> SourceText.parentPath(p) == pkg)) name
+		] : null;
+	}
+
+	/**
 	 * The accessors a use of the std property `member` of `typeName` runs — the getter (`prefixes[0]` + name) when it
 	 * `reads`, the setter (`prefixes[1]` + name) when it `writes` — by their member names; none for a plain field.
 	 */

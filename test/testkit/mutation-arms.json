@@ -33541,6 +33541,35 @@
 			"note": "a dependency the source binds only through its ambient import.hx chain has no statement to carry, so a destination outside that chain loses the binding and the move refuses or writes code that does not compile"
 		},
 		{
+			"name": "M-CARRY-TYPE-WILDCARD-NONE",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "typeWildcardProviderOf",
+			"force": "null",
+			"note": "a dependency the source binds only through a package wildcard, its own or its ambient chain's, has no statement to carry, so the move refuses that it has nothing to carry"
+		},
+		{
+			"name": "M-CARRY-TYPE-WILDCARD-CLASH-BLIND",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "typeWildcardCollision",
+			"force": "null",
+			"note": "a carried package wildcard is written past a destination naming another type of that package by a lower rung, silently rebinding that file's own reference"
+		},
+		{
+			"name": "M-CARRY-USING-OWN-ONLY",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "usingLinesToCarry",
+			"find": "for (imp in StaticExtensions.usingsOf(cursorInfo)) if (!imp.guarded) {",
+			"replace": "for (imp in cursorInfo.imports) if (!imp.guarded && imp.kind == ImportKind.Using) {",
+			"note": "a using only the source's ambient chain supplies is not carried, so the moved code calls an extension the destination does not have"
+		},
+		{
+			"name": "M-STD-MODULE-NAMES-NONE",
+			"type": "anyparse.query.StdTypes",
+			"method": "moduleNamesIn",
+			"force": "null",
+			"note": "a std package lists no types, so a carried std wildcard is written past a destination naming another type of that package, silently rebinding it"
+		},
+		{
 			"name": "M-CARRY-HOLDS-GUARDED-COUNTS",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "destAlreadyHolds",

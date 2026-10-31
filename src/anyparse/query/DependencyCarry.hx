@@ -148,16 +148,16 @@ final class DependencyCarry {
 				continue;
 			}
 			// The destination already binds `dep` to `wanted`, so the carried line
-			// would bind nothing new — see `destinationAlreadyBinds`. Only a plain
-			// `import` is skipped: a `using` grants extension methods no visibility rung grants, and an
-			// alias introduces a NAME the destination has no other way to spell.
-			if (statement.kind == ImportKind.Import && destinationAlreadyBinds(dep, wanted, destInfo, names)) continue;
+			// would bind nothing new — see `destinationAlreadyBinds`.
+			if (destinationAlreadyBinds(statement, dep, wanted, destInfo, names)) continue;
 			// Already present in the destination → no carry. The PATH is part of the identity: two
 			// alias statements binding one name to different modules share a `raw`, and reading
 			// them as the same statement would silently leave the moved decl on the DESTINATION's
 			// binding instead of its own. The differing-path case no longer reaches here at all —
 			// the collision gate above refuses it, for the plain and the alias spelling alike.
 			if (destAlreadyHolds(destInfo, statement)) continue;
+			final wildErr: Null<String> = typeWildcardCollision(statement, dep, wanted, destInfo, destSource, destRegions, names);
+			if (wildErr != null) return CarryErr(wildErr);
 			// De-dup the carry list (a single import line could provide more
 			// than one referenced name only via wildcards, which we skipped —
 			// and via a MODULE import, which now reaches here and repeats).
@@ -274,7 +274,8 @@ final class DependencyCarry {
 	 * `statement` is that explicit statement (`unguardedProviderOf`); else the MODULE import whose sub-type rung produced
 	 * `wanted` (`moduleStatementBinding`) — a module import binds every type the module declares, so the statement need not
 	 * spell `dep`; else the AMBIENT chain's statement that produced it (`ambientProviderOf`, with `ambientFile` naming the
-	 * file that spells it) — a destination outside that chain loses the binding, so it travels as an explicit statement too.
+	 * file that spells it) — a destination outside that chain loses the binding, so it travels as an explicit statement too;
+	 * else the package wildcard, the file's own or its chain's, that produced it (`typeWildcardProviderOf`).
 	 * `ownSub` is the one statementless binding a statement can be written for (`ownSubModuleImport`).
 	 */
 	private static function sourceBindingOf(dep: String, cursorInfo: FileInfo, names: TypeNameBinding): SourceBinding {
@@ -282,7 +283,9 @@ final class DependencyCarry {
 		final wanted: Null<String> = direct != null ? SymbolIndex.pathImportedBy(direct) : bindingOf(dep, cursorInfo, names)?.path;
 		final provider: Null<ImportInfo> = direct ?? moduleStatementBinding(dep, wanted, cursorInfo);
 		final ownSub: Null<String> = ownSubModuleImport(dep, wanted, provider, cursorInfo);
-		final ambient: Null<AmbientProvider> = provider == null && ownSub == null ? ambientProviderOf(dep, wanted, cursorInfo) : null;
+		final ambient: Null<AmbientProvider> = provider == null && ownSub == null
+			? ambientProviderOf(dep, wanted, cursorInfo) ?? typeWildcardProviderOf(dep, wanted, cursorInfo)
+			: null;
 		return {
 			wanted: wanted,
 			statement: provider ?? ambient?.statement,
@@ -530,6 +533,63 @@ final class DependencyCarry {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The unguarded PACKAGE wildcard `import pkg.*;` that binds `dep` to `wanted` — the file's own first, then its ambient
+	 * chain's, nearest first — and the ambient file that spells it, null for the file's own. Any one of them carries the same
+	 * line, so which of two equal statements is found does not matter. A module-static wildcard (`import p.Mod.*;`, an
+	 * upper-initial head) binds no type and is never one.
+	 */
+	private static function typeWildcardProviderOf(dep: String, wanted: Null<String>, info: FileInfo): Null<AmbientProvider> {
+		if (wanted == null) return null;
+		final binds: (ImportInfo) -> Bool = imp -> {
+			final pkg: String = SourceText.parentPath(imp.raw);
+			!imp.guarded && imp.kind == ImportKind.Wild && !SourceText.isUpperInitial(SourceText.lastSegment(pkg)) && '$pkg.$dep' == wanted;
+		};
+		final own: Null<ImportInfo> = info.imports.find(binds);
+		if (own != null) return { statement: own, file: null };
+		for (group in info.ambientImports) {
+			final imp: Null<ImportInfo> = group.imports.find(binds);
+			if (imp != null) return { statement: imp, file: group.file };
+		}
+		return null;
+	}
+
+	/**
+	 * The refusal a carried PACKAGE wildcard (`typeWildcardProviderOf`) owes, or null for any other statement and for a
+	 * wildcard that rebinds nothing.
+	 *
+	 * A wildcard binds every main type of its package, not the one dependency, and it ranks below the destination's own
+	 * types, explicit imports and the always-imported std module but above its package chain and the top level. So two
+	 * shapes rebind silently: the destination binding `dep` elsewhere (by an outranking rung the moved code stays on it, by
+	 * an outranked one the destination's own references move), and the destination's own code naming ANOTHER type of the
+	 * package that it binds by no outranking rung of its own file and not already to that package's type — the carried line
+	 * takes it over. The name scan over-counts (a comment or string reads as a use), the direction a refusal takes.
+	 */
+	private static function typeWildcardCollision(
+		statement: ImportInfo, dep: String, wanted: Null<String>, destInfo: FileInfo, destSource: String, regions: Array<LexRegion>,
+		names: TypeNameBinding
+	): Null<String> {
+		if (statement.kind != ImportKind.Wild) return null;
+		final head: String = 'the moved code reaches "$dep" as $wanted through "import ${statement.raw};", and ${destInfo.file} ';
+		final standing: Null<NameBinding> = bindingOf(dep, destInfo, names);
+		if (standing != null && standing.path != wanted)
+			return '${head}binds "$dep" to ${standing.path} — carrying the wildcard would silently rebind the moved code or that '
+				+ 'file\'s own references; import "$dep" explicitly at the source first, or move the dependency too';
+		final pkg: String = SourceText.parentPath(statement.raw);
+		final listed: Array<String> = names.wildcardTypes(pkg)?.map(m -> m.type.name) ?? StdTypes.moduleNamesIn(pkg) ?? [];
+		final clash: Null<String> = listed.find(
+			n ->
+				n != dep
+				&& NameMentionScan.destinationNamesType(destSource, destInfo, n, regions)
+				&& bindingOf(n, destInfo, names)?.path != '$pkg.$n'
+				&& names.bindingsOf(n, destInfo, null, true).bound == null
+		);
+		return clash == null
+			? null
+			: '${head}references "$clash", which the wildcard would bind too — carrying it would silently rebind that file\'s own '
+				+ '"$clash" to $pkg.$clash; import "$dep" explicitly at the source first, or qualify the references';
 	}
 
 	/**
@@ -792,7 +852,9 @@ final class DependencyCarry {
 	}
 
 	/**
-	 * The source module's `using` statements the destination lacks, appended to `carried`.
+	 * The source module's `using` statements the destination lacks, appended to `carried` — its own and its ambient chain's,
+	 * measured against the destination's own and chain's alike (`StaticExtensions.usingsOf`): a destination outside the
+	 * source's chain loses an ambient `using` exactly as it loses an ambient import.
 	 *
 	 * A `using` grants STATIC EXTENSIONS, and an extension call spells the METHOD name and nothing else —
 	 * no name scan can see which module supplied it. The destination side rests on exactly that evidence —
@@ -820,7 +882,7 @@ final class DependencyCarry {
 		final files: Array<FileInfo> = index.allFiles();
 		final destRegions: Array<LexRegion> = plugin.lexicalRegions(destSource);
 		final sites: UsingSites = new UsingSites(source, plugin, cursorInfo.file, index);
-		for (imp in cursorInfo.imports) if (!imp.guarded && imp.kind == ImportKind.Using) {
+		for (imp in StaticExtensions.usingsOf(cursorInfo)) if (!imp.guarded) {
 			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (path == null) continue;
 			// Proven unneeded, the one case left behind: the module's extension methods are KNOWN (the std probe, or a
@@ -833,9 +895,8 @@ final class DependencyCarry {
 			// satisfies nothing for the default configuration — without the filter the move writes both
 			// files and the tree then reads `String has no field trim` on neko. It is the same filter
 			// `addImportEdit` applies for the same reason.
-			final already: Bool = destInfo.imports.exists(
-				other -> !other.guarded && other.kind == ImportKind.Using && SymbolIndex.pathImportedBy(other) == path
-			);
+			final already: Bool = StaticExtensions.usingsOf(destInfo)
+				.exists(other -> !other.guarded && SymbolIndex.pathImportedBy(other) == path);
 			if (already) continue;
 			// The statement binds its module's own TYPE name beside the extensions, so it faces the same
 			// collision gate a carried import does. But a collision SKIPS the line instead of refusing
@@ -851,7 +912,7 @@ final class DependencyCarry {
 				SourceText.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, index, files, true, destRegions, null
 			) != null)
 				continue;
-			final line: String = DependencyCarry.importLineFor(imp, source);
+			final line: String = DependencyCarry.importLineFor(imp, cursorInfo.imports.contains(imp) ? source : '');
 			if (!carried.contains(line)) carried.push(line);
 		}
 		return carried;
@@ -930,10 +991,15 @@ final class DependencyCarry {
 	 * `destAlreadyHolds`'s answer, the same one.
 	 *
 	 * `wanted == null` is never a yes: an unnameable source binding is exactly the case the carry
-	 * must not skip on, and the collision gate above has already had its say about it.
+	 * must not skip on, and the collision gate above has already had its say about it. Only a plain `import` and a package
+	 * wildcard are skipped: a `using` grants extension methods no visibility rung grants, and an alias introduces a NAME the
+	 * destination has no other way to spell.
 	 */
-	private static function destinationAlreadyBinds(dep: String, wanted: Null<String>, destInfo: FileInfo, names: TypeNameBinding): Bool {
-		return wanted != null && bindingOf(dep, destInfo, names)?.path == wanted;
+	private static function destinationAlreadyBinds(
+		statement: ImportInfo, dep: String, wanted: Null<String>, destInfo: FileInfo, names: TypeNameBinding
+	): Bool {
+		final bindsOnly: Bool = statement.kind == ImportKind.Import || statement.kind == ImportKind.Wild;
+		return bindsOnly && wanted != null && bindingOf(dep, destInfo, names)?.path == wanted;
 	}
 
 	/**
@@ -1192,10 +1258,13 @@ private typedef SourceBinding = {
 	final ownSub: Null<String>;
 }
 
-/** An ambient chain's statement and the file that spells it (`DependencyCarry.ambientProviderOf`). */
+/**
+ * An ambient chain's statement and the file that spells it (`DependencyCarry.ambientProviderOf`) — or a package wildcard
+ * and its ambient file, null for the source's own (`DependencyCarry.typeWildcardProviderOf`).
+ */
 private typedef AmbientProvider = {
 	final statement: ImportInfo;
-	final file: String;
+	final file: Null<String>;
 }
 
 /**

@@ -310,6 +310,13 @@ final class StaticExtensions {
 			&& (host.type.isExtern || host.type.kind == SymbolIndex.INTERFACE_DECL_KIND);
 	}
 
+	/** The `using` statements of `fi`: its own, then each group of its ambient chain, nearest first. */
+	public static function usingsOf(fi: FileInfo): Array<ImportInfo> {
+		final out: Array<ImportInfo> = fi.imports.filter(i -> i.kind == ImportKind.Using);
+		for (group in fi.ambientImports) for (i in group.imports) if (i.kind == ImportKind.Using) out.push(i);
+		return out;
+	}
+
 	/** Whether the link `link` of `t` is an interface: every link of an interface, an `implements` link of a class. */
 	private static inline function implemented(t: TypeDeclInfo, link: AncestorLink): Bool {
 		return t.kind == SymbolIndex.INTERFACE_DECL_KIND || t.interfaces.contains(SourceText.lastSegment(link.raw));
@@ -318,13 +325,6 @@ final class StaticExtensions {
 	/** Whether `m` is a static a `using` offers as the extension `method` — `@:noUsing` withholds it. */
 	private static inline function extendsAs(m: MemberInfo, method: String): Bool {
 		return m.name == method && m.isStatic && !m.excludedFromExtensions;
-	}
-
-	/** The `using` statements of `fi`: its own, then each group of its ambient chain, nearest first. */
-	private static function usingsOf(fi: FileInfo): Array<ImportInfo> {
-		final out: Array<ImportInfo> = fi.imports.filter(i -> i.kind == ImportKind.Using);
-		for (group in fi.ambientImports) for (i in group.imports) if (i.kind == ImportKind.Using) out.push(i);
-		return out;
 	}
 
 	/** The `using` statements among `imports`, the last first: the order the compiler tries them in. */
