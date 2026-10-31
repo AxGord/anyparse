@@ -86,7 +86,10 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 			armKinds: ShapeVocab.switchArmKinds(shape),
 			outcomeCalls: shape.outcomeRecordingCalls ?? [],
 			functionKinds: ShapeVocab.functionLikeKinds(shape),
-			statementListKinds: plugin.controlFlowSupport()?.blockKinds() ?? []
+			statementListKinds: plugin.controlFlowSupport()?.blockKinds() ?? [],
+			loopKinds: ShapeVocab.loopKinds(shape),
+			iterationKinds: shape.iterationBindingKinds ?? [],
+			valueBinderKinds: shape.iterationValueBinderKinds ?? []
 		};
 	}
 
@@ -210,8 +213,10 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 	 * Whether a read of the local `write` assigns, bound to the same declaration, follows the try on some path: it lies in a
 	 * LATER statement of a statement list enclosing the try, inside the innermost function around it (`ancestors[fnAt]`) —
 	 * the code after a closure the try sits in runs whenever the closure is not, so it does not count. Neither does a read
-	 * in another arm of a branch the try sits in, nor one before the try in a loop around it (that one is a path, but not
-	 * one this proves).
+	 * in another arm of a branch the try sits in. A read anywhere in a loop around the try — condition or body, before the
+	 * try included — counts: the next iteration reaches it, but only for a binding declared outside the loop (a local of the
+	 * body is fresh each iteration) and not in a `for` head's iterable, which runs once. The write's own span is no read
+	 * (`n++` reads `n`).
 	 */
 	private static function readAfter(write: RefHit, tree: QueryNode, ancestors: Array<QueryNode>, fnAt: Int, scan: CatchScan): Bool {
 		final binding: Null<Span> = write.bindingSpan;
@@ -220,6 +225,7 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 			for (h in Refs.find(write.name, tree, scan.shape)) if (h.kind == RefKind.Read && h.bindingSpan?.from == binding.from) h.span
 		];
 		for (k in fnAt + 1...ancestors.length - 1) {
+			if (readByNextIteration(ancestors[k], write.span, binding, reads, scan)) return true;
 			final listSpan: Null<Span> = ancestors[k].span;
 			final childSpan: Null<Span> = ancestors[k + 1].span;
 			if (
@@ -231,6 +237,32 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 				return true;
 		}
 		return false;
+	}
+
+	/** The span of the iterable of a `for` loop `loop` (its first child that is no value binder), run once; null for another loop. */
+	private static function evaluatedOnce(loop: QueryNode, scan: CatchScan): Null<Span> {
+		if (!scan.iterationKinds.contains(loop.kind)) return null;
+		for (c in loop.children) if (!scan.valueBinderKinds.contains(c.kind)) return c.span;
+		return null;
+	}
+
+	/**
+	 * Whether one of `reads` is reached by the next iteration of `node`, a loop around the try that wrote `writeSpan`: `binding`
+	 * is declared outside it, and the read is in the loop but neither the write itself nor a `for` iterable.
+	 */
+	private static function readByNextIteration(
+		node: QueryNode, writeSpan: Span, binding: Span, reads: Array<Span>, scan: CatchScan
+	): Bool {
+		final loopSpan: Null<Span> = scan.loopKinds.contains(node.kind) ? node.span : null;
+		if (loopSpan == null || binding.from >= loopSpan.from) return false;
+		final once: Null<Span> = evaluatedOnce(node, scan);
+		return reads.exists(
+			r ->
+				r.from != writeSpan.from
+				&& r.from >= loopSpan.from
+				&& r.to <= loopSpan.to
+				&& (once == null || r.from < once.from || r.to > once.to)
+		);
 	}
 
 }
@@ -264,4 +296,13 @@ private typedef CatchScan = {
 
 	/** `ControlFlowSupport.blockKinds`: the statement lists whose later statements follow the try. */
 	final statementListKinds: Array<String>;
+
+	/** `ShapeVocab.loopKinds`: a read anywhere in a loop around the try is reached by its next iteration. */
+	final loopKinds: Array<String>;
+
+	/** `RefShape.iterationBindingKinds`: the `for` loops, whose head iterable is evaluated once. */
+	final iterationKinds: Array<String>;
+
+	/** `RefShape.iterationValueBinderKinds`: the binder nodes ahead of a `for` iterable. */
+	final valueBinderKinds: Array<String>;
 };

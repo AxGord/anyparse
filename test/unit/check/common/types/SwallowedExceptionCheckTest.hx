@@ -373,6 +373,28 @@ class SwallowedExceptionCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { try {').length);
 	}
 
+	/** A counter or flag only the loop head (or an earlier statement of the loop body) reads is read by the next iteration. */
+	public function testCatchOutcomeReadByTheNextIterationNotFlagged(): Void {
+		for (src in [
+			'class C { function f() { var tries = 0; while (true) { if (tries > 3) break; try { g(); break; } catch (e:Exception) '
+			+ 'tries++; } } }',
+			'class C { function f() { var tries = 0; while (tries < 3) { try { g(); break; } catch (e:Exception) { tries++; } } } }',
+			'class C { function f() { var threw = false; for (i in 0...3) { if (threw) break; try { g(); } catch (e:Exception) {'
+			+ ' threw = true; } } } }'
+		]) Assert.equals(0, violations(src).length, src);
+	}
+
+	/** A loop around the try does not make an unread counter handled, nor one declared inside the loop and read nowhere. */
+	public function testCatchOutcomeReadNowhereInLoopStillFlagged(): Void {
+		for (src in [
+			'class C { function f() { var tries = 0; while (true) { try { g(); break; } catch (e:Exception) tries++; } } }',
+			'class C { function f() { for (i in 0...3) { var n = 0; try { g(); } catch (e:Exception) { n++; } } } }',
+			'class C { function f() { for (i in 0...3) { var failed = false; trace(failed); try { g(); } catch (e:Exception) {'
+			+ ' failed = true; } } } }',
+			'class C { function f() { var n = 3; for (i in 0...n) { try { g(); } catch (e:Exception) { n++; } } } }'
+		]) Assert.equals(1, violations(src).length, src);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new SwallowedException(), src);
 	}
