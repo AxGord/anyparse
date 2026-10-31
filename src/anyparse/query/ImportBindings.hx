@@ -41,7 +41,7 @@ typedef BindingCollision = {
 }
 
 /**
- * The ONE reader of "which simple names does this import line bind", over the resolution index —
+ * The one answer to "which simple names does this import line bind", over the resolution index —
  * what `import-order` refuses a reorder by, what `WildcardImportGate` admits a wildcard by, and what
  * `unused-import`, `redundant-import`, `hoist-common-import` and `import-outside-guard` read before
  * they delete or move a line. What the compiler does — the precedence table is in `docs/decisions.md`:

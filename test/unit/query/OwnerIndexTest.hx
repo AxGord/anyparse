@@ -93,6 +93,31 @@ class OwnerIndexTest extends Test {
 		Assert.same(['IdentityMap', 'NodeHolder'], [for (hit in hits) OwnerIndex.nameOf(hit.entry)]);
 	}
 
+	/** Of two equal matches, the type other files name in their code ranks first; a name in a comment counts for nothing. */
+	@:pin('control') @:killer('M-OWNER-MENTIONS-UNCOUNTED') @:killer('M-OWNER-MENTIONS-IN-COMMENTS')
+	public function testATypeOtherFilesNameOutranksAnEqualMatch(): Void {
+		final owners: OwnerIndex = ownersOf([
+			{ file: 'src/a/A.hx', source: 'package a;\n\nclass PathAlpha {}\n' },
+			{ file: 'src/a/B.hx', source: 'package a;\n\nclass PathBeta {}\n' },
+			{ file: 'src/a/C.hx', source: 'package a;\n\nclass User {\n\tvar p:PathBeta;\n}\n' },
+			{
+				file: 'src/a/D.hx',
+				source: 'package a;\n\n// PathAlpha, named in a comment only.\nclass Prose {\n\tvar s:String = "PathAlpha";\n}\n'
+			}
+		]);
+		Assert.same(['PathBeta', 'PathAlpha'], [for (hit in owners.rank('path', 2)) OwnerIndex.nameOf(hit.entry)]);
+	}
+
+	/** Of two equal matches, the declaration whose doc states the question it owns ranks first. */
+	@:pin('control') @:killer('M-OWNER-OWNED-UNBONUSED')
+	public function testAnOwnedQuestionOutranksAnEqualMatch(): Void {
+		final owners: OwnerIndex = ownersOf([
+			{ file: 'src/a/A.hx', source: 'package a;\n\nclass ZoneBeta {}\n' },
+			{ file: 'src/a/B.hx', source: 'package a;\n\n/** The one answer to "zone". */\nclass ZoneAlpha {}\n' }
+		]);
+		Assert.same(['ZoneAlpha', 'ZoneBeta'], [for (hit in owners.rank('zone', 2)) OwnerIndex.nameOf(hit.entry)]);
+	}
+
 	/**
 	 * Each question a review found answered twice — a copy written beside the component that owned it — finds that owner,
 	 * the type or one of its members, among the first few declarations the project's `src` ranks.

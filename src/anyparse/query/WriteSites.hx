@@ -7,8 +7,8 @@ using Lambda;
 
 /**
  * Every WRITE in a tree — each `RefShape.writeParentKinds` node: an assignment in every operator spelling, an
- * increment, a decrement — with the storage it writes named the way `Refs` binds a name, so a consumer asks "can this
- * write change the value that expression reads" by comparing two PATHS (`mayOverlap`).
+ * increment, a decrement — with the storage it writes named the way `Refs` binds a name, so it is the one answer
+ * to "can this write change the value that expression reads", asked by comparing two PATHS (`mayOverlap`).
  *
  * A path is a root key and the steps below it, joined by `.`: `<name>@<binding>` for the root identifier, binding
  * being `Refs.bindingAt`'s answer for it — the offset of the declaration it binds, a member declared in the file

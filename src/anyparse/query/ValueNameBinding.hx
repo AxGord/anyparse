@@ -11,7 +11,8 @@ import anyparse.query.TypeNameBinding.ImportPath;
 using Lambda;
 
 /**
- * THE meaning of a bare VALUE name no local, parameter or member binds, at module level: what the module itself declares
+ * THE meaning of a bare VALUE name no local, parameter or member binds, at module level — the one
+ * answer to "which declaration does this bare value name bind": what the module itself declares
  * there (`FileInfo.moduleFields`), else the statics its imports bring in under the name. Each answer was compiled first on
  * Haxe 4.3.7 (`docs/decisions.md`):
  *

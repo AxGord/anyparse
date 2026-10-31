@@ -13,8 +13,9 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
- * The typing service of one run scope: the ONE place a typing question is asked, over the declarations the
- * `SymbolIndex` read. Its questions split the way a compiler's typer splits them. SIGNATURE questions are answered from
+ * The typing service of one run scope: the ONE place a typing question is asked, over the declarations
+ * the `SymbolIndex` read, and the one answer to "what type does this expression or declaration have".
+ * Its questions split the way a compiler's typer splits them. SIGNATURE questions are answered from
  * the declarations alone, no body read (`members`: what a named type declares or inherits; `structural`: what it unifies
  * with). BODY questions walk an expression: `typeWalk` owns the shapes and a `TypingHost` answers each in its own currency,
  * and `expectations` gives the type a position expects. Every answer the service remembers lives in `cache`, keyed by the

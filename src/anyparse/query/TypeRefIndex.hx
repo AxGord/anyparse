@@ -11,8 +11,8 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 using Lambda;
 
 /**
- * The name -> DECLARATION layer of the index: which files declare a simple name, and which
- * declaration a written type reference denotes when it is read from a given file's scope.
+ * The name -> DECLARATION layer of the index: which files declare a simple name, and which declaration a written type reference denotes
+ * when it is read from a given file's scope — the one answer to "which declaration does this written type reference denote from this file".
  * A SIMPLE name is bound by `names` (`TypeNameBinding`), the compiler's resolution order and the one implementation of it:
  * `resolveTypeRefAll` answers a simple reference through it, and `ImportBindings` lists an import line's names from its tables.
  * Every type a name may be on some build — what the call graph dispatches on — is `names.bindingsOf`,

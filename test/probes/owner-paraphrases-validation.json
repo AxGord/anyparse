@@ -1,0 +1,28 @@
+{
+	"about": "A second set for `hxq owner`, written after the ranking was tuned on owner-paraphrases.json by the same author, who had read the owners' docs, so it is not held out (several questions echo an owned question's wording): owner questions in other words, and controls whose answer is an operation or a config reader that states no owned question, so a bonus for owned questions cannot win by crowding them out. Read by unit.query.OwnerParaphraseTest.",
+	"top": 3,
+	"atLeast": 16,
+	"questions": [
+		{ "question": "do two path strings point at one file on disk", "owners": ["FileIdentity"] },
+		{ "question": "key a map by file so relative and absolute paths collide", "owners": ["FileIdentity"] },
+		{ "question": "could some call in this region reassign the local I cached", "owners": ["UnchangedLocal"] },
+		{ "question": "resolve a bare type identifier through the imports and the package", "owners": ["TypeNameBinding"] },
+		{ "question": "can I drop this call because it does nothing observable", "owners": ["StdlibPurity", "PurityScan"] },
+		{ "question": "is the result of the if expression discarded", "owners": ["TailValueScan"] },
+		{ "question": "keep a haxe --wait server alive across lint runs", "owners": ["OracleServerPool"] },
+		{ "question": "infer the type of a local variable without an annotation", "owners": ["TypingService"] },
+		{ "question": "which static does an unqualified function call refer to", "owners": ["ValueNameBinding"] },
+		{ "question": "does this assignment modify the field that expression reads", "owners": ["WriteSites"] },
+		{ "question": "members declared under conditional compilation", "owners": ["MemberBranchScan"] },
+		{ "question": "names introduced by a wildcard import", "owners": ["ImportBindings"] },
+		{ "question": "which declaration does a qualified type path like pkg.Mod.Sub denote", "owners": ["TypeRefIndex", "TypeNameBinding"] },
+		{ "question": "is the receiver of a static call a type or a value", "owners": ["QualifiedReceiver"] },
+		{ "question": "prove that the start argument of substr is non-negative", "owners": ["OrderGuards"] },
+		{ "question": "add an import statement to a file", "owners": ["AddImport"] },
+		{ "question": "extract selected statements into a new function", "owners": ["ExtractMethod"] },
+		{ "question": "inline a method body at every call site", "owners": ["InlineMethod"] },
+		{ "question": "delete a declaration only if nothing references it", "owners": ["SafeDelete"] },
+		{ "question": "read the lint configuration file", "owners": ["LintConfig"] },
+		{ "question": "move a type to another package", "owners": ["MoveSymbol"] }
+	]
+}

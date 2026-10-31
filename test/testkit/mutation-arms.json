@@ -33701,6 +33701,37 @@
 			"find": "second[j].out == outcomes[i].out",
 			"replace": "true",
 			"note": "a formatter row whose second pass rewrites its own output still reads as one pass"
+		},
+		{
+			"name": "M-OWNER-STANDING-FLAT",
+			"type": "anyparse.query.OwnerIndex",
+			"method": "standing",
+			"force": "1.0",
+			"note": "every declaration stands alike, so a rule or a hub member sharing a word outranks the owner a paraphrased question asks for"
+		},
+		{
+			"name": "M-OWNER-MENTIONS-UNCOUNTED",
+			"type": "anyparse.query.OwnerIndex",
+			"method": "standing",
+			"find": "Math.log(1 + entry.mentions)",
+			"replace": "0",
+			"note": "how many files name a type stops counting, so a component the code calls ties with one nothing calls"
+		},
+		{
+			"name": "M-OWNER-MENTIONS-IN-COMMENTS",
+			"type": "anyparse.query.OwnerIndex",
+			"method": "codeWords",
+			"find": "if (region < regions.length && regions[region].from <= i) {",
+			"replace": "if (false) {",
+			"note": "a type named in a comment or a string counts as called"
+		},
+		{
+			"name": "M-OWNER-OWNED-UNBONUSED",
+			"type": "anyparse.query.OwnerIndex",
+			"method": "standing",
+			"find": "OWNED_BONUS",
+			"replace": "1",
+			"note": "a doc stating the question it owns no longer marks its declaration, so an equal match that owns nothing ties with it"
 		}
 	]
 }

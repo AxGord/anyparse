@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
@@ -35,6 +36,9 @@ typedef OwnerEntry = {
 
 	/** The search terms of the whole doc comment. */
 	final docTerms: Array<String>;
+
+	/** How many other files of the scope name this type in their code; 0 for a member, whose name is too common a word to count. */
+	final mentions: Int;
 };
 
 /** A ranked answer: the declaration, and how well its name and doc cover the question. */
@@ -60,6 +64,9 @@ final class OwnerIndex {
 
 	/** How much a term found only further down the doc counts. */
 	private static inline final DOC_WEIGHT: Float = 0.5;
+
+	/** How many times a declaration whose doc states the question it owns outranks an equal match that states none. */
+	private static inline final OWNED_BONUS: Float = 3;
 
 	/** The shortest word that is a search term. */
 	private static inline final MIN_TERM_LENGTH: Int = 2;
@@ -173,7 +180,8 @@ final class OwnerIndex {
 	/**
 	 * The `limit` declarations whose name and doc best cover `question`, best first: each term of the question its name or the question
 	 * its doc owns carries counts most, one its doc's first sentence carries less, one further down the doc least,
-	 * each weighted by how rare the term is in the scope, and the sum scaled by the share of the question's terms matched.
+	 * each weighted by how rare the term is in the scope, and the sum scaled by the
+	 * share of the question's terms matched and by the declaration's `standing`.
 	 */
 	public function rank(question: String, limit: Int): Array<OwnerHit> {
 		final asked: Array<String> = distinct(terms(question));
@@ -195,7 +203,7 @@ final class OwnerIndex {
 				matched++;
 				score += weight * Math.log(1 + entries.length / (_documentFrequency[term] ?? 1));
 			}
-			if (matched > 0) hits.push({ entry: entry, score: score * matched / asked.length });
+			if (matched > 0) hits.push({ entry: entry, score: standing(entry) * score * matched / asked.length });
 		}
 		hits.sort((a, b) -> if (a.score > b.score)
 			-1
@@ -222,18 +230,26 @@ final class OwnerIndex {
 		return out;
 	}
 
-	/** Every type and member `index` holds, each with the doc it owns read off its file's source. */
+	/** Every type and member `index` holds, each with the doc it owns read off its file's source and how many files name its type. */
 	public static function build(index: SymbolIndex, plugin: GrammarPlugin): OwnerIndex {
-		final entries: Array<OwnerEntry> = [];
+		final declared: Map<String, Int> = [];
+		for (info in index.allFiles()) for (type in info.types) declared[type.name] = 0;
+		final read: Array<{ info: FileInfo, source: String, regions: Array<LexRegion> }> = [];
 		for (info in index.allFiles()) {
 			final source: Null<String> = index.sourceOf(info.file);
 			if (source == null) continue;
 			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
-			final lines: LineIndex = new LineIndex(source);
-			for (type in info.types) {
-				entries.push(entryOf(source, regions, lines, info.file, type.name, null, type.span.from));
+			for (name in codeWords(source, regions)) if (declared.exists(name)) declared[name] = (declared[name] ?? 0) + 1;
+			read.push({ info: info, source: source, regions: regions });
+		}
+		final entries: Array<OwnerEntry> = [];
+		for (file in read) {
+			final lines: LineIndex = new LineIndex(file.source);
+			for (type in file.info.types) {
+				final mentions: Int = Std.int(Math.max(0, (declared[type.name] ?? 0) - 1));
+				entries.push(entryOf(file.source, file.regions, lines, file.info.file, type.name, null, type.span.from, mentions));
 				for (member in type.members)
-					entries.push(entryOf(source, regions, lines, info.file, type.name, member.name, member.declFrom));
+					entries.push(entryOf(file.source, file.regions, lines, file.info.file, type.name, member.name, member.declFrom, 0));
 			}
 		}
 		return new OwnerIndex(entries);
@@ -327,8 +343,17 @@ final class OwnerIndex {
 		return code >= '0'.code && code <= '9'.code;
 	}
 
+	/**
+	 * How far a declaration's matches count, whatever the question: a component many files name is what they call for the
+	 * answer, where a rule or a command is named only by its registry, and a doc stating the question it owns marks the owner.
+	 */
+	private static function standing(entry: OwnerEntry): Float {
+		return (1 + Math.log(1 + entry.mentions)) * (entry.question == null ? 1 : OWNED_BONUS);
+	}
+
 	private static function entryOf(
-		source: String, regions: Array<LexRegion>, lines: LineIndex, file: String, type: String, member: Null<String>, from: Int
+		source: String, regions: Array<LexRegion>, lines: LineIndex, file: String, type: String, member: Null<String>, from: Int,
+		mentions: Int
 	): OwnerEntry {
 		final block: Null<Span> = SourceSlice.leadingDocBlock(source, new Span(from, from), regions);
 		final doc: String = block == null ? '' : SourceSlice.docProse(source, block);
@@ -344,8 +369,37 @@ final class OwnerIndex {
 			nameTerms: distinct(terms(member ?? type)),
 			questionTerms: distinct(terms(question ?? '')),
 			summaryTerms: distinct(terms(summary)),
-			docTerms: distinct(terms(doc))
+			docTerms: distinct(terms(doc)),
+			mentions: mentions
 		};
+	}
+
+	/** The distinct words of `source` outside its comments and literals, each once. */
+	private static function codeWords(source: String, regions: Array<LexRegion>): Array<String> {
+		final seen: Map<String, Bool> = [];
+		final out: Array<String> = [];
+		var region: Int = 0;
+		var i: Int = 0;
+		while (i < source.length) {
+			while (region < regions.length && regions[region].to <= i) region++;
+			if (region < regions.length && regions[region].from <= i) {
+				i = regions[region].to;
+				continue;
+			}
+			if (!isWordCode(source.fastCodeAt(i)) && source.fastCodeAt(i) != '_'.code) {
+				i++;
+				continue;
+			}
+			var end: Int = i;
+			while (end < source.length && (isWordCode(source.fastCodeAt(end)) || source.fastCodeAt(end) == '_'.code)) end++;
+			final word: String = source.substring(i, end);
+			if (!seen.exists(word)) {
+				seen[word] = true;
+				out.push(word);
+			}
+			i = end;
+		}
+		return out;
 	}
 
 	/** Push the terms of one word, split where its case or its digits change (`HTTPServer64` is `http`, `server`, `64`). */

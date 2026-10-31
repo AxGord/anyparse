@@ -8,7 +8,8 @@ import anyparse.query.TypeResolver;
 
 /**
  * Whether an expression subtree can be evaluated once — or DROPPED — without changing what the
- * program does. Two checks ask this of the same shapes: `extract-repeated-expression` before
+ * program does: the one answer to "can this expression be hoisted or deleted without changing
+ * behaviour". Two checks ask this of the same shapes: `extract-repeated-expression` before
  * hoisting an expression into a `final` local, and `unnecessary-switch` before deleting a
  * degenerate switch's subject outright.
  *

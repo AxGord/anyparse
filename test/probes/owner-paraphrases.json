@@ -1,0 +1,27 @@
+{
+	"about": "The set the `hxq owner` ranking (anyparse.query.OwnerIndex) was TUNED on, so its count is no held-out reading: each question is how a worker would ask for a component a review later found duplicated, worded from the review records (the first review's five paraphrases among them) rather than from the owner's doc. `owners` are the types whose answer it is (a member of one counts). The metric is how many questions rank an owner in the top 3 over the project's `src`, and `atLeast` is the floor the test holds. Never reword a question to fit a doc: add a phrasing instead. Read by unit.query.OwnerParaphraseTest.",
+	"top": 3,
+	"atLeast": 15,
+	"questions": [
+		{ "question": "are these two paths the same file", "owners": ["FileIdentity"] },
+		{ "question": "compare file paths so a symlink and a relative spelling of one file are equal", "owners": ["FileIdentity"] },
+		{ "question": "can this local change between check and use", "owners": ["UnchangedLocal"] },
+		{ "question": "may a closure called in between overwrite this variable", "owners": ["UnchangedLocal"] },
+		{ "question": "which import does this name come from", "owners": ["TypeNameBinding"] },
+		{ "question": "what type does an unqualified type name in this file refer to", "owners": ["TypeNameBinding"] },
+		{ "question": "does this expression have side effects", "owners": ["StdlibPurity", "PurityScan"] },
+		{ "question": "is calling this standard library function pure", "owners": ["StdlibPurity"] },
+		{ "question": "is this block's value used", "owners": ["TailValueScan"] },
+		{ "question": "is the last expression of a block its result value", "owners": ["TailValueScan"] },
+		{ "question": "reuse a running compiler server instead of spawning haxe for every typecheck", "owners": ["OracleServerPool"] },
+		{ "question": "what is the static type of this expression", "owners": ["TypingService"] },
+		{ "question": "what does this identifier refer to: a local, a field or a static", "owners": ["ValueNameBinding"] },
+		{ "question": "find every assignment to a variable", "owners": ["WriteSites"] },
+		{ "question": "which members of a class sit inside #if blocks", "owners": ["MemberBranchScan"] },
+		{ "question": "does an enclosing condition guarantee this index is not negative", "owners": ["OrderGuards"] },
+		{ "question": "which statically imported functions can a file call without a prefix", "owners": ["ValueNameBinding", "ImportBindings"] },
+		{ "question": "resolve a receiver written as ClassName.member to its declaring type", "owners": ["QualifiedReceiver"] },
+		{ "question": "which file declares the type a type annotation names", "owners": ["TypeRefIndex", "TypeNameBinding"] },
+		{ "question": "which declarations does an import statement bring into scope", "owners": ["ImportBindings"] }
+	]
+}

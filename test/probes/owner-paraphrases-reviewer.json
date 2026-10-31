@@ -1,0 +1,16 @@
+{
+	"about": "The held-out set for `hxq owner`: questions a reviewer wrote without the owners' wording and without the ranking's tuning, the honest reading of how far a paraphrase finds its owner. `owners` are the types whose answer it is (a member of one counts); `atLeast` is the floor the test holds. Never reword a question to fit a doc. Read by unit.query.OwnerParaphraseTest.",
+	"top": 3,
+	"atLeast": 3,
+	"questions": [
+		{ "question": "after I read x, could a method call before I use it again make x hold something else", "owners": ["UnchangedLocal"] },
+		{ "question": "normalize a filename so the same source opened twice is keyed once", "owners": ["FileIdentity"] },
+		{ "question": "does anything consume what the final statement in braces evaluates to", "owners": ["TailValueScan"] },
+		{ "question": "a class name with no package prefix, which class is it given imports and the same package", "owners": ["TypeNameBinding"] },
+		{ "question": "keep haxe --wait processes alive to make repeated compiles cheap", "owners": ["OracleServerPool"] },
+		{ "question": "is this command line argument an option, an option's value or a positional", "owners": ["CliFlags"] },
+		{ "question": "pick the grammar from the file extensions given on the command line", "owners": ["LanguageChoice"] },
+		{ "question": "in Foo.bar(), is Foo a type name or a variable", "owners": ["QualifiedReceiver"] },
+		{ "question": "remove a method only if nothing anywhere calls it", "owners": ["SafeDelete"] }
+	]
+}
