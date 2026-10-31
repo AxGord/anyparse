@@ -5,6 +5,8 @@
 			"-cp",
 			"src",
 			"-cp",
+			"lib",
+			"-cp",
 			"main",
 			"-main",
 			"Main",
@@ -315,7 +317,6 @@
 		{
 			"name": "C4",
 			"note": "StringMap through an import.hx type wildcard haxe.ds.*",
-			"knownDefect": "type-wildcard binding not carried: refuses (MOVE-CARRY-WILDCARD)",
 			"argv": [
 				"hxq",
 				"move",
@@ -334,13 +335,13 @@
 				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
 			},
 			"expect": {
-				"exit": 1,
+				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "75a5c2250816677d",
-				"files": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "0ad589f099a13109",
 				"compiles": [
-					false,
-					false
+					true,
+					true
 				]
 			}
 		},
@@ -410,7 +411,6 @@
 		{
 			"name": "C7",
 			"note": "StringMap through the source's own import haxe.ds.*",
-			"knownDefect": "type-wildcard binding not carried: refuses (MOVE-CARRY-WILDCARD)",
 			"argv": [
 				"hxq",
 				"move",
@@ -428,20 +428,19 @@
 				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
 			},
 			"expect": {
-				"exit": 1,
+				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "75a5c2250816677d",
-				"files": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "759419466f220c46",
 				"compiles": [
-					false,
-					false
+					true,
+					true
 				]
 			}
 		},
 		{
 			"name": "C8",
 			"note": "Map/Date/StringTools beside an import.hx haxe.ds.* (Map is also a top-level alias)",
-			"knownDefect": "false refusal of Map, a top-level std alias, under haxe.ds.* (MOVE-CARRY-WILDCARD)",
 			"argv": [
 				"hxq",
 				"move",
@@ -460,13 +459,13 @@
 				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
 			},
 			"expect": {
-				"exit": 1,
+				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "bdcaeda715e59443",
-				"files": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "19ec10f3cb8a59a5",
 				"compiles": [
-					false,
-					false
+					true,
+					true
 				]
 			}
 		},
@@ -503,7 +502,6 @@
 		{
 			"name": "C10",
 			"note": "Map under the source's import haxe.ds.* (top-level alias)",
-			"knownDefect": "false refusal of Map, a top-level std alias, under haxe.ds.* (MOVE-CARRY-WILDCARD)",
 			"argv": [
 				"hxq",
 				"move",
@@ -521,20 +519,19 @@
 				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
 			},
 			"expect": {
-				"exit": 1,
+				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "bdcaeda715e59443",
-				"files": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "a80e5f65939006f7",
 				"compiles": [
-					false,
-					false
+					true,
+					true
 				]
 			}
 		},
 		{
 			"name": "C11",
 			"note": "Bytes through an import.hx haxe.io.* plus Map",
-			"knownDefect": "type-wildcard binding not carried: refuses (MOVE-CARRY-WILDCARD)",
 			"argv": [
 				"hxq",
 				"move",
@@ -553,13 +550,13 @@
 				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
 			},
 			"expect": {
-				"exit": 1,
+				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "d6464e4a297b704e",
-				"files": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "18a45eac5ef0ac39",
 				"compiles": [
-					false,
-					false
+					true,
+					true
 				]
 			}
 		},
@@ -954,7 +951,6 @@
 		{
 			"name": "U1",
 			"note": "an extension call through a using that only import.hx supplies",
-			"knownDefect": "a using supplied only by import.hx is not carried: the moved code does not compile (MOVE-CARRY-WILDCARD)",
 			"argv": [
 				"hxq",
 				"move",
@@ -978,10 +974,10 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "4f16c38b8b410219",
-				"files": "1c74bfe49da4abd2",
+				"files": "c88a1782ea2b4feb",
 				"compiles": [
-					false,
-					false
+					true,
+					true
 				]
 			}
 		},
@@ -1011,6 +1007,654 @@
 				"out": "e3b0c44298fc1c14",
 				"err": "4f16c38b8b410219",
 				"files": "9f0bdb06f62ead49",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "W1",
+			"note": "wildcard package lib.* is outside --scope and the dest has its own r.Helper: the move writes without the import, so Widget is unbound at the dest",
+			"knownDefect": "a wildcard of a package outside --scope is neither carried nor refused: the moved code does not compile (documented door, MOVE-CARRY-WILDCARD)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"lib/lib/Helper.hx": "package lib;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"lib.Helper\";\n}",
+				"lib/lib/Widget.hx": "package lib;\n\nclass Widget {\n\tpublic function new() {}\n\tpublic function who(): String return \"lib.Widget\";\n}",
+				"src/p/Host.hx": "package p;\n\nimport lib.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(new Widget().who());\n\t}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tpublic static function check() {\n\t\ttrace(new Helper().who());\n\t}\n}",
+				"src/r/Helper.hx": "package r;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"r.Helper\";\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "31eb5e4776c4121c",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "W2",
+			"note": "source import haxe.ds.*, dest names its own r.Vector, which the wildcard would rebind to haxe.ds.Vector: refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport haxe.ds.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\tvar m = new StringMap<Int>();\n\t\ttrace(m.exists(\"a\"));\n\t}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tpublic static function check() {\n\t\ttrace(new Vector().who());\n\t}\n}",
+				"src/r/Vector.hx": "package r;\n\nclass Vector {\n\tpublic function new() {}\n\tpublic function who(): String return \"r.Vector\";\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "8eaa927a47bc8267",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "W3",
+			"note": "as W2 but the dest's Vector sits in a #if foo region: refused in both define sets",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport haxe.ds.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\tvar m = new StringMap<Int>();\n\t\ttrace(m.exists(\"a\"));\n\t}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tpublic static function check() {\n\t\t#if foo trace(new Vector().who()); #end\n\t}\n}",
+				"src/r/Vector.hx": "package r;\n\nclass Vector {\n\tpublic function new() {}\n\tpublic function who(): String return \"r.Vector\";\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "8eaa927a47bc8267",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "W4",
+			"note": "dest declares its own Option sub-type, which outranks the haxe.ds.* wildcard: carried, compiles",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport haxe.ds.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\tvar m = new StringMap<Int>();\n\t\ttrace(m.exists(\"a\"));\n\t}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tpublic static function check() {\n\t\ttrace(new Option().who());\n\t}\n}\n\nclass Option {\n\tpublic function new() {}\n\tpublic function who(): String return \"r.Dest.Option\";\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "3647fdd663604a62",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "W5",
+			"note": "dest names List, a top-level std type the wildcard haxe.ds.* would rebind to haxe.ds.List: refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport haxe.ds.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\tvar m = new StringMap<Int>();\n\t\ttrace(m.exists(\"a\"));\n\t}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tpublic static function check() {\n\t\tvar l = new List<Int>(); trace(l.length);\n\t}\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "59e47ba12dc24568",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "W6",
+			"note": "source import q.*, dest names its own sibling r.Helper that q.Helper would rebind: refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport q.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(new Node().who());\n\t}\n}\n",
+				"src/q/Helper.hx": "package q;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"q.Helper\";\n}",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic function new() {}\n\tpublic function who(): String return \"q.Node\";\n}",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tpublic static function check() {\n\t\ttrace(new Helper().who());\n\t}\n}",
+				"src/r/Helper.hx": "package r;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"r.Helper\";\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4cd2e7026d146298",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "W7",
+			"note": "module-static wildcard supplied only by the source's import.hx: carried to the dest, compiles in both define sets",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n",
+				"src/p/import.hx": "import q.Tools.*;\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"q.Tools.qfun\";\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "f40d291b3489d536",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "W8",
+			"note": "module-static wildcard in the source's own imports: carried to the dest, compiles",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport q.Tools.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"q.Tools.qfun\";\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "7ed8f991921cb40b",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "W9",
+			"note": "dest holds an explicit import r2.Helper, which outranks the q.* wildcard: carried beside it, compiles",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport q.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(new Node().who());\n\t}\n}\n",
+				"src/q/Helper.hx": "package q;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): Int return 1;\n}",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic function new() {}\n\tpublic function who(): String return \"q.Node\";\n}",
+				"src/r/Dest.hx": "package r;\n\nimport r2.Helper;\n\nclass Dest {\n\tpublic static function check() {\n\t\tvar s: String = new Helper().who();\n\t\ttrace(s);\n\t}\n}",
+				"src/r2/Helper.hx": "package r2;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"r2.Helper\";\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "6bff88164f1a8b64",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "W10",
+			"note": "as W9 but the explicit r2.Helper comes from the dest's import.hx: refused although the explicit ambient import outranks the wildcard",
+			"knownDefect": "conservative false refusal: the dest's ambient explicit import r2.Helper outranks q.*, so carrying is safe (W9 moves)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport q.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(new Node().who());\n\t}\n}\n",
+				"src/q/Helper.hx": "package q;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"q.Helper\";\n}",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic function new() {}\n\tpublic function who(): String return \"q.Node\";\n}",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tpublic static function check() {\n\t\ttrace(new Helper().who());\n\t}\n}",
+				"src/r/import.hx": "import r2.Helper;\n",
+				"src/r2/Helper.hx": "package r2;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"r2.Helper\";\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4cd2e7026d146298",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "W11",
+			"note": "wildcard lib.* outside --scope and a top-level Helper: the move writes without the import, so Widget is unbound at the dest",
+			"knownDefect": "a wildcard of a package outside --scope is neither carried nor refused: the moved code does not compile (documented door, MOVE-CARRY-WILDCARD)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"lib/lib/Helper.hx": "package lib;\n\nclass Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"lib.Helper\";\n}",
+				"lib/lib/Widget.hx": "package lib;\n\nclass Widget {\n\tpublic function new() {}\n\tpublic function who(): String return \"lib.Widget\";\n}",
+				"src/Helper.hx": "class Helper {\n\tpublic function new() {}\n\tpublic function who(): String return \"toplevel.Helper\";\n}",
+				"src/p/Host.hx": "package p;\n\nimport lib.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(new Widget().who());\n\t}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tpublic static function check() {\n\t\ttrace(new Helper().who());\n\t}\n}",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); r.Dest.check(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "31eb5e4776c4121c",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "S1",
+			"note": "source import.hx carries q.Tools.*, dest holds the same wildcard only under #if foo: compiles in both define sets",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n",
+				"src/p/import.hx": "import q.Tools.*;\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"q.Tools.qfun\";\n}\n",
+				"src/r/Dest.hx": "package r;\n\n#if foo\nimport q.Tools.*;\n#end\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "ac7a199e82b1aae0",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "S1b",
+			"note": "source's own q.Tools.* wildcard, dest holds it only under #if foo: compiles in both define sets",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport q.Tools.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"q.Tools.qfun\";\n}\n",
+				"src/r/Dest.hx": "package r;\n\n#if foo\nimport q.Tools.*;\n#end\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "eedad58cf3f65446",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "S2",
+			"note": "source's own q.Tools.*, dest's import.hx holds it only under #if foo: the guarded ambient copy must not count as held",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport q.Tools.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"q.Tools.qfun\";\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"src/r/import.hx": "#if foo\nimport q.Tools.*;\n#end\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "7ed8f991921cb40b",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "S2b",
+			"note": "source ambient q.Tools.*, dest's import.hx holds it only under #if foo: the guarded ambient copy must not count as held",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n",
+				"src/p/import.hx": "import q.Tools.*;\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"q.Tools.qfun\";\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"src/r/import.hx": "#if foo\nimport q.Tools.*;\n#end\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "f40d291b3489d536",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "S3",
+			"note": "source's own q.Tools.*, dest's import.hx holds it unguarded: nothing to carry, compiles",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport q.Tools.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"q.Tools.qfun\";\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"src/r/import.hx": "import q.Tools.*;\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "0fb69e86f3c02bf6",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "K1",
+			"note": "move-member --keep-bare: q/import.hx holds q.Dest.* then z.Z.*, so Tools' bare g() binds Z.g; the own import q.Dest.* that keep-bare adds would outrank the chain and rebind it to Dest.g: refused",
+			"argv": [
+				"hxq",
+				"move-member",
+				"src/q/Tools.hx",
+				"qfun",
+				"--to",
+				"Dest",
+				"--scope",
+				"src",
+				"--keep-bare",
+				"--write"
+			],
+			"files": {
+				"src/Main.hx": "class Main { static function main() { trace(q.Tools.useG()); trace(q.Tools.useQ()); } }\n",
+				"src/q/Dest.hx": "package q;\n\nclass Dest {\n\tpublic static function g(): String return \"Dest.g\";\n}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"Tools.qfun\";\n\tpublic static function useG(): String return g();\n\tpublic static function useQ(): String return qfun();\n}\n",
+				"src/q/import.hx": "import q.Dest.*;\nimport z.Z.*;\n",
+				"src/z/Z.hx": "package z;\n\nclass Z {\n\tpublic static function g(): String return \"Z.g\";\n}\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3802611c76b30746",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "K2",
+			"note": "move-member: the caller's own z.Z.* wildcard outranks the source's ambient one: caller not repointed, Z.qfun kept",
+			"argv": [
+				"hxq",
+				"move-member",
+				"src/q/Tools.hx",
+				"qfun",
+				"--to",
+				"Dest",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/Main.hx": "class Main { static function main() { trace(c.Use.f()); } }\n",
+				"src/c/Use.hx": "package c;\n\nimport z.Z.*;\n\nclass Use {\n\tpublic static function f(): Int return qfun();\n}\n",
+				"src/c/import.hx": "import q.Tools.*;\n",
+				"src/q/Dest.hx": "package q;\n\nclass Dest {}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"Tools.qfun\";\n}\n",
+				"src/z/Z.hx": "package z;\n\nclass Z {\n\tpublic static function qfun(): Int return 1;\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "310b48865c1635d9",
+				"files": "c6212f914fb3e1f0",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "K3",
+			"note": "move-member: the caller's nearer import.hx z.Z.* outranks the farther q.Tools.*: caller not repointed, Z.qfun kept",
+			"argv": [
+				"hxq",
+				"move-member",
+				"src/q/Tools.hx",
+				"qfun",
+				"--to",
+				"Dest",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/Main.hx": "class Main { static function main() { trace(c.d.Use.f()); } }\n",
+				"src/c/d/Use.hx": "package c.d;\n\nclass Use {\n\tpublic static function f(): Int return qfun();\n}\n",
+				"src/c/d/import.hx": "import z.Z.*;\n",
+				"src/c/import.hx": "import q.Tools.*;\n",
+				"src/q/Dest.hx": "package q;\n\nclass Dest {}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"Tools.qfun\";\n}\n",
+				"src/z/Z.hx": "package z;\n\nclass Z {\n\tpublic static function qfun(): Int return 1;\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "310b48865c1635d9",
+				"files": "c6212f914fb3e1f0",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "K4",
+			"note": "move-member: the caller's nearer import.hx q.Tools.* outranks the farther z.Z.*: caller repointed to Dest.qfun, so it keeps the moved function instead of rebinding to Z.qfun",
+			"argv": [
+				"hxq",
+				"move-member",
+				"src/q/Tools.hx",
+				"qfun",
+				"--to",
+				"Dest",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/Main.hx": "class Main { static function main() { trace(c.d.Use.f()); } }\n",
+				"src/c/d/Use.hx": "package c.d;\n\nclass Use {\n\tpublic static function f(): String return qfun();\n}\n",
+				"src/c/d/import.hx": "import q.Tools.*;\n",
+				"src/c/import.hx": "import z.Z.*;\n",
+				"src/q/Dest.hx": "package q;\n\nclass Dest {}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qfun(): String return \"Tools.qfun\";\n}\n",
+				"src/z/Z.hx": "package z;\n\nclass Z {\n\tpublic static function qfun(): Int return 1;\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "134b8eae482cbbf6",
+				"files": "5a63e919c56089f0",
 				"compiles": [
 					true,
 					true
