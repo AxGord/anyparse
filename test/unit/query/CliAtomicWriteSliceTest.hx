@@ -6,6 +6,7 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import anyparse.query.cli.CliIo;
+import anyparse.query.cli.WriteFailure;
 import unit.cli.CliFixture;
 
 using Lambda;
@@ -275,6 +276,82 @@ final class CliAtomicWriteSliceTest extends Test {
 		unlockAndRemove(dir);
 		#else
 		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A change set that names one file twice — `./` in one spelling, a symlink in another — is refused before anything is
+	 * written: both members stage beside the one real file, so the first rename used to land and the second died on a
+	 * temporary that was already gone, leaving a half-written set.
+	 *
+	 * A refusal that came late would show as the first member's text already on disk.
+	 */
+	@:pin('control') @:killer('M-WRITE-SAME-TARGET-BY-SPELLING')
+	public function testAChangeSetNamingOneFileTwiceIsRefusedBeforeAnythingIsWritten(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('apq_stage_twice', [{ name: 'D.hx', source: DRIFTED }, { name: 'E.hx', source: DRIFTED }]);
+		final dotted: Bool = try {
+			CliIo.writeFiles([
+				{ path: '$dir/D.hx', content: 'class D {}\n' },
+				{ path: '$dir/./D.hx', content: 'class D {\n}\n' }
+			]);
+			false;
+		} catch (exception: WriteFailure) {
+			true;
+		};
+		Assert.isTrue(dotted, 'the second spelling of D.hx fails the set');
+		Assert.equals(DRIFTED, File.getContent('$dir/D.hx'), 'and D.hx keeps every byte it had');
+		#if nodejs
+		js.node.Fs.symlinkSync('$dir/E.hx', '$dir/L.hx');
+		final linked: Bool = try {
+			CliIo.writeFiles([
+				{ path: '$dir/E.hx', content: 'class E {}\n' },
+				{ path: '$dir/L.hx', content: 'class E {\n}\n' }
+			]);
+			false;
+		} catch (exception: WriteFailure) {
+			true;
+		};
+		Assert.isTrue(linked, 'a symlink to E.hx is the same member');
+		Assert.equals(DRIFTED, File.getContent('$dir/E.hx'), 'and E.hx keeps every byte it had');
+		#end
+		Assert.equals(0, stagedLeftovers(dir), 'no staging temporary is left behind');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two letter-case spellings of one existing file are one member on a case-insensitive volume: the set is refused whole
+	 * and the file keeps its bytes. Plain `realpathSync` hands the caller's case back, so the spellings keyed apart, shared
+	 * one staging temporary and the second content replaced the first before the second rename failed. Skipped where the
+	 * fixture's volume tells the two spellings apart.
+	 */
+	@:pin('control') @:killer('M-FILE-IDENTITY-PLAIN-REALPATH')
+	public function testACaseSpellingOfAnExistingFileIsTheSameMember(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('apq_stage_case', [{ name: 'D.hx', source: DRIFTED }]);
+		if (!FileSystem.exists('$dir/d.hx')) {
+			CliFixture.removeDir(dir);
+			Assert.pass('a case-sensitive volume has no second spelling');
+			return;
+		}
+		final refused: Bool = try {
+			CliIo.writeFiles([
+				{ path: '$dir/D.hx', content: 'class D {}\n' },
+				{ path: '$dir/d.hx', content: 'class D {\n}\n' }
+			]);
+			false;
+		} catch (exception: WriteFailure) {
+			true;
+		};
+		Assert.isTrue(refused, 'the second spelling fails the set');
+		Assert.equals(DRIFTED, File.getContent('$dir/D.hx'), 'and the file keeps every byte it had');
+		Assert.equals(0, stagedLeftovers(dir), 'no staging temporary is left behind');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('needs nodejs');
 		#end
 	}
 

@@ -8,6 +8,9 @@ using Lambda;
  */
 typedef JournalEntry = {
 	final path: String;
+
+	/** The file's `FileIdentity.realPath`: two spellings of one file are one entry, whose `original` is the run's first sight of it. */
+	final identity: String;
 	final original: Null<String>;
 	final mode: Null<Int>;
 }
@@ -82,12 +85,18 @@ final class WriteJournal {
 
 	private function record(path: String): Void {
 		final absolute: String = ConfigFinder.absolute(path);
-		if (_entries.exists(entry -> entry.path == absolute)) return;
+		final identity: String = FileIdentity.realPath(absolute);
+		if (_entries.exists(entry -> entry.identity == identity)) return;
 		final original: Null<String> = read(absolute);
 		final mode: Null<Int> = #if (sys || nodejs) original == null
 			? null
 			: sys.FileSystem.stat(absolute).mode & CliIo.PERMISSION_BITS #else null #end;
-		_entries.push({ path: absolute, original: original, mode: mode });
+		_entries.push({
+			path: absolute,
+			identity: identity,
+			original: original,
+			mode: mode
+		});
 	}
 
 	/** Record `path`, about to be written or deleted, in the run's journal — a no-op outside `during`, and for a path already recorded. */

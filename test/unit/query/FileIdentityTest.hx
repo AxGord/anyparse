@@ -68,16 +68,17 @@ class FileIdentityTest extends Test {
 	}
 
 	/**
-	 * On a case-insensitive volume two case spellings of one file stay two identities: the caller's casing is kept, so a
-	 * case variant is refused as a second file rather than merged by a guess.
+	 * On a case-insensitive volume two case spellings of an existing file
+	 * are one identity: the directory's own casing decides, not the caller's.
 	 */
-	// Both arms keep the spelling handed in, so the two spellings still differ and this case stays green.
-	@:pin('guard') // noqa: guard-pin-arm-reach
-	public function testACaseVariantSpellingIsNotFoldedOntoTheFile(): Void {
+	// A case-sensitive volume has no second spelling to merge.
+	@:pin('control')
+	@:killer('M-FILE-IDENTITY-PLAIN-REALPATH')
+	public function testACaseVariantSpellingOfAnExistingFileIsTheSameFile(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeTree('fileidentitycase', [{ name: 'Case/A.hx', source: 'class A {}\n' }]);
 		if (sys.FileSystem.exists('$dir/case/A.hx'))
-			Assert.notEquals(FileIdentity.realPath('$dir/Case/A.hx'), FileIdentity.realPath('$dir/case/A.hx'));
+			Assert.equals(FileIdentity.realPath('$dir/Case/A.hx'), FileIdentity.realPath('$dir/case/A.hx'));
 		else
 			Assert.pass('a case-sensitive volume has no second spelling');
 		CliFixture.removeDir(dir);

@@ -33954,6 +33954,30 @@
 			"note": "a run whose body throws leaves its journal recording, so every later write in the process lands in a finished run's journal"
 		},
 		{
+			"name": "M-WRITE-JOURNAL-PLAIN-KEY",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "record",
+			"find": "if (_entries.exists(entry -> entry.identity == identity)) return;",
+			"replace": "if (_entries.exists(entry -> entry.path == absolute)) return;",
+			"note": "the journal keys a file by its spelling, so a second spelling records the text the run already wrote as its original and a rollback restores that"
+		},
+		{
+			"name": "M-WRITE-SAME-TARGET-BY-SPELLING",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "refuseSameTarget",
+			"find": "final identity: String = FileIdentity.realPath(w.path);",
+			"replace": "final identity: String = w.path;",
+			"note": "a change set is keyed by the spelling of each path, so one file named twice through a symlink or a dot segment passes the refusal and half-writes the set"
+		},
+		{
+			"name": "M-FILE-IDENTITY-PLAIN-REALPATH",
+			"type": "anyparse.query.FileIdentity",
+			"method": "resolveExisting",
+			"find": "final native: Null<String> = try js.Syntax.code('require(\"fs\").realpathSync.native({0})', path) catch (exception: Exception) null;",
+			"replace": "final native: Null<String> = null;",
+			"note": "an existing path resolves through plain realpath, which keeps the caller's letter case, so two case spellings of one file key apart on a case-insensitive volume"
+		},
+		{
 			"name": "M-WRITE-JOURNAL-MODE-LOST",
 			"type": "anyparse.query.cli.WriteJournal",
 			"method": "rollback",

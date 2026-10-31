@@ -327,6 +327,7 @@ final class CliIo {
 		#if (sys || nodejs)
 		final staged: Array<StagedWrite> = [];
 		final created: Array<String> = [];
+		refuseSameTarget(writes);
 		for (w in writes) WriteJournal.note(w.path);
 		try {
 			for (w in writes) staged.push(stageWrite(w.path, w.content, created));
@@ -417,6 +418,22 @@ final class CliIo {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Refuse a change set that names one file twice, however it is spelled — a symlink, a `./`, a relative against an
+	 * absolute path. `stageWrite` resolves every member to its real file and stages beside it, so two spellings share one
+	 * temporary: the first rename lands and the second finds nothing to rename, a half-written tree. Nothing is staged
+	 * or recorded yet when this throws.
+	 */
+	private static function refuseSameTarget(writes: Array<{ path: String, content: String }>): Void {
+		final seen: Map<String, String> = [];
+		for (w in writes) {
+			final identity: String = FileIdentity.realPath(w.path);
+			final earlier: Null<String> = seen[identity];
+			if (earlier != null) throw new WriteFailure(w.path, 'the same file as ${earlier}, which this change set also writes');
+			seen[identity] = w.path;
+		}
 	}
 
 	#if (sys || nodejs)

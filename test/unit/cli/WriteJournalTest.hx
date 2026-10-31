@@ -105,4 +105,25 @@ class WriteJournalTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-WRITE-JOURNAL-PLAIN-KEY')
+	public function testTwoSpellingsOfOneFileKeepTheRunsFirstSightOfIt(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('writejournal', [{ name: 'a.txt', source: 'a' }]);
+		js.node.Fs.symlinkSync('$dir/a.txt', '$dir/link.txt');
+		final journal: WriteJournal = new WriteJournal();
+		WriteJournal.during(journal, () -> {
+			CliIo.writeFile('$dir/a.txt', 'first');
+			CliIo.writeFile('$dir/link.txt', 'second');
+			return 0;
+		});
+		Assert.equals(1, journal.originals().length, 'one file is one entry however it was spelled');
+		journal.rollback();
+		Assert.equals('a', File.getContent('$dir/a.txt'), 'and a rollback restores what the run first found');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('a symlink needs nodejs');
+		#end
+	}
+
 }
