@@ -420,7 +420,6 @@ class Lowering {
 		return rules;
 	}
 
-
 	/**
 	 * Build the blockEnded predicate call on the accumulator's last
 	 * element, for `@:sep('text', tailRelax, blockEnded('<predicate>'))`
@@ -442,13 +441,30 @@ class Lowering {
 	 * channel, the sister of `parseGateCall` / `unescapeChar`.
 	 */
 	private function buildBlockEndedPredicateCall(predicateName: String, accumRef: Expr): Expr {
-		final lastElem: Expr = macro $accumRef[$accumRef.length - 1];
-		if (_formatInfo.astPreds) return AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, _ctx.spans, predicateName, [lastElem]);
+		return elementPredicateCall(predicateName, macro $accumRef[$accumRef.length - 1]);
+	}
+
+	/**
+	 * Call the named element-shape predicate on `elem` (a bare element, never a `Trivial<…>`
+	 * wrapper): the generated typed predicate of this build's AST family for an `astPreds`
+	 * format, else the schema-instance method.
+	 */
+	private function elementPredicateCall(predicateName: String, elem: Expr): Expr {
+		if (_formatInfo.astPreds) return AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, _ctx.spans, predicateName, [elem]);
 		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
-			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [lastElem]),
+			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [elem]),
 			pos: Context.currentPos()
 		};
+	}
+
+	/**
+	 * The `@:sepAlt(…, selfEnded('<predicate>'))` waiver on `elem`, or `false` when the branch
+	 * names no predicate.
+	 */
+	private function sepAltSelfEndedCall(branch: ShapeNode, elem: Expr): Expr {
+		final predicateName: Null<String> = branch.annotations[AnnotationKeys.LIT_SEP_ALT_SELF_ENDED_PREDICATE];
+		return predicateName == null ? macro false : elementPredicateCall(predicateName, elem);
 	}
 
 	// -------- enum rule --------
@@ -584,7 +600,6 @@ class Lowering {
 		return macro $b{statements};
 	}
 
-
 	private function tryBranch(branch: ShapeNode, typePath: String, recurseFnName: String): Expr {
 		final body: Expr = lowerEnumBranch(branch, typePath, recurseFnName);
 		return macro {
@@ -694,7 +709,6 @@ class Lowering {
 			packOf(typePath).concat([simple, ctor]);
 	}
 
-
 	/**
 	 * ω-stash-nl-operator-commit: drop a stale `pendingTrivia` LINE-BREAK signal
 	 * (`newlineBefore` + `blankBefore`) at the point an operator COMMITS. Emits
@@ -799,7 +813,6 @@ class Lowering {
 		};
 		return _ctx.trivia ? clear : macro {};
 	}
-
 
 	/**
 	 * Case 5: unary-prefix branch (`@:prefix("-")`). A ctor with a single
@@ -972,6 +985,10 @@ class Lowering {
 		// pre-peek stash (`function(a, b)\n\treturn [for (k in m) …]`) reaches
 		// element 0 and `reflowSourceMultiline` breaks a flat bracket open.
 		final openDelimBarrier: Expr = stashNewlineClearExpr();
+		final sepAltWaiver: Expr = triviaSepAltWaiverExpr(branch, sepText);
+		// `@:sepAlt`: the separator the previous element left out is demanded here.
+		final sepAltCheck: Expr = macro if (!_sepWaived) expectLit(ctx, $v{sepText});
+		final sepAltRequire: Expr = sepAltText(branch) != null && sepText != null ? sepAltCheck : macro {};
 		return macro {
 			skipWs(ctx);
 			expectLit(ctx, $v{leadText});
@@ -987,6 +1004,7 @@ class Lowering {
 			// (see `ctorArgsTrivia` build above). For sep-less branches
 			// the var is unused; Haxe does not warn on unused locals.
 			var _trailPresent: Bool = false;
+			var _sepWaived: Bool = true;
 			while (true) {
 				final _lead = collectTrivia(ctx);
 				if ($closeNextOrEofExpr) {
@@ -994,7 +1012,9 @@ class Lowering {
 					_trailLC = _lead.leadingComments;
 					break;
 				}
+				$sepAltRequire;
 				final _node: $elemCT = $elemCall;
+				final _elemEnd: Int = ctx.pos;
 				// ω-trivia-trailing-before-sep (mirror of
 				// emitStarFieldSteps :3339): probe a same-line trailing
 				// comment BEFORE the sep-match so `elem /*c*/ , next`
@@ -1009,6 +1029,7 @@ class Lowering {
 				var _sepAfter: Bool = true;
 				var _sepAcrossGap: Bool = false;
 				$sepMatchExpr;
+				$sepAltWaiver;
 				final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
 				_items.push({
 					blankBefore: _lead.blankBefore,
@@ -1294,16 +1315,16 @@ class Lowering {
 			return lowerTriviaStarBranch(branch, ctorRef, leadText, trailText, sepText, elemCT, elemCall, closeNextOrEofExpr);
 		if (sepText == null) return lowerStarNoSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall);
 		final sepCharCode: Int = sepText.charCodeAt(0);
-		// Opt-in (@:sepAlt) tolerant variant: a close-driven loop that
-		// consumes an OPTIONAL separator (sepText or sepAltText) between
-		// elements. Mirrors the trivia-build close-peek loop in plain
-		// mode so multi `;`-separated anon fields parse under the
-		// non-trivia HaxeParser / HaxeModuleSpanParser builds. Only the
-		// @:sepAlt branch (HxType.Anon) reaches this; the strict loop
-		// below stays byte-identical for every other @:sep Star.
+		// Opt-in (@:sepAlt) variant: a close-driven loop that accepts
+		// either separator between elements, waived only for a prior
+		// element that ended with the alternate byte or satisfies the
+		// `selfEnded` predicate. Only the @:sepAlt branch (HxType.Anon)
+		// reaches this; the loop below stays byte-identical for every
+		// other @:sep Star.
 		if (sepAltText != null)
 			return lowerStarSepAltBranch(
-				leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepAltText.charCodeAt(0)
+				leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepAltText.charCodeAt(0),
+				sepAltSelfEndedCall(branch, macro _items[_items.length - 1])
 			);
 		// Block-ended exemption (Session 2 pilot — mirror of
 		// `emitStarFieldSteps`). When the enum branch carries
@@ -1322,8 +1343,29 @@ class Lowering {
 			: lowerStarSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode);
 	}
 
+	/**
+	 * The trivia Star loop's twin of the plain `@:sepAlt` loop's contract: after
+	 * an element it records whether the NEXT element may follow with no separator
+	 * (`_sepWaived`) — a separator was matched, the element ended with the
+	 * alternate byte, or the `selfEnded` predicate holds. Empty for any other Star.
+	 */
+	private function triviaSepAltWaiverExpr(branch: ShapeNode, sepText: Null<String>): Expr {
+		final altText: Null<String> = sepAltText(branch);
+		if (altText == null || sepText == null) return macro {};
+		final selfEnded: Expr = sepAltSelfEndedCall(branch, macro _node);
+		return macro _sepWaived = _sepAfter || ctx.input.charCodeAt(_elemEnd - 1) == $v{altText.charCodeAt(0)} || $selfEnded;
+	}
+
 	// -------- binary field helpers --------
 	// -------- @:raw post-processing --------
 	// -------- helpers --------
+
+	/**
+	 * The `@:sepAlt` separator text of `branch`, or null when it declares none.
+	 */
+	private static function sepAltText(branch: ShapeNode): Null<String> {
+		return branch.annotations[AnnotationKeys.LIT_SEP_ALT_TEXT];
+	}
+
 }
 #end

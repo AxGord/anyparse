@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxTypeArg;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
+import haxe.Exception;
 import utest.Assert;
 
 /**
@@ -15,8 +16,9 @@ import utest.Assert;
  *
  * `HxType.Anon` opts into `@:sepAlt(';')`, so the non-trivia
  * build (`HaxeParser`, and the span parser `apq` uses) runs a
- * close-driven loop that consumes an OPTIONAL `,` OR `;` between
- * fields plus an optional trailing separator. The dominant
+ * close-driven loop that consumes a `,` OR `;` between fields
+ * plus an optional trailing separator (a field's own `;` counts;
+ * `HxAnonSepStrictTest` pins the refusal). The dominant
  * anyparse-schema shape `{ var a:T; var b:T; }` now parses, as do
  * `;`-separated short fields, mixed, classic `,`, and `{}`.
  *
@@ -47,7 +49,7 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 
 	public function testShortFieldsStillComma(): Void {
 		// Regression guard: the classic `,`-separated short form is
-		// unaffected by the tolerant @:sepAlt loop.
+		// unaffected by the @:sepAlt loop.
 		final fields: Array<HxAnonField> = anonOf('class Foo { var s:{x:Int, y:String}; }');
 		Assert.equals(2, fields.length);
 		switch fields[0] {
@@ -276,11 +278,11 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 	}
 
 	public function testVarFieldsNoSemiBetween(): Void {
-		// `{ var a:Int var b:Int }` — no separator at all between
-		// adjacent VarFields. Parser-side @:trailOpt is unconditional
-		// (same leniency as class-member case in Slice 13). Convergent
-		// with statement-level parser leniency.
-		final fields: Array<HxAnonField> = anonOf('class Foo { var s:{var a:Int var b:Int}; }');
+		// `{ var a:Int var b:Int }` — no separator at all between adjacent
+		// VarFields is refused, as Haxe refuses it; a `}`-ended field
+		// (`var s:{…}`) takes that `}` for its `;`, as Haxe's class notation does.
+		Assert.raises(anonOf.bind('class Foo { var s:{var a:Int var b:Int}; }'), Exception);
+		final fields: Array<HxAnonField> = anonOf('class Foo { var s:{var a:{x:Int} var b:Int;}; }');
 		Assert.equals(2, fields.length);
 		Assert.equals('a', (expectVarField(fields[0]).name: String));
 		Assert.equals('b', (expectVarField(fields[1]).name: String));

@@ -43,6 +43,13 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static inline final HX_COND_ARGS: String = 'anyparse.grammar.haxe.HxConditionalArgs';
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
 	private static inline final HX_COND_SPLICE_TAIL_BODY: String = 'anyparse.grammar.haxe.HxCondSpliceTailBody';
+	private static inline final HX_ANON_MEMBER: String = 'anyparse.grammar.haxe.HxAnonMember';
+	private static inline final HX_ANON_FIELD: String = 'anyparse.grammar.haxe.HxAnonField';
+	private static inline final HX_ANON_VAR_BODY: String = 'anyparse.grammar.haxe.HxAnonVarBody';
+	private static inline final HX_TYPE: String = 'anyparse.grammar.haxe.HxType';
+
+	/** Generated predicate the anon-member separator gate calls on a field's declared type. */
+	private static inline final TYPE_ENDS_WITH_BRACE: String = '_typeEndsWithBrace';
 
 	/**
 	 * The keyword a `HxExpr.CondSpliceTail` fragment starts with when it
@@ -269,6 +276,10 @@ final class HxAstPredLowering extends AstPredLowering {
 			binopRhsNoSemiField(),
 			condSpliceTailElseLedField(),
 			stmtNoSemiField(),
+			anonMemberNoSepField(),
+			anonVarBodyEndsWithBraceField(),
+
+			typeEndsWithBraceField(),
 			condLeafWalkerField('betweenImportsTailLeafClassify', true, '_classifyImportLeafTail'),
 			condLeafWalkerField('betweenImportsHeadLeafClassify', false, '_classifyImportLeafHead'),
 			condLeafWalkerField('tailLeafKeepsBlankAfterConditional', true, '_classifyKeepsBlankLeaf'),
@@ -1053,6 +1064,59 @@ final class HxAstPredLowering extends AstPredLowering {
 		final openComment: Expr = field(block, FN_BLOCK_STMTS + TriviaTypeSynth.TRAILING_OPEN_SUFFIX);
 		final closeComments: Expr = field(block, FN_BLOCK_STMTS + TriviaTypeSynth.TRAILING_LEADING_SUFFIX);
 		return macro $stmts.length == 0 && $openComment == null && $closeComments.length == 0;
+	}
+
+	/**
+	 * `anonMemberNoSep(m) → Bool` — true iff an anonymous-structure-type member needs no `,`
+	 * before the next one: a `#if … #end` field region (its separators live inside the region),
+	 * or a `var` / `final` field whose last token is `}` (Haxe's class notation takes `}` for the
+	 * `;`). Consumed by `HxType.Anon`'s
+	 * `@:sepAlt(';', selfEnded('anonMemberNoSep'))` parse gate; a field that consumed its own
+	 * `;` is waived by the loop's byte check, not here.
+	 */
+	private function anonMemberNoSepField(): Field {
+		final varBody: Expr = { expr: ECall(ident('_anonVarBodyEndsWithBrace'), [ident('_b')]), pos: Context.currentPos() };
+		final body: Expr = macro m == null
+			? false
+			: ${nullSwitch(field(ident('m'), 'field'), macro false, [
+				caseOf(HX_ANON_FIELD, ['Conditional'], macro true),
+				caseBindMulti(HX_ANON_FIELD, ['VarField', 'FinalField'], [0 => '_b'], varBody)
+			], macro false)};
+		return predField(
+			'anonMemberNoSep',
+			[valueArg('m', HX_ANON_MEMBER)],
+			macro :Bool, body, 'True iff an anon-type member needs no `,` before the next one.'
+		);
+	}
+
+	/** `_anonVarBodyEndsWithBrace(b)` — the `var` / `final` anon field's declared type ends with `}`. */
+	private function anonVarBodyEndsWithBraceField(): Field {
+		final decl: Expr = { expr: ECall(ident(TYPE_ENDS_WITH_BRACE), [field(ident('_d'), 'type')]), pos: Context.currentPos() };
+		final body: Expr = nullSwitch(
+			ident('b'), macro false,
+			[caseBindMulti(HX_ANON_VAR_BODY, ['Optional', 'Plain'], [0 => '_d'], decl)],
+			macro false
+		);
+		return predField(
+			'_anonVarBodyEndsWithBrace',
+			[valueArg('b', HX_ANON_VAR_BODY)],
+			macro :Bool, body, 'True iff a class-notation anon field ends with `}`.'
+		);
+	}
+
+	/**
+	 * `_typeEndsWithBrace(t)` — a type expression whose last token is `}`: an anonymous structure,
+	 * or a function type whose return type is one.
+	 */
+	private function typeEndsWithBraceField(): Field {
+		inline function rec(e: Expr): Expr return { expr: ECall(ident(TYPE_ENDS_WITH_BRACE), [e]), pos: e.pos };
+		final body: Expr = nullSwitch(ident('t'), macro false, [
+			caseOf(HX_TYPE, ['Anon'], macro true),
+			caseBind(HX_TYPE, 'Arrow', [1 => '_r'], rec(ident('_r'))),
+
+			caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))
+		], macro false);
+		return predField(TYPE_ENDS_WITH_BRACE, [valueArg('t', HX_TYPE)], macro :Bool, body, 'True iff a type expression ends with `}`.');
 	}
 
 }

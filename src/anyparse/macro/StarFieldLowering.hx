@@ -1075,16 +1075,18 @@ final class StarFieldLowering {
 	}
 
 	/**
-	 * Case 4 (@:sepAlt): tolerant close-driven loop that consumes an
-	 * OPTIONAL separator (sepText or sepAltText) between elements. Mirrors
-	 * the trivia-build close-peek loop in plain mode so multi `;`-separated
-	 * anon fields parse under the non-trivia builds. Sole consumer:
-	 * `HxType.Anon`.
+	 * Case 4 (@:sepAlt): close-driven loop that consumes a separator
+	 * (sepText or sepAltText) between elements plus an optional trailing
+	 * one. The separator is mandatory unless the prior element ended with
+	 * the alternate byte itself or `selfEndedCall` holds for it, so two
+	 * adjacent elements with nothing between them are refused, as the
+	 * trivia loop refuses them. Sole consumer: `HxType.Anon`.
 	 */
 	private static function lowerStarSepAltBranch(
 		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int,
-		sepAltCharCode: Int
+		sepAltCharCode: Int, selfEndedCall: Expr
 	): Expr {
+		final sepText: String = String.fromCharCode(sepCharCode);
 		return macro {
 			skipWs(ctx);
 			expectLit(ctx, $v{leadText});
@@ -1092,10 +1094,14 @@ final class StarFieldLowering {
 			skipWs(ctx);
 			while ($closeNotNextExpr) {
 				_items.push($elemCall);
+				final _selfEnded: Bool = ctx.input.charCodeAt(ctx.pos - 1) == $v{sepAltCharCode} || $selfEndedCall;
 				skipWs(ctx);
-				if (ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode} || ctx.input.charCodeAt(ctx.pos) == $v{sepAltCharCode}) {
+				final _sc: Null<Int> = ctx.input.charCodeAt(ctx.pos);
+				if (_sc == $v{sepCharCode} || _sc == $v{sepAltCharCode}) {
 					ctx.pos++;
 					skipWs(ctx);
+				} else if (!_selfEnded && ($closeNotNextExpr)) {
+					expectLit(ctx, $v{sepText});
 				}
 			}
 			skipWs(ctx);

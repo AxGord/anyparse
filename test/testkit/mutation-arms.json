@@ -34071,6 +34071,78 @@
 			"find": "&& names(scan, guarded, SourceText.lastSegment(k.arm.type))",
 			"replace": "",
 			"note": "a member name alone reaches an arm, so a guard calling a same-named member of another type is reported"
+		},
+		{
+			"name": "M-ANON-SEP-PLAIN-OPTIONAL",
+			"type": "anyparse.macro.StarFieldLowering",
+			"method": "lowerStarSepAltBranch",
+			"find": "expectLit(ctx, $v{sepText});",
+			"replace": "{}",
+			"note": "the plain @:sepAlt loop no longer demands a separator, so `typedef T = { a:Int b:String }` parses although Haxe refuses it"
+		},
+		{
+			"name": "M-ANON-SEP-TRIVIA-OPTIONAL",
+			"type": "anyparse.macro.Lowering",
+			"method": "lowerTriviaStarBranch",
+			"find": "? sepAltCheck : macro {}",
+			"replace": "? macro {} : macro {}",
+			"note": "the trivia @:sepAlt loop no longer demands a separator, so sep-less anon fields parse and the writer round-trips non-compiling source"
+		},
+		{
+			"name": "M-ANON-SEP-PLAIN-NO-BYTE-WAIVER",
+			"type": "anyparse.macro.StarFieldLowering",
+			"method": "lowerStarSepAltBranch",
+			"find": "ctx.input.charCodeAt(ctx.pos - 1) == $v{sepAltCharCode} || ",
+			"replace": "",
+			"note": "a field that consumed its own `;` still owes a separator in the plain parser, so `{ var a:Int; var b:String; }` is refused"
+		},
+		{
+			"name": "M-ANON-SEP-TRIVIA-NO-BYTE-WAIVER",
+			"type": "anyparse.macro.Lowering",
+			"method": "triviaSepAltWaiverExpr",
+			"find": "ctx.input.charCodeAt(_elemEnd - 1) == $v{altText.charCodeAt(0)} || ",
+			"replace": "",
+			"note": "a field that consumed its own `;` still owes a separator in the trivia parser, so `{ var a:Int; var b:String; }` is refused"
+		},
+		{
+			"name": "M-ANON-SEP-COND-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "['Conditional'], macro true)",
+			"replace": "['Conditional'], macro false)",
+			"note": "a `#if … #end` field region owes a `,` after its `#end`, so an anon type with a guarded field followed by another field is refused"
+		},
+		{
+			"name": "M-ANON-SEP-FN-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "['Conditional']",
+			"replace": "['Conditional', 'FnField']",
+			"note": "a `function` field is waived like a region, so `function f():Void {}` followed by another field parses though Haxe refuses a body there"
+		},
+		{
+			"name": "M-ANON-SEP-VAR-BRACE-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "[0 => '_b'], varBody)",
+			"replace": "[0 => '_b'], macro false)",
+			"note": "a `var` field whose type ends with `}` owes a `,` before the next field, though Haxe's class notation takes the `}` for its `;`"
+		},
+		{
+			"name": "M-ANON-SEP-ARROW-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "typeEndsWithBraceField",
+			"find": "caseBind(HX_TYPE, 'Arrow', [1 => '_r'], rec(ident('_r')))",
+			"replace": "caseBind(HX_TYPE, 'Arrow', [1 => '_r'], macro false)",
+			"note": "`var a:Int->{x:Int}` is not seen to end with `}`, so the next anon field is refused"
+		},
+		{
+			"name": "M-ANON-SEP-ARROW-FN-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "typeEndsWithBraceField",
+			"find": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))",
+			"replace": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], macro false)",
+			"note": "`var a:(Int) -> {x:Int}` is not seen to end with `}`, so the next anon field is refused"
 		}
 	]
 }

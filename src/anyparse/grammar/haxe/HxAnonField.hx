@@ -37,8 +37,8 @@ package anyparse.grammar.haxe;
  * `var`), then the `Required` catch-all LAST — its first token is `HxIdentLit`, which would
  * otherwise shadow the keyword branches. The Alt-enum split (over a Boolean presence flag)
  * was chosen because the macro pipeline supports `@:optional` only on `Ref` and `Star`
- * fields. `HxType.Anon`'s `@:sepAlt(';')` close-driven loop consumes an OPTIONAL `,` OR `;`
- * between fields plus an optional trailing separator, tolerating the field's own `;`.
+ * fields. `HxType.Anon`'s `@:sepAlt` loop requires a `,` OR `;` between fields, waived after a
+ * field's own `;` (a `FnField` has no other end) and after a `Conditional` or `}`-ended `var`.
  */
 @:peg
 enum HxAnonField {

@@ -12,6 +12,7 @@ final class AnnotationKeys {
 	public static final LIT_SEP_STARTS_ELEMENT: String = 'lit.sepStartsElement';
 	public static final LIT_SEP_TAIL_RELAX: String = 'lit.sepTailRelax';
 	public static final LIT_SEP_ALT_TEXT: String = 'lit.sepAltText';
+	public static final LIT_SEP_ALT_SELF_ENDED_PREDICATE: String = 'lit.sepAltSelfEndedPredicate';
 	public static final TERNARY_SEP: String = 'ternary.sep';
 	public static final TERNARY_PREC: String = 'ternary.prec';
 	public static final PRATT_ASSOC: String = 'pratt.assoc';

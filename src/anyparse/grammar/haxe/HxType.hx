@@ -153,9 +153,10 @@ enum HxType {
 	 * typedef brace as `BrOpenType.TypedefDecl` and routes it to
 	 * `MarkWrapping.typedefWrapping`, which never reads `wrapping.anonType`.
 	 */
-	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'),
-		leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef,
-		keepCurlyBlanks, typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'))
+	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';', selfEnded('anonMemberNoSep')) @:fmt(anonTypeBracesOpen,
+		anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'),
+		beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks, typedefBodyBlanks, groupRestProbe,
+		trailingComma('trailingCommaAnonTypes'))
 	Anon(fields: Array<HxAnonMember>);
 
 	ArrowFn(fn: HxArrowFnType);

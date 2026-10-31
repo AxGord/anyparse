@@ -38,8 +38,12 @@ import haxe.macro.Expr;
  *   `Lowering.buildBlockEndedPredicateCall`); `sepStartsElement` says a separator byte after a
  *   block-ended element begins the NEXT element, for a grammar whose separator can also be an
  *   element (`EmptyStmt`). Sets `lit.sepBlockEndedPredicate` and `lit.sepStartsElement`.
- * - `@:sepAlt(";")` — an alternate separator accepted alongside `@:sep` by the tolerant
- *   close-driven loop. Sets `lit.sepAltText`.
+ * - `@:sepAlt(";")` — an alternate separator accepted alongside `@:sep` by a close-driven loop. A
+ *   separator stays MANDATORY between two elements unless the prior element ended with the alternate
+ *   byte itself (it consumed its own terminator). Sets `lit.sepAltText`.
+ * - `@:sepAlt(";", selfEnded('<predicate>'))` — additionally lets the named AST predicate on the prior
+ *   element waive the separator (an element that terminates itself by shape, e.g. a preprocessor
+ *   region). Sets `lit.sepAltSelfEndedPredicate`.
  *
  * Every argument-shape refusal is a `fatalError` in the `annotate*` helpers below.
  */
@@ -83,7 +87,7 @@ class Lit implements Strategy {
 			case ':sep':
 				annotateSep(node, entry);
 			case ':sepAlt':
-				node.annotations[AnnotationKeys.LIT_SEP_ALT_TEXT] = singleString(entry.params, ':sepAlt');
+				annotateSepAlt(node, entry);
 			case _:
 		}
 	}
@@ -112,6 +116,19 @@ class Lit implements Strategy {
 				Context.fatalError('$tag argument must be a string literal', e.pos);
 				throw 'unreachable';
 		};
+	}
+
+	private static function annotateSepAlt(node: ShapeNode, entry: MetadataEntry): Void {
+		final argCount: Int = entry.params.length;
+		if (argCount == 0 || argCount > 2)
+			Context.fatalError('@:sepAlt expects @:sepAlt("text") or @:sepAlt("text", selfEnded(\'<predicate>\'))', entry.pos);
+		node.annotations[AnnotationKeys.LIT_SEP_ALT_TEXT] = stringOrFail(entry.params[0], ':sepAlt');
+		if (argCount == 2) switch entry.params[1].expr {
+			case ECall({ expr: EConst(CIdent('selfEnded')) }, [arg]):
+				node.annotations[AnnotationKeys.LIT_SEP_ALT_SELF_ENDED_PREDICATE] = stringOrFail(arg, ':sepAlt');
+			case _:
+				Context.fatalError('@:sepAlt second argument must be `selfEnded(\'<predicate>\')`', entry.params[1].pos);
+		}
 	}
 
 	private static function annotateWrap(node: ShapeNode, entry: MetadataEntry): Void {
