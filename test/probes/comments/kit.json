@@ -1475,6 +1475,29 @@
 				"onePass": true,
 				"commentsKept": true
 			}
+		},
+		{
+			"name": "braces/value-if-lead-comment",
+			"note": "symmetric braces: a line comment leading a bare then-branch of a value if/else must stay inside the inserted brace",
+			"knownDefect": "the comment is written outside the inserted brace, dedented",
+			"fixpoint": "Main.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"Main.hx"
+			],
+			"files": {
+				"hxformat.json": "{\"whitespace\":{\"bracesConfig\":{\"singleStatementBraces\":\"symmetric\"}}}\n",
+				"Main.hx": "class Main {\n\tstatic function f():Int return 1;\n\tstatic function g():Int return 2;\n\tstatic function main() {\n\t\tfinal c = true;\n\t\tfinal x = if (c)\n\t\t\t// lead comment\n\t\t\tf();\n\t\telse {\n\t\t\tg();\n\t\t};\n\t\ttrace(x);\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "5ef505a009a25bd9",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
 		}
 	]
 }

@@ -7550,6 +7550,86 @@
 				"err": "b92429f9953d9de4",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "verify: new of a module no build main reaches",
+			"note": "an ill-typed created module is refused or rolled back, never reported as verified",
+			"argv": [
+				"hxq",
+				"new",
+				"src/zz/Bad.hx",
+				"--kind",
+				"class",
+				"--field",
+				"public static function f(): Int { return \"not an int\"; }",
+				"--write"
+			],
+			"files": {
+				"apqlint.json": "{\"compilerOracle\":[{\"hxml\":\"build.hxml\",\"dir\":\".\"}]}\n",
+				"build.hxml": "-cp src\n-main Main\n--no-output\n",
+				"src/Main.hx": "class Main { static function main() {} }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "fa63ccf3c124504e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "verify: breaking signature edit is put back",
+			"note": "under --verify, a breaking first step of a two-step refactor is rolled back: every file as it was",
+			"argv": [
+				"hxq",
+				"patch",
+				"src/pkg/A.hx",
+				"--select",
+				"FnMember:f",
+				"--write",
+				"--reformat",
+				"--verify",
+				"-"
+			],
+			"stdin": "f(): Int\n====\nf(x: Int): Int\n",
+			"files": {
+				"apqlint.json": "{\"compilerOracle\":[{\"hxml\":\"build.hxml\",\"dir\":\".\"}]}\n",
+				"build.hxml": "-cp src\n-main Main\n--no-output\n",
+				"src/Main.hx": "class Main { static function main() { pkg.B.g(); } }\n",
+				"src/pkg/A.hx": "package pkg;\n\nclass A {\n\tpublic static function f(): Int return 1;\n}\n",
+				"src/pkg/B.hx": "package pkg;\n\nclass B {\n\tpublic static function g(): Int return A.f();\n}\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "879373add59701e2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "verify: created module red only in a non-js build is kept",
+			"note": "a created module that is red only in a non-js named build must not be put back",
+			"argv": [
+				"hxq",
+				"new",
+				"src/zz/JsOnly.hx",
+				"--kind",
+				"class",
+				"--field",
+				"public static function f(): Bool { return js.Browser.supported; }",
+				"--write"
+			],
+			"files": {
+				"apqlint.json": "{\"compilerOracle\":[{\"hxml\":\"js.hxml\",\"dir\":\".\"},{\"hxml\":\"cross.hxml\",\"dir\":\".\"}]}\n",
+				"js.hxml": "-cp src\n-main Main\n-js out.js\n",
+				"cross.hxml": "-cp src\n-main Main\n--no-output\n",
+				"src/Main.hx": "class Main { static function main() {} }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "da0b42f768a2e4b7",
+				"files": "0c456ff64af44d6d"
+			}
 		}
 	]
 }

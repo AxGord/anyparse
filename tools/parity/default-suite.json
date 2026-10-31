@@ -2,7 +2,7 @@
 	"commandHelp": true,
 	"files": {
 		"src/demo/Greeter.hx": "package demo;\n\nimport demo.Shape;\nimport haxe.ds.StringMap;\n\n/** Greets by name. */\nclass Greeter implements Named {\n\n\tpublic var name: String;\n\n\tprivate var count: Int = 0;\n\n\tpublic function new(name: String) {\n\t\tthis.name = name;\n\t}\n\n\tpublic function greet(other: String): String {\n\t\tcount++;\n\t\tfinal text: String = 'Hello, ' + other + ' from ' + name;\n\t\treturn text;\n\t}\n\n\tpublic function twice(other: String): String {\n\t\treturn greet(other) + greet(other);\n\t}\n\n\tpublic static function main(): Void {\n\t\t#if debug\n\t\ttrace('debug');\n\t\t#end\n\t\tfinal g: Greeter = new Greeter('a');\n\t\ttrace(g.twice('b'));\n\t}\n\n}\n",
-		"src/demo/Named.hx": "package demo;\n\ninterface Named {\n\n\tvar name: String;\n\n}\n",
+		"src/demo/Named.hx": "package demo;\n\n/** What a thing is called: the one answer to \"what is this thing's name\". */\ninterface Named {\n\n\tvar name: String;\n\n}\n",
 		"src/demo/Shape.hx": "package demo;\n\nenum Shape {\n\tCircle(r: Float);\n\tSquare(side: Float);\n}\n\nclass Area {\n\n\tpublic static function of(shape: Shape): Float {\n\t\treturn switch shape {\n\t\t\tcase Circle(r): Math.PI * r * r;\n\t\t\tcase Square(side): side * side;\n\t\t}\n\t}\n\n}\n",
 		"src/demo/Messy.hx": "class Messy{function f(){return 1;}}\n",
 		"hxformat.json": "{\"indentation\":{\"character\":\"tab\",\"tabWidth\":4,\"trailingWhitespace\":false,\"alignInlineSwitchCaseBody\":true},\"emptyLines\":{\"maxAnywhereInFile\":2,\"afterLeftCurly\":\"keep\",\"beforeRightCurly\":\"keep\",\"classEmptyLines\":{\"beginType\":1,\"endType\":1},\"abstractEmptyLines\":{\"beginType\":1,\"endType\":1},\"interfaceEmptyLines\":{\"beginType\":1,\"endType\":1},\"externClassEmptyLines\":{\"beginType\":1,\"endType\":1}},\"wrapping\":{\"maxLineLength\":140,\"functionSignature\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"totalItemLength <= n\",\"value\":100},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":1}],\"type\":\"noWrap\"}]},\"callParameter\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":1},{\"cond\":\"totalItemLength <= n\",\"value\":100}],\"type\":\"noWrap\"}]},\"expressionWrapping\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"}]},\"conditionWrapping\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"}]}},\"whitespace\":{\"addLineCommentSpace\":true,\"typeHintColonPolicy\":\"after\",\"typeCheckColonPolicy\":\"after\",\"functionTypeHaxe3Policy\":\"around\",\"functionTypeHaxe4Policy\":\"around\",\"arrowFunctionsPolicy\":\"around\",\"ifPolicy\":\"around\",\"forPolicy\":\"around\",\"whilePolicy\":\"around\",\"switchPolicy\":\"around\",\"binopPolicy\":\"around\",\"intervalPolicy\":\"around\",\"bracesConfig\":{\"objectLiteralBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\"},\"anonTypeBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\"}},\"parenConfig\":{\"callParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"funcParamParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"conditionParens\":{\"openingPolicy\":\"before\",\"closingPolicy\":\"after\"},\"anonFuncParamParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"}}},\"lineEnds\":{\"emptyCurly\":\"noBreak\"},\"sameLine\":{\"ifBody\":\"fitLine\",\"forBody\":\"fitLine\",\"whileBody\":\"fitLine\",\"functionBody\":\"fitLine\",\"expressionIf\":\"next\",\"comprehensionFor\":\"keep\"}}",
@@ -772,6 +772,56 @@
 				"--write"
 			],
 			"stdin": "package demo;\nclass Raw {}\n"
+		},
+		{
+			"name": "owner ranking: doc words reach the declaration",
+			"argv": [
+				"hxq",
+				"owner",
+				"who greets someone by name",
+				"src",
+				"--lang",
+				"haxe",
+				"--limit",
+				"5"
+			]
+		},
+		{
+			"name": "owner ranking: a query sharing no word answers the empty verdict",
+			"argv": [
+				"hxq",
+				"owner",
+				"modify variable reading",
+				"src",
+				"--lang",
+				"haxe",
+				"--limit",
+				"5"
+			]
+		},
+		{
+			"name": "owner ranking: --limit truncates",
+			"argv": [
+				"hxq",
+				"owner",
+				"greets name",
+				"src",
+				"--lang",
+				"haxe",
+				"--limit",
+				"2"
+			]
+		},
+		{
+			"name": "owner list",
+			"argv": [
+				"hxq",
+				"owner",
+				"--list",
+				"src",
+				"--lang",
+				"haxe"
+			]
 		}
 	]
 }

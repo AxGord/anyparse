@@ -483,6 +483,35 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "G1",
+			"note": "fmt with symmetric braces over a value-position try whose catch body is a switch expression: no ; may follow the switch inside the inserted wrap",
+			"argv": [
+				"hxq",
+				"fmt",
+				"Main.hx",
+				"--write"
+			],
+			"files": {
+				"hxformat.json": "{\"whitespace\":{\"bracesConfig\":{\"singleStatementBraces\":\"symmetric\"}}}\n",
+				"apqlint.json": "{}\n",
+				"Main.hx": "class Main {\n\tstatic function g():Int return 1;\n\tstatic function k(k:Int):Int {\n\t\treturn try { g(); g(); } catch (e:haxe.Exception) switch k { case 1: 10; case _: 20; };\n\t}\n\tstatic function main() {\n\t\tSys.println(k(1));\n\t\tSys.println(k(2));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "184cd92d73b4aec2",
+				"files": "af79c6f36ff0c66d",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }
