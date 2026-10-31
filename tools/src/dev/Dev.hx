@@ -25,6 +25,8 @@ final class Dev {
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
 		{ name: 'slice-stats', main: SliceStats.main, usage: SliceStats.USAGE },
 		{ name: 'battery', main: Battery.main, usage: Battery.USAGE },
+		{ name: 'base-engine', main: BaseEngine.main, usage: BaseEngine.USAGE },
+		{ name: 'parity', main: Parity.main, usage: Parity.USAGE },
 
 		{ name: 'decision', main: Decision.main, usage: Decision.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },

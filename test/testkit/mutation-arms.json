@@ -33507,6 +33507,22 @@
 			"find": "for (scope in chain) {",
 			"replace": "for (scope in chain.concat([for (k in packages.keys()) k])) {",
 			"note": "every package is read after the file's own chain, so a SIBLING package binds a name it never reached by a simple name"
+		},
+		{
+			"name": "M-BASE-ENGINE-CHECKSUM-BLIND",
+			"type": "dev.BaseEngine",
+			"method": "valid",
+			"find": "&& File.getContent(checksum) == digest(engine);",
+			"replace": ";",
+			"note": "a cached base engine is reused without checking its content against its checksum, so a damaged or truncated engine answers every parity run"
+		},
+		{
+			"name": "M-PARITY-EXIT-BLIND",
+			"type": "dev.Parity",
+			"method": "differences",
+			"find": "if (base.status != tip.status)",
+			"replace": "if (false)",
+			"note": "parity no longer compares exit statuses, so an engine that starts refusing an invocation with the same output reads as equal"
 		}
 	]
 }

@@ -32,6 +32,7 @@ final class Tmp {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		if (sweep) {
 			dirs.startupSweep(Repo.ofScript());
+			BaseEngine.prune(BaseEngine.defaultCache(), BaseEngine.maxAgeDays());
 			Sys.println('tmp-lifecycle: sweep done');
 			return 0;
 		}

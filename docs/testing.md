@@ -950,6 +950,22 @@ APQ_TEST=MoveFamilyCapture node bin/test.js   # the move family alone
 
 Run it before and after any refactor that touches the shared lexical seam, the `RefactorSupport` scans, or `MoveSymbol` / `MoveMember` / `InheritanceMove`. When it fails, read the diff and decide: bytes that are an improvement get re-captured, bytes that are a regression get the op fixed. Re-capturing to make it green without reading it is the one way the class stops working.
 
+### Engine parity: `dev base-engine` and `dev parity`
+
+A review that asks "what did this slice change in the CLI's answers" compares two ENGINES, not two trees, and both halves are tools:
+
+```sh
+node bin/dev.js base-engine <commit>                       # prints the path of the commit's apq.js, built or reused
+node bin/dev.js parity <commit|engine> bin/apq.js          # the default suite; prints only the invocations that differ
+node bin/dev.js parity main bin/apq.js --suite my.json --out <dir> --verbose
+```
+
+`base-engine` copies the whole commit out with `git archive` into a `devkit.TempDir` (run-scoped, swept like every `apq-dev.` directory) and builds `bin/apq-js-common.hxml` there — the whole tree, because a macro may read files outside `src` (the graph command's vendored renderer). The engine is kept in `$TMPDIR/anyparse-base-engine/<full sha>/` beside its SHA-256 and the `haxe -version` that built it; an entry whose checksum or compiler no longer matches is rebuilt, never used. A build stages into its own directory and moves it into place whole, so a concurrent reader never sees half an engine. Entries unused for `BASE_ENGINE_MAX_AGE_DAYS` (7) days go at the next `base-engine` run or `dev tmp-lifecycle --sweep`.
+
+`parity` runs every invocation of a suite on both engines through the `bin/apq` / `bin/hxq` shim of the tree it sits in (`HXQ_BIN` pinned, `HXQ_CODE_CACHE=0`), each in a fresh copy of the invocation's fixture files at the SAME path on both sides, so absolute paths in the output agree and the engine is the only variable. It compares exit status, stdout, stderr and the files the fixture holds afterwards (what a write op wrote), prints a `DIFF` block per differing invocation, then `parity: N of M invocations differ`; it exits 1 when N > 0. `--out <dir>` keeps both sides' streams of each differing invocation as `<i>.{base,tip}.{out,err}`; `--verbose` prints one status line per invocation.
+
+A suite is a JSON file: `files` (relative path → content, the fixture every invocation starts from), `invocations` (`name`, `argv` starting with `apq` or `hxq`, optional `stdin`, optional own `files`), and `commandHelp: true` to add `apq <command> --help` for every command the TIP engine lists. The default, `tools/parity/default-suite.json`, holds the queries and write ops of the hxq skills and `--help` texts and the calls the hooks, the workflows and `tools/src` make (`fmt -l`, `recon --probe`, `lint --format json`, `lint --fix`, `lint-diff`, `test-summary`, `mutation-verdict`, `patch` on stdin, …). An invocation whose output carries a pid or a clock (`probe` stages its source under a pid) cannot be in a suite: it differs between any two runs.
+
 ### The corpus is a gate for the WRITER, not for every input the writer reads
 
 The reflex is to read a `sweep --diff` of `0 fixtures changed` as "nothing about layout moved". It does not carry that much: a comment-lexer mutation, and even a classifier broken outright, can leave every corpus verdict identical while the unit pins for the same mechanism fail. The snapshot the corpus writes is a per-fixture PASS/FAIL verdict, not the output bytes, so a fixture already failing can change what it emits and still count as unchanged; and no fixture happens to exercise every width policy. Treat a corpus Δ0 as evidence that the fixtures' VERDICTS held, and reach for a byte capture — a `fmt --write` tree diffed against the other arm, or the unit pins for the mechanism you touched — when the question is whether the bytes held.
