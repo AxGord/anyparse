@@ -786,7 +786,7 @@ node bin/dev.js slice-gate /tmp/hxqb-X [--arm <NAME>]... [--allow <gate>]... [--
 
 ### No census lists
 
-The registries have no hand-kept second declaration. The classes are the `*Test.hx` files (the build holds the two to each other), the pins are the `@:pin` / `@:killer` metadata on the fixtures, the arms are `mutation-arms.json`; the build refuses a dangling `@:killer`, an arm nobody names, an arm whose member is gone and a `control` with no arm. A removed test or pin shows in the diff of its own file, and the `lists` row of the slice gate prints every registry's count beside the baseline's.
+The registries have no hand-kept second declaration. The classes are the `*Test.hx` files (the build holds the two to each other), the pins are the `@:pin` / `@:killer` metadata on the fixtures, the arms are `mutation-arms.json`; the build refuses a dangling `@:killer`, an arm nobody names, an arm whose member is gone and a `control` with no arm. A removed test or pin shows in the diff of its own file, and the `lists` row of the slice gate prints every registry's count beside the baseline's. The one registry that IS a second declaration is the builtin rule set: `test/testkit/builtin-census.json` lists `Linter.builtins()` by name, `unit.check.BuiltinFixClassCensusTest` fails naming every rule added or lost, and the author of an ADD records it with `APQ_CENSUS_RECORD=1 APQ_TEST=unit.check.BuiltinFixClassCensusTest node bin/test.js`; record mode never removes a name, a loss stays a failure.
 
 ### Landing a slice
 

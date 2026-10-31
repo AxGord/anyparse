@@ -33772,6 +33772,22 @@
 			"find": "OWNED_BONUS",
 			"replace": "1",
 			"note": "a doc stating the question it owns no longer marks its declaration, so an equal match that owns nothing ties with it"
+		},
+		{
+			"name": "M-CENSUS-ADD-UNDETECTED",
+			"type": "unit.check.BuiltinFixClassCensusTest",
+			"method": "complaints",
+			"find": "if (added.length > 0 && !shouldWrite(actual, recorded, record))",
+			"replace": "if (false)",
+			"note": "a rule registered but absent from the recorded census passes without anyone recording it"
+		},
+		{
+			"name": "M-CENSUS-LOST-UNDETECTED",
+			"type": "unit.check.BuiltinFixClassCensusTest",
+			"method": "complaints",
+			"find": "if (removed.length > 0)",
+			"replace": "if (false)",
+			"note": "a recorded rule dropped from registration passes silently"
 		}
 	]
 }

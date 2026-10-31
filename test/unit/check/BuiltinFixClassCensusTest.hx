@@ -1,6 +1,9 @@
 package unit.check;
 
 import anyparse.check.Check;
+import haxe.Json;
+import sys.FileSystem;
+import sys.io.File;
 
 using StringTools;
 
@@ -49,10 +52,50 @@ class BuiltinFixClassCensusTest extends Test {
 	 */
 	private static inline final TRIPWIRE: String = 'class C {\n\tpublic function f(a: Int): Void {\n\t\tif (a == a) trace(4711);\n\t}\n}\n';
 
-	public function testTheBuiltinSetIsThisBig(): Void {
-		// Shrinkage IS the acceptance test: a new builtin changes this number, and the author
-		// then has to say which side of the verified/unverified split it joins.
-		Assert.equals(206, Linter.builtins().length);
+	private static inline final LOST_HINT: String =
+		'builtins lost from registration (fix the registration, or delete the name from the census file by hand; a loss is never recorded): ';
+	private static inline final ADDED_HINT: String =
+		'builtins missing from the census file (record with `APQ_CENSUS_RECORD=1 APQ_TEST=unit.check.BuiltinFixClassCensusTest node bin/test.js`, then state which fix-class list the rule joins): ';
+
+	/** The recorded builtin names, one JSON string per line, sorted. */
+	private static inline final CENSUS_FILE: String = 'test/testkit/builtin-census.json';
+
+	/**
+	 * The registered set is the recorded one, by NAME; `decide` holds the whole decision. Record mode
+	 * adds names and never removes one.
+	 */
+	public function testTheBuiltinSetIsTheRecordedOne(): Void {
+		final actual: Array<String> = [for (check in Linter.builtins()) check.id()];
+		final recorded: Array<String> = readRecorded();
+		final record: Bool = Sys.getEnv('APQ_CENSUS_RECORD') == '1';
+		if (shouldWrite(actual, recorded, record)) save(render(actual));
+		Assert.same([], complaints(actual, recorded, record));
+	}
+
+	public function testDifferenceIsBySetNotByPosition(): Void {
+		Assert.same(['c'], difference(['b', 'a', 'c'], ['a', 'b']));
+		Assert.same([], difference(['a'], ['a', 'z']));
+	}
+
+	/**
+	 * The wiring of the three outcomes, not just the set difference: an add without record mode fails and
+	 * names the command, an add in record mode writes and passes, a loss fails and writes nothing even in
+	 * record mode. Killed by arms `M-CENSUS-ADD-UNDETECTED` and `M-CENSUS-LOST-UNDETECTED`.
+	 */
+	@:pin('control')
+	@:killer('M-CENSUS-ADD-UNDETECTED')
+	@:killer('M-CENSUS-LOST-UNDETECTED')
+	public function testDecideFailsOnAddWritesOnRecordAndNeverRecordsALoss(): Void {
+		final plain: Array<String> = complaints(['a', 'new-rule'], ['a'], false);
+		Assert.isFalse(shouldWrite(['a', 'new-rule'], ['a'], false));
+		Assert.equals(1, plain.length);
+		Assert.stringContains('new-rule', plain[0]);
+		Assert.stringContains('APQ_CENSUS_RECORD=1 APQ_TEST=unit.check.BuiltinFixClassCensusTest node bin/test.js', plain[0]);
+		Assert.isTrue(shouldWrite(['a', 'new-rule'], ['a'], true));
+		Assert.same([], complaints(['a', 'new-rule'], ['a'], true));
+		Assert.isFalse(shouldWrite(['a', 'new-rule'], ['a', 'gone'], true));
+		Assert.stringContains('gone', complaints(['a', 'new-rule'], ['a', 'gone'], true).join('\n'));
+		Assert.same([], complaints(['a'], ['a'], false));
 	}
 
 	public function testTheseAreTheRiskyFixRules(): Void {
@@ -258,6 +301,52 @@ class BuiltinFixClassCensusTest extends Test {
 		else
 			0);
 		return ids;
+	}
+
+	private static function readRecorded(): Array<String> {
+		final root: Any = Json.parse(File.getContent(CENSUS_FILE));
+		return Reflect.field(root, 'builtins');
+	}
+
+	private static function render(names: Array<String>): String {
+		final sorted: Array<String> = names.copy();
+		sorted.sort((a, b) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
+		return '{\n"builtins": [\n' + [for (name in sorted) '\t"$name"'].join(',\n') + '\n]\n}\n';
+	}
+
+	/** Whether a record run rewrites the file: only for pure additions, a loss is never recorded. */
+	private static function shouldWrite(actual: Array<String>, recorded: Array<String>, record: Bool): Bool {
+		return record && difference(recorded, actual).length == 0 && difference(actual, recorded).length > 0;
+	}
+
+	/**
+	 * The failure messages of a run. A new rule is fatal until its author records it, and must then state
+	 * which side of the verified/unverified fix split it joins; a loss is never recorded.
+	 */
+	private static function complaints(actual: Array<String>, recorded: Array<String>, record: Bool): Array<String> {
+		final added: Array<String> = difference(actual, recorded);
+		final removed: Array<String> = difference(recorded, actual);
+		final messages: Array<String> = [];
+		if (removed.length > 0) messages.push(LOST_HINT + removed.join(', '));
+		if (added.length > 0 && !shouldWrite(actual, recorded, record)) messages.push(ADDED_HINT + added.join(', '));
+		return messages;
+	}
+
+	/** Write through a temp file and a rename so an interrupted record never leaves a torn file. */
+	private static function save(content: String): Void {
+		final temp: String = '$CENSUS_FILE.tmp';
+		File.saveContent(temp, content);
+		FileSystem.rename(temp, CENSUS_FILE);
+	}
+
+	/** The members of `left` that `right` lacks, in `left`'s order. */
+	private static function difference(left: Array<String>, right: Array<String>): Array<String> {
+		return [for (name in left) if (!right.contains(name)) name];
 	}
 
 }
