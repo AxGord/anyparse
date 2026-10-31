@@ -1,5 +1,5 @@
 {
-	"about": "The held-out set for `hxq owner`: questions a reviewer wrote without the owners' wording and without the ranking's tuning, the honest reading of how far a paraphrase finds its owner. `owners` are the types whose answer it is (a member of one counts); `atLeast` is the floor the test holds. Never reword a question to fit a doc. Read by unit.query.OwnerParaphraseTest.",
+	"about": "Questions a reviewer wrote without the owners' wording, read by unit.query.OwnerParaphraseTest. OWNER-INDEX-3 tuned ranking ideas on this set and on owner-paraphrases-reviewer-2.json (refuted on owner-paraphrases-heldout-3.json and reverted), so neither is held out any more. `owners` are the types whose answer it is (a member of one counts); `atLeast` is the floor the test holds. Never reword a question to fit a doc.",
 	"top": 3,
 	"atLeast": 3,
 	"questions": [

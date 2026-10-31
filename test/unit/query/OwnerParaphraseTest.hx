@@ -31,12 +31,15 @@ class OwnerParaphraseTest extends Test {
 
 	/**
 	 * The benchmark files, relative to the repository root: the set the ranking was tuned on, a second written after tuning
-	 * by the same author, and the held-out one a reviewer wrote without the owners' wording.
+	 * by the same author, the one a reviewer wrote without the owners' wording, a second a fresh reviewer wrote from the
+	 * backlog's review records without the owners' docs or the ranking, and the held-out one nobody has tuned on.
 	 */
 	private static final BENCHMARKS: Array<String> = [
 		'test/probes/owner-paraphrases.json',
 		'test/probes/owner-paraphrases-validation.json',
-		'test/probes/owner-paraphrases-reviewer.json'
+		'test/probes/owner-paraphrases-reviewer.json',
+		'test/probes/owner-paraphrases-reviewer-2.json',
+		'test/probes/owner-paraphrases-heldout-3.json'
 	];
 
 	@:pin('control') @:killer('M-OWNER-STANDING-FLAT')

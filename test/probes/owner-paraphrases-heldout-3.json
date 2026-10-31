@@ -1,0 +1,18 @@
+{
+	"about": "The held-out set for `hxq owner`: questions written by an agent that saw only the backlog's hxq-bugs records, never the owners' docs or the ranking, first measured after OWNER-INDEX-3's tuning and never tuned on, so it is the honest reading a ranking change must move. `owners` are the types whose answer it is (a member of one counts); `atLeast` is the floor the test holds. Never reword a question to fit a doc. Read by unit.query.OwnerParaphraseTest.",
+	"top": 3,
+	"atLeast": 7,
+	"questions": [
+		{ "question": "where do I decide whether a dotted name is a field access or a package path", "owners": ["TypingService"] },
+		{ "question": "canonical absolute location of a file after following links, even if missing", "owners": ["FileIdentity"] },
+		{ "question": "can a closure or later call modify this variable I am reading", "owners": ["UnchangedLocal"] },
+		{ "question": "checking whether a block's final statement supplies the enclosing value", "owners": ["TailValueScan"] },
+		{ "question": "which declared command-line switches does each subcommand accept and how are unknown ones rejected", "owners": ["CliFlags"] },
+		{ "question": "reading file contents and diffs at an old commit without checking it out", "owners": ["GitRevision"] },
+		{ "question": "which names does a star import bring into scope", "owners": ["TypeNameBinding"] },
+		{ "question": "pool of long-lived compiler processes reused across lint runs", "owners": ["OracleServerPool"] },
+		{ "question": "does this expression have side effects, so it is safe to drop or reorder", "owners": ["PurityScan"] },
+		{ "question": "finding every place a variable or field gets assigned", "owners": ["WriteSites"] },
+		{ "question": "which standard library functions are known to be free of side effects", "owners": ["StdlibPurity"] }
+	]
+}

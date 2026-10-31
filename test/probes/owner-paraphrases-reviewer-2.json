@@ -1,0 +1,23 @@
+{
+	"about": "Questions a fresh reviewer wrote from the backlog's review records without the owners' docs and without knowing how the ranking works, read by unit.query.OwnerParaphraseTest. OWNER-INDEX-3 tuned ranking ideas on it (refuted on owner-paraphrases-heldout-3.json and reverted), so it is held out no more. `owners` are the types whose answer it is (a member of one counts); `atLeast` is the floor the test holds. Never reword a question to fit a doc.",
+	"top": 3,
+	"atLeast": 5,
+	"questions": [
+		{ "question": "Does this pretty-printer document end in a // line comment, so I must not glue the next token onto its line?", "owners": ["WrapList"] },
+		{ "question": "Which parts of a source file should be treated as comments or string text, so a name that only appears there does not count as a use when deciding an import is dead?", "owners": ["InertRegions"] },
+		{ "question": "If some files were skipped because they would not parse, could any of them still mention this private member by name, so I should refuse to delete it?", "owners": ["RawSourceScan", "SymbolIndex"] },
+		{ "question": "Starting from a file, walk up its parent directories until a config file of a given name turns up.", "owners": ["ConfigFinder"] },
+		{ "question": "In the formatter options code, how do I tell that an array literal is really a comprehension rather than a plain list?", "owners": ["HaxeFormat"] },
+		{ "question": "Does this subtree only read a variable by name, as opposed to assigning to it?", "owners": ["Refs"] },
+		{ "question": "Does a conditional-compilation line like #else, #end or a multi-line #if (a take a condition, and where does that condition end?", "owners": ["CondDirectives"] },
+		{ "question": "I need a finding's source text in a normalized form so that two occurrences can be compared for equality; what renders it?", "owners": ["SpanRender"] },
+		{ "question": "What range of text has to be cut to delete or move a class member together with its doc comment, annotations and modifiers, so every operation agrees?", "owners": ["ElementSpan", "RefactorSupport"] },
+		{ "question": "Given the text of `import a.b.Util as U`, get the path the alias points at.", "owners": ["ModuleScan"] },
+		{ "question": "Is this method called by name from a framework, like a Unity MonoBehaviour start, so that renaming it or making it private would break things?", "owners": ["NamingPolicy", "HaxeNamingSupport", "NamingOptions"] },
+		{ "question": "Can I prove this operand is never null, so a null check on it is pointless?", "owners": ["TypeResolver"] },
+		{ "question": "Which node kind stands for the identifier inside a string interpolation such as '$Moved'?", "owners": ["RefShape"] },
+		{ "question": "Apply an edit to a source file and keep the result canonical, without shortening blank lines that sit inside a multi-line string literal.", "owners": ["CanonicalEdit"] },
+		{ "question": "Work out which token can start each alternative of a grammar rule, so the parser can dispatch on the first byte instead of trying every branch.", "owners": ["BranchFirstToken"] },
+		{ "question": "In the doc renderer, emit a line end followed by the right indentation.", "owners": ["Renderer"] }
+	]
+}
