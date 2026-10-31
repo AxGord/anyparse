@@ -170,6 +170,98 @@ class SwallowedExceptionCheckTest extends Test {
 		);
 	}
 
+	/** A catch with no braces is a handler like any other: under a statement `try`, in the `;`-terminated and the bare spelling. */
+	public function testBareCatchBodyFlagged(): Void {
+		for (src in [
+			'class C { function f() { try g(); catch (e:Exception) log("x"); } }',
+			'class C { function f() { try g() catch (e:Exception) log("x"); } }',
+			'class C { function f() { try g(); catch (e:Exception) if (c) log("x"); } }'
+		]) Assert.equals(1, violations(src).length, src);
+	}
+
+	/** A bare body that uses the variable, returns, throws or jumps handles the exception. */
+	public function testBareCatchBodyHandledNotFlagged(): Void {
+		for (body in [
+			'log(e)',
+			'return false',
+			'return',
+			'throw new Foo()',
+			'continue',
+			'break'
+		]) Assert.equals(0, violations('class C { function f() { for (x in xs) { try g(x) catch (e:Exception) $body; } } }').length, body);
+	}
+
+	/** A bare body that only yields a value is the recovery value of the try, in a `case` body as well as after the try. */
+	@:pin('control')
+	@:killer('M-SWALLOW-BARE-VALUE', 'M-SWALLOW-BARE-DEFAULT-ARM')
+	public function testBareValueBodyNotFlagged(): Void {
+		for (src in [
+			'class C { function f() { return switch (x) { case 1: try g() catch (e:Exception) null; case _: 0; }; } }',
+			'class C { function f() { return switch (x) { case 1: try g() catch (e:Exception) MISSING; case _: 0; }; } }',
+			'class C { function f() { return switch (x) { case 1: 0; default: try g() catch (e:Exception) null; }; } }',
+			'class C { function f() { try g() catch (e:Exception) null; } }'
+		]) Assert.equals(0, violations(src).length, src);
+	}
+
+	/** A value body mid-list is no result: the statements after the try run on, and nobody reads what it yielded. */
+	@:pin('control')
+	@:killer('M-SWALLOW-BARE-TAIL')
+	public function testBareValueBodyMidListStillFlagged(): Void {
+		for (src in [
+			'class C { function f() { try g() catch (e:Exception) null; h(); } }',
+			'class C { function f() { return switch (x) { case 1: try g() catch (e:Exception) null; h(); case _: 0; }; } }'
+		]) Assert.equals(1, violations(src).length, src);
+	}
+
+	/** A try EXPRESSION recovers with its catch body's value, whatever the body does. */
+	@:pin('control')
+	@:killer('M-SWALLOW-BARE-STMT-ONLY')
+	public function testBareBodyOfATryExpressionNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f() { final x = try g() catch (e:Exception) fallback("x"); } }').length);
+	}
+
+	/** A catch that counts the failure in a local the code after the try reads has made it a value the code acts on. */
+	@:pin('control')
+	@:killer('M-SWALLOW-OUTCOME-COUNTER')
+	public function testCountedFailureReadAfterTheTryNotFlagged(): Void {
+		for (catchClause in [
+			'catch (e:Exception) { failed++; }',
+			'catch (e:Exception) { --failed; }',
+			'catch (e:Exception) failed++;',
+			'catch (e:Exception) failed = -1;',
+			'catch (e:Exception) { failed += 1; }',
+			'catch (e:Exception) failed -= 1;'
+		])
+			Assert.equals(
+				0, violations('class C { function f() { var failed = 0; try { g(); } $catchClause report(failed); } }').length, catchClause
+			);
+	}
+
+	/** A counter nothing reads after the try, or a field, or counting next to other work, handles nothing. */
+	public function testCountedFailureNotActedOnStillFlagged(): Void {
+		for (src in [
+			'class C { function f() { var failed = 0; try { g(); } catch (e:Exception) { failed++; } } }',
+			'class C { var failed = 0; function f() { try { g(); } catch (e:Exception) { failed++; } report(failed); } }',
+			'class C { function f() { var failed = 0; try { g(); } catch (e:Exception) { failed++; log("x"); } report(failed); } }'
+		]) Assert.equals(1, violations(src).length, src);
+	}
+
+	/** An expected-exception test records the caught exception as its result: the catch body is only `Assert.pass()` / `Assert.fail(…)`. */
+	@:pin('control')
+	@:killer('M-SWALLOW-TEST-OUTCOME')
+	public function testTestOutcomeCallsNotFlagged(): Void {
+		for (catchClause in [
+			'catch (e:Exception) { Assert.pass(); }',
+			'catch (e:Exception) { Assert.fail("unexpected"); }',
+			'catch (e:Exception) Assert.pass();'
+		]) Assert.equals(0, violations('class C { function f() { try { g(); } $catchClause } }').length, catchClause);
+		for (catchClause in [
+			'catch (e:Exception) { Foo.pass(); }',
+			'catch (e:Exception) { Assert.pass(); log("x"); }',
+			'catch (e:Exception) { pass(); }'
+		]) Assert.equals(1, violations('class C { function f() { try { g(); } $catchClause } }').length, catchClause);
+	}
+
 	/** Only a body that IS the assignments: one under a condition or inside an inner block is not. */
 	public function testAssignmentInANestedStatementStillFlagged(): Void {
 		for (body in ['if (c) threw = true;', '{ threw = true; }'])
@@ -184,9 +276,15 @@ class SwallowedExceptionCheckTest extends Test {
 
 	/** The value assigned must be a constant: a call, another local, a compound assignment, an interpolation. */
 	@:pin('control')
-	@:killer('M-SWALLOW-OUTCOME-COMPOUND', 'M-SWALLOW-OUTCOME-VALUE')
+	@:killer('M-SWALLOW-OUTCOME-VALUE')
 	public function testComputedValueStillFlagged(): Void {
-		for (assign in ['threw = compute();', 'threw = other;', 'threw += 1;', 'threw = \'a$$b\';'])
+		for (assign in [
+			'threw = compute();',
+			'threw = other;',
+			'threw += compute();',
+			'threw += other;',
+			'threw = \'a$$b\';'
+		])
 			Assert.equals(
 				1,
 				violations('class C { function f() { var threw = 0; try { g(); } catch (exception:Exception) { $assign } trace(threw); } }')

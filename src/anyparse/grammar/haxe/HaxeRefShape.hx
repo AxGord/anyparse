@@ -896,6 +896,7 @@ final class HaxeRefShape {
 			'ThrowStmt',
 			'ThrowExpr',
 			'ReturnStmt',
+			'ReturnExpr',
 			'VoidReturnStmt',
 			'BreakStmt',
 			'ContinueStmt',
@@ -1223,6 +1224,7 @@ final class HaxeRefShape {
 		];
 		table.nullAssertionCalls = ['Assert.notNull'];
 		table.assertTrueCalls = ['Assert.isTrue'];
+		table.outcomeRecordingCalls = ['Assert.pass', 'Assert.fail'];
 		table.assertFalseCalls = ['Assert.isFalse'];
 		table.mapExistsMethods = ['exists'];
 		table.mapLiteralEntryKind = 'Arrow';

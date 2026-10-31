@@ -303,7 +303,7 @@ final class DeadStore extends RuleBase {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final nestedFnKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		final controlExitKinds: Array<String> = shape.controlExitKinds ?? [];
-		final returnKinds: Array<String> = ShapeVocab.returnStatementKinds(shape);
+		final returnKinds: Array<String> = ShapeVocab.returnKinds(shape);
 		final ownNames: Array<String> = paramNames.concat(NullFlow.collectDeclared(body, localDeclKinds, nestedFnKinds));
 		final excluded: Array<String> = collectExcluded(body, identKind, shape.stringInterpIdentKind, nestedFnKinds);
 		for (i in 0...ownNames.length) {

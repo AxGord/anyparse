@@ -152,6 +152,19 @@ class DeadStoreTest extends Test {
 		Assert.equals(1, violations('class C { function f(a:Int):Int { a = 5; a = 6; return a; } }').length);
 	}
 
+	/**
+	 * A `return` inside an expression leaves the function and no `catch`
+	 * intercepts it: the stores before it die as before a `return` statement.
+	 */
+	@:pin('control')
+	@:killer('M-DEADSTORE-RETURN-EXPR')
+	public function testReturnInsideAnExpressionClearsLiveness(): Void {
+		Assert.equals(
+			2,
+			violations('class C { function f(c:Bool):Int { var x = 1; x = 5; final v = c ? 3 : return 4; x = 2; return v + x; } }').length
+		);
+	}
+
 	public function testWriteOnlyLocalBothFlagged(): Void {
 		// A written-then-never-read local: `unused-local`'s text scan counts the write as a
 		// reference, so both stores are this check's findings — the partition's other half.

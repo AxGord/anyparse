@@ -2487,6 +2487,13 @@ final class RefShape {
 	public var assertFalseCalls: Null<Array<String>>;
 
 	/**
+	 * Dotted `Type.method` calls that RECORD a test outcome (`Assert.pass`, `Assert.fail`) — the `swallowed-exception` check reads a
+	 * catch body made only of them as handling the exception: the failure became the test result, observable in the run's tally. Optional;
+	 * unset treats none as handling.
+	 */
+	public var outcomeRecordingCalls: Null<Array<String>>;
+
+	/**
 	 * Map membership-test method names (`exists`) — the calls the flow engine reads as
 	 * a membership guard.
 	 *

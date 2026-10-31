@@ -25405,6 +25405,14 @@
 			"note": "the dead-store fix proves nothing beyond the shape, so a dead `s.toUpperCase()` / `Date.now()` / `Std.int(v)` store stays"
 		},
 		{
+			"name": "M-DEADSTORE-RETURN-EXPR",
+			"type": "anyparse.check.common.unused.DeadStore",
+			"method": "analyzeBody",
+			"find": "ShapeVocab.returnKinds(shape)",
+			"replace": "ShapeVocab.returnStatementKinds(shape)",
+			"note": "a return inside an expression is read as a throw a catch may intercept, so every local stays live at it and the dead stores before it go unreported"
+		},
+		{
 			"name": "M-DNG-UNSEEN-DROPPED",
 			"type": "anyparse.check.common.nullsafety.DeadNullGuard",
 			"method": "run",
@@ -25652,18 +25660,10 @@
 			"note": "an offset at or past the upper bound answers, so ArgumentValues reads the written type of the NEXT declaration"
 		},
 		{
-			"name": "M-SWALLOW-OUTCOME-COMPOUND",
-			"type": "anyparse.check.common.types.SwallowedException",
-			"method": "outcomeLocal",
-			"find": "assign.kind != shape.assignKind",
-			"replace": "!shape.writeParentKinds.contains(assign.kind)",
-			"note": "a compound assignment of a constant (`threw += 1;`) counts as recording an outcome, though it reads the local it writes"
-		},
-		{
 			"name": "M-SWALLOW-OUTCOME-VALUE",
 			"type": "anyparse.check.common.types.SwallowedException",
 			"method": "outcomeLocal",
-			"find": " || !MemberKinds.isMovableLiteral(assign.children[1], shape)",
+			"find": "if (write.children.length == 2 && !MemberKinds.isMovableLiteral(write.children[1], shape)) return null;",
 			"replace": "",
 			"note": "any value counts as a recorded outcome, so `threw = compute();` and `threw = other;` hide a handler that runs code"
 		},
@@ -25722,6 +25722,54 @@
 			"find": " && scan.statementListKinds.contains(ancestors[k].kind)",
 			"replace": "",
 			"note": "a read in the other arm of the branch the try sits in counts, though it follows the try in the text and on no path"
+		},
+		{
+			"name": "M-SWALLOW-TEST-OUTCOME",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "recordsTestOutcome",
+			"find": "scan.outcomeCalls.contains('$recv.${access.method}')",
+			"replace": "true",
+			"note": "any receiver.method call in the body reads as recording a test outcome, though only the listed Assert calls do"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-COUNTER",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "outcomeLocal",
+			"find": "if (!plain && !counter) return null;",
+			"replace": "if (!plain) return null;",
+			"note": "an increment of a local read after the try (`failed++`) is not read as recording an outcome"
+		},
+		{
+			"name": "M-SWALLOW-BARE-VALUE",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "flagCatch",
+			"find": " || MemberKinds.isSideEffectFree(body, scan.shape) && endsItsList(ancestors, scan)",
+			"replace": "",
+			"note": "a bare body that only yields a value (`null`, a constant) is read as a handler that does nothing, though it is the value the try produces"
+		},
+		{
+			"name": "M-SWALLOW-BARE-TAIL",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "flagCatch",
+			"find": " && endsItsList(ancestors, scan)",
+			"replace": "",
+			"note": "a side-effect-free bare body mid-list reads as the value the try produces, though the statements after it run on and nobody reads that value"
+		},
+		{
+			"name": "M-SWALLOW-BARE-DEFAULT-ARM",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "endsItsList",
+			"find": "scan.armKinds.contains(parent.kind)",
+			"replace": "parent.kind == 'CaseBranch'",
+			"note": "a value body at the tail of a `default` arm is read as a swallow, though it is the value the arm yields like a `case` arm's"
+		},
+		{
+			"name": "M-SWALLOW-BARE-STMT-ONLY",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "flagCatch",
+			"find": "if (bare && !(ancestors.length > 0 && scan.tryStatementKinds.contains(ancestors[ancestors.length - 1].kind))) return;",
+			"replace": "",
+			"note": "a catch of a try EXPRESSION with a bare body counts as a statement-context handler, though its body is the recovery value"
 		},
 		{
 			"name": "M-NAMING-PROPERTY-MODS-NONE",
