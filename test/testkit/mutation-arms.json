@@ -27806,7 +27806,7 @@
 		},
 		{
 			"name": "M-ASYM-FIX-UNTERMINATED",
-			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"type": "anyparse.check.common.control.BranchChain",
 			"method": "selfTerminated",
 			"force": "true",
 			"note": "a bare branch with no terminator of its own is braced: `if (a) p() else { … }` becomes `{ p() }`, which Haxe rejects with Missing ;"
@@ -27849,6 +27849,45 @@
 			"method": "openTail",
 			"force": "true",
 			"note": "any unterminated bare branch takes an appended terminator, a conditional-compilation region included, whose terminator its parent owns"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-DANGLING-ELSE",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "removable",
+			"find": "(shielded || !IfExpressionChain.holdsElseLessConditional(statement, seams.shield.conditionalKinds))",
+			"replace": "true",
+			"note": "a block holding an else-less conditional loses its braces where an else follows, and that else re-binds onto the inner if"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-DECL",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "removable",
+			"find": "!seams.keptKinds.contains(statement.kind)",
+			"replace": "true",
+			"note": "a block holding one declaration loses its braces, widening the binding's scope"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-ASYMMETRIC",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "chainFinding",
+			"find": "if (!removable(last, site, at)) return null;",
+			"replace": "if (!removable(last, site, at)) continue;",
+			"note": "a chain whose else must stay braced is stripped in its then branch alone, leaving the asymmetry asymmetric-branch-braces reports"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-COMMENT",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "removable",
+			"find": "&& unbraceEdits(block, site) != null",
+			"replace": "",
+			"note": "a block with a comment between a brace and its statement is reported, though stripping its braces would drop or misplace the comment"
+		},
+		{
+			"name": "M-CATCH-DYNAMIC-LOGGING-NAME-IGNORED",
+			"type": "anyparse.check.common.types.CatchDynamic",
+			"method": "catchName",
+			"force": "DEFAULT_CATCH_NAME",
+			"note": "catch-dynamic recommends and arm (b) writes exception whatever naming.catchVarName says"
 		},
 		{
 			"name": "M-SHADOWING-PARAM-NO-RENAME",

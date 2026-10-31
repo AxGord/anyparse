@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.common.control.BranchChain.ChainSeams;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
@@ -50,9 +51,6 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'asymmetric-branch-braces';
 
-	/** An if node with an else branch has children [cond, then, else]. */
-	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
-
 	/** The then branch is the second child of an if node - `[cond, then, else]`. */
 	private static inline final THEN_BRANCH_INDEX: Int = 1;
 
@@ -89,7 +87,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	 * - an edit inside a branch this call already braces (or around one) waits for the next pass, so
 	 *   no two edits of one call overlap;
 	 * - a local declaration stays bare - its braces would scope the binding;
-	 * - a branch must close on a terminator of its own (`selfTerminated`), or END in a bare expression
+	 * - a branch must close on a terminator of its own (`BranchChain.selfTerminated`), or END in a bare expression
 	 *   statement (`openTail`), which takes the terminator inside the braces: Haxe accepts
 	 *   `if (a) p() else { … }` and rejects `{ p() }` with `Missing ;` (verified against the
 	 *   compiler), and `{ p(); }` is the same statement - as `{ for (c in s) p(); }` is the same loop.
@@ -130,6 +128,11 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 		return edits;
 	}
 
+	/** The else branch of `node` when it is an `if` with one, else null. */
+	private static inline function elseOf(node: QueryNode, seams: Seams): Null<QueryNode> {
+		return BranchChain.elseOf(node, seams.ifKinds);
+	}
+
 	/**
 	 * Every finding in `root`, one per if / else-if chain, in document order (`chainFinding`).
 	 */
@@ -157,7 +160,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	 * `else`, or one braced in its tail and bare in its head. Its span is the whole chain.
 	 */
 	private static function chainFinding(head: QueryNode, seams: Seams): Null<Asymmetry> {
-		final links: Array<QueryNode> = linksFrom(head, seams);
+		final links: Array<QueryNode> = BranchChain.linksFrom(head, seams.ifKinds);
 		final tail: QueryNode = links[links.length - 1];
 		final last: Null<QueryNode> = elseOf(tail, seams);
 		final headSpan: Null<Span> = head.span;
@@ -207,7 +210,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 				return Declined('a bare branch is a declaration, and braces would scope its binding');
 			// An unterminated statement's span runs on over the blank before `else`; the braces close on its last token.
 			final text: String = site.source.substring(placed.from, placed.to).rtrim();
-			final statement: Null<String> = if (selfTerminated(bare, site.source, site.seams))
+			final statement: Null<String> = if (BranchChain.selfTerminated(bare, site.source, site.seams))
 				text
 			else if (openTail(bare, site.seams))
 				text + site.terminator
@@ -254,25 +257,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 			head = path[at];
 			at--;
 		}
-		return linksFrom(head, seams);
-	}
-
-	/** The links of the chain `head` starts: `head`, then every `if` down its else-if spine. */
-	private static function linksFrom(head: QueryNode, seams: Seams): Array<QueryNode> {
-		final links: Array<QueryNode> = [head];
-		var next: Null<QueryNode> = elseOf(head, seams);
-		while (next != null && seams.ifKinds.contains(next.kind)) {
-			links.push(next);
-			next = elseOf(next, seams);
-		}
-		return links;
-	}
-
-	/** The else branch of `node` when it is an `if` with one, else null. */
-	private static function elseOf(node: QueryNode, seams: Seams): Null<QueryNode> {
-		return seams.ifKinds.contains(node.kind) && node.children.length == IF_WITH_ELSE_CHILD_COUNT
-			? node.children[ELSE_BRANCH_INDEX]
-			: null;
+		return BranchChain.linksFrom(head, seams.ifKinds);
 	}
 
 	/**
@@ -289,24 +274,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	}
 
 	/**
-	 * Whether `node` closes on a terminator of its own, so it still parses as the single statement of a
-	 * block: its text ends in the grammar's statement terminator, or it is a block or a `switch`
-	 * statement (closed by its own `}`), or an `if` / loop / `try` / `catch` whose LAST child closes so in
-	 * turn - `for (c in s) { … }` does, `for (c in s) p()` does not. Anything else - an expression that
-	 * merely ends in a brace, a conditional-compilation region - answers false.
-	 */
-	private static function selfTerminated(node: QueryNode, source: String, seams: Seams): Bool {
-		final span: Null<Span> = node.span;
-		final terminator: Null<String> = seams.terminator;
-		if (span == null || terminator == null) return false;
-		if (source.substring(span.from, span.to).rtrim().endsWith(terminator)) return true;
-		if (node.kind == seams.blockStmtKind || seams.braceClosedKinds.contains(node.kind)) return true;
-		final last: Null<QueryNode> = node.children.length == 0 ? null : node.children[node.children.length - 1];
-		return last != null && seams.lastChildClosedKinds.contains(node.kind) && selfTerminated(last, source, seams);
-	}
-
-	/**
-	 * Whether `node`, which `selfTerminated` refused, ends in an expression statement written without its
+	 * Whether `node`, which `BranchChain.selfTerminated` refused, ends in an expression statement written without its
 	 * terminator - `p()`, `for (c in s) p()`, `if (b) x else y` - so that the terminator appended to its
 	 * text is that statement's own. A conditional-compilation region, whose terminator its parent owns,
 	 * is not one.
@@ -347,20 +315,16 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	 */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final catchKind: Null<String> = shape.catchClauseKind;
-		final blockStmtKind: Null<String> = shape.blockStmtKind;
-		return ifKinds.length == 0 || blockStmtKind == null ? null : {
-			ifKinds: ifKinds,
-			blockStmtKind: blockStmtKind,
-			exemptElseKinds: ifKinds.concat(shape.switchStatementKinds ?? []),
-			terminator: shape.statementTerminator,
+		final chain: Null<ChainSeams> = BranchChain.chainSeams(shape);
+		return chain == null ? null : {
+			ifKinds: chain.ifKinds,
+			blockStmtKind: chain.blockStmtKind,
+			exemptElseKinds: chain.ifKinds.concat(shape.switchStatementKinds ?? []),
+			terminator: chain.terminator,
 			exprStmtKind: shape.exprStatementKind,
 			declKinds: shape.localDeclKinds ?? [],
-			braceClosedKinds: shape.switchStatementKinds ?? [],
-			lastChildClosedKinds: ifKinds.concat(shape.loopStatementKinds ?? [])
-				.concat(shape.tryStatementKinds ?? [])
-				.concat(catchKind == null ? [] : [catchKind])
+			braceClosedKinds: chain.braceClosedKinds,
+			lastChildClosedKinds: chain.lastChildClosedKinds
 		};
 	}
 

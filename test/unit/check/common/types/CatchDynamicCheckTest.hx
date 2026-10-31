@@ -4,6 +4,8 @@ import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.types.CatchDynamic;
 
+using StringTools;
+
 /**
  * The `catch-dynamic` check: a `catch` clause whose declared exception type is
  * `Dynamic` (or `Any`) is flagged `Warning` (prefer `catch (exception:Exception)`).
@@ -192,6 +194,37 @@ class CatchDynamicCheckTest extends Test {
 		final expected: String = 'import haxe.Exception;\n\n'
 			+ "class C { public function f():Void { try g() catch (exception:Exception) { trace('boom', exception); } } }";
 		Assert.equals(expected, out);
+	}
+
+	/**
+	 * Arm (b) names the caught value what the project's `naming.catchVarName` names every catch variable, so the fix and
+	 * the naming policy agree; the shadow gate reads that name too.
+	 */
+	@:pin('control')
+	@:killer('M-CATCH-DYNAMIC-LOGGING-NAME-IGNORED')
+	public function testFixLoggingRenamesToTheNamingCatchVarName(): Void {
+		final config: String = '{"rules": {"catch-dynamic": {"fixLoggingUses": true}, "naming": {"catchVarName": "err"}}}';
+		final check: CatchDynamic = new CatchDynamic();
+		check.setConfigResolver(_ -> LintConfig.parse(config));
+		final out: String = CheckFixture.fixedSource(
+			check, "class C { public function f():Void { try g() catch (e:Dynamic) { trace('boom $e', e); } } }"
+		);
+		final expected: String = 'import haxe.Exception;\n\n'
+			+ "class C { public function f():Void { try g() catch (err:Exception) { trace('boom $err', err); } } }";
+		Assert.equals(expected, out);
+		final shadow: String = "class C { public function f():Void { var err = 1; try g() catch (e:Dynamic) { trace('$e $err'); } } }";
+		Assert.equals(0, CheckFixture.edits(check, shadow).length, 'a body already reading the configured name keeps its binder');
+	}
+
+	/** The messages recommend the project's catch-variable name, so following them never trips the naming rule. */
+	@:pin('control')
+	@:killer('M-CATCH-DYNAMIC-LOGGING-NAME-IGNORED')
+	public function testMessagesNameTheNamingCatchVarName(): Void {
+		final resolve: (String) -> LintConfig = _ -> LintConfig.parse('{"rules": {"naming": {"catchVarName": "ex"}}}');
+		final src: String = 'class C { public function f():Void { try g() catch (e:Dynamic) {} try g() catch (e) {} } }';
+		final vs: Array<Violation> = CheckFixture.violationsIn(new CatchDynamic(), [{ file: 'C.hx', source: src }], null, resolve);
+		Assert.equals(2, vs.length);
+		for (v in vs) Assert.isTrue(v.message.endsWith('prefer catch (ex:Exception)'), v.message);
 	}
 
 	public function testFixLoggingNestedInnerCatchUntouched(): Void {

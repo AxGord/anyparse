@@ -43,6 +43,7 @@ import anyparse.check.common.control.PreferTernaryExpression;
 import anyparse.check.common.control.PreferTernaryReturn;
 import anyparse.check.common.control.PreferTryExpressionAssignment;
 import anyparse.check.common.control.PreferTryExpressionReturn;
+import anyparse.check.common.control.RedundantBraces;
 import anyparse.check.common.control.RedundantCaseBody;
 import anyparse.check.common.control.RedundantCondCompParens;
 import anyparse.check.common.control.RedundantElse;
@@ -289,6 +290,9 @@ final class Linter {
 			// wants an else block wrapping ONE if and this one wants exactly one of the
 			// two branches braced at all.
 			new AsymmetricBranchBraces(),
+			// Strips braces only off a chain whose EVERY branch can go bare, so it never claims a chain
+			// `asymmetric-branch-braces` reports.
+			new RedundantBraces(),
 			new DoubleNegation(),
 			new InvertNegatedIfElse(),
 			new PreferNullCoalescing(),

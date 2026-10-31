@@ -53,8 +53,8 @@ final class NamingOptions implements NamingSupport {
 	public function policyFor(path: String): NamingPolicy {
 		final config: LintConfig = LintConfig.resolveWith(_resolve, path);
 		final rules: NamingPolicy = [];
-		final catchName: Null<String> = config.stringOption(RULE_ID, CATCH_VAR_OPTION);
-		if (catchName != null && catchName != '') rules.push(catchVarRule(catchName));
+		final catchName: Null<String> = catchVarName(config);
+		if (catchName != null) rules.push(catchVarRule(catchName));
 		final suffix: Null<String> = config.stringOption(RULE_ID, HANDLER_OPTION);
 		if (suffix != null && suffix != '') rules.push(handlerRule(suffix));
 		final base: NamingPolicy = _base.policyFor(path);
@@ -80,6 +80,15 @@ final class NamingOptions implements NamingSupport {
 	/** `base` with the project's `naming` options laid over it, or null when the grammar has no naming support. */
 	public static function over(base: Null<NamingSupport>, resolve: Null<(String) -> LintConfig>): Null<NamingSupport> {
 		return base == null ? null : new NamingOptions(base, resolve);
+	}
+
+	/**
+	 * The one name `config`'s `naming.catchVarName` gives every catch variable, or null when the project sets none - the
+	 * name the naming policy enforces and the name a rule renaming a catch variable writes.
+	 */
+	public static function catchVarName(config: LintConfig): Null<String> {
+		final name: Null<String> = config.stringOption(RULE_ID, CATCH_VAR_OPTION);
+		return name == '' ? null : name;
 	}
 
 	/** Every catch variable is `name`, or an `_`-prefixed discard, which marks a deliberately swallowed exception. */

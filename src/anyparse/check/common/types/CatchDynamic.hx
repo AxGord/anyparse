@@ -2,6 +2,7 @@ package anyparse.check.common.types;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.VersionGated;
+import anyparse.check.common.naming.NamingOptions;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -46,9 +47,9 @@ private typedef CatchHeader = {
  * `'$e'` all yield text identical to the `Dynamic` path). Because the equivalence is a
  * runtime-behaviour claim, arm (b) is GATED behind the rule option `apqlint.json` →
  * `"catch-dynamic": { "fixLoggingUses": true }` (default OFF): the option IS the project's
- * explicit acceptance of that equivalence. With it ON, `fix` swaps the type, RENAMES the variable
- * to `exception`, and rewrites every logging use (`$msg` → `$exception`), adding the import by the
- * same convention as arm (a). It is skipped when the body already references `exception` (renaming
+ * explicit acceptance of that equivalence. With it ON, `fix` swaps the type, RENAMES the variable to the project's
+ * `naming.catchVarName` (`exception` when unset), and rewrites every logging use (`$msg` → `$exception`), adding the import by the
+ * same convention as arm (a). It is skipped when the body already references that name (renaming
  * would shadow it), or when any mention is NOT a pure stringify (a field access `e.foo`, a `throw`
  * / `return`, an argument to another call) — that reads or propagates the raw-value API and stays
  * report-only for a manual `.unwrap` decision.
@@ -74,9 +75,8 @@ private typedef CatchHeader = {
 @:nullSafety(Strict)
 final class CatchDynamic extends RuleBase implements ConfigAware implements VersionGated {
 
-	/** The message for a bare, untyped `catch (e)` (arm (c)) — shared by `run` and any diagnostics. */
-	private static final UNTYPED_MESSAGE: String =
-		'untyped catch clause is implicitly Exception (Haxe 4.1+) — prefer catch (exception:Exception)';
+	/** The name arm (b) gives a caught value when the project's `naming.catchVarName` sets none. */
+	private static inline final DEFAULT_CATCH_NAME: String = 'exception';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -95,14 +95,18 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(
 			files, plugin, readKinds(plugin),
-			(entry, tree, seams, violations) -> walk(violations, entry.file, entry.source, tree, seams.kind, seams.catchAll)
+			(entry, tree, seams, violations) ->
+				walk(
+					violations, entry.file, entry.source, tree, seams.kind, seams.catchAll,
+					catchName(LintConfig.resolveWith(_resolveConfig, entry.file))
+				)
 		);
 	}
 
 	/**
 	 * Arm (a) swaps an UNUSED `Dynamic`/`Any` catch-all to `Exception` (adding the import), keeping the
 	 * original variable name; arm (b) — opt-in via `fixLoggingUses` — additionally renames a
-	 * logging-only catch's variable to `exception` and rewrites its logging uses. A body that reads or
+	 * logging-only catch's variable to the project's catch-variable name and rewrites its logging uses. A body that reads or
 	 * propagates the raw value stays a finding.
 	 */
 	public function fix(
@@ -123,7 +127,9 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 				if (span != null) flagged['${span.from}:${span.to}'] = true;
 			}
 			final file: String = violations.length > 0 ? violations[0].file : '';
-			final fixLogging: Bool = LintConfig.resolveWith(_resolveConfig, file).boolOption('catch-dynamic', 'fixLoggingUses') ?? false;
+			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
+			final fixLogging: Bool = config.boolOption('catch-dynamic', 'fixLoggingUses') ?? false;
+			final loggingName: String = catchName(config);
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 			final importMap: Map<String, String> = provider != null ? provider.importMap(source, file) : [];
 			// The shared printer owns the short-name / add-import / fully-qualified decision (imports,
@@ -141,7 +147,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 					// would be unused in a build where the branch is compiled out.
 					final exText: String = insideConditional ? exceptionPath : printer.print(exceptionPath).text;
 					final catchEdits: Array<{ span: Span, text: String }> = catchRewriteEdits(
-						node, source, catchAll, exText, flagged, fixLogging, callKind, fieldKind, identKind
+						node, source, catchAll, exText, flagged, fixLogging ? loggingName : null, callKind, fieldKind, identKind
 					);
 					if (catchEdits.length > 0) {
 						for (e in catchEdits) edits.push(e);
@@ -165,12 +171,23 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 		return '4.1';
 	}
 
-	/** Walk `node`, flagging every catch clause whose declared type is a catch-all name, plus every bare untyped catch. */
+	/**
+	 * The catch-variable name `config`'s project wants - its `naming.catchVarName`, else `exception` - the name the
+	 * messages recommend and arm (b) writes.
+	 */
+	private static function catchName(config: LintConfig): String {
+		return NamingOptions.catchVarName(config) ?? DEFAULT_CATCH_NAME;
+	}
+
+	/**
+	 * Walk `node`, flagging every catch clause whose declared type is a catch-all name, plus every bare untyped catch;
+	 * `name` is the catch-variable name the messages recommend.
+	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, catchKind: String, catchAll: Array<String>
+		out: Array<Violation>, file: String, source: String, node: QueryNode, catchKind: String, catchAll: Array<String>, name: String
 	): Void {
-		if (node.kind == catchKind) flagCatch(out, file, source, node, catchAll);
-		for (c in node.children) walk(out, file, source, c, catchKind, catchAll);
+		if (node.kind == catchKind) flagCatch(out, file, source, node, catchAll, name);
+		for (c in node.children) walk(out, file, source, c, catchKind, catchAll, name);
 	}
 
 	/**
@@ -181,7 +198,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	 * no `:` to anchor on. The violation span covers only the parameter region, not the handler body.
 	 */
 	private static function flagCatch(
-		out: Array<Violation>, file: String, source: String, catchNode: QueryNode, catchAll: Array<String>
+		out: Array<Violation>, file: String, source: String, catchNode: QueryNode, catchAll: Array<String>, name: String
 	): Void {
 		final bare: Null<{ varName: String, to: Int, from: Int }> = catchBareRegion(catchNode, source);
 		if (bare != null) {
@@ -190,7 +207,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 				span: new Span(bare.from, bare.to),
 				rule: 'catch-dynamic',
 				severity: Severity.Warning,
-				message: UNTYPED_MESSAGE
+				message: 'untyped catch clause is implicitly Exception (Haxe 4.1+) — prefer catch ($name:Exception)'
 			});
 			return;
 		}
@@ -201,7 +218,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 			span: new Span(p.from, p.to),
 			rule: 'catch-dynamic',
 			severity: Severity.Warning,
-			message: 'catch type \'${p.typeName}\' is a raw catch-all — prefer catch (exception:Exception)'
+			message: 'catch type \'${p.typeName}\' is a raw catch-all — prefer catch ($name:Exception)'
 		});
 	}
 
@@ -338,25 +355,25 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	/**
 	 * The arm-(b) rewrite edits for a flagged catch clause whose caught value is used ONLY as a
 	 * logging value — string interpolation (`$e`), `Std.string(e)`, or a `trace(e)` argument. Renames
-	 * the bound variable to `exception`, rewrites every logging use accordingly, and swaps the type to
+	 * the bound variable to `name`, rewrites every logging use accordingly, and swaps the type to
 	 * `exText`. Empty when the clause is not flagged / not a catch-all, its value is unused (arm (a)'s
-	 * job), the body already references `exception` (renaming would shadow it), or any use is not a
+	 * job), the body already references `name` (renaming would shadow it), or any use is not a
 	 * pure stringify. The caller adds the import per the shared convention.
 	 */
 	private static function loggingSwapEdits(
-		catchNode: QueryNode, source: String, catchAll: Array<String>, exText: String, flagged: Map<String, Bool>, callKind: String,
-		fieldKind: String, identKind: String
+		catchNode: QueryNode, source: String, catchAll: Array<String>, exText: String, flagged: Map<String, Bool>, name: String,
+		callKind: String, fieldKind: String, identKind: String
 	): Array<{ span: Span, text: String }> {
 		final p = catchParamRegion(catchNode, source);
 		if (p == null || !catchAll.contains(p.typeName) || !flagged.exists('${p.from}:${p.to}') || p.varName.length == 0) return [];
 		if (!mentionsName(p.body, p.varName)) return [];
-		if (p.varName != 'exception' && mentionsName(p.body, 'exception')) return [];
+		if (p.varName != name && mentionsName(p.body, name)) return [];
 		final mentions: Null<Array<QueryNode>> = loggingMentions(p.body, p.varName, callKind, fieldKind, identKind);
 		if (mentions == null) return [];
-		final out: Array<{ span: Span, text: String }> = [{ span: new Span(p.from, p.to), text: '(exception:$exText)' }];
-		if (p.varName != 'exception') for (m in mentions) {
+		final out: Array<{ span: Span, text: String }> = [{ span: new Span(p.from, p.to), text: '($name:$exText)' }];
+		if (p.varName != name) for (m in mentions) {
 			final ms: Null<Span> = m.span;
-			if (ms != null) out.push({ span: ms, text: m.kind == 'Ident' ? '$$exception' : 'exception' });
+			if (ms != null) out.push({ span: ms, text: m.kind == 'Ident' ? '$$$name' : name });
 		}
 		return out;
 	}
@@ -401,12 +418,12 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	 * The rewrite edits for ONE flagged catch clause: arm (c) (annotate a bare, untyped catch —
 	 * unconditional, keeping the variable name) when the clause has no declared type at all; else
 	 * arm (a) (swap an unused catch-all, keeping the variable name) when the value is unused; else
-	 * arm (b) (rename a logging-only value to `exception`) when `fixLogging` is on; else empty —
+	 * arm (b) (rename a logging-only value to `loggingName`) when that name is set; else empty —
 	 * the clause stays a report-only finding. The three arms are mutually exclusive: a clause is
 	 * either bare (arm (c)'s concern) or typed (arms (a)/(b)'s), never both.
 	 */
 	private static function catchRewriteEdits(
-		node: QueryNode, source: String, catchAll: Array<String>, exText: String, flagged: Map<String, Bool>, fixLogging: Bool,
+		node: QueryNode, source: String, catchAll: Array<String>, exText: String, flagged: Map<String, Bool>, loggingName: Null<String>,
 		callKind: String, fieldKind: String, identKind: String
 	): Array<{ span: Span, text: String }> {
 		final bareEdit: Null<{ span: Span, text: String }> = bareSwapEdit(node, source, exText, flagged);
@@ -414,8 +431,8 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 		final unusedEdit: Null<{ span: Span, text: String }> = swapEdit(node, source, catchAll, exText, flagged);
 		return if (unusedEdit != null)
 			[unusedEdit]
-		else if (fixLogging)
-			loggingSwapEdits(node, source, catchAll, exText, flagged, callKind, fieldKind, identKind)
+		else if (loggingName != null)
+			loggingSwapEdits(node, source, catchAll, exText, flagged, loggingName, callKind, fieldKind, identKind)
 		else
 			[];
 	}

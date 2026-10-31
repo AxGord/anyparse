@@ -25,7 +25,13 @@ var item:Dynamic = new Item();  // --fix (with an oracle): var item:Item = new I
 
 ## `catch-dynamic`
 
-a `catch` clause whose declared exception type is `Dynamic` (or `Any`) — a raw catch-all; the user's rule is `catch (exception:Exception)`, whose wrapper binds a richer, uniform API rather than the raw thrown value; `Warning`, report-only. The type is read from the clause header source (between the first `:` and the closing `)`, bounded by the handler block) and reduced to a simple nominal name (`TypeResolver.simpleNominalName`); a hit against `RefShape.catchAllTypeNames` (`Dynamic` / `Any`) is flagged, and only the `(var:Type)` parameter region is spanned. A typed catch of any other name (`Exception`, a custom class, `String`) and an untyped `catch (e)` (no type text) are left alone; a non-nominal type (generic / function) yields no simple name → safe miss. Report-only — no `--fix`: `catch (e:Dynamic)` binds the RAW thrown value while `catch (e:Exception)` binds a WRAPPER with a different API, so an automatic type swap would silently change what the body operates on
+a `catch` clause whose declared exception type is `Dynamic` (or `Any`) — a raw catch-all — or that declares no type at all (`catch (e)`); the rule is `catch (<name>:Exception)`, whose wrapper binds a richer, uniform API rather than the raw thrown value, and the message names the `naming` rule's `catchVarName` (`exception` when unset). `Warning`. The type is read from the clause header source (between the first `:` and the closing `)`, bounded by the handler block) and reduced to a simple nominal name (`TypeResolver.simpleNominalName`); a hit against `RefShape.catchAllTypeNames` (`Dynamic` / `Any`) is flagged, and only the parameter region is spanned. A typed catch of any other name (`Exception`, a custom class, `String`) is left alone; a non-nominal type (generic / function) yields no simple name → safe miss.
+
+`--fix` has three arms, each spelling `Exception` short (adding `import haxe.Exception;`) or fully qualified on a collision or inside `#if`:
+
+- (a) unconditional: a catch-all whose variable the body never mentions swaps its type to `Exception` — nothing reads the value, so nothing changes;
+- (b) opt-in, `"catch-dynamic": { "fixLoggingUses": true }`: a catch-all whose value is only logged (interpolated, `Std.string`, `trace`) swaps its type and renames its variable to `catchVarName` (`exception` when unset), skipping a body that already reads that name. It is opt-in because `catch (e:Dynamic)` binds the RAW thrown value while `catch (e:Exception)` binds a WRAPPER: the logged text agrees on Haxe 4.1+, but that is a runtime claim the project accepts by turning the option on. Any other use of the value — a field access, a `throw`, an argument to another call — stays report-only;
+- (c) unconditional: a bare `catch (e)`, implicitly `haxe.Exception` since Haxe 4.1, gains the `:Exception` annotation and keeps its name.
 
 ## `explicit-local-type`
 
