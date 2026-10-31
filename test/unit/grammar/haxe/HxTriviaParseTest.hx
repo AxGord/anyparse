@@ -271,7 +271,7 @@ class HxTriviaParseTest extends Test {
 			case IfStmt(s): s;
 			case _: throw 'expected IfStmt';
 		};
-		Assert.equals(' after else', ifStmt.elseBodyAfterKw);
+		Assert.equals('// after else', ifStmt.elseBodyAfterKw);
 		Assert.equals(0, ifStmt.elseBodyKwLeading.length);
 		final elseStmt: Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = ifStmt.elseBody;
 		Assert.notNull(elseStmt);

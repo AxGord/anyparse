@@ -177,7 +177,7 @@ final class WriterRefFieldLowering {
 		} else if (bodyPolicyFlag != null) {
 			emitOptionalBodyPolicyOnly(
 				ctx, child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName, indentObjArgs,
-				prevTrailFieldName
+				prevTrailFieldName, typePath, fieldName
 			);
 			// A statement body's `;` (`catch (e) { … };`) is a source token like the mandatory path's.
 			pushStmtBodyTrailOpt(optParts, trailOptText, structTrailOptAccess);
@@ -217,7 +217,7 @@ final class WriterRefFieldLowering {
 				$adoptKwLeading;
 				_sv;
 			}
-			: valueBraceSymmetryWrap(ctx.braceSym, child, fieldAccess);
+			: valueWrapAdopting(ctx.braceSym, child, fieldAccess, adoptKwLeading);
 		parts.push(macro {
 			final _optVal = $optValInit;
 			if (_optVal != null)
@@ -510,7 +510,7 @@ final class WriterRefFieldLowering {
 	private static function emitOptionalBodyPolicyOnly(
 		ctx: RefFieldCtx, child: ShapeNode, optParts: Array<Expr>, bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>,
 		writeCall: Expr, refName: String, hasElseIf: Bool, elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>,
-		prevTrailFieldName: Null<String>
+		prevTrailFieldName: Null<String>, typePath: String, fieldName: String
 	): Void {
 		final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
 		// Head -> body seam, mirror of the mandatory-Ref path in
@@ -524,6 +524,11 @@ final class WriterRefFieldLowering {
 			expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
 			pos: Context.currentPos()
 		};
+		// The own-line run between the head and a present body: the `<field>BeforeLeading` slot a
+		// `@:fmt(bareRefSepWhenPresent)` field grows (`TriviaPairSlots.isBareNonFirstRef`).
+		final beforeLeadingExpr: Null<Expr> = ctx.ctx.trivia && child.fmtHasFlag('bareRefSepWhenPresent') && ctx.isTriviaBearing(typePath)
+			? beforeLeadingAccess(fieldName)
+			: null;
 		optParts.push(WriterBodyPolicyLowering.bodyPolicyWrap(ctx.bodyPolicy, {
 			flagName: bodyPolicyFlag,
 			exprFlagName: bodyPolicyExprFlag,
@@ -533,6 +538,7 @@ final class WriterRefFieldLowering {
 			hasElseIf: hasElseIf,
 			elseFieldName: elseFieldName,
 			afterTrailExpr: afterTrailExpr,
+			beforeLeadingExpr: beforeLeadingExpr,
 			indentObjArgs: indentObjArgs,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
 			strictFitLineArgs: child.fmtReadStringArgs(WriterLowering.STRICT_FIT_LINE_BODY),
@@ -818,9 +824,9 @@ final class WriterRefFieldLowering {
 		final writeFn: String = ctx.writeFnFor(refName);
 		// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-		// Only an if-then body is ever wrapped, and only a non-first bare Ref grows the head-gap slots: the
-		// prior field's after-trail comment and this field's own-line run.
-		final wrapsWithHeadGap: Bool = ctx.ctx.trivia && elseFieldName != null && !isFirstField;
+		// Only an if-then body (statement or value) is ever wrapped, and only a non-first bare Ref grows the
+		// head-gap slots: the prior field's after-trail comment and this field's own-line run.
+		final wrapsWithHeadGap: Bool = ctx.ctx.trivia && (elseFieldName != null || valueMirrors(child)) && !isFirstField;
 		final deBraced = deBraceBodyAccess(ctx.braceSym, child, fieldAccess, elseFieldName, typePath, {
 			sameLine: wrapsWithHeadGap && prevTrailFieldName != null
 				? valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX)
@@ -848,9 +854,23 @@ final class WriterRefFieldLowering {
 			// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
 			// bareBodyBreaks / non-first-body / condWrap / arrowBodyLineWrap
 			// dispatch lives in emitBareRefNonBodyPolicy.
+			// The head-gap comments a bare body's break-wrap writes: the prior field's after-trail comment and this
+			// field's own-line run (a lead-less, kw-less non-first Ref of a trivia-bearing rule grows that slot).
+			final ownGap: Bool = ctx.ctx.trivia
+				&& !isFirstField
+				&& kwLead == null
+				&& leadText == null
+				&& !isRaw
+				&& ctx.isTriviaBearing(typePath);
+			final headGap: Null<HeadGapSlots> = !ownGap && prevTrailFieldName == null ? null : {
+				afterTrail: prevTrailFieldName == null
+					? macro null
+					: valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+				beforeLeading: ownGap ? beforeLeadingAccess(fieldName) : macro ([]: Array<String>)
+			};
 			emitBareRefNonBodyPolicy(
 				ctx, child, parts, refName, fieldName, typePath, effAccess, writeCall, isFirstField, isRaw, kwLead, leadText, hasCondWrap,
-				condWrapArgs, spanInfoPresent, trailText, prevAnyStarNonEmpty, prevPadTrailing
+				condWrapArgs, spanInfoPresent, trailText, prevAnyStarNonEmpty, prevPadTrailing, headGap
 			);
 			null;
 		};
@@ -1043,7 +1063,7 @@ final class WriterRefFieldLowering {
 		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, refName: String, fieldName: String, typePath: String, fieldAccess: Expr,
 		writeCall: Expr, isFirstField: Bool, isRaw: Bool, kwLead: Null<String>, leadText: Null<String>, hasCondWrap: Bool,
 		condWrapArgs: Null<Array<String>>, spanInfoPresent: Bool, trailText: Null<String>, prevAnyStarNonEmpty: Null<Expr>,
-		prevPadTrailing: Null<Expr>
+		prevPadTrailing: Null<Expr>, headGap: Null<HeadGapSlots>
 	): Void {
 		// `@:fmt(leftCurly)` on a bare Ref field (e.g.
 		// `HxFnDecl.body:HxFnBody`) routes the inter-field
@@ -1094,7 +1114,9 @@ final class WriterRefFieldLowering {
 			// sole separator) and by `HxCatchClauseExpr.body` (last
 			// field; replaces the fixed `_dt(' ')` between `)` and the
 			// catch body).
-			parts.push(bodyBreakWrap(ctx, bodyBreakFlag, writeCall, fieldAccess, refName, child.fmtHasFlag('blockBodyKeepsInline')));
+			parts.push(
+				bodyBreakWrap(ctx, bodyBreakFlag, writeCall, fieldAccess, refName, child.fmtHasFlag('blockBodyKeepsInline'), headGap)
+			);
 		} else if (bareBodyBreaksFlag && noLeadNoRaw) {
 			// ω-statement-bare-break: shape-only wrap — block body
 			// emits inline ` ` + body, bare body emits hardline +
@@ -1107,7 +1129,7 @@ final class WriterRefFieldLowering {
 			// (last field; replaces the default `_dt(' ')` separator
 			// between `)` and the catch body).
 			parts.push(bareBodyBreakWrap(
-				ctx, writeCall, fieldAccess, refName, child.fmtReadString('bareBodyBreaks'), child.fmtHasFlag('constructFitBody')
+				ctx, writeCall, fieldAccess, refName, child.fmtReadString('bareBodyBreaks'), child.fmtHasFlag('constructFitBody'), headGap
 			));
 		} else if (noLeadNoRaw && !isFirstField) {
 			// Bare-Ref non-first body: allmanIndentForCtor / nestBodyOnSourceNewline /
@@ -1204,7 +1226,8 @@ final class WriterRefFieldLowering {
 	 * haxe-formatter contract).
 	 */
 	private static function bodyBreakWrap(
-		ctx: RefFieldCtx, flagName: String, writeCall: Expr, bodyAccess: Expr, bodyTypePath: String, shapeAware: Bool
+		ctx: RefFieldCtx, flagName: String, writeCall: Expr, bodyAccess: Expr, bodyTypePath: String, shapeAware: Bool,
+		headGap: Null<HeadGapSlots>
 	): Expr {
 		final optFlag: Expr = optFieldAccess(flagName);
 		final sameLayoutExpr: Expr = macro _dc([_dt(' '), $writeCall]);
@@ -1244,9 +1267,10 @@ final class WriterRefFieldLowering {
 		// `_dn(_cols, …)` in the Next branch needs a per-call `_cols` binding —
 		// mirrors `bodyPolicyWrap`'s tail block (line 1721) and the Star
 		// `_dn(_cols, _dc(_docs))` site at line 2337.
+		final gapped: Expr = withHeadGap(headGap, blockPatterns, bodyAccess, wrapExpr, writeCall);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$wrapExpr;
+			$gapped;
 		};
 	}
 
@@ -1281,7 +1305,8 @@ final class WriterRefFieldLowering {
 	 * future grammar that adds the flag without a block alternative.
 	 */
 	private static function bareBodyBreakWrap(
-		ctx: RefFieldCtx, writeCall: Expr, bodyAccess: Expr, bodyTypePath: String, policyField: Null<String>, constructFitBody: Bool
+		ctx: RefFieldCtx, writeCall: Expr, bodyAccess: Expr, bodyTypePath: String, policyField: Null<String>, constructFitBody: Bool,
+		headGap: Null<HeadGapSlots>
 	): Expr {
 		final sameLayoutExpr: Expr = macro _dc([_dt(' '), $writeCall]);
 		final breakLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
@@ -1315,10 +1340,24 @@ final class WriterRefFieldLowering {
 			];
 			{ expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos() };
 		};
+		final gapped: Expr = withHeadGap(headGap, blockPatterns, bodyAccess, wrapExpr, writeCall);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$wrapExpr;
+			$gapped;
 		};
+	}
+
+	/**
+	 * `layout` behind the head-gap comments `headGap` carries (`headGapCommentsWrap`); `layout` itself when the
+	 * field grows no head-gap slot. A body opening with one of `blockPatterns` keeps the head's column.
+	 */
+	@:access(anyparse.macro.WriterBodyPolicyLowering)
+	private static function withHeadGap(
+		headGap: Null<HeadGapSlots>, blockPatterns: Array<Expr>, bodyAccess: Expr, layout: Expr, writeCall: Expr
+	): Expr {
+		if (headGap == null) return layout;
+		final isBlockBody: Expr = WriterBodyPolicyLowering.isOneOfCtors(bodyAccess, blockPatterns);
+		return WriterBodyPolicyLowering.headGapCommentsWrap(headGap.afterTrail, headGap.beforeLeading, isBlockBody, layout, writeCall);
 	}
 
 	/**
@@ -1976,5 +2015,13 @@ typedef RefFieldCtx = {
 	final isTightLead: (leadText:Null<String>) -> Bool;
 	final isTriviaBearing: (refName:String) -> Bool;
 	final writeFnFor: (refName:String) -> String;
+}
+/**
+ * The two head-gap comment slots a bare body field's separator reads, as runtime accesses: the comment cuddled to the
+ * prior field's closer (`Null<String>`, `null` when none) and the own-line run before the body (`Array<String>`).
+ */
+typedef HeadGapSlots = {
+	final afterTrail: Expr;
+	final beforeLeading: Expr;
 }
 #end

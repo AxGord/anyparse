@@ -34,6 +34,8 @@ package anyparse.grammar.haxe;
  * by the enclosing `constructFitGroup` (see `HxTryCatchStmt`), so this body and the try body
  * break together instead of each answering for its own line. The default is `Next`,
  * haxe-formatter's `sameLine.catchBody` default; only non-block bodies see the difference.
+ * `@:fmt(bareRefSepWhenPresent)` gives a present body the `bodyBeforeLeading` slot, so an own-line
+ * comment between `)` and the body is kept rather than dropped with the gap.
  */
 @:peg
 @:spanned('CatchClause')
@@ -41,5 +43,5 @@ typedef HxCatchClause = {
 	@:kw('catch') @:lead('(') @:trail(')')
 	@:fmt(catchParensGap, catchParensInsideOpen, catchParensInsideClose)
 	var param: HxCatchParam;
-	@:optional @:absentOn('}') @:trailOpt(';') @:fmt(bodyPolicy('catchBody'), constructFitBody) var body: Null<HxStatement>;
+	@:optional @:absentOn('}') @:trailOpt(';') @:fmt(bodyPolicy('catchBody'), constructFitBody, bareRefSepWhenPresent) var body: Null<HxStatement>;
 };

@@ -65,6 +65,9 @@ final class WriterBraceSymmetryLowering {
 	 */
 	private static inline final DROP_SINGLE_STMT_BRACES: String = 'dropSingleStmtBraces';
 
+	/** The value-branch flag that mirrors a sibling's braces; read through `valueMirrors` or its args. */
+	private static inline final VALUE_BRACE_SYMMETRY: String = 'valueBraceSymmetry';
+
 	/**
 	 * Locate the mandatory bodyPolicy sibling carrying `dropSingleStmtBraces`
 	 * (the then-body) and build its `value.<then>` field-access expr. Shared by
@@ -213,7 +216,7 @@ final class WriterBraceSymmetryLowering {
 	 * sibling kept braces. Byte-inert for every field without `@:fmt(valueBraceSymmetry)`.
 	 */
 	private static function valueBraceSymmetryWrap(bs: BraceSymmetryCtx, child: ShapeNode, fieldAccess: Expr): Expr {
-		final args: Null<Array<String>> = child.fmtReadStringArgs('valueBraceSymmetry');
+		final args: Null<Array<String>> = child.fmtReadStringArgs(VALUE_BRACE_SYMMETRY);
 		final stmtPath: Null<String> = valueBraceSymmetryStmtPath(bs, child, args);
 		if (args == null || stmtPath == null) return fieldAccess;
 		final lift: Expr = stmtLift(bs, stmtPath, args[2]);
@@ -230,7 +233,7 @@ final class WriterBraceSymmetryLowering {
 	 * re-block must not also emit its own trail, or the trail lands inside the new braces.
 	 */
 	private static function valueBraceSymmetryTrailDrop(bs: BraceSymmetryCtx, child: ShapeNode, fieldAccess: Expr, emit: Expr): Expr {
-		final args: Null<Array<String>> = child.fmtReadStringArgs('valueBraceSymmetry');
+		final args: Null<Array<String>> = child.fmtReadStringArgs(VALUE_BRACE_SYMMETRY);
 		if (args == null || valueBraceSymmetryStmtPath(bs, child, args) == null) return emit;
 		final needsWrap: Expr = valueBraceSymmetryProbe(args, fieldAccess);
 		return macro $needsWrap ? _de() : $emit;
@@ -282,13 +285,36 @@ final class WriterBraceSymmetryLowering {
 		final blockCtor: String = args[1];
 		final liftExpr: Expr = blockElemLift(bs, seqFieldRefTarget(bs, elemRefName, args[0]), blockCtor, args[2]);
 		final deBrace: Bool = starNode.fmtHasFlag('tryDeBrace');
+		final gap: { sameLine: Null<String>, ownLines: Null<String> } = clauseHeadGapSlots(bs, elemRefName, args[0]);
 		return macro {
 			var _tcs = $fieldAccess;
 			_tcs = cast anyparse.format.SingleStmtBraces.trySymmetryCatches(
 				_tcs, $bodyAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $v{blockCtor}, $v{deBrace},
-				$liftExpr
+				$liftExpr, $v{gap.sameLine}, $v{gap.ownLines}
 			);
 			_tcs;
+		};
+	}
+
+	/**
+	 * The names of the head-gap comment slots a catch clause (`clausePath`) grows before its `bodyField`: the after-trail
+	 * slot of the field just before it when that field closes on a `@:trail`, and the body's own before-leading run. Each
+	 * is `null` when the grammar grows no such slot, so the runtime adoption never reads a field the clause lacks.
+	 */
+	private static function clauseHeadGapSlots(
+		bs: BraceSymmetryCtx, clausePath: String, bodyField: String
+	): { sameLine: Null<String>, ownLines: Null<String> } {
+		final rule: Null<ShapeNode> = bs.shape.rules[clausePath];
+		if (rule == null || rule.kind != Seq || !bs.isTriviaBearing(clausePath)) return { sameLine: null, ownLines: null };
+		final i: Int = rule.children.findIndex(c -> c.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == bodyField);
+		if (i < 0) return { sameLine: null, ownLines: null };
+		final prev: Null<ShapeNode> = i == 0 ? null : rule.children[i - 1];
+		final prevName: Null<String> = prev?.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
+		return {
+			sameLine: prev != null && prevName != null && TriviaPairSlots.isTrailRef(prev)
+				? prevName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX
+				: null,
+			ownLines: TriviaPairSlots.isBareNonFirstRef(rule.children[i], rule) ? bodyField + TriviaTypeSynth.BEFORE_LEADING_SUFFIX : null
 		};
 	}
 
@@ -358,20 +384,42 @@ final class WriterBraceSymmetryLowering {
 
 	/**
 	 * `adoptHeadGapComments` over a keyword-led body's two slots — the comment cuddled to the keyword and
-	 * the run below it; `macro {}` for a field with no keyword, which grows neither. The cuddled slot holds
-	 * a line comment's text without its `//` (the separator writes it back), so the block gets it re-prefixed.
+	 * the run below it; `macro {}` for a field with no keyword, which grows neither. Both slots hold their
+	 * comments verbatim, delimiters included.
 	 */
 	private static function adoptKwHeadGapComments(rawAccess: Expr, fieldName: String, kwLead: Null<String>): Expr {
 		if (kwLead == null) return macro {};
 		final pos: Position = Context.currentPos();
 		final afterKw: Expr = { expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), pos: pos };
 		return adoptHeadGapComments(
-			rawAccess, macro {
-				final _ak: Null<String> = $afterKw;
-				_ak == null ? null : '//' + _ak;
-			},
+			rawAccess, afterKw,
 			{ expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), pos: pos }
 		);
+	}
+
+	/** May the writer brace `child`'s body itself — a de-braceable statement body, or a value branch mirroring its sibling? */
+	private static function mayWrapBody(child: ShapeNode): Bool {
+		return child.fmtHasFlag(DROP_SINGLE_STMT_BRACES) || valueMirrors(child);
+	}
+
+	/** Does `child` carry `@:fmt(valueBraceSymmetry(…))` — is it a value branch the mirror may brace? */
+	private static function valueMirrors(child: ShapeNode): Bool {
+		return child.fmtReadStringArgs(VALUE_BRACE_SYMMETRY) != null;
+	}
+
+	/**
+	 * `valueBraceSymmetryWrap` followed by the head-gap adoption `adopt` (an `adoptHeadGapComments` step over `_sv`):
+	 * the value twin of the statement splice, so a branch the value mirror braced takes its comments inside too.
+	 */
+	private static function valueWrapAdopting(bs: BraceSymmetryCtx, child: ShapeNode, fieldAccess: Expr, adopt: Expr): Expr {
+		final wrapped: Expr = valueBraceSymmetryWrap(bs, child, fieldAccess);
+		return wrapped == fieldAccess
+			? wrapped
+			: macro {
+				var _sv = $wrapped;
+				$adopt;
+				_sv;
+			};
 	}
 
 	/**
@@ -383,7 +431,7 @@ final class WriterBraceSymmetryLowering {
 	private static function headGapCommentsOutside(
 		bs: BraceSymmetryCtx, child: ShapeNode, slot: Expr, effAccess: Expr, rawAccess: Expr, sameLine: Bool
 	): Expr {
-		if (!bs.ctx.trivia || !child.fmtHasFlag(DROP_SINGLE_STMT_BRACES)) return slot;
+		if (!bs.ctx.trivia || !mayWrapBody(child)) return slot;
 		return sameLine
 			? macro {
 				final _hgs: Null<String> = $slot;
@@ -482,7 +530,7 @@ final class WriterBraceSymmetryLowering {
 				// fields and the pair is byte-identical to the pre-slice access without either.
 				bs,
 				child,
-				valueBraceSymmetryWrap(bs, child, fieldAccess)
+				valueWrapAdopting(bs, child, fieldAccess, adoptExpr)
 			);
 		// The runtime gate includes `opt.dropSingleStmtBraces` so the default-off
 		// path never allocates a suppress-frame opt copy (byte-inert AND

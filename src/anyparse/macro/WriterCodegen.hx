@@ -116,6 +116,8 @@ class WriterCodegen {
 			// pre-slice `Nest(cols, [hardline, body])` shape — fixtures
 			// without kw-trivia stay byte-identical.
 			fields.push(nextLayoutKwGapDocField());
+			// The `Same`-policy layout of a kw-led NON-block body, comment-aware.
+			fields.push(kwSameLayoutDocField());
 			// ω-trivia-before-kw: renders the gap between the preceding token
 			// and a `@:optional @:kw` keyword. Returns the caller's plain
 			// separator when no comments captured; otherwise emits each
@@ -1074,7 +1076,7 @@ class WriterCodegen {
 				// ω-line-comment-indent: this slot historically bypassed the
 				// adapter entirely. Only the new knob routes it, so with the
 				// knob off the emitted bytes stay exactly as before.
-				_parts.push(_dt(opt.normalizeLineCommentIndent ? lineCommentStr(['//' + afterKw], 0, opt) : '//' + afterKw));
+				_parts.push(_dt(opt.normalizeLineCommentIndent ? lineCommentStr([afterKw], 0, opt) : afterKw));
 			}
 			if (kwLeading.length > 0) {
 				final _nested: Array<anyparse.core.Doc> = [];
@@ -1133,7 +1135,7 @@ class WriterCodegen {
 			}
 			_innerParts.push(bodyDoc);
 			final _nested: anyparse.core.Doc = _dn(cols, _dc(_innerParts));
-			return afterKw == null ? _nested : _dc([trailingCommentDoc(afterKw, opt), _nested]);
+			return afterKw == null ? _nested : _dc([trailingCommentDocVerbatim(afterKw, opt), _nested]);
 		};
 		return {
 			name: 'nextLayoutKwGapDoc',
@@ -1150,6 +1152,37 @@ class WriterCodegen {
 					// may flatten. The comment separators below stay hard: a captured comment
 					// refuses the re-flow outright, so they are only ever reached with a hard gap.
 					{ name: 'gap', type: macro :anyparse.core.Doc }
+				],
+				ret: macro :anyparse.core.Doc,
+				expr: body
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * Generate `kwSameLayoutDoc` — the `Same`-policy kw→body layout of a body that does not open with
+	 * `{`. A block body and empty kw-trivia slots keep `kwGapDoc`, with the glued `' ' + body`; a captured comment forces the body
+	 * off the keyword line, and then it takes the `Next` layout, indented one step — a body that
+	 * follows a comment at the keyword's own column reads as a sibling of the `if`, not its branch.
+	 */
+	private static function kwSameLayoutDocField(): Field {
+		final body: Expr = macro {
+			if (bodyIsBlock || cuddled == null && ownLines.length == 0)
+				return _dc([kwGapDoc(cuddled, ownLines, step, false, opt), bodyDoc]);
+			return nextLayoutKwGapDoc(cuddled, ownLines, step, bodyDoc, opt, _dhl());
+		};
+		return {
+			name: 'kwSameLayoutDoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'cuddled', type: macro :Null<String> },
+					{ name: 'ownLines', type: macro :Array<String> },
+					{ name: 'step', type: macro :Int },
+					{ name: 'bodyDoc', type: macro :anyparse.core.Doc },
+					{ name: 'bodyIsBlock', type: macro :Bool },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
 				expr: body

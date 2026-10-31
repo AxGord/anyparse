@@ -264,7 +264,7 @@ applies.
 | `expressionIfArrowBodyReflow` | bool | `false` | when `true`, a value-`if`/`else` chain that is the direct body of an arrow lambda becomes one width-decided unit — flat when it fits, one branch per line (each value glued to its own condition) when it does not — instead of each branch following the `expressionIf` policy independently. Reach extends slightly beyond the immediate arrow body: a `cast(…, T)` operand, an `untyped`/`@:meta` prefix, and an enclosing value-`if`'s condition also re-flow. A comment anywhere on the chain's `else`-spine refuses the reflow whole |
 | `expressionIfFit` | bool | `false` | the non-arrow sibling of `expressionIfArrowBodyReflow`: fit-decides EVERY value-`if`/`else if` chain (initializer, `return`, call argument, …), not only one in an arrow body — flat on one line when it fits, otherwise the exact `expressionIfBody`/`expressionElseBody` layout. An arrow body under both knobs keeps the arrow-specific shape (that gate is checked first) |
 | `expressionIfFitMaxBranches` | int | `0` (no cap) | largest number of value branches an `expressionIfFit` chain may hold and still collapse onto one line (`if (c) a else b` is 2, `if (c) a else if (d) b else e` is 3); a chain over the cap keeps the exact policy layout. Inert while `expressionIfFit` is off |
-| `elseIfCommentReflow` | bool | `false` | when `true`, an `else if` whose nested `if` carries exactly one interposed `//` line comment glues as usual (`} else if (b) {`) and re-emits that comment at the end of the nested `if`'s head line, instead of forcing the three-line layout (`else` alone, comment one indent deeper, `if` back at the outer indent). Refuses (layout unchanged) for a block comment, more than one comment, a comment cuddled to `else` itself, a nested `if` head that already carries its own trailing `//`, an empty then-body, or any body shape offering no provable head-line anchor. Statement position only (`HxIfStmt.elseBody`); `elseBody: "keep"` also disables it |
+| `elseIfCommentReflow` | bool | `false` | when `true`, an `else if` whose nested `if` carries exactly one interposed `//` line comment glues as usual (`} else if (b) {`) and re-emits that comment at the end of the nested `if`'s head line, instead of the three-line layout (`else` alone, the comment and the nested `if` one indent deeper). Refuses (layout unchanged) for a block comment, more than one comment, a comment cuddled to `else` itself, a nested `if` head that already carries its own trailing `//`, an empty then-body, or any body shape offering no provable head-line anchor. Statement position only (`HxIfStmt.elseBody`); `elseBody: "keep"` also disables it |
 
 **Unlike the `wrapping.*` cascades, a `sameLine.*` value must be spelled in the exact
 lowercase-camelCase the schema declares — `"Same"` / `"FitLine"` / `"Keep"` are each a
@@ -365,10 +365,9 @@ BRANCH of an `if`, the twin of `sameLine.elseIf` for the other keyword-headed st
 branch idiomatically carries; the values, the `keep` default (deliberately unlike `elseIf`'s
 `same`, so an existing config's bytes stay put) and the second seam a glued then-`switch`
 owns are on `HxModuleWriteOptions.elseSwitch`. It reaches BOTH the statement `if` and the
-value `if`, and BOTH branches of each — the rule is SYMMETRY. One refusal, on either branch:
-a comment written between the keyword and the `switch` declines the glue — both seams — and
-the source layout is kept byte for byte, because the glued layout has no channel for that
-comment.
+value `if`, and BOTH branches of each — the rule is SYMMETRY. A comment written between
+the keyword and the `switch`, on either branch, is carried by the glued layout: it stays after the keyword and pushes the `switch` onto its own line one indent
+deeper, so the source layout is kept byte for byte.
 
 **`whitespace.bracesConfig.singleStatementBraces: "symmetric"`** — the ADD direction of a
 policy that until now only removed. An if/else (or try/catch group, or value-`if`) with
@@ -376,7 +375,8 @@ EXACTLY ONE braced branch gets the other braced; a bare branch with NO braced si
 alone, so this is not "brace everything". `"remove"` arms both directions (the repair has been
 part of it since it shipped), `"symmetric"` only the repair, `"keep"` neither. `else if` and
 `else switch` are exempt in both directions — bracing them would rebuild the `else { if … }`
-shape `collapsible-else-if` exists to remove. ⚠️ The statement path and the VALUE path keep
+shape `collapsible-else-if` exists to remove. A then-position `if` or `switch` is not exempt:
+it has no keyword to glue to, so it is braced like any other bare then-body. ⚠️ The statement path and the VALUE path keep
 two separate skip lists (`SingleStmtBraces.SYMMETRY_WRAP_SKIP_CTORS` and the tail of
 `@:fmt(valueBraceSymmetry(…))` in `HxIfExpr`); teaching one about a ctor does not teach the
 other, which is how a value `switch` in else position was still being braced after the

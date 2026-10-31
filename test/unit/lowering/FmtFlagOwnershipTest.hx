@@ -50,7 +50,7 @@ class FmtFlagOwnershipTest extends Test {
 
 	/** The `@:fmt` reader modules, and how many inventory flags each one names. */
 	private static final EXPECTED_OWNERSHIP: Map<String, Int> = [
-		'WriterRefFieldLowering' => 45,
+		'WriterRefFieldLowering' => 46,
 		'WriterTriviaStarDispatch' => 43,
 		'WriterStarEmitLowering' => 42,
 		'WriterKwRefLowering' => 31,

@@ -122,11 +122,14 @@ final class WriterBodyPolicyLowering {
 		final optFlag: Expr = resolveBodyOptFlag(bp, opts);
 		final hasKwSlots: Bool = opts.afterKwExpr != null && opts.kwLeadingExpr != null;
 		final kwSep: { kwPolicyInlineSep: Null<Expr>, sameSepNb: Expr } = buildBodyKwSep(opts, hasKwSlots);
+		final blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> } = collectBlockCtorPatternsByLeftCurly(bp, opts.bodyTypePath);
+		final blockPatterns: Array<Expr> = blockSplit.tagged.concat(blockSplit.untagged);
 		final shared: WriterLowering.BodyWrapShared = {
 			writeCall: writeCall,
 			sameSepNb: kwSep.sameSepNb,
 			kwPolicyInlineSep: kwSep.kwPolicyInlineSep,
-			hasKwSlots: hasKwSlots
+			hasKwSlots: hasKwSlots,
+			isBlockBody: isOneOfCtors(opts.bodyValueExpr, blockPatterns)
 		};
 		final sameLayoutExpr: Expr = buildBodySameLayout(bp, opts, shared);
 		final nextLayoutExpr: Expr = buildBodyNextLayout(bp, opts, shared);
@@ -139,13 +142,12 @@ final class WriterBodyPolicyLowering {
 			fitExpr: fitExpr,
 			elseIfSameLayoutExpr: buildElseIfCommentReflowLayout(bp, opts, shared, sameLayoutExpr)
 		};
-		final blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> } = collectBlockCtorPatternsByLeftCurly(bp, opts.bodyTypePath);
 		final ifStmtPattern: Null<Expr> = opts.hasElseIf
 			? (bp.findCtorPattern(opts.bodyTypePath, 'IfStmt') ?? bp.findCtorPattern(opts.bodyTypePath, 'IfExpr'))
 			: null;
 		final keepLayoutExpr: Expr = buildBodyKeepLayout(bp, opts, layouts, blockSplit, ifStmtPattern);
 		final coreWrapExpr: Expr = buildBodyCoreWrap(bp, opts, optFlag, layouts, keepLayoutExpr, blockSplit, ifStmtPattern);
-		final wrapExpr: Expr = wrapBodyAfterTrail(opts, coreWrapExpr, writeCall, blockSplit);
+		final wrapExpr: Expr = wrapBodyAfterTrail(opts, coreWrapExpr, writeCall, shared.isBlockBody);
 		final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall);
 		final mbgWrapExpr: Expr = wrapBodyMetaBlockGlue(opts, finalWrapExpr, sameLayoutExpr);
 		return macro {
@@ -345,27 +347,37 @@ final class WriterBodyPolicyLowering {
 		bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts, shared: WriterLowering.BodyWrapShared
 	): Expr {
 		final writeCall: Expr = shared.writeCall;
-		final sameSepNb: Expr = shared.sameSepNb;
+
 		final ifExprIndentArgs: Null<Array<String>> = opts.ifExprIndentArgs;
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
-		if (opts.widthAware == true) {
-			// `same` keeps the value on the keyword line. Only a value whose NATURAL glued first line
-			// still overflows, wrapped as it would render there, moves to the next line — a flat-width
-			// probe would move every value that wraps after its head. A control-flow or block value
-			// (the ctors `bodyPolicySingleLine` names) always stays: it is told apart by its ctor, not
-			// by a Doc shape a kept source break can change.
-			final flatBody: Expr = wrapIfExprNest(macro _bodyW, ifExprIndentArgs, bodyValueExpr);
-			final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
-			var isBlockValue: Expr = macro false;
-			for (ctorName in opts.singleLineMultiCtors ?? []) isBlockValue = macro $isBlockValue || $ctorExpr == $v{ctorName};
-			return macro {
-				final _bodyW: anyparse.core.Doc = $writeCall;
-				final _gluedW: anyparse.core.Doc = _dc([$sameSepNb, $flatBody]);
-				$isBlockValue ? _gluedW : _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);
-			};
-		}
-		final flatBody: Expr = wrapIfExprNest(writeCall, ifExprIndentArgs, bodyValueExpr);
-		return macro _dc([$sameSepNb, $flatBody]);
+		if (opts.widthAware != true) return sameGlue(opts, shared, wrapIfExprNest(writeCall, ifExprIndentArgs, bodyValueExpr));
+		// `same` keeps the value on the keyword line. Only a value whose NATURAL glued first line
+		// still overflows, wrapped as it would render there, moves to the next line — a flat-width
+		// probe would move every value that wraps after its head. A control-flow or block value
+		// (the ctors `bodyPolicySingleLine` names) always stays: it is told apart by its ctor, not
+		// by a Doc shape a kept source break can change.
+		final flatBody: Expr = wrapIfExprNest(macro _bodyW, ifExprIndentArgs, bodyValueExpr);
+		final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
+		var isBlockValue: Expr = macro false;
+		for (ctorName in opts.singleLineMultiCtors ?? []) isBlockValue = macro $isBlockValue || $ctorExpr == $v{ctorName};
+		return macro {
+			final _bodyW: anyparse.core.Doc = $writeCall;
+			final _gluedW: anyparse.core.Doc = ${sameGlue(opts, shared, flatBody)};
+			$isBlockValue ? _gluedW : _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);
+		};
+	}
+
+	/**
+	 * The `Same` layout's separator + `body`: at a kw-trivia site `kwSameLayoutDoc`, which indents a body that a
+	 * captured comment pushed off the keyword line; elsewhere the plain `sameSepNb` glue.
+	 */
+	private static function sameGlue(opts: WriterLowering.WrapBodyOpts, shared: WriterLowering.BodyWrapShared, body: Expr): Expr {
+		final sameSepNb: Expr = shared.sameSepNb;
+		if (!shared.hasKwSlots) return macro _dc([$sameSepNb, $body]);
+		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
+		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
+		final isBlockBody: Expr = shared.isBlockBody;
+		return macro kwSameLayoutDoc($afterKwExpr, $kwLeadingExpr, _cols, $body, $isBlockBody, opt);
 	}
 
 	/**
@@ -577,7 +589,7 @@ final class WriterBodyPolicyLowering {
 				Context.currentPos()
 			);
 		final writeCall: Expr = shared.writeCall;
-		final sameSepNb: Expr = shared.sameSepNb;
+
 		return macro {
 			final _eicrBody: anyparse.core.Doc = $writeCall;
 			final _eicrLead: Array<String> = $kwLeadingExpr;
@@ -587,7 +599,7 @@ final class WriterBodyPolicyLowering {
 				&& StringTools.startsWith(_eicrLead[0], '//')
 				? anyparse.format.ElseIfCommentReflow.insertHeadTrail(_eicrBody, trailingCommentDocGuarded(_eicrLead[0], opt))
 				: null;
-			_eicrDoc != null ? _dc([_dt(' '), _eicrDoc]) : _dc([$sameSepNb, _eicrBody]);
+			_eicrDoc != null ? _dc([_dt(' '), _eicrDoc]) : ${sameGlue(opts, shared, macro _eicrBody)};
 		};
 	}
 
@@ -668,18 +680,11 @@ final class WriterBodyPolicyLowering {
 		final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 		final samePat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Same']));
 		final nextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
-		// A comment the source wrote between `else` and the `switch` DECLINES the glue: the
-		// `Same` layout has no channel for it and emitted the body without it, which is comment
-		// LOSS, the one thing this writer fails closed on. Declining lets the arms below answer,
-		// so the source's own two-line shape - comment included - is what survives. The `elseIf`
-		// twin reaches the same end by a different road: its Same layout goes through
-		// `buildElseIfCommentReflowLayout`, which either relocates the comment or restates the
-		// layout with it. Generalising that machinery to a keyword-headed body is worth doing and
-		// is NOT done here; refusing to glue is the fail-closed half of it.
-		final lead: Null<Expr> = opts.kwLeadingExpr;
-		final sameGuard: Expr = lead == null ? macro $knob == $samePat : macro $knob == $samePat && ($lead).length == 0;
+		// A comment the source wrote between `else` and the `switch` needs no guard here: the
+		// `Same` layout carries kw-slot comments (`kwSameLayoutDoc`), which push the body onto its
+		// own line one step in - the source's own two-line shape.
 		return [
-			{ values: patterns, expr: sameLayoutExpr, guard: sameGuard },
+			{ values: patterns, expr: sameLayoutExpr, guard: macro $knob == $samePat },
 			{ values: patterns.copy(), expr: nextLayoutExpr, guard: macro $knob == $nextPat }
 		];
 	}
@@ -824,6 +829,14 @@ final class WriterBodyPolicyLowering {
 		return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };
 	}
 
+	/** The runtime test "is `value` built by one of `patterns`" — constant `false` for an empty list. */
+	private static function isOneOfCtors(value: Expr, patterns: Array<Expr>): Expr {
+		return patterns.length == 0 ? macro false : {
+			expr: ESwitch(value, [{ values: patterns, expr: macro true, guard: null }], macro false),
+			pos: Context.currentPos()
+		};
+	}
+
 	/**
 	 * Wrap the core body Expr with the after-trail / before-leading comment
 	 * forced-Next-layout (ω-issue-316-then-trail / ω-556-then-body-leading-
@@ -839,7 +852,7 @@ final class WriterBodyPolicyLowering {
 	 * fork emits for `} else // comment` + newline `{`.
 	 */
 	private static function wrapBodyAfterTrail(
-		opts: WriterLowering.WrapBodyOpts, coreWrapExpr: Expr, writeCall: Expr, blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> }
+		opts: WriterLowering.WrapBodyOpts, coreWrapExpr: Expr, writeCall: Expr, isBlockBodyExpr: Expr
 	): Expr {
 		final afterTrailExpr: Null<Expr> = opts.afterTrailExpr;
 		final beforeLeadingExpr: Null<Expr> = opts.beforeLeadingExpr;
@@ -848,16 +861,23 @@ final class WriterBodyPolicyLowering {
 		// after-trail comment OR at least one own-line leading comment.
 		final afterTrailRt: Expr = afterTrailExpr ?? macro null;
 		final beforeLeadingRt: Expr = beforeLeadingExpr ?? macro ([]: Array<String>);
-		final blockPatterns: Array<Expr> = blockSplit.tagged.concat(blockSplit.untagged);
-		final isBlockBodyExpr: Expr = blockPatterns.length == 0 ? macro false : {
-			expr: ESwitch(opts.bodyValueExpr, [{ values: blockPatterns, expr: macro true, guard: null }], macro false),
-			pos: Context.currentPos()
-		};
+		return headGapCommentsWrap(afterTrailRt, beforeLeadingRt, isBlockBodyExpr, coreWrapExpr, writeCall);
+	}
+
+	/**
+	 * The head→body gap with its captured comments — the one cuddled to the head (`afterTrail`, verbatim) and the
+	 * own-line run (`beforeLeading`). With both empty it is `core`, the field's own layout; a comment forces the body
+	 * onto a line of its own, one indent step in unless it opens with `{` (`isBlockBody`), which keeps the head's column.
+	 * Needs a `_cols` binding in scope.
+	 */
+	private static function headGapCommentsWrap(
+		afterTrail: Expr, beforeLeading: Expr, isBlockBody: Expr, core: Expr, writeCall: Expr
+	): Expr {
 		return macro {
-			final _at556: Null<String> = $afterTrailRt;
-			final _bl556: Array<String> = $beforeLeadingRt;
+			final _at556: Null<String> = $afterTrail;
+			final _bl556: Array<String> = $beforeLeading;
 			if (_at556 == null && _bl556.length == 0)
-				$coreWrapExpr;
+				$core;
 			else {
 				final _outer556: Array<anyparse.core.Doc> = [];
 				if (_at556 != null) _outer556.push(trailingCommentDocVerbatim(_at556, opt));
@@ -868,7 +888,7 @@ final class WriterBodyPolicyLowering {
 				}
 				_inner556.push($writeCall);
 				final _body556: anyparse.core.Doc = _dc(_inner556);
-				_outer556.push($isBlockBodyExpr ? _body556 : _dn(_cols, _body556));
+				_outer556.push($isBlockBody ? _body556 : _dn(_cols, _body556));
 				_dc(_outer556);
 			}
 		};

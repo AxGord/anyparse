@@ -149,7 +149,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 
 | module | inventory flags it names |
 |---|---|
-| `WriterRefFieldLowering` | 45 |
+| `WriterRefFieldLowering` | 46 |
 | `WriterTriviaStarDispatch` | 43 |
 | `WriterStarEmitLowering` | 42 |
 | `WriterKwRefLowering` | 31 |

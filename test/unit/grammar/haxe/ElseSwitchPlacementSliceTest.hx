@@ -118,20 +118,16 @@ class ElseSwitchPlacementSliceTest extends Test {
 	}
 
 	/**
-	 * A comment between `else` and the `switch` DECLINES the glue, and the source survives BYTE FOR
-	 * BYTE — indentation included.
+	 * A comment between `else` and the `switch` keeps the source BYTE FOR BYTE — indentation included:
+	 * the glue's `Same` layout writes the comment and puts the `switch` below it, one step in.
 	 *
-	 * `buildElseSwitchCases` guards the `Same` arm on an empty leading-comment run. The mutation
-	 * audit is why this asserts exact bytes rather than "the comment is still there": with the guard
-	 * REMOVED the comment survives too, so a presence assertion cannot see the arm at all (the arm
-	 * ran green against the first version of this test). What the guard actually buys is the
-	 * LAYOUT: without it the `switch` drops to the outer indent, one level shallower than the author
-	 * wrote it, because the glue half-applies. Exact equality is the only assertion that separates
-	 * the two.
+	 * Exact bytes rather than "the comment is still there": a `Same` layout that writes the comment
+	 * but drops the body back to the keyword's column keeps the comment too, and only exact equality
+	 * separates the two.
 	 */
 	@:pin('control')
-	@:killer('M-ELSE-SWITCH-COMMENT-GLUE')
-	public function testACommentBetweenElseAndSwitchDeclinesTheGlue(): Void {
+	@:killer('M-KW-SAME-UNNESTED')
+	public function testACommentBetweenElseAndSwitchKeepsTheSourceShape(): Void {
 		final src: String = 'class F {\n\tfunction f(s:String):Int {\n\t\tif (s == \'\')\n\t\t\treturn 0;\n'
 			+ '\t\telse\n\t\t\t// why\n\t\t\tswitch s {\n\t\t\t\tcase _:\n\t\t\t\t\treturn 1;\n\t\t\t}\n\t}\n}';
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, SAME));

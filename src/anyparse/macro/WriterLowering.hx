@@ -1165,18 +1165,12 @@ class WriterLowering {
 					// `StructSeqLowering.computeBeforeSlots` exactly, because those three decide
 					// synthesise / capture / consume for the SAME slot and a field the first two
 					// admit but this one refuses would be captured and then silently dropped.
-					// `bodyPolicy` is the one shape that reaches a different emit branch
-					// (`emitOptionalBodyPolicyOnly`, which takes no separator), so a field
-					// combining it with this flag would lose the gap with no diagnostic —
-					// refused loudly instead of shipped silently.
+					// `bodyPolicy` is the one shape that reaches a different emit branch: there
+					// `bodyPolicyWrap` owns the separator, so no bare separator is built and
+					// `emitOptionalBodyPolicyOnly` reads the gap's comment slot itself.
 					final bareSepOptIn: Bool = child.fmtHasFlag('bareRefSepWhenPresent');
-					if (bareSepOptIn && bodyPolicyFlag != null)
-						Context.fatalError(
-							'WriterLowering: @:fmt(bareRefSepWhenPresent) cannot combine with @:fmt(bodyPolicy)'
-							+ ' — the body-policy emit path owns the separator (field "$fieldName" of $typePath)',
-							Context.currentPos()
-						);
 					final optBareSep: Null<Expr> = bareSepOptIn
+						&& bodyPolicyFlag == null
 						&& kwLead == null
 						&& leadText == null
 						&& (!isFirstField || child.fmtHasFlag(BEFORE_NEWLINE_SLOT_FIRST))
@@ -1964,6 +1958,8 @@ typedef BodyWrapShared = {
 	final sameSepNb: Expr;
 	final kwPolicyInlineSep: Null<Expr>;
 	final hasKwSlots: Bool;
+	// Does the body value open with `{` — a runtime ctor test over the body type's block ctors (`false` when it has none).
+	final isBlockBody: Expr;
 };
 
 /**

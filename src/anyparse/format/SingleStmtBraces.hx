@@ -99,7 +99,7 @@ class SingleStmtBraces {
 		if (drop && isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block, 'BlockStmt');
 		// Gate 7's repair direction - see `needsSymmetryWrap`. This is the ONE direction
 		// `symmetry` alone arms.
-		if (needsSymmetryWrap(block, siblingKeepsBraces)) return wrapInBlock(block, 'BlockStmt');
+		if (needsSymmetryWrap(block, siblingKeepsBraces, isIfThenBody)) return wrapInBlock(block, 'BlockStmt');
 		// `singleStatementBraces: "symmetric"` asks for the repair direction WITHOUT the
 		// removal one, so everything below - the whole de-brace decision - is skipped.
 		// Gate 8 above is skipped with it: it exists to repair a shape the REMOVE
@@ -257,15 +257,17 @@ class SingleStmtBraces {
 
 	/**
 	 * The one answer to "did the writer wrap this bare body in braces?": true when `eff` is a block
-	 * `wrapInBlock` synthesized around `raw` without a lift. Its single element IS `raw`, which no parsed
-	 * block can satisfy, and a de-braced or untouched body is never a block holding itself.
+	 * `wrapInBlock` synthesized around `raw`. Its single element IS `raw`, or the statement a lift raised it
+	 * into, which no parsed block can satisfy, and a de-braced or untouched body is never a block holding itself.
 	 */
 	public static function wrappedFrom(eff: Null<Any>, raw: Null<Any>): Bool {
 		if (eff == null || raw == null || eff == raw || !Reflect.isEnumValue(eff)) return false;
 		final stmts: Any = paramAt(cast eff, 0);
 		if (!(stmts is Array)) return false;
 		final elems: Array<Any> = cast stmts;
-		return elems.length == 1 && triviaNode(elems[0]) == raw;
+		if (elems.length != 1) return false;
+		final node: Any = triviaNode(elems[0]);
+		return node == raw || Reflect.isEnumValue(node) && paramAt(cast node, 0) == raw;
 	}
 
 	/**
@@ -404,7 +406,7 @@ class SingleStmtBraces {
 	 */
 	public static function trySymmetryCatches(
 		catches: Null<Array<Dynamic>>, body: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool,
-		?lift: (EnumValue) -> Dynamic
+		?lift: (EnumValue) -> Dynamic, ?sameLineSlot: String, ?ownLinesSlot: String
 	): Dynamic {
 		if (catches == null || catches.length == 0) return catches;
 		final verdict: Int = tryBraceVerdict(body, catches, drop, symmetry, suppress, blockCtor, deBraceable);
@@ -422,7 +424,7 @@ class SingleStmtBraces {
 			}
 			changed = true;
 			final nodeCopy: Dynamic = Reflect.copy(node);
-			Reflect.setField(nodeCopy, 'body', next);
+			Reflect.setField(nodeCopy, 'body', adoptClauseHeadGap(nodeCopy, next, cur, sameLineSlot, ownLinesSlot));
 			if (!wrapped) {
 				out.push(nodeCopy);
 				continue;
@@ -437,17 +439,18 @@ class SingleStmtBraces {
 	/**
 	 * Gate 7's repair direction (omega-ssb-symmetry-wrap): should this body gain the
 	 * braces its brace-keeping sibling has? Runs under `suppress` for the same reason
-	 * the gate-8 wrap does - adding braces never changes semantics. `!= 'IfStmt'` is
-	 * the ELSE-position exemption: `unwrapStmt` returns the then-position bare `if`
-	 * before this is reached, so any `IfStmt` still here is an `else if` chain link,
-	 * and wrapping it would rebuild the `else { if … }` shape `collapsible-else-if`
-	 * exists to remove. `innerSelfTerminates` is gate 3 read in reverse and carries
-	 * TWO exclusions: a statement with no terminator of its own (`else r()` with no
-	 * `;`) would not re-parse inside braces, and a brace-bearing `BlockStmt` /
+	 * the gate-8 wrap does - adding braces never changes semantics. The skip list is the
+	 * ELSE-position exemption: `else if` / `else switch` glue to the `else` line, while the
+	 * same ctor in then-position (`if (a) switch k {…} else {…}`) has no keyword to glue to,
+	 * so it is wrapped like any other bare then-body. `innerSelfTerminates` is gate 3 read in
+	 * reverse and carries TWO exclusions: a statement with no terminator of its own (`else r()`
+	 * with no `;`) would not re-parse inside braces, and a brace-bearing `BlockStmt` /
 	 * `BlockBody` is already braced - wrapping it again would nest a redundant level.
 	 */
-	private static inline function needsSymmetryWrap(block: EnumValue, siblingKeepsBraces: Bool): Bool {
-		return siblingKeepsBraces && !SYMMETRY_WRAP_SKIP_CTORS.contains(Type.enumConstructor(block)) && innerSelfTerminates(block);
+	private static inline function needsSymmetryWrap(block: EnumValue, siblingKeepsBraces: Bool, isIfThenBody: Bool): Bool {
+		return siblingKeepsBraces
+			&& (isIfThenBody || !SYMMETRY_WRAP_SKIP_CTORS.contains(Type.enumConstructor(block)))
+			&& innerSelfTerminates(block);
 	}
 
 	/** Is `o` a trivia typedef struct that declares `name`? Enum values and `null` are not. */
@@ -468,6 +471,22 @@ class SingleStmtBraces {
 	 */
 	private static inline function triviaNode(v: Dynamic): Dynamic {
 		return hasStructField(v, 'node') ? Reflect.field(v, 'node') : v;
+	}
+
+	/**
+	 * The catch-clause twin of `adoptHeadGapComments`: a clause body the group verdict braced takes the clause's head-gap
+	 * comments (`sameLineSlot`, cuddled to the `)`; `ownLinesSlot`, the run below it) inside its new braces, and the
+	 * clause COPY loses them, so its separator writes nothing outside. A body that was not wrapped is returned as is.
+	 */
+	private static function adoptClauseHeadGap(
+		clause: Any, wrapped: Null<Any>, raw: Null<Any>, sameLineSlot: Null<String>, ownLinesSlot: Null<String>
+	): Null<Any> {
+		if (!wrappedFrom(wrapped, raw)) return wrapped;
+		final sameLine: Null<String> = sameLineSlot == null ? null : Reflect.field(clause, sameLineSlot);
+		final ownLines: Null<Array<String>> = ownLinesSlot == null ? null : Reflect.field(clause, ownLinesSlot);
+		if (sameLineSlot != null) Reflect.setField(clause, sameLineSlot, null);
+		if (ownLinesSlot != null) Reflect.setField(clause, ownLinesSlot, []);
+		return adoptHeadGapComments(wrapped, raw, sameLine, ownLines);
 	}
 
 	/**
@@ -758,7 +777,7 @@ class SingleStmtBraces {
 		if (!drop || body == null || !Reflect.isEnumValue(body)) return null;
 		final block: EnumValue = cast body;
 		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return null; // gate 8 wrap - no de-brace
-		if (needsSymmetryWrap(block, siblingKeepsBraces)) return null; // gate 7 wrap - no de-brace
+		if (needsSymmetryWrap(block, siblingKeepsBraces, isIfThenBody)) return null; // gate 7 wrap - no de-brace
 		if (Type.enumConstructor(block) != 'BlockStmt') return null; // do-body / non-block - no plain de-brace
 		if (siblingKeepsBraces) return null; // gate 7 keep
 		if (hasTrailingSemi) return null; // gate 6 keep

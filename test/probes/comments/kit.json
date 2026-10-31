@@ -82,7 +82,23 @@
 		"bwd/c3.hx": "class C {\n\tfunction f(k:Int):Int {\n\t\treturn try {\n\t\t\tg();\n\t\t\tg();\n\t\t} catch (e:Dynamic) switch k {\n\t\t\tcase _: 1;\n\t\t};\n\t}\n}\n",
 		"bwd/c4.hx": "class C {\n\tfunction f(a:Bool) {\n\t\tif (a) // one\n\t\t\tg();\n\t\telse {\n\t\t\tg();\n\t\t\tg();\n\t\t}\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg();\n\t\t} else // two\n\t\t\tg();\n\t}\n}\n",
 		"bwd/C5.hx": "class C5 {\n\tstatic function g() {}\n\n\tfunction f():Array<Int> {\n\t\treturn try {\n\t\t\tg();\n\t\t\t[];\n\t\t} catch (e:Dynamic) [1, 2];\n\t}\n}\n",
-		"bwd/C6.hx": "class C6 {\n\tstatic function g() {}\n\n\tfunction f():Array<Int> {\n\t\treturn try {\n\t\t\tg();\n\t\t\t[];\n\t\t} catch (e:Dynamic) [for (i in 0...3) i];\n\t}\n}\n"
+		"bwd/C6.hx": "class C6 {\n\tstatic function g() {}\n\n\tfunction f():Array<Int> {\n\t\treturn try {\n\t\t\tg();\n\t\t\t[];\n\t\t} catch (e:Dynamic) [for (i in 0...3) i];\n\t}\n}\n",
+		"bw2/hxformat.json": "{\"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"symmetric\"}}}\n",
+		"bw2/v1.hx": "class C {\n\tfunction f(a:Bool):Int {\n\t\treturn if (a) {\n\t\t\tg();\n\t\t\t1;\n\t\t} else // c2\n\t\t\t3;\n\t}\n}\n",
+		"bw2/v2.hx": "class C {\n\tfunction f(k:Int):Int {\n\t\treturn try {\n\t\t\tg();\n\t\t\t1;\n\t\t} catch (e:Dynamic) // c2\n\t\t\t3;\n\t}\n}\n",
+		"bw2/v3.hx": "class C {\n\tfunction f(a:Bool):Int {\n\t\treturn if (a) // t1\n\t\t\t3\n\t\telse {\n\t\t\tg();\n\t\t\t1;\n\t\t};\n\t}\n}\n",
+		"bw2/c1.hx": "class C {\n\tfunction f() {\n\t\ttry {\n\t\t\tg();\n\t\t\tg();\n\t\t} catch (e:Dynamic)\n\t\t\t// c\n\t\t\tg();\n\t}\n}\n",
+		"bw2/c2.hx": "class C {\n\tfunction f() {\n\t\ttry g() catch (e:Dynamic) /* c */ g();\n\t}\n}\n",
+		"bw2/k1.hx": "class C {\n\tfunction f(a:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg();\n\t\t} else /* b2 */ g();\n\t}\n}\n",
+		"bw2/e1.hx": "class C {\n\tfunction f(a:Bool, c:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t} else\n\t\t\t// n2\n\t\t\tif (c) {\n\t\t\t\tg();\n\t\t\t}\n\t}\n}\n",
+		"bw2/s1.hx": "class C {\n\tfunction f(a:Bool, k:Int) {\n\t\tif (a) switch k {\n\t\t\tcase _: g();\n\t\t} else {\n\t\t\tg();\n\t\t\tg();\n\t\t}\n\t}\n}\n",
+		"bw2/b1.hx": "class C {\n\tfunction f(a:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg();\n\t\t} else\n\t\t\t// n1\n\n\t\t\t// n2\n\t\t\tg();\n\t}\n}\n",
+		"bw2k/hxformat.json": "{}\n",
+		"bw2k/v1.hx": "class C {\n\tfunction f(a:Bool):Int {\n\t\treturn if (a) {\n\t\t\tg();\n\t\t\t1;\n\t\t} else // c2\n\t\t\t3;\n\t}\n}\n",
+		"bw2k/c1.hx": "class C {\n\tfunction f() {\n\t\ttry {\n\t\t\tg();\n\t\t\tg();\n\t\t} catch (e:Dynamic)\n\t\t\t// c\n\t\t\tg();\n\t}\n}\n",
+		"bw2k/c2.hx": "class C {\n\tfunction f() {\n\t\tvar x = try g() catch (e:Dynamic)\n\t\t\t// c\n\t\t\tg();\n\t}\n}\n",
+		"bw2k/k1.hx": "class C {\n\tfunction f(a:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg();\n\t\t} else /* b2 */ g();\n\t}\n}\n",
+		"bw2k/e1.hx": "class C {\n\tfunction f(a:Bool, c:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t} else\n\t\t\t// n2\n\t\t\tif (c) {\n\t\t\t\tg();\n\t\t\t}\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -1479,7 +1495,6 @@
 		{
 			"name": "braces/value-if-lead-comment",
 			"note": "symmetric braces: a line comment leading a bare then-branch of a value if/else must stay inside the inserted brace",
-			"knownDefect": "the comment is written outside the inserted brace, dedented",
 			"fixpoint": "Main.hx",
 			"argv": [
 				"hxq",
@@ -1492,7 +1507,246 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "5ef505a009a25bd9",
+				"out": "dde81bbc6163b212",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/v1.hx",
+			"fixpoint": "bw2/v1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/v1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "1db57c8fb709ce08",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/v2.hx",
+			"fixpoint": "bw2/v2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/v2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "f788a21620a57c56",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/v3.hx",
+			"fixpoint": "bw2/v3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/v3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "47ac92da12d066a2",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/c1.hx",
+			"fixpoint": "bw2/c1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/c1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "75dab9e832f6b4b7",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/c2.hx",
+			"fixpoint": "bw2/c2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/c2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "4612b978170398d0",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/k1.hx",
+			"fixpoint": "bw2/k1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/k1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "4ce19850cb35c41d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/e1.hx",
+			"fixpoint": "bw2/e1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/e1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e1d262733ce8176a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/s1.hx",
+			"fixpoint": "bw2/s1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/s1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "077f917ec34f8f9c",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2k/v1.hx",
+			"fixpoint": "bw2k/v1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2k/v1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7d603781ad006597",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2k/c1.hx",
+			"fixpoint": "bw2k/c1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2k/c1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e57f9c83a0d34964",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2k/c2.hx",
+			"fixpoint": "bw2k/c2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2k/c2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "d9a1f156e8f5467e",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2k/k1.hx",
+			"fixpoint": "bw2k/k1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2k/k1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ea1f9f5de10e9da9",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2k/e1.hx",
+			"fixpoint": "bw2k/e1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2k/e1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e1d262733ce8176a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bw2/b1.hx",
+			"knownDefect": "a blank line between two own-line comments is dropped, here as in every leading-comment run (the trivia model keeps no gap between comments)",
+			"fixpoint": "bw2/b1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bw2/b1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "26a18c5e4e9d80f8",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

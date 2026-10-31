@@ -1497,8 +1497,8 @@ final class StructSeqLowering {
 	}
 
 	/**
-	 * The post-commit trivia handling of `emitOptionalRefLeadCommit`, three ways: trivia mode with kw slots captures the
-	 * same-line trailing comment into `afterKwLocal`, routes own-line leadings into `kwLeadingLocal` and whether the body
+	 * The post-commit trivia handling of `emitOptionalRefLeadCommit`, three ways: trivia mode with kw slots captures the same-line
+	 * trailing comment verbatim (delimiters kept) into `afterKwLocal`, routes own-line leadings into `kwLeadingLocal` and whether the body
 	 * stayed on the kw's line into `bodyOnSameLineLocal`; trivia mode with a lead stashes the captured run for the sub-rule's
 	 * first `@:trivia` Star (ω₆b); plain mode skips whitespace.
 	 */
@@ -1508,7 +1508,7 @@ final class StructSeqLowering {
 		return if (hasKwTriviaSlots)
 			macro {
 				final _kwEndPos: Int = ctx.pos;
-				$i{afterKwLocal} = collectTrailing(ctx);
+				$i{afterKwLocal} = collectTrailingFull(ctx);
 				final _t = collectTrivia(ctx);
 				for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
 				$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);

@@ -1045,14 +1045,6 @@
 			"note": "no branch value ever reads as a bracket block the knob may hug, so a `[`-valued branch stops joining its head and the close stops cuddling the `else`"
 		},
 		{
-			"name": "M-ELSE-SWITCH-COMMENT-GLUE",
-			"type": "anyparse.macro.WriterBodyPolicyLowering",
-			"method": "buildElseSwitchCases",
-			"find": "final sameGuard: Expr = lead == null ? macro $knob == $samePat : macro $knob == $samePat && ($lead).length == 0;",
-			"replace": "final sameGuard: Expr = macro $knob == $samePat;",
-			"note": "the `same` guard stops asking whether the source wrote a comment between `else` and `switch`, so the glue swallows a layout that has no channel for it and the comment is lost"
-		},
-		{
 			"name": "M-ELSE-SWITCH-TESTS-NONE",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "buildElseSwitchTests",
@@ -34143,6 +34135,70 @@
 			"find": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))",
 			"replace": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], macro false)",
 			"note": "`var a:(Int) -> {x:Int}` is not seen to end with `}`, so the next anon field is refused"
+		},
+		{
+			"name": "M-SSB-THEN-SKIP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "needsSymmetryWrap",
+			"find": "(isIfThenBody || !SYMMETRY_WRAP_SKIP_CTORS",
+			"replace": "(false || !SYMMETRY_WRAP_SKIP_CTORS",
+			"note": "the else-position skip list also exempts a then-position `switch`, so `if (a) switch k {…} else { … }` stays half-braced under symmetric"
+		},
+		{
+			"name": "M-AFTERKW-STRIPPED",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "commitTriviaAction",
+			"find": "$i{afterKwLocal} = collectTrailingFull(ctx);",
+			"replace": "$i{afterKwLocal} = collectTrailing(ctx);",
+			"note": "the comment cuddled to a keyword is captured without its delimiters, so `else /* b2 */` cannot be written back as the block comment it was"
+		},
+		{
+			"name": "M-KW-SAME-UNNESTED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "sameGlue",
+			"find": "if (!shared.hasKwSlots) return macro _dc([$sameSepNb, $body]);",
+			"replace": "if (true) return macro _dc([$sameSepNb, $body]);",
+			"note": "a body a comment pushed off the `else` line lands at the keyword's own column, reading as a sibling of the `if` rather than its branch"
+		},
+		{
+			"name": "M-VALUE-WRAP-NO-ADOPT",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "valueWrapAdopting",
+			"find": "return wrapped == fieldAccess",
+			"replace": "return true",
+			"note": "a value branch the mirror braces leaves its head-gap comment outside the new braces, with the `{` alone on the next line"
+		},
+		{
+			"name": "M-SSB-WRAP-FROM-UNLIFTED",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "wrappedFrom",
+			"find": "return node == raw || Reflect.isEnumValue(node) && paramAt(cast node, 0) == raw;",
+			"replace": "return node == raw;",
+			"note": "a value branch lifted into a statement inside its new block no longer reads as wrapped, so its head-gap comments stay outside the braces"
+		},
+		{
+			"name": "M-CLAUSE-GAP-NO-ADOPT",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "adoptClauseHeadGap",
+			"find": "if (!wrappedFrom(wrapped, raw)) return wrapped;",
+			"replace": "if (true || !wrappedFrom(wrapped, raw)) return wrapped;",
+			"note": "a catch body the try group braces leaves the clause's comments outside the new braces, with the `{` alone below them"
+		},
+		{
+			"name": "M-CATCH-BEFORE-LEADING-UNREAD",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalBodyPolicyOnly",
+			"find": "? beforeLeadingAccess(fieldName)",
+			"replace": "? null",
+			"note": "the own-line comment captured before a statement catch body is never written, so fmt refuses the file as dropping it"
+		},
+		{
+			"name": "M-CATCH-GAP-UNREAD",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "withHeadGap",
+			"find": "if (headGap == null) return layout;",
+			"replace": "if (true) return layout;",
+			"note": "a comment before an expression catch body (bare statement or value try) is never written, so fmt refuses the file as dropping it"
 		}
 	]
 }

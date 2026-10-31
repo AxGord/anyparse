@@ -65,21 +65,15 @@ class HxInlineBlockCommentWriteTest extends Test {
 		);
 	}
 
-	public function testElseSeamKeepsTheTextAsALineComment(): Void {
-		// Pinned as an artifact, not an endorsement: the `} else /* e */ {` seam
-		// re-emits the block comment as a `//` line comment on its own line.
-		// No byte of the TEXT is lost, so the guard allows it — but the shape
-		// change is invisible to an inventory check and belongs on the record.
-		//
-		// The space this used to expect after `// e` was never the comment's:
-		// `LineCommentNormalizer` rtrims every line-comment body, so what
-		// stranded there was the else-seam's own body-policy space, emitted
-		// before the `{` the `//` then pushed onto the next line. The renderer
-		// drops a non-verbatim trailing blank at a line end, so it is gone.
+	public function testElseSeamKeepsTheBlockComment(): Void {
+		// The `} else /* e */ {` seam keeps the comment a block comment: the slot
+		// cuddled to `else` is captured verbatim. Its break before the `{` is the
+		// seam's own (a cuddled comment always ends the keyword line), pinned as an
+		// artifact rather than an endorsement.
 		final source: String =
 			'class Foo {\n\tfunction bar() {\n\t\tif (c) {\n\t\t\trun();\n\t\t} else /* e */ {\n\t\t\trun();\n\t\t}\n\t}\n}\n';
 		Assert.equals(
-			'class Foo {\n\tfunction bar() {\n\t\tif (c) {\n\t\t\trun();\n\t\t} else // e\n\t\t{\n\t\t\trun();\n\t\t}\n\t}\n}\n',
+			'class Foo {\n\tfunction bar() {\n\t\tif (c) {\n\t\t\trun();\n\t\t} else /* e */\n\t\t{\n\t\t\trun();\n\t\t}\n\t}\n}\n',
 			roundTrip(source)
 		);
 	}
