@@ -31208,14 +31208,6 @@
 			"note": "a named file the scope walk holds under another spelling is indexed twice"
 		},
 		{
-			"name": "M-MODMOVE-CLI-ROLLBACK-OFF",
-			"type": "anyparse.query.cli.ModuleMoveCli",
-			"method": "rollback",
-			"find": "CliIo.writeFiles(state.restore);",
-			"replace": "",
-			"note": "a move the build rejects is not put back"
-		},
-		{
 			"name": "M-MODMOVE-SORTED-GUARD-OFF",
 			"type": "anyparse.query.ModuleMove",
 			"method": "unsortedListRefusals",
@@ -31264,14 +31256,6 @@
 			"method": "unknownKey",
 			"force": "null",
 			"note": "a misspelt key of the move declaration is dropped in silence"
-		},
-		{
-			"name": "M-MODMOVE-CLI-DIR-LEFT",
-			"type": "anyparse.query.cli.ModuleMoveCli",
-			"method": "rollback",
-			"find": "for (d in state.dirs)",
-			"replace": "for (d in ([]: Array<String>))",
-			"note": "a rolled-back move leaves the directory its write created"
 		},
 		{
 			"name": "M-MODMOVE-CLI-TEXT-ROOT-MISSING",
@@ -33810,6 +33794,78 @@
 			"find": "? text : text + site.terminator",
 			"replace": "? text : text",
 			"note": "a bare expression body is braced without a terminator, `{ p() }`, which Haxe rejects as Missing ;"
+		},
+		{
+			"name": "M-WRITE-VERIFY-NO-ROLLBACK",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "putBackIfBroken",
+			"find": "if (broken.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a write that turns a green build red is replayed and kept, so the op exits 0 over a tree that no longer compiles"
+		},
+		{
+			"name": "M-WRITE-VERIFY-RED-BEFORE-JUDGES",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "putBackIfBroken",
+			"find": "if (confirmed(before[k])) r]",
+			"replace": "r]",
+			"note": "a build red before the write counts as broken by it, so a write into a project that never compiled is always put back"
+		},
+		{
+			"name": "M-WRITE-VERIFY-UNREACHED-KEPT",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "keptUnreached",
+			"find": "} else if (created.contains(file)) {",
+			"replace": "} else if (false) {",
+			"note": "a created module no configured build compiles, even when named to it, stays on disk as unverified"
+		},
+		{
+			"name": "M-WRITE-VERIFY-COUNTS-EVERY-BUILD",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "judge",
+			"find": "(sources.length == 0 || sources.exists(s -> parsedBy(a, s)))",
+			"replace": "true",
+			"note": "every green build vouches for the write, including one that never parsed a written file"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-NO-RECORD",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "note",
+			"find": "recording?.record(path);",
+			"replace": "",
+			"note": "the run records none of its writes, so nothing is verified and a rollback restores nothing"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-DIRS-KEPT",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "rollback",
+			"find": "CliIo.removeCreatedDirectories(_directories);",
+			"replace": "",
+			"note": "a rollback deletes the files the run created but leaves the directories it made for them"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-NO-RESTORE",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "rollback",
+			"find": "replay(originals());",
+			"replace": "",
+			"note": "a rollback leaves every file as the run wrote it, so a write the build rejects stays on disk"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-SEAT-KEPT",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "during",
+			"find": "recording = outer;\n\t\t\tthrow exception;",
+			"replace": "throw exception;",
+			"note": "a run whose body throws leaves its journal recording, so every later write in the process lands in a finished run's journal"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-MODE-LOST",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "rollback",
+			"find": "if (mode != null && sys.FileSystem.exists(entry.path)) js.node.Fs.chmodSync(entry.path, mode);",
+			"replace": "",
+			"note": "a rolled-back deletion restores the file with the default mode, so an executable script comes back 0644"
 		}
 	]
 }

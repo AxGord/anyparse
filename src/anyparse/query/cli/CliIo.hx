@@ -20,10 +20,18 @@ import sys.FileSystem;
  *
  * Every member is a pure function of its arguments plus the process — the
  * module holds NO state, which is what keeps a CLI run free of the
- * process-scoped caches invariant 1 forbids in generated code.
+ * process-scoped caches invariant 1 forbids in generated code. A write or delete is reported to
+ * the run's `WriteJournal` (`note`), which holds what the run touched for the typecheck after it.
  */
 @:nullSafety(Strict)
 final class CliIo {
+
+	/**
+	 * The mode bits a staged temporary inherits from the target it will replace: 07777, so the
+	 * setuid / setgid / sticky trio travels with the nine permission bits rather than being dropped
+	 * by the rename. Inert on a `.hx` source and free to carry.
+	 */
+	public static inline final PERMISSION_BITS: Int = 0xFFF;
 
 	/**
 	 * Heartbeat interval for the multi-file walk progress line — emit a
@@ -40,13 +48,6 @@ final class CliIo {
 	 * does, where a `.apq-tmp.hx` would be linted, formatted and reported as a source file.
 	 */
 	private static inline final STAGED_WRITE_SUFFIX: String = '.apq-tmp';
-
-	/**
-	 * The mode bits a staged temporary inherits from the target it will replace: 07777, so the
-	 * setuid / setgid / sticky trio travels with the nine permission bits rather than being dropped
-	 * by the rename. Inert on a `.hx` source and free to carry.
-	 */
-	private static inline final PERMISSION_BITS: Int = 0xFFF;
 
 	/** Extension of the corpus fixture format — see `isHxtestPath`. */
 	private static inline final HXTEST_EXT: String = '.hxtest';
@@ -121,9 +122,9 @@ final class CliIo {
 	public static function stderr(s: String): Void {
 		#if nodejs
 		final bytes: js.node.Buffer = js.node.Buffer.from(s, 'utf8');
-		try {
-			writeFully(bytes.length, at -> js.node.Fs.writeSync(STDERR_FD, bytes, at, bytes.length - at), () -> pause(BLOCKED_RETRY_MS));
-		} catch (exception: Exception) {
+		try writeFully(
+			bytes.length, at -> js.node.Fs.writeSync(STDERR_FD, bytes, at, bytes.length - at), () -> pause(BLOCKED_RETRY_MS)
+		) catch (exception: Exception) {
 			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
 			throw exception;
 		}
@@ -292,12 +293,11 @@ final class CliIo {
 	 * revert failing because its work was already undone would abort a rollback half way.
 	 */
 	public static function deletePath(path: String): Bool {
+		WriteJournal.note(path);
 		return #if (sys || nodejs) try {
 			if (FileSystem.exists(path)) FileSystem.deleteFile(path);
 			!FileSystem.exists(path);
-		} catch (exception: Exception) {
-			false;
-		} #else false #end;
+		} catch (exception: Exception) false #else false #end;
 	}
 
 	/**
@@ -325,6 +325,7 @@ final class CliIo {
 		#if (sys || nodejs)
 		final staged: Array<StagedWrite> = [];
 		final created: Array<String> = [];
+		for (w in writes) WriteJournal.note(w.path);
 		try {
 			for (w in writes) staged.push(stageWrite(w.path, w.content, created));
 		} catch (failure: WriteFailure) {
@@ -332,9 +333,8 @@ final class CliIo {
 			removeCreatedDirectories(created);
 			throw failure;
 		}
-		for (i in 0...staged.length) try {
-			commitStagedWrite(staged[i]);
-		} catch (failure: WriteFailure) {
+		WriteJournal.noteDirectories(created);
+		for (i in 0...staged.length) try commitStagedWrite(staged[i]) catch (failure: WriteFailure) {
 			// The renames already done cannot be undone — the originals are gone. What CAN be
 			// tidied is the tail nobody has moved yet, and it must be: an ordinary handled error
 			// would otherwise leave a `.apq-tmp` beside every remaining member of the set, which
@@ -417,6 +417,19 @@ final class CliIo {
 
 	#if (sys || nodejs)
 	/**
+	 * Remove the directories a change set created, innermost first, leaving any that holds a file: what a committed
+	 * member now lives in survives, everything staged only for a member that was not written goes.
+	 *
+	 * Best effort for the reason `discardStage` is: every caller is already reporting a write failure.
+	 */
+	public static function removeCreatedDirectories(created: Array<String>): Void {
+		var k: Int = created.length;
+		while (k-- > 0) try FileSystem.deleteDirectory(created[k]) catch (exception: Exception) { // noqa: swallowed-exception
+			// A directory that still holds a file is the one case expected here, and it must stay.
+		}
+	}
+
+	/**
 	 * Stage `content` for `path` in a sibling temporary, answering the pair `commitStagedWrite`
 	 * renames into place.
 	 *
@@ -465,9 +478,8 @@ final class CliIo {
 			final mode: Null<Int> = if (FileSystem.exists(target)) {
 				File.append(target, true).close();
 				FileSystem.stat(target).mode & PERMISSION_BITS;
-			} else {
+			} else
 				null;
-			};
 			createMissingDirectories(Path.directory(target), created);
 			File.saveContent(staged, content);
 			// NODE ONLY, and the doc above says so: `sys.FileSystem` has no chmod, so a target
@@ -497,9 +509,7 @@ final class CliIo {
 	 * host message it quotes can still name the temporary; the path this CLI prints is the one the caller gave.
 	 */
 	private static function commitStagedWrite(pending: StagedWrite): Void {
-		try {
-			FileSystem.rename(pending.staged, pending.target);
-		} catch (exception: Exception) {
+		try FileSystem.rename(pending.staged, pending.target) catch (exception: Exception) {
 			discardStage(pending.staged);
 			throw new WriteFailure(pending.asked, exception.message);
 		}
@@ -538,19 +548,6 @@ final class CliIo {
 		for (d in missing) {
 			FileSystem.createDirectory(d);
 			created.push(d);
-		}
-	}
-
-	/**
-	 * Remove the directories a change set created, innermost first, leaving any that holds a file: what a committed
-	 * member now lives in survives, everything staged only for a member that was not written goes.
-	 *
-	 * Best effort for the reason `discardStage` is: every caller is already reporting a write failure.
-	 */
-	private static function removeCreatedDirectories(created: Array<String>): Void {
-		var k: Int = created.length;
-		while (k-- > 0) try FileSystem.deleteDirectory(created[k]) catch (exception: Exception) { // noqa: swallowed-exception
-			// A directory that still holds a file is the one case expected here, and it must stay.
 		}
 	}
 	#end

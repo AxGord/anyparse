@@ -80,6 +80,12 @@ typedef OracleConfig = {
 	 * configurations it prepares for ONE run, absent everywhere else, and then every compile goes to the compiler.
 	 */
 	var ?runs: OracleRunMemo;
+
+	/**
+	 * Modules (`pkg.Type`) named on the command line beside the hxml, so a compile types a file no root of the build reaches
+	 * — a module a write just created. Absent everywhere but the typecheck after a write (`WriteVerification`).
+	 */
+	var ?modules: Array<String>;
 }
 
 /**

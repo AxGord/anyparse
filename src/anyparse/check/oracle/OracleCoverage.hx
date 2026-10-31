@@ -79,6 +79,9 @@ import haxe.io.Path;
 @:nullSafety(Strict)
 final class OracleCoverage {
 
+	/** The extension of a source file the compiler parses. */
+	private static inline final SOURCE_EXTENSION: String = 'hx';
+
 	/** The `haxe -v` line prefix that names a source file the compiler read. */
 	private static inline final PARSED_PREFIX: String = 'Parsed ';
 
@@ -476,6 +479,33 @@ final class OracleCoverage {
 	/** The `-v` probe's argument vector for `hxml` under `defines` — see `probe` for why the order is what it is. */
 	public static function probeArgs(hxml: String, defines: Array<String>): Array<String> {
 		return ['-v'].concat(CompilerOracle.defineFlags(defines)).concat(['--each', hxml, '--no-output']);
+	}
+
+	/** Whether `file` is a source the compiler parses — what a `Parsed` line can name. */
+	public static function isSource(file: String): Bool {
+		return Path.extension(file) == SOURCE_EXTENSION;
+	}
+
+	/**
+	 * The module a build names `file` by: its path under the first of `classPaths` that holds it, dot-separated, extension
+	 * dropped. Null when no root holds it, it is no source, or a segment is not a legal package or type name — an `import.hx`
+	 * among them, which no command line may name.
+	 */
+	public static function moduleUnder(classPaths: Array<String>, file: String): Null<String> {
+		#if (sys || nodejs)
+		if (!isSource(file)) return null;
+		final key: String = canonical(Sys.getCwd(), file);
+		for (root in classPaths) {
+			final dir: String = canonical(Sys.getCwd(), root);
+			final prefix: String = dir.endsWith('/') ? dir : '$dir/';
+			if (!key.startsWith(prefix)) continue;
+			final segments: Array<String> = Path.withoutExtension(key.substr(prefix.length)).split('/');
+			final type: String = segments.pop() ?? '';
+			final legal: Bool = ~/^[A-Z][A-Za-z0-9_]*$/.match(type) && segments.foreach(s -> ~/^[a-z_][A-Za-z0-9_]*$/.match(s));
+			return legal ? segments.concat([type]).join('.') : null;
+		}
+		#end
+		return null;
 	}
 
 	/** The coverage one probe spawn of `hxml`, run from `root`, reports. */

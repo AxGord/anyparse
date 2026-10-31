@@ -204,7 +204,9 @@ class CliHelpListingPinTest extends Test {
 		'',
 		'Global options:',
 		'  --lang <name>   Pick grammar plugin (default: the one the file extensions, or stdin, name)',
-		'  -h, --help      Show help'
+		'  -h, --help      Show help',
+		'  --verify        A --write that only edits files is typechecked too (one that creates or deletes one always is)',
+		'  --no-verify     A --write is never typechecked'
 	];
 
 	/** `apq refs --help`, from the base binary. */

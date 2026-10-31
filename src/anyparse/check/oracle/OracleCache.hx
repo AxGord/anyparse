@@ -378,6 +378,14 @@ final class OracleCache {
 		#end
 	}
 
+	/**
+	 * The class-path roots `hxml`'s include chain declares with `-cp`, absolute and normalised, compiled from `cwd` — the
+	 * process cwd's implicit root and library roots excluded; empty when the chain cannot be read.
+	 */
+	public static function classPaths(hxml: String, cwd: Null<String>): Array<String> {
+		return #if (sys || nodejs) scanHxmlChain(cwd ?? Sys.getCwd(), hxml)?.classPaths ?? [] #else [] #end;
+	}
+
 	/** The library name of a `-lib` token, with any `:version` suffix stripped. */
 	private static function libName(token: String): String {
 		final colon: Int = token.indexOf(':');

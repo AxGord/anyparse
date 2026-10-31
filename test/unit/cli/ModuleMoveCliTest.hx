@@ -70,8 +70,8 @@ class ModuleMoveCliTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-MODMOVE-CLI-ROLLBACK-OFF')
-	@:killer('M-MODMOVE-CLI-DIR-LEFT')
+	@:killer('M-WRITE-JOURNAL-NO-RESTORE')
+	@:killer('M-WRITE-JOURNAL-DIRS-KEPT')
 	public function testVerifyPutsEveryFileBackWhenTheMoveBreaksTheBuild(): Void {
 		#if (sys || nodejs)
 		// `Owner` lives on a classpath the scope does not index, so no binding check can see the move lose it — the case

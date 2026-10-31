@@ -152,16 +152,20 @@ final class CompilerOracle {
 	/**
 	 * `typecheckEach` with `-v`, each verdict with every file its compile parsed, for a caller that may keep a verdict only
 	 * while each of them is a file it hashed (`OracleCache.storeIfUnchanged`). A failing `-v` compile is asked again plainly,
-	 * whose streams are what a rejection quotes; the files are the `-v` compile's.
+	 * whose streams are what a rejection quotes; the files are the `-v` compile's. `parallel` bounds how many compile at once
+	 * (default `HaxeSpawn.parallelism`).
 	 */
-	public static function typecheckEachReading(oracles: Array<OracleConfig>, stopAfterFailure: Bool): Array<OracleReading> {
+	public static function typecheckEachReading(
+		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int
+	): Array<OracleReading> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
 		if (memo != null) return remembered(memo, oracles, stopAfterFailure, true);
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
+		final bound: Int = parallel ?? HaxeSpawn.parallelism();
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (oracle in asked) { args: argsOf(oracle, true), cwd: oracle.dir }
-		], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure);
-		final plain: Map<Int, HaxeRun> = plainRetries(asked, runs);
+		], ORACLE_BUFFER, bound, stopAfterFailure);
+		final plain: Map<Int, HaxeRun> = plainRetries(asked, runs, bound);
 		for (run in runs) if (run.unstarted != true) invocations++;
 		final out: Array<OracleReading> = [];
 		var next: Int = 0;
@@ -343,11 +347,11 @@ final class CompilerOracle {
 	 * The plain compile of each `asked[k]` whose `-v` compile `runs[k]` answered and failed, by `k`: its streams are what a
 	 * rejection quotes, and they carry no `-v` lines.
 	 */
-	private static function plainRetries(asked: Array<OracleConfig>, runs: Array<HaxeRun>): Map<Int, HaxeRun> {
+	private static function plainRetries(asked: Array<OracleConfig>, runs: Array<HaxeRun>, ?parallel: Int): Map<Int, HaxeRun> {
 		final retried: Array<Int> = [for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0) k];
 		final plain: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (k in retried) { args: argsOf(asked[k], false), cwd: asked[k].dir }
-		], ORACLE_BUFFER, HaxeSpawn.parallelism(), false);
+		], ORACLE_BUFFER, parallel ?? HaxeSpawn.parallelism(), false);
 		invocations += plain.length;
 		return [for (j in 0...retried.length) retried[j] => plain[j]];
 	}
@@ -454,7 +458,15 @@ final class CompilerOracle {
 
 	/** The argument vector of `oracle`'s typecheck, `-v` (`OracleCoverage.probeArgs`) when `verbose`. */
 	private static function argsOf(oracle: OracleConfig, verbose: Bool): Array<String> {
-		return verbose ? OracleCoverage.probeArgs(oracle.hxml, oracle.defines) : oracleArgs(oracle.hxml, oracle.defines);
+		final modules: Array<String> = oracle.modules ?? [];
+		// named ahead of `--each`, like the defines, so every arm of the hxml types them
+		return if (modules.length == 0)
+			verbose ? OracleCoverage.probeArgs(oracle.hxml, oracle.defines) : oracleArgs(oracle.hxml, oracle.defines)
+		else
+			(verbose ? ['-v'] : []).concat(defineFlags(oracle.defines))
+				.concat(modules)
+				.concat(['--each'])
+				.concat(oracleArgs(oracle.hxml, []));
 	}
 
 	/**

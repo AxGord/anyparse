@@ -12,6 +12,8 @@ import anyparse.query.cli.LanguageChoice;
 import anyparse.query.cli.PostWriteFix;
 import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.WriteFailure;
+import anyparse.query.cli.WriteJournal;
+import anyparse.query.cli.WriteVerification;
 import anyparse.runtime.Span;
 
 #if (sys || nodejs)
@@ -277,22 +279,41 @@ final class Cli {
 		// unconditional strip here would swallow it — so the marker is what makes this legal,
 		// not the spelling of the flag. Resolving the command first is what allows the test.
 		final takesFix: Bool = registered is PostWriteFix;
+		// A command that writes source declares `--write`; what it writes is typechecked once it returns (`WriteVerification`).
+		// `--verify` is left in the argv of a command that reads one of its own (`fmt`, `move`), and asks for the check too.
+		final writes: Bool = registered.flags().declares('--write');
+		final ownVerify: Bool = registered.flags().declares(WriteVerification.OPT_IN);
 		var requireMatch: Bool = false;
 		var postWriteFix: Bool = false;
+		var verify: Bool = writes;
+		var forced: Bool = false;
 		final rest: Array<String> = [];
-		for (a in args.slice(1)) if (a == '--exit-on-empty' || a == '--require-match')
+		for (a in args.slice(1)) if (a == '--exit-on-empty' || a == '--require-match') {
 			requireMatch = true;
-		else if (takesFix && a == '--fix')
+		} else if (takesFix && a == '--fix') {
 			postWriteFix = true;
-		else
+		} else if (writes && a == WriteVerification.OPT_OUT) {
+			verify = false;
+		} else if (writes && a == WriteVerification.OPT_IN) {
+			forced = true;
+			if (ownVerify) rest.push(a);
+		} else {
 			rest.push(a);
+		}
 		final unknown: Null<String> = registered.flags().unknownFlag(rest);
 		if (unknown != null) throw new UsageFailure('unknown option "$unknown" — `apq $cmd --help` lists its options');
 		// The process entry names no default grammar: an argv with no `--lang` gets the one its files or its stdin
 		// name, or a usage error. An in-process caller keeps its argv as given.
-		if (!chooseLanguage) return registered.run(rest, new CliContext(requireMatch, postWriteFix));
-		final chosen: LanguageChoiceResult = LanguageChoice.choose(rest, registered, CliIo.readStdin);
-		return registered.run(chosen.args, new CliContext(requireMatch, postWriteFix, chosen.stdin));
+		// re-bound because strict null-safety does not carry the narrowed `registered` into a closure
+		final command: CliCommand = registered;
+		final run: () -> Int = if (chooseLanguage) {
+			final chosen: LanguageChoiceResult = LanguageChoice.choose(rest, command, CliIo.readStdin);
+			() -> command.run(chosen.args, new CliContext(requireMatch, postWriteFix, chosen.stdin));
+		} else
+			() -> command.run(rest, new CliContext(requireMatch, postWriteFix));
+		if (!verify) return run();
+		final journal: WriteJournal = new WriteJournal();
+		return WriteVerification.settle(cmd, journal, WriteJournal.during(journal, run), forced);
 	}
 
 	private static function printUsage(): Void {
@@ -306,6 +327,10 @@ final class Cli {
 		CliIo.sysPrint('Global options:\n');
 		CliIo.sysPrint('  --lang <name>   Pick grammar plugin (default: the one the file extensions, or stdin, name)\n');
 		CliIo.sysPrint('  -h, --help      Show help\n');
+		CliIo.sysPrint(
+			'  --verify        A --write that only edits files is typechecked too (one that creates or deletes one always is)\n'
+		);
+		CliIo.sysPrint('  --no-verify     A --write is never typechecked\n');
 	}
 
 }

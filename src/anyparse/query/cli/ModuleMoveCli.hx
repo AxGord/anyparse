@@ -1,7 +1,6 @@
 package anyparse.query.cli;
 
 import anyparse.check.LintConfig;
-import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.ConfigFinder.ConfigChain;
 import anyparse.query.ExitCode.*;
@@ -41,8 +40,8 @@ private typedef WrittenState = {
  * registries, sorted lists and test mirrors read from the `move` section of its `apqlint.json` (`MoveDeclaration`).
  *
  * The write is all or nothing: every changed file is staged and committed together, the relocated originals deleted after.
- * `--verify` typechecks every configured `compilerOracle` build before and after the write and puts every file back when a
- * build that typechecked before does not after.
+ * A move creates and deletes files, so the typecheck after the write and the put-back of every file when it breaks a build run for
+ * it by default (`WriteVerification`); `--verify` additionally refuses to write where no `compilerOracle` is configured to run it.
  */
 @:nullSafety(Strict)
 final class ModuleMoveCli {
@@ -179,31 +178,22 @@ final class ModuleMoveCli {
 		return out;
 	}
 
-	/** Print the preview, or write (and with `--verify`, prove) the relocation. */
+	/** Print the preview, or write the relocation. */
 	private static function emit(
 		opts: ModuleMoveOpts, outcome: ModuleMoveOutcome, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
 		ext: String
 	): Int {
 		if (!opts.write) return preview(outcome);
+		if (opts.verify && LintConfig.discover(outcome.moves[0].from).compilerOracles().length == 0) {
+			CliIo.stderr('apq move: --verify needs a "compilerOracle" in apqlint.json — nothing written\n');
+			return EXIT_RUNTIME;
+		}
 		final originalOf: Map<String, String> = [for (e in scopeFiles) e.file => e.source];
 		for (m in outcome.moves) originalOf[m.to] = originalOf[m.from] ?? '';
 		final canonical: Array<MoveChange> = [for (c in outcome.changes) canonicalOf(c, originalOf, plugin, ext)];
-		final judging: Null<Array<OracleConfig>> = opts.verify ? judgingConfigs(outcome.moves[0].from) : [];
-		if (judging == null) return EXIT_RUNTIME;
-		final state: WrittenState = write(canonical, outcome.removed);
-		final failed: Array<String> = if (opts.verify)
-			try failedAfter(judging) catch (exception: Exception) ['the typecheck after the move threw: ${exception.message}']
-		else
-			[];
-		if (failed.length > 0) {
-			rollback(state);
-			for (f in failed) CliIo.stderr('apq move: --verify: $f\n');
-			CliIo.stderr('apq move: --verify: the tree does not typecheck after the move — every file put back\n');
-			return EXIT_RUNTIME;
-		}
+		write(canonical, outcome.removed);
 		for (i in outcome.imports) CliIo.stderr('apq move: import added: $i\n');
-		final verified: String = opts.verify ? ', verified' : '';
-		CliIo.stderr('apq move: moved ${outcome.moves.length} module(s), wrote ${canonical.length} file(s)$verified\n');
+		CliIo.stderr('apq move: moved ${outcome.moves.length} module(s), wrote ${canonical.length} file(s)\n');
 		return EXIT_OK;
 	}
 
@@ -219,8 +209,8 @@ final class ModuleMoveCli {
 			: change;
 	}
 
-	/** Write every change together, then delete the relocated originals; what a rollback needs to undo it. */
-	private static function write(changes: Array<MoveChange>, removed: Array<String>): WrittenState {
+	/** Write every change together, then delete the relocated originals — or put every file back when one cannot be deleted. */
+	private static function write(changes: Array<MoveChange>, removed: Array<String>): Void {
 		final restore: Array<{ path: String, content: String }> = [];
 		final created: Array<String> = [];
 		for (c in changes) if (ConfigFinder.fileExists(c.file))
@@ -235,7 +225,6 @@ final class ModuleMoveCli {
 			rollback(state);
 			throw new Exception('apq move: could not delete $r after writing its new copy — every file put back');
 		}
-		return state;
 	}
 
 	/** Put every file `state` recorded back as it was, and remove the directories the write created. */
@@ -306,43 +295,6 @@ final class ModuleMoveCli {
 		CliIo.sysPrint('total: ${moved.length} module(s) moved, ${outcome.changes.length - moved.length} file(s) updated\n');
 		CliIo.stderr('apq move: NOTHING written — this is a preview; re-run with --write to apply\n');
 		return EXIT_OK;
-	}
-
-	/**
-	 * The configured builds that typecheck now, near `file` — the ones a failure after the move is attributable to; null
-	 * (after saying why) when there are none.
-	 */
-	private static function judgingConfigs(file: String): Null<Array<OracleConfig>> {
-		final oracles: Array<OracleConfig> = LintConfig.discover(file).compilerOracles();
-		if (oracles.length == 0) {
-			CliIo.stderr('apq move: --verify needs a "compilerOracle" in apqlint.json — nothing written\n');
-			return null;
-		}
-		final out: Array<OracleConfig> = [];
-		for (i => outcome in CompilerOracle.typecheckEach(oracles, false)) switch outcome {
-			case Confirmed:
-				out.push(oracles[i]);
-			case _:
-				CliIo.stderr('apq move: --verify: ${oracles[i].hxml} does not typecheck before the move — it judges nothing\n');
-		}
-		if (out.length > 0) return out;
-		CliIo.stderr('apq move: --verify: no configured build typechecks before the move — nothing written\n');
-		return null;
-	}
-
-	/** One line per build of `judging` that does not typecheck now. */
-	private static function failedAfter(judging: Array<OracleConfig>): Array<String> {
-		final out: Array<String> = [];
-		for (i => outcome in CompilerOracle.typecheckEach(judging, false)) switch outcome {
-			case Confirmed:
-			case Rejected(errors):
-				out.push('${judging[i].hxml}: $errors');
-			case Unavailable(reason):
-				out.push('${judging[i].hxml}: unavailable after the move: $reason');
-			case null:
-				out.push('${judging[i].hxml}: no verdict');
-		}
-		return out;
 	}
 
 	/** Every directory holding one of `files` that does not exist yet, deepest first. */

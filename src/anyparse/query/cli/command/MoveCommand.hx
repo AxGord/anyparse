@@ -241,8 +241,10 @@ final class MoveCommand implements CliCommand {
 		CliIo.sysPrint('refuses the move. Refused too: a path composed from the old package at run\n');
 		CliIo.sysPrint('time, a registry glob whose reach would change, a qualified path whose head\n');
 		CliIo.sysPrint('a local name shadows, an existing destination. Every reason is listed and\n');
-		CliIo.sysPrint('nothing is written. --verify typechecks every configured compilerOracle\n');
-		CliIo.sysPrint('build before and after the write and puts every file back on a failure.\n');
+		CliIo.sysPrint('nothing is written. A move creates and deletes files, so its write is\n');
+		CliIo.sysPrint('typechecked by every configured compilerOracle build and put back when it\n');
+		CliIo.sysPrint('breaks one (--no-verify skips that); --verify refuses to write where no\n');
+		CliIo.sysPrint('compilerOracle is configured.\n');
 	}
 
 	private static function parseMoveArgs(args: Array<String>): MoveOpts {

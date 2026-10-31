@@ -466,10 +466,9 @@ final class HaxeSpawn {
 	 * replaces the computed bound, for a machine the heuristic misjudges.
 	 */
 	public static function parallelism(): Int {
-		final declared: Null<Int> = Std.parseInt(Sys.getEnv('APQ_ORACLE_PARALLEL') ?? '');
-		return declared != null && declared > 0
-			? declared
-			: #if nodejs parallelismFor(PoolLease.threads() ?? machineThreads(), js.node.Os.totalmem(), gcSetting() != null) #else 1 #end;
+		return declaredParallelism() ?? #if nodejs parallelismFor(
+			PoolLease.threads() ?? machineThreads(), js.node.Os.totalmem(), gcSetting() != null
+		) #else 1 #end;
 	}
 
 	/**
@@ -715,6 +714,22 @@ final class HaxeSpawn {
 					cancelled: cancelled
 				}
 		];
+	}
+
+	/**
+	 * `parallelism`, but at most `cap` when this process holds no pool lease and `APQ_ORACLE_PARALLEL` declares nothing: a
+	 * compile batch run beside other agents' work, outside any pool, must not take every core and the memory each compile
+	 * holds.
+	 */
+	public static function unleasedParallelism(cap: Int): Int {
+		final leased: Bool = #if nodejs PoolLease.threads() != null #else false #end;
+		return declaredParallelism() != null || leased ? parallelism() : Std.int(Math.min(cap, parallelism()));
+	}
+
+	/** The positive compile count `APQ_ORACLE_PARALLEL` declares, or null. */
+	private static function declaredParallelism(): Null<Int> {
+		final declared: Null<Int> = Std.parseInt(Sys.getEnv('APQ_ORACLE_PARALLEL') ?? '');
+		return declared != null && declared > 0 ? declared : null;
 	}
 
 }
