@@ -1,5 +1,6 @@
 package unit.query;
 
+import anyparse.query.MoveMember;
 import anyparse.query.MoveSymbol;
 import unit.cli.CliFixture;
 
@@ -8,7 +9,8 @@ using StringTools;
 
 /**
  * `move` over a dependency the source reaches only through a PACKAGE wildcard (`import pkg.*;`, its own or its ambient
- * `import.hx` chain's), and over a `using` only the ambient chain supplies. The wildcard travels as written, unless the
+ * `import.hx` chain's), and over a `using` only the ambient chain supplies. A module-static wildcard (`import p.Mod.*;`) is carried the
+ * same way, and a caller left behind that it binds is repointed. The wildcard travels as written, unless the
  * destination's own code names another type of that package the carried line would take over. Written to disk: an
  * ambient chain is a fact about where a module sits.
  */
@@ -26,6 +28,18 @@ final class MoveWildcardImportCarryTest extends Test {
 
 	/** `Moved` (line 5, column 7) writes `Node` with no statement of the source's own spelling it. */
 	private static final HOST_BARE: String = 'package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n}\n';
+
+	/** The package of `Tools`, whose main class declares the static `qfun` that `Moved` calls bare. */
+	private static final MODULE_Q: Array<{ name: String, source: String }> = [
+		{
+			name: 'src/q/Tools.hx',
+			source: 'package q;\n\nclass Tools {\n\tpublic static function qfun(): Int return 1;\n}\n'
+		}
+	];
+
+	/** `Moved` (line 5, column 7) calls `qfun`, which no statement of the source's own spells. */
+	private static final HOST_BARE_CALL: String =
+		'package p;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n';
 
 	/** The source's own package wildcard is the only binding of `Node`: it is carried, where the move used to refuse. */
 	@:pin('control')
@@ -137,6 +151,129 @@ final class MoveWildcardImportCarryTest extends Test {
 		assertCarries(moved('package r;\n\nclass Dest {}\n', host, 5, tree), 'using q.Tools;');
 	}
 
+	/**
+	 * The static `qfun` is reached only through the ambient `import q.Tools.*;`:
+	 * the destination lies outside that chain, so the statement is carried.
+	 */
+	@:pin('control')
+	@:killer('M-CARRY-STATIC-WILDCARD-OWN-ONLY')
+	public function testAnAmbientModuleStaticWildcardIsCarried(): Void {
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([{ name: 'src/p/import.hx', source: 'import q.Tools.*;\n' }]);
+		assertCarries(moved('package r;\n\nclass Dest {}\n', HOST_BARE_CALL, 5, tree), 'import q.Tools.*;');
+	}
+
+	/** A destination in the same directory already receives `import q.Tools.*;` from the same `import.hx`: no second copy is written. */
+	@:pin('control')
+	@:killer('M-CARRY-STATIC-WILDCARD-DEST-OWN-ONLY')
+	public function testADestinationReceivingTheAmbientWildcardGetsNoCopy(): Void {
+		#if (sys || nodejs)
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([{ name: 'src/p/import.hx', source: 'import q.Tools.*;\n' }]);
+		switch moved('package p;\n\nclass Dest {}\n', HOST_BARE_CALL, 5, tree, 'src/p/Dest.hx') {
+			case Ok(changes, _):
+				final written: String = changes.find(c -> c.file.endsWith('/src/p/Dest.hx'))?.newSource ?? '';
+				Assert.isTrue(written.contains('class Moved'), 'the declaration should land in the destination, got: $written');
+				Assert.isFalse(written.contains('import q.Tools.*;'), 'the destination already receives the wildcard, got: $written');
+			case Err(message):
+				Assert.fail('the move should go through, got: $message');
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The ambient statement sits under a `#if`: its condition is no text of the source file, so the move refuses and names the file. */
+	@:pin('guard')
+	public function testAGuardedAmbientModuleStaticWildcardRefuses(): Void {
+		#if (sys || nodejs)
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([
+			{
+				name: 'src/p/import.hx',
+				source: '#if js\nimport q.Tools.*;\n#end\n'
+			}
+		]);
+		switch moved('package r;\n\nclass Dest {}\n', HOST_BARE_CALL, 5, tree) {
+			case Ok(_, _):
+				Assert.fail('a guarded ambient wildcard cannot be carried — the move must refuse');
+			case Err(message):
+				Assert.isTrue(
+					message.contains('import.hx') && message.contains('qfun'),
+					'the refusal should name the file and the name, got: $message'
+				);
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The destination receives a rival `import q.Rival.*;` declaring `qfun` too from
+	 * its own `import.hx`: statement order would decide the name, so the move refuses.
+	 */
+	@:pin('guard')
+	public function testARivalWildcardTheDestinationReceivesAmbientlyRefuses(): Void {
+		#if (sys || nodejs)
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([
+			{ name: 'src/q/Rival.hx', source: 'package q;\n\nclass Rival {\n\tpublic static function qfun(): Int return 2;\n}\n' },
+			{ name: 'src/p/import.hx', source: 'import q.Tools.*;\n' },
+			{ name: 'src/s/import.hx', source: 'import q.Rival.*;\n' }
+		]);
+		switch moved('package s;\n\nclass Dest {}\n', HOST_BARE_CALL, 5, tree, 'src/s/Dest.hx') {
+			case Ok(_, _):
+				Assert.fail('the destination\'s ambient Rival.* declares qfun too — the move must refuse');
+			case Err(message):
+				Assert.isTrue(message.contains('both modules declare "qfun"'), 'the refusal should name the clash, got: $message');
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A caller left behind reaches the moved static `qfun` bare through its ambient `import q.Tools.*;`: it is qualified at
+	 * the destination, as it is when its own file spells the wildcard.
+	 */
+	@:pin('control')
+	@:killer('M-CARRY-STATIC-WILDCARD-OWN-ONLY')
+	public function testALeftBehindCallerBoundByAnAmbientWildcardIsRepointed(): Void {
+		assertRepointed([
+			{ name: 'src/c/import.hx', source: 'import q.Tools.*;\n' },
+			{ name: 'src/c/Use.hx', source: 'package c;\n\nclass Use {\n\tpublic static function f(): Int return qfun();\n}\n' }
+		], '/src/c/Use.hx');
+	}
+
+	/**
+	 * Two ambient groups bind `qfun`: the farther `import z.Z.*;` and the nearer `import q.Tools.*;`. The nearer wins, so the
+	 * caller means `Tools.qfun` and is repointed at the destination; reading the farther group last would leave it on `Z.qfun`.
+	 */
+	@:pin('control')
+	@:killer('M-CARRY-STATIC-WILDCARD-ORDER-NEAREST-FIRST')
+	public function testTheNearerAmbientGroupBindsTheNameForALeftBehindCaller(): Void {
+		assertRepointed([
+			{ name: 'src/z/Z.hx', source: 'package z;\n\nclass Z {\n\tpublic static function qfun(): Int return 2;\n}\n' },
+			{ name: 'src/c/import.hx', source: 'import z.Z.*;\n' },
+			{ name: 'src/c/d/import.hx', source: 'import q.Tools.*;\n' },
+			{ name: 'src/c/d/Use.hx', source: 'package c.d;\n\nclass Use {\n\tpublic static function f(): Int return qfun();\n}\n' }
+		], '/src/c/d/Use.hx');
+	}
+
+	/**
+	 * The source's own `import q.Tools.*;` is carried although the destination's `import.hx` spells it under a `#if`: a guarded
+	 * statement binds the name in some builds only, so it does not stand for the destination.
+	 */
+	@:pin('control')
+	@:killer('M-CARRY-STATIC-WILDCARD-HOLDS-GUARDED')
+	public function testADestinationHoldingTheWildcardOnlyUnderAnIfStillGetsIt(): Void {
+		final host: String =
+			'package p;\n\nimport q.Tools.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n';
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([
+			{
+				name: 'src/r/import.hx',
+				source: '#if foo\nimport q.Tools.*;\n#end\n'
+			}
+		]);
+		assertCarries(moved('package r;\n\nclass Dest {}\n', host, 7, tree), 'import q.Tools.*;');
+	}
+
 	/** The move succeeded and wrote `line` into the destination. */
 	private static function assertCarries(result: MoveResult, line: String): Void {
 		#if (sys || nodejs)
@@ -156,12 +293,14 @@ final class MoveWildcardImportCarryTest extends Test {
 	 * Write `extra` plus the source module `host` and `dest` at `src/r/Dest.hx`,
 	 * move `Moved` (at `line`, column 7) there, and remove the tree.
 	 */
-	private static function moved(dest: String, host: String, line: Int, extra: Array<{ name: String, source: String }>): MoveResult {
+	private static function moved(
+		dest: String, host: String, line: Int, extra: Array<{ name: String, source: String }>, destName: String = 'src/r/Dest.hx'
+	): MoveResult {
 		var result: MoveResult = Err('the fixture did not run');
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = extra.concat([
 			{ name: 'src/p/Host.hx', source: host },
-			{ name: 'src/r/Dest.hx', source: dest }
+			{ name: destName, source: dest }
 		]);
 		final root: String = CliFixture.writeTree('apq_move_wildcard', tree);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
@@ -169,10 +308,43 @@ final class MoveWildcardImportCarryTest extends Test {
 				for (entry in tree) { file: '$root/${entry.name}', source: entry.source }
 			];
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-			result = MoveSymbol.moveType('$root/src/p/Host.hx', line, 7, '$root/src/r/Dest.hx', files, plugin, plugin.typeRefShape());
+			result = MoveSymbol.moveType('$root/src/p/Host.hx', line, 7, '$root/$destName', files, plugin, plugin.typeRefShape());
 		});
 		#end
 		return result;
+	}
+
+	/**
+	 * Moves the static `qfun` of `q.Tools` into `q.Dest`, in a tree of `extra` files beside them, and asserts the file `use`
+	 * (a path suffix) calls it as `Dest.qfun()` afterwards.
+	 */
+	private static function assertRepointed(extra: Array<{ name: String, source: String }>, use: String): Void {
+		#if (sys || nodejs)
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([
+			{
+				name: 'src/q/Dest.hx',
+				source: 'package q;\n\nclass Dest {}\n'
+			}
+		]).concat(extra);
+		final root: String = CliFixture.writeTree('apq_move_wildcard', tree);
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final scope: Array<{ file: String, source: String }> = [
+				for (entry in tree) { file: '$root/${entry.name}', source: entry.source }
+			];
+			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+			switch MoveMember.move(
+				'$root/src/q/Tools.hx', 'Tools', ['qfun'], 'Dest', null, false, false, scope, plugin, plugin.typeRefShape()
+			) {
+				case Ok(changes, _):
+					final written: String = changes.find(c -> c.file.endsWith(use))?.newSource ?? '';
+					Assert.isTrue(written.contains('Dest.qfun()'), 'the caller should be repointed at the destination, got: $written');
+				case Err(message):
+					Assert.fail('the move should go through, got: $message');
+			}
+		});
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
 }

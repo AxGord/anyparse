@@ -1437,7 +1437,7 @@
 			"name": "M-WILDCARD-RIVAL-ORDER-BLIND",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "wildcardBareReferences",
-			"find": "src.names.contains(name)\n&& !providers.exists(o -> o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name))",
+			"find": "src.names.contains(name) && !providers.exists(o -> o.module != srcModule && o.order > srcAt && o.names.contains(name))",
 			"replace": "src.names.contains(name)",
 			"note": "a later wildcard import providing the same name no longer wins, so a caller that never meant the source module is repointed too"
 		},
@@ -1445,8 +1445,8 @@
 			"name": "M-WILDCARD-BINDS-BLIND",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "wildcardBareReferences",
-			"find": "src.names.contains(name)\n&& !providers.exists(o -> o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name))",
-			"replace": "true\n&& !providers.exists(o -> o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name))",
+			"find": "src.names.contains(name) && !providers.exists(o -> o.module != srcModule && o.order > srcAt && o.names.contains(name))",
+			"replace": "true && !providers.exists(o -> o.module != srcModule && o.order > srcAt && o.names.contains(name))",
 			"note": "the source wildcard is credited with names it does not bind, so a bare call resolved through some other import is repointed at the destination"
 		},
 		{
@@ -33600,6 +33600,38 @@
 			"find": "for (imp in StaticExtensions.usingsOf(cursorInfo)) if (!imp.guarded) {",
 			"replace": "for (imp in cursorInfo.imports) if (!imp.guarded && imp.kind == ImportKind.Using) {",
 			"note": "a using only the source's ambient chain supplies is not carried, so the moved code calls an extension the destination does not have"
+		},
+		{
+			"name": "M-CARRY-STATIC-WILDCARD-OWN-ONLY",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "wildcardStaticProviders",
+			"find": "for (g in info.ambientImports) { file: g.file, imports: g.imports }",
+			"replace": "for (g in info.ambientImports.slice(0, 0)) { file: g.file, imports: g.imports }",
+			"note": "a module-static wildcard only the source's ambient import.hx spells provides no names, so the moved code's bare static call is carried no statement and the destination reads Unknown identifier; a caller left behind that binds through one is not repointed"
+		},
+		{
+			"name": "M-CARRY-STATIC-WILDCARD-DEST-OWN-ONLY",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "holdsWildcard",
+			"find": "info.imports.exists(spells) || info.ambientImports.exists(group -> group.imports.exists(spells))",
+			"replace": "info.imports.exists(spells)",
+			"note": "a destination that already receives the wildcard from its own import.hx is not seen to hold it, so a second copy is written into a file that has the binding"
+		},
+		{
+			"name": "M-CARRY-STATIC-WILDCARD-HOLDS-GUARDED",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "holdsWildcard",
+			"find": "imp -> !imp.guarded && imp.kind == ImportKind.Wild",
+			"replace": "imp -> imp.kind == ImportKind.Wild",
+			"note": "a #if-guarded copy of the wildcard at the destination reads as holding it, so the carry is skipped and the moved code does not compile in the builds without that condition"
+		},
+		{
+			"name": "M-CARRY-STATIC-WILDCARD-ORDER-NEAREST-FIRST",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "wildcardStaticProviders",
+			"find": "groups.reverse();",
+			"replace": "groups.length;",
+			"note": "the farthest import.hx group is read last, so it outranks a nearer one that binds the same name and a caller left behind is repointed, or spared, by the wrong wildcard"
 		},
 		{
 			"name": "M-STD-MODULE-NAMES-NONE",

@@ -231,15 +231,12 @@ final class DependencyCarry {
 		callerInfo: FileInfo, tree: QueryNode, names: Array<String>, srcModule: String, files: Array<FileInfo>, shape: RefShape
 	): Array<WildBareRef> {
 		final providers: Array<WildProvider> = wildcardStaticProviders(callerInfo, files, shape);
-		final src: Null<WildProvider> = providers.find(p -> p.module == srcModule);
+		final src: Null<WildProvider> = providers.filter(p -> p.module == srcModule).pop();
 		if (src == null) return [];
-		final srcAt: Int = src.imp.span.from;
+		final srcAt: Int = src.order;
 		final bound: Array<String> = [
 			for (name in names)
-				if (
-					src.names.contains(name)
-					&& !providers.exists(o -> o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name))
-				)
+				if (src.names.contains(name) && !providers.exists(o -> o.module != srcModule && o.order > srcAt && o.names.contains(name)))
 					name
 		];
 		if (bound.length == 0) return [];
@@ -1031,7 +1028,9 @@ final class DependencyCarry {
 	 * (`Unknown identifier : fromSide`). So nothing the dependency walk asks about — a type position, an
 	 * upper-initial receiver — can ever see one, and without this arm the whole class of name such a
 	 * statement provides is invisible to the carry, which then writes a destination reading `Unknown
-	 * identifier`. Not an edge case: whole packages of this project reach their constants that way.
+	 * identifier`. Not an edge case: whole packages of this project reach their constants that way. The source's
+	 * `import.hx` chain supplies them as the file's own statements do and a destination outside that chain loses them, so an
+	 * ambient statement travels as an explicit one; a `#if`-guarded ambient one refuses, its condition being no text of this file.
 	 *
 	 * The refusals are the two ways a carry cannot repair the name. A member the DESTINATION's own
 	 * type declares wins over any import (a class declaring `fromMain` beats the
@@ -1060,14 +1059,18 @@ final class DependencyCarry {
 			// no reason to stay silent about it.
 			final shadow: Null<String> = shadowedByDestMember(provider, wanted, destInfo);
 			if (shadow != null) return shadow;
-			if (destInfo.imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == provider.imp.raw)) continue;
+			if (holdsWildcard(destInfo, provider.imp.raw)) continue;
 			final refusal: Null<String> = rivalWildcardCollision(provider, wanted, destInfo, files, shape);
 			if (refusal != null) return refusal;
 			if (!provider.imp.guarded) {
-				final line: String = DependencyCarry.importLineFor(provider.imp, source);
+				final line: String = DependencyCarry.importLineFor(provider.imp, provider.ambientFile == null ? source : '');
 				if (!carried.contains(line)) carried.push(line);
 				continue;
 			}
+			// A guarded statement of an ambient file has no `#if` region in THIS file's text to read its condition from.
+			if (provider.ambientFile != null)
+				return 'the moved code reaches "${wanted[0]}" through "import ${provider.imp.raw};" in ${provider.ambientFile}, '
+					+ 'guarded by a `#if` there — carrying a guarded ambient statement is not supported; qualify the references';
 			final walk: Array<CondDirective> = scanned ?? GuardedImportCarry.directivesOf(source, plugin);
 			scanned = walk;
 			final guardRefusal: Null<String> = foldGuardedResult(
@@ -1128,7 +1131,7 @@ final class DependencyCarry {
 	}
 
 	/**
-	 * Every unguarded-or-guarded `import <module>.*;` of `info`'s file whose head names a MODULE the
+	 * Every unguarded-or-guarded `import <module>.*;` of `info`'s file, its own and its ambient chain's, whose head names a MODULE the
 	 * index holds, paired with the simple names it binds.
 	 *
 	 * A wildcard whose head is a PACKAGE is a different statement with a different answer —
@@ -1137,12 +1140,23 @@ final class DependencyCarry {
 	 */
 	private static function wildcardStaticProviders(info: FileInfo, files: Array<FileInfo>, shape: RefShape): Array<WildProvider> {
 		final out: Array<WildProvider> = [];
-		for (imp in info.imports) if (imp.kind == ImportKind.Wild && imp.raw.endsWith('.*')) {
+		final groups: Array<{ file: Null<String>, imports: Array<ImportInfo> }> = [
+			for (g in info.ambientImports) { file: g.file, imports: g.imports }
+		];
+		groups.reverse();
+		groups.push({ file: null, imports: info.imports });
+		for (group in groups) for (imp in group.imports) if (imp.kind == ImportKind.Wild && imp.raw.endsWith('.*')) {
 			final head: String = imp.raw.substring(0, imp.raw.length - 2);
 			final holder: Null<FileInfo> = files.find(fi -> fi.module == head);
 			if (holder == null) continue;
 			final names: Array<String> = staticNamesOf(holder, shape);
-			if (names.length > 0) out.push({ imp: imp, module: head, names: names });
+			if (names.length > 0) out.push({
+				imp: imp,
+				module: head,
+				names: names,
+				ambientFile: group.file,
+				order: out.length
+			});
 		}
 		return out;
 	}
@@ -1216,6 +1230,12 @@ final class DependencyCarry {
 	private static function moduleMemberNames(files: Array<FileInfo>, module: String): Null<Array<String>> {
 		final info: Null<FileInfo> = files.find(f -> f.module == module);
 		return info == null ? null : [for (t in info.types) for (m in t.members) m.name];
+	}
+
+	/** Whether `info`'s file, or an `import.hx` above it, already declares the wildcard `import <raw>;`. */
+	private static function holdsWildcard(info: FileInfo, raw: String): Bool {
+		final spells: (ImportInfo) -> Bool = imp -> !imp.guarded && imp.kind == ImportKind.Wild && imp.raw == raw;
+		return info.imports.exists(spells) || info.ambientImports.exists(group -> group.imports.exists(spells));
 	}
 
 }
@@ -1295,6 +1315,12 @@ private typedef WildProvider = {
 	var imp: ImportInfo;
 	var module: String;
 	var names: Array<String>;
+
+	/** The `import.hx` that spells the statement, null for the file's own; its `imp.span` addresses THAT file. */
+	var ambientFile: Null<String>;
+
+	/** Rank in the file's resolution order (a higher one wins a shared name): the farthest ambient group first, the file's own last. */
+	var order: Int;
 }
 
 /**
