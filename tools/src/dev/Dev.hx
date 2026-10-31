@@ -24,6 +24,7 @@ final class Dev {
 		{ name: 'slice-gate', main: SliceGate.main, usage: SliceGate.USAGE },
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
 		{ name: 'slice-stats', main: SliceStats.main, usage: SliceStats.USAGE },
+		{ name: 'token-audit', main: TokenAudit.main, usage: TokenAudit.USAGE },
 		{ name: 'battery', main: Battery.main, usage: Battery.USAGE },
 		{ name: 'base-engine', main: BaseEngine.main, usage: BaseEngine.USAGE },
 		{ name: 'parity', main: Parity.main, usage: Parity.USAGE },

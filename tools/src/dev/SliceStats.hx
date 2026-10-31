@@ -4,6 +4,7 @@ import dev.SliceMeasure.EdgeReading;
 import dev.SliceMeasure.EdgeShare;
 import devkit.Args;
 import devkit.Cmd.cmd;
+import devkit.Table;
 import sys.io.File;
 
 using Lambda;
@@ -265,7 +266,7 @@ final class SliceStats {
 				line;
 			}
 		];
-		return render(header, cells);
+		return Table.render(header, cells);
 	}
 
 	/** One line per week: slices, median hours, mean rounds, tokens, lines added, modules, and the readings asked for. */
@@ -300,7 +301,7 @@ final class SliceStats {
 				line;
 			}
 		];
-		return render(header, cells);
+		return Table.render(header, cells);
 	}
 
 	/** The day (UTC) the time `seconds` since the epoch falls in, as `YYYY-MM-DD`. */
@@ -390,18 +391,6 @@ final class SliceStats {
 		if (share == null) return NONE;
 		final inside: Int = share.existing + share.fresh;
 		return inside == 0 ? '${share.added} ${NONE}' : '${share.added} ${Math.round(share.existing * PERCENT / inside)}%';
-	}
-
-	/** `cells` under `header`, each column as wide as its widest cell, the first left-aligned and the rest right-aligned. */
-	private static function render(header: Array<String>, cells: Array<Array<String>>): String {
-		final all: Array<Array<String>> = [header].concat(cells);
-		final widths: Array<Int> = [for (_ in header) 0];
-		for (row in all) for (i => cell in row) if (cell.length > widths[i]) widths[i] = cell.length;
-		return [
-			for (row in all) [
-				for (i => cell in row) i == 0 ? cell.rpad(' ', widths[i]) : cell.lpad(' ', widths[i])
-			].join('  ').rtrim()
-		].join('\n');
 	}
 
 }
