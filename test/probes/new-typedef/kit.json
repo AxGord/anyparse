@@ -1,0 +1,1212 @@
+{
+	"about": "hxq new --kind typedef with --field shapes (optional, final, metadata, doc and block comments, nested anonymous types, function types, initializers, separators already in the field text) and --extends; the written module then compiles. Seeded from the HXQ-NEW-TYPEDEF reviews.",
+	"files": {
+		"p/Base.hx": "typedef Base = { z:Int }\n"
+	},
+	"invocations": [
+		{
+			"name": "T1",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T1.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"a:Int",
+				"--field",
+				"b:String",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T1"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "03f437f7fd31f78d",
+				"files": "f91e71c7abd05b29",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T2",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T2.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"?opt:Int",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T2"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "933f5a55edab5cc7",
+				"files": "fa0bfaabb23919af",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T3",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T3.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"@:optional var x:Int",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T3"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "2e13fc99bd40df79",
+				"files": "65bfeff28179ac9e",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T3b",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T3b.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"@:optional x:Int",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T3b"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "feb67e7beca56d81",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "T4",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T4.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"final x:Int",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T4"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "14b7ada5ac55d98a",
+				"files": "424c7c236c9297c4",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T5",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T5.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"f:Int->Void",
+				"--field",
+				"g:(a:Int, b:String)->Void",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T5"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "484b3be7a8fc927d",
+				"files": "e235571e72978698",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T6",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T6.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"n:{a:{b:Int}, c:String}",
+				"--field",
+				"m:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T6"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "99a52a146107205c",
+				"files": "75860d2c15c9345f",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T7",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T7.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"m:Map<String, Int>",
+				"--field",
+				"k:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T7"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "489129cb7fcb17ec",
+				"files": "ab6086d238d5f1a2",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T8",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T8.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"var a:Int;",
+				"--field",
+				"?b:Null<Int>,",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T8"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "36b7b211070bddb4",
+				"files": "234768a8a94c244a",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T9",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T9.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** doc */ a:Int",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T9"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "d67068447db52a5c",
+				"files": "774b336c6438e14a",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "T10",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T10.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"x:Int // c",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T10"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "72840903b4961ab9",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "T11",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T11.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"var a:Int; var b:Int;",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T11"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "db989f98890c1a47",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "T12",
+			"argv": [
+				"hxq",
+				"new",
+				"p/T12.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"a:Int, b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"T12"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "73886e1e8ffee160",
+				"files": "959805f6d786e64e",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Y1",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Y1.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"x:Int = 3",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Y1"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "ec95a11c4d792832",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "Y2",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Y2.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** d */ @:optional var x:Int",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Y2"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "2ed3b420b2c30369",
+				"files": "628c1e80c94adf07",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Y3",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Y3.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** d */ final x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Y3"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "add0e909bb22e8be",
+				"files": "104408aa08679636",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Y4",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Y4.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/* c */ var x:Int",
+				"--field",
+				"final y:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Y4"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "f8215a83c683a759",
+				"files": "dc8f829b0df48326",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Y5",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Y5.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"final x:Int",
+				"--field",
+				"/** d */ b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Y5"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "194143e5ee0e3e64",
+				"files": "cfb58cc6f86fa092",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "K1",
+			"argv": [
+				"hxq",
+				"new",
+				"p/K1.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"@:optional var x:Int;",
+				"--field",
+				"final y:Int;",
+				"--field",
+				"var f:Int->Void;",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"K1"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "61b54186c91ae10a",
+				"files": "679b4f22d73ca346",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "M1",
+			"argv": [
+				"hxq",
+				"new",
+				"p/M1.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"?a:Int",
+				"--field",
+				"final b:String",
+				"--field",
+				"c:Int->Void",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"M1"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b23e8af4ad330aac",
+				"files": "7036ca2edae59db8",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "M2",
+			"argv": [
+				"hxq",
+				"new",
+				"p/M2.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** doc */ a:Int",
+				"--field",
+				"final b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"M2"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "371e2bf10f30f09b",
+				"files": "af208fd36b5d075e",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "M3",
+			"argv": [
+				"hxq",
+				"new",
+				"p/M3.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"n:{a:Int, b:Int}",
+				"--field",
+				"final b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"M3"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "a6d0e8895a15c3bb",
+				"files": "44a6c6372aad351e",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "E1",
+			"argv": [
+				"hxq",
+				"new",
+				"p/E1.hx",
+				"--kind",
+				"typedef",
+				"--extends",
+				"Base",
+				"--field",
+				"final x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"E1"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b804de1cd533adc6",
+				"files": "3f727aa79115f08e",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "E2",
+			"argv": [
+				"hxq",
+				"new",
+				"p/E2.hx",
+				"--kind",
+				"typedef",
+				"--extends",
+				"Base",
+				"--field",
+				"x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"E2"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "ca004a9f6194d86b",
+				"files": "eef24c86fc3ec6f5",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "X1",
+			"knownDefect": "refuses a legal `@:meta(args) var` field that haxe compiles",
+			"argv": [
+				"hxq",
+				"new",
+				"p/X1.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"@:native(\"a b\") var x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"X1"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "86c54664ab74baec",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "X2",
+			"knownDefect": "refuses a legal `@:meta(args) final` field that haxe compiles",
+			"argv": [
+				"hxq",
+				"new",
+				"p/X2.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"@:meta(a, b) final x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"X2"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "8551060cfc588896",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "X3",
+			"knownDefect": "refuses a legal class-notation anonymous field type `{var a:Int;}`",
+			"argv": [
+				"hxq",
+				"new",
+				"p/X3.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"n:{var a:Int;}",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"X3"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "64cb1a84bf2f2482",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "X4",
+			"argv": [
+				"hxq",
+				"new",
+				"p/X4.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"@:optional  final  x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"X4"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5d40c1fcb639f926",
+				"files": "537574afa2dc7aaf",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "X5",
+			"argv": [
+				"hxq",
+				"new",
+				"p/X5.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** d */ final x:Int",
+				"--field",
+				"b:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"X5"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "ecf74871892446b2",
+				"files": "7f53b56c0f939af6",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "X6",
+			"argv": [
+				"hxq",
+				"new",
+				"p/X6.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"final x:Int = 3",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"X6"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "6a61cf9ce11f2aae",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "Z1",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Z1.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** d */ ?b:Int",
+				"--field",
+				"final x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Z1"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "30336d2de44151ad",
+				"files": "bf34f10f3fceff6d",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Z2",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Z2.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/* a */ /* b */ final x:Int",
+				"--field",
+				"c:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Z2"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "ec31967942dc01cb",
+				"files": "72980139449b5135",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Z3",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Z3.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** d */ @:optional b:Int",
+				"--field",
+				"c:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Z3"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "2fca5bae2a7be23d",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "Z4",
+			"knownDefect": "refuses a doc-led `public var` field that haxe compiles",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Z4.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** d */ public var x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Z4"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "41cf621d3bb7e283",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false
+				]
+			}
+		},
+		{
+			"name": "Z5",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Z5.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"f:(Int)->Void",
+				"--field",
+				"final g:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Z5"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "d5cff5f0433aa450",
+				"files": "6263b14fe32b1b90",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Z6",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Z6.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"@:m(x=1) var a:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Z6"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "c85e232b4b9fd9af",
+				"files": "74f17e07993e6c4a",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Z7",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Z7.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** a=b */ final x:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Z7"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "97a2ad2aa3635a95",
+				"files": "8d8d1e1afb5c8053",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "Z8",
+			"argv": [
+				"hxq",
+				"new",
+				"p/Z8.hx",
+				"--kind",
+				"typedef",
+				"--field",
+				"/** d */ var x:Int",
+				"--field",
+				"/** e */ y:Int",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"p",
+					"--no-output",
+					"Z8"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "97c9e06794e81b55",
+				"files": "e1c441de5151e0f0",
+				"compiles": [
+					true
+				]
+			}
+		}
+	]
+}

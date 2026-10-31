@@ -1,0 +1,163 @@
+package unit.dev;
+
+import dev.Probe;
+import dev.Repo;
+import devkit.TempDir;
+import haxe.Json;
+import haxe.io.Path;
+import sys.io.File;
+import utest.Assert;
+import utest.Test;
+
+/**
+ * `dev.Probe`: what deviates between a recorded answer and a new one, the run directory and the staged-probe pid normalized out
+ * of a stream, and a tiny kit recorded on one stand-in engine that holds on it and deviates on another.
+ */
+@:nullSafety(Strict)
+final class ProbeTest extends Test {
+
+	@:pin('control')
+	@:killer('M-PROBE-EXIT-BLIND')
+	public function testTheDeviationsNameTheExitTheStreamsTheFilesAndTheCompiles(): Void {
+		final recorded: Expectation = answer(0, 'a', [true, false]);
+		Assert.same([], Probe.deviations(recorded, seen(answer(0, 'a', [true, false]), 'x'), true));
+		Assert.same([
+			'exit: 0 → 1',
+			'stdout: digest a → b, now `first`',
+			'files written: digest a → b',
+			'compiles with define set #1: false → true'
+		], Probe.deviations(recorded, seen(answer(1, 'b', [true, true]), 'first\nsecond'), true));
+		Assert.same(['exit: 0 → 1'], Probe.deviations(recorded, seen(answer(1, 'a', [true, true]), ''), false), 'compiles unchecked');
+		Assert.same(['not recorded: `dev probe --record` writes the expectation'], Probe.deviations(null, seen(recorded, ''), true));
+	}
+
+	public function testTheRunDirectoryAndTheProbePidAreNormalized(): Void {
+		Assert.equals(
+			'<fixture>/a.hx and /t/anyparse-last-probe.N.hx',
+			Probe.normalize('/no/such/run/a.hx and /t/anyparse-last-probe.4242.hx', '/no/such/run')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-PROBE-ONE-PASS-BLIND')
+	public function testATinyKitRecordedOnOneEngineHoldsThereAndDeviatesOnAnother(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final kitFile: String = dir.file('kit.json');
+			File.saveContent(
+				kitFile, Json.stringify({
+					files: { "in.txt": 'x\n' },
+					compile: { args: ['--version'], defines: [[], ['--no-such-haxe-flag']] },
+					invocations: [
+						{ name: 'writes', argv: ['hxq', 'write'] },
+						{ name: 'echoes', argv: ['apq', 'echo', 'y'], stdin: 'in' },
+						{ name: 'formats', argv: ['apq', 'fmt', 'in.txt'], fixpoint: 'in.txt' }
+					]
+				})
+			);
+			final a: String = engine(dir.file('a.js'), 'A');
+			final b: String = engine(dir.file('b.js'), 'B');
+			Probe.write(kitFile, Probe.observe(tree, a, Probe.load(kitFile), true, 2));
+			final kit: Kit = Probe.load(kitFile);
+			Assert.same([true, false], kit.cases[0].expect?.compiles, 'haxe ran once per define set on the written fixture');
+			final again: Array<Seen> = Probe.observe(tree, a, kit, true, 2);
+			Assert.same([[], [], []], [for (i => row in again) Probe.deviations(kit.cases[i].expect, row, true)]);
+			Assert.isTrue(kit.cases[2].expect?.onePass == true && kit.cases[2].expect?.commentsKept == true, 'A formats to a fixed point');
+			final other: Array<Seen> = Probe.observe(tree, b, kit, true, 2);
+			Assert.equals(1, Probe.deviations(kit.cases[0].expect, other[0], true).length, 'only what B writes differs');
+			Assert.same([], Probe.deviations(kit.cases[1].expect, other[1], true));
+			Assert.same([
+				'stdout: digest ${kit.cases[2].expect?.out} → ${other[2].answer.out}, now `x`',
+				'one pass (a second run over the output is a fixed point): true → false',
+				'comments kept: true → false'
+			], Probe.deviations(kit.cases[2].expect, other[2], true));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-PROBE-KNOWN-DEFECT-COUNTED')
+	public function testAKnownDefectRowThatMovesIsReportedApartAndFailsNothing(): Void {
+		final recorded: Expectation = answer(0, 'a', []);
+		final kit: Kit = {
+			invocations: [
+				{
+					name: 'plain',
+					argv: ['apq', 'x'],
+					stdin: null,
+					files: []
+				},
+				{
+					name: 'known',
+					argv: ['apq', 'y'],
+					stdin: null,
+					files: []
+				}
+			],
+			cases: [
+				{
+					compile: null,
+					expect: recorded,
+					knownDefect: null,
+					fixpoint: null
+				},
+				{
+					compile: null,
+					expect: recorded,
+					knownDefect: 'refuses a legal shape',
+					fixpoint: null
+				}
+			]
+		};
+		final moved: Array<Seen> = [seen(answer(0, 'a', []), ''), seen(answer(1, 'a', []), '')];
+		final verdict: Verdict = Probe.judge(kit, moved, false);
+		Assert.equals(0, verdict.deviating);
+		Assert.equals(1, verdict.knownMoved);
+		Assert.same([
+			'KNOWN-DEFECT ROW MOVED (maybe fixed) #1 known: refuses a legal shape',
+			'  exit: 0 → 1'
+		], verdict.lines);
+		final both: Verdict = Probe.judge(kit, [moved[1], moved[1]], false);
+		Assert.equals(1, both.deviating, 'an unmarked row still deviates');
+	}
+
+	public function testTheCommentsAreAMultisetOfLineAndBlockComments(): Void {
+		Assert.same(['/* b c */', '// a', '// a'], Probe.commentsOf('x // a\ny /* b\n   c */ z // a\n'));
+		Assert.same([], Probe.commentsOf('no comment'));
+	}
+
+	/** A stand-in engine at `file`: echoes its arguments, standard input and run directory, and writes `mark` on `write`. */
+	private static function engine(file: String, mark: String): String {
+		File.saveContent(file, [
+			// the shim downgrades `--lang-default` for an engine whose text never spells it
+			'// takes --lang-default',
+			"const fs = require('fs');",
+			'const a = process.argv.slice(2);',
+			"const input = a[0] === 'echo' ? fs.readFileSync(0, 'utf8') : '';",
+			'if (a[0] === "write") fs.writeFileSync("out.txt", "$mark");',
+			// `fmt` of engine A is a fixed point keeping every comment; any other engine appends a comment on each pass
+			"const text = a[0] === 'fmt' ? fs.readFileSync(a[a.length - 1], 'utf8') : '';",
+			'const tail = "$mark" === "A" ? "" : "// $mark\\n";',
+			"process.stdout.write(a[0] === 'fmt' ? text + tail : a.join(' ') + ' ' + input + ' in ' + process.cwd() + '\\n');"
+		].join('\n'));
+		return Path.normalize(file);
+	}
+
+	private static function answer(exit: Int, digest: String, compiles: Array<Bool>): Expectation {
+		return {
+			exit: exit,
+			out: digest,
+			err: 'e',
+			files: digest,
+			compiles: compiles
+		};
+	}
+
+	private static function seen(answer: Expectation, out: String): Seen {
+		return { answer: answer, out: out, err: '' };
+	}
+
+}

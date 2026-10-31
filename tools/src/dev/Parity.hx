@@ -167,24 +167,8 @@ final class Parity {
 		return { files: files, invocations: invocations, commandHelp: parsed.commandHelp == true };
 	}
 
-	/** `apq <command> --help` for every command the engine `engine` lists, each over `files`. */
-	private static function helpInvocations(shimTree: String, engine: String, files: Map<String, String>): Array<Invocation> {
-		final help: Result = shim(shimTree, engine, ['apq', '--help']).at(shimTree).run();
-		final names: Array<String> = commandsOf(help.out);
-		if (names.length == 0) throw new haxe.Exception('`apq --help` of $engine lists no command');
-		return [
-			for (name in names)
-				{
-					name: 'help $name',
-					argv: ['apq', name, '--help'],
-					stdin: null,
-					files: files
-				}
-		];
-	}
-
 	/** Every invocation run on `engine`, each in the directory `<work>/<index>` holding a fresh copy of its files. */
-	private static function side(
+	public static function side(
 		shimTree: String, engine: String, invocations: Array<Invocation>, work: TempDir, threads: Int
 	): Array<Outcome> {
 		final dirs: Array<String> = [for (i => invocation in invocations) fixture(work.file('$i'), invocation.files)];
@@ -208,15 +192,8 @@ final class Parity {
 		];
 	}
 
-	/** `argv` (`apq|hxq <command> …`) run by the shim of `shimTree` on `engine`, the code cache off on both sides alike. */
-	private static function shim(shimTree: String, engine: String, argv: Array<String>): Command {
-		return Command.of(['sh', Path.join([shimTree, 'bin', argv[0]])].concat(argv.slice(1)))
-			.env('HXQ_BIN', engine)
-			.env('HXQ_CODE_CACHE', '0');
-	}
-
 	/** The directory `dir`, emptied and holding `files` (path relative to it => content). */
-	private static function fixture(dir: String, files: Map<String, String>): String {
+	public static function fixture(dir: String, files: Map<String, String>): String {
 		js.Syntax.code("require('fs').rmSync({0}, { recursive: true, force: true })", dir);
 		FileSystem.createDirectory(dir);
 		for (name => text in files) {
@@ -225,6 +202,29 @@ final class Parity {
 			File.saveContent(path, text);
 		}
 		return dir;
+	}
+
+	/** `apq <command> --help` for every command the engine `engine` lists, each over `files`. */
+	private static function helpInvocations(shimTree: String, engine: String, files: Map<String, String>): Array<Invocation> {
+		final help: Result = shim(shimTree, engine, ['apq', '--help']).at(shimTree).run();
+		final names: Array<String> = commandsOf(help.out);
+		if (names.length == 0) throw new haxe.Exception('`apq --help` of $engine lists no command');
+		return [
+			for (name in names)
+				{
+					name: 'help $name',
+					argv: ['apq', name, '--help'],
+					stdin: null,
+					files: files
+				}
+		];
+	}
+
+	/** `argv` (`apq|hxq <command> …`) run by the shim of `shimTree` on `engine`, the code cache off on both sides alike. */
+	private static function shim(shimTree: String, engine: String, argv: Array<String>): Command {
+		return Command.of(['sh', Path.join([shimTree, 'bin', argv[0]])].concat(argv.slice(1)))
+			.env('HXQ_BIN', engine)
+			.env('HXQ_CODE_CACHE', '0');
 	}
 
 	/** Every file below `dir/prefix`, by its path relative to `dir`, with its content. */

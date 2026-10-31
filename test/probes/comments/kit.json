@@ -1,0 +1,1347 @@
+{
+	"about": "hxq fmt of comments in the trivia slots (each row also checked: a second fmt over the output is a fixed point, the comment multiset is kept) of case-pattern lists, guards, separators, typedef right-hand sides and call arguments. Seeded from the W2 and W2b reviews.",
+	"files": {
+		"w2/p01.hx": "class C { function f() { switch x { case A, /* B, */ C: 1; case _: 2; } } }\n",
+		"w2/p02.hx": "class C { function f() { switch x { case /* a */ A, B: 1; case _: 2; } } }\n",
+		"w2/p03.hx": "class C { function f() { switch x { case A /* a */, B: 1; case _: 2; } } }\n",
+		"w2/p04.hx": "class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A, // after sep\n\t\t\t\tB:\n\t\t\t\t1;\n\t\t\tcase _:\n\t\t\t\t2;\n\t\t}\n\t}\n}\n",
+		"w2/p05.hx": "class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A, B\n\t\t\t\t// before colon\n\t\t\t\t:\n\t\t\t\t1;\n\t\t\tcase _:\n\t\t\t\t2;\n\t\t}\n\t}\n}\n",
+		"w2/p06.hx": "class C { function f() { switch x { case A, B /* tail */: 1; case _: 2; } } }\n",
+		"w2/p07.hx": "class C { function f() { switch x { case A: // trail colon\n1; case _: 2; } } }\n",
+		"w2/p08.hx": "class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A // line before sep\n\t\t\t\t, B:\n\t\t\t\t1;\n\t\t\tcase _:\n\t\t\t\t2;\n\t\t}\n\t}\n}\n",
+		"w2/p09.hx": "class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase\n\t\t\t\t// own line first\n\t\t\t\tA, B:\n\t\t\t\t1;\n\t\t\tcase _:\n\t\t\t\t2;\n\t\t}\n\t}\n}\n",
+		"w2/p10.hx": "class C { function f() { switch x { case A /* x */ if (y) /* g */, B: 1; case _: 2; } } }\n",
+		"w2/p11.hx": "class C { function f() { switch x { case A, /* 1 */ /* 2 */ B, /* 3 */ C /* 4 */: 1; case _: 2; } } }\n",
+		"w2/p12.hx": "typedef T = /* c */ { a: Int };\n",
+		"w2/p13.hx": "typedef T = // c\n{ a: Int };\n",
+		"w2/p14.hx": "typedef T = A & /* c */ B;\n",
+		"w2/p15.hx": "typedef T = A & // c\nB;\n",
+		"w2/p16.hx": "typedef T = /* c1 */ /* c2 */ A & /* c3 */ B & // c4\nC;\n",
+		"w2/p17.hx": "typedef T = /* c */ Int;\n",
+		"w2/p18.hx": "typedef T =\n\t/* multi\n\tline */ { a: Int };\n",
+		"w2/p19.hx": "class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A, // one\n\t\t\t\tB, // two\n\t\t\t\tC: // three\n\t\t\t\t1;\n\t\t\tcase _:\n\t\t\t\t2;\n\t\t}\n\t}\n}\n",
+		"w2/p20.hx": "class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A,\n\t\t\t\tB // b-trail\n\t\t\t\t:\n\t\t\t\t1;\n\t\t\tcase _:\n\t\t\t\t2;\n\t\t}\n\t}\n}\n",
+		"w2/p21.hx": "class C { function f() { switch x { case /* only */ _: 2; } } }\n",
+		"w2/p22.hx": "class C { function f() { switch x { case LongPatternNameNumberOne(aaaaaaaa, bbbbbbbbbb), /* mid */ LongPatternNameNumberTwo(cccccccccc, dddddddd), LongPatternNameNumberThree(eeeee): 1; case _: 2; } } }\n",
+		"w2/p23.hx": "typedef T = {\n\tvar a: Int;\n} & /* c */ {\n\tvar b: Int;\n}\n",
+		"w2/p24.hx": "typedef T = A & B // after\n;\n",
+		"w2/q02.hx": "class C { function f() { switch x { case A, B: 1; case _: 2; } } }\n",
+		"w2/q10.hx": "class C { function f() { switch x { case A /* x */ if (y): 1; case _: 2; } } }\n",
+		"w2/q22.hx": "class C { function f() { switch x { case LongPatternNameNumberOne(aaaaaaaa, bbbbbbbbbb), LongPatternNameNumberTwo(cccccccccc, dddddddd), LongPatternNameNumberThree(eeeee): 1; case _: 2; } } }\n",
+		"w2/r1.hx": "class C { function f() { switch x { case A\n, B: 1; case _: 2; } } }\n",
+		"w2/r2.hx": "class C { function f() { switch x { case A // c\n, B: 1; case _: 2; } } }\n",
+		"w2/r3.hx": "class C { function f() { switch x { case A /* c */\n, B: 1; case _: 2; } } }\n",
+		"w2/r4.hx": "class C { function f() { switch x { case A, B // c\n: 1; case _: 2; } } }\n",
+		"w2/r5.hx": "class C { function f() { switch x { case A\n/* c */, B: 1; case _: 2; } } }\n",
+		"w2/s1.hx": "class C { function f() { g(a // c\n, b); } }\n",
+		"w2/s2.hx": "class C { function f() { g(a\n/* c */, b); } }\n",
+		"w2/s3.hx": "class C { var a = [1 // c\n, 2]; }\n",
+		"w2/t1.hx": "class C { function f() { switch x { case /* a */ A: 1; case _: 2; } } }\n",
+		"w2/t2.hx": "class C { function f() { switch x { case /* a */ A, B, C: 1; case _: 2; } } }\n",
+		"w2/t3.hx": "class C { function f() { switch x { case /* a */ A(1), B: 1; case _: 2; } } }\n",
+		"w2/t4.hx": "class C { function f() { switch x { case /* a */ A, B: return 1; case _: 2; } } }\n",
+		"w2/u1.hx": "class C { function f() { switch x { case\nA, B: 1; case _: 2; } } }\n",
+		"w2/v1.hx": "class C { var a = [1 /* c */\n, 2]; }\n",
+		"w2/v2.hx": "class C { var a = [1\n/* c */, 2]; }\n",
+		"w2/v3.hx": "enum abstract E(Int) { var A = 1; } class C { function f(a:Int /* c */\n, b:Int) {} }\n",
+		"w2b/g01.hx": "class C { var o = {a: 1 // c\n, b: 2}; }\n",
+		"w2b/g02.hx": "class C { var o = {a: 1 /* c */\n, b: 2}; }\n",
+		"w2b/g03.hx": "typedef T = {a:Int // c\n, b:Int};\n",
+		"w2b/g04.hx": "enum E { A(x:Int // c\n, y:Int); }\n",
+		"w2b/g05.hx": "class C { var m = [1 => 2 // c\n, 3 => 4]; }\n",
+		"w2b/g06.hx": "class C { function f() { g(a\n// own\n, b); } }\n",
+		"w2b/g07.hx": "class C<T // c\n, U> {}\n",
+		"w2b/g08.hx": "class C { var a = [1 // c1\n// c2\n, 2 // c3\n, 3]; }\n",
+		"w2b/g09.hx": "class C { function f() { new D(a // c\n, b); } }\n",
+		"w2b/g10.hx": "class C { var a = [1 // c\n]; }\n",
+		"w2b/g11.hx": "class C { var a = [1, 2 // c\n, ]; }\n",
+		"w2b/g12.hx": "class C { function f(a:Int // c\n, b:Int) {} }\n",
+		"w2b/g13.hx": "class C { function f() { switch x { case A // c1\n, B // c2\n, C: 1; case _: 2; } } }\n",
+		"w2b/g14.hx": "class C { function f() { var a = 1 // c\n, b = 2; } }\n",
+		"w2b/g15.hx": "class C { function f() { return a // c\n&& b; } }\n",
+		"w2b/g16.hx": "class C { function f() { if (// c\na) {} } }\n",
+		"w2b/g17.hx": "class C { function f() { var x = (/* c */ a + b); } }\n",
+		"w2b/g18.hx": "class C { var a = [1 // c\n\n, 2]; }\n",
+		"w2b/h01.hx": "class C { function f() { var x = ( // c\na + b); } }\n",
+		"w2b/h02.hx": "class C { function f() { var x = ( /* c */\na + b); } }\n",
+		"w2b/h03.hx": "class C { function f() { var x = (/* c1 */ /* c2 */ a); } }\n",
+		"w2b/h04.hx": "class C { function f() { return aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa // c\n&& bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb && ccccccccccccccccccccccccccccccccccccc; } }\n",
+		"w2b/h05.hx": "class C { function f() { return a && // c\nb; } }\n",
+		"w2b/h06.hx": "class C { function f() { if (x) { } /* c */ else { } } }\n",
+		"w2b/h07.hx": "class C { function f() { if (x) a(); // c\nelse b(); } }\n",
+		"w2b/h08.hx": "class C { function f() { try { } /* c */ catch (e:Dynamic) { } } }\n",
+		"w2b/h09.hx": "class C { function f() { var x = ( // c1\n// c2\na); } }\n",
+		"w2b/k01.hx": "class C { function f() { return a // c1\n&& // c2\nb; } }\n",
+		"w2b/k02.hx": "class C { function f() { return a // c1\n&&\n// c2\nb; } }\n",
+		"w2b/k03.hx": "class C { function f() { return a // c1\n|| b // c2\n|| c; } }\n",
+		"w2b/m01.hx": "class C { function f() { g(a // c1\n, b // c2\n, c); } }\n",
+		"w2b/m02.hx": "class C { function f() { switch x { case A, // c1\nB, // c2\nC: 1; case _: 2; } } }\n"
+	},
+	"invocations": [
+		{
+			"name": "w2/p01.hx",
+			"fixpoint": "w2/p01.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p01.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "87affdf1e33f3683",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p02.hx",
+			"fixpoint": "w2/p02.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p02.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "d40300cd3b132302",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p03.hx",
+			"fixpoint": "w2/p03.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p03.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e25cd6e5da5a6329",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p04.hx",
+			"fixpoint": "w2/p04.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p04.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c5e5849102f27d99",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p05.hx",
+			"fixpoint": "w2/p05.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p05.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "4e64912eb182009e",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p06.hx",
+			"fixpoint": "w2/p06.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p06.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e57eb0645723a357",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p07.hx",
+			"fixpoint": "w2/p07.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p07.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "d62882bf29f0e833",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p08.hx",
+			"fixpoint": "w2/p08.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p08.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "59dc7e65737af0d8",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p09.hx",
+			"fixpoint": "w2/p09.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p09.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "83df665287ecb5bf",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p10.hx",
+			"fixpoint": "w2/p10.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p10.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "8ba2a60dc2b44cf3",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p11.hx",
+			"fixpoint": "w2/p11.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p11.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c8f546c3145166b7",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p12.hx",
+			"fixpoint": "w2/p12.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p12.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "108041e269393c3d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p13.hx",
+			"fixpoint": "w2/p13.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p13.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "a551694c1fd4c268",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p14.hx",
+			"fixpoint": "w2/p14.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p14.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "fbda0b3a4b4f8721",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p15.hx",
+			"fixpoint": "w2/p15.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p15.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "428fc083788898b0",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p16.hx",
+			"fixpoint": "w2/p16.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p16.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "f054080b5e62c180",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p17.hx",
+			"fixpoint": "w2/p17.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p17.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "502fbf169a8add24",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p18.hx",
+			"fixpoint": "w2/p18.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p18.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "64890d3945543abe",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p19.hx",
+			"knownDefect": "a comma-first list with a line comment on each element writes the separator on a line of its own (W2c)",
+			"fixpoint": "w2/p19.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p19.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "d89ac95d84550545",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p20.hx",
+			"fixpoint": "w2/p20.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p20.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "34750d650040bc15",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p21.hx",
+			"fixpoint": "w2/p21.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p21.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "37a1cafb70dae444",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p22.hx",
+			"fixpoint": "w2/p22.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p22.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "64dd03a5cc6e099d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p23.hx",
+			"fixpoint": "w2/p23.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p23.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "74ccb16beece57a3",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p24.hx",
+			"fixpoint": "w2/p24.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p24.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ae0a210972430d9d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/q02.hx",
+			"fixpoint": "w2/q02.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/q02.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "260d172e30be3274",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/q10.hx",
+			"fixpoint": "w2/q10.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/q10.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "eea1ac6fc318142d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/q22.hx",
+			"fixpoint": "w2/q22.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/q22.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "1e534ebf52c2e6fd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/r1.hx",
+			"fixpoint": "w2/r1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/r1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "260d172e30be3274",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/r2.hx",
+			"fixpoint": "w2/r2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/r2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "f382017ef787020d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/r3.hx",
+			"fixpoint": "w2/r3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/r3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "1405540803849365",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/r4.hx",
+			"fixpoint": "w2/r4.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/r4.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "20cc688c374d1a62",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/r5.hx",
+			"fixpoint": "w2/r5.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/r5.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "1405540803849365",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/s1.hx",
+			"fixpoint": "w2/s1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/s1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "3ff25136db6f81b3",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/s2.hx",
+			"fixpoint": "w2/s2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/s2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "56dec0985a201b23",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/s3.hx",
+			"fixpoint": "w2/s3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/s3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "0224e1fa3f69af91",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/t1.hx",
+			"fixpoint": "w2/t1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/t1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "57393861920eae1b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/t2.hx",
+			"fixpoint": "w2/t2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/t2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "b16440d3bd371fb1",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/t3.hx",
+			"fixpoint": "w2/t3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/t3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "038e48f8ad2ed8ff",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/t4.hx",
+			"fixpoint": "w2/t4.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/t4.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "4896df8a38281283",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/u1.hx",
+			"fixpoint": "w2/u1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/u1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "260d172e30be3274",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/v1.hx",
+			"fixpoint": "w2/v1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/v1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "09e0b7beafbdf227",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/v2.hx",
+			"fixpoint": "w2/v2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/v2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7283531a1cb028dd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/v3.hx",
+			"fixpoint": "w2/v3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/v3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "76816520b9b69c93",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g01.hx",
+			"fixpoint": "w2b/g01.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g01.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "07ba12f2c0470995",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g02.hx",
+			"fixpoint": "w2b/g02.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g02.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ddfc82405a085c1f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g03.hx",
+			"fixpoint": "w2b/g03.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g03.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "50cba5a4613c3360",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g04.hx",
+			"fixpoint": "w2b/g04.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g04.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "b334bed561279f5a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g05.hx",
+			"fixpoint": "w2b/g05.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g05.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ce1006d90ec75174",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g06.hx",
+			"fixpoint": "w2b/g06.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g06.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "149e7f617f4a8bba",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g07.hx",
+			"fixpoint": "w2b/g07.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g07.hx"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "dac8d71aa77d85c4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "w2b/g08.hx",
+			"fixpoint": "w2b/g08.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g08.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "31a240680352a78d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g09.hx",
+			"fixpoint": "w2b/g09.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g09.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "34d7afbf0cf47a80",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g10.hx",
+			"fixpoint": "w2b/g10.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g10.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bd4f41200a22f06d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g11.hx",
+			"fixpoint": "w2b/g11.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g11.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "44fa318e16282171",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g12.hx",
+			"fixpoint": "w2b/g12.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g12.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7f2857c64e14f131",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g13.hx",
+			"knownDefect": "a comma-first list with a line comment on each element writes the separator on a line of its own (W2c)",
+			"fixpoint": "w2b/g13.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g13.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "d6fa52238639df71",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g14.hx",
+			"fixpoint": "w2b/g14.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g14.hx"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "119961bac5d7fafb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "w2b/g15.hx",
+			"fixpoint": "w2b/g15.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g15.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c79fcecc4dc439e4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g16.hx",
+			"fixpoint": "w2b/g16.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g16.hx"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "78ef245637d94614",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "w2b/g17.hx",
+			"fixpoint": "w2b/g17.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g17.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "65caf5729cf058c2",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/g18.hx",
+			"fixpoint": "w2b/g18.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/g18.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "0224e1fa3f69af91",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/h01.hx",
+			"fixpoint": "w2b/h01.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h01.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7dcb46bb7fa0dab3",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/h02.hx",
+			"fixpoint": "w2b/h02.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h02.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "65caf5729cf058c2",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/h03.hx",
+			"fixpoint": "w2b/h03.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h03.hx"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "c2d8fc262f6f3550",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "w2b/h04.hx",
+			"fixpoint": "w2b/h04.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h04.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "50b3252b3fd6b682",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/h05.hx",
+			"fixpoint": "w2b/h05.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h05.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "39989e9cebf5cf59",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/h06.hx",
+			"fixpoint": "w2b/h06.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h06.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "1396a508d37815fd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/h07.hx",
+			"fixpoint": "w2b/h07.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h07.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "8ad74b0f3fab1edd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/h08.hx",
+			"fixpoint": "w2b/h08.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h08.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "821a892b1b431fcc",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/h09.hx",
+			"fixpoint": "w2b/h09.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/h09.hx"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "90dfe2d6a3e989b0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "w2b/k01.hx",
+			"fixpoint": "w2b/k01.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/k01.hx"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "bfa55a888fd2d8c4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "w2b/k02.hx",
+			"fixpoint": "w2b/k02.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/k02.hx"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "ca9ba49ac182dd8b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "w2b/k03.hx",
+			"fixpoint": "w2b/k03.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/k03.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bbc846519db8d49b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/m01.hx",
+			"knownDefect": "a comma-first list with a line comment on each element writes the separator on a line of its own (W2c)",
+			"fixpoint": "w2b/m01.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/m01.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "5ecf1584282d1ab4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2b/m02.hx",
+			"knownDefect": "a comma-first list with a line comment on each element writes the separator on a line of its own (W2c)",
+			"fixpoint": "w2b/m02.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2b/m02.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "d6fa52238639df71",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		}
+	]
+}

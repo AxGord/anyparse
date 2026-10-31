@@ -1,0 +1,1021 @@
+{
+	"about": "hxq move of class Moved out of src/p/Host.hx into another package, with the dependency it reads (q.Node, haxe.ds) bound by an explicit import, an import.hx, a wildcard or a #if-guarded import at either side; the fixture then compiles main/Main.hx without and with -D foo. Seeded from the HXQ-MOVE-AMBIENT and MOVE-CARRY-AMBIENT reviews (P*, A*, C*, U*).",
+	"compile": {
+		"args": [
+			"-cp",
+			"src",
+			"-cp",
+			"main",
+			"-main",
+			"Main",
+			"--no-output"
+		],
+		"defines": [
+			[],
+			[
+				"-D",
+				"foo"
+			]
+		]
+	},
+	"invocations": [
+		{
+			"name": "A1",
+			"note": "dest names r.Node bare in another type: carrying q.Node would rebind it",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n\nclass Other {\n\tpublic static function f() {\n\t\ttrace(new Node().rOnly);\n\t}\n}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f08c56780dcf7e7f",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "A2",
+			"note": "dest names r.Node in a typedef",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\ntypedef Alias = Array<Node>;\n\nclass Dest {}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f08c56780dcf7e7f",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "A3",
+			"note": "dest names r.Node in Std.isOfType",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tstatic function f(x: Dynamic) {\n\t\treturn Std.isOfType(x, Node);\n\t}\n}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f08c56780dcf7e7f",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "A4",
+			"note": "dest names r.Node in a #if foo member",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\t#if foo\n\tstatic function f() trace(new Node().rOnly);\n\t#end\n}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f08c56780dcf7e7f",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "A5",
+			"note": "dest names r.Node in an enum argument",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nenum E {\n\tA(n: Node);\n}\n\nclass Dest {}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f08c56780dcf7e7f",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "A6",
+			"note": "dest names r.Node as a value",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tstatic function f() {\n\t\tvar k = Node;\n\t\ttrace(k);\n\t}\n}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f08c56780dcf7e7f",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "C1",
+			"note": "std names (Map, Date, Std, StringTools) beside an import.hx-bound q.Node",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tvar m: Map<String, Int> = [];\n\tvar d: Date = Date.now();\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(Std.string(n.qOnly) + StringTools.trim(\" a \"));\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "a606a470ccda222c",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C2",
+			"note": "std names with no import anywhere",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar m: Map<String, Int> = [];\n\tvar d: Date = Date.now();\n\tpublic function new() {\n\t\ttrace(Std.string(Math.max(1, 2)) + StringTools.trim(\" a \"));\n\t}\n}\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tvar x: Int = 0;\n\tvar s: String = \"\";\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "694eb644111d6889",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C3",
+			"note": "StringMap bound by p/import.hx",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar m: StringMap<Int> = new StringMap();\n\tvar i: Int = 0;\n\tpublic function new() {}\n}\n",
+				"src/p/import.hx": "import haxe.ds.StringMap;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tvar x: Int = 0;\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "c64f892fdf3db6b3",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C4",
+			"note": "StringMap through an import.hx type wildcard haxe.ds.*",
+			"knownDefect": "type-wildcard binding not carried: refuses (MOVE-CARRY-WILDCARD)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar m: StringMap<Int> = new StringMap();\n\tvar i: Int = 0;\n\tvar s: String = \"\";\n\tvar a: Array<Float> = [];\n\tpublic function new() { trace(Std.string(i) + Math.max(1, 2)); }\n}\n",
+				"src/p/import.hx": "import haxe.ds.*;\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tvar x: Int = 0;\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "75a5c2250816677d",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "C5",
+			"note": "StringMap bound by the root import.hx",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/import.hx": "import haxe.ds.StringMap;\n",
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar m: StringMap<Int> = new StringMap();\n\tvar i: Int = 0;\n\tvar s: String = \"\";\n\tvar a: Array<Float> = [];\n\tpublic function new() { trace(Std.string(i) + Math.max(1, 2)); }\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tvar x: Int = 0;\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "44570450dab3f2ce",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C6",
+			"note": "haxe.ds.* import.hx on both sides",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar m: StringMap<Int> = new StringMap();\n\tvar i: Int = 0;\n\tvar s: String = \"\";\n\tvar a: Array<Float> = [];\n\tpublic function new() { trace(Std.string(i) + Math.max(1, 2)); }\n}\n",
+				"src/p/import.hx": "import haxe.ds.*;\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tvar x: Int = 0;\n\tvar y: StringMap<Int> = null;\n}\n",
+				"src/r/import.hx": "import haxe.ds.*;\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "7ceeb12cdff564a5",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C7",
+			"note": "StringMap through the source's own import haxe.ds.*",
+			"knownDefect": "type-wildcard binding not carried: refuses (MOVE-CARRY-WILDCARD)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport haxe.ds.*;\n\nclass Host {}\n\nclass Moved {\n\tvar m: StringMap<Int> = new StringMap();\n\tvar i: Int = 0;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tvar x: Int = 0;\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "75a5c2250816677d",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "C8",
+			"note": "Map/Date/StringTools beside an import.hx haxe.ds.* (Map is also a top-level alias)",
+			"knownDefect": "false refusal of Map, a top-level std alias, under haxe.ds.* (MOVE-CARRY-WILDCARD)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar m: Map<String, Int> = [];\n\tvar i: Int = 0;\n\tvar s: String = \"\";\n\tvar a: Array<Float> = [];\n\tvar d: Date = Date.now();\n\tpublic function new() { trace(Std.string(i) + Math.max(1, 2) + StringTools.trim(s)); }\n}\n",
+				"src/p/import.hx": "import haxe.ds.*;\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {\n\tvar x: Int = 0;\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "bdcaeda715e59443",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "C9",
+			"note": "source imports haxe.io.* and spells haxe.io.Bytes qualified",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport haxe.io.*;\n\nclass Host {}\n\nclass Moved {\n\tvar i: Int = 0;\n\tvar e: haxe.io.Bytes = null;\n\tpublic function new() { trace(Std.string(i)); }\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "8fd24baa66e6fb12",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C10",
+			"note": "Map under the source's import haxe.ds.* (top-level alias)",
+			"knownDefect": "false refusal of Map, a top-level std alias, under haxe.ds.* (MOVE-CARRY-WILDCARD)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport haxe.ds.*;\n\nclass Host {}\n\nclass Moved {\n\tvar m: Map<String, Int> = [];\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "bdcaeda715e59443",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "C11",
+			"note": "Bytes through an import.hx haxe.io.* plus Map",
+			"knownDefect": "type-wildcard binding not carried: refuses (MOVE-CARRY-WILDCARD)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar b: Bytes = null;\n\tvar m: Map<String, Int> = [];\n\tpublic function new() {}\n}\n",
+				"src/p/import.hx": "import haxe.io.*;\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "d6464e4a297b704e",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "C12",
+			"note": "Map and List with no import",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar m: Map<String, Int> = [];\n\tvar l: List<Int> = null;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "36a7bf682ae3b6ec",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P1",
+			"note": "dest imports q.Node explicitly",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nimport q.Node;\n\nclass Dest {\n\tvar m: Node;\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "2ed8e38d257a10e5",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P2",
+			"note": "dest import.hx also binds q.Node",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"src/r/import.hx": "import q.Node;\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "3a1759fc5d3bda98",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P3",
+			"note": "dest package declares its own r.Node",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "a78dc132990c576a",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P4",
+			"note": "dest package has r.Node, dest import.hx binds q.Node",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"src/r/import.hx": "import q.Node;\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "3a1759fc5d3bda98",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P5",
+			"note": "nothing binds Node at dest: the import.hx binding must be carried",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "a78dc132990c576a",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P6",
+			"note": "dest has r.Node and imports q.*",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nimport q.*;\n\nclass Dest {}\n",
+				"src/r/Node.hx": "package r;\n\nclass Node {\n\tpublic var rOnly: Int = 2;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "0a5ff682dde6c811",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P7",
+			"note": "dest package p.sub declares its own Node",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/p/sub/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/p/sub/Dest.hx": "package p.sub;\n\nclass Dest {}\n",
+				"src/p/sub/Node.hx": "package p.sub;\n\nclass Node {\n\tpublic function new() {}\n}\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new p.sub.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "a8abc34273c4b763",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P9",
+			"note": "dest module declares Node itself and imports q.Node",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nimport q.Node;\n\nclass Dest {}\n\nclass Node {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "546b9b124811edf8",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "P10",
+			"note": "dest imports q.Node, a sibling module in r",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nimport q.Node;\n\nclass Dest {}\n",
+				"src/r/Other.hx": "package r;\n\nclass Other {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "a78dc132990c576a",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P11",
+			"note": "dest binds q.Node only under #if foo",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\n#if foo\nimport q.Node;\n#end\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "8489ca23dba000a4",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "P12",
+			"note": "source imports q.Node explicitly, dest only under #if foo",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport q.Node;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n\tpublic function new() {\n\t\tn = new Node();\n\t\ttrace(n.qOnly);\n\t}\n}\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\n#if foo\nimport q.Node;\n#end\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "9f9785f4000875c0",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "U1",
+			"note": "an extension call through a using that only import.hx supplies",
+			"knownDefect": "a using supplied only by import.hx is not carried: the moved code does not compile (MOVE-CARRY-WILDCARD)",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(new Node().qx());\n\t}\n}\n",
+				"src/p/import.hx": "import q.Node;\nusing q.Tools;\n",
+				"src/q/Node.hx": "package q;\n\nclass Node {\n\tpublic function new() {}\n}\n",
+				"src/q/Tools.hx": "package q;\n\nclass Tools {\n\tpublic static function qx(n: Node): Int return 1;\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "1c74bfe49da4abd2",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "U2",
+			"note": "an import.hx alias: import q.Thing in Node",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(new Node().qOnly);\n\t}\n}\n",
+				"src/p/import.hx": "import q.Thing in Node;\n",
+				"src/q/Thing.hx": "package q;\n\nclass Thing {\n\tpublic var qOnly: Int = 1;\n\tpublic function new() {}\n}\n",
+				"src/r/Dest.hx": "package r;\n\nclass Dest {}\n",
+				"main/Main.hx": "class Main { static function main() { new r.Dest.Moved(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "9f0bdb06f62ead49",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		}
+	]
+}

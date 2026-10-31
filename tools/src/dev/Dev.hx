@@ -27,6 +27,7 @@ final class Dev {
 		{ name: 'battery', main: Battery.main, usage: Battery.USAGE },
 		{ name: 'base-engine', main: BaseEngine.main, usage: BaseEngine.USAGE },
 		{ name: 'parity', main: Parity.main, usage: Parity.USAGE },
+		{ name: 'probe', main: Probe.main, usage: Probe.USAGE },
 
 		{ name: 'decision', main: Decision.main, usage: Decision.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },

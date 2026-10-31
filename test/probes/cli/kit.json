@@ -1,0 +1,7552 @@
+{
+	"about": "every registered command with the flags its help and the skills spell, read ops and write ops without --write, plus usage faults; each once through apq and once through hxq (which adds its --lang-default). Seeded from the CLI-FLAGS and CLI-FLAGS-2 reviews.",
+	"files": {
+		"pkg/Foo.hx": "package pkg;\n\nimport haxe.ds.StringMap;\n\n/** A fixture. */\n@:keep\nclass Foo {\n\tpublic static inline final LIMIT: Int = 3;\n\n\tvar count: Int = 0;\n\tfinal names: Array<String> = ['b', 'a'];\n\n\tpublic function new() {}\n\n\tpublic function bump(by: Int, label: String): Int {\n\t\tcount += by;\n\t\ttrace('bump ' + label);\n\t\treturn helper(count);\n\t}\n\n\tfunction helper(x: Int): Int {\n\t\t#if debug\n\t\ttrace(x);\n\t\t#end\n\t\treturn switch x {\n\t\t\tcase 0: 1;\n\t\t\tcase 1 | 2: x * 2;\n\t\t\tcase _: x;\n\t\t}\n\t}\n\n\tpublic function useMap(): StringMap<Int> {\n\t\tfinal m = new StringMap<Int>();\n\t\tm.set('k', bump(1, 'k'));\n\t\treturn m;\n\t}\n}\n",
+		"pkg/Bar.hx": "package pkg;\n\nclass Bar extends Base {\n\tpublic function run(): Int {\n\t\tfinal f = new Foo();\n\t\treturn f.bump(2, 'x') + Foo.LIMIT;\n\t}\n}\n\nclass Base {\n\tpublic var shared: Int = 1;\n\n\tpublic function new() {}\n\n\tpublic function inherited(): Int {\n\t\treturn shared;\n\t}\n}\n",
+		"data.json": "{\"a\": [1, 2], \"b\": \"x\"}\n"
+	},
+	"invocations": [
+		{
+			"name": "apq ast pkg/Foo.hx --depth 1",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--depth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d48c6e2585cae725",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --depth 1",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--depth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d48c6e2585cae725",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --select FnMember:bump --source",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"--source"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1c0088e053e5a39f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --select FnMember:bump --source",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"--source"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1c0088e053e5a39f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --json --depth 0",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--json",
+				"--depth",
+				"0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3f01ce4d23f74bf",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --json --depth 0",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--json",
+				"--depth",
+				"0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3f01ce4d23f74bf",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --select FnMember --min-children 2",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember",
+				"--min-children",
+				"2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "005c4b57eb145418",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --select FnMember --min-children 2",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember",
+				"--min-children",
+				"2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "005c4b57eb145418",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --at 16:3 --depth 0",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--at",
+				"16:3",
+				"--depth",
+				"0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "27d0479ec2463541",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --at 16:3 --depth 0",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--at",
+				"16:3",
+				"--depth",
+				"0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "27d0479ec2463541",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --count --select FnMember",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--count",
+				"--select",
+				"FnMember"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "46a56e8df6e18819",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --count --select FnMember",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--count",
+				"--select",
+				"FnMember"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "46a56e8df6e18819",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --writer-output",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--writer-output"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "b7ebff3d8e484d0b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --writer-output",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--writer-output"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "b7ebff3d8e484d0b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --type-refs",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--type-refs"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d311ea6e7659e1ae",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --type-refs",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--type-refs"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d311ea6e7659e1ae",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --spans --depth 1",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--spans",
+				"--depth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "acde562eb63ae8fd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --spans --depth 1",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--spans",
+				"--depth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "acde562eb63ae8fd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --limit",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--limit"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c849d3aa9c153457",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --limit",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--limit"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c849d3aa9c153457",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq probe class C { function f() { return 1; } } --depth 2",
+			"argv": [
+				"apq",
+				"probe",
+				"class C { function f() { return 1; } }",
+				"--depth",
+				"2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d712025fa1683e7c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq probe class C { function f() { return 1; } } --depth 2",
+			"argv": [
+				"hxq",
+				"probe",
+				"class C { function f() { return 1; } }",
+				"--depth",
+				"2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "81d34d6232e30512",
+				"err": "bb5eeb9378081581",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq probe --count class C {}",
+			"argv": [
+				"apq",
+				"probe",
+				"--count",
+				"class C {}"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d712025fa1683e7c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq probe --count class C {}",
+			"argv": [
+				"hxq",
+				"probe",
+				"--count",
+				"class C {}"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4355a46b19d348dc",
+				"err": "bb5eeb9378081581",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq probe class C {} --writer-probe",
+			"argv": [
+				"apq",
+				"probe",
+				"class C {}",
+				"--writer-probe"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d712025fa1683e7c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq probe class C {} --writer-probe",
+			"argv": [
+				"hxq",
+				"probe",
+				"class C {}",
+				"--writer-probe"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "c31af358bff2db7f",
+				"err": "d1abad068178a269",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq probe class C {} --select ClassDecl --json",
+			"argv": [
+				"apq",
+				"probe",
+				"class C {}",
+				"--select",
+				"ClassDecl",
+				"--json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d712025fa1683e7c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq probe class C {} --select ClassDecl --json",
+			"argv": [
+				"hxq",
+				"probe",
+				"class C {}",
+				"--select",
+				"ClassDecl",
+				"--json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "05a5db5589949de7",
+				"err": "bb5eeb9378081581",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq probe class C {} --writer-output",
+			"argv": [
+				"apq",
+				"probe",
+				"class C {}",
+				"--writer-output"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d712025fa1683e7c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq probe class C {} --writer-output",
+			"argv": [
+				"hxq",
+				"probe",
+				"class C {}",
+				"--writer-output"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "8a7eaee3a2ed1ded",
+				"err": "bb5eeb9378081581",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq probe --i;",
+			"argv": [
+				"apq",
+				"probe",
+				"--i;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "1111029ae8724c65",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq probe --i;",
+			"argv": [
+				"hxq",
+				"probe",
+				"--i;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "1111029ae8724c65",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq probe a b",
+			"argv": [
+				"apq",
+				"probe",
+				"a",
+				"b"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d712025fa1683e7c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq probe a b",
+			"argv": [
+				"hxq",
+				"probe",
+				"a",
+				"b"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c6dd893426b4c5e8",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq search trace($x) pkg",
+			"argv": [
+				"apq",
+				"search",
+				"trace($x)",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "06fd49b789572360",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq search trace($x) pkg",
+			"argv": [
+				"hxq",
+				"search",
+				"trace($x)",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a29ac0d48d0d2d01",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq search trace($x) pkg --flat --limit 1",
+			"argv": [
+				"apq",
+				"search",
+				"trace($x)",
+				"pkg",
+				"--flat",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "06fd49b789572360",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq search trace($x) pkg --flat --limit 1",
+			"argv": [
+				"hxq",
+				"search",
+				"trace($x)",
+				"pkg",
+				"--flat",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1de9bd3b3cd58515",
+				"err": "f7080661e69ee4a7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq search --kind CallExpr trace($x) pkg",
+			"argv": [
+				"apq",
+				"search",
+				"--kind",
+				"CallExpr",
+				"trace($x)",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "06fd49b789572360",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq search --kind CallExpr trace($x) pkg",
+			"argv": [
+				"hxq",
+				"search",
+				"--kind",
+				"CallExpr",
+				"trace($x)",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "df7e1a8e0d11f089",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq search -- --$x pkg",
+			"argv": [
+				"apq",
+				"search",
+				"--",
+				"--$x",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "06fd49b789572360",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq search -- --$x pkg",
+			"argv": [
+				"hxq",
+				"search",
+				"--",
+				"--$x",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq search --json trace($x) pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"search",
+				"--json",
+				"trace($x)",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1d0aab20bae0307a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq search --json trace($x) pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"search",
+				"--json",
+				"trace($x)",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1d0aab20bae0307a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs count pkg",
+			"argv": [
+				"apq",
+				"refs",
+				"count",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8c685632153487d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs count pkg",
+			"argv": [
+				"hxq",
+				"refs",
+				"count",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4c83022e7db6b821",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs count pkg --decls",
+			"argv": [
+				"apq",
+				"refs",
+				"count",
+				"pkg",
+				"--decls"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8c685632153487d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs count pkg --decls",
+			"argv": [
+				"hxq",
+				"refs",
+				"count",
+				"pkg",
+				"--decls"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1fd9d00ac72218bd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs count bump -- pkg --flat",
+			"argv": [
+				"apq",
+				"refs",
+				"count",
+				"bump",
+				"--",
+				"pkg",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8c685632153487d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs count bump -- pkg --flat",
+			"argv": [
+				"hxq",
+				"refs",
+				"count",
+				"bump",
+				"--",
+				"pkg",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "bcba274df6795e59",
+				"err": "9099b980ac52310b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs count pkg --limit 1 --json",
+			"argv": [
+				"apq",
+				"refs",
+				"count",
+				"pkg",
+				"--limit",
+				"1",
+				"--json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8c685632153487d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs count pkg --limit 1 --json",
+			"argv": [
+				"hxq",
+				"refs",
+				"count",
+				"pkg",
+				"--limit",
+				"1",
+				"--json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a35c5e1fe4f7f3a1",
+				"err": "408ce753f647dbcb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs count pkg --reads --writes --doc --source",
+			"argv": [
+				"apq",
+				"refs",
+				"count",
+				"pkg",
+				"--reads",
+				"--writes",
+				"--doc",
+				"--source"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8c685632153487d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs count pkg --reads --writes --doc --source",
+			"argv": [
+				"hxq",
+				"refs",
+				"count",
+				"pkg",
+				"--reads",
+				"--writes",
+				"--doc",
+				"--source"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "9f776a2d57ed5a73",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs count pkg --limit",
+			"argv": [
+				"apq",
+				"refs",
+				"count",
+				"pkg",
+				"--limit"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8c685632153487d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs count pkg --limit",
+			"argv": [
+				"hxq",
+				"refs",
+				"count",
+				"pkg",
+				"--limit"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "fbc3c6060a761f54",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs count pkg --limit x",
+			"argv": [
+				"apq",
+				"refs",
+				"count",
+				"pkg",
+				"--limit",
+				"x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8c685632153487d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs count pkg --limit x",
+			"argv": [
+				"hxq",
+				"refs",
+				"count",
+				"pkg",
+				"--limit",
+				"x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "5b55489b5062a062",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq uses StringMap pkg",
+			"argv": [
+				"apq",
+				"uses",
+				"StringMap",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "08760cc4a8b70b73",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq uses StringMap pkg",
+			"argv": [
+				"hxq",
+				"uses",
+				"StringMap",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "ca362531ed272139",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq uses Foo pkg --flat --limit 2",
+			"argv": [
+				"apq",
+				"uses",
+				"Foo",
+				"pkg",
+				"--flat",
+				"--limit",
+				"2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "08760cc4a8b70b73",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq uses Foo pkg --flat --limit 2",
+			"argv": [
+				"hxq",
+				"uses",
+				"Foo",
+				"pkg",
+				"--flat",
+				"--limit",
+				"2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "90ac81d823da6902",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq uses Foo pkg --json",
+			"argv": [
+				"apq",
+				"uses",
+				"Foo",
+				"pkg",
+				"--json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "7642f36447c40197",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq uses Foo pkg --json",
+			"argv": [
+				"hxq",
+				"uses",
+				"Foo",
+				"pkg",
+				"--json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "7642f36447c40197",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq meta @:keep pkg",
+			"argv": [
+				"apq",
+				"meta",
+				"@:keep",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "77ee225483439a08",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq meta @:keep pkg",
+			"argv": [
+				"hxq",
+				"meta",
+				"@:keep",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "9199bdf344b27225",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq meta @:keep pkg --on ClassDecl --flat",
+			"argv": [
+				"apq",
+				"meta",
+				"@:keep",
+				"pkg",
+				"--on",
+				"ClassDecl",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "77ee225483439a08",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq meta @:keep pkg --on ClassDecl --flat",
+			"argv": [
+				"hxq",
+				"meta",
+				"@:keep",
+				"pkg",
+				"--on",
+				"ClassDecl",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "bc207176b758c232",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq meta @:keep pkg --json --limit 1",
+			"argv": [
+				"apq",
+				"meta",
+				"@:keep",
+				"pkg",
+				"--json",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "77ee225483439a08",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq meta @:keep pkg --json --limit 1",
+			"argv": [
+				"hxq",
+				"meta",
+				"@:keep",
+				"pkg",
+				"--json",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "3efd04ed184195ef",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq blast Foo pkg",
+			"argv": [
+				"apq",
+				"blast",
+				"Foo",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "90ad4c02bebe8612",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq blast Foo pkg",
+			"argv": [
+				"hxq",
+				"blast",
+				"Foo",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "15517b5c4c9d8e1c",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq blast Foo pkg --flat --limit 3",
+			"argv": [
+				"apq",
+				"blast",
+				"Foo",
+				"pkg",
+				"--flat",
+				"--limit",
+				"3"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "90ad4c02bebe8612",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq blast Foo pkg --flat --limit 3",
+			"argv": [
+				"hxq",
+				"blast",
+				"Foo",
+				"pkg",
+				"--flat",
+				"--limit",
+				"3"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "98ea3b8627326fca",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lit bump pkg",
+			"argv": [
+				"apq",
+				"lit",
+				"bump",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "e0130b48f288c5ba",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lit bump pkg",
+			"argv": [
+				"hxq",
+				"lit",
+				"bump",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a0da153dc4381cdf",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lit bump pkg --exact --flat",
+			"argv": [
+				"apq",
+				"lit",
+				"bump",
+				"pkg",
+				"--exact",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "e0130b48f288c5ba",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lit bump pkg --exact --flat",
+			"argv": [
+				"hxq",
+				"lit",
+				"bump",
+				"pkg",
+				"--exact",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1aa97fa9cdcfd5b1",
+				"err": "d924af1ff86a517e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lit k pkg --kind Literal --limit 1",
+			"argv": [
+				"apq",
+				"lit",
+				"k",
+				"pkg",
+				"--kind",
+				"Literal",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "e0130b48f288c5ba",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lit k pkg --kind Literal --limit 1",
+			"argv": [
+				"hxq",
+				"lit",
+				"k",
+				"pkg",
+				"--kind",
+				"Literal",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "c1bee505ace0da6c",
+				"err": "054b3efcd9957abf",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lit a b -- pkg --any-kind",
+			"argv": [
+				"apq",
+				"lit",
+				"a",
+				"b",
+				"--",
+				"pkg",
+				"--any-kind"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "e0130b48f288c5ba",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lit a b -- pkg --any-kind",
+			"argv": [
+				"hxq",
+				"lit",
+				"a",
+				"b",
+				"--",
+				"pkg",
+				"--any-kind"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "31299e39343122a3",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lit debug pkg --include-directives",
+			"argv": [
+				"apq",
+				"lit",
+				"debug",
+				"pkg",
+				"--include-directives"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "e0130b48f288c5ba",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lit debug pkg --include-directives",
+			"argv": [
+				"hxq",
+				"lit",
+				"debug",
+				"pkg",
+				"--include-directives"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "b8c7bfc0325941d9",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lit fixture pkg --include-comments",
+			"argv": [
+				"apq",
+				"lit",
+				"fixture",
+				"pkg",
+				"--include-comments"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "e0130b48f288c5ba",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lit fixture pkg --include-comments",
+			"argv": [
+				"hxq",
+				"lit",
+				"fixture",
+				"pkg",
+				"--include-comments"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "c0abae0985609f45",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq mentions bump pkg",
+			"argv": [
+				"apq",
+				"mentions",
+				"bump",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "e1a359e448433e47",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq mentions bump pkg",
+			"argv": [
+				"hxq",
+				"mentions",
+				"bump",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "04f76ce391c35677",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq mentions bump count -- pkg --flat --limit 1000",
+			"argv": [
+				"apq",
+				"mentions",
+				"bump",
+				"count",
+				"--",
+				"pkg",
+				"--flat",
+				"--limit",
+				"1000"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "e1a359e448433e47",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq mentions bump count -- pkg --flat --limit 1000",
+			"argv": [
+				"hxq",
+				"mentions",
+				"bump",
+				"count",
+				"--",
+				"pkg",
+				"--flat",
+				"--limit",
+				"1000"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "50bfc500c3551bc6",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq cases _ pkg",
+			"argv": [
+				"apq",
+				"cases",
+				"_",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "b1363c9094322c13",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq cases _ pkg",
+			"argv": [
+				"hxq",
+				"cases",
+				"_",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "949643d79149d9a2",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq cases _ pkg --flat --limit 1",
+			"argv": [
+				"apq",
+				"cases",
+				"_",
+				"pkg",
+				"--flat",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "b1363c9094322c13",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq cases _ pkg --flat --limit 1",
+			"argv": [
+				"hxq",
+				"cases",
+				"_",
+				"pkg",
+				"--flat",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "b83f74b325f1d855",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq cond debug pkg",
+			"argv": [
+				"apq",
+				"cond",
+				"debug",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "ee30159fcb9cb551",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq cond debug pkg",
+			"argv": [
+				"hxq",
+				"cond",
+				"debug",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "c6eacac7eade79da",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq cond debug pkg --limit 1 --max-body 1",
+			"argv": [
+				"apq",
+				"cond",
+				"debug",
+				"pkg",
+				"--limit",
+				"1",
+				"--max-body",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "ee30159fcb9cb551",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq cond debug pkg --limit 1 --max-body 1",
+			"argv": [
+				"hxq",
+				"cond",
+				"debug",
+				"pkg",
+				"--limit",
+				"1",
+				"--max-body",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "c6eacac7eade79da",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq callees Foo.bump pkg",
+			"argv": [
+				"apq",
+				"callees",
+				"Foo.bump",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "7ac94dcee10e1af7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq callees Foo.bump pkg",
+			"argv": [
+				"hxq",
+				"callees",
+				"Foo.bump",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e50282891a3303c9",
+				"err": "31c67f29053df869",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq callers Foo.helper pkg --depth 1",
+			"argv": [
+				"apq",
+				"callers",
+				"Foo.helper",
+				"pkg",
+				"--depth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "aad5c4d30dac104d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq callers Foo.helper pkg --depth 1",
+			"argv": [
+				"hxq",
+				"callers",
+				"Foo.helper",
+				"pkg",
+				"--depth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "2aca882d37add7be",
+				"err": "8fda086f5a8f9293",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq reach --from Bar.run --to Foo.helper pkg",
+			"argv": [
+				"apq",
+				"reach",
+				"--from",
+				"Bar.run",
+				"--to",
+				"Foo.helper",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "5719239ec07779da",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq reach --from Bar.run --to Foo.helper pkg",
+			"argv": [
+				"hxq",
+				"reach",
+				"--from",
+				"Bar.run",
+				"--to",
+				"Foo.helper",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "16a23a67df841d7c",
+				"err": "ec20c8f0bfcf22b7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq clusters Foo pkg",
+			"argv": [
+				"apq",
+				"clusters",
+				"Foo",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "fccb423b51eded65",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq clusters Foo pkg",
+			"argv": [
+				"hxq",
+				"clusters",
+				"Foo",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4285e7f45e1dc8a0",
+				"err": "ee1689ec7daaea00",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq graph pkg",
+			"argv": [
+				"apq",
+				"graph",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8bacd0b4d2b3809",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq graph pkg",
+			"argv": [
+				"hxq",
+				"graph",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "dacbcc6953071428",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq graph pkg --by type",
+			"argv": [
+				"apq",
+				"graph",
+				"pkg",
+				"--by",
+				"type"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "aff24e769d63bb87",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq graph pkg --by type",
+			"argv": [
+				"hxq",
+				"graph",
+				"pkg",
+				"--by",
+				"type"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "aff24e769d63bb87",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq graph pkg --format mermaid",
+			"argv": [
+				"apq",
+				"graph",
+				"pkg",
+				"--format",
+				"mermaid"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8bacd0b4d2b3809",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq graph pkg --format mermaid",
+			"argv": [
+				"hxq",
+				"graph",
+				"pkg",
+				"--format",
+				"mermaid"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "295f0fa509cf5b65",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq symbols pkg",
+			"argv": [
+				"apq",
+				"symbols",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "8675ed78bc52e59f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq symbols pkg",
+			"argv": [
+				"hxq",
+				"symbols",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e7b5974b2f8dfb8c",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq symbols pkg --kind ClassDecl",
+			"argv": [
+				"apq",
+				"symbols",
+				"pkg",
+				"--kind",
+				"ClassDecl"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "8675ed78bc52e59f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq symbols pkg --kind ClassDecl",
+			"argv": [
+				"hxq",
+				"symbols",
+				"pkg",
+				"--kind",
+				"ClassDecl"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e7b5974b2f8dfb8c",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq importers haxe.ds.StringMap pkg",
+			"argv": [
+				"apq",
+				"importers",
+				"haxe.ds.StringMap",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "5dccb816980cacaa",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq importers haxe.ds.StringMap pkg",
+			"argv": [
+				"hxq",
+				"importers",
+				"haxe.ds.StringMap",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "69617162e2f08688",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq declares Foo pkg",
+			"argv": [
+				"apq",
+				"declares",
+				"Foo",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "2ab21295fc5abaf8",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq declares Foo pkg",
+			"argv": [
+				"hxq",
+				"declares",
+				"Foo",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "fc4c9eac958c22b5",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq gates pkg",
+			"argv": [
+				"apq",
+				"gates",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "6d126ca26f80dfc3",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq gates pkg",
+			"argv": [
+				"hxq",
+				"gates",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "0bf9839eb8450534",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq gates pkg --flat --limit 1",
+			"argv": [
+				"apq",
+				"gates",
+				"pkg",
+				"--flat",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "6d126ca26f80dfc3",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq gates pkg --flat --limit 1",
+			"argv": [
+				"hxq",
+				"gates",
+				"pkg",
+				"--flat",
+				"--limit",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "0bf9839eb8450534",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq diff pkg/Foo.hx pkg/Bar.hx",
+			"argv": [
+				"apq",
+				"diff",
+				"pkg/Foo.hx",
+				"pkg/Bar.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "30ad7b54d657a99f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq diff pkg/Foo.hx pkg/Bar.hx",
+			"argv": [
+				"hxq",
+				"diff",
+				"pkg/Foo.hx",
+				"pkg/Bar.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "30ad7b54d657a99f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq changed HEAD pkg",
+			"argv": [
+				"apq",
+				"changed",
+				"HEAD",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "af85e5ae6bf88a32",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq changed HEAD pkg",
+			"argv": [
+				"hxq",
+				"changed",
+				"HEAD",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "13c2abf4a39b41d5",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq strip pkg/Foo.hx trace",
+			"argv": [
+				"apq",
+				"strip",
+				"pkg/Foo.hx",
+				"trace"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "73916ec27b6f7252",
+				"err": "38a99c348c342a5c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq strip pkg/Foo.hx trace",
+			"argv": [
+				"hxq",
+				"strip",
+				"pkg/Foo.hx",
+				"trace"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "73916ec27b6f7252",
+				"err": "38a99c348c342a5c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq writer-equals pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"writer-equals",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "a1ce3105a1a7ec63",
+				"err": "00b010c91db4f5ed",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq writer-equals pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"writer-equals",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "a1ce3105a1a7ec63",
+				"err": "00b010c91db4f5ed",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq writer-equals pkg/Foo.hx --plain",
+			"argv": [
+				"apq",
+				"writer-equals",
+				"pkg/Foo.hx",
+				"--plain"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "a1ce3105a1a7ec63",
+				"err": "00b010c91db4f5ed",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq writer-equals pkg/Foo.hx --plain",
+			"argv": [
+				"hxq",
+				"writer-equals",
+				"pkg/Foo.hx",
+				"--plain"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "a1ce3105a1a7ec63",
+				"err": "00b010c91db4f5ed",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq writer-probe pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"writer-probe",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f2698dc01222eedd",
+				"err": "698f8448f86517a2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq writer-probe pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"writer-probe",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f2698dc01222eedd",
+				"err": "698f8448f86517a2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq source pkg/Foo.hx --range 3:6",
+			"argv": [
+				"apq",
+				"source",
+				"pkg/Foo.hx",
+				"--range",
+				"3:6"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "41d959303d2aed2b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq source pkg/Foo.hx --range 3:6",
+			"argv": [
+				"hxq",
+				"source",
+				"pkg/Foo.hx",
+				"--range",
+				"3:6"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "41d959303d2aed2b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq source pkg/Foo.hx --select FnMember:helper",
+			"argv": [
+				"apq",
+				"source",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "9aa5cc17cb0ff759",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq source pkg/Foo.hx --select FnMember:helper",
+			"argv": [
+				"hxq",
+				"source",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "9aa5cc17cb0ff759",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq source pkg/Foo.hx -n --range 1:2",
+			"argv": [
+				"apq",
+				"source",
+				"pkg/Foo.hx",
+				"-n",
+				"--range",
+				"1:2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "100bc0dd4d4570b0",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq source pkg/Foo.hx -n --range 1:2",
+			"argv": [
+				"hxq",
+				"source",
+				"pkg/Foo.hx",
+				"-n",
+				"--range",
+				"1:2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "100bc0dd4d4570b0",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq show pkg/Foo.hx --range 1:3 --number",
+			"argv": [
+				"apq",
+				"show",
+				"pkg/Foo.hx",
+				"--range",
+				"1:3",
+				"--number"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d2d08e9e124f9d65",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq show pkg/Foo.hx --range 1:3 --number",
+			"argv": [
+				"hxq",
+				"show",
+				"pkg/Foo.hx",
+				"--range",
+				"1:3",
+				"--number"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d2d08e9e124f9d65",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq get data.json a.0",
+			"argv": [
+				"apq",
+				"get",
+				"data.json",
+				"a.0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4355a46b19d348dc",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq get data.json a.0",
+			"argv": [
+				"hxq",
+				"get",
+				"data.json",
+				"a.0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4355a46b19d348dc",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq get data.json --select Member:a",
+			"argv": [
+				"apq",
+				"get",
+				"data.json",
+				"--select",
+				"Member:a"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f109b002d2f351fa",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq get data.json --select Member:a",
+			"argv": [
+				"hxq",
+				"get",
+				"data.json",
+				"--select",
+				"Member:a"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f109b002d2f351fa",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq get - a",
+			"argv": [
+				"apq",
+				"get",
+				"-",
+				"a"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f109b002d2f351fa",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq get - a",
+			"argv": [
+				"hxq",
+				"get",
+				"-",
+				"a"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "79015bb85e905f93",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"fmt",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "b7ebff3d8e484d0b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq fmt pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "b7ebff3d8e484d0b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt --list pkg/Foo.hx data.json",
+			"argv": [
+				"apq",
+				"fmt",
+				"--list",
+				"pkg/Foo.hx",
+				"data.json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "1a9bf32b1824f08d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq fmt --list pkg/Foo.hx data.json",
+			"argv": [
+				"hxq",
+				"fmt",
+				"--list",
+				"pkg/Foo.hx",
+				"data.json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "69617162e2f08688",
+				"err": "3a780b1992a6551b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt pkg/Foo.hx -l",
+			"argv": [
+				"apq",
+				"fmt",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "69617162e2f08688",
+				"err": "eef06c7385a6b7eb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq fmt pkg/Foo.hx -l",
+			"argv": [
+				"hxq",
+				"fmt",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "69617162e2f08688",
+				"err": "eef06c7385a6b7eb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt -l pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"fmt",
+				"-l",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "69617162e2f08688",
+				"err": "eef06c7385a6b7eb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq fmt -l pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"-l",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "69617162e2f08688",
+				"err": "eef06c7385a6b7eb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt --verify pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"fmt",
+				"--verify",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "f22931c4653f967d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq fmt --verify pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"--verify",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "f22931c4653f967d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt --one-pass --list pkg",
+			"argv": [
+				"apq",
+				"fmt",
+				"--one-pass",
+				"--list",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d0167ada62090e9d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq fmt --one-pass --list pkg",
+			"argv": [
+				"hxq",
+				"fmt",
+				"--one-pass",
+				"--list",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "5a3b0022962cefc1",
+				"err": "9c61c9068e2ee6bf",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint pkg/Foo.hx --no-oracle --flat",
+			"argv": [
+				"apq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "25d022178e09a100",
+				"err": "cbe36b1c6da3a54a",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint pkg/Foo.hx --no-oracle --flat",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "25d022178e09a100",
+				"err": "cbe36b1c6da3a54a",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint pkg/Foo.hx --no-oracle --rule unused-import --format json",
+			"argv": [
+				"apq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--rule",
+				"unused-import",
+				"--format",
+				"json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4f53cda18c2baa0c",
+				"err": "fbbbe43aac9861ec",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint pkg/Foo.hx --no-oracle --rule unused-import --format json",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--rule",
+				"unused-import",
+				"--format",
+				"json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4f53cda18c2baa0c",
+				"err": "fbbbe43aac9861ec",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint --list-rules",
+			"argv": [
+				"apq",
+				"lint",
+				"--list-rules"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "945d33088dcc76ad",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint --list-rules",
+			"argv": [
+				"hxq",
+				"lint",
+				"--list-rules"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a7a6b78e7e872d8b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint pkg/Foo.hx --no-oracle --all --flat --full",
+			"argv": [
+				"apq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--all",
+				"--flat",
+				"--full"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "7b47dbc5c4e88739",
+				"err": "500be2f97cd8fc69",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint pkg/Foo.hx --no-oracle --all --flat --full",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--all",
+				"--flat",
+				"--full"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "7b47dbc5c4e88739",
+				"err": "500be2f97cd8fc69",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint pkg/Foo.hx --no-oracle --range 15:20",
+			"argv": [
+				"apq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--range",
+				"15:20"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "a08d539da4f37f19",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint pkg/Foo.hx --no-oracle --range 15:20",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--range",
+				"15:20"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "a08d539da4f37f19",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint pkg/Foo.hx --no-oracle --baseline",
+			"argv": [
+				"apq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--baseline"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "dd0a438cb13418ac",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint pkg/Foo.hx --no-oracle --baseline",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--baseline"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "dd0a438cb13418ac",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint pkg/Foo.hx --no-oracle --summary",
+			"argv": [
+				"apq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--summary"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1bf6ac9d19335c2b",
+				"err": "0324cd1aed0b7f70",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint pkg/Foo.hx --no-oracle --summary",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"--summary"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "1bf6ac9d19335c2b",
+				"err": "0324cd1aed0b7f70",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint pkg/Foo.hx --no-oracle -a --flat",
+			"argv": [
+				"apq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"-a",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "7b47dbc5c4e88739",
+				"err": "500be2f97cd8fc69",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint pkg/Foo.hx --no-oracle -a --flat",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/Foo.hx",
+				"--no-oracle",
+				"-a",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "7b47dbc5c4e88739",
+				"err": "500be2f97cd8fc69",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint-diff --old data.json --new data.json",
+			"argv": [
+				"apq",
+				"lint-diff",
+				"--old",
+				"data.json",
+				"--new",
+				"data.json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "4fe1683b139d28b9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint-diff --old data.json --new data.json",
+			"argv": [
+				"hxq",
+				"lint-diff",
+				"--old",
+				"data.json",
+				"--new",
+				"data.json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "4fe1683b139d28b9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint-score --truth data.json data.json",
+			"argv": [
+				"apq",
+				"lint-score",
+				"--truth",
+				"data.json",
+				"data.json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d2f577cf532fc84e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint-score --truth data.json data.json",
+			"argv": [
+				"hxq",
+				"lint-score",
+				"--truth",
+				"data.json",
+				"data.json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "d2f577cf532fc84e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq test-summary nosuch.txt",
+			"argv": [
+				"apq",
+				"test-summary",
+				"nosuch.txt"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3d786a1a816252c1",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq test-summary nosuch.txt",
+			"argv": [
+				"hxq",
+				"test-summary",
+				"nosuch.txt"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3d786a1a816252c1",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq mutation-verdict nosuch.txt",
+			"argv": [
+				"apq",
+				"mutation-verdict",
+				"nosuch.txt"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "232d987cfbd5af8c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq mutation-verdict nosuch.txt",
+			"argv": [
+				"hxq",
+				"mutation-verdict",
+				"nosuch.txt"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "232d987cfbd5af8c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq shard-plan --help",
+			"argv": [
+				"apq",
+				"shard-plan",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "85ea24147934166a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq shard-plan --help",
+			"argv": [
+				"hxq",
+				"shard-plan",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "85ea24147934166a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq self-status pkg",
+			"argv": [
+				"apq",
+				"self-status",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c9f1b0af35be8f44",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq self-status pkg",
+			"argv": [
+				"hxq",
+				"self-status",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d639e8b738b26cc1",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq resolve-define debug pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq resolve-define debug pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq resolve-define debug pkg/Foo.hx --undefined",
+			"argv": [
+				"apq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx",
+				"--undefined"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq resolve-define debug pkg/Foo.hx --undefined",
+			"argv": [
+				"hxq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx",
+				"--undefined"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq resolve-define debug pkg/Foo.hx -l",
+			"argv": [
+				"apq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq resolve-define debug pkg/Foo.hx -l",
+			"argv": [
+				"hxq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq comment-rewrite fixture sample pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"comment-rewrite",
+				"fixture",
+				"sample",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4142e0a686793f9e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq comment-rewrite fixture sample pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"comment-rewrite",
+				"fixture",
+				"sample",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4142e0a686793f9e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq comment-rewrite fix(ture) x pkg/Foo.hx --regex",
+			"argv": [
+				"apq",
+				"comment-rewrite",
+				"fix(ture)",
+				"x",
+				"pkg/Foo.hx",
+				"--regex"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4142e0a686793f9e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq comment-rewrite fix(ture) x pkg/Foo.hx --regex",
+			"argv": [
+				"hxq",
+				"comment-rewrite",
+				"fix(ture)",
+				"x",
+				"pkg/Foo.hx",
+				"--regex"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4142e0a686793f9e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq comment-rewrite fixture x pkg/Foo.hx -l",
+			"argv": [
+				"apq",
+				"comment-rewrite",
+				"fixture",
+				"x",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "364fcdc6c26bb1da",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq comment-rewrite fixture x pkg/Foo.hx -l",
+			"argv": [
+				"hxq",
+				"comment-rewrite",
+				"fixture",
+				"x",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "364fcdc6c26bb1da",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq rename pkg/Foo.hx --select VarMember:count total",
+			"argv": [
+				"apq",
+				"rename",
+				"pkg/Foo.hx",
+				"--select",
+				"VarMember:count",
+				"total"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4a96ae77564f26ca",
+				"err": "9c1fff1f1a5ed449",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq rename pkg/Foo.hx --select VarMember:count total",
+			"argv": [
+				"hxq",
+				"rename",
+				"pkg/Foo.hx",
+				"--select",
+				"VarMember:count",
+				"total"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4a96ae77564f26ca",
+				"err": "9c1fff1f1a5ed449",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq rename pkg/Foo.hx 10:6 total",
+			"argv": [
+				"apq",
+				"rename",
+				"pkg/Foo.hx",
+				"10:6",
+				"total"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4a96ae77564f26ca",
+				"err": "203ec72159a5f53e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq rename pkg/Foo.hx 10:6 total",
+			"argv": [
+				"hxq",
+				"rename",
+				"pkg/Foo.hx",
+				"10:6",
+				"total"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4a96ae77564f26ca",
+				"err": "203ec72159a5f53e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq inline pkg/Foo.hx --select FinalMember:LIMIT",
+			"argv": [
+				"apq",
+				"inline",
+				"pkg/Foo.hx",
+				"--select",
+				"FinalMember:LIMIT"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "e613e63e6a2e0fdb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq inline pkg/Foo.hx --select FinalMember:LIMIT",
+			"argv": [
+				"hxq",
+				"inline",
+				"pkg/Foo.hx",
+				"--select",
+				"FinalMember:LIMIT"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "e613e63e6a2e0fdb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq inline-method pkg/Foo.hx --select FnMember:helper",
+			"argv": [
+				"apq",
+				"inline-method",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "82c8d4a8723c44aa",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq inline-method pkg/Foo.hx --select FnMember:helper",
+			"argv": [
+				"hxq",
+				"inline-method",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "82c8d4a8723c44aa",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-var pkg/Foo.hx 17:3 v",
+			"argv": [
+				"apq",
+				"extract-var",
+				"pkg/Foo.hx",
+				"17:3",
+				"v"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "5862c2b37db74303",
+				"err": "608d0c3b9afd0206",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-var pkg/Foo.hx 17:3 v",
+			"argv": [
+				"hxq",
+				"extract-var",
+				"pkg/Foo.hx",
+				"17:3",
+				"v"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "5862c2b37db74303",
+				"err": "608d0c3b9afd0206",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-constant pkg/Foo.hx --type Foo --name K --literal 'k'",
+			"argv": [
+				"apq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"--name",
+				"K",
+				"--literal",
+				"'k'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "ca28d9c00c0fbb90",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-constant pkg/Foo.hx --type Foo --name K --literal 'k'",
+			"argv": [
+				"hxq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"--name",
+				"K",
+				"--literal",
+				"'k'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "ca28d9c00c0fbb90",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-constant pkg/Foo.hx --select Literal:'k' --name K",
+			"argv": [
+				"apq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--select",
+				"Literal:'k'",
+				"--name",
+				"K"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "b9a262d4b5c0d127",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-constant pkg/Foo.hx --select Literal:'k' --name K",
+			"argv": [
+				"hxq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--select",
+				"Literal:'k'",
+				"--name",
+				"K"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "b9a262d4b5c0d127",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-constant pkg/Foo.hx --match 'k' --name K --to Foo",
+			"argv": [
+				"apq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--match",
+				"'k'",
+				"--name",
+				"K",
+				"--to",
+				"Foo"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "c7b53b55dcf8a5d7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-constant pkg/Foo.hx --match 'k' --name K --to Foo",
+			"argv": [
+				"hxq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--match",
+				"'k'",
+				"--name",
+				"K",
+				"--to",
+				"Foo"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "c7b53b55dcf8a5d7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-method pkg/Foo.hx --range 16:17 --name f2",
+			"argv": [
+				"apq",
+				"extract-method",
+				"pkg/Foo.hx",
+				"--range",
+				"16:17",
+				"--name",
+				"f2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "66c5a0f9950c9445",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-method pkg/Foo.hx --range 16:17 --name f2",
+			"argv": [
+				"hxq",
+				"extract-method",
+				"pkg/Foo.hx",
+				"--range",
+				"16:17",
+				"--name",
+				"f2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "66c5a0f9950c9445",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-param pkg/Foo.hx --select FnMember:helper y: Int = 0",
+			"argv": [
+				"apq",
+				"add-param",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"y: Int = 0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "88357cdc7311cdb0",
+				"err": "b7ab2fa5e5bfe6c2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-param pkg/Foo.hx --select FnMember:helper y: Int = 0",
+			"argv": [
+				"hxq",
+				"add-param",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"y: Int = 0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "88357cdc7311cdb0",
+				"err": "b7ab2fa5e5bfe6c2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq change-sig pkg/Foo.hx --select FnMember:bump 1,0",
+			"argv": [
+				"apq",
+				"change-sig",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"1,0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d3fcdcc36389caae",
+				"err": "9313e6740c87453e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq change-sig pkg/Foo.hx --select FnMember:bump 1,0",
+			"argv": [
+				"hxq",
+				"change-sig",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"1,0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d3fcdcc36389caae",
+				"err": "9313e6740c87453e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-param pkg/Foo.hx --select FnMember:bump label",
+			"argv": [
+				"apq",
+				"remove-param",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"label"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "ef92de181c69da31",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-param pkg/Foo.hx --select FnMember:bump label",
+			"argv": [
+				"hxq",
+				"remove-param",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"label"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "ef92de181c69da31",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-member pkg/Foo.hx --type Foo var extra: Int = 0;",
+			"argv": [
+				"apq",
+				"add-member",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"var extra: Int = 0;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "93f06c391cb60a47",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-member pkg/Foo.hx --type Foo var extra: Int = 0;",
+			"argv": [
+				"hxq",
+				"add-member",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"var extra: Int = 0;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "93f06c391cb60a47",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-import pkg/Foo.hx haxe.ds.IntMap",
+			"argv": [
+				"apq",
+				"add-import",
+				"pkg/Foo.hx",
+				"haxe.ds.IntMap"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0fb95487405f90c4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-import pkg/Foo.hx haxe.ds.IntMap",
+			"argv": [
+				"hxq",
+				"add-import",
+				"pkg/Foo.hx",
+				"haxe.ds.IntMap"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0fb95487405f90c4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-meta pkg/Foo.hx --select FnMember:bump @:noCompletion",
+			"argv": [
+				"apq",
+				"add-meta",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"@:noCompletion"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "fa135b318a6fe548",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-meta pkg/Foo.hx --select FnMember:bump @:noCompletion",
+			"argv": [
+				"hxq",
+				"add-meta",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"@:noCompletion"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "fa135b318a6fe548",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-meta pkg/Foo.hx --at 15 @:noCompletion",
+			"argv": [
+				"apq",
+				"add-meta",
+				"pkg/Foo.hx",
+				"--at",
+				"15",
+				"@:noCompletion"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "30bc8313e602add6",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-meta pkg/Foo.hx --at 15 @:noCompletion",
+			"argv": [
+				"hxq",
+				"add-meta",
+				"pkg/Foo.hx",
+				"--at",
+				"15",
+				"@:noCompletion"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "30bc8313e602add6",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --after 17 count++;",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"17",
+				"count++;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "7291d872c3a65c4b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --after 17 count++;",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"17",
+				"count++;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "7291d872c3a65c4b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --after --select ExprStmt count++;",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"--select",
+				"ExprStmt",
+				"count++;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "fa5acebc49b7923d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --after --select ExprStmt count++;",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"--select",
+				"ExprStmt",
+				"count++;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "fa5acebc49b7923d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --before 17:3 count++;",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--before",
+				"17:3",
+				"count++;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "7291d872c3a65c4b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --before 17:3 count++;",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--before",
+				"17:3",
+				"count++;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "7291d872c3a65c4b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --append --select ArrayExpr 'c'",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--append",
+				"--select",
+				"ArrayExpr",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3df52bdc378a9660",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --append --select ArrayExpr 'c'",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--append",
+				"--select",
+				"ArrayExpr",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3df52bdc378a9660",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --sorted --select ArrayExpr 'c'",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--sorted",
+				"--select",
+				"ArrayExpr",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f64a5cffdef6a009",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --sorted --select ArrayExpr 'c'",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--sorted",
+				"--select",
+				"ArrayExpr",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f64a5cffdef6a009",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --after 17 --i;",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"17",
+				"--i;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "77312556016aec90",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --after 17 --i;",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"17",
+				"--i;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "77312556016aec90",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --after 17 -",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"17",
+				"-"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "7291d872c3a65c4b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --after 17 -",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"17",
+				"-"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "7291d872c3a65c4b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --after",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "f1ba487f2af19fcb",
+				"err": "b92429f9953d9de4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --after",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "f1ba487f2af19fcb",
+				"err": "b92429f9953d9de4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --append 11 'c'",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--append",
+				"11",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "8675a23ec3791656",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --append 11 'c'",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--append",
+				"11",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "8675a23ec3791656",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq move-elements pkg/Foo.hx --select ArrayExpr --range 0:1 --append ArrayExpr",
+			"argv": [
+				"apq",
+				"move-elements",
+				"pkg/Foo.hx",
+				"--select",
+				"ArrayExpr",
+				"--range",
+				"0:1",
+				"--append",
+				"ArrayExpr"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "e64c2d90d34481e7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq move-elements pkg/Foo.hx --select ArrayExpr --range 0:1 --append ArrayExpr",
+			"argv": [
+				"hxq",
+				"move-elements",
+				"pkg/Foo.hx",
+				"--select",
+				"ArrayExpr",
+				"--range",
+				"0:1",
+				"--append",
+				"ArrayExpr"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "e64c2d90d34481e7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node pkg/Foo.hx --select FnMember:helper function helper(x: Int): Int return x;",
+			"argv": [
+				"apq",
+				"replace-node",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"function helper(x: Int): Int return x;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "797b398ed3c12ac2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq replace-node pkg/Foo.hx --select FnMember:helper function helper(x: Int): Int return x;",
+			"argv": [
+				"hxq",
+				"replace-node",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"function helper(x: Int): Int return x;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "797b398ed3c12ac2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node pkg/Foo.hx --at 17:3 count--;",
+			"argv": [
+				"apq",
+				"replace-node",
+				"pkg/Foo.hx",
+				"--at",
+				"17:3",
+				"count--;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "c073a5ab97dee996",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq replace-node pkg/Foo.hx --at 17:3 count--;",
+			"argv": [
+				"hxq",
+				"replace-node",
+				"pkg/Foo.hx",
+				"--at",
+				"17:3",
+				"count--;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "c073a5ab97dee996",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-element pkg/Foo.hx 17",
+			"argv": [
+				"apq",
+				"remove-element",
+				"pkg/Foo.hx",
+				"17"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "9c6c5c7de0918d63",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-element pkg/Foo.hx 17",
+			"argv": [
+				"hxq",
+				"remove-element",
+				"pkg/Foo.hx",
+				"17"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "9c6c5c7de0918d63",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-element pkg/Foo.hx --select ExprStmt --nth 1",
+			"argv": [
+				"apq",
+				"remove-element",
+				"pkg/Foo.hx",
+				"--select",
+				"ExprStmt",
+				"--nth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "08e92faae6636447",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-element pkg/Foo.hx --select ExprStmt --nth 1",
+			"argv": [
+				"hxq",
+				"remove-element",
+				"pkg/Foo.hx",
+				"--select",
+				"ExprStmt",
+				"--nth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "08e92faae6636447",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-import pkg/Foo.hx haxe.ds.StringMap",
+			"argv": [
+				"apq",
+				"remove-import",
+				"pkg/Foo.hx",
+				"haxe.ds.StringMap"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f473124accbe7e4f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-import pkg/Foo.hx haxe.ds.StringMap",
+			"argv": [
+				"hxq",
+				"remove-import",
+				"pkg/Foo.hx",
+				"haxe.ds.StringMap"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f473124accbe7e4f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-member pkg/Foo.hx --type Foo helper",
+			"argv": [
+				"apq",
+				"remove-member",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "b965730bb509d5dd",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-member pkg/Foo.hx --type Foo helper",
+			"argv": [
+				"hxq",
+				"remove-member",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "b965730bb509d5dd",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-member pkg/Foo.hx --select FnMember:helper",
+			"argv": [
+				"apq",
+				"remove-member",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "54b10ceada85f66f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-member pkg/Foo.hx --select FnMember:helper",
+			"argv": [
+				"hxq",
+				"remove-member",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "54b10ceada85f66f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq set-modifier pkg/Foo.hx --select FnMember:helper +inline",
+			"argv": [
+				"apq",
+				"set-modifier",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"+inline"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "1176e0971c2ceb05",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq set-modifier pkg/Foo.hx --select FnMember:helper +inline",
+			"argv": [
+				"hxq",
+				"set-modifier",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"+inline"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "1176e0971c2ceb05",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq set-doc pkg/Foo.hx --select FnMember:helper Doc.",
+			"argv": [
+				"apq",
+				"set-doc",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"Doc."
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "e6c57a5df961b891",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq set-doc pkg/Foo.hx --select FnMember:helper Doc.",
+			"argv": [
+				"hxq",
+				"set-doc",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"Doc."
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "e6c57a5df961b891",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq set-comment pkg/Foo.hx 1:1 // x",
+			"argv": [
+				"apq",
+				"set-comment",
+				"pkg/Foo.hx",
+				"1:1",
+				"// x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "b5d0027d4c93cd8d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq set-comment pkg/Foo.hx 1:1 // x",
+			"argv": [
+				"hxq",
+				"set-comment",
+				"pkg/Foo.hx",
+				"1:1",
+				"// x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "b5d0027d4c93cd8d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq rewrite trace($x) log($x) pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"rewrite",
+				"trace($x)",
+				"log($x)",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "deff3b3f49bc2655",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq rewrite trace($x) log($x) pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"rewrite",
+				"trace($x)",
+				"log($x)",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "deff3b3f49bc2655",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq encapsulate-field pkg/Foo.hx --select VarMember:count",
+			"argv": [
+				"apq",
+				"encapsulate-field",
+				"pkg/Foo.hx",
+				"--select",
+				"VarMember:count"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "46916fff4eeb76c5",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq encapsulate-field pkg/Foo.hx --select VarMember:count",
+			"argv": [
+				"hxq",
+				"encapsulate-field",
+				"pkg/Foo.hx",
+				"--select",
+				"VarMember:count"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "46916fff4eeb76c5",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq make-final pkg/Foo.hx --select VarMember:count",
+			"argv": [
+				"apq",
+				"make-final",
+				"pkg/Foo.hx",
+				"--select",
+				"VarMember:count"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "bfaf5d7ff6104d36",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq make-final pkg/Foo.hx --select VarMember:count",
+			"argv": [
+				"hxq",
+				"make-final",
+				"pkg/Foo.hx",
+				"--select",
+				"VarMember:count"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "bfaf5d7ff6104d36",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq safe-delete pkg/Foo.hx --select FnMember:helper --scope pkg",
+			"argv": [
+				"apq",
+				"safe-delete",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "fc76b36bcc32ce31",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq safe-delete pkg/Foo.hx --select FnMember:helper --scope pkg",
+			"argv": [
+				"hxq",
+				"safe-delete",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "fc76b36bcc32ce31",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq introduce-parameter-object pkg/Foo.hx --select FnMember:bump --params by,label --name P",
+			"argv": [
+				"apq",
+				"introduce-parameter-object",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"--params",
+				"by,label",
+				"--name",
+				"P"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "d393b9ea8fa697f3",
+				"err": "a58fb3482e009c76",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq introduce-parameter-object pkg/Foo.hx --select FnMember:bump --params by,label --name P",
+			"argv": [
+				"hxq",
+				"introduce-parameter-object",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"--params",
+				"by,label",
+				"--name",
+				"P"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "d393b9ea8fa697f3",
+				"err": "a58fb3482e009c76",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-interface pkg/Foo.hx IFoo",
+			"argv": [
+				"apq",
+				"extract-interface",
+				"pkg/Foo.hx",
+				"IFoo"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4b40796673df63e4",
+				"err": "c03cfafc5764041c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-interface pkg/Foo.hx IFoo",
+			"argv": [
+				"hxq",
+				"extract-interface",
+				"pkg/Foo.hx",
+				"IFoo"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4b40796673df63e4",
+				"err": "c03cfafc5764041c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-superclass pkg/Foo.hx FooBase --members helper",
+			"argv": [
+				"apq",
+				"extract-superclass",
+				"pkg/Foo.hx",
+				"FooBase",
+				"--members",
+				"helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "180a52bfb89a3b5e",
+				"err": "f073b8ef8c4847c3",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-superclass pkg/Foo.hx FooBase --members helper",
+			"argv": [
+				"hxq",
+				"extract-superclass",
+				"pkg/Foo.hx",
+				"FooBase",
+				"--members",
+				"helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "180a52bfb89a3b5e",
+				"err": "f073b8ef8c4847c3",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq pull-up pkg/Bar.hx Bar.run",
+			"argv": [
+				"apq",
+				"pull-up",
+				"pkg/Bar.hx",
+				"Bar.run"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "d078a8dea557fcf7",
+				"err": "03d9b675f5444491",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq pull-up pkg/Bar.hx Bar.run",
+			"argv": [
+				"hxq",
+				"pull-up",
+				"pkg/Bar.hx",
+				"Bar.run"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "d078a8dea557fcf7",
+				"err": "03d9b675f5444491",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq push-down pkg/Bar.hx Base.inherited --to Bar",
+			"argv": [
+				"apq",
+				"push-down",
+				"pkg/Bar.hx",
+				"Base.inherited",
+				"--to",
+				"Bar"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "03f6902169e697d3",
+				"err": "4e4614aa0b7ce13a",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq push-down pkg/Bar.hx Base.inherited --to Bar",
+			"argv": [
+				"hxq",
+				"push-down",
+				"pkg/Bar.hx",
+				"Base.inherited",
+				"--to",
+				"Bar"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "03f6902169e697d3",
+				"err": "4e4614aa0b7ce13a",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq move-member pkg/Foo.hx Foo.LIMIT --to pkg/Bar.hx",
+			"argv": [
+				"apq",
+				"move-member",
+				"pkg/Foo.hx",
+				"Foo.LIMIT",
+				"--to",
+				"pkg/Bar.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "f857e23f631f6930",
+				"err": "d024518553907c46",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq move-member pkg/Foo.hx Foo.LIMIT --to pkg/Bar.hx",
+			"argv": [
+				"hxq",
+				"move-member",
+				"pkg/Foo.hx",
+				"Foo.LIMIT",
+				"--to",
+				"pkg/Bar.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "f857e23f631f6930",
+				"err": "d024518553907c46",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq move-to-helper pkg/Foo.hx Foo.helper --into FooHelper",
+			"argv": [
+				"apq",
+				"move-to-helper",
+				"pkg/Foo.hx",
+				"Foo.helper",
+				"--into",
+				"FooHelper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "10e36afc4287f3ed",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq move-to-helper pkg/Foo.hx Foo.helper --into FooHelper",
+			"argv": [
+				"hxq",
+				"move-to-helper",
+				"pkg/Foo.hx",
+				"Foo.helper",
+				"--into",
+				"FooHelper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "10e36afc4287f3ed",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq move pkg/Foo.hx --select ClassDecl:Foo --to pkg/Other.hx",
+			"argv": [
+				"apq",
+				"move",
+				"pkg/Foo.hx",
+				"--select",
+				"ClassDecl:Foo",
+				"--to",
+				"pkg/Other.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ed0ef3a5fe071de",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq move pkg/Foo.hx --select ClassDecl:Foo --to pkg/Other.hx",
+			"argv": [
+				"hxq",
+				"move",
+				"pkg/Foo.hx",
+				"--select",
+				"ClassDecl:Foo",
+				"--to",
+				"pkg/Other.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ed0ef3a5fe071de",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq new pkg/N.hx --class",
+			"argv": [
+				"apq",
+				"new",
+				"pkg/N.hx",
+				"--class"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "61db1f1eb3072e2f",
+				"err": "5be03f19e731dae1",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq new pkg/N.hx --class",
+			"argv": [
+				"hxq",
+				"new",
+				"pkg/N.hx",
+				"--class"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "61db1f1eb3072e2f",
+				"err": "5be03f19e731dae1",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq new pkg/N.hx --kind interface",
+			"argv": [
+				"apq",
+				"new",
+				"pkg/N.hx",
+				"--kind",
+				"interface"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d5206d6893288cb1",
+				"err": "5be03f19e731dae1",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq new pkg/N.hx --kind interface",
+			"argv": [
+				"hxq",
+				"new",
+				"pkg/N.hx",
+				"--kind",
+				"interface"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d5206d6893288cb1",
+				"err": "5be03f19e731dae1",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq new pkg/N.hx --implements IFoo --field x",
+			"argv": [
+				"apq",
+				"new",
+				"pkg/N.hx",
+				"--implements",
+				"IFoo",
+				"--field",
+				"x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3640f7913024f82f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq new pkg/N.hx --implements IFoo --field x",
+			"argv": [
+				"hxq",
+				"new",
+				"pkg/N.hx",
+				"--implements",
+				"IFoo",
+				"--field",
+				"x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3640f7913024f82f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq patch pkg/Foo.hx --select FnMember:helper --help",
+			"argv": [
+				"apq",
+				"patch",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "57e62b84de66d869",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq patch pkg/Foo.hx --select FnMember:helper --help",
+			"argv": [
+				"hxq",
+				"patch",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "57e62b84de66d869",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq sweep --help",
+			"argv": [
+				"apq",
+				"sweep",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "53c2110859a523ad",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq sweep --help",
+			"argv": [
+				"hxq",
+				"sweep",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "53c2110859a523ad",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq recon --help",
+			"argv": [
+				"apq",
+				"recon",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "00c6d748dd6b2936",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq recon --help",
+			"argv": [
+				"hxq",
+				"recon",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "00c6d748dd6b2936",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq oracle --help",
+			"argv": [
+				"apq",
+				"oracle",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "2904bf303a789769",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq oracle --help",
+			"argv": [
+				"hxq",
+				"oracle",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "2904bf303a789769",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq merge-file a b",
+			"argv": [
+				"apq",
+				"merge-file",
+				"a",
+				"b"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "45cca5c8afcda8c8",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq merge-file a b",
+			"argv": [
+				"hxq",
+				"merge-file",
+				"a",
+				"b"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "45cca5c8afcda8c8",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq mutation-schema --help",
+			"argv": [
+				"apq",
+				"mutation-schema",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "88d183427940100a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq mutation-schema --help",
+			"argv": [
+				"hxq",
+				"mutation-schema",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "88d183427940100a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq stdlib-dup --help",
+			"argv": [
+				"apq",
+				"stdlib-dup",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a4809f12c6a420dd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq stdlib-dup --help",
+			"argv": [
+				"hxq",
+				"stdlib-dup",
+				"--help"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a4809f12c6a420dd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq encapsulate-field pkg/Foo.hx count",
+			"argv": [
+				"apq",
+				"encapsulate-field",
+				"pkg/Foo.hx",
+				"count"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "933a1776f91d01b9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq encapsulate-field pkg/Foo.hx count",
+			"argv": [
+				"hxq",
+				"encapsulate-field",
+				"pkg/Foo.hx",
+				"count"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "933a1776f91d01b9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq make-final pkg/Foo.hx count --scope pkg",
+			"argv": [
+				"apq",
+				"make-final",
+				"pkg/Foo.hx",
+				"count",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "cdee2cc9d48bb4d9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq make-final pkg/Foo.hx count --scope pkg",
+			"argv": [
+				"hxq",
+				"make-final",
+				"pkg/Foo.hx",
+				"count",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "cdee2cc9d48bb4d9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq safe-delete pkg/Foo.hx useMap --scope pkg",
+			"argv": [
+				"apq",
+				"safe-delete",
+				"pkg/Foo.hx",
+				"useMap",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0bf50a4524f3445b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq safe-delete pkg/Foo.hx useMap --scope pkg",
+			"argv": [
+				"hxq",
+				"safe-delete",
+				"pkg/Foo.hx",
+				"useMap",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0bf50a4524f3445b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq rewrite pkg/Foo.hx trace($x) log($x)",
+			"argv": [
+				"apq",
+				"rewrite",
+				"pkg/Foo.hx",
+				"trace($x)",
+				"log($x)"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "c45a64145e94a6dd",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq rewrite pkg/Foo.hx trace($x) log($x)",
+			"argv": [
+				"hxq",
+				"rewrite",
+				"pkg/Foo.hx",
+				"trace($x)",
+				"log($x)"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "c45a64145e94a6dd",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq rewrite pkg/Foo.hx trace($x) log($x) --reformat",
+			"argv": [
+				"apq",
+				"rewrite",
+				"pkg/Foo.hx",
+				"trace($x)",
+				"log($x)",
+				"--reformat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "bce3ef8acd6aeb60",
+				"err": "f5e278f22f859ba8",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq rewrite pkg/Foo.hx trace($x) log($x) --reformat",
+			"argv": [
+				"hxq",
+				"rewrite",
+				"pkg/Foo.hx",
+				"trace($x)",
+				"log($x)",
+				"--reformat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "bce3ef8acd6aeb60",
+				"err": "f5e278f22f859ba8",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq move-to-helper pkg/Foo.hx helper --to FooHelper --scope pkg",
+			"argv": [
+				"apq",
+				"move-to-helper",
+				"pkg/Foo.hx",
+				"helper",
+				"--to",
+				"FooHelper",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "963a193b1433fe69",
+				"err": "ca713518ad224fe5",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq move-to-helper pkg/Foo.hx helper --to FooHelper --scope pkg",
+			"argv": [
+				"hxq",
+				"move-to-helper",
+				"pkg/Foo.hx",
+				"helper",
+				"--to",
+				"FooHelper",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "963a193b1433fe69",
+				"err": "ca713518ad224fe5",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq pull-up pkg/Bar.hx run --to Base --scope pkg",
+			"argv": [
+				"apq",
+				"pull-up",
+				"pkg/Bar.hx",
+				"run",
+				"--to",
+				"Base",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "2fb91223abc41305",
+				"err": "79f249ae13f68194",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq pull-up pkg/Bar.hx run --to Base --scope pkg",
+			"argv": [
+				"hxq",
+				"pull-up",
+				"pkg/Bar.hx",
+				"run",
+				"--to",
+				"Base",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "2fb91223abc41305",
+				"err": "79f249ae13f68194",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq push-down pkg/Bar.hx inherited --to Bar --scope pkg",
+			"argv": [
+				"apq",
+				"push-down",
+				"pkg/Bar.hx",
+				"inherited",
+				"--to",
+				"Bar",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4d8a6c4649fcfc7c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq push-down pkg/Bar.hx inherited --to Bar --scope pkg",
+			"argv": [
+				"hxq",
+				"push-down",
+				"pkg/Bar.hx",
+				"inherited",
+				"--to",
+				"Bar",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4d8a6c4649fcfc7c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq move-member pkg/Foo.hx LIMIT --to Bar --scope pkg",
+			"argv": [
+				"apq",
+				"move-member",
+				"pkg/Foo.hx",
+				"LIMIT",
+				"--to",
+				"Bar",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a7ae50e2b52cbc33",
+				"err": "f05f103ab2b2b8b0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq move-member pkg/Foo.hx LIMIT --to Bar --scope pkg",
+			"argv": [
+				"hxq",
+				"move-member",
+				"pkg/Foo.hx",
+				"LIMIT",
+				"--to",
+				"Bar",
+				"--scope",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a7ae50e2b52cbc33",
+				"err": "f05f103ab2b2b8b0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-interface pkg/Foo.hx IFoo --members bump",
+			"argv": [
+				"apq",
+				"extract-interface",
+				"pkg/Foo.hx",
+				"IFoo",
+				"--members",
+				"bump"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4b40796673df63e4",
+				"err": "180fe03889f36e93",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-interface pkg/Foo.hx IFoo --members bump",
+			"argv": [
+				"hxq",
+				"extract-interface",
+				"pkg/Foo.hx",
+				"IFoo",
+				"--members",
+				"bump"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4b40796673df63e4",
+				"err": "180fe03889f36e93",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq introduce-parameter-object pkg/Foo.hx --select FnMember:bump --params by,label --as P",
+			"argv": [
+				"apq",
+				"introduce-parameter-object",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"--params",
+				"by,label",
+				"--as",
+				"P"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "bd81308ec7cdf83e",
+				"err": "68996b1a2926b6c9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq introduce-parameter-object pkg/Foo.hx --select FnMember:bump --params by,label --as P",
+			"argv": [
+				"hxq",
+				"introduce-parameter-object",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"--params",
+				"by,label",
+				"--as",
+				"P"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "bd81308ec7cdf83e",
+				"err": "68996b1a2926b6c9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-param pkg/Foo.hx --select FnMember:bump 1",
+			"argv": [
+				"apq",
+				"remove-param",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "d9c925b5b19710e3",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-param pkg/Foo.hx --select FnMember:bump 1",
+			"argv": [
+				"hxq",
+				"remove-param",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "d9c925b5b19710e3",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-method pkg/Foo.hx 16:3 17:3 f2",
+			"argv": [
+				"apq",
+				"extract-method",
+				"pkg/Foo.hx",
+				"16:3",
+				"17:3",
+				"f2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "2fb8c5797abe9ebf",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-method pkg/Foo.hx 16:3 17:3 f2",
+			"argv": [
+				"hxq",
+				"extract-method",
+				"pkg/Foo.hx",
+				"16:3",
+				"17:3",
+				"f2"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "2fb8c5797abe9ebf",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq writer-equals pkg/Foo.hx pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"writer-equals",
+				"pkg/Foo.hx",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "6d69c6efc73908a4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq writer-equals pkg/Foo.hx pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"writer-equals",
+				"pkg/Foo.hx",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "6d69c6efc73908a4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq writer-equals pkg/Foo.hx pkg/Foo.hx --plain",
+			"argv": [
+				"apq",
+				"writer-equals",
+				"pkg/Foo.hx",
+				"pkg/Foo.hx",
+				"--plain"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "2c3eb1f3960ea480",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq writer-equals pkg/Foo.hx pkg/Foo.hx --plain",
+			"argv": [
+				"hxq",
+				"writer-equals",
+				"pkg/Foo.hx",
+				"pkg/Foo.hx",
+				"--plain"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "2c3eb1f3960ea480",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq strip pkg/Foo.hx --delete trace",
+			"argv": [
+				"apq",
+				"strip",
+				"pkg/Foo.hx",
+				"--delete",
+				"trace"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "7fab4623f3518879",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq strip pkg/Foo.hx --delete trace",
+			"argv": [
+				"hxq",
+				"strip",
+				"pkg/Foo.hx",
+				"--delete",
+				"trace"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "7fab4623f3518879",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --append --select ArrayExpr 'c'",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--append",
+				"--select",
+				"ArrayExpr",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3df52bdc378a9660",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --append --select ArrayExpr 'c'",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--append",
+				"--select",
+				"ArrayExpr",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3df52bdc378a9660",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --after --select ExprStmt --nth 1 count++;",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"--select",
+				"ExprStmt",
+				"--nth",
+				"1",
+				"count++;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3df52bdc378a9660",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --after --select ExprStmt --nth 1 count++;",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"--select",
+				"ExprStmt",
+				"--nth",
+				"1",
+				"count++;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3df52bdc378a9660",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --sorted 11 'c'",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--sorted",
+				"11",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "d9ae067092d4700b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --sorted 11 'c'",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--sorted",
+				"11",
+				"'c'"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "d9ae067092d4700b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx --after - 17:3",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"-",
+				"17:3"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "5939f5433d58f23f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx --after - 17:3",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx",
+				"--after",
+				"-",
+				"17:3"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "5939f5433d58f23f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-member pkg/Foo.hx --type Foo var extra:Int = 0;",
+			"argv": [
+				"apq",
+				"add-member",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"var extra:Int = 0;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "93f06c391cb60a47",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-member pkg/Foo.hx --type Foo var extra:Int = 0;",
+			"argv": [
+				"hxq",
+				"add-member",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"var extra:Int = 0;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "93f06c391cb60a47",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-import pkg/Foo.hx haxe.ds.IntMap",
+			"argv": [
+				"apq",
+				"add-import",
+				"pkg/Foo.hx",
+				"haxe.ds.IntMap"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0fb95487405f90c4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-import pkg/Foo.hx haxe.ds.IntMap",
+			"argv": [
+				"hxq",
+				"add-import",
+				"pkg/Foo.hx",
+				"haxe.ds.IntMap"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0fb95487405f90c4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-meta pkg/Foo.hx --select FnMember:bump @:noCompletion",
+			"argv": [
+				"apq",
+				"add-meta",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"@:noCompletion"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "fa135b318a6fe548",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-meta pkg/Foo.hx --select FnMember:bump @:noCompletion",
+			"argv": [
+				"hxq",
+				"add-meta",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:bump",
+				"@:noCompletion"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "fa135b318a6fe548",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-import pkg/Foo.hx haxe.ds.StringMap",
+			"argv": [
+				"apq",
+				"remove-import",
+				"pkg/Foo.hx",
+				"haxe.ds.StringMap"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f473124accbe7e4f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-import pkg/Foo.hx haxe.ds.StringMap",
+			"argv": [
+				"hxq",
+				"remove-import",
+				"pkg/Foo.hx",
+				"haxe.ds.StringMap"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f473124accbe7e4f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-member pkg/Foo.hx --type Foo helper",
+			"argv": [
+				"apq",
+				"remove-member",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "b965730bb509d5dd",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-member pkg/Foo.hx --type Foo helper",
+			"argv": [
+				"hxq",
+				"remove-member",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"helper"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "b965730bb509d5dd",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq set-modifier pkg/Foo.hx --select FnMember:helper +inline",
+			"argv": [
+				"apq",
+				"set-modifier",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"+inline"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "1176e0971c2ceb05",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq set-modifier pkg/Foo.hx --select FnMember:helper +inline",
+			"argv": [
+				"hxq",
+				"set-modifier",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"+inline"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "1176e0971c2ceb05",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq set-doc pkg/Foo.hx --select FnMember:helper Doc.",
+			"argv": [
+				"apq",
+				"set-doc",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"Doc."
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "e6c57a5df961b891",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq set-doc pkg/Foo.hx --select FnMember:helper Doc.",
+			"argv": [
+				"hxq",
+				"set-doc",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"Doc."
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "e6c57a5df961b891",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node pkg/Foo.hx --select FnMember:helper function helper(x:Int):Int return x;",
+			"argv": [
+				"apq",
+				"replace-node",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"function helper(x:Int):Int return x;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "797b398ed3c12ac2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq replace-node pkg/Foo.hx --select FnMember:helper function helper(x:Int):Int return x;",
+			"argv": [
+				"hxq",
+				"replace-node",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"function helper(x:Int):Int return x;"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "797b398ed3c12ac2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-element pkg/Foo.hx --select ExprStmt --nth 1",
+			"argv": [
+				"apq",
+				"remove-element",
+				"pkg/Foo.hx",
+				"--select",
+				"ExprStmt",
+				"--nth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "08e92faae6636447",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-element pkg/Foo.hx --select ExprStmt --nth 1",
+			"argv": [
+				"hxq",
+				"remove-element",
+				"pkg/Foo.hx",
+				"--select",
+				"ExprStmt",
+				"--nth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "08e92faae6636447",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq resolve-define debug pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq resolve-define debug pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq resolve-define debug pkg/Foo.hx --undefined",
+			"argv": [
+				"apq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx",
+				"--undefined"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq resolve-define debug pkg/Foo.hx --undefined",
+			"argv": [
+				"hxq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx",
+				"--undefined"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq resolve-define debug pkg/Foo.hx -l",
+			"argv": [
+				"apq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq resolve-define debug pkg/Foo.hx -l",
+			"argv": [
+				"hxq",
+				"resolve-define",
+				"debug",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "0ec4301f4bd3baee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq comment-rewrite fixture sample pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"comment-rewrite",
+				"fixture",
+				"sample",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4142e0a686793f9e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq comment-rewrite fixture sample pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"comment-rewrite",
+				"fixture",
+				"sample",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4142e0a686793f9e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq comment-rewrite fix(ture) x pkg/Foo.hx --regex",
+			"argv": [
+				"apq",
+				"comment-rewrite",
+				"fix(ture)",
+				"x",
+				"pkg/Foo.hx",
+				"--regex"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4142e0a686793f9e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq comment-rewrite fix(ture) x pkg/Foo.hx --regex",
+			"argv": [
+				"hxq",
+				"comment-rewrite",
+				"fix(ture)",
+				"x",
+				"pkg/Foo.hx",
+				"--regex"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "4142e0a686793f9e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq comment-rewrite fixture x pkg/Foo.hx -l",
+			"argv": [
+				"apq",
+				"comment-rewrite",
+				"fixture",
+				"x",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "364fcdc6c26bb1da",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq comment-rewrite fixture x pkg/Foo.hx -l",
+			"argv": [
+				"hxq",
+				"comment-rewrite",
+				"fixture",
+				"x",
+				"pkg/Foo.hx",
+				"-l"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "364fcdc6c26bb1da",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq comment-rewrite -- fixture x pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"comment-rewrite",
+				"--",
+				"fixture",
+				"x",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "63acfc57defde3a6",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq comment-rewrite -- fixture x pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"comment-rewrite",
+				"--",
+				"fixture",
+				"x",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "63acfc57defde3a6",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq patch pkg/Foo.hx --select FnMember:helper --batch",
+			"argv": [
+				"apq",
+				"patch",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"--batch"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "025ae3ef9dc827c1",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq patch pkg/Foo.hx --select FnMember:helper --batch",
+			"argv": [
+				"hxq",
+				"patch",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"--batch"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "025ae3ef9dc827c1",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq source pkg/Foo.hx --select FnMember:helper --select FnMember:bump",
+			"argv": [
+				"apq",
+				"source",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"--select",
+				"FnMember:bump"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "92ef48e32a2c54d7",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq source pkg/Foo.hx --select FnMember:helper --select FnMember:bump",
+			"argv": [
+				"hxq",
+				"source",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember:helper",
+				"--select",
+				"FnMember:bump"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "92ef48e32a2c54d7",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq set-comment pkg/Foo.hx 22:3 // x",
+			"argv": [
+				"apq",
+				"set-comment",
+				"pkg/Foo.hx",
+				"22:3",
+				"// x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "5ef72e9f05b2aef0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq set-comment pkg/Foo.hx 22:3 // x",
+			"argv": [
+				"hxq",
+				"set-comment",
+				"pkg/Foo.hx",
+				"22:3",
+				"// x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "5ef72e9f05b2aef0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-constant pkg/Foo.hx --type Foo --name K --literal k",
+			"argv": [
+				"apq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"--name",
+				"K",
+				"--literal",
+				"k"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3c4670e54a997b9c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-constant pkg/Foo.hx --type Foo --name K --literal k",
+			"argv": [
+				"hxq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--type",
+				"Foo",
+				"--name",
+				"K",
+				"--literal",
+				"k"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "3c4670e54a997b9c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-constant pkg/Foo.hx 34:9 --name K",
+			"argv": [
+				"apq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"34:9",
+				"--name",
+				"K"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "2f8ad616ebe8860c",
+				"err": "d1e319c4fdc21d92",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-constant pkg/Foo.hx 34:9 --name K",
+			"argv": [
+				"hxq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"34:9",
+				"--name",
+				"K"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "2f8ad616ebe8860c",
+				"err": "d1e319c4fdc21d92",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-constant pkg/Foo.hx --match 'bump ' + $x --name K --to Foo",
+			"argv": [
+				"apq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--match",
+				"'bump ' + $x",
+				"--name",
+				"K",
+				"--to",
+				"Foo"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "529614b8ee0bc009",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-constant pkg/Foo.hx --match 'bump ' + $x --name K --to Foo",
+			"argv": [
+				"hxq",
+				"extract-constant",
+				"pkg/Foo.hx",
+				"--match",
+				"'bump ' + $x",
+				"--name",
+				"K",
+				"--to",
+				"Foo"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "529614b8ee0bc009",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-var pkg/Foo.hx --match 'bump ' + $x v",
+			"argv": [
+				"apq",
+				"extract-var",
+				"pkg/Foo.hx",
+				"--match",
+				"'bump ' + $x",
+				"v"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f6c79cf26f8acae6",
+				"err": "53be028081494680",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-var pkg/Foo.hx --match 'bump ' + $x v",
+			"argv": [
+				"hxq",
+				"extract-var",
+				"pkg/Foo.hx",
+				"--match",
+				"'bump ' + $x",
+				"v"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f6c79cf26f8acae6",
+				"err": "53be028081494680",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq graph pkg --level type",
+			"argv": [
+				"apq",
+				"graph",
+				"pkg",
+				"--level",
+				"type"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8bacd0b4d2b3809",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq graph pkg --level type",
+			"argv": [
+				"hxq",
+				"graph",
+				"pkg",
+				"--level",
+				"type"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "ef51f5cb78c0bdf4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq graph pkg --diff pkg pkg",
+			"argv": [
+				"apq",
+				"graph",
+				"pkg",
+				"--diff",
+				"pkg",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8bacd0b4d2b3809",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq graph pkg --diff pkg pkg",
+			"argv": [
+				"hxq",
+				"graph",
+				"pkg",
+				"--diff",
+				"pkg",
+				"pkg"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "d6c71858a56f3573",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq graph pkg --focus Foo",
+			"argv": [
+				"apq",
+				"graph",
+				"pkg",
+				"--focus",
+				"Foo"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8bacd0b4d2b3809",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq graph pkg --focus Foo",
+			"argv": [
+				"hxq",
+				"graph",
+				"pkg",
+				"--focus",
+				"Foo"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "2558b142afac64a7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq uses Foo pkg --decls",
+			"argv": [
+				"apq",
+				"uses",
+				"Foo",
+				"pkg",
+				"--decls"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "a6ba78bb044c3a4d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq uses Foo pkg --decls",
+			"argv": [
+				"hxq",
+				"uses",
+				"Foo",
+				"pkg",
+				"--decls"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "a6ba78bb044c3a4d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --select FnMember --max-children 1 --depth 0",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember",
+				"--max-children",
+				"1",
+				"--depth",
+				"0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a3e40e23aa9d08be",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --select FnMember --max-children 1 --depth 0",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--select",
+				"FnMember",
+				"--max-children",
+				"1",
+				"--depth",
+				"0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "a3e40e23aa9d08be",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast --code class C {} --depth 1",
+			"argv": [
+				"apq",
+				"ast",
+				"--code",
+				"class C {}",
+				"--depth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "f657423637ca75b3",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast --code class C {} --depth 1",
+			"argv": [
+				"hxq",
+				"ast",
+				"--code",
+				"class C {}",
+				"--depth",
+				"1"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "07d8705e60f148f3",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast --stdin --depth 0",
+			"argv": [
+				"apq",
+				"ast",
+				"--stdin",
+				"--depth",
+				"0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "54ccfcd61b5f08f7",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast --stdin --depth 0",
+			"argv": [
+				"hxq",
+				"ast",
+				"--stdin",
+				"--depth",
+				"0"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "c595d2bad3407f75",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs",
+			"argv": [
+				"apq",
+				"refs"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8c685632153487d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs",
+			"argv": [
+				"hxq",
+				"refs"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "7d1077c2f5720a27",
+				"err": "267bf576f679eb6e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq search",
+			"argv": [
+				"apq",
+				"search"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "06fd49b789572360",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq search",
+			"argv": [
+				"hxq",
+				"search"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "edfa19e2878a6975",
+				"err": "edb3322da6b0602c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast",
+			"argv": [
+				"apq",
+				"ast"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "f657423637ca75b3",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast",
+			"argv": [
+				"hxq",
+				"ast"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "b3f17d34e4decb9f",
+				"err": "c9d4ea61e7a1df80",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt --bogus pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"fmt",
+				"--bogus",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8dd7fc134f747e9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq fmt --bogus pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"--bogus",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "c8dd7fc134f747e9",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint pkg/Foo.hx --rule",
+			"argv": [
+				"apq",
+				"lint",
+				"pkg/Foo.hx",
+				"--rule"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "5acac1f7c558e822",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint pkg/Foo.hx --rule",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/Foo.hx",
+				"--rule"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "5acac1f7c558e822",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq source pkg/Foo.hx --range",
+			"argv": [
+				"apq",
+				"source",
+				"pkg/Foo.hx",
+				"--range"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "9aa1a1ca889df1a0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq source pkg/Foo.hx --range",
+			"argv": [
+				"hxq",
+				"source",
+				"pkg/Foo.hx",
+				"--range"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "9aa1a1ca889df1a0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq get data.json",
+			"argv": [
+				"apq",
+				"get",
+				"data.json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "9d45c7134d53c478",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq get data.json",
+			"argv": [
+				"hxq",
+				"get",
+				"data.json"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "9d45c7134d53c478",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-element pkg/Foo.hx",
+			"argv": [
+				"apq",
+				"add-element",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "f1ba487f2af19fcb",
+				"err": "b92429f9953d9de4",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq add-element pkg/Foo.hx",
+			"argv": [
+				"hxq",
+				"add-element",
+				"pkg/Foo.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 2,
+				"out": "f1ba487f2af19fcb",
+				"err": "b92429f9953d9de4",
+				"files": "e3b0c44298fc1c14"
+			}
+		}
+	]
+}

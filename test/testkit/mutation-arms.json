@@ -33609,6 +33609,30 @@
 			"method": "terms",
 			"force": "[]",
 			"note": "a question splits into no terms, so owner ranks nothing and no duplicated question finds its owner"
+		},
+		{
+			"name": "M-PROBE-EXIT-BLIND",
+			"type": "dev.Probe",
+			"method": "deviations",
+			"find": "if (expected.exit != answer.exit)",
+			"replace": "if (false)",
+			"note": "a probe kit no longer compares exit statuses, so an engine that starts refusing an invocation with the same streams and no write reads as matching its recording"
+		},
+		{
+			"name": "M-PROBE-KNOWN-DEFECT-COUNTED",
+			"type": "dev.Probe",
+			"method": "judge",
+			"find": "if (known == null) {",
+			"replace": "if (true) {",
+			"note": "a known-defect row that moved counts as a deviation, so a fix to a defect the kit recorded fails the probe like a regression"
+		},
+		{
+			"name": "M-PROBE-ONE-PASS-BLIND",
+			"type": "dev.Probe",
+			"method": "rerun",
+			"find": "second[j].out == outcomes[i].out",
+			"replace": "true",
+			"note": "a formatter row whose second pass rewrites its own output still reads as one pass"
 		}
 	]
 }
