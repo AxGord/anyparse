@@ -140,13 +140,33 @@ final class WriterBraceSymmetryLowering {
 	 * carries no such branch, or the branch is not a single `Star`.
 	 */
 	private static function starElementTypePath(bs: BraceSymmetryCtx, typePath: String, ctor: String): Null<String> {
+		final branch: Null<ShapeNode> = ctorBranch(bs, typePath, ctor);
+		if (branch == null) return null;
+		final star: Null<ShapeNode> = branch.children.length == 1 && branch.children[0].kind == Star ? branch.children[0] : null;
+		return star == null || star.children.length == 0 ? null : star.children[0].annotations.get(AnnotationKeys.BASE_REF);
+	}
+
+	/** The branch of `typePath`'s `Alt` rule whose ctor is `ctor`; `null` when the rule is not an `Alt` or has none. */
+	private static function ctorBranch(bs: BraceSymmetryCtx, typePath: String, ctor: String): Null<ShapeNode> {
 		final rule: Null<ShapeNode> = bs.shape.rules[typePath];
-		if (rule == null || rule.kind != Alt) return null;
-		for (branch in rule.children) if (branch.annotations.get(AnnotationKeys.BASE_CTOR) == ctor) {
-			final star: Null<ShapeNode> = branch.children.length == 1 && branch.children[0].kind == Star ? branch.children[0] : null;
-			return star == null || star.children.length == 0 ? null : star.children[0].annotations.get(AnnotationKeys.BASE_REF);
-		}
-		return null;
+		return rule == null || rule.kind != Alt
+			? null
+			: rule.children.find(branch -> branch.annotations.get(AnnotationKeys.BASE_CTOR) == ctor);
+	}
+
+	/**
+	 * The `inner -> <StmtCtor>(inner, <trail>)` lift that raises a wrapped branch EXPRESSION into the
+	 * block's statement type. The trail slot is cleared only where the ctor's `@:fmt(liftNoSemi(…))` predicate
+	 * says the value ends on its own `}`: written with a `;` a `switch` reads back as the statement plus an empty
+	 * one, while a `]`- or value-ended expression without one does not compile.
+	 */
+	private static function stmtLift(bs: BraceSymmetryCtx, stmtPath: String, stmtCtor: String): Expr {
+		final stmtRef: Expr = MacroStringTools.toFieldExpr(bs.ruleCtorPath(stmtPath, stmtCtor));
+		final gate: Null<Array<String>> = ctorBranch(bs, stmtPath, stmtCtor)?.fmtReadStringArgs('liftNoSemi');
+		final trail: Expr = gate == null || gate.length != 1
+			? macro true
+			: macro !${AstPredLowering.predCallExpr(bs.shape.root, bs.ctx.trivia, bs.ctx.spans, gate[0], [macro cast _liftInner])};
+		return macro (_liftInner -> $stmtRef(cast _liftInner, $trail));
 	}
 
 	/**
@@ -169,9 +189,7 @@ final class WriterBraceSymmetryLowering {
 	private static function blockElemLift(bs: BraceSymmetryCtx, valuePath: Null<String>, blockCtor: String, stmtCtor: Null<String>): Expr {
 		if (valuePath == null || stmtCtor == null) return macro null;
 		final stmtPath: Null<String> = starElementTypePath(bs, valuePath, blockCtor);
-		if (stmtPath == null) return macro null;
-		final stmtRef: Expr = MacroStringTools.toFieldExpr(bs.ruleCtorPath(stmtPath, stmtCtor));
-		return macro (_tbsInner -> $stmtRef(cast _tbsInner, true));
+		return stmtPath == null ? macro null : stmtLift(bs, stmtPath, stmtCtor);
 	}
 
 	/**
@@ -198,16 +216,12 @@ final class WriterBraceSymmetryLowering {
 		final args: Null<Array<String>> = child.fmtReadStringArgs('valueBraceSymmetry');
 		final stmtPath: Null<String> = valueBraceSymmetryStmtPath(bs, child, args);
 		if (args == null || stmtPath == null) return fieldAccess;
-		final stmtRef: Expr = MacroStringTools.toFieldExpr(bs.ruleCtorPath(stmtPath, args[2]));
+		final lift: Expr = stmtLift(bs, stmtPath, args[2]);
 		final blockCtor: String = args[1];
 		final needsWrap: Expr = valueBraceSymmetryProbe(args, macro _vbsVal);
 		return macro {
 			final _vbsVal = $fieldAccess;
-			$needsWrap
-				? cast anyparse.format.SingleStmtBraces.wrapInBlock(
-					cast _vbsVal, $v{blockCtor}, _vbsInner -> $stmtRef(cast _vbsInner, true)
-				)
-				: _vbsVal;
+			$needsWrap ? cast anyparse.format.SingleStmtBraces.wrapInBlock(cast _vbsVal, $v{blockCtor}, $lift) : _vbsVal;
 		};
 	}
 
@@ -331,12 +345,64 @@ final class WriterBraceSymmetryLowering {
 	}
 
 	/**
+	 * The generated step that moves a body's head-gap comments (`sameLine`, the one cuddled to the head;
+	 * `ownLines`, the run on lines of their own) inside the braces the wrap direction gives it, as `_sv = …`
+	 * on the substituted body `_sv`; `macro {}` for a field that grows neither slot.
+	 */
+	private static function adoptHeadGapComments(rawAccess: Expr, sameLine: Null<Expr>, ownLines: Null<Expr>): Expr {
+		if (sameLine == null && ownLines == null) return macro {};
+		final sameLineArg: Expr = sameLine ?? macro null;
+		final ownLinesArg: Expr = ownLines ?? macro null;
+		return macro _sv = cast anyparse.format.SingleStmtBraces.adoptHeadGapComments(_sv, $rawAccess, $sameLineArg, $ownLinesArg);
+	}
+
+	/**
+	 * `adoptHeadGapComments` over a keyword-led body's two slots — the comment cuddled to the keyword and
+	 * the run below it; `macro {}` for a field with no keyword, which grows neither. The cuddled slot holds
+	 * a line comment's text without its `//` (the separator writes it back), so the block gets it re-prefixed.
+	 */
+	private static function adoptKwHeadGapComments(rawAccess: Expr, fieldName: String, kwLead: Null<String>): Expr {
+		if (kwLead == null) return macro {};
+		final pos: Position = Context.currentPos();
+		final afterKw: Expr = { expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), pos: pos };
+		return adoptHeadGapComments(
+			rawAccess, macro {
+				final _ak: Null<String> = $afterKw;
+				_ak == null ? null : '//' + _ak;
+			},
+			{ expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), pos: pos }
+		);
+	}
+
+	/**
+	 * A head-gap comment slot as the separator before a body writes it: on a brace-droppable field the
+	 * wrap may have moved it inside the braces (`adoptHeadGapComments`), and then nothing is left outside.
+	 * `sameLine` picks the slot's shape — one cuddled comment or an own-line run. An empty slot skips the
+	 * probe, which re-derives the substituted body.
+	 */
+	private static function headGapCommentsOutside(
+		bs: BraceSymmetryCtx, child: ShapeNode, slot: Expr, effAccess: Expr, rawAccess: Expr, sameLine: Bool
+	): Expr {
+		if (!bs.ctx.trivia || !child.fmtHasFlag(DROP_SINGLE_STMT_BRACES)) return slot;
+		return sameLine
+			? macro {
+				final _hgs: Null<String> = $slot;
+				_hgs == null ? null : anyparse.format.SingleStmtBraces.sameLineOutsideWrap(_hgs, $effAccess, $rawAccess);
+			}
+			: macro {
+				final _hgc: Array<String> = $slot;
+				_hgc.length == 0 ? _hgc : anyparse.format.SingleStmtBraces.commentsOutsideWrap(_hgc, $effAccess, $rawAccess);
+			};
+	}
+
+	/**
 	 * The de-braced substitute for a body field carrying `@:fmt(dropSingleStmtBraces)`, plus
 	 * the two side channels its gates feed (the nested-unwrap suppress frame and the hoisted
 	 * trailing comment). Off-path the access is byte-identical to the raw field access.
 	 */
 	private static function deBraceBodyAccess(
-		bs: BraceSymmetryCtx, child: ShapeNode, fieldAccess: Expr, elseFieldName: Null<String>, typePath: String
+		bs: BraceSymmetryCtx, child: ShapeNode, fieldAccess: Expr, elseFieldName: Null<String>, typePath: String,
+		headGap: { sameLine: Null<Expr>, ownLines: Null<Expr> }
 	): { effAccess: Expr, ssbSuppressCond: Null<Expr>, ssbTrailCommentExpr: Null<Expr> } {
 		// ω-single-stmt-braces: a body field carrying `@:fmt(dropSingleStmtBraces)`
 		// (trivia mode only) substitutes its runtime value with
@@ -399,6 +465,7 @@ final class WriterBraceSymmetryLowering {
 		// optionalBodyFieldName channel), so for / while / do bodies pass `false` and
 		// stay exempt from gate 8 and the wrap direction.
 		final isThenBodyExpr: Expr = elseFieldName != null ? macro true : macro false;
+		final adoptExpr: Expr = adoptHeadGapComments(fieldAccess, headGap.sameLine, headGap.ownLines);
 		final effAccess: Expr = dropBraces
 			? macro {
 				var _sv = $fieldAccess;
@@ -406,6 +473,7 @@ final class WriterBraceSymmetryLowering {
 					_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
 					$thenChainSuppressExpr, $isThenBodyExpr
 				);
+				$adoptExpr;
 				_sv;
 			}
 			: tryBraceSymmetryWrap(

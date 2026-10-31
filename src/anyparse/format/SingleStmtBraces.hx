@@ -22,6 +22,11 @@ using StringTools;
  */
 class SingleStmtBraces {
 
+	/** A trivia block ctor's positional layout: its open-brace comment slot, and the arity that carries one. */
+	private static inline final OPEN_TRAILING_INDEX: Int = 2;
+
+	private static inline final OPEN_TRAILING_ARITY: Int = 6;
+
 	/** Value ctors a symmetry wrap must leave alone: a brace-LED value re-opens `{` in statement position. */
 	private static final TRY_WRAP_SKIP_CTORS: Array<String> = ['ObjectLit'];
 
@@ -228,8 +233,9 @@ class SingleStmtBraces {
 	 * block expression, whose elements are STATEMENTS — so it passes a lift that builds the
 	 * expression-statement, typed, from the writer's generated code. What is shared is the part that
 	 * would otherwise drift: the Star element wrapper and the block ctor's positional slot vector.
-	 * The element's `sepAfter` — the block writer writes back the `;` it records — is set only when the
-	 * statement does not terminate itself, so a synthesized block never gains a `;` after a `}`.
+	 * The element's `sepAfter` — the block writer writes back the `;` it records — is set only when an
+	 * unlifted statement does not terminate itself; a lifted one owns its terminator through the lift, which
+	 * asks the grammar whether the expression needs one, so a synthesized block never gains a `;` after a `}`.
 	 */
 	public static function wrapInBlock(value: EnumValue, blockCtor: String, ?lift: (EnumValue) -> Dynamic): Dynamic {
 		final en: Null<Enum<Dynamic>> = Type.getEnum(cast value);
@@ -242,11 +248,55 @@ class SingleStmtBraces {
 			leadingComments: [],
 			trailingComment: null,
 			trailingBeforeSep: false,
-			sepAfter: raise != null || !innerSelfTerminates(value),
+			sepAfter: raise == null && !innerSelfTerminates(value),
 			node: raise == null ? value : raise(value)
 		};
 		final args: Array<Dynamic> = [[elem], null, null, false, [], false];
 		return Type.createEnum(en, blockCtor, args);
+	}
+
+	/**
+	 * The one answer to "did the writer wrap this bare body in braces?": true when `eff` is a block
+	 * `wrapInBlock` synthesized around `raw` without a lift. Its single element IS `raw`, which no parsed
+	 * block can satisfy, and a de-braced or untouched body is never a block holding itself.
+	 */
+	public static function wrappedFrom(eff: Null<Any>, raw: Null<Any>): Bool {
+		if (eff == null || raw == null || eff == raw || !Reflect.isEnumValue(eff)) return false;
+		final stmts: Any = paramAt(cast eff, 0);
+		if (!(stmts is Array)) return false;
+		final elems: Array<Any> = cast stmts;
+		return elems.length == 1 && triviaNode(elems[0]) == raw;
+	}
+
+	/**
+	 * `eff` with the head-gap comments moved inside it when it is the block wrapped around `raw`: the
+	 * same-line one (`if (c) // n`) becomes the block's open-brace comment and the own-line run leads its
+	 * element. Those comments lead the bare body, so once the body gains braces they belong inside them;
+	 * written before the `{` they push the brace onto a line of its own. The block is the writer's own,
+	 * so it is safe to fill.
+	 */
+	public static function adoptHeadGapComments(
+		eff: Null<Any>, raw: Null<Any>, sameLine: Null<String>, ownLines: Null<Array<String>>
+	): Null<Any> {
+		final hasOwnLines: Bool = ownLines != null && ownLines.length > 0;
+		if ((sameLine == null && !hasOwnLines) || !wrappedFrom(eff, raw)) return eff;
+		final block: EnumValue = cast eff;
+		final ps: Array<Any> = Type.enumParameters(block);
+		final elems: Array<Any> = cast ps[0];
+		if (ownLines != null && hasOwnLines) Reflect.setField(elems[0], 'leadingComments', ownLines.copy());
+		if (sameLine == null || ps.length < OPEN_TRAILING_ARITY) return eff;
+		ps[OPEN_TRAILING_INDEX] = sameLine;
+		return Type.createEnum(Type.getEnum(block), Type.enumConstructor(block), ps);
+	}
+
+	/** The own-line head-gap `comments` still written outside the body: none once `adoptHeadGapComments` moved them inside. */
+	public static function commentsOutsideWrap(comments: Array<String>, eff: Null<Any>, raw: Null<Any>): Array<String> {
+		return comments.length == 0 || !wrappedFrom(eff, raw) ? comments : [];
+	}
+
+	/** The same-line head-gap `comment` still written outside the body: none once `adoptHeadGapComments` moved it inside. */
+	public static function sameLineOutsideWrap(comment: Null<String>, eff: Null<Any>, raw: Null<Any>): Null<String> {
+		return comment == null || !wrappedFrom(eff, raw) ? comment : null;
 	}
 
 	/**
@@ -699,7 +749,7 @@ class SingleStmtBraces {
 	private static function openTrailingOf(body: Dynamic): Null<String> {
 		if (body == null || !Reflect.isEnumValue(body)) return null;
 		final ps: Array<Dynamic> = Type.enumParameters(cast body);
-		return ps.length < 6 ? null : ps[2];
+		return ps.length < OPEN_TRAILING_ARITY ? null : ps[OPEN_TRAILING_INDEX];
 	}
 
 	private static function deBracedElem(

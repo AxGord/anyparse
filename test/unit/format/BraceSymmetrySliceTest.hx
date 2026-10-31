@@ -275,6 +275,117 @@ class BraceSymmetrySliceTest extends Test {
 		Assert.isTrue(anySkipped, 'no row was skipped — the matrix cannot discriminate');
 	}
 
+	/**
+	 * An own-line comment the source wrote between the head and a bare then-body leads that body, so
+	 * the braces the repair adds go AROUND it. Written before the `{` it dedented onto the `if` line's
+	 * column and left the brace alone on the next line.
+	 */
+	@:pin('control')
+	@:killer('M-SSB-WRAP-FROM-NONE')
+	public function testAHeadGapCommentMovesInsideTheWrappedThenBody(): Void {
+		final out: String = HxWriteFixture.triviaWrite(stmtIf('// note\n\t\t\tp();'), SYMMETRIC);
+		Assert.isTrue(
+			out.indexOf('if (a) {\n\t\t\t// note\n\t\t\tp();\n\t\t} else {') != -1, 'the comment must lead the wrapped body in: <$out>'
+		);
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, SYMMETRIC));
+	}
+
+	/** The else side reads its comment from the keyword's slot, not the then-body's — the same move, a second seam. */
+	@:pin('control')
+	@:killer('M-SSB-WRAP-FROM-NONE')
+	public function testAHeadGapCommentMovesInsideTheWrappedElseBody(): Void {
+		final out: String = HxWriteFixture.triviaWrite(
+			wrap('if (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\t// note\n\t\t\tr();'), SYMMETRIC
+		);
+		Assert.isTrue(out.indexOf('} else {\n\t\t\t// note\n\t\t\tr();\n\t\t}') != -1, 'the comment must lead the wrapped body in: <$out>');
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, SYMMETRIC));
+	}
+
+	/**
+	 * The same-line twin: a comment cuddled to the head (`if (a) // why`) becomes the new block's
+	 * open-brace comment on both sides, rather than leaving the `{` alone on the line below it.
+	 */
+	@:pin('control')
+	@:killer('M-SSB-WRAP-FROM-NONE')
+	public function testACuddledHeadCommentBecomesTheWrappedBlocksOpenComment(): Void {
+		final then: String = HxWriteFixture.triviaWrite(
+			wrap('if (a) // why\n\t\t\t// own\n\t\t\tp();\n\t\telse {\n\t\t\tq();\n\t\t\tr();\n\t\t}'), SYMMETRIC
+		);
+		Assert.isTrue(then.indexOf('if (a) { // why\n\t\t\t// own\n\t\t\tp();') != -1, 'the then comments must open the block in: <$then>');
+		Assert.equals(then, HxWriteFixture.triviaWrite(then, SYMMETRIC));
+		final otherwise: String = HxWriteFixture.triviaWrite(
+			wrap('if (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else // why\n\t\t\tr();'), SYMMETRIC
+		);
+		Assert.isTrue(otherwise.indexOf('} else { // why\n\t\t\tr();') != -1, 'the else comment must open the block in: <$otherwise>');
+		Assert.equals(otherwise, HxWriteFixture.triviaWrite(otherwise, SYMMETRIC));
+	}
+
+	/** A body the SOURCE braced is not the repair's, so a comment written before its `{` stays where it was. */
+	public function testACommentBeforeASourceBraceIsLeftWhereItIs(): Void {
+		final src: String = wrap('if (a)\n\t\t// note\n\t\t{\n\t\t\tp();\n\t\t\tq();\n\t\t} else {\n\t\t\tr();\n\t\t\ts();\n\t\t}');
+		Assert.equals(HxWriteFixture.triviaWrite(src, KEEP), HxWriteFixture.triviaWrite(src, SYMMETRIC));
+	}
+
+	/**
+	 * A wrapped value that ends on its own `}` takes no `;` inside the new block: `{ switch s {…}; }`
+	 * is a switch statement plus an empty one, which `empty-statement` then reports. The lift asks the
+	 * statement ctor's own parse gate whether the expression needs a terminator.
+	 */
+	@:pin('control')
+	@:killer('M-SSB-LIFT-TRAIL-ALWAYS')
+	public function testAWrappedSwitchCatchBodyGainsNoSemicolon(): Void {
+		final src: String = 'class C {\n\tfunction f(s:String):Int {\n\t\treturn try {\n\t\t\tp();\n\t\t\tq();\n'
+			+ '\t\t} catch (e:Dynamic) switch s {\n\t\t\tcase _:\n\t\t\t\t1;\n\t\t};\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);
+		Assert.isTrue(out.indexOf('} catch (e:Dynamic) {\n\t\t\tswitch s {') != -1, 'the wrap must have fired at all in: <$out>');
+		Assert.isTrue(out.indexOf('\t\t\t}\n\t\t};') != -1, 'the switch must close the block bare in: <$out>');
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, SYMMETRIC));
+	}
+
+	/** The value-`if` wrap lifts through the same ctor, so a `}`-ended else value is bare inside its block too. */
+	@:pin('control')
+	@:killer('M-SSB-LIFT-TRAIL-ALWAYS')
+	public function testAWrappedValueElseEndingOnABraceGainsNoSemicolon(): Void {
+		final src: String = 'class C {\n\tfunction f(a:Bool):Int {\n\t\treturn if (a) {\n\t\t\tp();\n\t\t\t0;\n\t\t} else\n\t\t\ttry\n'
+			+ '\t\t\t\tp()\n\t\t\tcatch (e:Dynamic) {\n\t\t\t\tq();\n\t\t\t\t1;\n\t\t\t};\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);
+		Assert.isTrue(out.indexOf('} else {\n\t\t\ttry {') != -1, 'the wrap must have fired at all in: <$out>');
+		Assert.isTrue(out.indexOf('\t\t\t}\n\t\t};') != -1, 'the try must close the block bare in: <$out>');
+	}
+
+	/**
+	 * Only a `}` may stand in for the terminator. A `]`-ended value lifted into a block keeps its `;`:
+	 * the parser's own gate also reads `[1, 2]` back without one, but the compiler says `Missing ;`.
+	 */
+	@:pin('control')
+	@:killer('M-SSB-LIFT-PARSE-GATE')
+	@:killer('M-SSB-LIFT-TRAIL-NEVER')
+	public function testAWrappedBracketEndedCatchValueKeepsItsSemicolon(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Array<Int> {\n\t\treturn try {\n\t\t\tp();\n\t\t\t[];\n\t\t} catch (e:Dynamic) [1, 2];\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);
+		Assert.isTrue(out.indexOf('} catch (e:Dynamic) {\n\t\t\t[1, 2];\n\t\t};') != -1, 'the lifted value must keep its `;` in: <$out>');
+	}
+
+	/** The value-`if` lift is the same lift, so a `]`-ended else value keeps its `;` too. */
+	@:pin('control')
+	@:killer('M-SSB-LIFT-PARSE-GATE')
+	@:killer('M-SSB-LIFT-TRAIL-NEVER')
+	public function testAWrappedBracketEndedValueElseKeepsItsSemicolon(): Void {
+		final src: String = 'class C {\n\tfunction f(a:Bool):Void {\n\t\tvar v = if (a) {\n\t\t\tp();\n\t\t\t[1];\n\t\t} else [2];\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);
+		Assert.isTrue(out.indexOf('} else {\n\t\t\t[2];\n\t\t};') != -1, 'the lifted value must keep its `;` in: <$out>');
+	}
+
+	/** The plain case the `}` rule must not swallow: a value that ends on a literal keeps its `;`. */
+	@:pin('control')
+	@:killer('M-SSB-LIFT-TRAIL-NEVER')
+	public function testAWrappedPlainValueKeepsItsSemicolon(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\treturn try {\n\t\t\tp();\n\t\t\t1;\n\t\t} catch (e:Dynamic) 3;\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);
+		Assert.isTrue(out.indexOf('} catch (e:Dynamic) {\n\t\t\t3;\n\t\t};') != -1, 'the lifted value must keep its `;` in: <$out>');
+	}
+
 	public function testTheRepairIsIdempotent(): Void {
 		final once: String = HxWriteFixture.triviaWrite(wrap('if (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr();'), SYMMETRIC);
 		Assert.equals(once, HxWriteFixture.triviaWrite(once, SYMMETRIC));

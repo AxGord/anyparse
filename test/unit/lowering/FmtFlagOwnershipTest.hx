@@ -63,7 +63,7 @@ class FmtFlagOwnershipTest extends Test {
 		'TriviaPairSlots' => 10,
 		'TriviaPairAltCtor' => 8,
 		'StructSeqLowering' => 7,
-		'WriterBraceSymmetryLowering' => 6,
+		'WriterBraceSymmetryLowering' => 7,
 		'WriterFieldSepLowering' => 6,
 		'PrattPostfixLowering' => 4,
 		'Lowering' => 4,

@@ -314,7 +314,12 @@ enum HxStatement {
 	 */
 	MetaCondStmt(inner: HxMetaCondStmt);
 
-	@:trailOpt(';') @:fmt(trailOptParseGate('stmtExprNoSemi'))
+	/**
+	 * `liftNoSemi` names the predicate under which an `ExprStmt` the writer SYNTHESIZES around a value
+	 * (a brace-symmetry wrap) may omit its `;`: only a `}`-ended value, as the compiler reads it. The
+	 * parse gate is wider — it also lets `]` and identifier tails stand unterminated — and is no answer here.
+	 */
+	@:trailOpt(';') @:fmt(trailOptParseGate('stmtExprNoSemi'), liftNoSemi('endsWithCloseBrace'))
 	ExprStmt(expr: HxExpr);
 
 	/**

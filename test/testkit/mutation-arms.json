@@ -510,7 +510,7 @@
 			"name": "M-WRAP-SEPAFTER-ALWAYS",
 			"type": "anyparse.format.SingleStmtBraces",
 			"method": "wrapInBlock",
-			"find": "sepAfter: raise != null || !innerSelfTerminates(value),",
+			"find": "sepAfter: raise == null && !innerSelfTerminates(value),",
 			"replace": "sepAfter: true,",
 			"note": "a synthesized block records a source `;` after its statement, so the block writer appends one after the `}` of an `if` it braced"
 		},
@@ -33914,6 +33914,37 @@
 			"find": "if (mode != null && sys.FileSystem.exists(entry.path)) js.node.Fs.chmodSync(entry.path, mode);",
 			"replace": "",
 			"note": "a rolled-back deletion restores the file with the default mode, so an executable script comes back 0644"
+		},
+		{
+			"name": "M-SSB-WRAP-FROM-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "wrappedFrom",
+			"force": "false",
+			"note": "no body reads as one the symmetry wrap braced, so the own-line comment before a bare branch stays outside the braces the repair adds, dedented onto the head with the brace alone below it"
+		},
+		{
+			"name": "M-SSB-LIFT-TRAIL-ALWAYS",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "stmtLift",
+			"find": "final trail: Expr = gate == null || gate.length != 1",
+			"replace": "final trail: Expr = true || gate == null || gate.length != 1",
+			"note": "a wrapped branch expression always takes a `;` inside its new block, so a `}`-ended value such as a `switch` comes out `{ switch k {…}; }`, a statement plus an empty one"
+		},
+		{
+			"name": "M-SSB-LIFT-PARSE-GATE",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "stmtLift",
+			"find": "fmtReadStringArgs('liftNoSemi')",
+			"replace": "fmtReadStringArgs('trailOptParseGate')",
+			"note": "the lift asks the parser's statement gate instead of the `}` rule, so a `]`-ended value such as `[1, 2]` is written into its new block without the `;` the compiler requires"
+		},
+		{
+			"name": "M-SSB-LIFT-TRAIL-NEVER",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "stmtLift",
+			"find": ": macro !${AstPredLowering",
+			"replace": ": macro false && !${AstPredLowering",
+			"note": "every lifted value loses its `;`, so a wrapped `3` or `[1, 2]` comes out unterminated before the block's `}`"
 		}
 	]
 }

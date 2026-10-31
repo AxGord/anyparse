@@ -205,6 +205,7 @@ final class WriterRefFieldLowering {
 		// splice: `else { x; };` keeps its braces rather than become `else x;;`.
 		// ω-single-stmt-braces symmetry (gate 7): an else-body must keep its braces whenever
 		// the sibling then-body keeps its own (see buildThenSiblingKeepsProbe).
+		final adoptKwLeading: Expr = adoptKwHeadGapComments(fieldAccess, fieldName, kwLead);
 		final optValInit: Expr = dropElseBraces
 			? macro {
 				var _sv = $fieldAccess;
@@ -213,6 +214,7 @@ final class WriterRefFieldLowering {
 						_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, false, $elseTrailSemiExpr,
 						$thenSiblingKeepsExpr || $elseChainSuppressExpr, false
 					);
+				$adoptKwLeading;
 				_sv;
 			}
 			: valueBraceSymmetryWrap(ctx.braceSym, child, fieldAccess);
@@ -426,14 +428,19 @@ final class WriterRefFieldLowering {
 		// (the parent struct) and forward to `bodyPolicyWrap`
 		// which injects them into the kw→body separator.
 		final useTriviaGap: Bool = ctx.ctx.trivia;
-		final afterKwExpr: Null<Expr> = useTriviaGap ? {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX),
-			pos: Context.currentPos()
-		} : null;
-		final kwLeadingExpr: Null<Expr> = useTriviaGap ? {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX),
-			pos: Context.currentPos()
-		} : null;
+		// A body the brace-symmetry wrap braced holds both comment slots inside its braces instead.
+		final afterKwExpr: Null<Expr> = useTriviaGap
+			? headGapCommentsOutside(
+				ctx.braceSym, child, valueFieldAccess(fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), macro _optVal,
+				valueFieldAccess(fieldName), true
+			)
+			: null;
+		final kwLeadingExpr: Null<Expr> = useTriviaGap
+			? headGapCommentsOutside(
+				ctx.braceSym, child, valueFieldAccess(fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), macro _optVal,
+				valueFieldAccess(fieldName), false
+			)
+			: null;
 		// ω-keep-policy: `<field>BodyOnSameLine:Bool` drives the
 		// `Keep` branch of `bodyPolicyWrap` / policySwitch.
 		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap ? {
@@ -811,7 +818,15 @@ final class WriterRefFieldLowering {
 		final writeFn: String = ctx.writeFnFor(refName);
 		// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-		final deBraced = deBraceBodyAccess(ctx.braceSym, child, fieldAccess, elseFieldName, typePath);
+		// Only an if-then body is ever wrapped, and only a non-first bare Ref grows the head-gap slots: the
+		// prior field's after-trail comment and this field's own-line run.
+		final wrapsWithHeadGap: Bool = ctx.ctx.trivia && elseFieldName != null && !isFirstField;
+		final deBraced = deBraceBodyAccess(ctx.braceSym, child, fieldAccess, elseFieldName, typePath, {
+			sameLine: wrapsWithHeadGap && prevTrailFieldName != null
+				? valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX)
+				: null,
+			ownLines: wrapsWithHeadGap ? beforeLeadingAccess(fieldName) : null
+		});
 		final effAccess: Expr = deBraced.effAccess;
 		final ssbSuppressCond: Null<Expr> = deBraced.ssbSuppressCond;
 		final ssbTrailCommentExpr: Null<Expr> = deBraced.ssbTrailCommentExpr;
@@ -872,10 +887,12 @@ final class WriterRefFieldLowering {
 		// fired by `HxIfStmt.thenBody` after `cond`'s `)`
 		// trail. Plain mode and non-bearing rules see a null
 		// `prevTrailFieldName` and skip the threading.
-		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null ? null : {
-			expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-			pos: Context.currentPos()
-		};
+		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null
+			? null
+			: headGapCommentsOutside(
+				ctx.braceSym, child, valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), fieldAccess,
+				valueFieldAccess(fieldName), true
+			);
 		// ω-556-then-body-leading-comment: the bare non-first Ref
 		// body grows a `<field>BeforeLeading:Array<String>` slot
 		// (`isBareNonFirstRef`, same host as the BeforeNewline
@@ -916,8 +933,9 @@ final class WriterRefFieldLowering {
 		// ω-556-then-body-leading-comment: own-line leading-comment
 		// slot, same gate as `bodyOnSameLineExpr` (the BeforeNewline
 		// sibling shares the `isBareNonFirstRef` host).
-		final beforeLeadingExpr: Null<Expr> =
-			ctx.ctx.trivia && (!isFirstField || firstFieldNlOptIn) ? beforeLeadingAccess(fieldName) : null;
+		final beforeLeadingExpr: Null<Expr> = ctx.ctx.trivia && (!isFirstField || firstFieldNlOptIn)
+			? headGapCommentsOutside(ctx.braceSym, child, beforeLeadingAccess(fieldName), fieldAccess, valueFieldAccess(fieldName), false)
+			: null;
 		// ω-untyped-body-stmt-override: forward all
 		// `@:fmt(bodyPolicyOverride('<ctor>', '<flag>'))`
 		// entries on this field to bodyPolicyWrap. Each entry

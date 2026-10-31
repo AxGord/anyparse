@@ -75,7 +75,14 @@
 		"w2b/k02.hx": "class C { function f() { return a // c1\n&&\n// c2\nb; } }\n",
 		"w2b/k03.hx": "class C { function f() { return a // c1\n|| b // c2\n|| c; } }\n",
 		"w2b/m01.hx": "class C { function f() { g(a // c1\n, b // c2\n, c); } }\n",
-		"w2b/m02.hx": "class C { function f() { switch x { case A, // c1\nB, // c2\nC: 1; case _: 2; } } }\n"
+		"w2b/m02.hx": "class C { function f() { switch x { case A, // c1\nB, // c2\nC: 1; case _: 2; } } }\n",
+		"bwd/hxformat.json": "{\"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"symmetric\"}}}\n",
+		"bwd/c1.hx": "class C {\n\tfunction f(a:Bool) {\n\t\tif (a)\n\t\t\t// note\n\t\t\tg();\n\t\telse {\n\t\t\tg();\n\t\t\tg();\n\t\t}\n\t}\n}\n",
+		"bwd/c2.hx": "class C {\n\tfunction f(a:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg();\n\t\t} else\n\t\t\t// note\n\t\t\tg();\n\t}\n}\n",
+		"bwd/c3.hx": "class C {\n\tfunction f(k:Int):Int {\n\t\treturn try {\n\t\t\tg();\n\t\t\tg();\n\t\t} catch (e:Dynamic) switch k {\n\t\t\tcase _: 1;\n\t\t};\n\t}\n}\n",
+		"bwd/c4.hx": "class C {\n\tfunction f(a:Bool) {\n\t\tif (a) // one\n\t\t\tg();\n\t\telse {\n\t\t\tg();\n\t\t\tg();\n\t\t}\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg();\n\t\t} else // two\n\t\t\tg();\n\t}\n}\n",
+		"bwd/C5.hx": "class C5 {\n\tstatic function g() {}\n\n\tfunction f():Array<Int> {\n\t\treturn try {\n\t\t\tg();\n\t\t\t[];\n\t\t} catch (e:Dynamic) [1, 2];\n\t}\n}\n",
+		"bwd/C6.hx": "class C6 {\n\tstatic function g() {}\n\n\tfunction f():Array<Int> {\n\t\treturn try {\n\t\t\tg();\n\t\t\t[];\n\t\t} catch (e:Dynamic) [for (i in 0...3) i];\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -1339,6 +1346,132 @@
 				"out": "d6fa52238639df71",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bwd/c1.hx",
+			"fixpoint": "bwd/c1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bwd/c1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c789d817b4696cf9",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bwd/c2.hx",
+			"fixpoint": "bwd/c2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bwd/c2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "2f4e35c2e7ad014f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bwd/c3.hx",
+			"fixpoint": "bwd/c3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bwd/c3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "40400d15003782bc",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bwd/c4.hx",
+			"fixpoint": "bwd/c4.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bwd/c4.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "84bdb9b1d8586422",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bwd/C5.hx",
+			"fixpoint": "bwd/C5.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bwd/C5.hx",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"bwd",
+					"--no-output",
+					"C5"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "184cd92d73b4aec2",
+				"files": "6871d782e61ba83c",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "bwd/C6.hx",
+			"fixpoint": "bwd/C6.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"bwd/C6.hx",
+				"--write"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"bwd",
+					"--no-output",
+					"C6"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "184cd92d73b4aec2",
+				"files": "d7b2fe01eeb3ceac",
+				"compiles": [
+					true
+				],
 				"onePass": true,
 				"commentsKept": true
 			}

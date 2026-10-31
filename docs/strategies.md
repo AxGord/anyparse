@@ -110,7 +110,7 @@ forceMultiInTypedef, forPolicy, forwardNewlineForBody, funcParamParens, function
 groupRestProbe, heritageWrap, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
 inlineBlockBodyIfFlag(…), inlineElemTrivia, inlineSep, interMemberBlankLines(…), interMemberCondLookThrough(…), intervalPolicy,
 keepBlankAfterStarCtor(…), keepCurlyBlanks, keepInnerWhenEmpty(…), kwPolicy(…), leftCurly[(…)],
-leftCurlyAnonFnOverride(…), lineLengthAwareSeps, loopBodyIfElseNext(…), mapWrapRules(…),
+leftCurlyAnonFnOverride(…), lineLengthAwareSeps, liftNoSemi(…), loopBodyIfElseNext(…), mapWrapRules(…),
 measuredMultilineDecls, metaBlockGlue(…), metaLineEndPolicy(…), methodChain(…), multilineCtor,
 multilineWhenFieldCtorAndOpt(…), multilineWhenFieldNonEmpty(…), multilineWhenFieldShape(…),
 multilineWhenLeadingTriviaSpansLines(…), multilineWhenStarFieldWrapsCascade(…), multiVarWrap(…), nestBody,
@@ -162,7 +162,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `TriviaPairSlots` | 10 |
 | `TriviaPairAltCtor` | 8 |
 | `StructSeqLowering` | 7 |
-| `WriterBraceSymmetryLowering` | 6 |
+| `WriterBraceSymmetryLowering` | 7 |
 | `WriterFieldSepLowering` | 6 |
 | `PrattPostfixLowering` | 4 |
 | `Lowering` | 4 |

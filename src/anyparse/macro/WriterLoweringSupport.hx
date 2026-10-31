@@ -56,6 +56,11 @@ final class WriterLoweringSupport {
 		return { expr: EField(macro opt, fieldName), pos: Context.currentPos() };
 	}
 
+	/** The generated read `value.<fieldName>` of the struct being written — a field, or a trivia slot named after one. */
+	private static inline function valueFieldAccess(fieldName: String): Expr {
+		return { expr: EField(macro value, fieldName), pos: Context.currentPos() };
+	}
+
 	/**
 	 * Build the field-access Expr `value.<fieldName><BEFORE_NEWLINE_SUFFIX>`
 	 * for a trivia-bearing struct field's `<field>BeforeNewline:Bool` synth slot
