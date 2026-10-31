@@ -77,7 +77,7 @@ class IntroduceParameterObjectSliceTest extends Test {
 	/** An unknown parameter is refused. */
 	public function testNoSuchParamRefused(): Void {
 		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a:Int):Int return a;\n}';
-		assertErr('not a contiguous run', introduce(src, 'f', ['nope'], 'T', null));
+		assertErr('parameter "nope" is not a parameter of "f"', introduce(src, 'f', ['nope'], 'T', null));
 	}
 
 	/**

@@ -84,14 +84,18 @@ class MakeFinalSliceTest extends Test {
 	/** A field that is already final is not a plain var and is refused. */
 	public function testAlreadyFinalRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic final x:Int = 1;\n\tpublic function new() {}\n}';
-		assertErr('no mutable var field', MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
+		assertErr(
+			'field "x" of "Cfg" is already final',
+			MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }], plugin())
+		);
 	}
 
 	/** A missing field is refused. */
 	public function testNoSuchFieldRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 1;\n\tpublic function new() {}\n}';
 		assertErr(
-			'no mutable var field', MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'nope', [{ file: 'pkg/Cfg.hx', source: src }], plugin())
+			'no field "nope" on a unique type "Cfg"',
+			MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'nope', [{ file: 'pkg/Cfg.hx', source: src }], plugin())
 		);
 	}
 

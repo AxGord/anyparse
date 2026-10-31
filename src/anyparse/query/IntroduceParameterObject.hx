@@ -141,6 +141,8 @@ final class IntroduceParameterObject {
 		final declSpanNN: Span = declSpan;
 
 		final params: Array<QueryNode> = CallSites.leadingParams(declNN, shape);
+		for (pn in paramNames) if (params.filter(p -> p.name == pn).length == 0)
+			return Refused('parameter "$pn" is not a parameter of "$nameNN"');
 		final rng: Null<{ start: Int, end: Int }> = contiguousRange(params, paramNames);
 		if (rng == null) return Refused('parameters ${paramNames.join(', ')} are not a contiguous run of "$nameNN"\'s parameters');
 		final rngNN: { start: Int, end: Int } = rng;

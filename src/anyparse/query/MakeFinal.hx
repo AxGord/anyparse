@@ -43,6 +43,12 @@ final class MakeFinal {
 	/** The mutable field keyword this op replaces with `final`. */
 	private static final VAR: String = 'var';
 
+	/** Node kinds of a mutable field. */
+	private static final VAR_KINDS: Array<String> = ['VarMember', 'VarField'];
+
+	/** Node kinds of an already-final field. */
+	private static final FINAL_KINDS: Array<String> = ['FinalMember', 'FinalField'];
+
 	/**
 	 * Make the `var` field `fieldName` of `typeName` (declared in `srcFile`)
 	 * `final` when no reassignment survives under `scopeFiles`. Returns
@@ -65,10 +71,19 @@ final class MakeFinal {
 		final src: Parsed = srcEntry;
 
 		final shape: RefShape = plugin.refShape();
-		final fieldNode: Null<QueryNode> = resolveVarField(
-			src.tree, typeName, fieldName, src.source, shape, plugin.lexicalRegions.bind(src.source)
+		final fieldNode: Null<QueryNode> = resolveField(
+			src.tree, typeName, fieldName, src.source, shape, plugin.lexicalRegions.bind(src.source), VAR_KINDS
 		);
-		if (fieldNode == null) return Err('no mutable var field "$fieldName" on a unique type "$typeName" in $srcFile');
+		if (fieldNode == null) {
+			final finalField: Null<QueryNode> = resolveField(
+				src.tree, typeName, fieldName, src.source, shape, plugin.lexicalRegions.bind(src.source), FINAL_KINDS
+			);
+			return Err(
+				finalField != null
+					? 'field "$fieldName" of "$typeName" is already final'
+					: 'no field "$fieldName" on a unique type "$typeName" in $srcFile'
+			);
+		}
 		final fNode: QueryNode = fieldNode;
 		final fieldSpan: Null<Span> = fNode.span;
 		if (fieldSpan == null) return Err('field "$fieldName" carries no span');
@@ -139,15 +154,16 @@ final class MakeFinal {
 	 * (final-aware). Null when the type or a mutable field of that name is
 	 * absent / ambiguous (a `final` field is already done and not matched).
 	 */
-	private static function resolveVarField(
-		tree: QueryNode, typeName: String, fieldName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>
+	private static function resolveField(
+		tree: QueryNode, typeName: String, fieldName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>,
+		kinds: Array<String>
 	): Null<QueryNode> {
 		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, typeName);
 		if (decl == null) return null;
 		var hit: Null<QueryNode> = null;
 		// Branch-aware: a field a `#if` region declares is not a direct child of the type. The swap is
 		// in place, inside that region, so seeing it is the whole fix.
-		MemberBranchScan.eachTypeMember(decl, shape, source, n -> n.kind == 'VarMember' || n.kind == 'VarField', (child, _) -> {
+		MemberBranchScan.eachTypeMember(decl, shape, source, n -> kinds.contains(n.kind), (child, _) -> {
 			if (hit == null && child.name == fieldName) hit = child;
 		}, regions);
 		return hit;
