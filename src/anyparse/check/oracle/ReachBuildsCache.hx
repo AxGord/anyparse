@@ -180,7 +180,9 @@ final class ReachBuildsCache {
 		return #if (sys || nodejs) try {
 			final stat: sys.FileStat = sys.FileSystem.stat(file);
 			'${stat.size} ${stat.mtime.getTime()}';
-		} catch (exception: Exception) null #else null #end;
+		} catch (exception: Exception) {
+			null;
+		} #else null #end;
 	}
 
 	/** Whether every `[file, stat]` pair of `stats` names a file whose size and modification time are as recorded. */

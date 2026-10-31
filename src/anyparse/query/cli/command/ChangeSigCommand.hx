@@ -108,7 +108,9 @@ final class ChangeSigCommand implements CliCommand {
 
 		final filePath: String = file;
 		final permStr: String = permSpec;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq change-sig: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

@@ -155,7 +155,9 @@ final class UsesCommand implements CliCommand {
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
+					try {
+						limit = CliArgs.parseLimit(arg.value());
+					} catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return usesParseExit(EXIT_USAGE);
 					}

@@ -371,7 +371,9 @@ final class HaxeSpawnTest extends Test {
 		return pid != null && try {
 			js.Syntax.code('process.kill({0}, 0)', pid);
 			true;
-		} catch (exception: haxe.Exception) false;
+		} catch (exception: haxe.Exception) {
+			false;
+		};
 	}
 	#end
 

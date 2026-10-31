@@ -589,10 +589,9 @@ class Lowering {
 		final body: Expr = lowerEnumBranch(branch, typePath, recurseFnName);
 		return macro {
 			final _savedPos: Int = ctx.pos;
-			try
-				$body
-			catch (_branchFail: anyparse.runtime.ParseError)
+			try $body catch (_branchFail: anyparse.runtime.ParseError) {
 				ctx.pos = _savedPos;
+			}
 		};
 	}
 

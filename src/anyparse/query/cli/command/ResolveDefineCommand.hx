@@ -225,7 +225,9 @@ final class ResolveDefineCommand implements CliCommand {
 		var failed: Int = 0;
 		var regions: Int = 0;
 		for (path in paths) {
-			final source: String = try CliIo.readFile(path) catch (exception: Exception) {
+			final source: String = try {
+				CliIo.readFile(path);
+			} catch (exception: Exception) {
 				CliIo.stderr('apq resolve-define: $path: ${exception.message}\n');
 				failed++;
 				continue;

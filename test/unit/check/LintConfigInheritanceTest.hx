@@ -288,7 +288,9 @@ class LintConfigInheritanceTest extends Test {
 		return try {
 			File.getContent(path);
 			true;
-		} catch (exception: haxe.Exception) false;
+		} catch (exception: haxe.Exception) {
+			false;
+		};
 	}
 
 	private function tree(rootConfig: String, nestedConfig: String): String {

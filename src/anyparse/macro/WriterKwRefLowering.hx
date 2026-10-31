@@ -844,9 +844,9 @@ final class WriterKwRefLowering {
 		// sameLayoutExpr fallback and emit `Nest(_cols, subCall)` directly so
 		// the body's own leading `_dhl` (ObjectLit `leftCurly=Next`) picks up
 		// `+cols`. `indentArgs` is the 3-arg entry (null → no override).
-		final indentWrapped: Expr = if (indentArgs == null)
-			policyWrapped
-		else {
+		final indentWrapped: Expr = if (indentArgs == null) {
+			policyWrapped;
+		} else {
 			final ctorName: String = indentArgs[0];
 			final optField: String = indentArgs[1];
 			final leftCurlyField: String = indentArgs[2];
@@ -875,8 +875,9 @@ final class WriterKwRefLowering {
 			final sourceAccess: Expr = macro $i{argNames[1]};
 			final optAccess: Expr = optFieldAccess(captureSourceOpt);
 			macro $optAccess && $sourceAccess.indexOf('{') < 0 && $sourceAccess.indexOf('}') < 0 ? $indentWrapped : _dt($sourceAccess);
-		} else
+		} else {
 			indentWrapped;
+		};
 		// ω-string-interp-noformat-flat: pin the re-rendered interpolation
 		// body force-flat through `HardFlatten` so an inner chain collapses to
 		// one line (the fork never wraps expressions inside interpolations).

@@ -595,8 +595,9 @@ final class WriterStarEmitLowering {
 				final _patCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				_patBeforeNl ? _dn(_patCols, _dc([_dhl(), _patListDoc])) : _patListDoc;
 			};
-		} else
+		} else {
 			macro $listCall;
+		};
 		parts.push(macro {
 			final _arr = $fieldAccess;
 			final _docs: Array<anyparse.core.Doc> = [];
@@ -733,9 +734,9 @@ final class WriterStarEmitLowering {
 				expr: ESwitch(prevBareRefBody.access, firstShapeCases, null),
 				pos: Context.currentPos()
 			};
-			final subsequentSepExpr: Expr = if (elemBodyField == null)
+			final subsequentSepExpr: Expr = if (elemBodyField == null) {
 				sepExpr;
-			else {
+			} else {
 				final prevElemBodyAccess: Expr = {
 					expr: EField(macro _arr[_si - 1], elemBodyField),
 					pos: Context.currentPos()

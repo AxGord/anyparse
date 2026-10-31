@@ -116,7 +116,9 @@ final class ExtractInterfaceCommand implements CliCommand {
 		final ifaceFile: String = out ?? '$dir$ifaceNameNN.hx';
 		if (refuseOccupiedDestination('extract-interface', ifaceFile)) return EXIT_RUNTIME;
 
-		final source: String = try CliIo.readFile(srcFileNN) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(srcFileNN);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq extract-interface: $srcFileNN: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

@@ -137,14 +137,18 @@ final class SourceCommand implements CliCommand {
 		path: String, content: String, lang: String, selectExpr: Null<String>, atSpec: Null<String>
 	): Null<LineRange> {
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor(lang, path);
-		final tree: QueryNode = try plugin.parseFile(content) catch (exception: Exception) {
+		final tree: QueryNode = try {
+			plugin.parseFile(content);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq source: $path does not parse: ${exception.message}\n');
 			return null;
 		};
 
 		var node: Null<QueryNode>;
 		if (selectExpr != null) {
-			final selector: Selector = try Selector.parse(selectExpr) catch (exception: Exception) {
+			final selector: Selector = try {
+				Selector.parse(selectExpr);
+			} catch (exception: Exception) {
 				CliIo.stderr('apq source: malformed selector "$selectExpr": ${exception.message}\n');
 				return null;
 			};
@@ -463,7 +467,9 @@ final class SourceCommand implements CliCommand {
 		final parsed: Null<{ plugin: GrammarPlugin, tree: QueryNode }> = try {
 			final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 			{ plugin: plugin, tree: plugin.parseFile(content) };
-		} catch (exception: Exception) null;
+		} catch (exception: Exception) {
+			null;
+		};
 		if (parsed == null)
 			return
 				'${head}It does not parse, so there is no selector menu — read a window with `--range L:L2`, or pass `--all` to print it '

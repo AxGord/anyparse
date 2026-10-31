@@ -141,7 +141,9 @@ final class FixtureCache {
 		return try {
 			Fs.accessSync(path, Fs.X_OK);
 			!FileSystem.isDirectory(path);
-		} catch (exception: Exception) false;
+		} catch (exception: Exception) {
+			false;
+		};
 	}
 
 	private static function touch(path: String): Void {

@@ -121,9 +121,9 @@ final class CliIo {
 	public static function stderr(s: String): Void {
 		#if nodejs
 		final bytes: js.node.Buffer = js.node.Buffer.from(s, 'utf8');
-		try writeFully(
-			bytes.length, at -> js.node.Fs.writeSync(STDERR_FD, bytes, at, bytes.length - at), () -> pause(BLOCKED_RETRY_MS)
-		) catch (exception: Exception) {
+		try {
+			writeFully(bytes.length, at -> js.node.Fs.writeSync(STDERR_FD, bytes, at, bytes.length - at), () -> pause(BLOCKED_RETRY_MS));
+		} catch (exception: Exception) {
 			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
 			throw exception;
 		}
@@ -295,7 +295,9 @@ final class CliIo {
 		return #if (sys || nodejs) try {
 			if (FileSystem.exists(path)) FileSystem.deleteFile(path);
 			!FileSystem.exists(path);
-		} catch (exception: Exception) false #else false #end;
+		} catch (exception: Exception) {
+			false;
+		} #else false #end;
 	}
 
 	/**
@@ -330,7 +332,9 @@ final class CliIo {
 			removeCreatedDirectories(created);
 			throw failure;
 		}
-		for (i in 0...staged.length) try commitStagedWrite(staged[i]) catch (failure: WriteFailure) {
+		for (i in 0...staged.length) try {
+			commitStagedWrite(staged[i]);
+		} catch (failure: WriteFailure) {
 			// The renames already done cannot be undone — the originals are gone. What CAN be
 			// tidied is the tail nobody has moved yet, and it must be: an ordinary handled error
 			// would otherwise leave a `.apq-tmp` beside every remaining member of the set, which
@@ -461,8 +465,9 @@ final class CliIo {
 			final mode: Null<Int> = if (FileSystem.exists(target)) {
 				File.append(target, true).close();
 				FileSystem.stat(target).mode & PERMISSION_BITS;
-			} else
+			} else {
 				null;
+			};
 			createMissingDirectories(Path.directory(target), created);
 			File.saveContent(staged, content);
 			// NODE ONLY, and the doc above says so: `sys.FileSystem` has no chmod, so a target
@@ -492,7 +497,9 @@ final class CliIo {
 	 * host message it quotes can still name the temporary; the path this CLI prints is the one the caller gave.
 	 */
 	private static function commitStagedWrite(pending: StagedWrite): Void {
-		try FileSystem.rename(pending.staged, pending.target) catch (exception: Exception) {
+		try {
+			FileSystem.rename(pending.staged, pending.target);
+		} catch (exception: Exception) {
 			discardStage(pending.staged);
 			throw new WriteFailure(pending.asked, exception.message);
 		}

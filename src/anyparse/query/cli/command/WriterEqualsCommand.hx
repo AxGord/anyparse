@@ -129,9 +129,9 @@ final class WriterEqualsCommand implements CliCommand {
 		final sectionOpts: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPathFinal);
 		final optsJson: Null<String> = sectionOpts ?? (configPath != null ? CliIo.readFile(configPath) : null);
 
-		final emitted: Null<String> = try (
-			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
-		) catch (e: ParseError) {
+		final emitted: Null<String> = try {
+			(plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
+		} catch (e: ParseError) {
 			CliIo.stderr('apq writer-equals: $inputPathFinal: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {

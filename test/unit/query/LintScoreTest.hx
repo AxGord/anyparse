@@ -106,8 +106,15 @@ class LintScoreTest extends Test {
 	@:pin('control') @:killer('M-SCORE-SEVERITY-EXACT')
 	public function testSeverityIsAMinimum(): Void {
 		final truth: LintTruthJson = LintScore.parseTruth(truthOf([entry('A', 'A.b', 'S.f', 'real-long')]));
-		final report: String = '[${finding('A', 'A.b', 'S.f', 'error')}, ${finding('A', 'A.c', 'S.f')}, ${finding('A', 'A.d', 'S.f', 'info')},'
-			+ ' ${finding('A', 'A.e', 'S.f', 'warning', 'other-rule')}]';
+		final report: String = '['
+			+ finding('A', 'A.b', 'S.f', 'error')
+			+ ', '
+			+ finding('A', 'A.c', 'S.f')
+			+ ', '
+			+ finding('A', 'A.d', 'S.f', 'info')
+			+ ', '
+			+ finding('A', 'A.e', 'S.f', 'warning', 'other-rule')
+			+ ']';
 		Assert.same([2, 1], counts(LintScore.score(truth, LintDiff.parseReport(report), 'warning')));
 		Assert.same([3, 0], counts(LintScore.score(truth, LintDiff.parseReport(report), null)));
 		Assert.same([1, 2], counts(LintScore.score(truth, LintDiff.parseReport(report), 'error')));
@@ -288,7 +295,9 @@ class LintScoreTest extends Test {
 		return try {
 			fn();
 			'';
-		} catch (exception: Exception) exception.message;
+		} catch (exception: Exception) {
+			exception.message;
+		};
 	}
 
 	private static function truthOf(entries: Array<String>, commit: String = '"c"', rule: String = 'thread-safety'): String {

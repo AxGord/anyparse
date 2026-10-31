@@ -95,7 +95,9 @@ final class ExtractVarCommand implements CliCommand {
 
 		final filePath: String = file;
 		final nameStr: String = name;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq extract-var: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

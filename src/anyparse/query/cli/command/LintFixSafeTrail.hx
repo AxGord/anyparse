@@ -133,8 +133,9 @@ final class LintFixSafeTrail {
 							originalOf[file]
 					);
 					CompilerOracle.typecheckAll(judging);
-				} catch (failure: WriteFailure)
+				} catch (failure: WriteFailure) {
 					Unavailable('its candidate could not be put on disk: ${failure.message}');
+				}
 			},
 			splitRules: file -> splitRules(file, changed, coupled, originalOf),
 			laterRules: laterRules,

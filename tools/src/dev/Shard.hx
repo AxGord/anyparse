@@ -121,7 +121,9 @@ final class Shard {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		final work: String = dirs.claimAfterSweep(WORK_PREFIX, job.repo);
 		final keep: Bool = job.keep || job.planOnly;
-		final status: Int = try execute(job, work) catch (exception: Exception) {
+		final status: Int = try {
+			execute(job, work);
+		} catch (exception: Exception) {
 			release(dirs, work, keep, 1, job.warn);
 			throw exception;
 		};
@@ -317,7 +319,9 @@ final class Shard {
 		final entries: String = job.fixtureCache ?? throw new Exception('no fixture-cache store to shim');
 		FixtureCache.prune(entries, FixtureCache.maxAgeDays());
 		final bindir: String = Path.join([work, 'fixture-cache-bin']);
-		final why: Null<String> = try FixtureCache.shim(job.repo, entries, bindir, tally) catch (exception: Exception) {
+		final why: Null<String> = try {
+			FixtureCache.shim(job.repo, entries, bindir, tally);
+		} catch (exception: Exception) {
 			'fixture-cache: ${exception.message}';
 		};
 		if (why == null) return bindir;

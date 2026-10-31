@@ -51,11 +51,15 @@ final class GetCommand implements CliCommand implements StdinDocument {
 			CliIo.stderr('apq get: $label: the ${plugin.langName()} grammar declares no object or array, so no path names a value in it\n');
 			return EXIT_RUNTIME;
 		}
-		final source: String = try fromStdin ? ctx.readStdin() : CliIo.readFile(o.file) catch (exception: Exception) {
+		final source: String = try {
+			fromStdin ? ctx.readStdin() : CliIo.readFile(o.file);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq get: $label: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: Exception) {
+		final tree: QueryNode = try {
+			plugin.parseFile(source);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq get: $label does not parse: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

@@ -172,7 +172,9 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		// (--at / --select / --count / --json / --depth) renders it through
 		// the same code path the default tree uses, so the dump is directly
 		// comparable with a plain `ast` run of the same file.
-		final tree: QueryNode = try (o.typeRefs ? plugin.parseFileTypeRefs(source) : plugin.parseFile(source)) catch (e: ParseError) {
+		final tree: QueryNode = try {
+			(o.typeRefs ? plugin.parseFileTypeRefs(source) : plugin.parseFile(source));
+		} catch (e: ParseError) {
 			CliIo.stderr('apq ast: $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
@@ -554,9 +556,9 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		// harness's writer settings in a single command. `--code` /
 		// `--stdin` modes have no path → defaults stay.
 		final optsJson: Null<String> = file != null ? CliArgs.readWriteOptionsJsonOrNull((file: String)) : null;
-		final emitted: Null<String> = try (
-			writerOutputPlain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
-		) catch (e: ParseError) {
+		final emitted: Null<String> = try {
+			(writerOutputPlain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
+		} catch (e: ParseError) {
 			CliIo.stderr('apq ast: $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
@@ -573,14 +575,18 @@ final class AstCommand implements CliCommand implements StdinDocument {
 			return EXIT_OK;
 		}
 		final emittedSrc: String = emitted;
-		final treeIn: QueryNode = try plugin.parseFile(source) catch (e: ParseError) {
+		final treeIn: QueryNode = try {
+			plugin.parseFile(source);
+		} catch (e: ParseError) {
 			CliIo.stderr('apq ast: --writer-output --diff: input $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			CliIo.stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
-		final treeOut: QueryNode = try plugin.parseFile(emittedSrc) catch (e: ParseError) {
+		final treeOut: QueryNode = try {
+			plugin.parseFile(emittedSrc);
+		} catch (e: ParseError) {
 			CliIo.stderr('apq ast: --writer-output --diff: writer output failed to re-parse: $e\n');
 			CliIo.stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
 			return EXIT_RUNTIME;

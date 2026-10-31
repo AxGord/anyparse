@@ -62,7 +62,9 @@ final class CalleesCommand implements CliCommand {
 					}
 					depth = parsedDepth;
 				case '--limit':
-					try limit = CliArgs.parseLimit(arg.value()) catch (exception: Exception) {
+					try {
+						limit = CliArgs.parseLimit(arg.value());
+					} catch (exception: Exception) {
 						CliIo.stderr('${exception.message}\n');
 						return EXIT_USAGE;
 					}
@@ -103,9 +105,9 @@ final class CalleesCommand implements CliCommand {
 			return ctx.emptyExit(true);
 		}
 		// --limit 0 = uncapped; unset = DEFAULT_CHAIN_LINES; the budget is
-		final provenEmpty: Bool = if (output == Text)
-			renderChains(graph, matches, depth, outward, kinds, sources, limit)
-		else {
+		final provenEmpty: Bool = if (output == Text) {
+			renderChains(graph, matches, depth, outward, kinds, sources, limit);
+		} else {
 			final drawn: CodeGraph = MemberGraphBuilder.chains(graph, [for (m in matches) m.id], depth, outward, kinds);
 			CliCallGraph.printGraph(output, drawn, '$cmd $targetStr --depth $depth');
 			drawn.edges().length == 0;

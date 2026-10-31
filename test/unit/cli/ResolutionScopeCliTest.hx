@@ -165,7 +165,9 @@ class ResolutionScopeCliTest extends Test {
 		final name: String = haxe.io.Path.withoutDirectory(dir);
 		File.saveContent('$dir/apqlint.json', '{"resolutionRoots":["$dir"]}');
 		Sys.setCwd(haxe.io.Path.directory(dir));
-		final exit: Int = try Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', name]) catch (exception: haxe.Exception) {
+		final exit: Int = try {
+			Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', name]);
+		} catch (exception: haxe.Exception) {
 			Sys.setCwd(oldCwd);
 			throw exception;
 		}

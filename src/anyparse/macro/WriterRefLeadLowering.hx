@@ -66,7 +66,7 @@ final class WriterRefLeadLowering {
 					_dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl())
 				])
 				: $gluedLead;
-		} else
+		} else {
 			whitespacePolicyLead(child, leadText, [
 				'objectFieldColon',
 				'typeHintColon',
@@ -79,6 +79,7 @@ final class WriterRefLeadLowering {
 				'switchCondParensInsideOpen',
 				'whileCondParensInsideOpen'
 			]);
+		};
 		// ω-switch-subject-parens: drop the switch-subject open `(` when the knob
 		// is on and the subject is not a leading-brace expr (object literal / block
 		// keep their parens). Nothing replaces it — the `switch` keyword already
@@ -417,9 +418,9 @@ final class WriterRefLeadLowering {
 			}
 			: macro Type.enumConstructor($fieldAccess) == $v{ctorName};
 		final gateAccess: Expr = isComplexValueExpr ? macro (opt._inFieldLevelVar || $optAccess) : optAccess;
-		final condExpr: Expr = if (leftCurlyField == null)
-			macro $gateAccess && $ctorMatch
-		else {
+		final condExpr: Expr = if (leftCurlyField == null) {
+			macro $gateAccess && $ctorMatch;
+		} else {
 			final leftCurlyAccess: Expr = optFieldAccess(leftCurlyField);
 			macro $gateAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next && $ctorMatch;
 		};

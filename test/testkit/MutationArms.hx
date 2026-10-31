@@ -125,7 +125,9 @@ final class MutationArms {
 		final arms: Array<MutationArm> = [];
 		final errors: Array<String> = [];
 		var root: Null<Any> = null;
-		try root = Json.parse(source) catch (exception: Exception) {
+		try {
+			root = Json.parse(source);
+		} catch (exception: Exception) {
 			errors.push('the arm table is not valid JSON: ${exception.message}');
 			return { arms: arms, errors: errors };
 		}

@@ -75,7 +75,9 @@ final class EncapsulateFieldCommand implements CliCommand {
 		final filePath: String = file;
 		final fieldNameNN: String = fieldName;
 		final typeNameNN: String = typeName ?? RefactorSupport.baseNameOf(filePath);
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq encapsulate-field: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

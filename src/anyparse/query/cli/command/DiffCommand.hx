@@ -57,7 +57,9 @@ final class DiffCommand implements CliCommand {
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
+					try {
+						limit = CliArgs.parseLimit(arg.value());
+					} catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return EXIT_USAGE;
 					}
@@ -86,14 +88,18 @@ final class DiffCommand implements CliCommand {
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 		final sourceA: String = CliIo.readSourceForParse(a);
 		final sourceB: String = CliIo.readSourceForParse(b);
-		final treeA: QueryNode = try plugin.parseFile(sourceA) catch (e: ParseError) {
+		final treeA: QueryNode = try {
+			plugin.parseFile(sourceA);
+		} catch (e: ParseError) {
 			CliIo.stderr('apq diff: $a: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			CliIo.stderr('apq diff: $a: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
-		final treeB: QueryNode = try plugin.parseFile(sourceB) catch (e: ParseError) {
+		final treeB: QueryNode = try {
+			plugin.parseFile(sourceB);
+		} catch (e: ParseError) {
 			CliIo.stderr('apq diff: $b: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {

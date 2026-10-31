@@ -171,7 +171,11 @@ final class CheckScan {
 		return try {
 			final tree: QueryNode = plugin.parseFile(source);
 			plugin.projectBranchAware(tree, source);
-		} catch (exception: ParseError) null catch (exception: Exception) null;
+		} catch (exception: ParseError) {
+			null;
+		} catch (exception: Exception) {
+			null;
+		};
 	}
 
 	/**

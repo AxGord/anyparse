@@ -1332,7 +1332,9 @@ final class HaxeFormatConfigLoader {
 		final line: String = 'apq: hxformat.json indentation.character \'$character'
 			+ '\' is not recognized — use "tab" or a literal run of spaces (e.g. "    "); keeping the default\n';
 		#if nodejs
-		try Sys.stderr().writeString(line) catch (exception: Exception) {
+		try {
+			Sys.stderr().writeString(line);
+		} catch (exception: Exception) {
 			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
 			throw exception;
 		}

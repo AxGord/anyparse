@@ -62,7 +62,9 @@ final class SetCommentCommand implements CliCommand implements PostWriteFix {
 
 		final filePath: String = file;
 		final commentStr: String = commentText;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq set-comment: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

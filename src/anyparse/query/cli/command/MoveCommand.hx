@@ -97,9 +97,9 @@ final class MoveCommand implements CliCommand {
 		// `RefactorSupport.canonicalize` run, and for the same recorded reason: a writer whose
 		// output is not its own fixed point leaves the file one pass short of where the next
 		// `fmt --list` looks, which is the very symptom this gate exists to remove.
-		final fixed: FormatFixedPointResult = try FormatFixedPoint.run(
-			text -> plugin.writeRoundTrip(text, opts), change.newSource
-		) catch (exception: CommentLossException) {
+		final fixed: FormatFixedPointResult = try {
+			FormatFixedPoint.run(text -> plugin.writeRoundTrip(text, opts), change.newSource);
+		} catch (exception: CommentLossException) {
 			// The one failure worth a word: the writer refuses to drop an author's comment
 			// rather than emitting lossy output. Keeping the raw splice is right for a span
 			// splice (the move's own re-parse already validated it), but silence here would
@@ -155,7 +155,9 @@ final class MoveCommand implements CliCommand {
 			throw new Exception('apq move: null arg after validation (unreachable)');
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
 
-		final cursorSource: String = try CliIo.readSourceForParse(cursorFile) catch (exception: Exception) {
+		final cursorSource: String = try {
+			CliIo.readSourceForParse(cursorFile);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq move: $cursorFile: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

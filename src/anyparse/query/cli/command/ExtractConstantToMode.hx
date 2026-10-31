@@ -79,7 +79,9 @@ final class ExtractConstantToMode {
 		}
 		final filePath: String = file;
 		final constantName: String = name;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq $OP: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -90,7 +92,9 @@ final class ExtractConstantToMode {
 			{
 				file: intoPath,
 				source: FileSystem.exists(intoPath)
-					? (try CliIo.readFile(intoPath) catch (exception: Exception) {
+					? (try {
+						CliIo.readFile(intoPath);
+					} catch (exception: Exception) {
 						CliIo.stderr('apq $OP: $intoPath: ${exception.message}\n');
 						return EXIT_RUNTIME;
 					}: String)

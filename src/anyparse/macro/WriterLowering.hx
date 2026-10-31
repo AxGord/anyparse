@@ -452,9 +452,9 @@ class WriterLowering {
 			// Build pattern
 			final ctorPath: Array<String> = ruleCtorPath(typePath, ctor);
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
-			final pattern: Expr = if (children.length == 0)
-				ctorRef
-			else {
+			final pattern: Expr = if (children.length == 0) {
+				ctorRef;
+			} else {
 				final argExprs: Array<Expr> = [for (name in argNames) macro $i{name}];
 				{ expr: ECall(ctorRef, argExprs), pos: Context.currentPos() };
 			};

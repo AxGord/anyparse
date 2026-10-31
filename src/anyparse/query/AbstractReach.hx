@@ -92,8 +92,9 @@ final class AbstractReach {
 		final r: MemberRead = if (receiver != null && !declaring.exists(o -> receiver.contains(o))) {
 			if (receiver.exists(_built)) for (t in _everything()) add(t);
 			{ name: read.name, owners: null };
-		} else
+		} else {
 			read;
+		};
 		resolve(r, declaring);
 		return true;
 	}

@@ -275,7 +275,9 @@ class LintReportChannelSliceTest extends Test {
 			buffer.push(Std.string(chunk));
 			return true;
 		};
-		try fn() catch (exception: haxe.Exception) {
+		try {
+			fn();
+		} catch (exception: haxe.Exception) {
 			stream.write = original;
 			throw exception;
 		}

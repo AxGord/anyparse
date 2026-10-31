@@ -33,7 +33,9 @@ final class TypePathRegistries {
 	 * other, or the reason the file cannot be read as JSON. Empty when the relocation keeps every glob's reach.
 	 */
 	public static function globRefusals(registry: TypePathRegistry, json: String, moved: Array<TypePathMove>): Array<String> {
-		final root: Dynamic = try Json.parse(json) catch (exception: Exception) {
+		final root: Dynamic = try {
+			Json.parse(json);
+		} catch (exception: Exception) {
 			return ['declared type-path registry ${registry.file} is not JSON: ${exception.message}'];
 		};
 		final out: Array<String> = [];
@@ -56,12 +58,12 @@ final class TypePathRegistries {
 
 	/** Every string at `path[i..]` under `node`, arrays transparent. */
 	private static function valuesAt(node: Dynamic, path: Array<String>, i: Int): Array<String> {
-		if (Std.isOfType(node, Array)) {
+		if (node is Array) {
 			final items: Array<Dynamic> = node;
 			return [for (item in items) for (v in valuesAt(item, path, i)) v];
 		}
-		if (i == path.length) return Std.isOfType(node, String) ? [(node: String)] : [];
-		if (node == null || !Reflect.isObject(node) || Std.isOfType(node, String)) return [];
+		if (i == path.length) return node is String ? [(node: String)] : [];
+		if (node == null || !Reflect.isObject(node) || node is String) return [];
 		return valuesAt(Reflect.field(node, path[i]), path, i + 1);
 	}
 

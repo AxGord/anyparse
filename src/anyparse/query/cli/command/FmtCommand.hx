@@ -539,7 +539,9 @@ final class FmtCommand implements CliCommand {
 			);
 			return { changed: false, failed: true, fatalExit: null };
 		}
-		final source: String = try CliIo.readFile(path) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(path);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
 			return { changed: false, failed: true, fatalExit: null };
 		};
@@ -550,7 +552,9 @@ final class FmtCommand implements CliCommand {
 		// its own fixed point left `--write` one pass short of where the next
 		// `--list` looked. `FormatFixedPoint` documents the instance.
 		final roundTrip: (text:String) -> Null<String> = text -> plugin.writeRoundTrip(text, optsJson);
-		final fixedPoint: FormatFixedPointResult = try FormatFixedPoint.run(roundTrip, source) catch (exception: Exception) {
+		final fixedPoint: FormatFixedPointResult = try {
+			FormatFixedPoint.run(roundTrip, source);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
 			return { changed: false, failed: true, fatalExit: null };
 		};
@@ -639,7 +643,9 @@ final class FmtCommand implements CliCommand {
 				// Continuing past a TRUNCATING write is what turned a full disk into a tree
 				// of empty source files: a run on a volume with no free blocks reported some
 				// files rewritten and left them at 0 bytes.
-				try CliIo.writeFile(path, formatted) catch (failure: WriteFailure) {
+				try {
+					CliIo.writeFile(path, formatted);
+				} catch (failure: WriteFailure) {
 					CliIo.stderr('apq fmt: ${failure.message}\n');
 					return {
 						changed: false,

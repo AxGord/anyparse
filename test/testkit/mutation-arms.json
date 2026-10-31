@@ -7913,8 +7913,8 @@
 			"name": "M-REACH-EXTENSION-READ",
 			"type": "anyparse.query.AbstractReach",
 			"method": "read",
-			"find": "\t\t\t{ name: read.name, owners: null };\n\t\t} else\n",
-			"replace": "\t\t\tread;\n\t\t} else\n",
+			"find": "\t\t\t{ name: read.name, owners: null };\n\t\t} else {\n",
+			"replace": "\t\t\tread;\n\t\t} else {\n",
 			"note": "a read none of whose receiver's chain declares the name reaches nothing, so a static extension's return type is out of reach"
 		},
 		{
@@ -33788,6 +33788,28 @@
 			"find": "if (removed.length > 0)",
 			"replace": "if (false)",
 			"note": "a recorded rule dropped from registration passes silently"
+		},
+		{
+			"name": "M-ASYM-TRY-UNFLAGGED",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "tryFinding",
+			"force": "null",
+			"note": "a try/catch whose body is braced and whose catch is bare is not a finding, although the writer symmetric mode braces the catch"
+		},
+		{
+			"name": "M-ASYM-TRY-FIX-NO-EDIT",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "tryBraceFix",
+			"force": "Declined('mutated')",
+			"note": "no bare body of an asymmetric try/catch is ever braced, so the try half of asymmetric-branch-braces stays report-only"
+		},
+		{
+			"name": "M-ASYM-TRY-FIX-UNTERMINATED",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "tryBraceFix",
+			"find": "? text : text + site.terminator",
+			"replace": "? text : text",
+			"note": "a bare expression body is braced without a terminator, `{ p() }`, which Haxe rejects as Missing ;"
 		}
 	]
 }

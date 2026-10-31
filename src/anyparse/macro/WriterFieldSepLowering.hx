@@ -129,8 +129,9 @@ final class WriterFieldSepLowering {
 				pos: Context.currentPos()
 			};
 			macro ($slotAccess ? _dhl() : _dt(' '));
-		} else
+		} else {
 			macro _dt(' ');
+		};
 		final flagBased: Expr = sameLinePolicySwitch(optFlag, keepExpr);
 		if (prevBody == null || !child.fmtHasFlag('shapeAware')) return withPadTrailingDrop(prevPadTrailing, flagBased);
 		// ω-same-on-block: the block arm splits by the DELIMITER the branch opens
@@ -362,9 +363,9 @@ final class WriterFieldSepLowering {
 		final childBodyPolicyFlag: Null<String> = childBodyPolicy.stmt;
 		if (childBodyPolicyFlag == null) return withPadTrailingDrop(c.prevPadTrailing, c.shapeAwareSwitch);
 		final stmtBpAccess: Expr = optFieldAccess(childBodyPolicyFlag);
-		final bpAccess: Expr = if (childBodyPolicy.expr == null)
-			stmtBpAccess
-		else {
+		final bpAccess: Expr = if (childBodyPolicy.expr == null) {
+			stmtBpAccess;
+		} else {
 			final exprBpAccess: Expr = optFieldAccess(childBodyPolicy.expr);
 			macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
 		};
@@ -376,8 +377,9 @@ final class WriterFieldSepLowering {
 				pos: Context.currentPos()
 			};
 			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
-		} else
+		} else {
 			macro $bpAccess == $samePat;
+		};
 		// ω-ifelse-semicolon-next-line: when the body is forced inline
 		// (`isInlineExpr` — e.g. `sameLine.ifBody:same`) the pre-slice
 		// shape obeyed `flagBased` (`sameLineElse`), gluing `else` after a
@@ -418,8 +420,9 @@ final class WriterFieldSepLowering {
 					? _dhl()
 					: ${c.flagBased}
 			);
-		} else
+		} else {
 			c.flagBased;
+		};
 		return withPadTrailingDrop(c.prevPadTrailing, macro $isInlineExpr ? $inlineSep : ${c.shapeAwareSwitch});
 	}
 
@@ -478,8 +481,9 @@ final class WriterFieldSepLowering {
 			else if (prevAnyStarNonEmpty != null) {
 				final prev: Expr = prevAnyStarNonEmpty;
 				macro $prev ? $nlSep : _de();
-			} else
+			} else {
 				nlSep;
+			};
 			// ω-598-member-leading-comment: own-line gap comments — see buildBeforeLeadingSep.
 			final sepWithLeading: Expr = buildBeforeLeadingSep(child, fieldName, triviaSepExpr);
 			return withPadTrailingDrop(prevPadTrailing, sepWithLeading);

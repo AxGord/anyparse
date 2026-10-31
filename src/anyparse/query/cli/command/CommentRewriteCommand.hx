@@ -255,7 +255,9 @@ final class CommentRewriteCommand implements CliCommand {
 		var changed: Int = 0;
 		var failed: Int = 0;
 		for (path in paths) {
-			final source: String = try CliIo.readFile(path) catch (exception: Exception) {
+			final source: String = try {
+				CliIo.readFile(path);
+			} catch (exception: Exception) {
 				CliIo.stderr('apq comment-rewrite: $path: ${exception.message}\n');
 				failed++;
 				continue;

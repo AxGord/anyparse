@@ -115,7 +115,9 @@ final class SearchCommand implements CliCommand {
 		// simply has none. `search` mints no kind of its own, so the whole vocabulary is the grammar's.
 		final kindFilter: Null<String> = o.kind;
 		if (kindFilter != null && CliWalk.rejectUnknownKinds(CMD, plugin, [kindFilter], [])) return EXIT_USAGE;
-		final parsed: Pattern = try plugin.parsePattern(patternStr) catch (e: Exception) {
+		final parsed: Pattern = try {
+			plugin.parsePattern(patternStr);
+		} catch (e: Exception) {
 			CliIo.stderr('apq search: pattern: ${e.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -287,7 +289,9 @@ final class SearchCommand implements CliCommand {
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
+					try {
+						limit = CliArgs.parseLimit(arg.value());
+					} catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return searchParseExit(EXIT_USAGE);
 					}

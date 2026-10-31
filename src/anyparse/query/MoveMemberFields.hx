@@ -95,8 +95,9 @@ final class MoveMemberFields {
 		else if (MemberKinds.isDataFieldKind(g.member.kind)) {
 			final at: Int = SourceText.identTokenOffset(srcSource, span, name);
 			at >= 0 && !SourceText.isProperty(srcSource, at + name.length);
-		} else
+		} else {
 			false;
+		};
 		final shape: RefShape = plugin.refShape();
 		return plain
 			&& !MemberBranchScan.isGuardedMember(srcDecl, shape, srcSource, g.member, plugin.lexicalRegions.bind(srcSource))

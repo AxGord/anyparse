@@ -97,8 +97,9 @@ class HxInlineBlockCommentWriteTest extends Test {
 		try {
 			final written: Null<String> = roundTrip(source);
 			Assert.fail('expected a comment-loss refusal, got: $written');
-		} catch (exception: CommentLossException)
+		} catch (exception: CommentLossException) {
 			Assert.equals(expected, exception.comment);
+		}
 	}
 
 	private function roundTrip(source: String): Null<String> return new HaxeQueryPlugin().writeRoundTrip(source);

@@ -336,7 +336,9 @@ final class CliArgs {
 			for (path in paths)
 				{
 					file: path,
-					source: (try CliIo.readSourceForParse(path) catch (exception: Exception) {
+					source: (try {
+						CliIo.readSourceForParse(path);
+					} catch (exception: Exception) {
 						CliIo.stderr('apq $cmd: $path: ${exception.message}\n');
 						return null;
 					}: String)

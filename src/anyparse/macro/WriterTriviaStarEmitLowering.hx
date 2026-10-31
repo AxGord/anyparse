@@ -207,9 +207,9 @@ final class WriterTriviaStarEmitLowering {
 		// `triviaTryparseStarExpr` can emit a `Reflect.copy(opt)` + per-pair
 		// override block in the runtime flat-case branch.
 		final flatChildOptRaw: Null<Array<String>> = starNode.fmtReadStringArgs('flatChildOpt');
-		final flatChildOptPairs: Array<Array<String>> = if (flatChildOptRaw == null)
-			[]
-		else {
+		final flatChildOptPairs: Array<Array<String>> = if (flatChildOptRaw == null) {
+			[];
+		} else {
 			final out: Array<Array<String>> = [];
 			for (raw in flatChildOptRaw) {
 				final eq: Int = raw.indexOf('=');
@@ -477,9 +477,9 @@ final class WriterTriviaStarEmitLowering {
 			? findElementBodyField(ctx.ctorPat, elemRefName, prevBareRefBody.typePath)
 			: null;
 		final blockKeepsInlineBranch: Expr = blockBodyKeepsInlineBranch(starNode);
-		final firstSepOverride: Null<Expr> = if (blockPatterns.length == 0)
+		final firstSepOverride: Null<Expr> = if (blockPatterns.length == 0) {
 			closeTrailingFirstOverride;
-		else {
+		} else {
 			final fallback: Expr = closeTrailingFirstOverride ?? sepExpr;
 			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : fallback;
 			final bareBranch: Expr = blockShapeAware ? fallback : bareSepBreak(barePolicyFields[0], sepExpr, softSeam);
@@ -489,9 +489,9 @@ final class WriterTriviaStarEmitLowering {
 			];
 			{ expr: ESwitch(prevBareRefBody.access, cases, null), pos: Context.currentPos() };
 		};
-		final subsequentSepOverride: Null<Expr> = if (elemBodyField == null)
+		final subsequentSepOverride: Null<Expr> = if (elemBodyField == null) {
 			null;
-		else {
+		} else {
 			final prevElemBodyAccess: Expr = {
 				expr: EField(macro _arr[_si - 1].node, elemBodyField),
 				pos: Context.currentPos()

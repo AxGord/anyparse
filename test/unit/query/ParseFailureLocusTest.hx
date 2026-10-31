@@ -64,8 +64,9 @@ final class ParseFailureLocusTest extends Test {
 			final tree: QueryNode = plugin.parseFile(source);
 			Assert.fail('expected a parse failure, got a tree of ${tree.children.length} child(ren)');
 			return '';
-		} catch (exception: Exception)
+		} catch (exception: Exception) {
 			return exception.toString();
+		}
 	}
 
 }

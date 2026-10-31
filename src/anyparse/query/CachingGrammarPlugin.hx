@@ -873,9 +873,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final known: Null<{ source: String, info: Null<FileInfo> }> = _declarations[file];
 		if (known != null && known.source == source) return known.info;
 		final provider: Null<ParsedRootProvider> = _rootProvider;
-		final info: Null<FileInfo> = if (provider == null)
-			IndexScope.over([{ file: file, source: source }], this).fileInfo(file)
-		else {
+		final info: Null<FileInfo> = if (provider == null) {
+			IndexScope.over([{ file: file, source: source }], this).fileInfo(file);
+		} else {
 			final full: Null<Any> = _rootCache[source];
 			SymbolIndexBuilder.declarationsFromRoot(file, source, full ?? provider.parseDeclarationsRoot(source), provider, this);
 		};

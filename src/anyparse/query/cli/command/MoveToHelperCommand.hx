@@ -133,7 +133,9 @@ final class MoveToHelperCommand implements CliCommand {
 		return try {
 			CliIo.readFile(path);
 			true;
-		} catch (exception: Exception) false;
+		} catch (exception: Exception) {
+			false;
+		};
 	}
 
 	private static function printUsage(): Void {

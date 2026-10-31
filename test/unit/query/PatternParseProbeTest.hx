@@ -243,8 +243,9 @@ class PatternParseProbeTest extends Test {
 		try {
 			new HaxeQueryPlugin().parsePattern(source);
 			return false;
-		} catch (_: Exception)
+		} catch (_: Exception) {
 			return true;
+		}
 	}
 
 	private static function collectMetavarNames(node: QueryNode, into: Array<String>): Void {

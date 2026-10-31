@@ -83,7 +83,9 @@ final class RewriteCommand implements CliCommand {
 		final filePath: String = file;
 		final pat: String = pattern;
 		final repl: String = replacement;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq rewrite: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

@@ -108,7 +108,9 @@ final class RenameCommand implements CliCommand {
 
 		final filePath: String = file;
 		final newNameStr: String = newName;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq rename: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -176,7 +178,9 @@ final class RenameCommand implements CliCommand {
 				scopeFiles.push({ file: path, source: source });
 				continue;
 			}
-			final fileSource: String = try CliIo.readSourceForParse(path) catch (exception: Exception) {
+			final fileSource: String = try {
+				CliIo.readSourceForParse(path);
+			} catch (exception: Exception) {
 				CliIo.stderr('apq rename: $path: ${exception.message}\n');
 				return EXIT_RUNTIME;
 			};
@@ -220,7 +224,9 @@ final class RenameCommand implements CliCommand {
 		return try {
 			final tree: QueryNode = plugin.parseFile(source);
 			RefactorSupport.resolveTypeDeclAtCursor(tree, Span.offsetOf(source, line, col), source) != null;
-		} catch (exception: Exception) false;
+		} catch (exception: Exception) {
+			false;
+		};
 	}
 
 	/**
@@ -231,7 +237,9 @@ final class RenameCommand implements CliCommand {
 		return try {
 			final tree: QueryNode = plugin.parseFile(source);
 			CrossRenameMember.isMemberDeclAtCursor(tree, Span.offsetOf(source, line, col), source, plugin.refShape());
-		} catch (exception: Exception) false;
+		} catch (exception: Exception) {
+			false;
+		};
 	}
 
 	/**

@@ -788,41 +788,6 @@ final class CompilerFacts {
 	}
 
 	/**
-	 * The types `n` records at exactly `span` of `file`, whose text is `text`, added to `seen` (`typeOfExpressionAt`):
-	 * whether one of them is a site of the text's own, or null when a fact there is not the text's.
-	 */
-	private function textSitesAt(n: FactNode, file: String, span: Span, text: String, seen: Array<String>): Null<Bool> {
-		// a local the compiler declares at the range holds a value there: the text's (`a?.b()`, `a ?? b`) or an inlined
-		// call's parameter the text is handed to, of that parameter's type — so it may type the range beside a site of the
-		// text's own, never alone
-		final held: Array<String> = [for (v in n.vars) if (same(v.at, file, span)) v.name];
-		var own: Bool = false;
-		for (site in FactText.typedSites(n, FactText.bare(text))) {
-			final at: Null<FactPos> = site.at;
-			final member: Null<String> = site.member;
-			if (at == null || !same(at, file, span) || site.type == '?') continue;
-			final named: Bool = member == null || FactText.mentions(text, member);
-			// code the text does not spell, typed at its range, is the compiler's: the range is not the text's alone
-			if (!(named || (member != null && held.contains(member))) || !spelledCall(site.call)) return null;
-			own = own || named;
-			if (!seen.contains(site.type)) seen.push(site.type);
-		}
-		return own;
-	}
-
-	/**
-	 * Whether a call's receiver site counts beside `call` (null: a site no call has): when its own file spells the call's
-	 * member at the call's range — an inlined body's call in its callee's file takes the text as its receiver, a call no
-	 * text there spells is the compiler's.
-	 */
-	private function spelledCall(call: Null<{ at: FactPos, member: Null<String> }>): Bool {
-		if (call == null) return true;
-		final member: Null<String> = call.member;
-		final there: Null<String> = sourceOf(call.at.file);
-		return member != null && there != null && FactText.mentions(there.substring(call.at.span.from, call.at.span.to), member);
-	}
-
-	/**
 	 * Every type the configurations gave the VALUE of the expression at exactly `span` in `file`: its own
 	 * (`typeOfExpressionAt`), then the source type of each value flow recorded at that very range — a value handed to a
 	 * place of another type flows there at its own type, the facts' only record of many a value. Distinct; empty when the
@@ -982,6 +947,41 @@ final class CompilerFacts {
 	}
 
 	/**
+	 * The types `n` records at exactly `span` of `file`, whose text is `text`, added to `seen` (`typeOfExpressionAt`):
+	 * whether one of them is a site of the text's own, or null when a fact there is not the text's.
+	 */
+	private function textSitesAt(n: FactNode, file: String, span: Span, text: String, seen: Array<String>): Null<Bool> {
+		// a local the compiler declares at the range holds a value there: the text's (`a?.b()`, `a ?? b`) or an inlined
+		// call's parameter the text is handed to, of that parameter's type — so it may type the range beside a site of the
+		// text's own, never alone
+		final held: Array<String> = [for (v in n.vars) if (same(v.at, file, span)) v.name];
+		var own: Bool = false;
+		for (site in FactText.typedSites(n, FactText.bare(text))) {
+			final at: Null<FactPos> = site.at;
+			final member: Null<String> = site.member;
+			if (at == null || !same(at, file, span) || site.type == '?') continue;
+			final named: Bool = member == null || FactText.mentions(text, member);
+			// code the text does not spell, typed at its range, is the compiler's: the range is not the text's alone
+			if (!(named || (member != null && held.contains(member))) || !spelledCall(site.call)) return null;
+			own = own || named;
+			if (!seen.contains(site.type)) seen.push(site.type);
+		}
+		return own;
+	}
+
+	/**
+	 * Whether a call's receiver site counts beside `call` (null: a site no call has): when its own file spells the call's
+	 * member at the call's range — an inlined body's call in its callee's file takes the text as its receiver, a call no
+	 * text there spells is the compiler's.
+	 */
+	private function spelledCall(call: Null<{ at: FactPos, member: Null<String> }>): Bool {
+		if (call == null) return true;
+		final member: Null<String> = call.member;
+		final there: Null<String> = sourceOf(call.at.file);
+		return member != null && there != null && FactText.mentions(there.substring(call.at.span.from, call.at.span.to), member);
+	}
+
+	/**
 	 * The node `id` of the file keyed `home`: unioned over every configuration — save what configurations typed of it in
 	 * another file where it has a range of its own, a copy of its type each build reads from its own (`typeHomes`): that
 	 * copy is a declaration of its own, asked by its own file's ranges, and its code, at its own positions, is no code of
@@ -1124,7 +1124,9 @@ final class CompilerFacts {
 	private function materializeAs(entry: String, id: String, lines: Array<NodeLine>): Null<FactNode> {
 		final reading: Map<String, Bool> = [];
 		_reading = reading;
-		final made: Null<FactNode> = try materialize(id, lines) catch (exception: haxe.Exception) {
+		final made: Null<FactNode> = try {
+			materialize(id, lines);
+		} catch (exception: haxe.Exception) {
 			_reading = null;
 			throw exception;
 		};

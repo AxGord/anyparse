@@ -45,7 +45,9 @@ final class PhaseTimings {
 	public static function measure<T>(phase: String, body: () -> T): T {
 		if (!enabled) return body();
 		final started: Float = Timer.stamp();
-		final result: T = try body() catch (exception: Exception) {
+		final result: T = try {
+			body();
+		} catch (exception: Exception) {
 			add(phase, Timer.stamp() - started, started);
 			throw exception;
 		};
@@ -60,7 +62,9 @@ final class PhaseTimings {
 			return;
 		}
 		final started: Float = Timer.stamp();
-		try body() catch (exception: Exception) {
+		try {
+			body();
+		} catch (exception: Exception) {
 			add(phase, Timer.stamp() - started, started);
 			throw exception;
 		}

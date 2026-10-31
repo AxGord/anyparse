@@ -97,7 +97,9 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 		final filePath: String = file;
 		final typeStr: String = typeName;
 		final memberStr: String = memberText;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq add-member: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

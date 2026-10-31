@@ -1585,7 +1585,9 @@ class MemberOrderCheckTest extends Test {
 		return try {
 			new HaxeQueryPlugin().parseFile(src);
 			true;
-		} catch (exception: haxe.Exception) false;
+		} catch (exception: haxe.Exception) {
+			false;
+		};
 	}
 
 	/**

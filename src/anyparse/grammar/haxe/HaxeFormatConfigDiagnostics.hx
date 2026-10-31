@@ -103,7 +103,9 @@ final class HaxeFormatConfigDiagnostics {
 		if (Sys.getEnv(SILENCE_VAR) == '1') return;
 		final line: Null<String> = message(path, diagnose(json));
 		if (line == null) return;
-		try Sys.stderr().writeString(line) catch (exception: Exception) {
+		try {
+			Sys.stderr().writeString(line);
+		} catch (exception: Exception) {
 			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
 			throw exception;
 		}

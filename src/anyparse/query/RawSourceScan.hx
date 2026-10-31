@@ -315,9 +315,9 @@ final class RawSourceScan {
 		final shape: RefShape = _plugin.refShape();
 		final tag: Null<String> = shape.waivesPrivacyMetaName;
 		final tree: Null<QueryNode> = tag == null || _skipped.contains(file) ? null : ParseGate.parseOrNull(_plugin, source);
-		final out: Null<Array<String>> = if (tree == null || tag == null)
-			null
-		else {
+		final out: Null<Array<String>> = if (tree == null || tag == null) {
+			null;
+		} else {
 			final names: Array<String> = [];
 			final newKind: Null<String> = shape.newExprKind;
 			final ctorName: Null<String> = shape.constructorName;

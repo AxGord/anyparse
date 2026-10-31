@@ -52,9 +52,9 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 	): Bool {
 		final label: String = plain ? 'plain' : 'trivia';
 		CliIo.sysPrint('=== $label ===\n');
-		final emitted: Null<String> = try (
-			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
-		) catch (e: ParseError) {
+		final emitted: Null<String> = try {
+			(plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
+		} catch (e: ParseError) {
 			CliIo.stderr('apq writer-probe: $label: $file: $e\n');
 			return false;
 		} catch (e: Exception) {

@@ -152,9 +152,9 @@ final class BodyFit {
 		final flat: Int = WrapList.flatLength(body);
 		final own: Doc = if (flat != -1)
 			chainStaircase(cols, body, Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body]))), lineWidth);
-		else if (refuseGlue)
+		else if (refuseGlue) {
 			breakLayout(cols, body);
-		else {
+		} else {
 			final glued: Doc = Doc.Concat([Doc.OptSpace(' '), body]);
 			glueLayout(cols, body, nestGluedBody ? Doc.Nest(cols, glued) : glued, lineWidth);
 		}

@@ -148,9 +148,9 @@ final class NewFile {
 		// one-pass gate every writer-emit op puts on its input, so a file the
 		// writer settles only on the second rewrite would be written `wrote
 		// <path>` and then refused by the very next op on it.
-		final settled: FormatFixedPointResult = try FormatFixedPoint.run(
-			text -> plugin.writeRoundTrip(text, optsJson), source
-		) catch (exception: ParseError) {
+		final settled: FormatFixedPointResult = try {
+			FormatFixedPoint.run(text -> plugin.writeRoundTrip(text, optsJson), source);
+		} catch (exception: ParseError) {
 			// `$exception` keeps the `line:col` + `(expected …)` — see `createRaw`.
 			return err('assembled source does not parse: $exception');
 		} catch (exception: CommentLossException) {
@@ -181,9 +181,9 @@ final class NewFile {
 		// `tools/src/module/Unpack.hx` through `apq new --raw -` wrote a file its
 		// own `fmt --list` immediately called drifted, so the next writer-emit op
 		// on it refused with `file is not in canonical form`.
-		final settled: FormatFixedPointResult = try FormatFixedPoint.run(
-			text -> plugin.writeRoundTrip(text, optsJson), content
-		) catch (exception: ParseError) {
+		final settled: FormatFixedPointResult = try {
+			FormatFixedPoint.run(text -> plugin.writeRoundTrip(text, optsJson), content);
+		} catch (exception: ParseError) {
 			// `$exception`, not `${exception.message}`: `ParseError.toString` carries the
 			// `line:col` and the `(expected …)` hint, and this is the arm a CALLER's own
 			// bespoke catch used to own. `ExtractInterface` / `ExtractSuperclass` route

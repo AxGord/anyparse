@@ -66,6 +66,28 @@ final class HxReservedNameSliceTest extends Test {
 		'while'
 	];
 
+	/**
+	 * The reserved words that ARE expressions (`HxExprIdentLit` keeps them, `break` /
+	 * `continue` / `return` as value-less atoms): `(null:Int) -> 1` parses as an arrow over the
+	 * check-type expression `(null : Int)` rather than as a lambda, the arrow-expression fallback no name slot governs.
+	 */
+	private static final EXPRESSION_ATOMS: Array<String> = [
+		'abstract',
+		'break',
+		'cast',
+		'continue',
+		'false',
+		'function',
+		'inline',
+		'macro',
+		'new',
+		'null',
+		'return',
+		'this',
+		'true',
+		'untyped'
+	];
+
 	public function new(): Void {
 		super();
 	}
@@ -108,39 +130,6 @@ final class HxReservedNameSliceTest extends Test {
 		]) Assert.isTrue(parses(src), src);
 	}
 
-	private static function refused(src: String, what: String): Void {
-		Assert.isFalse(parses(src), 'Haxe refuses a $what: $src');
-	}
-
-	private static function parses(src: String): Bool {
-		return try {
-			HaxeModuleParser.parse(src);
-			true;
-		} catch (_: ParseError) false;
-	}
-
-	/**
-	 * The reserved words that ARE expressions (`HxExprIdentLit` keeps them, `break` /
-	 * `continue` / `return` as value-less atoms): `(null:Int) -> 1` parses as an arrow over the
-	 * check-type expression `(null : Int)` rather than as a lambda, the arrow-expression fallback no name slot governs.
-	 */
-	private static final EXPRESSION_ATOMS: Array<String> = [
-		'abstract',
-		'break',
-		'cast',
-		'continue',
-		'false',
-		'function',
-		'inline',
-		'macro',
-		'new',
-		'null',
-		'return',
-		'this',
-		'true',
-		'untyped'
-	];
-
 	/**
 	 * `operator` (reserved since 4.0) and `overload` (since 4.2) still name a declaration: every branch of a `#if` region is
 	 * parsed, and code gated on an older compiler declares them — lime's `Cairo` holds `public var operator(get, set)` under
@@ -152,6 +141,19 @@ final class HxReservedNameSliceTest extends Test {
 	public function testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration(): Void {
 		Assert.isTrue(parses('class C {\n\t#if (haxe_ver < "4.0.0")\n\tpublic var operator(get, set):Int;\n\t#end\n}'));
 		Assert.isTrue(parses('class C { function f() { final overload = 1; return overload; } }'));
+	}
+
+	private static function refused(src: String, what: String): Void {
+		Assert.isFalse(parses(src), 'Haxe refuses a $what: $src');
+	}
+
+	private static function parses(src: String): Bool {
+		return try {
+			HaxeModuleParser.parse(src);
+			true;
+		} catch (_: ParseError) {
+			false;
+		};
 	}
 
 }

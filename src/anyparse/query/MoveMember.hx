@@ -308,8 +308,9 @@ final class MoveMember {
 				case { error: e } if (e != null): return Err(e);
 				case { fields: f }: f;
 			}
-		} else
+		} else {
 			[];
+		};
 		applySiblingOutcome(prep, sibling.accessMembers, sibling.fieldDeps, movedTextEdits, editsByFile, advisoryExtras);
 
 		final rewireError: Null<String> = collectCallerRewires(

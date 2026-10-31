@@ -65,7 +65,9 @@ final class CmdTest extends Test {
 			final error: Null<TemplateError> = try {
 				Assert.fail('read as ${CmdTemplate.parse(bad).length} word(s)');
 				null;
-			} catch (e: TemplateError) e;
+			} catch (e: TemplateError) {
+				e;
+			};
 			Assert.notNull(error, bad);
 			if (error != null) Assert.equals(5, error.offset, bad);
 		}

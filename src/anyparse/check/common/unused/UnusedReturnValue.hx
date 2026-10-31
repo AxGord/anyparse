@@ -226,9 +226,9 @@ final class UnusedReturnValue extends RuleBase implements ConfigAware implements
 		final recvName: Null<String> = recv.name;
 		if (recvName == null) return null;
 		final selfText: Null<String> = ctx.selfReferenceText;
-		final nominal: Null<String> = if (selfText != null && recvName == selfText)
+		final nominal: Null<String> = if (selfText != null && recvName == selfText) {
 			memberReturn(root, callee.span, method, ctx);
-		else {
+		} else {
 			// An instance receiver resolves through its declared type; an unbound name is a
 			// static / type receiver, looked up by its own name.
 			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, ctx.shape);

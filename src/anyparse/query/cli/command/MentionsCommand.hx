@@ -187,7 +187,9 @@ final class MentionsCommand implements CliCommand {
 				case '--flat':
 					scan.flat = true;
 				case '--limit':
-					try scan.limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
+					try {
+						scan.limit = CliArgs.parseLimit(arg.value());
+					} catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return mentionsParseExit(EXIT_USAGE);
 					}

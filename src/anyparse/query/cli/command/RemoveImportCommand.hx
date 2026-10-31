@@ -94,7 +94,9 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 		// `--using` is the keyword spelled as a flag: the op reads the statement form, so the flag
 		// becomes one rather than a second parameter the library entry point would have to carry.
 		final path: String = usingFlag ? '${ImportSpelling.USING_WORD} ${spelled.path}' : modulePath;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq remove-import: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

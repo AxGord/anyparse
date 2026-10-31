@@ -156,7 +156,9 @@ class ApqAstTypeRefsCliTest extends Test {
 			buffer.add('$chunk');
 			return true;
 		});
-		final code: Int = try Cli.run(argv) catch (exception: Exception) {
+		final code: Int = try {
+			Cli.run(argv);
+		} catch (exception: Exception) {
 			Reflect.setField(stdout, 'write', original);
 			throw exception;
 		}

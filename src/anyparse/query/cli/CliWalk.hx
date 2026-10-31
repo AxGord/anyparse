@@ -180,7 +180,9 @@ final class CliWalk {
 		final prefiltered: Bool = !singleFile && keys != null && keys.length > 0 && !keys.exists(key -> source.indexOf(key) >= 0);
 		return prefiltered
 			? null
-			: try parse(source) catch (exception: ParseError) {
+			: try {
+				parse(source);
+			} catch (exception: ParseError) {
 				if (singleFile) CliIo.stderr('apq $cmd: $path: $exception\n');
 				skipOut?.push({ path: path, locus: formatParseErrorLocus(exception, source) });
 				null;

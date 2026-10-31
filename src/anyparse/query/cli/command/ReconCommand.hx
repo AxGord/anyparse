@@ -995,9 +995,9 @@ final class ReconCommand implements CliCommand {
 			source;
 		};
 		final optsJson: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPath);
-		final emittedRaw: Null<String> = try (
-			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
-		) catch (e: ParseError) {
+		final emittedRaw: Null<String> = try {
+			(plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
+		} catch (e: ParseError) {
 			CliIo.sysPrint('WRITER FAIL :: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {

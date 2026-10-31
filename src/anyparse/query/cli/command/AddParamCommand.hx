@@ -96,7 +96,9 @@ final class AddParamCommand implements CliCommand {
 
 		final filePath: String = file;
 		final paramStr: String = paramText;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq add-param: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

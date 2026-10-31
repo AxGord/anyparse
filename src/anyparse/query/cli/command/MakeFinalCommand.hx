@@ -76,7 +76,9 @@ final class MakeFinalCommand implements CliCommand {
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = scopeDir == null ? [
 			{
 				file: filePath,
-				source: try CliIo.readFile(filePath) catch (exception: Exception) {
+				source: try {
+					CliIo.readFile(filePath);
+				} catch (exception: Exception) {
 					CliIo.stderr('apq make-final: $filePath: ${exception.message}\n');
 					return EXIT_RUNTIME;
 				}

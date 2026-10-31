@@ -89,7 +89,9 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 		final filePath: String = file;
 		final paramsNN: String = params;
 		final typeNameNN: String = typeName;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq introduce-parameter-object: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

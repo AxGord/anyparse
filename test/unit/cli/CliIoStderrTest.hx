@@ -29,7 +29,9 @@ class CliIoStderrTest extends Test {
 			bytes.push(data.slice(offset, offset + taken));
 			return taken;
 		};
-		try CliIo.stderr(text) catch (exception: Exception) {
+		try {
+			CliIo.stderr(text);
+		} catch (exception: Exception) {
 			fs.writeSync = original;
 			throw exception;
 		}

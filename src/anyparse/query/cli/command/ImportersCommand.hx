@@ -80,7 +80,9 @@ final class ImportersCommand implements CliCommand {
 			for (path in paths)
 				{
 					file: path,
-					source: (try CliIo.readSourceForParse(path) catch (exception: Exception) {
+					source: (try {
+						CliIo.readSourceForParse(path);
+					} catch (exception: Exception) {
 						CliIo.stderr('apq importers: $path: ${exception.message}\n');
 						return EXIT_RUNTIME;
 					}: String)

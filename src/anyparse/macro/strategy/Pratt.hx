@@ -116,8 +116,9 @@ class Pratt implements Strategy {
 						Context.fatalError('@:infix third argument must be the string literal "Left" or "Right"', entry.params[2].pos);
 						throw 'unreachable';
 				}
-			} else
+			} else {
 				'Left';
+			};
 			final rightPrecValue: Int = if (entry.params.length == 4) {
 				switch entry.params[3].expr {
 					case EConst(CInt(s)) if (Std.parseInt(s) <= precValue): Std.parseInt(s);

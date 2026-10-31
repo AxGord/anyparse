@@ -44,7 +44,9 @@ final class TempDir {
 	/** `body` over a new directory that is removed once `body` returns or throws. */
 	public static function with<T>(body: TempDir -> T): T {
 		final dir: TempDir = create();
-		final result: T = try body(dir) catch (exception: Exception) {
+		final result: T = try {
+			body(dir);
+		} catch (exception: Exception) {
 			dir.dispose();
 			throw exception;
 		};

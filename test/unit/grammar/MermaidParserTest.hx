@@ -296,7 +296,11 @@ class MermaidParserTest extends Test {
 		final failed: Bool = try {
 			MermaidParser.parse(source);
 			false;
-		} catch (_: ParseError) true catch (_: Exception) true;
+		} catch (_: ParseError) {
+			true;
+		} catch (_: Exception) {
+			true;
+		};
 		Assert.isTrue(failed, 'refuses ${Json.stringify(source)}');
 	}
 

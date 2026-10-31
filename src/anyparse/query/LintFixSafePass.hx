@@ -364,10 +364,12 @@ final class LintFixSafePass {
 			if (!probes.green([for (file in changed) if (!culprits.exists(c -> c.file == file)) file], partial))
 				throw new IsolationStop('the cut the isolation settled on does not typecheck');
 			settledNarrowing(narrowing, culprits, changed, spentBefore + probes.spent);
-		} catch (stop: IsolationStop) switch narrowing {
-			case Narrowed(reverted, spent): Narrowed(reverted, spent + probes.spent);
-			case WholeWave(why, errors): WholeWave('$why; ${stop.message}', errors);
-			case Bisected(_): narrowing;
+		} catch (stop: IsolationStop) {
+			switch narrowing {
+				case Narrowed(reverted, spent): Narrowed(reverted, spent + probes.spent);
+				case WholeWave(why, errors): WholeWave('$why; ${stop.message}', errors);
+				case Bisected(_): narrowing;
+			}
 		};
 	}
 

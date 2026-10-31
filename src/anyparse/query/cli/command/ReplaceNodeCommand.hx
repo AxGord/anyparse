@@ -110,7 +110,9 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 
 		final filePath: String = file;
 		final newSrc: String = newSource;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq replace-node: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

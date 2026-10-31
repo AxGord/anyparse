@@ -475,7 +475,9 @@ final class GatesCommand implements CliCommand {
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(arg.value()) catch (e: Exception) {
+					try {
+						limit = CliArgs.parseLimit(arg.value());
+					} catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return gatesParseExit(EXIT_USAGE);
 					}

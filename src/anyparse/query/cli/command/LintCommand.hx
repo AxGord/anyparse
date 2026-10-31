@@ -246,7 +246,9 @@ final class LintCommand implements CliCommand {
 		final files: Array<{ file: String, source: String }> = [];
 		final sourceOf: Map<String, String> = [];
 		for (path in paths) {
-			final fileSource: String = try CliIo.readSourceForParse(path) catch (exception: Exception) {
+			final fileSource: String = try {
+				CliIo.readSourceForParse(path);
+			} catch (exception: Exception) {
 				CliIo.stderr('apq lint: $path: ${exception.message}\n');
 				return EXIT_RUNTIME;
 			};
@@ -570,7 +572,9 @@ final class LintCommand implements CliCommand {
 	private static function endingCompiles(
 		early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>, body: () -> Int
 	): Int {
-		final answer: Int = try body() catch (exception: Exception) {
+		final answer: Int = try {
+			body();
+		} catch (exception: Exception) {
 			endCompiles(early, ahead, oracles);
 			throw exception;
 		};

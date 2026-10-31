@@ -123,7 +123,9 @@ final class GateTree {
 		final outcome: Outcome = try {
 			cmd('git -C $tree worktree add --detach $checkout $base').check();
 			body(checkout);
-		} catch (exception: Exception) NotRun(clip(exception.message));
+		} catch (exception: Exception) {
+			NotRun(clip(exception.message));
+		};
 		cmd('git -C $tree worktree remove --force $checkout').run();
 		scratch.dispose();
 		return outcome;

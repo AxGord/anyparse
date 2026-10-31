@@ -174,7 +174,9 @@ final class CliAtomicWriteSliceTest extends Test {
 				{ path: '$dir/D.hx', content: 'class D {}\n' }
 			]);
 			false;
-		} catch (exception: haxe.Exception) true;
+		} catch (exception: haxe.Exception) {
+			true;
+		};
 		Assert.isTrue(failed, 'the blocked member fails the set');
 		Assert.isFalse(FileSystem.exists('$dir/n1'), 'and the directories staged for the other member are gone');
 		Assert.equals(DRIFTED, File.getContent('$dir/D.hx'), 'the blocked target keeps every byte it had');

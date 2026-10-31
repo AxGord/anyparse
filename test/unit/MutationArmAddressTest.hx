@@ -99,9 +99,9 @@ final class MutationArmAddressTest extends Test {
 				continue;
 			}
 			final cached: Null<QueryNode> = trees[file];
-			final tree: QueryNode = if (cached != null)
-				cached
-			else {
+			final tree: QueryNode = if (cached != null) {
+				cached;
+			} else {
 				final parsed: QueryNode = plugin.parseFile(File.getContent(file));
 				trees[file] = parsed;
 				parsed;
@@ -302,9 +302,9 @@ final class MutationArmAddressTest extends Test {
 		}
 		final file: String = found;
 		final cachedSource: Null<String> = sources[file];
-		final source: String = if (cachedSource != null)
+		final source: String = if (cachedSource != null) {
 			cachedSource;
-		else {
+		} else {
 			final read: String = File.getContent(file);
 			sources[file] = read;
 			trees[file] = plugin.parseFile(read);

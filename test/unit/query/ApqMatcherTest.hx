@@ -384,7 +384,9 @@ class Y {
 		final matches: Array<Match> = try {
 			final pattern: Pattern = plugin.parsePattern('static final A:Array<String> = []');
 			Matcher.search(pattern, tree);
-		} catch (exception: haxe.Exception) [];
+		} catch (exception: haxe.Exception) {
+			[];
+		};
 		// Either the pattern is refused outright or it matches nothing —
 		// two silent matches on the bare modifiers is the corruption regression.
 		Assert.equals(0, matches.length);
@@ -639,7 +641,8 @@ class Y {
 	public function testTypeArgumentsAndValueArgumentsAreSeparateRuns(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(
-			'class X {\n\tfunction f() {\n\t\tnew Foo(x);\n\t\tnew Foo(x, y);\n\t\tnew Map<String, Int>();\n\t\tnew Map<String, Int>(z);\n\t}\n}'
+			'class X {\n\tfunction f() {\n\t\tnew Foo(x);\n\t\tnew Foo(x, y);\n\t\tnew Map<String, Int>();\n'
+			+ '\t\tnew Map<String, Int>(z);\n\t}\n}'
 		);
 		final two: Array<Match> = Matcher.search(plugin.parsePattern("new $T($a, $b)"), tree);
 		Assert.equals('Foo', boundNames(two, 'T').join(','), 'only `new Foo(x, y)` has two value arguments');

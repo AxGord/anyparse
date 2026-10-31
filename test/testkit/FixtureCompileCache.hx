@@ -10,6 +10,8 @@ import js.node.Fs;
 import js.node.Zlib;
 import js.node.fs.Stats;
 
+using Lambda;
+
 /**
  * A content-addressed REPLAY of the fixture compiles the reach probes run, for `dev mutation-check`.
  *
@@ -43,6 +45,34 @@ import js.node.fs.Stats;
  */
 @:nullSafety(Strict)
 final class FixtureCompileCache {
+
+	/** A root holding more files than this is not a fixture: the compile runs for real. */
+	private static inline final MAX_ROOT_FILES: Int = 400;
+
+	/** A root holding more bytes than this is not a fixture either. */
+	private static inline final MAX_ROOT_BYTES: Int = 16 * 1024 * 1024;
+
+	/** How deep hxml includes are followed before the compile is left to the compiler. */
+	private static inline final MAX_HXML_DEPTH: Int = 4;
+
+	/** Buffer of the real compile: the defines probe's `-v` names every parsed module. */
+	private static inline final MAX_BUFFER: Int = 1024 * 1024 * 1024;
+
+	/** The placeholder bracket: a byte no path and no compiler output carries. */
+	private static inline final MARK: String = '\x01';
+
+	/**
+	 * The version of the key and entry layout, bumped whenever what may be recorded changes, since a kept cache outlives
+	 * the rule it was written under: 2 gzips an entry, 3 records no compile
+	 * that writes into its cwd, 4 records the mutant switches a compile ran.
+	 */
+	private static inline final LAYOUT: Int = 4;
+
+	/** How long a process waits on another's compile of the same key before compiling it itself. */
+	private static inline final AWAIT_MS: Float = 10 * 60 * 1000;
+
+	/** How often a waiting process looks for the record. */
+	private static inline final AWAIT_POLL_MS: Int = 50;
 
 	/** A `--macro` naming one of these is a probe compile; nothing else is replayed. */
 	private static final PROBE_MACROS: Array<String> = ['anyparse.check.facts.TypedFactsMacro.run(', 'AnyparseReachDefinesProbe.'];
@@ -96,34 +126,6 @@ final class FixtureCompileCache {
 		'-swf',
 		'--swf'
 	];
-
-	/** A root holding more files than this is not a fixture: the compile runs for real. */
-	private static inline final MAX_ROOT_FILES: Int = 400;
-
-	/** A root holding more bytes than this is not a fixture either. */
-	private static inline final MAX_ROOT_BYTES: Int = 16 * 1024 * 1024;
-
-	/** How deep hxml includes are followed before the compile is left to the compiler. */
-	private static inline final MAX_HXML_DEPTH: Int = 4;
-
-	/** Buffer of the real compile: the defines probe's `-v` names every parsed module. */
-	private static inline final MAX_BUFFER: Int = 1024 * 1024 * 1024;
-
-	/** The placeholder bracket: a byte no path and no compiler output carries. */
-	private static inline final MARK: String = '\x01';
-
-	/**
-	 * The version of the key and entry layout, bumped whenever what may be recorded changes, since a kept cache outlives
-	 * the rule it was written under: 2 gzips an entry, 3 records no compile
-	 * that writes into its cwd, 4 records the mutant switches a compile ran.
-	 */
-	private static inline final LAYOUT: Int = 4;
-
-	/** How long a process waits on another's compile of the same key before compiling it itself. */
-	private static inline final AWAIT_MS: Float = 10 * 60 * 1000;
-
-	/** How often a waiting process looks for the record. */
-	private static inline final AWAIT_POLL_MS: Int = 50;
 
 	/**
 	 * The shim's entry point: `APQ_FIXTURE_CACHE_HAXE` is the real compiler, `APQ_FIXTURE_CACHE_STAMP` its identity,
@@ -215,6 +217,55 @@ final class FixtureCompileCache {
 		return outcome;
 	}
 
+	/**
+	 * The roots and placeheld arguments of the compile `args` in `cwd`, or null when it is not one this class may replay:
+	 * see the class doc. Roots are real paths, the cwd first.
+	 */
+	public static function plan(cwd: String, args: Array<String>): Null<CompilePlan> {
+		final base: Null<String> = realPath(cwd);
+		if (base == null) return null;
+		final roots: Array<String> = [base];
+		var i: Int = 0;
+		while (i < args.length) {
+			final taken: Int = argument(base, args, i, roots);
+			if (taken == 0) return null;
+			i += taken;
+		}
+		final probe: Bool = Lambda.exists(
+			[for (k in 1...args.length) if (args[k - 1] == '--macro') args[k]], m -> PROBE_MACROS.exists(p -> m.indexOf(p) >= 0)
+		);
+		if (!probe || !args.contains('--no-output')) return null;
+		// a root inside another is walked twice, and a compile running beside this one would write into both
+		for (a in roots) for (b in roots) if (a != b && a.startsWith('$b/')) return null;
+		return { roots: roots, args: [for (a in args) encode(a, roots)] };
+	}
+
+	/**
+	 * `text` with every spelling of every root in `roots` replaced by a placeholder naming the root and the spelling.
+	 * The order is free: an alias is its real path's own tail (`/private` + `/var/x`), so either one replaced first
+	 * decodes to the same text, and `plan` refuses a root inside another.
+	 */
+	public static function encode(text: String, roots: Array<String>): String {
+		final spelled: Array<{ path: String, mark: String }> = [];
+		for (r in 0...roots.length) {
+			final forms: Array<String> = spellings(roots[r]);
+			for (s in 0...forms.length) spelled.push({ path: forms[s], mark: '$MARK$r.$s$MARK' });
+		}
+		var out: String = text;
+		for (s in spelled) out = out.split(s.path).join(s.mark);
+		return out;
+	}
+
+	/** `text` with every placeholder `encode` wrote replaced by that root's spelling in `roots`. */
+	public static function decode(text: String, roots: Array<String>): String {
+		var out: String = text;
+		for (r in 0...roots.length) {
+			final forms: Array<String> = spellings(roots[r]);
+			for (s in 0...forms.length) out = out.split('$MARK$r.$s$MARK').join(forms[s]);
+		}
+		return out;
+	}
+
 	/** The recorded entry at `entry`, unzipped, or null. */
 	private static function readEntry(entry: String): Null<String> {
 		return try Zlib.gunzipSync(Fs.readFileSync(entry)).toString('utf8') catch (exception: Exception) null;
@@ -227,9 +278,7 @@ final class FixtureCompileCache {
 		} catch (exception: Exception) {
 			return false;
 		}
-		try Fs.writeFileSync(
-			Path.join([lock, 'pid']), Std.string(Node.process.pid)
-		) catch (exception: Exception) {} // noqa: swallowed-exception
+		try Fs.writeFileSync(Path.join([lock, 'pid']), '${Node.process.pid}') catch (exception: Exception) {} // noqa: swallowed-exception
 		return true;
 	}
 
@@ -265,30 +314,9 @@ final class FixtureCompileCache {
 			// signal 0 probes without sending; the extern types the signal as a name
 			js.Syntax.code('process.kill({0}, 0)', pid);
 			true;
-		} catch (exception: Exception) false;
-	}
-
-	/**
-	 * The roots and placeheld arguments of the compile `args` in `cwd`, or null when it is not one this class may replay:
-	 * see the class doc. Roots are real paths, the cwd first.
-	 */
-	public static function plan(cwd: String, args: Array<String>): Null<CompilePlan> {
-		final base: Null<String> = realPath(cwd);
-		if (base == null) return null;
-		final roots: Array<String> = [base];
-		var i: Int = 0;
-		while (i < args.length) {
-			final taken: Int = argument(base, args, i, roots);
-			if (taken == 0) return null;
-			i += taken;
-		}
-		final probe: Bool = Lambda.exists(
-			[for (k in 1...args.length) if (args[k - 1] == '--macro') args[k]], m -> Lambda.exists(PROBE_MACROS, p -> m.indexOf(p) >= 0)
-		);
-		if (!probe || !args.contains('--no-output')) return null;
-		// a root inside another is walked twice, and a compile running beside this one would write into both
-		for (a in roots) for (b in roots) if (a != b && a.startsWith('$b/')) return null;
-		return { roots: roots, args: [for (a in args) encode(a, roots)] };
+		} catch (exception: Exception) {
+			false;
+		};
 	}
 
 	/**
@@ -308,32 +336,6 @@ final class FixtureCompileCache {
 		if (root == null || !Fs.statSync(root).isDirectory()) return 0;
 		if (!roots.contains(root)) roots.push(root);
 		return 2;
-	}
-
-	/**
-	 * `text` with every spelling of every root in `roots` replaced by a placeholder naming the root and the spelling.
-	 * The order is free: an alias is its real path's own tail (`/private` + `/var/x`), so either one replaced first
-	 * decodes to the same text, and `plan` refuses a root inside another.
-	 */
-	public static function encode(text: String, roots: Array<String>): String {
-		final spelled: Array<{ path: String, mark: String }> = [];
-		for (r in 0...roots.length) {
-			final forms: Array<String> = spellings(roots[r]);
-			for (s in 0...forms.length) spelled.push({ path: forms[s], mark: '$MARK$r.$s$MARK' });
-		}
-		var out: String = text;
-		for (s in spelled) out = out.split(s.path).join(s.mark);
-		return out;
-	}
-
-	/** `text` with every placeholder `encode` wrote replaced by that root's spelling in `roots`. */
-	public static function decode(text: String, roots: Array<String>): String {
-		var out: String = text;
-		for (r in 0...roots.length) {
-			final forms: Array<String> = spellings(roots[r]);
-			for (s in 0...forms.length) out = out.split('$MARK$r.$s$MARK').join(forms[s]);
-		}
-		return out;
 	}
 
 	/** The spellings of the real path `root`: itself, and on macOS the `/private`-less form a temp path is handed out as. */

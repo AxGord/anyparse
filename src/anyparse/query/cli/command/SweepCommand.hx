@@ -485,7 +485,9 @@ final class SweepCommand implements CliCommand {
 					skipConfig: snapshot.skipConfig ?? 0,
 					skipMalformed: snapshot.skipMalformed ?? 0
 				};
-			} catch (_: Exception) null
+			} catch (_: Exception) {
+				null;
+			}
 			: null;
 	}
 

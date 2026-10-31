@@ -519,7 +519,9 @@ final class Battery {
 			run: Branches.newRunId(),
 			ownLease: mode.match(Own(_, _))
 		};
-		final status: Int = try new Battery(plan, mode).drive() catch (exception: Exception) {
+		final status: Int = try {
+			new Battery(plan, mode).drive();
+		} catch (exception: Exception) {
 			Sys.stderr().writeString('dev battery: logs kept in $work\n');
 			throw exception;
 		};

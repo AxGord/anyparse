@@ -221,9 +221,9 @@ final class CallReturns {
 			key,
 			() -> [
 				for (a in args)
-					if (a.kind == c.shape.nullLiteralKind)
-						NullValue
-					else {
+					if (a.kind == c.shape.nullLiteralKind) {
+						NullValue;
+					} else {
 						final own: IndexTyping = {
 							root: c.root,
 							shape: c.shape,

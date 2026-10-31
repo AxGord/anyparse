@@ -144,7 +144,9 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 
 		final filePath: String = file;
 		final codeStr: String = code;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq add-element: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

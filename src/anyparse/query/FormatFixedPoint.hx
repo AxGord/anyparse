@@ -118,7 +118,9 @@ final class FormatFixedPoint {
 		var prev: String = first;
 		var rewrites: Int = 1;
 		while (rewrites < MAX_REWRITES) {
-			final next: Null<String> = try roundTrip(prev) catch (exception: Exception) {
+			final next: Null<String> = try {
+				roundTrip(prev);
+			} catch (exception: Exception) {
 				return {
 					text: prev,
 					rewrites: rewrites,

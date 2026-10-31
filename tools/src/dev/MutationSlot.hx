@@ -102,7 +102,9 @@ final class MutationSlot {
 				writeVerdict(workroot, name, RUN_FAIL, 'track \'$name\' vanished between the parent\'s parse and this slot\'s');
 				continue;
 			}
-			try track(slotCtx, row) catch (exception: Exception) {
+			try {
+				track(slotCtx, row);
+			} catch (exception: Exception) {
 				writeVerdict(workroot, name, RUN_FAIL, 'slot $slot failed on it: ${oneLine(exception.message)}');
 			}
 		}
@@ -210,7 +212,9 @@ final class MutationSlot {
 		return try {
 			js.Syntax.code('process.kill({0}, 0)', pid);
 			true;
-		} catch (exception: Exception) Reflect.field(exception.native, 'code') == 'EPERM';
+		} catch (exception: Exception) {
+			Reflect.field(exception.native, 'code') == 'EPERM';
+		};
 	}
 
 	/** One track in this slot, its verdict left in the workroot. */
@@ -304,7 +308,9 @@ final class MutationSlot {
 		return try {
 			js.node.Fs.mkdirSync(Path.join([workroot, CLAIMS, name]));
 			true;
-		} catch (exception: Exception) false;
+		} catch (exception: Exception) {
+			false;
+		};
 	}
 
 	/** A run's transcript as one file: its stdout, its stderr, and why it gave no exit status when it gave none. */

@@ -46,7 +46,9 @@ final class MoveElementsCommand implements CliCommand {
 			case Right(opts): opts;
 		};
 		final sourceFile: String = o.file;
-		final source: String = try CliIo.readFile(sourceFile) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(sourceFile);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq $OP: $sourceFile: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -55,7 +57,9 @@ final class MoveElementsCommand implements CliCommand {
 		final destSource: Null<String> = if (destFile == null)
 			null
 		else
-			try CliIo.readFile(destFile) catch (exception: Exception) {
+			try {
+				CliIo.readFile(destFile);
+			} catch (exception: Exception) {
 				CliIo.stderr('apq $OP: $destFile: ${exception.message}\n');
 				return EXIT_RUNTIME;
 			};

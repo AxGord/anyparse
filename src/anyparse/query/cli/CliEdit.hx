@@ -185,7 +185,9 @@ final class CliEdit {
 		op: String, source: String, plugin: GrammarPlugin, at: Null<String>, select: Null<String>, matchPat: Null<String>, nth: Null<Int>,
 		preferName: Bool = false
 	): Null<Position> {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: Exception) {
+		final tree: QueryNode = try {
+			plugin.parseFile(source);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq $op: source does not parse: ${exception.message}\n');
 			return null;
 		};

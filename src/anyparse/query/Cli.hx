@@ -233,9 +233,9 @@ final class Cli {
 	 * what a bug wants.
 	 */
 	public static function run(args: Array<String>, chooseLanguage: Bool = false): Int {
-		try
-			return dispatch(args, chooseLanguage)
-		catch (failure: WriteFailure) {
+		try {
+			return dispatch(args, chooseLanguage);
+		} catch (failure: WriteFailure) {
 			// Named with the subcommand, like every other line the CLI prints: a bare `apq:` costs
 			// a script the identity of the op that failed, and `args[0]` is the op by construction
 			// (the empty / `--help` argv returned above).

@@ -586,7 +586,9 @@ final class HaxeSpawn {
 			try js.node.Fs.mkdtempSync(Path.join([TempScratch.root(), prefix])) catch (exception: haxe.Exception) null;
 		if (dir == null) return null;
 		final file: String = Path.join([dir, 'jobs.json']);
-		try sys.io.File.saveContent(file, haxe.Json.stringify(jobs)) catch (exception: haxe.Exception) {
+		try {
+			sys.io.File.saveContent(file, haxe.Json.stringify(jobs));
+		} catch (exception: haxe.Exception) {
 			dropBatch(dir);
 			return null;
 		}

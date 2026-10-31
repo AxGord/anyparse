@@ -94,7 +94,8 @@
 			"anonTypeBraces": {
 				"openingPolicy": "after",
 				"closingPolicy": "before"
-			}
+			},
+			"singleStatementBraces": "symmetric"
 		},
 		"parenConfig": {
 			"callParens": {

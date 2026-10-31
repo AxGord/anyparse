@@ -495,9 +495,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			: macro {};
 		final walkArm: Expr = block(descendCore(child, value, intoName, typeOutName, 0));
 		final skipArm: Expr = child.hasMeta(QUERY_TYPE_REF_META) ? refsCall : macro if (withTypeRefs) $refsCall;
-		final refsAware: Expr = if (ref == null || !altHasCtor(ref, ANON_CTOR))
+		final refsAware: Expr = if (ref == null || !altHasCtor(ref, ANON_CTOR)) {
 			skipArm;
-		else {
+		} else {
 			final anonPattern: Expr = ctorPattern(ref, ANON_CTOR, [for (_ in 0...ctorArity(ref, ANON_CTOR)) '_']);
 			{
 				expr: ESwitch(value, [

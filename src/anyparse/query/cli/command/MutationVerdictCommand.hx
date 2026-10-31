@@ -101,7 +101,9 @@ final class MutationVerdictCommand implements CliCommand implements LanguageFree
 			return EXIT_USAGE;
 		}
 		final raws: Array<String> = [
-			for (path in logPaths) try CliIo.readFile(path) catch (exception: Exception) {
+			for (path in logPaths) try {
+				CliIo.readFile(path);
+			} catch (exception: Exception) {
 				CliIo.stderr('apq mutation-verdict: read failed: ${exception.message}\n');
 				return EXIT_RUNTIME;
 			}

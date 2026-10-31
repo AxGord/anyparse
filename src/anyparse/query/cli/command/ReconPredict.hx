@@ -648,7 +648,9 @@ final class ReconPredict {
 	 * `strip --dry-run` / `recon --predict-strip` semantics).
 	 */
 	public static function runReconCandidates(plugin: GrammarPlugin, root: String, pattern: String): Int {
-		final re: EReg = try new EReg(pattern, 'g') catch (e: Exception) {
+		final re: EReg = try {
+			new EReg(pattern, 'g');
+		} catch (e: Exception) {
 			CliIo.stderr('apq recon: --candidates: pattern "$pattern" is not a valid EReg: ${e.message}\n');
 			return EXIT_USAGE;
 		}

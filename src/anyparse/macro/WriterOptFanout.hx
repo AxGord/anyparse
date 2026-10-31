@@ -196,13 +196,13 @@ final class WriterOptFanout {
 			Context.warning(
 				'WriterCodegen: options type $optionsTypePath did not resolve to an anon — _copyOpt falls back to Reflect.copy', pos
 			);
-		final body: Expr = if (fallback)
+		final body: Expr = if (fallback) {
 			macro {
 				final _c: $optionsCT = cast Reflect.copy(o);
 				if (_c == null) throw 'WriterCodegen._copyOpt: Reflect.copy returned null';
 				return _c;
-			}
-		else {
+			};
+		} else {
 			final objFields: Array<ObjectField> = [
 				for (n in names) { field: n, expr: { expr: EField(macro o, n), pos: pos } }
 			];

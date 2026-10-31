@@ -250,7 +250,9 @@ class AmbientImportResolutionTest extends Test {
 			final readable: Bool = try {
 				sys.io.File.getContent('$root/src/lib/import.hx');
 				true;
-			} catch (_: haxe.Exception) false;
+			} catch (_: haxe.Exception) {
+				false;
+			};
 			if (readable) {
 				Assert.pass('this runner reads a mode-0 file — nothing to withhold');
 			} else {

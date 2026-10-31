@@ -393,8 +393,9 @@ final class MemberSpacing {
 		final endEdit: Null<{ span: Span, text: String }> = if (lastEndTo >= 0 && blankLineCount(source.substring(lastEndTo, gapTo)) < 1) {
 			final tail: String = source.substring(lastEndTo, gapTo);
 			{ span: new Span(lastEndTo, gapTo), text: GROUP_SEPARATOR + tail.substring(tail.lastIndexOf('\n') + 1) };
-		} else
+		} else {
 			null;
+		};
 		return { ifEdit: ifEdit, endEdit: endEdit };
 	}
 

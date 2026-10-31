@@ -250,7 +250,9 @@ final class MutationArm {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		final workroot: String = dirs.claimAfterSweep(WORK_PREFIX, job.repo);
 		final state: RunState = { schema: null };
-		final status: Int = try execute(job, workroot, state) catch (exception: Exception) {
+		final status: Int = try {
+			execute(job, workroot, state);
+		} catch (exception: Exception) {
 			release(job, dirs, workroot, state, 1);
 			throw exception;
 		};

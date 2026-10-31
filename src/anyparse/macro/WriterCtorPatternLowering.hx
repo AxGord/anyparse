@@ -317,9 +317,9 @@ final class WriterCtorPatternLowering {
 		final arity: Int = branch.children.length + branchSynthExtraArity(ctx, bodyTypePath, branch);
 		final ctorPath: Array<String> = ctx.ruleCtorPath(bodyTypePath, ctorName);
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
-		return if (arity == 0)
-			ctorRef
-		else {
+		return if (arity == 0) {
+			ctorRef;
+		} else {
 			final args: Array<Expr> = [for (_ in 0...arity) macro _];
 			{ expr: ECall(ctorRef, args), pos: Context.currentPos() };
 		};
@@ -362,9 +362,9 @@ final class WriterCtorPatternLowering {
 			final arity: Int = branch.children.length + branchSynthExtraArity(ctx, bodyTypePath, branch);
 			final ctorPath: Array<String> = ctx.ruleCtorPath(bodyTypePath, branchCtor);
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
-			return if (arity == 0)
-				ctorRef
-			else {
+			return if (arity == 0) {
+				ctorRef;
+			} else {
 				final args: Array<Expr> = [for (_ in 0...arity) macro _];
 				{ expr: ECall(ctorRef, args), pos: Context.currentPos() };
 			};

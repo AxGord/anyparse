@@ -57,7 +57,9 @@ final class LintWarn {
 	public static function main(argv: Array<String>): Int {
 		new devkit.Args(argv).done();
 		final input: String = js.Syntax.code("require('fs').readFileSync(0, 'utf8')");
-		final body: Null<String> = try nudge(input, Repo.ofScript()) catch (exception: Exception) {
+		final body: Null<String> = try {
+			nudge(input, Repo.ofScript());
+		} catch (exception: Exception) {
 			// a hook that fails must fail open: say why where a verbose harness shows it, never block the tool call
 			Sys.stderr().writeString('dev lint-warn: ${exception.message}\n');
 			null;

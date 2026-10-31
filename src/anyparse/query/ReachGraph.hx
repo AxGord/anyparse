@@ -1188,9 +1188,9 @@ final class ReachGraph {
 		final span: Null<Span> = found?.span;
 		final answer: Null<{ words: Array<String>, reads: Array<MemberRead> }> = if (
 			tree == null || found == null || span == null || source == null
-		)
-			null
-		else {
+		) {
+			null;
+		} else {
 			final words: Array<String> = literalAbstracts(found);
 			eachWord(source.substring(span.from, span.to), w -> if (!words.contains(w)) words.push(w));
 			{ words: words, reads: memberUses(r.file, tree, source, found) };

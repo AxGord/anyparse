@@ -85,7 +85,9 @@ final class ExtractSuperclassCommand implements CliCommand {
 		final superFile: String = out ?? '$dir$superNameNN.hx';
 		if (ExtractInterfaceCommand.refuseOccupiedDestination('extract-superclass', superFile)) return EXIT_RUNTIME;
 
-		final source: String = try CliIo.readFile(srcFileNN) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(srcFileNN);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq extract-superclass: $srcFileNN: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

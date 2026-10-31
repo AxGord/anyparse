@@ -99,7 +99,9 @@ final class CommandTest extends Test {
 		final thrown: Null<CommandFailed> = try {
 			Assert.fail('passed as ${result.check().status}');
 			null;
-		} catch (e: CommandFailed) e;
+		} catch (e: CommandFailed) {
+			e;
+		};
 		Assert.notNull(thrown);
 		if (thrown != null) Assert.isTrue(thrown.message.contains('exited 3') && thrown.message.endsWith(':\ne'), thrown.message);
 	}

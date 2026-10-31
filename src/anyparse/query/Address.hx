@@ -300,7 +300,9 @@ final class Address {
 	private static function resolveSelect(
 		tree: QueryNode, source: String, plugin: GrammarPlugin, selectorExpr: String, nth: Null<Int>
 	): AddressResult {
-		final selector: Selector = try Selector.parse(selectorExpr) catch (exception: Exception) {
+		final selector: Selector = try {
+			Selector.parse(selectorExpr);
+		} catch (exception: Exception) {
 			return Err('malformed selector "$selectorExpr": ${exception.message}');
 		};
 		final equiv: Null<KindEquivalence> = plugin.selectKindEquivalence();
@@ -314,7 +316,9 @@ final class Address {
 	private static function resolveMatch(
 		tree: QueryNode, source: String, plugin: GrammarPlugin, patternSource: String, nth: Null<Int>
 	): AddressResult {
-		final pattern: Pattern = try plugin.parsePattern(patternSource) catch (exception: Exception) {
+		final pattern: Pattern = try {
+			plugin.parsePattern(patternSource);
+		} catch (exception: Exception) {
 			return Err('malformed pattern "$patternSource": ${exception.message}');
 		};
 		final found: Array<Match> = Matcher.search(pattern, tree);

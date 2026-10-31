@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.common.control.BranchChain.ChainSeams;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.CondRegionScan;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -37,6 +38,11 @@ using StringTools;
  * the braced side - else one spanning the whole chain (`if (a) p(); else if (b) { q(); }
  * else { r(); }` is braced in its tail and bare in its head).
  *
+ * A try/catch is a group the same way, in statement and in value position: its try body and every catch body braced,
+ * or all of them bare. `try { p(); q(); } catch (e:T) r();` is one finding spanning the `try`, and the fix braces
+ * `r();`, as the writer's `tryBraceVerdict` does. Neither is read inside a `macro` reification
+ * (`RefShape.opaqueKinds`): a brace level there is part of the code it builds - the writer leaves it alone too.
+ *
  * ## Grammar-agnostic
  *
  * The `if` kinds come from `RefShape.ifStatementKinds` (statement position only),
@@ -58,7 +64,10 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	private static inline final ELSE_BRANCH_INDEX: Int = 2;
 
 	public function new() {
-		super(RULE_ID, 'an if/else with exactly one braced branch - the other reads as an accident', RuleCategory.Control);
+		super(
+			RULE_ID, 'an if/else chain or a try/catch that braces some branches and not others - the bare ones read as an accident',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -118,7 +127,9 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 		final edits: Array<FixEdit> = [];
 		for (pair in collect(tree, seams)) {
 			final finding: Null<Violation> = violations.find(v -> v.span?.from == pair.span.from && v.span?.to == pair.span.to);
-			if (finding != null) switch braceFix(site, pair, edits) {
+			if (finding != null) switch (seams.tryKinds.contains(pair.node.kind)
+				? tryBraceFix(site, pair, edits)
+				: braceFix(site, pair, edits)) {
 				case Braced(own):
 					for (e in own) edits.push(e);
 				case Declined(reason):
@@ -143,10 +154,13 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	}
 
 	/**
-	 * Collects the finding of every chain HEAD below `node` - an `if` that is not the else of another (`link` false).
+	 * Collects the finding of every chain HEAD below `node` - an `if` that is not the else of another (`link` false) -
+	 * and of every try/catch. A `macro` reification is not descended: `ReificationScan.withoutQuoted` drops a finding
+	 * there anyway - a brace level in it is part of the code it builds - so this only spares the walk.
 	 */
 	private static function walk(node: QueryNode, seams: Seams, out: Array<Asymmetry>, link: Bool): Void {
-		final found: Null<Asymmetry> = link || !seams.ifKinds.contains(node.kind) ? null : chainFinding(node, seams);
+		if (seams.opaqueKinds.contains(node.kind)) return;
+		final found: Null<Asymmetry> = link || !seams.ifKinds.contains(node.kind) ? tryFinding(node, seams) : chainFinding(node, seams);
 		if (found != null) out.push(found);
 		final elseLink: Null<QueryNode> = elseOf(node, seams);
 		for (child in node.children) walk(child, seams, out, child == elseLink && seams.ifKinds.contains(child.kind));
@@ -217,15 +231,105 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 			else
 				null;
 			if (statement == null) return Declined('a bare branch carries no terminator of its own, so it would not compile inside braces');
-			final open: Int = bracesOpenAt(site, placed.from);
-			final braced: String = open == placed.from ? '{ $statement }' : ' {${site.source.substring(open, placed.from)}$statement }';
-			edits.push({ span: new Span(open, placed.from + text.length), text: braced });
+			edits.push(bracedEdit(site, placed.from, placed.from + text.length, statement));
 		}
 		if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))
 			return Declined('it overlaps a branch this pass braces - the next pass takes it');
 		return chainBracedAfter(site, edits, links)
 			? Braced(edits)
 			: Declined('the braced chain does not parse back as the same if/else with every branch braced');
+	}
+
+	/**
+	 * The edit that braces the bare statement whose text starts at `from`, replacing up to `close`: `{ statement }`, or -
+	 * when the branch's own comments sit above it (`bracesOpenAt`) - braces opened after the header that take them in.
+	 */
+	private static function bracedEdit(site: FixSite, from: Int, close: Int, statement: String): FixEdit {
+		final open: Int = bracesOpenAt(site, from);
+		return {
+			span: new Span(open, close),
+			text: open == from ? '{ $statement }' : ' {${site.source.substring(open, from)}$statement }'
+		};
+	}
+
+	/**
+	 * The one finding of the try/catch `node`, or null when `node` is none or its bodies agree: one braced and another
+	 * bare - the group the writer's `tryBraceVerdict` braces whole. Its span is the whole `try`.
+	 */
+	private static function tryFinding(node: QueryNode, seams: Seams): Null<Asymmetry> {
+		final bodies: Null<Array<QueryNode>> = BranchChain.tryBodiesOf(node, seams.tryKinds, seams.catchKind);
+		final span: Null<Span> = node.span;
+		return bodies == null
+			|| span == null
+			|| !bodies.exists(b -> seams.bracedKinds.contains(b.kind))
+			|| bareBodies(bodies, seams).length == 0
+			? null
+			: { span: span, node: node, message: 'the try/catch braces some bodies and not others - brace all or none' };
+	}
+
+	/** The bodies of a try/catch group that carry no braces. */
+	private static function bareBodies(bodies: Array<QueryNode>, seams: Seams): Array<QueryNode> {
+		return bodies.filter(b -> !seams.bracedKinds.contains(b.kind));
+	}
+
+	/**
+	 * `fix`'s answer for one asymmetric try/catch: the brace edits on every bare body of the group, or the gate that kept
+	 * them bare. The chain's gates, with one difference: a body in an EXPRESSION slot (`try p() catch …`) carries no
+	 * terminator of its own, so a bare body that does not close on one takes it inside its braces, and the parse back
+	 * (`tryBracedAfter`) proves the block holds that body and nothing else. A bare LAST body followed by the statement's
+	 * own terminator takes it in too: once braced, the `try` closes on its `}`.
+	 */
+	private static function tryBraceFix(site: FixSite, found: Asymmetry, taken: Array<FixEdit>): BraceFix {
+		final seams: Seams = site.seams;
+		final bodies: Null<Array<QueryNode>> = BranchChain.tryBodiesOf(found.node, seams.tryKinds, seams.catchKind);
+		final end: Null<Int> = found.node.span?.to;
+		if (bodies == null || end == null) return Declined('the try cannot be placed in the source again');
+		final edits: Array<FixEdit> = [];
+		for (bare in bareBodies(bodies, seams)) {
+			final placed: Null<Span> = bare.span;
+			if (placed == null) return Declined('a bare body cannot be placed in the source again');
+			if (seams.declKinds.contains(bare.kind)) return Declined('a bare body is a declaration, and braces would scope its binding');
+			if (CondRegionScan.isConditionalKind(bare.kind, seams.shape))
+				return Declined('a bare body carries no terminator of its own, so it would not compile inside braces');
+			final text: String = site.source.substring(placed.from, placed.to).rtrim();
+			final statement: String = BranchChain.selfTerminated(bare, site.source, seams) ? text : text + site.terminator;
+			final textEnd: Int = placed.from + text.length;
+			final last: Bool = bare == bodies[bodies.length - 1];
+			edits.push(bracedEdit(
+				site, placed.from, last && site.source.substring(textEnd, end).trim() == site.terminator ? end : textEnd, statement
+			));
+		}
+		if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))
+			return Declined('it overlaps a branch this pass braces - the next pass takes it');
+		return tryBracedAfter(site, edits, found.node, bodies)
+			? Braced(edits)
+			: Declined('the braced try does not parse back as the same try/catch with every body braced');
+	}
+
+	/**
+	 * Whether the source with `edits` applied parses back as a try/catch where `node` stood - of any try kind, since a
+	 * braced value-shaped `try` reads as the statement one - with as many bodies, every one braced, and each block braced
+	 * anew holding exactly its old body: the same statement, or the same expression as its one expression statement.
+	 */
+	private static function tryBracedAfter(site: FixSite, edits: Array<FixEdit>, node: QueryNode, bodies: Array<QueryNode>): Bool {
+		final seams: Seams = site.seams;
+		final rewritten: Null<QueryNode> = ParseGate.parseOrNull(site.plugin, CanonicalEdit.applyEdits(site.source, edits));
+		final from: Null<Int> = node.span?.from;
+		final after: Null<QueryNode> = rewritten == null || from == null
+			? null
+			: TreePath.firstAround(rewritten, new Span(from, from), n -> n.span?.from == from && seams.tryKinds.contains(n.kind));
+		final now: Null<Array<QueryNode>> = after == null ? null : BranchChain.tryBodiesOf(after, seams.tryKinds, seams.catchKind);
+		if (now == null || now.length != bodies.length || bareBodies(now, seams).length > 0) return false;
+		return [
+			for (i => body in bodies) if (!seams.bracedKinds.contains(body.kind)) holdsOnly(now[i], body.kind, seams.exprStmtKind)
+		].foreach(ok -> ok);
+	}
+
+	/** Whether `block` holds one statement of `kind`, or one expression statement (`exprStmtKind`) of a `kind` expression. */
+	private static function holdsOnly(block: QueryNode, kind: String, exprStmtKind: Null<String>): Bool {
+		final inner: Null<QueryNode> = block.children.length == 1 ? block.children[0] : null;
+		return inner != null
+			&& (inner.kind == kind || inner.kind == exprStmtKind && inner.children.length == 1 && inner.children[0].kind == kind);
 	}
 
 	/**
@@ -324,7 +428,12 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 			exprStmtKind: shape.exprStatementKind,
 			declKinds: shape.localDeclKinds ?? [],
 			braceClosedKinds: chain.braceClosedKinds,
-			lastChildClosedKinds: chain.lastChildClosedKinds
+			lastChildClosedKinds: chain.lastChildClosedKinds,
+			tryKinds: chain.tryKinds,
+			catchKind: chain.catchKind,
+			bracedKinds: [chain.blockStmtKind].concat(plugin.controlFlowSupport()?.blockKinds() ?? []),
+			opaqueKinds: shape.opaqueKinds ?? [],
+			shape: shape
 		};
 	}
 
@@ -353,6 +462,20 @@ private typedef Seams = {
 
 	/** Statements that close the way their LAST child does: the `if`, loop, `try` and `catch` kinds. */
 	final lastChildClosedKinds: Array<String>;
+
+	/** The try/catch kinds, statement and value alike (`BranchChain.tryBodiesOf`). */
+	final tryKinds: Array<String>;
+
+	final catchKind: Null<String>;
+
+	/** What a braced body is: the block-statement kind and `ControlFlowSupport.blockKinds` - a value `try` holds blocks too. */
+	final bracedKinds: Array<String>;
+
+	/** Subtrees not walked: a macro reification is code the program builds, not code it runs. */
+	final opaqueKinds: Array<String>;
+
+	/** The grammar's shape, for `CondRegionScan.isConditionalKind`. */
+	final shape: RefShape;
 };
 
 /** One asymmetric if/else or chain: the reported span, the `if` node it is anchored on, and the message naming the defect. */

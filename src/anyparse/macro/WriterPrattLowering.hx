@@ -582,8 +582,9 @@ final class WriterPrattLowering {
 				$outerAfterComment, $outerOwnComments, _relocateAbove, _afterComments, _ownComments, _aboveComments, opt
 			);
 			macro if ($pushed) _hasLeadComment = true;
-		} else
+		} else {
 			macro {};
+		};
 		// Top-level gather: head operand, the outer operator, the outer
 		// ctor's source-newline (parallel to that operator), tail operand.
 		final outerBreakPush: Expr = threadBreaks ? macro _breaks.push(${outerChainNl}) : macro {};
@@ -1356,9 +1357,9 @@ final class WriterPrattLowering {
 		final arity: Int = children.length + pc.branchExtraArgs(branch);
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(pc.ruleCtorPath(typePath, branch.annotations[AnnotationKeys.BASE_CTOR]));
 		if (prec == null && tPrec == null) return atomOpenCase(branch, typePath, arity, ctorRef, pos);
-		final body: Expr = if (tPrec != null)
-			macro $v{tPrec} < ctx ? $v{none} : 0
-		else {
+		final body: Expr = if (tPrec != null) {
+			macro $v{tPrec} < ctx ? $v{none} : 0;
+		} else {
 			final right: ShapeNode = children[1];
 			final rightRef: Null<String> = right.kind == Ref ? right.annotations[AnnotationKeys.BASE_REF] : null;
 			// A right operand of another rule (`a is T`) ends in that rule's own syntax.

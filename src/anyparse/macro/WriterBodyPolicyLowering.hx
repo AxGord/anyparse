@@ -178,9 +178,9 @@ final class WriterBodyPolicyLowering {
 		// override on a different block-shaped ctor, extend the meta to
 		// `inlineBlockBodyIfFlag('<flag>', '<ctorName>')` and read both
 		// args here.
-		final base: Expr = if (inlineBlockBodyArgs == null)
+		final base: Expr = if (inlineBlockBodyArgs == null) {
 			opts.writeCall;
-		else {
+		} else {
 			if (inlineBlockBodyArgs.length != 1)
 				Context.fatalError(
 					'WriterLowering: bodyPolicyWrap inlineBlockBodyArgs requires (flagName), got ${inlineBlockBodyArgs.length} args',
@@ -209,18 +209,18 @@ final class WriterBodyPolicyLowering {
 		final flagName: String = opts.flagName;
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
 		final exprFlagName: Null<String> = opts.exprFlagName;
-		final baseOptFlag: Expr = if (exprFlagName == null)
-			optFieldAccess(flagName)
-		else {
+		final baseOptFlag: Expr = if (exprFlagName == null) {
+			optFieldAccess(flagName);
+		} else {
 			final stmtAccess: Expr = optFieldAccess(flagName);
 			final exprAccess: Expr = optFieldAccess(exprFlagName);
 			macro (opt._inExprPosition ? $exprAccess : $stmtAccess);
 		};
 		final singleLineFlagName: Null<String> = opts.singleLineFlagName;
 		final singleLineMultiCtors: Null<Array<String>> = opts.singleLineMultiCtors;
-		final defaultOptFlag: Expr = if (singleLineFlagName == null)
-			baseOptFlag
-		else {
+		final defaultOptFlag: Expr = if (singleLineFlagName == null) {
+			baseOptFlag;
+		} else {
 			final singleLineAccess: Expr = optFieldAccess(singleLineFlagName);
 			final ctors: Array<String> = singleLineMultiCtors ?? [];
 			final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
@@ -229,9 +229,9 @@ final class WriterBodyPolicyLowering {
 			macro ($isMultiLine ? $baseOptFlag : $singleLineAccess);
 		};
 		final policyOverrides: Null<Array<Array<String>>> = opts.policyOverrides;
-		final ctorOverriddenOptFlag: Expr = if (policyOverrides == null || policyOverrides.length == 0)
-			defaultOptFlag
-		else {
+		final ctorOverriddenOptFlag: Expr = if (policyOverrides == null || policyOverrides.length == 0) {
+			defaultOptFlag;
+		} else {
 			final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
 			var chain: Expr = defaultOptFlag;
 			var i: Int = policyOverrides.length - 1;
@@ -255,9 +255,9 @@ final class WriterBodyPolicyLowering {
 		final bpPath: Array<String> = ['anyparse', 'format', 'BodyPolicy'];
 		final samePat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
-		final baseResolved: Expr = if (fallbackFlagName == null || elseFieldName == null)
+		final baseResolved: Expr = if (fallbackFlagName == null || elseFieldName == null) {
 			ctorOverriddenOptFlag;
-		else {
+		} else {
 			final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
 			final fallbackAccess: Expr = optFieldAccess(fallbackFlagName);
 			macro {
@@ -291,9 +291,9 @@ final class WriterBodyPolicyLowering {
 	private static function arrowValueIfPolicy(opts: WriterLowering.WrapBodyOpts, resolved: Expr, samePat: Expr): Expr {
 		if (opts.arrowValueIfSite != true) return resolved;
 		final elseFieldName: Null<String> = opts.elseFieldName;
-		final gate: Expr = if (elseFieldName == null)
+		final gate: Expr = if (elseFieldName == null) {
 			macro _aifReflow;
-		else {
+		} else {
 			final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
 			macro _aifReflow && $elseAccess != null;
 		};
@@ -411,8 +411,9 @@ final class WriterBodyPolicyLowering {
 				else
 					_dn(_cols, _dc([${valueIfGapExpr(softGap, macro _body)}, _body]));
 			};
-		} else
+		} else {
 			null;
+		};
 		return indentObjGuardedNext ?? (
 			hasKwSlots
 				? macro {
@@ -702,8 +703,9 @@ final class WriterBodyPolicyLowering {
 			final cases: Array<Case> = [{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null }];
 			cases.push({ values: [macro _], expr: nextLayoutExpr, guard: null });
 			{ expr: ESwitch(bodyValueExpr, cases, null), pos: Context.currentPos() };
-		} else
+		} else {
 			nextLayoutExpr;
+		};
 		// omega-else-switch: the `Keep` body policy is the path Pony's config takes
 		// (`sameLine.elseBody` unset), so the knob has to be honoured HERE as well as
 		// in `buildBodyCoreWrap` - otherwise `elseSwitch: "same"` would move nothing
@@ -808,9 +810,9 @@ final class WriterBodyPolicyLowering {
 		}
 		if (blockSplit.untagged.length > 0) outerCases.push({ values: blockSplit.untagged, expr: sameLayoutExpr, guard: null });
 		if (blockSplit.tagged.length > 0) outerCases.push({ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null });
-		final bodySwitch: Expr = if (outerCases.length == 0)
-			policySwitch
-		else {
+		final bodySwitch: Expr = if (outerCases.length == 0) {
+			policySwitch;
+		} else {
 			outerCases.push({ values: [macro _], expr: policySwitch, guard: null });
 			{ expr: ESwitch(bodyValueExpr, outerCases, null), pos: Context.currentPos() };
 		};

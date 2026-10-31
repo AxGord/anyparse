@@ -55,7 +55,9 @@ final class ScrubGuardTest extends Test {
 		final refused: Null<UsageError> = try {
 			Assert.fail('accepted ${ScrubGuard.loadRules(list).length} rule(s)');
 			null;
-		} catch (e: UsageError) e;
+		} catch (e: UsageError) {
+			e;
+		};
 		Assert.notNull(refused);
 		if (refused != null) Assert.isTrue(refused.message.indexOf('rule 2') >= 0, refused.message);
 	}

@@ -72,7 +72,9 @@ final class Dev {
 			return 2;
 		}
 		final rest: Array<String> = argv.slice(1);
-		if (!rest.contains('--help') && !rest.contains('-h')) return try command.main(rest) catch (error: UsageError) {
+		if (!rest.contains('--help') && !rest.contains('-h')) return try {
+			command.main(rest);
+		} catch (error: UsageError) {
 			Sys.stderr().writeString('dev $name: ${error.message}\n${command.usage}\n');
 			2;
 		} catch (exception: Exception) {

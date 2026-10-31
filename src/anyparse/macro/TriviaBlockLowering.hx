@@ -773,8 +773,9 @@ final class TriviaBlockLowering {
 						: _clearArrowLambdaBody(_clearValueIfBranch($stmtOptExpr))
 				) : _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr)))
 			);
-		} else
+		} else {
 			elemOptExpr;
+		};
 		final call: Expr = { expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]), pos: Context.currentPos() };
 		// The widest unit, written again for the emit, names its break afresh: tie that break to the offer every
 		// sibling carries.

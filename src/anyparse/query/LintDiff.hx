@@ -87,9 +87,9 @@ final class LintDiff {
 		if (!envelope && !trimmed.startsWith('[')) {
 			throw new Exception('not an `apq lint --format json` report — expected a top-level JSON array or a {"findings": …} envelope');
 		}
-		final report: LintReportJson = try LintReportJsonParser.parse(envelope
-			? trimmed
-			: '{"findings":$trimmed}') catch (exception: ParseError) {
+		final report: LintReportJson = try {
+			LintReportJsonParser.parse(envelope ? trimmed : '{"findings":$trimmed}');
+		} catch (exception: ParseError) {
 			if (!envelope) throw exception;
 			throw new Exception(
 				'not an `apq lint --format json` report — an object, but no {"findings": […]} envelope: ${exception.message}'

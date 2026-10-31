@@ -88,7 +88,9 @@ final class AddImportCommand implements CliCommand {
 
 		final filePath: String = file;
 		final pathStr: String = path;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq add-import: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

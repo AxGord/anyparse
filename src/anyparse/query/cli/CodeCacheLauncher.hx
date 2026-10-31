@@ -215,7 +215,9 @@ final class CodeCacheLauncher {
 
 	/** `persist` at the end of a call, whose own outcome a cache that could not be saved must not change. */
 	private static function persistQuietly(engine: CompiledEngine, binary: String): Void {
-		try persist(engine, binary) catch (exception: Exception) {
+		try {
+			persist(engine, binary);
+		} catch (exception: Exception) {
 			if (Sys.getEnv(TRACE_ENV) == '1') Node.process.stderr.write('apq-launch: code cache not saved: ${exception.message}\n');
 		}
 	}
@@ -242,7 +244,9 @@ final class CodeCacheLauncher {
 			result.status == 0
 				? 'warmed ${cachePath(binary)}'
 				: 'code cache not warmed: the warm run ended with status ${result.status}, signal ${result.signal}';
-		} catch (exception: Exception) 'code cache not warmed: ${exception.message}';
+		} catch (exception: Exception) {
+			'code cache not warmed: ${exception.message}';
+		};
 		process.stdout.write('apq-launch: $message\n');
 	}
 

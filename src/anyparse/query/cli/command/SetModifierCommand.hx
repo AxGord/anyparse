@@ -92,7 +92,9 @@ final class SetModifierCommand implements CliCommand {
 		}
 
 		final filePath: String = file;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq set-modifier: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

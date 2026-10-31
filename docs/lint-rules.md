@@ -167,7 +167,7 @@ branching: if / else, ternaries, switch, boolean logic, guards, conditional-comp
 | rule | language | default | description |
 |---|---|---|---|
 | [`assignment-in-condition`](guide/lint/control.md#assignment-in-condition) | any | on | an assignment (=) used as a condition — likely a == typo |
-| [`asymmetric-branch-braces`](guide/lint/control.md#asymmetric-branch-braces) | any | off | an if/else with exactly one braced branch - the other reads as an accident |
+| [`asymmetric-branch-braces`](guide/lint/control.md#asymmetric-branch-braces) | any | off | an if/else chain or a try/catch that braces some branches and not others - the bare ones read as an accident |
 | [`case-pattern-separator`](guide/lint/control.md#case-pattern-separator) | any | off | a switch case whose pattern separator does not match the configured style (comma or pipe) |
 | [`collapse-nested-switch`](guide/lint/control.md#collapse-nested-switch) | any | off | a case whose only statement is a switch on its own binder, collapsible into a deep pattern |
 | [`collapsible-else-if`](guide/lint/control.md#collapsible-else-if) | any | on | an else whose sole statement is an if — collapses to else if |

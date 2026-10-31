@@ -98,7 +98,9 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 		final nameStr: Null<String> = o.name;
 		if (filePath == null || startPos == null || endPos == null || nameStr == null)
 			throw new Exception('apq extract-method: null arg after validation (unreachable)');
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq extract-method: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

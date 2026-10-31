@@ -874,8 +874,9 @@ final class WriterCtorBlankLowering {
 			final patternFinal: Expr = if (isMatch && predicateName != null && arity >= 1) {
 				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
 				{ expr: ECall(ctorIdent, binders), pos: pos };
-			} else
+			} else {
 				pattern;
+			};
 			cases.push({ values: [patternFinal], guard: null, expr: kindExpr });
 		}
 		// ω-orphan-prefix-decl: a classifier field declared `@:optional` —
@@ -938,9 +939,9 @@ final class WriterCtorBlankLowering {
 		// as multi-line when its leading layout crosses source lines (fork
 		// `getTypeInfo` includes leading comment + leading meta in the
 		// `oneLine` span). Null → byte-identical to the pre-slice paths.
-		final structPred: Null<Expr> = if (branch.children.length == 0)
-			null
-		else {
+		final structPred: Null<Expr> = if (branch.children.length == 0) {
+			null;
+		} else {
 			final argNode: ShapeNode = branch.children[0];
 			final argTypeName: Null<String> = argNode.annotations[AnnotationKeys.BASE_REF];
 			if (argTypeName == null)
@@ -1172,8 +1173,9 @@ final class WriterCtorBlankLowering {
 				final argTypeName: Null<String> = argNode.annotations[AnnotationKeys.BASE_REF];
 				final inner: Null<Expr> = argTypeName == null ? null : buildMultilinePredicate(cb, argTypeName, macro _v);
 				inner ?? macro false;
-			} else
+			} else {
 				macro false;
+			};
 			cases.push({ values: [pattern], guard: null, expr: body });
 		}
 		return anyTagged ? { expr: ESwitch(accessExpr, cases, null), pos: pos } : null;

@@ -29,8 +29,9 @@ final class BranchOutliningTest extends Test {
 				try {
 					skipWs(ctx);
 					return Foo.Bar(new anyparse.runtime.Span(_start, ctx.pos));
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -58,8 +59,9 @@ final class BranchOutliningTest extends Test {
 				try {
 					final _raw: Int = parseX(ctx);
 					return Foo.Bar(_raw);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -78,8 +80,9 @@ final class BranchOutliningTest extends Test {
 				try {
 					left = parseX(ctx);
 					return Foo.Bar(left);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -95,8 +98,9 @@ final class BranchOutliningTest extends Test {
 				try {
 					if (parseX(ctx) == 0) break;
 					return Foo.Bar(0);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -111,8 +115,9 @@ final class BranchOutliningTest extends Test {
 				try {
 					while (true) if (parseX(ctx) == 0) break;
 					return Foo.Bar(0);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -132,8 +137,9 @@ final class BranchOutliningTest extends Test {
 							return Foo.Bar(0);
 						case _:
 					}
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -148,8 +154,9 @@ final class BranchOutliningTest extends Test {
 				final _savedPos: Int = ctx.pos;
 				try {
 					for (k => v in parseMap(ctx)) if (k == v) return Foo.Bar(k);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -164,8 +171,9 @@ final class BranchOutliningTest extends Test {
 				final _savedPos: Int = ctx.pos;
 				try {
 					return parseX(ctx);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -181,8 +189,9 @@ final class BranchOutliningTest extends Test {
 				try {
 					skipWs(ctx);
 					return Foo.NONE;
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -198,8 +207,9 @@ final class BranchOutliningTest extends Test {
 				final _savedPos: Int = ctx.pos;
 				try {
 					return Foo.Bar(_start);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -217,8 +227,9 @@ final class BranchOutliningTest extends Test {
 				final _savedPos: Int = ctx.pos;
 				try {
 					return Foo.Bar(_start);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -237,12 +248,14 @@ final class BranchOutliningTest extends Test {
 						final _savedPos: Int = ctx.pos;
 						try {
 							return Foo.Bar(0);
-						} catch (_branchFail: anyparse.runtime.ParseError)
+						} catch (_branchFail: anyparse.runtime.ParseError) {
 							ctx.pos = _savedPos;
+						}
 					}
 					return Foo.Baz(1);
-				} catch (_branchFail: anyparse.runtime.ParseError)
+				} catch (_branchFail: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
@@ -257,8 +270,9 @@ final class BranchOutliningTest extends Test {
 				final _savedPos: Int = ctx.pos;
 				try {
 					return Foo.Bar(0);
-				} catch (_e: anyparse.runtime.ParseError)
+				} catch (_e: anyparse.runtime.ParseError) {
 					ctx.pos = _savedPos;
+				}
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});

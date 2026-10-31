@@ -728,8 +728,9 @@ final class TriviaSepLowering {
 		else if (wrapRulesField != null) {
 			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
 			macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
-		} else
+		} else {
 			macro false;
+		};
 		// ω-arrow-body-objlit-reflow: a FOURTH disjunct on the same
 		// `@:fmt(reflowInExprPosition)` Star (HxObjectLit.fields) — Ignore
 		// also fires when the literal is an arrow-lambda body (runtime

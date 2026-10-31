@@ -114,7 +114,9 @@ final class CliFixture {
 	 * otherwise leave the tree, or a file it chmodded to mode 0, behind for the rest of the session.
 	 */
 	public static function always(cleanup: () -> Void, body: () -> Void): Void {
-		try body() catch (exception: Exception) {
+		try {
+			body();
+		} catch (exception: Exception) {
 			cleanup();
 			throw exception;
 		}
@@ -227,7 +229,9 @@ final class CliFixture {
 			buffer,
 			original
 		);
-		try fn() catch (exception: haxe.Exception) {
+		try {
+			fn();
+		} catch (exception: haxe.Exception) {
 			fs.writeSync = original;
 			throw exception;
 		}
@@ -257,7 +261,9 @@ final class CliFixture {
 			buffer.add('$chunk');
 			return true;
 		});
-		try fn() catch (exception: haxe.Exception) {
+		try {
+			fn();
+		} catch (exception: haxe.Exception) {
 			Reflect.setField(stdout, 'write', original);
 			throw exception;
 		}
@@ -304,7 +310,9 @@ final class CliFixture {
 		final previous: String = Sys.getCwd();
 		Sys.setCwd(dir);
 		var code: Int = -1;
-		final out: String = try CliFixture.captureStdout(() -> code = Cli.run(args)) catch (exception: haxe.Exception) {
+		final out: String = try {
+			CliFixture.captureStdout(() -> code = Cli.run(args));
+		} catch (exception: haxe.Exception) {
 			Sys.setCwd(previous);
 			throw exception;
 		}

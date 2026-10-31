@@ -102,7 +102,9 @@ final class ExtractConstantCommand implements CliCommand {
 		}
 		final filePath: String = scopeArgs[0];
 		final typeStr: String = typeName;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq extract-constant: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -156,7 +158,9 @@ final class ExtractConstantCommand implements CliCommand {
 		final scopeFiles: Array<{ file: String, source: String }> = [
 			for (path in paths) if (!FileIdentity.same(path, intoPath)) {
 				file: path,
-				source: (try CliIo.readSourceForParse(path) catch (exception: Exception) {
+				source: (try {
+					CliIo.readSourceForParse(path);
+				} catch (exception: Exception) {
 					CliIo.stderr('apq extract-constant: $path: ${exception.message}\n');
 					return EXIT_RUNTIME;
 				}: String)
@@ -165,7 +169,9 @@ final class ExtractConstantCommand implements CliCommand {
 
 		final moduleExists: Bool = FileSystem.exists(intoPath);
 		final moduleSource: Null<String> = if (moduleExists)
-			try CliIo.readFile(intoPath) catch (exception: Exception) {
+			try {
+				CliIo.readFile(intoPath);
+			} catch (exception: Exception) {
 				CliIo.stderr('apq extract-constant: $intoPath: ${exception.message}\n');
 				return EXIT_RUNTIME;
 			}

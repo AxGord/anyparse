@@ -182,14 +182,18 @@ final class OracleGenerationLock {
 		final won: Bool = try {
 			js.node.Fs.mkdirSync(claim);
 			true;
-		} catch (exception: haxe.Exception) false;
+		} catch (exception: haxe.Exception) {
+			false;
+		};
 		if (!won) {
 			if (claimAbandoned(claim)) {
 				final aside: String = '$claim.dead-${js.Node.process.pid}-${Std.random(ASIDE_SUFFIX_BOUND)}';
 				final moved: Bool = try {
 					sys.FileSystem.rename(claim, aside);
 					true;
-				} catch (exception: haxe.Exception) false;
+				} catch (exception: haxe.Exception) {
+					false;
+				};
 				if (moved) removeTree(aside);
 			}
 			return false;
@@ -211,7 +215,9 @@ final class OracleGenerationLock {
 		final signalable: Bool = try {
 			js.Syntax.code('process.kill({0}, 0)', pid);
 			true;
-		} catch (exception: haxe.Exception) '${Reflect.field(exception.native, 'code')}' == 'EPERM';
+		} catch (exception: haxe.Exception) {
+			'${Reflect.field(exception.native, 'code')}' == 'EPERM';
+		};
 		return signalable && (start == '' || startTime(pid) == start);
 	}
 

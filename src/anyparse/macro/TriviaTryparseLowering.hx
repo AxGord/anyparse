@@ -1233,9 +1233,9 @@ final class TriviaTryparseLowering {
 			return fit ? buildCaseBodyFitPredicate(flagName) : buildCaseBodyFlagPredicate(flagName);
 		return if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
 			macro false;
-		else if (caseBodyFlagNames.length == 1)
+		else if (caseBodyFlagNames.length == 1) {
 			pred(caseBodyFlagNames[0]);
-		else {
+		} else {
 			final stmtPred: Expr = pred(caseBodyFlagNames[0]);
 			final exprPred: Expr = pred(caseBodyFlagNames[1]);
 			macro (opt._inExprPosition ? $exprPred : $stmtPred);
@@ -1282,8 +1282,9 @@ final class TriviaTryparseLowering {
 						: $stmtOptExpr
 				) : _clearExprPosition($stmtOptExpr)
 			);
-		} else
+		} else {
 			macro _writerOpt;
+		};
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
 			pos: Context.currentPos()

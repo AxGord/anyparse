@@ -231,8 +231,9 @@ final class WriterPolicyLowering {
 		final knobExpr: Expr = if (anonFnOverrideKnob != null) {
 			final overrideExpr: Expr = optFieldAccess(anonFnOverrideKnob);
 			macro opt._inAnonFnBody ? $overrideExpr : $baseKnobExpr;
-		} else
+		} else {
 			baseKnobExpr;
+		};
 		final nextPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
 		// `optSpaceUpstream=true` (currently only first-field Star with
 		// knob-form `@:fmt(leftCurly('<knob>'))`, e.g. `HxObjectLit.fields` /

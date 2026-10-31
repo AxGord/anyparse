@@ -113,7 +113,9 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 		}
 
 		final filePath: String = file;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq patch: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -145,7 +147,9 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 	 * the gate is patched without `--reformat`, so its rows are refused exactly as one `apq patch` refuses them.
 	 */
 	private static function runPatchBatch(rowsPath: String, lang: String, sep: String): Int {
-		final rows: String = try CliIo.readFile(rowsPath) catch (exception: Exception) {
+		final rows: String = try {
+			CliIo.readFile(rowsPath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq patch: --batch: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

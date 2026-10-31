@@ -169,7 +169,9 @@ class HxInlineBlockCommentGapTest extends Test {
 	}
 
 	private function assertCapturedRoundTrip(name: String, source: String, fixture: String): Void {
-		final written: Null<String> = try new HaxeQueryPlugin().writeRoundTrip(source) catch (exception: CommentLossException) {
+		final written: Null<String> = try {
+			new HaxeQueryPlugin().writeRoundTrip(source);
+		} catch (exception: CommentLossException) {
 			Assert.fail('$name: writer lost a captured comment (${exception.comment})');
 			return;
 		}
@@ -188,8 +190,9 @@ class HxInlineBlockCommentGapTest extends Test {
 		try {
 			final written: Null<String> = new HaxeQueryPlugin().writeRoundTrip(source);
 			Assert.fail('$name: expected a comment-loss refusal, got: $written');
-		} catch (exception: CommentLossException)
+		} catch (exception: CommentLossException) {
 			Assert.pass();
+		}
 	}
 
 	private function inBody(statements: String): String return 'class Foo {\n\tfunction bar() {\n\t\t$statements\n\t}\n}\n';

@@ -110,7 +110,9 @@ class JsonTypedParserTest extends Test {
 		final error: Null<ParseError> = try {
 			TestKeyedParser.parse('{"member":"A.b"}');
 			null;
-		} catch (exception: ParseError) exception;
+		} catch (exception: ParseError) {
+			exception;
+		};
 		Assert.notNull(error, 'the field\'s own name is not its key');
 		Assert.stringContains('"function"', error?.message ?? '');
 	}
@@ -143,7 +145,9 @@ class JsonTypedParserTest extends Test {
 		final error: Null<ParseError> = try {
 			TestConfigParser.parse('{"name":null,"count":1,"policy":"first","nested":{"kind":"k"}}');
 			null;
-		} catch (exception: ParseError) exception;
+		} catch (exception: ParseError) {
+			exception;
+		};
 		Assert.stringContains('missing required field "name"', error?.message ?? '');
 	}
 

@@ -100,7 +100,9 @@ final class SetDocCommand implements CliCommand implements PostWriteFix {
 
 		final filePath: String = file;
 		final docStr: String = docText;
-		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+		final source: String = try {
+			CliIo.readFile(filePath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq set-doc: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};

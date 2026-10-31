@@ -21,12 +21,19 @@ typedef ChainSeams = {
 
 	/** Statements that close the way their LAST child does: the `if`, loop, `try` and `catch` kinds. */
 	final lastChildClosedKinds: Array<String>;
+
+	/** `RefShape.tryStatementKinds` and `RefShape.tryExpressionKinds`: the try/catch groups, statement and value alike. */
+	final tryKinds: Array<String>;
+
+	/** `RefShape.catchClauseKind`; unset, no try is read as a group. */
+	final catchKind: Null<String>;
 };
 
 /**
- * The if / else-if CHAIN and the statement-closing question the brace rules share. `asymmetric-branch-braces` braces
- * a chain's bare branches and `redundant-braces` strips a chain's braces; both read the chain's links and whether a
- * branch statement closes on its own here, so the two never disagree about one chain.
+ * The if / else-if CHAIN, the try/catch GROUP and the statement-closing question the brace rules share.
+ * `asymmetric-branch-braces` braces a chain's or a group's bare branches and `redundant-braces` strips a chain's
+ * braces; both read the links, the bodies and whether a branch statement closes on its own here, so the two never
+ * disagree about one chain.
  */
 @:nullSafety(Strict)
 final class BranchChain {
@@ -51,6 +58,21 @@ final class BranchChain {
 			next = elseOf(next, ifKinds);
 		}
 		return links;
+	}
+
+	/**
+	 * The bodies of the try/catch `node` - its try body, then each catch clause's body, the clause's last child - when
+	 * `node` is one of `tryKinds` and every child after the first is a `catchKind` clause; null otherwise. They are one
+	 * group, as a chain's branches are: the writer braces all of them or none.
+	 */
+	public static function tryBodiesOf(node: QueryNode, tryKinds: Array<String>, catchKind: Null<String>): Null<Array<QueryNode>> {
+		if (catchKind == null || !tryKinds.contains(node.kind) || node.children.length < 2) return null;
+		final bodies: Array<QueryNode> = [node.children[0]];
+		for (clause in node.children.slice(1)) {
+			if (clause.kind != catchKind || clause.children.length == 0) return null;
+			bodies.push(clause.children[clause.children.length - 1]);
+		}
+		return bodies;
 	}
 
 	/**
@@ -82,7 +104,9 @@ final class BranchChain {
 			braceClosedKinds: shape.switchStatementKinds ?? [],
 			lastChildClosedKinds: ifKinds.concat(shape.loopStatementKinds ?? [])
 				.concat(shape.tryStatementKinds ?? [])
-				.concat(catchKind == null ? [] : [catchKind])
+				.concat(catchKind == null ? [] : [catchKind]),
+			tryKinds: (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []),
+			catchKind: catchKind
 		};
 	}
 

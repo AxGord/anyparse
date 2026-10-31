@@ -33,9 +33,9 @@ final class BenchAb {
 		final args: Args = new Args(argv);
 		final configOption: Null<String> = args.option('--config');
 		final given: Array<String> = args.rest(['<mode>', '<target>', '<rounds>', '<reps>', '<label>:<binary>']);
-		final config: String = if (configOption == null)
-			'hxformat.json'
-		else {
+		final config: String = if (configOption == null) {
+			'hxformat.json';
+		} else {
 			if (!FileSystem.exists(configOption)) throw new UsageError('config $configOption not found');
 			FileSystem.fullPath(configOption);
 		};

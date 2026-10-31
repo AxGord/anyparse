@@ -84,11 +84,15 @@ final class MutationSchemaCommand implements CliCommand {
 			printMutationSchemaUsage();
 			return EXIT_USAGE;
 		}
-		final plan: String = try CliIo.readFile(planPath) catch (exception: Exception) {
+		final plan: String = try {
+			CliIo.readFile(planPath);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq mutation-schema: read failed: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
-		final rows: Array<{ id: Int, file: String, arm: SchemaArm }> = try parsePlan(plan) catch (exception: Exception) {
+		final rows: Array<{ id: Int, file: String, arm: SchemaArm }> = try {
+			parsePlan(plan);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq mutation-schema: ${exception.message}\n');
 			return EXIT_USAGE;
 		}
@@ -96,11 +100,12 @@ final class MutationSchemaCommand implements CliCommand {
 		for (row in rows) if (!files.contains(row.file)) files.push(row.file);
 		final plugin: GrammarPlugin = CliArgs.pickPlugin('haxe');
 		final placed: Map<Int, String> = [];
-		for (file in files)
-			try composeFile(plugin, file, [for (row in rows) if (row.file == file) row.arm], placed) catch (exception: Exception) {
-				CliIo.stderr('apq mutation-schema: $file: ${exception.message}\n');
-				return EXIT_RUNTIME;
-			}
+		for (file in files) try {
+			composeFile(plugin, file, [for (row in rows) if (row.file == file) row.arm], placed);
+		} catch (exception: Exception) {
+			CliIo.stderr('apq mutation-schema: $file: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		}
 		for (row in rows) CliIo.sysPrint('${row.id}\t${placed[row.id] ?? 'skip\t${row.file}\tnot composed'}\n');
 		return EXIT_OK;
 	}

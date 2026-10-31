@@ -614,8 +614,9 @@ final class WriterRefFieldLowering {
 		final thisPad: Null<Expr> = if (!isOptional && child.fmtHasFlag('padTrailing')) {
 			parts.push(padTrailingDoc(ctx.fieldSep, node, child, typePath));
 			macro true;
-		} else
+		} else {
 			thisPadTrailing;
+		};
 		// `thisTransparent` is null for mandatory bare Ref (always emits visible
 		// content), `$fieldAccess == null` for optional Ref (transparent when
 		// absent — lets a prev pad signal propagate across an absent middle field).
@@ -822,13 +823,13 @@ final class WriterRefFieldLowering {
 		// token. Non-first-field case (HxIfStmt.thenBody after cond's `)` trail):
 		// the trail emits the token literally and bodyPolicyWrap replaces the
 		// default ` ` separator.
-		final justWrappedBody: Null<PrevBodyInfo> = if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw)
+		final justWrappedBody: Null<PrevBodyInfo> = if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw) {
 			// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
 			emitBodyPolicyBareRef(
 				ctx, child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, effAccess,
 				refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag, condFitGroup, ssbTrailCommentExpr
 			);
-		else {
+		} else {
 			// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
 			// bareBodyBreaks / non-first-body / condWrap / arrowBodyLineWrap
 			// dispatch lives in emitBareRefNonBodyPolicy.
@@ -1001,9 +1002,9 @@ final class WriterRefFieldLowering {
 		// the keyword field beside it is annotated. Null when the knob is absent -
 		// every existing gap keeps its bytes.
 		final glueCtorTest: Null<Expr> = buildElseSwitchGlueTest(ctx.ctorPat, elseSwitchArgs, refName, fieldAccess);
-		final headGlue: Null<Expr> = if (glueCtorTest == null || (afterTrailExpr == null && beforeLeadingExpr == null))
+		final headGlue: Null<Expr> = if (glueCtorTest == null || (afterTrailExpr == null && beforeLeadingExpr == null)) {
 			glueCtorTest;
-		else {
+		} else {
 			final atRt: Expr = afterTrailExpr ?? macro null;
 			final blRt: Expr = beforeLeadingExpr ?? macro ([]: Array<String>);
 			macro ($glueCtorTest && $atRt == null && $blRt.length == 0);
@@ -1213,9 +1214,9 @@ final class WriterRefFieldLowering {
 			final braceCases: Array<Case> = [{ values: [braceNextPat], expr: allmanLayoutExpr, guard: null }];
 			{ expr: ESwitch(brace, braceCases, sameLayoutExpr), pos: Context.currentPos() };
 		};
-		final wrapExpr: Expr = if (blockPatterns.length == 0)
-			flagSwitch
-		else {
+		final wrapExpr: Expr = if (blockPatterns.length == 0) {
+			flagSwitch;
+		} else {
 			final shapeCases: Array<Case> = [
 				{ values: blockPatterns, expr: blockLayoutExpr, guard: null },
 				{ values: [macro _], expr: flagSwitch, guard: null }
@@ -1273,9 +1274,9 @@ final class WriterRefFieldLowering {
 		// DOWNGRADE — `try f() catch (e) g();` would render across four lines — and worse, the
 		// de-braced statement form re-parses as the bare one, so a second `fmt` pass would explode
 		// what the first collapsed and `fmt` would stop being a fixed point.
-		final nextLayoutExpr: Expr = if (policyField == null)
-			breakLayoutExpr
-		else {
+		final nextLayoutExpr: Expr = if (policyField == null) {
+			breakLayoutExpr;
+		} else {
 			final policy: Expr = optFieldAccess(policyField);
 			// Under `@:fmt(constructFitBody)` the escape is ONE soft line owned by the enclosing
 			// construct group (see WrapBodyOpts.constructFitBody) — the body drops to its own indented
@@ -1287,9 +1288,9 @@ final class WriterRefFieldLowering {
 			macro $policy == anyparse.format.BodyPolicy.FitLine ? $fitEscape : $breakLayoutExpr;
 		};
 		final blockPatterns: Array<Expr> = collectBlockCtorPatterns(ctx.ctorPat, bodyTypePath);
-		final wrapExpr: Expr = if (blockPatterns.length == 0)
-			nextLayoutExpr
-		else {
+		final wrapExpr: Expr = if (blockPatterns.length == 0) {
+			nextLayoutExpr;
+		} else {
 			final shapeCases: Array<Case> = [
 				{ values: blockPatterns, expr: sameLayoutExpr, guard: null },
 				{ values: [macro _], expr: nextLayoutExpr, guard: null }

@@ -188,7 +188,9 @@ final class HookProbe {
 		return try {
 			final said: HookAnswer = Json.parse(out);
 			said.hookSpecificOutput?.permissionDecision ?? WARN;
-		} catch (exception: Exception) '';
+		} catch (exception: Exception) {
+			'';
+		};
 	}
 
 	/** The `additionalContext` a nudge hook answered, or `` when it said nothing a harness would show. */
@@ -196,7 +198,9 @@ final class HookProbe {
 		return try {
 			final said: HookAnswer = Json.parse(out);
 			said.hookSpecificOutput?.additionalContext ?? '';
-		} catch (exception: Exception) '';
+		} catch (exception: Exception) {
+			'';
+		};
 	}
 
 	/** The probe class, whose one method returns `7777` followed by `tail`. */

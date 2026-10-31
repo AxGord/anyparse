@@ -256,12 +256,12 @@ final class WriterCascadeLowering {
 				}
 				acc2;
 			};
-			final tailBody: Expr = if (info.tailAdapterOptField == null)
+			final tailBody: Expr = if (info.tailAdapterOptField == null) {
 				macro {
 					$tailKindIdent = 0;
 					$tailPathIdent = '';
-				}
-			else {
+				};
+			} else {
 				final adapterCall: Expr = WriterLowering.astPredCallT(info.tailAdapterOptField, [macro _v0]);
 				macro {
 					final _r = $adapterCall;
@@ -274,12 +274,12 @@ final class WriterCascadeLowering {
 					}
 				};
 			}
-			final headBody: Expr = if (info.headAdapterOptField == null)
+			final headBody: Expr = if (info.headAdapterOptField == null) {
 				macro {
 					$headKindIdent = 0;
 					$headPathIdent = '';
-				}
-			else {
+				};
+			} else {
 				final adapterCall: Expr = WriterLowering.astPredCallT(info.headAdapterOptField, [macro _v0]);
 				macro {
 					final _r = $adapterCall;
@@ -504,9 +504,9 @@ final class WriterCascadeLowering {
 			// the previous element matched the ctor AND its tail leaf was NOT
 			// an import / using (adapter returned null). Plain after-ctor infos
 			// keep the bare `_prevKind == 1` gate, byte-identical.
-			final gate: Expr = if (info.tailAdapterOptField == null)
+			final gate: Expr = if (info.tailAdapterOptField == null) {
 				macro $prevIdent == 1;
-			else {
+			} else {
 				final prevTailNullIdent: Expr = { expr: EConst(CIdent('_prevTailNullAfter$idx')), pos: pos };
 				macro $prevIdent == 1 && $prevTailNullIdent == 1;
 			}
@@ -536,9 +536,9 @@ final class WriterCascadeLowering {
 			// excluded ctor (e.g. a cond-comp `#if … #end`). Without
 			// `prevExcludeCases` the gate is the original two-term form —
 			// byte-identical for every existing `blankLinesBeforeCtor{,If}`.
-			final gate: Expr = if (info.prevExcludeCases == null)
+			final gate: Expr = if (info.prevExcludeCases == null) {
 				macro $currIdent == 1 && $prevIdent != 1;
-			else {
+			} else {
 				final prevExclIdent: Expr = { expr: EConst(CIdent('_prevKindPrevExcl$idx')), pos: pos };
 				macro $currIdent == 1 && $prevIdent != 1 && $prevExclIdent != 1;
 			}

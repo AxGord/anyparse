@@ -113,7 +113,9 @@ final class MutationCheck {
 		final workroot: String = dirs.claimAfterSweep(WORK_PREFIX, job.repo);
 		Sys.println('workroot: $workroot');
 		final slots: Array<Int> = [];
-		final status: Int = try execute(job, rows, Std.int(Math.min(jobs, rows.length)), workroot, slots) catch (exception: Exception) {
+		final status: Int = try {
+			execute(job, rows, Std.int(Math.min(jobs, rows.length)), workroot, slots);
+		} catch (exception: Exception) {
 			release(job, dirs, workroot, slots, 1);
 			throw exception;
 		};

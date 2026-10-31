@@ -66,7 +66,9 @@ class ApqAstIntegrationTest extends Test {
 
 		for (path in paths) {
 			final source: String = File.getContent(path);
-			final tree: Null<QueryNode> = try plugin.parseFile(source) catch (e: ParseError) {
+			final tree: Null<QueryNode> = try {
+				plugin.parseFile(source);
+			} catch (e: ParseError) {
 				parseFailed++;
 				null;
 			} catch (e: Exception) {

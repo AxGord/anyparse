@@ -127,8 +127,9 @@ final class CommentRewrite {
 				final grown: Bool = next.indexOf('\n') >= 0 && isOneLineDocBlock(source, unit);
 				edits.push({ span: bodySpan, text: grown ? SourceComments.openGrownDocBlock(next, continuation) : next });
 			}
-		} catch (exception: Exception)
+		} catch (exception: Exception) {
 			return Err(exception.message);
+		}
 
 		if (edits.length == 0) return Ok(source);
 		final result: EditResult = CanonicalEdit.canonicalize(source, edits, reformat, plugin, optsJson);

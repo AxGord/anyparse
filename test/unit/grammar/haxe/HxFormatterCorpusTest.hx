@@ -217,7 +217,9 @@ class HxFormatterCorpusTest extends Test {
 				}
 				continue;
 			}
-			final opts: HxModuleWriteOptions = try HaxeFormatConfigLoader.loadHxFormatJson(tc.config) catch (exception: Exception) {
+			final opts: HxModuleWriteOptions = try {
+				HaxeFormatConfigLoader.loadHxFormatJson(tc.config);
+			} catch (exception: Exception) {
 				skipConfig++;
 				sweepFixtures.push({ path: relPath, status: 'SKIP_CONFIG' });
 				continue;
@@ -231,7 +233,9 @@ class HxFormatterCorpusTest extends Test {
 			// it drops the trailing LF leaving the `\r` that the fixture's
 			// stripPadNewlines also leaves in `expected`.
 			opts.finalNewline = true;
-			final module: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = try HaxeModuleTriviaParser.parse(tc.input) catch (exception: Exception) {
+			final module: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = try {
+				HaxeModuleTriviaParser.parse(tc.input);
+			} catch (exception: Exception) {
 				skipParse++;
 				final reason: String = classifyParseFailure(exception, tc.input);
 				final prev: Null<Int> = parseReasons[reason];
@@ -239,7 +243,9 @@ class HxFormatterCorpusTest extends Test {
 				sweepFixtures.push({ path: relPath, status: 'SKIP_PARSE' });
 				continue;
 			};
-			final emitted: String = try HaxeModuleTriviaWriter.write(module, opts) catch (exception: Exception) {
+			final emitted: String = try {
+				HaxeModuleTriviaWriter.write(module, opts);
+			} catch (exception: Exception) {
 				skipWrite++;
 				sweepFixtures.push({ path: relPath, status: 'SKIP_WRITE' });
 				continue;
@@ -327,8 +333,9 @@ class HxFormatterCorpusTest extends Test {
 			final dSkipParse: Int = sweepSkipParse - (prevSkipParse: Int);
 			'  Δpass ${signed(dPass)} / Δfail ${signed(dFail)} / Δskip-parse ${signed(dSkipParse)}  vs last sweep ($prevPass / $prevFail'
 				+ ' / $prevSkipParse)';
-		} else
+		} else {
 			'  (no previous sweep recorded)';
+		};
 		Sys.println('');
 		Sys.println(
 			'===== sweep totals: $sweepPass pass / $sweepFail fail / $sweepSkipParse skip-parse / $sweepSkipWrite skip-write / '

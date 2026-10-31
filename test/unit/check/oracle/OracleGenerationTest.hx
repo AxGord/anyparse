@@ -1049,7 +1049,9 @@ final class OracleGenerationTest extends Test {
 		final writable: Bool = try {
 			File.saveContent('$dir/probe.txt', '');
 			true;
-		} catch (exception: haxe.Exception) false;
+		} catch (exception: haxe.Exception) {
+			false;
+		};
 		var ready: Array<OracleConfig> = [];
 		if (!writable)
 			CliFixture.always(

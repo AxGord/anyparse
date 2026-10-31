@@ -18,7 +18,8 @@ import anyparse.check.common.control.AsymmetricBranchBraces;
  *
  * `DefaultOff` is asserted, not assumed: brace symmetry is the project's taste, so the check may
  * not fire unasked. Once asked, its fix takes the writer's repair direction and its gates: a
- * branch with no terminator of its own and a declaration stay bare.
+ * branch with no terminator of its own and a declaration stay bare. A try/catch is the same kind of group - its try
+ * body and every catch body - and a `macro` reification is read for neither.
  */
 @:nullSafety(Strict)
 class AsymmetricBranchBracesCheckTest extends Test {
@@ -329,6 +330,72 @@ class AsymmetricBranchBracesCheckTest extends Test {
 		final once: String = CheckFixture.fixedSource(new AsymmetricBranchBraces(), src);
 		Assert.equals(1, violations(once).length, 'the inner pair is left for the next pass');
 		Assert.equals(0, violations(CheckFixture.fixedSource(new AsymmetricBranchBraces(), once)).length);
+	}
+
+	/**
+	 * A try/catch is a group as an if/else chain is: the try body and every catch body braced, or all of them bare. The
+	 * shape the writer's `singleStatementBraces: "symmetric"` repairs - a braced body opposite a bare catch - is one
+	 * finding spanning the whole `try`.
+	 */
+	@:pin('control')
+	@:killer('M-ASYM-TRY-UNFLAGGED')
+	public function testATryWithABracedBodyAndABareCatchIsFlagged(): Void {
+		final src: String = wrap('try {\n\t\t\tp();\n\t\t\tq();\n\t\t} catch (e:String)\n\t\t\tr();');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('the try/catch braces some bodies and not others - brace all or none', vs[0].message);
+		Assert.equals(src.indexOf('try'), vs[0].span?.from);
+		Assert.equals(src.lastIndexOf('r();') + 'r();'.length, vs[0].span?.to);
+	}
+
+	/** The mirror, in statement and in value position, and a second catch braced opposite a bare first one. */
+	public function testATryWithABracedCatchAndABareBodyIsFlagged(): Void {
+		Assert.equals(1, violations(wrap('try p() catch (e:String) {\n\t\t\tq();\n\t\t}')).length);
+		Assert.equals(1, violations(wrap('final v:Int = try p() catch (e:Int) {\n\t\t\t0;\n\t\t};')).length);
+		Assert.equals(1, violations(wrap('try p() catch (e:String) q() catch (e:Int) {\n\t\t\tr();\n\t\t}')).length);
+	}
+
+	/** Every body bare, or every body braced: symmetric. */
+	public function testAnAgreeingTryIsNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('try p() catch (e:String) q();')).length);
+		Assert.equals(0, violations(wrap('final v:Int = try p() catch (e:Int) 0;')).length);
+		Assert.equals(
+			0, violations(wrap('try {\n\t\t\tp();\n\t\t} catch (e:String) {\n\t\t\tq();\n\t\t} catch (e:Int) {\n\t\t\tr();\n\t\t}')).length
+		);
+	}
+
+	/**
+	 * The fix braces every bare body of the group, as the writer does: a bare statement keeps its own terminator, a bare
+	 * expression takes one inside its braces (`{ p() }` is `Missing ;`), and the result is a symmetric try.
+	 */
+	@:pin('control')
+	@:killer('M-ASYM-TRY-FIX-NO-EDIT')
+	@:killer('M-ASYM-TRY-FIX-UNTERMINATED')
+	public function testFixBracesEveryBareBodyOfATry(): Void {
+		final catchBare: String = CheckFixture.fixedSource(
+			new AsymmetricBranchBraces(), wrap('try {\n\t\t\tp();\n\t\t\tq();\n\t\t} catch (e:String)\n\t\t\tr();')
+		);
+		Assert.equals(wrap('try {\n\t\t\tp();\n\t\t\tq();\n\t\t} catch (e:String)\n\t\t\t{ r(); }'), catchBare);
+		Assert.equals(0, violations(catchBare).length, 'the fixed try is symmetric');
+		Assert.equals(
+			wrap('try { p(); } catch (e:String) { q(); } catch (e:Int) {\n\t\t\tr();\n\t\t}'),
+			CheckFixture.fixedSource(new AsymmetricBranchBraces(), wrap('try p() catch (e:String) q() catch (e:Int) {\n\t\t\tr();\n\t\t}'))
+		);
+		Assert.equals(
+			wrap('final v:Int = try { p(); } catch (e:Int) {\n\t\t\t0;\n\t\t};'),
+			CheckFixture.fixedSource(new AsymmetricBranchBraces(), wrap('final v:Int = try p() catch (e:Int) {\n\t\t\t0;\n\t\t};'))
+		);
+	}
+
+	/**
+	 * A `macro` reification is code the program BUILDS: a brace level there is part of the value it returns
+	 * (`EBlock([e])` for `e`), so the writer leaves its braces alone and no finding is reported there - an if/else or a
+	 * try/catch inside one is none. The same constructs outside a reification are (the tests above).
+	 */
+	@:pin('guard')
+	public function testAMacroReificationIsNotRead(): Void {
+		Assert.equals(0, violations(wrap('e = macro try {\n\t\t\tp();\n\t\t\tq();\n\t\t} catch (err:Dynamic)\n\t\t\tr();')).length);
+		Assert.equals(0, violations(wrap('e = macro {\n\t\t\tif (a) {\n\t\t\t\tp();\n\t\t\t} else\n\t\t\t\tq();\n\t\t};')).length);
 	}
 
 	private function violations(src: String): Array<Violation> {

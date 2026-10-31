@@ -125,13 +125,14 @@ final class ParseProf {
 	private static function phaseParse(sources: Array<Src>, reps: Int): String {
 		var failed: Int = 0;
 		var ok: Int = 0;
-		for (r in 0...reps) {
+		for (_ in 0...reps) {
 			for (s in sources) {
 				try {
 					final tree: Any = HaxeModuleTriviaParser.parse(s.source);
 					if (tree != null) ok++;
-				} catch (exception: haxe.Exception)
+				} catch (exception: haxe.Exception) {
 					failed++;
+				}
 			}
 		}
 		return 'parsed=$ok parseFail=$failed';
@@ -141,13 +142,14 @@ final class ParseProf {
 	private static function phaseWalk(plugin: GrammarPlugin, sources: Array<Src>, reps: Int): String {
 		var failed: Int = 0;
 		var roots: Int = 0;
-		for (r in 0...reps) {
+		for (_ in 0...reps) {
 			for (s in sources) {
 				try {
 					final tree: QueryNode = plugin.parseFile(s.source);
 					roots += tree.children.length;
-				} catch (exception: haxe.Exception)
+				} catch (exception: haxe.Exception) {
 					failed++;
+				}
 			}
 		}
 		return 'rootChildren=$roots parseFail=$failed';
@@ -159,7 +161,7 @@ final class ParseProf {
 		final opts: HxModuleWriteOptions = writeOptionsOf(optsJson);
 		var written: Int = 0;
 		var outBytes: Int = 0;
-		for (r in 0...reps) {
+		for (_ in 0...reps) {
 			for (tree in trees) if (tree != null) {
 				final emitted: Null<String> = HaxeModuleTriviaWriter.write(tree, opts);
 				if (emitted != null) {
@@ -176,7 +178,7 @@ final class ParseProf {
 		var written: Int = 0;
 		var threw: Int = 0;
 		var equal: Int = 0;
-		for (r in 0...reps) {
+		for (_ in 0...reps) {
 			for (s in sources) {
 				try {
 					final out: Null<String> = plugin.writeRoundTrip(s.source, optsJson);
@@ -184,8 +186,9 @@ final class ParseProf {
 						written++;
 						if (out == s.source) equal++;
 					}
-				} catch (exception: haxe.Exception)
+				} catch (exception: haxe.Exception) {
 					threw++;
+				}
 			}
 		}
 		return 'written=$written equal=$equal threw=$threw';
@@ -194,7 +197,7 @@ final class ParseProf {
 	/** Every builtin check over the whole set. */
 	private static function phaseLint(plugin: GrammarPlugin, sources: Array<Src>, reps: Int): String {
 		var found: Int = 0;
-		for (r in 0...reps) {
+		for (_ in 0...reps) {
 			final violations: Array<Violation> = Linter.run(sources, plugin);
 			found = violations.length;
 		}
@@ -206,7 +209,7 @@ final class ParseProf {
 		Sys.println('file\tbytes\tlines\tparseUs\trtUs\tnodes\tcond\tmeta\tstr\tfn\ttype');
 		// Warm the JIT over the whole set first: without it the first files carry the
 		// tier-up cost and read an order of magnitude slower than the same file later.
-		for (w in 0...2) for (s in sources) {
+		for (_ in 0...2) for (s in sources) {
 			try HaxeModuleTriviaParser.parse(s.source) catch (exception: haxe.Exception) {}
 			try plugin.writeRoundTrip(s.source, optsJson) catch (exception: haxe.Exception) {}
 		}
@@ -214,7 +217,7 @@ final class ParseProf {
 			var parseUs: Float = 0;
 			var rtUs: Float = 0;
 			var nodes: Int = 0;
-			for (r in 0...reps) {
+			for (_ in 0...reps) {
 				final p0: Float = now();
 				try HaxeModuleTriviaParser.parse(s.source) catch (exception: haxe.Exception) {}
 				parseUs += (now() - p0) * US_PER_SECOND;
@@ -227,8 +230,9 @@ final class ParseProf {
 				final tree: QueryNode = plugin.parseFile(s.source);
 				nodes = count(tree);
 				tally(tree, kinds);
-			} catch (exception: haxe.Exception)
+			} catch (exception: haxe.Exception) {
 				nodes = -1;
+			}
 			Sys.println(
 				'${s.file}\t${s.source.length}\t${lineCount(s.source)}\t${Math.round(parseUs / reps)}\t${Math.round(rtUs / reps)}\t$nodes'
 				+ '\t${group(kinds, ['Conditional'])}\t${group(kinds, ['Meta', 'MetaCall', 'MetaStmt', 'MetaExpr'])}\t'
@@ -306,7 +310,12 @@ final class ParseProf {
 		final out: Array<String> = [];
 		if (sys.FileSystem.isDirectory(target)) {
 			collect(target, out);
-			out.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+			out.sort((a, b) -> if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0);
 			return out;
 		}
 		for (line in sys.io.File.getContent(target).split('\n')) {
@@ -366,11 +375,7 @@ final class ParseProf {
 
 	/** Seconds, but from a monotonic microsecond-resolution clock on js. */
 	private static function now(): Float {
-		#if js
-		return (cast js.Syntax.code('performance.now()'): Float) / MS_PER_SECOND;
-		#else
-		return haxe.Timer.stamp();
-		#end
+		return #if js (cast js.Syntax.code('performance.now()'): Float) / MS_PER_SECOND #else haxe.Timer.stamp() #end;
 	}
 
 }
