@@ -293,7 +293,7 @@ class CrossRenameMemberSliceTest extends Test {
 	public function testOverrideRefused(): Void {
 		final sub: String = 'class Sub extends Base {\n\toverride public function speak():Void {}\n}';
 		final base: String = 'class Base {\n\tpublic function speak():Void {}\n}';
-		assertErr(run('sub.hx', sub, 'speak', 'talk', [
+		assertErr('is an override', run('sub.hx', sub, 'speak', 'talk', [
 			{ file: 'sub.hx', source: sub },
 			{ file: 'base.hx', source: base }
 		]));
@@ -362,7 +362,7 @@ class CrossRenameMemberSliceTest extends Test {
 	public function testUnprovableFamilyRefused(): Void {
 		final base: String = 'class Root {\n\tpublic function ping():Void {}\n}';
 		final foreign: String = 'class Foreign extends Absent {\n\toverride public function ping():Void {}\n}';
-		assertErr(run('base.hx', base, 'ping', 'pong', [
+		assertErr('cannot be proven unrelated', run('base.hx', base, 'ping', 'pong', [
 			{ file: 'base.hx', source: base },
 			{ file: 'foreign.hx', source: foreign }
 		]));
@@ -371,14 +371,14 @@ class CrossRenameMemberSliceTest extends Test {
 	/** A destination name already declared on the type is refused. */
 	public function testNameCollisionRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function alpha():Void {}\n\tpublic function beta():Void {}\n}';
-		assertErr(run('a.hx', a, 'alpha', 'beta', [{ file: 'a.hx', source: a }]));
+		assertErr('already declares a member', run('a.hx', a, 'alpha', 'beta', [{ file: 'a.hx', source: a }]));
 	}
 
 	/** A source type declared in more than one scope file is refused. */
 	public function testAmbiguousTypeRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function probe():Void {}\n}';
 		final dup: String = 'class Foo {\n\tpublic function probe():Void {}\n}';
-		assertErr(run('a.hx', a, 'probe', 'scan', [
+		assertErr('ambiguous, refusing', run('a.hx', a, 'probe', 'scan', [
 			{ file: 'a.hx', source: a },
 			{ file: 'dup.hx', source: dup }
 		]));
@@ -392,31 +392,31 @@ class CrossRenameMemberSliceTest extends Test {
 	public function testCaseCaptureCollisionRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function tag():Void {}\n\tpublic function pick(v:Any):Void {\n\t\tswitch v {\n'
 			+ '\t\t\tcase tag: trace(0);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
-		assertErr(run('a.hx', a, 'tag', 'label', [{ file: 'a.hx', source: a }]));
+		assertErr('case-pattern capture', run('a.hx', a, 'tag', 'label', [{ file: 'a.hx', source: a }]));
 	}
 
 	/** Renaming a constructor (`new`) is refused. */
 	public function testConstructorRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function new() {}\n}';
-		assertErr(run('a.hx', a, 'new', 'init', [{ file: 'a.hx', source: a }]));
+		assertErr('cannot rename a constructor', run('a.hx', a, 'new', 'init', [{ file: 'a.hx', source: a }]));
 	}
 
 	/** A cursor not on a member declaration (a local var) is refused. */
 	public function testCursorNotOnMemberRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function m():Void {\n\t\tvar local = 1;\n\t\ttrace(local);\n\t}\n}';
-		assertErr(run('a.hx', a, 'local', 'x', [{ file: 'a.hx', source: a }]));
+		assertErr('is not on a member declaration', run('a.hx', a, 'local', 'x', [{ file: 'a.hx', source: a }]));
 	}
 
 	/** A no-op rename (same name) is refused. */
 	public function testNoOpRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function keep():Void {}\n}';
-		assertErr(run('a.hx', a, 'keep', 'keep', [{ file: 'a.hx', source: a }]));
+		assertErr('is a no-op', run('a.hx', a, 'keep', 'keep', [{ file: 'a.hx', source: a }]));
 	}
 
 	/** An invalid new name is rejected. */
 	public function testInvalidNewNameRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function keep():Void {}\n}';
-		assertErr(run('a.hx', a, 'keep', '1bad', [{ file: 'a.hx', source: a }]));
+		assertErr('is not a valid identifier', run('a.hx', a, 'keep', '1bad', [{ file: 'a.hx', source: a }]));
 	}
 
 	/**
@@ -497,7 +497,7 @@ class CrossRenameMemberSliceTest extends Test {
 	public function testSkipParseScopeFileRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function keep():Void {}\n}';
 		final broken: String = 'class @@@ not valid @@@';
-		assertErr(run('a.hx', a, 'keep', 'hold', [
+		assertErr('do not parse', run('a.hx', a, 'keep', 'hold', [
 			{ file: 'a.hx', source: a },
 			{ file: 'broken.hx', source: broken }
 		]));
@@ -595,7 +595,7 @@ class CrossRenameMemberSliceTest extends Test {
 	public function testLowerCasePatternCaptureStillRefuses(): Void {
 		final a: String = 'class Config {\n\tpublic static var limit = 5;\n'
 			+ '\tpublic static function tag(v:Int):String return switch (v) {\n\t\tcase limit: \'x\';\n\t}\n}';
-		assertErr(run('a.hx', a, 'limit', 'cap', [{ file: 'a.hx', source: a }]));
+		assertErr('case-pattern capture', run('a.hx', a, 'limit', 'cap', [{ file: 'a.hx', source: a }]));
 	}
 
 	/**
@@ -1078,12 +1078,13 @@ class CrossRenameMemberSliceTest extends Test {
 		return CrossRenameMember.crossRenameMember(cursorFile, cursorSource, p.line, p.col, newName, scopeFiles, plugin(), refShape());
 	}
 
-	private function assertErr(result: CrossRenameResult): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, result: CrossRenameResult): Void {
 		switch result {
 			case Ok(changes, _):
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

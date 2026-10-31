@@ -181,7 +181,7 @@ class CrossRenameSliceTest extends Test {
 			{ file: 'a.hx', source: a },
 			{ file: 'dup.hx', source: dup }
 		], plugin(), typeRefShape(), refShape());
-		assertErr(result);
+		assertErr('ambiguous, refusing', result);
 	}
 
 	/**
@@ -194,7 +194,7 @@ class CrossRenameSliceTest extends Test {
 		final result: CrossRenameResult = CrossRename.crossRenameType(
 			'a.hx', a, 2, 6, 'renamed', [{ file: 'a.hx', source: a }], plugin(), typeRefShape(), refShape()
 		);
-		assertErr(result);
+		assertErr('is not on a type declaration', result);
 	}
 
 	/**
@@ -208,7 +208,7 @@ class CrossRenameSliceTest extends Test {
 			{ file: 'a.hx', source: a },
 			{ file: 'broken.hx', source: broken }
 		], plugin(), typeRefShape(), refShape());
-		assertErr(result);
+		assertErr('do not parse', result);
 	}
 
 	/** No-op `Foo` -> `Foo` is refused. */
@@ -217,7 +217,7 @@ class CrossRenameSliceTest extends Test {
 		final result: CrossRenameResult = CrossRename.crossRenameType(
 			'a.hx', a, 1, 7, 'Foo', [{ file: 'a.hx', source: a }], plugin(), typeRefShape(), refShape()
 		);
-		assertErr(result);
+		assertErr('is a no-op', result);
 	}
 
 	/** An invalid new name is rejected without touching any source. */
@@ -226,7 +226,7 @@ class CrossRenameSliceTest extends Test {
 		final result: CrossRenameResult = CrossRename.crossRenameType(
 			'a.hx', a, 1, 7, '1bad', [{ file: 'a.hx', source: a }], plugin(), typeRefShape(), refShape()
 		);
-		assertErr(result);
+		assertErr('is not a valid identifier', result);
 	}
 
 	/** An enum declaration renames just like a class. */
@@ -478,12 +478,13 @@ class CrossRenameSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: CrossRenameResult): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, result: CrossRenameResult): Void {
 		switch result {
 			case Ok(changes, _):
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

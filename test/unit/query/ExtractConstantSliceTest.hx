@@ -46,19 +46,19 @@ class ExtractConstantSliceTest extends Test {
 	public function testNameCollisionRefused(): Void {
 		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'dup';\n\t}\n"
 			+ '\tstatic function DUP():Void {}\n}';
-		assertErr(ExtractConstant.extractConstant(src, 'K', 'DUP', 'dup', true, plugin()));
+		assertErr('already has a member named', ExtractConstant.extractConstant(src, 'K', 'DUP', 'dup', true, plugin()));
 	}
 
 	/** A literal that does not occur is refused. */
 	public function testNoOccurrenceRefused(): Void {
 		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'present';\n\t}\n}";
-		assertErr(ExtractConstant.extractConstant(src, 'K', 'ABSENT', 'absent', true, plugin()));
+		assertErr('no plain literal', ExtractConstant.extractConstant(src, 'K', 'ABSENT', 'absent', true, plugin()));
 	}
 
 	/** A name that is not a valid identifier is refused. */
 	public function testInvalidNameRefused(): Void {
 		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'x';\n\t}\n}";
-		assertErr(ExtractConstant.extractConstant(src, 'K', '9BAD', 'x', true, plugin()));
+		assertErr('is not a valid identifier', ExtractConstant.extractConstant(src, 'K', '9BAD', 'x', true, plugin()));
 	}
 
 	/**
@@ -66,13 +66,13 @@ class ExtractConstantSliceTest extends Test {
 	 */
 	public function testInterpolatedNotMatched(): Void {
 		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(y:String):String {\n\t\treturn 'x$y';\n\t}\n}";
-		assertErr(ExtractConstant.extractConstant(src, 'K', 'X', 'x', true, plugin()));
+		assertErr('no plain literal', ExtractConstant.extractConstant(src, 'K', 'X', 'x', true, plugin()));
 	}
 
 	/** A missing / non-unique type is refused. */
 	public function testUnknownTypeRefused(): Void {
 		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'x';\n\t}\n}";
-		assertErr(ExtractConstant.extractConstant(src, 'Missing', 'X', 'x', true, plugin()));
+		assertErr('no unique type', ExtractConstant.extractConstant(src, 'Missing', 'X', 'x', true, plugin()));
 	}
 
 	/** The first member's doc comment stays on that member, not on the constant. */
@@ -99,7 +99,7 @@ class ExtractConstantSliceTest extends Test {
 	public function testNonUniqueTypeRefused(): Void {
 		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'x';\n\t}\n}\n\nclass K {\n"
 			+ '\tstatic function g():Void {}\n}';
-		assertErr(ExtractConstant.extractConstant(src, 'K', 'X', 'x', true, plugin()));
+		assertErr('no unique type', ExtractConstant.extractConstant(src, 'K', 'X', 'x', true, plugin()));
 	}
 
 	/** The constant reuses the verbatim source token (embedded quotes preserved). */
@@ -245,12 +245,13 @@ class ExtractConstantSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: EditResult): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, result: EditResult): Void {
 		switch result {
 			case Ok(_):
 				Assert.fail('expected Err, got Ok');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

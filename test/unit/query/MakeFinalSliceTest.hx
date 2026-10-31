@@ -40,21 +40,27 @@ class MakeFinalSliceTest extends Test {
 	public function testReassignedRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass Cfg {\n\tpublic var n:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void n = n + 1;\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
+		assertErr(
+			'is reassigned outside the constructor',
+			MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src }], plugin())
+		);
 	}
 
 	/** A compound-assign counts as a reassignment. */
 	public function testCompoundAssignRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass Cfg {\n\tpublic var n:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void n += 1;\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
+		assertErr(
+			'is reassigned outside the constructor',
+			MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src }], plugin())
+		);
 	}
 
 	/** A cross-file `obj.field = …` write is refused. */
 	public function testCrossFileWriteRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var v:Int = 0;\n\tpublic function new() {}\n}';
 		final user: String = 'package pkg;\n\nclass User {\n\tpublic function new() {}\n\tpublic function set(c:Cfg):Void c.v = 9;\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'v', [
+		assertErr('is reassigned outside the constructor', MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'v', [
 			{ file: 'pkg/Cfg.hx', source: src },
 			{ file: 'pkg/User.hx', source: user }
 		], plugin()));
@@ -63,25 +69,30 @@ class MakeFinalSliceTest extends Test {
 	/** A field never assigned (no init, no ctor write) is refused. */
 	public function testNeverAssignedRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var loose:Int;\n\tpublic function new() {}\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'loose', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
+		assertErr('is never assigned', MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'loose', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
 	}
 
 	/** A field assigned both at its declaration and in the constructor is refused. */
 	public function testDoubleInitRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 1;\n\tpublic function new() { x = 2; }\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
+		assertErr(
+			'assigned both at its declaration',
+			MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }], plugin())
+		);
 	}
 
 	/** A field that is already final is not a plain var and is refused. */
 	public function testAlreadyFinalRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic final x:Int = 1;\n\tpublic function new() {}\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
+		assertErr('no mutable var field', MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
 	}
 
 	/** A missing field is refused. */
 	public function testNoSuchFieldRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 1;\n\tpublic function new() {}\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'nope', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
+		assertErr(
+			'no mutable var field', MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'nope', [{ file: 'pkg/Cfg.hx', source: src }], plugin())
+		);
 	}
 
 	/**
@@ -152,12 +163,13 @@ class MakeFinalSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: EditResult): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, result: EditResult): Void {
 		switch result {
 			case Ok(_):
 				Assert.fail('expected Err, got Ok');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

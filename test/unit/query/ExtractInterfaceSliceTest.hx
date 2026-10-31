@@ -117,25 +117,25 @@ class ExtractInterfaceSliceTest extends Test {
 	public function testNoPublicMethodsRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tfunction hidden():Void {}\n\tpublic static function s():Void {}\n}';
-		assertErr(ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src, plugin()));
+		assertErr('no public instance method', ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src, plugin()));
 	}
 
 	/** A `--members` entry that is not an extractable method is refused. */
 	public function testUnknownMemberRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', ['nope'], src, plugin()));
+		assertErr('is not a public instance method', ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', ['nope'], src, plugin()));
 	}
 
 	/** The interface name must differ from the source type. */
 	public function testNameEqualsTypeRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(ExtractInterface.extract('pkg/S.hx', 'S', 'S', 'pkg/S2.hx', null, src, plugin()));
+		assertErr('must differ from the source type', ExtractInterface.extract('pkg/S.hx', 'S', 'S', 'pkg/S2.hx', null, src, plugin()));
 	}
 
 	/** An invalid interface name is refused. */
 	public function testInvalidNameRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(ExtractInterface.extract('pkg/S.hx', 'S', '1bad', 'pkg/X.hx', null, src, plugin()));
+		assertErr('is not a valid identifier', ExtractInterface.extract('pkg/S.hx', 'S', '1bad', 'pkg/X.hx', null, src, plugin()));
 	}
 
 	/**
@@ -210,7 +210,7 @@ class ExtractInterfaceSliceTest extends Test {
 	/** A source type that is not a class in the file is refused. */
 	public function testNoSuchClassRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(ExtractInterface.extract('pkg/S.hx', 'Other', 'IS', 'pkg/IS.hx', null, src, plugin()));
+		assertErr('no unique class', ExtractInterface.extract('pkg/S.hx', 'Other', 'IS', 'pkg/IS.hx', null, src, plugin()));
 	}
 
 	/**
@@ -332,12 +332,13 @@ class ExtractInterfaceSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: MoveResult): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, result: MoveResult): Void {
 		switch result {
 			case Ok(changes, _):
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

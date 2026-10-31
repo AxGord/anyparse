@@ -43,13 +43,13 @@ class RemoveImportSliceTest extends Test {
 	/** A path that names no import is refused. */
 	public function testNotFound(): Void {
 		final source: String = 'import a.Used;\nclass C {\n\tvar x:Used;\n}\n';
-		assertErr(source, 'a.Nope');
+		assertErr('no import of', source, 'a.Nope');
 	}
 
 	/** A path naming both an `import` and a `using` is ambiguous — refused. */
 	public function testAmbiguous(): Void {
 		final source: String = 'import a.B;\nusing a.B;\nclass C {}\n';
-		assertErr(source, 'a.B');
+		assertErr('ambiguous', source, 'a.B');
 	}
 
 	/**
@@ -96,7 +96,7 @@ class RemoveImportSliceTest extends Test {
 
 	/** A `using` statement does not match an `import` of the same path: the kind is part of the request. */
 	public function testUsingStatementDoesNotRemoveAnImport(): Void {
-		assertErr('import a.B;\nclass C {}\n', 'using a.B;');
+		assertErr('no using of', 'import a.B;\nclass C {}\n', 'using a.B;');
 	}
 
 	#if (sys || nodejs)
@@ -124,12 +124,13 @@ class RemoveImportSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(source: String, path: String): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, source: String, path: String): Void {
 		switch RemoveImport.removeImport(source, path, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.fail('expected Err, got Ok:\n$text');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

@@ -35,45 +35,45 @@ class EncapsulateFieldSliceTest extends Test {
 	/** A `final` field is refused (no setter). */
 	public function testFinalRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic final id:Int = 1;\n\tpublic function new() {}\n}';
-		assertErr(EncapsulateField.encapsulate(src, 'Model', 'id', true, plugin()));
+		assertErr('is a final field', EncapsulateField.encapsulate(src, 'Model', 'id', true, plugin()));
 	}
 
 	/** A `static` field is refused. */
 	public function testStaticRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic static var shared:Int = 0;\n\tpublic function new() {}\n}';
-		assertErr(EncapsulateField.encapsulate(src, 'Model', 'shared', true, plugin()));
+		assertErr('is static', EncapsulateField.encapsulate(src, 'Model', 'shared', true, plugin()));
 	}
 
 	/** A field with no explicit type is refused. */
 	public function testNoTypeRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var loose = 0;\n\tpublic function new() {}\n}';
-		assertErr(EncapsulateField.encapsulate(src, 'Model', 'loose', true, plugin()));
+		assertErr('needs an explicit type', EncapsulateField.encapsulate(src, 'Model', 'loose', true, plugin()));
 	}
 
 	/** An existing accessor blocks encapsulation. */
 	public function testAccessorExistsRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n'
 			+ '\tfunction get_count():Int return count;\n}';
-		assertErr(EncapsulateField.encapsulate(src, 'Model', 'count', true, plugin()));
+		assertErr('already exists', EncapsulateField.encapsulate(src, 'Model', 'count', true, plugin()));
 	}
 
 	/** A field already declared as a property is refused. */
 	public function testAlreadyPropertyRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\t@:isVar public var count(get, set):Int = 0;\n\tpublic function new() {}\n'
 			+ '\tfunction get_count():Int return count;\n\tfunction set_count(v:Int):Int return count = v;\n}';
-		assertErr(EncapsulateField.encapsulate(src, 'Model', 'count', true, plugin()));
+		assertErr('already exists', EncapsulateField.encapsulate(src, 'Model', 'count', true, plugin()));
 	}
 
 	/** A method name (not a field) is refused. */
 	public function testMethodNotFieldRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic function new() {}\n\tpublic function run():Void {}\n}';
-		assertErr(EncapsulateField.encapsulate(src, 'Model', 'run', true, plugin()));
+		assertErr('has no field', EncapsulateField.encapsulate(src, 'Model', 'run', true, plugin()));
 	}
 
 	/** A missing field is refused. */
 	public function testNoSuchFieldRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n}';
-		assertErr(EncapsulateField.encapsulate(src, 'Model', 'nope', true, plugin()));
+		assertErr('has no field', EncapsulateField.encapsulate(src, 'Model', 'nope', true, plugin()));
 	}
 
 	private function okEncap(src: String, typeName: String, fieldName: String): String {
@@ -92,12 +92,13 @@ class EncapsulateFieldSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: EditResult): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, result: EditResult): Void {
 		switch result {
 			case Ok(_):
 				Assert.fail('expected Err, got Ok');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

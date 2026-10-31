@@ -50,20 +50,20 @@ class IntroduceParameterObjectSliceTest extends Test {
 	public function testNonContiguousRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(x:Int, y:Int, z:Int):Int return x + y + z;\n}';
-		assertErr(introduce(src, 'f', ['x', 'z'], 'T', null));
+		assertErr('not a contiguous run', introduce(src, 'f', ['x', 'z'], 'T', null));
 	}
 
 	/** A parameter without an explicit type is refused. */
 	public function testUntypedParamRefused(): Void {
 		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a, b:Int):Int return b;\n}';
-		assertErr(introduce(src, 'f', ['a', 'b'], 'T', null));
+		assertErr('has no explicit type', introduce(src, 'f', ['a', 'b'], 'T', null));
 	}
 
 	/** A parameter used through a short string interpolation is refused. */
 	public function testShortInterpRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a:Int, b:Int):String return a + \'$$b\';\n}';
-		assertErr(introduce(src, 'f', ['a', 'b'], 'T', null));
+		assertErr('short string interpolation', introduce(src, 'f', ['a', 'b'], 'T', null));
 	}
 
 	/** A braced interpolation is folded, not refused. */
@@ -77,7 +77,7 @@ class IntroduceParameterObjectSliceTest extends Test {
 	/** An unknown parameter is refused. */
 	public function testNoSuchParamRefused(): Void {
 		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a:Int):Int return a;\n}';
-		assertErr(introduce(src, 'f', ['nope'], 'T', null));
+		assertErr('not a contiguous run', introduce(src, 'f', ['nope'], 'T', null));
 	}
 
 	/**
@@ -222,12 +222,13 @@ class IntroduceParameterObjectSliceTest extends Test {
 		return IntroduceParameterObject.introduce(src, p.line, p.col, params, typeName, objName, plugin(), refShape());
 	}
 
-	private function assertErr(result: EditResult): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, result: EditResult): Void {
 		switch result {
 			case Ok(_):
 				Assert.fail('expected Err, got Ok');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

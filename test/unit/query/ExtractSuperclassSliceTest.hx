@@ -43,7 +43,9 @@ class ExtractSuperclassSliceTest extends Test {
 	public function testStrandedRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function helper():Int return 1;\n'
 			+ '\tpublic function calc():Int return helper();\n}';
-		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['calc'], src, plugin()));
+		assertErr(
+			'reference member(s) staying behind', ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['calc'], src, plugin())
+		);
 	}
 
 	/** `extends` is inserted before an existing `implements` clause. */
@@ -96,38 +98,38 @@ class ExtractSuperclassSliceTest extends Test {
 	public function testAlreadyExtendsRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass S extends Other {\n\tpublic function new() { super(); }\n\tpublic function a():Void {}\n}';
-		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['a'], src, plugin()));
+		assertErr('already extends a class', ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['a'], src, plugin()));
 	}
 
 	/** A static member is refused. */
 	public function testStaticRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic static function s():Void {}\n}';
-		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['s'], src, plugin()));
+		assertErr('is static', ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['s'], src, plugin()));
 	}
 
 	/** An override member is refused. */
 	public function testOverrideRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass S {\n\tpublic function new() {}\n\toverride public function toString():String return \'s\';\n}';
-		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['toString'], src, plugin()));
+		assertErr('is an override', ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['toString'], src, plugin()));
 	}
 
 	/** A constructor is refused. */
 	public function testConstructorRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['new'], src, plugin()));
+		assertErr('cannot pull up a constructor', ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['new'], src, plugin()));
 	}
 
 	/** An unknown member is refused. */
 	public function testUnknownMemberRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['nope'], src, plugin()));
+		assertErr('has no instance member', ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['nope'], src, plugin()));
 	}
 
 	/** An empty member set is refused. */
 	public function testEmptyMembersRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', [], src, plugin()));
+		assertErr('no members named', ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', [], src, plugin()));
 	}
 
 	/**
@@ -301,12 +303,13 @@ class ExtractSuperclassSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result: MoveResult): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, result: MoveResult): Void {
 		switch result {
 			case Ok(changes, _):
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

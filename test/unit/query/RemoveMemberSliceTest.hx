@@ -17,12 +17,12 @@ class RemoveMemberSliceTest extends Test {
 
 	/** An unknown type is refused. */
 	public inline function testTypeNotFound(): Void {
-		assertErr('class C {\n\tvar x:Int;\n}\n', 'Nope', 'x');
+		assertErr('no type named', 'class C {\n\tvar x:Int;\n}\n', 'Nope', 'x');
 	}
 
 	/** An unknown member is refused. */
 	public inline function testMemberNotFound(): Void {
-		assertErr('class C {\n\tvar x:Int;\n}\n', 'C', 'nope');
+		assertErr('no member named', 'class C {\n\tvar x:Int;\n}\n', 'C', 'nope');
 	}
 
 	/**
@@ -31,7 +31,7 @@ class RemoveMemberSliceTest extends Test {
 	 * `cfg:{}` — a silent Ok that no longer type-checks.
 	 */
 	public inline function testAnonStructureFieldInMemberTypeIsRefused(): Void {
-		assertErr('class C {\n\tvar cfg:{ var inner:Int; } = { inner: 1 };\n}\n', 'C', 'inner');
+		assertErr('no member named', 'class C {\n\tvar cfg:{ var inner:Int; } = { inner: 1 };\n}\n', 'C', 'inner');
 	}
 
 	/** Remove a method by name; the sibling member survives. */
@@ -132,7 +132,7 @@ class RemoveMemberSliceTest extends Test {
 	 * sequence the language itself cannot express.
 	 */
 	public function testDocWithLiteralCloserIsUnparseable(): Void {
-		assertErr(docFixture('a literal `*/` closer and no'), 'A', 'victim');
+		assertErr('does not parse', docFixture('a literal `*/` closer and no'), 'A', 'victim');
 	}
 
 	/**
@@ -233,13 +233,13 @@ class RemoveMemberSliceTest extends Test {
 	 */
 	public function testUnguardedDuplicateNameIsRefused(): Void {
 		final source: String = 'class C {\n\tvar drop:Int;\n\n\tvar drop:String;\n}\n';
-		assertErr(source, 'C', 'drop');
+		assertErr('ambiguous', source, 'C', 'drop');
 	}
 
 	/** One conditional declaration and one unguarded: the pair cannot compile, so it is refused too. */
 	public function testMixedGuardedAndUnguardedDuplicateIsRefused(): Void {
 		final source: String = 'class C {\n\t#if a\n\tvar drop:Int;\n\t#end\n\tvar drop:String;\n}\n';
-		assertErr(source, 'C', 'drop');
+		assertErr('ambiguous', source, 'C', 'drop');
 	}
 
 	/**
@@ -408,12 +408,13 @@ class RemoveMemberSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(source: String, typeName: String, memberName: String): Void {
+	/** `result` is a refusal whose message contains `reason` — not any other `Err`. */
+	private function assertErr(reason: String, source: String, typeName: String, memberName: String): Void {
 		switch RemoveMember.removeMember(source, typeName, memberName, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.fail('expected Err, got Ok:\n$text');
-			case Err(_):
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 
