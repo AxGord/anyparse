@@ -380,6 +380,10 @@ The support modules hold no state — every member is a pure function of its arg
 
 What a run legitimately needs to remember goes on `CliContext`, an instance created per invocation and handed to the command. `--exit-on-empty` is the live example: parsed once by the dispatcher, consumed much later by whichever find-walker the run ended in. `Cli` carried it across that gap in a `private static var` — the one piece of process-scoped mutable state in the CLI, and the shape a second run in the same process can observe. A field on a per-run instance is the same value with none of that; that static went with the last `case` arm; nothing in the CLI layer is process-scoped now, and nothing mechanical pins that a command stays stateless (a `static var` on a `CliCommand` is caught by no lint rule and no test — an open item).
 
+### One question, one owner — found by the question
+
+A component that answers a question states it in its doc comment's first sentence, and the one owner of a question says so as `the one answer to "<question>"`. `apq owner "<question words>" <scope>` (`OwnerIndex`, over the scope's `SymbolIndex` and the doc each declaration owns, `SourceSlice.leadingDocBlock`) ranks the types and members whose names and docs carry the question's terms; `--list` prints the stated questions with their owners. It exists because `refs` / `callers` find a component by NAME, and the copy a review most often finds is logic written beside an owner its author could not name. An owner found is called or extended in place.
+
 ## Cross-family IR
 
 Not in scope for initial implementation. When it appears:

@@ -121,6 +121,20 @@ class ApqDocSourceTest extends Test {
 		Assert.isTrue(on.indexOf('\"source\"') >= 0, '--source must add the source key');
 	}
 
+	/** `leadingDocBlock` is the comment itself, and `docProse` its words on one line: no delimiters, gutter or breaks. */
+	public function testDocProseFoldsTheGutterOfTheOwnedComment(): Void {
+		final src: String = 'class C {\n\t/**\n\t * One  two.\n\t * Three.\n\t */\n\tvar count:Int = 0;\n}';
+		final block: Null<Span> = SourceSlice.leadingDocBlock(src, spanAt(src, 'var count'), new HaxeQueryPlugin().lexicalRegions(src));
+		Assert.notNull(block);
+		if (block == null) return;
+		Assert.equals('/**', src.substr(block.from, 3));
+		Assert.equals('One two. Three.', SourceSlice.docProse(src, block));
+
+		final run: String = '/// line one\n/// line two\nclass D {}';
+		final runBlock: Null<Span> = SourceSlice.leadingDocBlock(run, spanAt(run, 'class D'), new HaxeQueryPlugin().lexicalRegions(run));
+		Assert.equals('line one line two', runBlock == null ? null : SourceSlice.docProse(run, runBlock));
+	}
+
 	private function declHits(src: String, name: String): Array<RefHit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(src);

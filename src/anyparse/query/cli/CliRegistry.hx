@@ -47,6 +47,7 @@ import anyparse.query.cli.command.MutationSchemaCommand;
 import anyparse.query.cli.command.MutationVerdictCommand;
 import anyparse.query.cli.command.NewCommand;
 import anyparse.query.cli.command.OracleCommand;
+import anyparse.query.cli.command.OwnerCommand;
 import anyparse.query.cli.command.PatchCommand;
 import anyparse.query.cli.command.ProbeCommand;
 import anyparse.query.cli.command.PullUpCommand;
@@ -131,6 +132,7 @@ final class CliRegistry {
 			new SymbolsCommand(),
 			new ImportersCommand(),
 			new DeclaresCommand(),
+			new OwnerCommand(),
 			new LintCommand(),
 			new LintDiffCommand(),
 			new LintScoreCommand(),

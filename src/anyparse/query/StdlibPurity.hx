@@ -3,7 +3,8 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 
 /**
- * Which stdlib calls are provably pure, and how far — the ONE table every purity predicate reads. `PurityScan` asks
+ * Which stdlib calls are provably pure, and how far — the ONE table every purity predicate
+ * reads, and the one answer to "is this call effect-free, or transparent". `PurityScan` asks
  * `isTransparentCallee` before it lets a check hoist, merge or drop a call; `TypeResolver.isDeletionPure` (through
  * `TypeResolver.isPureStdlibCall`) asks `isEffectFreeCallee` before a fix deletes one. Two levels, because the two
  * questions differ: a discarded `Date.now()` changes nothing, while two of them are not one.

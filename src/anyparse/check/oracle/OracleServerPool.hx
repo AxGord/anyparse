@@ -17,7 +17,8 @@ typedef PoolServer = {
 
 /**
  * The run's own `haxe --wait` servers, one per configuration, for the plain typechecks a `--fix` run repeats over trees
- * that differ by a file or two: the risky fix's covering compile, its bisect probes, the oracle-assisted batch.
+ * that differ by a file or two: the risky fix's covering compile, its bisect probes, the oracle-assisted batch. The one
+ * answer to "which warm compiler server typechecks for this run".
  *
  * Started once the facts compiles are in (`LintCommand`), when the cores those took are free again: each server's first
  * compile runs in the background then, so the first typecheck through it is already warm. They live as the jobs of a

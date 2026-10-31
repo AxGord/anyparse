@@ -34,21 +34,21 @@ typedef CommentTok = { from: Int, to: Int, isLine: Bool };
 final class SourceComments {
 
 	/**
-	 * The doc-comment opener — what distinguishes documentation from a plain `/* … *\/` banner.
-	 */
-	private static final DOC_OPEN: String = '/**';
-
-	/**
 	 * The line-comment opener — also the continuation marker every line after the first of a
 	 * line-comment RUN carries, which is what `normalizeCommentBody` folds away in `lineRun` mode.
 	 */
-	private static final LINE_OPEN: String = '//';
+	public static final LINE_OPEN: String = '//';
 
 	/**
 	 * The block-comment gutter marker — one per continuation line, the default
 	 * `normalizeCommentBody` folds.
 	 */
-	private static final GUTTER_STAR: String = '*';
+	public static final GUTTER_STAR: String = '*';
+
+	/**
+	 * The doc-comment opener — what distinguishes documentation from a plain `/* … *\/` banner.
+	 */
+	private static final DOC_OPEN: String = '/**';
 
 	/**
 	 * Whether `text` holds a `//` or `/*` comment marker. The primitive under
@@ -639,7 +639,7 @@ final class SourceComments {
 	/**
 	 * Normalize a comment BODY for cross-line literal matching: fold each line
 	 * continuation — a `\n` or `\r\n`, the following whitespace, blank lines, and
-	 * one continuation marker per line — into a single space, so a phrase wrapped
+	 * one continuation marker per line, a line run's whole `///` mark — into a single space, so a phrase wrapped
 	 * across two lines reads as one run. `lineRun` picks the marker — the gutter star of a
 	 * block comment, the `//` opener when the body is a run of line comments merged by
 	 * `collectCommentUnits`. It is REQUIRED and not defaulted: a caller who forgets it would
@@ -917,6 +917,8 @@ final class SourceComments {
 				markerSeen = false;
 			} else if (!markerSeen && body.substr(i, marker.length) == marker) {
 				i += marker.length;
+				// A line-comment run may open every line with a longer run of the same mark (`///`); all of it is gutter.
+				if (marker == LINE_OPEN) while (i < n && body.fastCodeAt(i) == LINE_OPEN.fastCodeAt(0)) i++;
 				markerSeen = true;
 			} else {
 				break;

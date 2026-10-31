@@ -33555,6 +33555,36 @@
 			"find": "if (base.status != tip.status)",
 			"replace": "if (false)",
 			"note": "parity no longer compares exit statuses, so an engine that starts refusing an invocation with the same output reads as equal"
+		},
+		{
+			"name": "M-OWNER-QUESTION-UNREAD",
+			"type": "anyparse.query.OwnerIndex",
+			"method": "ownedQuestion",
+			"force": "null",
+			"note": "a doc's stated question is never read, so owner --list is empty and an owned question no longer ranks its owner first"
+		},
+		{
+			"name": "M-OWNER-DOC-BLIND",
+			"type": "anyparse.query.OwnerIndex",
+			"method": "entryOf",
+			"find": "SourceSlice.docProse(source, block)",
+			"replace": "''",
+			"note": "the ranking reads names only, so a declaration whose doc alone answers the question is never found"
+		},
+		{
+			"name": "M-OWNER-RARITY-BLIND",
+			"type": "anyparse.query.OwnerIndex",
+			"method": "rank",
+			"find": "Math.log(1 + entries.length / (_documentFrequency[term] ?? 1))",
+			"replace": "1.0",
+			"note": "every term counts alike, so a word every declaration carries ties with the rare word that names the concept"
+		},
+		{
+			"name": "M-OWNER-TERMS-EMPTY",
+			"type": "anyparse.query.OwnerIndex",
+			"method": "terms",
+			"force": "[]",
+			"note": "a question splits into no terms, so owner ranks nothing and no duplicated question finds its owner"
 		}
 	]
 }

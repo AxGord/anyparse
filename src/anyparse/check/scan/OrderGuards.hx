@@ -33,7 +33,10 @@ typedef OrderContext = {
 	final survivors: Map<String, Bool>;
 };
 
-/** What the caller's typing knows about calls, for a bound over storage a call might change. */
+/**
+ * What the caller's typing knows about calls, for a bound over storage a call might change: a hook the caller fills
+ * from the owners, never an answer of its own — whether a call is effect-free is `StdlibPurity.isEffectFreeCallee`'s.
+ */
 typedef CallEffects = {
 
 	/** Whether the call or construction `call` changes no storage the program can read. */

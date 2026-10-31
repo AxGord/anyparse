@@ -9,7 +9,7 @@ import anyparse.query.GrammarPlugin.RefShape;
  * none of its body's, a statement other than a list's last none of its own; a conditional, a `switch` with its arms, a
  * `try` with its `catch` clauses and an expression statement hand on what their own position uses; and every other node
  * — an initializer, an argument, a lambda's body — may use what it holds, the conservative answer where no type is read.
- * A macro reification (`opaqueKinds`) is not walked.
+ * A macro reification (`opaqueKinds`) is not walked. The one answer to "may the value of a block's last statement be used".
  */
 @:nullSafety(Strict)
 final class TailValueScan {

@@ -953,6 +953,22 @@ class CommentRewriteSliceTest extends Test {
 		Assert.isTrue(text.contains('width.\n\t */'), 'and so did the closer: $text');
 	}
 
+	/** A `///` run's whole mark is gutter, so a literal find crosses its line break and the rewrite keeps the `///`. */
+	public function testALiteralFindCrossesATripleSlashRun(): Void {
+		final src: String = 'class C {\n\t/// Returns the first\n\t/// value of the list.\n\tvar x = 1;\n}';
+		final text: String = okText(cr(src, 'first value', 'XX', false));
+		Assert.isTrue(text.contains('\t/// Returns the XX of the list.\n'), text);
+	}
+
+	/**
+	 * A slash-only line inside a `//` run folds like a blank separator, so a find across it is refused rather than
+	 * silently deleting the line.
+	 */
+	public function testAFindAcrossASlashOnlyRunLineIsRefused(): Void {
+		final src: String = 'class C {\n\t// Banner text\n\t////////////////////\n\t// next section here\n\tvar x = 1;\n}';
+		Assert.isTrue(errText(cr(src, 'Banner text next', 'JOINED', false)).contains('blank comment line'));
+	}
+
 	private inline function bullets(): String {
 		return '/**\n * Lead sentence.\n *\n * - M1 first item\n * - M2 second item\n * - M3 third item\n */\nclass C {}';
 	}

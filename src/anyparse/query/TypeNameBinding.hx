@@ -33,7 +33,8 @@ enum Tier {
 }
 
 /**
- * THE meaning of a SIMPLE type name written in a file — the one implementation every reader of a bare
+ * THE meaning of a SIMPLE type name written in a file, the one answer to "which declaration
+ * does this simple type name bind" — the one implementation every reader of a bare
  * type name asks, through `TypeRefIndex.names` (`TypeRefIndex.resolveTypeRefAll` answers a simple
  * reference here too). Tier by tier, in the order the Haxe compiler resolves it (each tier probed on
  * 4.3.7, `docs/decisions.md`):

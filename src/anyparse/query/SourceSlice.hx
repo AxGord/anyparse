@@ -57,6 +57,18 @@ final class SourceSlice {
 	 * run of full-line line comments is returned as one block.
 	 */
 	public static function leadingDoc(source: String, span: Null<Span>, regions: Array<LexRegion>): Null<String> {
+		final block: Null<Span> = leadingDocBlock(source, span, regions);
+		if (block == null) return null;
+		final lineFrom: Int = block.from == 0 ? 0 : source.lastIndexOf('\n', block.from - 1) + 1;
+		final newline: Int = source.indexOf('\n', block.to);
+		return source.substring(lineFrom, newline < 0 ? source.length : newline);
+	}
+
+	/**
+	 * The comment that documents the declaration whose `span.from` is given, as the span of the comment itself, or null when
+	 * none is adjacent: the one reading of which comment a declaration owns, which `leadingDoc` prints by whole lines.
+	 */
+	public static function leadingDocBlock(source: String, span: Null<Span>, regions: Array<LexRegion>): Null<Span> {
 		if (span == null) return null;
 		final lineStart: Array<Int> = [];
 		final lineEnd: Array<Int> = [];
@@ -97,9 +109,21 @@ final class SourceSlice {
 		// declaration's code as this one's documentation. Same rule the deletion span
 		// uses (`RefactorSupport.startsItsLine`), so the read and the write side agree
 		// on which comment belongs to whom.
-		return block == null || !SourceText.startsItsLine(source, block.from)
-			? null
-			: source.substring(lineStart[lineOfOffset(lineStart, lineEnd, block.from)], lineEnd[i]);
+		return block == null || !SourceText.startsItsLine(source, block.from) ? null : block;
+	}
+
+	/**
+	 * The words of the comment `block` as one line of prose: its delimiters, the opener's repeated marker, the gutter and the
+	 * line breaks folded away (`SourceComments.normalizeCommentBody`) and every whitespace run collapsed to one space.
+	 */
+	public static function docProse(source: String, block: Span): String {
+		final isLine: Bool = source.substr(block.from, SourceComments.LINE_OPEN.length) == SourceComments.LINE_OPEN;
+		final body: Span = SourceComments.commentBody(source, { from: block.from, to: block.to, isLine: isLine });
+		final text: String = SourceComments.normalizeCommentBody(source.substring(body.from, body.to), isLine).text;
+		final marker: Int = (isLine ? SourceComments.LINE_OPEN : SourceComments.GUTTER_STAR).fastCodeAt(0);
+		var start: Int = 0;
+		while (start < text.length && text.fastCodeAt(start) == marker) start++;
+		return ~/\s+/g.replace(text.substr(start), ' ').trim();
 	}
 
 	/** Whether `code` is a space, tab or carriage return — the trailing bytes a line may carry past its last real character. */
