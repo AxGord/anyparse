@@ -50,11 +50,15 @@ final class WriteVerification {
 	public static function settle(op: String, journal: WriteJournal, exit: Int, forced: Bool): Int {
 		final changed: Array<String> = journal.changed();
 		if (changed.length == 0 || !forced && !journal.createdOrDeleted()) return exit;
-		final oracles: Array<OracleConfig> = try oraclesOf(changed) catch (exception: Exception) {
+		final oracles: Array<OracleConfig> = try {
+			oraclesOf(changed);
+		} catch (exception: Exception) {
 			CliIo.stderr('apq $op: unverified — the apqlint.json naming the builds could not be read: ${exception.message}\n');
 			return exit;
 		}
-		if (oracles.length != 0) return try judge(op, journal, oracles, changed, exit) catch (exception: Exception) {
+		if (oracles.length != 0) return try {
+			judge(op, journal, oracles, changed, exit);
+		} catch (exception: Exception) {
 			journal.rollback();
 			CliIo.stderr('apq $op: the typecheck after the write threw: ${exception.message} — every file put back\n');
 			ExitCode.EXIT_RUNTIME;

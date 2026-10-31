@@ -99,7 +99,9 @@ final class WriteJournal {
 	public static function during<T>(journal: WriteJournal, body: () -> T): T {
 		final outer: Null<WriteJournal> = recording;
 		recording = journal;
-		final result: T = try body() catch (exception: Exception) {
+		final result: T = try {
+			body();
+		} catch (exception: Exception) {
 			recording = outer;
 			throw exception;
 		}

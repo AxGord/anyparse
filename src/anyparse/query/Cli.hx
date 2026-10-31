@@ -309,8 +309,9 @@ final class Cli {
 		final run: () -> Int = if (chooseLanguage) {
 			final chosen: LanguageChoiceResult = LanguageChoice.choose(rest, command, CliIo.readStdin);
 			() -> command.run(chosen.args, new CliContext(requireMatch, postWriteFix, chosen.stdin));
-		} else
+		} else {
 			() -> command.run(rest, new CliContext(requireMatch, postWriteFix));
+		};
 		if (!verify) return run();
 		final journal: WriteJournal = new WriteJournal();
 		return WriteVerification.settle(cmd, journal, WriteJournal.during(journal, run), forced);

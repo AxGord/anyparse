@@ -76,7 +76,9 @@ class WriteJournalTest extends Test {
 				throw new haxe.Exception('the run failed');
 			});
 			false;
-		} catch (exception: haxe.Exception) true;
+		} catch (exception: haxe.Exception) {
+			true;
+		};
 		Assert.isTrue(threw, 'the body\'s exception reaches the caller');
 		CliIo.writeFile('$dir/a.txt', 'after the run');
 		Assert.equals(0, journal.changed().length, 'a write after the run is not recorded in its journal');
