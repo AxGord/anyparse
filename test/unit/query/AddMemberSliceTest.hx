@@ -83,19 +83,19 @@ class AddMemberSliceTest extends Test {
 	/** Refuse an unknown type name. */
 	public function testRefuseUnknownType(): Void {
 		final source: String = 'class C {\n\tvar x:Int;\n}\n';
-		assertRefused(source, 'Nope', 'var z:Int;');
+		assertRefused('no type named', source, 'Nope', 'var z:Int;');
 	}
 
 	/** Refuse an ambiguous type name (two decls share it). */
 	public function testRefuseAmbiguousType(): Void {
 		final source: String = 'class C {}\n\nclass C {}\n';
-		assertRefused(source, 'C', 'var z:Int;');
+		assertRefused('ambiguous: 2 types', source, 'C', 'var z:Int;');
 	}
 
 	/** Refuse a malformed member — the whole-file re-emit fails to parse. */
 	public function testRefuseMalformedMember(): Void {
 		final source: String = 'class C {\n\tvar x:Int;\n}\n';
-		assertRefused(source, 'C', '@@@ not haxe');
+		assertRefused('result does not parse', source, 'C', '@@@ not haxe');
 	}
 
 	/**
@@ -104,7 +104,7 @@ class AddMemberSliceTest extends Test {
 	 */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
 		final source: String = 'class C {\n    var x:Int;\n}\n';
-		assertRefused(source, 'C', 'var y:Int;');
+		assertRefused('not in canonical form', source, 'C', 'var y:Int;');
 	}
 
 	/**
@@ -303,14 +303,13 @@ class AddMemberSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, typeName: String, memberText: String, reformat: Bool = false): Void {
+	private function assertRefused(reason: String, source: String, typeName: String, memberText: String, reformat: Bool = false): Void {
 		final result: EditResult = addOf(source, typeName, memberText, reformat);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

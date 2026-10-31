@@ -540,34 +540,34 @@ class PatchSliceTest extends Test {
 
 	public function testNotFoundRefused(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
-		assertRefused(source, BySelector('FnMember:f'), 'return 9;', 'return 2;');
+		assertRefused('does not occur in the resolved FnMember', source, BySelector('FnMember:f'), 'return 9;', 'return 2;');
 	}
 
 	public function testAmbiguousRefused(): Void {
 		// `1;` occurs in both statements — the fragment must be widened.
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n}\n';
-		assertRefused(source, BySelector('FnMember:f'), '1', '2');
+		assertRefused('occurs 2 times', source, BySelector('FnMember:f'), '1', '2');
 	}
 
 	public function testAmbiguousDedentedRefused(): Void {
 		// Two identical trimmed lines — the line-wise fallback must also refuse.
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\ttrace(1);\n\t\ttrace(1);\n\t}\n}\n';
-		assertRefused(source, BySelector('FnMember:f'), 'trace(1);', 'trace(2);');
+		assertRefused('occurs 2 times', source, BySelector('FnMember:f'), 'trace(1);', 'trace(2);');
 	}
 
 	public function testIdenticalRefused(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
-		assertRefused(source, BySelector('FnMember:f'), 'return 1;', 'return 1;');
+		assertRefused('are identical', source, BySelector('FnMember:f'), 'return 1;', 'return 1;');
 	}
 
 	public function testEmptyOldRefused(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
-		assertRefused(source, BySelector('FnMember:f'), '', 'return 2;');
+		assertRefused('is empty', source, BySelector('FnMember:f'), '', 'return 2;');
 	}
 
 	public function testUnparseableResultRefused(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
-		assertRefused(source, BySelector('FnMember:f'), 'return 1;', 'return ((;');
+		assertRefused('result does not parse', source, BySelector('FnMember:f'), 'return 1;', 'return ((;');
 	}
 
 	public function testFragmentOutsideNodeNotSeen(): Void {
@@ -601,7 +601,7 @@ class PatchSliceTest extends Test {
 			{ oldText: 'return 1 + 2;', newText: 'return 9;' },
 			{ oldText: '1 + 2', newText: '3' }
 		];
-		assertManyRefused(source, pairs);
+		assertManyRefused('overlap', source, pairs);
 	}
 
 	public function testDuplicateOldPairsRefused(): Void {
@@ -611,7 +611,7 @@ class PatchSliceTest extends Test {
 			{ oldText: 'return 1;', newText: 'return 2;' },
 			{ oldText: 'return 1;', newText: 'return 3;' }
 		];
-		assertManyRefused(source, pairs);
+		assertManyRefused('overlap', source, pairs);
 	}
 
 	public function testSecondPairNotFoundRefused(): Void {
@@ -620,7 +620,7 @@ class PatchSliceTest extends Test {
 			{ oldText: 'return 1;', newText: 'return 2;' },
 			{ oldText: 'missing();', newText: 'present();' }
 		];
-		assertManyRefused(source, pairs);
+		assertManyRefused('pair 2:', source, pairs);
 	}
 
 	/**
@@ -655,7 +655,7 @@ class PatchSliceTest extends Test {
 		// addressed. The region is trimmed to the bytes the typedef owns, so the
 		// fragment is simply not found.
 		final source: String = '/** typedef doc */\ntypedef T = {\n\tfinal a:Int;\n}\n\n/** class doc */\nclass C {}\n';
-		assertRefused(source, BySelector('TypedefDecl:T'), 'class doc', 'HIJACKED');
+		assertRefused('does not occur in the resolved TypedefDecl', source, BySelector('TypedefDecl:T'), 'class doc', 'HIJACKED');
 	}
 
 	/**
@@ -1086,13 +1086,12 @@ class PatchSliceTest extends Test {
 		}
 	}
 
-	private function assertManyRefused(source: String, pairs: Array<{ oldText: String, newText: String }>): Void {
+	private function assertManyRefused(reason: String, source: String, pairs: Array<{ oldText: String, newText: String }>): Void {
 		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 
@@ -1105,13 +1104,12 @@ class PatchSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, target: ReplaceTarget, oldText: String, newText: String): Void {
+	private function assertRefused(reason: String, source: String, target: ReplaceTarget, oldText: String, newText: String): Void {
 		switch Patch.patchNode(source, target, oldText, newText, false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

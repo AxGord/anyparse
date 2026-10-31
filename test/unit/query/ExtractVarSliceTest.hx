@@ -93,7 +93,7 @@ class ExtractVarSliceTest extends Test {
 	public function testRefuseBracelessBranchSubExpr(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, b:Int):Int {\n\t\tif (a > 0) return a + b;\n\t\treturn 0;\n\t}\n}';
 		// Line 3 col 21 — the `a` in the braceless then-branch `a + b`.
-		assertRefused(source, 3, 21, 't');
+		assertRefused('is not inside a { } block', source, 3, 21, 't');
 	}
 
 	/**
@@ -103,7 +103,7 @@ class ExtractVarSliceTest extends Test {
 	public function testRefuseCursorNotOnExpressionStart(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, b:Int):Int {\n\t\tvar y = a + b;\n\t\treturn y;\n\t}\n}';
 		// Line 3 col 12 — the space between `a` and `+`.
-		assertRefused(source, 3, 12, 't');
+		assertRefused('no expression starts at', source, 3, 12, 't');
 	}
 
 	/**
@@ -113,7 +113,7 @@ class ExtractVarSliceTest extends Test {
 	public function testRefuseInvalidName(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, b:Int):Int {\n\t\tvar y = a + b;\n\t\treturn y;\n\t}\n}';
 		// Line 3 col 11 — the `a`; name `1bad` is not a valid identifier.
-		assertRefused(source, 3, 11, '1bad');
+		assertRefused('is not a valid identifier', source, 3, 11, '1bad');
 	}
 
 	/**
@@ -124,7 +124,7 @@ class ExtractVarSliceTest extends Test {
 	public function testRefuseNameCollidesWithParam(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, b:Int, x:Int):Int {\n\t\treturn a + b;\n\t}\n}';
 		// Line 3 col 10 — the `a`; name `x` already names a parameter.
-		assertRefused(source, 3, 10, 'x');
+		assertRefused('already names a parameter or local', source, 3, 10, 'x');
 	}
 
 	/**
@@ -152,7 +152,7 @@ class ExtractVarSliceTest extends Test {
 	public function testRefuseCollidesFinalMethodParam(): Void {
 		final source: String = 'class C {\n\tfinal function d(a:Int, b:Int, x:Int):Int {\n\t\treturn a + b;\n\t}\n}';
 		// Line 3 col 10 — the `a`; name `x` already names a param of the final method.
-		assertRefused(source, 3, 10, 'x');
+		assertRefused('already names a parameter or local', source, 3, 10, 'x');
 	}
 
 	/**
@@ -164,7 +164,7 @@ class ExtractVarSliceTest extends Test {
 		final source: String =
 			'class C {\n\tfunction f(a:Int, b:Int, m:Map<Int, Int>):Int {\n\t\tfor (k => v in m) trace(k + v);\n\t\treturn a + b;\n\t}\n}';
 		// Line 4 col 10 — the `a`; name `v` already names the loop's value binder.
-		assertRefused(source, 4, 10, 'v');
+		assertRefused('already names a parameter or local', source, 4, 10, 'v');
 	}
 
 	private function assertExtract(source: String, line: Int, col: Int, name: String, expected: String): Void {
@@ -179,14 +179,13 @@ class ExtractVarSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, line: Int, col: Int, name: String): Void {
+	private function assertRefused(reason: String, source: String, line: Int, col: Int, name: String): Void {
 		final result: ExtractResult = extractOf(source, line, col, name);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

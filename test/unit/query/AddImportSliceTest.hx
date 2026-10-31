@@ -104,7 +104,7 @@ class AddImportSliceTest extends Test {
 	/** Refuse an import already present as the same kind. */
 	public function testRefuseDuplicateImport(): Void {
 		final source: String = 'import a.B;\n\nclass C {}\n';
-		assertRefused(source, 'a.B', false);
+		assertRefused('already imported: a.B', source, 'a.B', false);
 	}
 
 	/**
@@ -116,7 +116,7 @@ class AddImportSliceTest extends Test {
 	 */
 	public function testRefuseDuplicateInsideConditional(): Void {
 		final source: String = '#if sys\nimport a.B;\n#end\n\nclass C {}\n';
-		assertRefused(source, 'a.B', false);
+		assertRefused('inside a conditional-compilation', source, 'a.B', false);
 	}
 
 	/** `import a.B` does NOT block `using a.B` — dedup is per-kind. */
@@ -129,7 +129,7 @@ class AddImportSliceTest extends Test {
 	/** Refuse a non-canonical file (no blank lines) without `--reformat`. */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
 		final source: String = 'package foo;\nimport a.B;\nclass C {}\n';
-		assertRefused(source, 'c.D', false);
+		assertRefused('not in canonical form', source, 'c.D', false);
 	}
 
 	/** `reformat` proceeds on a non-canonical file, canonicalising it. */
@@ -254,8 +254,8 @@ class AddImportSliceTest extends Test {
 
 	/** A `using` spelled as a statement is deduplicated like one passed under the flag, guarded copies included. */
 	public function testUsingStatementDuplicateIsRefused(): Void {
-		assertRefused('package foo;\n\nusing a.B;\n\nclass C {}\n', 'using a.B;', false);
-		assertRefused('package foo;\n\n#if sys\nusing a.B;\n#end\n\nclass C {}\n', 'using a.B;', false);
+		assertRefused('already imported: a.B', 'package foo;\n\nusing a.B;\n\nclass C {}\n', 'using a.B;', false);
+		assertRefused('inside a conditional-compilation', 'package foo;\n\n#if sys\nusing a.B;\n#end\n\nclass C {}\n', 'using a.B;', false);
 	}
 
 	/**
@@ -326,14 +326,13 @@ class AddImportSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, path: String, isUsing: Bool, reformat: Bool = false): Void {
+	private function assertRefused(reason: String, source: String, path: String, isUsing: Bool, reformat: Bool = false): Void {
 		final result: EditResult = addOf(source, path, isUsing, reformat);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

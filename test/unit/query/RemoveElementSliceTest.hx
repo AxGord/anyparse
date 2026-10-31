@@ -114,13 +114,13 @@ class RemoveElementSliceTest extends Test {
 	/** A non-canonical source without reformat is refused by the gate. */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
 		final source: String = 'class C {\n    var a:Int;\n    var b:Int;\n}\n';
-		assertRefused(source, 3, 5, false);
+		assertRefused('not in canonical form', source, 3, 5, false);
 	}
 
 	/** A position not on an element's first token is refused. */
 	public function testRefuseNotOnElementStart(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\ta();\n\t}\n}\n';
-		assertRefused(source, 3, 1, true);
+		assertRefused('not on the first token of an element', source, 3, 1, true);
 	}
 
 	/** remove-element tolerates a cursor INSIDE an element's identifier, not only on its first character (was an exact-position trap). */
@@ -189,13 +189,12 @@ class RemoveElementSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, line: Int, col: Int, reformat: Bool): Void {
+	private function assertRefused(reason: String, source: String, line: Int, col: Int, reformat: Bool): Void {
 		switch removeOf(source, line, col, reformat) {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

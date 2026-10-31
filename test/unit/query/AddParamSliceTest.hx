@@ -121,7 +121,7 @@ class AddParamSliceTest extends Test {
 	public function testRefuseRequiredParam(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int):Void {}\n}';
 		// Line 2 col 11 — the `f`; `b:Int` is required (no default, not optional).
-		assertRefused(source, 2, 11, 'b:Int');
+		assertRefused('requires a default value', source, 2, 11, 'b:Int');
 	}
 
 	/**
@@ -131,7 +131,7 @@ class AddParamSliceTest extends Test {
 	public function testRefuseNameCollidesWithExistingParam(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, b:Int):Void {}\n}';
 		// Line 2 col 11 — the `f`; `a` already names a parameter.
-		assertRefused(source, 2, 11, 'a:Int = 0');
+		assertRefused('is already a parameter', source, 2, 11, 'a:Int = 0');
 	}
 
 	/**
@@ -141,7 +141,7 @@ class AddParamSliceTest extends Test {
 	public function testRefuseCursorOffFunction(): Void {
 		final source: String = 'class C {\n\tvar x:Int = 0;\n}';
 		// Line 2 col 6 — the `x` field, not a function.
-		assertRefused(source, 2, 6, '?flag:Bool');
+		assertRefused('is not on a function', source, 2, 6, '?flag:Bool');
 	}
 
 	/**
@@ -178,14 +178,13 @@ class AddParamSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, line: Int, col: Int, paramText: String): Void {
+	private function assertRefused(reason: String, source: String, line: Int, col: Int, paramText: String): Void {
 		final result: AddParamResult = addOf(source, line, col, paramText);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

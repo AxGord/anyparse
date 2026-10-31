@@ -27,7 +27,10 @@ class InlineSliceTest extends Test {
 	 * `$(a + b)` — a valid string, so the re-parse gate would pass a silent miscompile.
 	 */
 	public inline function testRefusesBracelessInterpolationRead(): Void {
-		assertRefused("class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v $x';\n\t}\n}", 3, 3);
+		assertRefused(
+			'braceless string interpolation',
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v $x';\n\t}\n}", 3, 3
+		);
 	}
 
 	/**
@@ -47,7 +50,10 @@ class InlineSliceTest extends Test {
 	 * `rename` refuses the same shape.
 	 */
 	public inline function testRefusesUnreadableInterpolationBlockInScope(): Void {
-		assertRefused("class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v \\x24{x}' + x;\n\t}\n}", 3, 3);
+		assertRefused(
+			'escape-spelled string interpolation',
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v \\x24{x}' + x;\n\t}\n}", 3, 3
+		);
 	}
 
 	/**
@@ -109,7 +115,7 @@ class InlineSliceTest extends Test {
 	 */
 	public function testRefuseReassignedVariable(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int):Int {\n\t\tvar x = 1;\n\t\tx = 2;\n\t\treturn x;\n\t}\n}';
-		assertRefused(source, 3, 3);
+		assertRefused('is reassigned', source, 3, 3);
 	}
 
 	/**
@@ -118,7 +124,7 @@ class InlineSliceTest extends Test {
 	 */
 	public function testRefuseInitializerWithCall(): Void {
 		final source: String = 'class C {\n\tfunction g():Int return 1;\n\tfunction f():Int {\n\t\tvar x = g();\n\t\treturn x + x;\n\t}\n}';
-		assertRefused(source, 4, 3);
+		assertRefused('is not inline-safe', source, 4, 3);
 	}
 
 	/**
@@ -127,7 +133,7 @@ class InlineSliceTest extends Test {
 	 */
 	public function testRefuseInitializerReadsReassignedFreeVar(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int):Int {\n\t\tvar x = a + 1;\n\t\ta = 9;\n\t\treturn x;\n\t}\n}';
-		assertRefused(source, 3, 3);
+		assertRefused('depends on reassigned variable', source, 3, 3);
 	}
 
 	/**
@@ -137,7 +143,7 @@ class InlineSliceTest extends Test {
 	public function testRefuseCursorOnParameter(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int):Int {\n\t\treturn a + a;\n\t}\n}';
 		// Line 2 col 13 — the param `a` decl.
-		assertRefused(source, 2, 13);
+		assertRefused('is not a local variable', source, 2, 13);
 	}
 
 	/**
@@ -147,7 +153,7 @@ class InlineSliceTest extends Test {
 	public function testRefuseCursorOnForIterator(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar t = 0;\n\t\tfor (i in 0...10) t += i;\n\t\treturn t;\n\t}\n}';
 		// Line 4 col 3 — the `for` decl (iterator `i`).
-		assertRefused(source, 4, 3);
+		assertRefused('is not a local variable', source, 4, 3);
 	}
 
 	/**
@@ -156,7 +162,7 @@ class InlineSliceTest extends Test {
 	 */
 	public function testRefuseNoReads(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar x = 5;\n\t\treturn 0;\n\t}\n}';
-		assertRefused(source, 3, 3);
+		assertRefused('has no reads to inline', source, 3, 3);
 	}
 
 	/**
@@ -188,14 +194,13 @@ class InlineSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, line: Int, col: Int): Void {
+	private function assertRefused(reason: String, source: String, line: Int, col: Int): Void {
 		final result: InlineResult = inlineOf(source, line, col);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

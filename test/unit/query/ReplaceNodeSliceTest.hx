@@ -40,25 +40,25 @@ class ReplaceNodeSliceTest extends Test {
 	/** Refuse a selector that matches no node. */
 	public function testRefuseSelectorNoMatch(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {}\n}\n';
-		assertRefused(source, BySelector('FnMember:nope'), 'x');
+		assertRefused('matched no nodes', source, BySelector('FnMember:nope'), 'x');
 	}
 
 	/** Refuse an ambiguous selector — `VarMember` matches both fields. */
 	public function testRefuseSelectorAmbiguous(): Void {
 		final source: String = 'class C {\n\tvar a:Int;\n\tvar b:Int;\n}\n';
-		assertRefused(source, BySelector('VarMember'), 'var c:Int;');
+		assertRefused('matched 2 nodes', source, BySelector('VarMember'), 'var c:Int;');
 	}
 
 	/** Refuse a malformed replacement — the whole-file re-emit fails. */
 	public function testRefuseMalformedReplacement(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {}\n}\n';
-		assertRefused(source, BySelector('FnMember:f'), '@@@ not haxe');
+		assertRefused('result does not parse', source, BySelector('FnMember:f'), '@@@ not haxe');
 	}
 
 	/** Refuse a non-canonical file (4-space indent) without `--reformat`. */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
 		final source: String = 'class C {\n    function f():Void {}\n}\n';
-		assertRefused(source, BySelector('FnMember:f'), 'function h():Void {}');
+		assertRefused('not in canonical form', source, BySelector('FnMember:f'), 'function h():Void {}');
 	}
 
 	/**
@@ -97,7 +97,7 @@ class ReplaceNodeSliceTest extends Test {
 	/** A cursor with no node of the requested kind is refused. */
 	public function testRefuseKindNoMatch(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = a + b;\n\t}\n}\n';
-		assertRefused(source, ByKindPosition(3, 11, 'Mul'), 'q', true);
+		assertRefused('is not on a "Mul" node', source, ByKindPosition(3, 11, 'Mul'), 'q', true);
 	}
 
 	/**
@@ -137,8 +137,8 @@ class ReplaceNodeSliceTest extends Test {
 	 */
 	public function testBareModifierNewSourceRefused(): Void {
 		final source: String = 'class C {\n\tprivate static function walk():Void {\n\t\ttrace(1);\n\t}\n\n\tfunction next():Void {}\n}\n';
-		assertRefused(source, BySelector('FnMember:walk'), 'public');
-		assertRefused(source, ByPosition(2, 2), ' final ');
+		assertRefused('bare modifier keyword "public"', source, BySelector('FnMember:walk'), 'public');
+		assertRefused('bare modifier keyword "final"', source, ByPosition(2, 2), ' final ');
 	}
 
 	/**
@@ -198,14 +198,13 @@ class ReplaceNodeSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, target: ReplaceTarget, newSource: String, reformat: Bool = false): Void {
+	private function assertRefused(reason: String, source: String, target: ReplaceTarget, newSource: String, reformat: Bool = false): Void {
 		final result: EditResult = replaceOf(source, target, newSource, reformat);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

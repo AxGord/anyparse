@@ -8,6 +8,7 @@ import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.io.Path;
+import sys.FileSystem;
 
 using Lambda;
 
@@ -140,6 +141,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 			source = readStdin();
 			fileLabel = '<stdin>';
 		} else if (file != null) {
+			if (refuseMissingFile(file)) return EXIT_RUNTIME;
 			source = CliIo.readSourceForParse(file);
 			fileLabel = file;
 		} else {
@@ -158,15 +160,8 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		// added / removed / reshaped in one shot, without a second `hxq diff`
 		// call. Exit non-zero when the writer output fails to re-parse
 		// (writer produced syntactically broken Haxe).
-		if (o.writerOutput) {
-			if (!o.typeRefs) return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
-			CliIo.stderr('apq ast: --type-refs cannot be combined with --writer-output (the type-ref projection is not writable)\n');
-			return EXIT_USAGE;
-		}
-		if (o.writerDiff) {
-			CliIo.stderr('apq ast: --diff requires --writer-output (it diffs input vs writer-emitted output)\n');
-			return EXIT_USAGE;
-		}
+		final writerExit: Null<Int> = writerModeExit(o, plugin, source, file, fileLabel);
+		if (writerExit != null) return writerExit;
 
 		// `--type-refs` swaps ONLY the projection: every downstream branch
 		// (--at / --select / --count / --json / --depth) renders it through
@@ -754,6 +749,25 @@ final class AstCommand implements CliCommand implements StdinDocument {
 				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, plugin.lexicalRegions(source), o.spans)
 		);
 		return EXIT_OK;
+	}
+
+	private static function refuseMissingFile(file: String): Bool {
+		if (FileSystem.exists(file)) return false;
+		CliIo.stderr('apq ast: no such file "$file"\n');
+		return true;
+	}
+
+	private static function writerModeExit(
+		o: AstOpts, plugin: GrammarPlugin, source: String, file: Null<String>, fileLabel: String
+	): Null<Int> {
+		if (o.writerOutput) {
+			if (!o.typeRefs) return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
+			CliIo.stderr('apq ast: --type-refs cannot be combined with --writer-output (the type-ref projection is not writable)\n');
+			return EXIT_USAGE;
+		}
+		if (!o.writerDiff) return null;
+		CliIo.stderr('apq ast: --diff requires --writer-output (it diffs input vs writer-emitted output)\n');
+		return EXIT_USAGE;
 	}
 
 }

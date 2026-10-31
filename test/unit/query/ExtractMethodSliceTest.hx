@@ -70,19 +70,19 @@ class ExtractMethodSliceTest extends Test {
 	/** A non-canonical source without `reformat` is refused by the gate. */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
 		final source: String = 'class C {\n    function f():Void {\n        var a = 1;\n        trace(a);\n    }\n}\n';
-		assertRefused(source, 4, 9, 4, 9, 'helper', false);
+		assertRefused('not in canonical form', source, 4, 9, 4, 9, 'helper', false);
 	}
 
 	/** A range containing a `return` cannot be wrapped in a closure. */
 	public function testRefuseReturnInRange(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\tif (a > 0) return a;\n\t\treturn 0;\n\t}\n}\n';
-		assertRefused(source, 4, 3, 4, 3, 'helper', true);
+		assertRefused('contains return / break / continue', source, 4, 3, 4, 3, 'helper', true);
 	}
 
 	/** An outer local mutated in the range and read after it is refused. */
 	public function testRefuseOuterLocalMutated(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar sum = 0;\n\t\tsum += 5;\n\t\treturn sum;\n\t}\n}\n';
-		assertRefused(source, 4, 3, 4, 3, 'helper', true);
+		assertRefused('is modified inside the range', source, 4, 3, 4, 3, 'helper', true);
 	}
 
 	/**
@@ -116,7 +116,7 @@ class ExtractMethodSliceTest extends Test {
 	/** A range whose ends are not children of one block is refused. */
 	public function testRefuseCrossBlockRange(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tif (true) {\n\t\t\ttrace(1);\n\t\t}\n\t\ttrace(2);\n\t}\n}\n';
-		assertRefused(source, 4, 4, 6, 3, 'helper', true);
+		assertRefused('no statement range at', source, 4, 4, 6, 3, 'helper', true);
 	}
 
 	/**
@@ -136,7 +136,7 @@ class ExtractMethodSliceTest extends Test {
 	/** A START not on a statement's first token is refused. */
 	public function testRefuseCursorNotOnStatement(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\treturn a;\n\t}\n}\n';
-		assertRefused(source, 3, 6, 3, 6, 'helper', true);
+		assertRefused('no statement range at', source, 3, 6, 3, 6, 'helper', true);
 	}
 
 	/**
@@ -331,15 +331,14 @@ class ExtractMethodSliceTest extends Test {
 	}
 
 	private function assertRefused(
-		source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, reformat: Bool
+		reason: String, source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, reformat: Bool
 	): Void {
 		final result: EditResult = extractOf(source, startLine, startCol, endLine, endCol, name, reformat);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

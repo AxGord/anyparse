@@ -158,6 +158,7 @@ class ExtractConstantSliceTest extends Test {
 		final module: String =
 			"package pkg;\n\nfinal class Keys {\n\tpublic static final DUP:String = 'dup';\n\n\tprivate function new() {}\n}";
 		assertErrInto(
+			'already has a member named',
 			ExtractConstant.extractInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', true, module, 'DUP', 'x.y', true, plugin())
 		);
 	}
@@ -166,6 +167,7 @@ class ExtractConstantSliceTest extends Test {
 	public function testCrossFileZeroOccurrenceRefused(): Void {
 		final a: String = "package pkg;\n\nclass A {\n\tstatic function f(k: String): Bool {\n\t\treturn k == 'present';\n\t}\n}";
 		assertErrInto(
+			'occurs across the scope',
 			ExtractConstant.extractInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, 'ABSENT', 'absent', true, plugin())
 		);
 	}
@@ -173,7 +175,10 @@ class ExtractConstantSliceTest extends Test {
 	/** A name that is not a valid identifier is refused. */
 	public function testCrossFileInvalidNameRefused(): Void {
 		final a: String = "package pkg;\n\nclass A {\n\tstatic function f(k: String): Bool {\n\t\treturn k == 'x';\n\t}\n}";
-		assertErrInto(ExtractConstant.extractInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, '9BAD', 'x', true, plugin()));
+		assertErrInto(
+			'is not a valid identifier',
+			ExtractConstant.extractInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, '9BAD', 'x', true, plugin())
+		);
 	}
 
 	/** A metadata literal is left untouched; only the body occurrence is counted and replaced. */
@@ -270,13 +275,12 @@ class ExtractConstantSliceTest extends Test {
 		}
 	}
 
-	private function assertErrInto(result: ExtractIntoResult): Void {
+	private function assertErrInto(reason: String, result: ExtractIntoResult): Void {
 		switch result {
 			case Ok(_, _, _):
 				Assert.fail('expected Err, got Ok');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 

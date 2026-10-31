@@ -79,13 +79,13 @@ class AddElementSliceTest extends Test {
 	/** A non-canonical source without reformat is refused by the gate. */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
 		final source: String = 'class C {\n    function f():Void {\n        a();\n    }\n}\n';
-		assertRefused(source, 3, 9, After, 'b();', false);
+		assertRefused('not in canonical form', source, 3, 9, After, 'b();', false);
 	}
 
 	/** A position not on an element's first token is refused. */
 	public function testRefuseNotOnElementStart(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\ta();\n\t}\n}\n';
-		assertRefused(source, 3, 1, After, 'b();', true);
+		assertRefused('is not on the first token of an element', source, 3, 1, After, 'b();', true);
 	}
 
 	/** --append: add a member to a class body by pointing at the `class` keyword (= add-member). */
@@ -163,7 +163,7 @@ class AddElementSliceTest extends Test {
 	/** --append on a position that is not a container's first token (a literal) is refused. */
 	public function testRefuseAppendNotOnContainer(): Void {
 		final source: String = 'class C {\n\tvar x:Int = 5;\n}\n';
-		assertAppendRefused(source, 2, 14, 'y', true);
+		assertAppendRefused('is not on the first token of a container', source, 2, 14, 'y', true);
 	}
 
 	/**
@@ -228,9 +228,9 @@ class AddElementSliceTest extends Test {
 	public function testStatementIntoCommaListRefused(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfoo(1, 2);\n\t}\n}\n';
 		// Sibling insert: the cursor on `1` addresses a call-argument slot.
-		assertRefused(source, 3, 7, After, 'bar();', true);
+		assertRefused('the target is a comma-separated list', source, 3, 7, After, 'bar();', true);
 		// Append: the cursor on the callee resolves the Call container.
-		assertAppendRefused(source, 3, 3, 'bar();', true);
+		assertAppendRefused('the container is a comma-separated list', source, 3, 3, 'bar();', true);
 	}
 
 	/**
@@ -464,14 +464,13 @@ class AddElementSliceTest extends Test {
 		}
 	}
 
-	private function assertAppendRefused(source: String, line: Int, col: Int, code: String, reformat: Bool): Void {
+	private function assertAppendRefused(reason: String, source: String, line: Int, col: Int, code: String, reformat: Bool): Void {
 		final result: EditResult = appendOf(source, line, col, code, reformat);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 
@@ -488,14 +487,15 @@ class AddElementSliceTest extends Test {
 		}
 	}
 
-	private function assertRefused(source: String, line: Int, col: Int, side: InsertSide, code: String, reformat: Bool): Void {
+	private function assertRefused(
+		reason: String, source: String, line: Int, col: Int, side: InsertSide, code: String, reformat: Bool
+	): Void {
 		final result: EditResult = addOf(source, line, col, side, code, reformat);
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			// Any refusal passes here: the callers name no expected reason yet.
-			case Err(_): // noqa: refusal-assert-ignores-message
-				Assert.pass();
+			case Err(message):
+				Assert.isTrue(message.indexOf(reason) >= 0, message);
 		}
 	}
 
