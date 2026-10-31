@@ -31944,6 +31944,52 @@
 			"note": "a branch whose patch the checked-out branch holds under a commit without the trailer is landed a second time"
 		},
 		{
+			"name": "M-LAND-FMT-THROW-KEEPS-REWRITE",
+			"type": "dev.LandFormat",
+			"method": "run",
+			"find": "restore(paths);\n\t\t\tthrow exception;",
+			"replace": "throw exception;",
+			"note": "a writer run that throws leaves the rewritten bytes unstaged in the tree, so the rollback of the pick is refused for those files and the tree stays half-rewritten"
+		},
+		{
+			"name": "M-LAND-FMT-REWRITE-NOT-STAGED",
+			"type": "dev.LandFormat",
+			"method": "fold",
+			"find": "final staging: Result = git(['add', '--'].concat(changed));",
+			"replace": "final staging: Result = git(['status', '--short']);",
+			"note": "the rewrite is left unstaged, so the commit holds the unformatted bytes and the tree is dirty right after the landing"
+		},
+		{
+			"name": "M-LAND-FMT-NOT-NAMED",
+			"type": "dev.LandFormat",
+			"method": "trailer",
+			"force": "null",
+			"note": "the landing commit does not name the files the fmt step rewrote, so a reader of the history cannot tell the merge commit holds bytes the slice never wrote"
+		},
+		{
+			"name": "M-LAND-FMT-NON-LAYOUT-FOLDED",
+			"type": "dev.LandFormat",
+			"method": "nonLayout",
+			"force": "[]",
+			"note": "every rewrite counts as layout, so a change of meaning the writer made on a merged file is folded into the landing commit unreviewed"
+		},
+		{
+			"name": "M-LAND-FMT-FAILURE-KEEPS-REWRITE",
+			"type": "dev.LandFormat",
+			"method": "run",
+			"find": "if (!outcome.match(Passed)) restore(paths);",
+			"replace": "{}",
+			"note": "a failed fmt step leaves the rewritten bytes in the tree, so the rollback of the pick is refused for those files and the tree is left half-rewritten"
+		},
+		{
+			"name": "M-LAND-FMT-SECOND-PASS-IGNORED",
+			"type": "dev.LandFormat",
+			"method": "fold",
+			"find": "if (!settled.match(Passed)) return settled;",
+			"replace": "{}",
+			"note": "a file the writer still rewrites after the landing's rewrite no longer fails the step, so the landed tree is one the next writer pass changes again"
+		},
+		{
 			"name": "M-TRIVIA-SYNTH-ONCE-PER-COMPILATION",
 			"type": "anyparse.macro.TriviaTypeSynth",
 			"method": "arm",

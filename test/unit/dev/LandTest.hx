@@ -1,6 +1,7 @@
 package unit.dev;
 
 import dev.Land;
+import dev.LandFormat;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Summary.Outcome;
@@ -454,6 +455,116 @@ final class LandTest extends Test {
 		Assert.isTrue(run.output.indexOf('was red — its snapshot is the base all the same') >= 0, run.output);
 	}
 
+	@:pin('control')
+	@:killer('M-LAND-FMT-REWRITE-NOT-STAGED')
+	@:killer('M-LAND-FMT-NOT-NAMED')
+	public function testALayoutRewriteIsFoldedIntoTheCommitAndNamedInIt(): Void {
+		final run: Landing = formatting(rewriting('layout', Passed));
+		Assert.equals(0, run.status, run.output);
+		Assert.equals('pretty\n', run.files['src/A.hx']);
+		Assert.equals('', run.dirty, 'the rewrite is in the commit, not left beside it');
+		Assert.equals(2, run.commits);
+		Assert.isTrue(run.message.indexOf('Fmt-Applied: src/A.hx') >= 0, run.message);
+		Assert.isTrue(run.message.endsWith('Slice: S1\nFmt-Applied: src/A.hx'), run.message);
+		Assert.isTrue(run.output.indexOf('1 file(s) rewritten as layout') >= 0, run.output);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-FMT-NON-LAYOUT-FOLDED')
+	@:killer('M-LAND-FMT-FAILURE-KEEPS-REWRITE')
+	public function testARewriteBeyondLayoutFailsTheStepAndTakesThePickBack(): Void {
+		final run: Landing = formatting(rewriting('declarations', Passed));
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('the writer changed more than layout in 1 file(s), first src/A.hx') >= 0, run.output);
+		Assert.isFalse(run.merging);
+		Assert.isFalse(run.moved);
+		Assert.equals('', run.dirty);
+		Assert.equals(1, run.commits);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-FMT-SECOND-PASS-IGNORED')
+	public function testAFileTheWriterStillRewritesFailsTheLandingAndLeavesNothing(): Void {
+		final run: Landing = formatting(
+			rewriting('layout', Failed('fmt --list --one-pass still reports the tree after a rewrite: src/A.hx'))
+		);
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('still reports the tree after a rewrite') >= 0, run.output);
+		Assert.isFalse(run.merging);
+		Assert.isFalse(run.moved);
+		Assert.equals('', run.dirty);
+	}
+
+	public function testAReportThatCouldNotBeReadFailsTheStep(): Void {
+		final tools: FormatTools = rewriting('layout', Passed);
+		final run: Landing = formatting({ rewrite: tools.rewrite, changes: (tree, base, files) -> null, settled: tools.settled });
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('could not classify the rewrite of 1 file(s)') >= 0, run.output);
+		Assert.equals('', run.dirty);
+		Assert.isFalse(run.moved);
+	}
+
+	public function testACanonicalPickFoldsNothingAndAddsNoTrailer(): Void {
+		final run: Landing = formatting(idle());
+		Assert.equals(0, run.status, run.output);
+		Assert.equals('ugly\n', run.files['src/A.hx']);
+		Assert.isTrue(run.message.indexOf('Fmt-Applied') < 0, run.message);
+		Assert.isTrue(run.output.indexOf('already canonical') >= 0, run.output);
+	}
+
+	public function testAPickWithNoSourceOfTheScopeSkipsTheStep(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { format: rewriting('layout', Failed('never asked')) });
+		Assert.equals(0, run.status, run.output);
+		Assert.isTrue(run.output.indexOf('skipped') >= 0, run.output);
+	}
+
+	public function testOnlyTheLayoutRowsOfAChangedReportCountAsLayout(): Void {
+		final report: String = 'changed against 8cfd4a6: 3 file(s) — layout 1, declarations 1, text 1\n'
+			+ 'M src/A.hx  layout\nM src/B.hx  declarations  +2 -2\n    ~ ClassForm:B  +1 -1\nM docs/c.md  text  +1 -0\n';
+		Assert.same(['src/B.hx', 'src/D.hx'], LandFormat.nonLayout(report, ['src/A.hx', 'src/B.hx', 'src/D.hx']));
+		Assert.same([], LandFormat.nonLayout(report, ['src/A.hx']));
+		Assert.same(['src/A.hx'], LandFormat.nonLayout('', ['src/A.hx']));
+	}
+
+	public function testOnlyTheSourceTheFmtRowReadsIsRewritten(): Void {
+		Assert.same(['src/A.hx', 'test/unit/B.hx', 'tools/src/C.hx'], LandFormat.formattable([
+			'src/A.hx',
+			'docs/x.md',
+			'test/unit/B.hx',
+			'tools/src/C.hx',
+			'bin/d.hx',
+			'src/e.json'
+		]));
+	}
+
+	public function testTheTrailerNamesTheFirstFilesAndCountsTheRest(): Void {
+		final files: Array<Edit> = [for (i in 0...10) { path: 'src/F$i.hx', content: 'ugly\n' }];
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { onSide: files, format: rewriting('layout', Passed) });
+		Assert.equals(0, run.status, run.output);
+		Assert.isTrue(
+			run.message.endsWith(
+				'Fmt-Applied: src/F0.hx, src/F1.hx, src/F2.hx, src/F3.hx, src/F4.hx, src/F5.hx, src/F6.hx, src/F7.hx, and 2 more'
+			),
+			run.message
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-FMT-THROW-KEEPS-REWRITE')
+	public function testAWriterThatThrowsPutsThePickBack(): Void {
+		final tools: FormatTools = rewriting('layout', Passed);
+		final run: Landing = formatting({
+			rewrite: tools.rewrite,
+			changes: (tree, base, files) -> throw new haxe.Exception('boom'),
+			settled: tools.settled
+		});
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('boom') >= 0, run.output);
+		Assert.equals('', run.dirty);
+		Assert.isFalse(run.moved);
+		Assert.isFalse(run.merging);
+	}
+
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
@@ -502,6 +613,7 @@ final class LandTest extends Test {
 				resolve: shape.resolve,
 				battery: request,
 				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
+				format: shape.format ?? idle(),
 				exec: (words, tree, log) -> {
 					flags.push(words);
 					final at: Int = words.indexOf('--repo');
@@ -543,7 +655,9 @@ final class LandTest extends Test {
 				commits: Std.parseInt(cmd('git -C $repo rev-list --count HEAD').run().out.trim()) ?? -1,
 				message: cmd('git -C $repo log -1 --format=%B').run().out.trim(),
 				author: cmd('git -C $repo log -1 --format=%an').run().out.trim(),
-				files: [for (path in shape.read ?? []) path => File.getContent('$repo/$path')],
+				files: [
+					for (path in shape.read ?? []) if (FileSystem.exists('$repo/$path')) path => File.getContent('$repo/$path')
+				],
 				brief: FileSystem.exists('$logs/merge-brief.md') ? File.getContent('$logs/merge-brief.md') : ''
 			};
 		});
@@ -627,6 +741,35 @@ final class LandTest extends Test {
 			File.saveContent('$cache/$base-suite.txt', '1 2\n');
 		}
 		return left && battery?.baseRed != true ? Passed : Failed('the battery is red');
+	}
+
+	/** A writer that finds every file canonical already. */
+	private static function idle(): FormatTools {
+		return { rewrite: (tree, files) -> Passed, changes: (tree, base, files) -> '', settled: (tree, files) -> Passed };
+	}
+
+	/**
+	 * A writer that rewrites every file it is given to `pretty`, whose `apq changed` report says `classes` of each, and whose
+	 * second pass ends as `settled`.
+	 */
+	private static function rewriting(classes: String, settled: Outcome): FormatTools {
+		return {
+			rewrite: (tree, files) -> {
+				for (file in files) File.saveContent('$tree/$file', 'pretty\n');
+				Passed;
+			},
+			changes: (tree, base, files) ->
+				'changed against $base: ${files.length} file(s) — $classes ${files.length}\n'
+					+ [for (file in files) 'M $file  $classes\n'].join(''),
+			settled: (tree, files) -> settled
+		};
+	}
+
+	/** A landing whose branch adds `src/A.hx` in the form `ugly` and which the writer `format` then looks at. */
+	private static function formatting(format: FormatTools): Landing {
+		return landing(
+			() -> Passed, 'b.txt', null, null, { onSide: [{ path: 'src/A.hx', content: 'ugly\n' }], format: format, read: ['src/A.hx'] }
+		);
 	}
 
 }
@@ -739,6 +882,9 @@ private typedef Setup = {
 	/** What the user does in the repository while the binaries are built, and whether the branch is landed a second time. */
 	@:optional var during: (repo:String) -> Void;
 	@:optional var again: Bool;
+
+	/** The writer runs of the `fmt` step; the ones that rewrite nothing when absent. */
+	@:optional var format: FormatTools;
 
 	/** The paths whose contents the run reports. */
 	@:optional var read: Array<String>;

@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import dev.LandFormat.FormatTools;
 import dev.MergeBrief.MergePlace;
 import devkit.Args;
 import devkit.Branches;
@@ -19,7 +20,8 @@ using StringTools;
  * `dev land <branch>` — the parent's landing of a reviewed slice branch in the tree that holds this `dev.js`, as ONE
  * command: the branch's single commit is applied on top of the checked-out branch (`git cherry-pick --no-commit`), so the
  * history stays linear, its files merging as their `.gitattributes` say (`docs/decisions.md` by union, source and JSON
- * through their grammar by `apq merge-file`, each merged file a detail line), the three binaries rebuilt, the commit made
+ * through their grammar by `apq merge-file`, each merged file a detail line), the three binaries rebuilt, the pick's `.hx`
+ * files rewritten as canonical when that is layout only (`LandFormat`), the commit made
  * with a `Slice: <ID>` trailer, then
  * `dev battery` (quick, or in full when the commit brings in a path where a shard and the one-process suite can
  * diverge, or the number of the landing, counted over every landing that runs the battery, is a multiple of ten — the
@@ -91,6 +93,8 @@ final class Land {
 	private final _exec: BatteryExec;
 	private final _merged: MergedPaths;
 	private final _print: String -> Void;
+	private final _format: LandFormat;
+
 
 	/** The trailers the commit carries beside `Slice`, each `<key>: <value>`. */
 	private final _trailers: Array<String>;
@@ -120,6 +124,7 @@ final class Land {
 		_exec = options.exec;
 		_merged = options.merged;
 		_print = options.print;
+		_format = new LandFormat(options.repo, options.format, _summary);
 		_trailers = options.trailers ?? [];
 		_resolve = options.resolve ?? [];
 		_queue = options.queue;
@@ -136,6 +141,7 @@ final class Land {
 			{ name: 'base', step: ensureBase.bind(battery) },
 			{ name: 'pick', step: pick },
 			{ name: 'build', step: build },
+			{ name: 'fmt', step: _format.run },
 			{ name: 'commit', step: commit.bind(message) },
 			{ name: 'battery', step: runBattery.bind(battery) }
 		];
@@ -274,7 +280,9 @@ final class Land {
 		]);
 		if (!trailer.ok) return Failed(trailer.firstError());
 		final markers: Array<String> = [];
-		for (marker in _trailers) {
+		final applied: Null<String> = _format.trailer();
+		final named: Array<String> = applied == null ? _trailers : _trailers.concat(['${LandFormat.TRAILER}: $applied']);
+		for (marker in named) {
 			markers.push('--trailer');
 			markers.push(marker);
 		}
@@ -381,6 +389,7 @@ final class Land {
 			queue: queue,
 			battery: noBattery ? null : request,
 			compile: (tree, log) -> Binaries.compileWith(tree, log, [], Lease.ofEnvironment()),
+			format: LandFormat.engine(),
 			exec: execBattery,
 			merged: mergedPaths,
 			print: Sys.println
@@ -551,6 +560,9 @@ typedef LandOptions = {
 	var battery: Null<BatteryRequest>;
 
 	var compile: Compile;
+
+	/** The writer runs of the `fmt` step (`LandFormat.engine` for a real landing). */
+	var format: FormatTools;
 	var exec: BatteryExec;
 	var merged: MergedPaths;
 	var print: String -> Void;
