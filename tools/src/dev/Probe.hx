@@ -19,7 +19,9 @@ using StringTools;
  * `dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--threads <n>] [--repo <tree>]` — a reviewer's probe
  * kit run on ONE engine. A kit is a `dev parity` suite whose invocations each carry what an engine answered when the kit was
  * recorded: exit status, digests of both streams and of the files the invocation wrote, and whether the fixture then compiles
- * with haxe under each declared define set. Only the invocations that deviate are printed, then one count line; exits 1 when one
+ * with haxe under each declared define set; with `run` in the compile spec it also runs the fixture and the files the invocation
+ * started from, and records whether both print the same. Only the
+ * invocations that deviate are printed, then one count line; exits 1 when one
  * does. `--record` writes what the engine answers into the kit instead.
  */
 @:nullSafety(Strict)
@@ -186,6 +188,12 @@ final class Probe {
 			for (k in 0...Std.int(Math.max(want.length, got.length))) if (want[k] != got[k])
 				lines.push('compiles with define set #$k: ${want[k]} → ${got[k]}');
 		}
+		final wantSame: Null<Array<Bool>> = expected.sameRun;
+		final gotSame: Null<Array<Bool>> = answer.sameRun;
+		if (compiled && wantSame != null && gotSame != null) {
+			for (k in 0...Std.int(Math.max(wantSame.length, gotSame.length))) if (wantSame[k] != gotSame[k])
+				lines.push('runs print the same as the original with define set #$k: ${wantSame[k]} → ${gotSame[k]}');
+		}
 		return lines;
 	}
 
@@ -233,20 +241,37 @@ final class Probe {
 	private static function compileAll(kit: Kit, outcomes: Array<Outcome>, seen: Array<Seen>, work: TempDir, threads: Int): Void {
 		final commands: Array<Command> = [];
 		final owners: Array<Int> = [];
+		final originals: Array<Bool> = [];
 		for (i => outcome in outcomes) {
 			final spec: Null<CompileSpec> = kit.cases[i].compile;
 			if (spec == null) continue;
 			final defines: Array<Array<String>> = spec.defines ?? [[]];
+			final sides: Array<Bool> = spec.run == true ? [false, true] : [false];
 			for (k => set in defines) {
-				final root: String = Parity.fixture(work.file('compile-$i-$k'), outcome.files);
-				final at: String = spec.dir == null ? root : Path.join([root, spec.dir]);
-				commands.push(Command.of(['haxe'].concat(spec.args).concat(set)).at(at).timeout(COMPILE_TIMEOUT_MS));
-				owners.push(i);
+				// the run flag also compiles the files the invocation started from, to compare what the two programs print
+				for (original in sides) {
+					final label: String = original ? 'original' : 'compile';
+					final root: String = Parity.fixture(work.file('$label-$i-$k'), original ? kit.invocations[i].files : outcome.files);
+					final at: String = spec.dir == null ? root : Path.join([root, spec.dir]);
+					commands.push(Command.of(['haxe'].concat(spec.args).concat(set)).at(at).timeout(COMPILE_TIMEOUT_MS));
+					owners.push(i);
+					originals.push(original);
+				}
 			}
 			seen[i].answer.compiles = [];
+			if (spec.run == true) seen[i].answer.sameRun = [];
 		}
 		final results: Array<Result> = Pool.of(threads).run(commands);
-		for (j => result in results) seen[owners[j]].answer.compiles?.push(result.status == 0 && result.failure == '');
+		for (j => result in results) {
+			final done: Bool = result.status == 0 && result.failure == '';
+			final answer: Expectation = seen[owners[j]].answer;
+			if (originals[j]) {
+				final fixed: Result = results[j - 1];
+				answer.sameRun?.push(done && fixed.status == 0 && fixed.failure == '' && fixed.out == result.out);
+			} else {
+				answer.compiles?.push(done);
+			}
+		}
 	}
 
 	private static function firstLine(text: String): String {
@@ -313,6 +338,9 @@ typedef CompileSpec = {
 	var args: Array<String>;
 	var ?dir: String;
 	var ?defines: Array<Array<String>>;
+
+	/** Whether the compile runs the program (`--interp`), and the files the invocation started from run too, to compare what both print. */
+	var ?run: Bool;
 }
 
 /** An engine's answer to one invocation: exit status and digests of stdout, stderr and the files it wrote, and each compile's verdict. */
@@ -322,6 +350,9 @@ typedef Expectation = {
 	var err: String;
 	var files: String;
 	var ?compiles: Array<Bool>;
+
+	/** Per define set: both programs ran and printed the same. */
+	var ?sameRun: Array<Bool>;
 	var ?onePass: Bool;
 	var ?commentsKept: Bool;
 }

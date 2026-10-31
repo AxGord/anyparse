@@ -2871,7 +2871,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "a7a6b78e7e872d8b",
+				"out": "d3900c6105fa80e6",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}

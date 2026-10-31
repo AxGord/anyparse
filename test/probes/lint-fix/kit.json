@@ -1,0 +1,488 @@
+{
+	"about": "hxq lint --fix of one rule over a fixture program, then the fixture and the files it started from both compiled and RUN (haxe --interp) with and without -D dflag: a fix must keep what the program prints. Seeded from the redundant-braces review (dangling else through a loop, #if regions, macro returns). D* must be refused, F* fixed.",
+	"compile": {
+		"args": [
+			"-cp",
+			".",
+			"-main",
+			"Main",
+			"--interp"
+		],
+		"defines": [
+			[],
+			[
+				"-D",
+				"dflag"
+			]
+		],
+		"run": true
+	},
+	"invocations": [
+		{
+			"name": "D1",
+			"note": "dangling else through a for body: must be refused",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tif (a) {\n\t\t\tfor (i in 0...1) if (b) p('inner');\n\t\t} else {\n\t\t\tp('outer-else');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "352a983997bad96e",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "D2",
+			"note": "dangling else through a while body: must be refused",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tif (a) {\n\t\t\twhile (n-- > 0) if (b) p('w-inner');\n\t\t} else {\n\t\t\tp('w-else');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "352a983997bad96e",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "D3",
+			"note": "nested for in the loop body of an if with else: must be refused",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tif (a) for (i in 0...1) {\n\t\t\tfor (j in 0...1) if (b) p('deep');\n\t\t} else p('loop-else');\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "352a983997bad96e",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "D4",
+			"note": "else-less if as a loop body, followed by a statement",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tfor (x in xs) {\n\t\t\tif (x > 1) p('big');\n\t\t}\n\t\tp('after');\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "352a983997bad96e",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "D5",
+			"note": "#if region statement inside an if branch",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tif (a) {\n\t\t\t#if dflag\n\t\t\tp('d');\n\t\t\t#else\n\t\t\tp('nod');\n\t\t\t#end\n\t\t} else {\n\t\t\tp('e');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "352a983997bad96e",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "D6",
+			"note": "an else present only under a define",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tif (a) {\n\t\t\tfor (i in 0...1) if (b) p('x') #if dflag else p('y') #end;\n\t\t} else {\n\t\t\tp('z');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "352a983997bad96e",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F1",
+			"note": "else-if chain whose every branch can go bare",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tif (a) {\n\t\t\tp('a');\n\t\t} else if (b) {\n\t\t\tp('b');\n\t\t} else {\n\t\t\tp('c');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "a3c142a784622b21",
+				"files": "5aced0b4f0402159",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F2",
+			"note": "plain for body",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tfor (x in xs) {\n\t\t\tp('x$x');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "6a25b639529260f1",
+				"files": "ff7ef621969e043c",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F3",
+			"note": "define-switched expression in both branches",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tif (a) {\n\t\t\tp(#if dflag 'a' #else 'b' #end);\n\t\t} else {\n\t\t\tp(#if dflag 'c' #else 'd' #end);\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "aaa6b6975fdc36ee",
+				"files": "8c71b7f53a28defd",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F4",
+			"note": "break in a loop body",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tfor (x in xs) {\n\t\t\tif (x == 2) {\n\t\t\t\tbreak;\n\t\t\t}\n\t\t\tp('x$x');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "6a25b639529260f1",
+				"files": "29202afbefb16734",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F5",
+			"note": "value tail of a block expression",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tfinal r = {\n\t\t\tif (a) {\n\t\t\t\t10;\n\t\t\t} else {\n\t\t\t\t20;\n\t\t\t}\n\t\t};\n\t\tp('r$r');\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "aaa6b6975fdc36ee",
+				"files": "b25c9bb895c87737",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F6",
+			"note": "while with a call body",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\twhile (n-- > 0) {\n\t\t\tp('n$n');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "6a25b639529260f1",
+				"files": "17e9c8c7605b683a",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F7",
+			"note": "if inside a switch case",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tswitch (v()) {\n\t\t\tcase 1:\n\t\t\t\tif (a) {\n\t\t\t\t\tp('one-a');\n\t\t\t\t}\n\t\t\tcase _:\n\t\t\t\tp('other');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "6a25b639529260f1",
+				"files": "2654a71ca9e641f7",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F8",
+			"note": "return and throw of define-switched values in a function",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function g(a:Bool):Int {\n\t\tif (a) {\n\t\t\treturn #if dflag 1 #else 2 #end;\n\t\t} else {\n\t\t\treturn 3;\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tSys.println(g(true));\n\t\tSys.println(g(false));\n\t\ttry {\n\t\t\tif (g(true) == 1) {\n\t\t\t\tthrow 'one';\n\t\t\t}\n\t\t} catch (e:String) {\n\t\t\tSys.println('caught $e');\n\t\t}\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "a3c142a784622b21",
+				"files": "f52edf04093008bb",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F9",
+			"note": "return macro in a macro function called from main",
+			"argv": [
+				"hxq",
+				"lint",
+				"Mac.hx",
+				"--rule",
+				"redundant-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Mac.hx": "import haxe.macro.Expr;\n\nclass Mac {\n\tpublic static macro function m(flag:Bool):Expr {\n\t\tif (flag) {\n\t\t\treturn macro 3;\n\t\t} else {\n\t\t\treturn macro 4;\n\t\t}\n\t}\n}\n",
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tSys.println(Mac.m(true));\n\t\tSys.println(Mac.m(false));\n\t}\n}\n",
+				"apqlint.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "aaa6b6975fdc36ee",
+				"files": "6ebf397eb5add7d7",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		}
+	]
+}

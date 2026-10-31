@@ -33735,6 +33735,14 @@
 			"note": "a formatter row whose second pass rewrites its own output still reads as one pass"
 		},
 		{
+			"name": "M-PROBE-SAME-RUN-BLIND",
+			"type": "dev.Probe",
+			"method": "compileAll",
+			"find": "fixed.out == result.out",
+			"replace": "true",
+			"note": "a fix that changes what the program prints still reads as the same run"
+		},
+		{
 			"name": "M-OWNER-STANDING-FLAT",
 			"type": "anyparse.query.OwnerIndex",
 			"method": "standing",

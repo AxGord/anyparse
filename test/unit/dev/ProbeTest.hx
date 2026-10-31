@@ -31,6 +31,51 @@ final class ProbeTest extends Test {
 		Assert.same(['not recorded: `dev probe --record` writes the expectation'], Probe.deviations(null, seen(recorded, ''), true));
 	}
 
+	@:pin('control')
+	@:killer('M-PROBE-SAME-RUN-BLIND')
+	public function testARunSpecComparesWhatTheFixedAndTheOriginalProgramPrint(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final kitFile: String = dir.file('kit.json');
+			final program: String = 'class Main { static function main() { Sys.println("one"); } }\n';
+			File.saveContent(
+				kitFile, Json.stringify({
+					compile: { args: ['-cp', '.', '-main', 'Main', '--interp'], defines: [[]], run: true },
+					invocations: [
+						{ name: 'same', argv: ['hxq', 'keep'], files: { "Main.hx": program } },
+						{ name: 'changes', argv: ['hxq', 'change'], files: { "Main.hx": program } }
+					]
+				})
+			);
+			final engineFile: String = dir.file('e.js');
+			File.saveContent(engineFile, [
+				'// takes --lang-default',
+				"const fs = require('fs');",
+				"if (process.argv[2] === 'change') fs.writeFileSync('Main.hx', fs.readFileSync('Main.hx', 'utf8').replace('one', 'two'));"
+			].join('\n'));
+			final seen: Array<Seen> = Probe.observe(tree, Path.normalize(engineFile), Probe.load(kitFile), true, 2);
+			Assert.same([true], seen[0].answer.compiles);
+			Assert.same([true], seen[0].answer.sameRun);
+			Assert.same([true], seen[1].answer.compiles, 'the changed program still compiles');
+			Assert.same([false], seen[1].answer.sameRun, 'but prints something else');
+			final was: Expectation = {
+				exit: 0,
+				out: '',
+				err: '',
+				files: '',
+				sameRun: [true]
+			};
+			Assert.same(
+				['runs print the same as the original with define set #0: true → false'],
+				Probe.deviations(was, seen[1], true).filter(line -> line.indexOf('runs print') == 0)
+			);
+		});
+	}
+
 	public function testTheRunDirectoryAndTheProbePidAreNormalized(): Void {
 		Assert.equals(
 			'<fixture>/a.hx and /t/anyparse-last-probe.N.hx',
