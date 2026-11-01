@@ -24,6 +24,17 @@ final class ArtifactRowTest extends Test {
 		Assert.isNull(ArtifactRow.problem('src/A.hx', ArtifactRow.MAX_BYTES));
 	}
 
+	public function testOversizeFilesFailOnlyWhenTheBranchAddsOrGrowsThem(): Void {
+		final big: Int = ArtifactRow.MAX_BYTES + 500000;
+		Assert.isNull(ArtifactRow.problem('a.json', big + 1000, big));
+		Assert.isNull(ArtifactRow.problem('a.json', Std.int(big * 5 / 4), big));
+		Assert.notNull(ArtifactRow.problem('a.json', Std.int(big * 5 / 4) + 1, big));
+		Assert.notNull(ArtifactRow.problem('a.json', 2 * ArtifactRow.MAX_BYTES));
+		Assert.notNull(ArtifactRow.problem('a.json', 1600000, 1200000));
+		Assert.notNull(ArtifactRow.problem('a.json', ArtifactRow.MAX_BYTES + 1, ArtifactRow.MAX_BYTES));
+		Assert.isNull(ArtifactRow.problem('a.json', 10, big));
+	}
+
 	public function testAnAllowedPathPassesAndAnotherFails(): Void {
 		TempDir.with(dir -> {
 			FileSystem.createDirectory(dir.file('bin'));
@@ -31,10 +42,10 @@ final class ArtifactRowTest extends Test {
 			File.saveContent(dir.file('A.hx'), 'class A {}');
 			File.saveBytes(dir.file('big.bin'), Bytes.alloc(ArtifactRow.MAX_BYTES + 1));
 			final files: Array<String> = ['bin/apq.js', 'A.hx', 'big.bin'];
-			Assert.equals(2, ArtifactRow.offenders(dir.path, files, []).length);
-			final left: Array<String> = ArtifactRow.offenders(dir.path, files, ['bin/apq.js']);
+			Assert.equals(2, ArtifactRow.offenders(dir.path, files, [], _ -> null).length);
+			final left: Array<String> = ArtifactRow.offenders(dir.path, files, ['bin/apq.js'], _ -> null);
 			Assert.equals(1, left.length);
-			Assert.equals('big.bin: over 1 MB (${ArtifactRow.MAX_BYTES + 1} bytes)', left[0]);
+			Assert.equals('big.bin: over 1 MB (${ArtifactRow.MAX_BYTES + 1} bytes), added', left[0]);
 		});
 	}
 
