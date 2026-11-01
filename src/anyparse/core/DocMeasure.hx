@@ -724,6 +724,39 @@ final class DocMeasure {
 		return scanTailAt(d, 0, true, out) == TailBreak && out.nest == 0 ? out.closeWidth : -1;
 	}
 
+	/**
+	 * The line a glued ternary `c ? a : b` leaves after its condition's closing line: its width - the closer run that
+	 * opens it plus `? a : b` up to the tail's first forced break - and whether such a break ends it. A branch that opens
+	 * its own paren group follows the container rule: the group opens at the end of a line that fits, so only that first
+	 * line is measured. A then-branch that opens one leaves a second line, `) : else`, measured the same way. Null when
+	 * `committed` is not a glued ternary whose condition closes at the indent it opened on.
+	 */
+	public static function gluedTernaryTail(committed: Doc): Null<GluedTernaryTail> {
+		return switch committed {
+			case Concat(parts) if (gluesTernary(committed)):
+				final run: Int = closeLineRun(parts[0]);
+				final tail: Doc = Concat(parts.slice(1));
+				// An opened then-branch closes at the ternary's own indent, and `: else` rides that line.
+				final thenRun: Int = closeLineRun(parts[2]);
+				run < 0 ? null : {
+					width: run + flatFirstLineWidthThroughBodyGroup(tail),
+					breaks: hasForcedBreak(tail),
+					closingLine: thenRun < 0 ? -1 : thenRun + ' : '.length + flatFirstLineWidthThroughBodyGroup(parts[4]),
+					elseBreaks: hasForcedBreak(parts[4])
+				};
+			case _: null;
+		};
+	}
+
+	/** True iff `flat` is the glued shape of a ternary: condition, ` ? `, then branch, ` : `, else branch. */
+	public static function gluesTernary(flat: Doc): Bool {
+		return switch flat {
+			case Concat(parts):
+				parts.length == 5 && parts[1].match(Text(' ? ')) && parts[3].match(Text(' : '));
+			case _: false;
+		};
+	}
+
 	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
 	private static inline function isIdentStart(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
@@ -1098,3 +1131,15 @@ private typedef TailOut = {
 	var braceCloser: Bool;
 	var closeWidth: Int;
 }
+
+/**
+ * The lines a glued ternary `c ? a : b` leaves after its condition's head: `width` is the closing line of the condition
+ * through the tail's first forced break, `breaks` says a branch breaks on it, and `closingLine` is the `) : else` line
+ * an opened then-branch leaves (`-1` when it opens nothing), `elseBreaks` that the else branch breaks on that line.
+ */
+typedef GluedTernaryTail = {
+	width: Int,
+	breaks: Bool,
+	closingLine: Int,
+	elseBreaks: Bool
+};

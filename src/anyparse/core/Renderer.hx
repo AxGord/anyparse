@@ -2445,7 +2445,7 @@ class Renderer {
 				// Flat-width family — flat-token measurer feeds a `crosses`
 				// test, no measure-only capture. Delegated to the static
 				// `pushFlatWidthBranch`.
-				pushFlatWidthBranch(f, stack, col, width);
+				pushFlatWidthBranch(f, stack, col, pendingSpace, width);
 			case IfFullLineExceeds(n, breakDoc, flatDoc):
 				// Sibling of `IfLineExceeds`. Both the primitive's own
 				// subtree (`flatTokenWidth`) and the rest-of-stack
@@ -3463,7 +3463,7 @@ class Renderer {
 	 * Reads `f`/`col`/`width`; writes `stack`. Extracted verbatim from
 	 * `pushExceedsBranch` — mutates no scalar accumulator (invariant #1).
 	 */
-	private static function pushFlatWidthBranch(f: Frame, stack: Array<Frame>, col: Int, width: Int): Void {
+	private static function pushFlatWidthBranch(f: Frame, stack: Array<Frame>, col: Int, pendingSpace: Int, width: Int): Void {
 		switch (f.doc) {
 			case IfBreak(breakDoc, flatDoc):
 				// Force-flat (slice B): always pick `flatDoc`, propagate
@@ -3531,7 +3531,10 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final firstLineCrosses: Bool = col + flatTokenWidthFirstLine(flatDoc) >= n;
+					// A strict-`>` probe (emitted at `lineWidth + 1`) counts the un-flushed separator before it, as
+					// `IfFullLineExceeds` does; the `n == width` consumers are calibrated to the bare column.
+					final effPending: Int = n > width ? pendingSpace : 0;
+					final firstLineCrosses: Bool = col + effPending + flatTokenWidthFirstLine(flatDoc) >= n;
 					final pushMode: Mode = firstLineCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
 				}

@@ -1065,7 +1065,8 @@ final class CollapsePass {
 	private static function chainGluedIfOpens(d: Doc, decisions: CollapseRun, width: Int): Null<Doc> {
 		final flat: Null<Doc> = switch d {
 			case WrapBoundary(Group(IfBreak(_, fl))): gluedSide(fl, width);
-			case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(gluedSide(fl, width))): gluedSide(fl, width);
+			case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (restAwareGlues(gluedSide(fl, width), decisions, width)):
+				gluedSide(fl, width);
 			case WrapBoundary(Group(IfWidthExceeds(_, _, fl))): fl;
 			case WrapBoundary(Group(IfFullLineExceeds(_, _, fl))): fl;
 			case _: null;
@@ -1092,9 +1093,21 @@ final class CollapsePass {
 	}
 
 	/**
+	 * Does the glue commit the flat side of a rest-aware chain pivot? An infix chain's does; a ternary's does only once its
+	 * condition opens a group that closes at the indent the ternary started on, since the `? a : b` tail then rides that
+	 * closing line behind `ternaryTailGate`'s width check. A group opening only inside a branch is the branch's own.
+	 */
+	private static function restAwareGlues(flat: Doc, decisions: CollapseRun, width: Int): Bool {
+		return switch flat {
+			case Concat(parts) if (DocMeasure.gluesTernary(flat)):
+				subtreeOpens(parts[0], decisions) && DocMeasure.closeLineRun(commitOpens(parts[0], decisions, width)) >= 0;
+			case _: gluesInfixChain(flat);
+		};
+	}
+
+	/**
 	 * The flat side of a rest-aware chain pivot is an infix chain glued as `a op b op c` with `&&`, `||`, `+` or `-` (the
-	 * `BinaryChainEmit` NoWrap shape). A ternary's `c ? a : b` shares the rest-aware pivot but is NOT an op-chain: the
-	 * forward glue never commits it, so it stays outside this positive list.
+	 * `BinaryChainEmit` NoWrap shape).
 	 */
 	private static function gluesInfixChain(flat: Doc): Bool {
 		return switch flat {
@@ -1442,37 +1455,29 @@ final class CollapsePass {
 	}
 
 	/**
-	 * The line a glued ternary `c ? a : b` leaves after its condition's closing line: its width - the closer run that
-	 * opens it plus `? a : b` up to the tail's first forced break - and whether such a break ends it. A branch that opens
-	 * its own paren group follows the container rule: the group opens at the end of a line that fits, so only that first
-	 * line is measured. Null when `committed` is not a glued ternary whose condition closes at the indent it opened on.
-	 */
-	private static function gluedTernaryTail(committed: Doc): Null<{ width: Int, breaks: Bool }> {
-		return switch committed {
-			case Concat(parts) if (parts.length == 5 && parts[1].match(Text(' ? ')) && parts[3].match(Text(' : '))):
-				final run: Int = DocMeasure.closeLineRun(parts[0]);
-				final tail: Doc = Concat(parts.slice(1));
-				run < 0
-					? null
-					: { width: run + DocMeasure.flatFirstLineWidthThroughBodyGroup(tail), breaks: DocMeasure.hasForcedBreak(tail) };
-			case _: null;
-		};
-	}
-
-	/**
 	 * The glued ternary `d` with its condition's paren committed open (`opened`), behind the one width check its glue
 	 * owes: the `? a : b` tail rides the closing line when that line fits, else `d` is rewritten as it stands and its own
 	 * seams break. Null when `opened` is not such a ternary, so every other chain keeps its unconditional glue.
 	 */
 	private static function ternaryTailGate(d: Doc, opened: Doc, decisions: CollapseRun, width: Int): Null<Doc> {
-		final tail: Null<{ width: Int, breaks: Bool }> = gluedTernaryTail(opened);
+		final tail: Null<DocMeasure.GluedTernaryTail> = DocMeasure.gluedTernaryTail(opened);
 		if (tail == null) return null;
 		final broken: Doc = D.mapChildren(d, recPair(decisions, width).flat);
 		final glued: Doc = WrapBoundary(opened);
+		final limit: Int = width + 1;
+		// The `) : else` line of an opened then-branch ends the ternary unless the else branch breaks too.
+		final closing: Doc = if (tail.closingLine < 0)
+			glued
+		else if (tail.elseBreaks)
+			IfArrowContinuationFits(0, tail.closingLine, limit, broken, glued)
+		else
+			IfArrowContinuationFitsWithRest(0, tail.closingLine, limit, broken, glued);
 		// What follows the ternary shares the tail line only when no branch breaks on it.
-		return tail.breaks
-			? IfArrowContinuationFits(0, tail.width, width + 1, broken, glued)
-			: IfArrowContinuationFitsWithRest(0, tail.width, width + 1, broken, glued);
+		final tailLine: Doc = tail.breaks
+			? IfArrowContinuationFits(0, tail.width, limit, broken, closing)
+			: IfArrowContinuationFitsWithRest(0, tail.width, limit, broken, closing);
+		// The head up to the condition's own forced break is the first line the glue leaves, at the column the ternary starts.
+		return IfFirstLineExceeds(limit, broken, tailLine);
 	}
 
 }

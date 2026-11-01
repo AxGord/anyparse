@@ -11166,7 +11166,7 @@
 		},
 		{
 			"name": "M-TERNARY-TAIL-GATE-OFF",
-			"type": "anyparse.core.CollapsePass",
+			"type": "anyparse.core.DocMeasure",
 			"method": "gluedTernaryTail",
 			"find": "run < 0",
 			"replace": "true",
@@ -11184,41 +11184,97 @@
 			"name": "M-TERNARY-TAIL-GATE-OFF-BY-ONE",
 			"type": "anyparse.core.CollapsePass",
 			"method": "ternaryTailGate",
-			"find": ": IfArrowContinuationFitsWithRest(0, tail.width, width + 1, broken, glued);",
-			"replace": ": IfArrowContinuationFitsWithRest(0, tail.width, width + 2, broken, glued);",
+			"find": ": IfArrowContinuationFitsWithRest(0, tail.width, limit, broken, closing);",
+			"replace": ": IfArrowContinuationFitsWithRest(0, tail.width, limit + 1, broken, closing);",
 			"note": "a closing line one column past the limit still carries the ternary tail"
 		},
 		{
 			"name": "M-TERNARY-TAIL-REST-OFF",
 			"type": "anyparse.core.CollapsePass",
 			"method": "ternaryTailGate",
-			"find": ": IfArrowContinuationFitsWithRest(0, tail.width, width + 1, broken, glued);",
-			"replace": ": IfArrowContinuationFits(0, tail.width, width + 1, broken, glued);",
+			"find": ": IfArrowContinuationFitsWithRest(0, tail.width, limit, broken, closing);",
+			"replace": ": IfArrowContinuationFits(0, tail.width, limit, broken, closing);",
 			"note": "what follows the ternary on its tail line (`),` / `);`) is not charged, so a glued tail overflows by that much"
 		},
 		{
 			"name": "M-TERNARY-TAIL-FLAT-WIDTH",
-			"type": "anyparse.core.CollapsePass",
+			"type": "anyparse.core.DocMeasure",
 			"method": "gluedTernaryTail",
-			"find": "DocMeasure.flatFirstLineWidthThroughBodyGroup(tail)",
-			"replace": "DocMeasure.flatTokenWidth(tail)",
+			"find": "flatFirstLineWidthThroughBodyGroup(tail)",
+			"replace": "flatTokenWidth(tail)",
 			"note": "a branch that opens its own paren group is counted flat, so `) ? x && (` breaks its seams although that line fits"
 		},
 		{
 			"name": "M-TERNARY-TAIL-BREAKS-CHARGES-REST",
 			"type": "anyparse.core.CollapsePass",
 			"method": "ternaryTailGate",
-			"find": "? IfArrowContinuationFits(0, tail.width, width + 1, broken, glued)",
-			"replace": "? IfArrowContinuationFitsWithRest(0, tail.width, width + 1, broken, glued)",
+			"find": "? IfArrowContinuationFits(0, tail.width, limit, broken, closing)",
+			"replace": "? IfArrowContinuationFitsWithRest(0, tail.width, limit, broken, closing)",
 			"note": "a tail whose branch breaks is charged the `);` that lands on a later line, so a fitting first tail line breaks its seams"
 		},
 		{
 			"name": "M-TERNARY-TAIL-BREAKS-OFF-BY-ONE",
 			"type": "anyparse.core.CollapsePass",
 			"method": "ternaryTailGate",
-			"find": "? IfArrowContinuationFits(0, tail.width, width + 1, broken, glued)",
-			"replace": "? IfArrowContinuationFits(0, tail.width, width + 2, broken, glued)",
+			"find": "? IfArrowContinuationFits(0, tail.width, limit, broken, closing)",
+			"replace": "? IfArrowContinuationFits(0, tail.width, limit + 1, broken, closing)",
 			"note": "a first tail line ending where a branch opens its group glues one column past the limit"
+		},
+		{
+			"name": "M-TERNARY-HEAD-GATE-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "return IfFirstLineExceeds(limit, broken, tailLine);",
+			"replace": "return tailLine;",
+			"note": "the head line of a glued ternary is not width-checked, so a condition head past the limit keeps the tail glued behind it"
+		},
+		{
+			"name": "M-TERNARY-HEAD-LIMIT-LOW",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "return IfFirstLineExceeds(limit, broken, tailLine);",
+			"replace": "return IfFirstLineExceeds(limit - 1, broken, tailLine);",
+			"note": "a head line of exactly the limit counts as overflowing, so the ternary breaks its seams although the head fits"
+		},
+		{
+			"name": "M-TERNARY-REST-AWARE-GLUE-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "restAwareGlues",
+			"find": "case Concat(parts) if (DocMeasure.gluesTernary(flat)):",
+			"replace": "case Concat(parts) if (false):",
+			"note": "a rest-aware ternary whose condition closes an opened group is never glued, so its `?` / `:` always break although the tail fits"
+		},
+		{
+			"name": "M-TERNARY-CLOSING-GATE-OFF",
+			"type": "anyparse.core.DocMeasure",
+			"method": "gluedTernaryTail",
+			"find": "closingLine: thenRun < 0 ? -1 : thenRun + ' : '.length + flatFirstLineWidthThroughBodyGroup(parts[4]),",
+			"replace": "closingLine: -1,",
+			"note": "the `) : else` line of an opened then-branch is not width-checked, so it overflows the limit"
+		},
+		{
+			"name": "M-TERNARY-CLOSING-REST-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "IfArrowContinuationFitsWithRest(0, tail.closingLine, limit, broken, glued);",
+			"replace": "IfArrowContinuationFits(0, tail.closingLine, limit, broken, glued);",
+			"note": "what follows the else branch on the `) : else` line is not charged, so that line overflows by that much"
+		},
+		{
+			"name": "M-TERNARY-CLOSING-ELSE-BREAKS-CHARGES-REST",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "IfArrowContinuationFits(0, tail.closingLine, limit, broken, glued)",
+			"replace": "IfArrowContinuationFitsWithRest(0, tail.closingLine, limit, broken, glued)",
+			"note": "an else branch that breaks on the `) : else` line is charged the content that lands on a later line, so a fitting closing line breaks the seams"
+		},
+		{
+			"name": "M-TERNARY-HEAD-PENDING-OFF",
+			"type": "anyparse.core.Renderer",
+			"method": "pushFlatWidthBranch",
+			"find": "final effPending: Int = n > width ? pendingSpace : 0;",
+			"replace": "final effPending: Int = 0;",
+			"note": "a strict-limit first-line probe ignores the separator still pending before it, so a head after `= ` glues one column past the limit"
 		},
 		{
 			"name": "M-FOR-BODY-PROBE-EAGER",
@@ -28226,15 +28282,16 @@
 		{
 			"name": "M-COLLAPSE-GLUE-TERNARY",
 			"type": "anyparse.core.CollapsePass",
-			"method": "gluesInfixChain",
-			"force": "true",
-			"note": "a rest-aware ternary pivot is forward-glued like an op-chain, so a ternary call argument hugs an opening paren branch the fork breaks before"
+			"method": "restAwareGlues",
+			"find": "subtreeOpens(parts[0], decisions) && DocMeasure.closeLineRun(commitOpens(parts[0], decisions, width)) >= 0;",
+			"replace": "subtreeOpens(flat, decisions);",
+			"note": "a rest-aware ternary pivot is forward-glued whenever anything in it opens, not only when its condition closes an opened group, so a ternary call argument hugs an opening paren branch the fork breaks before"
 		},
 		{
 			"name": "M-COLLAPSE-GLUE-REST-CHAIN-SKIPPED",
 			"type": "anyparse.core.CollapsePass",
 			"method": "chainGluedIfOpens",
-			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(gluedSide(fl, width))): gluedSide(fl, width);",
+			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (restAwareGlues(gluedSide(fl, width), decisions, width)):\ngluedSide(fl, width);",
 			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): gluedSide(fl, width);",
 			"note": "a rest-aware `&&` / `+` chain whose trailing paren opens is no longer forward-glued, so it breaks before `|| (` instead of hugging the paren"
 		},
@@ -32209,8 +32266,8 @@
 			"name": "M-CHAIN-GLUE-THRESHOLD-FIRES",
 			"type": "anyparse.core.CollapsePass",
 			"method": "chainGluedIfOpens",
-			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(gluedSide(fl, width))): gluedSide(fl, width);",
-			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;",
+			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (restAwareGlues(gluedSide(fl, width), decisions, width)):\ngluedSide(fl, width);",
+			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (restAwareGlues(fl, decisions, width)):\nfl;",
 			"note": "a rest-aware chain whose flat side a lineLength threshold partitions is not recognised as a glued infix chain, so it is never committed glued around its opened paren and breaks at its own operator instead"
 		},
 		{
