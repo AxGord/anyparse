@@ -97,7 +97,7 @@ final class CompilerNameProofTest extends Test {
 		Assert.isFalse(pooled((pool, config, root) -> {
 			final proof: CompilerNameProof = new CompilerNameProof();
 			proof.answerFor(() -> judgedBy([], [config]), new HaxeQueryPlugin());
-			proof.sameDeclaration('$root/a/b/Main.hx', MAIN_SOURCE, 0, MAIN_SOURCE, 0);
+			proof.sameDeclarations('$root/a/b/Main.hx', MAIN_SOURCE, MAIN_SOURCE, [{ before: 0, after: 0 }])[0];
 		}));
 		#else
 		Assert.pass('non-sys target');
@@ -108,9 +108,9 @@ final class CompilerNameProofTest extends Test {
 	@:killer('M-NAME-PROOF-NO-ASK-AGREES')
 	public function testNoConfigurationCompilingTheSiteIsNoAgreement(): Void {
 		final proof: CompilerNameProof = new CompilerNameProof();
-		Assert.isFalse(proof.sameDeclaration('a/b/Main.hx', 'x', 0, 'x', 0), 'no judges installed');
+		Assert.same([false], proof.sameDeclarations('a/b/Main.hx', 'x', 'x', [{ before: 0, after: 0 }]), 'no judges installed');
 		proof.answerFor(() -> judgedBy([], []), new HaxeQueryPlugin());
-		Assert.isFalse(proof.sameDeclaration('a/b/Main.hx', 'x', 0, 'x', 0), 'judges, none compiling the site');
+		Assert.same([false], proof.sameDeclarations('a/b/Main.hx', 'x', 'x', [{ before: 0, after: 0 }]), 'judges, none compiling the site');
 	}
 
 	@:pin('guard')
@@ -134,6 +134,95 @@ final class CompilerNameProofTest extends Test {
 			CompilerNameProof.samePosition(here, there),
 			CompilerNameProof.samePosition(here, null)
 		]);
+	}
+
+	/** Two sites asked in one round: the short name still binds `a.F`, the second site's rewritten text names `trace` instead. */
+	@:pin('control')
+	@:killer('M-NAME-PROOF-FIRST-PAIR-FOR-EVERY-SITE')
+	public function testEachSiteOfOneRoundGetsItsOwnVerdict(): Void {
+		#if (sys || nodejs)
+		final at: Int = MAIN_SOURCE.indexOf('F.make');
+		final verdicts: Array<Bool> = [];
+		Assert.isTrue(pooled((pool, config, root) -> {
+			final proof: CompilerNameProof = new CompilerNameProof();
+			proof.answerFor(() -> judgedBy([], [config]), new HaxeQueryPlugin());
+			for (verdict in proof.sameDeclarations('$root/a/b/Main.hx', MAIN_SOURCE, SHORT_SOURCE, [
+				{ before: at, after: SHORT_SOURCE.indexOf('F.make') },
+				{ before: at, after: SHORT_SOURCE.indexOf('trace') }
+			])) verdicts.push(verdict);
+			true;
+		}));
+		Assert.same([true, false], verdicts);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * One round asks the same file at two texts in turn: one declaring its own `F`, one calling `a.F`. Each answer is read
+	 * from its own text, so one drop of the cached module serves every ask.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-POSITIONS-FIRST-ASK-TEXT')
+	public function testEachAskOfOneRoundIsReadAtItsOwnText(): Void {
+		#if (sys || nodejs)
+		final local: String = '$SHORT_SOURCE\nclass F {\n\tpublic static function make():String {\n\t\treturn \'b\';\n\t}\n}\n';
+		final named: Array<String> = [];
+		Assert.isTrue(pooled((pool, config, root) -> {
+			final answers: Null<Array<Null<TypeReplyPosition>>> = pool.positionsIn([config], '$root/a/b/Main.hx', [
+				[
+					{ content: local, at: local.indexOf('F.make') },
+					{ content: MAIN_SOURCE, at: MAIN_SOURCE.indexOf('F.make') },
+					{ content: local, at: local.indexOf('F.make') }
+				]
+			])[0];
+			for (answer in answers ?? []) named.push(answer == null ? 'none' : answer.file.endsWith('a/F.hx') ? 'a.F' : 'own');
+			true;
+		}));
+		Assert.same(['own', 'a.F', 'own'], named);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Two configurations of one tree are asked in one round, and each answers its own asks. */
+	@:pin('guard')
+	public function testEveryConfigurationIsAskedInOneRound(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_name_proof_two', [
+			{ name: 'a/F.hx', source: F_SOURCE },
+			{ name: 'a/b/Main.hx', source: MAIN_SOURCE },
+			{ name: 'build.hxml', source: '-cp .\n-main a.b.Main\n--no-output\n' },
+			{ name: 'other.hxml', source: '-cp .\n-main a.b.Main\n--no-output\n-D other\n' }
+		]);
+		final memo: OracleRunMemo = new OracleRunMemo(false, () -> ['$root/a/F.hx', '$root/a/b/Main.hx']);
+		final configs: Array<OracleConfig> = OracleRunMemo.attach([
+			{ hxml: 'build.hxml', dir: root, defines: [] },
+			{ hxml: 'other.hxml', dir: root, defines: [] }
+		], memo);
+		memo.servers.start(configs);
+		final ask: PositionAsk = { content: SHORT_SOURCE, at: SHORT_SOURCE.indexOf('F.make') };
+		final lines: Array<Null<Int>> = [
+			for (answers in memo.servers.positionsIn(
+				configs, '$root/a/b/Main.hx', [[ask], [ask, ask]]
+			)) for (answer in answers ?? [null]) lineOf(answer)
+		];
+		memo.servers.stop();
+		CliFixture.removeDir(root);
+		Assert.same([3, 3, 3], lines);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-POOL-ASKS-NOT-INTERLEAVED')
+	public function testEveryConfigurationsFirstAskComesBeforeAnySecond(): Void {
+		final ask: PositionAsk = { content: '', at: 0 };
+		Assert.same(
+			[{ oracle: 0, ask: 0 }, { oracle: 2, ask: 0 }, { oracle: 0, ask: 1 }],
+			OracleServerPool.interleaved([0, 2], [[ask, ask], [ask], [ask]])
+		);
 	}
 
 	/** A coverage answer naming `known` configurations with no compiled set and `unknown` ones whose set is unknown. */

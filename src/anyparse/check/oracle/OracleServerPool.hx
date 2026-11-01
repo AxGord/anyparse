@@ -15,6 +15,12 @@ typedef PoolServer = {
 	var seen: Map<String, Null<String>>;
 }
 
+/** One question of `OracleServerPool.positionsIn`: the name at offset `at` of `content`. */
+typedef PositionAsk = {
+	content: String,
+	at: Int
+};
+
 /**
  * The run's own `haxe --wait` servers, one per configuration, for the plain typechecks a `--fix` run repeats over trees
  * that differ by a file or two: the risky fix's covering compile, its bisect probes, the oracle-assisted batch. The one
@@ -98,33 +104,10 @@ final class OracleServerPool {
 		return PhaseTimings.measure('oracle warm compile', compileTimed.bind(oracles));
 	}
 
-	/**
-	 * Where `oracle`'s server says the declaration of the name at offset `at` of `content` is written, `content` being read
-	 * as the text of `file` in place of its bytes on disk (`CompilerDisplayOracle.positionOver`); null when the pool holds
-	 * no server for it, a server did not take an invalidation, or the compiler names none. As before a compile, every path
-	 * the run may write whose text moved is dropped first, and then `file` itself, whose cached module the server would
-	 * answer from instead of `content`; `file` then counts as moved, so the next compile re-reads it.
-	 */
+	/** `positionsIn` for one name in one configuration. */
 	public function positionIn(oracle: OracleConfig, file: String, content: String, at: Int): Null<TypeReplyPosition> {
-		#if nodejs
-		if (!_servers.exists(keyOf(oracle))) return null;
-		_warming?.await();
-		final now: Map<String, Null<String>> = texts();
-		renew(oracle, now);
-		final server: Null<PoolServer> = _servers[keyOf(oracle)];
-		if (server == null) return null;
-		final replies: Array<HaxeRun> = HaxeSpawn.runAll([
-			for (path in moved(server.seen, now).concat([file])) invalidation(server, oracle, path)
-		], BUFFER, HaxeSpawn.parallelism());
-		if (!replies.foreach(reply -> CompilerServer.isServerReply(reply.out + reply.err))) {
-			end(oracle);
-			return null;
-		}
-		server.seen = [for (path => text in now) if (path != file) path => text];
-		return CompilerDisplayOracle.positionOver(server.port, oracle.hxml, oracle.dir, oracle.defines, file, content, at);
-		#else
-		return null;
-		#end
+		final answers: Null<Array<Null<TypeReplyPosition>>> = positionsIn([oracle], file, [[{ content: content, at: at }]])[0];
+		return answers == null ? null : answers[0];
 	}
 
 	/** Whether any server of the pool answers compiles. */
@@ -138,6 +121,49 @@ final class OracleServerPool {
 		for (batch in _batches) batch.cancel();
 		_batches.clear();
 		_servers.clear();
+	}
+
+	/**
+	 * For each of `oracles`, where its server says the declaration of the name is written at each of its `asks`, an ask's
+	 * `content` read as the text of `file` in place of its bytes on disk (`CompilerDisplayOracle.positionsOver`); null for a
+	 * configuration the pool holds no server for or whose server did not take an invalidation, and a null answer where the
+	 * compiler names none. As before a compile, every path the run may write whose text moved is dropped first, and then
+	 * `file` itself, whose cached module the server would answer from instead of a text handed in; one drop serves every
+	 * ask, since the compiler keeps no module it typed from a handed-in text. `file` then counts as moved, so the next
+	 * compile re-reads it. The servers are asked at once, each configuration's asks interleaved with the others'.
+	 */
+	public function positionsIn(
+		oracles: Array<OracleConfig>, file: String, asks: Array<Array<PositionAsk>>
+	): Array<Null<Array<Null<TypeReplyPosition>>>> {
+		final out: Array<Null<Array<Null<TypeReplyPosition>>>> = [for (_ in oracles) null];
+		#if nodejs
+		final held: Array<Int> = [for (i in 0...oracles.length) if (_servers.exists(keyOf(oracles[i]))) i];
+		if (held.length == 0) return out;
+		_warming?.await();
+		final now: Map<String, Null<String>> = texts();
+		for (i in held) renew(oracles[i], now);
+		final asked: Array<Int> = [for (i in held) if (_servers.exists(keyOf(oracles[i]))) i];
+		final unheard: Array<Int> = invalidate(oracles, asked, now, [file]);
+		// a server that did not take every invalidation may hold a text that is gone: it answers nothing from here on
+		for (i in unheard) end(oracles[i]);
+		final requests: Array<PositionRequest> = [];
+		final owners: Array<{ oracle: Int, ask: Int }> = [];
+		for (owner in interleaved([for (i in asked) if (!unheard.contains(i)) i], asks)) {
+			final server: Null<PoolServer> = _servers[keyOf(oracles[owner.oracle])];
+			if (server == null) continue;
+			// every ask about `file` is answered from the text handed in, so the next compile re-reads its disk bytes
+			server.seen = [for (path => text in now) if (path != file) path => text];
+			requests.push(requestOf(server.port, oracles[owner.oracle], asks[owner.oracle][owner.ask]));
+			owners.push(owner);
+			out[owner.oracle] ??= [for (_ in asks[owner.oracle]) null];
+		}
+		final answers: Array<Null<TypeReplyPosition>> = CompilerDisplayOracle.positionsOver(file, requests);
+		for (k => owner in owners) {
+			final row: Null<Array<Null<TypeReplyPosition>>> = out[owner.oracle];
+			if (row != null) row[owner.ask] = answers[k];
+		}
+		#end
+		return out;
 	}
 
 	/** `start`, untimed. */
@@ -176,7 +202,7 @@ final class OracleServerPool {
 		final now: Map<String, Null<String>> = texts();
 		for (oracle in oracles) renew(oracle, now);
 		final asked: Array<Int> = [for (i in 0...oracles.length) if (_servers.exists(keyOf(oracles[i]))) i];
-		final unheard: Array<Int> = invalidate(oracles, asked, now);
+		final unheard: Array<Int> = invalidate(oracles, asked, now, []);
 		// a server that did not take every invalidation may hold a text that is gone: it answers nothing from here on
 		for (i in unheard) end(oracles[i]);
 		final compiled: Array<Int> = [for (i in asked) if (!unheard.contains(i)) i];
@@ -242,14 +268,16 @@ final class OracleServerPool {
 
 	/**
 	 * Every path whose text in `now` moved since the last compile through the server of each `oracles[i]`, `i` in `asked`,
-	 * invalidated on that server; the indices whose server did not take every one of them.
+	 * invalidated on that server, and every path of `dropped` with them; the indices whose server did not take every one.
 	 */
-	private function invalidate(oracles: Array<OracleConfig>, asked: Array<Int>, now: Map<String, Null<String>>): Array<Int> {
+	private function invalidate(
+		oracles: Array<OracleConfig>, asked: Array<Int>, now: Map<String, Null<String>>, dropped: Array<String>
+	): Array<Int> {
 		final invalidations: Array<{ index: Int, job: SpawnJob }> = [];
 		for (i in asked) {
 			final oracle: OracleConfig = oracles[i];
 			final server: Null<PoolServer> = _servers[keyOf(oracle)];
-			if (server != null) for (path in moved(server.seen, now))
+			if (server != null) for (path in moved(server.seen, now).concat(dropped))
 				invalidations.push({ index: i, job: invalidation(server, oracle, path) });
 		}
 		final replies: Array<HaxeRun> = HaxeSpawn.runAll([for (v in invalidations) v.job], BUFFER, HaxeSpawn.parallelism());
@@ -259,6 +287,18 @@ final class OracleServerPool {
 		)
 			unheard.push(asking.index);
 		return unheard;
+	}
+
+	/**
+	 * Each ask of each of `oracles` (indices into `asks`), every configuration's first ask before any one's second, so the
+	 * requests the compile budget overlaps are spread over the servers instead of queued at one. PURE.
+	 */
+	public static function interleaved(oracles: Array<Int>, asks: Array<Array<PositionAsk>>): Array<{ oracle: Int, ask: Int }> {
+		final out: Array<{ oracle: Int, ask: Int }> = [];
+		var depth: Int = 0;
+		for (i in oracles) depth = asks[i].length > depth ? asks[i].length : depth;
+		for (j in 0...depth) for (i in oracles) if (j < asks[i].length) out.push({ oracle: i, ask: j });
+		return out;
 	}
 
 	private static inline function keyOf(oracle: OracleConfig): String {
@@ -315,6 +355,18 @@ final class OracleServerPool {
 	/** `oracle`'s server on `port`, started as the one job of its own batch, so it can be ended alone (`end`). */
 	private static function serve(port: Int, oracle: OracleConfig): PendingRuns {
 		return HaxeSpawn.startAll([{ args: ['--wait', '$port'], cwd: oracle.dir, tethered: true }], BUFFER, 1);
+	}
+
+	/** The display request of `ask` to `oracle`'s server on `port`. */
+	private static function requestOf(port: Int, oracle: OracleConfig, ask: PositionAsk): PositionRequest {
+		return {
+			port: port,
+			hxml: oracle.hxml,
+			cwd: oracle.dir,
+			defines: oracle.defines,
+			content: ask.content,
+			at: ask.at
+		};
 	}
 
 }

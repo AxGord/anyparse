@@ -336,6 +336,17 @@ final class CompilerServer {
 	}
 
 	/**
+	 * `content` framed as the client reads it under `-D display-stdin`: a little-endian 32-bit byte length, then a `\x01`
+	 * and the text — the server takes what follows `\x01` as the display file's source instead of the bytes on disk.
+	 */
+	public static function displayStdin(content: String): Buffer {
+		final body: Buffer = Buffer.from('\x01$content', UTF8);
+		final head: Buffer = Buffer.alloc(STDIN_LENGTH_BYTES);
+		head.writeInt32LE(body.length, 0);
+		return Buffer.concat([head, body]);
+	}
+
+	/**
 	 * The recorded server when it is still alive AND still answers as a Haxe compilation
 	 * server, with every possibly-stale linted file invalidated first. Null when there is
 	 * no usable server: nothing recorded, the process is gone, the port answers as
@@ -494,17 +505,6 @@ final class CompilerServer {
 	/** `file` resolved against the process cwd (node-normalised, NOT symlink-followed), or `file` on failure. */
 	private static function absolute(file: String): String {
 		return try sys.FileSystem.absolutePath(file) catch (exception: haxe.Exception) file;
-	}
-
-	/**
-	 * `content` framed as the client reads it under `-D display-stdin`: a little-endian 32-bit byte length, then a `\x01`
-	 * and the text — the server takes what follows `\x01` as the display file's source instead of the bytes on disk.
-	 */
-	private static function displayStdin(content: String): Buffer {
-		final body: Buffer = Buffer.from('\x01$content', UTF8);
-		final head: Buffer = Buffer.alloc(STDIN_LENGTH_BYTES);
-		head.writeInt32LE(body.length, 0);
-		return Buffer.concat([head, body]);
 	}
 	#end
 

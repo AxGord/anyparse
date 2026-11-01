@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check.NameOracle;
+import anyparse.check.Check.NameSite;
 
 /**
  * A `NameOracle` answering from the rewritten text alone and counting the questions — what a rule's planning fixtures
@@ -18,9 +19,9 @@ final class FixedNameOracle implements NameOracle {
 		_answer = answer;
 	}
 
-	public function sameDeclaration(file: String, before: String, beforeAt: Int, after: String, afterAt: Int): Bool {
-		asked++;
-		return _answer(after, afterAt);
+	public function sameDeclarations(file: String, before: String, after: String, sites: Array<NameSite>): Array<Bool> {
+		asked += sites.length;
+		return [for (site in sites) _answer(after, site.after)];
 	}
 
 	/** An oracle that confirms every rewrite. */

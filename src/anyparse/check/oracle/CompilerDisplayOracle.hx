@@ -1,5 +1,7 @@
 package anyparse.check.oracle;
 
+import anyparse.check.oracle.HaxeSpawn.SpawnJob;
+import anyparse.core.TempScratch;
 import anyparse.query.FileIdentity;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -69,6 +71,9 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 
 	/** The compiler flag a display request is spelled with. */
 	private static inline final DISPLAY: String = '--display';
+
+	/** Output a position reply may carry: one `<pos>` element, or an error. */
+	private static inline final REPLY_OUTPUT: Int = 1024 * 1024;
 
 	private final _hxml: String;
 	private final _cwd: Null<String>;
@@ -146,30 +151,47 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	}
 
 	/**
-	 * Where the compiler on `port` (a server of `hxml` run from `cwd` under `defines`) says the declaration of the name at
-	 * offset `at` of `content` is written, `content` being read as the text of `file` in place of its bytes on disk
-	 * (`-D display-stdin`); null when it names none. The caller drops the server's cached module of `file` first: a module
-	 * a compile cached is answered from instead of the text handed in.
+	 * Where the compiler says the declaration of the name each of `requests` asks about is written, the request's `content`
+	 * read as the text of `file` in place of its bytes on disk (`-D display-stdin`); null for one it names none for. Asked at
+	 * once within the compile budget: requests to one server wait their turn there, requests to different servers overlap.
+	 * The caller drops each server's cached module of `file` first: a module a compile cached is answered from instead of
+	 * the text handed in.
 	 */
-	public static function positionOver(
-		port: Int, hxml: String, cwd: Null<String>, defines: Array<String>, file: String, content: String, at: Int
-	): Null<TypeReplyPosition> {
-		invocations++;
+	public static function positionsOver(file: String, requests: Array<PositionRequest>): Array<Null<TypeReplyPosition>> {
+		invocations += requests.length;
+		final out: Array<Null<TypeReplyPosition>> = [for (_ in requests) null];
 		#if nodejs
-		final bytePos: Int = haxe.io.Bytes.ofString(content.substring(0, at)).length;
-		final forms: Array<String> = [FileIdentity.realPath(file)];
-		for (form in formsOf(file, cwd)) addForm(forms, form);
-		for (form in forms) {
-			final reply: String = CompilerServer.connect(
-				port, hxml, cwd, ['-D', 'display-stdin', DISPLAY, '$form@$bytePos@position'], defines, content
-			)?.output ?? '';
-			// A path the compiler does not take for the display file's has it read the disk text, where the cursor names nothing.
-			if (reply.indexOf(NO_COMPLETION_POINT) == -1) return parsePositionResponse(reply);
+		if (requests.length == 0) return out;
+		final dir: Null<String> =
+			try js.node.Fs.mkdtempSync(Path.join([TempScratch.root(), 'apq-display-'])) catch (exception: haxe.Exception) null;
+		if (dir == null) return out;
+		final inputs: Null<Map<String, String>> = stdinFiles(dir, requests);
+		if (inputs == null) {
+			HaxeSpawn.dropBatch(dir);
+			return out;
 		}
-		return null;
-		#else
-		return null;
+		final forms: Array<Array<String>> = [for (request in requests) displayForms(file, request.cwd)];
+		var asking: Array<Int> = [for (i in 0...requests.length) i];
+		var form: Int = 0;
+		while (asking.length > 0) {
+			final replies: Array<HaxeRun> = HaxeSpawn.runAll(
+				[for (i in asking) positionJob(requests[i], forms[i][form], inputs)], REPLY_OUTPUT, HaxeSpawn.parallelism()
+			);
+			final next: Array<Int> = [];
+			for (k => i in asking) {
+				final reply: String = replies[k].out + replies[k].err;
+				// A path the compiler does not take for the display file's has it read the disk text, where the cursor names nothing.
+				if (reply.indexOf(NO_COMPLETION_POINT) == -1)
+					out[i] = parsePositionResponse(reply)
+				else if (form + 1 < forms[i].length)
+					next.push(i);
+			}
+			asking = next;
+			form++;
+		}
+		HaxeSpawn.dropBatch(dir);
 		#end
+		return out;
 	}
 
 	/**
@@ -331,6 +353,38 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		};
 	}
 
+	/**
+	 * Each distinct `content` of `requests`, framed for `-D display-stdin` (`CompilerServer.displayStdin`) in a file of
+	 * `dir`, by content; null when one could not be written.
+	 */
+	private static function stdinFiles(dir: String, requests: Array<PositionRequest>): Null<Map<String, String>> {
+		final out: Map<String, String> = [];
+		#if nodejs
+		var count: Int = 0;
+		for (request in requests) if (!out.exists(request.content)) {
+			final input: String = Path.join([dir, 'stdin-${count++}']);
+			try
+				js.node.Fs.writeFileSync(input, CompilerServer.displayStdin(request.content))
+			catch (exception: haxe.Exception)
+				return null;
+			out[request.content] = input;
+		}
+		#end
+		return out;
+	}
+
+	/** The client process asking `request`'s server for a position, the display file spelled `form`, its text read from `inputs`. */
+	private static function positionJob(request: PositionRequest, form: String, inputs: Map<String, String>): SpawnJob {
+		final bytePos: Int = haxe.io.Bytes.ofString(request.content.substring(0, request.at)).length;
+		return {
+			args: CompilerServer.connectArgs(
+				request.port, request.hxml, ['-D', 'display-stdin', DISPLAY, '$form@$bytePos@position'], request.defines
+			),
+			cwd: request.cwd,
+			stdin: inputs[request.content]
+		};
+	}
+
 	#if nodejs
 	private inline function connectRun(extra: Array<String>): Null<String> {
 		return CompilerServer.connect(_port, _hxml, _cwd, extra, _defines)?.output;
@@ -383,6 +437,13 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	 */
 	private inline function pathForms(file: String): Array<String> {
 		return formsOf(file, _cwd);
+	}
+
+	/** Every spelling of `file` a display request may name it by, its real path first (`formsOf`). */
+	private static function displayForms(file: String, cwd: Null<String>): Array<String> {
+		final forms: Array<String> = [FileIdentity.realPath(file)];
+		for (form in formsOf(file, cwd)) addForm(forms, form);
+		return forms;
 	}
 
 	/** `pathForms` for a client run from `cwd`. */
@@ -440,4 +501,17 @@ typedef TypeReplyPosition = {
 	first: Int,
 	last: Int,
 	byLine: Bool
+};
+
+/**
+ * One request of `CompilerDisplayOracle.positionsOver`: the server on `port` of `hxml` run from `cwd` under `defines`,
+ * and the name at offset `at` of `content` it is asked about.
+ */
+typedef PositionRequest = {
+	port: Int,
+	hxml: String,
+	cwd: Null<String>,
+	defines: Array<String>,
+	content: String,
+	at: Int
 };

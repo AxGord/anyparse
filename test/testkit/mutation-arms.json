@@ -17385,8 +17385,8 @@
 		{
 			"name": "M-POOL-POSITION-NEVER-RENEWS",
 			"type": "anyparse.check.oracle.OracleServerPool",
-			"method": "positionIn",
-			"find": "renew(oracle, now);",
+			"method": "positionsIn",
+			"find": "for (i in held) renew(oracles[i], now);",
 			"replace": "",
 			"note": "a position request through a drifted server invalidates it path by path, one walk of its whole cache each, instead of asking a fresh server"
 		},
@@ -33495,7 +33495,7 @@
 		{
 			"name": "M-NAME-PROOF-ALWAYS-SAME",
 			"type": "anyparse.check.oracle.CompilerNameProof",
-			"method": "sameDeclarationTimed",
+			"method": "agreed",
 			"force": "true",
 			"note": "every value-site rewrite reads as confirmed, so a call a build macro of the build configuration re-points is shortened"
 		},
@@ -33510,31 +33510,31 @@
 		{
 			"name": "M-DISPLAY-STDIN-DROPPED",
 			"type": "anyparse.check.oracle.CompilerDisplayOracle",
-			"method": "positionOver",
-			"find": "defines, content",
-			"replace": "defines",
+			"method": "positionJob",
+			"find": "stdin: inputs[request.content]",
+			"replace": "stdin: null",
 			"note": "the text handed in never reaches the compiler, so a rewrite not yet on disk is never asked about"
 		},
 		{
 			"name": "M-DISPLAY-STDIN-NOT-INVALIDATED",
 			"type": "anyparse.check.oracle.OracleServerPool",
-			"method": "positionIn",
-			"find": "moved(server.seen, now).concat([file])",
+			"method": "invalidate",
+			"find": "moved(server.seen, now).concat(dropped)",
 			"replace": "moved(server.seen, now)",
 			"note": "the module the warm compile cached is answered from, so the text handed in is ignored"
 		},
 		{
 			"name": "M-POOL-POSITION-STALE-WRITES",
 			"type": "anyparse.check.oracle.OracleServerPool",
-			"method": "positionIn",
-			"find": "moved(server.seen, now).concat([file])",
-			"replace": "[file]",
+			"method": "invalidate",
+			"find": "moved(server.seen, now).concat(dropped)",
+			"replace": "dropped",
 			"note": "a path the run wrote within the second the server last read it is answered at its old text, since the server compares modification times in whole seconds"
 		},
 		{
 			"name": "M-NAME-PROOF-NO-ASK-AGREES",
 			"type": "anyparse.check.oracle.CompilerNameProof",
-			"method": "sameDeclarationTimed",
+			"method": "agreed",
 			"find": "return asked.length > 0;",
 			"replace": "return true;",
 			"note": "a site no configuration compiles reads as confirmed, so a rewrite nothing typechecked the meaning of is applied"
@@ -33542,10 +33542,34 @@
 		{
 			"name": "M-NAME-PROOF-NO-ANSWER-AGREES",
 			"type": "anyparse.check.oracle.CompilerNameProof",
-			"method": "sameDeclarationTimed",
+			"method": "agreed",
 			"find": "if (was == null || !samePosition(",
 			"replace": "if (was != null && !samePosition(",
 			"note": "a configuration naming no declaration for the original reads as agreement, so a broken display answer confirms any rewrite"
+		},
+		{
+			"name": "M-NAME-PROOF-FIRST-PAIR-FOR-EVERY-SITE",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "pairAt",
+			"find": "[answers[2 * m], answers[2 * m + 1]]",
+			"replace": "[answers[0], answers[1]]",
+			"note": "every site of one round is judged by the first site's two answers, so a rewrite the compiler re-points rides on its neighbour's agreement"
+		},
+		{
+			"name": "M-POOL-POSITIONS-FIRST-ASK-TEXT",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "positionsIn",
+			"find": "asks[owner.oracle][owner.ask]",
+			"replace": "asks[owner.oracle][0]",
+			"note": "every ask of one round is read at the first ask's text, so the rewritten text is never the one asked about"
+		},
+		{
+			"name": "M-POOL-ASKS-NOT-INTERLEAVED",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "interleaved",
+			"find": "for (j in 0...depth) for (i in oracles)",
+			"replace": "for (i in oracles) for (j in 0...depth)",
+			"note": "one configuration's asks are queued together, so the compile budget's overlapping requests wait at one server while the others idle"
 		},
 		{
 			"name": "M-INLINE-METHOD-OTHER-RECEIVER",

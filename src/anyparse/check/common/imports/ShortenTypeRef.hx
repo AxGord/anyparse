@@ -5,6 +5,7 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.NameOracle;
 import anyparse.check.Check.NameOracleAware;
+import anyparse.check.Check.NameSite;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit;
@@ -431,14 +432,16 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		final oracle: Null<NameOracle> = _nameOracle;
 		if (oracle == null) return [for (r in rewrites) spanKey(r.site)];
 		final after: String = CanonicalEdit.applyEdits(source, [for (e in edits) { span: e.span, text: e.text }]);
-		final out: Array<String> = [];
+		final sites: Array<NameSite> = [];
 		for (r in rewrites) {
 			final from: Int = r.site.from;
-			final beforeAt: Int = from + source.substring(from, r.site.to).lastIndexOf('.') + 1;
-			final afterAt: Int = shiftedStart(from, edits) + r.text.lastIndexOf('.') + 1;
-			if (!oracle.sameDeclaration(file, source, beforeAt, after, afterAt)) out.push(spanKey(r.site));
+			sites.push({
+				before: from + source.substring(from, r.site.to).lastIndexOf('.') + 1,
+				after: shiftedStart(from, edits) + r.text.lastIndexOf('.') + 1
+			});
 		}
-		return out;
+		final same: Array<Bool> = oracle.sameDeclarations(file, source, after, sites);
+		return [for (k => r in rewrites) if (!same[k]) spanKey(r.site)];
 	}
 
 	/**

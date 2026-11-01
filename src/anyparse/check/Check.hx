@@ -433,15 +433,22 @@ interface OracleAssisted {
 
 }
 
+/** One written name a rewrite moves: its offset in the text before the rewrite and in the text after it. */
+typedef NameSite = {
+	before: Int,
+	after: Int
+};
+
 /**
- * The compiler's answer to whether a rewrite keeps what a written name means: the name at `beforeAt` of `before` and the
- * one at `afterAt` of `after`, both read as the text of `file`, name the same declaration under every configuration that
- * compiles the site. False on any disagreement and wherever no configuration answers — never a guess.
+ * The compiler's answer to whether a rewrite keeps what a written name means: for each of `sites`, the name at its
+ * `before` offset of `before` and the one at its `after` offset of `after`, both read as the text of `file`, name the same
+ * declaration under every configuration that compiles the site. False on any disagreement and wherever no configuration
+ * answers — never a guess. Every site of one rewrite of a file is asked at once, so the compiler is asked in one round.
  */
 @:nullSafety(Strict)
 interface NameOracle {
 
-	public function sameDeclaration(file: String, before: String, beforeAt: Int, after: String, afterAt: Int): Bool;
+	public function sameDeclarations(file: String, before: String, after: String, sites: Array<NameSite>): Array<Bool>;
 
 }
 
