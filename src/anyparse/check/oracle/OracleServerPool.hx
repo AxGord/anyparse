@@ -32,7 +32,9 @@ typedef PositionAsk = {
  * gives it up (`end`) and when `apq` itself is gone — and each is TETHERED to that driver (`SpawnJob.tethered`), so a
  * kill that takes the driver down with `apq` (a SIGKILL of their whole process group: a timed-out or stopped agent's
  * shell) takes the servers too, where it used to leave each one holding a whole compiled project with no owner. Never
- * kept past the run: `CompilerServer` is the persistent kind, for report mode.
+ * kept past the run: `CompilerServer` is the persistent kind, for report mode. A server listens on a random loopback
+ * port that a bind probe found free (`portIsFree`): `haxe --wait` exits at once on a port something else holds, and the
+ * readiness poll would then be answered by that holder or by nothing.
  *
  * ## A warm answer is believed only when it is GREEN
  *
@@ -62,6 +64,14 @@ final class OracleServerPool {
 
 	private static inline final PORT_SPAN: Int = 40000;
 
+	/** How many candidate ports are tried for one server before it is given up on (`freePort`). */
+	private static inline final PORT_PROBES: Int = 8;
+
+	/** Exits 1 when the loopback port named by its last argument cannot be bound — the bind `haxe --wait` makes first. */
+	private static inline final BIND_PROBE: String = 'const n=Number(process.argv[process.argv.length-1]);'
+		+ 'require("net").createServer().once("error",()=>process.exit(1))'
+		+ '.listen(n,"127.0.0.1",function(){this.close(()=>process.exit(0))})';
+
 	/**
 	 * How many moved paths a server is invalidated for before it is replaced by a fresh one instead (`renew`): the server
 	 * answers invalidations one at a time, each a walk of everything it holds, so past this many a fresh server's first
@@ -77,14 +87,18 @@ final class OracleServerPool {
 	/** Every path the run may write, read afresh at each compile (`OracleRunMemo`'s list). */
 	private final _written: () -> Array<String>;
 
+	/** The next port a server may be tried on: random unless a caller names them, which a test does to hold one. */
+	private final _candidate: () -> Int;
+
 	/** Whether `start` started the servers: the pool starts once per run. */
 	private var _started: Bool = false;
 
 	/** Each server's first compile, run in the background from `start`. */
 	private var _warming: Null<PendingRuns> = null;
 
-	public function new(written: () -> Array<String>) {
+	public function new(written: () -> Array<String>, ?candidate: () -> Int) {
 		_written = written;
+		_candidate = candidate ?? (() -> PORT_BASE + Std.random(PORT_SPAN));
 	}
 
 	/**
@@ -176,14 +190,17 @@ final class OracleServerPool {
 		if (usable.length == 0) return;
 		_started = true;
 		final ports: Array<Int> = [];
+		final serving: Array<OracleConfig> = [];
 		for (o in usable) {
-			final port: Int = freePort(ports);
+			final port: Null<Int> = freePort(ports);
+			if (port == null) continue;
 			ports.push(port);
+			serving.push(o);
 			_batches[keyOf(o)] = serve(port, o);
 		}
 		final snapshot: Map<String, Null<String>> = texts();
 		final warm: Array<SpawnJob> = [];
-		for (i => o in usable) if (ready(ports[i], o)) {
+		for (i => o in serving) if (ready(ports[i], o)) {
 			_servers[keyOf(o)] = { port: ports[i], seen: snapshot };
 			warm.push({ args: compileArgs(ports[i], o), cwd: o.dir });
 		} else {
@@ -240,15 +257,20 @@ final class OracleServerPool {
 	private function renew(oracle: OracleConfig, now: Map<String, Null<String>>): Void {
 		final server: Null<PoolServer> = _servers[keyOf(oracle)];
 		if (server == null || moved(server.seen, now).length <= RESTART_AT) return;
-		PhaseTimings.time('oracle server restart', () -> {
+		PhaseTimings.time('oracle server restart', restart.bind(oracle, now));
+	}
+
+	/** `renew`'s replacement: `oracle` left with a fresh server on a free port, or with none. */
+	private function restart(oracle: OracleConfig, now: Map<String, Null<String>>): Void {
+		end(oracle);
+		final free: Null<Int> = freePort([]);
+		if (free == null) return;
+		final port: Int = free;
+		_batches[keyOf(oracle)] = serve(port, oracle);
+		if (ready(port, oracle))
+			_servers[keyOf(oracle)] = { port: port, seen: now }
+		else
 			end(oracle);
-			final port: Int = freePort([]);
-			_batches[keyOf(oracle)] = serve(port, oracle);
-			if (ready(port, oracle))
-				_servers[keyOf(oracle)] = { port: port, seen: now }
-			else
-				end(oracle);
-		});
 	}
 
 	/** End `oracle`'s server: it answers nothing from here on, and the compiled project it holds is freed. */
@@ -258,12 +280,17 @@ final class OracleServerPool {
 		_servers.remove(keyOf(oracle));
 	}
 
-	/** A random port neither in `taken` nor one a server of the pool listens on. */
-	private function freePort(taken: Array<Int>): Int {
+	/**
+	 * A port neither in `taken` nor one a server of the pool listens on, and that nothing else holds (`portIsFree`); null
+	 * when none of `PORT_PROBES` candidates qualified, so the configuration gets no server rather than one that cannot bind.
+	 */
+	private function freePort(taken: Array<Int>): Null<Int> {
 		final used: Array<Int> = taken.concat([for (server in _servers) server.port]);
-		var port: Int = PORT_BASE + Std.random(PORT_SPAN);
-		while (used.contains(port)) port = PORT_BASE + Std.random(PORT_SPAN);
-		return port;
+		for (_ in 0...PORT_PROBES) {
+			final port: Int = _candidate();
+			if (!used.contains(port) && portIsFree(port)) return port;
+		}
+		return null;
 	}
 
 	/**
@@ -298,6 +325,22 @@ final class OracleServerPool {
 		for (i in oracles) depth = asks[i].length > depth ? asks[i].length : depth;
 		for (j in 0...depth) for (i in oracles) if (j < asks[i].length) out.push({ oracle: i, ask: j });
 		return out;
+	}
+
+	/**
+	 * Whether `haxe --wait` can bind `port` on the loopback now. A listener already there
+	 * makes the server exit at once, and the readiness poll would then be answered by that
+	 * listener or by nothing. A probe that cannot run says free: `ready` is the verdict on a server that does not come up.
+	 */
+	public static function portIsFree(port: Int): Bool {
+		#if nodejs
+		final res: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
+			js.Node.process.execPath, ['-e', BIND_PROBE, '$port'], { stdio: 'ignore' }
+		);
+		return res.status != 1;
+		#else
+		return true;
+		#end
 	}
 
 	private static inline function keyOf(oracle: OracleConfig): String {
