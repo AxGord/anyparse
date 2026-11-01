@@ -29,7 +29,7 @@ final class OracleRunMemoTest extends Test {
 	private static final MUTATOR: String = 'class Mutator {\n\tpublic static function once():Void {\n'
 		+ '\t\tif (sys.FileSystem.exists(\'mutated.flag\')) return;\n\t\tsys.io.File.saveContent(\'mutated.flag\', \'\');\n'
 		+ '\t\tsys.io.File.saveContent(\'Main.hx\', \'class Main { static function main() { nope(); } }\\n\');\n\t}\n}\n';
-	private static final BUILD: String = '-cp .\n-main Main\n--js out.js\n' + CompileCounter.MACRO;
+	private static final BUILD: String = '-cp .\n-main Main\n--js out.js\n${CompileCounter.MACRO}';
 	#end
 
 	/** The coverage probe of the tree a baseline just compiled with `-v` IS that compile, so it costs none of its own. */
@@ -125,7 +125,7 @@ final class OracleRunMemoTest extends Test {
 		final servers: Array<Int> = [
 			for (port in ports) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
 		];
-		final driver: Null<Int> = pool?._batch?._pid;
+		final driver: Null<Int> = pool == null ? null : [for (batch in pool._batches) batch._pid][0];
 		Assert.isTrue(servers.length > 0, 'the server runs');
 		Assert.notNull(driver, 'the servers have a driver');
 		if (driver != null) Assert.equals(0, ProcessProbe.outlivingKilledDriver(driver, servers).length, 'the server outlived its driver');
@@ -193,6 +193,136 @@ final class OracleRunMemoTest extends Test {
 		js.node.Fs.utimesSync(main, stamp, stamp);
 		if (pool != null) for (server in pool._servers) server.seen = pool.texts();
 		Assert.isTrue(CompilerOracle.typecheckAll(oracles).match(Confirmed), 'a stale warm rejection was taken as the verdict');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/**
+	 * A server whose tree moved by more paths than invalidating them is worth is replaced by a fresh one, which compiles the
+	 * tree as it is now — staged with a rewrite inside the second the first server compiled, which no modification time
+	 * tells — and the server it replaced is ended.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-NEVER-RESTARTS')
+	@:access(anyparse.check.oracle.OracleServerPool)
+	@:access(unit.check.ProcessProbe)
+	public function testADriftedServerIsReplacedByAFreshOne(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final main: String = '$dir/Main.hx';
+		final save: (String, String) -> Void = sys.io.File.saveContent;
+		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.txt'];
+		for (pad in pads) save(pad, 'a');
+		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
+			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main].concat(pads))
+		);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first server compiles the first text');
+		final first: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final replaced: Array<Int> = [
+			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
+		];
+		for (pad in pads) save(pad, 'b');
+		final stamp: Date = js.node.Fs.statSync(main).mtime;
+		save(main, BAD);
+		js.node.Fs.utimesSync(main, stamp, stamp);
+		final status: Null<Int> = pool?.compile(oracles)[0]?.status;
+		Assert.isTrue(status != null && status != 0, 'the drifted configuration did not answer the text it holds now');
+		final second: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		Assert.equals(1, second.length, 'the drifted configuration keeps a server');
+		Assert.equals(
+			0, second.filter(port -> first.contains(port)).length, 'the drifted server was invalidated path by path, not replaced'
+		);
+		Assert.equals(0, ProcessProbe.awaitGone(replaced, ProcessProbe.GONE_MS).length, 'the replaced server still runs');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/**
+	 * A server the pool gives up on is ended alone: each server is the one job of its own batch, so the server of the other
+	 * configuration keeps running and still answers its compiles.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-END-CANCELS-ALL')
+	@:access(anyparse.check.oracle.OracleServerPool)
+	@:access(unit.check.ProcessProbe)
+	public function testEndingOneServerLeavesTheOthersRunning(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		sys.io.File.saveContent('$dir/other.hxml', BUILD);
+		final oracles: Array<OracleConfig> = OracleRunMemo.attach([
+			{ hxml: 'build.hxml', dir: dir, defines: [] },
+			{ hxml: 'other.hxml', dir: dir, defines: [] }
+		], new OracleRunMemo(false, () -> ['$dir/Main.hx']));
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		if (pool == null || HaxeSpawn.resident() < 2) {
+			pool?.stop();
+			CliFixture.removeDir(dir);
+			Assert.pass('the machine holds one server only');
+			return;
+		}
+		final ended: Null<Int> = pool._servers[OracleServerPool.keyOf(oracles[0])]?.port;
+		final kept: Null<Int> = pool._servers[OracleServerPool.keyOf(oracles[1])]?.port;
+		Assert.notNull(ended, 'the first configuration has a server');
+		Assert.notNull(kept, 'the second configuration has a server');
+		final endedPids: Array<Int> = ended == null ? [] : ProcessProbe.pidsRunning('haxe --wait $ended');
+		final keptPids: Array<Int> = kept == null ? [] : ProcessProbe.pidsRunning('haxe --wait $kept');
+		Assert.isTrue(endedPids.length > 0 && keptPids.length > 0, 'both servers run');
+		pool.end(oracles[0]);
+		Assert.equals(0, ProcessProbe.awaitGone(endedPids, ProcessProbe.GONE_MS).length, 'the ended server still runs');
+		Assert.equals(keptPids.length, keptPids.filter(ProcessProbe.alive).length, 'ending one server ended the other too');
+		Assert.equals(0, pool.compile([oracles[1]])[0]?.status, 'the kept server no longer answers its compiles');
+		pool.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/**
+	 * A position request through a server whose tree drifted past what invalidating it is worth is answered by a fresh
+	 * server, as a compile is: the drifted one is ended.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-POSITION-NEVER-RENEWS')
+	@:access(anyparse.check.oracle.OracleServerPool)
+	@:access(unit.check.ProcessProbe)
+	public function testAPositionRequestReplacesADriftedServer(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final main: String = '$dir/Main.hx';
+		final save: (String, String) -> Void = sys.io.File.saveContent;
+		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.txt'];
+		for (pad in pads) save(pad, 'a');
+		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
+			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main].concat(pads))
+		);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first server compiles the first text');
+		final first: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final replaced: Array<Int> = [
+			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
+		];
+		for (pad in pads) save(pad, 'b');
+		pool?.positionIn(oracles[0], main, GOOD, GOOD.indexOf('trace'));
+		final second: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		Assert.equals(1, second.length, 'the drifted configuration keeps a server');
+		Assert.equals(
+			0, second.filter(port -> first.contains(port)).length, 'the drifted server was invalidated path by path, not replaced'
+		);
+		Assert.equals(0, ProcessProbe.awaitGone(replaced, ProcessProbe.GONE_MS).length, 'the replaced server still runs');
 		pool?.stop();
 		CliFixture.removeDir(dir);
 		#else

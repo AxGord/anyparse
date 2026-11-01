@@ -3,6 +3,7 @@ package anyparse.check.oracle;
 import anyparse.check.Check.NameOracle;
 import anyparse.check.oracle.CompilerDisplayOracle.TypeReplyPosition;
 import anyparse.check.oracle.OracleCoverage.UsableCoverage;
+import anyparse.core.PhaseTimings;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
@@ -31,6 +32,11 @@ final class CompilerNameProof implements NameOracle {
 	}
 
 	public function sameDeclaration(file: String, before: String, beforeAt: Int, after: String, afterAt: Int): Bool {
+		return PhaseTimings.measure('oracle name proof', sameDeclarationTimed.bind(file, before, beforeAt, after, afterAt));
+	}
+
+	/** `sameDeclaration`, untimed. */
+	private function sameDeclarationTimed(file: String, before: String, beforeAt: Int, after: String, afterAt: Int): Bool {
 		final judges: Null<() -> UsableCoverage> = _judges;
 		final plugin: Null<GrammarPlugin> = _plugin;
 		if (judges == null || plugin == null) return false;

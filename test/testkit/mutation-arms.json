@@ -17345,10 +17345,34 @@
 		{
 			"name": "M-POOL-SERVER-UNTETHERED",
 			"type": "anyparse.check.oracle.OracleServerPool",
-			"method": "startTimed",
-			"find": "cwd: usable[i].dir, tethered: true }",
-			"replace": "cwd: usable[i].dir, tethered: false }",
+			"method": "serve",
+			"find": "cwd: oracle.dir, tethered: true }",
+			"replace": "cwd: oracle.dir, tethered: false }",
 			"note": "the run's warm servers are plain jobs of their own process groups, so a SIGKILL of the group apq and the driver share leaves each one running with no owner"
+		},
+		{
+			"name": "M-POOL-NEVER-RESTARTS",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "renew",
+			"find": "moved(server.seen, now).length <= RESTART_AT",
+			"replace": "true",
+			"note": "a server whose tree moved by more paths than invalidating them is worth is invalidated path by path, one walk of its whole cache each, instead of being replaced by a fresh server"
+		},
+		{
+			"name": "M-POOL-END-CANCELS-ALL",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "end",
+			"find": "_batches[keyOf(oracle)]?.cancel();",
+			"replace": "for (batch in _batches) batch.cancel();",
+			"note": "the pool's servers share one fate again: giving up one configuration's server ends every other server with it"
+		},
+		{
+			"name": "M-POOL-POSITION-NEVER-RENEWS",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "positionIn",
+			"find": "renew(oracle, now);",
+			"replace": "",
+			"note": "a position request through a drifted server invalidates it path by path, one walk of its whole cache each, instead of asking a fresh server"
 		},
 		{
 			"name": "M-DISPLAY-SERVER-UNTETHERED",
@@ -33455,7 +33479,7 @@
 		{
 			"name": "M-NAME-PROOF-ALWAYS-SAME",
 			"type": "anyparse.check.oracle.CompilerNameProof",
-			"method": "sameDeclaration",
+			"method": "sameDeclarationTimed",
 			"force": "true",
 			"note": "every value-site rewrite reads as confirmed, so a call a build macro of the build configuration re-points is shortened"
 		},
@@ -33494,7 +33518,7 @@
 		{
 			"name": "M-NAME-PROOF-NO-ASK-AGREES",
 			"type": "anyparse.check.oracle.CompilerNameProof",
-			"method": "sameDeclaration",
+			"method": "sameDeclarationTimed",
 			"find": "return asked.length > 0;",
 			"replace": "return true;",
 			"note": "a site no configuration compiles reads as confirmed, so a rewrite nothing typechecked the meaning of is applied"
@@ -33502,7 +33526,7 @@
 		{
 			"name": "M-NAME-PROOF-NO-ANSWER-AGREES",
 			"type": "anyparse.check.oracle.CompilerNameProof",
-			"method": "sameDeclaration",
+			"method": "sameDeclarationTimed",
 			"find": "if (was == null || !samePosition(",
 			"replace": "if (was != null && !samePosition(",
 			"note": "a configuration naming no declaration for the original reads as agreement, so a broken display answer confirms any rewrite"
