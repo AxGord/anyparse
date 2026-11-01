@@ -343,13 +343,9 @@ final class ExhaustiveSwitches {
 		final returns: Array<QueryNode> = [];
 		collectReturns(getter, returns, true);
 		final at: ValueContext = { file: decl.file, fn: getter, owner: owner };
-		return returns.length > 0 && returns.foreach(r ->
-			r.children.length == 1 && (
-				readsOwnField(r.children[0], getter, member)
-					? storedHolds(decl, owner, member, closed)
-					: valueExpr(r.children[0], at, closed)
-			)
-		);
+		return returns.length > 0 && returns.foreach(r -> r.children.length == 1 && (
+			readsOwnField(r.children[0], getter, member) ? storedHolds(decl, owner, member, closed) : valueExpr(r.children[0], at, closed)
+		));
 	}
 
 	/** Whether the stored member `member` of `owner` (declared in `decl`) starts with a value and is assigned only values. */

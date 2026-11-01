@@ -289,9 +289,10 @@ final class MapValueScan {
 	 * with a proven value, and any other name — a static extension, a foreign member — fails closed.
 	 */
 	private static function memberCallSlotSafe(method: Null<String>, call: QueryNode, seams: ValueSeams, claim: MapClaim): Bool {
-		return method != null
-			&& ((claim == NoNullValue ? READ_ONLY_METHODS : KEY_SET_METHODS).contains(method)
-				|| (method == SET_METHOD && call.children.length == SET_CALL_CHILDREN && provenValue(call.children[2], seams, claim)));
+		return method != null && (
+			(claim == NoNullValue ? READ_ONLY_METHODS : KEY_SET_METHODS).contains(method)
+			|| (method == SET_METHOD && call.children.length == SET_CALL_CHILDREN && provenValue(call.children[2], seams, claim))
+		);
 	}
 
 	/**

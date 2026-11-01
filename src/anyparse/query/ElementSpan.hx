@@ -723,10 +723,11 @@ final class ElementSpan {
 	 * for grammar-completeness, not for coverage.
 	 */
 	private static function isAnnotationElement(node: QueryNode): Bool {
-		return MemberKinds.META_KINDS.contains(node.kind)
-			|| (node.kind == MemberKinds.CONDITIONAL_REGION_KIND
-				&& node.children.length > 0
-				&& node.children.foreach(c -> MemberKinds.META_KINDS.contains(c.kind)));
+		return MemberKinds.META_KINDS.contains(node.kind) || (
+			node.kind == MemberKinds.CONDITIONAL_REGION_KIND
+			&& node.children.length > 0
+			&& node.children.foreach(c -> MemberKinds.META_KINDS.contains(c.kind))
+		);
 	}
 
 	/**

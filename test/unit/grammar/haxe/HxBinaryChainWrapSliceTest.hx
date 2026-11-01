@@ -196,21 +196,18 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('l.w);') == -1, 'close should not be glued to last item in: <$out>');
 	}
 
-	public function testParenWrapKeepsCloseGluedOnOPLAfterFirst(): Void {
-		// Default opBoolChain cascade is OPLAfterFirst (items[0] inline,
-		// rest on own lines). Inner Doc has NO leading hardline, so
-		// `WrapList.startsWithHardline` returns false and the wrap stays
-		// in the pre-slice `lead + inner + trail` flat shape — close `)`
-		// glued to last item. Mirrors the expected default-config layout
-		// of issue_187_multi_line_wrapped_assignment.
+	public function testParenWrapOpensAsContainerOnOPLAfterFirst(): Void {
+		// Default opBoolChain cascade is OPLAfterFirst (items[0] inline, rest on
+		// own lines). A paren group whose `||` content breaks opens as a
+		// container: `(` ends the line, the chain one indent deeper with its
+		// continuation lines co-indented, `)` on its own line.
 		final src: String = 'class C { static function m():Void { var v:Bool = ('
 			+ 'aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee); } }';
 		final out: String = writeWithLineWidth(src, 80);
-		// Close paren must be glued to the last operand `eeee...);`.
-		Assert.isTrue(out.indexOf('eeeeeeeeeeee);') != -1, 'expected close `)` glued to last item for OPLAfterFirst inner in: <$out>');
-		Assert.isTrue(
-			out.indexOf('\n\t);') == -1 && out.indexOf('\n\t\t);') == -1,
-			'close should not land on its own line for OPLAfterFirst inner in: <$out>'
+		Assert.equals(
+			'class C {\n\tstatic function m():Void {\n\t\tvar v:Bool = (\n\t\t\taaaaaaaaaaaa\n\t\t\t|| bbbbbbbbbbbb\n'
+			+ '\t\t\t|| cccccccccccc\n\t\t\t|| dddddddddddd\n\t\t\t|| eeeeeeeeeeee\n\t\t);\n\t}\n}\n',
+			out
 		);
 	}
 

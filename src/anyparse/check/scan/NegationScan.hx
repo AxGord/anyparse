@@ -93,10 +93,11 @@ final class NegationScan {
 		final cs: Null<Span> = cond.span;
 		// Only the De Morgan tier can decline anything — the text fallback has no flip to refuse,
 		// so its verbatim wrap is the shape it always emitted and the site still inverts.
-		return cs != null
-			&& (support == null
-				|| CheckScan.hasCommentMarker(source, cs.from, cs.to)
-				|| !support.negateConditionDeclinesFlip(cond, source, typeNominalOf));
+		return cs != null && (
+			support == null
+			|| CheckScan.hasCommentMarker(source, cs.from, cs.to)
+			|| !support.negateConditionDeclinesFlip(cond, source, typeNominalOf)
+		);
 	}
 
 	/**

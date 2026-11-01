@@ -338,15 +338,15 @@ final class MemberWriteScan {
 		final start: Int = i;
 		while (i < n && isOperatorChar(source.fastCodeAt(i))) i++;
 		final token: String = source.substring(start, i);
-		return token == '++'
-			|| token == '--'
-			|| (token.length != 0
-				&& token.fastCodeAt(token.length - 1) == '='.code
-				&& token != '=='
-				&& token != '<='
-				&& token != '>='
-				&& token != '!='
-				&& token != '=>');
+		return token == '++' || token == '--' || (
+			token.length != 0
+			&& token.fastCodeAt(token.length - 1) == '='.code
+			&& token != '=='
+			&& token != '<='
+			&& token != '>='
+			&& token != '!='
+			&& token != '=>'
+		);
 	}
 
 }

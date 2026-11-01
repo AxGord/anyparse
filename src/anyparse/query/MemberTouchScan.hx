@@ -331,9 +331,11 @@ final class MemberTouchScan {
 				span: span
 			};
 			// an imported name is a static's, never a member of the object under construction
-			final onSelf: Bool = node.name == name && (node.kind == shape.identKind || (
-				node.children.length > 0 && node.children[0].kind == shape.identKind && node.children[0].name == shape.selfReferenceText
-			));
+			final onSelf: Bool = node.name == name && (
+				node.kind == shape.identKind || (
+					node.children.length > 0 && node.children[0].kind == shape.identKind && node.children[0].name == shape.selfReferenceText
+				)
+			);
 			for (id in touchingNodes(g, file, span.from)) {
 				out.touchers[id] = { file: file, span: span };
 				if (!onSelf && !out.notOnSelf.exists(id)) out.notOnSelf[id] = { file: file, span: span };
@@ -804,6 +806,11 @@ final class MemberTouchScan {
 		return span != null && region != null && span.from < region.to && region.from < span.to;
 	}
 
+	/** Inline would lose the `region != null` narrowing under null safety, hence the suppression. */
+	private static function within(span: Span, region: Null<Span>): Bool { // noqa: prefer-inline
+		return region != null && span.from >= region.from && span.to <= region.to;
+	}
+
 	/**
 	 * The names the imports of `file` give the static `name` of `declaring` besides its own (`ValueNameBinding.fieldAliases`):
 	 * every alias but one whose path names a type proven not to be `declaring` — one declared once, declaring `name` itself.
@@ -816,11 +823,12 @@ final class MemberTouchScan {
 		for (a in aliases) {
 			final target: Null<ImportedStatic> = a.target;
 			// a static of a type declared once, which declares `name` itself, is provably not `declaring`'s
-			final other: Bool = target != null
-				&& (target.member != name
-					|| target.owner != declaring
-					&& target.decls.length == 1
-					&& target.decls[0].type.members.exists(m -> m.name == name));
+			final other: Bool = target != null && (
+				target.member != name
+				|| target.owner != declaring
+				&& target.decls.length == 1
+				&& target.decls[0].type.members.exists(m -> m.name == name)
+			);
 			if (!other && a.alias != name && !out.contains(a.alias)) out.push(a.alias);
 		}
 		return out;
@@ -924,11 +932,6 @@ final class MemberTouchScan {
 		if (!TYPED_ACCESSES.contains(f.access)) return false;
 		final use: Null<String> = f.use;
 		return f.write || (use != null && TYPED_USES.contains(use) && (use != 'call' || f.method != null));
-	}
-
-	/** Whether `span` lies inside `region`; false when there is no region. */
-	private static function within(span: Span, region: Null<Span>): Bool {
-		return region != null && span.from >= region.from && span.to <= region.to;
 	}
 
 	private static function typesOf(provider: Null<TypeInfoProvider>, source: String): Map<Int, String> {

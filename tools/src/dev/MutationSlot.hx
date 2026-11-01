@@ -391,15 +391,14 @@ final class MutationSlot {
 		final shim: String = Path.join([ctx.workroot, 'fixture-cache/bin']);
 		final inherited: String = Sys.getEnv(PATH) ?? '';
 		final path: String = FileSystem.exists(Path.join([shim, 'haxe'])) ? '$shim:$inherited' : inherited;
-		return filter ->
-			Shard.callerGc(
-				cmd('node $testJs')
-					.at(ctx.wt)
-					.env(PATH, path)
-					.env('APQ_TEST', filter == 'ALL' ? '' : filter)
-					.env('APQ_MUTANT', mutant ?? '')
-					.timeout(SUITE_TIMEOUT_MS)
-			);
+		return filter -> Shard.callerGc(
+			cmd('node $testJs')
+				.at(ctx.wt)
+				.env(PATH, path)
+				.env('APQ_TEST', filter == 'ALL' ? '' : filter)
+				.env('APQ_MUTANT', mutant ?? '')
+				.timeout(SUITE_TIMEOUT_MS)
+		);
 	}
 
 	/** `classify`, or null when a transcript cannot be read. */

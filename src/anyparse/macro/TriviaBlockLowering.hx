@@ -323,10 +323,13 @@ final class TriviaBlockLowering {
 	 * AND-ed out under extern context.
 	 */
 	private static function triviaBlockInterMemberPlainExpr(betweenVarsAccess: Expr, betweenFnAccess: Expr, afterVarsAccess: Expr): Expr {
-		return macro (!opt._classExtern
-			&& ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
+		return macro (
+			!opt._classExtern && (
+				(_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
 				|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
-				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)));
+				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)
+			)
+		);
 	}
 
 	/**
@@ -766,11 +769,12 @@ final class TriviaBlockLowering {
 			final stmtOptExpr: Expr = WriterOptFanout.statementListElemOpt(elemOptExpr);
 			macro (
 				_si == _arr.length - 1 ? (
-					$blockTailBarrier
-						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
-							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine)
-						? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr)))
-						: _clearArrowLambdaBody(_clearValueIfBranch($stmtOptExpr))
+					$blockTailBarrier && (
+						opt.expressionIfBody == anyparse.format.BodyPolicy.Next
+						|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
+					) ? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr))) : _clearArrowLambdaBody(
+						_clearValueIfBranch($stmtOptExpr)
+					)
 				) : _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr)))
 			);
 		} else {

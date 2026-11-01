@@ -878,11 +878,11 @@ final class MoveSymbol {
 			// sees.
 			final moduleWide: Bool = (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using)
 				&& oldImportPath == target.cursorInfo.module;
-			final keepsOthers: Bool = moduleWide
-				&& remaining.length > 0
-				&& (imp.kind == ImportKind.Using
-					|| NameMentionScan.sourceNamesAny(destSource, remaining, destExcluded, lexicalRegions(destSource))
-					|| NameMentionScan.sourceNamesAny(declText, remaining, [], lexicalRegions(declText)));
+			final keepsOthers: Bool = moduleWide && remaining.length > 0 && (
+				imp.kind == ImportKind.Using
+				|| NameMentionScan.sourceNamesAny(destSource, remaining, destExcluded, lexicalRegions(destSource))
+				|| NameMentionScan.sourceNamesAny(declText, remaining, [], lexicalRegions(declText))
+			);
 			// A `using` is NOT made redundant by the type becoming local: the static extension is
 			// granted by the STATEMENT, not by the declaration's module, and a module may `using` its
 			// own sub-type (compile-proved on 4.3.7). Deleting it took `3.twice()` away from a

@@ -560,14 +560,15 @@ final class GuardContinue extends RuleBase {
 
 	/** Whether `code` is an identifier character; a null code (out of range) is a boundary, not a word character. */
 	private static function isWordCode(code: Null<Int>): Bool {
-		return code != null
-			&& (code >= '0'.code
-				&& code <= '9'.code
-				|| code >= 'A'.code
-				&& code <= 'Z'.code
-				|| code >= 'a'.code
-				&& code <= 'z'.code
-				|| code == '_'.code);
+		return code != null && (
+			code >= '0'.code
+			&& code <= '9'.code
+			|| code >= 'A'.code
+			&& code <= 'Z'.code
+			|| code >= 'a'.code
+			&& code <= 'z'.code
+			|| code == '_'.code
+		);
 	}
 
 	/**

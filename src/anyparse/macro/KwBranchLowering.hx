@@ -318,14 +318,16 @@ final class KwBranchLowering {
 		// `peekLit` disjunct to see, so the preprocessor terminators must be
 		// first-class gate exits like `case`/`default` are for switch arms.
 		final gateCond: Null<Expr> = parseGateCall != null
-			? (macro ($parseGateCall
+			? (macro (
+				$parseGateCall
 				|| peekKw(ctx, 'else')
 				|| peekLit(ctx, '}')
 				|| peekKw(ctx, 'case')
 				|| peekKw(ctx, 'default')
 				|| peekKw(ctx, '#end')
 				|| peekKw(ctx, '#else')
-				|| peekKw(ctx, '#elseif')))
+				|| peekKw(ctx, '#elseif')
+			))
 			: null;
 		steps.push(
 			if (parseGateCall != null && triviaTrailOpt)

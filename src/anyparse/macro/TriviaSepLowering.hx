@@ -1630,8 +1630,10 @@ final class TriviaSepLowering {
 		// `false` for every non-typedef caller (compile-time gate) → the
 		// existing source-blank pass-through is byte-identical.
 		final typedefStripBetweenExpr: Expr = typedefBodyBlanks
-			? macro (opt._inTypedefBody
-				&& (opt.typedefBetweenFields > 0 || opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove))
+			? macro (
+				opt._inTypedefBody
+				&& (opt.typedefBetweenFields > 0 || opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
+			)
 			: macro false;
 		// ω-uniform-element-blanks: suppress the source blank at every interior
 		// gap once the pre-pass found the gap set uniform. Sister to the

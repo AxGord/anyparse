@@ -371,12 +371,10 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		index: Null<SymbolIndex>, className: Null<String>, field: String, selfBacked: Bool, inlineGetter: Null<QueryNode>,
 		plugin: GrammarPlugin
 	): Bool {
-		return !selfBacked
-			&& inlineGetter == null
-			&& index != null
-			&& className != null
-			&& (index.subtypes.subtypeReferencesField(className, field)
-				|| MemberWriteScan.accessGrantMayReference(className, field, index, plugin));
+		return !selfBacked && inlineGetter == null && index != null && className != null && (
+			index.subtypes.subtypeReferencesField(className, field)
+			|| MemberWriteScan.accessGrantMayReference(className, field, index, plugin)
+		);
 	}
 
 	/** The last `.`-separated segment of `path` (its simple name). */

@@ -487,12 +487,12 @@ final class WriterBodyPolicyLowering {
 		// the shared `fitLineLayout` uses, so all three inherit one answer.
 		final gluedLayout: Expr = macro anyparse.format.BodyFit.glueLayout(_cols, _body, _dc([_dop(' '), $gluedBody]), opt.lineWidth);
 		final multilineGlue: Expr = kwNewlineExpr != null
-			? macro ($kwNewlineExpr
-				&& (opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
-					|| opt.opBoolChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep)
-				&& !anyparse.format.wrap.WrapList.startsWithHardline(_body)
-				? _dn(_cols, _dc([_dhl(), _body]))
-				: $gluedLayout)
+			? macro (
+				$kwNewlineExpr && (
+					opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
+					|| opt.opBoolChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
+				) && !anyparse.format.wrap.WrapList.startsWithHardline(_body) ? _dn(_cols, _dc([_dhl(), _body])) : $gluedLayout
+			)
 			: gluedLayout;
 		// ω-condwrap-fitline-construct-group: under a construct-level BodyGroup
 		// (see WrapBodyOpts.condFitGroup) the flat-body FitLine layout is the

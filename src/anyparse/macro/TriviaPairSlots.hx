@@ -117,11 +117,13 @@ final class TriviaPairSlots {
 		// `StructSeqLowering.computeBeforeSlots` and `WriterLowering`'s `optBareSep` gate on
 		// purpose — three places decide synthesise / capture / consume for one slot,
 		// and only an identical spelling makes the agreement checkable by eye.
-		return child.kind == Ref && ((
-			child.annotations[AnnotationKeys.BASE_OPTIONAL] != true || child.fmtHasFlag('bareRefSepWhenPresent')
-		) && (child.readMetaString(':kw') == null && (
-			child.readMetaString(':lead') == null && (child != parent.children[0] || child.fmtHasFlag('beforeNewlineSlotFirst'))
-		)));
+		return child.kind == Ref && (
+			(child.annotations[AnnotationKeys.BASE_OPTIONAL] != true || child.fmtHasFlag('bareRefSepWhenPresent')) && (
+				child.readMetaString(':kw') == null && (
+					child.readMetaString(':lead') == null && (child != parent.children[0] || child.fmtHasFlag('beforeNewlineSlotFirst'))
+				)
+			)
+		);
 	}
 
 	/**
@@ -137,9 +139,13 @@ final class TriviaPairSlots {
 	 * writer's struct-Star emit under `opt.leftCurly == Next`.
 	 */
 	public static function isBareFirstStarNlOptIn(child: ShapeNode, parent: ShapeNode): Bool {
-		return child.kind == Star && (child.annotations[AnnotationKeys.BASE_OPTIONAL] != true && (child.readMetaString(':kw') == null && (
-			child.readMetaString(':lead') == null && (child == parent.children[0] && child.fmtHasFlag('beforeNewlineSlotFirst'))
-		)));
+		return child.kind == Star && (
+			child.annotations[AnnotationKeys.BASE_OPTIONAL] != true && (
+				child.readMetaString(':kw') == null && (
+					child.readMetaString(':lead') == null && (child == parent.children[0] && child.fmtHasFlag('beforeNewlineSlotFirst'))
+				)
+			)
+		);
 	}
 
 	public static function buildBeforeNewlineSlot(child: ShapeNode, pos: Position): Field {
@@ -326,9 +332,10 @@ final class TriviaPairSlots {
 	 * predicates rely on).
 	 */
 	public static function isCondOpenNewlineRef(child: ShapeNode): Bool {
-		return child.kind == Ref
-			&& (child.annotations[AnnotationKeys.BASE_OPTIONAL] != true
-				&& (child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline')));
+		return child.kind == Ref && (
+			child.annotations[AnnotationKeys.BASE_OPTIONAL] != true
+			&& (child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline'))
+		);
 	}
 
 	public static function buildCondOpenNewlineSlot(child: ShapeNode, pos: Position): Field {

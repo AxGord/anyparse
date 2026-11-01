@@ -723,9 +723,10 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 			final child: QueryNode = kids[i];
 			// The modifier is a SIBLING that precedes the declaration, so the flag is set on the way
 			// DOWN into the function and inherited by its whole subtree.
-			final inMacro: Bool = macroBody
-				|| (context.functionKinds.contains(child.kind)
-					&& MemberKinds.macroModifierPrecedes(kids, i, context.macroKind, MODIFIER_RUN_BOUNDARY));
+			final inMacro: Bool = macroBody || (
+				context.functionKinds.contains(child.kind)
+				&& MemberKinds.macroModifierPrecedes(kids, i, context.macroKind, MODIFIER_RUN_BOUNDARY)
+			);
 			scan(child, context, region, upperReceiver, inMacro, out);
 		}
 	}

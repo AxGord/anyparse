@@ -750,8 +750,11 @@ final class CallGraphFacts {
 		final at: Null<Span> = e.span;
 		if (at == null) return false;
 		final span: Span = at;
-		return typed.contains(siteKey(span)) || g.outEdges(id)
-			.exists(f -> f.typed != null && f.to == e.to && (f.spliced?.sites ?? []).exists(s -> s.from <= span.from && span.to <= s.to));
+		return typed.contains(siteKey(span))
+			|| g.outEdges(id)
+				.exists(
+					f -> f.typed != null && f.to == e.to && (f.spliced?.sites ?? []).exists(s -> s.from <= span.from && span.to <= s.to)
+				);
 	}
 
 	/** The declaring type of a call target `pack.Type.field`. */

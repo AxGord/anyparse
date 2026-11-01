@@ -3611,6 +3611,14 @@ class Renderer {
 				// the non-crossing path pushes
 				// `Frame(f.indent, f.mode, flatDoc)` with both flags false.
 				stack.push(new Frame(f.indent, f.mode, flatDoc, f.forceFlat, f.hardFlat));
+			case IfResidualLineExceeds(n, breakDoc, flatDoc) if (
+				!f.forceFlat && DocMeasure.flatFirstLineThroughBodyGroup(flatDoc).opensAtBreak
+			):
+				// A lambda body that ends its first line by opening its own construct (`x && (` an opened paren group, `f(`
+				// committed open) breaks by itself; what follows lands on the construct's own lines, so only the first line
+				// decides whether the body leaves the `->` line, never its whole flat width.
+				final firstLineCrosses: Bool = col + DocMeasure.flatFirstLineWidthThroughBodyGroup(flatDoc) >= n;
+				stack.push(new Frame(f.indent, firstLineCrosses ? MBreak : f.mode, firstLineCrosses ? breakDoc : flatDoc));
 			case IfLineExceeds(n, breakDoc, flatDoc), IfResidualLineExceeds(n, breakDoc, flatDoc):
 				// Line-length-aware probe: rule fires when `col +
 				// DocMeasure.flatTokenWidth(flatDoc) +

@@ -208,15 +208,12 @@ final class SafeDelete {
 		final idx: Null<SymbolIndex> = index();
 		final fi: Null<FileInfo> = idx?.fileInfo(entry.file) ?? idx?.allFiles().find(f -> FileIdentity.same(f.file, entry.file));
 		if (idx == null || fi == null) return unbound + importsNaming(entry, memberName);
-		final reaches: ImportedStatic -> Bool = s ->
-			s.member == memberName
-				&& (s.decls.length == 0
-					|| s.decls.exists(
-						d ->
-							FileIdentity.same(d.file.file, srcFile)
-							&& d.type.span.from <= memberSpan.from
-							&& memberSpan.from < d.type.span.to
-					));
+		final reaches: ImportedStatic -> Bool = s -> s.member == memberName && (
+			s.decls.length == 0
+			|| s.decls.exists(
+				d -> FileIdentity.same(d.file.file, srcFile) && d.type.span.from <= memberSpan.from && memberSpan.from < d.type.span.to
+			)
+		);
 		final statics: ImportedStatics = idx.values.importedStatics(fi, memberName);
 		var count: Int = 0;
 		if (statics.unknown || statics.statics.exists(reaches)) count += unbound + (idx.fileImportsMemberName(fi.file, memberName) ? 1 : 0);

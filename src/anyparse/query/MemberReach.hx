@@ -2516,10 +2516,11 @@ final class MemberReach {
 		// the built-in array's own methods, its constructor among them, reach what they hold or are handed only by converting
 		// it to a string (the implicit site below) or by calling a function value the call hands them: no member by name, of an
 		// element or of the array, and no function value it was handed before
-		final arrayOwn: Bool = (_shape.arrayTypeNames ?? []).contains(type)
-			&& ((_shape.execution?.nonMutatingArrayMethods ?? []).contains(name)
-				|| (_shape.execution?.mutatingArrayMethods ?? []).contains(name)
-				|| name == (_shape.constructorName ?? 'new'));
+		final arrayOwn: Bool = (_shape.arrayTypeNames ?? []).contains(type) && (
+			(_shape.execution?.nonMutatingArrayMethods ?? []).contains(name)
+			|| (_shape.execution?.mutatingArrayMethods ?? []).contains(name)
+			|| name == (_shape.constructorName ?? 'new')
+		);
 		if (arrayOwn) site.values = _g.library.callsItsArgument(g, type, name);
 		// target code handed an object carrying the member may write it by its name — a blind spot, as at a code site — unless it
 		// writes no member by name: the built-in array's own methods, which store and convert what they hold, a call known to run

@@ -57,12 +57,12 @@ final class ShellHxAccess {
 	public static function writeSegment(command: String, cwd: Null<String>, slice: Null<String>): Null<String> {
 		return find(
 			command, cwd,
-			(segment, dir) ->
-				!viaHxq(segment)
-				&& (EDITOR.match(segment)
-					&& touches(segment, dir, slice)
-					|| redirectsIntoRepo(segment, dir, slice)
-					|| transfers(segment, dir, slice))
+			(segment, dir) -> !viaHxq(segment) && (
+				EDITOR.match(segment)
+				&& touches(segment, dir, slice)
+				|| redirectsIntoRepo(segment, dir, slice)
+				|| transfers(segment, dir, slice)
+			)
 		);
 	}
 

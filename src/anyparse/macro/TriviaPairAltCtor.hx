@@ -144,10 +144,12 @@ final class TriviaPairAltCtor {
 	 * `@:trail` are mutually exclusive on the same ctor.
 	 */
 	public static function isCaptureSourceBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref
-				&& (branch.readMetaString(':lead') != null
-					&& (branch.readMetaString(':trail') != null && branch.fmtReadString('captureSource') != null)));
+		return branch.children.length == 1 && (
+			branch.children[0].kind == Ref && (
+				branch.readMetaString(':lead') != null
+				&& (branch.readMetaString(':trail') != null && branch.fmtReadString('captureSource') != null)
+			)
+		);
 	}
 
 	/**

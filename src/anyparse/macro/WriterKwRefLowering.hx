@@ -461,6 +461,9 @@ final class WriterKwRefLowering {
 			? macro ($wrapOpenNewlineExpr && anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0)
 			: macro false;
 		final opAddSubShape: Expr = opAddSubParenShape(leadDoc);
+		// An `&&`/`||` inner that does not fit opens the paren as a container whatever its own width — no `CollapseProbe`,
+		// whose fit gate re-glues an inner that cannot be one line — and its chain co-indents inside, since the paren's own
+		// `Nest` already supplies the indent.
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _wrapTrail: anyparse.core.Doc = $trailDoc;
@@ -483,7 +486,7 @@ final class WriterKwRefLowering {
 						? _dg(_dib($hardlineOpenShape, _dc([$leadDoc, _wrapInner, _wrapTrail])))
 						: $keepOpenGate
 							? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
-							: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
+							: anyparse.format.wrap.WrapList.topLevelOperatorClass(_wrapInner) == anyparse.format.wrap.ChainOperatorClass.OpAddSub
 								? $opAddSubShape
 								: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
 									? (
@@ -504,20 +507,27 @@ final class WriterKwRefLowering {
 											_dhl(),
 											_wrapTrail
 										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-										: opt._parenInCondition
-											&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+										: anyparse.format.wrap.BinaryChainEmit.isBreakableBoolChain(_wrapInner)
 											? _dfle(opt.lineWidth + 1, _dc([
 												$leadDoc,
-												_dn(_cols, _dc([_dhl(), _wrapInner])),
+												_dn(_cols, _dc([_dhl(), anyparse.format.wrap.BinaryChainEmit.coIndented(_wrapInner)])),
 												_dhl(),
 												_wrapTrail
 											]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-											: _dfle(opt.lineWidth + 1, _dc([
-												$leadDoc,
-												_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
-												_dhl(),
-												_wrapTrail
-											]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
+											: opt._parenInCondition
+												&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+												? _dfle(opt.lineWidth + 1, _dc([
+													$leadDoc,
+													_dn(_cols, _dc([_dhl(), _wrapInner])),
+													_dhl(),
+													_wrapTrail
+												]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+												: _dfle(opt.lineWidth + 1, _dc([
+													$leadDoc,
+													_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+													_dhl(),
+													_wrapTrail
+												]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
 			};
 			anyparse.core.BreakCommits.followBare($innerDoc, _parenShape);
 		};

@@ -720,10 +720,11 @@ final class CtorFieldWrite {
 	/** Whether `writeFrom` is reachable from `node` through `transparent` kinds only. */
 	private static function reachesThroughOperands(node: QueryNode, writeFrom: Int, transparent: Array<String>): Bool {
 		final span: Null<Span> = node.span;
-		return span != null
-			&& (span.from == writeFrom
-				|| transparent.contains(node.kind)
-				&& node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent)));
+		return span != null && (
+			span.from == writeFrom
+			|| transparent.contains(node.kind)
+			&& node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent))
+		);
 	}
 
 	/** Recursively find the class-like container whose direct field member starts at `fieldFrom`. */

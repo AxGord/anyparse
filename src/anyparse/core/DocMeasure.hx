@@ -92,20 +92,31 @@ final class DocMeasure {
 	 * `BodyGroup` deferral, and this question is a different one rather than a mode of theirs.
 	 */
 	public static function flatFirstLineWidthThroughBodyGroup(d: Doc): Int {
+		return flatFirstLineThroughBodyGroup(d).width;
+	}
+
+	/**
+	 * The `flatFirstLineWidthThroughBodyGroup` walk with one more answer: whether the forced break that ends the first
+	 * line comes right after an open delimiter, i.e. whether `d` opens its own construct at the end of its first line
+	 * (`x && (` committed open, `f(() -> {`). False when `d` has no forced break.
+	 */
+	public static function flatFirstLineThroughBodyGroup(d: Doc): { width: Int, opensAtBreak: Bool } {
 		final stack: Array<Doc> = [d];
 		var total: Int = 0;
+		var lastOpen: Bool = false;
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			switch (node) {
 				case Text(s), OptSpace(s):
 					total += s.length;
+					lastOpen = lastCharIsOpenDelim(s) ?? lastOpen;
 				case OptSpaceSkipAfterHardline:
 					total++;
 				case Line(flat):
-					if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return total;
+					if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return { width: total, opensAtBreak: lastOpen };
 					total += flat.length;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
-					return total;
+					return { width: total, opensAtBreak: lastOpen };
 				case Empty:
 				case Concat(items):
 					var i: Int = items.length;
@@ -124,7 +135,7 @@ final class DocMeasure {
 					stack.push(inner);
 			}
 		}
-		return total;
+		return { width: total, opensAtBreak: false };
 	}
 
 	/**

@@ -1377,12 +1377,12 @@ final class CollapsePass {
 	 * delimited group stays intact.
 	 *
 	 * Gates, each excluding a regression:
-	 *  - `taggedAddChain(d) != null` — ONLY a pure `+`/`-` chain, since
-	 *    `CollapseAddProbe` is emitted for no other operator class. An opBool /
-	 *    ternary / method chain keeps the unconditional commit: the probe's
-	 *    "ends at an open delim" question is calibrated to the opAddSub glue
-	 *    shape, and no site has asked for the others. Widening it is a
-	 *    measurement, not a tidy-up.
+	 *  - a pure `+`/`-` chain (`taggedAddChain`), or an `&&`/`||` chain
+	 *    (`gluesBoolChain`) whose break slot is its plain rewrite, so its seams
+	 *    break first. The bool gate asks `IfFirstLineExceeds` first: the glued
+	 *    head up to the group's forced break, counted FLAT, since the natural
+	 *    walk lets an operand's own break (a long `==`) end the line early.
+	 *    A ternary / method chain keeps the unconditional commit.
 	 *  - `!insideBroken` — inside an already-broken outer add-chain both
 	 *    branches derive from the same `flat`
 	 *    (`rewriteTaggedAddChain`'s `insideBroken` leg vs `commitOpens(flat)`),
@@ -1415,10 +1415,24 @@ final class CollapsePass {
 	 */
 	private static function commitChainGlue(d: Doc, glued: Doc, decisions: CollapseRun, insideBroken: Bool, width: Int): Doc {
 		final committed: Doc = WrapBoundary(commitOpens(glued, decisions, width));
-		final tagged: Null<TaggedAddChain> = insideBroken ? null : taggedAddChain(d);
-		return tagged == null
-			? committed
-			: IfNaturalFirstLineFitsOpenDelim(width, rewriteTaggedAddChain(tagged, decisions, insideBroken, width), committed);
+		if (insideBroken) return committed;
+		final tagged: Null<TaggedAddChain> = taggedAddChain(d);
+		return if (tagged != null)
+			IfNaturalFirstLineFitsOpenDelim(width, rewriteTaggedAddChain(tagged, decisions, insideBroken, width), committed)
+		else if (gluesBoolChain(glued)) {
+			final broken: Doc = D.mapChildren(d, recPair(decisions, width).flat);
+			IfFirstLineExceeds(width + 1, broken, IfNaturalFirstLineFitsOpenDelim(width, broken, committed));
+		} else {
+			committed;
+		};
+	}
+
+	/** True iff `flat` is the glued shape of an `&&` / `||` chain (its first gap carries a boolean operator). */
+	private static function gluesBoolChain(flat: Doc): Bool {
+		return switch flat {
+			case Concat(parts) if (parts.length >= 3): parts[1].match(Text(' && ' | ' || '));
+			case _: false;
+		};
 	}
 
 }

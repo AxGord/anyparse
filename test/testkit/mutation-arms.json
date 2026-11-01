@@ -2140,8 +2140,8 @@
 			"name": "M-SSB-FRAME-BLANKET",
 			"type": "anyparse.macro.WriterBraceSymmetryLowering",
 			"method": "deBraceBodyAccess",
-			"find": "\t\t\t&& !anyparse.format.SingleStmtBraces.keepsBraces(\n\t\t\t\t$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true\n\t\t\t));",
-			"replace": "\t\t\t&& !(false && anyparse.format.SingleStmtBraces.keepsBraces(\n\t\t\t\t$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true\n\t\t\t)));",
+			"find": "\t\t\t\t&& !anyparse.format.SingleStmtBraces.keepsBraces(\n\t\t\t\t\t$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true\n\t\t\t\t)",
+			"replace": "\t\t\t\t&& !(false && anyparse.format.SingleStmtBraces.keepsBraces(\n\t\t\t\t\t$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true\n\t\t\t\t))",
 			"note": "the suppress frame is armed without the span-precision probe, so a then-body that renders WITH its braces still gates every unwrap nested inside it"
 		},
 		{
@@ -2272,8 +2272,8 @@
 			"name": "M-META-ELEMENT-ANY-COND-REGION",
 			"type": "anyparse.query.ElementSpan",
 			"method": "isAnnotationElement",
-			"find": "|| (node.kind == MemberKinds.CONDITIONAL_REGION_KIND\n\t\t\t\t&& node.children.length > 0\n\t\t\t\t&& node.children.foreach(c -> MemberKinds.META_KINDS.contains(c.kind)));",
-			"replace": "|| (node.kind == MemberKinds.CONDITIONAL_REGION_KIND\n\t\t\t\t&& node.children.length > 0\n\t\t\t\t);",
+			"find": "&& node.children.length > 0\n\t\t\t&& node.children.foreach(c -> MemberKinds.META_KINDS.contains(c.kind))",
+			"replace": "&& node.children.length > 0",
 			"note": "every non-empty conditional region reads as an annotation element, so a `#if debug public #end` modifier region stops being the declaration's first token and an edit addressed at it no longer takes the member"
 		},
 		{
@@ -13394,8 +13394,8 @@
 			"name": "M-REACH-ARRAY-CTOR",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": " || name == (_shape.constructorName ?? 'new'));",
-			"replace": ");",
+			"find": "\n\t\t\t|| name == (_shape.constructorName ?? 'new')\n\t\t);",
+			"replace": "\n\t\t);",
 			"note": "(precision) the built-in array's constructor may call any function value the program holds"
 		},
 		{
@@ -14611,7 +14611,7 @@
 			"name": "M-REACH-IMPORT-ALIAS-OTHER-TYPE",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "aliasesIn",
-			"find": "target.owner != declaring\n\t\t\t\t\t&& target.decls.length == 1\n\t\t\t\t\t&& target.decls[0].type.members.exists(m -> m.name == name)",
+			"find": "target.owner != declaring\n\t\t\t\t&& target.decls.length == 1\n\t\t\t\t&& target.decls[0].type.members.exists(m -> m.name == name)",
 			"replace": "false",
 			"note": "an alias of another type's own static of the same name is read as the member"
 		},
@@ -21223,7 +21223,7 @@
 			"name": "M-TS-IMPORT-STATIC-INDEXED",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "memberMayBind",
-			"find": "!types.chainFullyIndexed(currentType)\n\t\t\t\t||",
+			"find": "!types.chainFullyIndexed(currentType)\n\t\t\t||",
 			"replace": "",
 			"note": "an imported static outranks a member a supertype the index does not hold may declare"
 		},
@@ -21839,7 +21839,7 @@
 			"name": "M-TS-SUPER-STATIC-IMPORT",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "memberMayBind",
-			"find": "\n\t\t\t\t&& !staticOfSupertype(g, currentType, name)",
+			"find": "\n\t\t\t&& !staticOfSupertype(g, currentType, name)",
 			"replace": "",
 			"note": "a supertype's static keeps an imported static of the name out of a bare read"
 		},
@@ -22196,8 +22196,8 @@
 			"name": "M-VALUES-IMPORTED-CTOR",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "importMayBring",
-			"find": "(types == null\n\t\t\t\t\t\t|| carriesValue(types, name)\n\t\t\t\t\t\t|| split.rest.length == 0",
-			"replace": "(types == null\n\t\t\t\t\t\t|| split.rest.length == 0",
+			"find": "types == null\n\t\t\t\t\t\t|| carriesValue(types, name)\n\t\t\t\t\t\t|| split.rest.length == 0",
+			"replace": "types == null\n\t\t\t\t\t\t|| split.rest.length == 0",
 			"note": "an import that puts an enum in scope brings none of its constructors, so a bare pattern naming one reads as a capture"
 		},
 		{

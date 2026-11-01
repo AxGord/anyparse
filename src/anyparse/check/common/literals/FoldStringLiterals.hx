@@ -579,18 +579,17 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		// (budgetBase shifts with the edit span between the two states): from the merged
 		// state fill proposes a split of a line that already fits, from the split state
 		// it proposes the merge back — both "legal", cycling forever.
-		return width != null
-			&& ((width.written > ctx.metrics.lineWidth && width.written >= width.original)
-				|| (groups >= current && width.original <= ctx.metrics.lineWidth))
-			? null
-			: {
-				span: decomposition.span,
-				editSpan: decomposition.editSpan,
-				text: settled.text,
-				groups: groups,
-				constant: constant,
-				message: messageFor(groups, current)
-			};
+		return width != null && (
+			(width.written > ctx.metrics.lineWidth && width.written >= width.original)
+			|| (groups >= current && width.original <= ctx.metrics.lineWidth)
+		) ? null : {
+			span: decomposition.span,
+			editSpan: decomposition.editSpan,
+			text: settled.text,
+			groups: groups,
+			constant: constant,
+			message: messageFor(groups, current)
+		};
 	}
 
 	/**

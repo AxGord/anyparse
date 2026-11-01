@@ -161,11 +161,9 @@ class LintScoreTest extends Test {
 			'unknown evidence kind "hunch"',
 			refusal(() -> LintScore.parseTruth(truthOf([entry('A', 'A.b', 'S.f', 'false', ', "evidence": {"kind": "hunch"}')])))
 		);
-		Assert.stringContains('negative "ms"', refusal(() ->
-			LintScore.parseTruth(truthOf([
-				entry('A', 'A.b', 'S.f', 'false', ', "evidence": {"kind": "measured", "ms": -1}')
-			]))
-		));
+		Assert.stringContains('negative "ms"', refusal(() -> LintScore.parseTruth(truthOf([
+			entry('A', 'A.b', 'S.f', 'false', ', "evidence": {"kind": "measured", "ms": -1}')
+		]))));
 		Assert.stringContains(
 			'labelled twice',
 			refusal(() -> LintScore.parseTruth(truthOf([entry('A', 'A.b', 'S.f', 'false'), entry('A', 'A.b', 'S.f', 'rare')])))

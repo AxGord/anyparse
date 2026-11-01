@@ -346,10 +346,12 @@ final class WriterBraceSymmetryLowering {
 		if (!bs.ctx.trivia || !child.fmtHasFlag(DROP_SINGLE_STMT_BRACES)) return macro false;
 		return findThenSiblingAccess(node) == null
 			? macro opt._ssbChainSuppress
-			: macro (opt._ssbChainSuppress
+			: macro (
+				opt._ssbChainSuppress
 				|| anyparse.format.SingleStmtBraces.chainForcesBraces(
 					value, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
-				));
+				)
+			);
 	}
 
 	/**
@@ -504,10 +506,12 @@ final class WriterBraceSymmetryLowering {
 		// For / while / do bodies (no `else` sibling) never force.
 		final thenChainSuppressExpr: Expr = elseAccess == null
 			? macro false
-			: macro (opt._ssbChainSuppress
+			: macro (
+				opt._ssbChainSuppress
 				|| anyparse.format.SingleStmtBraces.chainForcesBraces(
 					value, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
-				));
+				)
+			);
 		// omega-ssb-wrap: `isIfThenBody` is a MACRO-time discriminator - `elseFieldName`
 		// is non-null only for `HxIfStmt.thenBody` (the fitLineIfWithElse
 		// optionalBodyFieldName channel), so for / while / do bodies pass `false` and
@@ -544,11 +548,13 @@ final class WriterBraceSymmetryLowering {
 		// never disarms it wrongly (fail closed).
 		final ssbSuppressCond: Null<Expr> = elseAccess == null
 			? null
-			: macro ($elseAccess != null
+			: macro (
+				$elseAccess != null
 				&& opt.dropSingleStmtBraces
 				&& !anyparse.format.SingleStmtBraces.keepsBraces(
 					$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true
-				));
+				)
+			);
 		// ω-single-stmt-braces trailing-comment hoist: when the de-brace fires AND the
 		// single statement carries a same-line trailing comment, `hoistTrailingComment`
 		// returns it (else null) so `buildBodyWriteCall` folds it after the bare

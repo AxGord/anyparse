@@ -229,12 +229,12 @@ final class IfFalseDeadCode extends RuleBase {
 	 */
 	private static function isTrivialBody(body: String): Bool {
 		final trimmed: String = body.trim();
-		return trimmed == ''
-			|| trimmed == ';'
-			|| (trimmed.length >= 2
-				&& trimmed.charAt(0) == '{'
-				&& trimmed.charAt(trimmed.length - 1) == '}'
-				&& trimmed.substring(1, trimmed.length - 1).trim() == '');
+		return trimmed == '' || trimmed == ';' || (
+			trimmed.length >= 2
+			&& trimmed.charAt(0) == '{'
+			&& trimmed.charAt(trimmed.length - 1) == '}'
+			&& trimmed.substring(1, trimmed.length - 1).trim() == ''
+		);
 	}
 
 	/**

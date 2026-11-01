@@ -307,10 +307,11 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		final fnName: Null<String> = fn.name;
 		final isLocal: Bool = fn.kind == 'LocalFnStmt';
 		final ownerName: Null<String> = parent.name;
-		final eligible: Bool = isLocal
-			|| (ownerName != null
-				&& !isPublicDecl(fn, parent, source, visibilityKinds, modifierKinds)
-				&& RefactorSupport.isPrivateMemberConfined(ownerName, fnName ?? '', source, index));
+		final eligible: Bool = isLocal || (
+			ownerName != null
+			&& !isPublicDecl(fn, parent, source, visibilityKinds, modifierKinds)
+			&& RefactorSupport.isPrivateMemberConfined(ownerName, fnName ?? '', source, index)
+		);
 		final capturedAsValue: Bool = fnName != null && captured.contains(fnName);
 		final params: Array<QueryNode> = CallSites.leadingParams(fn, shape);
 		for (pi => p in params) {

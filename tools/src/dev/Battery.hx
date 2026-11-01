@@ -134,19 +134,18 @@ final class Battery {
 			'battery: running suite→corpus ∥ fmt ∥ jvm ∥ oracle→lint concurrently — output replays in a fixed order once they join'
 		);
 		final parallel: Float = Timer.stamp();
-		final command: Array<String> -> Command = rows ->
-			Command.of([
-				'node',
-				self,
-				'battery',
-				'--rows',
-				rows.join(','),
-				'--plan',
-				workFile('plan.json')
-			])
-				.at(_plan.repo)
-				.env(ENGINE_VAR, Path.join([_plan.repo, 'bin/apq.js']))
-				.timeout(BRANCH_TIMEOUT_MS);
+		final command: Array<String> -> Command = rows -> Command.of([
+			'node',
+			self,
+			'battery',
+			'--rows',
+			rows.join(','),
+			'--plan',
+			workFile('plan.json')
+		])
+			.at(_plan.repo)
+			.env(ENGINE_VAR, Path.join([_plan.repo, 'bin/apq.js']))
+			.timeout(BRANCH_TIMEOUT_MS);
 		final order: Array<String> = [for (rows in BRANCHES) for (row in rows) row];
 		final leased: Array<String> -> Command = Branches.leased(_mode, BRANCHES, branchThreads, command, 'battery ${_plan.head}');
 		for (name => value in Branches.run(_plan.run, BRANCHES, order, leased, branchReport, _summary)) _readings[name] = value;

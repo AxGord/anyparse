@@ -1274,12 +1274,10 @@ final class TriviaTryparseLowering {
 			final stmtOptExpr: Expr = WriterOptFanout.statementListElemOpt(macro _writerOpt);
 			macro (
 				_si == _arr.length - 1 ? (
-					$caseTailBarrier
-						&& !opt._inExprPosition
-						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
-							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine)
-						? _clearExprPosition($stmtOptExpr)
-						: $stmtOptExpr
+					$caseTailBarrier && !opt._inExprPosition && (
+						opt.expressionIfBody == anyparse.format.BodyPolicy.Next
+						|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
+					) ? _clearExprPosition($stmtOptExpr) : $stmtOptExpr
 				) : _clearExprPosition($stmtOptExpr)
 			);
 		} else {
@@ -1453,8 +1451,10 @@ final class TriviaTryparseLowering {
 	 */
 	private static function triviaTryparseCondIncreaseGateExpr(condBodyIndent: Bool): Expr {
 		return condBodyIndent
-			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease
-				|| opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease)
+			? macro (
+				opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease
+				|| opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease
+			)
 			: macro false;
 	}
 

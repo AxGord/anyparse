@@ -254,11 +254,13 @@ final class CallRepetition {
 		final lists: ChainLists = _listsOf(edge.file);
 		if (listed(edge, lists.iterateIds, lists.iterateNames)) return true;
 		final via: String = edge.via ?? '';
-		return !(runsOnce(edge, lists)
+		return !(
+			runsOnce(edge, lists)
 			|| registered(edge)
 			|| lists.spawnIds.contains(via)
 			|| lists.marshalIds.contains(via)
-			|| listed(edge, lists.neverInvokeIds, lists.neverInvokeNames));
+			|| listed(edge, lists.neverInvokeIds, lists.neverInvokeNames)
+		);
 	}
 
 	/**

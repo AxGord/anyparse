@@ -214,15 +214,14 @@ final class Shard {
 		final started: Float = Timer.stamp();
 		final runs: Array<Result> = Pool.of(job.shards).map(
 			[for (s in 0...job.shards) s],
-			s ->
-				callerGc(
-					cmd('node ${job.testJs}')
-						.at(job.repo)
-						.env('PATH', shim == null ? path : '$shim:$path')
-						.env('APQ_TEST', split.filters[s])
-						.env('APQ_TEST_TIMING', Path.join([work, 'shard$s.timing']))
-						.timeout(SHARD_TIMEOUT_MS)
-				)
+			s -> callerGc(
+				cmd('node ${job.testJs}')
+					.at(job.repo)
+					.env('PATH', shim == null ? path : '$shim:$path')
+					.env('APQ_TEST', split.filters[s])
+					.env('APQ_TEST_TIMING', Path.join([work, 'shard$s.timing']))
+					.timeout(SHARD_TIMEOUT_MS)
+			)
 		);
 		final elapsed: Int = Math.round((Timer.stamp() - started) * MS_PER_SECOND);
 		final sum: Tally = {

@@ -65,15 +65,16 @@ final class HxCompareOperandBreakSliceTest extends Test {
 	public function testCompareOperandInBoolChainBreaksBeforeOp(): Void {
 		// The client DiskSystemBase shape: a `||` operand `call(...) == CONST`
 		// inside a nested-paren bool chain overflows at 151 columns — it
-		// must break before `==` instead of staying glued.
+		// must break before `==` instead of staying glued. The paren group
+		// whose content breaks opens as a container on the outer chain's line.
 		final glued: String = 'class C {\n\tfunction f() {\n\t\tif (\n'
 			+ '\t\t\t!incrementalRemoteAction.folder && fileTimestamp > incrementalRemoteAction.cloudTimestamp\n\t\t\t&& (fileTimestamp != '
 			+ 'cloudTimestamp\n\t\t\t|| _dataSystem.cloudStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true) '
 			+ '== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED)\n\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		final broken: String = 'class C {\n\tfunction f() {\n\t\tif (\n'
-			+ '\t\t\t!incrementalRemoteAction.folder && fileTimestamp > incrementalRemoteAction.cloudTimestamp\n\t\t\t&& (fileTimestamp != '
-			+ 'cloudTimestamp\n\t\t\t|| _dataSystem.cloudStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true)\n'
-			+ '\t\t\t\t== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED)\n\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
+			+ '\t\t\t!incrementalRemoteAction.folder && fileTimestamp > incrementalRemoteAction.cloudTimestamp && (\n\t\t\t\tfileTimestamp '
+			+ '!= cloudTimestamp\n\t\t\t\t|| _dataSystem.cloudStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true)\n'
+			+ '\t\t\t\t\t== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED\n\t\t\t)\n\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		Assert.equals(broken, triviaWrite(glued));
 		Assert.equals(broken, triviaWrite(broken));
 	}

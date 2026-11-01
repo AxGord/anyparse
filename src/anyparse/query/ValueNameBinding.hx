@@ -273,10 +273,12 @@ final class ValueNameBinding {
 					&& SourceText.lastSegment(imp.raw) == name
 					|| split != null
 					&& SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))
-					&& (types == null
+					&& (
+						types == null
 						|| carriesValue(types, name)
 						|| split.rest.length == 0
-						&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.exists(m -> m.name == name)));
+						&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.exists(m -> m.name == name))
+					);
 		};
 	}
 
