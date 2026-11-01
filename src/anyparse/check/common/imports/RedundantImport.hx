@@ -372,7 +372,7 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 			typeValues: values,
 			fieldValues: []
 		};
-		for (o in info.imports) if ((o.span.from != imp.span.from || o.span.to != imp.span.to) && !providesModule(o, module)) {
+		for (o in importsBetween(info, imp, module)) {
 			final theirs: Null<ImportBinding> = switch o.kind {
 				case ImportKind.Wild: null;
 				case ImportKind.Alias: bindings.ofAlias(o.alias ?? o.raw);
@@ -382,6 +382,28 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 			if (theirs != null && ImportBindings.collision(mine, imp.raw, theirs, o.raw) != null) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The statements that decide a name `imp` and its module import `module` both bind: those after the nearest `module`
+	 * import above `imp` and before `imp`. Haxe lets the LAST statement binding a name win, so one outside that window wins
+	 * or loses the same with and without `imp`, an unresolved module included. No such import above `imp` leaves the window
+	 * empty — a module import below it outranks it for everything it binds.
+	 */
+	private static function importsBetween(info: FileInfo, imp: ImportInfo, module: String): Array<ImportInfo> {
+		final limit: Int = imp.span.from;
+		var provider: Int = -1;
+		for (o in info.imports) {
+			final at: Int = o.span.from;
+			if (providesModule(o, module) && at < limit && at > provider) provider = at;
+		}
+		final above: Int = provider;
+		return above < 0
+			? []
+			: info.imports.filter(o -> {
+				final at: Int = o.span.from;
+				return at > above && at < limit;
+			});
 	}
 
 }
