@@ -11269,6 +11269,22 @@
 			"note": "an else branch that breaks on the `) : else` line is charged the content that lands on a later line, so a fitting closing line breaks the seams"
 		},
 		{
+			"name": "M-TERNARY-CLOSING-ELSE-BREAKS-OFF-BY-ONE",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "IfArrowContinuationFits(0, tail.closingLine, limit, broken, glued)",
+			"replace": "IfArrowContinuationFits(0, tail.closingLine, limit + 1, broken, glued)",
+			"note": "the `) : else` line of an else branch that breaks on it glues one column past the limit"
+		},
+		{
+			"name": "M-TERNARY-ELSE-BREAKS-UNDETECTED",
+			"type": "anyparse.core.DocMeasure",
+			"method": "gluedTernaryTail",
+			"find": "elseBreaks: hasForcedBreak(parts[4])",
+			"replace": "elseBreaks: false",
+			"note": "an else branch that breaks on the `) : else` line is not recognised, so the rest after it is charged to that line although it lands later"
+		},
+		{
 			"name": "M-TERNARY-HEAD-PENDING-OFF",
 			"type": "anyparse.core.Renderer",
 			"method": "pushFlatWidthBranch",

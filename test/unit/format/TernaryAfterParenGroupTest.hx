@@ -374,6 +374,8 @@ final class TernaryAfterParenGroupTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-TERNARY-CLOSING-ELSE-BREAKS-CHARGES-REST')
+	@:killer('M-TERNARY-CLOSING-ELSE-BREAKS-OFF-BY-ONE')
+	@:killer('M-TERNARY-ELSE-BREAKS-UNDETECTED')
 	public function testOpeningElseLeavesTheClosingLineUncharged(): Void {
 		// Inside a paren that stays glued the `),` that follows lands on a later line, so it is not charged to the closing line.
 		assertLaidOut(
