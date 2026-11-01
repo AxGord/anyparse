@@ -811,6 +811,13 @@ class PreferInlineCheckTest extends Test {
 		Assert.equals(0, demands, 'the owner own source answers the gate, so the widest index is never demanded');
 	}
 
+	public function testNullGuardedBodyNotFlagged(): Void {
+		Assert.equals(
+			0, violations(cls('function within(from:Int, r:Null<Pt>):Bool return r != null && from >= r.x;')).length,
+			'a null guard that narrows the rest of the body does not survive the inline — a caller argument is not a narrowable local'
+		);
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t$members\n}';
 	}

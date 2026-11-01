@@ -860,17 +860,27 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 * RHS, return or ternary branch — but NOT a `==` / `!=` / `??` null-check operand (context-neutral).
 	 * Haxe re-type-checks an inline body at every call site in the CALLER's null-safety mode, so a
 	 * `null` that compiles in this class's (looser / off) context can fail Strict re-checking
-	 * elsewhere. Over-skips a safe null-value body (the sound direction); a precise split would need
-	 * null-flow typing.
+	 * elsewhere. A `== null` / `!= null` comparison that is NOT the whole body is a GUARD (see
+	 * `isNullGuard`): the narrowing it gives the rest of the body does not survive the inline, because
+	 * the caller's argument need not be a narrowable local. Over-skips a safe null-value body (the sound
+	 * direction); a precise split would need null-flow typing.
 	 */
 	private static function bodyHasNullSafetyRisk(fn: QueryNode, shape: RefShape): Bool {
 		final body: Null<QueryNode> = bodyOf(fn, shape);
-		return body != null && subtreeHasNullSafetyRisk(body, body.kind, shape);
+		return body != null && subtreeHasNullSafetyRisk(body, body.kind, bodyRootExpr(fn, shape), shape);
 	}
 
 	/** Whether `node`'s subtree contains a null literal in a value slot. */
-	private static function subtreeHasNullSafetyRisk(node: QueryNode, parentKind: String, shape: RefShape): Bool {
-		return isRiskyHere(node, parentKind, shape) || node.children.exists(c -> subtreeHasNullSafetyRisk(c, node.kind, shape));
+	private static function subtreeHasNullSafetyRisk(node: QueryNode, parentKind: String, root: Null<QueryNode>, shape: RefShape): Bool {
+		return isRiskyHere(node, parentKind, shape)
+			|| node != root
+			&& isNullGuard(node, shape)
+			|| node.children.exists(c -> subtreeHasNullSafetyRisk(c, node.kind, root, shape));
+	}
+
+	/** Whether `node` is a `== null` / `!= null` comparison — a guard whose narrowing an inlined body loses. */
+	private static function isNullGuard(node: QueryNode, shape: RefShape): Bool {
+		return (node.kind == shape.eqKind || node.kind == shape.notEqKind) && node.children.exists(c -> c.kind == shape.nullLiteralKind);
 	}
 
 }

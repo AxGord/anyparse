@@ -807,7 +807,7 @@ final class MemberTouchScan {
 	}
 
 	/** Inline would lose the `region != null` narrowing under null safety, hence the suppression. */
-	private static function within(span: Span, region: Null<Span>): Bool { // noqa: prefer-inline
+	private static function within(span: Span, region: Null<Span>): Bool {
 		return region != null && span.from >= region.from && span.to <= region.to;
 	}
 
