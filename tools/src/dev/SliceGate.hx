@@ -44,7 +44,7 @@ final class SliceGate {
 	 */
 	public static final GATE_BRANCHES: Array<Array<String>> = [
 		['suite', 'corpus', 'arms'],
-		['lists', 'fmt', 'scrub'],
+		['lists', 'fmt', 'scrub', 'artifacts'],
 		['lint'],
 		['jvm'],
 		['infra4'],
@@ -59,7 +59,17 @@ final class SliceGate {
 
 	/** The branches' rows in table order; `decisions`, `frozen` and `porcelain` follow, once every branch has ended. */
 	private static final GATE_ROWS: Array<String> = [
-		'suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'arms', 'infra4', 'scrub', 'kits'
+		'suite',
+		'lists',
+		'corpus',
+		'fmt',
+		'lint',
+		'jvm',
+		'arms',
+		'infra4',
+		'scrub',
+		'artifacts',
+		'kits'
 	];
 
 	/** The branches of a `--baseline` run; `frozen` follows them. */
@@ -148,6 +158,7 @@ final class SliceGate {
 			case 'jvm': jvmOutcome;
 			case 'arms': GateArms.outcome.bind(_gate);
 			case 'scrub': scrubOutcome;
+			case 'artifacts': artifactsOutcome;
 			case 'kits': () ->
 				KitsRow.outcome(_gate.tree, _gate.summary, lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n'));
 			case _: () -> NotRun('no row named $name');
@@ -360,6 +371,13 @@ final class SliceGate {
 			return NotRun('no token list — set ANYPARSE_SCRUB_LIST (or ANYPARSE_SCRUB_PRIVATE_ROOTS)');
 		_gate.summary.detail('tree and ${GateTree.short(_gate.base)}..HEAD clean');
 		return tree.ok && range.ok ? Passed : Failed(GateTree.quote(tree.ok ? range : tree));
+	}
+
+	/** The artifacts row: no touched file is build output or over 1 MB, unless `--allow` names its path. */
+	private function artifactsOutcome(): Outcome {
+		final found: Array<String> = ArtifactRow.offenders(_gate.tree, _gate.touched, _gate.options.allow);
+		_gate.summary.detail('${_gate.touched.length} touched file(s) checked');
+		return found.length == 0 ? Passed : Failed(GateTree.clip('${found.length} artifact(s), first ${found[0]}'));
 	}
 
 	/**
