@@ -134,7 +134,18 @@ risky edit is typechecked by EVERY configuration that compiles it and is kept on
 when all of them confirm; an edit no configuration compiles is declined, not
 guessed at. A configuration whose own build is red before any edit, or whose
 compiled set cannot be probed, is EXCLUDED and named once per run, and the others
-still judge what they cover. `defines` go ahead of `--each`, so every `--next` arm
+still judge what they cover. One rule's edit sets in every file are judged
+TOGETHER: written at once and typechecked by every configuration any of them
+needs, so a rule whose edits all build costs one round, not one per file; a
+rejected set is put back and judged as its two halves the same way, so a half
+with no failing file is kept in one round and only a half holding one is split
+further, down to single files judged alone; a set the oracle cannot run on at
+all is judged file by file. Judged together, edits in
+two files that typecheck only together now both land where a file-by-file pass
+reverted each — the tree that results is still confirmed by every configuration
+judging it. The summary names the rounds the risky phase
+spent and how many candidate files each judged (`N oracle round(s) (candidate
+files per round: …)`). `defines` go ahead of `--each`, so every `--next` arm
 of the hxml sees them. Full contract: `docs/testing.md` § "The oracle answers for
 what it COMPILED, not for what you linted".
 

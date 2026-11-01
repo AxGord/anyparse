@@ -66,6 +66,12 @@ typedef FixVerifyResult = {
 	var excluded: Array<OracleExclusion>;
 
 	/**
+	 * How many candidate FILES each typecheck of the per-file arms judged at once, one entry per round in order: a
+	 * check's whole candidate set first, then each probe of a rejected set and each file judged alone.
+	 */
+	var rounds: Array<Int>;
+
+	/**
 	 * The compiled-set probes this run PAID FOR, one per JUDGING configuration it probed, each
 	 * paired with that configuration — empty when it never needed them (no risky candidate ever
 	 * existed, or the baseline was not `Confirmed`).
@@ -265,12 +271,46 @@ private enum EntryVerdict {
 }
 
 /**
+ * A file the verifier judges: its path and the text it holds now, which the verifier moves to each decided text.
+ */
+typedef FileText = {
+	var file: String;
+	var source: String;
+}
+
+/**
+ * One file's risky edit set that the writer accepted and some configuration can judge: `fullText` is the file with
+ * every edit applied, `verifying` the configurations that must all confirm it.
+ */
+private typedef EntryCandidate = {
+	var entry: FileText;
+	var edits: Array<GroupedEdit>;
+	var opts: Null<String>;
+	var fullText: String;
+	var verifying: Array<OracleConfig>;
+}
+
+/** What `FixVerifier.prepareEntry` settles: a verdict reached without the candidate's own typecheck, or a candidate to judge. */
+private enum EntryPrep {
+	Settled(verdict: EntryVerdict);
+	Ready(candidate: EntryCandidate);
+}
+
+/** One file a risky check reported in, with the edits it proposed and what preparing them settled — null `prep` for no edit. */
+private typedef PendingEntry = {
+	var entry: FileText;
+	var own: Array<Violation>;
+	var edits: Array<GroupedEdit>;
+	var prep: Null<EntryPrep>;
+}
+
+/**
  * Fix-verification for `RiskyFix` checks: the machinery behind the `compilerOracle`
  * key's promise that a rewrite/deletion is applied ONLY if it still compiles. It
  * assumes the safe (non-risky) fixes are already applied on disk, then for each
- * risky check and each file it applies that check's edits speculatively, writes the
- * candidate, runs the compiler oracle, and KEEPS it on `Confirmed` or reconciles
- * otherwise — the report-only fallback.
+ * risky check it applies that check's edits speculatively in every file, writes the
+ * candidates, runs the compiler oracle once over all of them (`judgeBatch`), and KEEPS
+ * them on `Confirmed` or reconciles otherwise — down to one file, then the report-only fallback.
  *
  * That promise carries a precondition the oracle cannot state for itself, and it is one question
  * PER CONFIGURATION: the file must be one the hxml actually COMPILES, and `compilerOracle` declares
@@ -312,7 +352,7 @@ final class FixVerifier {
 	 * `CompilerNameProof` over the judging configurations and the run's warm servers for the duration of the pass.
 	 */
 	public static function verify(
-		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
+		files: Array<FileText>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
 		write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: Array<ConfigCoverage>,
 		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
 	): FixVerifyResult {
@@ -327,9 +367,9 @@ final class FixVerifier {
 	}
 
 	private static function verifyWith(
-		names: CompilerNameProof, files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin,
-		oracles: Array<OracleConfig>, write: (String, String) -> Void, optsByFile: Null<Map<String, Null<String>>>,
-		coverage: Null<Array<ConfigCoverage>>, resolveConfig: Null<(String) -> LintConfig>, applyEnablement: Bool
+		names: CompilerNameProof, files: Array<FileText>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
+		write: (String, String) -> Void, optsByFile: Null<Map<String, Null<String>>>, coverage: Null<Array<ConfigCoverage>>,
+		resolveConfig: Null<(String) -> LintConfig>, applyEnablement: Bool
 	): FixVerifyResult {
 		final applied: Array<String> = [];
 		final reverted: Array<FixVerifyRevert> = [];
@@ -340,6 +380,7 @@ final class FixVerifier {
 		// at all, which is a decline like any other and the one the caller could least see.
 		final tallies: Array<FixVerifyTally> = [];
 		var appliedEdits: Int = 0;
+		final rounds: Array<Int> = [];
 		// EVERY configuration's own baseline, and a RED one is dropped rather than allowed to stop
 		// the phase: a configuration that does not typecheck before any edit was never a working
 		// gate, since a failure there afterwards is unattributable — where a green sibling still
@@ -363,6 +404,7 @@ final class FixVerifier {
 					coverageUnknown: null,
 					coverage: [],
 					excluded: excluded,
+					rounds: rounds,
 					tallies: tallies
 				};
 		}
@@ -405,6 +447,9 @@ final class FixVerifier {
 			// arm, which the safe loop has already run, and tallying them here would report them as risky
 			// declines.
 			final all: Array<Violation> = check is RiskyArm ? (cast check: RiskyArm).riskyArmFindings(collected) : collected;
+			// Every file's candidate is prepared first and the whole set judged together (`judgeBatch`); the verdicts are then
+			// folded in file order, so the lists and tallies read as a file-by-file pass leaves them.
+			final pending: Array<PendingEntry> = [];
 			for (entry in files) {
 				final own: Array<Violation> = all.filter(v -> v.file == entry.file);
 				if (own.length == 0) continue;
@@ -417,14 +462,11 @@ final class FixVerifier {
 						for (e in flatFix(check, entry.source, own, plugin, index)) { span: e.span, text: e.text, group: null }
 					];
 				if (edits.length == 0) {
-					// The check was asked for these findings and answered nothing — a decline, and
-					// the only one no other list in this result records.
-					tallies.push({
-						rule: check.id(),
-						file: entry.file,
-						findings: own.length,
-						edits: 0,
-						declineReasons: checkReasons(own)
+					pending.push({
+						entry: entry,
+						own: own,
+						edits: edits,
+						prep: null
 					});
 					continue;
 				}
@@ -446,6 +488,7 @@ final class FixVerifier {
 					partials: partials,
 					declined: declined,
 					coverageUnknown: unknown,
+					rounds: rounds,
 					coverage: coverageMemo.probes,
 					excluded: excluded,
 					// Emptied to keep the contract `coverageUnknown` states: every list above is
@@ -458,11 +501,35 @@ final class FixVerifier {
 					tallies: []
 				};
 				final opts: Null<String> = optsByFile == null ? null : optsByFile[entry.file];
+				pending.push({
+					entry: entry,
+					own: own,
+					edits: edits,
+					prep: prepareEntry(entry, edits, plugin, opts, current, excluded, write, rounds)
+				});
+			}
+			final verdicts: Array<Null<EntryVerdict>> = judgePending(pending, plugin, write, rounds);
+			for (k => p in pending) {
+				final entry: FileText = p.entry;
+				final edits: Array<GroupedEdit> = p.edits;
+				final own: Array<Violation> = p.own;
+				final verdict: Null<EntryVerdict> = verdicts[k];
+				if (verdict == null) {
+					// The check was asked for these findings and answered nothing — a decline, and
+					// the only one no other list in this result records.
+					tallies.push({
+						rule: check.id(),
+						file: entry.file,
+						findings: own.length,
+						edits: 0,
+						declineReasons: checkReasons(own)
+					});
+					continue;
+				}
 				// The verdict answers HOW MANY of this check's edits reached disk, because that
 				// is the one thing the caller's ledger row turns on: zero is a decline whatever
 				// the reason, and the reason is already in `declined` / `reverted` under the same
 				// (file, rule) pair.
-				final verdict: EntryVerdict = verifyEntry(entry, edits, plugin, opts, current, excluded, write);
 				final landed: Int = switch verdict {
 					case NoChange, SourceNotCanonical: 0;
 					case Declined(reason):
@@ -534,6 +601,7 @@ final class FixVerifier {
 				coverageUnknown: null,
 				coverage: coverageMemo.probes,
 				excluded: excluded,
+				rounds: rounds,
 				tallies: tallies
 			},
 			{
@@ -578,15 +646,95 @@ final class FixVerifier {
 	}
 
 	/**
-	 * Speculatively apply `edits` to one file and reconcile with the oracle.
+	 * Speculatively apply `edits` to one file and reconcile with the oracle, judging it ALONE: `prepareEntry`, then
+	 * `judgeAlone` for the candidate it builds. `writerNarrowed` re-enters here with the writable part of a refused set.
+	 *
+	 * Mutates `entry.source` and the disk (`write`) to the final decided text.
+	 */
+	private static function verifyEntry(
+		entry: FileText, edits: Array<GroupedEdit>, plugin: GrammarPlugin, opts: Null<String>, usable: UsableCoverage,
+		excluded: Array<OracleExclusion>, write: (String, String) -> Void, rounds: Array<Int>
+	): EntryVerdict {
+		return switch prepareEntry(entry, edits, plugin, opts, usable, excluded, write, rounds) {
+			case Settled(verdict): verdict;
+			case Ready(candidate): judgeAlone(candidate, plugin, write, rounds);
+		};
+	}
+
+	/**
+	 * What one file's edit set settles before its own typecheck: the writer's splice, and WHICH configurations
+	 * could judge the result.
 	 *
 	 * A candidate NO configuration typechecks — its file outside every compiled set, or its edits
 	 * inside a conditional branch no compiled arm of any configuration makes live — is `Declined` the
 	 * moment it exists, carrying each configuration's own reason; asked after the canonicalise so the
-	 * verdict distinguishes "no candidate" from "a candidate nothing can judge". The configurations
-	 * that DO typecheck it are the ones that then judge it, and all of them must confirm.
+	 * verdict distinguishes "no candidate" from "a candidate nothing can judge". A set the writer refuses
+	 * on a canonical source is narrowed at once (`writerNarrowed`, which judges what it keeps alone). Every
+	 * other candidate is `Ready`, nothing written yet, with the configurations that must all confirm it.
+	 */
+	private static function prepareEntry(
+		entry: FileText, edits: Array<GroupedEdit>, plugin: GrammarPlugin, opts: Null<String>, usable: UsableCoverage,
+		excluded: Array<OracleExclusion>, write: (String, String) -> Void, rounds: Array<Int>
+	): EntryPrep {
+		final before: String = entry.source;
+		final full: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
+		// Three outcomes, not two: an `Err` here is the WRITER declining the spliced
+		// source, which is not the same event as a check that proposed nothing — and
+		// `case _: return NoChange` recorded both as the latter, so a refused edit set
+		// left no trace at all.
+		//
+		// But only ONE of the two `Err` origins belongs to this check. With
+		// `reformat = false`, `canonicalize` first REFUSES a source that is not already
+		// the writer's fixed point: nothing was spliced, nothing was learned, and on a
+		// tree nobody has formatted that is the common case, not the exceptional one.
+		// Charging the check for the TREE's state would put a `risky-fix REVERTED` line
+		// and a +1 on the reverted count under every risky rule on every drifted file.
+		// Re-asking the gate costs one round trip on an error path that is rare.
+		final fullText: String = switch CanonicalEdit.canonicalize(before, full, false, plugin, opts) {
+			case Ok(text) if (text != before): text;
+			case Ok(_): return Settled(NoChange);
+			case Err(message): return Settled(
+				CanonicalEdit.isWriterCanonical(before, plugin, opts)
+					? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write, rounds)
+					: SourceNotCanonical
+			);
+		};
+		// The candidate exists; WHICH configurations could ever judge it is a separate question,
+		// and it is asked here rather than earlier so that the decline count means what it says:
+		// an edit set the writer would have refused is `NoChange` above, never a decline.
+		// EVERY edit's whole span, because the set is written and judged as ONE candidate: one edit
+		// landing where nothing is compiled makes the verdict on the rest unattributable, and a
+		// single edit STRADDLING such a region is the same thing with both its ends in live code.
+		final spans: Array<Span> = [for (edit in edits) edit.span];
+		final regions: Array<LexRegion> = plugin.lexicalRegions(before);
+		final covering: Array<OracleConfig> = [];
+		final gaps: Array<String> = [];
+		for (i in 0...usable.configs.length) {
+			final gap: Null<String> = usable.coverages[i].uncovered(entry.file, before, spans, plugin.refShape(), regions);
+			if (gap == null)
+				covering.push(usable.configs[i])
+			else
+				gaps.push(gap);
+		}
+		// A decline names the EXCLUDED configurations too, since one of them may be the very build that would
+		// have typechecked this edit and was dropped as red. A candidate is verified by every green configuration
+		// that may compile it — the covering ones and every one whose compiled set is unknown: dropping the latter
+		// is how an edit that compiles on mac and breaks an android build whose `-v` probe failed was applied.
+		return covering.length == 0
+			? Settled(Declined(OracleCoverage.gapSentence(gaps.concat(CompilerOracle.sentencesOf(excluded)))))
+			: Ready({
+				entry: entry,
+				edits: edits,
+				opts: opts,
+				fullText: fullText,
+				verifying: covering.concat(usable.unknown)
+			});
+	}
+
+	/**
+	 * ONE file's candidate judged by itself.
 	 *
-	 * Otherwise the full set is written and typechecked by every covering configuration first:
+	 * The full set is written and typechecked by every verifying configuration first:
 	 * `Confirmed` from all of them keeps it (`Applied`); `Unavailable` (an oracle cannot run) or a
 	 * `Rejected` with fewer than two UNITS reverts the whole file (`Reverted`). A multi-unit `Rejected` is
 	 * BISECTED — `FailerBisect.isolateFailers` isolates the failing UNITS by binary search (each
@@ -610,58 +758,14 @@ final class FixVerifier {
 	 *
 	 * Mutates `entry.source` and the disk (`write`) to the final decided text.
 	 */
-	private static function verifyEntry(
-		entry: { file: String, source: String }, edits: Array<GroupedEdit>, plugin: GrammarPlugin, opts: Null<String>,
-		usable: UsableCoverage, excluded: Array<OracleExclusion>, write: (String, String) -> Void
+	private static function judgeAlone(
+		candidate: EntryCandidate, plugin: GrammarPlugin, write: (String, String) -> Void, rounds: Array<Int>
 	): EntryVerdict {
+		final entry: FileText = candidate.entry;
+		final edits: Array<GroupedEdit> = candidate.edits;
+		final opts: Null<String> = candidate.opts;
+		final verifying: Array<OracleConfig> = candidate.verifying;
 		final before: String = entry.source;
-		final full: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
-		// Three outcomes, not two: an `Err` here is the WRITER declining the spliced
-		// source, which is not the same event as a check that proposed nothing — and
-		// `case _: return NoChange` recorded both as the latter, so a refused edit set
-		// left no trace at all.
-		//
-		// But only ONE of the two `Err` origins belongs to this check. With
-		// `reformat = false`, `canonicalize` first REFUSES a source that is not already
-		// the writer's fixed point: nothing was spliced, nothing was learned, and on a
-		// tree nobody has formatted that is the common case, not the exceptional one.
-		// Charging the check for the TREE's state would put a `risky-fix REVERTED` line
-		// and a +1 on the reverted count under every risky rule on every drifted file.
-		// Re-asking the gate costs one round trip on an error path that is rare.
-		final fullText: String = switch CanonicalEdit.canonicalize(before, full, false, plugin, opts) {
-			case Ok(text) if (text != before): text;
-			case Ok(_): return NoChange;
-			case Err(message): return CanonicalEdit.isWriterCanonical(before, plugin, opts)
-				? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write)
-				: SourceNotCanonical;
-		};
-		// The candidate exists; WHICH configurations could ever judge it is a separate question,
-		// and it is asked here rather than earlier so that the decline count means what it says:
-		// an edit set the writer would have refused is `NoChange` above, never a decline.
-		// EVERY edit's whole span, because the set is written and judged as ONE candidate: one edit
-		// landing where nothing is compiled makes the verdict on the rest unattributable, and a
-		// single edit STRADDLING such a region is the same thing with both its ends in live code.
-		final spans: Array<Span> = [for (edit in edits) edit.span];
-		final regions: Array<LexRegion> = plugin.lexicalRegions(before);
-		final covering: Array<OracleConfig> = [];
-		final gaps: Array<String> = [];
-		for (i in 0...usable.configs.length) {
-			final gap: Null<String> = usable.coverages[i].uncovered(entry.file, before, spans, plugin.refShape(), regions);
-			if (gap == null)
-				covering.push(usable.configs[i])
-			else
-				gaps.push(gap);
-		}
-		// The EXCLUDED configurations join the gap list, because one of them may be the very build
-		// that would have typechecked this edit: a decline that named only the judging
-		// configurations' gaps would send the reader looking at an hxml's classpath for a file
-		// whose own build was dropped as red.
-		if (covering.length == 0) return Declined(OracleCoverage.gapSentence(gaps.concat(CompilerOracle.sentencesOf(excluded))));
-		// Coverage decided WHETHER the edit may be judged; the verdict is asked of every green
-		// configuration that may compile it — the covering ones, and every one whose compiled set is
-		// unknown. Dropping the latter is how an edit that compiles on mac and breaks an android build
-		// whose `-v` probe failed was applied.
-		final verifying: Array<OracleConfig> = covering.concat(usable.unknown);
 		// SPAWNS, counted per CONFIGURATION, because one candidate now costs a compile in each of
 		// them. `CompilerOracle.invocations` is the process-wide spawn counter this package
 		// already keeps, and reading it around the ask is what keeps the reported number exact
@@ -669,18 +773,19 @@ final class FixVerifier {
 		final spawns: Array<Int> = [0];
 		function askCovering(): OracleOutcome {
 			final spentBefore: Int = CompilerOracle.invocations;
+			rounds.push(1);
 			final outcome: OracleOutcome = CompilerOracle.typecheckAll(verifying);
 			spawns[0] += CompilerOracle.invocations - spentBefore;
 			return outcome;
 		}
-		write(entry.file, fullText);
+		write(entry.file, candidate.fullText);
 		// ALL of them, and the first REJECTION decides: an edit that compiles on one configuration
 		// and breaks another is exactly the incident this list exists to catch, so a single
 		// confirmation is not a verdict. `typecheckAll` stops at that first rejection, which is why
 		// the worst case of one compile per configuration is only ever paid for a GOOD edit.
 		switch askCovering() {
 			case Confirmed:
-				entry.source = fullText;
+				entry.source = candidate.fullText;
 				return Applied;
 			case Unavailable(reason):
 				entry.source = before;
@@ -778,6 +883,79 @@ final class FixVerifier {
 	}
 
 	/**
+	 * The verdict on each of one check's `pending` files, in order: the one `prepareEntry` settled, a `judgeBatch` verdict
+	 * for every `Ready` candidate, and null for a file the check answered no edit for.
+	 */
+	private static function judgePending(
+		pending: Array<PendingEntry>, plugin: GrammarPlugin, write: (String, String) -> Void, rounds: Array<Int>
+	): Array<Null<EntryVerdict>> {
+		final candidates: Array<EntryCandidate> = [];
+		for (p in pending) switch p.prep {
+			case Ready(candidate):
+				candidates.push(candidate);
+			case _:
+		}
+		final judged: Array<EntryVerdict> = judgeBatch(candidates, plugin, write, rounds);
+		var next: Int = 0;
+		return [
+			for (p in pending) {
+				final prep: Null<EntryPrep> = p.prep;
+				if (prep == null)
+					null
+				else
+					switch prep {
+						case Settled(settled): settled;
+						case Ready(_): judged[next++];
+					};
+			}
+		];
+	}
+
+	/**
+	 * One check's candidates judged TOGETHER, one verdict per candidate in order: written at once and typechecked by
+	 * the union of their verifying configurations, so a check whose edits all build costs one round, not one per file.
+	 *
+	 * A rejected set is put back at its own texts and judged as its two halves (`judgeHalves`), down to single files
+	 * judged alone — each on top of what the halves before it kept, as a file-by-file pass would judge it. An
+	 * unavailable oracle leaves every file to `judgeAlone` — exactly that file-by-file pass.
+	 */
+	private static function judgeBatch(
+		candidates: Array<EntryCandidate>, plugin: GrammarPlugin, write: (String, String) -> Void, rounds: Array<Int>
+	): Array<EntryVerdict> {
+		final n: Int = candidates.length;
+		if (n < 2) return [for (candidate in candidates) judgeAlone(candidate, plugin, write, rounds)];
+		final configs: Array<OracleConfig> = [];
+		for (candidate in candidates) {
+			write(candidate.entry.file, candidate.fullText);
+			for (config in candidate.verifying) if (!configs.contains(config)) configs.push(config);
+		}
+		rounds.push(n);
+		final outcome: OracleOutcome = CompilerOracle.typecheckAll(configs);
+		if (outcome.match(Confirmed)) {
+			for (candidate in candidates) candidate.entry.source = candidate.fullText;
+			return [for (_ in candidates) Applied];
+		}
+		// every file is back at its own text before any is judged again, else a later confirm would read a tree still
+		// carrying another file's unkept candidate
+		for (candidate in candidates) write(candidate.entry.file, candidate.entry.source);
+		return outcome.match(Rejected(_))
+			? judgeHalves(candidates, plugin, write, rounds)
+			: [for (candidate in candidates) judgeAlone(candidate, plugin, write, rounds)];
+	}
+
+	/**
+	 * A rejected set judged as its two halves in order, each again as one batch, so the halves holding no failing
+	 * file are kept whole and only the ones holding one are split further.
+	 */
+	private static function judgeHalves(
+		candidates: Array<EntryCandidate>, plugin: GrammarPlugin, write: (String, String) -> Void, rounds: Array<Int>
+	): Array<EntryVerdict> {
+		final half: Int = candidates.length >> 1;
+		final left: Array<EntryVerdict> = judgeBatch(candidates.slice(0, half), plugin, write, rounds);
+		return left.concat(judgeBatch(candidates.slice(half), plugin, write, rounds));
+	}
+
+	/**
 	 * The full set was refused by the WRITER on a canonical source, so no candidate exists to
 	 * typecheck and no compile has been spent. Before this the set was reverted whole
 	 * (`NotCanonical`), so one un-writable unit cost every writable one beside it.
@@ -793,8 +971,8 @@ final class FixVerifier {
 	 * its own cause, because it says nothing about the writer.
 	 */
 	private static function writerNarrowed(
-		entry: { file: String, source: String }, edits: Array<GroupedEdit>, message: String, plugin: GrammarPlugin, opts: Null<String>,
-		usable: UsableCoverage, excluded: Array<OracleExclusion>, write: (String, String) -> Void
+		entry: FileText, edits: Array<GroupedEdit>, message: String, plugin: GrammarPlugin, opts: Null<String>, usable: UsableCoverage,
+		excluded: Array<OracleExclusion>, write: (String, String) -> Void, rounds: Array<Int>
 	): EntryVerdict {
 		final whole: EntryVerdict = Reverted(NotCanonical(message));
 		final units: Array<Array<Int>> = unitsOf(edits);
@@ -809,7 +987,7 @@ final class FixVerifier {
 		final keptEdits: Array<GroupedEdit> = [for (i in flat) edits[i]];
 		final refused: Int = edits.length - keptEdits.length;
 		final spentBefore: Int = CompilerOracle.invocations;
-		final inner: EntryVerdict = verifyEntry(entry, keptEdits, plugin, opts, usable, excluded, write);
+		final inner: EntryVerdict = verifyEntry(entry, keptEdits, plugin, opts, usable, excluded, write, rounds);
 		return switch inner {
 			case Applied: Partial(keptEdits.length, refused, CompilerOracle.invocations - spentBefore, NotCanonical(message));
 			case Partial(landed, dropped, spawns, cause) if (landed > 0): Partial(landed, dropped + refused, spawns, cause);

@@ -145,7 +145,8 @@ final class LintFixVerify {
 				// declined / excluded / bisect tails are each empty on an ordinary run, and spelled
 				// inline they push the segment past the line width.
 				final declinedClause: String = declinedTail(verified.declined);
-				final clauses: String = '$declinedClause${excludedTail(verified.excluded)}${bisectTail(verified.partials)}';
+				final clauses: String =
+					'$declinedClause${excludedTail(verified.excluded)}${bisectTail(verified.partials)}${roundsTail(verified.rounds)}';
 				return {
 					tail: ', risky-fix verified: ${verified.applied.length} file(s) applied, ${verified.reverted.length}'
 						+ ' reverted to report-only$clauses',
@@ -275,6 +276,29 @@ final class LintFixVerify {
 			probes += partial.oracleInvocations;
 		}
 		return ' (bisect: ${partials.length} file(s), $kept edit(s) kept, $reverted reverted, $probes oracle run(s))';
+	}
+
+	/**
+	 * `, N oracle round(s) (candidate files per round: 40, 20x2, 1x5)` — how many typechecks the per-file risky arms spent
+	 * and how many candidate files each judged at once, sizes descending; empty when none was spent.
+	 */
+	public static function roundsTail(rounds: Array<Int>): String {
+		if (rounds.length == 0) return '';
+		final sizes: Array<Int> = [];
+		final counts: Map<Int, Int> = [];
+		for (size in rounds) {
+			final seen: Null<Int> = counts[size];
+			if (seen == null) sizes.push(size);
+			counts[size] = (seen ?? 0) + 1;
+		}
+		sizes.sort((a, b) -> b - a);
+		final parts: Array<String> = [
+			for (size in sizes) {
+				final times: Int = counts[size] ?? 0;
+				times == 1 ? '$size' : '${size}x$times';
+			}
+		];
+		return ', ${rounds.length} oracle round(s) (candidate files per round: ${parts.join(', ')})';
 	}
 
 	/**
@@ -810,8 +834,7 @@ final class LintFixVerify {
 	 * refusal can be attributed to a rule and the rest kept (`settleAssistedFile`).
 	 */
 	private static function assistedGroups(
-		entry: { file: String, source: String }, findingsByCheck: Array<{ check: Check, all: Array<Violation> }>, plugin: GrammarPlugin,
-		oracle: TypeOracle
+		entry: FileText, findingsByCheck: Array<{ check: Check, all: Array<Violation> }>, plugin: GrammarPlugin, oracle: TypeOracle
 	): Array<RuleEdits> {
 		final out: Array<RuleEdits> = [];
 		for (byCheck in findingsByCheck) {

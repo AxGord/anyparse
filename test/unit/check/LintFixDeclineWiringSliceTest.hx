@@ -453,7 +453,6 @@ class LintFixDeclineWiringSliceTest extends Test {
 		#end
 	}
 
-
 	/**
 	 * The decline row's `<n> of <reported>` label never states a part larger than its whole.
 	 *
@@ -936,141 +935,6 @@ class LintFixDeclineWiringSliceTest extends Test {
 		#end
 	}
 
-	/** One violation carrying `reason`, or none — the shape a check hands back from `fix`. */
-	private static function reasoned(reason: Null<String>): Violation {
-		return {
-			file: 'F.hx',
-			span: null,
-			rule: 'avoid-dynamic',
-			severity: Severity.Info,
-			message: 'a Dynamic',
-			declineReason: reason
-		};
-	}
-
-	#if (sys || nodejs)
-	/**
-	 * One risky-fix phase where the CHECK spoke and the VERIFIER also had an answer for the same
-	 * (rule, file) pair — the shape the per-finding decline turns on, and the one no earlier fixture could express.
-	 *
-	 * `Partly.hx` sits outside the oracle's compiled set and carries 3 findings the check declined
-	 * itself; `Whole.hx` sits in a region no compiled arm makes live and every one of its findings
-	 * carries the check's sentence, so the verifier's has nothing left to say about it.
-	 */
-	private static function checkSpokenResult(): FixVerifyResult {
-		return {
-			baseline: Confirmed,
-			applied: [],
-			appliedEdits: 0,
-			reverted: [],
-			excluded: [],
-			partials: [],
-			declined: [
-				{
-					file: 'Partly.hx',
-					rule: 'shorten-type-ref',
-					edits: 2,
-					reason: 'the compiler oracle does not compile this file'
-				},
-				{
-					file: 'Whole.hx',
-					rule: 'shorten-type-ref',
-					edits: 1,
-					reason: 'the compiler oracle does not typecheck this region'
-				}
-			],
-			coverageUnknown: null,
-			coverage: null,
-			tallies: [
-				{
-					rule: 'shorten-type-ref',
-					file: 'Partly.hx',
-					findings: 5,
-					edits: 0,
-					declineReasons: [{ text: 'report-only: the shorter spelling is unproven', count: 3 }]
-				},
-				{
-					rule: 'shorten-type-ref',
-					file: 'Whole.hx',
-					findings: 2,
-					edits: 0,
-					declineReasons: [{ text: 'report-only: the shorter spelling is unproven', count: 2 }]
-				}
-			]
-		};
-	}
-
-	/**
-	 * One risky-fix phase's outcome, shaped to exercise all THREE reason states of the fold in one
-	 * call: `avoid-dynamic` landed both its edits in a covered file, landed none in a file the oracle
-	 * does not compile (reason in `declined`), none in a file the compiler read and refused (reason in
-	 * `reverted`, via `revertCauseText`), and none in a file that is in NEITHER list — an edit set that
-	 * canonicalised back to its own source, which declines with nothing to quote.
-	 *
-	 * That last row is the one the fold got wrong first time round and the one a hand-built fixture is
-	 * for: it is the shape `riskyDeclineReason` answers null for, and the shape whose real producer
-	 * (`SourceNotCanonical`) is now excluded upstream instead. Built by hand rather than verified for
-	 * real, so the ARITHMETIC is measured on its own; whether the verifier fills these rows correctly is
-	 * `FixVerifierCoverageE2ETest`'s question, against the real compiler.
-	 */
-	private static function riskyResult(): FixVerifyResult {
-		return {
-			baseline: Confirmed,
-			applied: ['Covered.hx'],
-			appliedEdits: 2,
-			excluded: [],
-			reverted: [
-				{
-					file: 'Rejected.hx',
-					rule: 'avoid-dynamic',
-					cause: OracleRejected
-				}
-			],
-			partials: [],
-			declined: [
-				{
-					file: 'Uncovered.hx',
-					rule: 'avoid-dynamic',
-					edits: 3,
-					reason: 'the compiler oracle does not compile this file'
-				}
-			],
-			coverageUnknown: null,
-			coverage: null,
-			tallies: [
-				{
-					rule: 'avoid-dynamic',
-					file: 'Covered.hx',
-					findings: 2,
-					edits: 2,
-					declineReasons: []
-				},
-				{
-					rule: 'avoid-dynamic',
-					file: 'Uncovered.hx',
-					findings: 3,
-					edits: 0,
-					declineReasons: []
-				},
-				{
-					rule: 'avoid-dynamic',
-					file: 'Rejected.hx',
-					findings: 1,
-					edits: 0,
-					declineReasons: []
-				},
-				{
-					rule: 'avoid-dynamic',
-					file: 'Silent.hx',
-					findings: 4,
-					edits: 0,
-					declineReasons: []
-				}
-			]
-		};
-	}
-	#end
-
 	/**
 	 * One refused FINDING costs its rule nothing else in the file.
 	 *
@@ -1188,6 +1052,18 @@ class LintFixDeclineWiringSliceTest extends Test {
 		#end
 	}
 
+	/** One violation carrying `reason`, or none — the shape a check hands back from `fix`. */
+	private static function reasoned(reason: Null<String>): Violation {
+		return {
+			file: 'F.hx',
+			span: null,
+			rule: 'avoid-dynamic',
+			severity: Severity.Info,
+			message: 'a Dynamic',
+			declineReason: reason
+		};
+	}
+
 	/**
 	 * The safe loop's pass 1 over `arm-rule`'s five findings in one file, as the driver records it: `reported` filled by
 	 * `applyLintPass`, then one group with no edit, so all five are declined — two of them hand-offs `ArmCheck`'s risky
@@ -1216,6 +1092,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	private static function armResult(edits: Int, declineReasons: Array<{ text: String, count: Int }>): FixVerifyResult {
 		return {
 			baseline: Confirmed,
+			rounds: [],
 			applied: edits > 0 ? ['A.hx'] : [],
 			appliedEdits: edits,
 			excluded: [],
@@ -1247,6 +1124,131 @@ class LintFixDeclineWiringSliceTest extends Test {
 			declineReason: reason
 		};
 	}
+
+	#if (sys || nodejs)
+	/**
+	 * One risky-fix phase where the CHECK spoke and the VERIFIER also had an answer for the same
+	 * (rule, file) pair — the shape the per-finding decline turns on, and the one no earlier fixture could express.
+	 *
+	 * `Partly.hx` sits outside the oracle's compiled set and carries 3 findings the check declined
+	 * itself; `Whole.hx` sits in a region no compiled arm makes live and every one of its findings
+	 * carries the check's sentence, so the verifier's has nothing left to say about it.
+	 */
+	private static function checkSpokenResult(): FixVerifyResult {
+		return {
+			baseline: Confirmed,
+			rounds: [],
+			applied: [],
+			appliedEdits: 0,
+			reverted: [],
+			excluded: [],
+			partials: [],
+			declined: [
+				{
+					file: 'Partly.hx',
+					rule: 'shorten-type-ref',
+					edits: 2,
+					reason: 'the compiler oracle does not compile this file'
+				},
+				{
+					file: 'Whole.hx',
+					rule: 'shorten-type-ref',
+					edits: 1,
+					reason: 'the compiler oracle does not typecheck this region'
+				}
+			],
+			coverageUnknown: null,
+			coverage: null,
+			tallies: [
+				{
+					rule: 'shorten-type-ref',
+					file: 'Partly.hx',
+					findings: 5,
+					edits: 0,
+					declineReasons: [{ text: 'report-only: the shorter spelling is unproven', count: 3 }]
+				},
+				{
+					rule: 'shorten-type-ref',
+					file: 'Whole.hx',
+					findings: 2,
+					edits: 0,
+					declineReasons: [{ text: 'report-only: the shorter spelling is unproven', count: 2 }]
+				}
+			]
+		};
+	}
+
+	/**
+	 * One risky-fix phase's outcome, shaped to exercise all THREE reason states of the fold in one
+	 * call: `avoid-dynamic` landed both its edits in a covered file, landed none in a file the oracle
+	 * does not compile (reason in `declined`), none in a file the compiler read and refused (reason in
+	 * `reverted`, via `revertCauseText`), and none in a file that is in NEITHER list — an edit set that
+	 * canonicalised back to its own source, which declines with nothing to quote.
+	 *
+	 * That last row is the one the fold got wrong first time round and the one a hand-built fixture is
+	 * for: it is the shape `riskyDeclineReason` answers null for, and the shape whose real producer
+	 * (`SourceNotCanonical`) is now excluded upstream instead. Built by hand rather than verified for
+	 * real, so the ARITHMETIC is measured on its own; whether the verifier fills these rows correctly is
+	 * `FixVerifierCoverageE2ETest`'s question, against the real compiler.
+	 */
+	private static function riskyResult(): FixVerifyResult {
+		return {
+			baseline: Confirmed,
+			rounds: [],
+			applied: ['Covered.hx'],
+			appliedEdits: 2,
+			excluded: [],
+			reverted: [
+				{
+					file: 'Rejected.hx',
+					rule: 'avoid-dynamic',
+					cause: OracleRejected
+				}
+			],
+			partials: [],
+			declined: [
+				{
+					file: 'Uncovered.hx',
+					rule: 'avoid-dynamic',
+					edits: 3,
+					reason: 'the compiler oracle does not compile this file'
+				}
+			],
+			coverageUnknown: null,
+			coverage: null,
+			tallies: [
+				{
+					rule: 'avoid-dynamic',
+					file: 'Covered.hx',
+					findings: 2,
+					edits: 2,
+					declineReasons: []
+				},
+				{
+					rule: 'avoid-dynamic',
+					file: 'Uncovered.hx',
+					findings: 3,
+					edits: 0,
+					declineReasons: []
+				},
+				{
+					rule: 'avoid-dynamic',
+					file: 'Rejected.hx',
+					findings: 1,
+					edits: 0,
+					declineReasons: []
+				},
+				{
+					rule: 'avoid-dynamic',
+					file: 'Silent.hx',
+					findings: 4,
+					edits: 0,
+					declineReasons: []
+				}
+			]
+		};
+	}
+	#end
 
 }
 

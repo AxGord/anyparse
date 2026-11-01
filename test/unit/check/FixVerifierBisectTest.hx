@@ -131,7 +131,7 @@ class FixVerifierBisectTest extends Test {
 			unknown: [],
 			excluded: [],
 			stop: null
-		}, [], (_, _) -> written++);
+		}, [], (_, _) -> written++, []);
 		Assert.equals(0, written, 'nothing may be written when no candidate was produced');
 		// Its OWN constructor, not `NoChange`. Both mean "no candidate", but only one of them is a
 		// statement about the CHECK, and `FixVerifier.verify` tallies for the caller's fix ledger off

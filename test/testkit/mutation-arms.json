@@ -3774,9 +3774,9 @@
 		{
 			"name": "M-ORACLE-UNKNOWN-COVERAGE-NO-VETO",
 			"type": "anyparse.check.FixVerifier",
-			"method": "verifyEntry",
-			"find": "final verifying: Array<OracleConfig> = covering.concat(usable.unknown);",
-			"replace": "final verifying: Array<OracleConfig> = covering;",
+			"method": "prepareEntry",
+			"find": "verifying: covering.concat(usable.unknown)",
+			"replace": "verifying: covering",
 			"note": "a configuration whose compiled set is unknown is dropped from the post-edit typecheck, so an edit that compiles on the covering build and breaks the unknown one is applied although its green baseline makes the rejection attributable"
 		},
 		{
@@ -15010,10 +15010,41 @@
 		{
 			"name": "M-WRITER-NARROW-NONE",
 			"type": "anyparse.check.FixVerifier",
-			"method": "verifyEntry",
-			"find": "? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write)",
+			"method": "prepareEntry",
+			"find": "? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write, rounds)",
 			"replace": "? Reverted(NotCanonical(message))",
 			"note": "a risky edit set the writer refuses is reverted whole again, so its writable units go with the refused one"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-NONE",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeBatch",
+			"find": "if (n < 2) return",
+			"replace": "if (n >= 0) return",
+			"note": "every candidate of a risky check is typechecked alone again, so a check whose edits all build costs one oracle round per file"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-NO-SPLIT",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeHalves",
+			"force": "[for (c in candidates) judgeAlone(c, plugin, write, rounds)]",
+			"note": "a rejected batch is judged file by file instead of in halves, so the halves holding no failing file are no longer kept in one round"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-NO-RESTORE",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeBatch",
+			"find": "for (candidate in candidates) write(candidate.entry.file, candidate.entry.source);",
+			"replace": "",
+			"note": "files a rejected batch did not keep stay on disk at their candidate text, so a file judged alone afterwards is confirmed or rejected against edits that were never kept"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-UNAVAILABLE-SPLITS",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeBatch",
+			"find": "outcome.match(Rejected(_))",
+			"replace": "!outcome.match(Confirmed)",
+			"note": "a batch the oracle could not judge at all is split into halves and asked again, spending rounds on a compiler that cannot run"
 		},
 		{
 			"name": "M-ASSISTED-SALVAGE-NONE",
