@@ -1008,7 +1008,10 @@ final class CollapsePass {
 			case _:
 		}
 		final glued: Null<Doc> = chainGluedIfOpens(d, decisions, width);
-		if (glued != null) return WrapBoundary(commitOpens(glued, decisions, width));
+		if (glued != null) {
+			final opened: Doc = commitOpens(glued, decisions, width);
+			return ternaryTailGate(d, opened, decisions, width) ?? WrapBoundary(opened);
+		}
 
 		// A per-binary `Group` cascade on the spine between the committed
 		// chain and the opened paren (e.g. `(paren) / 2` — the `/` is a
@@ -1414,7 +1417,10 @@ final class CollapsePass {
 	 * the two-branch chain signature), never Haxe syntax.
 	 */
 	private static function commitChainGlue(d: Doc, glued: Doc, decisions: CollapseRun, insideBroken: Bool, width: Int): Doc {
-		final committed: Doc = WrapBoundary(commitOpens(glued, decisions, width));
+		final opened: Doc = commitOpens(glued, decisions, width);
+		final ternary: Null<Doc> = ternaryTailGate(d, opened, decisions, width);
+		if (ternary != null) return ternary;
+		final committed: Doc = WrapBoundary(opened);
 		if (insideBroken) return committed;
 		final tagged: Null<TaggedAddChain> = taggedAddChain(d);
 		return if (tagged != null)
@@ -1433,6 +1439,40 @@ final class CollapsePass {
 			case Concat(parts) if (parts.length >= 3): parts[1].match(Text(' && ' | ' || '));
 			case _: false;
 		};
+	}
+
+	/**
+	 * The line a glued ternary `c ? a : b` leaves after its condition's closing line: its width - the closer run that
+	 * opens it plus `? a : b` up to the tail's first forced break - and whether such a break ends it. A branch that opens
+	 * its own paren group follows the container rule: the group opens at the end of a line that fits, so only that first
+	 * line is measured. Null when `committed` is not a glued ternary whose condition closes at the indent it opened on.
+	 */
+	private static function gluedTernaryTail(committed: Doc): Null<{ width: Int, breaks: Bool }> {
+		return switch committed {
+			case Concat(parts) if (parts.length == 5 && parts[1].match(Text(' ? ')) && parts[3].match(Text(' : '))):
+				final run: Int = DocMeasure.closeLineRun(parts[0]);
+				final tail: Doc = Concat(parts.slice(1));
+				run < 0
+					? null
+					: { width: run + DocMeasure.flatFirstLineWidthThroughBodyGroup(tail), breaks: DocMeasure.hasForcedBreak(tail) };
+			case _: null;
+		};
+	}
+
+	/**
+	 * The glued ternary `d` with its condition's paren committed open (`opened`), behind the one width check its glue
+	 * owes: the `? a : b` tail rides the closing line when that line fits, else `d` is rewritten as it stands and its own
+	 * seams break. Null when `opened` is not such a ternary, so every other chain keeps its unconditional glue.
+	 */
+	private static function ternaryTailGate(d: Doc, opened: Doc, decisions: CollapseRun, width: Int): Null<Doc> {
+		final tail: Null<{ width: Int, breaks: Bool }> = gluedTernaryTail(opened);
+		if (tail == null) return null;
+		final broken: Doc = D.mapChildren(d, recPair(decisions, width).flat);
+		final glued: Doc = WrapBoundary(opened);
+		// What follows the ternary shares the tail line only when no branch breaks on it.
+		return tail.breaks
+			? IfArrowContinuationFits(0, tail.width, width + 1, broken, glued)
+			: IfArrowContinuationFitsWithRest(0, tail.width, width + 1, broken, glued);
 	}
 
 }

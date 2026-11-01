@@ -11165,6 +11165,62 @@
 			"note": "committing an opened paren re-commits a shared node once per path to it"
 		},
 		{
+			"name": "M-TERNARY-TAIL-GATE-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "gluedTernaryTail",
+			"find": "run < 0",
+			"replace": "true",
+			"note": "a ternary after a paren group that opens glues its `? a : b` onto the closing `)` line with no width check, so the line overflows or the else branch breaks its own arguments"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GATE-NESTED-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "commitOpensUnmemoized",
+			"find": "return ternaryTailGate(d, opened, decisions, width) ?? WrapBoundary(opened);",
+			"replace": "return WrapBoundary(opened);",
+			"note": "a ternary nested inside a committed glue keeps its `? a : b` on its condition's closing line whatever its width"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GATE-OFF-BY-ONE",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": ": IfArrowContinuationFitsWithRest(0, tail.width, width + 1, broken, glued);",
+			"replace": ": IfArrowContinuationFitsWithRest(0, tail.width, width + 2, broken, glued);",
+			"note": "a closing line one column past the limit still carries the ternary tail"
+		},
+		{
+			"name": "M-TERNARY-TAIL-REST-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": ": IfArrowContinuationFitsWithRest(0, tail.width, width + 1, broken, glued);",
+			"replace": ": IfArrowContinuationFits(0, tail.width, width + 1, broken, glued);",
+			"note": "what follows the ternary on its tail line (`),` / `);`) is not charged, so a glued tail overflows by that much"
+		},
+		{
+			"name": "M-TERNARY-TAIL-FLAT-WIDTH",
+			"type": "anyparse.core.CollapsePass",
+			"method": "gluedTernaryTail",
+			"find": "DocMeasure.flatFirstLineWidthThroughBodyGroup(tail)",
+			"replace": "DocMeasure.flatTokenWidth(tail)",
+			"note": "a branch that opens its own paren group is counted flat, so `) ? x && (` breaks its seams although that line fits"
+		},
+		{
+			"name": "M-TERNARY-TAIL-BREAKS-CHARGES-REST",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "? IfArrowContinuationFits(0, tail.width, width + 1, broken, glued)",
+			"replace": "? IfArrowContinuationFitsWithRest(0, tail.width, width + 1, broken, glued)",
+			"note": "a tail whose branch breaks is charged the `);` that lands on a later line, so a fitting first tail line breaks its seams"
+		},
+		{
+			"name": "M-TERNARY-TAIL-BREAKS-OFF-BY-ONE",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "? IfArrowContinuationFits(0, tail.width, width + 1, broken, glued)",
+			"replace": "? IfArrowContinuationFits(0, tail.width, width + 2, broken, glued)",
+			"note": "a first tail line ending where a branch opens its group glues one column past the limit"
+		},
+		{
 			"name": "M-FOR-BODY-PROBE-EAGER",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "wrapBodyAllman",

@@ -714,6 +714,16 @@ final class DocMeasure {
 		return scanTailAt(d, 0, true, out) == TailBreak && out.braceCloser ? out.closeWidth : -1;
 	}
 
+	/**
+	 * The rendered width of the closer run that opens `d`'s forced closing line, or `-1` unless that line starts at the
+	 * indent of the line `d` itself started on. `breakTailCloseRun` without its brace requirement: what a caller gluing
+	 * text after a paren or bracket that closes under its own opener pays for the closers already on that line.
+	 */
+	public static function closeLineRun(d: Doc): Int {
+		final out: TailOut = { nest: 0, braceCloser: false, closeWidth: 0 };
+		return scanTailAt(d, 0, true, out) == TailBreak && out.nest == 0 ? out.closeWidth : -1;
+	}
+
 	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
 	private static inline function isIdentStart(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;

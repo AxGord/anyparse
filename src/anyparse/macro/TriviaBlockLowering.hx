@@ -772,9 +772,9 @@ final class TriviaBlockLowering {
 					$blockTailBarrier && (
 						opt.expressionIfBody == anyparse.format.BodyPolicy.Next
 						|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
-					) ? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr))) : _clearArrowLambdaBody(
-						_clearValueIfBranch($stmtOptExpr)
 					)
+						? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr)))
+						: _clearArrowLambdaBody(_clearValueIfBranch($stmtOptExpr))
 				) : _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr)))
 			);
 		} else {
