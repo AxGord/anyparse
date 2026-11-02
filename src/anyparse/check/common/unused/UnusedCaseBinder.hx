@@ -238,10 +238,8 @@ final class UnusedCaseBinder extends RuleBase {
 		for (i in 0...switchNode.children.length) if (i != at) {
 			final groups: Null<Array<Array<PatternBinder>>> = CasePatternScan.binderGroups(seams, switchNode.children[i]);
 			if (groups == null) continue;
-			for (group in groups) if (
-				group[0].bare && group[0].whole && CasePatternScan.patternRun(seams, switchNode.children[i]).length == 1
-			)
-				return true;
+			for (group in groups)
+				if (group[0].bare && group[0].whole && CasePatternScan.patternRun(seams, switchNode.children[i]).length == 1) return true;
 		}
 		return false;
 	}

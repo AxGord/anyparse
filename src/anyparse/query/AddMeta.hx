@@ -74,10 +74,9 @@ final class AddMeta {
 
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, hostNN);
 		final run: Array<QueryNode> = prefixRun(parent, hostNN);
-		for (sibling in run) if (
-			MemberKinds.META_KINDS.contains(sibling.kind) && sibling.name == nameNN && sameEntry(source, sibling, text)
-		)
-			return Err('already annotated: $text');
+		for (sibling in run)
+			if (MemberKinds.META_KINDS.contains(sibling.kind) && sibling.name == nameNN && sameEntry(source, sibling, text))
+				return Err('already annotated: $text');
 
 		final edit: Null<{ span: Span, text: String }> = runEdit(source, run, hostNN, [text]);
 		return edit == null

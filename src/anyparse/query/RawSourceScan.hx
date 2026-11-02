@@ -188,10 +188,8 @@ final class RawSourceScan {
 	 * subtypes" proof needs, where the regions are a type declaration and each of its subtypes'.
 	 */
 	public function nameOccursOutsideAll(name: String, excluded: Map<String, Array<Span>>): Bool {
-		for (file => src in _sources) if (OccurrenceScan.referencedInRange(
-			src, name, 0, src.length, excluded[file] ?? [], matchMaskFor(file, src)
-		))
-			return true;
+		for (file => src in _sources)
+			if (OccurrenceScan.referencedInRange(src, name, 0, src.length, excluded[file] ?? [], matchMaskFor(file, src))) return true;
 		return false;
 	}
 

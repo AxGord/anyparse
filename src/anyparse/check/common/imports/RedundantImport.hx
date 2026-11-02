@@ -178,10 +178,8 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 		if (!ImportBindings.bindsNoValue(bindings.ofImport(imp.raw))) return null;
 		final simple: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
 		if (simple == null) return null;
-		for (o in info.imports) if (
-			(o.span.from != imp.span.from || o.span.to != imp.span.to) && SymbolIndex.bindsAnyOf(o, simple, publicTypes)
-		)
-			return null;
+		for (o in info.imports)
+			if ((o.span.from != imp.span.from || o.span.to != imp.span.to) && SymbolIndex.bindsAnyOf(o, simple, publicTypes)) return null;
 		final kept: Null<Array<ResolvedType>> = index.refs.names.keptWithout(imp, info);
 		if (kept == null) return null;
 		final decl: ResolvedType = kept[0];

@@ -1627,10 +1627,9 @@ private class PlanContext {
 	/** The SMALLEST member region containing `span`, or null when it sits outside every member. */
 	private function memberSpanOf(span: Span): Null<Span> {
 		var best: Null<Span> = null;
-		for (member in memberSpans()) if (
-			member.from <= span.from && span.to <= member.to && (best == null || member.to - member.from < best.to - best.from)
-		)
-			best = member;
+		for (member in memberSpans())
+			if (member.from <= span.from && span.to <= member.to && (best == null || member.to - member.from < best.to - best.from))
+				best = member;
 		return best;
 	}
 
@@ -1700,14 +1699,15 @@ private class PlanContext {
 	/** The region of the body statement of `member` that contains `span`, or null when `span` is in none. */
 	private function statementSpanOf(span: Span, member: Span): Null<Span> {
 		var best: Null<Span> = null;
-		for (statement in statementSpans()) if (
-			member.from <= statement.from
-			&& statement.to <= member.to
-			&& statement.from <= span.from
-			&& span.to <= statement.to
-			&& (best == null || statement.to - statement.from < best.to - best.from)
-		)
-			best = statement;
+		for (statement in statementSpans())
+			if (
+				member.from <= statement.from
+				&& statement.to <= member.to
+				&& statement.from <= span.from
+				&& span.to <= statement.to
+				&& (best == null || statement.to - statement.from < best.to - best.from)
+			)
+				best = statement;
 		return best;
 	}
 

@@ -331,11 +331,12 @@ final class BackingFieldRefs {
 		final childShadows: Bool = shadowsProp
 			|| (FieldRefScan.isFnScope(node, shape) && FieldRefScan.functionBindsName(node, propName, shape));
 		final isWrite: Bool = FieldRefScan.isWriteNodeKind(node.kind, shape);
-		for (i in 0...node.children.length) if (!subtypeRefWalk(
-			node.children[i], field, owner, propName, index, source, ownerFileScan, cls2, isWrite && i == 0, childShadows, renameEdits,
-			excludeSpans, shape
-		))
-			return false;
+		for (i in 0...node.children.length)
+			if (!subtypeRefWalk(
+				node.children[i], field, owner, propName, index, source, ownerFileScan, cls2, isWrite && i == 0, childShadows, renameEdits,
+				excludeSpans, shape
+			))
+				return false;
 		return true;
 	}
 

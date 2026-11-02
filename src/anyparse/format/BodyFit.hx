@@ -389,8 +389,9 @@ final class BodyFit {
 	 * wrapping its CONDITION.
 	 *
 	 * `sameLine` is the caller's own same-line layout, returned UNCHANGED for every
-	 * shape the gate does not claim, so a two-link chain keeps the head-fit glue it
-	 * has always had. The gate is NOT statement-position only — a brace-less FUNCTION
+	 * shape the gate does not claim. A two-link chain keeps the head-fit glue and goes
+	 * to `chainHeadGate`, which charges only a head the `BodyGroup` deferral hides.
+	 * The gate is NOT statement-position only — a brace-less FUNCTION
 	 * body reaches it through `fitLineLayout` and does not tear, because that two-link
 	 * guard refuses the chain — so what differs is the enclosing site, not the
 	 * position class.
@@ -405,10 +406,10 @@ final class BodyFit {
 	 * since its measured doc contains the separator this one does not.
 	 *
 	 * INVARIANT: `n` is computed at EMIT time from `flatTokenWidth(sameLine)`, so no
-	 * post-pass may rewrite the flat branch in a way that changes that width.
-	 * `WrapList.groupifyInlineBodies` is exactly such a pass and carries an
-	 * `IfLineExceeds` through untouched; whether it can reach this gate is UNMEASURED,
-	 * and `arrowGlueThreshold` shares the exposure.
+	 * post-pass may rewrite the flat branch in a way that changes that width without
+	 * re-folding it. `WrapList.groupifyInlineBodies` is exactly such a pass; it reaches
+	 * this gate and `chainHeadGate` inside a comprehension item and re-folds `n` for
+	 * every probe `slotProbeBreak` recognises. `arrowGlueThreshold` shares the exposure.
 	 *
 	 * `lineWidth <= 0` returns `sameLine` unchanged, the inert answer for a caller
 	 * with no width to spend. `docs/decisions.md` records the refused alternative of
@@ -417,7 +418,8 @@ final class BodyFit {
 	public static function chainStaircase(cols: Int, body: Doc, sameLine: Doc, lineWidth: Int): Doc {
 		if (lineWidth <= 0) return sameLine;
 		final second: Null<Doc> = chainBodyInner(body);
-		if (second == null || chainBodyInner(second) == null) return sameLine;
+		if (second == null) return sameLine;
+		if (chainBodyInner(second) == null) return chainHeadGate(cols, body, second, sameLine, lineWidth);
 		final charged: Int = DocMeasure.flatFirstLineWidthThroughBodyGroup(body);
 		final n: Int = lineWidth + DocMeasure.flatTokenWidth(sameLine) - charged;
 		return Doc.IfLineExceeds(n, Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), forceChainBreaks(body)])), sameLine);
@@ -512,9 +514,63 @@ final class BodyFit {
 		return walk(elem);
 	}
 
+	/**
+	 * The next-line form of a chain gate's probe — `chainHeadGate`'s or
+	 * `chainStaircase`'s — or `null` when `d` is not one.
+	 *
+	 * A walker that recognises the bare body slot and moves the body below its header
+	 * (`WrapList.dropComprehensionBody`) must see through a gate the same way, since
+	 * the gate wraps that very slot: bare, in the body-level `BodyGroup`, or in the
+	 * `Group` that `WrapList.groupifyInlineBodies` re-tags it to. The probe's break
+	 * branch IS that next-line form, the staircase's included. Both branches must be
+	 * the slot itself at one indent — never a slot found deeper — so a condition-wrap
+	 * probe whose shapes merely END in a slot is not mistaken for a gate.
+	 */
+	public static function slotProbeBreak(d: Doc): Null<Doc> {
+		switch d {
+			case Doc.IfLineExceeds(_, brk, Doc.Group(fl) | Doc.BodyGroup(fl) | fl):
+				final indent: Int = slotIndent(brk, true);
+				return indent >= 0 && indent == slotIndent(fl, false) ? brk : null;
+			case _:
+				return null;
+		}
+	}
+
 	/** `own` coordinated by the sibling number `width`, or `own` itself when `width` asks for no coordination. */
 	private static inline function siblingLayout(cols: Int, body: Doc, lineWidth: Int, width: Int, own: Doc): Doc {
 		return width < 0 ? own : Doc.IfIndentWidthExceeds(width, lineWidth, breakLayout(cols, body), own);
+	}
+
+	/** The `Nest` indent of `d` when `d` is a body slot whose separator is a hardline (`next`) or the glue space, else `-1`. */
+	private static function slotIndent(d: Doc, next: Bool): Int {
+		return switch d {
+			case Doc.Nest(n, Doc.Concat([Doc.Line('\n'), _])) if (next): n;
+			case Doc.Nest(n, Doc.Concat([sep, _])) if (!next && isGlueSeparator(sep)): n;
+			case _: -1;
+		};
+	}
+
+	/**
+	 * The two-link `FitLine` chain gate: a control-flow construct whose body is another
+	 * such construct with a plain body glues that link onto the header line only when the
+	 * link's HEAD — everything up to its own body — fits there; otherwise the link takes
+	 * the next line one indent deeper and still answers `FitLine` for its own body.
+	 *
+	 * Only a head the `BodyGroup` deferral HIDES is gated. A construct-level group (the
+	 * `conditionWrapping` cond-fit group) holds the link's condition, so the enclosing
+	 * `fitsFlat` sees the link's keyword alone and glues it however wide the condition
+	 * is — the condition then wraps at the deeper column although the whole link would
+	 * fit on a line of its own. A head the walk already measures (a `for` / `while`
+	 * header) keeps `sameLine` unchanged, so only the blind population moves.
+	 *
+	 * The threshold folds the deferred width into `n` exactly as `chainStaircase` does;
+	 * `head` excludes the glue space for the same reason.
+	 */
+	private static function chainHeadGate(cols: Int, body: Doc, second: Doc, sameLine: Doc, lineWidth: Int): Doc {
+		final head: Int = DocMeasure.flatFirstLineWidthThroughBodyGroup(body) - DocMeasure.flatFirstLineWidthThroughBodyGroup(second) - 1;
+		if (head <= DocMeasure.flatTokenWidth(body)) return sameLine;
+		final n: Int = lineWidth + DocMeasure.flatTokenWidth(sameLine) - head;
+		return Doc.IfLineExceeds(n, breakLayout(cols, body), sameLine);
 	}
 
 	/**

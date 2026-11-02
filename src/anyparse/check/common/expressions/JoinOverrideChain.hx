@@ -324,10 +324,8 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 		if (s.switchKinds.contains(inner.kind)) return pureSwitch(inner, s, purity);
 		final ifKinds: Null<Array<String>> = s.tree.ifKinds;
 		if (ifKinds == null || !ifKinds.contains(inner.kind)) return false;
-		for (i in 0...inner.children.length) if (!(
-			i == 0 ? pureValue(inner.children[0], s, purity) : pureUnit(inner.children[i], s, purity)
-		))
-			return false;
+		for (i in 0...inner.children.length)
+			if (!(i == 0 ? pureValue(inner.children[0], s, purity) : pureUnit(inner.children[i], s, purity))) return false;
 		return true;
 	}
 

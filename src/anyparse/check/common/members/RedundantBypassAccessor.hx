@@ -178,12 +178,13 @@ final class RedundantBypassAccessor extends RuleBase {
 		final span: Null<Span> = assign.span;
 		if (span == null) return false;
 		var best: Null<TypeDeclInfo> = null;
-		for (type in info.types) if (
-			type.span.from <= span.from
-			&& span.to <= type.span.to
-			&& (best == null || type.span.to - type.span.from < best.span.to - best.span.from)
-		)
-			best = type;
+		for (type in info.types)
+			if (
+				type.span.from <= span.from
+				&& span.to <= type.span.to
+				&& (best == null || type.span.to - type.span.from < best.span.to - best.span.from)
+			)
+				best = type;
 		if (best == null) return false;
 		final member: Null<MemberInfo> = best.members.find(m -> m.name == name);
 		return member != null && !member.hasSetter;

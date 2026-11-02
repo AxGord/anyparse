@@ -27,10 +27,11 @@ import utest.Test;
  * which is why `if (…) push();` stays on one line at the bottom of every
  * staircase below.
  *
- * TWO-LINK CHAINS ARE NOT TOUCHED. `for (…) if (…) push();` keeps the
- * head-fit glue it has always had — that is the population
+ * TWO-LINK CHAINS ARE NOT STAIRCASED. `for (…) if (…) push();` keeps the
+ * head-fit glue — that is the population
  * `sameline/fitline_chained_for_if_long.hxtest` pins, and it is pinned again
- * here so the gate cannot quietly widen onto it.
+ * here so the gate cannot quietly widen onto it. A head that a construct group
+ * hides from the measure is `BodyFitChainHeadGateTest`'s concern.
  *
  * EVERY FIXTURE BELOW PLACES THE CHAIN AS A STATEMENT IN A BRACED BLOCK, and
  * that is the whole population the gate reaches. Three sibling shapes were

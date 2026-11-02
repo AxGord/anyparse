@@ -686,10 +686,9 @@ final class LockTaint {
 		if (known != null) return known;
 		final takers: Array<String> = [];
 		_selfTakers[held] = takers;
-		for (edge in _graph.edges) if (
-			takesLock(edge) && !takers.contains(edge.from) && _sites.lockOf(edge) == held && _sites.selfTake(edge)
-		)
-			takers.push(edge.from);
+		for (edge in _graph.edges)
+			if (takesLock(edge) && !takers.contains(edge.from) && _sites.lockOf(edge) == held && _sites.selfTake(edge))
+				takers.push(edge.from);
 		var qi: Int = 0;
 		while (qi < takers.length) {
 			final id: String = takers[qi++];

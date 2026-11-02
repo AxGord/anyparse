@@ -781,10 +781,9 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		for (file in readers) {
 			final info: Null<FileInfo> = ctx.infoOf[file];
 			if (info == null || !info.ambientImportsBounded) return false;
-			for (imp in info.imports) if (
-				!(statementKeyOf(imp) == key && !imp.guarded) && SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)
-			)
-				return false;
+			for (imp in info.imports)
+				if (!(statementKeyOf(imp) == key && !imp.guarded) && SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes))
+					return false;
 			for (group in info.ambientImports) for (imp in group.imports) if (
 				ConfigFinder.absolute(group.file) != at || statementKeyOf(imp) != key
 			) {

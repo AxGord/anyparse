@@ -283,10 +283,9 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 				if (tree != null)
 					collectReflectNames(tree, candidateNames, reflectBlocked, shape);
 				else
-					for (candidate in candidateNames) if (
-						!reflectBlocked.contains(candidate) && RawSourceScan.mentionsWord(entry.source, candidate)
-					)
-						reflectBlocked.push(candidate);
+					for (candidate in candidateNames)
+						if (!reflectBlocked.contains(candidate) && RawSourceScan.mentionsWord(entry.source, candidate))
+							reflectBlocked.push(candidate);
 			}
 			return reflectBlocked;
 		}

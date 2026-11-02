@@ -173,9 +173,25 @@
 			"name": "M-CHAIN-STAIRCASE-OFF",
 			"type": "anyparse.format.BodyFit",
 			"method": "chainStaircase",
-			"find": "\tif (second == null || chainBodyInner(second) == null) return sameLine;",
-			"replace": "\tif (second == null || chainBodyInner(second) == null) return sameLine;\n\treturn sameLine;",
+			"find": "\tif (chainBodyInner(second) == null) return chainHeadGate(cols, body, second, sameLine, lineWidth);",
+			"replace": "\tif (chainBodyInner(second) == null) return chainHeadGate(cols, body, second, sameLine, lineWidth);\n\treturn sameLine;",
 			"note": "a chain of three links or more never staircases, so an over-long chain keeps the same-line layout instead of breaking every link"
+		},
+		{
+			"name": "M-CHAIN-HEAD-GATE-OFF",
+			"type": "anyparse.format.BodyFit",
+			"method": "chainHeadGate",
+			"find": "\tif (head <= DocMeasure.flatTokenWidth(body)) return sameLine;",
+			"replace": "\treturn sameLine;",
+			"note": "a two-link chain whose link hides its head in a construct group glues on the keyword alone again, so an over-wide head wraps its condition instead of moving the link to the next line"
+		},
+		{
+			"name": "M-SLOT-PROBE-BREAK-NONE",
+			"type": "anyparse.format.BodyFit",
+			"method": "slotProbeBreak",
+			"find": "\t\t\treturn indent >= 0 && indent == slotIndent(fl, false) ? brk : null;",
+			"replace": "\t\t\treturn null;",
+			"note": "a body slot wrapped in a chain gate's probe no longer reads as droppable, so a cuddled comprehension over a gated chain opens its bracket on a line of its own"
 		},
 		{
 			"name": "M-PAREN-PIN-NONE",

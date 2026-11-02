@@ -4383,7 +4383,7 @@ class WrapList {
 			case Concat(parts):
 				BodyFit.rebuiltTail(parts, dropComprehensionBody);
 			case _:
-				null;
+				BodyFit.slotProbeBreak(item);
 		};
 	}
 
@@ -4555,7 +4555,11 @@ class WrapList {
 			case IfFirstLineExceeds(n, b, f):
 				IfFirstLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfLineExceeds(n, b, f):
-				IfLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
+				// A chain gate folds its flat side's measured width into `n` at emit time
+				// (`BodyFit.chainStaircase`), so the re-tag that widens that side re-folds it.
+				final g: Doc = groupifyShared(f, memo);
+				final refold: Int = BodyFit.slotProbeBreak(d) == null ? 0 : DocMeasure.flatTokenWidth(g) - DocMeasure.flatTokenWidth(f);
+				IfLineExceeds(n + refold, groupifyShared(b, memo), g);
 			case IfResidualLineExceeds(n, b, f):
 				IfResidualLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfFullLineExceeds(n, b, f):

@@ -234,10 +234,8 @@ final class MoveToHelper {
 		for (file => tree in prep.trees) {
 			final source: String = prep.sourceOf[file] ?? '';
 			if (source.indexOf(name) < 0) continue;
-			for (hit in MoveMember.qualifiedReceiverEdits(source, tree, prep, name)) if (
-				file != prep.srcFile || !MoveMember.insideAnyCut(prep, hit.span.from)
-			)
-				return true;
+			for (hit in MoveMember.qualifiedReceiverEdits(source, tree, prep, name))
+				if (file != prep.srcFile || !MoveMember.insideAnyCut(prep, hit.span.from)) return true;
 		}
 		return false;
 	}

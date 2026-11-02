@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-GROUPIFY-GATE-REFOLD-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "groupifyShared",
+			"find": "IfLineExceeds(n + refold, groupifyShared(b, memo), g);",
+			"replace": "IfLineExceeds(n, groupifyShared(b, memo), g);",
+			"note": "a comprehension item's re-tag widens a chain gate's flat side without re-folding its threshold, so the gate counts the body twice and breaks a chain that fits"
+		},
+		{
 			"name": "M-CUDDLE-FLATONLY",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "shapeComprehensionCuddledOpen",

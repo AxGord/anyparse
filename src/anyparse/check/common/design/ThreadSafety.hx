@@ -471,10 +471,8 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		final lockPairs: Array<String> = option('lockPairs');
 		final waived: Array<String> = positive.waived(options, graph, configured, found);
 		final sinkIds: Array<String> = configured.copy();
-		for (id in positive.builtin.concat(positive.natives).concat(positive.libraryFor(options))) if (
-			!waived.contains(id) && !sinkIds.contains(id)
-		)
-			sinkIds.push(id);
+		for (id in positive.builtin.concat(positive.natives).concat(positive.libraryFor(options)))
+			if (!waived.contains(id) && !sinkIds.contains(id)) sinkIds.push(id);
 		return {
 			reports: options.declared,
 			bounded: BoundedRepeats.entries(options.boundedRepeats, graph, found),
@@ -712,10 +710,9 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	): Void {
 		// a multi-lock helper's give is its caller's release, never a release of a hold begun elsewhere
 		for (c in sites.crossing) if (c.lock != aside && !long.contains(c.lock) && !sites.helpers.contains(c.edge.from)) long.push(c.lock);
-		for (a in acquires) if (
-			(LongLockExplain.leaks(a) || taints.blindLong(a)) && a.lock != null && a.lock != aside && !long.contains(a.lock)
-		)
-			long.push(a.lock);
+		for (a in acquires)
+			if ((LongLockExplain.leaks(a) || taints.blindLong(a)) && a.lock != null && a.lock != aside && !long.contains(a.lock))
+				long.push(a.lock);
 		var grew: Bool = true;
 		// the taint is rebuilt from scratch each round: a lock turning long adds sink edges anywhere in the graph, and the
 		// rounds are bounded by the number of locks, so a worklist would buy little over the plain recompute

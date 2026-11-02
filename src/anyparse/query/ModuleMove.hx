@@ -412,10 +412,8 @@ final class ModuleMove {
 			final moved: Bool = newPathOf.exists(e.file);
 			if (!moved && !declared.exists(name -> e.source.indexOf(name) >= 0)) continue;
 			final names: Array<String> = [];
-			for (o in ModulePathTokens.bareNames(e.source, ModulePathTokens.inertSpans(e.source, plugin), upper)) if (
-				(moved || declared.contains(o.name)) && !names.contains(o.name)
-			)
-				names.push(o.name);
+			for (o in ModulePathTokens.bareNames(e.source, ModulePathTokens.inertSpans(e.source, plugin), upper))
+				if ((moved || declared.contains(o.name)) && !names.contains(o.name)) names.push(o.name);
 			if (names.length > 0) out.push({ before: e.file, after: newPathOf[e.file] ?? e.file, names: names });
 		}
 		return out;

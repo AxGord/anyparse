@@ -797,10 +797,8 @@ final class CompilerFacts {
 		final typed: Null<String> = typeOfExpressionAt(file, span);
 		final types: Array<String> = typed == null ? [] : [typed];
 		final key: String = _key(file);
-		for (f in flowsIn(file, span) ?? []) if (
-			f.at.file == key && f.at.span.from == span.from && f.at.span.to == span.to && !types.contains(f.from)
-		)
-			types.push(f.from);
+		for (f in flowsIn(file, span) ?? [])
+			if (f.at.file == key && f.at.span.from == span.from && f.at.span.to == span.to && !types.contains(f.from)) types.push(f.from);
 		return types;
 	}
 

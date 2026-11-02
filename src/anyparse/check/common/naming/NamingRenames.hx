@@ -515,10 +515,8 @@ final class NamingRenames {
 		final project: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);
 		if (project == null) return null;
 		final projectFiles: Array<String> = [for (entry in project) entry.file];
-		for (file in affectedFiles(c.ownerName, c.declFile, resolutionIndex, c.oldName)) if (
-			!sourceByFile.exists(file) && projectFiles.contains(file)
-		)
-			return file;
+		for (file in affectedFiles(c.ownerName, c.declFile, resolutionIndex, c.oldName))
+			if (!sourceByFile.exists(file) && projectFiles.contains(file)) return file;
 		if (!c.isPublic) return null;
 		for (entry in project) if (!sourceByFile.exists(entry.file) && entry.source.indexOf(c.oldName) >= 0) {
 			final spans: Null<Array<Span>> = otherFileRenameSpans(

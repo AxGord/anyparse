@@ -257,10 +257,8 @@ final class ReflectionScan {
 		final calleeSpan: Null<Span> = invocations.contains(node.kind) && node.children.length > 0 ? node.children[0].span : null;
 		if (calleeSpan != null) {
 			final callee: String = ~/\s+/g.replace(source.substring(calleeSpan.from, calleeSpan.to), '');
-			for (spelling => nameArg in calls) if (
-				(callee == spelling || callee.endsWith('.$spelling')) && !literalNameArg(node, nameArg, source, fold)
-			)
-				return true;
+			for (spelling => nameArg in calls)
+				if ((callee == spelling || callee.endsWith('.$spelling')) && !literalNameArg(node, nameArg, source, fold)) return true;
 		}
 		return node.children.exists(c -> enumeratingCallIn(c, source, calls, invocations, fold));
 	}

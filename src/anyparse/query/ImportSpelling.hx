@@ -72,10 +72,8 @@ final class ImportSpelling {
 		final aliasAt: Int = aliasStart(path);
 		if (aliasAt >= 0 && !SourceText.isIdentifier(path.substr(aliasAt + ALIAS_WORD_WIDTH).trim())) return false;
 		final segments: Array<String> = (aliasAt < 0 ? path : path.substring(0, aliasAt)).split('.');
-		for (i in 0...segments.length) if (
-			!(segments[i] == '*' && i > 0 && i == segments.length - 1) && !SourceText.isIdentifier(segments[i])
-		)
-			return false;
+		for (i in 0...segments.length)
+			if (!(segments[i] == '*' && i > 0 && i == segments.length - 1) && !SourceText.isIdentifier(segments[i])) return false;
 		return true;
 	}
 

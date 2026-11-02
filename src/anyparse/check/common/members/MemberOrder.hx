@@ -524,10 +524,8 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 		final out: Array<OrderedMember> = [];
 		while (out.length < members.length) {
 			var best: Int = -1;
-			for (i in 0...members.length) if (
-				!taken[i] && indegree[i] == 0 && (best < 0 || compareOrder(members[i], members[best], plan) < 0)
-			)
-				best = i;
+			for (i in 0...members.length)
+				if (!taken[i] && indegree[i] == 0 && (best < 0 || compareOrder(members[i], members[best], plan) < 0)) best = i;
 			if (best < 0)
 				throw new Exception(
 					'member-order: the init-order constraints hold a cycle, which edges from a lower to a higher '

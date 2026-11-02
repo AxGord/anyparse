@@ -294,10 +294,8 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 		container: QueryNode, decl: TypeDeclMatch, source: String, shape: RefShape, ownerName: String, regions: Array<LexRegion>
 	): Null<Int> {
 		var at: Int = -1;
-		for (m in MemberSlots.collectMembers(container, source, shape, [], regions)) if (
-			m.condition == null && m.rank - MemberRank.StaticPrivateImmutableField <= 0
-		)
-			at = m.span.to;
+		for (m in MemberSlots.collectMembers(container, source, shape, [], regions))
+			if (m.condition == null && m.rank - MemberRank.StaticPrivateImmutableField <= 0) at = m.span.to;
 		if (at >= 0) return at;
 		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(source, decl, ownerName, regions);
 		return brace == null ? null : brace + 1;

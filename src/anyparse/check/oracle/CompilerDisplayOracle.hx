@@ -313,10 +313,8 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	public static function declarationAt(index: SymbolIndex, pos: TypeReplyPosition): Resolution {
 		var file: Null<FileInfo> = null;
 		// the longest indexed path the reply's ends with: `a/b/Mod.hx` before a toplevel `Mod.hx`
-		for (f in index.allFiles()) if (
-			(pos.file == f.file || pos.file.endsWith('/${f.file}')) && (file == null || f.file.length > file.file.length)
-		)
-			file = f;
+		for (f in index.allFiles())
+			if ((pos.file == f.file || pos.file.endsWith('/${f.file}')) && (file == null || f.file.length > file.file.length)) file = f;
 		final source: Null<String> = file == null ? null : index.sourceOf(file.file);
 		if (file == null || source == null || pos.byLine) return Resolution.Unknown;
 		final starts: Array<Int> = lineStarts(source);

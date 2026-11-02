@@ -163,10 +163,9 @@ final class DeclarationDelta {
 		if (headerMoved && sameLines(bodyLines(before), bodyLines(after))) return delta(Imports, [], []);
 		final renames: Null<Array<Renaming>> = renamingsOf(bodyBefore, bodyAfter);
 		if (renames == null || renames.length == 0) return delta(Declarations, [], declarationChanges(plugin, before, after));
-		for (renaming in renames) if (
-			!boundEverywhere(plugin, before, bodyBefore, renaming.from) || !boundEverywhere(plugin, after, bodyAfter, renaming.to)
-		)
-			return delta(Declarations, [], declarationChanges(plugin, before, after));
+		for (renaming in renames)
+			if (!boundEverywhere(plugin, before, bodyBefore, renaming.from) || !boundEverywhere(plugin, after, bodyAfter, renaming.to))
+				return delta(Declarations, [], declarationChanges(plugin, before, after));
 		return delta(Renamed, renames, []);
 	}
 

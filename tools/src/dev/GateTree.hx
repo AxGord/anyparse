@@ -76,10 +76,8 @@ final class GateTree {
 			? { paths: [], moved: [] }
 			: changedPaths(gitIn(tree, ['diff', '--name-status', '-M', base]));
 		final untracked: Array<String> = options.baseline ? [] : gitIn(tree, ['ls-files', '--others', '--exclude-standard']).split('\n');
-		for (name in changed.paths.concat(untracked)) if (
-			name != '' && !touched.contains(name) && FileSystem.exists(Path.join([tree, name]))
-		)
-			touched.push(name);
+		for (name in changed.paths.concat(untracked))
+			if (name != '' && !touched.contains(name) && FileSystem.exists(Path.join([tree, name]))) touched.push(name);
 		_moved = changed.moved;
 	}
 
