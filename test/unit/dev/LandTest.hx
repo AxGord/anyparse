@@ -565,6 +565,23 @@ final class LandTest extends Test {
 		Assert.isFalse(run.merging);
 	}
 
+	public function testALandingShowsTheProseRefsRowAndItNeverFailsIt(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md');
+		Assert.equals(0, run.status);
+		Assert.isTrue(run.output.indexOf('prose-refs  passed') >= 0, run.output);
+	}
+
+	public function testTheProseRefsRowNamesTheProseThatStillNamesTheLandedRename(): Void {
+		final run: Landing = landing(() -> Passed, 'new/moved.txt', 'old/moved.txt', {
+			base: [{ path: 'docs/guide.md', content: 'see old/moved.txt here\n' }],
+			skills: [{ path: 's/SKILL.md', content: 'x\nold/moved.txt\n' }]
+		});
+		Assert.equals(0, run.status);
+		Assert.isTrue(run.output.indexOf('prose-refs  passed') >= 0, run.output);
+		Assert.isTrue(run.output.indexOf('docs/guide.md:1 old/moved.txt') >= 0, run.output);
+		Assert.isTrue(run.proseLog.indexOf('/skills/s/SKILL.md:2 old/moved.txt') >= 0, run.proseLog);
+	}
+
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
@@ -604,6 +621,7 @@ final class LandTest extends Test {
 				cache: cache,
 				every: Land.FULL_EVERY
 			};
+			final skillsDir: Null<String> = seedSkills(dir.file('skills'), shape.skills);
 			function go(): Int return Land.land({
 				repo: repo,
 				branch: BRANCH,
@@ -611,6 +629,7 @@ final class LandTest extends Test {
 				message: shape.message,
 				trailers: shape.trailers,
 				resolve: shape.resolve,
+				skills: skillsDir,
 				battery: request,
 				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
 				format: shape.format ?? idle(),
@@ -658,7 +677,8 @@ final class LandTest extends Test {
 				files: [
 					for (path in shape.read ?? []) if (FileSystem.exists('$repo/$path')) path => File.getContent('$repo/$path')
 				],
-				brief: FileSystem.exists('$logs/merge-brief.md') ? File.getContent('$logs/merge-brief.md') : ''
+				brief: contentsOf('$logs/merge-brief.md'),
+				proseLog: contentsOf('$logs/prose-refs.txt')
 			};
 		});
 	}
@@ -772,6 +792,18 @@ final class LandTest extends Test {
 		);
 	}
 
+	/** The skills directory `path` holding `documents`, or null when the setup has none. */
+	private static function seedSkills(path: String, documents: Null<Array<Edit>>): Null<String> {
+		if (documents == null) return null;
+		write(path, documents);
+		return path;
+	}
+
+	/** What the file at `path` holds, or empty when there is none. */
+	private static function contentsOf(path: String): String {
+		return FileSystem.exists(path) ? File.getContent(path) : '';
+	}
+
 }
 
 /** What a `Land.land` run over a scratch repository left behind. */
@@ -820,6 +852,9 @@ private typedef Landing = {
 
 	/** The merge brief the run wrote, or empty. */
 	var brief: String;
+
+	/** The log of the `prose-refs` row, or empty. */
+	var proseLog: String;
 }
 
 /** The battery a landing asks for: whether in full, and the landings the count already holds. */
@@ -888,4 +923,7 @@ private typedef Setup = {
 
 	/** The paths whose contents the run reports. */
 	@:optional var read: Array<String>;
+
+	/** Documents of the skills directory the landing reads beside the repository's own prose. */
+	@:optional var skills: Array<Edit>;
 }

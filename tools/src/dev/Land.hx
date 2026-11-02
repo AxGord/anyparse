@@ -23,7 +23,8 @@ using StringTools;
  * history stays linear, its files merging as their `.gitattributes` say (`docs/decisions.md` by union, source and JSON
  * through their grammar by `apq merge-file`, each merged file a detail line), the three binaries rebuilt, the pick's `.hx`
  * files rewritten as canonical when that is layout only (`LandFormat`), the commit made
- * with a `Slice: <ID>` trailer, then
+ * with a `Slice: <ID>` trailer, the `prose-refs` row (`LandProse`: the prose that still names a path the commit deleted or
+ * renamed, report-only), then
  * `dev battery` (quick, or in full when the commit brings in a path where a shard and the one-process suite can
  * diverge, or the number of the landing, counted over every landing that runs the battery, is a multiple of ten — the
  * battery row says which) — and one verdict line. A branch that does not carry exactly one commit over the checked-out one
@@ -95,6 +96,7 @@ final class Land {
 	private final _merged: MergedPaths;
 	private final _print: String -> Void;
 	private final _format: LandFormat;
+	private final _prose: LandProse;
 
 
 	/** The trailers the commit carries beside `Slice`, each `<key>: <value>`. */
@@ -126,6 +128,7 @@ final class Land {
 		_merged = options.merged;
 		_print = options.print;
 		_format = new LandFormat(options.repo, options.format, _summary);
+		_prose = new LandProse(options.repo, options.skills, Path.join([options.logs, 'prose-refs.txt']), _summary);
 		_trailers = options.trailers ?? [];
 		_resolve = options.resolve ?? [];
 		_queue = options.queue;
@@ -144,6 +147,7 @@ final class Land {
 			{ name: 'build', step: build },
 			{ name: 'fmt', step: _format.run },
 			{ name: 'commit', step: commit.bind(message) },
+			{ name: 'prose-refs', step: _prose.run },
 			{ name: 'battery', step: runBattery.bind(battery) }
 		];
 		var aborted: Bool = false;
@@ -371,6 +375,7 @@ final class Land {
 			every: FULL_EVERY
 		};
 		final repo: String = Repo.resolve(args.option('--repo'));
+		final home: Null<String> = Sys.getEnv('HOME');
 		final logsOption: Null<String> = args.option('--logs');
 		final branch: String = args.positionals(['<branch>'])[0];
 		if (!noBattery && (Sys.getEnv('ANYPARSE_HXFORMAT_FORK') ?? '') == '')
@@ -388,6 +393,7 @@ final class Land {
 			trailers: trailers,
 			resolve: resolve,
 			queue: queue,
+			skills: home == null ? null : Path.join([home, '.claude/skills']),
 			battery: noBattery ? null : request,
 			compile: (tree, log) -> Binaries.compileWith(tree, log, [], Lease.ofEnvironment()),
 			format: LandFormat.engine(),
@@ -556,6 +562,9 @@ typedef LandOptions = {
 
 	/** The queue file a merge brief quotes; the repository's `.claude/batch/wave-D.md` when absent. */
 	@:optional var queue: String;
+
+	/** The directory of skill documents the `prose-refs` row also reads; none when absent. */
+	@:optional var skills: Null<String>;
 
 	/** The battery to run; null runs none. */
 	var battery: Null<BatteryRequest>;
