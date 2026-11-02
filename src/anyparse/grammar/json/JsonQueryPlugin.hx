@@ -70,6 +70,7 @@ final class JsonQueryPlugin implements GrammarPlugin {
 		shape.arrayLiteralKind = JsonProjection.ARRAY;
 		shape.objectLiteralKind = JsonProjection.OBJECT;
 		shape.stringLiteralKinds = [JsonProjection.STRING];
+		shape.dataDocument = true;
 		shape.commaContainerKinds = [JsonProjection.ARRAY, JsonProjection.OBJECT];
 		shape.delimitedContainerKinds = [JsonProjection.ARRAY, JsonProjection.OBJECT];
 		return shape;

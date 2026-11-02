@@ -142,4 +142,32 @@ class ChangedCommandCliTest extends Test {
 		#end
 	}
 
+	/**
+	 * A JSON file is classed `values` and named by key path with the old and new value, a record inserted in the middle
+	 * of an array shifts no other one, and a file only re-laid is `layout`.
+	 */
+	public function testAJsonFileIsNamedByKeyPath(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeTree('apq_changed_json', [
+			{ name: 'k.json', source: '{"arms": [{"name": "A", "n": 1}, {"name": "B", "n": 2}], "version": 1}\n' },
+			{ name: 'm.json', source: '{"a": 1, "b": [1, 2]}\n' }
+		]);
+		CliFixture.git(root, ['init', '-q']);
+		CliFixture.git(root, ['add', '-A']);
+		CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']);
+		File.saveContent('$root/k.json', '{"arms": [{"name": "A", "n": 1}, {"name": "X", "n": 9}, {"name": "B", "n": 3}], "version": 1}\n');
+		File.saveContent('$root/m.json', '{\n\t"a": 1,\n\t"b": [1, 2]\n}\n');
+		final report: String = CliFixture.inDir(root, ['changed', 'HEAD']);
+		final names: String = CliFixture.inDir(root, ['changed', 'HEAD', '--names']);
+		CliFixture.removeDir(root);
+		Assert.isTrue(report.indexOf('M k.json  values  +1 -0 ~1\n') >= 0, report);
+		Assert.isTrue(report.indexOf('    + arms.1  {"name":"X","n":9}\n') >= 0, report);
+		Assert.isTrue(report.indexOf('    ~ arms.2.n  2 -> 3\n') >= 0, report);
+		Assert.isTrue(report.indexOf('M m.json  layout\n') >= 0, report);
+		Assert.equals('', names);
+		#else
+		Assert.pass('a git child process needs the nodejs target');
+		#end
+	}
+
 }

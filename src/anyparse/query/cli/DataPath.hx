@@ -28,6 +28,12 @@ final class DataPath {
 		return shape.objectLiteralKind != null || shape.arrayLiteralKind != null;
 	}
 
+	/** Whether `node` is one of the grammar's string literals, NAMED by its decoded value. */
+	public static inline function isString(node: QueryNode, shape: RefShape): Bool {
+		final kinds: Null<Array<String>> = shape.stringLiteralKinds;
+		return kinds != null && kinds.contains(node.kind);
+	}
+
 	/** The segments of `path`; throws `UsageFailure` on an escape that escapes nothing. */
 	public static function parse(path: String): Array<String> {
 		if (path == '' || path == SEPARATOR) return [];
@@ -113,11 +119,6 @@ final class DataPath {
 
 	private static inline function isContainer(node: QueryNode, shape: RefShape): Bool {
 		return node.kind == shape.objectLiteralKind || node.kind == shape.arrayLiteralKind;
-	}
-
-	private static inline function isString(node: QueryNode, shape: RefShape): Bool {
-		final kinds: Null<Array<String>> = shape.stringLiteralKinds;
-		return kinds != null && kinds.contains(node.kind);
 	}
 
 	/** The child `segment` names in `node`: the LAST entry of that key (as a JSON reader keeps it), or the element at that index. */

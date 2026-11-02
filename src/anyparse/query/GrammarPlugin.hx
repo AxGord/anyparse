@@ -3676,6 +3676,13 @@ final class RefShape {
 	 */
 	public var packageSegmentPattern: Null<String>;
 
+	/**
+	 * Whether a document of the grammar IS a value tree (JSON: objects, arrays, scalars) rather than code, so a change to it
+	 * is read by KEY PATH — `apq changed` names each added, removed or changed value — and not by declaration. Needs
+	 * `objectLiteralKind` or `arrayLiteralKind`. Optional; unset → a document is read by the declarations it names.
+	 */
+	public var dataDocument: Null<Bool>;
+
 	public function new(
 		identKind: String, declHostKinds: Array<String>, moduleValueDeclKinds: Array<String>, scopeKinds: Array<String>,
 		writeParentKinds: Array<String>, selfScopeDeclKinds: Array<String>

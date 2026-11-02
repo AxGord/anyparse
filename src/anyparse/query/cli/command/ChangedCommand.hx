@@ -121,6 +121,8 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		CliIo.sysPrint('                declaration in the file, printed as old -> new\n');
 		CliIo.sysPrint('  declarations  each declaration added (+), removed (-) or changed (~), matched by\n');
 		CliIo.sysPrint('                NAME, with its --select address and line counts\n');
+		CliIo.sysPrint('  values        a data document (JSON): each key path added (+), removed (-) or changed (~ old -> new),\n');
+		CliIo.sysPrint('                a digest shortened, with `+added -removed ~changed` counts\n');
 		CliIo.sysPrint('  text          a file the grammar does not read: a line count only\n');
 		CliIo.sysPrint('A moved file prints `<- <old path>` — when a <path> filter names both of its paths.\n');
 		CliIo.sysPrint('Untracked files are not reported.\n');
@@ -186,10 +188,12 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			GitRevision.sourceAt(tip, entry.path);
 		if (now == null) return { names: [], failure: '${entry.path} is not readable at "$tip"' };
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor(lang, entry.path);
+		// a data document's keys are no names a reader looks up in the code
+		if (DataDelta.reads(plugin.refShape())) return { names: [], delta: DataDelta.compare(plugin, before, now) };
 		if (!entry.path.toLowerCase().endsWith(CliArgs.sourceExtensionOf(plugin.langName())))
 			return { names: [], delta: DeclarationDelta.compareText(before, now) };
 		final delta: FileDelta = DeclarationDelta.compare(plugin, before, now, CliArgs.discoverFormatConfig(entry.path));
-		// a data file's keys are no names a reader looks up in the code
+		// another grammar's keys, a data file of this one, are no names a reader looks up in the code
 		final whole: Bool = entry.status == 'A' || entry.status == 'D';
 		return { names: plugin.langName() == lang ? DeclarationDelta.namesOf(delta, whole) : [], delta: delta };
 	}
@@ -221,7 +225,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		entry: ChangedPath, label: String, delta: FileDelta, shown: Array<DeclarationChange>, opts: ChangedOpts
 	): String {
 		final moved: String = entry.basePath != entry.path ? '  <- ${entry.basePath}' : '';
-		final counts: String = label == ChangeClass.Layout || label == ChangeClass.Unchanged ? '' : '  +${delta.added} -${delta.removed}';
+		final counts: String = countsOf(label, delta);
 		final out: StringBuf = new StringBuf();
 		out.add('${entry.status} ${entry.path}$moved  $label$counts\n');
 		final whole: Bool = isWhole(entry);
@@ -231,6 +235,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			if (delta.headerReordered) out.add('    import order changed\n');
 		}
 		for (renaming in delta.renames) out.add('    rename ${renaming.from} -> ${renaming.to}\n');
+		for (change in delta.values) out.add('    ${valueRow(change)}\n');
 		// a file added or deleted whole shows its lines only for the declaration a selector names
 		final lines: Bool = opts.diff && (!whole || opts.selector != null);
 		for (change in shown) {
@@ -256,6 +261,33 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			)
 				change
 		];
+	}
+
+	/** One changed key path as a row: `+ path  value`, `- path  value`, `~ path  old -> new`. */
+	private static function valueRow(change: ValueChange): String {
+		return switch change.status {
+			case Added: '+ ${change.path}  ${change.after}';
+			case Removed: '- ${change.path}  ${change.before}';
+			case Changed: change.before == '' && change.after == ''
+				? '~ ${change.path}'
+				: '~ ${change.path}  ${change.before} -> ${change.after}';
+		};
+	}
+
+	/** `  +a -r ~c`: how many key paths were added, removed and changed. */
+	private static function valueCounts(values: Array<ValueChange>): String {
+		final tally: Map<DeclarationStatus, Int> = [];
+		for (change in values) tally[change.status] = (tally[change.status] ?? 0) + 1;
+		return '  +${tally[Added] ?? 0} -${tally[Removed] ?? 0} ~${tally[Changed] ?? 0}';
+	}
+
+	/** The counts after a file's label: none for a change that moved no value, else lines or, for a data document, key paths. */
+	private static function countsOf(label: String, delta: FileDelta): String {
+		return switch label {
+			case ChangeClass.Layout, ChangeClass.Unchanged: '';
+			case ChangeClass.Values: valueCounts(delta.values);
+			case _: '  +${delta.added} -${delta.removed}';
+		};
 	}
 
 }

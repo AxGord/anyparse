@@ -29,6 +29,9 @@ enum abstract ChangeClass(String) to String {
 
 	final Declarations = 'declarations';
 
+	/** A data document whose key paths differ: each added, removed or changed value is named by its path (`DataDelta`). */
+	final Values = 'values';
+
 	/** A version the grammar does not parse: only a line count is known. */
 	final Text = 'text';
 }
@@ -66,6 +69,19 @@ typedef Renaming = {
 	final to: String;
 }
 
+/** One key path of a data document whose value differs between the two versions. */
+typedef ValueChange = {
+	final status: DeclarationStatus;
+
+	/** The dotted key path (`DataPath.format`); a digit segment indexes an array. */
+	final path: String;
+
+	/** The value as compact JSON, shortened — empty on the side that lacks it. */
+	final before: String;
+
+	final after: String;
+}
+
 /** What `DeclarationDelta.compare` reads off two versions of one file. */
 typedef FileDelta = {
 	final change: ChangeClass;
@@ -80,6 +96,9 @@ typedef FileDelta = {
 
 	final renames: Array<Renaming>;
 	final declarations: Array<DeclarationChange>;
+
+	/** The key paths of a data document whose value differs; empty for a file read by declaration. */
+	final values: Array<ValueChange>;
 
 	/** Changed lines of the whole file, counted on the writer's output where the grammar parses it. */
 	final added: Int;
@@ -153,6 +172,7 @@ final class DeclarationDelta {
 				headerReordered: headerMoved && headerAdded.length + headerRemoved.length == 0,
 				renames: renames,
 				declarations: declarations,
+				values: [],
 				added: counts.added,
 				removed: counts.removed
 			};
@@ -404,6 +424,7 @@ final class DeclarationDelta {
 			headerReordered: false,
 			renames: [],
 			declarations: [],
+			values: [],
 			added: counts.added,
 			removed: counts.removed
 		};
