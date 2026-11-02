@@ -56,6 +56,9 @@ typedef OutlineEntry = { var node: QueryNode; var depth: Int; };
 /**
  * An outline entry that survived the filters: `index` into the entry list, the window it prints
  * (`bounds` in lines), and its one-line `header`, filled once the rows after it are known.
+ * A `hidden` row is a member written on its type's own line: it prints nothing, but it still
+ * bounds the headers around it, so the type's header stops before it and the next member's
+ * starts after it.
  */
 typedef OutlineRow = {
 	var entry: OutlineEntry;
@@ -63,6 +66,8 @@ typedef OutlineRow = {
 	var window: Span;
 	var bounds: LineRange;
 	var header: String;
+	var onTypeLine: Bool;
+	var hidden: Bool;
 };
 
 /**
@@ -369,18 +374,31 @@ final class SourceCommand implements CliCommand {
 	 * one line), and ends at the node's body or, for a type, where its first listed member begins.
 	 */
 	private static function headerOf(
-		rows: Array<OutlineRow>, k: Int, until: Null<Int>, source: String, shape: RefShape, comments: Array<CommentTok>
+		rows: Array<OutlineRow>, k: Int, until: Null<Int>, source: String, shape: RefShape, comments: Array<CommentTok>,
+		folded: Array<Span>
 	): String {
 		final node: QueryNode = rows[k].entry.node;
 		final span: Null<Span> = node.span;
 		if (span == null) return '';
-		var from: Int = span.from;
-		while (from > 0 && source.fastCodeAt(from - 1) != '\n'.code) from--;
-		// Bounded by the previous ROW, not the previous entry: an annotation folded into this
-		// declaration's window is not a row, so a same-line `@:keep` stays in the header.
-		for (m in 0...k) {
-			final end: Int = rows[m].window.to;
-			if (end <= span.from && end > from) from = end;
+		var from: Int = SourceText.lineStartOf(source, span.from);
+		// A member written on its type's line starts at the member, with its own annotations.
+		if (rows[k].onTypeLine) {
+			from = rows[k].window.from;
+		} else {
+			// An annotation run that reaches this line from above (a multi-line argument) is part of
+			// the header, from the line it starts on; walked last to first, so an earlier annotation
+			// reaching that line is adopted too. One that ends on an earlier line is not.
+			for (n in 0...folded.length) {
+				final annotation: Span = folded[folded.length - 1 - n];
+				if (annotation.from < from && annotation.to > from && annotation.to <= span.from)
+					from = SourceText.lineStartOf(source, annotation.from);
+			}
+			// Bounded by the previous ROW, not the previous entry: an annotation folded into this
+			// declaration's window is not a row, so a same-line `@:keep` stays in the header.
+			for (m in 0...k) {
+				final end: Int = rows[m].window.to;
+				if (end <= span.from && end > from) from = end;
+			}
 		}
 		// A doc block above the first member is trivia outside its window, so the type's header
 		// ends where that block begins.
@@ -389,6 +407,53 @@ final class SourceCommand implements CliCommand {
 		if (header == null) return '';
 		final text: String = ~/\s+/g.replace(header, ' ');
 		return text.length > SIGNATURE_MAX_CHARS ? '${text.substr(0, SIGNATURE_MAX_CHARS)}…' : text;
+	}
+
+	/**
+	 * The rows of `entries`: every entry that is not part of a sibling's declaration. An
+	 * annotation folded into a window, and the children it owns, are no row and bound no header;
+	 * the folded annotations' spans go to `folded` for `headerOf`. A child on its type's header
+	 * line (`implements X`, a type parameter) is part of the header the type's row prints, while
+	 * a member there stays a `hidden` row that only bounds the headers around it.
+	 */
+	private static function outlineRows(
+		entries: Array<OutlineEntry>, windows: Array<Null<Span>>, source: String, shape: RefShape, folded: Array<Span>
+	): Array<OutlineRow> {
+		final rows: Array<OutlineRow> = [];
+		var headerLine: Int = 0;
+		var foldedTo: Int = -1;
+		for (i => entry in entries) {
+			final found: Null<Span> = windows[i] ?? entry.node.span;
+			if (found == null) continue;
+			final window: Span = found;
+			final bounds: LineRange = lineRange(window, source);
+			final nodeSpan: Null<Span> = entry.node.span;
+			// Entries come in document order: one inside the last folded annotation is its argument.
+			if (nodeSpan != null && nodeSpan.from < foldedTo) continue;
+			if (foldedIntoSibling(entries, windows, i)) {
+				if (nodeSpan != null) {
+					folded.push(nodeSpan);
+					foldedTo = nodeSpan.to;
+				}
+				continue;
+			}
+			if (entry.depth == 0) headerLine = (nodeSpan ?? window).lineCol(source).line;
+			final onTypeLine: Bool = entry.depth > 0 && bounds.from <= headerLine;
+			final hidden: Bool = onTypeLine && bounds.to <= headerLine;
+			// On the type's own line only a member bounds the headers; a supertype or a type
+			// parameter there is part of the type's header.
+			if (hidden && !(shape.memberDeclKinds ?? []).contains(entry.node.kind)) continue;
+			rows.push({
+				entry: entry,
+				index: i,
+				window: window,
+				bounds: bounds,
+				header: '',
+				onTypeLine: onTypeLine,
+				hidden: hidden
+			});
+		}
+		return rows;
 	}
 
 	#if (sys || nodejs)
@@ -781,36 +846,17 @@ final class SourceCommand implements CliCommand {
 		final windows: Array<Null<Span>> = CliEdit.sourceWindows(
 			tree, [for (entry in entries) entry.node], source, plugin.lexicalRegions.bind(source)
 		);
-		final rows: Array<OutlineRow> = [];
-		// A child on its parent's header line (`implements X`, a type parameter) is part of the
-		// header the parent row already prints, not a member.
-		var headerLine: Int = 0;
-		for (i => entry in entries) {
-			final found: Null<Span> = windows[i] ?? entry.node.span;
-			if (found == null) continue;
-			final window: Span = found;
-			final bounds: LineRange = lineRange(window, source);
-			if (entry.depth == 0)
-				headerLine = (entry.node.span ?? window).lineCol(source).line;
-			else if (bounds.to <= headerLine || foldedIntoSibling(entries, windows, i))
-				continue;
-			rows.push({
-				entry: entry,
-				index: i,
-				window: window,
-				bounds: bounds,
-				header: ''
-			});
-		}
+		final folded: Array<Span> = [];
+		final rows: Array<OutlineRow> = outlineRows(entries, windows, source, shape, folded);
 		for (k => row in rows) {
 			// A type's header ends where its first listed member begins.
 			final next: Null<OutlineRow> = rows[k + 1];
 			row.header = headerOf(
-				rows, k, next != null && next.entry.depth > row.entry.depth ? next.window.from : null, source, shape, comments
+				rows, k, next != null && next.entry.depth > row.entry.depth ? next.window.from : null, source, shape, comments, folded
 			);
 		}
-		final spanning: Array<OutlineRow> = rows.filter(row -> row.entry.depth > 0 || row.bounds.to > row.bounds.from);
-		final shown: Array<OutlineRow> = dropOneLiners && spanning.length > 0 ? spanning : rows;
+		final spanning: Array<OutlineRow> = rows.filter(row -> !row.hidden && (row.entry.depth > 0 || row.bounds.to > row.bounds.from));
+		final shown: Array<OutlineRow> = dropOneLiners && spanning.length > 0 ? spanning : rows.filter(row -> !row.hidden);
 		final buf: StringBuf = new StringBuf();
 		for (row in shown) {
 			final indent: String = ''.lpad(' ', row.entry.depth * OUTLINE_INDENT);

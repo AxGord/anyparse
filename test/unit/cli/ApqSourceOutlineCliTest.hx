@@ -267,6 +267,91 @@ class ApqSourceOutlineCliTest extends Test {
 		#end
 	}
 
+	/** A top-level annotation on the type's own line stays in the whole-file outline header, as `--select` prints it. */
+	public function testATopLevelSameLineAnnotationStaysInTheHeader(): Void {
+		#if (sys || nodejs)
+		final out: String = outlineOf('package;\n\n@:keep class K {\n\tvar a: Int;\n}\n');
+		#if nodejs
+		Assert.stringContains('ClassDecl:K  @:keep class K\n', out);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** A member written on its type's own line prints its own header, and the type's header stops before it. */
+	public function testAMemberOnTheTypesLineHasItsOwnHeader(): Void {
+		#if (sys || nodejs)
+		final out: String = outlineOf('package;\n\nclass P { var a: Int; function g(): Void {\n\t\ttrace(1);\n\t}\n\tvar z: Int;\n}\n');
+		#if nodejs
+		Assert.stringContains('ClassDecl:P  class P\n', out);
+		Assert.stringContains('FnMember:g  function g(): Void\n', out);
+		Assert.stringContains('VarMember:z  var z: Int\n', out);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** An annotation with an argument on the line above a type adds no row for the argument. */
+	public function testAnAnnotationArgumentOnTheLineAboveIsNoRow(): Void {
+		#if (sys || nodejs)
+		final out: String = outlineOf('package;\n\n@:nullSafety(Strict)\nclass K {\n\tvar a: Int;\n}\n');
+		#if nodejs
+		Assert.stringContains('ClassDecl:K  class K\n', out);
+		Assert.isFalse(out.indexOf('IdentExpr') >= 0);
+		Assert.stringContains('VarMember:a  var a: Int\n', out);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** A same-line annotation with an argument, one line or several, stays whole in the header. */
+	public function testASameLineAnnotationWithAnArgumentKeepsTheWholeRun(): Void {
+		#if (sys || nodejs)
+		final out: String = outlineOf(
+			'@:nullSafety(Strict) class K {\n\tvar a: Int;\n}\n\n@:build(Foo.bar({\n\tx: 1\n})) class L {\n\tvar b: Int;\n}\n'
+		);
+		#if nodejs
+		Assert.stringContains('ClassDecl:K  @:nullSafety(Strict) class K\n', out);
+		Assert.stringContains('ClassDecl:L  @:build(Foo.bar({ x: 1 })) class L\n', out);
+		Assert.isFalse(out.indexOf('FieldAccess') >= 0);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** The first member on the type's line, when it spans lines, starts its header at the member. */
+	public function testAFirstMultiLineMemberOnTheTypesLineHasItsOwnHeader(): Void {
+		#if (sys || nodejs)
+		final out: String = outlineOf('class P { function g(): Void {\n\t\ttrace(1);\n\t}\n\tvar z: Int;\n}\n');
+		#if nodejs
+		Assert.stringContains('ClassDecl:P  class P\n', out);
+		Assert.stringContains('FnMember:g  function g(): Void\n', out);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** Several annotations before a multi-line one stay in the header. */
+	public function testAnEarlierAnnotationInTheSameRunStaysInTheHeader(): Void {
+		#if (sys || nodejs)
+		final out: String = outlineOf(
+			'package;\n\n@:keep @:build(Foo.bar({\n\tx: 1\n})) class K {\n\tvar a: Int;\n}\n\n'
+			+ '@:a(1,\n\t2) @:b(3,\n\t4) class L {\n\tvar b: Int;\n}\n'
+		);
+		#if nodejs
+		Assert.stringContains('ClassDecl:K  @:keep @:build(Foo.bar({ x: 1 })) class K\n', out);
+		Assert.stringContains('ClassDecl:L  @:a(1, 2) @:b(3, 4) class L\n', out);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
 	/** The outline of `source` as the command prints it. */
 	private function outlineOf(source: String): String {
 		final path: String = CliFixture.writeAs('apq_source_outline_case', 'hx', source);
