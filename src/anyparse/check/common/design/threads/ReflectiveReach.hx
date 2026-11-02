@@ -343,10 +343,10 @@ final class ReflectiveReach {
 	private function unresolvedMade(file: String, written: String): Bool {
 		for (key in keysOf(file, written)) {
 			final named: String = aliased(key);
-			if (named != key && !declared(named) && StdTypes.declaresModule('', named) != true) return true;
+			if (named != key && !declared(named) && !StdTypes.declaresToplevel(_plugin, named)) return true;
 		}
 		final bound: Bool = written.indexOf('.') >= 0 || _graph.typeKeysOf(file, written).length > 0;
-		return !bound && !declared(written) && StdTypes.declaresModule('', written) != true;
+		return !bound && !declared(written) && !StdTypes.declaresToplevel(_plugin, written);
 	}
 
 	/**

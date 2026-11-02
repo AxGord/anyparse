@@ -24,9 +24,11 @@ final class StdTypes {
 	private static inline final MAX_DEPTH: Int = 8;
 
 	/**
-	 * The std's toplevel types every module reaches with no import, each mapped to the ONE path it denotes — its own name, or
-	 * `haxe.ds.Map` for the root `Map` typedef that re-points at it: what the toplevel binds where the index does not hold the
-	 * std (`toplevelPath`). The value half is load-bearing: matching the name alone would read `haxe.macro.Type` as `Type`.
+	 * The std's toplevel types every module reaches with no import — each name its `StdTypes` module declares and each
+	 * root module this table lists — mapped to the ONE path it denotes: its own name, or `haxe.ds.Map` for the root `Map`
+	 * typedef that re-points at it. The one table of std toplevel names, read where the index does not hold the std
+	 * (`toplevelPath`); `StdTypesTest` pins every name against the std of the compiler. The value half is load-bearing:
+	 * matching the name alone would read `haxe.macro.Type` as `Type`.
 	 */
 	private static final TOPLEVEL: Map<String, String> = [
 		'Int' => 'Int',
@@ -54,7 +56,13 @@ final class StdTypes {
 		'Type' => 'Type',
 		'EReg' => 'EReg',
 		'Lambda' => 'Lambda',
-		'Xml' => 'Xml'
+		'Xml' => 'Xml',
+		'Single' => 'Single',
+		'Iterator' => 'Iterator',
+		'Iterable' => 'Iterable',
+		'KeyValueIterator' => 'KeyValueIterator',
+		'KeyValueIterable' => 'KeyValueIterable',
+		'ArrayAccess' => 'ArrayAccess'
 	];
 
 	/** Every std core module path, for resolving a simple name written inside one. */
@@ -78,6 +86,17 @@ final class StdTypes {
 	/** The path the std's toplevel type `name` denotes with no import (`TOPLEVEL`), or null for a name the toplevel holds none of. */
 	public static inline function toplevelPath(name: String): Null<String> {
 		return TOPLEVEL[name];
+	}
+
+	/**
+	 * Whether the discovered std declares `name` at its toplevel, visible bare from every module: a root-package module of
+	 * the core (`Array`, `String`, `Math`…) or a type its `StdTypes` module declares (`Int`, `Bool`, `Iterator`…) — the
+	 * std's own listing, where `toplevelPath` is the table. False when no std was discovered: unknown is no proof.
+	 */
+	public static function declaresToplevel(plugin: GrammarPlugin, name: String): Bool {
+		if (declaresModule('', name) == true) return true;
+		final core: Null<Array<TypeDeclInfo>> = moduleTypes(plugin, TypeNameBinding.STD_TYPES_MODULE);
+		return core != null && core.exists(t -> t.name == name && !t.isPrivate);
 	}
 
 	/**

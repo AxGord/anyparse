@@ -6,7 +6,6 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.ds.Either;
 
@@ -53,9 +52,6 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class ExtractConstantTo {
-
-	/** The module the std top-level value types live in (`Int`, `Float`, `Bool`, `Null`, `Dynamic`…). */
-	private static inline final STD_TYPES_MODULE: String = 'StdTypes';
 
 	/**
 	 * Move the addressed expression of `request` into a `static final` named `request.name`, as described above.
@@ -134,7 +130,7 @@ final class ExtractConstantTo {
 		final shape: RefShape = plugin.refShape();
 		final name: Null<String> = node.name;
 		final namesType: Bool = node.kind == shape.newExprKind || (shape.typeAnnotationKinds ?? []).contains(node.kind);
-		if (namesType && name != null && !name.contains('.') && !isStdTopLevelType(plugin, name)) return name;
+		if (namesType && name != null && !name.contains('.') && !StdTypes.declaresToplevel(plugin, name)) return name;
 		final type: Null<QueryNode> = node.type;
 		final fromType: Null<String> = type == null ? null : firstUnseenType(type, plugin);
 		if (fromType != null) return fromType;
@@ -143,17 +139,6 @@ final class ExtractConstantTo {
 			if (hit != null) return hit;
 		}
 		return null;
-	}
-
-	/**
-	 * Whether `name` is a std top-level type, visible bare from every module: one the std core declares as a
-	 * root-package module (`Array`, `String`, `Math`…) or one its `StdTypes` module declares (`Int`, `Bool`,
-	 * `Null`…). False when no std was discovered — unknown is no proof.
-	 */
-	public static function isStdTopLevelType(plugin: GrammarPlugin, name: String): Bool {
-		if (StdTypes.declaresModule('', name) == true) return true;
-		final core: Null<Array<TypeDeclInfo>> = StdTypes.moduleTypes(plugin, STD_TYPES_MODULE);
-		return core != null && core.exists(t -> t.name == name);
 	}
 
 	/** Whether `node` declares a local or a data field — an address whose INITIALIZER is the expression. */

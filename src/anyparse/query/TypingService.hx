@@ -156,6 +156,21 @@ final class TypingService {
 	}
 
 	/**
+	 * Whether the bare `name` binds one type, on every build, in `file` and in `other` alike — the one answer to "does a type
+	 * name written in one file mean there what it means in another": the path `other` binds it to, read both ways through
+	 * `bareBinding`. False wherever either side is unproved — a guarded or unlisted binding, an ambiguous one, a tier
+	 * nothing here reads.
+	 */
+	public function bindsAlike(file: FileInfo, other: FileInfo, name: String): Bool {
+		final path: Null<String> = switch _refs.names.bindingsOf(name, other).bound {
+			case InIndex(decls): decls.length == 1 ? TypeRefIndex.importPathFor(decls[0].file, decls[0].type) : null;
+			case OutOfIndex(path): path;
+			case null: StdTypes.toplevelPath(name);
+		};
+		return path != null && bareBinding(other, name, path) == Same && bareBinding(file, name, path) == Same;
+	}
+
+	/**
 	 * How `head.sub` written at `at` of `file` and read as a value is read, decided by what the bare `head` binds there
 	 * (`TypeNameBinding.tierOf`; a guarded statement's every candidate, `unknownCandidates`) and by whether that type
 	 * declares or inherits a member `sub` (4.3.7: an imported `Mod`'s static `Sub` wins over a module `Mod` holding a type

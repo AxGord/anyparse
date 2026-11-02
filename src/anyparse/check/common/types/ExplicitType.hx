@@ -17,8 +17,6 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
-import anyparse.query.TypeNameBinding;
-import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
@@ -804,41 +802,15 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 
 	/**
 	 * Whether `typeText` can be written VERBATIM in the file being fixed and MEAN THERE WHAT IT
-	 * MEANS in `declFile`. Both halves matter: a name that merely resolves on both sides can still
-	 * resolve to two DIFFERENT types (`import a.Payload` here, `import b.Payload` in the interface),
-	 * and Haxe rejects the resulting override with a type mismatch.
-	 *
-	 * Per nominal, in order:
-	 *
-	 * - one of `TypeNameBinding.AMBIENT_TYPE_NAMES` → yes, it means the same thing in every module;
-	 * - brought in by a `#if`-guarded import on EITHER side → no: `ImportInfo.guarded` marks an
-	 *   import whose presence is branch-dependent while the index is branch-blind, so the name
-	 *   would not resolve in the other configuration;
-	 * - resolvable from BOTH files to exactly one declaration each, and it is the SAME declaration
-	 *   (same file, same span) → yes;
-	 * - resolvable from neither (a type the index does not model at all — the standard library is
-	 *   normally absent) AND both files carry the identical plain `import` path for the name → yes;
-	 * - anything else → no. That includes a name resolvable on one side only (it would need an
-	 *   import this pass does not add), an ambiguous simple name, and a type declared in a file the
-	 *   index SKIPPED, which is indistinguishable from an unknown one.
+	 * MEANS in `declFile`: each of its nominals binds one type, on every build, alike in both files
+	 * (`TypingService.bindsAlike`). A name that merely resolves on both sides can still resolve to
+	 * two DIFFERENT types (`import a.Payload` here, `import b.Payload` in the interface), and Haxe
+	 * rejects the resulting override with a type mismatch.
 	 */
 	private static function typeUsableFrom(s: InheritedSeams, typeText: String, declFile: String): Bool {
 		final here: Null<FileInfo> = s.idx.fileInfo(s.file);
 		final there: Null<FileInfo> = s.idx.fileInfo(declFile);
-		if (here == null || there == null) return false;
-		for (n in nominalsOf(typeText)) if (!TypeNameBinding.AMBIENT_TYPE_NAMES.contains(n)) {
-			if (TypeRefIndex.bindsUnderGuard(here, n) || TypeRefIndex.bindsUnderGuard(there, n)) return false;
-			final mine: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, s.file);
-			final theirs: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, declFile);
-			if (mine.length == 1 && theirs.length == 1) {
-				if (mine[0].file.file != theirs[0].file.file || mine[0].type.span.from != theirs[0].type.span.from) return false;
-				continue;
-			}
-			if (mine.length != 0 || theirs.length != 0) return false;
-			final path: Null<String> = TypeRefIndex.plainImportPathOf(here, n);
-			if (path == null || path != TypeRefIndex.plainImportPathOf(there, n)) return false;
-		}
-		return true;
+		return here != null && there != null && nominalsOf(typeText).foreach(n -> s.idx.typing.bindsAlike(here, there, n));
 	}
 
 	/**

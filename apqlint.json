@@ -130,7 +130,6 @@
 				"anyparse.query.ModuleScan.declaresTypeNamed",
 				"anyparse.query.TypeNameBinding.shadowedOnDisk",
 				"anyparse.query.TypeNameBinding.STD_TYPE_NAMES",
-				"anyparse.query.TypeNameBinding.AMBIENT_TYPE_NAMES",
 				"anyparse.query.StdTypes.moduleTypes",
 				"anyparse.query.StdTypes.declaresModule"
 			],

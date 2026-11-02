@@ -15043,6 +15043,14 @@
 			"find": "final native: Null<String> = try js.Syntax.code('require(\"fs\").realpathSync.native({0})', path) catch (exception: Exception) null;",
 			"replace": "final native: Null<String> = null;",
 			"note": "an existing path resolves through plain realpath, which keeps the caller's letter case, so two case spellings of one file key apart on a case-insensitive volume"
+		},
+		{
+			"name": "M-BINDS-ALIKE-ONE-SIDE",
+			"type": "anyparse.query.TypingService",
+			"method": "bindsAlike",
+			"find": "bareBinding(other, name, path) == Same && bareBinding(file, name, path) == Same",
+			"replace": "bareBinding(other, name, path) == Same",
+			"note": "the name is read only in the file it is copied from, so a std name the target module shadows with its own type is copied as the std one"
 		}
 	]
 }

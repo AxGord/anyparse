@@ -143,9 +143,8 @@ class ShadowingParameterCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f(xs:Array<DiskSystemItemData>):Void {\n\t\tvar item:DiskSystemItemData = xs[0];\n'
 			+ '\t\tfinal e = xs.find((item:DiskSystemItemData) -> item.fileName == "a");\n\t\ttrace(item);\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tfunction f(xs:Array<DiskSystemItemData>):Void {\n\t\tvar item:DiskSystemItemData = xs[0];\n'
-			+ '\t\tfinal e = xs.find((diskSystemItemData:DiskSystemItemData) -> diskSystemItemData.fileName == "a");\n'
-			+ '\t\ttrace(item);\n\t}\n}',
+			'class C {\n\tfunction f(xs:Array<DiskSystemItemData>):Void {\n\t\tvar item:DiskSystemItemData = xs[0];\n\t\tfinal e = '
+			+ 'xs.find((diskSystemItemData:DiskSystemItemData) -> diskSystemItemData.fileName == "a");\n\t\ttrace(item);\n\t}\n}',
 			CheckFixture.fixedSource(new ShadowingParameter(), src)
 		);
 	}
@@ -160,7 +159,8 @@ class ShadowingParameterCheckTest extends Test {
 		for (src in [
 			'class C {\n\tfunction f(errorMessage:String):Void {\n\t\tlogin(errorMessage -> trace(errorMessage));\n\t}\n}',
 			'class C {\n\tfunction f(items:Array<Item>):Void {\n\t\tlist((items:Null<Array<Item>>) -> trace(items));\n\t}\n}',
-			'class C {\n\tfunction f(source:String):Void {\n\t\tlist((source:String) -> trace(source));\n\t}\n}'
+			'class C {\n\tfunction f(source:String):Void {\n\t\tlist((source:String) -> trace(source));\n\t}\n}',
+			'class C {\n\tfunction f(source:Date):Void {\n\t\tlist((source:Date) -> trace(source));\n\t}\n}'
 		]) {
 			Assert.equals(src, CheckFixture.fixedSource(new ShadowingParameter(), src));
 			Assert.notNull(declineOf(src), src);

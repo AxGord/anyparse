@@ -10,9 +10,9 @@ import anyparse.query.Refs;
 import anyparse.query.Rename;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
+import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
-import anyparse.query.TypeNameBinding;
 
 using StringTools;
 
@@ -658,7 +658,7 @@ final class ShadowingLocal extends RuleBase {
 	/**
 	 * The local name a declaration written with type `written` takes: the lower-camel of its simple nominal
 	 * (`events.SidebarTabEvent` → `sidebarTabEvent`), or null for anything else — a type argument, a function or
-	 * structure type, a name not starting upper-case, and a std root type (`TypeNameBinding.AMBIENT_TYPE_NAMES`:
+	 * structure type, a name not starting upper-case, and a std toplevel type (`StdTypes.toplevelPath`:
 	 * `int` / `string` would name a type, not the value).
 	 */
 	private static function typeNamedLocal(written: String): Null<String> {
@@ -667,7 +667,7 @@ final class ShadowingLocal extends RuleBase {
 		return SourceText.isIdentifier(path.replace('.', ''))
 			&& simple.length > 0
 			&& simple.charAt(0) != simple.charAt(0).toLowerCase()
-			&& !TypeNameBinding.AMBIENT_TYPE_NAMES.contains(simple)
+			&& StdTypes.toplevelPath(simple) == null
 			? SourceText.lowerCamel(simple)
 			: null;
 	}

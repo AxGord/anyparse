@@ -641,6 +641,30 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.isTrue(out.indexOf('grab(str:String)') != -1, 'got: $out');
 	}
 
+	/**
+	 * A std name the module itself declares a type of means that type there, not the std one the
+	 * interface's file reads: `Float` here is `Impl.Float`, so the interface's `Float` is not copied.
+	 */
+	@:pin('control')
+	@:killer('M-BINDS-ALIKE-ONE-SIDE')
+	public function testFixSkipsAStdNameTheModuleShadowsHere(): Void {
+		final out: String = scopedFix('class Impl implements Fl { public function take(p):Void {} }\n\nclass Float {}', [
+			{ file: 'Fl.hx', source: 'interface Fl {\n\tpublic function take(p:Float):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('take(p:'), 'got: $out');
+	}
+
+	/**
+	 * A std toplevel type nothing imports binds alike in both files — `Date` as much as `String` —
+	 * so the interface's annotation is copied.
+	 */
+	public function testFixCopiesAStdToplevelTypeBothFilesReachBare(): Void {
+		final out: String = scopedFix('class Impl implements Dt { public function take(p):Void {} }', [
+			{ file: 'Dt.hx', source: 'interface Dt {\n\tpublic function take(p:Date):Void;\n}' }
+		]);
+		Assert.isTrue(out.indexOf('take(p:Date)') != -1, 'got: $out');
+	}
+
 	/** A `pkg.Payload` the interface imports and the implementation does not. */
 	private function packaged(): Array<{ file: String, source: String }> {
 		return [
