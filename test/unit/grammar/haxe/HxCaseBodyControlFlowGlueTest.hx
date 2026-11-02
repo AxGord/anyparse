@@ -29,27 +29,18 @@ import utest.Test;
  * share one indent one level under `case`. The refusal is by STATEMENT KIND
  * (`caseBodyControlFlowRoot`), not by shape: a `{`-opening value keeps its
  * glue, a control-flow body that DOES render flat (`case X: if (c) x();`)
- * never reaches the glue branch, and a `@:meta` prefix is transparent.
+ * never reaches the glue branch, and a `@:meta` prefix is transparent. A refused
+ * body is decided alone: its siblings answer `FitLine` for themselves.
  *
- * SIBLING SYMMETRY. A refused body is below its label, so the per-switch
- * rule of omega-case-sibling-symmetry applies and every sibling follows it
- * down. The structural pre-pass cannot take the verdict — `case X: if (c) x();`
- * and `case X: if (c) { x(); }` have the SAME statement kind — so it is taken
- * in the WIDTH loop: a unit that reads `-1` AND has a control-flow body root
- * forces the break. Both halves hang off ONE meta
- * (`@:fmt(refuseGlueOnControlFlowRoot)` on the case-body Star, read back by the
- * case-LIST Star), so a grammar never gets the spread without the placement.
- *
- * Every test here FAILS on the pre-slice engine except the four guards against
- * over-firing: `testAFlatControlFlowBodyStaysInline`,
- * `testGluedValueBodiesStayGluedAndDoNotTrigger`,
- * `testAMetadataWrappedBlockStaysGlued` and `testKnobOffIsInert`. The knobs are
- * visible only through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
+ * The guards against over-firing are `testAFlatControlFlowBodyStaysInline`,
+ * `testGluedValueBodiesStayGlued`, `testAMetadataWrappedBlockStaysGlued` and
+ * `testKnobOffIsInert`. The knobs are visible only through `HaxeModuleTriviaParser` /
+ * `HaxeModuleTriviaWriter`.
  */
 @:nullSafety(Strict)
 final class HxCaseBodyControlFlowGlueTest extends Test {
 
-	/** A braced `if` body beside a one-liner — nothing here is over-wide, the trigger is the body's KIND. */
+	/** A braced `if` body beside a one-liner — nothing here is over-wide, the refusal reads the body's KIND. */
 	private static final BLOCK_IF_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase A: if (c) {\n'
 		+ '\t\t\t\taa();\n\t\t\t}\n\t\t\tcase _: bb();\n\t\t}\n\t}\n}\n';
 
@@ -104,7 +95,7 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 	private static final META_BLOCK_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n'
 		+ '\t\t\tcase A: @:privateAccess {\n\t\t\t\taa();\n\t\t\t\tbb();\n\t\t\t}\n\t\t\tcase _: cc();\n\t\t}\n\t}\n}\n';
 
-	/** ONE case — no sibling to coordinate with, so only the per-construct decision can place this body. */
+	/** ONE case: the placement is the same with no sibling beside it. */
 	private static final SOLE_CASE_SRC: String =
 		'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase A: if (c) {\n\t\t\t\taa();\n\t\t\t}\n\t\t}\n\t}\n}\n';
 
@@ -122,12 +113,12 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 		Assert.isTrue(out.indexOf('case A: if (c)') == -1, 'and nothing of it may stay on the label line: <$out>');
 	}
 
-	/** Below its label is a below-label placement, so the per-switch rule takes the one-liner sibling down too. */
-	@:pin('control')
-	@:killer('M-CASE-CTRLFLOW-STAR-FLAG-BLIND')
-	public function testAControlFlowBodySpreadsItsSiblings(): Void {
+	/**
+	 * A refused body is decided alone: the one-liner sibling stays on its label.
+	 */
+	public function testAControlFlowBodyLeavesItsSiblingOnItsLabel(): Void {
 		final out: String = write(BLOCK_IF_SRC, json(140));
-		Assert.isTrue(out.indexOf('case _:\n\t\t\t\tbb();') != -1, 'a fitting sibling must follow a control-flow body down: <$out>');
+		Assert.isTrue(out.indexOf('case _: bb();') != -1, 'a fitting sibling must stay on its label: <$out>');
 	}
 
 	/**
@@ -144,7 +135,7 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 
 	/** `for` / `while` / `try` / `do while` / `switch` are the same kind of body and take the same placement. */
 	@:pin('control')
-	@:killer('M-CASE-CTRLFLOW-STAR-FLAG-BLIND')
+	@:killer('M-CASE-CTRLFLOW-GLUE-NOT-REFUSED')
 	public function testEveryControlFlowCtorGoesBelowItsLabel(): Void {
 		final out: String = write(LOOPS_SRC, json(140));
 		Assert.isTrue(out.indexOf('case A:\n\t\t\t\tfor (i in list) {') != -1, 'for: <$out>');
@@ -152,60 +143,55 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 		Assert.isTrue(out.indexOf('case C:\n\t\t\t\ttry {') != -1, 'try: <$out>');
 		Assert.isTrue(out.indexOf('case D:\n\t\t\t\tdo {') != -1, 'do while: <$out>');
 		Assert.isTrue(out.indexOf('case E:\n\t\t\t\tswitch (y) {') != -1, 'switch: <$out>');
-		Assert.isTrue(out.indexOf('case _:\n\t\t\t\thh();') != -1, 'and the plain sibling follows them: <$out>');
+		Assert.isTrue(out.indexOf('case _: hh();') != -1, 'and the plain sibling stays on its label: <$out>');
 	}
 
 	/**
 	 * The refusal is on the GLUE outcome only. A control-flow body that
-	 * renders flat never reaches it — it is measured like any other body and
-	 * stays on the label line, taking its sibling with it.
+	 * renders flat never reaches it: it is measured like any other body and
+	 * stays on the label line. Its sibling answers for itself.
 	 */
 	public function testAFlatControlFlowBodyStaysInline(): Void {
 		final out: String = write(SHORT_IF_SRC, json(140));
 		Assert.isTrue(out.indexOf('case A: if (c) aa();') != -1, 'a flat `if` body is measured, not refused: <$out>');
-		Assert.isTrue(out.indexOf('case _: bb();') != -1, 'so its sibling stays inline as well: <$out>');
+		Assert.isTrue(out.indexOf('case _: bb();') != -1, 'and its sibling answers for itself: <$out>');
 	}
 
 	/**
 	 * A `{`-opening VALUE keeps its glue: the brace ends the label line and
-	 * the interior is unambiguously the body's. It is also not a trigger, so
-	 * the plain sibling stays inline — the pin that this slice widened the
-	 * refusal by STATEMENT KIND and not by `flatLength == -1`.
+	 * the interior is unambiguously the body's. The refusal reads the statement's
+	 * KIND, not `flatLength == -1`.
 	 */
-	public function testGluedValueBodiesStayGluedAndDoNotTrigger(): Void {
+	public function testGluedValueBodiesStayGlued(): Void {
 		final out: String = write(GLUED_VALUES_SRC, json(140));
 		Assert.isTrue(out.indexOf('case A: (a, b) -> {') != -1, 'a block-lambda body stays glued: <$out>');
 		Assert.isTrue(out.indexOf('case B: {') != -1, 'and so does a plain block body: <$out>');
-		Assert.isTrue(out.indexOf('case _: ee();') != -1, 'neither is a trigger, so the plain sibling stays inline: <$out>');
+		Assert.isTrue(out.indexOf('case _: ee();') != -1, 'and the plain sibling stays inline: <$out>');
 	}
 
 	/**
-	 * The sibling pre-pass short-circuits on a one-unit case list, so a lone
-	 * case gets no coordination at all. Its placement can only come from the
-	 * per-construct decision inside `BodyFit.fitLineLayout` — which is the
-	 * half of this slice the symmetry channel cannot stand in for.
 	 * Braces have nothing to do with it. `whileBody: next` gives a brace-less
 	 * `while` body its hardline, the case body then cannot render flat, and the
-	 * same refusal applies — head below the label, sibling spread with it.
+	 * same refusal applies: the head goes below the label.
 	 */
 	@:pin('control')
-	@:killer('M-CASE-CTRLFLOW-STAR-FLAG-BLIND')
-	public function testABracelessControlFlowBodyGoesBelowAndSpreads(): Void {
+	@:killer('M-CASE-CTRLFLOW-GLUE-NOT-REFUSED')
+	public function testABracelessControlFlowBodyGoesBelowItsLabel(): Void {
 		final out: String = write(BRACELESS_WHILE_SRC, jsonNextWhileBody(140));
 		Assert.isTrue(out.indexOf('case A:\n\t\t\t\twhile (c)\n\t\t\t\t\tbb();') != -1, 'the brace-less head goes below its label: <$out>');
-		Assert.isTrue(out.indexOf('case _:\n\t\t\t\tcc();') != -1, 'and its sibling follows it down: <$out>');
+		Assert.isTrue(out.indexOf('case _: cc();') != -1, 'and its sibling stays on its label: <$out>');
 	}
 
 	/**
 	 * A `#if` region body is a control-flow body: glued, its `#else` / `#end`
 	 * markers render at the head's indent, above the branch content they
-	 * delimit. It goes below its label and takes its sibling with it.
+	 * delimit, so it goes below its label.
 	 */
 	public function testAConditionalRegionBodyGoesBelowItsLabel(): Void {
 		final out: String = write(COND_REGION_SRC, json(140));
 		Assert.isTrue(out.indexOf('case A:\n\t\t\t\t#if debug') != -1, 'the region head goes below its label: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t\t#else\n') != -1, 'and its `#else` marker indents with it: <$out>');
-		Assert.isTrue(out.indexOf('case _:\n\t\t\t\tcc();') != -1, 'and the sibling follows it down: <$out>');
+		Assert.isTrue(out.indexOf('case _: cc();') != -1, 'and the sibling stays on its label: <$out>');
 	}
 
 	/**
@@ -218,13 +204,13 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 		final out: String = write(META_CONTROL_FLOW_SRC, json(140));
 		Assert.isTrue(out.indexOf('case A:\n\t\t\t\t@:privateAccess if (c) {') != -1, 'the expression route: <$out>');
 		Assert.isTrue(out.indexOf('case B:\n\t\t\t\t@:privateAccess do {') != -1, 'the statement route: <$out>');
-		Assert.isTrue(out.indexOf('case _:\n\t\t\t\tcc();') != -1, 'and the sibling follows them down: <$out>');
+		Assert.isTrue(out.indexOf('case _: cc();') != -1, 'and the sibling stays on its label: <$out>');
 	}
 
 	/**
 	 * The other half of the recursion, and the reason it is a recursion rather
 	 * than a widened ctor table: an annotated `{`-opening VALUE keeps the glue
-	 * the bare value gets, and is no trigger.
+	 * the bare value gets.
 	 */
 	public function testAMetadataWrappedBlockStaysGlued(): Void {
 		final out: String = write(META_BLOCK_SRC, json(140));
@@ -232,7 +218,10 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 		Assert.isTrue(out.indexOf('case _: cc();') != -1, 'and its sibling stays inline: <$out>');
 	}
 
-	public function testASoleCaseIsPlacedWithoutAnySiblingCoordination(): Void {
+	/**
+	 * The placement comes from the per-construct decision in `BodyFit.fitLineLayout`, with no sibling beside it.
+	 */
+	public function testASoleCaseGoesBelowItsLabel(): Void {
 		final out: String = write(SOLE_CASE_SRC, json(140));
 		Assert.isTrue(out.indexOf('case A:\n\t\t\t\tif (c) {') != -1, 'a lone control-flow case body still goes below: <$out>');
 	}

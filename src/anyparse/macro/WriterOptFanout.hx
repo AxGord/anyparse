@@ -273,59 +273,6 @@ final class WriterOptFanout {
 		};
 	}
 
-	/**
-	 * ω-expressionif-collapse — opt-fanout shim for the
-	 * `propagateValueIfBranch` meta on `HxIfExpr.thenBranch` / `elseBranch`.
-	 * Sets the narrow `_inValueIfBranch` flag ONLY when the branch is
-	 * value-yielded — gated on `o._inExprPosition` so a statement-position
-	 * `if` (whose branches are statements, not values) never flips it.
-	 * Idempotent: returns `o` unchanged when not in expression position or
-	 * when the flag is already set. Read by `HxObjectLit.fields`
-	 * (`@:fmt(reflowInExprPosition)`) to collapse a source-multiline object
-	 * literal that is the direct branch value. Emitted only when the opt
-	 * typedef carries `_inValueIfBranch:Bool`.
-	 * ω-case-sibling-symmetry — opt-fanout shim for the
-	 * `caseSiblingSymmetry` meta on a case-list Star. Stamps the switch's
-	 * widest-sibling flat width onto the element opt so every sibling body
-	 * reaches the same placement verdict.
-	 *
-	 * Unlike the boolean `_set*` shims this is a SETTER with a value and no
-	 * idempotence short-circuit on "already set": the width is per-switch,
-	 * so a nested switch must OVERWRITE the enclosing one's rather than
-	 * inherit it. It does short-circuit when the value is already equal,
-	 * which is the common no-coordination case (`-1` into `-1`) and keeps
-	 * the allocation off every non-switch Star. Emitted only when the opt
-	 * typedef carries `_caseSiblingFlatWidth:Int`.
-	 */
-	private static function setCaseSiblingWidthField(optionsCT: ComplexType, hasOffer: Bool): Field {
-		// The offer rides with the width it stands beside, so a nested switch overwrites both.
-		final same: Expr = hasOffer
-			? macro o._caseSiblingFlatWidth == w && o._caseSiblingOffer == offer
-			: macro o._caseSiblingFlatWidth == w;
-		final setOffer: Expr = hasOffer ? macro _c._caseSiblingOffer = offer : macro {};
-		return {
-			name: '_setCaseSiblingWidth',
-			access: [APrivate, AStatic, AInline],
-			kind: FFun({
-				args: [
-					{ name: 'o', type: optionsCT },
-					{ name: 'w', type: macro : Int },
-					{ name: 'offer', type: macro : Null<anyparse.format.SiblingBreakOffer> },
-					chainBaseArg(optionsCT)
-				],
-				ret: optionsCT,
-				expr: macro {
-					if ($same) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._caseSiblingFlatWidth = w;
-					$setOffer;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
 	private static function setValueIfBranchField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setValueIfBranch',
@@ -1309,9 +1256,7 @@ final class WriterOptFanout {
 			fields.push(setElseIfBranchField(optionsCT));
 			fields.push(clearElseIfBranchField(optionsCT));
 		}
-		// ω-case-sibling-symmetry: per-switch widest-sibling width fanout.
-		if (optionsHasField(optionsTypePath, '_caseSiblingFlatWidth'))
-			fields.push(setCaseSiblingWidthField(optionsCT, optionsHasField(optionsTypePath, '_caseSiblingOffer')));
+
 		if (hasValueIfBranch) {
 			fields.push(setValueIfBranchField(optionsCT));
 			fields.push(clearValueIfBranchField(optionsCT));

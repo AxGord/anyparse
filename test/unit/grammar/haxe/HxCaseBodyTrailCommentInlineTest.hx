@@ -13,8 +13,7 @@ import utest.Test;
  * `_caseBodyFlattenable` required the body Star's orphan trailing-comment
  * run to be EMPTY, so one commented-out case between two live ones pushed
  * the body above it below its label while its siblings stayed inline. The
- * cause is invisible in the output — the reader sees an asymmetric switch
- * and no reason for it:
+ * cause is invisible in the output — the reader sees one body below its label and no reason for it:
  *
  * ```
  * case SIZE:
@@ -35,11 +34,8 @@ import utest.Test;
  * byte-identical, while a tree formatted with `caseBody` /
  * `expressionCase: fitLine` does move — the point of the slice.
  *
- * WIDTH. An element carrying trail docs cannot render on one line, so the
- * sibling pre-pass reads it as `-1` and it contributes NOTHING to the
- * widest-sibling width — the same answer a glued body gives. It never LEADS a
- * spread; its own over-wide body still breaks through the `BodyGroup` the fit
- * path wraps around the BODY alone; and it does FOLLOW someone else's trigger.
+ * WIDTH. Its own over-wide body still breaks through the `BodyGroup` the fit
+ * path wraps around the BODY alone.
  *
  * `testATrailCommentBodyJoinsItsLabel` and `testABlankAfterTheTrailCommentIsPreserved`
  * FAIL on the pre-slice engine; every other test here is a guard, byte-identical
@@ -75,7 +71,9 @@ final class HxCaseBodyTrailCommentInlineTest extends Test {
 	private static final LABEL_TRAIL_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (t) {\n\t\t\tcase A: // a note\n'
 		+ '\t\t\t\tsize = cast(d, Int);\n\t\t\tcase C: bold = cast(d, Bool);\n\t\t\tcase _:\n\t\t}\n\t}\n}\n';
 
-	/** The trail-comment case is the WIDEST — the unit the pre-pass cannot measure. */
+	/**
+	 * The trail-comment case is the WIDEST: its own body breaks and nothing else moves.
+	 */
 	private static final WIDE_TRAIL_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (t) {\n'
 		+ '\t\t\tcase A: aaaa(bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n\t\t\t// orphan note\n\t\t\tcase C: cc(d);\n'
 		+ '\t\t\tcase _:\n\t\t}\n\t}\n}\n';
@@ -91,8 +89,8 @@ final class HxCaseBodyTrailCommentInlineTest extends Test {
 		+ '\t\t\tcase A: size = cast(d, Int);\n\t\t\tcase C: bold = cast(d, Bool);\n\n\t\t\t// orphan note behind a blank\n'
 		+ '\t\t}\n\t}\n}\n';
 
-	/** A multi-statement sibling triggers structurally; the trail-comment case must FOLLOW it down. */
-	private static final FOLLOWS_TRIGGER_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (t) {\n'
+	/** A multi-statement sibling goes below its label; the trail-comment case stays on its own. */
+	private static final BESIDE_MULTI_STMT_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (t) {\n'
 		+ '\t\t\tcase A: size = cast(d, Int);\n\t\t\t// orphan note\n\t\t\tcase C:\n\t\t\t\tfinal u:Int = k();\n\t\t\t\tu;\n'
 		+ '\t\t}\n\t}\n}\n';
 
@@ -111,7 +109,9 @@ final class HxCaseBodyTrailCommentInlineTest extends Test {
 		Assert.isTrue(out.indexOf('case A:\n') == -1, 'nothing may push the body below the label: <$out>');
 	}
 
-	/** The siblings that were already inline are untouched — the whole point is that the switch reads uniformly. */
+	/**
+	 * The siblings answer for themselves: the trail comment moves nothing of theirs.
+	 */
 	public function testTheSiblingsAreUnaffected(): Void {
 		final out: String = write(TRAIL_SRC, json(140));
 		Assert.isTrue(out.indexOf('case C: bold = cast(d, Bool);') != -1, 'the live sibling stays inline: <$out>');
@@ -157,22 +157,21 @@ final class HxCaseBodyTrailCommentInlineTest extends Test {
 	}
 
 	/**
-	 * The measurement decision, pinned in both directions: the trail-comment
-	 * unit cannot be measured (its element Doc carries the comment's
-	 * hardline), so it contributes no width and does not spread its siblings
-	 * — while its own over-wide body still breaks, because the fit path
-	 * measures the BODY alone inside its `BodyGroup`.
+	 * An over-wide body still breaks, because the fit path measures the BODY alone
+	 * inside its `BodyGroup`.
 	 */
-	public function testAWideTrailCommentUnitBreaksAloneWithoutSpreading(): Void {
+	public function testAWideTrailCommentUnitBreaksAlone(): Void {
 		final out: String = write(WIDE_TRAIL_SRC, json(48));
 		Assert.isTrue(out.indexOf('case A:\n\t\t\t\taaaa(') != -1, 'its own over-wide body still breaks: <$out>');
-		Assert.isTrue(out.indexOf('case C: cc(d);') != -1, 'but it never leads a spread: <$out>');
+		Assert.isTrue(out.indexOf('case C: cc(d);') != -1, 'and its sibling answers for itself: <$out>');
 	}
 
-	/** Coordination still reaches it: under a structural trigger the trail-comment case goes below its label too. */
-	public function testATrailCommentUnitFollowsAStructuralTrigger(): Void {
-		final out: String = write(FOLLOWS_TRIGGER_SRC, json(140));
-		Assert.isTrue(out.indexOf('case A:\n\t\t\t\tsize = cast(d, Int);') != -1, 'the trail-comment case follows the trigger: <$out>');
+	/**
+	 * The multi-statement sibling below its label says nothing about this case.
+	 */
+	public function testATrailCommentUnitStaysBesideAMultiStatementBranch(): Void {
+		final out: String = write(BESIDE_MULTI_STMT_SRC, json(140));
+		Assert.isTrue(out.indexOf('case A: size = cast(d, Int);') != -1, 'the trail-comment case stays on its label: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t// orphan note\n\t\t\tcase C:') != -1, 'and the comment stays at label indent: <$out>');
 	}
 
@@ -196,7 +195,7 @@ final class HxCaseBodyTrailCommentInlineTest extends Test {
 			{ name: 'TRAIL_BLANK_AFTER_SRC', src: TRAIL_BLANK_AFTER_SRC },
 			{ name: 'TRAIL_BLANK_BEFORE_SRC', src: TRAIL_BLANK_BEFORE_SRC },
 			{ name: 'LAST_CASE_BLANK_BEFORE_SRC', src: LAST_CASE_BLANK_BEFORE_SRC },
-			{ name: 'FOLLOWS_TRIGGER_SRC', src: FOLLOWS_TRIGGER_SRC }
+			{ name: 'BESIDE_MULTI_STMT_SRC', src: BESIDE_MULTI_STMT_SRC }
 		];
 		for (f in fixtures) {
 			final pass1: String = write(f.src, j);

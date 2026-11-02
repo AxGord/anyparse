@@ -195,11 +195,10 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 	}
 
 	public function testExpressionCaseFitLineBreaksOverWideBodyWholesale(): Void {
-		// Re-pinned by ω-case-sibling-symmetry: the over-wide case still moves
-		// its WHOLE body to the next line rather than splitting inside the
-		// value's call parens (that is this test's subject), but its fitting
-		// siblings now follow it down — per-switch symmetry, pinned in
-		// `HxCaseBodySymmetrySliceTest`.
+		// The over-wide case moves its WHOLE body to the next line rather than
+		// splitting inside the value's call parens (that is this test's subject);
+		// its fitting siblings answer for themselves, pinned in
+		// `HxCaseBodyPerBranchTest`.
 		final out: String = write(EXPR_SWITCH_SRC, exprFitJson(true));
 		Assert.isTrue(
 			out.indexOf('KindData.KIND_RECTANGLE_STROKE]:\n\t\t\t\tLineTint(') != -1,
@@ -207,8 +206,8 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		);
 		Assert.isTrue(out.indexOf('LineTint(current\n') == -1, 'the over-wide body must not split inside the value call parens: <$out>');
 		Assert.isTrue(
-			out.indexOf('KindData.KIND_OVAL_STROKE]:\n\t\t\t\tLineTint(current ? cast(node, OvalShape).lineTint : tint);') != -1,
-			'the sibling that would fit follows the switch down: <$out>'
+			out.indexOf('KindData.KIND_OVAL_STROKE]: LineTint(current ? cast(node, OvalShape).lineTint : tint);') != -1,
+			'the sibling that fits stays on its label: <$out>'
 		);
 	}
 
@@ -216,8 +215,8 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		// The measured outcome reaches `BodyFit` only when the body holds NO
 		// hardline, so its `Nest` has no inner line to move — the knob cannot
 		// change a byte. Exercised on both fit outcomes: an ALL-FIT switch
-		// (every body inline) and a switch the width forces down (every body
-		// on the next line, per ω-case-sibling-symmetry).
+		// (every body inline) and a switch whose over-wide body takes the next
+		// line.
 		final allFit: String =
 			'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1: foo();\n\t\t\tcase _: bar();\n\t\t}\n\t}\n}\n';
 		Assert.equals(write(allFit, caseFitJson(true)), write(allFit, caseFitJson(false)));

@@ -380,16 +380,11 @@ enum Doc {
 	 * That inversion is visible to every walker that resolves this ctor to ONE
 	 * slot. `WrapList.flatLength` takes `flatDoc`, so for such a call it walks a
 	 * shape carrying hardlines and answers `-1` — "cannot be laid out on one
-	 * line" — even though the call's glued form is perfectly flat. Two behaviours
-	 * currently rest on that answer, so do not "correct" it without reading both:
-	 *  - `WriterBlankLowering.caseSiblingWidthProbeExpr` (ω-case-sibling-symmetry)
-	 *    consumes its bodies only through `flatLength`, so a case body holding
-	 *    such a call never raises the widest-sibling maximum and the group falls
-	 *    back to `BodyFit.SIBLING_NONE` — sibling coordination cannot be
-	 *    triggered by one;
-	 *  - the enclosing natural-first-line walk sees the OPEN shape and therefore
-	 *    keeps an outer prefix glued, pinned by
-	 *    `HxCallParamOuterFirstWrapSliceTest.testNestedCallSoleArgHugsWhenTheInnerCallLeadingBreaks`.
+	 * line" — even though the call's glued form is perfectly flat. A behaviour rests
+	 * on that answer, so do not "correct" it without reading it: the enclosing
+	 * natural-first-line walk sees the OPEN shape and therefore keeps an outer prefix
+	 * glued, pinned by
+	 * `HxCallParamOuterFirstWrapSliceTest.testNestedCallSoleArgHugsWhenTheInnerCallLeadingBreaks`.
 	 */
 	IfArrowContinuationFits(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 
@@ -430,7 +425,8 @@ enum Doc {
 	IfArrowContinuationFitsWithRest(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
-	 * Sibling-coordinated placement decision (ω-case-sibling-symmetry).
+	 * Sibling-coordinated placement decision. No lowering emits it now that `BodyFit` answers
+	 * case bodies per branch; the ctor is the primitive for a group that must reach one verdict.
 	 * Renders `breakDoc` when `f.indent + flatWidth` EXCEEDS `n`, else
 	 * `flatDoc` — the `<= n` fits convention the `Group` family uses.
 	 *

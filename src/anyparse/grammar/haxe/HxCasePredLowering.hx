@@ -13,18 +13,14 @@ import haxe.macro.Expr;
  * a mode and one `generate()` output, and nothing here is reachable from
  * the other side. What holds the family together is a single question
  * asked in several shapes: where does a case BODY render relative to its
- * label, and which units of a switch force the answer for their siblings.
+ * label.
  *
  * Members, in the order `generate()` emits them:
  *
  *  - `caseBodyRefusesFlat` / `caseBodyControlFlowRoot` /
  *    `caseBodyControlFlowExpr` — per-BODY shape gates. The first refuses
  *    inline emission, the other two refuse the GLUE.
- *  - `caseSiblingUnits_*` / `_caseSiblingUnitsInto` /
- *    `_addCaseSiblingUnit` — the `#if`-region flattener the sibling
- *    pre-pass measures through.
- *  - `caseUnitStructuralBreak_*` / `caseUnitControlFlowBody_*` — per-UNIT
- *    verdicts feeding that pre-pass.
+
  *  - `condSpliceRawWrapsCases` — the raw-fragment scan that tells a
  *    case-label splice from a statement splice.
  *
@@ -35,11 +31,6 @@ final class HxCasePredLowering extends AstPredLowering {
 
 	private static inline final HX_EXPR: String = HxAstPredLowering.HX_EXPR;
 	private static inline final HX_STATEMENT: String = HxAstPredLowering.HX_STATEMENT;
-	private static inline final HX_SWITCH_CASE: String = HxAstPredLowering.HX_SWITCH_CASE;
-	private static inline final HX_CASE_BRANCH: String = 'anyparse.grammar.haxe.HxCaseBranch';
-	private static inline final HX_DEFAULT_BRANCH: String = 'anyparse.grammar.haxe.HxDefaultBranch';
-	private static inline final HX_CONDITIONAL_CASE: String = 'anyparse.grammar.haxe.HxConditionalCase';
-	private static inline final HX_ELSEIF_CASE: String = 'anyparse.grammar.haxe.HxElseifCase';
 
 	/**
 	 * `HxStatement` ctors that are keyword-led CONTROL-FLOW statements —
@@ -103,11 +94,7 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBodyRefusesFlatField(),
 			caseBodyControlFlowRootField(),
 			caseBodyControlFlowExprField(),
-			caseSiblingUnitsField(),
-			caseSiblingUnitsIntoField(),
-			addCaseSiblingUnitField(),
-			caseUnitStructuralBreakField(),
-			caseUnitControlFlowBodyField(),
+
 			condSpliceRawWrapsCasesField()
 		];
 	}
@@ -148,9 +135,7 @@ final class HxCasePredLowering extends AstPredLowering {
 	 *
 	 * The predicate answers on KIND alone and is asked only on the glue
 	 * outcome, so it never touches a body that fits on one line — `case X: if
-	 * (c) x();` fits and stays inline. It is also the AST half of the
-	 * sibling-symmetry verdict: `caseUnitControlFlowBody_*` pairs it with the
-	 * pre-pass's own `flatLength == -1` verdict, the bit no AST walk can supply.
+	 * (c) x();` fits and stays inline.
 	 */
 	private function caseBodyControlFlowRootField(): Field {
 		final recurse: Expr = {
@@ -199,245 +184,6 @@ final class HxCasePredLowering extends AstPredLowering {
 			'caseBodyControlFlowExpr',
 			[valueArg('e', HX_EXPR)],
 			macro : Bool, body, 'True iff a case body expression is the expression form of a keyword-led control-flow construct.'
-		);
-	}
-
-	/**
-	 * `caseSiblingUnits_<ElemRule>(c) → Null<Array<…>>` — the case UNITS
-	 * one switch-case Star element stands for, or `null` when the element
-	 * is its own single unit. Consumed by the widest-sibling pre-pass of
-	 * `@:fmt(caseSiblingSymmetry(…))` (see
-	 * `WriterBlankLowering.caseSiblingWidthProbeExpr`), which splices the
-	 * returned units in place of the element before measuring.
-	 *
-	 * A `#if <cond> case … #end` region projects as ONE
-	 * `HxSwitchCase.Conditional` element whose Doc carries directive
-	 * hardlines, so its own `WrapList.flatLength` is `-1`: the region can
-	 * FOLLOW a plain sibling's break but could never LEAD one. Flattening
-	 * it into its inner case elements hands the pre-pass the same per-case
-	 * widths it already has for a plain sibling, so an over-wide
-	 * `#if`-guarded body now triggers the spread like any other.
-	 *
-	 * `null` — never `[]` — is the answer for every non-region element:
-	 * this runs for every case of every switch, so the hot path must not
-	 * allocate. Deliberately `null` as well:
-	 *
-	 *  - `CondSpliceCase`, the region shape that splits a case's LABELS
-	 *    from the body they share after `#end`. Its labels live in a
-	 *    byte-verbatim `HxCondSpliceRaw`, so there is no inner
-	 *    case-element list to measure and the element stays one
-	 *    non-contributing unit.
-	 *  - a PATTERN-scope conditional (`case #if js "a" #else "b" #end:`),
-	 *    which parses as a plain `CaseBranch` and never reaches this arm —
-	 *    it already measures FLAT (the directives render inline in the
-	 *    flat walk) and already contributes.
-	 *  - a `#if` inside a case BODY (statement scope): the element is a
-	 *    `CaseBranch` whose own Doc measures `-1`, unchanged.
-	 */
-	private function caseSiblingUnitsField(): Field {
-		final unitsCT: ComplexType = ruleArrayCT(HX_SWITCH_CASE);
-		final collect: Expr = macro {
-			final _u: $unitsCT = [];
-			_caseSiblingUnitsInto(_i, _u);
-			_u;
-		};
-		final body: Expr = nullSwitch(ident('c'), macro null, [caseBind(HX_SWITCH_CASE, 'Conditional', [0 => '_i'], collect)], macro null);
-		return predField(
-			'caseSiblingUnits_${simpleName(HX_SWITCH_CASE)}',
-			[valueArg('c', HX_SWITCH_CASE)],
-			ruleNullArrayCT(HX_SWITCH_CASE), body,
-			'The case units a `#if`-guarded switch-case element expands to, or null when it is its own single unit.'
-		);
-	}
-
-	/**
-	 * Worker of `caseSiblingUnits_*`: appends every case element of every
-	 * branch of ONE `#if` case region to `out`, in `body` →
-	 * `elseifs[i].body` → `elseBody` order.
-	 *
-	 * The units are taken ACROSS the branches because `#if` / `#elseif` /
-	 * `#else` are ALTERNATIVES — only one of them is ever compiled — so
-	 * the maximum over all of them is the conservative trigger, and the
-	 * bytes this writer emits are one file serving every compilation
-	 * variant.
-	 */
-	private function caseSiblingUnitsIntoField(): Field {
-		inline function addUnit(elem: Expr): Expr
-			return { expr: ECall(ident('_addCaseSiblingUnit'), [elem, ident('out')]), pos: Context.currentPos() };
-		final addBody: Expr = addUnit(starElem(HX_CONDITIONAL_CASE, 'body', macro _b[_i]));
-		final clauseBody: Expr = field(starElem(HX_CONDITIONAL_CASE, 'elseifs', ident('_cl')), 'body');
-		final addClause: Expr = addUnit(starElem(HX_ELSEIF_CASE, 'body', macro _cb[_k]));
-		final addElse: Expr = addUnit(starElem(HX_CONDITIONAL_CASE, 'elseBody', macro _eb[_m]));
-		final body: Expr = macro {
-			if (p == null) return;
-			final _b = p.body;
-			var _i: Int = 0;
-			while (_i < _b.length) {
-				$addBody;
-				_i++;
-			}
-			final _els = p.elseifs;
-			var _j: Int = 0;
-			while (_j < _els.length) {
-				final _cl = _els[_j];
-				final _cb = $clauseBody;
-				var _k: Int = 0;
-				while (_k < _cb.length) {
-					$addClause;
-					_k++;
-				}
-				_j++;
-			}
-			final _eb = p.elseBody;
-			if (_eb != null) {
-				var _m: Int = 0;
-				while (_m < _eb.length) {
-					$addElse;
-					_m++;
-				}
-			}
-		};
-		return predField('_caseSiblingUnitsInto', [
-			valueArg('p', HX_CONDITIONAL_CASE),
-			{ name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }
-		], macro : Void, body, 'Appends every case element of every branch of one `#if` case region to `out`.');
-	}
-
-	/**
-	 * Appends ONE switch-case Star element to `out` as units: a nested
-	 * `#if` region recurses back through `_caseSiblingUnitsInto` (so a
-	 * region inside a region flattens all the way down), anything else
-	 * pushes itself.
-	 *
-	 * Under the DEFAULT `indentation.conditionalPolicy: aligned` a region's
-	 * body renders at the enclosing case-list indent, so a nested unit's
-	 * flat width is directly comparable with a top-level sibling's. The
-	 * `Increase` / `Decrease` policies do lift a region body one level per
-	 * conditional depth (`@:fmt(conditionalBodyIndent)` on
-	 * `HxConditionalCase.body` reads `opt.conditionalPolicy`), and the
-	 * pre-pass measures every unit at the switch's own indent while
-	 * `IfIndentWidthExceeds` evaluates each body at ITS indent — so under
-	 * those policies a region can still come out asymmetric — a limitation
-	 * carried forward from the engine before the pre-pass, not introduced by
-	 * it; a depth-aware unit width is a separate slice.
-	 */
-	private function addCaseSiblingUnitField(): Field {
-		final regionOf: Expr = sw(ident('n'), [caseBind(HX_SWITCH_CASE, 'Conditional', [0 => '_i'], ident('_i'))], macro null);
-		final regionCT: ComplexType = ruleNullCT(HX_CONDITIONAL_CASE);
-		final body: Expr = macro {
-			final _c: $regionCT = $regionOf;
-			if (_c == null) {
-				out.push(n);
-				return;
-			}
-			_caseSiblingUnitsInto(_c, out);
-		};
-		return predField(
-			'_addCaseSiblingUnit',
-			[bareArg('n', HX_SWITCH_CASE), { name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }],
-			macro : Void, body, 'Appends one switch-case element to `out`, flattening a nested `#if` region into its own units.'
-		);
-	}
-
-	/**
-	 * `caseUnitStructuralBreak_<ElemRule>(c) → Bool` — true iff ONE case unit's body renders on
-	 * the line(s) BELOW its own label whatever the budget, so the per-switch symmetry verdict can
-	 * be reached without a width comparison at all. Consumed by the `@:fmt(caseSiblingSymmetry(…))`
-	 * pre-pass (`WriterBlankLowering.caseSiblingWidthProbeExpr`), which drops the whole
-	 * widest-sibling measurement for `BodyFit.SIBLING_FORCE_BREAK` on the first unit that answers
-	 * true.
-	 *
-	 * The verdict is the body statement COUNT plus the flat-refusal gate, on `CaseBranch.body`
-	 * and `DefaultBranch.stmts` alike: two or more statements — true, the body cannot share the
-	 * label line; exactly one statement that `caseBodyRefusesFlat` refuses (an outermost `&&` /
-	 * `||`) — true, the same placement reached through the shape gate; exactly one statement
-	 * otherwise — false, which deliberately covers a GLUED body (a lambda / block / object literal
-	 * whose Doc carries a hardline: its FIRST line shares the label line, so a triggered switch
-	 * still moves it, it just never leads); ZERO statements — false, there is nothing to move.
-	 *
-	 * `CondSpliceCase` is true with no check at all: it splits a case's LABELS from the body they
-	 * share after `#end`, and that body is MANDATORY (`HxCondSpliceCase.tail`, plus whatever
-	 * `rest` absorbs) and renders BELOW those labels at every budget. A `Conditional` region never
-	 * reaches this predicate AS ITSELF: the pre-pass flattens it through `caseSiblingUnits_*`
-	 * first, so the predicate runs per INNER unit. Every other ctor is false.
-	 *
-	 * A single CONTROL-FLOW statement is deliberately not listed, even though
-	 * `BodyFit.fitLineLayout` refuses it the glue: the same statement kind covers `case X: if (c)
-	 * x();`, which fits on one line and stays there. That verdict needs the width measure, so it
-	 * lives in the pre-pass's own loop through the sibling predicate `caseUnitControlFlowBody_*`.
-	 *
-	 * RESIDUAL: a body element with leading comments and a label carrying its own trailing
-	 * comment render below the label but are not trigger inputs HERE — one predicate name emits
-	 * ONE body shared by the plain / trivia / spans AST families, and the slots holding those
-	 * shapes are trivia-family-specific, so reading them would make one predicate answer
-	 * differently per family for the same tree. The width loop closes half of it as a side
-	 * effect (a comment-refused body measures `-1`, and a control-flow statement then spreads the
-	 * switch through `caseUnitControlFlowBody_*`); the comment-refused bodies whose statement is
-	 * not control-flow need a trivia-aware channel.
-	 */
-	private function caseUnitStructuralBreakField(): Field {
-		inline function verdict(rule: String, fieldName: String, holder: String): Expr {
-			final stmts: Expr = field(ident(holder), fieldName);
-			final refuses: Expr = {
-				expr: ECall(ident('caseBodyRefusesFlat'), [starElem(rule, fieldName, macro _cs[0])]),
-				pos: Context.currentPos()
-			};
-			return macro {
-				final _cs = $stmts;
-				_cs.length >= 2 || (_cs.length == 1 && $refuses);
-			};
-		}
-		final body: Expr = nullSwitch(ident('c'), macro false, [
-			caseBind(HX_SWITCH_CASE, 'CaseBranch', [0 => '_b'], verdict(HX_CASE_BRANCH, 'body', '_b')),
-			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d')),
-			caseOf(HX_SWITCH_CASE, ['CondSpliceCase'], macro true)
-		], macro false);
-		return predField(
-			'caseUnitStructuralBreak_${simpleName(HX_SWITCH_CASE)}',
-			[valueArg('c', HX_SWITCH_CASE)],
-			macro : Bool, body,
-			'True iff a case unit\'s body sits below its label at any budget (multi-statement, one refused statement, '
-			+ 'or a label-splice region).'
-		);
-	}
-
-	/**
-	 * `caseUnitControlFlowBody_<ElemRule>(c) → Bool` — true iff a case unit
-	 * holds EXACTLY ONE body statement and that statement is control-flow
-	 * (`caseBodyControlFlowRoot`). The AST half of the glue refusal's
-	 * sibling-symmetry verdict.
-	 *
-	 * It is deliberately NOT part of `caseUnitStructuralBreak_*`, whose
-	 * contract is "below its label at ANY budget": `case X: if (c) x();` and
-	 * `case X: if (c) { x(); }` are the SAME statement kind, and only the width
-	 * measure separates the one that stays inline from the one that is refused.
-	 * So this predicate is consumed inside the pre-pass's WIDTH loop, gated on
-	 * the unit's width probe answering `-1` — the bit no AST walk can supply.
-	 *
-	 * `CondSpliceCase` answers false: its shared body already triggers
-	 * structurally, and its labels are byte-verbatim so it carries no body
-	 * count to take here.
-	 */
-	private function caseUnitControlFlowBodyField(): Field {
-		inline function verdict(rule: String, fieldName: String, holder: String): Expr {
-			final stmts: Expr = field(ident(holder), fieldName);
-			final isControlFlow: Expr = {
-				expr: ECall(ident('caseBodyControlFlowRoot'), [starElem(rule, fieldName, macro _cs[0])]),
-				pos: Context.currentPos()
-			};
-			return macro {
-				final _cs = $stmts;
-				_cs.length == 1 && $isControlFlow;
-			};
-		}
-		final body: Expr = nullSwitch(ident('c'), macro false, [
-			caseBind(HX_SWITCH_CASE, 'CaseBranch', [0 => '_b'], verdict(HX_CASE_BRANCH, 'body', '_b')),
-			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d'))
-		], macro false);
-		return predField(
-			'caseUnitControlFlowBody_${simpleName(HX_SWITCH_CASE)}',
-			[valueArg('c', HX_SWITCH_CASE)],
-			macro : Bool, body, 'True iff a case unit holds exactly one body statement and that statement is control-flow.'
 		);
 	}
 
@@ -493,14 +239,6 @@ final class HxCasePredLowering extends AstPredLowering {
 			'condSpliceRawWrapsCases', [{ name: 'raw', type: macro : String }],
 			macro : Bool, body, 'True iff a token-splice raw fragment has a line starting with the `case` / `default` keyword.'
 		);
-	}
-
-	private function ruleArrayCT(rule: String): ComplexType {
-		return TPath({ pack: [], name: 'Array', params: [TPType(ruleCT(rule))] });
-	}
-
-	private function ruleNullArrayCT(rule: String): ComplexType {
-		return TPath({ pack: [], name: 'Null', params: [TPType(ruleArrayCT(rule))] });
 	}
 
 }

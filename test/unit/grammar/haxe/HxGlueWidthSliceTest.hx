@@ -41,10 +41,8 @@ import utest.Test;
  * below pins all four edges: its glued line is 131 columns and its broken body
  * line 105, so the break window is exactly `maxLineLength` in [105, 130].
  *
- * NOT A SYMMETRY TRIGGER: a glue this probe turns into a break does NOT make
- * its case siblings break (the widest-sibling pre-pass reads bodies through
- * `WrapList.flatLength`, where a glued body answers `-1`). Pinned below. The
- * knobs are visible only through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
+ * A glue this probe turns into a break does NOT make its case siblings break,
+ * pinned below. The knobs are visible only through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
  */
 @:nullSafety(Strict)
 final class HxGlueWidthSliceTest extends Test {
@@ -227,9 +225,7 @@ final class HxGlueWidthSliceTest extends Test {
 
 	@:pin('control')
 	@:killer('M-GLUE-NEVER-BREAKS')
-	public function testGlueTurnedBreakIsNotASiblingSymmetryTrigger(): Void {
-		// ω-case-sibling-symmetry's contract, preserved: a GLUE outcome is not
-		// a spread trigger, and turning one into a break must not make it one.
+	public function testGlueTurnedBreakLeavesItsSiblingOnItsLabel(): Void {
 		// `case _: bar();` fits and must stay on its label line even though its
 		// sibling just moved down.
 		final out: String = write(CASE_GLUE_SRC, caseFitJson(58));

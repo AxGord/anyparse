@@ -1300,7 +1300,7 @@ final class WriterStarEmitLowering {
 			anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, altBlockEndedFlag ? sepText : null, altBlockEndedFlag,
 			altBlockEndedFlag ? (branch.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
 			altBlockEndedFlag ? ctx.formatInfo.schemaTypePath : null, null, branch.fmtHasFlag('clearExprPositionNonTail'), null, null,
-			branch.fmtHasFlag('uniformStmtBlanks'), false, null, null, null, null, null, branch.fmtHasFlag('relocateTrailingComments')
+			branch.fmtHasFlag('uniformStmtBlanks'), false, null, branch.fmtHasFlag('relocateTrailingComments')
 		);
 	}
 

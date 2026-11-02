@@ -160,11 +160,7 @@ final class TriviaTryparseLowering {
 		// omega-case-body-controlflow-glue: when the case-body Star carries
 		// `@:fmt(refuseGlueOnControlFlowRoot)`, a `FitLine` body that cannot
 		// render flat AND whose single statement is keyword-led control flow
-		// takes the BREAK shape instead of gluing onto the case label. The
-		// enclosing case-LIST Star reads the same meta back off this one
-		// (`elemBodyStarHasFlag`) to gate its sibling FORCE, so the placement and
-		// the spread turn on together. False -> byte-identical to the pre-slice
-		// call, here and in the pre-pass.
+		// takes the BREAK shape instead of gluing onto the case label.
 		refuseGlueOnControlFlow: Bool = false,
 		// ω-splice-op-fill: the Star carries `@:fmt(fillItems)` — its elements
 		// are laid out as a Wadler `Fill` with a soft `Line(' ')` between them
@@ -1071,10 +1067,7 @@ final class TriviaTryparseLowering {
 	private static function triviaTryparseCaseWrapExpr(glueRefusalExpr: Expr): Expr {
 		return macro {
 			final _caseBody: anyparse.core.Doc = if (_fitCase)
-				anyparse.format.BodyFit.fitLineLayout(
-					_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, opt._caseSiblingFlatWidth, $glueRefusalExpr,
-					opt._caseSiblingOffer
-				);
+				anyparse.format.BodyFit.fitLineLayout(_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, $glueRefusalExpr);
 			else
 				opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs));
 			_dwb(_trailDocs.length > 0 ? _dc([_caseBody, _dc(_trailDocs)]) : _caseBody);

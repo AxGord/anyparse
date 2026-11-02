@@ -1017,31 +1017,6 @@ class WrapFlatSourceFixedPointTest extends Test {
 	}
 
 	/**
-	 * A case unit whose only over-wide part is a threshold-pivot literal must not lead the sibling
-	 * spread: the next pass reads that literal back as committed, where the unit measures no flat
-	 * width and its siblings stay on their labels.
-	 */
-	@:pin('control')
-	@:killer('M-SIBLING-OFFER-UNALIASED')
-	public function testPivotCaseUnitDoesNotLeadTheSiblingSpread(): Void {
-		final src: String = 'class C {\n\tfunction f(): Candidate {\n\t\treturn switch kind {\n'
-			+ '\t\t\tcase Provable: dropped(\'the key binder is never read; iterate the values alone, the loop never reads it\', null);\n'
-			+ '\t\t\tcase Keyed:\n\t\t\t\tdropped(\n\t\t\t\t\t\'the key binder is never read; drop it if nothing the loop runs changes the '
-			+ 'map, else rename it to a wildcard\',\n\t\t\t\t\t{ iterable: iterable, body: bodySpan }\n\t\t\t\t);\n'
-			+ '\t\t\tcase Unprovable: renamed(keyToken, \'the key binder is never read; rename it to a wildcard\');\n\t\t};\n\t}\n}';
-		final once: String = write(src, CASE_BODY_OBJECT);
-		Assert.isTrue(
-			once.indexOf('\t\t\tcase Provable: dropped(') != -1 && once.indexOf('\t\t\tcase Unprovable: renamed(') != -1,
-			'the fitting siblings must stay on their labels:\n<$once>'
-		);
-		Assert.isTrue(
-			once.indexOf('\t\t\tcase Keyed:\n\t\t\t\tdropped(\'the key binder') != -1 && once.indexOf('a wildcard\', {\n') != -1,
-			'the pivot unit must break its own literal below its label:\n<$once>'
-		);
-		Assert.equals(once, write(once, CASE_BODY_OBJECT), 'one round trip must land on the fixed point');
-	}
-
-	/**
 	 * A call argument that carries a threshold-pivot literal one call deeper must pack on its
 	 * first line like the committed argument the next pass reads back, instead of opening a line
 	 * of its own because its flat arm overflows.

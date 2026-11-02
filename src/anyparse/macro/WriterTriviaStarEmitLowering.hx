@@ -295,11 +295,6 @@ final class WriterTriviaStarEmitLowering {
 		// `alignInlineSwitchCaseBody` is the LABEL's. Wired on
 		// `HxCaseBranch.body` / `HxDefaultBranch.stmts` alongside
 		// `refuseFlatOnComplexExpr`.
-		//
-		// The SAME meta gates the accompanying sibling FORCE in the case-LIST
-		// Star's pre-pass - `caseSiblingControlFlowFnExpr` reads it back off this
-		// body Star through `elemBodyStarHasFlag`, so the two halves cannot be
-		// enabled apart. Flag off => byte-identical on BOTH.
 		final refuseGlueOnControlFlow: Bool = starNode.fmtHasFlag('refuseGlueOnControlFlowRoot');
 		// ω-metadata-line-end-function: `@:fmt(metaLineEndPolicy('<optField>'))`
 		// on a `@:trivia @:tryparse` Star wires inter-element + post-Star

@@ -1,10 +1,6 @@
 package anyparse.format;
 
-import anyparse.core.BreakCommits;
-import anyparse.core.BreakToken;
-import anyparse.core.D;
 import anyparse.core.Doc;
-import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
 import anyparse.format.wrap.WrapList;
 
@@ -51,52 +47,11 @@ import anyparse.format.wrap.WrapList;
 final class BodyFit {
 
 	/**
-	 * `_caseSiblingFlatWidth` sentinel: no sibling coordination — every body decides
-	 * for itself. What a case-list Star records when it is not opted in, when its
-	 * policy is not `FitLine`, when it holds one element or fewer, or when no element
-	 * could have rendered inline at all.
-	 */
-	public static inline final SIBLING_NONE: Int = -1;
-
-	/**
-	 * `_caseSiblingFlatWidth` sentinel: a widest-sibling pre-pass is IN PROGRESS
-	 * somewhere above. Suppresses coordination like `SIBLING_NONE`, and additionally
-	 * tells every nested case-list Star to skip its OWN pre-pass and pass the marker
-	 * further down.
-	 *
-	 * The suppression has no output consequence, because the pre-pass consumes its
-	 * Docs only through `WrapList.flatLength`, which forwards `IfIndentWidthExceeds`
-	 * to the FLAT branch — a nested switch's coordination cannot change the width
-	 * being measured. Without the marker every nesting level re-measures its whole
-	 * subtree, which is the exponential blow-up this sentinel exists to prevent.
-	 */
-	public static inline final SIBLING_PROBING: Int = -2;
-
-	/**
-	 * `_caseSiblingFlatWidth` FORCE channel: a width so large that
-	 * `IfIndentWidthExceeds` takes its break branch at every real indent and budget, so
-	 * every coordinated body in the group goes below its label.
-	 *
-	 * It is an ordinary `siblingWidth >= 0`, so `fitLineLayout` needs no arm for it and
-	 * the renderer no new ctor. What it encodes is a verdict the emitter reached without
-	 * a width COMPARISON: some unit of the group renders below its own label whatever
-	 * the budget — a multi-statement body, a single-statement body `caseBodyRefusesFlat`
-	 * refuses, a label-splice region whose shared body always sits below the labels it
-	 * was split from, or a body with no flat width that `caseBodyControlFlowRoot`
-	 * refuses the glue — so the per-switch rule "if one body is below its label, all
-	 * are" fires. The trigger set and the shapes it leaves out are both enumerated in
-	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc.
-	 */
-	public static inline final SIBLING_FORCE_BREAK: Int = 0x0FFFFFF0;
-
-	/**
 	 * The BREAK shape every `FitLine` outcome falls back to: `body` on the
 	 * next line, one indent level deeper than the header.
 	 *
-	 * Three sites want exactly this Doc — the sibling-coordinated probe's
-	 * break branch, `glueLayout`'s over-wide answer, and the control-flow
-	 * glue refusal — so it has one owner rather than three literal copies to
-	 * keep in step.
+	 * Two sites want exactly this Doc — `glueLayout`'s over-wide answer and the control-flow
+	 * glue refusal — so it has one owner rather than two literal copies to keep in step.
 	 */
 	public static inline function breakLayout(cols: Int, body: Doc): Doc {
 		return Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), body]));
@@ -106,29 +61,12 @@ final class BodyFit {
 	 * Build the `FitLine` placement Doc for `body` under a header rendered at the
 	 * enclosing indent.
 	 *
-	 * `siblingWidth < 0` (`SIBLING_NONE`, the default) is the per-construct decision
-	 * described on the class: measure when the body can render flat, width-gate the
-	 * glue when it cannot. `lineWidth` is REQUIRED and comes before it — the glue gate
-	 * needs a budget at every call site, and an omitted-by-default width would
-	 * silently restore the unmeasured glue this seam exists to remove.
-	 *
-	 * `siblingWidth >= 0` opts into the SIBLING-COORDINATED decision: the caller passes
-	 * ONE width for the whole group and the result is an `IfIndentWidthExceeds` probe
-	 * on it, so every sibling — all at the same indent — answers identically. Over the
-	 * budget the body goes to the next line one indent deeper and so does every
-	 * sibling, including ones that would have fit or glued; within it the probe falls
-	 * through to the per-construct decision above.
-	 *
-	 * TWO CHANNELS reach that width and this function deliberately cannot tell them
-	 * apart: the widest sibling's flat width, or `SIBLING_FORCE_BREAK` for a group
-	 * holding a unit that sits below its own label at every budget. A GLUED body is not
-	 * such a unit — its first line shares the label line — but a coordinated break
-	 * still moves it, since it sits inside the probe's break branch like everyone else.
-	 *
-	 * `siblingOffer` is the group's second number, the one its widest unit measures once
-	 * its named break is committed (`siblingBreakOffer`): a `BreakCommit` on that break's
-	 * token picks it when the measure render takes the break, which is the layout the next
-	 * rewrite reads, with that unit's literal broken in its source.
+	 * The decision is per construct, as described on the class: measure when the body
+	 * can render flat, width-gate the glue when it cannot. Nothing here reads a sibling:
+	 * one case branch below its label leaves the next one free to stay on its own.
+	 * `lineWidth` is REQUIRED — the glue gate needs a budget at every call site, and an
+	 * omitted-by-default width would silently restore the unmeasured glue this seam
+	 * exists to remove.
 	 *
 	 * `refuseGlue` replaces the glue outcome with `breakLayout`, and it is the CALLER's
 	 * verdict rather than anything measured here: the case-body path passes it when the
@@ -136,29 +74,13 @@ final class BodyFit {
 	 * (`else if`, `} while`, `catch`) are siblings of its head and so render at the
 	 * HEAD's indent when glued, reading as if the statement had left the branch. The
 	 * flag cannot reach the MEASURED outcome, so a body that renders flat is untouched.
-	 *
-	 * Some shapes DO render below their label and still cannot LEAD the group;
-	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc enumerates them. The render-time
-	 * one is a glue that `glueLayout` turns into a break — a verdict reached at the LIVE
-	 * PEN COLUMN, which no emitter-side walk can see, so the pre-pass never learns it.
 	 */
-	public static function fitLineLayout(
-		cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, siblingWidth: Int = SIBLING_NONE, refuseGlue: Bool = false,
-		?siblingOffer: SiblingBreakOffer
-	): Doc {
-		final flat: Int = WrapList.flatLength(body);
-		final own: Doc = if (flat != -1)
-			chainStaircase(cols, body, Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body]))), lineWidth);
-		else if (refuseGlue) {
-			breakLayout(cols, body);
-		} else {
-			final glued: Doc = Doc.Concat([Doc.OptSpace(' '), body]);
-			glueLayout(cols, body, nestGluedBody ? Doc.Nest(cols, glued) : glued, lineWidth);
-		}
-		final plain: Doc = siblingLayout(cols, body, lineWidth, siblingWidth, own);
-		return siblingOffer == null
-			? plain
-			: Doc.BreakCommit(siblingLayout(cols, body, lineWidth, siblingOffer.width, own), plain, siblingOffer.token);
+	public static function fitLineLayout(cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, refuseGlue: Bool = false): Doc {
+		if (WrapList.flatLength(body) != -1)
+			return chainStaircase(cols, body, Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body]))), lineWidth);
+		if (refuseGlue) return breakLayout(cols, body);
+		final glued: Doc = Doc.Concat([Doc.OptSpace(' '), body]);
+		return glueLayout(cols, body, nestGluedBody ? Doc.Nest(cols, glued) : glued, lineWidth);
 	}
 
 	/**
@@ -384,64 +306,6 @@ final class BodyFit {
 	}
 
 	/**
-	 * The alternative placement number a case list offers beside the one its widest-sibling pre-pass measured, when its
-	 * WIDEST unit `widest` holds exactly one named break (`BreakCommits.nested`, bodies included): the number the pre-pass
-	 * reads once that break is committed, as the next rewrite reads it back. A unit the committed break leaves with no
-	 * flat width stops measuring and leaves `second` (the widest of the others) in charge, unless its single statement is
-	 * `controlFlow`, which then leads the spread the way the pre-pass's control-flow verdict does. The token is fresh: the
-	 * pre-pass measured a throwaway write, so the emitted widest unit is tied to it by `aliasSiblingBreak`. Null when the
-	 * break does not change the number.
-	 */
-	public static function siblingBreakOffer(widest: Doc, second: Int, controlFlow: Bool): Null<SiblingBreakOffer> {
-		final commits: Array<Doc> = BreakCommits.outermostPerToken(BreakCommits.nested(widest));
-		if (commits.length != 1) return null;
-		return switch commits[0] {
-			case Doc.BreakCommit(brk, _, token) if (token != null):
-				final committed: Int = WrapList.flatLength(BreakCommits.replaced(widest, commits[0], brk));
-				final width: Int = if (committed >= 0)
-					committed > second ? committed : second;
-				else if (controlFlow)
-					SIBLING_FORCE_BREAK;
-				else
-					second;
-				width == WrapList.flatLength(widest) ? null : { width: width, token: new BreakToken() };
-			case _:
-				null;
-		};
-	}
-
-	/**
-	 * `elem`, the emitted widest unit of a case list, with its one named break also naming `offer`'s token, so the
-	 * measure render that takes that break takes the offer with it for every sibling. `elem` itself when there is no
-	 * offer or the unit no longer holds exactly one named break.
-	 */
-	public static function aliasSiblingBreak(elem: Doc, offer: Null<SiblingBreakOffer>): Doc {
-		if (offer == null) return elem;
-		final alias: BreakToken = offer.token;
-		var named: Null<BreakToken> = null;
-		for (node in BreakCommits.outermostPerToken(BreakCommits.nested(elem))) switch node {
-			case Doc.BreakCommit(_, _, token) if (token != null && token != alias):
-				if (named != null) return elem;
-				named = token;
-			case _:
-		}
-		final target: Null<BreakToken> = named;
-		if (target == null) return elem;
-		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
-		function walk(n: Doc): Doc {
-			final hit: Null<Doc> = memo.get(n);
-			if (hit != null) return hit;
-			final out: Doc = switch n {
-				case Doc.BreakMark(inner, token) if (token == target): Doc.BreakMark(Doc.BreakMark(walk(inner), token), alias);
-				case _: D.mapChildrenShared(n, walk);
-			};
-			memo.set(n, out);
-			return out;
-		}
-		return walk(elem);
-	}
-
-	/**
 	 * The next-line form of a chain gate's probe — `chainHeadGate`'s or
 	 * `chainStaircase`'s — or `null` when `d` is not one.
 	 *
@@ -461,11 +325,6 @@ final class BodyFit {
 			case _:
 				return null;
 		}
-	}
-
-	/** `own` coordinated by the sibling number `width`, or `own` itself when `width` asks for no coordination. */
-	private static inline function siblingLayout(cols: Int, body: Doc, lineWidth: Int, width: Int, own: Doc): Doc {
-		return width < 0 ? own : Doc.IfIndentWidthExceeds(width, lineWidth, breakLayout(cols, body), own);
 	}
 
 	/** The `Nest` indent of `d` when `d` is a body slot whose separator is a hardline (`next`) or the glue space, else `-1`. */

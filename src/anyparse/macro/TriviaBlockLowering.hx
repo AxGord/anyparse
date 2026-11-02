@@ -31,8 +31,7 @@ using anyparse.macro.MetaInspect;
  * called from `WriterLowering.emitTriviaBlockStarDispatch` and
  * `WriterLowering.triviaBlockStarBuild`) and a short outbound list back
  * into the shared lowering utilities (`astPredCallT`,
- * `blankBefore2ExtrasExpr`, `blankAroundMultilineExprs`,
- * `caseSiblingWidthProbeExpr`, `triviaBalcEmitExpr`,
+ * `blankBefore2ExtrasExpr`, `blankAroundMultilineExprs`, `triviaBalcEmitExpr`,
  * `triviaUniformCollapseInitExpr`, plus the `_astPredsOnStatic` gate
  * mirror). Both directions run through `@:access` and every member here
  * stays private.
@@ -451,13 +450,30 @@ final class TriviaBlockLowering {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaBlockStarExpr(
-		fieldAccess: Expr, trailBBAccess: Null<Expr>, trailLCAccess: Null<Expr>, trailCloseAccess: Null<Expr>, trailOpenAccess: Null<Expr>,
-		elemFn: String, openText: String, closeText: String, afterFieldsWithDocComments: Bool = false, existingBetweenFields: Bool = false,
-		beforeDocCommentEmptyLines: Bool = false, ?interMemberInfo: WriterLowering.InterMemberClassifyInfo,
-		indentCaseLabelsGate: Bool = false, emptyCurlyBreak: Bool = false, beginEndType: Bool = false, keepCurlyBlanks: Bool = false,
-		lineCommentTrailBlank: Bool = false, blankBeforeFinalDocInLeading: Bool = false,
-		?staticVarSubdivInfo: WriterLowering.StaticVarSubdivisionInfo, betweenMultilineCommentsBlanks: Bool = false,
-		?uniformBetweenOptField: String, clearAnonFnBodyOnElems: Bool = false, ?emptyCurlyKnob: String, ?rightCurlyKnob: String,
+		fieldAccess: Expr,
+		trailBBAccess: Null<Expr>,
+		trailLCAccess: Null<Expr>,
+		trailCloseAccess: Null<Expr>,
+		trailOpenAccess: Null<Expr>,
+		elemFn: String,
+		openText: String,
+		closeText: String,
+		afterFieldsWithDocComments: Bool = false,
+		existingBetweenFields: Bool = false,
+		beforeDocCommentEmptyLines: Bool = false,
+		?interMemberInfo: WriterLowering.InterMemberClassifyInfo,
+		indentCaseLabelsGate: Bool = false,
+		emptyCurlyBreak: Bool = false,
+		beginEndType: Bool = false,
+		keepCurlyBlanks: Bool = false,
+		lineCommentTrailBlank: Bool = false,
+		blankBeforeFinalDocInLeading: Bool = false,
+		?staticVarSubdivInfo: WriterLowering.StaticVarSubdivisionInfo,
+		betweenMultilineCommentsBlanks: Bool = false,
+		?uniformBetweenOptField: String,
+		clearAnonFnBodyOnElems: Bool = false,
+		?emptyCurlyKnob: String,
+		?rightCurlyKnob: String,
 		?rightCurlyAnonFnKnob: String,
 		// ω-blockended-trivia (Session 3): when the Star carries
 		// `@:sep('text', tailRelax, blockEnded)`, the block-mode emit
@@ -496,35 +512,13 @@ final class TriviaBlockLowering {
 		// `beginEndType` Star (`WriterTriviaStarDispatch.beginEndKnobAccess`); null on
 		// every Star without the flag, whose count reads no knob.
 		?beginTypeAccess: Expr,
-		?endTypeAccess: Expr, uniformStmtBlanks: Bool = false,
+		?endTypeAccess: Expr,
+		uniformStmtBlanks: Bool = false,
 		// omega-condswitchopen-for-close: force an empty body to break its close
 		// onto its own line (the outer-block `}` of a `#if for { switch { #end`
 		// region). See `triviaBlockEmptyDocExpr`.
 		forceEmptyBreak: Bool = false,
-		// ω-case-sibling-symmetry: `@:fmt(caseSiblingSymmetry('<stmtKnob>',
-		// '<exprKnob>'))` on a case-list Star. The two names are the
-		// statement-/expression-position body policies whose `FitLine` value
-		// arms the coordination; null (every other block Star) ⇒ no pre-pass,
-		// no element-opt copy, byte-identical emit.
-		?caseSiblingSymmetryKnobs: Array<String>,
-		// ω-if-leader-case-symmetry: the `caseSiblingUnits_<ElemRule>` fn-ref
-		// that expands a `#if`-guarded case region into its inner case
-		// elements for the widest-sibling pre-pass. Null alongside a null
-		// `caseSiblingSymmetryKnobs` ⇒ no pre-pass at all; null WITH knobs is
-		// a macro-time error (an opted-in Star needs the flattener).
-		?caseSiblingUnitsFn: Expr,
-		// ω-case-sibling-symmetry widened: the
-		// `caseUnitStructuralBreak_<ElemRule>` fn-ref that answers whether ONE
-		// expanded unit is below its label for structural reasons. Same
-		// nullability contract as `caseSiblingUnitsFn` — null alongside null
-		// knobs, a macro-time error with knobs.
-		?caseSiblingStructuralFn: Expr,
-		// omega-case-body-controlflow-glue: the
-		// `caseUnitControlFlowBody_<ElemRule>` fn-ref that answers whether ONE
-		// expanded unit holds a single control-flow body statement. Same
-		// nullability contract as the two above — null alongside null knobs, a
-		// macro-time error with knobs.
-		?caseSiblingControlFlowFn: Expr,
+
 		// ω-blank-around-multiline-members: the `WriteOptions` Int knob naming
 		// the blank count, or null when the Star does not carry the flag — the
 		// three splice points then lower to `macro {}` and the generated loop is
@@ -540,11 +534,7 @@ final class TriviaBlockLowering {
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
-		final caseSym: Bool = caseSiblingSymmetryKnobs != null && caseSiblingSymmetryKnobs.length == 2;
-		final caseSiblingWidthExpr: Expr = caseSiblingWidthProbeExpr(
-			elemFn, caseSym ? caseSiblingSymmetryKnobs : null, caseSiblingUnitsFn, caseSiblingStructuralFn, caseSiblingControlFlowFn
-		);
-		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail, caseSym);
+		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail);
 		final emptyText: String = openText + closeText;
 		// ω-empty-curly-break / ω-anonfunction-empty-curly / ω-blockempty:
 		// empty-body Doc dispatch moved to `triviaBlockEmptyDocExpr`.
@@ -693,8 +683,8 @@ final class TriviaBlockLowering {
 			anyEmptyLinesFlag: anyEmptyLinesFlag,
 			uniformStmtBlanks: uniformStmtBlanks,
 			elemPushExpr: triviaBlockElemPushExpr(relocateTrailingComments),
-			caseSiblingWidthExpr: caseSiblingWidthExpr,
-			caseSiblingOfferDecl: caseSym ? caseSiblingOfferLocals() : macro {},
+
+
 			blankAroundMarkExpr: blankAround.markExpr,
 			blankAroundSeenExpr: blankAround.seenExpr,
 			blankAroundApplyExpr: blankAround.applyExpr,
@@ -712,9 +702,7 @@ final class TriviaBlockLowering {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	@:access(anyparse.macro.WriterOptFanout)
-	private static function triviaBlockElemCallExpr(
-		elemFn: String, clearAnonFnBodyOnElems: Bool, clearExprPositionNonTail: Bool, caseSiblingSymmetry: Bool = false
-	): Expr {
+	private static function triviaBlockElemCallExpr(elemFn: String, clearAnonFnBodyOnElems: Bool, clearExprPositionNonTail: Bool): Expr {
 		// ω-arrow-lambda-body-context: when the call site opts in via
 		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
 		// element write call passes `_clearAnonFnBody(opt)` so the flag is
@@ -722,13 +710,7 @@ final class TriviaBlockLowering {
 		// statements / nested BlockExpr inside the body) fall back to the
 		// default `blockLeftCurly` knob rather than re-triggering the
 		// anon-fn override.
-		final elemOptBase: Expr = clearAnonFnBodyOnElems ? macro _clearAnonFnBody(opt) : macro opt;
-		// ω-case-sibling-symmetry: stamp the switch's widest-sibling flat width
-		// (`_csW`, computed by the pre-pass in `triviaBlockMainExpr`) onto every
-		// element's opt. ALWAYS written, never inherited, so a nested switch
-		// overwrites the enclosing one's width instead of coordinating against
-		// it. Flag off ⇒ the identical Expr as before.
-		final elemOptExpr: Expr = caseSiblingSymmetry ? macro _setCaseSiblingWidth($elemOptBase, _csW, _csO) : elemOptBase;
+		final elemOptExpr: Expr = clearAnonFnBodyOnElems ? macro _clearAnonFnBody(opt) : macro opt;
 		// ω-value-yielded-if-tail-barrier (SI-2): the per-element opt arg. When
 		// `clearExprPositionNonTail` is set (BlockExpr / BlockStmt), every block
 		// statement EXCEPT the tail gets `_clearExprPosition` so a discarded
@@ -780,10 +762,7 @@ final class TriviaBlockLowering {
 		} else {
 			elemOptExpr;
 		};
-		final call: Expr = { expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]), pos: Context.currentPos() };
-		// The widest unit, written again for the emit, names its break afresh: tie that break to the offer every
-		// sibling carries.
-		return caseSiblingSymmetry ? macro anyparse.format.BodyFit.aliasSiblingBreak($call, _si == _csWK ? _csO : null) : call;
+		return { expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]), pos: Context.currentPos() };
 	}
 
 	/**
@@ -1261,15 +1240,11 @@ final class TriviaBlockLowering {
 		final closeText: String = c.closeText;
 		final emptyTrailExpr: Expr = c.emptyTrailExpr;
 		final emptyDocExpr: Expr = c.emptyDocExpr;
-		final caseSiblingWidthExpr: Expr = c.caseSiblingWidthExpr;
-		final caseSiblingOfferDecl: Expr = c.caseSiblingOfferDecl;
+
 		final elseBody: Expr = triviaBlockElseBody(c);
 		return macro {
 			final _arr = $fieldAccess;
-			// The pre-pass may leave the alternative number it offers here (`BodyFit.siblingBreakOffer`), with the
-			// index of the element whose break it waits for.
-			$caseSiblingOfferDecl;
-			final _csW: Int = $caseSiblingWidthExpr;
+
 			final _trailLC: Array<String> = $trailLC;
 			final _trailBB: Bool = $trailBB;
 			final _trailClose: Null<String> = $trailClose;
@@ -1315,15 +1290,6 @@ final class TriviaBlockLowering {
 	private static function triviaBlockEndNExpr(beginEndType: Bool, endAccess: Expr): Expr {
 		final stated: Expr = beginEndType ? endAccess : macro null;
 		return macro anyparse.format.MemberGap.bodyEdge($stated, opt.beforeRightCurly, _trailBB && _arr.length > 0);
-	}
-
-	/**
-	 * The `_csO` / `_csWK` locals a case-list Star's pre-pass leaves its sibling offer in, as ONE `EVars`: a spliced block
-	 * would scope them away from the element loop that reads them.
-	 */
-	private static function caseSiblingOfferLocals(): Expr {
-		return macro var _csO: Null<anyparse.format.SiblingBreakOffer> = null,
-			_csWK: Int = -1;
 	}
 
 }

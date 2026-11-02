@@ -99,7 +99,7 @@ bodyPolicyForCtor(…), bodyPolicyOverride(…), bodyPolicySingleLine(…), brac
 breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, captureAfterLead, captureChainNewline,
 captureCondOpenNewline, captureKwNewline, capturePostfixOpSpace, captureRhsTrail, captureSource(…),
 captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
-caseSiblingSymmetry(…), catchParensGap, catchParensInsideClose, catchParensInsideOpen, chainNestSuppress,
+catchParensGap, catchParensInsideClose, catchParensInsideOpen, chainNestSuppress,
 clearBracePolicy, clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, complexItems, condExprFitBreak,
 condExprFitGroup, conditionalBodyIndent, conditionalMarkerDedent, condParensInside(…),
 condSpliceCaseMarkerDedent, condSwitchOpenCasesNest, condWrap(…), condWrapEnd, constructFitBody,
@@ -150,8 +150,8 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | module | inventory flags it names |
 |---|---|
 | `WriterRefFieldLowering` | 46 |
-| `WriterTriviaStarDispatch` | 43 |
 | `WriterStarEmitLowering` | 43 |
+| `WriterTriviaStarDispatch` | 41 |
 | `WriterKwRefLowering` | 31 |
 | `WriterTriviaStarEmitLowering` | 28 |
 | `WriterPolicyLowering` | 20 |

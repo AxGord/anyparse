@@ -421,13 +421,6 @@
 			"note": "a `default` branch's sub-struct opening on a tight `:` lead stops stripping the keyword's trailing space, so a `default` label is written `default :`"
 		},
 		{
-			"name": "M-CASE-CTRLFLOW-STAR-FLAG-BLIND",
-			"type": "anyparse.macro.WriterTriviaStarDispatch",
-			"method": "ownStarHasFlag",
-			"force": "false",
-			"note": "no direct Star child reads as carrying its `@:fmt` flag, so `refuseGlueOnControlFlowRoot` never reaches the case-list pre-pass and a sibling case unit glues to its own label beside a control-flow body"
-		},
-		{
 			"name": "M-PROJECTED-KINDS-ALT-ONLY",
 			"type": "anyparse.macro.QueryWalkerLowering",
 			"method": "eachProjectedKind",

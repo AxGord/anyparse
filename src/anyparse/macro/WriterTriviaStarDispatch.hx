@@ -21,9 +21,7 @@ using anyparse.macro.MetaInspect;
  * chooses between them: `emitTriviaCloseStar` hands off to
  * `TriviaSepLowering` or, through `emitTriviaBlockStarDispatch`, to
  * `TriviaBlockLowering`. Everything else in the module is what those two
- * calls need ASSEMBLED first: the per-element `@:fmt` predicate function
- * expressions (`casePredFnExpr` and the three `caseSibling*` shapes), the
- * inter-member classifier, the static-var subdivision INFO and its
+ * calls need ASSEMBLED first: the inter-member classifier, the static-var subdivision INFO and its
  * validation, and the three `*StarHasFlag` readers.
  *
  * Split out of `WriterLowering` for size. One member there enters, through
@@ -50,36 +48,6 @@ final class WriterTriviaStarDispatch {
 
 	/** `@:fmt(beginEndType(...))` argument count naming a knob pair, a context flag and the pair the flag switches to. */
 	private static inline final KNOB_PAIR_SWITCHED: Int = 5;
-
-	/**
-	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
-	 * region is ONE Star element whose Doc carries directive hardlines (flat
-	 * width `-1`), so without this predicate the region could only FOLLOW a
-	 * sibling's break, never LEAD one; it expands the region into its inner
-	 * case elements, and both channels of the pre-pass then judge each one on
-	 * its own.
-	 */
-	private static inline function caseSiblingUnitsFnExpr(
-		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
-	): Null<Expr> {
-		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseSiblingUnits');
-	}
-
-	/**
-	 * ω-case-sibling-symmetry widened: the STRUCTURAL verdict, answering what
-	 * the flat-width measurement cannot — whether a unit sits below its label
-	 * for reasons of SHAPE (a multi-statement body, a single statement the
-	 * flat-refusal gate rejects, or a label-splice region, whose shared body
-	 * always renders below the labels it was split from). One `true` in the
-	 * expanded unit list decides the whole switch, so the pre-pass short-
-	 * circuits to `BodyFit.SIBLING_FORCE_BREAK` and never runs the measuring
-	 * loop at all.
-	 */
-	private static inline function caseSiblingStructuralFnExpr(
-		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
-	): Null<Expr> {
-		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
-	}
 
 	/**
 	 * Trivia close-peek (`@:trail`) Star dispatch (the `if (closeText != null)`
@@ -386,10 +354,7 @@ final class WriterTriviaStarDispatch {
 		// block Star (the flag is unique to that one field).
 		final condSwitchOpenCasesNest: Bool = starNode.fmtHasFlag('condSwitchOpenCasesNest');
 		final emptyBlockBreak: Bool = starNode.fmtHasFlag('emptyBlockBreak');
-		final caseSymArgs: Null<Array<String>> = starNode.fmtReadStringArgs('caseSiblingSymmetry');
-		final caseSiblingUnitsFn: Null<Expr> = caseSiblingUnitsFnExpr(tc, caseSymArgs, elemRefName);
-		final caseSiblingStructuralFn: Null<Expr> = caseSiblingStructuralFnExpr(tc, caseSymArgs, elemRefName);
-		final caseSiblingControlFlowFn: Null<Expr> = caseSiblingControlFlowFnExpr(tc, caseSymArgs, elemRefName);
+
 		final blockStar: Expr = TriviaBlockLowering.triviaBlockStarExpr(
 			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText,
 			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
@@ -397,8 +362,7 @@ final class WriterTriviaStarDispatch {
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
 			blockEndedFlag ? tc.formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeAccess,
-			endTypeAccess, uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn,
-			caseSiblingControlFlowFn, blankAroundOptField, starNode.fmtHasFlag('relocateTrailingComments'),
+			endTypeAccess, uniformStmtBlanks, emptyBlockBreak, blankAroundOptField, starNode.fmtHasFlag('relocateTrailingComments'),
 			starNode.fmtReadStringArgs('glueToPrevious')
 		);
 		final blockStarNested: Expr = macro {
@@ -775,90 +739,6 @@ final class WriterTriviaStarDispatch {
 				'WriterLowering: @:fmt(staticVarSubdivision) static ctor "$staticCtor" not found on enum $modifierEnumName',
 				Context.currentPos()
 			);
-	}
-
-	/**
-	 * The `<namePrefix>_<ElemRule>` fn-ref a block Star's case-symmetry
-	 * pre-pass consumes, or null when the Star does not opt into
-	 * `caseSiblingSymmetry` (⇒ `caseSiblingWidthProbeExpr` yields `macro -1`
-	 * and no pre-pass runs) or the format generates no AST predicates (⇒ that
-	 * builder fatal-errors: the flattener and the structural verdict are
-	 * mandatory for an opted-in Star, the same loud failure every other
-	 * predicate-only `@:fmt` feature gives - carrying a second,
-	 * never-exercised copy of the pre-pass is exactly the drift those features
-	 * refuse). The control-flow verdict is the one OPTIONAL member of the
-	 * family: it is gated on a second meta and its absence drops an arm rather
-	 * than failing (see `caseSiblingControlFlowFnExpr`).
-	 *
-	 * Resolved from the Star's ELEMENT rule — the same seam as
-	 * `tryparseElemCondFn`, though the grammar generates all of these for
-	 * `HxSwitchCase` alone, so a `caseSiblingSymmetry` Star over any other
-	 * element rule fails at macro time with an unresolved field. Split out of
-	 * `emitTriviaBlockStarDispatch` to keep that helper under the complexity
-	 * gate.
-	 */
-	private static function casePredFnExpr(
-		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String, namePrefix: String
-	): Null<Expr> {
-		return !tc.formatInfo.astPreds || caseSymArgs == null || caseSymArgs.length != 2
-			? null
-			: AstPredLowering.predFnExpr(tc.shape.root, true, false, '${namePrefix}_${simpleName(elemRefName)}');
-	}
-
-	/**
-	 * omega-case-body-controlflow-glue: the CONTROL-FLOW verdict — whether a
-	 * unit holds exactly one body statement and that statement is keyword-led
-	 * control flow. Paired with the pre-pass's own `flatLength == -1`
-	 * measurement, since the statement KIND alone cannot tell an inline-able
-	 * `case X: if (c) x();` from a refused `case X: if (c) { x(); }`.
-	 */
-	private static function caseSiblingControlFlowFnExpr(
-		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
-	): Null<Expr> {
-		return elemBodyStarHasFlag(tc, elemRefName, 'refuseGlueOnControlFlowRoot')
-			? casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitControlFlowBody')
-			: null;
-	}
-
-	/**
-	 * True iff the case-list Star's ELEMENT rule reaches a body Star carrying
-	 * `@:fmt(<flag>)` - the macro-time link that keeps the two halves of the
-	 * glue refusal gated by ONE meta.
-	 *
-	 * The refusal itself is read off `HxCaseBranch.body` /
-	 * `HxDefaultBranch.stmts` inside the body Star's own emit; the sibling
-	 * FORCE that must accompany it is emitted in the case-LIST Star's pre-pass,
-	 * a different rule with a different meta. Left ungated, a grammar opting
-	 * into `caseSiblingSymmetry` without the body flag would spread every
-	 * sibling for a body that then GLUED to its label - the exact contradiction
-	 * the symmetry rule exists to prevent.
-	 *
-	 * The walk is bounded to ONE rule hop on purpose: the element rule's own
-	 * Star fields, plus those of the rules its direct `Ref` children name (for
-	 * an `Alt` element rule that is each ctor's payload - `CaseBranch` ->
-	 * `HxCaseBranch`). Following refs transitively would answer "does the flag
-	 * exist ANYWHERE in the grammar", which is true as soon as it is declared
-	 * once and would gate nothing.
-	 */
-	private static function elemBodyStarHasFlag(tc: TriviaStarDispatchCtx, elemRefName: String, flag: String): Bool {
-		final elem: Null<ShapeNode> = tc.shape.rules[elemRefName];
-		return elem != null && (ownStarHasFlag(elem, flag) || elem.children.exists(branch -> refStarHasFlag(tc, branch, flag)));
-	}
-
-	/** Any direct `Star` child of `node` carrying `@:fmt(<flag>)`. */
-	private static function ownStarHasFlag(node: ShapeNode, flag: String): Bool {
-		return node.children.exists(c -> c.kind == Star && c.fmtHasFlag(flag));
-	}
-
-	/** `ownStarHasFlag` on the rules named by `node`'s own direct `Ref` children (one hop, no recursion). */
-	private static function refStarHasFlag(tc: TriviaStarDispatchCtx, node: ShapeNode, flag: String): Bool {
-		for (child in node.children) {
-			final ref: Null<String> = child.annotations.get(AnnotationKeys.BASE_REF);
-			if (ref == null) continue;
-			final target: Null<ShapeNode> = tc.shape.rules[ref];
-			if (target != null && ownStarHasFlag(target, flag)) return true;
-		}
-		return false;
 	}
 
 	/**

@@ -32,19 +32,12 @@ package anyparse.grammar.haxe;
  * `cases` reuses `HxSwitchStmt.cases`'s `@:fmt(indentCaseLabels, rightCurly)` and adds
  * `nestBody` because the switch sits one block deeper than the statement position; `body`
  * mirrors `HxCondSpliceBlockOpen.body`'s `@:fmt(nestBody, rightCurly)` + `@:sep` block-Star
- * contract. `cases` also reuses `@:fmt(caseSiblingSymmetry('caseBody', 'expressionCase'))`
- * (omega-if-leader-case-symmetry): this shared case list IS the whole switch — a ROOT case
- * list, not a region nested inside one — so nothing above it runs a widest-sibling pre-pass
- * whose verdict it could inherit, and without the opt-in one over-wide body dropped below
- * its label while its inline siblings stayed put. The opposite of `HxConditionalCase.body` /
- * `elseBody` and `HxElseifCase.body`, which sit INSIDE an opted-in switch and must not run
- * their OWN pre-pass over the enclosing switch's verdict.
+ * contract.
  */
 @:peg
 typedef HxCondSpliceSwitchOpen = {
 	var raw: HxCondSwitchOpenRaw;
-	@:trail('}') @:trivia @:fmt(nestBody, indentCaseLabels, rightCurly, condSwitchOpenCasesNest,
-		caseSiblingSymmetry('caseBody', 'expressionCase')) var cases: Array<HxSwitchCase>;
+	@:trail('}') @:trivia @:fmt(nestBody, indentCaseLabels, rightCurly, condSwitchOpenCasesNest) var cases: Array<HxSwitchCase>;
 	@:trail('}') @:trivia @:fmt(nestBody, rightCurly, emptyBlockBreak) @:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
 }

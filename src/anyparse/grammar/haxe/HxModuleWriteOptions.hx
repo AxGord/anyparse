@@ -11,7 +11,6 @@ import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
-import anyparse.format.SiblingBreakOffer;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
@@ -705,38 +704,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * statement-position `case X:` breaks per `caseBody`.
 	 */
 	_inExprPosition: Bool,
-	// ω-case-sibling-symmetry — ONE placement number for a whole switch's
-	// case bodies, written once per switch by the cases Star's
-	// `@:fmt(caseSiblingSymmetry(...))` pre-pass and handed to every sibling
-	// body. `BodyFit.fitLineLayout` turns it into an `IfIndentWidthExceeds`
-	// probe, so all siblings of one switch reach ONE placement verdict: if
-	// the number does not fit, every body drops to the next line, including
-	// the ones that would fit and the glued ones. THREE values, not two:
-	//  - a plain `>= 0` — the WIDTH channel: the widest sibling case
-	//    clause's FLAT width (`case <patterns>: <body>`, separator
-	//    included);
-	//  - `BodyFit.SIBLING_FORCE_BREAK` — the STRUCTURAL channel. Not a
-	//    measurement but a verdict, reached because some unit of the switch
-	//    renders below its own label at every budget (a multi-statement
-	//    body, a flat-refused one, a label-splice region); it is spelled as
-	//    an ordinary large width precisely so nothing downstream needs an
-	//    arm for it;
-	//  - `BodyFit.SIBLING_NONE` (`-1`, the default, and what the pre-pass
-	//    records when no sibling could render inline at all) — "no
-	//    coordination": every body decides for itself, exactly as before
-	//    the slice.
-	// `BodyFit.SIBLING_PROBING` (`-2`) also lands here, but only in
-	// transit: the pre-pass stamps it for the duration of its own
-	// measurement so a nested Star returns its subtree unchanged instead of
-	// running a second pre-pass (ω-case-sym-linear). Always written by the
-	// pre-pass, never inherited, so a nested switch coordinates its own
-	// cases rather than the enclosing switch's.
-	_caseSiblingFlatWidth: Int,
-	// The pre-pass's alternative number for the same switch: the width it reads once the one named break inside the
-	// widest unit is committed (`BodyFit.siblingBreakOffer`), offered beside `_caseSiblingFlatWidth` so the measure render
-	// picks the one the next rewrite will read. Null when no break can change the verdict; written with the width, never
-	// inherited.
-	_caseSiblingOffer: Null<SiblingBreakOffer>,
+
 	// ω-expressionif-collapse — narrow companion to `_inExprPosition`, set
 	// ONLY on the immediate value of a value-yielded `if`/`else` branch
 	// (`HxIfExpr.thenBranch` / `elseBranch` carrying

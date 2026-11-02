@@ -2316,18 +2316,6 @@ typedef BlockStarCtx = {
 	 */
 	final elemPushExpr: Expr;
 
-	/**
-	 * ω-case-sibling-symmetry: `final _csW: Int = …;` widest-sibling
-	 * pre-pass, or `macro -1` when the Star has no `caseSiblingSymmetry` meta.
-	 */
-	final caseSiblingWidthExpr: Expr;
-
-	/**
-	 * The `_csO` / `_csWK` locals the case-sibling pre-pass leaves its offer in (`BodyFit.siblingBreakOffer`), or
-	 * `macro {}` when the Star has no `caseSiblingSymmetry` meta.
-	 */
-	final caseSiblingOfferDecl: Expr;
-
 	/** ω-blank-around-multiline-members: records where this gap's blank would go; `macro {}` without the flag. */
 	final blankAroundMarkExpr: Expr;
 

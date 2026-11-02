@@ -209,6 +209,14 @@
 			"note": "the glued body is emitted with no width test at all, so a header whose glued first line overflows never falls back to the break layout"
 		},
 		{
+			"name": "M-CASE-CTRLFLOW-GLUE-NOT-REFUSED",
+			"type": "anyparse.format.BodyFit",
+			"method": "fitLineLayout",
+			"find": "\tif (refuseGlue) return breakLayout(cols, body);",
+			"replace": "",
+			"note": "a control-flow body that cannot render flat glues to its label again, so its continuation lines render at the head's indent and read as if the statement had left the branch"
+		},
+		{
 			"name": "M-SSB-CHAIN-THEN-TRAILSEMI-OFF",
 			"type": "anyparse.format.SingleStmtBraces",
 			"method": "chainForcesBraces",
@@ -302,14 +310,6 @@
 			"find": "Doc.Group(Doc.IfWidthExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
 			"replace": "Doc.Group(Doc.IfLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
 			"note": "the Allman break of a lineLength-rule literal is not offered to its one-item list, which stays laddered where the next write cuddles"
-		},
-		{
-			"name": "M-SIBLING-OFFER-UNALIASED",
-			"type": "anyparse.format.BodyFit",
-			"method": "aliasSiblingBreak",
-			"find": "return walk(elem);",
-			"replace": "return elem;",
-			"note": "the emitted widest case unit no longer ties its named break to the sibling offer, so the measure render never takes the offer and the switch spreads on the flat width the next write no longer reads"
 		},
 		{
 			"name": "M-BODY-EDGE-STATED-IGNORED",
