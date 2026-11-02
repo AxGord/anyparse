@@ -719,7 +719,7 @@ final class WriterKwRefLowering {
 			|| subStructStartsWithBareBodyBreaks(kw, refName)
 			|| subStructStartsWithTightLead(kw, refName)
 			|| branch.fmtHasFlag('tightKw')
-			|| (leadText != null && !leadIsWord && !branch.fmtHasFlag('spaceBeforeLead'));
+			|| (leadText != null && !leadIsWord && (!branch.fmtHasFlag('spaceBeforeLead') || leadHasPolicy(branch)));
 		// ω-if-policy / ω-control-flow-policies / ω-try-policy /
 		// ω-anon-fn-paren-policy: a branch with a `@:fmt(<flag>)` whose
 		// runtime value is `WhitespacePolicy` opts into a runtime-switched
@@ -802,15 +802,7 @@ final class WriterKwRefLowering {
 				}
 			}
 		}
-		if (leadText != null) {
-			// ω-kw-word-lead-spacing: word-keyword lead also gets
-			// a trailing space so it doesn't fuse with the body's first
-			// token. `@:fmt(spaceAfterLead)` adds a trailing
-			// space to a symbol lead (`> Foo` structure-extension).
-			final spaceAfterLead: Bool = branch.fmtHasFlag('spaceAfterLead');
-			final leadEmit: String = leadIsWord || spaceAfterLead ? '$leadText ' : leadText;
-			parts.push(macro _dt($v{leadEmit}));
-		}
+		if (leadText != null) parts.push(kwRefLeadDoc(branch, leadText, leadIsWord));
 		parts.push(bodyExpr);
 		if (trailText != null) {
 			// ω-trailopt-source-track: in trivia mode the parser captures
@@ -1113,6 +1105,27 @@ final class WriterKwRefLowering {
 		// false → the unconditional `_dt(trail)` branch, same as before.
 		final gateCall: Expr = AstPredLowering.predCallExpr(kw.shape.root, kw.ctx.trivia, false, predName, [pathExpr]);
 		return macro ($gateCall ? _de() : _dt($v{trailText}));
+	}
+
+	/**
+	 * True when a ctor-level symbol `@:lead` is tagged with a `WhitespacePolicy` option: the
+	 * option then spaces the lead and the keyword's own trailing space is stripped.
+	 */
+	private static function leadHasPolicy(branch: ShapeNode): Bool {
+		return firstFmtFlag(branch, LEAD_POLICY_FLAGS) != null;
+	}
+
+	/**
+	 * The Doc of a kw-Ref branch's ctor-level `@:lead`. A symbol lead tagged with a whitespace
+	 * policy follows that option, and `spaceBeforeLead` pins its before-space (`add(Before)`), so
+	 * `macro : T` follows `typeHintColon` only after the colon. A word lead keeps a trailing
+	 * space so it does not fuse with the body; `@:fmt(spaceAfterLead)` adds one to a symbol lead.
+	 */
+	private static function kwRefLeadDoc(branch: ShapeNode, leadText: String, leadIsWord: Bool): Expr {
+		if (!leadIsWord && leadHasPolicy(branch))
+			return whitespacePolicyLead(branch, leadText, LEAD_POLICY_FLAGS, branch.fmtHasFlag('spaceBeforeLead'));
+		final leadEmit: String = leadIsWord || branch.fmtHasFlag('spaceAfterLead') ? '$leadText ' : leadText;
+		return macro _dt($v{leadEmit});
 	}
 
 }

@@ -582,10 +582,10 @@ class Lowering {
 		// that would have matched.
 		final statements: Array<Expr> = [];
 		if (dispatch) {
-			statements.push(finalLocal(GUARD_SAVED_LOCAL, macro :Int, macro ctx.pos));
+			statements.push(finalLocal(GUARD_SAVED_LOCAL, macro : Int, macro ctx.pos));
 			statements.push(macro skipWs(ctx));
-			if (needByte) statements.push(finalLocal(GUARD_BYTE_LOCAL, macro :Int, macro ctx.input.charCodeAt(ctx.pos)));
-			if (needWord) statements.push(finalLocal(GUARD_WORD_LOCAL, macro :String, macro peekWord(ctx)));
+			if (needByte) statements.push(finalLocal(GUARD_BYTE_LOCAL, macro : Int, macro ctx.input.charCodeAt(ctx.pos)));
+			if (needWord) statements.push(finalLocal(GUARD_WORD_LOCAL, macro : String, macro peekWord(ctx)));
 			statements.push(macro ctx.pos = $i{GUARD_SAVED_LOCAL});
 		}
 		for (i in 0...branches.length) {

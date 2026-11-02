@@ -82,7 +82,7 @@ final class WriterOptFanout {
 	 * has not been audited for its chain root stays on the old behaviour.
 	 */
 	private static inline function chainBaseArg(optionsCT: ComplexType): FunctionArg {
-		return { name: '_b', type: macro :Null<$optionsCT>, value: macro null };
+		return { name: '_b', type: macro : Null<$optionsCT>, value: macro null };
 	}
 
 	/**
@@ -309,8 +309,8 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'w', type: macro :Int },
-					{ name: 'offer', type: macro :Null<anyparse.format.SiblingBreakOffer> },
+					{ name: 'w', type: macro : Int },
+					{ name: 'offer', type: macro : Null<anyparse.format.SiblingBreakOffer> },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -862,7 +862,7 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro :Bool },
+					{ name: 'v', type: macro : Bool },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -892,7 +892,7 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro :Bool },
+					{ name: 'v', type: macro : Bool },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -924,7 +924,7 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro :Bool },
+					{ name: 'v', type: macro : Bool },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -1037,7 +1037,7 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro :Bool },
+					{ name: 'v', type: macro : Bool },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -1094,7 +1094,7 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro :Bool },
+					{ name: 'v', type: macro : Bool },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -1146,7 +1146,7 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro :Bool },
+					{ name: 'v', type: macro : Bool },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -1275,7 +1275,7 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'mode', type: macro :Null<anyparse.format.wrap.WrapMode> },
+					{ name: 'mode', type: macro : Null<anyparse.format.wrap.WrapMode> },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -1600,7 +1600,7 @@ final class WriterOptFanout {
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro :Bool },
+					{ name: 'v', type: macro : Bool },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
@@ -1627,10 +1627,10 @@ final class WriterOptFanout {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'r', type: macro :anyparse.format.wrap.WrapRules },
-					{ name: 'mode', type: macro :anyparse.format.wrap.WrapMode }
+					{ name: 'r', type: macro : anyparse.format.wrap.WrapRules },
+					{ name: 'mode', type: macro : anyparse.format.wrap.WrapMode }
 				],
-				ret: macro :anyparse.format.wrap.WrapRules,
+				ret: macro : anyparse.format.wrap.WrapRules,
 				expr: macro {
 					final _rules: Array<anyparse.format.wrap.WrapRule> = [];
 					for (_r in r.rules) {

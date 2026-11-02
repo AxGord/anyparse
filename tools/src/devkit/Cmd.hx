@@ -61,7 +61,7 @@ final class Cmd {
 	private static function isArray(value: Expr): Bool {
 		return switch Context.followWithAbstracts(Context.typeof(value)) {
 			case TInst(_.get() => { pack: [], name: 'Array' }, _): Context.unify(
-				Context.typeof(value), Context.resolveType(macro :Array<String>, value.pos)
+				Context.typeof(value), Context.resolveType(macro : Array<String>, value.pos)
 			);
 			case _: false;
 		};

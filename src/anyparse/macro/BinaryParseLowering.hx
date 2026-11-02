@@ -93,7 +93,7 @@ final class BinaryParseLowering {
 			expr: EVars([
 				{
 					name: localName,
-					type: macro :String,
+					type: macro : String,
 					expr: macro {
 						final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{len}));
 						ctx.pos += $v{len};
@@ -117,7 +117,7 @@ final class BinaryParseLowering {
 			expr: EVars([
 				{
 					name: localName,
-					type: macro :haxe.io.Bytes,
+					type: macro : haxe.io.Bytes,
 					expr: macro {
 						final _len: Int = {
 							final _s: String = StringTools.rtrim($localRef);
@@ -149,7 +149,7 @@ final class BinaryParseLowering {
 			expr: EVars([
 				{
 					name: localName,
-					type: macro :Int,
+					type: macro : Int,
 					expr: macro {
 						final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{width}));
 						ctx.pos += $v{width};
@@ -172,7 +172,7 @@ final class BinaryParseLowering {
 			expr: EVars([
 				{
 					name: localName,
-					type: macro :haxe.io.Bytes,
+					type: macro : haxe.io.Bytes,
 					expr: macro {
 						final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + $lenRef);
 						ctx.pos += $lenRef;

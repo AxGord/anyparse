@@ -33,6 +33,24 @@ using anyparse.macro.MetaInspect;
 final class WriterPolicyLowering {
 
 	/**
+	 * The `WhitespacePolicy` options a `@:lead` literal can be spaced by, in the order
+	 * `whitespacePolicyLead` resolves several tags on one site: a struct field's mandatory
+	 * lead and an enum branch's ctor-level lead read the same vocabulary.
+	 */
+	private static final LEAD_POLICY_FLAGS: Array<String> = [
+		'objectFieldColon',
+		'typeHintColon',
+		'typeCheckColon',
+		'typedefAssign',
+		'typedefIntersection',
+		'functionTypeHaxe4',
+		'arrowFunctions',
+		'catchParensInsideOpen',
+		'switchCondParensInsideOpen',
+		'whileCondParensInsideOpen'
+	];
+
+	/**
 	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
 	 * `prevPadTrailing` runtime drop. When the immediately preceding
 	 * field fired `@:fmt(padTrailing)`, drop THIS sep at runtime so
@@ -542,7 +560,9 @@ final class WriterPolicyLowering {
 	 * the ψ₆ principle (one meta = one options field); multiple tags on
 	 * one field are resolved by `flagNames` order.
 	 */
-	private static function whitespacePolicyLead(child: ShapeNode, leadText: String, flagNames: Array<String>): Expr {
+	private static function whitespacePolicyLead(
+		child: ShapeNode, leadText: String, flagNames: Array<String>, addBefore: Bool = false
+	): Expr {
 		final flagName: Null<String> = firstFmtFlag(child, flagNames);
 		// Opt-in `@:fmt(spaceAfterLead)` on a struct-
 		// field mandatory `@:lead(LIT)` appends an OptSpace after the
@@ -559,8 +579,16 @@ final class WriterPolicyLowering {
 		// on the nested object literal renders as `Address:\n{…}`. The
 		// leading space (Before / Both case) stays a plain `_dt(' ')`
 		// because nothing emits a hardline before the lead.
-		return if (flagName != null)
-			buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
+		// `addBefore` pins the space before the lead whatever the option says (the policy's
+		// `add(Before)`), so the option decides only the space after it.
+		final policy: Null<Expr> = if (flagName == null)
+			null
+		else if (addBefore)
+			macro ${optFieldAccess(flagName)}.add(anyparse.format.WhitespacePolicy.Before)
+		else
+			optFieldAccess(flagName);
+		return if (policy != null)
+			buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], policy, [
 				{ values: ['Before'], expr: macro _dc([_dt(' '), _dt($v{leadText})]) },
 				{ values: ['After'], expr: macro _dc([_dt($v{leadText}), _dop(' ')]) },
 				{ values: ['Both'], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]) }

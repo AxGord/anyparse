@@ -67,18 +67,7 @@ final class WriterRefLeadLowering {
 				])
 				: $gluedLead;
 		} else {
-			whitespacePolicyLead(child, leadText, [
-				'objectFieldColon',
-				'typeHintColon',
-				'typeCheckColon',
-				'typedefAssign',
-				'typedefIntersection',
-				'functionTypeHaxe4',
-				'arrowFunctions',
-				'catchParensInsideOpen',
-				'switchCondParensInsideOpen',
-				'whileCondParensInsideOpen'
-			]);
+			whitespacePolicyLead(child, leadText, LEAD_POLICY_FLAGS);
 		};
 		// ω-switch-subject-parens: drop the switch-subject open `(` when the knob
 		// is on and the subject is not a leading-brace expr (object literal / block

@@ -351,7 +351,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'endsWithCloseBrace',
 			[valueArg('e', HX_EXPR)],
-			macro :Bool, body, 'True iff the expression\'s surface form ends with `}` for the var/final-rhs `;` gate (recursive).'
+			macro : Bool, body, 'True iff the expression\'s surface form ends with `}` for the var/final-rhs `;` gate (recursive).'
 		);
 	}
 
@@ -380,7 +380,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'varDeclTailEndsWithCloseBrace',
 			[valueArg('d', HX_VAR_DECL)],
-			macro :Bool, body, 'True iff the LAST binding of a (possibly multi-variable) declaration ends with `}`.'
+			macro : Bool, body, 'True iff the LAST binding of a (possibly multi-variable) declaration ends with `}`.'
 		);
 	}
 
@@ -400,7 +400,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'operandIsBlockExpr',
 			[valueArg('e', HX_EXPR)],
-			macro :Bool, body, 'True iff a `macro <operand>` reification operand is a `{ … }` block.'
+			macro : Bool, body, 'True iff a `macro <operand>` reification operand is a `{ … }` block.'
 		);
 	}
 
@@ -430,7 +430,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'tailStmtReadsExprPosition',
 			[valueArg('s', HX_STATEMENT)],
-			macro :Bool, body, 'True iff a body-tail statement is a no-else `if` (drops the inherited expression-position frame).'
+			macro : Bool, body, 'True iff a body-tail statement is a no-else `if` (drops the inherited expression-position frame).'
 		);
 	}
 
@@ -460,7 +460,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'elementIsConditional_${simpleName(rule)}',
 			[valueArg(argName, rule)],
-			macro :Bool, body, 'True iff a cond-comp body Star element is itself a nested `Conditional`.'
+			macro : Bool, body, 'True iff a cond-comp body Star element is itself a nested `Conditional`.'
 		);
 	}
 
@@ -477,13 +477,13 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'elementIsConditional_HxTopLevelDecl',
 			[valueArg('d', HX_TOP_LEVEL_DECL)],
-			macro :Bool, body, 'True iff a cond-comp body Star decl element wraps a nested `Conditional` in its `.decl`.'
+			macro : Bool, body, 'True iff a cond-comp body Star decl element wraps a nested `Conditional` in its `.decl`.'
 		);
 	}
 
 	/** Constant-false member of the `elementIsConditional_*` family — see `doc` for why the shape can never match. */
 	private function elementIsConditionalFalseField(rule: String, argName: String, doc: String): Field {
-		return predField('elementIsConditional_${simpleName(rule)}', [valueArg(argName, rule)], macro :Bool, macro false, doc);
+		return predField('elementIsConditional_${simpleName(rule)}', [valueArg(argName, rule)], macro : Bool, macro false, doc);
 	}
 
 	/**
@@ -509,7 +509,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'stmtExprNoSemi',
 			[valueArg('e', HX_EXPR)],
-			macro :Bool, body, 'True iff the expression at the top of an `ExprStmt` needs no trailing `;` (see `_stmtExprNoSemiAt`).'
+			macro : Bool, body, 'True iff the expression at the top of an `ExprStmt` needs no trailing `;` (see `_stmtExprNoSemiAt`).'
 		);
 	}
 
@@ -622,8 +622,8 @@ final class HxAstPredLowering extends AstPredLowering {
 		], macro endsWithCloseBrace(e));
 		return predField(
 			'_stmtExprNoSemiAt',
-			[valueArg('e', HX_EXPR), { name: 'nested', type: macro :Bool }],
-			macro :Bool, body,
+			[valueArg('e', HX_EXPR), { name: 'nested', type: macro : Bool }],
+			macro : Bool, body,
 			'Worker for `stmtExprNoSemi` — `nested` marks an operand descent (inner `@:trailOpt` already claimed the `;`).'
 		);
 	}
@@ -644,7 +644,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'_binopRhsNoSemi',
 			[valueArg('r', HX_EXPR)],
-			macro :Bool, body, 'Right-operand walk for the binop arms of `_stmtExprNoSemiAt`, with the assign-RHS literal carve-out.'
+			macro : Bool, body, 'Right-operand walk for the binop arms of `_stmtExprNoSemiAt`, with the assign-RHS literal carve-out.'
 		);
 	}
 
@@ -690,8 +690,8 @@ final class HxAstPredLowering extends AstPredLowering {
 			$verdict;
 		};
 		return predField(
-			'_condSpliceTailElseLed', [{ name: 'raw', type: macro :String }],
-			macro :Bool, body, 'True iff a token-splice fragment is an `else`-led if-chain continuation (paren-depth-aware atom skip).'
+			'_condSpliceTailElseLed', [{ name: 'raw', type: macro : String }],
+			macro : Bool, body, 'True iff a token-splice fragment is an `else`-led if-chain continuation (paren-depth-aware atom skip).'
 		);
 	}
 
@@ -765,7 +765,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'stmtNoSemi',
 			[valueArg('s', HX_STATEMENT)],
-			macro :Bool, body, 'True iff a prior BlockBody statement needs no `;` before the next one.'
+			macro : Bool, body, 'True iff a prior BlockBody statement needs no `;` before the next one.'
 		);
 	}
 
@@ -832,7 +832,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			name,
 			[valueArg('p', HX_COND_DECL)],
-			macro :Null<{ ctorName: String, path: String }>, body,
+			macro : Null<{ ctorName: String, path: String }>, body,
 			'${tail ? 'Tail' : 'Head'}-leaf classification of a module-level conditional for the between/after cascades.'
 		);
 	}
@@ -859,7 +859,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			name,
 			[bareArg('e', HX_TOP_LEVEL_DECL)],
-			macro :Null<{ ctorName: String, path: String }>, body,
+			macro : Null<{ ctorName: String, path: String }>, body,
 			'Import/using leaf classification of one conditional body element (null = opaque).'
 		);
 	}
@@ -883,7 +883,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'_classifyKeepsBlankLeaf',
 			[bareArg('e', HX_TOP_LEVEL_DECL)],
-			macro :Null<{ ctorName: String, path: String }>, body,
+			macro : Null<{ ctorName: String, path: String }>, body,
 			'Keep-blank leaf classification of one conditional body element (non-null = fork keeps a blank).'
 		);
 	}
@@ -969,7 +969,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'arrayBracketKind',
 			[valueArg('e', HX_EXPR)],
-			macro :Int, body,
+			macro : Int, body,
 			'Bracket kind of an array-`[…]` ctor by its first element, through wrappers: 1 map, 2 comprehension, 0 array.'
 		);
 	}
@@ -1013,8 +1013,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function complexItemKindsField(): Field {
 		return predField(
-			'complexItemKinds', [{ name: 'elements', type: macro :Array<Any> }],
-			macro :Array<Int>, macro anyparse.grammar.haxe.HxComplexItems.kinds(elements),
+			'complexItemKinds', [{ name: 'elements', type: macro : Array<Any> }],
+			macro : Array<Int>, macro anyparse.grammar.haxe.HxComplexItems.kinds(elements),
 			'One complexity code per element of a delimited list, for `WrapList`\'s `complexItemKinds` axis.'
 		);
 	}
@@ -1038,7 +1038,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'ternaryBranchHoldsMultilineBlock',
 			[valueArg('e', HX_EXPR)],
-			macro :Bool, macro anyparse.grammar.haxe.HxTernaryBranchBlocks.holdsMultilineBlock(e, $v{leftOperandCtors}),
+			macro : Bool, macro anyparse.grammar.haxe.HxTernaryBranchBlocks.holdsMultilineBlock(e, $v{leftOperandCtors}),
 			'True iff a ternary operand holds a multi-line block outside the brace or bracket group it opens with.'
 		);
 	}
@@ -1054,7 +1054,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			name,
 			[valueArg('b', rule)],
-			macro :Bool, nullSwitch(ident('b'), macro true, cases, macro false),
+			macro : Bool, nullSwitch(ident('b'), macro true, cases, macro false),
 			'True iff a function body is absent, `;`, or a `{}` holding no statement and no comment.'
 		);
 	}
@@ -1087,7 +1087,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'anonMemberNoSep',
 			[valueArg('m', HX_ANON_MEMBER)],
-			macro :Bool, body, 'True iff an anon-type member needs no `,` before the next one.'
+			macro : Bool, body, 'True iff an anon-type member needs no `,` before the next one.'
 		);
 	}
 
@@ -1102,7 +1102,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'_anonVarBodyEndsWithBrace',
 			[valueArg('b', HX_ANON_VAR_BODY)],
-			macro :Bool, body, 'True iff a class-notation anon field ends with `}`.'
+			macro : Bool, body, 'True iff a class-notation anon field ends with `}`.'
 		);
 	}
 
@@ -1118,7 +1118,7 @@ final class HxAstPredLowering extends AstPredLowering {
 
 			caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))
 		], macro false);
-		return predField(TYPE_ENDS_WITH_BRACE, [valueArg('t', HX_TYPE)], macro :Bool, body, 'True iff a type expression ends with `}`.');
+		return predField(TYPE_ENDS_WITH_BRACE, [valueArg('t', HX_TYPE)], macro : Bool, body, 'True iff a type expression ends with `}`.');
 	}
 
 }

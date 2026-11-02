@@ -140,8 +140,8 @@ final class WriterCascadeLowering {
 	 */
 	private static function emitAfterCompute(acc: CascadeAccum, afterInfos: Array<AfterCtorBlankInfo>, pos: Position): Void {
 		for (i => info in afterInfos) {
-			acc.prevVars.push({ name: '_prevKindAfter$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currKindAfter$i', type: macro :Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevKindAfter$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currKindAfter$i', type: macro : Int, expr: macro 0 });
 			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
 			final kindIdent: Expr = { expr: EConst(CIdent('_currKindAfter$i')), pos: pos };
 			if (info.tailAdapterOptField == null) {
@@ -155,8 +155,8 @@ final class WriterCascadeLowering {
 				// both trackers are set from one switch. `info.classifyCases` has
 				// `expr: 1` on the matched (`_v0`-binding) case and `expr: 0`
 				// elsewhere — rewrite each into a `{kind = …; tailNull = …}` block.
-				acc.currVars.push({ name: '_currTailNullAfter$i', type: macro :Int, expr: macro 0 });
-				acc.prevVars.push({ name: '_prevTailNullAfter$i', type: macro :Int, expr: macro 0 });
+				acc.currVars.push({ name: '_currTailNullAfter$i', type: macro : Int, expr: macro 0 });
+				acc.prevVars.push({ name: '_prevTailNullAfter$i', type: macro : Int, expr: macro 0 });
 				final tailNullIdent: Expr = { expr: EConst(CIdent('_currTailNullAfter$i')), pos: pos };
 				final adapterCall: Expr = WriterLowering.astPredCallT(info.tailAdapterOptField, [macro _v0]);
 				final dualCases: Array<Case> = [
@@ -200,8 +200,8 @@ final class WriterCascadeLowering {
 	 */
 	private static function emitBeforeCompute(acc: CascadeAccum, beforeInfos: Array<BeforeCtorBlankInfo>, pos: Position): Void {
 		for (i => info in beforeInfos) {
-			acc.prevVars.push({ name: '_prevKindBefore$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currKindBefore$i', type: macro :Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevKindBefore$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currKindBefore$i', type: macro : Int, expr: macro 0 });
 			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
 			final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
 			final lhs: Expr = { expr: EConst(CIdent('_currKindBefore$i')), pos: pos };
@@ -217,8 +217,8 @@ final class WriterCascadeLowering {
 			// the previous sibling was excluded (falls through to source).
 			final prevExcludeCases: Null<Array<Case>> = info.prevExcludeCases;
 			if (prevExcludeCases == null) continue;
-			acc.prevVars.push({ name: '_prevKindPrevExcl$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currKindPrevExcl$i', type: macro :Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevKindPrevExcl$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currKindPrevExcl$i', type: macro : Int, expr: macro 0 });
 			final exclSwitch: Expr = { expr: ESwitch(classifierAccess, prevExcludeCases, null), pos: pos };
 			final exclLhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl$i')), pos: pos };
 			acc.currCompute.push(macro $exclLhs = $exclSwitch);
@@ -235,12 +235,12 @@ final class WriterCascadeLowering {
 	 */
 	private static function emitBetweenCompute(acc: CascadeAccum, betweenInfos: Array<BetweenCtorBlankInfo>, pos: Position): Void {
 		for (i => info in betweenInfos) {
-			acc.prevVars.push({ name: '_prevTailKindBetween$i', type: macro :Int, expr: macro 0 });
-			acc.prevVars.push({ name: '_prevTailPathBetween$i', type: macro :String, expr: macro '' });
-			acc.currVars.push({ name: '_currTailKindBetween$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currTailPathBetween$i', type: macro :String, expr: macro '' });
-			acc.currVars.push({ name: '_currHeadKindBetween$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currHeadPathBetween$i', type: macro :String, expr: macro '' });
+			acc.prevVars.push({ name: '_prevTailKindBetween$i', type: macro : Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevTailPathBetween$i', type: macro : String, expr: macro '' });
+			acc.currVars.push({ name: '_currTailKindBetween$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currTailPathBetween$i', type: macro : String, expr: macro '' });
+			acc.currVars.push({ name: '_currHeadKindBetween$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currHeadPathBetween$i', type: macro : String, expr: macro '' });
 
 			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
 			final tailKindIdent: Expr = { expr: EConst(CIdent('_currTailKindBetween$i')), pos: pos };
@@ -352,8 +352,8 @@ final class WriterCascadeLowering {
 		acc: CascadeAccum, betweenIfNotInfos: Array<BetweenSameCtorIfNotInfo>, pos: Position
 	): Void {
 		for (i => info in betweenIfNotInfos) {
-			acc.prevVars.push({ name: '_prevKindBetweenIfNot$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currKindBetweenIfNot$i', type: macro :Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevKindBetweenIfNot$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currKindBetweenIfNot$i', type: macro : Int, expr: macro 0 });
 			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
 			final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
 			final lhs: Expr = { expr: EConst(CIdent('_currKindBetweenIfNot$i')), pos: pos };
@@ -371,12 +371,12 @@ final class WriterCascadeLowering {
 	 */
 	private static function emitTransitionCompute(acc: CascadeAccum, transitionInfos: Array<TransitionAcrossInfo>, pos: Position): Void {
 		for (i => info in transitionInfos) {
-			acc.prevVars.push({ name: '_prevTailKindAcrossA$i', type: macro :Int, expr: macro 0 });
-			acc.prevVars.push({ name: '_prevTailKindAcrossB$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currTailKindAcrossA$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currTailKindAcrossB$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currHeadKindAcrossA$i', type: macro :Int, expr: macro 0 });
-			acc.currVars.push({ name: '_currHeadKindAcrossB$i', type: macro :Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevTailKindAcrossA$i', type: macro : Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevTailKindAcrossB$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currTailKindAcrossA$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currTailKindAcrossB$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currHeadKindAcrossA$i', type: macro : Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currHeadKindAcrossB$i', type: macro : Int, expr: macro 0 });
 
 			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
 			final tkaIdent: Expr = { expr: EConst(CIdent('_currTailKindAcrossA$i')), pos: pos };

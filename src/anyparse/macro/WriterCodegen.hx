@@ -173,9 +173,9 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'value', type: rootReturnCT },
-					{ name: 'options', type: macro :Null<$optionsCT>, value: macro null }
+					{ name: 'options', type: macro : Null<$optionsCT>, value: macro null }
 				],
-				ret: macro :String,
+				ret: macro : String,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -213,9 +213,9 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'value', type: rootReturnCT },
-					{ name: 'options', type: macro :Null<$optionsCT>, value: macro null }
+					{ name: 'options', type: macro : Null<$optionsCT>, value: macro null }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -244,7 +244,7 @@ class WriterCodegen {
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [{ name: 'value', type: rootReturnCT }],
-				ret: macro :haxe.io.Bytes,
+				ret: macro : haxe.io.Bytes,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -258,9 +258,9 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'value', type: rule.valueCT },
-					{ name: 'output', type: macro :haxe.io.BytesOutput }
+					{ name: 'output', type: macro : haxe.io.BytesOutput }
 				],
-				ret: macro :Void,
+				ret: macro : Void,
 				expr: rule.body
 			}),
 			pos: Context.currentPos()
@@ -274,13 +274,13 @@ class WriterCodegen {
 			{ name: 'value', type: rule.valueCT },
 			{ name: 'opt', type: optionsCT }
 		];
-		if (rule.hasCtxPrec) args.push({ name: 'ctxPrec', type: macro :Int, value: macro -1 });
+		if (rule.hasCtxPrec) args.push({ name: 'ctxPrec', type: macro : Int, value: macro -1 });
 		return {
 			name: rule.fnName,
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: args,
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: rule.body
 			}),
 			pos: Context.currentPos()
@@ -295,25 +295,25 @@ class WriterCodegen {
 
 	private static function docHelperFields(): Array<Field> {
 		return [
-			docHelper('_dt', [{ name: 's', type: macro :String }], macro anyparse.core.Doc.Text(s)),
+			docHelper('_dt', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.Text(s)),
 			// `_dt`'s VERBATIM sibling — the bytes are the author's, so the
 			// renderer may not trim a trailing blank off them. The comment
 			// helpers below emit through it; every other generated `_dt` is
 			// writer syntax by construction.
-			docHelper('_dtv', [{ name: 's', type: macro :String }], macro anyparse.core.Doc.Text(s, true)),
-			docHelper('_dop', [{ name: 's', type: macro :String }], macro anyparse.core.Doc.OptSpace(s)),
-			docHelper('_dc', [{ name: 'items', type: macro :Array<anyparse.core.Doc> }], macro anyparse.core.Doc.Concat(items)),
+			docHelper('_dtv', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.Text(s, true)),
+			docHelper('_dop', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.OptSpace(s)),
+			docHelper('_dc', [{ name: 'items', type: macro : Array<anyparse.core.Doc> }], macro anyparse.core.Doc.Concat(items)),
 			docHelper('_dn', [
-				{ name: 'n', type: macro :Int },
-				{ name: 'inner', type: macro :anyparse.core.Doc }
+				{ name: 'n', type: macro : Int },
+				{ name: 'inner', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.Nest(n, inner)),
-			docHelper('_dg', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.Group(inner)),
-			docHelper('_dbg', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.BodyGroup(inner)),
+			docHelper('_dg', [{ name: 'inner', type: macro : anyparse.core.Doc }], macro anyparse.core.Doc.Group(inner)),
+			docHelper('_dbg', [{ name: 'inner', type: macro : anyparse.core.Doc }], macro anyparse.core.Doc.BodyGroup(inner)),
 			// ω-group-rest-probe: opt-in Group variant whose render-time fit
 			// decision subtracts rest-of-stack flat width from the budget.
 			// Emit via `_dgrp(...)` instead of `_dg(...)` at sites where
 			// trailing same-line content should bias toward MBreak.
-			docHelper('_dgrp', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.GroupWithRestProbe(inner)),
+			docHelper('_dgrp', [{ name: 'inner', type: macro : anyparse.core.Doc }], macro anyparse.core.Doc.GroupWithRestProbe(inner)),
 			docHelper('_dhl', [], macro anyparse.core.Doc.Line('\n')),
 			docHelper('_doh', [], macro anyparse.core.Doc.OptHardline),
 			// ω-opthardlineskipbeforehardline: forward-looking opt-hardline.
@@ -331,18 +331,18 @@ class WriterCodegen {
 			docHelper('_dl', [], macro anyparse.core.Doc.Line(' ')),
 			docHelper('_de', [], macro anyparse.core.Doc.Empty),
 			docHelper('_dib', [
-				{ name: 'br', type: macro :anyparse.core.Doc },
-				{ name: 'fl', type: macro :anyparse.core.Doc }
+				{ name: 'br', type: macro : anyparse.core.Doc },
+				{ name: 'fl', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfBreak(br, fl)),
 			docHelper('_diwe', [
-				{ name: 'n', type: macro :Int },
-				{ name: 'br', type: macro :anyparse.core.Doc },
-				{ name: 'fl', type: macro :anyparse.core.Doc }
+				{ name: 'n', type: macro : Int },
+				{ name: 'br', type: macro : anyparse.core.Doc },
+				{ name: 'fl', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfWidthExceeds(n, br, fl)),
 			docHelper('_difle', [
-				{ name: 'n', type: macro :Int },
-				{ name: 'br', type: macro :anyparse.core.Doc },
-				{ name: 'fl', type: macro :anyparse.core.Doc }
+				{ name: 'n', type: macro : Int },
+				{ name: 'br', type: macro : anyparse.core.Doc },
+				{ name: 'fl', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfFirstLineExceeds(n, br, fl)),
 			// ω-ifnaturalfirstlineexceeds-infra: natural-shape first-line
 			// probe. Fires `br` when the NATURAL first line of `fl` (rendered
@@ -353,17 +353,17 @@ class WriterCodegen {
 			// Enum ctors can't be called in macro{}, so consumers (macro-
 			// generated WriterLowering) call this generated wrapper.
 			docHelper('_dinfle', [
-				{ name: 'n', type: macro :Int },
-				{ name: 'br', type: macro :anyparse.core.Doc },
-				{ name: 'fl', type: macro :anyparse.core.Doc }
+				{ name: 'n', type: macro : Int },
+				{ name: 'br', type: macro : anyparse.core.Doc },
+				{ name: 'fl', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfNaturalFirstLineExceeds(n, br, fl)),
 			// ω-natural-trailwidth: rest-aware sibling of `_dinfle`. The probe additionally
 			// counts what rides the same rendered line AFTER `fl` — for the `return` body,
 			// the statement terminator its `@:trailOpt(';')` emits outside the value's Doc.
 			docHelper('_dinfler', [
-				{ name: 'n', type: macro :Int },
-				{ name: 'br', type: macro :anyparse.core.Doc },
-				{ name: 'fl', type: macro :anyparse.core.Doc }
+				{ name: 'n', type: macro : Int },
+				{ name: 'br', type: macro : anyparse.core.Doc },
+				{ name: 'fl', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfNaturalFirstLineExceedsWithRest(n, br, fl)),
 			// ω-abstract-clauses-linewrap: column-threshold probe consuming
 			// rest-of-stack flat width. Fires `br` when
@@ -372,9 +372,9 @@ class WriterCodegen {
 			// branch to break before `from`/`to` clauses on abstract decls
 			// when the full decl line exceeds `opt.lineWidth`.
 			docHelper('_dile', [
-				{ name: 'n', type: macro :Int },
-				{ name: 'br', type: macro :anyparse.core.Doc },
-				{ name: 'fl', type: macro :anyparse.core.Doc }
+				{ name: 'n', type: macro : Int },
+				{ name: 'br', type: macro : anyparse.core.Doc },
+				{ name: 'fl', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfLineExceeds(n, br, fl)),
 			// ω-arrow-residual-linewrap: render-identical sibling of `_dile`
 			// whose natural-first-line walk defers the rest-of-line to the
@@ -382,26 +382,26 @@ class WriterCodegen {
 			// arrow-body marker so an enclosing `&&`/`||` / ternary / assignment
 			// breaks first instead of the arrow pre-empting it.
 			docHelper('_dilr', [
-				{ name: 'n', type: macro :Int },
-				{ name: 'br', type: macro :anyparse.core.Doc },
-				{ name: 'fl', type: macro :anyparse.core.Doc }
+				{ name: 'n', type: macro : Int },
+				{ name: 'br', type: macro : anyparse.core.Doc },
+				{ name: 'fl', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfResidualLineExceeds(n, br, fl)),
 			docHelper('_dfill', [
-				{ name: 'items', type: macro :Array<anyparse.core.Doc> },
-				{ name: 'sep', type: macro :anyparse.core.Doc }
+				{ name: 'items', type: macro : Array<anyparse.core.Doc> },
+				{ name: 'sep', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.Fill(items, sep)),
 			// ω-fill-rest-probe: opt-in Fill variant whose per-item-fit probe
 			// in FillCont resumption subtracts rest-of-stack flat width from
 			// the budget. Sister to `_dgrp` at the Fill primitive layer.
 			docHelper('_dfwrp', [
-				{ name: 'items', type: macro :Array<anyparse.core.Doc> },
-				{ name: 'sep', type: macro :anyparse.core.Doc }
+				{ name: 'items', type: macro : Array<anyparse.core.Doc> },
+				{ name: 'sep', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.FillWithRestProbe(items, sep)),
 			// ω-force-flat-engine slice D follow-up: WrapBoundary helper so the
 			// hand-rolled trivia-branch dispatchers (triviaSepStarExpr et al.)
 			// can reset force-flat for their inner content the same way the
 			// 4 cascade-emit functions do via Slice C's wraps.
-			docHelper('_dwb', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.WrapBoundary(inner)),
+			docHelper('_dwb', [{ name: 'inner', type: macro : anyparse.core.Doc }], macro anyparse.core.Doc.WrapBoundary(inner)),
 			// ω-iffulllineexceeds-primitive: full-line probe consuming the
 			// primitive's own flat width PLUS the rest-of-stack lookahead
 			// (calibration-gated in the renderer: BG-descending at
@@ -410,16 +410,16 @@ class WriterCodegen {
 			// `col + flatTokenWidth(fl) + restWidth >= n`. Used by the
 			// expression-paren collapse consumer (C2a/B) to decide paren-open.
 			docHelper('_dfle', [
-				{ name: 'n', type: macro :Int },
-				{ name: 'br', type: macro :anyparse.core.Doc },
-				{ name: 'fl', type: macro :anyparse.core.Doc }
+				{ name: 'n', type: macro : Int },
+				{ name: 'br', type: macro : anyparse.core.Doc },
+				{ name: 'fl', type: macro : anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfFullLineExceeds(n, br, fl)),
 			// ω-hardflatten (increment-2): HardFlatten helper. Pins the
 			// subtree force-flat through every inner WrapBoundary — the
 			// inner-collapse half of the chain-collapse family (fork's
 			// `collapseInnerChainBreaks`). Consumed by the ParenExpr
 			// `@:fmt(expressionParenHardFlatten)` open-branch emit.
-			docHelper('_dhf', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.HardFlatten(inner)),
+			docHelper('_dhf', [{ name: 'inner', type: macro : anyparse.core.Doc }], macro anyparse.core.Doc.HardFlatten(inner)),
 			// ω-collapse-probe (increment-2): CollapseProbe helper. Render-
 			// transparent marker on an expression-paren collapse-candidate
 			// open branch so `CollapsePass` recognises the paren and commits
@@ -427,14 +427,14 @@ class WriterCodegen {
 			// operator class (opAddSub wraps a HardFlatten inside; opBool /
 			// ternary wraps the plain inner). Consumed by the ParenExpr
 			// `@:fmt(expressionParenHardFlatten)` open-branch emit.
-			docHelper('_dcp', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.CollapseProbe(inner)),
+			docHelper('_dcp', [{ name: 'inner', type: macro : anyparse.core.Doc }], macro anyparse.core.Doc.CollapseProbe(inner)),
 			// ω-cond-indent-policy FixedZero: ConditionalMarkerZero helper.
 			// Wraps a whole `#if … #end` construct Doc; at render time every
 			// fresh `#`-leading line (a `#if`/`#elseif`/`#else`/`#end` marker)
 			// is flushed at column 0 while body lines keep their frame indent.
 			// Emitted by the generated writer only under
 			// `opt.conditionalPolicy == FixedZero`. Structurally transparent.
-			docHelper('_dcmz', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.ConditionalMarkerZero(inner)),
+			docHelper('_dcmz', [{ name: 'inner', type: macro : anyparse.core.Doc }], macro anyparse.core.Doc.ConditionalMarkerZero(inner)),
 			// ω-cond-indent-policy AlignedDecrease: ConditionalMarkerDecrease
 			// helper. Wraps a whole `#if … #end` construct Doc; at render time
 			// EVERY fresh line (markers AND body) is shifted one indent level
@@ -442,7 +442,7 @@ class WriterCodegen {
 			// by the generated writer only under
 			// `opt.conditionalPolicy == AlignedDecrease`. Structurally transparent.
 			docHelper(
-				'_dcmd', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.ConditionalMarkerDecrease(inner)
+				'_dcmd', [{ name: 'inner', type: macro : anyparse.core.Doc }], macro anyparse.core.Doc.ConditionalMarkerDecrease(inner)
 			)
 		];
 	}
@@ -451,7 +451,7 @@ class WriterCodegen {
 		return {
 			name: name,
 			access: [APrivate, AStatic, AInline],
-			kind: FFun({ args: args, ret: macro :anyparse.core.Doc, expr: macro return $body }),
+			kind: FFun({ args: args, ret: macro : anyparse.core.Doc, expr: macro return $body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -477,12 +477,12 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'open', type: macro :String },
-					{ name: 'close', type: macro :String },
-					{ name: 'docs', type: macro :Array<anyparse.core.Doc> },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'open', type: macro : String },
+					{ name: 'close', type: macro : String },
+					{ name: 'docs', type: macro : Array<anyparse.core.Doc> },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -551,18 +551,18 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'open', type: macro :String },
-					{ name: 'close', type: macro :String },
-					{ name: 'sep', type: macro :String },
-					{ name: 'items', type: macro :Array<anyparse.core.Doc> },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
-					{ name: 'trailingComma', type: macro :Bool },
-					{ name: 'openInside', type: macro :anyparse.core.Doc },
-					{ name: 'closeInside', type: macro :anyparse.core.Doc },
-					{ name: 'keepInnerWhenEmpty', type: macro :Bool },
-					{ name: 'cuddleHead', type: macro :Bool }
+					{ name: 'open', type: macro : String },
+					{ name: 'close', type: macro : String },
+					{ name: 'sep', type: macro : String },
+					{ name: 'items', type: macro : Array<anyparse.core.Doc> },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions },
+					{ name: 'trailingComma', type: macro : Bool },
+					{ name: 'openInside', type: macro : anyparse.core.Doc },
+					{ name: 'closeInside', type: macro : anyparse.core.Doc },
+					{ name: 'keepInnerWhenEmpty', type: macro : Bool },
+					{ name: 'cuddleHead', type: macro : Bool }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -611,18 +611,18 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'open', type: macro :String },
-					{ name: 'close', type: macro :String },
-					{ name: 'sep', type: macro :String },
-					{ name: 'items', type: macro :Array<anyparse.core.Doc> },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
-					{ name: 'trailingComma', type: macro :Bool },
-					{ name: 'openInside', type: macro :anyparse.core.Doc },
-					{ name: 'closeInside', type: macro :anyparse.core.Doc },
-					{ name: 'keepInnerWhenEmpty', type: macro :Bool },
-					{ name: 'doubleIndent', type: macro :Bool }
+					{ name: 'open', type: macro : String },
+					{ name: 'close', type: macro : String },
+					{ name: 'sep', type: macro : String },
+					{ name: 'items', type: macro : Array<anyparse.core.Doc> },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions },
+					{ name: 'trailingComma', type: macro : Bool },
+					{ name: 'openInside', type: macro : anyparse.core.Doc },
+					{ name: 'closeInside', type: macro : anyparse.core.Doc },
+					{ name: 'keepInnerWhenEmpty', type: macro : Bool },
+					{ name: 'doubleIndent', type: macro : Bool }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -641,8 +641,8 @@ class WriterCodegen {
 			name: 'formatFloat',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'value', type: macro :Float }],
-				ret: macro :String,
+				args: [{ name: 'value', type: macro : Float }],
+				ret: macro : String,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -678,10 +678,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'content', type: macro :String },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'content', type: macro : String },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -708,11 +708,11 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'run', type: macro :Array<String> },
-					{ name: 'index', type: macro :Int },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'run', type: macro : Array<String> },
+					{ name: 'index', type: macro : Int },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :String,
+				ret: macro : String,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -740,11 +740,11 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'run', type: macro :Array<String> },
-					{ name: 'index', type: macro :Int },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'run', type: macro : Array<String> },
+					{ name: 'index', type: macro : Int },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -770,10 +770,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'content', type: macro :String },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'content', type: macro : String },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -804,10 +804,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'content', type: macro :String },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'content', type: macro : String },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -842,10 +842,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'content', type: macro :String },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'content', type: macro : String },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -883,10 +883,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'doc', type: macro :anyparse.core.Doc },
-					{ name: 'trailing', type: macro :anyparse.core.Doc }
+					{ name: 'doc', type: macro : anyparse.core.Doc },
+					{ name: 'trailing', type: macro : anyparse.core.Doc }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -935,10 +935,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'doc', type: macro :anyparse.core.Doc },
-					{ name: 'trailing', type: macro :anyparse.core.Doc }
+					{ name: 'doc', type: macro : anyparse.core.Doc },
+					{ name: 'trailing', type: macro : anyparse.core.Doc }
 				],
-				ret: macro :Null<anyparse.core.Doc>,
+				ret: macro : Null<anyparse.core.Doc>,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -961,10 +961,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'inner', type: macro :anyparse.core.Doc },
-					{ name: 'trailing', type: macro :anyparse.core.Doc }
+					{ name: 'inner', type: macro : anyparse.core.Doc },
+					{ name: 'trailing', type: macro : anyparse.core.Doc }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1014,11 +1014,11 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'beforeKwLeading', type: macro :Array<String> },
-					{ name: 'sepDoc', type: macro :anyparse.core.Doc },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'beforeKwLeading', type: macro : Array<String> },
+					{ name: 'sepDoc', type: macro : anyparse.core.Doc },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1056,11 +1056,11 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'trailing', type: macro :Null<String> },
-					{ name: 'sepDoc', type: macro :anyparse.core.Doc },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'trailing', type: macro : Null<String> },
+					{ name: 'sepDoc', type: macro : anyparse.core.Doc },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1094,13 +1094,13 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'afterKw', type: macro :Null<String> },
-					{ name: 'kwLeading', type: macro :Array<String> },
-					{ name: 'cols', type: macro :Int },
-					{ name: 'nextCurly', type: macro :Bool },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'afterKw', type: macro : Null<String> },
+					{ name: 'kwLeading', type: macro : Array<String> },
+					{ name: 'cols', type: macro : Int },
+					{ name: 'nextCurly', type: macro : Bool },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1142,18 +1142,18 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'afterKw', type: macro :Null<String> },
-					{ name: 'kwLeading', type: macro :Array<String> },
-					{ name: 'cols', type: macro :Int },
-					{ name: 'bodyDoc', type: macro :anyparse.core.Doc },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'afterKw', type: macro : Null<String> },
+					{ name: 'kwLeading', type: macro : Array<String> },
+					{ name: 'cols', type: macro : Int },
+					{ name: 'bodyDoc', type: macro : anyparse.core.Doc },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions },
 					// omega-value-if-fit: the kw->body gap, supplied by the caller so an
 					// `arrowValueIfReflowSite` can hand in a SOFT `Line(' ')` the enclosing `Group`
 					// may flatten. The comment separators below stay hard: a captured comment
 					// refuses the re-flow outright, so they are only ever reached with a hard gap.
-					{ name: 'gap', type: macro :anyparse.core.Doc }
+					{ name: 'gap', type: macro : anyparse.core.Doc }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1177,14 +1177,14 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'cuddled', type: macro :Null<String> },
-					{ name: 'ownLines', type: macro :Array<String> },
-					{ name: 'step', type: macro :Int },
-					{ name: 'bodyDoc', type: macro :anyparse.core.Doc },
-					{ name: 'bodyIsBlock', type: macro :Bool },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'cuddled', type: macro : Null<String> },
+					{ name: 'ownLines', type: macro : Array<String> },
+					{ name: 'step', type: macro : Int },
+					{ name: 'bodyDoc', type: macro : anyparse.core.Doc },
+					{ name: 'bodyIsBlock', type: macro : Bool },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1210,8 +1210,8 @@ class WriterCodegen {
 			name: 'escapeString',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'value', type: macro :String }],
-				ret: macro :String,
+				args: [{ name: 'value', type: macro : String }],
+				ret: macro : String,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1240,13 +1240,13 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'above', type: macro :Bool },
-					{ name: 'content', type: macro :String },
-					{ name: 'code', type: macro :anyparse.core.Doc },
-					{ name: 'flat', type: macro :anyparse.core.Doc },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'above', type: macro : Bool },
+					{ name: 'content', type: macro : String },
+					{ name: 'code', type: macro : anyparse.core.Doc },
+					{ name: 'flat', type: macro : anyparse.core.Doc },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1283,15 +1283,15 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'after', type: macro :Null<String> },
-					{ name: 'own', type: macro :Array<String> },
-					{ name: 'above', type: macro :Bool },
-					{ name: 'afters', type: macro :Array<Null<anyparse.core.Doc>> },
-					{ name: 'owns', type: macro :Array<Null<anyparse.core.Doc>> },
-					{ name: 'aboves', type: macro :Array<Null<anyparse.core.Doc>> },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'after', type: macro : Null<String> },
+					{ name: 'own', type: macro : Array<String> },
+					{ name: 'above', type: macro : Bool },
+					{ name: 'afters', type: macro : Array<Null<anyparse.core.Doc>> },
+					{ name: 'owns', type: macro : Array<Null<anyparse.core.Doc>> },
+					{ name: 'aboves', type: macro : Array<Null<anyparse.core.Doc>> },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :Bool,
+				ret: macro : Bool,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1319,11 +1319,11 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'run', type: macro :Array<String> },
-					{ name: 'brk', type: macro :anyparse.core.Doc },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
+					{ name: 'run', type: macro : Array<String> },
+					{ name: 'brk', type: macro : anyparse.core.Doc },
+					{ name: 'opt', type: macro : anyparse.format.WriteOptions }
 				],
-				ret: macro :anyparse.core.Doc,
+				ret: macro : anyparse.core.Doc,
 				expr: body
 			}),
 			pos: Context.currentPos()

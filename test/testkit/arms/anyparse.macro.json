@@ -767,8 +767,8 @@
 			"name": "M-TAIL-ABSENT-FIELD-STOPS",
 			"type": "anyparse.macro.TriviaTailRehome",
 			"method": "seqField",
-			"find": "return macro $access == null ? $before : $present;",
-			"replace": "return present;",
+			"find": "macro $access == null ? $before : $present;",
+			"replace": "present;",
 			"note": "an absent optional last field (an if with no else) answers null instead of the field emitted before it"
 		},
 		{
@@ -1298,6 +1298,14 @@
 			"find": "if (headGap == null) return layout;",
 			"replace": "if (true) return layout;",
 			"note": "a comment before an expression catch body (bare statement or value try) is never written, so fmt refuses the file as dropping it"
+		},
+		{
+			"name": "M-MACRO-LEAD-POLICY-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefLeadDoc",
+			"find": "if (!leadIsWord && leadHasPolicy(branch))",
+			"replace": "if (false)",
+			"note": "a ctor-level lead tagged with a whitespace policy is written as the bare literal while the keyword's trailing space stays stripped, so `macro : T` collapses to `macro:T` under every `typeHintColonPolicy`"
 		}
 	]
 }

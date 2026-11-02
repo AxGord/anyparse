@@ -58,7 +58,7 @@ final class TriviaPairSlots {
 		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
 		return {
 			name: fieldName + TriviaTypeSynth.AFTER_LEAD_SUFFIX,
-			kind: FVar(macro :Array<String>),
+			kind: FVar(macro : Array<String>),
 			pos: pos,
 			access: []
 		};

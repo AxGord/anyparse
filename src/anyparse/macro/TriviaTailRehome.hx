@@ -61,13 +61,14 @@ final class TriviaTailRehome {
 	public static function fnRefFor(elem: ShapeNode): Null<Expr> {
 		if (elem.kind != Ref) return null;
 		final rule: String = elem.annotations[AnnotationKeys.BASE_REF];
-		if (!TriviaTypeSynth.refIsBearing(rule)) return null;
-		return MacroStringTools.toFieldExpr(packOf(rule).concat([
-			TriviaTypeSynth.SYNTH_SUBPACK,
-			TriviaTypeSynth.SYNTH_MODULE_LEAF,
-			CLASS_NAME,
-			fnName(rule)
-		]));
+		return TriviaTypeSynth.refIsBearing(rule)
+			? MacroStringTools.toFieldExpr(packOf(rule).concat([
+				TriviaTypeSynth.SYNTH_SUBPACK,
+				TriviaTypeSynth.SYNTH_MODULE_LEAF,
+				CLASS_NAME,
+				fnName(rule)
+			]))
+			: null;
 	}
 
 	/** The `TailComments` class for one synth batch; `paired` are the batch's paired type definitions. */
@@ -94,7 +95,7 @@ final class TriviaTailRehome {
 				access: [APublic, AStatic],
 				pos: pos,
 				kind: FFun({
-					args: [{ name: 'value', type: pairedCT }, { name: COMMENT_ARG, type: macro :String }],
+					args: [{ name: 'value', type: pairedCT }, { name: COMMENT_ARG, type: macro : String }],
 					ret: TPath({ pack: [], name: 'Null', params: [TPType(pairedCT)] }),
 					expr: macro return $body
 				})
@@ -162,8 +163,7 @@ final class TriviaTailRehome {
 			case Ref: refField(child, name, fieldNames);
 			case _: macro null;
 		};
-		if (child.annotations[AnnotationKeys.BASE_OPTIONAL] != true) return present;
-		return macro $access == null ? $before : $present;
+		return child.annotations[AnnotationKeys.BASE_OPTIONAL] != true ? present : macro $access == null ? $before : $present;
 	}
 
 	/** A close-peek trivia Star field: the comment lands in `<field>TrailingClose` after its close literal. */

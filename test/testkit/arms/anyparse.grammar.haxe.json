@@ -685,6 +685,24 @@
 			"find": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))",
 			"replace": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], macro false)",
 			"note": "`var a:(Int) -> {x:Int}` is not seen to end with `}`, so the next anon field is refused"
+		},
+		{
+			"name": "M-MACRO-PAREN-GLUED",
+			"type": "anyparse.grammar.haxe.HxExpr",
+			"method": "MacroExpr",
+			"kind": "ParamCtor",
+			"find": "@:fmt(clearExprPosition, clearBracePolicy)",
+			"replace": "@:fmt(clearExprPosition, clearBracePolicy, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
+			"note": "`macro` is written like the call-shaped `cast`, so `macro (x + 1)` loses the space the user keeps: it reads as a construct whose operand can be anything"
+		},
+		{
+			"name": "M-CAST-PAREN-SPACED",
+			"type": "anyparse.grammar.haxe.HxExpr",
+			"method": "CastExpr",
+			"kind": "ParamCtor",
+			"find": "@:fmt(atomOperandWhen('ECheckTypeExpr'), tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
+			"replace": "@:fmt(atomOperandWhen('ECheckTypeExpr'))",
+			"note": "`cast` is written like the construct `macro`, so `cast(x)` gains a space and stops reading as a call"
 		}
 	]
 }

@@ -96,8 +96,8 @@ final class WriterPrattLowering {
 			name: helperName,
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'value', type: valueCT }, { name: 'ctx', type: macro :Int }],
-				ret: macro :Int,
+				args: [{ name: 'value', type: valueCT }, { name: 'ctx', type: macro : Int }],
+				ret: macro : Int,
 				expr: macro return $dispatch
 			}),
 			pos: pos
@@ -271,7 +271,7 @@ final class WriterPrattLowering {
 	 * Doc arrays `pushChainOpComments` fills and whether an after-operator comment may move above its operand.
 	 */
 	private static function chainCommentChannelsDecl(relocateAboveExpr: Expr): Expr {
-		final docsCT: ComplexType = macro :Array<Null<anyparse.core.Doc>>;
+		final docsCT: ComplexType = macro : Array<Null<anyparse.core.Doc>>;
 		final vars: Array<Var> = [
 			for (name in ['_afterComments', '_ownComments', '_aboveComments'])
 				{
@@ -283,7 +283,7 @@ final class WriterPrattLowering {
 		];
 		vars.push({
 			name: '_relocateAbove',
-			type: macro :Bool,
+			type: macro : Bool,
 			expr: relocateAboveExpr,
 			isFinal: true
 		});

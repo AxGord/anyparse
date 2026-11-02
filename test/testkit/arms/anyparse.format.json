@@ -349,6 +349,14 @@
 			"find": "if (!wrappedFrom(wrapped, raw)) return wrapped;",
 			"replace": "if (true || !wrappedFrom(wrapped, raw)) return wrapped;",
 			"note": "a catch body the try group braces leaves the clause's comments outside the new braces, with the `{` alone below them"
+		},
+		{
+			"name": "M-WSP-ADD-NOOP",
+			"type": "anyparse.format.WhitespacePolicy",
+			"method": "add",
+			"find": "return this | side;",
+			"replace": "return this;",
+			"note": "adding a side leaves the policy as it was, so `macro : T` loses its pinned space before the colon and writes `macro: T` / `macro:T`"
 		}
 	]
 }

@@ -150,7 +150,7 @@ final class TerminalParseLowering {
 			return macro $b{[reject].concat(steps)};
 		}
 		final chain: Expr = orChain(byteSetTerms(TERMINAL_BYTE_LOCAL, codes));
-		final peek: Expr = finalLocal(TERMINAL_BYTE_LOCAL, macro :Int, macro ctx.input.charCodeAt(ctx.pos));
+		final peek: Expr = finalLocal(TERMINAL_BYTE_LOCAL, macro : Int, macro ctx.input.charCodeAt(ctx.pos));
 		final reject: Expr = macro if (!$chain) $fail;
 		return macro $b{[peek, reject].concat(steps)};
 	}

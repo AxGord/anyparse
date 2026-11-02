@@ -968,8 +968,8 @@ final class ParseDispatchLowering {
 		// byte fact needs the raw code, where `Input.charCodeAt` answering
 		// -1 past the end makes an explicit bounds test unnecessary.
 		final peek: Expr = switch first {
-			case FirstKw(_): finalLocal(STAR_GATE_WORD_LOCAL, macro :String, macro peekWord(ctx));
-			case _: finalLocal(STAR_GATE_BYTE_LOCAL, macro :Int, macro ctx.input.charCodeAt(ctx.pos));
+			case FirstKw(_): finalLocal(STAR_GATE_WORD_LOCAL, macro : String, macro peekWord(ctx));
+			case _: finalLocal(STAR_GATE_BYTE_LOCAL, macro : Int, macro ctx.input.charCodeAt(ctx.pos));
 		};
 		return macro {
 			$peek;

@@ -154,13 +154,13 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterStarEmitLowering` | 43 |
 | `WriterKwRefLowering` | 31 |
 | `WriterTriviaStarEmitLowering` | 28 |
+| `WriterPolicyLowering` | 20 |
 | `WriterCtorBlankLowering` | 17 |
 | `WriterLowering` | 17 |
 | `WriterPrattLowering` | 17 |
-| `WriterRefLeadLowering` | 17 |
-| `WriterPolicyLowering` | 10 |
 | `TriviaPairSlots` | 10 |
 | `TriviaPairAltCtor` | 8 |
+| `WriterRefLeadLowering` | 8 |
 | `StructSeqLowering` | 7 |
 | `WriterBraceSymmetryLowering` | 7 |
 | `WriterFieldSepLowering` | 6 |

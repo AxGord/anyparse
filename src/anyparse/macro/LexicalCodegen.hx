@@ -100,7 +100,7 @@ class LexicalCodegen {
 				+ ' `[from, to)` byte offsets in source order.\n\n Generated from the declarations of: $origins.',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{ name: 'source', type: macro :String }],
+				args: [{ name: 'source', type: macro : String }],
 				ret: TPath({ pack: [], name: 'Array', params: [TPType(regionCT())] }),
 				expr: body
 			}),
@@ -125,10 +125,10 @@ class LexicalCodegen {
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'src', type: macro :String },
-					{ name: 'onComment', type: TFunction([macro :Int, macro :Int], macro :Void) }
+					{ name: 'src', type: macro : String },
+					{ name: 'onComment', type: TFunction([macro : Int, macro : Int], macro : Void) }
 				],
-				ret: macro :Void,
+				ret: macro : Void,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -159,7 +159,9 @@ class LexicalCodegen {
 				i++;
 			}
 		};
-		return walkField(CODE_FN, ' Walk the CODE of `source` from `from`, reporting every region it opens at `depth`.', body, macro :Void);
+		return walkField(
+			CODE_FN, ' Walk the CODE of `source` from `from`, reporting every region it opens at `depth`.', body, macro : Void
+		);
 	}
 
 	private static function regionField(specs: Array<LexRegionSpec>, k: Int): Field {
@@ -174,7 +176,7 @@ class LexicalCodegen {
 			}
 			: delimitedBody(spec, k);
 		return walkField(
-			regionFn(k), ' The end offset of the ${spec.kind} that `${spec.origin}` declares, opened at `from`.', body, macro :Int
+			regionFn(k), ' The end offset of the ${spec.kind} that `${spec.origin}` declares, opened at `from`.', body, macro : Int
 		);
 	}
 
@@ -246,7 +248,7 @@ class LexicalCodegen {
 		return walkField(
 			holeFn(k, h),
 			' The offset just past the `$close` that balances the code hole opened at `from`, or -1 when it is unterminated.', body,
-			macro :Int
+			macro : Int
 		);
 	}
 
@@ -257,10 +259,10 @@ class LexicalCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'source', type: macro :String },
-					{ name: 'from', type: macro :Int },
-					{ name: 'depth', type: macro :Int },
-					{ name: 'emit', type: TFunction([macro :Int, macro :Int, kindCT(), macro :Int], macro :Void) }
+					{ name: 'source', type: macro : String },
+					{ name: 'from', type: macro : Int },
+					{ name: 'depth', type: macro : Int },
+					{ name: 'emit', type: TFunction([macro : Int, macro : Int, kindCT(), macro : Int], macro : Void) }
 				],
 				ret: ret,
 				expr: body

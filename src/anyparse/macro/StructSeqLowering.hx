@@ -665,7 +665,7 @@ final class StructSeqLowering {
 			expr: EVars([
 				{
 					name: '${keyLocal}Pos',
-					type: macro :Int,
+					type: macro : Int,
 					expr: macro ctx.pos,
 					isFinal: true
 				}
@@ -676,7 +676,7 @@ final class StructSeqLowering {
 			expr: EVars([
 				{
 					name: keyLocal,
-					type: macro :String,
+					type: macro : String,
 					expr: { expr: ECall(macro $i{keyFn}, [macro ctx]), pos: Context.currentPos() },
 					isFinal: true
 				}
@@ -1108,7 +1108,7 @@ final class StructSeqLowering {
 				expr: EVars([
 					{
 						name: '_afterTrail_$fieldName',
-						type: macro :Null<String>,
+						type: macro : Null<String>,
 						expr: macro null,
 						isFinal: false
 					}
@@ -1140,7 +1140,7 @@ final class StructSeqLowering {
 				expr: EVars([
 					{
 						name: trailPresentLocal,
-						type: macro :Bool,
+						type: macro : Bool,
 						expr: macro false,
 						isFinal: false
 					}
@@ -1269,7 +1269,7 @@ final class StructSeqLowering {
 				expr: EVars([
 					{
 						name: newlineAfterLocal,
-						type: macro :Bool,
+						type: macro : Bool,
 						expr: macro false,
 						isFinal: false
 					}

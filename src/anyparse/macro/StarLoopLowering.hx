@@ -703,7 +703,7 @@ final class StarLoopLowering {
 			expr: EVars([
 				{
 					name: sepBeforeLocal,
-					type: macro :Bool,
+					type: macro : Bool,
 					expr: macro false,
 					isFinal: false
 				}

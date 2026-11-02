@@ -693,13 +693,13 @@ final class TriviaTryparseLowering {
 			expr: EVars([
 				{
 					name: '_lastTrailComment',
-					type: macro :Null<String>,
+					type: macro : Null<String>,
 					expr: lastComment,
 					isFinal: true
 				},
 				{
 					name: '_trailEndsLine',
-					type: macro :Bool,
+					type: macro : Bool,
 					expr: endsLine,
 					isFinal: true
 				}
@@ -1529,19 +1529,19 @@ final class TriviaTryparseLowering {
 			expr: EVars([
 				{
 					name: '_caseBodyFlattenable',
-					type: macro :Bool,
+					type: macro : Bool,
 					expr: eligible,
 					isFinal: true
 				},
 				{
 					name: '_flatCase',
-					type: macro :Bool,
+					type: macro : Bool,
 					expr: macro _caseBodyFlattenable && _trailLC.length == 0 && $flatGateExpr,
 					isFinal: true
 				},
 				{
 					name: '_fitCase',
-					type: macro :Bool,
+					type: macro : Bool,
 					expr: macro _caseBodyFlattenable && !_flatCase && $priorAfterTrailRaw == null && $fitGateExpr,
 					isFinal: true
 				}

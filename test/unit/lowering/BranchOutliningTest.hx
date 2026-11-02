@@ -279,7 +279,7 @@ final class BranchOutliningTest extends Test {
 	}
 
 	private function outlined(body: Expr): Array<GeneratedRule> {
-		return BranchOutlining.outline([new GeneratedRule('parseR', macro :Foo, body, [])]);
+		return BranchOutlining.outline([new GeneratedRule('parseR', macro : Foo, body, [])]);
 	}
 
 	private function assertKeptInline(body: Expr): Void {

@@ -127,12 +127,12 @@ final class StructFieldTrailLowering {
 				pos: Context.currentPos()
 			});
 		}
-		pushVar(afterKwLocal, macro :Null<String>, macro null);
-		pushVar(kwLeadingLocal, macro :Array<String>, macro []);
-		pushVar(beforeKwNlLocal, macro :Bool, macro false);
-		pushVar(bodyOnSameLineLocal, macro :Bool, macro false);
-		pushVar(beforeKwLeadingLocal, macro :Array<String>, macro []);
-		pushVar(beforeKwTrailingLocal, macro :Null<String>, macro null);
+		pushVar(afterKwLocal, macro : Null<String>, macro null);
+		pushVar(kwLeadingLocal, macro : Array<String>, macro []);
+		pushVar(beforeKwNlLocal, macro : Bool, macro false);
+		pushVar(bodyOnSameLineLocal, macro : Bool, macro false);
+		pushVar(beforeKwLeadingLocal, macro : Array<String>, macro []);
+		pushVar(beforeKwTrailingLocal, macro : Null<String>, macro null);
 	}
 
 	/**
@@ -157,7 +157,7 @@ final class StructFieldTrailLowering {
 				expr: EVars([
 					{
 						name: afterTrailLocal,
-						type: macro :Null<String>,
+						type: macro : Null<String>,
 						expr: macro collectTrailingFull(ctx),
 						isFinal: true
 					}
@@ -177,7 +177,7 @@ final class StructFieldTrailLowering {
 					expr: EVars([
 						{
 							name: beforeTrailLocal,
-							type: macro :Null<String>,
+							type: macro : Null<String>,
 							expr: macro collectTrailingBlock(ctx),
 							isFinal: true
 						}
@@ -200,7 +200,7 @@ final class StructFieldTrailLowering {
 					expr: EVars([
 						{
 							name: afterTrailLocal,
-							type: macro :Null<String>,
+							type: macro : Null<String>,
 							expr: macro collectTrailingFull(ctx),
 							isFinal: true
 						}
@@ -290,7 +290,7 @@ final class StructFieldTrailLowering {
 					expr: EVars([
 						{
 							name: beforeNlLocal,
-							type: macro :Bool,
+							type: macro : Bool,
 							expr: macro _beforeTrivia.newlineBefore,
 							isFinal: true
 						}
@@ -316,7 +316,7 @@ final class StructFieldTrailLowering {
 					expr: EVars([
 						{
 							name: beforeBlankLocal,
-							type: macro :Bool,
+							type: macro : Bool,
 							expr: macro _beforeTrivia.blankBefore,
 							isFinal: true
 						}
@@ -333,7 +333,7 @@ final class StructFieldTrailLowering {
 					expr: EVars([
 						{
 							name: beforeNlLocal,
-							type: macro :Bool,
+							type: macro : Bool,
 							expr: macro collectTrivia(ctx).newlineBefore,
 							isFinal: true
 						}
@@ -358,7 +358,7 @@ final class StructFieldTrailLowering {
 			expr: EVars([
 				{
 					name: condOpenNewlineLocal,
-					type: macro :Bool,
+					type: macro : Bool,
 					expr: macro hasNewlineIn(ctx.input, _condLeadEnd, ctx.pos),
 					isFinal: true
 				}
@@ -475,7 +475,7 @@ final class StructFieldTrailLowering {
 			expr: EVars([
 				{
 					name: beforeNewlineLocalName(fieldName),
-					type: macro :Bool,
+					type: macro : Bool,
 					expr: macro _absentTrivia.newlineBefore,
 					isFinal: true
 				}
@@ -500,7 +500,7 @@ final class StructFieldTrailLowering {
 			expr: EVars([
 				{
 					name: beforeBlankLocalName(fieldName),
-					type: macro :Bool,
+					type: macro : Bool,
 					expr: macro _absentTrivia.blankBefore,
 					isFinal: true
 				}

@@ -137,12 +137,20 @@ enum HxExpr {
 	@:kw('untyped')
 	UntypedAtom;
 
-	@:kw('macro') @:lead(':') @:fmt(spaceBeforeLead)
+	/**
+	 * `macro : T`. The space before the colon is always written; the one after it follows
+	 * `typeHintColon` (`@:fmt(spaceBeforeLead, typeHintColon)` = the policy's `add(Before)`).
+	 */
+	@:kw('macro') @:lead(':') @:fmt(spaceBeforeLead, typeHintColon)
 	MacroTypeExpr(t: HxType);
 
 	@:kw('macro') @:fmt(clearBracePolicy)
 	MacroClassExpr(v: HxMacroClass);
 
+	/**
+	 * `macro e`. The space stays before any operand, a paren included: `macro` reads as a construct whose
+	 * operand can be anything, where `cast(e)` reads as a call.
+	 */
 	@:kw('macro') @:fmt(clearExprPosition, clearBracePolicy)
 	MacroExpr(operand: HxExpr);
 

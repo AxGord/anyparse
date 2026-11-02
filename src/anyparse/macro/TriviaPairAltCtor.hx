@@ -509,7 +509,7 @@ final class TriviaPairAltCtor {
 		if (isAltWrapOpenNewlineBranch(branch)) {
 			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 			args.push({ name: TriviaTypeSynth.WRAP_OPEN_NEWLINE_ARG_NAME, type: boolCT });
-			args.push({ name: TriviaTypeSynth.WRAP_OPEN_TRAILING_ARG_NAME, type: macro :Null<String> });
+			args.push({ name: TriviaTypeSynth.WRAP_OPEN_TRAILING_ARG_NAME, type: macro : Null<String> });
 		}
 		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family Alt
 		// branches opting into source-shape capture via `@:fmt(captureKwNewline)`
@@ -559,7 +559,7 @@ final class TriviaPairAltCtor {
 			final strCT2: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT2: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT2)] });
 			args.push({ name: TriviaTypeSynth.OP_AFTER_COMMENT_ARG_NAME, type: nullStrCT2 });
-			args.push({ name: TriviaTypeSynth.OP_OWN_COMMENTS_ARG_NAME, type: macro :Array<String> });
+			args.push({ name: TriviaTypeSynth.OP_OWN_COMMENTS_ARG_NAME, type: macro : Array<String> });
 		}
 		// ω-keep-infix-rhs-comment: `opRhsTrailComment` slot on any @:infix ctor
 		// carrying @:fmt(captureRhsTrail) (position #3, right-operand trailing).

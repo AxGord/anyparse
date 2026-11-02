@@ -86,7 +86,7 @@ class Codegen {
 			name: 'parse',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{ name: 'source', type: macro :String }],
+				args: [{ name: 'source', type: macro : String }],
 				ret: rootReturnCT,
 				expr: body
 			}),
@@ -152,7 +152,7 @@ class Codegen {
 			name: 'parseWith',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
+				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
 				ret: rootReturnCT,
 				expr: body
 			}),
@@ -178,7 +178,7 @@ class Codegen {
 			name: 'parse',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{ name: 'source', type: macro :haxe.io.Bytes }],
+				args: [{ name: 'source', type: macro : haxe.io.Bytes }],
 				ret: rootReturnCT,
 				expr: body
 			}),
@@ -200,11 +200,11 @@ class Codegen {
 		// `Null<Int>` under strict null safety — which would make the
 		// `_savedPos` rollback branch's `precValue < minPrec` comparison
 		// fail the null-safety binop check inside the generated parser.
-		final args: Array<FunctionArg> = [{ name: 'ctx', type: macro :anyparse.runtime.Parser }];
+		final args: Array<FunctionArg> = [{ name: 'ctx', type: macro : anyparse.runtime.Parser }];
 		if (rule.hasMinPrec) {
 			args.push({
 				name: 'minPrec',
-				type: macro :Int,
+				type: macro : Int,
 				value: macro 0
 			});
 		}
@@ -225,7 +225,7 @@ class Codegen {
 		return {
 			name: spec.varName,
 			access: [APrivate, AStatic, AFinal],
-			kind: FVar(macro :EReg, { expr: EConst(CRegexp(anchored, '')), pos: Context.currentPos() }),
+			kind: FVar(macro : EReg, { expr: EConst(CRegexp(anchored, '')), pos: Context.currentPos() }),
 			pos: Context.currentPos()
 		};
 	}
@@ -259,8 +259,8 @@ class Codegen {
 			name: 'skipWs',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
-				ret: macro :Void,
+				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
+				ret: macro : Void,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -328,8 +328,8 @@ class Codegen {
 			name: 'skipWsAndStash',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
-				ret: macro :Void,
+				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
+				ret: macro : Void,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -457,10 +457,10 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'lit', type: macro :String }
+					{ name: 'ctx', type: macro : anyparse.runtime.Parser },
+					{ name: 'lit', type: macro : String }
 				],
-				ret: macro :Bool,
+				ret: macro : Bool,
 				expr: macro $b{steps}
 			}),
 			pos: Context.currentPos()
@@ -486,10 +486,10 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'lit', type: macro :String }
+					{ name: 'ctx', type: macro : anyparse.runtime.Parser },
+					{ name: 'lit', type: macro : String }
 				],
-				ret: macro :Bool,
+				ret: macro : Bool,
 				expr: macro $b{steps}
 			}),
 			pos: Context.currentPos()
@@ -526,10 +526,10 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'keyword', type: macro :String }
+					{ name: 'ctx', type: macro : anyparse.runtime.Parser },
+					{ name: 'keyword', type: macro : String }
 				],
-				ret: macro :Bool,
+				ret: macro : Bool,
 				expr: macro $b{steps}
 			}),
 			pos: Context.currentPos()
@@ -560,8 +560,8 @@ class Codegen {
 			name: 'peekWord',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
-				ret: macro :String,
+				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
+				ret: macro : String,
 				// `Input.charCodeAt` returns -1 outside `[0, length)`, so
 				// the head reads below need no explicit bounds test.
 				expr: macro {
@@ -596,10 +596,10 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'lit', type: macro :String }
+					{ name: 'ctx', type: macro : anyparse.runtime.Parser },
+					{ name: 'lit', type: macro : String }
 				],
-				ret: macro :Void,
+				ret: macro : Void,
 				expr: macro {
 					if (!matchLit(ctx, lit)) {
 						throw anyparse.runtime.ParseError.backtrack;
@@ -629,10 +629,10 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'keyword', type: macro :String }
+					{ name: 'ctx', type: macro : anyparse.runtime.Parser },
+					{ name: 'keyword', type: macro : String }
 				],
-				ret: macro :Bool,
+				ret: macro : Bool,
 				expr: macro {
 					final _savedPos: Int = ctx.pos;
 					if (!matchLit(ctx, keyword)) return false;
@@ -668,10 +668,10 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'keyword', type: macro :String }
+					{ name: 'ctx', type: macro : anyparse.runtime.Parser },
+					{ name: 'keyword', type: macro : String }
 				],
-				ret: macro :Void,
+				ret: macro : Void,
 				expr: macro {
 					if (!matchLit(ctx, keyword)) {
 						throw anyparse.runtime.ParseError.backtrack;
@@ -781,8 +781,8 @@ class Codegen {
 			name: 'collectTrivia',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
-				ret: macro :{
+				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
+				ret: macro : {
 					blankBefore: Bool,
 					blankBefore2: Int,
 					blankAfterLeadingComments: Bool,
@@ -827,8 +827,8 @@ class Codegen {
 			name: 'collectTrailing',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
-				ret: macro :Null<String>,
+				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
+				ret: macro : Null<String>,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -856,11 +856,11 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'input', type: macro :anyparse.runtime.Input },
-					{ name: 'from', type: macro :Int },
-					{ name: 'to', type: macro :Int }
+					{ name: 'input', type: macro : anyparse.runtime.Input },
+					{ name: 'from', type: macro : Int },
+					{ name: 'to', type: macro : Int }
 				],
-				ret: macro :Bool,
+				ret: macro : Bool,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -904,10 +904,10 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'input', type: macro :anyparse.runtime.Input },
-					{ name: 'pos', type: macro :Int }
+					{ name: 'input', type: macro : anyparse.runtime.Input },
+					{ name: 'pos', type: macro : Int }
 				],
-				ret: macro :Bool,
+				ret: macro : Bool,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -960,10 +960,10 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'input', type: macro :anyparse.runtime.Input },
-					{ name: 'from', type: macro :Int }
+					{ name: 'input', type: macro : anyparse.runtime.Input },
+					{ name: 'from', type: macro : Int }
 				],
-				ret: macro :Bool,
+				ret: macro : Bool,
 				expr: body
 			}),
 			pos: Context.currentPos()
@@ -1276,8 +1276,8 @@ class Codegen {
 			name: name,
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
-				ret: macro :Null<String>,
+				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
+				ret: macro : Null<String>,
 				expr: body
 			}),
 			pos: Context.currentPos()

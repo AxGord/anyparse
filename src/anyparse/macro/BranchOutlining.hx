@@ -80,7 +80,7 @@ final class BranchOutlining {
 		if (taken.contains(name)) throw new Exception('BranchOutlining: helper name $name collides with a generated rule');
 		taken.push(name);
 		final returnCT: ComplexType = rule.returnCT;
-		final nullableCT: ComplexType = macro :Null<$returnCT>;
+		final nullableCT: ComplexType = macro : Null<$returnCT>;
 		final helperBody: Expr = macro {
 			$mapped;
 			return null;
@@ -108,8 +108,8 @@ final class BranchOutlining {
 	 * the rule's parameters.
 	 */
 	private static function ruleLocals(rule: GeneratedRule): Map<String, Null<ComplexType>> {
-		final types: Map<String, Null<ComplexType>> = ['ctx' => macro :anyparse.runtime.Parser];
-		if (rule.hasMinPrec) types['minPrec'] = macro :Int;
+		final types: Map<String, Null<ComplexType>> = ['ctx' => macro : anyparse.runtime.Parser];
+		if (rule.hasMinPrec) types['minPrec'] = macro : Int;
 		for (arg in rule.extraArgs) types[arg.name] = arg.type;
 		function declare(name: String, type: Null<ComplexType>): Void {
 			if (!types.exists(name)) {

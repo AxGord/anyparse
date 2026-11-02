@@ -41,4 +41,14 @@ enum abstract WhitespacePolicy(Int) from Int to Int {
 
 	final Both = 3;
 
+	/**
+	 * This policy with `side`'s space(s) switched on as well — haxe-formatter's
+	 * `WhitespacePolicy.add`, for a site that always keeps one side spaced and lets the
+	 * configured policy decide the other (`None.add(Before)` is `Before`, `After.add(Before)`
+	 * is `Both`).
+	 */
+	public inline function add(side: WhitespacePolicy): WhitespacePolicy {
+		return this | side;
+	}
+
 }

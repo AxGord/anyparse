@@ -129,8 +129,8 @@ final class WriterBlankLowering {
 			// below would not see the vars.
 			markExpr: {
 				expr: EVars([
-					{ name: '_bamAt', type: macro :Int, expr: macro _inner.length },
-					{ name: '_bamHad', type: macro :Bool, expr: macro false }
+					{ name: '_bamAt', type: macro : Int, expr: macro _inner.length },
+					{ name: '_bamHad', type: macro : Bool, expr: macro false }
 				]),
 				pos: Context.currentPos()
 			},
