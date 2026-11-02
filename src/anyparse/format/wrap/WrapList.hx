@@ -8,6 +8,7 @@ import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
+import anyparse.format.wrap.LineCommentPastSep.PastSepItems;
 
 using StringTools;
 using Lambda;
@@ -732,17 +733,24 @@ class WrapList {
 	 * Returns `-1` when the tree contains a forced hardline
 	 * (`Line` whose flat replacement starts with `\n`) — those trees
 	 * cannot be laid out in flat mode at all and the caller should
-	 * pick a break-mode shape unconditionally.
+	 * pick a break-mode shape unconditionally. With `codeOnly`, a line
+	 * comment and every forced break weigh nothing instead: the width the
+	 * code would take on one line with its notes gone.
 	 */
-	public static function flatLength(d: Doc): Int {
+	public static function flatLength(d: Doc, codeOnly: Bool = false): Int {
 		final stack: Array<Doc> = [d];
 		var total: Int = 0;
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			if (flatPushChildren(node, stack)) continue;
-			final contribution: Int = flatLeafLen(node);
-			if (contribution < 0) return -1;
-			total += contribution;
+			final contribution: Int = codeOnly && isLineCommentText( switch node {
+				case Text(s): s;
+				case _: null;
+			})
+				? 0
+				: flatLeafLen(node);
+			if (contribution < 0 && !codeOnly) return -1;
+			if (contribution > 0) total += contribution;
 		}
 		return total;
 	}
@@ -1366,6 +1374,18 @@ class WrapList {
 			measure.equalLens, hasContainerItems, hasMultilineLambdaItems
 		);
 		return probe.mode == FillLineWithLeadingBreak ? baseCols : baseCols * (1 + probe.additionalIndent);
+	}
+
+	/**
+	 * True iff `s` is a `//` LINE comment atom — the one comment form whose
+	 * presence at an element's edge makes a cuddled delimiter unreadable
+	 * (everything after `//` on that line is comment). `isCommentTextAtom`
+	 * accepts block comments too and answers a different question ("which
+	 * source token does this line structurally end on"); a `/* … *\/` can share
+	 * a line with a delimiter, so it is not excluded here.
+	 */
+	public static function isLineCommentText(s: Null<String>): Bool {
+		return s != null && s.trim().startsWith('//');
 	}
 
 	/**
@@ -2302,18 +2322,6 @@ class WrapList {
 		if (!endsWithCloseDelim(item)) return null;
 		final glueShape: Doc = Concat([Text(open), openInside, item, closeInside, Text(close)]);
 		return IfNaturalFirstLineFitsOpenDelim(lineWidth, openShape, glueShape);
-	}
-
-	/**
-	 * True iff `s` is a `//` LINE comment atom — the one comment form whose
-	 * presence at an element's edge makes a cuddled delimiter unreadable
-	 * (everything after `//` on that line is comment). `isCommentTextAtom`
-	 * accepts block comments too and answers a different question ("which
-	 * source token does this line structurally end on"); a `/* … *\/` can share
-	 * a line with a delimiter, so it is not excluded here.
-	 */
-	private static function isLineCommentText(s: Null<String>): Bool {
-		return s != null && s.trim().startsWith('//');
 	}
 
 	/**
@@ -4633,6 +4641,8 @@ class WrapList {
 		// values. `forceMode`, `sepBeforeFlags` and `sourceBreakBefore` stay nullable:
 		// null is their meaningful state.
 		final axes: ResolvedWrapListOptions = resolveAxes(options);
+		final pastSep: PastSepItems = LineCommentPastSep.relocate(items, sep, axes.sepBeforeFlags);
+		items = pastSep.items;
 		final appendTrailingComma: Bool = appendsTrailingComma(items, axes);
 		final leadFlat: Doc = axes.leadFlat;
 		final leadBreak: Doc = axes.leadBreak;
@@ -4640,7 +4650,7 @@ class WrapList {
 		final forceMode: Null<WrapMode> = axes.forceMode;
 		final suppressAdditionalIndent: Bool = axes.suppressAdditionalIndent;
 		final groupRestProbe: Bool = axes.groupRestProbe;
-		final sepBeforeFlags: Null<Array<Bool>> = axes.sepBeforeFlags;
+		final sepBeforeFlags: Null<Array<Bool>> = pastSep.sepBeforeFlags;
 		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
 		final breakAsOnePerLine: Bool = axes.breakAsOnePerLine;
 		final sourceBreakBefore: Null<Array<Bool>> = axes.sourceBreakBefore;

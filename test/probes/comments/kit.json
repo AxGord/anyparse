@@ -98,7 +98,11 @@
 		"bw2k/c1.hx": "class C {\n\tfunction f() {\n\t\ttry {\n\t\t\tg();\n\t\t\tg();\n\t\t} catch (e:Dynamic)\n\t\t\t// c\n\t\t\tg();\n\t}\n}\n",
 		"bw2k/c2.hx": "class C {\n\tfunction f() {\n\t\tvar x = try g() catch (e:Dynamic)\n\t\t\t// c\n\t\t\tg();\n\t}\n}\n",
 		"bw2k/k1.hx": "class C {\n\tfunction f(a:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg();\n\t\t} else /* b2 */ g();\n\t}\n}\n",
-		"bw2k/e1.hx": "class C {\n\tfunction f(a:Bool, c:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t} else\n\t\t\t// n2\n\t\t\tif (c) {\n\t\t\t\tg();\n\t\t\t}\n\t}\n}\n"
+		"bw2k/e1.hx": "class C {\n\tfunction f(a:Bool, c:Bool) {\n\t\tif (a) {\n\t\t\tg();\n\t\t} else\n\t\t\t// n2\n\t\t\tif (c) {\n\t\t\t\tg();\n\t\t\t}\n\t}\n}\n",
+		"w2c/r1a.hx": "class A {\n\tfunction f() {\n\t\tvar t3 = foo(1, 2) /* m\n\t\t\tn */\n\t\t;\n\t}\n}\n",
+		"w2c/r1b.hx": "class A {\n\tfunction f() {\n\t\tfoo(1, 2) /* m\n\t\t\tn */\n\t\t;\n\t}\n}\n",
+		"w2c/r4a.hx": "class A {\n\tfunction f() {\n\t\treturn a /* m\n\t\t\tn */\n\t\t\t+ b;\n\t}\n}\n",
+		"w2c/r4b.hx": "class A {\n\tfunction f() {\n\t\tif (a /* m\n\t\t\tn */\n\t\t\t&& b) {}\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -162,7 +166,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "c5e5849102f27d99",
+				"out": "c8f9b0235aa5b6c8",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -179,7 +183,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "4e64912eb182009e",
+				"out": "b3c0f9149ad14b58",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -230,7 +234,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "59dc7e65737af0d8",
+				"out": "f0985e695465036e",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -409,7 +413,6 @@
 		},
 		{
 			"name": "w2/p19.hx",
-			"knownDefect": "a comma-first list with a line comment on each element writes the separator on a line of its own (W2c)",
 			"fixpoint": "w2/p19.hx",
 			"argv": [
 				"hxq",
@@ -418,7 +421,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "d89ac95d84550545",
+				"out": "6e6cef17ebb8f871",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -435,7 +438,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "34750d650040bc15",
+				"out": "853cd31caad2e901",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -588,7 +591,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "f382017ef787020d",
+				"out": "2e8cb54776377349",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -622,7 +625,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "20cc688c374d1a62",
+				"out": "96cc18a657a55e48",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -656,7 +659,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "3ff25136db6f81b3",
+				"out": "b159f9f5f7ec8f65",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -928,7 +931,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "149e7f617f4a8bba",
+				"out": "d2e76551407078df",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -1037,7 +1040,6 @@
 		},
 		{
 			"name": "w2b/g13.hx",
-			"knownDefect": "a comma-first list with a line comment on each element writes the separator on a line of its own (W2c)",
 			"fixpoint": "w2b/g13.hx",
 			"argv": [
 				"hxq",
@@ -1046,7 +1048,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "d6fa52238639df71",
+				"out": "f6f12a706126f73a",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -1127,7 +1129,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "0224e1fa3f69af91",
+				"out": "342ebe1ee0b4ff29",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -1332,7 +1334,6 @@
 		},
 		{
 			"name": "w2b/m01.hx",
-			"knownDefect": "a comma-first list with a line comment on each element writes the separator on a line of its own (W2c)",
 			"fixpoint": "w2b/m01.hx",
 			"argv": [
 				"hxq",
@@ -1341,7 +1342,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "5ecf1584282d1ab4",
+				"out": "88693e6223351162",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -1350,7 +1351,6 @@
 		},
 		{
 			"name": "w2b/m02.hx",
-			"knownDefect": "a comma-first list with a line comment on each element writes the separator on a line of its own (W2c)",
 			"fixpoint": "w2b/m02.hx",
 			"argv": [
 				"hxq",
@@ -1359,7 +1359,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "d6fa52238639df71",
+				"out": "f6f12a706126f73a",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -1747,6 +1747,74 @@
 			"expect": {
 				"exit": 0,
 				"out": "26a18c5e4e9d80f8",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2c/r1a.hx",
+			"fixpoint": "w2c/r1a.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2c/r1a.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ba04cbeadb131b75",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2c/r1b.hx",
+			"fixpoint": "w2c/r1b.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2c/r1b.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "2baec8092c8cef58",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2c/r4a.hx",
+			"fixpoint": "w2c/r4a.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2c/r4a.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "6f45172169257a43",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2c/r4b.hx",
+			"fixpoint": "w2c/r4b.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2c/r4b.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c67a7fa2aa12cc65",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

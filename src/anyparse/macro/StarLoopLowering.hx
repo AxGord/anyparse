@@ -420,8 +420,9 @@ final class StarLoopLowering {
 	/**
 	 * The separator scan past a comment gap, spliced right after a trivia sep-loop's same-line `matchLit` missed: a
 	 * separator the source put on a later line, after a comment (`a // c` newline `, b`), is still this element's
-	 * separator. The gap's own-line comments ride into the next `collectTrivia` through `pendingTrivia`, so they lead the
-	 * next element (or join the orphans before the close); a gap with no comment, or no separator after it, rewinds whole.
+	 * separator. The gap's own-line comments and blank lines ride into the next `collectTrivia` through `pendingTrivia`,
+	 * so they lead the next element (or join the orphans before the close); a gap with no comment, or no separator after
+	 * it, rewinds whole.
 	 * Reads and sets the loop's `_trailingBeforeSep` / `_sepAfter` / `_sepAcrossGap` locals.
 	 */
 	private static function sepAcrossCommentGapExpr(sepText: String): Expr {
@@ -432,9 +433,9 @@ final class StarLoopLowering {
 			if ((_trailingBeforeSep != null || _gap.leadingComments.length > 0) && matchLit(ctx, $v{sepText})) {
 				_sepAfter = true;
 				_sepAcrossGap = true;
-				if (_gap.leadingComments.length > 0) ctx.pendingTrivia = {
-					blankBefore: false,
-					blankAfterLeadingComments: false,
+				if (_gap.leadingComments.length > 0 || _gap.blankBefore) ctx.pendingTrivia = {
+					blankBefore: _gap.blankBefore,
+					blankAfterLeadingComments: _gap.blankAfterLeadingComments,
 					newlineBefore: false,
 					leadingComments: _gap.leadingComments,
 				};

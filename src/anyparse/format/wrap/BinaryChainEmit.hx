@@ -613,6 +613,7 @@ final class BinaryChainEmit {
 		// comment, a `#if` line) keeps the broken chain, whose nest indents the operand's continuation.
 		final hugsLast: Bool = isChainOps(ops)
 			&& !items.slice(0, items.length - 1).exists(item -> WrapList.flatLength(item) < 0)
+			&& !overflowsAheadOfNote(items, ops, opt.lineWidth)
 			&& evalAt(false, []).mode == NoWrap;
 		if (!hugsLast) return broken;
 		final glued: Doc = shapeNoWrap(items, ops);
@@ -1392,6 +1393,57 @@ final class BinaryChainEmit {
 		final arm: Null<Doc> = WrapList.renderPivotBreakArm(items[idx]);
 		final hugItems: Array<Doc> = arm == null ? items : [for (i in 0...items.length) i == idx ? arm : items[i]];
 		return IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(hugItems, ops));
+	}
+
+	/**
+	 * Whether the chain's last operand breaks only because its first line ends on a note (`( // why`) and the chain
+	 * would not fit `lineWidth` on one line even with its notes gone. Such a chain is too long to hug its last operand —
+	 * the note made the break, not a delimiter the operand opened — so it takes its broken shape and the note keeps the
+	 * operand's own line. A chain that would fit keeps the hug.
+	 */
+	private static function overflowsAheadOfNote(items: Array<Doc>, ops: Array<String>, lineWidth: Int): Bool {
+		if (!firstLineEndsOnLineComment(items[items.length - 1])) return false;
+		var width: Int = 0;
+		for (item in items) width += WrapList.flatLength(item, true);
+		for (op in ops) width += op.length + 2;
+		return width > lineWidth;
+	}
+
+	/** Whether `d`'s first line, read with every soft break flat, ends on a line comment. */
+	private static function firstLineEndsOnLineComment(d: Doc): Bool {
+		var lastText: Null<String> = null;
+		function walk(n: Doc): Null<Bool> {
+			return switch n {
+				case Text(s):
+					if (s.trim() != '') lastText = s.trim();
+					null;
+				case Concat(arr):
+					var r: Null<Bool> = null;
+					for (it in arr) if (r == null) r = walk(it);
+					r;
+				case Line(flat):
+					flat.startsWith('\n') ? WrapList.isLineCommentText(lastText) : null;
+				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
+					WrapList.isLineCommentText(lastText);
+				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
+					HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+					ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
+					walk(i);
+				case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
+					IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
+					IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
+					IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+					IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat),
+					IfTrailingCommentOverflows(_, _, _, _, flat):
+					walk(flat);
+				case Empty, OptSpace(_), OptSpaceSkipAfterHardline:
+					null;
+				case Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
+					// Which item a fill breaks after is a render-time decision: no static first line.
+					false;
+			};
+		}
+		return walk(d) ?? false;
 	}
 
 }

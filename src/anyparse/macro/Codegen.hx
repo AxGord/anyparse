@@ -62,6 +62,8 @@ class Codegen {
 			fields.push(collectTriviaField(formatInfo));
 			fields.push(collectTrailingField(formatInfo));
 			fields.push(collectTrailingFullField(formatInfo));
+			fields.push(collectTrailingRunOnField(formatInfo));
+			fields.push(collectTrailingAfterOpenField(formatInfo));
 			fields.push(collectTrailingBlockField(formatInfo));
 			if (formatInfo.commentPatterns.length > 0) fields.push(skipWsAndStashField(formatInfo));
 		}
@@ -803,8 +805,7 @@ class Codegen {
 	 * `collectTrivia` picks the newlines up as leading of the next
 	 * element). For block comments, an internal newline disqualifies the
 	 * match — a newline-bearing block is left for the next element's
-	 * leading capture. Returns the comment body (delimiters stripped)
-	 * or `null`.
+	 * leading capture. Returns the comment body (delimiters stripped) or `null`.
 	 */
 	private static function collectTrailingField(formatInfo: FormatReader.FormatInfo): Field {
 		final attempts: Array<Expr> = [for (p in formatInfo.commentPatterns) trailingAttemptBlock(p)];
@@ -1209,7 +1210,29 @@ class Codegen {
 	 * `collectTrailing` because their writer helpers deliberately normalise to line style.
 	 */
 	private static function collectTrailingFullField(formatInfo: FormatReader.FormatInfo): Field {
-		return trailingFullField('collectTrailingFull', [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p)]);
+		return trailingFullField('collectTrailingFull', [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, Refused)]);
+	}
+
+	/**
+	 * Generate `collectTrailingRunOn` — `collectTrailingFull` that also takes a block comment running on past its
+	 * first line when it ends its own last line, for the one slot whose writer keeps such a comment where the parse
+	 * found it: a binary operand's comment ahead of an operator on the next line (`"a" /*+ b` newline `c *\/` newline
+	 * `+ "d"`). Every other trailing slot is followed by a token its writer glues, so it keeps refusing.
+	 */
+	private static function collectTrailingRunOnField(formatInfo: FormatReader.FormatInfo): Field {
+		return trailingFullField(
+			'collectTrailingRunOn',
+			[for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, EndingItsLine)]
+		);
+	}
+
+	/**
+	 * Generate `collectTrailingAfterOpen` — `collectTrailingFull` for the comment right after an OPEN delimiter
+	 * (`(/* a` newline `b *\/ x)`): a block comment that starts on the delimiter's line belongs to that delimiter
+	 * whatever follows its closer, since the delimiter leads no code a comment could lead instead.
+	 */
+	private static function collectTrailingAfterOpenField(formatInfo: FormatReader.FormatInfo): Field {
+		return trailingFullField('collectTrailingAfterOpen', [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, Always)]);
 	}
 
 	/**
@@ -1229,7 +1252,7 @@ class Codegen {
 	 */
 	private static function collectTrailingBlockField(formatInfo: FormatReader.FormatInfo): Field {
 		return trailingFullField('collectTrailingBlock', [
-			for (p in formatInfo.commentPatterns) if (!p.lineTerminated) trailingFullAttemptBlock(p)
+			for (p in formatInfo.commentPatterns) if (!p.lineTerminated) trailingFullAttemptBlock(p, Refused)
 		]);
 	}
 
@@ -1264,10 +1287,12 @@ class Codegen {
 	/**
 	 * Twin of `trailingAttemptBlock` that captures the open delimiter +
 	 * body + close delimiter verbatim. Line-style returns `open + body`
-	 * (no trailing `\n`); block-style returns `open + body + close` and
-	 * rejects internal newlines identically to the stripped variant.
+	 * (no trailing `\n`); block-style returns `open + body + close`. A block
+	 * that runs on past its first line is taken as `runOn` says — refused by
+	 * every slot whose writer glues the next token after the closer, which a
+	 * next parse would read as the comment leading that token.
 	 */
-	private static function trailingFullAttemptBlock(p: FormatReader.CommentPattern): Expr {
+	private static function trailingFullAttemptBlock(p: FormatReader.CommentPattern, runOn: TrailingRunOn): Expr {
 		final open: String = p.open;
 		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
@@ -1279,13 +1304,30 @@ class Codegen {
 		}
 		final close: String = p.close;
 		final docRefusal: Expr = docEndsLineRefusal(p, macro _start);
+		final runOnRefusal: Expr = switch runOn {
+			case Refused: macro if (_comment.indexOf('\n') >= 0) {
+				ctx.pos = _savedPos;
+				return (null: Null<String>);
+			};
+			case EndingItsLine: macro if (_comment.indexOf('\n') >= 0) {
+				var _k: Int = ctx.pos;
+				while (_k < ctx.input.length) {
+					final _h: Int = ctx.input.charCodeAt(_k);
+					if (_h != ' '.code && _h != '\t'.code && _h != '\r'.code) break;
+					_k++;
+				}
+				if (_k < ctx.input.length && ctx.input.charCodeAt(_k) != '\n'.code) {
+					ctx.pos = _savedPos;
+					return (null: Null<String>);
+				}
+			};
+			case Always: macro {};
+		};
 		return macro if (matchLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
 			var _found: Bool = false;
 			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
-				final _c: Int = ctx.input.charCodeAt(ctx.pos);
-				if (_c == '\n'.code) break;
 				if (matchLit(ctx, $v{close})) {
 					_end = ctx.pos;
 					_found = true;
@@ -1295,12 +1337,25 @@ class Codegen {
 			}
 			if (_found) {
 				$docRefusal;
-				return ctx.input.substring(_start, _end);
+				final _comment: String = ctx.input.substring(_start, _end);
+				$runOnRefusal;
+				return _comment;
 			}
 			ctx.pos = _savedPos;
 			return (null: Null<String>);
 		}
 	}
 
+}
+/** How a verbatim trailing capture treats a block comment that runs on past its first line. */
+private enum abstract TrailingRunOn(Int) {
+	/** Refused: left for the next element's leading capture. */
+	var Refused;
+
+	/** Taken when it also ends its own last line; code after its closer is what it leads. */
+	var EndingItsLine;
+
+	/** Taken whatever follows it (a comment right after an open delimiter). */
+	var Always;
 }
 #end

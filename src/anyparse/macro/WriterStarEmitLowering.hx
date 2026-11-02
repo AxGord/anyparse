@@ -1493,7 +1493,7 @@ final class WriterStarEmitLowering {
 	 * the guarded emitter, which keeps the following separator off a line comment. The last element also carries
 	 * the orphan comments the loop scanned before the close literal, so no captured comment is left unwritten.
 	 */
-	private static function inlineTriviaElemCall(elemFn: String, fieldName: String): Expr {
+	private static function inlineTriviaElemCall(elemFn: String, fieldName: String, movedPastTrail: Expr): Expr {
 		final writeCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _te.node, macro opt]),
 			pos: Context.currentPos()
@@ -1515,9 +1515,10 @@ final class WriterStarEmitLowering {
 			_edParts.push(leadingCommentsBefore(_lc, _dhl(), opt));
 			_edParts.push($writeCall);
 			final _tc: Null<String> = _te.trailingComment;
-			if (_tc != null && (_te.trailingBeforeSep || _isLast || StringTools.startsWith(_tc, '//')))
+			final _moved: Null<String> = _isLast ? $movedPastTrail : null;
+			if (_tc != null && _moved == null && (_te.trailingBeforeSep || _isLast || StringTools.startsWith(_tc, '//')))
 				_edParts.push(trailingCommentDocGuarded(_tc, opt));
-			if (_isLast) for (_oc in $orphanAccess) _edParts.push(trailingCommentDocGuarded(_oc, opt));
+			if (_isLast && _moved == null) for (_oc in $orphanAccess) _edParts.push(trailingCommentDocGuarded(_oc, opt));
 			_dc(_edParts);
 		};
 	}
@@ -1531,10 +1532,28 @@ final class WriterStarEmitLowering {
 
 	/** The per-element write call of a plain-layout Star: the bare element, or its `Trivial` wrapper with its comments. */
 	private static function plainStarElemCall(elemFn: String, starNode: ShapeNode, inlineElemTrivia: Bool): Expr {
-		return inlineElemTrivia ? inlineTriviaElemCall(elemFn, starNode.annotations[AnnotationKeys.BASE_FIELD_NAME]) : {
-			expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro opt]),
-			pos: Context.currentPos()
-		};
+		return inlineElemTrivia
+			? inlineTriviaElemCall(elemFn, starNode.annotations[AnnotationKeys.BASE_FIELD_NAME], movedPastTrailExpr(starNode) ?? macro null)
+			: {
+				expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro opt]),
+				pos: Context.currentPos()
+			};
+	}
+
+	/**
+	 * The runtime `LineCommentPastSep.movedPastTrail` answer for an inline-element trivia Star that captures the comment
+	 * after its trail literal (`@:fmt(captureTrailComment)`), read off `value`; null for any other Star. The Star leaves
+	 * that comment out of its last element and the next field writes it after the literal, both through this one call.
+	 */
+	private static function movedPastTrailExpr(starNode: ShapeNode): Null<Expr> {
+		if (!starNode.fmtHasFlag(INLINE_ELEM_TRIVIA) || !starNode.fmtHasFlag('captureTrailComment')) return null;
+		final name: String = starNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
+		final list: Expr = { expr: EField(macro value, name), pos: Context.currentPos() };
+		final orphans: Expr = { expr: EField(macro value, name + TriviaTypeSynth.TRAILING_LEADING_SUFFIX), pos: Context.currentPos() };
+		final afterTrail: Expr = { expr: EField(macro value, name + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos() };
+		return macro anyparse.format.wrap.LineCommentPastSep.movedPastTrail(
+			$list.length > 0 ? $list[$list.length - 1].trailingComment : null, $orphans, $afterTrail
+		);
 	}
 
 }

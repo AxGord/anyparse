@@ -151,7 +151,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 |---|---|
 | `WriterRefFieldLowering` | 46 |
 | `WriterTriviaStarDispatch` | 43 |
-| `WriterStarEmitLowering` | 42 |
+| `WriterStarEmitLowering` | 43 |
 | `WriterKwRefLowering` | 31 |
 | `WriterTriviaStarEmitLowering` | 28 |
 | `WriterCtorBlankLowering` | 17 |

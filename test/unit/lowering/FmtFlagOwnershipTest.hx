@@ -52,7 +52,7 @@ class FmtFlagOwnershipTest extends Test {
 	private static final EXPECTED_OWNERSHIP: Map<String, Int> = [
 		'WriterRefFieldLowering' => 46,
 		'WriterTriviaStarDispatch' => 43,
-		'WriterStarEmitLowering' => 42,
+		'WriterStarEmitLowering' => 43,
 		'WriterKwRefLowering' => 31,
 		'WriterTriviaStarEmitLowering' => 28,
 		'WriterCtorBlankLowering' => 17,

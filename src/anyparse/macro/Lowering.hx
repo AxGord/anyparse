@@ -993,7 +993,7 @@ class Lowering {
 			skipWs(ctx);
 			expectLit(ctx, $v{leadText});
 			$openDelimBarrier;
-			final _openTrail: Null<String> = collectTrailingFull(ctx);
+			final _openTrail: Null<String> = collectTrailingAfterOpen(ctx);
 			final _items: Array<$wrappedCT> = [];
 			var _trailBB: Bool = false;
 			var _trailLC: Array<String> = [];

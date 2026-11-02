@@ -3124,6 +3124,9 @@ class Renderer {
 	 */
 	private static function emitLine(ctx: RenderCtx, f: Frame, flat: String, verbatim: Bool): Void {
 		if (f.forceFlat || f.mode == MFlat) {
+			// A soft gap laid flat is the same gap as a blank `Text` (a fill's separator after an element that closes on
+			// a line comment): the pending hardline swallows it.
+			if (flat.length > 0 && absorbedByPendingHardline(ctx, flat, verbatim)) return;
 			flushPendingHardline(ctx);
 			// Zero-width flat text writes nothing, so a run held before it stays
 			// held for the next break to decide — but a pending optional space

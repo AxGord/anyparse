@@ -356,10 +356,9 @@ final class WriterTriviaStarEmitLowering {
 		// slot (mandatory Ref with `@:trail` in trivia-bearing mode),
 		// thread its access so the Star can inline-emit the captured
 		// trail-of-prev-field comment cuddled to the prev token.
-		final tryparsePriorAfterTrailExpr: Null<Expr> = prevTrailFieldName == null ? null : {
-			expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-			pos: Context.currentPos()
-		};
+		final tryparsePriorAfterTrailExpr: Null<Expr> = prevTrailFieldName == null
+			? null
+			: priorAfterTrailExpr(ctx, c.typePath, prevTrailFieldName);
 		// ω-blockended-trivia-tryparse (Session 3): thread the Star's
 		// `@:sep('text', tailRelax, blockEnded)` annotation into
 		// `triviaTryparseStarExpr` so the helper can inject `;`
@@ -588,6 +587,20 @@ final class WriterTriviaStarEmitLowering {
 			lineCommentLedAddBlank, afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks, cascadeInfos.betweenSameCtorIfNotInfos,
 			measuredMultiline
 		));
+	}
+
+	/**
+	 * The comment the field after `prevField` cuddles to that field's trail literal: the literal's own captured slot,
+	 * or — for a list whose closing line comment moves past its literal — that comment
+	 * (`WriterStarEmitLowering.movedPastTrailExpr`), so the list and this field agree on who writes it.
+	 */
+	@:access(anyparse.macro.WriterStarEmitLowering)
+	private static function priorAfterTrailExpr(ctx: WriterStarEmitLowering.StarEmitCtx, typePath: String, prevField: String): Expr {
+		final afterTrail: Expr = { expr: EField(macro value, prevField + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos() };
+		final node: Null<ShapeNode> = ctx.shape.rules[typePath];
+		final prev: Null<ShapeNode> = node?.children.find(ch -> ch.annotations[AnnotationKeys.BASE_FIELD_NAME] == prevField);
+		final moved: Null<Expr> = prev == null ? null : WriterStarEmitLowering.movedPastTrailExpr(prev);
+		return moved == null ? afterTrail : macro $moved ?? $afterTrail;
 	}
 
 }

@@ -611,7 +611,7 @@ final class StarFieldLowering {
 						{
 							name: trailOpenLocal,
 							type: nullStrCT,
-							expr: macro collectTrailingFull(ctx),
+							expr: macro collectTrailingAfterOpen(ctx),
 							isFinal: true
 						}
 					]),

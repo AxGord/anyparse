@@ -167,7 +167,7 @@ final class KwBranchLowering {
 			// pattern above.
 			if (triviaWrapOpenNewline) steps.push(macro final _leadEndPos: Int = ctx.pos);
 			// The comment on the open delimiter's line (`( // c`) is kept verbatim for the writer; `skipWs` would drop it.
-			if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenTrailing: Null<String> = collectTrailingFull(ctx));
+			if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenTrailing: Null<String> = collectTrailingAfterOpen(ctx));
 			steps.push(macro skipWs(ctx));
 			if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenNewline: Bool = hasNewlineIn(ctx.input, _leadEndPos, ctx.pos));
 		}

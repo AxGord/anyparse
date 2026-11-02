@@ -12,12 +12,17 @@ import utest.Test;
 class HxSepCommentGapWriteTest extends Test {
 
 	public function testLineCommentBeforeSeparatorOnTheNextLine(): Void {
-		assertSettles(inSwitch('case A // c\n\t\t\t, B:'), inSwitch('case A // c\n\t\t\t\t, B:'));
+		assertSettles(inSwitch('case A // c\n\t\t\t, B:'), inSwitch('case A, // c\n\t\t\t\tB:'));
 	}
 
 	public function testEachLineCommentStaysOnItsOwnPatternsLine(): Void {
+		assertSettles(inSwitch('case A // c1\n\t\t\t, B // c2\n\t\t\t, C:'), inSwitch('case A, // c1\n\t\t\t\tB, // c2\n\t\t\t\tC:'));
+	}
+
+	public function testCallLineCommentsBeforeSeparatorsGoPastThem(): Void {
 		assertSettles(
-			inSwitch('case A // c1\n\t\t\t, B // c2\n\t\t\t, C:'), inSwitch('case A // c1\n\t\t\t\t,\n\t\t\t\tB // c2\n\t\t\t\t, C:')
+			'class Foo {\n\tfunction bar() {\n\t\tg(a // c1\n\t\t\t, b // c2\n\t\t\t, c);\n\t}\n}\n',
+			'class Foo {\n\tfunction bar() {\n\t\tg(\n\t\t\ta, // c1\n\t\t\tb, // c2\n\t\t\tc\n\t\t);\n\t}\n}\n'
 		);
 	}
 
@@ -31,6 +36,10 @@ class HxSepCommentGapWriteTest extends Test {
 
 	public function testArrayLineCommentBeforeSeparator(): Void {
 		assertSettles('class Foo {\n\tvar a = [1 // c\n\t, 2];\n}\n', 'class Foo {\n\tvar a = [\n\t\t1, // c\n\t\t2\n\t];\n}\n');
+	}
+
+	public function testArrayBlankLineBetweenCommentAndSeparatorIsKept(): Void {
+		assertSettles('class Foo {\n\tvar a = [1 // c\n\n\t, 2];\n}\n', 'class Foo {\n\tvar a = [\n\t\t1, // c\n\n\t\t2\n\t];\n}\n');
 	}
 
 	public function testArrayOwnLineCommentBeforeSeparator(): Void {

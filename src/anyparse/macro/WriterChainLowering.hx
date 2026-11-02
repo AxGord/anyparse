@@ -376,7 +376,11 @@ final class WriterChainLowering {
 			while (_mj < _docs.length) {
 				_mInner.push(_dhl());
 				final _mTc: Null<String> = _args[_mj].trailingComment;
-				final _mAfterSep: Null<String> = _args[_mj].trailingBeforeSep ? null : _mTc;
+				final _mAfterSep: Null<String> = anyparse.format.wrap.LineCommentPastSep.writtenAfterSep(
+					_mTc, _args[_mj].trailingBeforeSep, _mj < _docs.length - 1 && _args[_mj].sepAfter
+				)
+					? _mTc
+					: null;
 				// Between elements only when the source wrote a separator there; on the
 				// last element when the config asks for a trailing one OR the source
 				// itself put one (which is what an after-separator comment proves).
@@ -495,7 +499,9 @@ final class WriterChainLowering {
 				// Parseable, idempotent, and strictly better than the refusal it
 				// replaces, but not the same shape; moving the chain emitter onto this
 				// rule is its own slice.
-				final _tcAfterSep: Bool = _tc != null && !_args[_i].trailingBeforeSep;
+				final _tcAfterSep: Bool = anyparse.format.wrap.LineCommentPastSep.writtenAfterSep(
+					_tc, _args[_i].trailingBeforeSep, _i < _args.length - 1 && _args[_i].sepAfter
+				);
 				if (_tcAfterSep) _forceArgMulti = true;
 				// `trailingCommentDocGuarded` already prepends ' ' to
 				// the captured content, so the per-arg Doc is just
@@ -514,11 +520,10 @@ final class WriterChainLowering {
 				// guard-bearing body - the two halves together keep the `)` off
 				// the comment's line under ANY wrap cascade. Every sound seam
 				// stays byte-identical, and a block comment keeps its legal glue.
-				// A BEFORE-separator trailing comment is NOT a force-multi trigger:
-				// `trailingCommentDocGuarded`'s render-time break already keeps the
-				// following token off its line, whatever shape the cascade picked.
-				// Widening the trigger to it would re-wrap every `arg // noqa` call
-				// in the tree for no correctness gain.
+				// A BEFORE-separator LINE comment on an argument a separator follows
+				// is written after that separator (`LineCommentPastSep`), so it joins
+				// the after-separator case: written as it reads back, one pass. On the
+				// last argument, and in block style, it stays in the argument's Doc.
 				var _elemDoc: anyparse.core.Doc = _tc != null && !_tcAfterSep ? _dc([_elem, trailingCommentDocGuarded(_tc, opt)]) : _elem;
 				// ω-callarg-leading-comment: glue a captured inline block leading
 				// comment before the argument (`/* c */ arg`).

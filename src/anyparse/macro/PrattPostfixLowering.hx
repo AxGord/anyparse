@@ -526,7 +526,7 @@ final class PrattPostfixLowering {
 					// on no operator match the `_hadComment` rewind (scanning from
 					// `_preWsPos`) restores a consumed comment; only a matched chain
 					// ctor reads it into its chainLeadComment slot.
-					final _opTrailComment: Null<String> = collectTrailingFull(ctx);
+					final _opTrailComment: Null<String> = collectTrailingRunOn(ctx);
 					final _stashCount0: Int = ctx.pendingTrivia == null ? 0 : ctx.pendingTrivia.leadingComments.length;
 					skipWsAndStash(ctx);
 					final _savedPos: Int = ctx.pos;

@@ -31,11 +31,9 @@ class HxPatternListAndLeadCommentWriteTest extends Test {
 	}
 
 	public function testLineCommentAfterSeparatorStaysOnItsPatternsLine(): Void {
-		// A line comment stays on its pattern's line, ahead of the separator the list writes on the next line: one
-		// heading the next pattern would read back as that pattern's comment.
-		final once: Null<String> = roundTrip(inSwitch('case A, // x\n\t\t\t\tC:'));
-		Assert.equals(inSwitch('case A // x\n\t\t\t\t, C:'), once);
-		Assert.equals(once, roundTrip(once ?? ''));
+		// A line comment stays on its pattern's line, after the separator: the next pattern starts the next line.
+		final source: String = inSwitch('case A, // x\n\t\t\t\tC:');
+		Assert.equals(source, roundTrip(source));
 	}
 
 	public function testCommentAfterTypedefAssign(): Void {
@@ -50,9 +48,27 @@ class HxPatternListAndLeadCommentWriteTest extends Test {
 		assertFixedPoint('typedef T = // c\n\tA;\n');
 	}
 
-	public function testOwnLineCommentBeforePatternCloseRidesTheLastPattern(): Void {
-		// An orphan the loop scans before `:` (the `TrailingLeading` slot) is written after the last pattern.
-		assertSettles(inSwitch('case A, B\n\t\t\t// c\n\t\t\t:'), inSwitch('case A,\n\t\t\t\tB // c\n\t\t\t\t:'), '// c');
+	public function testOwnLineCommentBeforePatternCloseMovesPastTheColon(): Void {
+		// The one line comment that closes the pattern list is written after `:`, so the list stays on the `case` line.
+		assertSettles(inSwitch('case A, B\n\t\t\t// c\n\t\t\t:'), inSwitch('case A, B: // c'), '// c');
+	}
+
+	public function testLastPatternsLineCommentMovesPastTheColon(): Void {
+		assertSettles(inSwitch('case A // c\n\t\t\t:\n\t\t\t\t1;'), inSwitch('case A: // c\n\t\t\t\t1;'), '// c');
+	}
+
+	public function testOccupiedColonCommentKeepsTheLastPatternsComment(): Void {
+		// The comment after `:` holds that slot, so the last pattern's own note stays where it was.
+		final source: String = inSwitch('case A,\n\t\t\t\tB // c\n\t\t\t\t: // d\n\t\t\t\t1;');
+		Assert.equals(source, roundTrip(source));
+	}
+
+	public function testTwoOwnLineCommentsBeforeTheColonAreNotMoved(): Void {
+		final once: String = roundTrip(inSwitch('case A, B\n\t\t\t// c\n\t\t\t// d\n\t\t\t:')) ?? '';
+		Assert.equals(once, roundTrip(once));
+		Assert.stringContains('// c', once);
+		Assert.stringContains('// d', once);
+		Assert.isFalse(once.indexOf(': //') >= 0, 'neither comment moves past the colon');
 	}
 
 	public function testInlineCommentBeforeFirstOfSeveralPatterns(): Void {
