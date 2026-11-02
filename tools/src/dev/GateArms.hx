@@ -23,6 +23,9 @@ using StringTools;
 @:nullSafety(Strict)
 final class GateArms {
 
+	/** What a command of the plan may run before it is killed: a hung call, not a slow one; the plan runs in the gate's own process. */
+	private static inline final PLAN_TIMEOUT_MS: Int = 10 * 60 * 1000;
+
 	/** How many arm names an arms row spells before it elides the rest. */
 	private static inline final ARMS_SHOWN: Int = 6;
 
@@ -32,27 +35,31 @@ final class GateArms {
 	/** The scope and the format of every `hxq graph` call of the row: the sources an arm can cut, as json. */
 	private static final GRAPH_SCOPE: Array<String> = ['src', 'tools/src', '--format', 'json'];
 
-	/** The arms row of `gate`, the heavy rows' threads as the arms' jobs. */
-	public static function outcome(gate: GateTree): Outcome {
-		if (gate.options.noArms) return Skipped('--no-arms');
+	/**
+	 * What the arms row of `gate` has to do: the outcome it settles without a run (`--no-arms`, a bad name, no arm selected), or
+	 * the selection to run. It spends no kill run, so a caller can ask before it takes a lease for the run.
+	 */
+	public static function plan(gate: GateTree): ArmPlan {
+		if (gate.options.noArms) return Settled(Skipped('--no-arms'));
 		final now: Array<ArmRecord> = ArmRegistry.read(Path.join([gate.tree, ArmRegistry.DIRECTORY]));
 		final old: Null<Array<ArmRecord>> = baseRecords(gate);
 		final layout: Array<String> = [for (file in layoutOf(changedReport(gate))) moduleOf(file)].filter(m -> m != '');
 		final modules: Array<String> = [for (file in gate.touched) moduleOf(file)].filter(m -> m != '' && !layout.contains(m));
-		final extra: Array<String> = gate.options.arms;
-		final waived: Array<String> = gate.options.allowArms;
 		final near: Array<String> = callNeighbours(gate, layout);
-		final picked: ArmSelection = select(now, old, modules, layout, pinnedKillers(gate, modules), extra, near);
-		for (name in extra) if (!picked.fast.contains(name)) return Failed('--arm $name names no arm in ${ArmRegistry.DIRECTORY}');
-		for (name in waived) if (!now.exists(r -> r.key == name))
-			return Failed('--allow-arm $name names no arm in ${ArmRegistry.DIRECTORY}');
-		if (picked.fast.length + picked.applyOnly.length == 0) return Skipped('no arm selected');
-		final read: ArmReading = { notes: [], rows: [] };
-		final applied: Outcome = picked.applyOnly.length == 0 ? Passed : applyOutcome(gate, picked.applyOnly, read);
-		if (!applied.match(Passed)) return applied;
-		if (picked.fast.length > 0) return fastOutcome(gate, picked.fast, old, read);
-		gate.summary.detail(passNote(read, waived));
-		return Passed;
+		final picked: ArmSelection = select(now, old, modules, layout, pinnedKillers(gate, modules), gate.options.arms, near);
+		for (name in gate.options.arms) if (!picked.fast.contains(name))
+			return Settled(Failed('--arm $name names no arm in ${ArmRegistry.DIRECTORY}'));
+		for (name in gate.options.allowArms) if (!now.exists(r -> r.key == name))
+			return Settled(Failed('--allow-arm $name names no arm in ${ArmRegistry.DIRECTORY}'));
+		return picked.fast.length + picked.applyOnly.length == 0 ? Settled(Skipped('no arm selected')) : Runs(picked, old);
+	}
+
+	/** The arms row of `gate`, the heavy rows' threads as the arms' jobs. */
+	public static function outcome(gate: GateTree): Outcome {
+		return switch plan(gate) {
+			case Settled(outcome): outcome;
+			case Runs(picked, old): run(gate, picked, old);
+		}
 	}
 
 	/**
@@ -100,6 +107,16 @@ final class GateArms {
 		return lines;
 	}
 
+	/** The runs of a `picked` selection, `old` being the registry at the base: the apply check first, then the kill run. */
+	private static function run(gate: GateTree, picked: ArmSelection, old: Null<Array<ArmRecord>>): Outcome {
+		final read: ArmReading = { notes: [], rows: [] };
+		final applied: Outcome = picked.applyOnly.length == 0 ? Passed : applyOutcome(gate, picked.applyOnly, read);
+		if (!applied.match(Passed)) return applied;
+		if (picked.fast.length > 0) return fastOutcome(gate, picked.fast, old, read);
+		gate.summary.detail(passNote(read, gate.options.allowArms));
+		return Passed;
+	}
+
 	/**
 	 * The `hxq changed` report of the touched files of `gate` that are tracked `.hx` files, empty when it has none or the
 	 * tool fails: it is read for what is layout only, so an empty report widens the selection and never narrows it.
@@ -107,7 +124,7 @@ final class GateArms {
 	private static function changedReport(gate: GateTree): String {
 		final files: Array<String> = gate.touched.filter(f -> f.endsWith('.hx'));
 		if (files.length == 0) return '';
-		final report: Result = gate.hxq(gate.tree, ['changed', gate.base].concat(files)).run();
+		final report: Result = gate.hxq(gate.tree, ['changed', gate.base].concat(files)).timeout(PLAN_TIMEOUT_MS).run();
 		return report.ok ? report.out : '';
 	}
 
@@ -174,7 +191,7 @@ final class GateArms {
 	 */
 	private static function pinnedKillers(gate: GateTree, modules: Array<String>): Array<String> {
 		final killers: Array<String> = [];
-		for (line in gate.inTree(cmd('node bin/test.js --list-pins')).check().lines()) {
+		for (line in gate.inTree(cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS)).check().lines()) {
 			final fields: Array<String> = line.split(' :: ');
 			if (fields.length < 3 || !modules.contains(fields[0].split('#')[0])) continue;
 			for (arm in fields[2].split(',').map(StringTools.trim)) if (arm != '' && !killers.contains(arm)) killers.push(arm);
@@ -267,7 +284,12 @@ final class GateArms {
 	 * that cannot be read throws and the row does not run, because no neighbours would quietly narrow the selection.
 	 */
 	private static function callNeighbours(gate: GateTree, layout: Array<String>): Array<String> {
-		final diff: MemberGraph = Json.parse(gate.hxq(gate.tree, ['graph', '--diff', gate.base, 'HEAD'].concat(GRAPH_SCOPE)).check().out);
+		final diff: MemberGraph = Json.parse(
+			gate.hxq(gate.tree, ['graph', '--diff', gate.base, 'HEAD'].concat(GRAPH_SCOPE))
+				.timeout(PLAN_TIMEOUT_MS)
+				.check()
+				.out
+		);
 		final seeds: Array<String> = [
 			for (node in diff.nodes) if (
 				node.level == 'member' && node.change == 'changed' && !layout.exists(m -> node.name.startsWith('$m.'))
@@ -278,6 +300,7 @@ final class GateArms {
 		final focus: Array<String> = [for (seed in seeds) for (arg in ['--focus', seed]) arg];
 		final around: MemberGraph = Json.parse(
 			gate.hxq(gate.tree, ['graph', '--level', 'member', '--edges', 'calls', '--radius', '1'].concat(focus).concat(GRAPH_SCOPE))
+				.timeout(PLAN_TIMEOUT_MS)
 				.check()
 				.out
 		);
@@ -293,6 +316,14 @@ final class GateArms {
 		final method: Null<Any> = Reflect.field(parsed, 'method');
 		return type is String && method is String && members.contains('$type.$method');
 	}
+
+}
+
+/** What the arms row has to do: an outcome already settled, or the `picked` selection to run against the base's registry `old`. */
+enum ArmPlan {
+
+	Settled(outcome: Outcome);
+	Runs(picked: ArmSelection, old: Null<Array<ArmRecord>>);
 
 }
 

@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import dev.GateArms.ArmPlan;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
 import dev.XconfigFmt.XconfigStand;
@@ -16,6 +17,7 @@ import devkit.Result;
 import devkit.Summary;
 import devkit.TempDir;
 import haxe.DynamicAccess;
+import haxe.Exception;
 import haxe.Json;
 import haxe.Timer;
 import haxe.io.Path;
@@ -39,6 +41,9 @@ final class SliceGate {
 
 	public static inline final USAGE: String = 'usage: dev slice-gate <worktree> [--baseline [--frozen <dir>]... [--infra-tree <dir>]...] '
 		+ '[--arm <NAME>]... [--allow-arm <NAME>]... [--no-arms] [--allow <gate>]... [--logs <dir>]';
+
+	/** The environment variable that names the script the branches run instead of this tool's own: a test's stand-in. */
+	public static inline final SELF_VAR: String = 'SLICE_GATE_SELF';
 
 	/** The most threads the arms phase takes. */
 	public static inline final ARMS_THREADS: Int = 2;
@@ -183,14 +188,14 @@ final class SliceGate {
 	}
 
 	/**
-	 * This tool's own script, copied into the logs before the build replaces it: the branches run the code the gate
-	 * runs, not the code the slice just built.
+	 * This tool's own script (`SELF_VAR` names another), copied into the logs before the build replaces it: the branches
+	 * run the code the gate runs, not the code the slice just built.
 	 */
 	private function keepSelf(): String {
 		final dir: String = _gate.log('rows');
 		FileSystem.createDirectory(dir);
 		final self: String = Path.join([dir, 'dev.js']);
-		File.copy(FileSystem.fullPath(js.Node.__filename), self);
+		File.copy(Sys.getEnv(SELF_VAR) ?? FileSystem.fullPath(js.Node.__filename), self);
 		return self;
 	}
 
@@ -211,12 +216,15 @@ final class SliceGate {
 
 	/**
 	 * The arms row, once every other branch has ended: a branch of its own that takes `armsThreads` of the caller's lease, or
-	 * under no lease a pool lease of its own for the phase alone (`armsCommand`). `--no-arms` runs nothing.
+	 * under no lease a pool lease of its own for the phase alone (`armsCommand`). A row the plan settles without a run
+	 * (`--no-arms`, no arm selected) is read in this process and takes no lease.
 	 */
 	private function armsPhase(self: String): Void {
-		if (_gate.options.noArms) {
-			gate(ARMS_ROW, rowStep(ARMS_ROW));
-			return;
+		switch armsPlan() {
+			case Settled(outcome):
+				gate(ARMS_ROW, () -> outcome);
+				return;
+			case _:
 		}
 		final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode));
 		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)} arms';
@@ -467,6 +475,14 @@ final class SliceGate {
 		final runs: Array<Result> = Pool.of(LISTINGS.length)
 			.map(LISTINGS, name -> cmd('node bin/test.js --list-$name').at(_gate.tree).env('HXQ_BIN', _gate.apq()));
 		return [for (i => name in LISTINGS) name => runs[i].check().lines()];
+	}
+
+	/**
+	 * The plan of the arms row, null when it cannot be made: that is left to the branch, whose row then says why, so a bad
+	 * plan never ends the gate after every other row has run.
+	 */
+	private function armsPlan(): Null<ArmPlan> {
+		return try GateArms.plan(_gate) catch (_: Exception) null;
 	}
 
 	/**

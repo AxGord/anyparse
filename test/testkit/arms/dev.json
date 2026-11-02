@@ -438,6 +438,46 @@
 			"find": "case [Passed, _]: cross;",
 			"replace": "case [Passed, _]: Passed;",
 			"note": "a slice whose touched file needs two rewrites under the cross-config passes the gate's fmt row and turns the battery red after the merge"
+		},
+		{
+			"name": "M-GATE-CHECK-DROPS-ARMS-PHASE",
+			"type": "dev.SliceGate",
+			"method": "check",
+			"find": "armsPhase(self);",
+			"replace": "",
+			"note": "a gate run that never starts the arms phase reports no arms row, so an arm that no longer kills its pin passes"
+		},
+		{
+			"name": "M-GATE-ARMS-LEASE-BEFORE-PLAN",
+			"type": "dev.SliceGate",
+			"method": "armsPhase",
+			"find": "case Settled(outcome):",
+			"replace": "case Settled(outcome) if (false):",
+			"note": "an arms phase that does not ask the plan first leases and starts a branch for a selection that is empty"
+		},
+		{
+			"name": "M-GATE-ALLOW-IGNORED",
+			"type": "dev.SliceGate",
+			"method": "gate",
+			"find": "case Failed(why) if (_gate.options.allow.contains(name)):",
+			"replace": "case Failed(why) if (false):",
+			"note": "a row named by --allow still fails, so a slice that must carry an offending file cannot pass its gate"
+		},
+		{
+			"name": "M-GATE-SETTLED-ARMS-ROW-DROPPED",
+			"type": "dev.SliceGate",
+			"method": "armsPhase",
+			"find": "gate(ARMS_ROW, () -> outcome);",
+			"replace": "",
+			"note": "a plan the gate settles in its own process never reaches the table, so a mistyped --arm passes the gate"
+		},
+		{
+			"name": "M-GATE-ARMS-PLAN-THROWS-IN-GATE",
+			"type": "dev.SliceGate",
+			"method": "armsPlan",
+			"find": "return try GateArms.plan(_gate) catch (_: Exception) null;",
+			"replace": "return GateArms.plan(_gate);",
+			"note": "a plan that cannot be made ends the gate after every other row has run, instead of failing the arms row"
 		}
 	]
 }
