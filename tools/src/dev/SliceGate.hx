@@ -37,13 +37,16 @@ final class SliceGate {
 	public static inline final USAGE: String = 'usage: dev slice-gate <worktree> [--baseline [--frozen <dir>]... [--infra-tree <dir>]...] '
 		+ '[--arm <NAME>]... [--no-arms] [--allow <gate>]... [--logs <dir>]';
 
+	/** The most threads the arms phase takes. */
+	public static inline final ARMS_THREADS: Int = 2;
+
 	/**
-	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote,
-	 * and `arms` follows them so the two heavy rows take the same threads one after the other; the three short rows share
-	 * one branch, so they hold one thread between them.
+	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote; the
+	 * three short rows share one branch, so they hold one thread between them. `arms` is not among them: it is the phase
+	 * that follows (`ARMS_BRANCHES`).
 	 */
 	public static final GATE_BRANCHES: Array<Array<String>> = [
-		['suite', 'corpus', 'arms'],
+		['suite', 'corpus'],
 		['lists', 'fmt', 'scrub', 'artifacts'],
 		['lint'],
 		['jvm'],
@@ -51,13 +54,23 @@ final class SliceGate {
 		['kits']
 	];
 
+	/**
+	 * The phase after every other branch has ended: the arms row alone, on a lease of its own. The kill run is a compile
+	 * server and a suite process per job and holds one or two cores, so it asks for `ARMS_THREADS` at most and gives them
+	 * back the moment it ends, instead of keeping a gate's lease for it.
+	 */
+	public static final ARMS_BRANCHES: Array<Array<String>> = [[ARMS_ROW]];
+
 	/** What a branch may run before it is killed: a wedged run, not a slow one. */
 	private static inline final BRANCH_TIMEOUT_MS: Int = 2 * 60 * 60 * 1000;
+
+	/** The row the arms phase runs. */
+	private static inline final ARMS_ROW: String = 'arms';
 
 	/** The registries `bin/test.js` lists, each counted in the lists row. */
 	private static final LISTINGS: Array<String> = ['classes', 'pins', 'arms', 'claims', 'dead', 'bases'];
 
-	/** The branches' rows in table order; `decisions`, `frozen` and `porcelain` follow, once every branch has ended. */
+	/** The rows of `GATE_BRANCHES` in table order; `arms`, `decisions`, `frozen` and `porcelain` follow, once every branch has ended. */
 	private static final GATE_ROWS: Array<String> = [
 		'suite',
 		'lists',
@@ -65,7 +78,6 @@ final class SliceGate {
 		'fmt',
 		'lint',
 		'jvm',
-		'arms',
 		'infra4',
 		'scrub',
 		'artifacts',
@@ -129,6 +141,7 @@ final class SliceGate {
 		final self: String = keepSelf();
 		if (!build()) return finish(title);
 		fanOut(self, GATE_BRANCHES, GATE_ROWS);
+		armsPhase(self);
 		gate('decisions', decisionsOutcome);
 		gate('frozen', frozenOutcome);
 		gate('porcelain', () -> {
@@ -186,15 +199,35 @@ final class SliceGate {
 			case Held(held): Branches.share(held, Branches.light(branches, demand));
 			case _: null;
 		};
-		final command: Array<String> -> Command = rows ->
+		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)}';
+		final leased: Array<String> -> Command = Branches.leased(_mode, branches, demand, branchCommand(self, threads), label);
+		for (name => value in Branches.run(_gate.options.run, branches, order, leased, branchReport, _gate.summary))
+			_readings[name] = value;
+	}
+
+	/**
+	 * The arms row, once every other branch has ended: a branch of its own that takes `armsThreads` of the caller's lease, or
+	 * under no lease a pool lease of its own for the phase alone (`armsCommand`). `--no-arms` runs nothing.
+	 */
+	private function armsPhase(self: String): Void {
+		if (_gate.options.noArms) {
+			gate(ARMS_ROW, rowStep(ARMS_ROW));
+			return;
+		}
+		final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode));
+		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)} arms';
+		final leased: Array<String> -> Command = rows -> armsCommand(_mode, command(rows), label);
+		for (name => value in Branches.run(_gate.options.run, ARMS_BRANCHES, [ARMS_ROW], leased, branchReport, _gate.summary))
+			_readings[name] = value;
+	}
+
+	/** The `--rows` process of a branch running `rows`, over the logs' copy `self` of this script, handed `threads`. */
+	private function branchCommand(self: String, threads: Null<Int>): Array<String> -> Command {
+		return rows ->
 			Command.of(['node', self, 'slice-gate'].concat(branchArgs(rows, threads)))
 				.at(_gate.tree)
 				.env('HXQ_BIN', _gate.apq())
 				.timeout(BRANCH_TIMEOUT_MS);
-		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)}';
-		final leased: Array<String> -> Command = Branches.leased(_mode, branches, demand, command, label);
-		for (name => value in Branches.run(_gate.options.run, branches, order, leased, branchReport, _gate.summary))
-			_readings[name] = value;
 	}
 
 	/** The command line of the branch running `rows`: this run's options, the rows, and the heavy rows' threads. */
@@ -454,7 +487,7 @@ final class SliceGate {
 	}
 
 	/**
-	 * The threads the branch running `rows` holds under `facts`: null for the heavy one (the suite and the arms), which takes
+	 * The threads the branch running `rows` holds under `facts`: null for the heavy one (the suite), which takes
 	 * what the others leave; one for the short rows; the lint row's two lints (the touched files at the base and now); the
 	 * jvm probe; a lint per tree INFRA gate 4 reads beside the base tree's, which a `--baseline` run lints in its own row —
 	 * each 0 when its rows will skip.
@@ -482,6 +515,25 @@ final class SliceGate {
 	 */
 	public static function leaseModeOf(rows: Null<String>): LeaseMode {
 		return rows == null ? Lease.ofEnvironment() : Unpooled;
+	}
+
+	/**
+	 * The threads the arms branch takes of a lease its caller `mode` holds: what that lease has, up to `ARMS_THREADS`; null
+	 * when the caller holds none (the branch's own lease says it).
+	 */
+	public static function armsThreads(mode: LeaseMode): Null<Int> {
+		return switch mode {
+			case Held(held): Std.int(Math.min(held, ARMS_THREADS));
+			case _: null;
+		};
+	}
+
+	/**
+	 * `command` of the arms branch as `mode` runs it: under `Own` a lease of its own from one thread up to `ARMS_THREADS`,
+	 * labelled `label`, which goes back to the pool as the arms end; under `Held` and `Unpooled` as it is.
+	 */
+	public static function armsCommand(mode: LeaseMode, command: Command, label: String): Command {
+		return Lease.take(mode, command, { min: 1, max: ARMS_THREADS }, label);
 	}
 
 	/** Whether the corpus harness runs: the fork it reads is named. */

@@ -3,6 +3,7 @@ package unit.dev;
 import dev.Probe;
 import dev.SliceGate;
 import devkit.Branches;
+import devkit.Command;
 import devkit.Lease.LeaseMode;
 import devkit.TempDir;
 import haxe.io.Path;
@@ -10,6 +11,8 @@ import sys.FileSystem;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
+
+using Lambda;
 
 /** `dev.SliceGate`: where a gate's and a branch's threads come from, and what its branches hold between them. */
 @:nullSafety(Strict)
@@ -76,6 +79,27 @@ final class SliceGateTest extends Test {
 			jvmMoved: true,
 			ruleInfra: 3
 		}, ['suite']));
+	}
+
+	/**
+	 * The arms row is a phase of its own after the other branches, and takes a lease of one thread up to `ARMS_THREADS`
+	 * that goes back to the pool as it ends: a gate that held its whole lease for the arms starved every other build.
+	 * Under a held lease it takes what that lease has, up to the same bound; without a pool, nothing.
+	 */
+	@:pin('guard')
+	public function testTheArmsRowIsAPhaseOnALeaseOfItsOwn(): Void {
+		Assert.isFalse(SliceGate.GATE_BRANCHES.exists(rows -> rows.contains('arms')), 'no branch of the main fan-out runs the arms');
+		Assert.same([['arms']], SliceGate.ARMS_BRANCHES);
+		final command: Command = Command.of(['node', 'arms']);
+		final own: Array<String> = SliceGate.armsCommand(Own('/p/scripts/wf-run', 10), command, 'gate arms').argv;
+		Assert.contains('1-${SliceGate.ARMS_THREADS}', own);
+		Assert.isFalse(own.contains('10'), 'the pool budget is not what it asks for: $own');
+		Assert.same(['node', 'arms'], SliceGate.armsCommand(Held(4), command, 'gate arms').argv);
+		Assert.same(['node', 'arms'], SliceGate.armsCommand(Unpooled, command, 'gate arms').argv);
+		Assert.equals(SliceGate.ARMS_THREADS, SliceGate.armsThreads(Held(4)));
+		Assert.equals(1, SliceGate.armsThreads(Held(1)));
+		Assert.isNull(SliceGate.armsThreads(Own('/p/scripts/wf-run', 10)));
+		Assert.isNull(SliceGate.armsThreads(Unpooled));
 	}
 
 }
