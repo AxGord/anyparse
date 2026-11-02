@@ -333,6 +333,22 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '"totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, "ternaryExpression": {"defaultWrap": "noWrap", "rules": '
 		+ '[{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"}]}}}';
 
+	/**
+	 * The `callParameter` cascade of `CALL_TERNARY_NESTED` under an `ifBody: fitLine` statement host: the host's
+	 * fit measure reads the literal argument through the cascade's fit-dependent `noWrap` shadow.
+	 */
+	private static final IF_BODY_CALL: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"ifBody": "fitLine"}, '
+		+ '"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": '
+		+ '[{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, "callParameter": {"defaultWrap": '
+		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], '
+		+ '"type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", '
+		+ '"value": 100}], "type": "noWrap"}]}}}';
+
+	/** A statement `if` whose body is a call with a literal argument, too long to stay on the header line. */
+	private static final IF_BODY_CALL_SRC: String = 'class C {\n\tfunction f(): Void {\n\t\tif (!unit.header && !matched[i])\n'
+		+ '\t\t\tout.push(changeOf(Removed, unit, baseAddress.describe(before.source, unit.node), '
+		+ '{ added: 0, removed: before.owned[i].length }, before.owned[i], []));\n\t}\n}';
+
 	public function new(): Void {
 		super();
 	}
@@ -660,6 +676,12 @@ class WrapFlatSourceFixedPointTest extends Test {
 				name: 'value-if branch (DIBuilder.hx)',
 				config: VALUE_IF_NESTED,
 				src: VALUE_IF_SRC,
+				closed: false
+			},
+			{
+				name: 'statement-if body call with a literal argument (ifBody: fitLine)',
+				config: IF_BODY_CALL,
+				src: IF_BODY_CALL_SRC,
 				closed: false
 			},
 			{

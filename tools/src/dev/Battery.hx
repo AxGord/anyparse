@@ -44,7 +44,8 @@ final class Battery {
 	 */
 	public static final XCONFIG_ONE_PASS: Array<String> = [
 		'src/anyparse/check/common/control/UnnecessarySwitch.hx',
-		'src/anyparse/macro/ParseDispatchLowering.hx'
+		'src/anyparse/macro/ParseDispatchLowering.hx',
+		'src/anyparse/query/cli/DeclarationDelta.hx'
 	];
 
 	/** The readings a branch leaves: the suite's counts, the corpus sweep's, and whether the client tree was linted. */
