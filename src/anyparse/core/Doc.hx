@@ -425,8 +425,7 @@ enum Doc {
 	IfArrowContinuationFitsWithRest(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
-	 * Sibling-coordinated placement decision. No lowering emits it now that `BodyFit` answers
-	 * case bodies per branch; the ctor is the primitive for a group that must reach one verdict.
+	 * Sibling-coordinated placement decision. `anyparse.format.SiblingShare` is its only producer.
 	 * Renders `breakDoc` when `f.indent + flatWidth` EXCEEDS `n`, else
 	 * `flatDoc` — the `<= n` fits convention the `Group` family uses.
 	 *
@@ -445,7 +444,8 @@ enum Doc {
 	 * cannot depend on the source's line shape and a single format pass
 	 * reaches the `writeRoundTrip(s) == s` fixed point.
 	 *
-	 * Pure render-time decision: no static walker evaluates the width, and
+	 * A negative width (a sibling slot `SiblingShare.decide` has not resolved yet) never exceeds,
+	 * so it renders `flatDoc`. Pure render-time decision: no static walker evaluates the width, and
 	 * the two branches wrap the SAME body, differing only in the separator
 	 * before it. That last property is load-bearing — a walker asking about
 	 * subtree CONTENT gets the same answer from either branch, so the

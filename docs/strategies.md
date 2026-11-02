@@ -121,7 +121,8 @@ propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, pro
 propagateValueIfBranch, reflowInExprPosition, reflowSourceMultiline, refuseFlatOnComplexExpr,
 refuseGlueOnControlFlowRoot, relocateTrailingComments, rightCurly[(…)], rightCurlyAnonFnOverride(…), sameLine(…),
 semicolonBeforeSibling(…), semicolonNextLineElse, sepBeforeOpt, setBoolFlagFromStarCtor(…), shapeAware,
-sharpCondParensGap, sharpCondParensInside(…), softFill, spaceAfterLead, spaceBeforeLead, spaceBeforeTrail,
+sharpCondParensGap, sharpCondParensInside(…), siblingLead(…), siblingShare(…), siblingSlot(…),
+softFill, spaceAfterLead, spaceBeforeLead, spaceBeforeTrail,
 staticVarSubdivision, suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe,
 switchCondParensInsideClose, switchCondParensInsideOpen, switchPolicy, switchSubjectNoWrap,
 switchSubjectParensStrip, switchWrapSpace, tight, tightKw, tightLead, tightOnParenOperand(…), trailingComma(…),
@@ -153,7 +154,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterStarEmitLowering` | 44 |
 | `WriterTriviaStarDispatch` | 41 |
 | `WriterKwRefLowering` | 32 |
-| `WriterTriviaStarEmitLowering` | 28 |
+| `WriterTriviaStarEmitLowering` | 31 |
 | `WriterPolicyLowering` | 20 |
 | `WriterCtorBlankLowering` | 17 |
 | `WriterLowering` | 17 |
@@ -169,6 +170,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `StarFieldLowering` | 4 |
 | `WriterBodyPolicyLowering` | 3 |
 | `WriterLoweringSupport` | 4 |
+| `SiblingScope` | 3 |
 | `WriterCodegen` | 2 |
 | `WriterBlankLowering` | 2 |
 | `WriterCondWrapLowering` | 2 |

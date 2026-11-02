@@ -45,5 +45,6 @@ typedef HxCaseBranch = {
 	@:trivia @:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap'), beforeNewlineSlotFirst, captureTrailComment, inlineElemTrivia) var patterns: Array<HxCasePattern>;
 	@:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
-		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt')) var body: Array<HxStatement>;
+		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt'),
+		siblingSlot('caseSiblings')) var body: Array<HxStatement>;
 };

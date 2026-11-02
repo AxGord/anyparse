@@ -57,3 +57,11 @@ the floor, not zero: a file that already carries such an `else` still formats (a
 and still takes edits that leave it alone. Whether a seam-adjacent `else` compiles depends
 on the defines (`#if a if (c) f(); #end else g();` compiles only with `-D a`), which no
 whole-file parse knows, so a seam makes an `else` acceptable, never proven valid.
+
+## Case branches of one switch: `sameLine.caseSiblings`
+
+`off` by default, each `fitLine` branch deciding alone. Under `anyBreak` the branches of one switch share the decision:
+one branch below its label, because it is too wide or because of its shape (two statements, an outermost `&&`), moves
+all of them, `#if` regions and a switch opened inside `#if` included. A branch that glues its opening `{` to the label
+stays there unless another branch leads. A branch held below its label by a comment does not lead, even when it is
+also too wide. Applies where `caseBody` or `expressionCase` is `fitLine`; under `same`, `next` and `keep` the key moves nothing.

@@ -10,6 +10,7 @@ import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
+import anyparse.format.SiblingPolicy;
 import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
@@ -28,6 +29,7 @@ import anyparse.grammar.haxe.format.HxFormatMetadataLineEndPolicy;
 import anyparse.grammar.haxe.format.HxFormatOptionalSemicolonPolicy;
 import anyparse.grammar.haxe.format.HxFormatRightCurlyPolicy;
 import anyparse.grammar.haxe.format.HxFormatSameLinePolicy;
+import anyparse.grammar.haxe.format.HxFormatSiblingPolicy;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommaPolicy;
 import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
 import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
@@ -50,6 +52,13 @@ final class HaxeFormatValues {
 
 	private static inline function trailingCommaToBool(policy: HxFormatTrailingCommaPolicy): Bool {
 		return policy == HxFormatTrailingCommaPolicy.Yes;
+	}
+
+	private static function siblingPolicyToRuntime(policy: HxFormatSiblingPolicy): SiblingPolicy {
+		return switch policy {
+			case HxFormatSiblingPolicy.AnyBreak: SiblingPolicy.AnyBreak;
+			case _: SiblingPolicy.Off;
+		};
 	}
 
 	private static function wrappingLocationFromString(s: String): Null<WrappingLocation> {

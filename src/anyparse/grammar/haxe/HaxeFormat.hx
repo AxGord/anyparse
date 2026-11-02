@@ -15,6 +15,7 @@ import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
+import anyparse.format.SiblingPolicy;
 import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
@@ -178,6 +179,7 @@ final class HaxeFormat implements TextFormat {
 		tryBody: BodyPolicy.Next,
 		caseBody: BodyPolicy.Keep,
 		expressionCase: BodyPolicy.Keep,
+		caseSiblings: SiblingPolicy.Off,
 		functionBody: BodyPolicy.Next,
 		anonFunctionBody: BodyPolicy.Same,
 		untypedBody: BodyPolicy.Same,

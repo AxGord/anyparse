@@ -96,15 +96,14 @@ final class WriterTriviaStarEmitLowering {
 		final triviaCtx: TriviaStarCtx = buildTriviaStarCtx(args);
 		if (starNode.hasMeta(':tryparse')) {
 			emitTriviaTryparseStar(ctx, triviaCtx, parts);
-			return;
-		}
-		if (closeText != null) {
+		} else if (closeText != null) {
 			WriterTriviaStarDispatch.emitTriviaCloseStar(ctx.triviaStar, triviaCtx, parts);
 		} else if (isLastField) {
 			emitTriviaEofStar(ctx, triviaCtx, parts);
 		} else {
 			Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
 		}
+		wrapSiblingFlags(starNode, parts);
 	}
 
 	/**
@@ -401,7 +400,7 @@ final class WriterTriviaStarEmitLowering {
 			tryparsePriorAfterTrailExpr, tryparseForceInlineSep, tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null,
 			tryparseBlockEnded, tryparseSepFaithful, tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
 			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,
-			refuseGlueOnControlFlow, tryparseFillItems, starNode.fmtReadStringArgs('glueToPrevious')
+			refuseGlueOnControlFlow, tryparseFillItems, starNode.fmtReadStringArgs('glueToPrevious'), starNode.fmtReadString('siblingSlot')
 		));
 	}
 
@@ -596,6 +595,20 @@ final class WriterTriviaStarEmitLowering {
 		final prev: Null<ShapeNode> = node?.children.find(ch -> ch.annotations[AnnotationKeys.BASE_FIELD_NAME] == prevField);
 		final moved: Null<Expr> = prev == null ? null : WriterStarEmitLowering.movedPastTrailExpr(prev);
 		return moved == null ? afterTrail : macro $moved ?? $afterTrail;
+	}
+
+	/**
+	 * The Star's finished Doc is the last part on every emit path, so a lead vote and a list's decision wrap it whole
+	 * whatever the Star's shape. An enum-ctor Star does not pass here, and `anyparse.macro.SiblingScope` refuses it as a sharing list.
+	 */
+	private static function wrapSiblingFlags(starNode: ShapeNode, parts: Array<Expr>): Void {
+		final lead: Null<String> = starNode.fmtReadString('siblingLead');
+		final shared: Null<String> = starNode.fmtReadString('siblingShare');
+		if (lead == null && shared == null) return;
+		final star: Null<Expr> = parts.pop();
+		if (star == null) return;
+		final voted: Expr = lead == null ? star : macro anyparse.format.SiblingShare.placedSlot(${optFieldAccess(lead)}, true, $star);
+		parts.push(shared == null ? voted : macro anyparse.format.SiblingShare.decide($voted, ${optFieldAccess(shared)}, opt.lineWidth));
 	}
 
 }

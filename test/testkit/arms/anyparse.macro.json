@@ -1323,6 +1323,14 @@
 			"find": "if (!leadIsWord && leadHasPolicy(branch))",
 			"replace": "if (false)",
 			"note": "a ctor-level lead tagged with a whitespace policy is written as the bare literal while the keyword's trailing space stays stripped, so `macro : T` collapses to `macro:T` under every `typeHintColonPolicy`"
+		},
+		{
+			"name": "M-SIBLING-SCOPE-NEVER-REFUSES",
+			"type": "anyparse.macro.SiblingScope",
+			"method": "requireShared",
+			"find": "if (path != null)",
+			"replace": "if (false)",
+			"note": "a slot outside every sharing list builds and ships unresolved"
 		}
 	]
 }

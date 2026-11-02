@@ -77,6 +77,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var expressionCase: HxFormatBodyPolicy;
 
+	@:optional var caseSiblings: HxFormatSiblingPolicy;
+
 	@:optional var functionBody: HxFormatBodyPolicy;
 
 	@:optional var anonFunctionBody: HxFormatBodyPolicy;

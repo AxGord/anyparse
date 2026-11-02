@@ -11,6 +11,7 @@ import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
+import anyparse.format.SiblingPolicy;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
@@ -78,6 +79,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	catchBody: BodyPolicy,
 	tryBody: BodyPolicy,
 	caseBody: BodyPolicy,
+	caseSiblings: SiblingPolicy,
 	expressionCase: BodyPolicy,
 	functionBody: BodyPolicy,
 	anonFunctionBody: BodyPolicy,

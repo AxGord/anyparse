@@ -357,6 +357,29 @@
 			"find": "return this | side;",
 			"replace": "return this;",
 			"note": "adding a side leaves the policy as it was, so `macro : T` loses its pinned space before the colon and writes `macro: T` / `macro:T`"
+		},
+		{
+			"name": "M-SIBLING-DECIDE-OFF",
+			"type": "anyparse.format.SiblingShare",
+			"method": "decide",
+			"force": "list",
+			"note": "no list decides: every slot stays unresolved, each sibling renders its own form, so a switch keeps the mix under anyBreak"
+		},
+		{
+			"name": "M-SIBLING-OFFER-UNALIASED",
+			"type": "anyparse.format.SiblingShare",
+			"method": "resolved",
+			"find": "Doc.BreakMark(Doc.BreakMark(walk(inner), token), offer.alias);",
+			"replace": "Doc.BreakMark(walk(inner), token);",
+			"note": "the offer is never committed: a widest unit whose only over-wide part is a pivot literal leads the spread on this pass and not on the next, so the writer needs a second pass"
+		},
+		{
+			"name": "M-SIBLING-VOTE-ANY-NEGATIVE",
+			"type": "anyparse.format.SiblingShare",
+			"method": "isVote",
+			"find": "return width <= MEASURED;",
+			"replace": "return width < 0;",
+			"note": "any negative width reads as a vote, so a number another rule wrote is overwritten by the verdict"
 		}
 	]
 }

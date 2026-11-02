@@ -173,7 +173,8 @@ final class TriviaTryparseLowering {
 		fillItems: Bool = false,
 		// `@:fmt(glueToPrevious(...))`: the element ctor written right after the previous element, no separator
 		// between them (the case body's stray `;` after a block, `};`). Null → byte-identical.
-		?glueToPrevious: Array<String>
+		?glueToPrevious: Array<String>,
+		?siblingKnob: String
 	): Expr {
 		// noqa: complexity
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
@@ -296,7 +297,8 @@ final class TriviaTryparseLowering {
 			forceInlineSep: forceInlineSep,
 			elemSelfTrailsNewline: elemSelfTrailsNewline,
 			elemCondFn: elemCondFnExpr,
-			glueToPreviousExpr: WriterLoweringSupport.triviaGlueToPreviousExpr(glueToPrevious)
+			glueToPreviousExpr: WriterLoweringSupport.triviaGlueToPreviousExpr(glueToPrevious),
+			siblingKnob: siblingKnob
 		};
 		final baseExpr: Expr = heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
 		return fillItems ? triviaTryparseFillExpr(c, baseExpr) : baseExpr;
@@ -587,6 +589,7 @@ final class TriviaTryparseLowering {
 		final whileExpr: Expr = triviaTryparseWhileExpr(c);
 		final assemblyExpr: Expr = triviaTryparseAssemblyExpr(c);
 		final trailEndsLineDecl: Expr = triviaTryparseTrailEndsLineDecl();
+		final emptyMode: Expr = siblingPolicyExpr(c.siblingKnob, fitGateExpr);
 		final caseGateDecls: Expr = triviaTryparseCaseGateDecls(shapeRefusalExpr, flatGateExpr, fitGateExpr, priorAfterTrailRaw);
 		return macro {
 			final _arr = $fieldAccess;
@@ -626,7 +629,9 @@ final class TriviaTryparseLowering {
 				// break of its own (`abstract A(Int) // c` with no from/to
 				// clauses), so the next struct field's `{` would glue onto
 				// the comment line. Guarded emit breaks instead.
-				_patEmpty != null ? _dc([trailingCommentDocGuarded(_patEmpty, opt), _baseEmpty]) : _baseEmpty;
+				anyparse.format.SiblingShare.placedSlot(
+					$emptyMode, false, _patEmpty != null ? _dc([trailingCommentDocGuarded(_patEmpty, opt), _baseEmpty]) : _baseEmpty
+				);
 			} else {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _docs: Array<anyparse.core.Doc> = [];
@@ -937,7 +942,9 @@ final class TriviaTryparseLowering {
 		final finalWrapDocs: Expr = c.finalWrapDocs;
 		final trailPadSpaceDoc: Expr = c.trailPadSpaceDoc;
 		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
-		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(finalWrapDocs, c.glueRefusalExpr, trailPadSpaceDoc, c.regionSeams);
+		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(
+			finalWrapDocs, c.glueRefusalExpr, trailPadSpaceDoc, c.regionSeams, c.siblingKnob, c.fitGateExpr, c.shapeRefusalExpr
+		);
 		return macro {
 			$tryparseBlockEndedTrailEmit;
 			// ω-cond-indent-policy: under AlignedIncrease hold the trailing
@@ -1014,6 +1021,13 @@ final class TriviaTryparseLowering {
 		};
 	}
 
+	/** What a slot outside the fit gate reads: it has no fit-line choice to share, so its vote is off. */
+	private static function siblingPolicyExpr(knob: Null<String>, fitGateExpr: Expr): Expr {
+		return knob == null
+			? macro anyparse.format.SiblingPolicy.Off
+			: macro ($fitGateExpr ? ${optFieldAccess(knob)} : anyparse.format.SiblingPolicy.Off);
+	}
+
 	/**
 	 * ω-case-body-fitline-shared — the terminal Doc for a single-statement
 	 * case / default body that the resolved policy puts on the case line.
@@ -1064,13 +1078,31 @@ final class TriviaTryparseLowering {
 	 * `WrapList.flatLength(body) >= 0`, i.e. the body holds no hardline at
 	 * all, so no inner line exists for a `Nest` to move.
 	 */
-	private static function triviaTryparseCaseWrapExpr(glueRefusalExpr: Expr): Expr {
+	private static function triviaTryparseCaseWrapExpr(glueRefusalExpr: Expr, siblingKnob: Null<String>): Expr {
+		final mode: Expr = siblingKnob == null ? macro anyparse.format.SiblingPolicy.Off : optFieldAccess(siblingKnob);
 		return macro {
 			final _caseBody: anyparse.core.Doc = if (_fitCase)
-				anyparse.format.BodyFit.fitLineLayout(_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, $glueRefusalExpr);
+				anyparse.format.SiblingShare.fitLineSlot(
+					$mode, _cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, $glueRefusalExpr
+				);
 			else
 				opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs));
 			_dwb(_trailDocs.length > 0 ? _dc([_caseBody, _dc(_trailDocs)]) : _caseBody);
+		};
+	}
+
+	/** The `_nestBody` terminal: a body placed below its head, as a slot that leads unless it is one statement that could have fit. */
+	private static function triviaTryparseNestWrapExpr(policy: Expr, shapeRefusalExpr: Expr, glueRefusalExpr: Expr): Expr {
+		return macro {
+			final _nestDoc: anyparse.core.Doc = if (_arr.length > 0 && _trailDocs.length > 0) {
+				_dwb(_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]));
+			} else {
+				for (_d in _trailDocs) _docs.push(_d);
+				_dwb(_dn(_cols, _dc(_docs)));
+			};
+			anyparse.format.SiblingShare.placedSlot(
+				$policy, _arr.length >= 2 || (_arr.length == 1 && (!$shapeRefusalExpr || $glueRefusalExpr)), _nestDoc
+			);
 		};
 	}
 
@@ -1091,9 +1123,11 @@ final class TriviaTryparseLowering {
 	 * can glue a follower onto a `//` comment.
 	 */
 	private static function triviaTryparseWrapDispatchExpr(
-		finalWrapDocs: Expr, glueRefusalExpr: Expr, trailPadSpaceDoc: Expr, regionSeams: Bool
+		finalWrapDocs: Expr, glueRefusalExpr: Expr, trailPadSpaceDoc: Expr, regionSeams: Bool, siblingKnob: Null<String>,
+		fitGateExpr: Expr, shapeRefusalExpr: Expr
 	): Expr {
-		final caseWrap: Expr = triviaTryparseCaseWrapExpr(glueRefusalExpr);
+		final caseWrap: Expr = triviaTryparseCaseWrapExpr(glueRefusalExpr, siblingKnob);
+		final nestWrap: Expr = triviaTryparseNestWrapExpr(siblingPolicyExpr(siblingKnob, fitGateExpr), shapeRefusalExpr, glueRefusalExpr);
 		final defaultTerminal: Expr = triviaTryparseDefaultTerminal(finalWrapDocs, regionSeams);
 		return macro {
 			// ω-force-flat-engine sister-coverage: tryparse Star is used
@@ -1105,12 +1139,7 @@ final class TriviaTryparseLowering {
 			if (_flatCase || _fitCase) {
 				$caseWrap;
 			} else if (_nestBody) {
-				if (_arr.length > 0 && _trailDocs.length > 0) {
-					_dwb(_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]));
-				} else {
-					for (_d in _trailDocs) _docs.push(_d);
-					_dwb(_dn(_cols, _dc(_docs)));
-				}
+				$nestWrap;
 			} else if (_condIncrease) {
 				// ω-cond-indent-policy: AlignedIncrease — body content
 				// (leading pad + each body element, all inside `_docs`)

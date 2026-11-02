@@ -28,5 +28,6 @@ package anyparse.grammar.haxe;
 typedef HxSwitchStmt = {
 	@:lead('(') @:trail(')') @:fmt(switchCondParensInsideOpen, switchCondParensInsideClose, switchSubjectNoWrap, switchSubjectParensStrip,
 		suppressComplexItems) var expr: HxExpr;
-	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), indentCaseLabels) @:lead('{') @:trail('}') @:trivia var cases: Array<HxSwitchCase>;
+	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), indentCaseLabels,
+		siblingShare('caseSiblings')) @:lead('{') @:trail('}') @:trivia var cases: Array<HxSwitchCase>;
 };

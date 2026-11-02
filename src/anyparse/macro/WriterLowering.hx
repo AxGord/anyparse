@@ -369,6 +369,7 @@ class WriterLowering {
 	}
 
 	public function generate(): Array<WriterRule> {
+		SiblingScope.requireShared(_shape);
 		_predRootStatic = _shape.root;
 		_astPredsOnStatic = _formatInfo.astPreds;
 		final rules: Array<WriterRule> = [
@@ -2566,6 +2567,7 @@ typedef TryparseStarCtx = {
 	 * force-flat boundary while the knob is on, so the seams follow the one region group's mode.
 	 */
 	final regionSeams: Bool;
+	final siblingKnob: Null<String>;
 	final forceInlineSep: Bool;
 	final elemSelfTrailsNewline: Bool;
 
