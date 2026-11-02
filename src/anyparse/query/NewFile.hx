@@ -337,22 +337,6 @@ final class NewFile {
 	}
 
 	/**
-	 * The signature text of an interface `FnMember`, sliced from `source` and
-	 * trimmed: `[member.from, NoBody.from)` drops the trailing `;` exactly (the
-	 * `NoBody` child spans only that terminator), leaving e.g.
-	 * `function run(files, plugin): Array<Violation>`. Returns null for an
-	 * unspanned member.
-	 */
-	private static function signatureOf(member: QueryNode, source: String): Null<String> {
-		final span: Null<Span> = member.span;
-		if (span == null) return null;
-		final noBody: Null<QueryNode> = member.children.find(c -> c.kind == 'NoBody');
-		final cut: Int = noBody != null && noBody.span != null ? noBody.span.from : span.to;
-		final sig: String = source.substring(span.from, cut).trim();
-		return sig.endsWith(';') ? sig.substr(0, sig.length - 1).trim() : sig;
-	}
-
-	/**
 	 * Parse the `--bodies` payload into method bodies and extra imports. A
 	 * line `@@ <name>` opens a section; lines until the next `@@` (or EOF) are
 	 * its content. The reserved section `@@ imports` contributes one statement
@@ -529,7 +513,8 @@ final class NewFile {
 
 		final methodNames: Array<String> = [];
 		for (member in iface.children) if (member.kind == 'FnMember') {
-			final sig: Null<String> = signatureOf(member, ifaceSource);
+			final memberSpan: Null<Span> = member.span;
+			final sig: Null<String> = memberSpan == null ? null : MemberHeader.of(member, ifaceSource, plugin.refShape(), memberSpan.from);
 			final name: Null<String> = member.name;
 			if (sig == null || name == null) continue;
 			methodNames.push(name);

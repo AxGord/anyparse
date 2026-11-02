@@ -2,6 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.Address;
 import anyparse.query.ExitCode.*;
+import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.SourceComments;
 import anyparse.runtime.CommonPrefix;
 import anyparse.runtime.Span;
 
@@ -27,6 +29,7 @@ typedef SourceOpts = {
 	var number: Bool;
 	var raw: Bool;
 	var all: Bool;
+	var outline: Bool;
 	var file: Null<String>;
 	var errExit: Null<Int>;
 };
@@ -37,6 +40,30 @@ typedef SourceOpts = {
  * a selector-menu entry advertises.
  */
 typedef LineRange = { var from: Int; var to: Int; };
+/**
+ * A `--select` / `--at` address resolved: the matched node with the tree and plugin it came
+ * from, and `window` — the modifier-folded span whose whole lines the read prints.
+ */
+typedef ResolvedNode = {
+	var tree: QueryNode;
+	var plugin: GrammarPlugin;
+	var node: QueryNode;
+	var window: Span;
+};
+
+/** One row of an `--outline`: a node and how many named levels below the outline's root it sits (0 = the root). */
+typedef OutlineEntry = { var node: QueryNode; var depth: Int; };
+/**
+ * An outline entry that survived the filters: `index` into the entry list, the window it prints
+ * (`bounds` in lines), and its one-line `header`, filled once the rows after it are known.
+ */
+typedef OutlineRow = {
+	var entry: OutlineEntry;
+	var index: Int;
+	var window: Span;
+	var bounds: LineRange;
+	var header: String;
+};
 
 /**
  * `apq source` — emit RAW verbatim file lines (no parse; --range L:L2).
@@ -65,6 +92,12 @@ final class SourceCommand implements CliCommand {
 	 */
 	private static inline final MENU_NAMED_DEPTH: Int = 1;
 
+	/** Spaces an outline row indents per named level below the root. */
+	private static inline final OUTLINE_INDENT: Int = 2;
+
+	/** Longest signature an outline row prints before cutting it with an ellipsis. */
+	private static inline final SIGNATURE_MAX_CHARS: Int = 160;
+
 	public function new() {}
 
 	public function name(): String {
@@ -76,7 +109,7 @@ final class SourceCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(['--all', '--number', '--raw', '-n'], ['--at', '--range', '--select']);
+		return new CliFlags(['--all', '--full', '--number', '--outline', '--raw', '-n'], ['--at', '--range', '--select']);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -123,19 +156,30 @@ final class SourceCommand implements CliCommand {
 	}
 
 	/**
-	 * Resolve a `source --select <sel>` / `--at <line>:<col>` address to the 1-based inclusive
-	 * line range spanning the matched node WITH its modifier / annotation / conditional-prefix
-	 * run — the same `declGroupSpan` fold `patch` searches and `replace-node` overwrites, so text
-	 * copied out of this read goes back into either op unchanged. An annotation addressed on its
-	 * own still spans only itself, and the fold never reaches the doc block above the run.
+	 * `resolveNodeWindow`'s answer as the 1-based inclusive line range the read prints, or `null`
+	 * after the diagnostic.
+	 */
+	public static function resolveNodeLineBounds(
+		path: String, content: String, lang: String, selectExpr: Null<String>, atSpec: Null<String>
+	): Null<LineRange> {
+		final resolved: Null<ResolvedNode> = resolveNodeWindow(path, content, lang, selectExpr, atSpec);
+		return resolved == null ? null : lineRange(resolved.window, content);
+	}
+
+	/**
+	 * Resolve a `source --select <sel>` / `--at <line>:<col>` address to the matched node and the
+	 * window of whole lines spanning it WITH its modifier / annotation / conditional-prefix run — the
+	 * same `declGroupSpan` fold `patch` searches and `replace-node` overwrites, so text copied out of
+	 * this read goes back into either op unchanged. An annotation addressed on its own still spans
+	 * only itself, and the fold never reaches the doc block above the run.
 	 *
 	 * Parses `content` with the `lang` plugin (so it works only on a parseable file, unlike the
 	 * raw `--range` reader). Returns `null` after printing a specific `apq source: …` diagnostic
 	 * (no match / ambiguous selector / position not on a node / parse failure).
 	 */
-	public static function resolveNodeLineBounds(
+	public static function resolveNodeWindow(
 		path: String, content: String, lang: String, selectExpr: Null<String>, atSpec: Null<String>
-	): Null<LineRange> {
+	): Null<ResolvedNode> {
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor(lang, path);
 		final tree: QueryNode = try {
 			plugin.parseFile(content);
@@ -207,7 +251,12 @@ final class SourceCommand implements CliCommand {
 		// alone as well — its `--with-doc` arm and a replacement opening with a block comment
 		// are the two that do reach it.
 		final span: Span = CliEdit.sourceWindows(tree, [resolved], content, plugin.lexicalRegions.bind(content))[0] ?? rawSpan;
-		return lineRange(span, content);
+		return {
+			tree: tree,
+			plugin: plugin,
+			node: resolved,
+			window: span
+		};
 	}
 
 	/** The leading run of spaces / tabs at the start of `s`. */
@@ -235,6 +284,7 @@ final class SourceCommand implements CliCommand {
 			number: false,
 			raw: false,
 			all: false,
+			outline: false,
 			file: null,
 			errExit: null
 		};
@@ -251,8 +301,10 @@ final class SourceCommand implements CliCommand {
 					opts.number = true;
 				case '--raw':
 					opts.raw = true;
-				case '--all':
+				case '--all', '--full':
 					opts.all = true;
+				case '--outline':
+					opts.outline = true;
 				case '--lang':
 					opts.lang = arg.value();
 				case '-h', '--help':
@@ -288,6 +340,55 @@ final class SourceCommand implements CliCommand {
 			buf.add('\n');
 		}
 		CliIo.sysPrint(buf.toString());
+	}
+
+	/**
+	 * True when entry `i` is a sibling's modifier or annotation: its span lies inside the window
+	 * another entry of the same depth prints, which `sourceWindows` folded in. Such a node is part
+	 * of that declaration, not a member of its own.
+	 */
+	private static function foldedIntoSibling(entries: Array<OutlineEntry>, windows: Array<Null<Span>>, i: Int): Bool {
+		final span: Null<Span> = entries[i].node.span;
+		if (span == null) return false;
+		for (j => other in entries) {
+			final window: Null<Span> = windows[j];
+			if (j != i && other.depth == entries[i].depth && window != null && window.from <= span.from && span.to <= window.to)
+				return true;
+		}
+		return false;
+	}
+
+	/** A node the outline does not enter: a function's body or parameters, whose named nodes are not members. */
+	private static function isBarrier(node: QueryNode, shape: RefShape): Bool {
+		return (shape.functionBodyKinds ?? []).contains(node.kind) || (shape.paramKinds ?? []).contains(node.kind);
+	}
+
+	/**
+	 * The one-line header of entry `i`, by `MemberHeader`. It starts on the line the node begins
+	 * on, or after the previous entry that ends before it when that is later (two declarations on
+	 * one line), and ends at the node's body or, for a type, where its first listed member begins.
+	 */
+	private static function headerOf(
+		rows: Array<OutlineRow>, k: Int, until: Null<Int>, source: String, shape: RefShape, comments: Array<CommentTok>
+	): String {
+		final node: QueryNode = rows[k].entry.node;
+		final span: Null<Span> = node.span;
+		if (span == null) return '';
+		var from: Int = span.from;
+		while (from > 0 && source.fastCodeAt(from - 1) != '\n'.code) from--;
+		// Bounded by the previous ROW, not the previous entry: an annotation folded into this
+		// declaration's window is not a row, so a same-line `@:keep` stays in the header.
+		for (m in 0...k) {
+			final end: Int = rows[m].window.to;
+			if (end <= span.from && end > from) from = end;
+		}
+		// A doc block above the first member is trivia outside its window, so the type's header
+		// ends where that block begins.
+		final lead: Null<Int> = until == null ? null : SourceComments.leadingCommentBlockStart(source, comments, until);
+		final header: Null<String> = MemberHeader.of(node, source, shape, from, lead != null && lead > from ? lead : until);
+		if (header == null) return '';
+		final text: String = ~/\s+/g.replace(header, ' ');
+		return text.length > SIGNATURE_MAX_CHARS ? '${text.substr(0, SIGNATURE_MAX_CHARS)}…' : text;
 	}
 
 	#if (sys || nodejs)
@@ -339,11 +440,12 @@ final class SourceCommand implements CliCommand {
 		// `--select` / `--at` resolve NODES' spans to line ranges (these parse the
 		// file — unlike the raw, parse-free `--range` / whole-file path, which still
 		// works on a skip-parse file).
+		if (opts.outline) return runOutline(path, content, opts);
 		if (opts.selectExprs.length > 0) return emitSelectedNodes(path, content, lines, opts);
 		if (opts.atSpec != null) {
 			final at: Null<LineRange> = resolveNodeLineBounds(path, content, opts.lang, null, opts.atSpec);
 			if (at == null) return EXIT_RUNTIME;
-			emitSourceLines(lines, at.from, at.to, opts.number, opts.raw);
+			emitNodeWindow(lines, at, opts);
 			return EXIT_OK;
 		}
 		if (opts.range == null && !opts.all) {
@@ -375,7 +477,9 @@ final class SourceCommand implements CliCommand {
 		CliIo.sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
 		CliIo.sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
 		CliIo.sysPrint('  --raw              Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
-		CliIo.sysPrint('  --all              Print the whole file past the narrow-the-read budget\n');
+		CliIo.sysPrint('  --outline          Signatures with line windows, no bodies: of the whole file, or of each\n');
+		CliIo.sysPrint('                     --select / --at node and its members (a member alone: its signature)\n');
+		CliIo.sysPrint('  --all, --full      Print the whole file, or a whole --select / --at node, past the budget\n');
 		CliIo.sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
 		CliIo.sysPrint('  -h, --help         Show this help\n');
 		CliIo.sysPrint('\n');
@@ -396,6 +500,10 @@ final class SourceCommand implements CliCommand {
 		CliIo.sysPrint('and the run exits non-zero, because `--select` needs a name you cannot have\n');
 		CliIo.sysPrint('on first contact. `--all` prints it whole; HXQ_SOURCE_MAX_LINES moves the\n');
 		CliIo.sysPrint('budget and 0 switches the refusal off.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A --select / --at node longer than that budget prints its first lines only; stderr\n');
+		CliIo.sysPrint('says how many are left and the --range window that reads them. `--full` lifts the\n');
+		CliIo.sysPrint('cut; an explicit --range is never cut.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('`apq show` is the SAME command. A shell sandbox refuses any command carrying\n');
 		CliIo.sysPrint('the token `source` (it reads as the builtin that executes a file), which made\n');
@@ -432,7 +540,7 @@ final class SourceCommand implements CliCommand {
 		final banner: Bool = opts.selectExprs.length > 1;
 		for (node in resolved) {
 			if (banner) CliIo.sysPrint(CliWalk.batchSection(node.selector));
-			emitSourceLines(lines, node.from, node.to, opts.number, opts.raw);
+			emitNodeWindow(lines, node, opts);
 		}
 		return failed || resolved.length == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
@@ -521,8 +629,9 @@ final class SourceCommand implements CliCommand {
 	 */
 	private static function topLevelSelectors(tree: QueryNode, source: String, plugin: GrammarPlugin, budget: Int): Array<String> {
 		final index: AddressIndex = Address.describerFor(tree, plugin.selectKindEquivalence());
-		final nodes: Array<QueryNode> = [];
-		collectTopLevelSelectors(tree, 0, nodes);
+		final entries: Array<OutlineEntry> = [];
+		collectOutline(tree, 0, plugin.refShape(), entries);
+		final nodes: Array<QueryNode> = [for (entry in entries) entry.node];
 		// The SAME window `--select` prints, not the bare node span — so a menu entry
 		// states what following it costs. It also exposes a greedy one: a module-level
 		// declaration whose span runs on to the next declaration reads as a
@@ -559,14 +668,156 @@ final class SourceCommand implements CliCommand {
 		return { from: span.lineCol(source).line, to: new Span(endOffset, endOffset).lineCol(source).line };
 	}
 
-	/** `topLevelSelectors`' walk: record `node` when shallow enough, then recurse while a child still could be. */
-	private static function collectTopLevelSelectors(node: QueryNode, namedAbove: Int, out: Array<QueryNode>): Void {
-		// A node is addressable by selector only with BOTH a name and a span.
+	/**
+	 * Print the lines of one addressed node, capped at the read budget: a node past it prints
+	 * its first `budget` lines and stderr says how many are left and how to get them. The
+	 * cap is on NODE reads (`--select` / `--at`) because the reader named a member, not a
+	 * size; an explicit `--range` is a size the reader chose and is never cut.
+	 */
+	private static function emitNodeWindow(lines: Array<String>, bounds: LineRange, opts: SourceOpts): Void {
+		final budget: Int = opts.all ? 0 : maxWholeFileLines();
+		if (budget <= 0 || bounds.to - bounds.from + 1 <= budget) {
+			emitSourceLines(lines, bounds.from, bounds.to, opts.number, opts.raw);
+			return;
+		}
+		final shownTo: Int = bounds.from + budget - 1;
+		emitSourceLines(lines, bounds.from, shownTo, opts.number, opts.raw);
+		final more: Int = bounds.to - shownTo;
+		final left: String = '$more more ${more == 1 ? 'line' : 'lines'} (${shownTo + 1}-${bounds.to})';
+		final ways: String =
+			'`--full` prints the whole node, `--range ${shownTo + 1}:${bounds.to}` just the rest, `--outline` lists its members';
+		CliIo.stderr('apq source: … $left; $ways (budget $budget lines, HXQ_SOURCE_MAX_LINES; 0 disables).\n');
+	}
+
+	/**
+	 * `--outline`: each addressed node's signature and, one named level down, its members'
+	 * signatures, every row with the line window `--select` prints — no bodies. With no
+	 * `--select` / `--at` the whole file is outlined; a node with no named members answers
+	 * its own signature alone, which is the signature-only read.
+	 */
+	private static function runOutline(path: String, content: String, opts: SourceOpts): Int {
+		if (opts.range != null) {
+			CliIo.stderr('apq source: --outline outlines nodes or the whole file; --range reads raw lines — pick one\n');
+			return EXIT_USAGE;
+		}
+		if (opts.selectExprs.length == 0 && opts.atSpec == null) {
+			final plugin: GrammarPlugin = CliArgs.pickPluginFor(opts.lang, path);
+			final tree: QueryNode = try {
+				plugin.parseFile(content);
+			} catch (exception: Exception) {
+				CliIo.stderr('apq source: $path does not parse: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+			final entries: Array<OutlineEntry> = [];
+			collectOutline(tree, 0, plugin.refShape(), entries);
+			CliIo.sysPrint(renderOutline(tree, plugin, content, entries, true));
+			return EXIT_OK;
+		}
+		final addresses: Array<Null<String>> = opts.selectExprs.length > 0 ? opts.selectExprs : [null];
+		final sections: Array<{ label: String, from: Int, text: String }> = [];
+		var failed: Bool = false;
+		for (selector in addresses) {
+			final resolved: Null<ResolvedNode> = resolveNodeWindow(path, content, opts.lang, selector, opts.atSpec);
+			if (resolved == null) {
+				failed = true;
+				continue;
+			}
+			final entries: Array<OutlineEntry> = [{ node: resolved.node, depth: 0 }];
+			if (namedAncestors(resolved.tree, resolved.node, 0) < MENU_NAMED_DEPTH) for (child in resolved.node.children)
+				collectOutline(child, 1, resolved.plugin.refShape(), entries);
+			sections.push({
+				label: selector ?? 'at ${opts.atSpec}',
+				from: resolved.window.from,
+				text: renderOutline(resolved.tree, resolved.plugin, content, entries, false)
+			});
+		}
+		sections.sort((a, b) -> a.from - b.from);
+		for (section in sections) {
+			if (addresses.length > 1) CliIo.sysPrint(CliWalk.batchSection(section.label));
+			CliIo.sysPrint(section.text);
+		}
+		return failed || sections.length == 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * How many named, addressable nodes sit above `target` inside `node`, or -1 when `target` is not under it.
+	 * A node already `MENU_NAMED_DEPTH` levels down is a member: its children are parameters and statements,
+	 * not members worth listing.
+	 */
+	private static function namedAncestors(node: QueryNode, target: QueryNode, above: Int): Int {
+		if (node == target) return above;
+		final below: Int = node.name != null && node.span != null ? above + 1 : above;
+		for (child in node.children) {
+			final found: Int = namedAncestors(child, target, below);
+			if (found >= 0) return found;
+		}
+		return -1;
+	}
+
+	/**
+	 * `collectTopLevelSelectors`' walk with the depth kept: record every addressable node at most
+	 * `MENU_NAMED_DEPTH` named levels below the start, in document order.
+	 */
+	private static function collectOutline(node: QueryNode, depth: Int, shape: RefShape, out: Array<OutlineEntry>): Void {
+		if (isBarrier(node, shape)) return;
 		final addressable: Bool = node.name != null && node.span != null;
-		if (addressable && namedAbove <= MENU_NAMED_DEPTH) out.push(node);
-		final below: Int = addressable ? namedAbove + 1 : namedAbove;
+		if (addressable) out.push({ node: node, depth: depth });
+		final below: Int = addressable ? depth + 1 : depth;
 		if (below > MENU_NAMED_DEPTH) return;
-		for (child in node.children) collectTopLevelSelectors(child, below, out);
+		for (child in node.children) collectOutline(child, below, shape, out);
+	}
+
+	/**
+	 * One row per entry: `<from>-<to>  <selector>  <signature>`, members indented under their
+	 * parent. `dropOneLiners` removes one-line ROOT-level nodes (the package line, every import)
+	 * unless nothing else is left, the grammar-agnostic judgement the selector menu makes.
+	 */
+	private static function renderOutline(
+		tree: QueryNode, plugin: GrammarPlugin, source: String, entries: Array<OutlineEntry>, dropOneLiners: Bool
+	): String {
+		final index: AddressIndex = Address.describerFor(tree, plugin.selectKindEquivalence());
+		final shape: RefShape = plugin.refShape();
+		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		final windows: Array<Null<Span>> = CliEdit.sourceWindows(
+			tree, [for (entry in entries) entry.node], source, plugin.lexicalRegions.bind(source)
+		);
+		final rows: Array<OutlineRow> = [];
+		// A child on its parent's header line (`implements X`, a type parameter) is part of the
+		// header the parent row already prints, not a member.
+		var headerLine: Int = 0;
+		for (i => entry in entries) {
+			final found: Null<Span> = windows[i] ?? entry.node.span;
+			if (found == null) continue;
+			final window: Span = found;
+			final bounds: LineRange = lineRange(window, source);
+			if (entry.depth == 0)
+				headerLine = (entry.node.span ?? window).lineCol(source).line;
+			else if (bounds.to <= headerLine || foldedIntoSibling(entries, windows, i))
+				continue;
+			rows.push({
+				entry: entry,
+				index: i,
+				window: window,
+				bounds: bounds,
+				header: ''
+			});
+		}
+		for (k => row in rows) {
+			// A type's header ends where its first listed member begins.
+			final next: Null<OutlineRow> = rows[k + 1];
+			row.header = headerOf(
+				rows, k, next != null && next.entry.depth > row.entry.depth ? next.window.from : null, source, shape, comments
+			);
+		}
+		final spanning: Array<OutlineRow> = rows.filter(row -> row.entry.depth > 0 || row.bounds.to > row.bounds.from);
+		final shown: Array<OutlineRow> = dropOneLiners && spanning.length > 0 ? spanning : rows;
+		final buf: StringBuf = new StringBuf();
+		for (row in shown) {
+			final indent: String = ''.lpad(' ', row.entry.depth * OUTLINE_INDENT);
+			final selector: String = index.describe(source, row.entry.node);
+			buf.add('${row.bounds.from}-${row.bounds.to}  $indent$selector  ${row.header}\n');
+		}
+		return buf.toString();
 	}
 
 	/**
