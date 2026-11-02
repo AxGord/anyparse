@@ -57,7 +57,7 @@ using anyparse.macro.MetaInspect;
  * writer either reads an undeclared local or declares a dead one, with
  * nothing in this module's types to catch it.
  */
-@:access(anyparse.macro.WriterBlankLowering)
+@:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterLoweringSupport)
 final class TriviaBlockLowering {
 
 	/**
@@ -534,8 +534,8 @@ final class TriviaBlockLowering {
 		// `IfTrailingCommentOverflows` choice under `opt.trailingCommentAbove`.
 		// False keeps the pre-slice push byte for byte.
 		relocateTrailingComments: Bool = false,
-		// `@:fmt(glueToPrevious('<field>', '<Ctor>'))`: the element field and the ctor of it written glued to the
-		// previous element - see `triviaBlockGlueExpr`. Null → every element starts its own line.
+		// `@:fmt(glueToPrevious([<field>, ]<Ctor>))`: the element (or its field) ctor written glued to the
+		// previous element - see `WriterLoweringSupport.glueElemTestExpr`. Null → every element starts its own line.
 		?glueToPrevious: Array<String>
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
@@ -698,7 +698,7 @@ final class TriviaBlockLowering {
 			blankAroundMarkExpr: blankAround.markExpr,
 			blankAroundSeenExpr: blankAround.seenExpr,
 			blankAroundApplyExpr: blankAround.applyExpr,
-			glueToPreviousExpr: triviaBlockGlueExpr(glueToPrevious)
+			glueToPreviousExpr: WriterLoweringSupport.triviaGlueToPreviousExpr(glueToPrevious)
 		};
 		return triviaBlockMainExpr(ctx);
 	}
@@ -1324,24 +1324,6 @@ final class TriviaBlockLowering {
 	private static function caseSiblingOfferLocals(): Expr {
 		return macro var _csO: Null<anyparse.format.SiblingBreakOffer> = null,
 			_csWK: Int = -1;
-	}
-
-	/**
-	 * `@:fmt(glueToPrevious('<field>', '<Ctor>'))`: the runtime test that element `_t` is written right
-	 * after the previous one, on its line — its `<field>` holds `<Ctor>` (Haxe: a stray member-scope `;`,
-	 * so `function f() {};` keeps `};`), and nothing sits between the two to keep them apart (no leading
-	 * comment on it, no trailing comment on the previous element). `macro false` without the flag.
-	 */
-	private static function triviaBlockGlueExpr(args: Null<Array<String>>): Expr {
-		if (args == null) return macro false;
-		if (args.length != 2)
-			Context.fatalError('@:fmt(glueToPrevious) expects 2 string args (field, ctor), got ${args.length}', Context.currentPos());
-		final value: Expr = { expr: EField(macro _t.node, args[0]), pos: Context.currentPos() };
-		final ctor: String = args[1];
-		return macro (_si > 0 && _t.leadingComments.length == 0 && _arr[_si - 1].trailingComment == null && {
-			final _gv: Null<EnumValue> = $value;
-			_gv != null && Type.enumConstructor(_gv) == $v{ctor};
-		});
 	}
 
 }

@@ -174,7 +174,10 @@ final class TriviaTryparseLowering {
 		// against one budget. A Star whose elements carry comments falls back
 		// to the ordinary source-faithful emit at write time (see
 		// `triviaTryparseFillExpr`); default false → byte-identical.
-		fillItems: Bool = false
+		fillItems: Bool = false,
+		// `@:fmt(glueToPrevious(...))`: the element ctor written right after the previous element, no separator
+		// between them (the case body's stray `;` after a block, `};`). Null → byte-identical.
+		?glueToPrevious: Array<String>
 	): Expr {
 		// noqa: complexity
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
@@ -296,7 +299,8 @@ final class TriviaTryparseLowering {
 			regionSeams: condExprFitSeps,
 			forceInlineSep: forceInlineSep,
 			elemSelfTrailsNewline: elemSelfTrailsNewline,
-			elemCondFn: elemCondFnExpr
+			elemCondFn: elemCondFnExpr,
+			glueToPreviousExpr: WriterLoweringSupport.triviaGlueToPreviousExpr(glueToPrevious)
 		};
 		final baseExpr: Expr = heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
 		return fillItems ? triviaTryparseFillExpr(c, baseExpr) : baseExpr;
@@ -777,8 +781,11 @@ final class TriviaTryparseLowering {
 		final elemSelfTrailsNewline: Bool = c.elemSelfTrailsNewline;
 		final leadCommentEmit: Expr = triviaTryparseLeadCommentSepExpr();
 		final forceInlineCond: Expr = triviaTryparseForceInlineSepCond(forceInlineSep);
+		final glueExpr: Expr = c.glueToPreviousExpr;
 		return macro {
-			if (_t.leadingComments.length > 0) {
+			if ($glueExpr) {
+				// `@:fmt(glueToPrevious)`: no separator — the element continues the previous one's line.
+			} else if (_t.leadingComments.length > 0) {
 				$leadCommentEmit;
 			} else if (_flatCase) {
 				_docs.push(_dt(' '));

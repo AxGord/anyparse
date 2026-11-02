@@ -13,10 +13,9 @@ import utest.Test;
  * extended the member span over trailing trivia and broke
  * span-dependent ops (member reorder, inline-method, line bounds).
  *
- * The trivia writer glues the stray `;` back onto the body it follows
+ * Both writers glue the stray `;` back onto the body it follows
  * (`};`, `@:fmt(glueToPrevious)`); removing it is the `empty-statement`
- * lint's job. The plain writer keeps it as an empty member on its own
- * line; neither doubles the `NoBody` signature form's own terminator.
+ * lint's job. Neither doubles the `NoBody` signature form's own terminator.
  */
 @:nullSafety(Strict)
 final class HxFnMemberTrailSemiSliceTest extends Test {
@@ -43,9 +42,11 @@ final class HxFnMemberTrailSemiSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
-	public function testPlainWriterKeepsStraySemiAsOwnMember(): Void {
-		final out: String = plainWrite('class C {\n\tfunction f():Void {};\n}');
-		Assert.equals('class C {\n\tfunction f():Void {}\n\t;\n}', out);
+	@:pin('control')
+	@:killer('M-GLUE-ELEM-TEST-OFF')
+	public function testPlainWriterGluesStraySemiToBody(): Void {
+		final out: String = plainWrite('class C {\n\tfunction f():Void {}\n\t;\n}');
+		Assert.equals('class C {\n\tfunction f():Void {};\n}', out);
 	}
 
 	public function testPlainWriterNoBodySignatureKeepsSingleSemi(): Void {

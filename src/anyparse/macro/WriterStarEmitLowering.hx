@@ -629,12 +629,19 @@ final class WriterStarEmitLowering {
 		// inter-token space; see leftCurlySeparator's `_de()` branch).
 		final hasKnobLeftCurly2: Bool = starNode.fmtReadString('leftCurly') != null;
 		if ((!isFirstField || hasKnobLeftCurly2) && !isRaw && ctx.isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
+		// `@:fmt(glueToPrevious)`: a glued element joins the previous element's line instead of starting its own.
+		final glueTest: Null<Expr> = WriterLoweringSupport.glueElemTestExpr(starNode.fmtReadStringArgs('glueToPrevious'), macro _arr[_si]);
+		final glueExpr: Expr = glueTest == null ? macro false : macro (_si > 0 && $glueTest);
 		parts.push(macro {
 			final _arr = $fieldAccess;
 			final _docs: Array<anyparse.core.Doc> = [];
 			var _si: Int = 0;
 			while (_si < _arr.length) {
-				_docs.push($elemCall);
+				final _elem: anyparse.core.Doc = $elemCall;
+				if ($glueExpr)
+					_docs[_docs.length - 1] = _dc([_docs[_docs.length - 1], _elem]);
+				else
+					_docs.push(_elem);
 				_si++;
 			}
 			blockBody($v{openText ?? '{'}, $v{closeText}, _docs, opt);

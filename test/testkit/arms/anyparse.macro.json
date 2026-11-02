@@ -60,10 +60,17 @@
 		},
 		{
 			"name": "M-GLUE-TO-PREVIOUS-OFF",
-			"type": "anyparse.macro.TriviaBlockLowering",
-			"method": "triviaBlockGlueExpr",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "triviaGlueToPreviousExpr",
 			"force": "macro false",
-			"note": "a stray member `;` is written on its own line again (`}` newline `;`) and the blank line before the next member is lost"
+			"note": "a stray member or case-body `;` is written on its own line again (`}` newline `;`) and the blank line before the next member is lost"
+		},
+		{
+			"name": "M-GLUE-ELEM-TEST-OFF",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "glueElemTestExpr",
+			"force": "null",
+			"note": "no Star glues an element: the plain writer puts a member `;` on its own line and a space before a case body `;`"
 		},
 		{
 			"name": "M-SEP-GLUE-OFF",

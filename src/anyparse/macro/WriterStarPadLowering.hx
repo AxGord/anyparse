@@ -30,6 +30,7 @@ import haxe.macro.Expr;
  * from its twin by this module's existence. A change to Star+sep emission
  * still has to visit all four sites, and they still name each other.
  */
+@:access(anyparse.macro.WriterLoweringSupport)
 final class WriterStarPadLowering {
 
 	/**
@@ -97,13 +98,18 @@ final class WriterStarPadLowering {
 				emitTryparsePadSepEmit(c, padLeading, padTrailing, sepBeforeOptActive, softFill, parts);
 			}
 		} else {
+			// `@:fmt(glueToPrevious)`: no space before a glued element (the case body's `{ … };`).
+			final glueTest: Null<Expr> = WriterLoweringSupport.glueElemTestExpr(
+				MetaInspect.fmtReadStringArgs(c.starNode, 'glueToPrevious'), macro _arr[_si + 1]
+			);
+			final nextGlued: Expr = glueTest ?? macro false;
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs: Array<anyparse.core.Doc> = [];
 				var _si: Int = 0;
 				while (_si < _arr.length) {
 					_docs.push($elemCall);
-					if (_si < _arr.length - 1) _docs.push(_dt(' '));
+					if (_si < _arr.length - 1 && !$nextGlued) _docs.push(_dt(' '));
 					_si++;
 				}
 				_dc(_docs);

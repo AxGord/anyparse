@@ -33,7 +33,6 @@ using StringTools;
  */
 @:re('(?:[0-9](?:_?[0-9])*\\.[0-9](?:_?[0-9])*(?:[eE][-+]?[0-9](?:_?[0-9])*)?(?:_?f(?:32|64))?|[0-9](?:_?[0-9])*\\.(?![\\w.])|\\.[0-9](?:_?[0-9])*(?:[eE][-+]?[0-9](?:_?[0-9])*)?(?:_?f(?:32|64))?|[0-9](?:_?[0-9])*[eE][-+]?[0-9](?:_?[0-9])*(?:_?f(?:32|64))?|[0-9](?:_?[0-9])*_?f(?:32|64))')
 @:rawString
-@:writeNormalize('stripSuffixUnderscore')
 abstract HxFloatLit(String) from String to String {
 
 	@:to public inline function toFloat(): Float {

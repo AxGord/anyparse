@@ -75,14 +75,11 @@ class HxFormatterCorpusTest extends Test {
 	/**
 	 * The fixtures whose formatted output still differs from their input by more than whitespace,
 	 * each a known writer behaviour: a block comment inside a wrapped `+` chain is moved off its
-	 * operand, and a `_` between a numeric literal and its type suffix is dropped. Every other fixture the writer
+	 * operand. Every other fixture the writer
 	 * formats must keep its token sequence — the formatter never adds or removes a token (a
 	 * redundant `;` included: removing it is the `empty-statement` lint's job).
 	 */
-	private static final KNOWN_TOKEN_DRIFT: Array<String> = [
-		'test/testcases/lineends/issue_396_long_opadd_chain.hxtest',
-		'test/testcases/other/numeric_separator.hxtest'
-	];
+	private static final KNOWN_TOKEN_DRIFT: Array<String> = ['test/testcases/lineends/issue_396_long_opadd_chain.hxtest'];
 
 	/**
 	 * ω-sweep-fixture-status: per-fixture status map for `apq recon

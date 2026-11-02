@@ -436,5 +436,34 @@ final class WriterLoweringSupport {
 		return leadText == null && trailText == null && sepText == null;
 	}
 
+	/**
+	 * The runtime test behind `@:fmt(glueToPrevious('<Ctor>'))` and `@:fmt(glueToPrevious('<field>', '<Ctor>'))`:
+	 * whether the Star element `node` — or its `<field>` — is the ctor written right after the previous element, on
+	 * that element's line. Null when the Star carries no glue. The trivia and the plain writer both ask it, so the
+	 * two pipelines glue the same elements.
+	 */
+	private static function glueElemTestExpr(args: Null<Array<String>>, node: Expr): Null<Expr> {
+		if (args == null) return null;
+		if (args.length != 1 && args.length != 2)
+			Context.fatalError('@:fmt(glueToPrevious) expects (ctor) or (field, ctor), got ${args.length} args', Context.currentPos());
+		final value: Expr = args.length == 1 ? node : { expr: EField(node, args[0]), pos: Context.currentPos() };
+		final ctor: String = args[args.length - 1];
+		return macro {
+			final _gv: Null<EnumValue> = $value;
+			_gv != null && Type.enumConstructor(_gv) == $v{ctor};
+		};
+	}
+
+	/**
+	 * `glueElemTestExpr` on a trivia Star's current element `_t`: it glues only when no comment sits between it and
+	 * the previous element, since gluing would move it into that comment. `macro false` when the Star carries no glue.
+	 */
+	private static function triviaGlueToPreviousExpr(args: Null<Array<String>>): Expr {
+		final test: Null<Expr> = glueElemTestExpr(args, macro _t.node);
+		return test == null
+			? macro false
+			: macro (_si > 0 && _t.leadingComments.length == 0 && _arr[_si - 1].trailingComment == null && $test);
+	}
+
 }
 #end

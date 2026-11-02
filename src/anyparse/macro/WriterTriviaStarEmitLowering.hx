@@ -407,7 +407,7 @@ final class WriterTriviaStarEmitLowering {
 			tryparsePriorAfterTrailExpr, tryparseForceInlineSep, tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null,
 			tryparseBlockEnded, tryparseSepFaithful, tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
 			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,
-			refuseGlueOnControlFlow, tryparseFillItems
+			refuseGlueOnControlFlow, tryparseFillItems, starNode.fmtReadStringArgs('glueToPrevious')
 		));
 	}
 

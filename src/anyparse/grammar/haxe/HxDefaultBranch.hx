@@ -34,5 +34,5 @@ package anyparse.grammar.haxe;
 typedef HxDefaultBranch = {
 	@:lead(':') @:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
-		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot) var stmts: Array<HxStatement>;
+		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt')) var stmts: Array<HxStatement>;
 };

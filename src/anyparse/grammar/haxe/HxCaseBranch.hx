@@ -37,11 +37,13 @@ package anyparse.grammar.haxe;
  * `@:fmt(refuseGlueOnControlFlowRoot)` gates the `FitLine` path: a body that cannot render flat AND whose
  * single statement is keyword-led control flow takes the BREAK shape — glued, its `else if` / `} while` /
  * `catch` continuation lines would render at the head's indent and read as if they had left the branch.
+ * `@:fmt(glueToPrevious('EmptyStmt'))` writes a stray `;` right after the statement before it (`{ … };`), as a
+ * block does.
  */
 @:peg
 typedef HxCaseBranch = {
 	@:trivia @:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap'), beforeNewlineSlotFirst, captureTrailComment, inlineElemTrivia) var patterns: Array<HxCasePattern>;
 	@:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
-		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot) var body: Array<HxStatement>;
+		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt')) var body: Array<HxStatement>;
 };

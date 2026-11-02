@@ -13,44 +13,41 @@ import utest.Assert;
  *  - `12_0`, `1_2_0` — underscore separator in decimal int.
  *  - `0x12_0`, `0x1_2_0` — underscore separator in hex.
  *  - `12_0i32`, `12_0_i32` — int with typed suffix (with or without
- *    underscore before suffix; writer normalises the latter to the
- *    former via `@:writeNormalize('stripSuffixUnderscore')`).
+ *    underscore before suffix).
  *  - `12.3_4`, `.3_4`, `1_2e3_4`, `12f64`, `1_2.3_4f64` — float
  *    forms (full / leading-dot / exp-no-dot / f-suffix-only).
- *  - Round-trip preserves source bytes except for the suffix-
- *    underscore strip — `1_2_0_i32` → `1_2_0i32`.
+ *  - Round-trip preserves source bytes, the `_` before a suffix
+ *    included — `1_2_0_i32` stays `1_2_0_i32`.
  *
  * Closes `other/numeric_separator.hxtest` (SKIP→PASS, single-fixture
  * Δpass +1 in the sweep).
  */
 class HxNumericSeparatorSliceTest extends HxTestHelpers {
 
-	// ======== Writer normalisation: strip `_` before typed suffix ========
+	// ======== Writer: a literal is written as its source spelling ========
 
-	public inline function testWriterStripsIntSuffixUnderscore(): Void {
+	public inline function testWriterKeepsIntSuffixUnderscore(): Void {
 		writerEquals(
-			'class C { var f:Int = 1_2_0_i32; }', 'class C {\n\tvar f:Int = 1_2_0i32;\n}\n',
-			'`1_2_0_i32` → `1_2_0i32` (strip underscore before int suffix)'
+			'class C { var f:Int = 1_2_0_i32; }', 'class C {\n\tvar f:Int = 1_2_0_i32;\n}\n',
+			'`1_2_0_i32` keeps the underscore before its suffix'
 		);
 	}
 
-	public inline function testWriterStripsFloatSuffixUnderscore(): Void {
+	public inline function testWriterKeepsFloatSuffixUnderscore(): Void {
 		writerEquals(
-			'class C { var f:Float = 1_2.3_4_f64; }', 'class C {\n\tvar f:Float = 1_2.3_4f64;\n}\n',
-			'`1_2.3_4_f64` → `1_2.3_4f64` (strip underscore before float suffix)'
+			'class C { var f:Float = 1_2.3_4_f64; }', 'class C {\n\tvar f:Float = 1_2.3_4_f64;\n}\n',
+			'`1_2.3_4_f64` keeps the underscore before its suffix'
 		);
 	}
 
-	public inline function testWriterStripsHexSuffixUnderscore(): Void {
+	public inline function testWriterKeepsHexSuffixUnderscore(): Void {
 		writerEquals(
-			'class C { var f:Int = 0xFF_FF_i32; }', 'class C {\n\tvar f:Int = 0xFF_FFi32;\n}\n',
-			'`0xFF_FF_i32` → `0xFF_FFi32` (strip underscore before hex suffix)'
+			'class C { var f:Int = 0xFF_FF_i32; }', 'class C {\n\tvar f:Int = 0xFF_FF_i32;\n}\n',
+			'`0xFF_FF_i32` keeps the underscore before its suffix'
 		);
 	}
 
 	public inline function testWriterPreservesInteriorUnderscores(): Void {
-		// The strip only targets the `_` IMMEDIATELY before the suffix —
-		// interior digit separators stay intact.
 		writerEquals(
 			'class C { var f:Int = 1_2_3_4_5_6; }', 'class C {\n\tvar f:Int = 1_2_3_4_5_6;\n}\n', 'interior `_` separators preserved'
 		);

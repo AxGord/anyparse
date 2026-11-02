@@ -86,6 +86,30 @@ final class HxSemiAfterBlockSliceTest extends Test {
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, DEFAULT));
 	}
 
+	/** A bare block as a case or default body keeps its `;` glued (`};`), in statement and in expression position. */
+	@:pin('control')
+	@:killer('M-GLUE-TO-PREVIOUS-OFF')
+	public function testCaseBodySemiGlued(): Void {
+		assertKept(
+			'switch (x) {\n\t\t\tcase 1:\n\t\t\t\t{\n\t\t\t\t\ta();\n\t\t\t\t};\n\t\t\tdefault:\n\t\t\t\t{\n\t\t\t\t\tb();\n\t\t\t\t};\n'
+			+ '\t\t}'
+		);
+		assertKept('var h = switch x {\n\t\t\tcase true:\n\t\t\t\t{\n\t\t\t\t\t1;\n\t\t\t\t};\n\t\t\tcase _: 2;\n\t\t};');
+	}
+
+	/** The plain writer glues the same `;`: after a member, and after a case body's block. */
+	@:pin('control')
+	@:killer('M-GLUE-ELEM-TEST-OFF')
+	public function testPlainWriterGluesSemi(): Void {
+		Assert.equals(
+			'class C {\n\tfunction f() {};\n\tvar x = 1;\n}',
+			HxWriteFixture.plainWrite('class C { function f() {}\n; var x = 1; }', DEFAULT)
+		);
+		final cases: String = HxWriteFixture.plainWrite(wrap('switch (x) { case 1: { a(); }\n; default: { b(); }\n; }'), DEFAULT);
+		Assert.isTrue(cases.indexOf('case 1:{a();};') != -1, 'expected `{a();};` in: <$cases>');
+		Assert.isTrue(cases.indexOf('default:{b();};') != -1, 'expected `{b();};` in: <$cases>');
+	}
+
 	private static function assertKept(body: String): Void {
 		final src: String = wrap('$body\n\t\tx();');
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, DEFAULT));

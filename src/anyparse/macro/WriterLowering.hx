@@ -1366,33 +1366,19 @@ class WriterLowering {
 				Context.fatalError('WriterLowering: no encoder for underlying type "$underlying"', Context.currentPos());
 				throw 'unreachable';
 		};
-		// ω-numeric-normalize-suffix: `@:writeNormalize('<id>')`
-		// on a `@:rawString` terminal wraps the emit through a built-in
-		// normalisation transform before `_dt`. Currently one variant —
-		// `'stripSuffixUnderscore'` — drops the optional underscore that
-		// precedes a Haxe 5 typed numeric suffix (`_i32` → `i32`,
-		// `_f64` → `f64`), matching haxe-formatter's canonicalisation
-		// convention: source-form `12_0_i32` round-trips as `12_0i32`,
-		// `1_2.3_4_f64` as `1_2.3_4f64`. Source-fidelity loss is the
-		// trade — haxe-formatter normalises here.
-		// Generic enough
-		// for future numeric-shape canonicalisations; the registry is
-		// the switch below, keep it small.
+		// `@:writeNormalize('<id>')` on a `@:rawString` terminal wraps the emit through a built-in
+		// transform before `_dt`; the registry is the switch below. A numeric literal carries none: it is
+		// written as its source spelling (`1_2_0_i32` stays), the writer drops no token the source wrote.
 		final normalize: Null<String> = node.readMetaString(':writeNormalize');
-		// omega-cond-directive-binop: the SECOND config-driven normalisation - unlike its
-		// two siblings this one reads a knob (`opt.condDirectiveOpSpacing`), so its default
-		// value is what keeps the terminal byte-identical rather than the absence of the meta.
+		// omega-cond-directive-binop: a config-driven normalisation - it reads a knob
+		// (`opt.condDirectiveOpSpacing`), so its default value is what keeps the terminal
+		// byte-identical rather than the absence of the meta.
 		return switch (normalize) {
 			case 'reindentBlock': reindentBlockEmit();
 			case 'condOperatorSpacing': macro return _dt(
 				anyparse.format.DirectiveCondition.spaceOperators((cast value: String), opt.condDirectiveOpSpacing)
 			);
-			case 'stripSuffixUnderscore': macro {
-				var _s: String = (cast value: String);
-				final _re = ~/_([iuf](?:8|16|32|64))$/;
-				if (_re.match(_s)) _s = _s.substr(0, _re.matchedPos().pos) + _re.matched(1);
-				return _dt(_s);
-			};
+
 			case _: macro return _dt(value);
 		};
 	}
@@ -2607,6 +2593,9 @@ typedef TryparseStarCtx = {
 	 * or null when the format has no generated predicates.
 	 */
 	final elemCondFn: Null<Expr>;
+
+	/** `@:fmt(glueToPrevious)`: element `_t` is written right after the previous one with no separator — `macro false` without it. */
+	final glueToPreviousExpr: Expr;
 };
 typedef CascadeEmit = {
 	initPrev: Expr,
