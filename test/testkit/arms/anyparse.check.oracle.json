@@ -791,8 +791,8 @@
 			"name": "M-GC-RUN-INHERITS",
 			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "exec",
-			"find": "maxBuffer: maxBuffer, env: childEnv() }",
-			"replace": "maxBuffer: maxBuffer }",
+			"find": "{ env: childEnv() }",
+			"replace": "{}",
 			"note": "a single haxe spawn inherits the caller's environment untouched, so every typecheck run through `run` pays the default collector again"
 		},
 		{

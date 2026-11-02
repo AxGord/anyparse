@@ -2,6 +2,8 @@ package unit.dev;
 
 import dev.Shard;
 import devkit.Args.UsageError;
+import devkit.Cmd.cmd;
+import devkit.Result;
 import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
@@ -35,6 +37,14 @@ const tokens = (process.env.APQ_TEST || '').split(',').filter(t => t);
 const run = tokens.length === 0 ? classes : tokens;
 const counted = run.filter(t => !t.includes('#') || t.split('#')[1].startsWith('0/'));
 const hit = run.some(t => t.split('#')[0] === classes[0]);
+if (mode === 'orphan') {
+  const c = require('child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 15000)'], { stdio: 'ignore' });
+  c.unref(); fs.writeFileSync(path.join(__dirname, 'orphan.pid'), String(c.pid));
+}
+if (mode === 'stall' && hit) {
+  fs.writeFileSync(process.env.APQ_TEST_PROGRESS, 'unit.Fake.testStuck');
+  return setInterval(() => {}, 1000);
+}
 if (hit && mode === 'die') { process.exitCode = 1; return process.stdout.write('  testA: OK .\\n'); }
 if (process.env.APQ_TEST_TIMING) fs.writeFileSync(process.env.APQ_TEST_TIMING, run.map(t => '3\\t1\\t' + t.split('#')[0] + '\\n').join(''));
 const failed = hit && mode === 'red' ? 1 : 0;
@@ -138,8 +148,45 @@ process.exitCode = failed;
 		});
 	}
 
+	/** A runner given `APQ_TEST_PROGRESS` leaves the test it started last in that file: the watchdog's sign of life. */
+	public function testTheRunnerLeavesTheTestItStartedLast(): Void {
+		TempDir.with(dir -> {
+			final progress: String = dir.file('progress');
+			final run: Result = cmd('${js.Node.process.execPath} ${js.Node.process.argv[1]}')
+				.env('APQ_TEST', 'unit.devkit.TallyTest')
+				.env('APQ_TEST_PROGRESS', progress)
+				.run();
+			Assert.equals(0, run.status, run.out + run.err);
+			Assert.isTrue(File.getContent(progress).startsWith('unit.devkit.TallyTest.test'), File.getContent(progress));
+		});
+	}
+
+	/** What a shard's process group left running is named in the run's warnings and killed. */
+	public function testAnOrphanAShardLeftIsWarnedAbout(): Void {
+		TempDir.with(dir -> {
+			final run: Ran = runFake(dir, 'orphan', 1, false);
+			final pid: String = File.getContent(dir.file('orphan.pid'));
+			killQuietly(Std.parseInt(pid));
+			Assert.equals(0, run.status, run.printed.join('\n'));
+			Assert.isTrue(run.warned.exists(l -> l.startsWith('dev shard: shard 0: orphan left running: $pid ')), run.warned.join('\n'));
+		});
+	}
+
+	/** A shard cut for making no progress fails the run, and the verdict says why and where it stood. */
+	public function testAShardCutForSilenceFailsTheRunWithItsReason(): Void {
+		TempDir.with(dir -> {
+			final run: Ran = runFake(dir, 'stall', 1, false, null, 2000);
+			Assert.equals(1, run.status);
+			final verdict: String = run.printed[run.printed.length - 1];
+			Assert.stringContains('suite-shard: FAILED', verdict);
+			Assert.stringContains('shard 0: ', verdict);
+			Assert.stringContains('made no progress for 2 s', verdict);
+			Assert.stringContains('last started: unit.Fake.testStuck', verdict);
+		});
+	}
+
 	/** `dev shard` over the fake runner in `dir` in `mode`; a kept work directory is removed again. */
-	private static function runFake(dir: TempDir, mode: String, shards: Int, verify: Bool, ?expect: SuiteCounts): Ran {
+	private static function runFake(dir: TempDir, mode: String, shards: Int, verify: Bool, ?expect: SuiteCounts, ?idleMs: Int): Ran {
 		File.saveContent(dir.file('fake.js'), RUNNER);
 		File.saveContent(dir.file('classes.txt'), TestRegistry.classNames().join('\n') + '\n');
 		File.saveContent(dir.file('mode'), mode);
@@ -157,13 +204,20 @@ process.exitCode = failed;
 			timings: dir.file('timings.tsv'),
 			fixtureCache: null,
 			print: printed.push,
-			warn: warned.push
+			warn: warned.push,
+			idleMs: idleMs
 		});
 		for (line in warned) if (line.startsWith('dev shard: work files kept in '))
 			js.Syntax.code(
 				"require('fs').rmSync({0}, { recursive: true, force: true })", line.substr('dev shard: work files kept in '.length)
 			);
 		return { status: status, printed: printed, warned: warned };
+	}
+
+	private static function killQuietly(pid: Null<Int>): Void {
+		if (pid != null) try js.Node.process.kill(pid) catch (exception: haxe.Exception) { // noqa: swallowed-exception
+			// the sleeper may be gone already
+		}
 	}
 
 }

@@ -57,6 +57,15 @@ final class Shard {
 	 */
 	private static inline final SHARD_TIMEOUT_MS: Int = 2 * 60 * 60 * 1000;
 
+	/**
+	 * How long a shard may run with no sign of life — no output and no new test started — before it is killed and its
+	 * transcript says which test stood last. Far above the longest single test, far below `SHARD_TIMEOUT_MS`.
+	 */
+	private static inline final IDLE_MS: Int = 15 * 60 * 1000;
+
+	/** The prefix of the lines the process driver adds to a shard's stderr for what its process group left running. */
+	private static inline final ORPHAN_NOTE: String = 'orphan ';
+
 	private static inline final MS_PER_SECOND: Int = 1000;
 	private static inline final MS_PER_TENTH: Int = 100;
 
@@ -206,6 +215,11 @@ final class Shard {
 		return 'failing: ${names.slice(0, FAILING_SHOWN).join(', ')}$more';
 	}
 
+	/** How long a shard of `job` may be silent before it is cut. */
+	private static inline function idleLimit(job: ShardJob): Int {
+		return job.idleMs ?? IDLE_MS;
+	}
+
 	/** Plan, run and report; answers the exit status. Every file it writes goes into `work`. */
 	private static function execute(job: ShardJob, work: String): Int {
 		final split: Null<ShardSplit> = split(job, work);
@@ -229,7 +243,10 @@ final class Shard {
 					.env('PATH', shim == null ? path : '$shim:$path')
 					.env('APQ_TEST', split.filters[s])
 					.env('APQ_TEST_TIMING', Path.join([work, 'shard$s.timing']))
+					.env('APQ_TEST_PROGRESS', progressFile(work, s))
 					.timeout(SHARD_TIMEOUT_MS)
+					.reaped()
+					.watched(idleLimit(job), progressFile(work, s))
 			)
 		);
 		final elapsed: Int = Math.round((Timer.stamp() - started) * MS_PER_SECOND);
@@ -348,6 +365,8 @@ final class Shard {
 		final exit: Int = result.ok ? 0 : 1;
 		final log: String = Path.join([work, 'shard$s.log']);
 		saveLog(log, result);
+		for (line in result.err.split('\n')) if (line.startsWith(ORPHAN_NOTE)) job.warn('dev shard: shard $s: $line');
+		if (result.failure != '') verdict.fail('shard $s: ${result.failure}');
 		final summary: Summarised = summarise(log, exit, job.warn);
 		if (summary.rc == 1) {
 			job.warn('dev shard: shard $s log is at $log');
@@ -525,6 +544,11 @@ final class Shard {
 		return value == null || value == '' ? null : value;
 	}
 
+	/** The file shard `s`'s runner rewrites with the test it starts (`APQ_TEST_PROGRESS`), for the watchdog. */
+	private static function progressFile(work: String, s: Int): String {
+		return Path.join([work, 'shard$s.progress']);
+	}
+
 }
 
 /** What a run found wrong so far: every reason in the order found, whether it is red, whether a shard did not finish. */
@@ -567,6 +591,9 @@ typedef ShardJob = {
 
 	/** Handed the run's totals once every shard has ended — a sum of what ran when a shard did not finish. */
 	var ?counted: Tally -> Void;
+
+	/** How long a shard may be silent before it is cut; `Shard.IDLE_MS` when absent. */
+	var ?idleMs: Int;
 }
 
 /** A shard plan as the run uses it: each shard's `APQ_TEST` value and its tokens, the class total, the producer check. */

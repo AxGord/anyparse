@@ -7,6 +7,7 @@ import anyparse.core.TempScratch;
 import haxe.DynamicAccess;
 import haxe.io.Path;
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
+import js.node.Fs;
 #end
 
 /**
@@ -110,6 +111,9 @@ final class HaxeSpawn {
 	/** The largest `driverBound`: a millisecond count that still fits an `Int`. */
 	private static inline final MAX_BOUND: Float = 2147483647;
 
+	/** The spawn error code of a process whose output outgrew its cap. */
+	private static inline final OVERFLOW: String = 'ENOBUFS';
+
 
 	/**
 	 * The node program a `tethered` job runs under, between the driver and the job: `argv[1]` is `1` when the tether leads
@@ -152,6 +156,11 @@ final class HaxeSpawn {
 	 * however the driver went, a SIGKILL of the whole process group `apq` and the driver share included — off Windows a
 	 * job's group is its own, so that kill does not reach it. Off Windows a tethered job is killed like any other; on
 	 * Windows, where a kill reaches the tether alone, its stdin is closed instead and the tether ends the job itself.
+	 * A job ENDS at its exit, not at the end of its pipes: when they stay open `PIPE_GRACE` after it, whatever else its
+	 * group still runs held them — the driver names it (`orphan held output: <pid> <command>` appended to the job's stderr),
+	 * kills the group, and answers; a holder outside the group costs one more second and is named so. A `reap` job names and
+	 * kills what its group still runs at its exit (`orphan left running: …`). A job with `idle` is killed once neither its
+	 * streams nor the file `progress` names moved for that long, and answers a `failure` quoting that file.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
 		+ "const TETHER = '"
@@ -161,12 +170,12 @@ final class HaxeSpawn {
 		+ "if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}"
 		+ "function drop() { if (process.argv[4]) try { require('fs').rmSync(require('path').dirname(process.argv[4]),"
 		+ ' { recursive: true, force: true }); } catch (err) {} }'
-		+ 'function emit(s) { const f = process.argv[4]; if (!f) { process.stdout.write(s); return; }'
-		+ " require('fs').writeFileSync(f + '.part', s); require('fs').renameSync(f + '.part', f); }"
+		+ 'function emit(s) { const f = process.argv[4]; if (!f) { process.stdout.write(s, () => process.exit(0)); return; }'
+		+ " require('fs').writeFileSync(f + '.part', s); require('fs').renameSync(f + '.part', f); process.exit(0); }"
 		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]); const stop = process.argv[3] === '1';"
 		+ "const group = process.platform !== 'win32';"
 		+ 'const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;'
-		+ 'let dying = false, reaping = 0; const GRACE = 3000;'
+		+ 'let dying = false, reaping = 0; const GRACE = 3000, PIPE_GRACE = 2000;'
 		+ 'function signal(c, s) { try { if (group) process.kill(-c.pid, s); else c.kill(s); }'
 		+ ' catch (err) { try { c.kill(s); } catch (ignored) {} } }'
 		+ 'function grouped(c) { if (!group) return false; try { process.kill(-c.pid, 0); return true; }'
@@ -185,6 +194,22 @@ final class HaxeSpawn {
 		+ "function recordGroup(j, c) { if (j.groupFile == null || c.pid == null) return; let st = '';"
 		+ " try { if (group) st = cp.execFileSync('ps', ['-o', 'lstart=', '-p', String(c.pid)], { encoding: 'utf8' }).trim(); } catch (err) {}"
 		+ " try { require('fs').writeFileSync(j.groupFile, c.pid + '\\n' + st); } catch (err) {} }"
+		+ 'function members(c) { if (!group) return []; try {'
+		+ " return cp.execFileSync('ps', ['-A', '-o', 'pid=,pgid=,command='], { encoding: 'utf8' }).split('\\n')"
+		+ " .map(l => /^\\s*(\\d+)\\s+(\\d+)\\s+(.*)$/.exec(l)).filter(m => m && Number(m[2]) === c.pid && Number(m[1]) !== c.pid)"
+		+ " .map(m => m[1] + ' ' + m[3]); } catch (err) { return []; } }"
+		+ 'function reap(c, how) { const left = members(c); if (left.length === 0) return;'
+		+ " c.orphans = (c.orphans || '') + left.map(m => how + ': ' + m).join('\\n') + '\\n'; signal(c, 'SIGKILL'); }"
+		+ "function lingering(i, c, now, answer) { if (now) reap(c, 'orphan left running');"
+		+ " c.grace = setTimeout(() => { if (out[i]) return; reap(c, 'orphan held output');"
+		+ ' c.stuck = setTimeout(() => { if (out[i]) return;'
+		+ " c.orphans = c.orphans || 'orphan held output: (outside the job group)\\n';"
+		+ ' c.stdout.destroy(); c.stderr.destroy(); answer(c.exitCode); }, 1000); }, PIPE_GRACE); }'
+		+ "function watchdog(c, j) { if (c.stalled) return; const fs = require('fs'); if (j.progress) try {"
+		+ ' const m = fs.statSync(j.progress).mtimeMs; if (m !== c.mark) { c.mark = m; c.beat = Date.now(); } } catch (err) {}'
+		+ " if (Date.now() - c.beat < j.idle) return; let last = '';"
+		+ " if (j.progress) try { last = fs.readFileSync(j.progress, 'utf8').trim().slice(-200); } catch (err) {}"
+		+ " c.stalled = 'no progress for ' + Math.round(j.idle / 1000) + ' s' + (last ? ' — last started: ' + last : ''); kill(c); }"
 		+ 'function cancelAfter(i) { for (let k = i + 1; k < jobs.length; k++) { if (out[k]) continue;'
 		+ ' if (kids[k]) { kids[k].cancelled = true; kill(kids[k]); }'
 		+ " else if (k >= next) { out[k] = { status: null, out: '', err: '', failure: '"
@@ -192,6 +217,7 @@ final class HaxeSpawn {
 		+ "', overflowed: false,"
 		+ ' cancelled: true, unstarted: true }; done++; } } next = jobs.length; }'
 		+ 'function finish(i, rec) { if (out[i]) return; out[i] = rec; if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);'
+		+ ' if (kids[i]) { clearTimeout(kids[i].grace); clearTimeout(kids[i].stuck); clearInterval(kids[i].watch); }'
 		+ ' kids[i] = null; running--; done++; if (dying) { settle(); return; }'
 		+ ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
 		+ ' if (done === jobs.length) emit(JSON.stringify(out)); else start(); }'
@@ -209,14 +235,20 @@ final class HaxeSpawn {
 		+ " if (typeof input === 'number') require('fs').closeSync(input);"
 		+ " c.tethered = j.tethered === true; if (c.tethered) c.stdin.on('error', () => {}); kids[i] = c; recordGroup(j, c);"
 		+ ' if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);'
-		+ " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; kill(c); } else o.push(d); });"
-		+ " c.stderr.on('data', d => e.push(d));"
+		+ " c.beat = Date.now(); c.stdout.on('data', d => { c.beat = Date.now(); size += d.length;"
+		+ ' if (size > max) { over = true; kill(c); } else o.push(d); });'
+		+ " c.stderr.on('data', d => { c.beat = Date.now(); e.push(d); });"
+		+ ' if (j.idle > 0) c.watch = setInterval(() => watchdog(c, j), Math.max(50, Math.min(1000, j.idle / 4)));'
 		+ " c.on('error', err => finish(i, { status: null, out: '', err: '', failure: 'could not launch ' + what + ' (' + err.message + ')',"
 		+ ' overflowed: false }));'
-		+ " c.on('close', code => finish(i, { status: over || c.cancelled || c.timedOut ? null : code,"
-		+ " out: Buffer.concat(o).toString('utf8'), err: Buffer.concat(e).toString('utf8'),"
+		+ " const answer = code => { const text = Buffer.concat(e).toString('utf8');"
+		+ ' finish(i, { status: over || c.cancelled || c.timedOut || c.stalled ? null : code,'
+		+ " out: Buffer.concat(o).toString('utf8'),"
+		+ " err: c.orphans ? text + (text === '' || text.endsWith('\\n') ? '' : '\\n') + c.orphans : text,"
 		+ " failure: c.cancelled ? 'cancelled — an earlier job failed' : c.timedOut ? what + ' timed out after ' + j.timeout + ' ms'"
-		+ " : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '', overflowed: over, cancelled: c.cancelled === true })); } }"
+		+ " : c.stalled ? what + ' made ' + c.stalled : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '',"
+		+ ' overflowed: over, cancelled: c.cancelled === true }); };'
+		+ " c.on('close', code => answer(code)); c.on('exit', () => lingering(i, c, j.reap === true, answer)); } }"
 		+ "if (jobs.length === 0) emit('[]'); else start();";
 
 	/**
@@ -260,7 +292,7 @@ final class HaxeSpawn {
 		};
 		#if nodejs
 		final cwd: Null<String> = job.cwd;
-		final options: Dynamic = { encoding: 'utf8', maxBuffer: maxBuffer, env: childEnv() };
+		final options: Dynamic = { env: childEnv() };
 		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
 		// over the inherited environment, which `options.env` already holds
 		final env: Null<DynamicAccess<String>> = job.env;
@@ -273,27 +305,27 @@ final class HaxeSpawn {
 		final stdin: Null<String> = job.stdin;
 		final input: Null<Int> = stdin == null
 			? null
-			: try js.node.Fs.openSync(stdin, 'r') catch (exception: haxe.Exception) return {
+			: try Fs.openSync(stdin, 'r') catch (exception: haxe.Exception) return {
 				status: null,
 				out: '',
 				err: '',
 				failure: 'could not open $stdin as the standard input of $program (${exception.message})',
 				overflowed: false
 			};
-		if (input != null) Reflect.setField(options, 'stdio', [input, 'pipe', 'pipe']);
-		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(program, job.args, options);
-		if (input != null) js.node.Fs.closeSync(input);
-		final out: String = streamText(res.stdout);
-		final err: String = streamText(res.stderr);
-		final launchError: Null<Dynamic> = (res.error: Dynamic);
-		if (launchError == null) return {
-			status: (res.status: Null<Int>),
+		final captured: CapturedRun = capturedSpawn(program, job.args, options, input, maxBuffer);
+		if (input != null) Fs.closeSync(input);
+		final out: String = captured.out;
+		final err: String = captured.err;
+		final launchError: Null<Dynamic> = captured.error;
+		if (launchError == null && !captured.overflowed) return {
+			status: captured.status,
 			out: out,
 			err: err,
 			failure: '',
 			overflowed: false
 		};
-		final code: String = '${Reflect.field(launchError, 'code')}';
+		final code: String = launchError == null ? OVERFLOW : '${Reflect.field(launchError, 'code')}';
+		final reason: String = launchError == null ? '' : '${Reflect.field(launchError, 'message')}';
 		return {
 			status: null,
 			out: out,
@@ -301,11 +333,11 @@ final class HaxeSpawn {
 			failure: switch code {
 				// the program ran FINE and out-wrote `maxBuffer`, or ran past `timeout` and was killed: both leave output
 				// worth reading, while every other spawn error means it never ran at all
-				case 'ENOBUFS': '$program out-wrote its $maxBuffer byte output buffer';
+				case OVERFLOW: '$program out-wrote its $maxBuffer byte output buffer';
 				case 'ETIMEDOUT': '$program timed out after $timeout ms';
-				case _: 'could not launch $program (${Reflect.field(launchError, 'message')})';
+				case _: 'could not launch $program ($reason)';
 			},
-			overflowed: code == 'ENOBUFS'
+			overflowed: code == OVERFLOW
 		};
 		#elseif sys
 		return job.env != null || job.stdin != null || (job.timeout ?? 0) > 0 ? {
@@ -357,10 +389,9 @@ final class HaxeSpawn {
 	): Array<HaxeRun> {
 		final stop: Bool = stopAfterFailure ?? false;
 		#if nodejs
-		// a shell job always goes through the driver: only there does a kill reach its whole process group; a tethered one,
-		// because only there is it tethered
-		if ((jobs.length <= 1 || parallel <= 1) && !jobs.exists(j -> j.shell != null || j.tethered == true))
-			return runInOrder(jobs, maxBuffer, stop);
+		// a job that needs the driver always goes through it: only there does a kill reach its whole process group, and only
+		// there is a job tethered, reaped or watched for progress
+		if ((jobs.length <= 1 || parallel <= 1) && !jobs.exists(needsDriver)) return runInOrder(jobs, maxBuffer, stop);
 		// the jobs go in through a FILE and the driver's stdin is the null device: an `input` piped to `spawnSync` can
 		// stall for good on macOS, the stdin socket drained while this process sleeps in `kevent` with bytes still to
 		// write, and the driver then blocks on a read that never ends (`docs/decisions.md`, "F1")
@@ -581,8 +612,7 @@ final class HaxeSpawn {
 	 * either could not be written. `dropBatch` removes it with whatever is left in it.
 	 */
 	public static function writeJobs(jobs: Array<SpawnJob>, prefix: String): Null<DriverBatch> {
-		final dir: Null<String> =
-			try js.node.Fs.mkdtempSync(Path.join([TempScratch.root(), prefix])) catch (exception: haxe.Exception) null;
+		final dir: Null<String> = try Fs.mkdtempSync(Path.join([TempScratch.root(), prefix])) catch (exception: haxe.Exception) null;
 		if (dir == null) return null;
 		final file: String = Path.join([dir, 'jobs.json']);
 		try {
@@ -615,6 +645,63 @@ final class HaxeSpawn {
 		final gc: Null<String> = gcSetting();
 		if (gc != null) env['OCAMLRUNPARAM'] = gc;
 		return env;
+	}
+
+	/**
+	 * `program args` run to its exit with both streams going to files of a scratch directory, not to pipes: a pipe is
+	 * closed only when EVERY holder is gone, so a grandchild that outlived the program kept `spawnSync` waiting for as long
+	 * as it lived. A stream past `maxBuffer` bytes is cut there and counts as overflowed.
+	 */
+	private static function capturedSpawn(
+		program: String, args: Array<String>, options: Any, input: Null<Int>, maxBuffer: Int
+	): CapturedRun {
+		final dir: Null<String> = try Fs.mkdtempSync(Path.join([TempScratch.root(), 'apq-exec-'])) catch (exception: haxe.Exception) null;
+		if (dir == null) return unscratched();
+		final outFile: String = Path.join([dir, 'out']);
+		final errFile: String = Path.join([dir, 'err']);
+		final fds: Null<Array<Int>> = try [Fs.openSync(outFile, 'w'), Fs.openSync(errFile, 'w')] catch (exception: haxe.Exception) null;
+		if (fds == null) {
+			dropBatch(dir);
+			return unscratched();
+		}
+		final stdin: Any = (input: Null<Any>) ?? 'ignore';
+		Reflect.setField(options, 'stdio', [stdin, fds[0], fds[1]]);
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(program, args, options);
+		for (fd in fds) Fs.closeSync(fd);
+		final captured: CapturedRun = {
+			status: (res.status: Null<Int>),
+			error: (res.error: Dynamic),
+			out: streamHead(outFile, maxBuffer),
+			err: streamHead(errFile, maxBuffer),
+			overflowed: streamSize(outFile) > maxBuffer || streamSize(errFile) > maxBuffer
+		};
+		dropBatch(dir);
+		return captured;
+	}
+
+	/** The answer of a spawn whose output files could not be made: it never ran. */
+	private static function unscratched(): CapturedRun {
+		return {
+			status: null,
+			error: { code: 'ECAPTURE', message: 'no scratch file for its output' },
+			out: '',
+			err: '',
+			overflowed: false
+		};
+	}
+
+	/** The size of the file `path` in bytes. */
+	private static function streamSize(path: String): Float {
+		return Fs.statSync(path).size;
+	}
+
+	/** The first `limit` bytes of the file `path` as text. */
+	private static function streamHead(path: String, limit: Int): String {
+		final fd: Int = Fs.openSync(path, 'r');
+		final bytes: js.node.Buffer = js.node.Buffer.alloc(Std.int(Math.min(streamSize(path), limit)));
+		Fs.readSync(fd, bytes, 0, bytes.length, 0);
+		Fs.closeSync(fd);
+		return bytes.toString('utf8');
 	}
 	#end
 
@@ -732,6 +819,11 @@ final class HaxeSpawn {
 		return declared != null && declared > 0 ? declared : null;
 	}
 
+	/** Whether `job` can only run through the process driver: a shell line, a tether, a reaped group or a progress watch. */
+	public static function needsDriver(job: SpawnJob): Bool {
+		return job.shell != null || job.tethered == true || job.reap == true || (job.idle ?? 0) > 0;
+	}
+
 }
 
 /**
@@ -765,12 +857,33 @@ typedef SpawnJob = {
 	 * never ends by itself, a compilation server.
 	 */
 	var ?tethered: Bool;
+
+	/**
+	 * What the job's process group still runs when the job exits is named in the job's stderr and killed (`PARALLEL_DRIVER`),
+	 * so nothing a job started outlives its run.
+	 */
+	var ?reap: Bool;
+
+	/** Milliseconds without a byte on either stream or a change of `progress` after which the job is killed; 0 or absent is no limit. */
+	var ?idle: Int;
+
+	/** A file the job rewrites as it moves on: its modification counts as progress, and its text names where a stalled job stood. */
+	var ?progress: String;
 }
 
 /** A batch directory `HaxeSpawn.writeJobs` made, and the jobs file in it the process driver reads. */
 typedef DriverBatch = {
 	var dir: String;
 	var jobs: String;
+}
+
+/** What `HaxeSpawn.capturedSpawn` left: the spawn's result, both streams read back and whether either was cut at the cap. */
+typedef CapturedRun = {
+	var status: Null<Int>;
+	var error: Null<Any>;
+	var out: String;
+	var err: String;
+	var overflowed: Bool;
 }
 
 /**

@@ -28,10 +28,11 @@ final class Command {
 	private final _input: Null<String>;
 	private final _upstream: Null<Command>;
 	private final _tethered: Bool;
+	private final _guard: Guard;
 
 	private function new(
 		argv: Array<String>, cwd: Null<String>, env: DynamicAccess<String>, timeout: Int, input: Null<String>, upstream: Null<Command>,
-		tethered: Bool
+		tethered: Bool, guard: Guard
 	) {
 		this.argv = argv;
 		_cwd = cwd;
@@ -40,6 +41,7 @@ final class Command {
 		_input = input;
 		_upstream = upstream;
 		_tethered = tethered;
+		_guard = guard;
 	}
 
 	/** `run`, throwing `CommandFailed` unless it exited 0. */
@@ -59,19 +61,19 @@ final class Command {
 
 	/** This command run in `dir`. */
 	public function at(dir: String): Command {
-		return new Command(argv, dir, _env, _timeout, _input, _upstream, _tethered);
+		return new Command(argv, dir, _env, _timeout, _input, _upstream, _tethered, _guard);
 	}
 
 	/** This command with the environment variable `name` set to `value` over this process's environment. */
 	public function env(name: String, value: String): Command {
 		final env: DynamicAccess<String> = Reflect.copy(_env) ?? {};
 		env[name] = value;
-		return new Command(argv, _cwd, env, _timeout, _input, _upstream, _tethered);
+		return new Command(argv, _cwd, env, _timeout, _input, _upstream, _tethered, _guard);
 	}
 
 	/** This command killed after `ms` milliseconds, which then answers a `failure`; 0 is no limit. */
 	public function timeout(ms: Int): Command {
-		return new Command(argv, _cwd, _env, ms, _input, _upstream, _tethered);
+		return new Command(argv, _cwd, _env, ms, _input, _upstream, _tethered, _guard);
 	}
 
 	/**
@@ -83,7 +85,33 @@ final class Command {
 	public function tethered(): Command {
 		if (_input != null || _upstream != null)
 			throw new Exception('`${toString()}` reads an input, and a tethered command reads its tether');
-		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, true);
+		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, true, _guard);
+	}
+
+	/**
+	 * This command run so that nothing it started outlives its end: what its process group still runs when it exits is
+	 * named in its `err` (`orphan left running: <pid> <command>`) and killed. Runs through the process driver, bounded by its
+	 * `timeout`.
+	 */
+	public function reaped(): Command {
+		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, _tethered, {
+			reap: true,
+			idle: _guard.idle,
+			progress: _guard.progress
+		});
+	}
+
+	/**
+	 * This command killed once it has been silent for `ms` milliseconds — no byte on either stream and no change of the file
+	 * `progress` — which then answers a `failure` quoting the text of `progress`: where a stalled run stood. Runs through the
+	 * process driver. A process group the command leads is killed whole.
+	 */
+	public function watched(ms: Int, progress: String): Command {
+		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, _tethered, {
+			reap: _guard.reap,
+			idle: ms,
+			progress: progress
+		});
 	}
 
 	/**
@@ -94,14 +122,14 @@ final class Command {
 	public function under(prefix: Array<String>): Command {
 		if (_upstream != null) throw new Exception('`${toString()}` is a pipeline, and a prefix would run only its last stage');
 		if (prefix.length == 0) throw new Exception('a prefix needs a program to run');
-		return new Command(prefix.concat(argv), _cwd, _env, _timeout, _input, _upstream, _tethered);
+		return new Command(prefix.concat(argv), _cwd, _env, _timeout, _input, _upstream, _tethered, _guard);
 	}
 
 	/** This command with `text` as its standard input. */
 	public function input(text: String): Command {
 		if (_upstream != null) throw new Exception('`${toString()}` already reads a pipe');
 		if (_tethered) throw new Exception('`${toString()}` is tethered, and a tethered command reads its tether');
-		return new Command(argv, _cwd, _env, _timeout, text, _upstream, _tethered);
+		return new Command(argv, _cwd, _env, _timeout, text, _upstream, _tethered, _guard);
 	}
 
 	/**
@@ -111,7 +139,7 @@ final class Command {
 	public function pipe(next: Command): Command {
 		if (next._input != null || next._upstream != null) throw new Exception('`$next` already has an input');
 		if (next._tethered) throw new Exception('`$next` is tethered, and a tethered command reads its tether');
-		return new Command(next.argv, next._cwd, next._env, next._timeout, null, this, next._tethered);
+		return new Command(next.argv, next._cwd, next._env, next._timeout, null, this, next._tethered, next._guard);
 	}
 
 	/** Run the command (every stage of a pipeline) to its end. Never throws for the command's own sake: see `Result`. */
@@ -153,6 +181,9 @@ final class Command {
 		};
 		if (stdin != null) job.stdin = stdin;
 		if (_tethered) job.tethered = true;
+		if (_guard.reap) job.reap = true;
+		if (_guard.idle > 0) job.idle = _guard.idle;
+		if (_guard.progress != null) job.progress = _guard.progress;
 		return job;
 	}
 
@@ -170,7 +201,7 @@ final class Command {
 	/** The command running `argv[0]` over the rest of `argv`. */
 	public static function of(argv: Array<String>): Command {
 		if (argv.length == 0) throw new Exception('a command needs a program to run');
-		return new Command(argv.copy(), null, {}, 0, null, null, false);
+		return new Command(argv.copy(), null, {}, 0, null, null, false, { reap: false, idle: 0, progress: null });
 	}
 
 	/** One argument of a `Cmd.cmd` template: `value` as text; a null `value` (`source` in the template) throws. */
@@ -192,7 +223,7 @@ final class Command {
 
 	/** One job run to its end: in this process, or through the process driver when it is tethered. */
 	private static function one(job: SpawnJob): HaxeRun {
-		return job.tethered == true ? HaxeSpawn.runAll([job], MAX_BUFFER, 1)[0] : HaxeSpawn.exec(job, MAX_BUFFER);
+		return HaxeSpawn.needsDriver(job) ? HaxeSpawn.runAll([job], MAX_BUFFER, 1)[0] : HaxeSpawn.exec(job, MAX_BUFFER);
 	}
 
 	/** `arg` as it would have to be written in a POSIX shell. */
@@ -200,4 +231,15 @@ final class Command {
 		return arg != '' && ~/^[A-Za-z0-9_@%+=:,.\/-]+$/.match(arg) ? arg : "'" + arg.split("'").join("'\\''") + "'";
 	}
 
+}
+
+/** How a command is supervised once it runs: the group it leaves behind, and the silence it is cut after. */
+typedef Guard = {
+	var reap: Bool;
+
+	/** Milliseconds of silence after which the run is killed; 0 for no limit. */
+	var idle: Int;
+
+	/** The file whose change counts as a sign of life, and whose text says where a stalled run stood. */
+	var progress: Null<String>;
 }

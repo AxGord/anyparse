@@ -3,6 +3,8 @@ import testkit.TestRegistry;
 import unit.cli.CliFixture;
 import utest.Runner;
 
+using StringTools;
+
 /**
  * Entry point for the test suite.
  *
@@ -107,15 +109,15 @@ class RunTests {
 			final passThrough: Dynamic = untyped out.write;
 			var buffer: Null<StringBuf> = null;
 			untyped out.write = function(chunk: Dynamic, ?enc: Dynamic, ?cb: Dynamic): Bool {
-				final buf = buffer;
+				final buf: Null<StringBuf> = buffer;
 				if (buf == null) return passThrough.call(out, chunk, enc, cb);
 				buf.add(Std.string(chunk));
 				if (cb != null) cb();
 				return true;
 			};
 			runner.onTestStart.add(function(_): Void buffer = new StringBuf());
-			runner.onTestComplete.add(function(h): Void {
-				final buf = buffer;
+			runner.onTestComplete.add(h -> {
+				final buf: Null<StringBuf> = buffer;
 				buffer = null;
 				if (buf == null) return;
 				for (a in h.results) switch a {
@@ -145,6 +147,7 @@ class RunTests {
 		runner.onComplete.add(_ -> Sys.println('tests executed: $executed'));
 		final timingPath: Null<String> = Sys.getEnv('APQ_TEST_TIMING');
 		if (timingPath != null && timingPath != '') recordTimings(runner, timingPath);
+		recordProgress(runner);
 		// Registered here for the same reason as the line above: `Report.create`'s own
 		// `onComplete` handler exits the process from inside the dispatch, so a scratch
 		// teardown added after it would never run. `removeScratchRoot` rather than `removeDir`
@@ -220,12 +223,20 @@ class RunTests {
 	private static function testNames(testCase: utest.Test): Array<String> {
 		return [
 			for (name in Type.getInstanceFields(Type.getClass(testCase)))
-				if (
-					(StringTools.startsWith(name, 'test') || StringTools.startsWith(name, 'spec'))
-					&& Reflect.isFunction(Reflect.field(testCase, name))
-				)
-					name
+				if ((name.startsWith('test') || name.startsWith('spec')) && Reflect.isFunction(Reflect.field(testCase, name))) name
 		];
+	}
+
+	/**
+	 * `APQ_TEST_PROGRESS=<path>`: rewrite `<path>` with `<class>.<method>` as each test starts, so a run that goes quiet leaves
+	 * the test it stopped in — the file's modification time is its sign of life for `dev shard`'s watchdog.
+	 */
+	private static function recordProgress(runner: Runner): Void {
+		final path: Null<String> = Sys.getEnv('APQ_TEST_PROGRESS');
+		if (path == null || path == '') return;
+		runner.onTestStart.add(
+			h -> sys.io.File.saveContent(path, '${Type.getClassName(Type.getClass(h.fixture.target))}.${h.fixture.method}')
+		);
 	}
 
 }
