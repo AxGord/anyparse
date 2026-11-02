@@ -43,10 +43,10 @@ final class Branches {
 			File.saveContent('$file.log', ran.out + ran.err + ran.failure);
 			final left: Null<BranchReport> = reportOf(file, id);
 			if (left != null) for (name => value in left.readings) readings[name] = value;
-			final why: String = ran.firstError();
+			final why: String = reasonOf(ran);
 			for (name in names) steps[name] = left?.steps.find(s -> s.name == name) ?? {
 				name: name,
-				outcome: NotRun('its branch left no report: ${why.length > WHY_WIDTH ? why.substr(0, WHY_WIDTH) + '…' : why} — $file.log'),
+				outcome: NotRun('its branch left no report: $why — $file.log'),
 				ms: 0,
 				note: '',
 				excerpt: Excerpt.errors(ran.out + ran.err + ran.failure)
@@ -57,6 +57,18 @@ final class Branches {
 			if (step != null) into.add(step.name, step.outcome, step.ms, step.note, step.excerpt);
 		}
 		return readings;
+	}
+
+	/**
+	 * Why the branch whose process ended as `ran` left no report, at most `WHY_WIDTH` characters. How the process failed comes
+	 * first, and its tail is kept (a cut for silence names the row it stood in there, after any wrapper's long path); a process
+	 * that failed no way says its first error line, head first.
+	 */
+	public static function reasonOf(ran: Result): String {
+		final failure: String = ran.failure;
+		if (failure != '') return failure.length > WHY_WIDTH ? '…${failure.substr(failure.length - WHY_WIDTH)}' : failure;
+		final first: String = ran.firstError();
+		return first.length > WHY_WIDTH ? '${first.substr(0, WHY_WIDTH)}…' : first;
 	}
 
 	/** Leave the steps of `summary` and `readings` at `file` for the run `id` that started this branch. */

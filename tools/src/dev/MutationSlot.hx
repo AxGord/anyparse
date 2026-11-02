@@ -45,6 +45,9 @@ final class MutationSlot {
 	/** Present when the slots keep compiler servers. */
 	public static inline final SERVERS: String = 'servers';
 
+	/** The environment variable naming the file a slot rewrites as each track ends: a gate's sign of life for the arms row. */
+	public static inline final PROGRESS_VAR: String = 'APQ_ARMS_PROGRESS';
+
 	/** The directory a slot claims a track in, one `mkdir` per track: the first slot to make it runs it. */
 	private static inline final CLAIMS: String = 'claims';
 
@@ -137,9 +140,14 @@ final class MutationSlot {
 		];
 	}
 
-	/** Leave `verdict` and its `detail` as track `name`'s answer. */
+	/**
+	 * Leave `verdict` and its `detail` as track `name`'s answer, and say so in the file `PROGRESS_VAR` names when it names one: a
+	 * gate watching this run for silence sees each track end.
+	 */
 	public static function writeVerdict(workroot: String, name: String, verdict: String, detail: String): Void {
 		File.saveContent(Path.join([workroot, '$name.verdict']), '$verdict\n$detail\n');
+		final progress: String = Sys.getEnv(PROGRESS_VAR) ?? '';
+		if (progress != '') File.saveContent(progress, 'arms: $name $verdict');
 	}
 
 	/** Track `name`'s verdict and detail; `RUN-FAIL` when it left none. */

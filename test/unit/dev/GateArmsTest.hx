@@ -27,6 +27,7 @@ final class GateArmsTest extends Test {
 		+ "const r=a.indexOf('--repo');const repo=r<0?process.cwd():a[r+1];const tree=path.dirname(path.dirname(process.argv[1]));"
 		+ "const knob=n=>fs.existsSync(tree+'/knobs/'+n);fs.appendFileSync(tree+'/runs.log',(r<0?'at-slice ':'at-base ')+a.join(' ')+' "
 		+ "HXQ_BIN='+process.env.HXQ_BIN+'\\n');if(a[0]==='worker-build')process.exit(fs.existsSync(tree+'/fail-base-build')?1:0);"
+		+ "if(a.includes('--fast'))fs.appendFileSync(tree+'/progress.log',(process.env.APQ_ARMS_PROGRESS||'-')+'\\n');"
 		+ "const names=a.slice(1).filter(x=>x.startsWith('M-'));if(a.includes('--apply-only')){const "
 		+ "bad=names.filter(n=>n!=='M-OK');for(const n of bad)console.log('APPLY-FAIL  '+n+' why');console.log(names.length+' arms: "
 		+ "'+(names.length-bad.length)+' apply, '+bad.length+' did not apply');process.exit(bad.length?1:0);}"
@@ -226,6 +227,19 @@ final class GateArmsTest extends Test {
 		});
 	}
 
+	/**
+	 * The kill run at the slice and the one at the base both hand the arms branch's progress file to the tracks, which rewrite it
+	 * as each ends: a watched branch running many tracks is never cut for silence while it makes headway.
+	 */
+	@:pin('guard')
+	public function testEveryKillRunHandsTheTracksTheBranchProgressFile(): Void {
+		withTree(tree -> {
+			Assert.isFalse(outcomeOf(tree, []).match(Passed), 'the survivors send the row to the base');
+			final expected: String = Path.join(['$tree-logs', 'rows/arms.json.progress']);
+			Assert.same([expected, expected], File.getContent(Path.join([tree, 'progress.log'])).trim().split('\n'));
+		});
+	}
+
 	public function testABaseThatCannotBeReadCallsNoArmRotten(): Void {
 		withTree(tree -> {
 			File.saveContent(Path.join([tree, 'fail-base-build']), '');
@@ -301,7 +315,7 @@ final class GateArmsTest extends Test {
 			FileSystem.createDirectory(Path.join([tree, 'src/pkg']));
 			FileSystem.createDirectory(Path.join([tree, ArmRegistry.DIRECTORY]));
 			FileSystem.createDirectory('$tree-logs');
-			File.saveContent(Path.join([tree, '.gitignore']), 'bin/\nknobs/\nruns.log\nhxq.log\nfail-base-build\n');
+			File.saveContent(Path.join([tree, '.gitignore']), 'bin/\nknobs/\nruns.log\nprogress.log\nhxq.log\nfail-base-build\n');
 			File.saveContent(Path.join([tree, 'bin/dev.js']), FAKE_DEV);
 			File.saveContent(Path.join([tree, 'bin/test.js']), '');
 			File.saveContent(Path.join([tree, 'bin/hxq']), FAKE_HXQ);

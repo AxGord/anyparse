@@ -245,7 +245,6 @@ final class Shard {
 					.env('APQ_TEST_TIMING', Path.join([work, 'shard$s.timing']))
 					.env('APQ_TEST_PROGRESS', progressFile(work, s))
 					.timeout(SHARD_TIMEOUT_MS)
-					.reaped()
 					.watched(idleLimit(job), progressFile(work, s))
 			)
 		);

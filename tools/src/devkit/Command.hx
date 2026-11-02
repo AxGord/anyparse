@@ -9,7 +9,9 @@ import haxe.Exception;
  * split or expanded. Usually built by `Cmd.cmd`. A command is immutable: `at`, `env`, `timeout`, `input`, `pipe` and
  * `tethered` each answer a new one, so a command can be kept and reused as a template.
  *
- * Every run goes through `HaxeSpawn` (`exec` here, `runAll` from `Pool`), the project's one process seam.
+ * Every run goes through `HaxeSpawn.runDriven` (here and from `Pool`), the project's one process
+ * seam: a run ends at its process's exit, and whatever its process group still runs then — an
+ * orphan holding its pipes included — is named in `err` (`orphan left running`) and killed.
  */
 @:nullSafety(Strict)
 final class Command {
@@ -89,28 +91,16 @@ final class Command {
 	}
 
 	/**
-	 * This command run so that nothing it started outlives its end: what its process group still runs when it exits is
-	 * named in its `err` (`orphan left running: <pid> <command>`) and killed. Runs through the process driver, bounded by its
-	 * `timeout`.
-	 */
-	public function reaped(): Command {
-		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, _tethered, {
-			reap: true,
-			idle: _guard.idle,
-			progress: _guard.progress
-		});
-	}
-
-	/**
 	 * This command killed once it has been silent for `ms` milliseconds — no byte on either stream and no change of the file
 	 * `progress` — which then answers a `failure` quoting the text of `progress`: where a stalled run stood. Runs through the
-	 * process driver. A process group the command leads is killed whole.
+	 * process driver. A process group the command leads is killed whole. With `awaitProgress` the silence counts only from the
+	 * first change of `progress`: a command that queues behind a lease wrapper has not begun, and is not silent.
 	 */
-	public function watched(ms: Int, progress: String): Command {
+	public function watched(ms: Int, progress: String, awaitProgress: Bool = false): Command {
 		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, _tethered, {
-			reap: _guard.reap,
 			idle: ms,
-			progress: progress
+			progress: progress,
+			awaitProgress: awaitProgress
 		});
 	}
 
@@ -177,13 +167,14 @@ final class Command {
 			args: argv.slice(1),
 			cwd: _cwd,
 			env: _env,
-			timeout: _timeout
+			timeout: _timeout,
+			reap: true
 		};
 		if (stdin != null) job.stdin = stdin;
 		if (_tethered) job.tethered = true;
-		if (_guard.reap) job.reap = true;
 		if (_guard.idle > 0) job.idle = _guard.idle;
 		if (_guard.progress != null) job.progress = _guard.progress;
+		if (_guard.awaitProgress) job.awaitProgress = true;
 		return job;
 	}
 
@@ -201,7 +192,11 @@ final class Command {
 	/** The command running `argv[0]` over the rest of `argv`. */
 	public static function of(argv: Array<String>): Command {
 		if (argv.length == 0) throw new Exception('a command needs a program to run');
-		return new Command(argv.copy(), null, {}, 0, null, null, false, { reap: false, idle: 0, progress: null });
+		return new Command(argv.copy(), null, {}, 0, null, null, false, {
+			idle: 0,
+			progress: null,
+			awaitProgress: false
+		});
 	}
 
 	/** One argument of a `Cmd.cmd` template: `value` as text; a null `value` (`source` in the template) throws. */
@@ -221,9 +216,13 @@ final class Command {
 		return [for (part in parts) for (item in part) item];
 	}
 
-	/** One job run to its end: in this process, or through the process driver when it is tethered. */
+	/**
+	 * One job run to its end through the process driver, which answers at the process's exit and not at its pipes' end: what
+	 * its process group still runs at the exit is named in the `err` (`orphan left running`) and killed, as it was when the
+	 * caller's own group was reaped. The limit is the job's `timeout` alone.
+	 */
 	private static function one(job: SpawnJob): HaxeRun {
-		return HaxeSpawn.needsDriver(job) ? HaxeSpawn.runAll([job], MAX_BUFFER, 1)[0] : HaxeSpawn.exec(job, MAX_BUFFER);
+		return HaxeSpawn.runDriven([job], MAX_BUFFER, 1)[0];
 	}
 
 	/** `arg` as it would have to be written in a POSIX shell. */
@@ -235,11 +234,13 @@ final class Command {
 
 /** How a command is supervised once it runs: the group it leaves behind, and the silence it is cut after. */
 typedef Guard = {
-	var reap: Bool;
 
 	/** Milliseconds of silence after which the run is killed; 0 for no limit. */
 	var idle: Int;
 
 	/** The file whose change counts as a sign of life, and whose text says where a stalled run stood. */
 	var progress: Null<String>;
+
+	/** Whether `idle` counts from the first change of `progress` and not from the start. */
+	var awaitProgress: Bool;
 }

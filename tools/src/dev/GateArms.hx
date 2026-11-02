@@ -107,6 +107,11 @@ final class GateArms {
 		return lines;
 	}
 
+	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
+	private static inline function progressOf(gate: GateTree): String {
+		return gate.branchProgress(SliceGate.ARMS_ROW);
+	}
+
 	/** The runs of a `picked` selection, `old` being the registry at the base: the apply check first, then the kill run. */
 	private static function run(gate: GateTree, picked: ArmSelection, old: Null<Array<ArmRecord>>): Outcome {
 		final read: ArmReading = { notes: [], rows: [] };
@@ -152,7 +157,9 @@ final class GateArms {
 	 * row says whose it is.
 	 */
 	private static function fastOutcome(gate: GateTree, names: Array<String>, old: Null<Array<ArmRecord>>, read: ArmReading): Outcome {
-		final run: Result = gate.inTree(cmd('node bin/dev.js mutation-arm $names --fast ${jobsOf(gate)}'));
+		final run: Result = gate.inTree(
+			cmd('node bin/dev.js mutation-arm $names --fast ${jobsOf(gate)}').env(MutationSlot.PROGRESS_VAR, progressOf(gate))
+		);
 		final log: String = run.out + run.err;
 		File.saveContent(gate.log('arms.log'), log);
 		final tally: EReg = ~/^(\d+) tracks: (\d+) killed, .*$/m;
@@ -270,6 +277,7 @@ final class GateArms {
 			final run: Result = cmd('node $dev mutation-arm $names --fast ${jobsOf(gate)} --repo $checkout')
 				.at(checkout)
 				.env('HXQ_BIN', '$checkout/bin/apq.js')
+				.env(MutationSlot.PROGRESS_VAR, progressOf(gate))
 				.run();
 			final log: String = run.out + run.err;
 			File.saveContent(gate.log('arms-base.log'), log);

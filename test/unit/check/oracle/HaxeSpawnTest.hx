@@ -302,6 +302,33 @@ final class HaxeSpawnTest extends Test {
 	}
 
 	/**
+	 * A pipe held by a process still in the job's own group is named and killed once the job's shell has exited: the sibling
+	 * job is not delayed by it and carries no orphan line.
+	 */
+	public function testAHolderInTheJobGroupIsNamedAndKilled(): Void {
+		#if nodejs
+		final holder: Int = 93;
+		final started: Float = Date.now().getTime();
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+			{ args: [], cwd: null, shell: 'sleep $holder & echo done' },
+			{ args: [], cwd: null, shell: 'echo ok' }
+		], ROOMY, 2);
+		final line: EReg = ~/orphan held output: (\d+) sleep 93/;
+		final named: Bool = line.match(runs[0].err);
+		final pid: Null<Int> = named ? Std.parseInt(line.matched(1)) : null;
+		final alive: Bool = signalable(pid);
+		if (pid != null && alive) js.Syntax.code('process.kill({0}, "SIGKILL")', pid);
+		Assert.equals(0, runs[0].status);
+		Assert.isTrue(named, 'the holder is named in the job\'s err: ${runs[0].err}');
+		Assert.isFalse(alive, 'and it was killed, not left running');
+		Assert.equals('', runs[1].err);
+		Assert.isTrue(Date.now().getTime() - started < holder * 1000 / 4, 'the run ended without waiting the holder out');
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/**
 	 * Start the process driver on the one shell job `shell` in a fresh directory holding `files`, wait for the job to write
 	 * its child's pid to `child.txt`, SIGTERM the driver, and answer how long the child outlived the signal in ms; null when
 	 * it never started or was alive `waitMs` later, when it is SIGKILLed here.

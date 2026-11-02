@@ -85,6 +85,19 @@ final class GateTree {
 		return Path.join([logs, name]);
 	}
 
+	/** Where the branch whose first row is `first` leaves its report. */
+	public inline function branchReport(first: String): String {
+		return log('rows/$first.json');
+	}
+
+	/**
+	 * The file that branch rewrites as it makes progress: the name of each row as it starts, and the arms row's track as each
+	 * ends (`MutationSlot.PROGRESS_VAR`). A branch that stops rewriting it is stalled.
+	 */
+	public inline function branchProgress(first: String): String {
+		return '${branchReport(first)}.progress';
+	}
+
 	/** `git <args>` in the tree, its standard output; a failure throws. */
 	public inline function git(args: Array<String>): String {
 		return gitIn(tree, args);

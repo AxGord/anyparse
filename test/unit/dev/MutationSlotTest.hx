@@ -24,6 +24,31 @@ final class MutationSlotTest extends Test {
 		Assert.equals('', MutationSlot.killerTokens(''));
 	}
 
+	/**
+	 * Each track's verdict also rewrites the file `PROGRESS_VAR` names, which is how a gate sees the arms row move; unset, nothing is
+	 * written.
+	 */
+	@:pin('guard')
+	public function testATracksVerdictIsASignOfLifeInTheNamedProgressFile(): Void {
+		TempDir.with(dir -> {
+			final progress: String = dir.file('progress');
+			final saved: String = Sys.getEnv(MutationSlot.PROGRESS_VAR) ?? '';
+			try {
+				Sys.putEnv(MutationSlot.PROGRESS_VAR, '');
+				MutationSlot.writeVerdict(dir.path, 'M-A', 'KILLED', 'detail');
+				Assert.isFalse(FileSystem.exists(progress));
+				Sys.putEnv(MutationSlot.PROGRESS_VAR, progress);
+				MutationSlot.writeVerdict(dir.path, 'M-B', 'SURVIVED', 'detail');
+				Assert.equals('arms: M-B SURVIVED', File.getContent(progress));
+				Assert.equals('SURVIVED\ndetail\n', File.getContent(dir.file('M-B.verdict')));
+			} catch (exception: haxe.Exception) {
+				Sys.putEnv(MutationSlot.PROGRESS_VAR, saved);
+				throw exception;
+			}
+			Sys.putEnv(MutationSlot.PROGRESS_VAR, saved);
+		});
+	}
+
 	public function testAKillerReadingAnswersWhenItMatchedAnExpectation(): Void {
 		Assert.isTrue(MutationSlot.matchedAny(reading('KILLED', '1 tests failed / 2 assertions: a.T.x'), 'a.T.x'));
 		Assert.isFalse(MutationSlot.matchedAny(reading('SURVIVED', '0 tests failed / 2 assertions'), 'a.T.x'));

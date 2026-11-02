@@ -14,7 +14,7 @@ import utest.Test;
 using StringTools;
 
 /**
- * `Command.run` — one process through `HaxeSpawn.exec`, its argument vector handed over with no shell in between. The
+ * `Command.run` — one process through the `HaxeSpawn` driver, its argument vector handed over with no shell in between. The
  * programs here are `node -e` scripts, so the suite needs nothing the runner does not already have.
  */
 @:nullSafety(Strict)
@@ -39,14 +39,19 @@ final class CommandTest extends Test {
 	/** Prints two lines. */
 	private static inline final PRINT_XY: String = 'console.log("x"); console.log("y")';
 
+	/** After a quiet start, writes `row-one` to the file `argv[1]` and then goes silent for good. */
+	private static inline final WRITE_LATE: String = 'setTimeout(() => require("fs").writeFileSync(process.argv[1], "row-one"), 1800); '
+		+ 'setInterval(() => {}, 1000)';
+
 	/** Prints a blank line between two, the last one ended. */
 	private static inline final PRINT_GAP: String = 'process.stdout.write("a\\n\\nb\\n")';
 
 	/** Prints one line with no break after it. */
 	private static inline final PRINT_UNENDED: String = 'process.stdout.write("a")';
 
-	/** Prints its parent's pid. */
-	private static inline final PRINT_PPID: String = 'process.stdout.write(String(process.ppid))';
+	/** Prints the command line of its parent. */
+	private static inline final PRINT_PARENT: String = 'process.stdout.write(require("child_process").execFileSync("ps", '
+		+ '["-ww", "-o", "command=", "-p", String(process.ppid)], { encoding: "utf8" }))';
 
 	/**
 	 * How long the sleepers of `LEAVE_HOLDER` and `LEAVE_QUIET` live; a test must end well before.
@@ -83,21 +88,18 @@ final class CommandTest extends Test {
 
 	/** A tethered command runs under its tether, never as this process's own child, whatever command was derived from it. */
 	public function testTheTetherIsKeptByEveryDerivedCommand(): Void {
-		final own: String = '${js.Node.process.pid}';
-		Assert.equals(own, cmd('$_node -e $PRINT_PPID').text(), 'untethered: this process\'s own child');
+		Assert.isFalse(isTether(cmd('$_node -e $PRINT_PARENT').text()), 'untethered: no tether between the driver and it');
 		TempDir.with(dir -> {
-			final tethered: devkit.Command = cmd('$_node -e $PRINT_PPID').tethered();
+			final tethered: devkit.Command = cmd('$_node -e $PRINT_PARENT').tethered();
 			for (derived in [
 				tethered,
 				tethered.at(dir.path),
 				tethered.env('DEVKIT_PROBE', 'x'),
 				tethered.timeout(60000)
 			]) {
-				final parent: String = derived.text();
-				Assert.notEquals(own, parent, derived.toString());
-				Assert.notEquals('', parent);
+				Assert.isTrue(isTether(derived.text()), derived.toString());
 			}
-			Assert.notEquals(own, tethered.pipe(cmd('$_node -e $UPPER')).text(), 'the upstream stage of a pipe');
+			Assert.isTrue(isTether(tethered.pipe(cmd('$_node -e $UPPER')).text()), 'the upstream stage of a pipe');
 		});
 	}
 
@@ -193,10 +195,66 @@ final class CommandTest extends Test {
 		final run: Result = cmd('$_node -e $LEAVE_HOLDER').run();
 		final elapsed: Float = Timer.stamp() - started;
 		final holder: Null<Int> = Std.parseInt(run.out.trim());
-		killQuietly(holder);
 		Assert.equals(0, run.status);
 		Assert.isTrue(elapsed < HOLD_SECONDS - 4, 'ended after $elapsed s');
 		Assert.notNull(holder);
+		Assert.stringContains('orphan left running: $holder ', run.err);
+		Assert.isFalse(alive(holder), 'the holder is gone');
+		killQuietly(holder);
+	}
+
+	/** A plain command names and kills what its own group leaves running at its exit, though nothing reaps its caller's group. */
+	public function testAPlainRunNamesAndKillsWhatItLeftRunning(): Void {
+		final run: Result = cmd('$_node -e $LEAVE_QUIET').run();
+		final holder: Null<Int> = Std.parseInt(run.out.trim());
+		Assert.equals(0, run.status);
+		Assert.stringContains('orphan left running: $holder ', run.err);
+		Assert.isFalse(alive(holder), 'the sleeper is gone');
+	}
+
+	/** A pooled command is reaped as a plain one is: a quiet leftover of its group is named and killed, whatever the pool's size. */
+	public function testAPooledCommandNamesAndKillsWhatItLeftRunning(): Void {
+		for (size in [1, 2]) {
+			final run: Result = Pool.of(size).run([cmd('$_node -e $LEAVE_QUIET')])[0];
+			final holder: Null<Int> = Std.parseInt(run.out.trim());
+			Assert.equals(0, run.status);
+			Assert.stringContains('orphan left running: $holder ', run.err, 'pool of $size');
+			Assert.isFalse(alive(holder), 'the sleeper is gone, pool of $size');
+			killQuietly(holder);
+		}
+	}
+
+	/** A pool of one runs through the driver as a larger one does: the holder of the pipes is named and killed. */
+	public function testAPoolOfOneNamesAndKillsAPipeHolder(): Void {
+		final started: Float = Timer.stamp();
+		final run: Result = Pool.of(1).run([cmd('$_node -e $LEAVE_HOLDER')])[0];
+		final elapsed: Float = Timer.stamp() - started;
+		final holder: Null<Int> = Std.parseInt(run.out.trim());
+		Assert.equals(0, run.status);
+		Assert.isTrue(elapsed < HOLD_SECONDS - 4, 'ended after $elapsed s');
+		Assert.stringContains('orphan left running: $holder ', run.err);
+		Assert.isFalse(alive(holder), 'the holder is gone');
+		killQuietly(holder);
+	}
+
+	/** With `awaitProgress` a command that has not moved its progress file yet is not silent: it is still queued. */
+	public function testSilenceCountsOnlyFromTheFirstMoveOfTheProgressFile(): Void {
+		TempDir.with(dir -> {
+			final progress: String = dir.file('progress');
+			final run: Result = cmd('$_node -e $WRITE_LATE $progress').timeout(60000).watched(1000, progress, true).run();
+			Assert.isNull(run.status);
+			Assert.stringContains('no progress for 1 s', run.failure);
+			Assert.stringContains('last started: row-one', run.failure);
+		});
+	}
+
+	/** With `awaitProgress` a command that never moves its progress file is bounded by its timeout alone. */
+	public function testACommandThatNeverMovesItsProgressFileIsBoundByItsTimeout(): Void {
+		TempDir.with(dir -> {
+			final run: Result = cmd('$_node -e $HANG').timeout(2500).watched(500, dir.file('never-written'), true).run();
+			Assert.isNull(run.status);
+			Assert.isTrue(run.failure.endsWith('timed out after 2500 ms'), run.failure);
+		});
 	}
 
 	/** The process driver gives the pipes a short grace after the exit, then names what still holds them and kills it. */
@@ -207,23 +265,14 @@ final class CommandTest extends Test {
 		final holder: Null<Int> = Std.parseInt(runs[0].out.trim());
 		Assert.equals(0, runs[0].status);
 		Assert.isTrue(elapsed < HOLD_SECONDS - 4, 'ended after $elapsed s');
-		Assert.stringContains('orphan held output: $holder ', runs[0].err);
+		Assert.stringContains('orphan left running: $holder ', runs[0].err);
 		Assert.isFalse(alive(holder), 'the holder is gone');
 		Assert.equals('', runs[1].err, 'a run that left nothing behind names nothing');
 	}
 
-	/** A reaped command names and kills what its group left running even when that holds none of its streams. */
-	public function testAReapedCommandKillsWhatItLeftRunning(): Void {
-		final run: Result = cmd('$_node -e $LEAVE_QUIET').reaped().run();
-		final holder: Null<Int> = Std.parseInt(run.out.trim());
-		Assert.equals(0, run.status);
-		Assert.stringContains('orphan left running: $holder ', run.err);
-		Assert.isFalse(alive(holder), 'the sleeper is gone');
-	}
-
 	/** A command with nothing to name leaves its streams as they were. */
-	public function testAReapedCommandThatLeftNothingNamesNothing(): Void {
-		final run: Result = cmd('$_node -e $PRINT_XY').reaped().run();
+	public function testAPlainRunThatLeftNothingNamesNothing(): Void {
+		final run: Result = cmd('$_node -e $PRINT_XY').run();
 		Assert.same([0, 'x\ny\n', ''], [run.status, run.out, run.err]);
 	}
 
@@ -269,6 +318,13 @@ final class CommandTest extends Test {
 			Assert.equals(0, run.status);
 			Assert.equals('', run.failure);
 		});
+	}
+
+	/**
+	 * Whether `parentCommand` is the tether program (`HaxeSpawn.TETHER`) run as a program of its own: the driver only embeds its text.
+	 */
+	private static function isTether(parentCommand: String): Bool {
+		return parentCommand.toLowerCase().contains('-e const cp = require("child_process");const lead');
 	}
 
 	private static function alive(pid: Null<Int>): Bool {

@@ -126,6 +126,76 @@ final class BranchesTest extends Test {
 		});
 	}
 
+	/**
+	 * A branch cut for silence under a lease wrapper names the row it stood in: the wrapper's own stderr line and its long path
+	 * must not stand in for how the process failed.
+	 */
+	public function testACutBranchNamesItsRowBehindAWrappersLongPath(): Void {
+		TempDir.with(dir -> {
+			final wrapperDir: String = dir.file('a-directory-whose-name-is-long-enough-to-push-the-row-past-the-reason-width-of-a-step');
+			sys.FileSystem.createDirectory(wrapperDir);
+			final wrapper: String = Path.join([wrapperDir, 'wf-run']);
+			final script: Array<String> = [
+				'#!/bin/sh',
+				'echo "wf-run: waiting for 1 threads - held 6/10 by slice-gate SOME-SLICE kits (2), slice-gate OTHER lint (1)" >&2',
+				'printf lint > "$$1"',
+				'exec node -e "setInterval(() => {}, 1000)"',
+				''
+			];
+			sys.io.File.saveContent(wrapper, script.join('\n'));
+			js.Syntax.code("require('fs').chmodSync({0}, 0o755)", wrapper);
+			final progress: String = dir.file('lint.json.progress');
+			final summary: Summary = new Summary();
+			final readings: Map<String, Int> = Branches.run(
+				'r1', [['lint']],
+				['lint'], names -> Command.of([wrapper, progress]).watched(1000, progress, true), names -> dir.file('lint.json'), summary
+			);
+			Assert.isFalse(readings.keys().hasNext(), 'a cut branch read nothing');
+			final outcome: Outcome = summary.steps()[0].outcome;
+			switch outcome {
+				case NotRun(why):
+					Assert.stringContains('last started: lint', why);
+					Assert.isTrue(why.length < 300, why);
+				case _:
+					Assert.fail('$outcome');
+			}
+		});
+	}
+
+	/** A branch cut in its second row keeps the result of its first: the report it left names only that row, which stays passed. */
+	public function testACutBranchKeepsTheRowsItFinished(): Void {
+		TempDir.with(dir -> {
+			final report: String = dir.file('a.json');
+			final progress: String = '$report.progress';
+			final left: String = Branches.encode('r1', [
+				{
+					name: 'a',
+					outcome: Passed,
+					ms: 0,
+					note: '',
+					excerpt: []
+				}
+			], []);
+			final script: String = 'const fs = require("fs"); fs.writeFileSync(process.argv[1], process.argv[2]); '
+				+ 'fs.writeFileSync(process.argv[3], "b"); setInterval(() => {}, 1000)';
+			final summary: Summary = new Summary();
+			final readings: Map<String, Int> = Branches.run(
+				'r1', [['a', 'b']],
+				['a', 'b'],
+				names -> Command.of(['node', '-e', script, report, left, progress]).watched(1000, progress, true), names -> report, summary
+			);
+			Assert.isFalse(readings.keys().hasNext());
+			Assert.same(['a', 'b'], [for (step in summary.steps()) step.name]);
+			Assert.isTrue(summary.steps()[0].outcome.match(Passed), 'the finished row keeps its result');
+			switch summary.steps()[1].outcome {
+				case NotRun(why):
+					Assert.stringContains('last started: b', why);
+				case other:
+					Assert.fail('$other');
+			}
+		});
+	}
+
 	/** A light branch queues a priority step ahead of the caller's own; the heavy one at the caller's own. */
 	@:pin('control')
 	@:killer('M-BRANCHES-LIGHT-NOT-AHEAD')

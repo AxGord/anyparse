@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.BranchWatch;
 import dev.Probe;
 import dev.SliceGate;
 import devkit.Branches;
@@ -51,6 +52,11 @@ final class SliceGateTest extends Test {
 		+ "const rows=at('--rows').split(','),logs=at('--logs');fs.appendFileSync(logs+'/branches.log',rows.join(',')+'\\n');"
 		+ "fs.mkdirSync(logs+'/rows',{recursive:true});fs.writeFileSync(logs+'/rows/'+rows[0]+'.json',JSON.stringify({run:at('--run'),"
 		+ "steps:rows.map(n=>({name:n,outcome:'passed',why:'',ms:0,note:'',excerpt:[]})),readings:[]}));";
+
+	/** A stand-in branch that starts its first row and then stops moving for good, as a wedged row does. */
+	private static final STALLED_SELF: String = "const fs=require('fs');const a=process.argv.slice(2);const at=n=>a[a.indexOf(n)+1];"
+		+ "const rows=at('--rows').split(','),logs=at('--logs');fs.mkdirSync(logs+'/rows',{recursive:true});"
+		+ "fs.writeFileSync(logs+'/rows/'+rows[0]+'.json.progress',rows[0]);setInterval(()=>{},1000);";
 
 	/**
 	 * A `--rows` branch runs inside the lease its gate took for it and never asks the pool itself, even inside a workflow
@@ -230,6 +236,55 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
+	 * Every branch is watched for silence: one that starts a row and then stops moving is cut at its row's limit, and the gate
+	 * names the row it stood in. The limit is the longest of the rows the branch runs, and a row left unnamed has the default.
+	 */
+	@:pin('guard')
+	public function testABranchThatStopsMovingIsCutAndNamesItsRow(): Void {
+		final ran: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, STALLED_SELF, 1000);
+		for (first in ['suite', 'lists', 'lint', 'jvm', 'infra4', 'kits', 'arms']) {
+			final log: String = ran.rowLogs[first] ?? '';
+			Assert.stringContains('made no progress for 1 s', log, first);
+			Assert.stringContains('last started: $first', log, first);
+		}
+		final minute: Int = 60 * 1000;
+		Assert.equals(20 * minute, BranchWatch.idleOf(['suite', 'corpus']));
+		Assert.equals(10 * minute, BranchWatch.idleOf(['lists', 'fmt', 'scrub', 'artifacts']));
+		Assert.equals(45 * minute, BranchWatch.idleOf(['arms']));
+		Assert.equals(5 * minute, BranchWatch.idleOf(['lists']));
+		Assert.equals(20 * minute, BranchWatch.idleOf(['no-such-row']));
+	}
+
+	/**
+	 * The real branch names each row in its progress file as the row starts and leaves its report after every row: while the
+	 * second row runs, the first row's result is already on disk and the progress file names the second, so a branch cut in
+	 * the second row loses nothing of the first.
+	 */
+	@:pin('guard')
+	public function testARealBranchMovesItsProgressFileAndReportsAfterEveryRow(): Void {
+		TempDir.with(dir -> {
+			final tree: String = scratchTree(dir, BASE_REGISTRY, GRAPH_HXQ);
+			final logs: String = dir.file('logs');
+			FileSystem.createDirectory(Path.join([logs, 'rows']));
+			final report: String = Path.join([logs, 'rows/artifacts.json']);
+			final progress: String = '$report.progress';
+			final marker: String = dir.file('marker');
+			final probe: Array<String> = [
+				"const fs = require('fs');",
+				'fs.writeFileSync(${Json.stringify(marker)}, fs.existsSync(${Json.stringify(report)}) + "|"',
+				'	+ fs.readFileSync(${Json.stringify(progress)}, "utf8"));'
+			];
+			File.saveContent(Path.join([tree, 'bin/apq.js']), 'built');
+			File.saveContent(Path.join([tree, 'bin/test.js']), probe.join('\n'));
+			Assert.equals(0, SliceGate.main([tree, '--rows', 'artifacts,lists', '--logs', logs, '--run', 'r']));
+			Assert.equals('true|lists', File.getContent(marker), 'while the second row ran');
+			Assert.equals('lists', File.getContent(progress));
+			final left: Null<BranchReport> = Branches.reportOf(report, 'r');
+			Assert.same(['artifacts', 'lists'], left == null ? [] : [for (step in left.steps) step.name]);
+		});
+	}
+
+	/**
 	 * A scratch tree whose base commit holds the arm registry `BASE_REGISTRY` and whose slice commit holds `registry`, with the
 	 * stand-ins the gate's tools need; it answers the baseline record the gate reads.
 	 */
@@ -263,8 +318,15 @@ final class SliceGateTest extends Test {
 	}
 
 	/** A whole `check()` over a scratch tree whose slice leaves `registry`, the compiler, the branches' script and the pool faked. */
-	private static function gateRun(registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ): GateRan {
-		var ran: GateRan = { branches: '', leases: '', status: -1 };
+	private static function gateRun(
+		registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ, ?self: String, ?idleMs: Int
+	): GateRan {
+		var ran: GateRan = {
+			branches: '',
+			leases: '',
+			status: -1,
+			rowLogs: []
+		};
 		TempDir.with(dir -> {
 			final tree: String = scratchTree(dir, registry, hxq);
 			final root: String = dir.file('plugin');
@@ -272,22 +334,33 @@ final class SliceGateTest extends Test {
 			for (d in [Path.join([root, 'scripts']), fakeBin]) FileSystem.createDirectory(d);
 			File.saveContent(Path.join([fakeBin, 'haxe']), '#!/bin/sh\nexit 0\n');
 			File.saveContent(Path.join([root, 'scripts/wf-run']), LOGGING_WF_RUN);
-			File.saveContent(dir.file('self.js'), FAKE_SELF);
+			File.saveContent(dir.file('self.js'), self ?? FAKE_SELF);
 			for (script in [Path.join([fakeBin, 'haxe']), Path.join([root, 'scripts/wf-run'])])
 				js.Syntax.code("require('fs').chmodSync({0}, 0o755)", script);
 			var status: Int = -1;
 			final saved: Map<String, String> = [
-				for (v in ['WF_PLUGIN_ROOT', 'WF_THREADS', 'PATH', SliceGate.SELF_VAR]) v => Sys.getEnv(v) ?? ''
+				for (v in ['WF_PLUGIN_ROOT', 'WF_THREADS', 'PATH', SliceGate.SELF_VAR, BranchWatch.IDLE_VAR]) v => Sys.getEnv(v) ?? ''
 			];
 			CliFixture.always(() -> for (v => value in saved) Sys.putEnv(v, value), () -> {
 				Sys.putEnv('WF_PLUGIN_ROOT', root);
 				Sys.putEnv('WF_THREADS', '');
 				Sys.putEnv('PATH', '$fakeBin:${saved['PATH']}');
 				Sys.putEnv(SliceGate.SELF_VAR, dir.file('self.js'));
+				Sys.putEnv(BranchWatch.IDLE_VAR, idleMs == null ? '' : '$idleMs');
 				status = SliceGate.main([tree, '--logs', '$tree-logs'].concat(extra ?? []));
 			});
 			final read: String -> String = file -> FileSystem.exists(file) ? File.getContent(file) : '';
-			ran = { branches: read('$tree-logs/branches.log'), leases: read(Path.join([root, 'scripts/leases.log'])), status: status };
+			final rowsDir: String = '$tree-logs/rows';
+			final rowLogs: Map<String, String> = FileSystem.exists(rowsDir) ? [
+				for (f in FileSystem.readDirectory(rowsDir)) if (f.endsWith('.json.log'))
+					f.substr(0, f.length - '.json.log'.length) => read(Path.join([rowsDir, f]))
+			] : [];
+			ran = {
+				branches: read('$tree-logs/branches.log'),
+				leases: read(Path.join([root, 'scripts/leases.log'])),
+				status: status,
+				rowLogs: rowLogs
+			};
 		});
 		return ran;
 	}
@@ -299,4 +372,7 @@ private typedef GateRan = {
 	var branches: String;
 	var leases: String;
 	var status: Int;
+
+	/** Each branch's log, by the first row it ran: what its process printed and why it was cut. */
+	var rowLogs: Map<String, String>;
 }

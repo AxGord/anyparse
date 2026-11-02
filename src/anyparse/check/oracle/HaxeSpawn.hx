@@ -158,9 +158,11 @@ final class HaxeSpawn {
 	 * Windows, where a kill reaches the tether alone, its stdin is closed instead and the tether ends the job itself.
 	 * A job ENDS at its exit, not at the end of its pipes: when they stay open `PIPE_GRACE` after it, whatever else its
 	 * group still runs held them — the driver names it (`orphan held output: <pid> <command>` appended to the job's stderr),
-	 * kills the group, and answers; a holder outside the group costs one more second and is named so. A `reap` job names and
-	 * kills what its group still runs at its exit (`orphan left running: …`). A job with `idle` is killed once neither its
-	 * streams nor the file `progress` names moved for that long, and answers a `failure` quoting that file.
+	 * kills the group, and answers; a holder outside the group costs one more second and is named so. A `reap`
+	 * job names and kills what its group still runs at its exit (`orphan left running: …`), listing the
+	 * processes only when a signal 0 to the group says one is left. A job with `idle` is killed once neither its
+	 * streams nor the file `progress` names moved for that long, and answers a `failure` quoting
+	 * that file; with `awaitProgress` the silence counts only from the first change of that file.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
 		+ "const TETHER = '"
@@ -198,7 +200,7 @@ final class HaxeSpawn {
 		+ " return cp.execFileSync('ps', ['-A', '-o', 'pid=,pgid=,command='], { encoding: 'utf8' }).split('\\n')"
 		+ " .map(l => /^\\s*(\\d+)\\s+(\\d+)\\s+(.*)$/.exec(l)).filter(m => m && Number(m[2]) === c.pid && Number(m[1]) !== c.pid)"
 		+ " .map(m => m[1] + ' ' + m[3]); } catch (err) { return []; } }"
-		+ 'function reap(c, how) { const left = members(c); if (left.length === 0) return;'
+		+ 'function reap(c, how) { if (!grouped(c)) return; const left = members(c); if (left.length === 0) return;'
 		+ " c.orphans = (c.orphans || '') + left.map(m => how + ': ' + m).join('\\n') + '\\n'; signal(c, 'SIGKILL'); }"
 		+ "function lingering(i, c, now, answer) { if (now) reap(c, 'orphan left running');"
 		+ " c.grace = setTimeout(() => { if (out[i]) return; reap(c, 'orphan held output');"
@@ -206,7 +208,8 @@ final class HaxeSpawn {
 		+ " c.orphans = c.orphans || 'orphan held output: (outside the job group)\\n';"
 		+ ' c.stdout.destroy(); c.stderr.destroy(); answer(c.exitCode); }, 1000); }, PIPE_GRACE); }'
 		+ "function watchdog(c, j) { if (c.stalled) return; const fs = require('fs'); if (j.progress) try {"
-		+ ' const m = fs.statSync(j.progress).mtimeMs; if (m !== c.mark) { c.mark = m; c.beat = Date.now(); } } catch (err) {}'
+		+ ' const m = fs.statSync(j.progress).mtimeMs; if (m !== c.mark) { c.mark = m; c.beat = Date.now(); c.moved = true; } } catch (err) {}'
+		+ ' if (j.awaitProgress && !c.moved) return;'
 		+ " if (Date.now() - c.beat < j.idle) return; let last = '';"
 		+ " if (j.progress) try { last = fs.readFileSync(j.progress, 'utf8').trim().slice(-200); } catch (err) {}"
 		+ " c.stalled = 'no progress for ' + Math.round(j.idle / 1000) + ' s' + (last ? ' — last started: ' + last : ''); kill(c); }"
@@ -235,6 +238,7 @@ final class HaxeSpawn {
 		+ " if (typeof input === 'number') require('fs').closeSync(input);"
 		+ " c.tethered = j.tethered === true; if (c.tethered) c.stdin.on('error', () => {}); kids[i] = c; recordGroup(j, c);"
 		+ ' if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);'
+		+ " if (j.awaitProgress && j.progress) try { c.mark = require('fs').statSync(j.progress).mtimeMs; } catch (err) {}"
 		+ " c.beat = Date.now(); c.stdout.on('data', d => { c.beat = Date.now(); size += d.length;"
 		+ ' if (size > max) { over = true; kill(c); } else o.push(d); });'
 		+ " c.stderr.on('data', d => { c.beat = Date.now(); e.push(d); });"
@@ -380,18 +384,38 @@ final class HaxeSpawn {
 	public static function runAll(
 		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?stopAfterFailure: Bool, ?bound: Int
 	): Array<HaxeRun> {
-		return PhaseTimings.measure('haxe runAll', () -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure, bound));
+		return PhaseTimings.measure('haxe runAll', () -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure, bound, false));
 	}
 
-	/** `runAll`, untimed. */
+	/**
+	 * `jobs` run by the process driver however few they are: a job there ends at its process's exit and not at its pipes' end, and
+	 * what still holds the pipes after a grace is named in its `err` and killed. The answers and `stopAfterFailure` are those of
+	 * `runAll`; so is `bound`, except that jobs run one after another, none tethered, one of them naming no `timeout`, have no driver
+	 * bound: their own `timeout` is the limit, as it is for a run in this process.
+	 */
+	public static function runDriven(
+		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?stopAfterFailure: Bool, ?bound: Int
+	): Array<HaxeRun> {
+		final sequential: Bool = (jobs.length <= 1 || parallel <= 1) && !jobs.exists(job -> job.tethered == true);
+		// jobs that run one after another, none tethered, are bounded by their own `timeout` alone, as a run in this process is
+		final open: Bool = sequential && jobs.exists(job -> (job.timeout ?? 0) <= 0);
+		return PhaseTimings.measure(
+			'haxe runAll',
+			() -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure, bound ?? (open ? Std.int(MAX_BOUND) : null), true)
+		);
+	}
+
+	/**
+	 * `runAll`, untimed; with `driven` even a single job that needs no driver goes through it.
+	 */
 	private static function runAllTimed(
-		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, stopAfterFailure: Null<Bool>, bound: Null<Int>
+		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, stopAfterFailure: Null<Bool>, bound: Null<Int>, driven: Bool
 	): Array<HaxeRun> {
 		final stop: Bool = stopAfterFailure ?? false;
 		#if nodejs
 		// a job that needs the driver always goes through it: only there does a kill reach its whole process group, and only
 		// there is a job tethered, reaped or watched for progress
-		if ((jobs.length <= 1 || parallel <= 1) && !jobs.exists(needsDriver)) return runInOrder(jobs, maxBuffer, stop);
+		if (!driven && (jobs.length <= 1 || parallel <= 1) && !jobs.exists(needsDriver)) return runInOrder(jobs, maxBuffer, stop);
 		// the jobs go in through a FILE and the driver's stdin is the null device: an `input` piped to `spawnSync` can
 		// stall for good on macOS, the stdin socket drained while this process sleeps in `kevent` with bytes still to
 		// write, and the driver then blocks on a read that never ends (`docs/decisions.md`, "F1")
@@ -869,6 +893,12 @@ typedef SpawnJob = {
 
 	/** A file the job rewrites as it moves on: its modification counts as progress, and its text names where a stalled job stood. */
 	var ?progress: String;
+
+	/**
+	 * The `idle` clock starts when `progress` first changes, not when the job starts: a job that queues for a lease before it
+	 * runs is not silent, it has not begun.
+	 */
+	var ?awaitProgress: Bool;
 }
 
 /** A batch directory `HaxeSpawn.writeJobs` made, and the jobs file in it the process driver reads. */

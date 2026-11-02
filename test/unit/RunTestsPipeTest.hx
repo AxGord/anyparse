@@ -22,11 +22,10 @@ final class RunTestsPipeTest extends Test {
 			final input: String = dir.file('transcript');
 			final text: String = [for (i in 0...20000) 'line $i of a transcript longer than any pipe buffer'].join('\n');
 			File.saveContent(input, text);
-			// reaped: through the process driver, which reads the child over a pipe; a plain run captures into files
+			// the process driver reads the child over a pipe, which a transcript longer than the pipe's buffer must outlive
 			final ran: Result = Command.of([js.Node.process.execPath, js.Node.__filename])
 				.env('APQ_TEST_CHILD', 'flood')
 				.env('APQ_TEST_CHILD_INPUT', input)
-				.reaped()
 				.run();
 			Assert.equals(0, ran.status, ran.err);
 			Assert.equals(text.length, ran.out.length);

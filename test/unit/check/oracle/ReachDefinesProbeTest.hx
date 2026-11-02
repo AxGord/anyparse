@@ -21,8 +21,8 @@ class ReachDefinesProbeTest extends Test {
 
 	@:pin('control') @:killer('M-DEFINES-ONE-ARM')
 	public function testOnlyAOneArmTranscriptWithBothSetsAnswers(): Void {
-		final one: String = 'Defines: js;true\nParsed src/Main.hx\nAPQ-REACH-EARLY-DEFINES js;nodejs\nAPQ-REACH-FINAL-DEFINES js;nodejs;late\n'
-			+ 'APQ-REACH-TYPE Main src/Main.hx\nAPQ-REACH-TYPE Sub src/Main.hx\nParsed src/Main.hx\n';
+		final one: String = 'Defines: js;true\nParsed src/Main.hx\nAPQ-REACH-EARLY-DEFINES js;nodejs\nAPQ-REACH-FINAL-DEFINES '
+			+ 'js;nodejs;late\nAPQ-REACH-TYPE Main src/Main.hx\nAPQ-REACH-TYPE Sub src/Main.hx\nParsed src/Main.hx\n';
 		final read: Null<ReachConfiguration> = ReachDefinesProbe.parse('test-js.hxml', one);
 		Assert.notNull(read);
 		if (read != null) {
@@ -32,7 +32,7 @@ class ReachDefinesProbeTest extends Test {
 			Assert.equals('Main@src/Main.hx,Sub@src/Main.hx', [for (t in read.types) '${t.name}@${t.file}'].join(','));
 		}
 		// the macro joins the LAST arm only: an earlier arm's defines are not in the transcript
-		Assert.isNull(ReachDefinesProbe.parse('two.hxml', 'Defines: js\n' + one));
+		Assert.isNull(ReachDefinesProbe.parse('two.hxml', 'Defines: js\n$one'));
 		Assert.isNull(ReachDefinesProbe.parse('no-final.hxml', 'Defines: js\nAPQ-REACH-EARLY-DEFINES js\n'));
 	}
 
@@ -46,7 +46,7 @@ class ReachDefinesProbeTest extends Test {
 		final read: Null<ReachConfiguration> = ReachDefinesProbe.parse('b.hxml', transcript);
 		Assert.notNull(read);
 		if (read != null) Assert.equals('v=4.307', [for (k => v in read.values) '$k=$v'].join(','));
-		Assert.isNull(ReachDefinesProbe.parse('broken.hxml', transcript + 'APQ-REACH-FINAL-VALUE ["v"]\n'));
+		Assert.isNull(ReachDefinesProbe.parse('broken.hxml', '${transcript}APQ-REACH-FINAL-VALUE ["v"]\n'));
 	}
 
 	@:pin('control') @:killer('M-DEFINES-VALUES-MACRO')
@@ -93,8 +93,8 @@ class ReachDefinesProbeTest extends Test {
 		write(
 			dir, 'macro/Init.hx',
 			'class Init {\n\tpublic static function first() {\n\t\thaxe.macro.Context.getType("B");\n'
-			+ '\t\thaxe.macro.Context.onAfterInitMacros(() -> { haxe.macro.Context.getType("C"); haxe.macro.Compiler.define("APQ_CB"); });\n'
-			+ '\t}\n\tpublic static function second() haxe.macro.Compiler.define("APQ_LATE");\n}\n'
+			+ '\t\thaxe.macro.Context.onAfterInitMacros(() -> { haxe.macro.Context.getType("C"); haxe.macro.Compiler.define("APQ_CB"); '
+			+ '});\n\t}\n\tpublic static function second() haxe.macro.Compiler.define("APQ_LATE");\n}\n'
 		);
 		write(dir, 'src/B.hx', 'class B { public static function f():Void {} }');
 		write(dir, 'src/C.hx', 'class C { public static function f():Void {} }');
@@ -121,7 +121,11 @@ class ReachDefinesProbeTest extends Test {
 		final oracles: Array<OracleConfig> = [
 			for (d in ['APQ_ONE', 'APQ_TWO', 'APQ_THREE']) { hxml: 'build.hxml', dir: dir, defines: [d] }
 		];
-		final builds: Null<anyparse.query.ReachLiveness.ReachBuilds> = ReachDefinesProbe.probeAll(oracles);
+		// the overlap this pin holds exists only with more than one compile at once, whatever thread count the pool lease grants
+		final declared: Null<String> = Sys.getEnv('APQ_ORACLE_PARALLEL');
+		Sys.putEnv('APQ_ORACLE_PARALLEL', '${oracles.length}');
+		var builds: Null<anyparse.query.ReachLiveness.ReachBuilds> = null;
+		CliFixture.always(() -> Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? ''), () -> builds = ReachDefinesProbe.probeAll(oracles));
 		Assert.notNull(builds);
 		if (builds != null) for (i in 0...oracles.length)
 			Assert.isTrue(builds.configurations[i].defined.contains(oracles[i].defines[0]), 'configuration $i answered another probe');
@@ -135,7 +139,7 @@ class ReachDefinesProbeTest extends Test {
 		final flag: String = Path.join([dir, 'flag.txt']);
 		write(
 			dir, 'macro/Init.hx',
-			'class Init { public static function go() if (sys.FileSystem.exists("$flag")) ' + 'haxe.macro.Compiler.define("APQ_FLAG"); }'
+			'class Init { public static function go() if (sys.FileSystem.exists("$flag")) haxe.macro.Compiler.define("APQ_FLAG"); }'
 		);
 		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');
 		write(dir, 'build.hxml', '-cp src\n-cp macro\n-main Main\n--interp\n--macro Init.go()\n');
@@ -148,34 +152,6 @@ class ReachDefinesProbeTest extends Test {
 		remove(dir);
 	}
 
-	/** A fresh directory under the temp root. */
-	private static function scratchDir(): String {
-		final dir: String = Path.join([TempScratch.root(), 'apq-reach-defines-test-${Std.random(0x7fffffff)}']);
-		FileSystem.createDirectory(dir);
-		return dir;
-	}
-
-	/** Write `text` to `name` under `dir`, creating its directory. */
-	private static function write(dir: String, name: String, text: String): Void {
-		final path: String = Path.join([dir, name]);
-		FileSystem.createDirectory(Path.directory(path));
-		File.saveContent(path, text);
-	}
-
-	/** Delete `dir` with everything under it, and `also`. */
-	private static function remove(dir: String, ?also: String): Void {
-		if (also != null) try FileSystem.deleteFile(also) catch (exception: Exception) {}
-		function wipe(path: String): Void {
-			if (FileSystem.isDirectory(path)) {
-				for (entry in FileSystem.readDirectory(path)) wipe(Path.join([path, entry]));
-				FileSystem.deleteDirectory(path);
-			} else {
-				FileSystem.deleteFile(path);
-			}
-		}
-		try wipe(dir) catch (exception: Exception) {}
-	}
-
 	@:pin('control') @:killer('M-DEFINES-TYPES') @:killer('M-DEFINES-IMPL')
 	public function testEveryTypedTypeIsReportedWithItsFile(): Void {
 		// A macro defines a subtype of `Base` no source file declares: the build types it, so the probe names it — the
@@ -184,8 +160,7 @@ class ReachDefinesProbeTest extends Test {
 		write(
 			dir, 'macro/Def.hx',
 			'class Def { public static function go() haxe.macro.Context.onAfterInitMacros(() -> haxe.macro.Context.defineType('
-			+ '{ pack: [], name: "Made", pos: haxe.macro.Context.currentPos(), fields: [], '
-			+ 'kind: TDClass({ pack: [], name: "Base" }) })); }'
+			+ '{ pack: [], name: "Made", pos: haxe.macro.Context.currentPos(), fields: [], kind: TDClass({ pack: [], name: "Base" }) })); }'
 		);
 		write(dir, 'src/Base.hx', 'class Base { public function new() {} }');
 		write(
@@ -220,7 +195,7 @@ class ReachDefinesProbeTest extends Test {
 		final flag: String = Path.join([dir, 'flag.txt']);
 		write(
 			dir, 'macro/Init.hx',
-			'class Init { public static function go() if (sys.FileSystem.exists("$flag")) ' + 'haxe.macro.Compiler.define("APQ_FLAG"); }'
+			'class Init { public static function go() if (sys.FileSystem.exists("$flag")) haxe.macro.Compiler.define("APQ_FLAG"); }'
 		);
 		write(dir, 'macro/Counter.hx', unit.check.CompileCounter.SOURCE);
 		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');
@@ -268,7 +243,6 @@ class ReachDefinesProbeTest extends Test {
 		remove(dir);
 	}
 
-
 	/**
 	 * A `--fix` run that starts the facts compiles before its first pass starts the builds' probe compiles once a check waits
 	 * on the facts, so its first reach question does not wait on them alone; a run that asks for the facts on demand leaves
@@ -304,6 +278,34 @@ class ReachDefinesProbeTest extends Test {
 		);
 		Assert.isNull(onDemand.probe, 'the builds started ahead of a run that asks for the facts on demand');
 		remove(dir);
+	}
+
+	/** A fresh directory under the temp root. */
+	private static function scratchDir(): String {
+		final dir: String = Path.join([TempScratch.root(), 'apq-reach-defines-test-${Std.random(0x7fffffff)}']);
+		FileSystem.createDirectory(dir);
+		return dir;
+	}
+
+	/** Write `text` to `name` under `dir`, creating its directory. */
+	private static function write(dir: String, name: String, text: String): Void {
+		final path: String = Path.join([dir, name]);
+		FileSystem.createDirectory(Path.directory(path));
+		File.saveContent(path, text);
+	}
+
+	/** Delete `dir` with everything under it, and `also`. */
+	private static function remove(dir: String, ?also: String): Void {
+		if (also != null) try FileSystem.deleteFile(also) catch (exception: Exception) {}
+		function wipe(path: String): Void {
+			if (FileSystem.isDirectory(path)) {
+				for (entry in FileSystem.readDirectory(path)) wipe(Path.join([path, entry]));
+				FileSystem.deleteDirectory(path);
+			} else {
+				FileSystem.deleteFile(path);
+			}
+		}
+		try wipe(dir) catch (exception: Exception) {}
 	}
 
 }

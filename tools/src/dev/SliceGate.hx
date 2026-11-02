@@ -48,6 +48,9 @@ final class SliceGate {
 	/** The most threads the arms phase takes. */
 	public static inline final ARMS_THREADS: Int = 2;
 
+	/** The row the arms phase runs. */
+	public static inline final ARMS_ROW: String = 'arms';
+
 	/**
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote; the
 	 * three short rows share one branch, so they hold one thread between them. `arms` is not among them: it is the phase
@@ -71,9 +74,6 @@ final class SliceGate {
 
 	/** What a branch may run before it is killed: a wedged run, not a slow one. */
 	private static inline final BRANCH_TIMEOUT_MS: Int = 2 * 60 * 60 * 1000;
-
-	/** The row the arms phase runs. */
-	private static inline final ARMS_ROW: String = 'arms';
 
 	/** The registries `bin/test.js` lists, each counted in the lists row. */
 	private static final LISTINGS: Array<String> = ['classes', 'pins', 'arms', 'claims', 'dead', 'bases'];
@@ -160,10 +160,17 @@ final class SliceGate {
 		return finish(title);
 	}
 
-	/** A `--rows` process: run `rows` in order and leave their steps and readings for the gate that started it. */
+	/**
+	 * A `--rows` process: run `rows` in order and leave their steps and readings for the gate that started it. Each row names
+	 * itself in the branch's progress file as it starts, and the report is left after every row, so a branch cut for silence
+	 * costs only the row it stood in.
+	 */
 	private function runBranch(rows: Array<String>): Int {
-		for (name in rows) gate(name, rowStep(name));
-		Branches.leave(branchReport(rows), _gate.options.run, _gate.summary, _readings);
+		for (name in rows) {
+			File.saveContent(branchProgress(rows), name);
+			gate(name, rowStep(name));
+			Branches.leave(branchReport(rows), _gate.options.run, _gate.summary, _readings);
+		}
 		return 0;
 	}
 
@@ -239,12 +246,18 @@ final class SliceGate {
 			Command.of(['node', self, 'slice-gate'].concat(branchArgs(_gate.options, rows, threads)))
 				.at(_gate.tree)
 				.env('HXQ_BIN', _gate.apq())
-				.timeout(BRANCH_TIMEOUT_MS);
+				.timeout(BRANCH_TIMEOUT_MS)
+				.watched(BranchWatch.idleOf(rows), branchProgress(rows), true);
+	}
+
+	/** The file the branch running `rows` rewrites with the name of each row it starts: a branch that stops rewriting it is stalled. */
+	private function branchProgress(rows: Array<String>): String {
+		return _gate.branchProgress(rows[0]);
 	}
 
 	/** Where the branch running `rows` leaves its report. */
 	private function branchReport(rows: Array<String>): String {
-		return _gate.log('rows/${rows[0]}.json');
+		return _gate.branchReport(rows[0]);
 	}
 
 	/** The threads the branch running `rows` holds in this run (`demandOf`). */
