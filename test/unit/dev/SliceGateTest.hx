@@ -102,4 +102,24 @@ final class SliceGateTest extends Test {
 		Assert.isNull(SliceGate.armsThreads(Unpooled));
 	}
 
+	/** A branch is the process that reads a waiver, so a waiver its gate did not hand over would never apply. */
+	@:pin('control')
+	@:killer('M-GATE-BRANCH-DROPS-WAIVER')
+	public function testABranchIsHandedTheGatesArmWaivers(): Void {
+		final args: Array<String> = SliceGate.branchArgs({
+			tree: '/t',
+			logs: '/l',
+			baseline: false,
+			frozen: [],
+			infra: [],
+			arms: [],
+			allow: [],
+			allowArms: ['M-A', 'M-B'],
+			noArms: false,
+			threads: null,
+			run: 'r'
+		}, ['arms'], null);
+		Assert.isTrue(args.contains('--allow-arm=M-A') && args.contains('--allow-arm=M-B'), args.join(' '));
+	}
+
 }

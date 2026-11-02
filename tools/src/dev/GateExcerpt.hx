@@ -13,8 +13,11 @@ using StringTools;
 @:nullSafety(Strict)
 final class GateExcerpt {
 
-	/** The verdict word of a track row of `dev mutation-arm`, which names the arm after it. */
-	private static final TRACK_ROW: EReg = ~/^([A-Z][A-Z-]*) +\S/;
+	/** The verdict words of a track whose cut built and ran and whose own pin did not go red. */
+	public static final UNKILLED: Array<String> = ['SURVIVED', 'MISMATCH'];
+
+	/** The verdict word of a track row of `dev mutation-arm`, and the arm it names after it. */
+	private static final TRACK_ROW: EReg = ~/^([A-Z][A-Z-]*) +(\S+)/;
 
 	/** The verdict words of a track that held. */
 	private static final HELD: Array<String> = ['KILLED', 'APPLIES'];
@@ -60,8 +63,23 @@ final class GateExcerpt {
 	 * build that failed); the error-looking lines when no row says so.
 	 */
 	public static function arms(log: String): Array<String> {
-		final rows: Array<String> = Excerpt.linesOf(log).filter(line -> TRACK_ROW.match(line) && !HELD.contains(TRACK_ROW.matched(1)));
-		return rows.length == 0 ? Excerpt.errors(log) : rows;
+		final rows: Array<ArmRow> = armRows(log);
+		return rows.length == 0 ? Excerpt.errors(log) : rows.map(row -> row.line);
 	}
 
+	/** The track rows of a `dev mutation-arm` log whose verdict is not that the arm held, each read into its verdict and arm. */
+	public static function armRows(log: String): Array<ArmRow> {
+		return [
+			for (line in Excerpt.linesOf(log)) if (TRACK_ROW.match(line) && !HELD.contains(TRACK_ROW.matched(1)))
+				{ verdict: TRACK_ROW.matched(1), name: TRACK_ROW.matched(2), line: line }
+		];
+	}
+
+}
+
+/** A track row of `dev mutation-arm`, read. */
+typedef ArmRow = {
+	var verdict: String;
+	var name: String;
+	var line: String;
 }

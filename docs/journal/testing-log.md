@@ -4540,3 +4540,18 @@ Main's engine against the slice's on the slice's tree, source / nominal: anypars
 6 277 / 7 389, UNKNOWN 13.0 / 13.2 → 12.0 / 12.2 %, DIFFERENT 1 / 1 unchanged; per case 1 073 380 cases, no MATCH lost,
 +10 629, no DIFFERENT added. Pony 26 / 26 → 21 / 21, no MATCH lost, +12, none added. All-rules lint and thread-safety
 scores move as after round 1.
+
+## ARM-ROT-GUARD (2026-11-02): how two arms came to survive on main
+
+Base `c60ae81d3`. Each bisect step: the arm's cut applied to a scratch checkout, `haxe test-js.hxml`, the pin classes through `APQ_TEST`.
+
+| Arm | Reading | Mechanism |
+|---|---|---|
+| `M-ARROW-HEAD-WIDTH-NONE` on `BodyFit.arrowConstructHeadWidth` | first-parent bisect over 594 commits, 9 steps: KILLED at `b5440fc09`, SURVIVED at `a22f528d4` | writer change on another type. BOOL-CHAIN-PAREN-GROUP taught `Renderer.pushFlatWidthBranch` and `DocMeasure.flatFirstLineWidthThroughBodyGroup` to judge a lambda body by its first line, which made the arm's correction redundant. No pin file moved, `BodyFit` untouched, so its gate never selected the arm |
+| `M-OFFER-REPLACED-COPIES` on `BreakCommits.replaced` | SURVIVED at its birth `d995ce391`; `BreakCommits` and `D` unchanged from there to `99713b531` | a wall-clock bound. The pin's write under the cut: 1.21 to 1.39 s over 6 runs at load about 5 (bound 1.5 s, so SURVIVED), 2.08 to 2.24 s over 5 runs under 16 hogs on 16 cores (KILLED); without the cut 0.02 s. No commit let it survive |
+
+Selection census, over the first version of the rule (`hxq changed` `~` rows joined on the whole member graph): the last 60 first-parent commits against today's registry and call graph (52 of them change a member in place). Arms added to today's selection by the one-edge neighbours: median 2, p90 9, max 157, sum 330; the graph takes about 4.5 s.
+
+The rule as shipped asks `hxq graph` both questions. On the slice's own tip: `--diff` seeds 8 members, its `~` rows minus 2 constants (`GateExcerpt.TRACK_ROW`, `SliceGate.USAGE`, no graph node); `--focus --radius 1` over them returns the same neighbours as the whole-graph join (46 at review, no name on either side only). Cost: `--diff` 21 to 33 s, `--focus` 4.4 s, against about 6 s for the whole graph. Arms with no member node today: 81 of 4365; 33 of those are on non-function kinds and 48 on functions the graph has no node for. `a22f528d4`'s changed `flatFirstLineWidthThroughBodyGroup` has `BodyFit.arrowConstructHeadWidth` one edge away at that commit, so the new selection would have run the arm in its gate.
+
+Whole-registry `--all --fast`: NOT measured here. `dev mutation-arm` typed by hand is refused by the pool gate, and a worker has no other route to the whole registry. A sample through the gate instead: every 100th of the 4364 sorted arms by `--arm`, 44 of them, plus the 9 the slice selects: `53 tracks: 53 killed, 0 survived` in 304 s on the arms row's 2 jobs. Extrapolated, not read: about 7 h at 2 jobs, and proportionally less at more jobs if the pool has them. 0 survivors in 44 sampled arms bounds the rot rate only loosely, under about 7 %.

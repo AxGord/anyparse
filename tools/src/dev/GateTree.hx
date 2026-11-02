@@ -248,6 +248,9 @@ typedef GateOptions = {
 	var infra: Array<String>;
 	var arms: Array<String>;
 	var allow: Array<String>;
+
+	/** The arms whose row in the arms row does not fail it, the rest of the row still deciding (`--allow arms` waives it whole). */
+	var allowArms: Array<String>;
 	var noArms: Bool;
 
 	/** The threads a heavy row (the suite's shards, the arms' jobs) may take, or null for each tool's own default. */

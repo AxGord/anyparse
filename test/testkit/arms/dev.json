@@ -385,6 +385,51 @@
 			"find": "fixed.out == result.out",
 			"replace": "true",
 			"note": "a fix that changes what the program prints still reads as the same run"
+		},
+		{
+			"name": "M-GATE-ARMS-NEIGHBOUR-BLIND",
+			"type": "dev.GateArms",
+			"method": "cutsMember",
+			"force": "false",
+			"note": "the arms row stops widening to call neighbours, so a change to a member the arm's member calls makes its pin blind and the slice lands green"
+		},
+		{
+			"name": "M-GATE-ARMS-NEIGHBOUR-UNWIRED",
+			"type": "dev.GateArms",
+			"method": "callNeighbours",
+			"force": "[]",
+			"note": "the row's selection still takes neighbours but nothing hands it any, so no arm on a call neighbour of a changed member ever runs"
+		},
+		{
+			"name": "M-GATE-ARMS-EXIT-IGNORED",
+			"type": "dev.GateArms",
+			"method": "fastOutcome",
+			"find": "accounted && (run.ok || standing.length < rows.length)",
+			"replace": "accounted",
+			"note": "a run that fails after a clean tally passes the row, so the tally hides whatever went wrong behind it"
+		},
+		{
+			"name": "M-GATE-ARMS-ROT-UNREAD",
+			"type": "dev.GateArms",
+			"method": "rotOnBase",
+			"force": "{ rot: [], failure: null }",
+			"note": "a survivor is never read again at the base, so rot the slice did not cause reads as its own and the worker bisects it by hand"
+		},
+		{
+			"name": "M-GATE-ARMS-WAIVER-IGNORED",
+			"type": "dev.GateArms",
+			"method": "fastOutcome",
+			"find": "rows.filter(row -> !waived.contains(row.name))",
+			"replace": "rows",
+			"note": "--allow-arm changes nothing, so a parent can only waive the whole row and hide the slice's own arms"
+		},
+		{
+			"name": "M-GATE-BRANCH-DROPS-WAIVER",
+			"type": "dev.SliceGate",
+			"method": "branchArgs",
+			"find": "for (arm in options.allowArms) args.push('--allow-arm=$arm');",
+			"replace": "",
+			"note": "the gate's waivers never reach the arms branch, the process that reads them"
 		}
 	]
 }

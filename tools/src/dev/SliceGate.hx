@@ -36,7 +36,7 @@ using StringTools;
 final class SliceGate {
 
 	public static inline final USAGE: String = 'usage: dev slice-gate <worktree> [--baseline [--frozen <dir>]... [--infra-tree <dir>]...] '
-		+ '[--arm <NAME>]... [--no-arms] [--allow <gate>]... [--logs <dir>]';
+		+ '[--arm <NAME>]... [--allow-arm <NAME>]... [--no-arms] [--allow <gate>]... [--logs <dir>]';
 
 	/** The most threads the arms phase takes. */
 	public static inline final ARMS_THREADS: Int = 2;
@@ -226,23 +226,10 @@ final class SliceGate {
 	/** The `--rows` process of a branch running `rows`, over the logs' copy `self` of this script, handed `threads`. */
 	private function branchCommand(self: String, threads: Null<Int>): Array<String> -> Command {
 		return rows ->
-			Command.of(['node', self, 'slice-gate'].concat(branchArgs(rows, threads)))
+			Command.of(['node', self, 'slice-gate'].concat(branchArgs(_gate.options, rows, threads)))
 				.at(_gate.tree)
 				.env('HXQ_BIN', _gate.apq())
 				.timeout(BRANCH_TIMEOUT_MS);
-	}
-
-	/** The command line of the branch running `rows`: this run's options, the rows, and the heavy rows' threads. */
-	private function branchArgs(rows: Array<String>, threads: Null<Int>): Array<String> {
-		final options: GateOptions = _gate.options;
-		final args: Array<String> = [_gate.tree, '--logs', _gate.logs, '--rows', rows.join(','), '--run', options.run];
-		if (options.baseline) args.push('--baseline');
-		for (dir in options.infra) args.push('--infra-tree=$dir');
-		for (arm in options.arms) args.push('--arm=$arm');
-		for (name in options.allow) args.push('--allow=$name');
-		if (options.noArms) args.push('--no-arms');
-		if (threads != null) args.push('--threads=$threads');
-		return args;
 	}
 
 	/** Where the branch running `rows` leaves its report. */
@@ -478,6 +465,27 @@ final class SliceGate {
 		return [for (i => name in LISTINGS) name => runs[i].check().lines()];
 	}
 
+	/** The command line of the branch running `rows`: this run's options, the rows, and the heavy rows' threads. */
+	public static function branchArgs(options: GateOptions, rows: Array<String>, threads: Null<Int>): Array<String> {
+		final args: Array<String> = [
+			options.tree,
+			'--logs',
+			options.logs,
+			'--rows',
+			rows.join(','),
+			'--run',
+			options.run
+		];
+		if (options.baseline) args.push('--baseline');
+		for (dir in options.infra) args.push('--infra-tree=$dir');
+		for (arm in options.arms) args.push('--arm=$arm');
+		for (name in options.allow) args.push('--allow=$name');
+		for (arm in options.allowArms) args.push('--allow-arm=$arm');
+		if (options.noArms) args.push('--no-arms');
+		if (threads != null) args.push('--threads=$threads');
+		return args;
+	}
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final baseline: Bool = args.flag('--baseline');
@@ -486,6 +494,7 @@ final class SliceGate {
 		final infra: Array<String> = args.options('--infra-tree');
 		final arms: Array<String> = args.options('--arm');
 		final allow: Array<String> = args.options('--allow');
+		final allowArms: Array<String> = args.options('--allow-arm');
 		final logsOption: Null<String> = args.option('--logs');
 		final rows: Null<String> = args.option('--rows');
 		final threads: Null<Int> = Std.parseInt(args.option('--threads') ?? '') ?? (rows == null ? null : PoolLease.threads());
@@ -504,6 +513,7 @@ final class SliceGate {
 			infra: infra.map(FileSystem.fullPath),
 			arms: arms,
 			allow: allow,
+			allowArms: allowArms,
 			noArms: noArms,
 			threads: threads != null && threads > 0 ? threads : null,
 			run: run
