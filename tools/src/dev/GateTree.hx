@@ -72,12 +72,8 @@ final class GateTree {
 		base = options.baseline
 			? gitIn(tree, ['rev-parse', 'HEAD']).trim()
 			: baseline?.base ?? gitIn(tree, ['merge-base', 'HEAD', 'main']).trim();
-		final changed: ChangedPaths = options.baseline
-			? { paths: [], moved: [] }
-			: changedPaths(gitIn(tree, ['diff', '--name-status', '-M', base]));
-		final untracked: Array<String> = options.baseline ? [] : gitIn(tree, ['ls-files', '--others', '--exclude-standard']).split('\n');
-		for (name in changed.paths.concat(untracked))
-			if (name != '' && !touched.contains(name) && FileSystem.exists(Path.join([tree, name]))) touched.push(name);
+		final changed: ChangedPaths = options.baseline ? { paths: [], moved: [] } : touchedSince(tree, base);
+		for (name in changed.paths) touched.push(name);
 		_moved = changed.moved;
 	}
 
@@ -97,6 +93,11 @@ final class GateTree {
 	/** `hxq <args>` in `dir` on the worktree's engine, whatever tree it reads. */
 	public inline function hxq(dir: String, args: Array<String>): Command {
 		return shim(tree, dir, args);
+	}
+
+	/** Whether the slice touched code that can move a lint rule's findings. */
+	public inline function ruleCodeMoved(): Bool {
+		return touched.exists(isRuleCode);
 	}
 
 	/** `command` run in the worktree on its engine. */
@@ -139,11 +140,6 @@ final class GateTree {
 		return touched.exists(f -> f.startsWith('src/') || f == JVM_PROBE);
 	}
 
-	/** Whether the slice touched code that can move a lint rule's findings. */
-	public function ruleCodeMoved(): Bool {
-		return touched.exists(f -> RULE_CODE.match(f));
-	}
-
 	/** The snapshot each `--infra-tree` of a `--baseline` run is linted into. */
 	public function infraSnapshots(): Array<InfraSnapshot> {
 		return [for (i => dir in options.infra) { tree: dir, snapshot: log('infra-$i.json') }];
@@ -155,6 +151,24 @@ final class GateTree {
 
 	public static inline function signed(n: Int): String {
 		return n >= 0 ? '+$n' : '$n';
+	}
+
+	/** Whether `file` is code that can move a lint rule's findings: `query` and `check`, `query/cli` excepted. */
+	public static function isRuleCode(file: String): Bool {
+		return RULE_CODE.match(file);
+	}
+
+	/**
+	 * The files in `tree` that differ from `base`, committed or not, untracked ones included, existing ones only, each
+	 * renamed one paired with its path at the base. A `tree` that is no git work tree throws.
+	 */
+	public static function touchedSince(tree: String, base: String): ChangedPaths {
+		final changed: ChangedPaths = changedPaths(gitIn(tree, ['diff', '--name-status', '-M', base]));
+		final untracked: Array<String> = gitIn(tree, ['ls-files', '--others', '--exclude-standard']).split('\n');
+		final paths: Array<String> = [];
+		for (name in changed.paths.concat(untracked)) if (name != '' && !paths.contains(name) && FileSystem.exists(Path.join([tree, name])))
+			paths.push(name);
+		return { paths: paths, moved: changed.moved };
 	}
 
 	/** The `hxq` shim of `tree` run in `dir` with `args`, pinned to the engine `tree` built: no staleness probe, no rebuild. */

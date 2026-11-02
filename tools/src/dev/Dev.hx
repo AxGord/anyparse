@@ -23,6 +23,7 @@ final class Dev {
 		{ name: 'mutation-check', main: MutationCheck.main, usage: MutationCheck.USAGE },
 		{ name: 'slice-gate', main: SliceGate.main, usage: SliceGate.USAGE },
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
+		{ name: 'rule-code', main: RuleCode.main, usage: RuleCode.USAGE },
 		{ name: 'slice-stats', main: SliceStats.main, usage: SliceStats.USAGE },
 		{ name: 'token-audit', main: TokenAudit.main, usage: TokenAudit.USAGE },
 		{ name: 'battery', main: Battery.main, usage: Battery.USAGE },
