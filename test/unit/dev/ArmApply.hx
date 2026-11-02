@@ -15,6 +15,11 @@ final class ArmApply {
 
 	/** The exit status of `--apply-only` for `arms` over the scratch repo `repo`, which is committed first. */
 	public static function applyOnly(repo: String, arms: Array<String>): Int {
+		return run(repo, arms.concat(['--apply-only']));
+	}
+
+	/** The exit status of `dev mutation-arm` with `args` over the scratch repo `repo`, which is committed first. */
+	public static function run(repo: String, args: Array<String>): Int {
 		if (!FileSystem.exists(Path.join([repo, '.git']))) {
 			cmd('git -C $repo init --quiet').check();
 			cmd('git -C $repo add -A').check();
@@ -24,7 +29,7 @@ final class ArmApply {
 		final pinned: String = Sys.getEnv('HXQ_BIN') ?? '';
 		Sys.putEnv('HXQ_BIN', engine);
 		try {
-			final status: Int = MutationArm.main(arms.concat(['--apply-only', '--repo', repo]));
+			final status: Int = MutationArm.main(args.concat(['--repo', repo]));
 			Sys.putEnv('HXQ_BIN', pinned);
 			return status;
 		} catch (exception: Exception) {

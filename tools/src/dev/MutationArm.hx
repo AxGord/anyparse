@@ -31,6 +31,9 @@ final class MutationArm {
 	public static inline final USAGE: String = 'usage: dev mutation-arm <ARM>... | --all | --list [--jobs N] [--fast] [--keep] [--check-apply] '
 		+ '[--apply-only] [--working-tree] [--repo <tree>]';
 
+	/** The verdict word of a row for an arm whose cut did not render: it is not a track, so no tally counts it. */
+	public static inline final APPLY_FAIL: String = 'APPLY-FAIL';
+
 	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under. */
 	private static inline final WORK_PREFIX: String = 'anyparse-mutarm';
 
@@ -103,6 +106,26 @@ final class MutationArm {
 	/** The verdict line of an `--apply-only` run: `applies` cuts applied to a scratch copy, `failed` did not. */
 	public static function applyTally(applies: Int, failed: Int): String {
 		return '${applies + failed} arms: $applies apply, $failed did not apply';
+	}
+
+	/**
+	 * The arms of `names` split by whether their cut rendered: the ones that did, and an `APPLY-FAIL` row (name, then why)
+	 * for each that did not — an arm the registry does not hold, one whose pairs do not pair up, or one whose cut does not
+	 * apply. One such arm is a row; the others still run.
+	 */
+	public static function splitRendered(names: Array<String>, cuts: Map<String, ArmCut>, targets: Map<String, ArmTarget>): RenderSplit {
+		final split: RenderSplit = { rendered: [], failed: [] };
+		for (name in names) {
+			final why: Null<String> = switch cuts[name] {
+				case Unrenderable(why): why;
+				case _: targets[name]?.failure;
+			};
+			if (why == null)
+				split.rendered.push(name)
+			else
+				split.failed.push('$APPLY_FAIL  ${name.rpad(' ', NAME_WIDTH)} $why');
+		}
+		return split;
 	}
 
 	/** Every arm name the registry `text` declares, in registry order. */
@@ -267,22 +290,9 @@ final class MutationArm {
 		final cores: Int = PoolLease.threads() ?? js.node.Os.cpus().length;
 		final cuts: Map<String, ArmCut> = cuts(ArmRegistry.merged(job.registry), job.names, job.registry);
 		final targets: Map<String, ArmTarget> = render(job, cuts, gen, workroot, cores);
-		final applyFail: Array<String> = [];
-		final rendered: Array<String> = [];
-		for (name in job.names) {
-			switch cuts[name] {
-				case Unrenderable(why):
-					return refuse([why]);
-				case _:
-			}
-			final failed: Null<String> = targets[name]?.failure;
-			if (failed != null) {
-				if (!job.checkApply && !job.applyOnly) return refuse([failed]);
-				applyFail.push('APPLY-FAIL  ${name.rpad(' ', NAME_WIDTH)} $failed');
-				continue;
-			}
-			rendered.push(name);
-		}
+		final split: RenderSplit = splitRendered(job.names, cuts, targets);
+		final applyFail: Array<String> = split.failed;
+		final rendered: Array<String> = split.rendered;
 		if (job.applyOnly) return reportApplied(rendered.length, applyFail);
 		final manifest: String = Path.join([workroot, 'manifest']);
 		final lines: Null<Array<String>> = manifestLines(job, rendered, workroot);
@@ -579,6 +589,8 @@ final class MutationArm {
 	/**
 	 * The payload of each forced arm of `targets`, built off the member's own signature as `hxq show` prints it out of
 	 * `gen` — taken from the tree rather than stored, so a signature change cannot stale the arm — or why it cannot be.
+	 * The member is shown whole (`--full`): `hxq show` elides the middle of a node past its line budget, which would
+	 * leave a long member's braces unbalanced.
 	 */
 	private static function forcePayloads(
 		job: ArmJob, cuts: Map<String, ArmCut>, targets: Map<String, ArmTarget>, gen: String, workroot: String, cores: Int
@@ -589,7 +601,7 @@ final class MutationArm {
 		final hxq: String = Path.join([job.repo, 'bin/hxq']);
 		final shown: Array<Result> = Pool.of(cores).map(forced, name -> {
 			final t: Null<ArmTarget> = targets[name];
-			cmd('sh $hxq show ${t?.file ?? ''} --select ${t?.selector ?? ''}').at(gen);
+			cmd('sh $hxq show ${t?.file ?? ''} --select ${t?.selector ?? ''} --full').at(gen);
 		});
 		for (i => name in forced) {
 			final t: Null<ArmTarget> = targets[name];
@@ -708,6 +720,12 @@ typedef ArmTarget = {
 	var file: String;
 	var selector: String;
 	var failure: Null<String>;
+}
+
+/** The arms of a run split by whether their cut rendered: the names that did, and a verdict row for each that did not. */
+typedef RenderSplit = {
+	var rendered: Array<String>;
+	var failed: Array<String>;
 }
 
 /** The pinned tests and classes of every arm, each a sorted comma-separated list. */

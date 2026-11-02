@@ -30,9 +30,11 @@ final class GateArmsTest extends Test {
 		+ "const names=a.slice(1).filter(x=>x.startsWith('M-'));if(a.includes('--apply-only')){const "
 		+ "bad=names.filter(n=>n!=='M-OK');for(const n of bad)console.log('APPLY-FAIL  '+n+' why');console.log(names.length+' arms: "
 		+ "'+(names.length-bad.length)+' apply, '+bad.length+' did not apply');process.exit(bad.length?1:0);}"
-		+ "const slice=fs.readFileSync(repo+'/src/pkg/A.hx','utf8')==='slice';let k=0,s=0;for(const n of names){const "
+		+ "const slice=fs.readFileSync(repo+'/src/pkg/A.hx','utf8')==='slice';let k=0,s=0;const "
+		+ "un=knob('unrendered')?fs.readFileSync(tree+'/knobs/unrendered','utf8'):'';for(const n of names){if(n===un)continue;const "
 		+ "v=knob('all-killed')||n==='M-OK'||(n==='M-OWN'&&!slice)?'KILLED':'SURVIVED';v==='KILLED'?k++:s++;console.log(v+' '+n+' filter=x "
-		+ "y');}console.log((k+s)+' tracks: '+k+' killed, '+s+' survived, 0 mismatch, 0 error');process.exit(s||knob('exit-1')?1:0);";
+		+ "y');}console.log((k+s)+' tracks: '+k+' killed, '+s+' survived, 0 mismatch, 0 error');if(un)console.log('APPLY-FAIL  '+un+' "
+		+ "why');process.exit(s||un||knob('exit-1')?1:0);";
 
 	private static final REGISTRY: String = '{"arms": [{"name": "M-SAME", "type": "a.Untouched", "method": "f", "force": "1"},'
 		+ '{"name": "M-LAYOUT", "type": "a.Reflowed", "method": "f", "force": "1"},{"name": "M-LAYOUT-SUB", "type": "a.Reflowed.Inner", '
@@ -229,6 +231,28 @@ final class GateArmsTest extends Test {
 			File.saveContent(Path.join([tree, 'fail-base-build']), '');
 			final outcome: Outcome = outcomeOf(tree, []);
 			Assert.isTrue(failedWith(outcome, 'not killed: M-ROT, M-OWN, M-NEW; base not read: worker-build'), '$outcome');
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-ARMS-UNRENDERED-PASSES')
+	public function testAnArmThatDidNotRenderFailsTheRowBesideAWaivedSurvivor(): Void {
+		withTree(tree -> {
+			knob(tree, 'unrendered', 'M-NEW');
+			final outcome: Outcome = outcomeOf(tree, ['M-ROT', 'M-OWN']);
+			Assert.isTrue(
+				failedWith(outcome, 'did not render: M-NEW'),
+				'its row is outside the tally, so the waived survivors cannot account for it: $outcome'
+			);
+		});
+	}
+
+	public function testAWaivedArmThatDidNotRenderPassesWhenTheRestAreKilled(): Void {
+		withTree(tree -> {
+			knob(tree, 'all-killed');
+			knob(tree, 'unrendered', 'M-NEW');
+			Assert.isTrue(outcomeOf(tree, ['M-NEW']).match(Passed), 'the waiver reaches the row that is outside the tally');
+			Assert.isTrue(failedWith(outcomeOf(tree, []), 'did not render: M-NEW'), 'unwaived, the same run fails the row');
 		});
 	}
 

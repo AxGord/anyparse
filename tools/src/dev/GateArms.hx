@@ -166,15 +166,20 @@ final class GateArms {
 		for (row in rows) read.rows.push(row);
 		gate.summary.detail(passNote(read, waived));
 		final killed: Int = Std.parseInt(tally.matched(2)) ?? 0;
-		final accounted: Bool = '${killed + rows.length - standing.length}' == tally.matched(1);
-		if (accounted && (run.ok || standing.length < rows.length)) return Passed;
+		// a row that never became a track is outside the tally's count, and a standing one fails the run whatever the tracks say
+		final tracks: Array<ArmRow> = rows.filter(row -> row.verdict != MutationArm.APPLY_FAIL);
+		final waivedTracks: Int = tracks.filter(row -> waived.contains(row.name)).length;
+		final accounted: Bool = '${killed + waivedTracks}' == tally.matched(1);
+		final unrendered: Array<String> = standing.filter(row -> row.verdict == MutationArm.APPLY_FAIL).map(row -> row.name);
+		if (accounted && unrendered.length == 0 && (run.ok || standing.length < rows.length)) return Passed;
 		final atBase: Array<String> = standing.filter(row ->
 			GateExcerpt.UNKILLED.contains(row.verdict) && old?.exists(r -> r.key == row.name) == true
 		)
 			.map(row -> row.name);
 		final rot: RotReading = atBase.length == 0 ? { rot: [], failure: null } : rotOnBase(gate, atBase);
-		final own: Array<String> = standing.map(row -> row.name).filter(name -> !rot.rot.contains(name));
+		final own: Array<String> = standing.map(row -> row.name).filter(name -> !rot.rot.contains(name) && !unrendered.contains(name));
 		final named: Array<String> = rotLines(rot, own);
+		if (unrendered.length > 0) named.push('did not render: ${unrendered.join(', ')}');
 		final said: Array<String> = named.length == 0 ? ['no row explains the run (exit ${run.status})'] : named;
 		gate.summary.excerpt(said.concat(excerpt));
 		return Failed(GateTree.clip('${said.join('; ')} — ${tally.matched(0)} — ${gate.log('arms.log')}'));

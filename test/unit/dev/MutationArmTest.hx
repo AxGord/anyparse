@@ -9,6 +9,8 @@ import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * `dev mutation-arm`'s reading of the registry and the generated pins: each arm's cut as a `hxq patch` payload (a
  * multi-pair cut is ONE payload; a forced value is spliced after the body brace the member's own braces locate), the
@@ -134,6 +136,69 @@ final class MutationArmTest extends Test {
 
 	public function testApplyOnlyAndCheckApplyAreAlternatives(): Void {
 		Assert.equals(2, MutationArm.main(['M-X', '--apply-only', '--check-apply', '--repo', '.']));
+	}
+
+	public function testAnArmThatDoesNotRenderIsARowAndTheOthersAreRendered(): Void {
+		final cuts: Map<String, ArmCut> = MutationArm.cuts(REGISTRY, ['M-ONE', 'M-ODD', 'M-NONE'], 'arms.json');
+		final targets: Map<String, ArmTarget> = [
+			'M-ONE' => {
+				type: 'a.B',
+				method: 'f',
+				file: 'src/a/B.hx',
+				selector: 'FnMember:f',
+				failure: null
+			},
+			'M-ROT' => {
+				type: 'a.B',
+				method: 'g',
+				file: 'src/a/B.hx',
+				selector: 'FnMember:g',
+				failure: 'M-ROT: the cut did not apply'
+			}
+		];
+		final split: RenderSplit = MutationArm.splitRendered(['M-ONE', 'M-ODD', 'M-NONE', 'M-ROT'], cuts, targets);
+		Assert.same(['M-ONE'], split.rendered);
+		Assert.equals(3, split.failed.length);
+		Assert.stringContains('M-ODD', split.failed[0]);
+		Assert.stringContains('no arm named "M-NONE"', split.failed[1]);
+		Assert.stringContains('M-ROT: the cut did not apply', split.failed[2]);
+		for (row in split.failed) Assert.isTrue(row.startsWith('APPLY-FAIL  '));
+	}
+
+	public function testALongMemberWithBracesInStringsIsForcedWhole(): Void {
+		TempDir.with(dir -> {
+			final repo: String = dir.file('repo');
+			FileSystem.createDirectory(Path.join([repo, 'src/a']));
+			FileSystem.createDirectory(Path.join([repo, 'bin']));
+			FileSystem.createDirectory(Path.join([repo, 'test/testkit/arms']));
+			// the `hxq` a run starts out of the repo it cuts: the engine the run pins
+			File.saveContent(Path.join([repo, 'bin/hxq']), 'cmd=$$1; shift; exec node "$$HXQ_BIN" "$$cmd" --lang-default haxe "$$@"\n');
+			final body: String = [for (i in 0...200) '\t\tfinal s$i:String = "{";'].join('\n');
+			File.saveContent(
+				Path.join([repo, 'src/a/B.hx']),
+				'package a;\n\nclass B {\n\n\tpublic static function f():Int {\n$body\n\t\treturn 1;\n\t}\n\n}\n'
+			);
+			final long: String = '{"name": "M-LONG", "type": "a.B", "method": "f", "force": "7"}';
+			final gone: String = '{"name": "M-GONE", "type": "a.Gone", "method": "f", "force": "7"}';
+			File.saveContent(Path.join([repo, 'test/testkit/arms/a.json']), '{"arms": [$long, $gone]}');
+			Assert.equals(0, ArmApply.applyOnly(repo, ['M-LONG']), 'a member past the show budget is cut');
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-ARM-RENDER-FAILURE-REFUSES')
+	public function testAFullRunOverAnArmThatDoesNotRenderAnswersARowNotARefusal(): Void {
+		TempDir.with(dir -> {
+			final repo: String = dir.file('repo');
+			FileSystem.createDirectory(Path.join([repo, 'src/a']));
+			FileSystem.createDirectory(Path.join([repo, 'test/testkit/arms']));
+			File.saveContent(Path.join([repo, 'src/a/B.hx']), 'package a;\n\nclass B {\n\n}\n');
+			File.saveContent(
+				Path.join([repo, 'test/testkit/arms/a.json']),
+				'{"arms": [{"name": "M-GONE", "type": "a.Gone", "method": "f", "force": "7"}]}'
+			);
+			Assert.equals(1, ArmApply.run(repo, ['M-GONE']), 'a row and exit 1; a refusal answered 2');
+		});
 	}
 
 }

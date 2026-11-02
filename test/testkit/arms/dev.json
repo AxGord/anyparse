@@ -404,9 +404,25 @@
 			"name": "M-GATE-ARMS-EXIT-IGNORED",
 			"type": "dev.GateArms",
 			"method": "fastOutcome",
-			"find": "accounted && (run.ok || standing.length < rows.length)",
-			"replace": "accounted",
+			"find": "(run.ok || standing.length < rows.length)",
+			"replace": "true",
 			"note": "a run that fails after a clean tally passes the row, so the tally hides whatever went wrong behind it"
+		},
+		{
+			"name": "M-ARM-RENDER-FAILURE-REFUSES",
+			"type": "dev.MutationArm",
+			"method": "execute",
+			"find": "if (job.applyOnly) return reportApplied(rendered.length, applyFail);",
+			"replace": "if (job.applyOnly) return reportApplied(rendered.length, applyFail);\n\tif (applyFail.length > 0) return refuse(applyFail);",
+			"note": "a run that refuses at the first arm that does not render takes the whole registry down with it"
+		},
+		{
+			"name": "M-GATE-ARMS-UNRENDERED-PASSES",
+			"type": "dev.GateArms",
+			"method": "fastOutcome",
+			"find": "accounted && unrendered.length == 0 &&",
+			"replace": "accounted &&",
+			"note": "an arm whose cut did not render is no track, so a waived survivor can make the tally add up and pass an arm that never ran"
 		},
 		{
 			"name": "M-GATE-ARMS-ROT-UNREAD",
