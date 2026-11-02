@@ -4,6 +4,8 @@ import anyparse.query.PackageDocuments;
 import anyparse.query.RegistryFiles;
 import haxe.Exception;
 import haxe.Json;
+import haxe.io.Path;
+import sys.FileSystem;
 import sys.io.File;
 
 using Lambda;
@@ -52,16 +54,34 @@ final class ArmRegistry {
 		return records;
 	}
 
-	/** The records of the registry at `path` — a directory of documents, or one document. */
+	/**
+	 * The records of the registry at `path` — a directory of documents, or one document. A directory is refused when a document
+	 * holds an arm that `PackageDocuments.misplacement` places elsewhere; a single document is read whatever it is called.
+	 */
 	public static function read(path: String): Array<ArmRecord> {
 		final files: Array<String> = RegistryFiles.of(path);
 		if (files.length == 0) throw new ArmRegistryError('no arm registry at $path');
-		return parseAll([for (file in files) File.getContent(file)]);
+		final texts: Array<String> = [for (file in files) File.getContent(file)];
+		if (FileSystem.isDirectory(path)) for (i => text in texts) {
+			final document: String = Path.withoutDirectory(files[i]);
+			for (record in parse(text)) {
+				final type: Null<String> = typeOf(record.text);
+				final complaint: Null<String> = type == null ? null : PackageDocuments.misplacement(document, type);
+				if (complaint != null) throw new ArmRegistryError('$document: arm ${record.key} $complaint');
+			}
+		}
+		return parseAll(texts);
 	}
 
 	/** The registry at `path` as ONE document — what `MutationArm.cuts` and `armNames` read. */
 	public static function merged(path: String): String {
 		return '{"arms": [' + [for (record in read(path)) record.text].join(',') + ']}';
+	}
+
+	/** The `type` of the record `body`, null when it carries none. */
+	private static function typeOf(body: String): Null<String> {
+		final type: Null<Any> = Reflect.field(Json.parse(body), 'type');
+		return type is String ? Std.string(type) : null;
 	}
 
 	/** The `name` of the record `body`. */
@@ -83,6 +103,7 @@ typedef ArmRecord = {
 }
 
 /**
- * A version that does not read as the registry: no `arms` array, a record without a string `name`, or a name declared twice.
+ * A version that does not read as the registry: no `arms` array, a record without a string `name`, a name declared twice, or
+ * (in a directory) an arm kept in a document `PackageDocuments.misplacement` rejects.
  */
 class ArmRegistryError extends Exception {}

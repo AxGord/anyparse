@@ -235,7 +235,7 @@ final class SliceGateTest extends Test {
 	 */
 	private static function scratchTree(dir: TempDir, registry: String, hxq: String): String {
 		final tree: String = dir.file('tree');
-		final registryFile: String = Path.join([tree, 'test/testkit/arms/pkg.json']);
+		final registryFile: String = Path.join([tree, 'test/testkit/arms/a.json']);
 		FileSystem.createDirectory(Path.join([tree, 'tools']));
 		FileSystem.createDirectory(Path.join([tree, 'bin']));
 		FileSystem.createDirectory(Path.join([tree, 'test/testkit/arms']));

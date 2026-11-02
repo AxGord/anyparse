@@ -34,9 +34,25 @@ final class ArmRegistryTest extends Test {
 		});
 	}
 
+	public function testAnArmKeptInAnotherPackagesDocumentIsRefused(): Void {
+		TempDir.with(dir -> {
+			File.saveContent(dir.file('a.json'), file([typed('A', 'a.X')]));
+			File.saveContent(dir.file('b.json'), file([typed('B', 'a.Y')]));
+			Assert.raises(() -> ArmRegistry.read(dir.path), ArmRegistryError);
+			File.saveContent(dir.file('b.json'), file([typed('B', 'b.Y')]));
+			Assert.same(['A', 'B'], ArmRegistry.read(dir.path).map(r -> r.key));
+			File.saveContent(dir.file('anything.json'), file([typed('C', 'zz.Q')]));
+			Assert.same(['C'], ArmRegistry.read(dir.file('anything.json')).map(r -> r.key), 'one document is not placed by its name');
+		});
+	}
+
 	/** A registry holding `records`, laid out as the real one is. */
 	private static function file(records: Array<String>): String {
 		return '{\n\t"$$comment": ["the registry"],\n\t"arms": [\n\t\t${records.join(',\n\t\t')}\n\t]\n}\n';
+	}
+
+	private static function typed(name: String, type: String): String {
+		return '{\n\t\t\t"name": "$name",\n\t\t\t"type": "$type"\n\t\t}';
 	}
 
 	private static function arm(name: String, note: String): String {
