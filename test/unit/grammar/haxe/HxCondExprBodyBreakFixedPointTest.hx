@@ -70,6 +70,17 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 		+ '\'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\'\n'
 		+ '\t\t\t\t}\n\t\t\t#else\n\t\t\t\t{alpha: x.aaaaaaaaaaaaaaaaaaaaaa}\n\t\t\t#end\n\t\t];\n\t}\n}';
 
+	/** `CFG_FIT` with an object-literal rule that keeps a literal flat up to 140 columns of fields, on a 120-column line. */
+	private static final CFG_FIT_RULE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
+		+ '{"maxLineLength": 120, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "onePerLine", '
+		+ '"rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}, '
+		+ '"sameLine": {"conditionalExprFit": true}}';
+
+	/** The comprehension at `k = 62` under `CFG_FIT_RULE`: the literal fits its line, so it stays flat. */
+	private static final FLAT_62: String = 'class M {\n\tfunction f() {\n\t\tvar y = [for (x in xs) #if debug\n'
+		+ '\t\t\t{alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\'}\n'
+		+ '\t\t#else\n\t\t\t{alpha: x.aaaaaaaaaaaaaaaaaaaaaa}\n\t\t#end\n\t\t];\n\t}\n}';
+
 	public function new(): Void {
 		super();
 	}
@@ -128,11 +139,21 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	}
 
 	/** Under `conditionalExprFit` the region keeps the directive-seam ladder its own group gives it. */
-	@:pin('control')
-	@:killer('M-BREAKMARK-FIT-NAMED')
+	@:pin('guard')
 	public function testAFitRegionKeepsItsLadder(): Void {
 		Assert.equals(FIT_85, HxWriteFixture.triviaWrite(comprehension(85), CFG_FIT));
 		Assert.equals(FIT_85, HxWriteFixture.triviaWrite(FIT_85, CFG_FIT));
+	}
+
+	/**
+	 * An `#if` body that fits its line and is kept flat by an object-literal rule stays flat under `conditionalExprFit`:
+	 * the body is not named, so the list does not lay itself out for a break the literal never takes.
+	 */
+	@:pin('control')
+	@:killer('M-BREAKMARK-FIT-NAMED')
+	public function testAFittingLiteralInAFitRegionStaysFlat(): Void {
+		Assert.equals(FLAT_62, HxWriteFixture.triviaWrite(comprehension(62), CFG_FIT_RULE));
+		Assert.equals(FLAT_62, HxWriteFixture.triviaWrite(FLAT_62, CFG_FIT_RULE));
 	}
 
 	private static function assertOneWrite(src: String, config: String, k: Int): String {
