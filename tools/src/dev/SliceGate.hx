@@ -408,10 +408,7 @@ final class SliceGate {
 
 	/** The artifacts row: no touched file is build output or over 1 MB, unless `--allow` names its path. */
 	private function artifactsOutcome(): Outcome {
-		final found: Array<String> = ArtifactRow.offenders(_gate.tree, _gate.touched, _gate.options.allow, file -> {
-			final size: Result = cmd('git -C ${_gate.tree} cat-file -s ${_gate.base}:$file').run();
-			size.ok ? Std.parseInt(size.out.trim()) : null;
-		});
+		final found: Array<String> = ArtifactRow.offendersAtBase(_gate.tree, _gate.base, _gate.touched, _gate.options.allow);
 		_gate.summary.detail('${_gate.touched.length} touched file(s) checked');
 		return found.length == 0 ? Passed : Failed(GateTree.clip('${found.length} artifact(s), first ${found[0]}'));
 	}

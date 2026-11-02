@@ -300,6 +300,14 @@
 			"note": "the branch of the short rows holds no thread in a gate run, so the heavy branch asks for the thread the lists, fmt and scrub rows run on and the gate oversubscribes the pool"
 		},
 		{
+			"name": "M-GATE-ARTIFACT-BASE-SIZE-DROPPED",
+			"type": "dev.ArtifactRow",
+			"method": "offendersAtBase",
+			"find": "size.ok ? Std.parseInt(size.out.trim()) : null;",
+			"replace": "null;",
+			"note": "a base size that never reaches the row makes every touched large file count as added, so an unchanged or slightly grown one fails the gate"
+		},
+		{
 			"name": "M-SWEEP-FIX-RESULT-IGNORED",
 			"type": "dev.TrapFixSweep",
 			"method": "verdictOf",

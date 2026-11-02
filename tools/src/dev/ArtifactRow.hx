@@ -1,7 +1,11 @@
 package dev;
 
+import devkit.Cmd.cmd;
+import devkit.Result;
 import haxe.io.Path;
 import sys.FileSystem;
+
+using StringTools;
 
 /**
  * The one answer to "which files a slice changed are build output or too big to commit": the slice gate's `artifacts`
@@ -54,6 +58,14 @@ final class ArtifactRow {
 			if (why != null) found.push('$file: $why');
 		}
 		return found;
+	}
+
+	/** `offenders` with `baseSize` read from `base` in the git tree `tree`: the one path the slice gate takes. */
+	public static function offendersAtBase(tree: String, base: String, files: Array<String>, allow: Array<String>): Array<String> {
+		return offenders(tree, files, allow, file -> {
+			final size: Result = cmd('git -C $tree cat-file -s $base:$file').run();
+			size.ok ? Std.parseInt(size.out.trim()) : null;
+		});
 	}
 
 }

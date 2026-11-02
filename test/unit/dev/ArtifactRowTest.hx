@@ -1,12 +1,15 @@
 package unit.dev;
 
 import dev.ArtifactRow;
+import devkit.Cmd.cmd;
 import devkit.TempDir;
 import haxe.io.Bytes;
 import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /** `dev.ArtifactRow`: what the slice gate's artifacts row calls build output or too big, and what `--allow` lets through. */
 @:nullSafety(Strict)
@@ -46,6 +49,29 @@ final class ArtifactRowTest extends Test {
 			final left: Array<String> = ArtifactRow.offenders(dir.path, files, ['bin/apq.js'], _ -> null);
 			Assert.equals(1, left.length);
 			Assert.equals('big.bin: over 1 MB (${ArtifactRow.MAX_BYTES + 1} bytes), added', left[0]);
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-ARTIFACT-BASE-SIZE-DROPPED')
+	public function testTheGatePathReadsTheBaseSizeFromGit(): Void {
+		TempDir.with(dir -> {
+
+			final big: Int = ArtifactRow.MAX_BYTES + 500000;
+			cmd('git -C ${dir.path} init -q').run();
+
+			File.saveBytes(dir.file('grown.json'), Bytes.alloc(big));
+			File.saveBytes(dir.file('same.json'), Bytes.alloc(big));
+			cmd('git -C ${dir.path} add .').run();
+			cmd('git -C ${dir.path} -c user.name=t -c user.email=t@t commit -q -m base').run();
+			final base: String = cmd('git -C ${dir.path} rev-parse HEAD').run().out.trim();
+			File.saveBytes(dir.file('grown.json'), Bytes.alloc(2 * big));
+			File.saveBytes(dir.file('same.json'), Bytes.alloc(big + 1000));
+			final files: Array<String> = ['grown.json', 'same.json'];
+			final found: Array<String> = ArtifactRow.offendersAtBase(dir.path, base, files, []);
+			Assert.equals(1, found.length);
+			Assert.equals('grown.json: grew over ${ArtifactRow.MAX_GROWTH_PERCENT}% ($big -> ${2 * big} bytes)', found[0]);
+			Assert.equals(0, ArtifactRow.offendersAtBase(dir.path, base, files, ['grown.json']).length);
 		});
 	}
 
