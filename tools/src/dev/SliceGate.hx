@@ -3,6 +3,7 @@ package dev;
 import anyparse.core.PoolLease;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
+import dev.XconfigFmt.XconfigStand;
 import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
@@ -13,6 +14,7 @@ import devkit.Lease.LeaseMode;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
+import devkit.TempDir;
 import haxe.DynamicAccess;
 import haxe.Json;
 import haxe.Timer;
@@ -383,8 +385,10 @@ final class SliceGate {
 		return Failed(GateTree.clip(line));
 	}
 
-	/** The fmt row: no file the writer would rewrite, none needing a second pass. */
-	private function fmtOutcome(): Outcome {
+	/**
+	 * The project-config half of the fmt row: no file the writer would rewrite, none needing a second pass.
+	 */
+	private function projectFmtOutcome(): Outcome {
 		final fmt: Result = _gate.hxq(_gate.tree, ['fmt', '--list', '--one-pass'].concat(GateTree.TREE_SCOPE)).run();
 		final line: String = '${fmt.out}\n${fmt.err}'.split('\n').find(l -> l.indexOf('would be rewritten') >= 0) ?? '';
 		_gate.summary.detail(line.replace('apq fmt --list: ', ''));
@@ -463,6 +467,31 @@ final class SliceGate {
 		final runs: Array<Result> = Pool.of(LISTINGS.length)
 			.map(LISTINGS, name -> cmd('node bin/test.js --list-$name').at(_gate.tree).env('HXQ_BIN', _gate.apq()));
 		return [for (i => name in LISTINGS) name => runs[i].check().lines()];
+	}
+
+	/**
+	 * The fmt row: the project-config half and the cross-config half. A slice that moves a file the vendored second config needs two
+	 * rewrites for fails here, not in the battery after the merge.
+	 */
+	private function fmtOutcome(): Outcome {
+		return fmtCombined(projectFmtOutcome(), crossConfigFmtOutcome());
+	}
+
+	/**
+	 * The cross-config half of the fmt row: the `.hx` files the slice touched, formatted one-pass under the vendored second
+	 * config, against the part of `XconfigFmt.XCONFIG_ONE_PASS` they hold.
+	 */
+	private function crossConfigFmtOutcome(): Outcome {
+		final stand: XconfigStand = TempDir.with(
+			scratch -> XconfigFmt.touchedStand(args -> _gate.hxq(_gate.tree, args), _gate.tree, _gate.touched, scratch.file('xconfig'))
+		);
+		return switch stand {
+			case Skipped: Skipped('no touched .hx');
+			case Holds: Passed;
+			case Breaks(failure):
+				_gate.summary.excerpt(failure.detail);
+				Failed(GateTree.clip(failure.line));
+		};
 	}
 
 	/** The command line of the branch running `rows`: this run's options, the rows, and the heavy rows' threads. */
@@ -570,6 +599,19 @@ final class SliceGate {
 	 */
 	public static function armsCommand(mode: LeaseMode, command: Command, label: String): Command {
 		return Lease.take(mode, command, { min: 1, max: ARMS_THREADS }, label);
+	}
+
+	/**
+	 * The fmt row from its two halves: the cross-config half only adds to the project half (it skipped is no news), and a row
+	 * failing both ways says both.
+	 */
+	public static function fmtCombined(project: Outcome, cross: Outcome): Outcome {
+		return switch [project, cross] {
+			case [Passed, Skipped(_)]: Passed;
+			case [Passed, _]: cross;
+			case [Failed(first), Failed(second)]: Failed('$first; $second');
+			case _: project;
+		};
 	}
 
 	/** Whether the corpus harness runs: the fork it reads is named. */

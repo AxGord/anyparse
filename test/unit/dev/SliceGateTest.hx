@@ -122,4 +122,18 @@ final class SliceGateTest extends Test {
 		Assert.isTrue(args.contains('--allow-arm=M-A') && args.contains('--allow-arm=M-B'), args.join(' '));
 	}
 
+	/**
+	 * The fmt row is the project half and the cross-config half: a skipped cross half adds nothing, a failing one fails an otherwise
+	 * green row, and a row failing both says both.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-FMT-CROSS-HALF-IGNORED')
+	public function testTheFmtRowFailsOnEitherHalfAndNamesBoth(): Void {
+		Assert.isTrue(SliceGate.fmtCombined(Passed, Skipped('no touched .hx')).match(Passed));
+		Assert.isTrue(SliceGate.fmtCombined(Passed, Passed).match(Passed));
+		Assert.isTrue(SliceGate.fmtCombined(Passed, Failed('xconfig +1')).match(Failed('xconfig +1')));
+		Assert.isTrue(SliceGate.fmtCombined(Failed('3 would be rewritten'), Passed).match(Failed('3 would be rewritten')));
+		Assert.isTrue(SliceGate.fmtCombined(Failed('a'), Failed('b')).match(Failed('a; b')));
+	}
+
 }

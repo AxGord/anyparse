@@ -2,6 +2,8 @@ package dev;
 
 import anyparse.core.PoolLease;
 import dev.Shard.Tally;
+import dev.XconfigFmt.XconfigFailure;
+import dev.XconfigFmt.XconfigRun;
 import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
@@ -16,7 +18,6 @@ import haxe.Exception;
 import haxe.Json;
 import haxe.Timer;
 import haxe.io.Path;
-import js.node.Fs.Fs;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -37,16 +38,6 @@ final class Battery {
 
 	/** The characters of HEAD a snapshot is keyed by. */
 	public static inline final KEY_LENGTH: Int = 8;
-
-	/**
-	 * The files the writer settles only on a second rewrite under the vendored config. Compared for equality:
-	 * a file joining is a regression and one leaving is progress, and either is recorded here with the measurement.
-	 */
-	public static final XCONFIG_ONE_PASS: Array<String> = [
-		'src/anyparse/check/common/control/UnnecessarySwitch.hx',
-		'src/anyparse/macro/ParseDispatchLowering.hx',
-		'src/anyparse/query/cli/DeclarationDelta.hx'
-	];
 
 	/** The readings a branch leaves: the suite's counts, the corpus sweep's, and whether the client tree was linted. */
 	private static inline final TESTS: String = 'tests';
@@ -69,9 +60,6 @@ final class Battery {
 
 	/** The build file only a typecheck reaches: the corpus drill's driver, a root-level module no binary's `-main` types. */
 	private static inline final RECON_HXML: String = 'recon.hxml';
-
-	/** The vendored second formatter config the cross-config arm formats this tree under. */
-	private static inline final XCONFIG: String = 'tools/data/xconfig-hxformat.json';
 
 	/** The lines of a failed typer-probe run shown when it names no `DIFFERENT` probe. */
 	private static inline final TAIL_LINES: Int = 20;
@@ -322,28 +310,12 @@ final class Battery {
 	 * the drift, which a foreign config legitimately brings.
 	 */
 	private function fmtXconfig(): Outcome {
-		final root: String = workFile('xconfig');
-		FileSystem.createDirectory(root);
-		File.copy(Path.join([_plan.repo, XCONFIG]), Path.join([root, 'hxformat.json']));
-		for (dir in GateTree.TREE_SCOPE) Fs.symlinkSync(Path.join([_plan.repo, dir]), Path.join([root, dir]));
-		final run: Result = hxq(['fmt', '--list', '--one-pass'].concat([for (dir in GateTree.TREE_SCOPE) Path.join([root, dir])]))
-			.env('APQ_NO_CONFIG_WARN', '1')
-			.run();
-		final lines: Array<String> = run.err.split('\n').filter(l -> l != '');
-		final summary: Array<String> = lines.filter(l -> l.startsWith('apq fmt --list:') || l.startsWith('apq fmt --one-pass:'));
-		for (line in summary) Sys.println(line);
-		// the per-file one-pass lines are the expected bulk; anything else on stderr (a crash, a parse failure) is shown
-		for (line in lines) if (line.indexOf(': the writer needed ') < 0 && !summary.contains(line)) Sys.println(line);
-		// the summary line is the completion proof: a run cut short after the baseline's packages would match the set
-		if (!lines.exists(l -> l.startsWith('apq fmt --list:')))
-			return Failed('the cross-config fmt run printed no summary line — it did not finish, so its one-pass set means nothing');
-		final moved: Array<String> = setMoves(XCONFIG_ONE_PASS, onePassSet(run.err, root));
-		if (moved.length == 0) return Passed;
-		for (line in moved) Sys.println(line);
-		return Failed(
-			'the cross-config one-pass set moved (+ = a new non-converging file, - = one that now settles) '
-			+ '— re-measure, then update Battery.XCONFIG_ONE_PASS'
-		);
+		final run: XconfigRun = XconfigFmt.xconfigRun(hxq, _plan.repo, workFile('xconfig'), null);
+		for (line in run.shown) Sys.println(line);
+		final failure: Null<XconfigFailure> = XconfigFmt.xconfigVerdict(run, XconfigFmt.XCONFIG_ONE_PASS, []);
+		if (failure == null) return Passed;
+		for (line in failure.detail) Sys.println(line);
+		return Failed(failure.line);
 	}
 
 	/** The typer probe corpus (`tools/typer-facts/`): every probe the typer answers as the compiler does. */
@@ -623,24 +595,6 @@ final class Battery {
 		}
 		if (changed && !allowBlast) why.push('the blast radius changed — explain each line above, then re-run with --allow-blast');
 		return why.length == 0 ? Passed : Failed(why.join('; '));
-	}
-
-	/** The files under the scratch `root` that `fmt --one-pass`'s stderr `err` names, relative to `root`, sorted. */
-	public static function onePassSet(err: String, root: String): Array<String> {
-		final prefix: String = 'apq fmt: $root/';
-		final marker: String = ': the writer needed ';
-		final files: Array<String> = [
-			for (line in err.split('\n')) if (line.startsWith(prefix) && line.indexOf(marker) >= 0)
-				line.substring(prefix.length, line.indexOf(marker))
-		];
-		files.sort(Reflect.compare);
-		return files;
-	}
-
-	/** How the set `now` differs from `expected`: `- <file>` for one gone, `+ <file>` for one joined; empty when equal. */
-	public static function setMoves(expected: Array<String>, now: Array<String>): Array<String> {
-		return
-			[for (file in expected) if (!now.contains(file)) '- $file'].concat([for (file in now) if (!expected.contains(file)) '+ $file']);
 	}
 
 	/**

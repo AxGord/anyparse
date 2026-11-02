@@ -46,21 +46,6 @@ final class BatteryTest extends Test {
 		Assert.isFalse(Battery.corpusRegressed('Δfail +0'));
 	}
 
-	public function testTheOnePassSetIsTheFilesUnderTheScratchRootSorted(): Void {
-		final err: String = [
-			'apq fmt: /w/xconfig/src/b/B.hx: the writer needed 2 rewrites to reach its fixed point',
-			'apq fmt: /w/xconfig/src/a/A.hx: the writer needed 2 rewrites to reach its fixed point',
-			'apq fmt: /elsewhere/C.hx: the writer needed 2 rewrites to reach its fixed point',
-			'apq fmt --list: 3 of 9 file(s) would be rewritten'
-		].join('\n');
-		Assert.same(['src/a/A.hx', 'src/b/B.hx'], Battery.onePassSet(err, '/w/xconfig'));
-	}
-
-	public function testTheSetMovesNameEveryFileGoneAndJoined(): Void {
-		Assert.same([], Battery.setMoves(['a', 'b'], ['a', 'b']));
-		Assert.same(['- a', '+ c'], Battery.setMoves(['a', 'b'], ['b', 'c']));
-	}
-
 	@:pin('control')
 	@:killer('M-BATTERY-BLAST-EXIT2-WAIVED')
 	public function testAllowBlastWaivesMovementButNeverAComparisonThatCouldNotRun(): Void {

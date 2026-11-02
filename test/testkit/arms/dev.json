@@ -430,6 +430,14 @@
 			"find": "for (arm in options.allowArms) args.push('--allow-arm=$arm');",
 			"replace": "",
 			"note": "the gate's waivers never reach the arms branch, the process that reads them"
+		},
+		{
+			"name": "M-GATE-FMT-CROSS-HALF-IGNORED",
+			"type": "dev.SliceGate",
+			"method": "fmtCombined",
+			"find": "case [Passed, _]: cross;",
+			"replace": "case [Passed, _]: Passed;",
+			"note": "a slice whose touched file needs two rewrites under the cross-config passes the gate's fmt row and turns the battery red after the merge"
 		}
 	]
 }
