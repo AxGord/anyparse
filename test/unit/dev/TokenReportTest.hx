@@ -1,8 +1,7 @@
 package unit.dev;
 
 import dev.TokenReport;
-import dev.TokenTranscript.AgentReading;
-import dev.TokenTranscript.TurnReading;
+import dev.TokenTranscript;
 import utest.Assert;
 import utest.Test;
 
@@ -170,34 +169,41 @@ final class TokenReportTest extends Test {
 
 	public function testToolsAreSummedAcrossAgentsAndSortedBySize(): Void {
 		final first: AgentReading = agentOf('a', 'S1', []);
-		first.tools['hxq show'] = {
-			calls: 1,
-			inChars: 40,
-			outChars: 400,
-			over2k: 0,
-			over5k: 0
-		};
+		first.tools['hxq show'] = stat(1, 400, 0, 0);
 		final second: AgentReading = agentOf('b', 'S1', []);
-		second.tools['hxq show'] = {
-			calls: 2,
-			inChars: 40,
-			outChars: 40000,
-			over2k: 1,
-			over5k: 0
-		};
-		second.tools['git diff'] = {
-			calls: 1,
-			inChars: 4,
-			outChars: 100000,
-			over2k: 1,
-			over5k: 1
-		};
+		second.tools['hxq show'] = stat(2, 40000, 1, 0);
+		second.tools['git diff'] = stat(1, 100000, 1, 1);
 		final report: Report = TokenReport.summarize([first, second], null);
 		Assert.equals('git diff', report.tools[0].key);
 		Assert.equals(3, report.tools[1].calls);
 		Assert.equals(10100, report.tools[1].outTok);
 		Assert.equals(1, report.tools[1].over2k);
 		Assert.equals(35100, report.toolOutTok);
+	}
+
+	public function testToolsAreSummedPerRoleWithTheLargestCallsKeptAndConvertedToTokens(): Void {
+		final worker: AgentReading = agentOf('a', 'S1', []);
+		worker.role = TokenTranscript.ROLE_WORKER;
+		worker.tools['hxq show'] = stat(2, 40000, 1, 0, [{ outChars: 36000, call: 'hxq show a' }, { outChars: 4000, call: 'hxq show b' }]);
+		final other: AgentReading = agentOf('b', 'S1', []);
+		other.role = TokenTranscript.ROLE_WORKER;
+		other.tools['hxq show'] = stat(2, 800, 0, 0, [{ outChars: 400, call: 'hxq show c' }, { outChars: 400, call: 'hxq show d' }]);
+		final reviewer: AgentReading = agentOf('c', 'S1', []);
+		reviewer.role = TokenTranscript.ROLE_REVIEWER;
+		reviewer.tools['git diff'] = stat(1, 80000, 1, 1);
+		final rows: Array<RoleToolRow> = TokenReport.summarize([worker, other, reviewer], null).roles;
+		Assert.equals(2, rows.length);
+		Assert.equals(TokenTranscript.ROLE_REVIEWER, rows[0].role);
+		Assert.equals('git diff', rows[0].key);
+		Assert.equals(20000, rows[0].outTok);
+		Assert.equals(1, rows[0].over5k);
+		Assert.equals(TokenTranscript.ROLE_WORKER, rows[1].role);
+		Assert.equals(4, rows[1].calls);
+		Assert.equals(10200, rows[1].outTok);
+		Assert.equals(3, rows[1].biggest.length);
+		Assert.equals('hxq show a', rows[1].biggest[0].call);
+		Assert.equals(9000, rows[1].biggest[0].outTok);
+		Assert.equals('hxq show b', rows[1].biggest[1].call);
 	}
 
 	public function testBypassesAreSummedAndSampled(): Void {
@@ -236,6 +242,7 @@ final class TokenReportTest extends Test {
 	private static function agentOf(id: String, slice: Null<String>, turns: Array<TurnReading>): AgentReading {
 		return {
 			id: id,
+			role: TokenTranscript.ROLE_OTHER,
 			slice: slice,
 			tools: [],
 			turns: turns,
@@ -246,6 +253,17 @@ final class TokenReportTest extends Test {
 			deniedWrites: [],
 			writeChars: 0,
 			indentChars: 0
+		};
+	}
+
+	private static function stat(calls: Int, outChars: Int, over2k: Int, over5k: Int, ?biggest: Array<BigCall>): ToolStat {
+		return {
+			calls: calls,
+			inChars: 0,
+			outChars: outChars,
+			over2k: over2k,
+			over5k: over5k,
+			biggest: biggest ?? []
 		};
 	}
 

@@ -6,6 +6,7 @@ import dev.TokenReport.ModelRow;
 import dev.TokenReport.Report;
 import dev.TokenReport.Rewrite;
 import dev.TokenReport.RewriteSummary;
+import dev.TokenReport.RoleToolRow;
 import dev.TokenReport.SliceCost;
 import dev.TokenReport.ToolRow;
 import dev.TokenTranscript.AgentReading;
@@ -20,7 +21,8 @@ import sys.io.File;
 /**
  * `dev token-audit <dir>...` — where the tokens of a batch of agents went, read from their Claude Code transcripts (the `*.output`
  * links of a session's `tasks/` directory, or the `*.jsonl` files of its `subagents/` directory): per tool, hxq subcommand,
- * dev command, git subcommand and plugin call the calls and the size of what they sent and got back; per model the turns and
+ * dev command, git subcommand and plugin call the calls and the size of what they sent and got back; per agent role (the
+ * opening of its first prompt) and tool the same with the three largest calls; per model the turns and
  * usage with a priced estimate; per slice the cost (and per landed slice with `--landed`); the cache rewrites with the idle
  * gap before each; and the reads and writes of repo `.hx` that went round hxq. `--json <file>` writes the whole reading for a
  * before/after diff. This is the meter only; the readings live in the journal, never in a doc.
@@ -89,6 +91,8 @@ final class TokenAudit {
 				[for (row in report.tools.slice(0, top)) toolCells(row)]
 			),
 			'',
+			roleLines(report.roles.slice(0, top)),
+			'',
 			Table.render(
 				['model', 'turns', 'input', 'output', 'cache read', 'cache write', 'cost usd'],
 				[for (row in report.models) modelCells(row)]
@@ -128,6 +132,20 @@ final class TokenAudit {
 
 	private static inline function usd(amount: Float): String {
 		return '$$${amount}';
+	}
+
+	/** The role × tool table of `rows`, each row followed by its largest calls. */
+	private static function roleLines(rows: Array<RoleToolRow>): String {
+		final table: Array<String> = Table.render(['role', 'tool', 'calls', 'out k-tok', '>5k'], [
+			for (row in rows) [row.role, row.key, '${row.calls}', thousands(row.outTok), '${row.over5k}']
+		])
+			.split('\n');
+		final lines: Array<String> = [table[0]];
+		for (i => row in rows) {
+			lines.push(table[i + 1]);
+			for (big in row.biggest) lines.push('    ${big.outTok} tok  ${big.call}');
+		}
+		return lines.join('\n');
 	}
 
 	/** The one-line task of the agent whose transcript is `file`, from the `.meta.json` beside it; null when there is none. */

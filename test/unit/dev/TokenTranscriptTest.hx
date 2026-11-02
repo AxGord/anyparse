@@ -108,6 +108,85 @@ final class TokenTranscriptTest extends Test {
 		Assert.equals('S146', prompted.slice);
 	}
 
+	public function testTheRoleComesFromTheOpeningOfTheFirstPrompt(): Void {
+		for (opening => role in [
+			'You are the slice driver for anyparse slice A-1' => TokenTranscript.ROLE_DRIVER,
+			'You are the task driver of' => TokenTranscript.ROLE_DRIVER,
+			'You are the driver of the queue' => TokenTranscript.ROLE_DRIVER,
+			'You are the worker of anyparse slice A-1' => TokenTranscript.ROLE_WORKER,
+			'Ты воркер среза A-1 проекта' => TokenTranscript.ROLE_WORKER,
+			'You review anyparse slice A-1, read-only' => TokenTranscript.ROLE_REVIEWER,
+			'Ты ревьюер среза A-1 проекта' => TokenTranscript.ROLE_REVIEWER,
+			'Срез ENG-8 в workflow-движке' => TokenTranscript.ROLE_ENGINE_WORKER,
+			'Review engine slice ENG-8 READ-ONLY' => TokenTranscript.ROLE_ENGINE_REVIEWER,
+			'Ревью среза ENG-8 в workflow-движке' => TokenTranscript.ROLE_ENGINE_REVIEWER,
+			'You are the worker for slice **S233** of the queue' => TokenTranscript.ROLE_WORKER,
+			'You are the READ-ONLY worker for slice **S233**' => TokenTranscript.ROLE_WORKER,
+			'You are the worker of engine slice ENG-8' => TokenTranscript.ROLE_ENGINE_WORKER,
+			'You are the pre-merge REVIEWER of slice A-1 in anyparse' => TokenTranscript.ROLE_REVIEWER,
+			'You are the REVIEWER of anyparse slice **A-1**' => TokenTranscript.ROLE_REVIEWER,
+			'You are the READ-ONLY adversarial reviewer of A-1' => TokenTranscript.ROLE_REVIEWER,
+			'You are the READ-ONLY reviewer of A-1' => TokenTranscript.ROLE_REVIEWER,
+			'Review slice A-1: branch `batch/hxqb-A1`' => TokenTranscript.ROLE_REVIEWER,
+			'Measure the new lint' => TokenTranscript.ROLE_OTHER,
+			'' => TokenTranscript.ROLE_OTHER
+		]) {
+			Assert.equals(role, TokenTranscript.roleOfPrompt(opening), opening);
+			Assert.equals(role, TokenTranscript.read('a', transcript([user(opening)]), null).role, opening);
+		}
+	}
+
+	public function testTheBoilerplateBeforeThePromptDoesNotHideItsRole(): Void {
+		final lines: String = 'IMPORTANT: Override the default rule.\nDo NOT call start().\n';
+		Assert.equals(TokenTranscript.ROLE_WORKER, TokenTranscript.roleOfPrompt('${lines}\nYou are the worker of anyparse slice A-1'));
+		Assert.equals(TokenTranscript.ROLE_REVIEWER, TokenTranscript.roleOfPrompt('${lines}---\nYou review anyparse slice A-1, read-only'));
+		Assert.equals(TokenTranscript.ROLE_OTHER, TokenTranscript.roleOfPrompt('${lines}just do it'));
+	}
+
+	public function testACommandBehindAnExportAndASemicolonIsKeyedByTheProgram(): Void {
+		final agent: AgentReading = TokenTranscript.read('a', transcript([
+			user('x'),
+			call('t1', 'Bash', { command: 'cd /w && export HXQ_BIN=/w/bin/apq.js; hxq show f.hx' }),
+			result('t1', 'ok'),
+			call('t2', 'Bash', { command: 'HXQ_BIN=/w/bin/apq.js hxq show g.hx' }),
+			result('t2', 'ok')
+		]), null);
+		Assert.equals(2, agent.tools['hxq show']?.calls);
+		Assert.equals('hxq show g.hx', agent.tools['hxq show']?.biggest[1].call);
+		Assert.equals('hxq show a.hx; echo done', TokenTranscript.normalize('export X=/x\nhxq show a.hx; echo done'));
+		Assert.equals('hxq patch f.hx <<\'EOF\'\nx\nEOF', TokenTranscript.normalize('export X=/x\nhxq patch f.hx <<\'EOF\'\nx\nEOF'));
+	}
+
+	public function testAKeyIsOneLineWhateverTheFirstWordOfTheCommandHolds(): Void {
+		Assert.equals('sh **', TokenTranscript.bashKey('**\nfoo bar'));
+		Assert.equals('sh foo', TokenTranscript.bashKey('/usr/bin/foo\tbar'));
+	}
+
+	public function testTheThreeLargestCallsOfARowAreKeptLargestFirstAndClipped(): Void {
+		final long: String = ''.lpad('y', 300);
+		final agent: AgentReading = TokenTranscript.read('a', transcript([
+			user('x'),
+			call('t1', 'Bash', { command: 'git log one' }),
+			result('t1', 'a'),
+			call('t2', 'Bash', { command: 'git log two' }),
+			result('t2', 'aaaaaa'),
+			call('t3', 'Bash', { command: 'git log\n  three $long' }),
+			result('t3', 'aaaa'),
+			call('t4', 'Bash', { command: 'git log four' }),
+			result('t4', 'aa'),
+			call('t5', 'Read', { file_path: '/w/notes.txt' }),
+			result('t5', 'a')
+		]), null);
+		final biggest: Array<BigCall> = agent.tools['git log']?.biggest ?? [];
+		Assert.equals(3, biggest.length);
+		Assert.equals('git log four', biggest[2].call);
+		Assert.equals('git log two', biggest[0].call);
+		Assert.equals(6, biggest[0].outChars);
+		Assert.isTrue(biggest[1].call.startsWith('git log three yyy'));
+		Assert.equals(120, biggest[1].call.length);
+		Assert.equals('/w/notes.txt', agent.tools['Read other']?.biggest[0].call);
+	}
+
 	public function testBypassesAndWritePayloadsAreCollectedPerAgent(): Void {
 		final agent: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),

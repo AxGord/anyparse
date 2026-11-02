@@ -23,12 +23,25 @@ final class TokenTranscript {
 
 	public static inline final OVER_LARGE: Int = 5000;
 
+	/** The roles an agent is classed into by the opening of its first prompt. */
+	public static inline final ROLE_DRIVER: String = 'driver';
+
+	public static inline final ROLE_WORKER: String = 'anyparse worker';
+	public static inline final ROLE_REVIEWER: String = 'anyparse reviewer';
+	public static inline final ROLE_ENGINE_WORKER: String = 'engine worker';
+	public static inline final ROLE_ENGINE_REVIEWER: String = 'engine reviewer';
+	public static inline final ROLE_OTHER: String = 'other';
+
 	/** How many leading-command rounds of `cd`, `export`, `VAR=` and `rtk` prefixes a command line is stripped of. */
 	private static inline final PREFIX_ROUNDS: Int = 6;
 
 	/** How many characters of a command a sample of a bypass keeps. */
 	private static inline final SAMPLE_LENGTH: Int = 140;
 
+	/** How many of a row's largest calls the reading keeps, and how long their text may be. */
+	private static inline final BIGGEST_CALLS: Int = 3;
+
+	private static inline final CALL_LENGTH: Int = 120;
 	private static inline final WORKFLOW_PREFIX: String = 'mcp__plugin_workflow_wf__';
 	private static inline final MCP_PREFIX: String = 'mcp__';
 
@@ -37,9 +50,36 @@ final class TokenTranscript {
 
 	private static inline final HOOK_DENIAL: String = 'PreToolUse:';
 	private static inline final BASH: String = 'Bash';
+
+	/** The role of each known prompt opening; the first prefix that opens the prompt wins, no prefix means `ROLE_OTHER`. */
+	private static final ROLE_PREFIXES: Array<RolePrefix> = [
+		{ prefix: 'You are the slice driver', role: ROLE_DRIVER },
+		{ prefix: 'You are the task driver', role: ROLE_DRIVER },
+		{ prefix: 'You are the driver of', role: ROLE_DRIVER },
+		{ prefix: 'You are the worker of anyparse', role: ROLE_WORKER },
+		{ prefix: 'You are the worker for slice', role: ROLE_WORKER },
+		{ prefix: 'You are the READ-ONLY worker for slice', role: ROLE_WORKER },
+		{ prefix: 'Ты воркер среза', role: ROLE_WORKER },
+		{ prefix: 'You review anyparse slice', role: ROLE_REVIEWER },
+		{ prefix: 'You are the pre-merge REVIEWER', role: ROLE_REVIEWER },
+		{ prefix: 'You are the REVIEWER of anyparse', role: ROLE_REVIEWER },
+		{ prefix: 'You are the READ-ONLY adversarial reviewer', role: ROLE_REVIEWER },
+		{ prefix: 'You are the READ-ONLY reviewer', role: ROLE_REVIEWER },
+		{ prefix: 'Review slice', role: ROLE_REVIEWER },
+		{ prefix: 'Ты ревьюер среза', role: ROLE_REVIEWER },
+		{ prefix: 'Срез ', role: ROLE_ENGINE_WORKER },
+		{ prefix: 'You are the worker of engine slice', role: ROLE_ENGINE_WORKER },
+		{ prefix: 'Review engine slice', role: ROLE_ENGINE_REVIEWER },
+		{ prefix: 'Ревью среза', role: ROLE_ENGINE_REVIEWER }
+	];
+
+	/** The boilerplate a subagent prompt may open with, which ends at a blank line or a `---` line and says nothing of the role. */
+	private static final PREAMBLE: EReg = ~/^IMPORTANT: Override[\s\S]*?(\n\n|\n---\n)\s*/;
+
 	private static final PROMPT_SLICE: EReg = new EReg('(?:slice|Slice|среза|срезу)\\s+($SLICE_SHAPE)\\b', '');
 	private static final DESCRIPTION_SLICE: EReg = new EReg('\\b($SLICE_SHAPE)\\b', '');
-	private static final LEADING: EReg = ~/^(cd \S+|export [^;&]+|[A-Za-z_][A-Za-z0-9_]*=\S+)\s*(&&|;|\n)\s*/;
+	private static final LEADING: EReg = ~/^(cd \S+|export [^;&\n]+|[A-Za-z_][A-Za-z0-9_]*=\S+)\s*(&&|;|\n)\s*/;
+	private static final BLANKS: EReg = ~/\s+/g;
 	private static final RTK: EReg = ~/^rtk (proxy )?/;
 	private static final ENV: EReg = ~/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+(?![&;])/;
 	private static final HXQ: EReg = ~/^(?:\S*\/)?(?:hxq|apq)(?:\.js)?\s+([a-z-]+)/;
@@ -56,6 +96,7 @@ final class TokenTranscript {
 	public static function read(id: String, text: String, description: Null<String>): AgentReading {
 		final agent: AgentReading = {
 			id: id,
+			role: ROLE_OTHER,
 			slice: null,
 			tools: [],
 			turns: [],
@@ -80,7 +121,9 @@ final class TokenTranscript {
 				case 'user':
 					if (!promptSeen) {
 						promptSeen = true;
-						agent.slice = sliceOfPrompt(textOf(message.content)) ?? sliceOfDescription(description);
+						final prompt: String = textOf(message.content);
+						agent.role = roleOfPrompt(prompt);
+						agent.slice = sliceOfPrompt(prompt) ?? sliceOfDescription(description);
 					}
 					readResults(agent, message.content, pending);
 				case _:
@@ -99,6 +142,13 @@ final class TokenTranscript {
 		return description != null && DESCRIPTION_SLICE.match(description) ? DESCRIPTION_SLICE.matched(1) : null;
 	}
 
+	/** The role the opening of the prompt `prompt` names, after any subagent boilerplate; `ROLE_OTHER` for an unknown opening. */
+	public static function roleOfPrompt(prompt: String): String {
+		final opening: String = (PREAMBLE.match(prompt) ? PREAMBLE.matchedRight() : prompt).ltrim();
+		for (entry in ROLE_PREFIXES) if (opening.startsWith(entry.prefix)) return entry.role;
+		return ROLE_OTHER;
+	}
+
 	/** `command` without the `cd`, `export`, `VAR=value` and `rtk` prefixes that precede the program it runs. */
 	public static function normalize(command: String): String {
 		var line: String = command.trim();
@@ -114,7 +164,7 @@ final class TokenTranscript {
 		if (NODE_APQ.match(line)) return 'hxq ${NODE_APQ.matched(1)}';
 		if (NODE_DEV.match(line)) return 'dev ${NODE_DEV.matched(1)}';
 		if (GIT.match(line)) return 'git ${GIT.matched(1)}';
-		final program: String = line.split(' ')[0];
+		final program: String = BLANKS.split(line)[0];
 		return 'sh ${program.substr(program.lastIndexOf('/') + 1)}';
 	}
 
@@ -123,6 +173,34 @@ final class TokenTranscript {
 		var total: Int = 0;
 		for (line in text.split('\n')) total += line.length - line.ltrim().length;
 		return total;
+	}
+
+	/** `calls` with `call` added, keeping only the `BIGGEST_CALLS` largest answers, the largest first. */
+	public static function keepBiggest(calls: Array<BigCall>, call: BigCall): Void {
+		calls.push(call);
+		calls.sort((a, b) -> b.outChars - a.outChars);
+		if (calls.length > BIGGEST_CALLS) calls.pop();
+	}
+
+	/** A tool stat of no calls. */
+	public static function emptyStat(): ToolStat {
+		return {
+			calls: 0,
+			inChars: 0,
+			outChars: 0,
+			over2k: 0,
+			over5k: 0,
+			biggest: []
+		};
+	}
+
+	/** `stat`'s counts and sizes added to `sum`; the largest calls are the caller's to merge. */
+	public static function addStat(sum: ToolStat, stat: ToolStat): Void {
+		sum.calls += stat.calls;
+		sum.inChars += stat.inChars;
+		sum.outChars += stat.outChars;
+		sum.over2k += stat.over2k;
+		sum.over5k += stat.over5k;
 	}
 
 	private static inline function sample(segment: Null<String>): Null<String> {
@@ -170,7 +248,13 @@ final class TokenTranscript {
 			case 'Read': (input.file_path ?? '').endsWith('.hx') ? 'Read .hx' : 'Read other';
 			case _: pluginKey(name);
 		};
-		pending[block.id ?? ''] = { key: key, inChars: Json.stringify(input).length, access: accessOf(name, input, cwd, agent.slice) };
+		final what: String = name == BASH ? line : input.file_path ?? Json.stringify(input);
+		pending[block.id ?? ''] = {
+			key: key,
+			inChars: Json.stringify(input).length,
+			call: BLANKS.replace(what, ' ').trim().substr(0, CALL_LENGTH),
+			access: accessOf(name, input, cwd, agent.slice)
+		};
 		final payload: String = switch name {
 			case BASH:
 				WRITE_OP.match(line) ? command : '';
@@ -187,13 +271,7 @@ final class TokenTranscript {
 		for (block in blocksOf(content)) {
 			final call: Null<PendingCall> = block.type == 'tool_result' ? pending[block.tool_use_id ?? ''] : null;
 			if (call == null) continue;
-			final stat: ToolStat = agent.tools[call.key] ?? {
-				calls: 0,
-				inChars: 0,
-				outChars: 0,
-				over2k: 0,
-				over5k: 0
-			};
+			final stat: ToolStat = agent.tools[call.key] ?? emptyStat();
 			final answer: String = textOf(block.content);
 			final size: Int = answer.length;
 			stat.calls++;
@@ -201,6 +279,7 @@ final class TokenTranscript {
 			stat.outChars += size;
 			if (size > OVER_SMALL * CHARS_PER_TOKEN) stat.over2k++;
 			if (size > OVER_LARGE * CHARS_PER_TOKEN) stat.over5k++;
+			keepBiggest(stat.biggest, { outChars: size, call: call.call });
 			agent.tools[call.key] = stat;
 			record(agent, call.access, block.is_error == true && answer.startsWith(HOOK_DENIAL));
 		}
@@ -260,6 +339,9 @@ final class TokenTranscript {
 typedef AgentReading = {
 	var id: String;
 
+	/** The role the opening of its first prompt names (`TokenTranscript.ROLE_*`). */
+	var role: String;
+
 	/** The slice its prompt (else its task line) names. */
 	var slice: Null<String>;
 
@@ -296,6 +378,21 @@ typedef ToolStat = {
 	var over2k: Int;
 
 	var over5k: Int;
+
+	/** The calls with the largest answers, the largest first. */
+	var biggest: Array<BigCall>;
+}
+
+/** A call and the size of its answer. */
+typedef BigCall = {
+	var outChars: Int;
+	var call: String;
+}
+
+/** A prompt opening and the role it names. */
+private typedef RolePrefix = {
+	var prefix: String;
+	var role: String;
 }
 
 /** One API message of an agent: when it began and ended (ms since the epoch) and its usage fields. */
@@ -317,6 +414,9 @@ typedef TurnReading = {
 private typedef PendingCall = {
 	var key: String;
 	var inChars: Int;
+
+	/** The command, path or input of the call, one line, clipped. */
+	var call: String;
 	var access: Access;
 }
 

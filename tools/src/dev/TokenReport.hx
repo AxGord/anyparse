@@ -8,7 +8,7 @@ using Lambda;
 
 /**
  * The one answer to "where do the agents' tokens and money go": sums the readings of many transcripts (`TokenTranscript`)
- * into per-tool sizes, per-model usage priced from `PRICES`, the cost per slice (and per landed slice), the cache rewrites
+ * into per-tool and per-role sizes, per-model usage priced from `PRICES`, the cost per slice (and per landed slice), the cache rewrites
  * with the idle gap before each, and the bypasses of hxq. Pure over its input, so a before/after pair of reports diffs.
  */
 @:nullSafety(Strict)
@@ -76,6 +76,7 @@ final class TokenReport {
 			toolOutTok: tools.fold((t, sum) -> sum + t.outTok, 0),
 			cost: round(models.fold((m, sum) -> sum + m.cost, 0.0)),
 			tools: tools,
+			roles: roleRows(agents),
 			models: models,
 			slices: slices,
 			landed: landed == null ? null : landedSummary(slices),
@@ -139,18 +140,8 @@ final class TokenReport {
 	private static function toolRows(agents: Array<AgentReading>): Array<ToolRow> {
 		final sums: Map<String, ToolStat> = [];
 		for (agent in agents) for (key => stat in agent.tools) {
-			final sum: ToolStat = sums[key] ?? {
-				calls: 0,
-				inChars: 0,
-				outChars: 0,
-				over2k: 0,
-				over5k: 0
-			};
-			sum.calls += stat.calls;
-			sum.inChars += stat.inChars;
-			sum.outChars += stat.outChars;
-			sum.over2k += stat.over2k;
-			sum.over5k += stat.over5k;
+			final sum: ToolStat = sums[key] ?? TokenTranscript.emptyStat();
+			TokenTranscript.addStat(sum, stat);
 			sums[key] = sum;
 		}
 		final rows: Array<ToolRow> = [
@@ -166,6 +157,32 @@ final class TokenReport {
 				}
 		];
 		rows.sort((a, b) -> b.inTok + b.outTok - a.inTok - a.outTok);
+		return rows;
+	}
+
+	/** The calls of each tool kind per agent role, the role and tool with the most output first. */
+	private static function roleRows(agents: Array<AgentReading>): Array<RoleToolRow> {
+		final sums: Map<String, ToolStat> = [];
+
+		for (agent in agents) for (key => stat in agent.tools) {
+			final id: String = '${agent.role}\n$key';
+			final sum: ToolStat = sums[id] ?? TokenTranscript.emptyStat();
+			TokenTranscript.addStat(sum, stat);
+			for (big in stat.biggest) TokenTranscript.keepBiggest(sum.biggest, big);
+			sums[id] = sum;
+		}
+		final rows: Array<RoleToolRow> = [
+			for (id => sum in sums)
+				{
+					role: id.substr(0, id.indexOf('\n')),
+					key: id.substr(id.indexOf('\n') + 1),
+					calls: sum.calls,
+					outTok: tokens(sum.outChars),
+					over5k: sum.over5k,
+					biggest: [for (big in sum.biggest) { outTok: tokens(big.outChars), call: big.call }]
+				}
+		];
+		rows.sort((a, b) -> b.outTok - a.outTok);
 		return rows;
 	}
 
@@ -327,6 +344,24 @@ typedef ToolRow = {
 	var over5k: Int;
 }
 
+/** The calls of one tool kind made by the agents of one role; sizes in tokens. */
+typedef RoleToolRow = {
+	var role: String;
+	var key: String;
+	var calls: Int;
+	var outTok: Int;
+	var over5k: Int;
+
+	/** The calls with the largest answers, the largest first. */
+	var biggest: Array<BigCallRow>;
+}
+
+/** A call and the size of its answer in tokens. */
+typedef BigCallRow = {
+	var outTok: Int;
+	var call: String;
+}
+
 /** The usage of one model summed over every agent, and what it costs at `PRICES`. */
 typedef ModelRow = {
 	var model: String;
@@ -417,6 +452,7 @@ typedef Report = {
 	var toolOutTok: Int;
 	var cost: Float;
 	var tools: Array<ToolRow>;
+	var roles: Array<RoleToolRow>;
 	var models: Array<ModelRow>;
 	var slices: Array<SliceCost>;
 	var landed: Null<LandedSummary>;
