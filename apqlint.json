@@ -192,7 +192,8 @@
 				"file": "test/testkit/arms",
 				"keys": [
 					"arms.type"
-				]
+				],
+				"byPackage": true
 			},
 			{
 				"file": "apqlint.json",

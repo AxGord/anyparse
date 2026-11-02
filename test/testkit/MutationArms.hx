@@ -1,9 +1,11 @@
 package testkit;
 
+import anyparse.query.PackageDocuments;
 import anyparse.query.RegistryFiles;
 import haxe.Json;
 import haxe.io.Path;
 #if (sys || nodejs)
+import sys.FileSystem;
 import sys.io.File;
 #end
 
@@ -111,6 +113,14 @@ final class MutationArms {
 
 	/** The classpath roots `test-js.hxml` declares, in its order — where an arm's `type` is looked for. */
 	private static final SOURCE_ROOTS: Array<String> = ['src', 'test', 'tools/src'];
+
+	/**
+	 * Read a registry kept as several documents: each one by `parse`, its errors named by file, the arms in the order of
+	 * `sources`. A name declared in two documents is an error — the split must not make a name mean two arms.
+	 */
+	public static inline function parseAll(sources: Array<ArmSource>): ArmTable {
+		return readSources(sources, false);
+	}
 
 	/**
 	 * The files `dev mutation-arm` would try for an arm's `type`, in classpath order.
@@ -233,11 +243,17 @@ final class MutationArms {
 		return at == -1 ? '$DEFAULT_KIND:$member' : member;
 	}
 
-	/**
-	 * Read a registry kept as several documents: each one by `parse`, its errors named by file, the arms in the order of
-	 * `sources`. A name declared in two documents is an error — the split must not make a name mean two arms.
-	 */
-	public static function parseAll(sources: Array<ArmSource>): ArmTable {
+	#if (sys || nodejs)
+	/** `parseAll` over the documents of the registry directory `path`, each named by its file name. */
+	public static function parseDirectory(path: String): ArmTable {
+		return readSources([
+			for (file in RegistryFiles.of(path)) { file: Path.withoutDirectory(file), text: File.getContent(file) }
+		], FileSystem.isDirectory(path));
+	}
+	#end
+
+	/** `parseAll`, and with `placed` also the refusal of an arm kept in a document not named after its type's package. */
+	private static function readSources(sources: Array<ArmSource>, placed: Bool): ArmTable {
 		final arms: Array<MutationArm> = [];
 		final errors: Array<String> = [];
 		final declaredIn: Map<String, String> = [];
@@ -254,19 +270,12 @@ final class MutationArms {
 						'"${arm.name}" is declared in both $first and ${source.file} — two arms under one name make the name useless'
 					);
 				arms.push(arm);
+				final complaint: Null<String> = placed ? PackageDocuments.misplacement(source.file, arm.type) : null;
+				if (complaint != null) errors.push('${source.file}: arm "${arm.name}" $complaint');
 			}
 		}
 		return { arms: arms, errors: errors };
 	}
-
-	#if (sys || nodejs)
-	/** `parseAll` over the documents of the registry directory `path`, each named by its file name. */
-	public static function parseDirectory(path: String): ArmTable {
-		return parseAll([
-			for (file in RegistryFiles.of(path)) { file: Path.withoutDirectory(file), text: File.getContent(file) }
-		]);
-	}
-	#end
 
 	/**
 	 * Everything wrong with the way ONE row declares its cut: the two spellings are

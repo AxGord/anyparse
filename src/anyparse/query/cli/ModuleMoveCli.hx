@@ -10,6 +10,7 @@ import anyparse.query.ModuleMove.ModuleRelocation;
 import anyparse.query.ModulePathTokens.ModuleRename;
 import anyparse.query.MoveDeclaration.MoveDeclarationData;
 import anyparse.query.MoveSymbol.MoveChange;
+import anyparse.query.TypePathRegistries.TypePathRegistry;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.MoveCommand;
 import haxe.ds.Either;
@@ -289,7 +290,9 @@ final class ModuleMoveCli {
 	private static function preview(outcome: ModuleMoveOutcome): Int {
 		final moved: Array<String> = [for (m in outcome.moves) m.to];
 		for (m in outcome.moves) CliIo.sysPrint('${m.from} -> ${m.to}\n');
-		for (c in outcome.changes) if (!moved.contains(c.file)) CliIo.sysPrint('${c.file}: updated\n');
+		for (c in outcome.changes) if (!moved.contains(c.file)) CliIo.sysPrint('${c.file}: ${exists(c.file) ? 'updated' : 'created'}\n');
+		final sources: Array<String> = [for (m in outcome.moves) m.from];
+		for (r in outcome.removed) if (!sources.contains(r)) CliIo.sysPrint('$r: removed\n');
 		for (i in outcome.imports) CliIo.sysPrint('import added: $i\n');
 		CliIo.sysPrint('total: ${moved.length} module(s) moved, ${outcome.changes.length - moved.length} file(s) updated\n');
 		CliIo.stderr('apq move: NOTHING written — this is a preview; re-run with --write to apply\n');
@@ -316,9 +319,9 @@ final class ModuleMoveCli {
 	}
 
 	/** The declared registries with each directory one names replaced by the documents inside it. */
-	private static function registriesOf(d: MoveDeclarationData): Array<{ file: String, keys: Array<String> }> {
+	private static function registriesOf(d: MoveDeclarationData): Array<TypePathRegistry> {
 		return [
-			for (r in d.registries) for (file in RegistryFiles.of(r.file)) { file: file, keys: r.keys }
+			for (r in d.registries) for (file in RegistryFiles.of(r.file)) { file: file, keys: r.keys, byPackage: r.byPackage }
 		];
 	}
 

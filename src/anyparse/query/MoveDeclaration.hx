@@ -8,6 +8,8 @@ import haxe.Json;
 import haxe.ds.Either;
 import haxe.io.Path;
 
+using Lambda;
+
 /**
  * What a project declares to `move` about itself, every path resolved against the declaring config's directory:
  *
@@ -77,9 +79,7 @@ final class MoveDeclaration {
 			textExclude: strings(section, 'textExclude').map(at),
 			textExtensions: strings(section, 'textExtensions'),
 			registries: [
-				for (r in objects(
-					section, 'registries', ['file', 'keys']
-				)) { file: at(string(r, 'registries', 'file')), keys: strings(r, 'keys') }
+				for (r in objects(section, 'registries', ['file', 'keys', 'byPackage'])) registry(r, at)
 			],
 			sortedLists: [
 				for (list in objects(section, 'sortedLists', ['parts'])) [
@@ -105,10 +105,10 @@ final class MoveDeclaration {
 	private static function strings(node: Dynamic, key: String): Array<String> {
 		final value: Dynamic = Reflect.field(node, key);
 		if (value == null) return [];
-		if (!Std.isOfType(value, Array)) throw new Exception('"$KEY.$key" is not an array of strings');
+		if (!(value is Array)) throw new Exception('"$KEY.$key" is not an array of strings');
 		final items: Array<Dynamic> = value;
 		return [
-			for (item in items) Std.isOfType(item, String) ? (item: String) : throw new Exception('"$KEY.$key" holds a non-string')
+			for (item in items) item is String ? (item: String) : throw new Exception('"$KEY.$key" holds a non-string')
 		];
 	}
 
@@ -119,10 +119,10 @@ final class MoveDeclaration {
 	private static function objects(node: Dynamic, key: String, allowed: Array<String>): Array<Dynamic> {
 		final value: Dynamic = Reflect.field(node, key);
 		if (value == null) return [];
-		if (!Std.isOfType(value, Array)) throw new Exception('"$KEY.$key" is not an array of objects');
+		if (!(value is Array)) throw new Exception('"$KEY.$key" is not an array of objects');
 		final items: Array<Dynamic> = value;
 		for (item in items) {
-			if (item == null || !Reflect.isObject(item) || Std.isOfType(item, String) || Std.isOfType(item, Array))
+			if (item == null || !Reflect.isObject(item) || item is String || item is Array)
 				throw new Exception('"$KEY.$key" holds a non-object');
 			final unknown: Null<String> = unknownKey(item, '$KEY.$key', allowed);
 			if (unknown != null) throw new Exception(unknown);
@@ -133,7 +133,7 @@ final class MoveDeclaration {
 	/** The required string `key` of an entry of `owner`; throws naming both when it is missing or not a string. */
 	private static function string(node: Dynamic, owner: String, key: String): String {
 		final value: Dynamic = Reflect.field(node, key);
-		if (!Std.isOfType(value, String)) throw new Exception('an entry of "$KEY.$owner" has no string "$key"');
+		if (!(value is String)) throw new Exception('an entry of "$KEY.$owner" has no string "$key"');
 		return value;
 	}
 
@@ -142,6 +142,15 @@ final class MoveDeclaration {
 		for (field in Reflect.fields(node)) if (!allowed.contains(field))
 			return '"$label" declares unknown key "$field" (known: ${allowed.join(', ')})';
 		return null;
+	}
+
+	/** One `registries` entry; a `byPackage` one names the array and the type field of its records by a two-segment key. */
+	private static function registry(entry: Any, at: (String) -> String): TypePathRegistry {
+		final keys: Array<String> = strings(entry, 'keys');
+		final byPackage: Bool = Reflect.field(entry, 'byPackage') == true;
+		if (byPackage && !keys.exists(k -> k.split('.').length == 2))
+			throw new Exception('"$KEY.registries" marks "byPackage" a registry with no key of the form "<array>.<field>"');
+		return { file: at(string(entry, 'registries', 'file')), keys: keys, byPackage: byPackage };
 	}
 
 }

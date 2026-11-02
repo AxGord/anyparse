@@ -10,6 +10,8 @@ import anyparse.query.ModuleMoveBindings.BindingProbe;
 import anyparse.query.ModulePathTokens.ModuleRename;
 import anyparse.query.ModulePathTokens.TextEdit;
 import anyparse.query.MoveSymbol.MoveChange;
+import anyparse.query.PackageDocuments.CarriedDocuments;
+import anyparse.query.PackageDocuments.RegistryDocument;
 import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -17,6 +19,7 @@ import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.TypePathRegistries.TypePathMove;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import anyparse.runtime.Span;
+import haxe.Exception;
 import haxe.ds.ArraySort;
 import haxe.ds.Either;
 import haxe.io.Path;
@@ -147,13 +150,17 @@ final class ModuleMove {
 		// Phase 3: the result parses, and the declared texts follow.
 		return switch changesOf(request, texts, newPathOf, renames, plugin) {
 			case Left(reasons): Refused(reasons);
-			case Right(changes): Moved({
-				changes: changes,
-				removed: [for (p in planned) p.move.from],
-				moves: [for (p in planned) p.move],
-				renames: renames,
-				imports: imports
-			});
+			case Right(changes):
+				switch placeRegistries(request, changes) {
+					case Left(reasons): Refused(reasons);
+					case Right(placed): Moved({
+						changes: placed.changes,
+						removed: [for (p in planned) p.move.from].concat(placed.removed),
+						moves: [for (p in planned) p.move],
+						renames: renames,
+						imports: imports
+					});
+				}
 		};
 	}
 
@@ -930,6 +937,39 @@ final class ModuleMove {
 			imp -> !imp.guarded && imp.kind == ImportKind.Import && imp.alias == null && isSubTypeOf(imp.raw, repair, shape)
 		);
 		return oneByOne ? '$repair.${SourceText.lastSegment(repair)}' : repair;
+	}
+
+	/**
+	 * The change set with the records of every package-keyed registry carried to the document of their new package: the
+	 * documents emptied by it are removed, the ones it creates are written.
+	 */
+	private static function placeRegistries(
+		request: ModuleMoveRequest, changes: Array<MoveChange>
+	): Either<Array<String>, { changes: Array<MoveChange>, removed: Array<String> }> {
+		var current: Array<MoveChange> = changes.copy();
+		final removed: Array<String> = [];
+		final placed: Array<TypePathRegistry> = request.registries.filter(r -> r.byPackage == true);
+		final directories: Array<String> = [];
+		for (registry in placed) if (!directories.contains(Path.directory(registry.file))) directories.push(Path.directory(registry.file));
+		for (directory in directories) {
+			final members: Array<TypePathRegistry> = placed.filter(r -> Path.directory(r.file) == directory);
+			final documents: Array<RegistryDocument> = [
+				for (r in members) for (e in request.textFiles) if (e.file == r.file)
+					{ file: e.file, source: current.find(c -> c.file == e.file)?.newSource ?? e.source }
+			];
+			final carried: CarriedDocuments = try PackageDocuments.carry(
+				documents, members[0].keys
+			) catch (exception: Exception) return Left(['a "byPackage" registry cannot be carried: ${exception.message}']);
+			for (emptied in carried.emptied) {
+				current = current.filter(c -> c.file != emptied);
+				removed.push(emptied);
+			}
+			for (written in carried.written) {
+				current = current.filter(c -> c.file != written.file);
+				current.push({ file: written.file, newSource: written.source });
+			}
+		}
+		return Right({ changes: current, removed: removed });
 	}
 
 }

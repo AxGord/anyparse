@@ -11,6 +11,9 @@ import haxe.Json;
 typedef TypePathRegistry = {
 	final file: String;
 	final keys: Array<String>;
+
+	/** The registry is a directory of documents named after the package of the types they hold (`PackageDocuments`). */
+	@:optional final byPackage: Bool;
 }
 
 /** A relocated type: its qualified path before and after. */
