@@ -230,7 +230,7 @@ using StringTools;
  *   agree on there.
  * - MULTI-LINE CONDITION HOISTED INTO THE ARROW HEAD. The collapsed `if`'s own condition is
  *   itself wrapped, so that wrap lives inside the lambda head. This one is the WRITER's
- *   answer rather than this check's: `BodyFit.arrowConstructHeadWidth` moves such a body to
+ *   answer rather than this check's: the writer's arrow-body probe moves such a body to
  *   the continuation line instead of gluing it, so the shape does not occur and the collapse
  *   of a construct body is a plain de-brace.
  *

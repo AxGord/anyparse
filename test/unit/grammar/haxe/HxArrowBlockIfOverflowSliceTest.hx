@@ -27,6 +27,9 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxArrowBlockIfOverflowSliceTest extends Test {
 
+	/** Padding that puts the glued first line at 140 columns — the configured limit. */
+	private static inline final LIMIT_PAD: Int = 78;
+
 	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
 		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
 		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= '
@@ -41,8 +44,7 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 	 * continuation indent, where its condition fits on one line again (glued head 148
 	 * columns, broken head 119).
 	 */
-	@:pin('control')
-	@:killer('M-ARROW-HEAD-WIDTH-NONE')
+	@:pin('guard')
 	public function testOverflowingBlockIfBreaksAfterArrow(): Void {
 		final src: String = 'class M {\n\tfunction f() {\n'
 			+ '\t\towner?.forEachEntry(entryUser -> if (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) '
@@ -52,6 +54,36 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 			+ '\t\t\tif (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) -> u.id == entryUser.id)) {\n'
 			+ '\t\t\t\tfillMissingTag(entryUser);\n\t\t\t\tbucket.push(entryUser);\n\t\t\t}\n\t\t);\n\t}\n}',
 			triviaWrite(src)
+		);
+	}
+
+	/**
+	 * A block-bodied `if` whose first line fits beside the `->` glues, whatever the block holds
+	 * below it: only the first line is measured.
+	 */
+	@:pin('control')
+	@:killer('M-OPEN-HEAD-ALWAYS-CROSSES')
+	public function testFittingConstructStaysGlued(): Void {
+		final src: String = blockIfArrow(32);
+		Assert.equals(src, triviaWrite(src));
+	}
+
+	/** The first line ending exactly on the limit still fits, so the body stays glued. */
+	@:pin('control')
+	@:killer('M-OPEN-HEAD-ALWAYS-CROSSES')
+	public function testFirstLineEndingOnTheLimitStaysGlued(): Void {
+		final src: String = blockIfArrow(LIMIT_PAD);
+		Assert.equals(src, triviaWrite(src));
+	}
+
+	/** One column past the limit, the body moves below the `->` and renders at the continuation indent. */
+	@:pin('control')
+	@:killer('M-OPEN-HEAD-NEVER-CROSSES')
+	public function testFirstLineOneColumnPastTheLimitBreaksAfterArrow(): Void {
+		Assert.equals(
+			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser ->\n\t\t\tif (chk(entryUser${padding(LIMIT_PAD + 1)})) {\n'
+			+ '\t\t\t\tfillMissingTag(entryUser);\n\t\t\t\tbucket.push(entryUser);\n\t\t\t}\n\t\t);\n\t}\n}',
+			triviaWrite(blockIfArrow(LIMIT_PAD + 1))
 		);
 	}
 
@@ -83,6 +115,15 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 
 	private inline function triviaWrite(src: String): String {
 		return HxWriteFixture.triviaWrite(src, CFG);
+	}
+
+	private static function padding(width: Int): String {
+		return [for (_ in 0...width) 'x'].join('');
+	}
+
+	private static function blockIfArrow(pad: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser -> if (chk(entryUser${padding(pad)})) {\n'
+			+ '\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}';
 	}
 
 }

@@ -451,7 +451,7 @@ final class WriterBlankLowering {
 	/**
 	 * The `arrowBodyLineWrap` emit for a lambda body: wrap `bodyCall` in the
 	 * `_dwb(_dilr(...))` arrow-body marker, so at render time the body either stays
-	 * glued to the arrow (when `BodyFit.arrowGlueThreshold` holds), or — under
+	 * glued to the arrow (while the line stays inside `opt.lineWidth`), or — under
 	 * `opt.fitLineBodyGlue` on a hardline-free body — is rescued onto the
 	 * continuation by `BodyFit.continuationRescuesArrowBody`, or else breaks after
 	 * the arrow and nests one level.
@@ -465,7 +465,7 @@ final class WriterBlankLowering {
 			final _doc: anyparse.core.Doc = $bodyCall;
 			final _flat: Int = anyparse.format.wrap.WrapList.flatLength(_doc);
 			_dwb(_dilr(
-				anyparse.format.BodyFit.arrowGlueThreshold(_doc, opt.lineWidth),
+				opt.lineWidth,
 				opt.fitLineBodyGlue && _flat >= 0
 					? anyparse.format.BodyFit.continuationRescuesArrowBody(_cols, _doc, _flat, opt.lineWidth)
 					: _dn(_cols, _dc([_dhl(), _doc])),

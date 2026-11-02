@@ -148,6 +148,22 @@
 			"note": "an else branch that breaks on the `) : else` line is not recognised, so the rest after it is charged to that line although it lands later"
 		},
 		{
+			"name": "M-OPEN-HEAD-NEVER-CROSSES",
+			"type": "anyparse.core.Renderer",
+			"method": "pushFlatWidthBranch",
+			"find": "final firstLineCrosses: Bool = col + DocMeasure.flatFirstLineWidthThroughBodyGroup(flatDoc) >= n;",
+			"replace": "final firstLineCrosses: Bool = false;",
+			"note": "a lambda body that opens its own construct always stays glued to the arrow, so a head that runs past the line is no longer moved below it"
+		},
+		{
+			"name": "M-OPEN-HEAD-ALWAYS-CROSSES",
+			"type": "anyparse.core.Renderer",
+			"method": "pushFlatWidthBranch",
+			"find": "final firstLineCrosses: Bool = col + DocMeasure.flatFirstLineWidthThroughBodyGroup(flatDoc) >= n;",
+			"replace": "final firstLineCrosses: Bool = true;",
+			"note": "a lambda body that opens its own construct always moves below the arrow, so a head that fits beside it no longer glues"
+		},
+		{
 			"name": "M-TERNARY-HEAD-PENDING-OFF",
 			"type": "anyparse.core.Renderer",
 			"method": "pushFlatWidthBranch",

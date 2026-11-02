@@ -41,8 +41,7 @@ final class HxIfExprCondWrapSliceTest extends Test {
 		super();
 	}
 
-	@:pin('control')
-	@:killer('M-ARROW-HEAD-WIDTH-NONE')
+	@:pin('guard')
 	public function testArrowBodyIfOverflowChainExplodesCond(): Void {
 		final flat: String = 'class C {\n\tfunction f() {\n'
 			+ '\t\trunWith((alphaArg:AlphaType, betaArg:BetaType) -> if (foundId == -1 && (excludeId == -1 || betaArg.id != excludeId) && ('
@@ -50,8 +49,7 @@ final class HxIfExprCondWrapSliceTest extends Test {
 		Assert.equals(EXPLODED, triviaWrite(flat));
 	}
 
-	@:pin('control')
-	@:killer('M-ARROW-HEAD-WIDTH-NONE')
+	@:pin('guard')
 	public function testExplodedSourceIsIdempotent(): Void {
 		Assert.equals(EXPLODED, triviaWrite(EXPLODED));
 	}

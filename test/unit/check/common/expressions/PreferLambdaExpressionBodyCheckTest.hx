@@ -443,7 +443,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	 * THE CONSTRUCT BODY. A block-bodied `if` whose condition is itself too wide for one line.
 	 * This used to be refused for two reasons at once: the collapse was line-neutral, and the
 	 * writer hoisted the wrapped condition into the arrow head. The writer no longer does that
-	 * (`BodyFit.arrowConstructHeadWidth` moves the body to the continuation line), so what is
+	 * (the writer moves the body to the continuation line), so what is
 	 * left is a plain de-brace — the same line count either way, head shortened by its ` {` and nothing
 	 * else — and clause 2 accepts it. The real-tree site this fixture was drawn from is the one
 	 * the whole slice exists for.

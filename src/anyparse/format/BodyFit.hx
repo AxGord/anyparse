@@ -89,9 +89,6 @@ final class BodyFit {
 	 */
 	public static inline final SIBLING_FORCE_BREAK: Int = 0x0FFFFFF0;
 
-	/** `arrowConstructHeadWidth`'s answer for a body with no construct head of its own. */
-	private static inline final NO_CONSTRUCT_HEAD: Int = -1;
-
 	/**
 	 * The BREAK shape every `FitLine` outcome falls back to: `body` on the
 	 * next line, one indent level deeper than the header.
@@ -244,75 +241,6 @@ final class BodyFit {
 	}
 
 	/**
-	 * The width of the construct head an arrow-lambda body leads with, or
-	 * `NO_CONSTRUCT_HEAD` when it has none.
-	 *
-	 * The `@:fmt(arrowBodyLineWrap)` marker already carries a break-after-`->` layout
-	 * and a render-time probe to reach it, but that probe measures FLAT WIDTH, and one
-	 * construct shape is invisible to every flat measure: a plain `if` (no `else`)
-	 * whose body is a `{}`-block. Its condition and body sit inside the
-	 * construct-level `BodyGroup` that `WriterLowering`'s cond-fit group emits, and
-	 * `DocMeasure.flatTokenWidthStep` defers a `BodyGroup` to width 0, so the whole
-	 * `if (…) { … }` reports only its `if (` where the same shape written as a `for`
-	 * reports its true width. The probe can then never fire for it: the body glues to
-	 * the header line however wide its own head is, and the `if`'s condition breaks
-	 * INSIDE the arrow head, leaving a first line that ends on a bare `if (`.
-	 *
-	 * Re-tagging the `BodyGroup` as a `Group` is the fix for a HARDLINE-FREE body; a
-	 * block body carries hardlines, so re-tagging it would change the render and not
-	 * just the measure. Making the width visible to the CALL cascade instead is the
-	 * other wrong answer: the call then opens and the body moves twice, relocating the
-	 * overflow rather than removing it. What is left is to hand the marker's own probe
-	 * an honest width — see `arrowGlueThreshold`.
-	 *
-	 * THREE refusals:
-	 *
-	 * - a body that CAN render flat (`flatLength != -1`) has no forced break, so its
-	 *   first line IS its whole width and the existing probe already measures it;
-	 * - a `{}`-BLOCK body ends the header line by itself, so moving it down strands
-	 *   its brace and buys nothing. That population belongs to
-	 *   `Renderer.selfBreakingBraceBody`, which reads the marker's FLAT side and must
-	 *   keep seeing exactly what it saw before — hence a refusal here rather than a
-	 *   probe the renderer would resolve;
-	 * - a body whose transparent first line is no WIDER than its flat width hides
-	 *   nothing behind a deferral, so there is no correction to make. This is what
-	 *   keeps the measure off call-bodied arrows: a call whose argument is a
-	 *   `{`-lambda also cannot render flat and also hides content behind a
-	 *   `BodyGroup`, but its transparent first line stops at that lambda's `{` and
-	 *   comes out SHORTER than the flat width, which counts the arguments past it.
-	 *   Without this test such arrows re-glue shapes that were correctly broken.
-	 */
-	public static function arrowConstructHeadWidth(body: Doc): Int {
-		if (WrapList.flatLength(body) != -1) return NO_CONSTRUCT_HEAD;
-		if (DocMeasure.firstVisibleTextStartsWith(body, '{'.code) && DocMeasure.hasForcedBreak(body)) return NO_CONSTRUCT_HEAD;
-		final head: Int = DocMeasure.flatFirstLineWidthThroughBodyGroup(body);
-		return head > DocMeasure.flatTokenWidth(body) ? head : NO_CONSTRUCT_HEAD;
-	}
-
-	/**
-	 * The `n` the arrow-body markers `IfResidualLineExceeds` must be given so that its
-	 * `col + flatTokenWidth(body) + rest >= n` test measures the bodys CONSTRUCT HEAD instead of
-	 * the width the `BodyGroup` deferral hid from it.
-	 *
-	 * The probes own arithmetic is right — it is the only place that knows the pen column the
-	 * body would glue to, and its rest-of-stack term is load-bearing. Only the width is wrong.
-	 * Both the honest head width and the width the probe WILL measure are static, column-
-	 * independent quantities, so their difference folds into the threshold at emit time:
-	 * `col + flat + rest >= lineWidth - (head - flat)` is exactly `col + head + rest >=
-	 * lineWidth`.
-	 *
-	 * The correction is one-directional by construction: `arrowConstructHeadWidth` returns a
-	 * head only when it EXCEEDS the flat width, so the threshold can only come DOWN, and the
-	 * probe can only start firing where it was blind — never stop firing where it already
-	 * worked. Without a head there is nothing to correct and `lineWidth` comes back unchanged,
-	 * which keeps every other arrow bodys probe byte-identical.
-	 */
-	public static function arrowGlueThreshold(body: Doc, lineWidth: Int): Int {
-		final head: Int = arrowConstructHeadWidth(body);
-		return head == NO_CONSTRUCT_HEAD ? lineWidth : lineWidth - (head - DocMeasure.flatTokenWidth(body));
-	}
-
-	/**
 	 * The BREAK-side answer for a construct-group `FitLine` body that CAN render
 	 * flat (`flatLength >= 0`) but did not fit on the header line.
 	 *
@@ -399,8 +327,7 @@ final class BodyFit {
 	 * The threshold is arithmetic rather than a second measurer: `Doc.IfLineExceeds`
 	 * measures with `flatTokenWidth`, which defers the very `BodyGroup`s this gate
 	 * exists to charge, and both widths are static and column-independent, so their
-	 * difference folds into `n` at emit time — the same correction
-	 * `arrowGlueThreshold` makes. Two things keep that boundary exact: `charged`
+	 * difference folds into `n` at emit time. Two things keep that boundary exact: `charged`
 	 * EXCLUDES the leading glue space, so a line landing ON the limit fits; and the
 	 * sibling `WrapList` probe's explicit `lineWidth + 1` must NOT be copied here,
 	 * since its measured doc contains the separator this one does not.
@@ -409,7 +336,7 @@ final class BodyFit {
 	 * post-pass may rewrite the flat branch in a way that changes that width without
 	 * re-folding it. `WrapList.groupifyInlineBodies` is exactly such a pass; it reaches
 	 * this gate and `chainHeadGate` inside a comprehension item and re-folds `n` for
-	 * every probe `slotProbeBreak` recognises. `arrowGlueThreshold` shares the exposure.
+	 * every probe `slotProbeBreak` recognises.
 	 *
 	 * `lineWidth <= 0` returns `sameLine` unchanged, the inert answer for a caller
 	 * with no width to spend. `docs/decisions.md` records the refused alternative of

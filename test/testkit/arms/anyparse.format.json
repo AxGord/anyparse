@@ -201,13 +201,6 @@
 			"note": "no glued body carries a pinnable collapse probe, so the arrow-continuation rescue has nothing to pin and the body breaks instead of gluing"
 		},
 		{
-			"name": "M-ARROW-HEAD-WIDTH-NONE",
-			"type": "anyparse.format.BodyFit",
-			"method": "arrowConstructHeadWidth",
-			"force": "NO_CONSTRUCT_HEAD",
-			"note": "a multi-line arrow body reports no construct head, so the glue threshold stops discounting the head width and an overflowing block-`if` body is measured whole"
-		},
-		{
 			"name": "M-GLUE-NEVER-BREAKS",
 			"type": "anyparse.format.BodyFit",
 			"method": "glueLayout",
