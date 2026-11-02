@@ -1,0 +1,23 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package unit.check. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-CENSUS-ADD-UNDETECTED",
+			"type": "unit.check.BuiltinFixClassCensusTest",
+			"method": "complaints",
+			"find": "if (added.length > 0 && !shouldWrite(actual, recorded, record))",
+			"replace": "if (false)",
+			"note": "a rule registered but absent from the recorded census passes without anyone recording it"
+		},
+		{
+			"name": "M-CENSUS-LOST-UNDETECTED",
+			"type": "unit.check.BuiltinFixClassCensusTest",
+			"method": "complaints",
+			"find": "if (removed.length > 0)",
+			"replace": "if (false)",
+			"note": "a recorded rule dropped from registration passes silently"
+		}
+	]
+}

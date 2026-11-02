@@ -1,0 +1,320 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.expressions. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-EMPTY-STMT-BEFORE-ELSE-OFF",
+			"type": "anyparse.check.common.expressions.EmptyStatement",
+			"method": "semicolonAfterBlock",
+			"find": "if (!trimmed.startsWith(';') || (last && trimmed != ';')) return -1;",
+			"replace": "if (trimmed != ';') return -1;",
+			"note": "only a `;` past a statement's last child is found, so `if (…) { … }; else` keeps its stray `;` unreported"
+		},
+		{
+			"name": "M-EMPTY-STMT-QUOTATION-BLIND",
+			"type": "anyparse.check.common.expressions.EmptyStatement",
+			"method": "EmptyStatement",
+			"kind": "ClassDecl",
+			"find": "final class EmptyStatement extends RuleBase implements QuotationAware {",
+			"replace": "final class EmptyStatement extends RuleBase {",
+			"note": "the rule takes the central reification drop again, so a stray `;` inside a `macro class` is neither reported nor fixed"
+		},
+		{
+			"name": "M-JSUL-ANNOTATION-NEVER-NEUTRAL",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "annotationIsNeutral",
+			"find": "return sourceType != null && TypeResolver.stripWs(annotation) == sourceType;",
+			"replace": "return false;",
+			"note": "an annotation is never proven type-neutral, so a declaration whose annotation merely restates its source type stops collapsing"
+		},
+		{
+			"name": "M-JSUL-COMMENT-ANY-IN-FILE",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "commentBlocksDrop",
+			"find": "comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to)",
+			"replace": "comments.length > 0",
+			"note": "any comment in the file counts as one inside the deleted line, so a comment merely standing BETWEEN the two statements blocks the join"
+		},
+		{
+			"name": "M-JSUL-PATH-ALWAYS-CONDITIONAL",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "pathIsConditional",
+			"force": "true",
+			"note": "every read path counts as conditional, so a field chain on a straight-line path is refused as if it had moved under a branch"
+		},
+		{
+			"name": "M-JSUL-BARE-IDENT-NOT-SAFE",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "readPositionIsSafe",
+			"find": "&& (init.kind == s.identKind || !pathIsConditional(path, s));",
+			"replace": "&& !pathIsConditional(path, s);",
+			"note": "the bare-identifier exemption goes, so a plain local read is refused on a conditional path even though reading it has no effect at all"
+		},
+		{
+			"name": "M-JSUL-LOCAL-CAPTURE-ANY",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "readsMutableLocal",
+			"find": "return bindingFrom != null && TypeResolver.mayBeLocalOrParam(tree, bindingFrom, s.mutableKinds, []);",
+			"replace": "return bindingFrom != null;",
+			"note": "every local capture reads as a mutable one, so capturing an IMMUTABLE local stops collapsing along with the var case the gate exists for"
+		},
+		{
+			"name": "M-JSUL-UNINDEXED-NAME-ALWAYS",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "unindexedNameUse",
+			"force": "true",
+			"note": "every site reads as carrying an unindexed use of the name, so a shape with no stray read past the pair is refused with the ones that have one"
+		},
+		{
+			"name": "M-JSUL-INIT-IDENT-ALWAYS-REBOUND",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "initIdentRebound",
+			"force": "true",
+			"note": "every initializer identifier reads as re-bound before the read, so a binder under a DIFFERENT name is treated as a capture"
+		},
+		{
+			"name": "M-PARENS-SPLICE-HOST-OPEN",
+			"type": "anyparse.check.common.expressions.RedundantParens",
+			"method": "dropsParens",
+			"find": "atom || !slots.splice.contains(bare.kind) && !spineEndsWith(bare, slots.greedy);",
+			"replace": "atom || !spineEndsWith(bare, slots.greedy);",
+			"note": "a pair around $a{...} in a splicing host drops, so the quoted call's arity changes"
+		},
+		{
+			"name": "M-PARENS-OPERAND-QUOTED-OPEN",
+			"type": "anyparse.check.common.expressions.RedundantParens",
+			"method": "dropsParens",
+			"find": "final atom: Bool = !opaque && isAtom(bare, slots);",
+			"replace": "final atom: Bool = isAtom(bare, slots);",
+			"note": "the atoms arm drops a quoted operand pair, whose content may be a splice of unknown precedence"
+		},
+		{
+			"name": "M-BIND-WRITES-IGNORED",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "unchangingBinding",
+			"find": "return !Refs.find(name, ctx.root, shape).exists(hit -> hit.kind == RefKind.Write && hit.bindingSpan?.from == from);",
+			"replace": "return true;",
+			"note": "a local written after the lambda is created still counts as unchanging"
+		},
+		{
+			"name": "M-BIND-FIELD-ARG",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "stableArg",
+			"find": "unchangingBinding(arg, ctx)",
+			"replace": "true",
+			"note": "any identifier, a field included, is a stable bind argument"
+		},
+		{
+			"name": "M-BIND-NULLABLE-ARG",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "unchangingBinding",
+			"find": "if (declared == null || (shape.nullableWrapperTypeNames ?? []).contains(declared)) return false;",
+			"replace": "if (declared == null) return false;",
+			"note": "a `Null<T>` binding is bound although null safety rejects it as an argument"
+		},
+		{
+			"name": "M-BIND-FIELD-RECEIVER",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "stableCallee",
+			"find": "if (receiver.kind != shape.identKind || receiverName == null) return false;",
+			"replace": "if (receiver.kind != shape.identKind || receiverName == null) return false;\n\t\treturn true;",
+			"note": "any single-level receiver is read as stable"
+		},
+		{
+			"name": "M-LOCALFN-RESULT-DROPPED",
+			"type": "anyparse.check.common.expressions.PreferLocalFunction",
+			"method": "declarationText",
+			"find": "':${signature.ret}'",
+			"replace": "''",
+			"note": "the declared result is not carried, so the hoisted declaration infers its type from the body"
+		},
+		{
+			"name": "M-LOCALFN-SIGNATURE-ANY",
+			"type": "anyparse.check.common.expressions.PreferLocalFunction",
+			"method": "signatureCarries",
+			"force": "true",
+			"note": "any literal signature is taken to reproduce the declared function type"
+		},
+		{
+			"name": "M-LOCALFN-VOID-RETURNED",
+			"type": "anyparse.check.common.expressions.PreferLocalFunction",
+			"method": "declarationText",
+			"find": "if (parts.bare && !parts.block && declared.returnsVoid)",
+			"replace": "if (false)",
+			"note": "an expression body under a `Void` result is returned rather than wrapped"
+		},
+		{
+			"name": "M-BIND-METHOD-UNPROVEN",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "plainMethod",
+			"force": "owner.type.members.exists(m -> m.name == name)",
+			"note": "any member the owner declares under the name is taken as a closable, unchanging method"
+		},
+		{
+			"name": "M-BIND-DYNAMIC-CALLEE",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "plainMethod",
+			"find": "!m.isDynamic\n\t\t\t&&",
+			"replace": "",
+			"note": "a `dynamic` method, rebindable after the callback is created, is bound"
+		},
+		{
+			"name": "M-BIND-CLOSURELESS-CALLEE",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "plainMethod",
+			"find": "!m.isMacro\n\t\t\t&& !m.isOverload",
+			"replace": "true",
+			"note": "a macro or an overloaded method, which has no closure to bind, is bound"
+		},
+		{
+			"name": "M-BIND-UNDECLARED-BARE",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "bareCalleeIsMethod",
+			"find": "&& enclosingDeclares(callee, name, ctx)",
+			"replace": "",
+			"note": "a bare callee name the enclosing type does not declare is taken as a method"
+		},
+		{
+			"name": "M-LOCALFN-OUTER-NAME-READ",
+			"type": "anyparse.check.common.expressions.PreferLocalFunction",
+			"method": "nameIsFree",
+			"find": " && !readsName(fn, name, s)",
+			"replace": "",
+			"note": "an initializer literal reading an outer function of the binding's name is hoisted into self-recursion"
+		},
+		{
+			"name": "M-BIND-LIBRARY-CALLEE",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "plainMethod",
+			"find": "!index.isThirdParty(owner.file.file)\n\t\t\t&&",
+			"replace": "",
+			"note": "a library or standard-library method, which a target may override as `extern inline`, is bound"
+		},
+		{
+			"name": "M-BIND-EXTERN-TYPE",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "plainMethod",
+			"find": "!owner.type.isExtern\n",
+			"replace": "true\n",
+			"note": "a member of an `extern` type is bound"
+		},
+		{
+			"name": "M-BIND-ABSTRACT-SELF",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "enclosingDeclares",
+			"find": "abstractSelf ? true : null",
+			"replace": "null",
+			"note": "an abstract's instance method is bound through an implicit `this` the abstract may reassign"
+		},
+		{
+			"name": "M-RLW-NAMED-FN-NOT-BINDER",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "resolveSeams",
+			"find": "if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
+			"replace": "if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k) && k != shape.namedFnExprKind) k",
+			"note": "a named function literal does not shadow a member callee, so the member's signature answers for it and a reduction the compiler rejects is proposed"
+		},
+		{
+			"name": "M-RLW-LOCAL-FN-AS-BINDER",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "resolveSeams",
+			"find": "for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
+			"replace": "for (k in BinderScan.binderKinds(shape)) k",
+			"note": "a local function counts as a shadowing binder rather than as the callee it is, so `p -> ok(p)` over a local `function ok` is never reduced"
+		},
+		{
+			"name": "M-EMPTY-BLOCK-DRAIN-LOOP",
+			"type": "anyparse.check.common.expressions.EmptyBlock",
+			"method": "isDrainLoopBody",
+			"force": "false",
+			"note": "no loop is a drain loop, so `while (gl.getError() != 0) {}` is reported as a forgotten body although its condition does the work"
+		},
+		{
+			"name": "M-EMPTY-BLOCK-NO-DECLINE",
+			"type": "anyparse.check.common.expressions.EmptyBlock",
+			"method": "collectEmptyFixes",
+			"find": "finding.declineReason = reason;",
+			"replace": "{}",
+			"note": "a kept empty block carries no decline note, so the --fix ledger reports a bare 'returned no edit' for every loop / catch / side-effecting if"
+		},
+		{
+			"name": "M-JSUL-SOURCE-ALWAYS-WRITTEN",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "sourceWritten",
+			"force": "true",
+			"note": "every source reads as written somewhere, so a parameter nothing writes stops collapsing into a later read"
+		},
+		{
+			"name": "M-JSUL-SOURCE-NEVER-WRITTEN",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "sourceWritten",
+			"force": "false",
+			"note": "no source reads as written, so a parameter assigned before or after the read, or from a closure, is inlined into a later statement that may see another value"
+		},
+		{
+			"name": "M-JSUL-LATER-HOLDER-ADJACENT-ONLY",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "holderIndex",
+			"find": "for (j in at + 1...kids.length) {",
+			"replace": "for (j in at + 1...at + 2) {",
+			"note": "only the immediately following sibling is searched for the read, so a capture read several statements later is never found"
+		},
+		{
+			"name": "M-JSUL-LATER-DEFERRED-ALLOWED",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "laterReadIsSafe",
+			"find": "&& !path.exists(n -> s.deferringKinds.contains(n.kind));",
+			"replace": ";",
+			"note": "a later read inside a lambda declared between is accepted, moving the read into a closure"
+		},
+		{
+			"name": "M-JSUL-LATER-LOOP-BARRIER",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "laterReadIsSafe",
+			"find": "s.deferringKinds.contains(n.kind)",
+			"replace": "s.barrierKinds.contains(n.kind)",
+			"note": "a loop on the path refuses a later read even though the invariant source makes every repetition read the same value"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-ANY-BINDER",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "invariantSource",
+			"find": "|| !s.invariantBinderKinds.contains(binder.kind)) return false;",
+			"replace": ") return false;",
+			"note": "any resolved binder counts as invariant, so a catch binder outside the parameter and final-local whitelist is inlined into a later read"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-ANY-SCOPE",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "invariantSource",
+			"find": "if (fnSpan == null || binding.from < fnSpan.from || binding.to > fnSpan.to) return false;",
+			"replace": "if (fnSpan == null) return false;",
+			"note": "an outer function's parameter counts as owned by the nested function, so its capture is inlined into a later read past the whitelist"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-PARAMS-ONLY",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "readSeams",
+			"find": "for (k in localDeclKinds) if (!mutableKinds.contains(k) && !continuationKinds.contains(k)) k",
+			"replace": "for (k in localDeclKinds) if (false) k",
+			"note": "only parameters count as invariant, so a capture of a final local read several statements later stops collapsing"
+		},
+		{
+			"name": "M-JSUL-LATER-LEADING-COMMENT-IGNORED",
+			"type": "anyparse.check.common.expressions.JoinSingleUseLocal",
+			"method": "commentBlocksDrop",
+			"find": "&& SourceComments.ownLineCommentAbove(source, comments, dropSpan.from, false) >= 0",
+			"replace": "&& false",
+			"note": "the later-read fix deletes a capture under an own-line comment, which then documents whatever statement followed it"
+		},
+		{
+			"name": "M-CPREC-NESTED-EDITS-OVERLAP",
+			"type": "anyparse.check.common.expressions.CPrecedenceTrap",
+			"method": "fix",
+			"find": "!spans.exists(outer -> outer != span && outer.from <= span.from && span.to <= outer.to)",
+			"replace": "true",
+			"note": "a flagged operand nested in another flagged one is wrapped in the same pass, so two edits overlap"
+		}
+	]
+}

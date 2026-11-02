@@ -1,0 +1,324 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.unused. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-CONFINEMENT-REPORT-INDEX-PARAM",
+			"type": "anyparse.check.common.unused.UnusedParameter",
+			"method": "run",
+			"find": "final index: SymbolIndex = IndexScope.widest(files, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(files, plugin);",
+			"note": "the removability proof asks the REPORT index again, so an `@:access` grantee outside the lint scope is invisible, the private method reads as confined and the finding goes back to `Warning` — the severity that REMOVES the parameter its cross-file callers still pass"
+		},
+		{
+			"name": "M-CONFINEMENT-REPORT-INDEX-DEAD",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "run",
+			"find": "final scopeIndex: SymbolIndex = IndexScope.widestScopeIndex(plugin, index) ?? index;",
+			"replace": "final scopeIndex: SymbolIndex = index;",
+			"note": "the S177 site, declared as an arm only in S180: the zero-occurrence proof asks the REPORT index again, so an `@:access` grantee outside the lint scope is invisible and a live private member is reported dead — and then deleted"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-DECLINE-SILENT",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "fix",
+			"find": "\t\t\tv.declineReason = decline;",
+			"replace": "\t\t\tv.declineReason = null;",
+			"note": "the seven per-member gates go back to a bare `false`: `--fix` still refuses the member and the ledger still counts it declined, with no sentence saying which gate closed"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-REGION-DECLINE-SILENT",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "noteRegionDeclines",
+			"find": "\t\t\tdeclined.declineReason = 'every member of its `#if` branch would go with it, and emptying a conditional region '\n\t\t\t\t+ 'loses the branch itself';",
+			"replace": "\t\t\tdeclined.declineReason = null;",
+			"note": "the one gate that is a fact about the edit SET rather than about a member — a `#if` branch this call would empty — stops speaking, which is the site the T865 brief did not enumerate"
+		},
+		{
+			"name": "M-STATICREACH-NEVER",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "memberDeclineReason",
+			"find": " || stringsUnreachable()",
+			"replace": "",
+			"note": "every string spelling a private static's name keeps it, whatever can reach the class — the old gate"
+		},
+		{
+			"name": "M-STATICREACH-INSTANCE",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "isStaticClassMember",
+			"find": "if (staticKind == null || !CheckScan.isClassBodyKind(parent.kind)) return false;",
+			"replace": "return true;",
+			"note": "an instance member takes the static-only relaxation, although instances flow into Dynamic everywhere"
+		},
+		{
+			"name": "M-STATICREACH-VALUE-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": "if (_values.exists(k)) return true;",
+			"replace": "",
+			"note": "the class name read as a value is ignored, so `Reflect.field(C, name)` through a local is not seen"
+		},
+		{
+			"name": "M-STATICREACH-CONSUMER-NONE",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "consumed",
+			"find": "if (at < 0) return false;",
+			"replace": "return false;",
+			"note": "no consumer is whitelisted, so `Type.getClassName(Type.getClass(x))` reads as an escape and nothing is ever relaxed"
+		},
+		{
+			"name": "M-STATICREACH-SOURCE-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "noteClassSource",
+			"find": "if (consumed(parent, path, path.length - 2, scan)) return;",
+			"replace": "return;",
+			"note": "an unconsumed `Type.getClass` / `typeof` / `resolveClass` is ignored, so an instance's class value reaches reflection unseen"
+		},
+		{
+			"name": "M-STATICREACH-THIS-UNBOUNDED",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "noteClassSource",
+			"find": "state.thisOwners.push(owner);",
+			"replace": "state.escapesAll = true;",
+			"note": "`getClass(this)` opens every class instead of the enclosing chain, so an unrelated class's self-lookup keeps every static"
+		},
+		{
+			"name": "M-STATICREACH-THIS-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": " || _thisOwners.exists(reified)",
+			"replace": "",
+			"note": "`getClass(this)` in a superclass of the owner is ignored, although `this` may be an owner instance"
+		},
+		{
+			"name": "M-STATICREACH-SUBTYPE-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "chainOf",
+			"find": "for (sub in index.subtypes.subtypeNames(owner, ownerFile)) if (!chain.contains(sub)) chain.push(sub);",
+			"replace": "",
+			"note": "a subclass's class value is ignored, although eval and ES6 js expose the inherited static through it"
+		},
+		{
+			"name": "M-STATICREACH-ALIAS-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "chainOf",
+			"find": "for (a in _aliases) if (a.target == target && !chain.contains(a.alias)) chain.push(a.alias);",
+			"replace": "",
+			"note": "a typedef or import alias of the owner read as a value is ignored"
+		},
+		{
+			"name": "M-STATICREACH-TYPEPATH-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": "ReflectionScan.runtimeTypePath(_surface.whole, k) || ",
+			"replace": "",
+			"note": "a literal naming the owner's path is ignored, so `Type.resolveClass('pkg.C')` or a library wrapper handed it is not seen"
+		},
+		{
+			"name": "M-STATICREACH-JS-HANDLE-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "noteName",
+			"find": "if (JS_CLASS_HANDLES.contains(name)) {",
+			"replace": "if (false) {",
+			"note": "`o.__class__` / `o.constructor` is ignored, although js reaches the instance's class through it"
+		},
+		{
+			"name": "M-STATICREACH-RECEIVER-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": "if ((_receivers[k] ?? []).exists(member -> !index.typing.members.typeDeclaresMember(k, member))) return true;",
+			"replace": "",
+			"note": "`C.ext()` naming no member of C is read as a static access, although a `using` extension then receives the class"
+		},
+		{
+			"name": "M-STATICREACH-MACRO-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "noteString",
+			"find": "if (!inCarrier && !scan.macroFile)",
+			"replace": "if (!inCarrier)",
+			"note": "a string in a macro file is vouched for, although reification turns it into an identifier"
+		},
+		{
+			"name": "M-STATICREACH-CARRIER-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "noteString",
+			"find": "if (!inCarrier && !scan.macroFile)",
+			"replace": "if (!scan.macroFile)",
+			"note": "a string pasted into target code is vouched for, although it names the static directly"
+		},
+		{
+			"name": "M-STATICREACH-OPAQUE-SOURCE-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "build",
+			"find": "if (state.opaque.exists(text -> handles.exists(h -> RawSourceScan.mentionsWord(text, h)))) state.escapesAll = true;",
+			"replace": "",
+			"note": "a `Type.getClass` inside an unparsed `#if` region is ignored, although no node walk sees it"
+		},
+		{
+			"name": "M-STATICREACH-OPAQUE-CHAIN-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": " || chain.exists(k -> RawSourceScan.mentionsWord(text, k))",
+			"replace": "",
+			"note": "the owner's name inside an unparsed `#if` region is ignored, although it may be the class value handed to reflection"
+		},
+		{
+			"name": "M-STATICREACH-REIFY-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "build",
+			"find": "noteReified(scanned, state);",
+			"replace": "",
+			"note": "a project macro reifying the class it builds or is called from is ignored, so a registry it feeds reaches the static unseen"
+		},
+		{
+			"name": "M-STATICREACH-MACRO-THIS",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "noteClassSource",
+			"find": " && !scan.macroFile",
+			"replace": "",
+			"note": "`getClass(this)` inside a macro module is bounded by the module's class, although `this` is reified into the caller"
+		},
+		{
+			"name": "M-STATICREACH-DEFINITION-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "noteName",
+			"find": "if (CLASS_SOURCES.contains(name) || NAME_SOURCES.contains(name)) {",
+			"replace": "if (CLASS_SOURCES.contains(name)) {",
+			"note": "a name-taking class source — `Type.resolveClass` or a library `getDefinitionByName` — is not recognised, so one handed a computed name escapes unseen"
+		},
+		{
+			"name": "M-STATICREACH-SOURCE-STRING-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "noteString",
+			"find": " || CLASS_SOURCES.contains(content) || NAME_SOURCES.contains(content)",
+			"replace": "",
+			"note": "a string naming a class source is ignored, so a reflective call of `Type.getClass` escapes unseen"
+		},
+		{
+			"name": "M-STATICREACH-USING-STD-ASSUMED",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "consumed",
+			"find": "scan.usingStd && slot == 1",
+			"replace": "slot == 1",
+			"note": "any receiver-less `x.isOfType(v)` is taken for `Std.isOfType`, although without `using Std` it is some method handed the class"
+		},
+		{
+			"name": "M-CTOR-CLASS-VALUE-BLIND",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "usedAsValue",
+			"force": "false",
+			"note": "a class handed around as a value is still never-instantiated, so the constructor `Type.createInstance` runs is deleted"
+		},
+		{
+			"name": "M-CTOR-RECEIVER-AS-VALUE",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "usedAsValue",
+			"find": " && !isReceiver",
+			"replace": "",
+			"note": "a static access `U.K` counts as a class value, so no utility class's private constructor is reported"
+		},
+		{
+			"name": "M-CTOR-ALIAS-BLIND",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "isAliased",
+			"force": "false",
+			"note": "a typedef aliasing the class is ignored, so a class value spelled by the alias reaches a deleted constructor"
+		},
+		{
+			"name": "M-CTOR-IMPORT-ALIAS-BLIND",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "usedAsValue",
+			"find": "names.push(alias);",
+			"replace": "names.push(className);",
+			"note": "an import alias of the class is not a spelling of it, so `Type.createInstance(K, [])` reaches a deleted constructor"
+		},
+		{
+			"name": "M-CTOR-QUALIFIED-BLIND",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "usedAsValue",
+			"find": "&& node.name == className;",
+			"replace": "&& false;",
+			"note": "a qualified path to the class is not a class value, so `Type.createInstance(pkg.U, [])` reaches a deleted constructor"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-FACTS",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "supertypeDecline",
+			"force": "DECLINE_ABSTRACT_IMPL",
+			"note": "every private method of an `extends` class stays, whatever the compiler's facts say of its supertypes"
+		},
+		{
+			"name": "M-UNUSED-BINDER-UNPROVEN",
+			"type": "anyparse.check.common.unused.UnusedCaseBinder",
+			"method": "armCandidates",
+			"find": "if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, group[0], scope)) continue;",
+			"replace": "",
+			"note": "an unread binder that may be a constant is spelled `_`, which turns a comparison into a catch-all"
+		},
+		{
+			"name": "M-UNUSED-LOCAL-IMPURE-UNSAID",
+			"type": "anyparse.check.common.unused.UnusedLocal",
+			"method": "fix",
+			"find": "v.declineReason = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '",
+			"replace": "final unsaid: String = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '",
+			"note": "the side-effecting-initializer refusal names no reason in the --fix ledger"
+		},
+		{
+			"name": "M-UNUSED-LOCAL-SHARED-LINE-UNSAID",
+			"type": "anyparse.check.common.unused.UnusedLocal",
+			"method": "fix",
+			"find": "v.declineReason = 'the binding shares its declaration line with another one, and the deletion takes the whole line';",
+			"replace": "final unsaid: String = 'the binding shares its declaration line with another one, and the deletion takes the whole line';",
+			"note": "the shared-line refusal names no reason in the --fix ledger"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-FIELD-KIND-PURITY",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "initializerPurity",
+			"find": ": TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);",
+			"replace": ": MemberKinds.isSideEffectFree.bind(_, shape);",
+			"note": "a field initializer is judged kind-only again, so a pure collection literal or stdlib call keeps a dead field"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-NOT-RESOLVED",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "scopeChainDecline",
+			"find": "case Absent: null;",
+			"replace": "case Absent: DECLINE_UNRESOLVED_CHAIN;",
+			"note": "a resolution-scope proof that no supertype declares the name is not taken, so every private method of a subclass stays undeletable without compiler facts (client Form / SpriteBase / AccountButton …)"
+		},
+		{
+			"name": "M-DEADSTORE-OWN-PURITY",
+			"type": "anyparse.check.common.unused.DeadStore",
+			"method": "rhsSafeToDelete",
+			"find": "&& TypeResolver.isDeletionPure(rhs, root, shape, declaredTypes, index);",
+			"replace": "&& false;",
+			"note": "the dead-store fix proves nothing beyond the shape, so a dead `s.toUpperCase()` / `Date.now()` / `Std.int(v)` store stays"
+		},
+		{
+			"name": "M-DEADSTORE-RETURN-EXPR",
+			"type": "anyparse.check.common.unused.DeadStore",
+			"method": "analyzeBody",
+			"find": "ShapeVocab.returnKinds(shape)",
+			"replace": "ShapeVocab.returnStatementKinds(shape)",
+			"note": "a return inside an expression is read as a throw a catch may intercept, so every local stays live at it and the dead stores before it go unreported"
+		},
+		{
+			"name": "M-QUALIFIED-CONSTRUCTION-UNSEEN",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "precededByNew",
+			"find": "while (j >= 0 && source.fastCodeAt(j) == '.'.code) {",
+			"replace": "while (false) {",
+			"note": "a qualified `new pkg.Type()` is not a construction of `Type`, so a private constructor only built that way is deleted"
+		},
+		{
+			"name": "M-CTOR-PRIVILEGE-UNASKED",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "run",
+			"find": "&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')",
+			"replace": "&& true",
+			"note": "the constructor arm stops asking what a privilege reaches, so a private constructor built through a waived alias or referenced as `A.new` is deleted"
+		}
+	]
+}

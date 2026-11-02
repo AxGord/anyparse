@@ -1,6 +1,9 @@
 package unit.dev;
 
 import dev.ArmRegistry;
+import devkit.TempDir;
+import haxe.Json;
+import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
@@ -12,6 +15,23 @@ final class ArmRegistryTest extends Test {
 
 	public function testANameDeclaredTwiceIsRefused(): Void {
 		Assert.raises(() -> ArmRegistry.parse(file([arm('A', '1'), arm('A', '2')])), ArmRegistryError);
+	}
+
+	public function testANameDeclaredInTwoDocumentsIsRefused(): Void {
+		Assert.raises(() -> ArmRegistry.parseAll([file([arm('A', '1')]), file([arm('B', '1'), arm('A', '2')])]), ArmRegistryError);
+		Assert.same(['A', 'B'], ArmRegistry.parseAll([file([arm('A', '1')]), file([arm('B', '2')])]).map(r -> r.key));
+	}
+
+	public function testADirectoryIsReadDocumentByDocumentAndMergedIntoOne(): Void {
+		TempDir.with(dir -> {
+			File.saveContent(dir.file('b.json'), file([arm('B', '2')]));
+			File.saveContent(dir.file('a.json'), file([arm('A', '1')]));
+			File.saveContent(dir.file('notes.txt'), 'not a registry document');
+			Assert.same(['A', 'B'], ArmRegistry.read(dir.path).map(r -> r.key), 'in file-name order');
+			final merged: { arms: Array<{ name: String }> } = Json.parse(ArmRegistry.merged(dir.path));
+			Assert.same(['A', 'B'], merged.arms.map(a -> a.name), 'the merged text is one document');
+			Assert.raises(() -> ArmRegistry.read(dir.file('missing')), ArmRegistryError);
+		});
 	}
 
 	/** A registry holding `records`, laid out as the real one is. */

@@ -19,7 +19,7 @@ using Lambda;
 using StringTools;
 
 /**
- * `dev mutation-arm <ARM>... | --all` — a DECLARED mutation arm (`test/testkit/mutation-arms.json`) turned into a run:
+ * `dev mutation-arm <ARM>... | --all` — a DECLARED mutation arm (`test/testkit/arms`) turned into a run:
  * each arm's cut rendered into a patch against a scratch worktree, its pins (the `@:killer`s that name it, out of the
  * generated registry) made its expectations, and the manifest handed to `dev mutation-check`. Every arm a copy can stand
  * for is also composed into one background build (`MutationSchemaBuild`). Flags and verdicts: `docs/testing.md`
@@ -30,9 +30,6 @@ final class MutationArm {
 
 	public static inline final USAGE: String = 'usage: dev mutation-arm <ARM>... | --all | --list [--jobs N] [--fast] [--keep] [--check-apply] '
 		+ '[--apply-only] [--working-tree] [--repo <tree>]';
-
-	/** The arm registry, from the tree's root. */
-	public static inline final REGISTRY: String = 'test/testkit/mutation-arms.json';
 
 	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under. */
 	private static inline final WORK_PREFIX: String = 'anyparse-mutarm';
@@ -81,9 +78,9 @@ final class MutationArm {
 			Sys.stderr().writeString(listed.err);
 			return listed.ok ? 0 : 1;
 		}
-		final registry: String = Path.join([repo, REGISTRY]);
+		final registry: String = Path.join([repo, ArmRegistry.DIRECTORY]);
 		if (!FileSystem.exists(registry)) return refuse(['no arm registry at $registry']);
-		final names: Array<String> = named.concat(all ? armNames(File.getContent(registry)) : []);
+		final names: Array<String> = named.concat(all ? armNames(ArmRegistry.merged(registry)) : []);
 		if (names.length == 0) return refuse(['no arm named (pass names, or --all)']);
 		final snap: Null<String> = workingTree ? snapshot(repo) : 'HEAD';
 		if (snap == null) return 2;
@@ -268,7 +265,7 @@ final class MutationArm {
 		Sys.putEnv('HXQ_BIN', job.apq);
 		Sys.putEnv('APQ_NO_CONFIG_WARN', '1');
 		final cores: Int = PoolLease.threads() ?? js.node.Os.cpus().length;
-		final cuts: Map<String, ArmCut> = cuts(File.getContent(job.registry), job.names, job.registry);
+		final cuts: Map<String, ArmCut> = cuts(ArmRegistry.merged(job.registry), job.names, job.registry);
 		final targets: Map<String, ArmTarget> = render(job, cuts, gen, workroot, cores);
 		final applyFail: Array<String> = [];
 		final rendered: Array<String> = [];

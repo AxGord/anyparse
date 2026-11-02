@@ -1,45 +1,42 @@
 package dev;
 
+import anyparse.query.RegistryFiles;
 import haxe.Exception;
 import haxe.Json;
+import sys.io.File;
 
+using Lambda;
 using StringTools;
 
 /**
- * The reader of `test/testkit/mutation-arms.json` as records keyed by `name`, each with its source text, and the text
- * around them — what the arms row of the slice gate selects from. The file merges through `apq merge-file`, by records
+ * The reader of the arm registry (`test/testkit/arms`, one document per package) as records keyed by `name`, each with its
+ * source text — what the arms row of the slice gate selects from. The documents merge through `apq merge-file`, by records
  * like every JSON document (`.gitattributes` `merge=anyparse`).
  */
 @:nullSafety(Strict)
 final class ArmRegistry {
 
+	/** The registry, from the tree's root: one document per package, named after it. */
+	public static inline final DIRECTORY: String = 'test/testkit/arms';
+
+	/** The single document the registry was kept in before it was split; a base older than the split still has it. */
+	public static inline final LEGACY_FILE: String = 'test/testkit/mutation-arms.json';
+
 	/** The key of the array that holds the records. */
 	private static inline final ARRAY_KEY: String = '"arms": [';
 
-	/** The registry `text` taken apart into its records, keyed by name, and the text around them. */
-	public static function parse(text: String): RecordFile {
+	/** The records of the registry document `text`, in its order; a name declared twice in it is refused. */
+	public static function parse(text: String): Array<ArmRecord> {
 		final open: Int = text.indexOf(ARRAY_KEY);
 		if (open < 0) throw new ArmRegistryError('no $ARRAY_KEY array');
 		final records: Array<ArmRecord> = [];
-		final separators: Array<String> = [];
 		var at: Int = open + ARRAY_KEY.length;
-		var head: Int = -1;
-		var last: Int = at;
 		while (true) {
 			final start: Int = skipSpace(text, at);
-			if (text.charAt(start) != '{') {
-				if (records.length == 0) head = start;
-				break;
-			}
-			if (records.length == 0)
-				head = start;
-			else
-				separators.push(text.substring(last, start));
-			final end: Int = objectEnd(text, start);
-			final body: String = text.substring(start, end);
+			if (text.charAt(start) != '{') break;
+			final body: String = text.substring(start, objectEnd(text, start));
 			records.push({ key: keyOf(body), text: body });
-			last = end;
-			final next: Int = skipSpace(text, end);
+			final next: Int = skipSpace(text, start + body.length);
 			if (text.charAt(next) != ',') break;
 			at = next + 1;
 		}
@@ -48,12 +45,29 @@ final class ArmRegistry {
 			if (keys.contains(record.key)) throw new ArmRegistryError('arm ${record.key} is declared twice');
 			keys.push(record.key);
 		}
-		return {
-			head: text.substring(0, head),
-			records: records,
-			separator: separators.length > 0 ? separators[0] : ',\n\t\t',
-			tail: text.substr(records.length == 0 ? head : last)
-		};
+		return records;
+	}
+
+	/** The records of several documents, in their order; a name declared in two of them is refused. */
+	public static function parseAll(texts: Array<String>): Array<ArmRecord> {
+		final records: Array<ArmRecord> = [];
+		for (text in texts) for (record in parse(text)) {
+			if (records.exists(r -> r.key == record.key)) throw new ArmRegistryError('arm ${record.key} is declared in two documents');
+			records.push(record);
+		}
+		return records;
+	}
+
+	/** The records of the registry at `path` — a directory of documents, or one document. */
+	public static function read(path: String): Array<ArmRecord> {
+		final files: Array<String> = RegistryFiles.of(path);
+		if (files.length == 0) throw new ArmRegistryError('no arm registry at $path');
+		return parseAll([for (file in files) File.getContent(file)]);
+	}
+
+	/** The registry at `path` as ONE document — what `MutationArm.cuts` and `armNames` read. */
+	public static function merged(path: String): String {
+		return '{"arms": [' + [for (record in read(path)) record.text].join(',') + ']}';
 	}
 
 	/** The `name` of the record `body`. */
@@ -98,14 +112,6 @@ final class ArmRegistry {
 		return i;
 	}
 
-}
-
-/** The registry taken apart: the text before the first record, the records, what separates them, and the rest. */
-typedef RecordFile = {
-	var head: String;
-	var records: Array<ArmRecord>;
-	var separator: String;
-	var tail: String;
 }
 
 /** One arm record: its `name` and its source text. */

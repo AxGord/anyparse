@@ -1,0 +1,426 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.query.cli. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-CLI-UNKNOWN-NO-PLURAL-PROBE",
+			"type": "anyparse.query.cli.CliRegistry",
+			"method": "nearest",
+			"find": "\t\treturn direct.length > 0 || !name.endsWith('s') ? direct : CliWalk.findFuzzy(name.substr(0, name.length - 1), pool);",
+			"replace": "\t\treturn direct;",
+			"note": "the singular-stem retry is dropped, so `apq members` is five edits and no substring away from every real command and the unknown-subcommand notice offers nothing - the exact miss the notice replaced the whole help page to answer"
+		},
+		{
+			"name": "M-CLI-COMMANDS-MEMOISED",
+			"type": "anyparse.query.cli.CliRegistry",
+			"method": "CliRegistry",
+			"kind": "ClassDecl",
+			"find": "/** Every registered command, in the order `apq --help` would list them. */\npublic static function commands(): Array<CliCommand> {\nreturn [",
+			"replace": "private static var _memo: Array<CliCommand> = [];\n\n/** Every registered command, in the order `apq --help` would list them. */\npublic static function commands(): Array<CliCommand> {\nif (_memo.length > 0) return _memo;\nreturn _memo = [",
+			"note": "the registry memoises its command objects into process-scoped state, so every run of the CLI shares one instance of each command"
+		},
+		{
+			"name": "M-POST-WRITE-FIX-HULL",
+			"type": "anyparse.query.cli.CliEdit",
+			"method": "changedCodeWindows",
+			"force": "[{ from: 1, to: after.split('\\n').length }]",
+			"note": "a write op's --fix lints the whole file instead of the lines the write changed, so a standing finding between or around two edited regions is rewritten too"
+		},
+		{
+			"name": "M-POST-WRITE-FIX-TRIVIA-BLIND",
+			"type": "anyparse.query.cli.CliEdit",
+			"method": "triviaLines",
+			"force": "[for (_ in lines) false]",
+			"note": "no line reads as trivia, so a write that changed only a comment still applies code fixes anchored on that comment line"
+		},
+		{
+			"name": "M-POST-WRITE-FIX-FAIL-OPEN",
+			"type": "anyparse.query.cli.CliEdit",
+			"method": "changedCodeWindows",
+			"find": "if (edits == null) return null;",
+			"replace": "if (edits == null) return [{ from: 1, to: now.length }];",
+			"note": "a diff past its budget falls back to one window over the whole file, so a write op's --fix rewrites code the write never touched"
+		},
+		{
+			"name": "M-CLI-REQUIREMATCH-STATIC",
+			"type": "anyparse.query.cli.CliContext",
+			"method": "CliContext",
+			"kind": "ClassDecl",
+			"find": "public function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String) {\nthis.requireMatch = requireMatch;\nthis.postWriteFix = postWriteFix;\nthis.stdin = stdin;\n}",
+			"replace": "private static var _sticky: Bool = false;\n\npublic function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;\nthis.postWriteFix = postWriteFix;\nthis.stdin = stdin;\n}",
+			"note": "the per-run flag gains a static backing, so one invocation's --exit-on-empty survives into the next one in the same process"
+		},
+		{
+			"name": "M-PROGRESS-TTY-BLIND",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "progressEnabled",
+			"find": "return progressEnv != null && progressEnv != '' ? progressEnv != '0' : !noProgressSet && stderrTty;",
+			"replace": "return !noProgressSet;",
+			"note": "the pre-slice rule is back — the heartbeat prints into a pipe unless HXQ_NO_PROGRESS is set, so 38 stderr lines land in a transcript per src-wide walk again"
+		},
+		{
+			"name": "M-BATCH-SEPARATOR-BLIND",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "nameSeparatorIndex",
+			"find": "return args.indexOf('--');",
+			"replace": "return -1;",
+			"note": "a bare `--` stops splitting queries from scope, so `refs A B -- src` reads A as the one name and B as a scope spec and every batch collapses to its first query"
+		},
+		{
+			"name": "M-KIND-GATE-FAIL-OPEN",
+			"type": "anyparse.query.cli.CliWalk",
+			"method": "rejectUnknownKinds",
+			"force": "false",
+			"note": "the shared --kind vocabulary gate calls every kind known again, so `apq lit 'x' F.hx --kind Literaal` goes back to printing `0 hits` at exit 0 - a typo answering exactly like a scope that genuinely holds no match"
+		},
+		{
+			"name": "M-WRITE-DIR-UNCREATED",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "stageWrite",
+			"find": "createMissingDirectories(Path.directory(target), created);",
+			"replace": "",
+			"note": "a write into a missing directory no longer creates it"
+		},
+		{
+			"name": "M-WRITE-DIR-KEPT",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "removeCreatedDirectories",
+			"find": "while (k-- > 0) try FileSystem.deleteDirectory(created[k])",
+			"replace": "while (k-- > 0 && k < 0) try FileSystem.deleteDirectory(created[k])",
+			"note": "a change set that is not written keeps the directories it created"
+		},
+		{
+			"name": "M-PICK-PLUGIN-FOR-IGNORES-PATH",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "pickPluginFor",
+			"force": "pickPlugin(lang)",
+			"note": "the file's extension is ignored, so the `--lang haxe` the shim prepends parses a `.json` file as Haxe and every JSON edit is refused"
+		},
+		{
+			"name": "M-CODE-CACHE-KEY-IGNORES-SOURCE",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "cacheKey",
+			"find": ".update(source).update(runtime)",
+			"replace": ".update(runtime)",
+			"note": "the key no longer hashes the engine's content, so a same-length rebuild is offered the old cache and V8, which checks only the length, runs the old engine's top level"
+		},
+		{
+			"name": "M-CODE-CACHE-KEY-IGNORES-RUNTIME",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "cacheKey",
+			"find": ".update(source).update(runtime)",
+			"replace": ".update(source)",
+			"note": "the key no longer carries node, V8 and flags, so a cache filed under another runtime is read as this one's"
+		},
+		{
+			"name": "M-CODE-CACHE-NO-CHECKSUM",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "readCache",
+			"find": "return sha256(payload).equals(data.slice(MAGIC.length + DIGEST_LENGTH, head)) ? payload : null;",
+			"replace": "return payload;",
+			"note": "the payload checksum is not verified, so a cache damaged after its header is handed to V8, which does not verify it either and can abort on it"
+		},
+		{
+			"name": "M-CODE-CACHE-WRITE-IN-PLACE",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "writeCache",
+			"find": "Fs.writeFileSync(temp, Buffer.concat([Buffer.from(MAGIC, 'latin1'), key, sha256(payload), payload]));\n\t\t\tFs.renameSync(temp, path);",
+			"replace": "Fs.writeFileSync(path, Buffer.concat([Buffer.from(MAGIC, 'latin1'), key, sha256(payload), payload]));",
+			"note": "the cache is rewritten in place instead of renamed over, so a reader at the same time can see half a file"
+		},
+		{
+			"name": "M-CODE-CACHE-PERSIST-IGNORES-STAMP",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "persist",
+			"find": "if (stampOf(binary) != engine.stamp) return false;",
+			"replace": "",
+			"note": "a run of an engine rewritten on disk since it was read still saves its cache, replacing the one a fresh build just warmed"
+		},
+		{
+			"name": "M-CODE-CACHE-KEY-IGNORES-PATH",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "compile",
+			"find": "cacheKey(source, '${runtimeTag()}\\n$binary')",
+			"replace": "cacheKey(source, runtimeTag())",
+			"note": "the key no longer carries the engine's real path, so a cache copied beside another copy of the engine is read there and every stack names the copy it was written from"
+		},
+		{
+			"name": "M-CODE-CACHE-KEY-IGNORES-EXECPATH",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "runtimeTag",
+			"find": "process.execPath,",
+			"replace": "",
+			"note": "the tag no longer names the node binary, so two node builds of one version string but different V8 configuration share a cache whose payload verifies and can still abort the other"
+		},
+		{
+			"name": "M-MODMOVE-CLI-ORIGINAL-KEPT",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "write",
+			"find": "for (r in removed) if (!CliIo.deletePath(r))",
+			"replace": "for (r in removed) if (false && !CliIo.deletePath(r))",
+			"note": "a written relocation leaves the original module in place"
+		},
+		{
+			"name": "M-SCOPE-FILES-BY-SPELLING",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "collectScopeFiles",
+			"find": "final at: Int = keys.indexOf(FileIdentity.realPath(extra));",
+			"replace": "final at: Int = paths.indexOf(extra);",
+			"note": "a named file the scope walk holds under another spelling is indexed twice"
+		},
+		{
+			"name": "M-MODMOVE-CLI-TEXT-ROOT-MISSING",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "textFilesOf",
+			"find": "if (!exists(entry))",
+			"replace": "if (false)",
+			"note": "a declared text root that does not exist is skipped in silence"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-BY-POSITION",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "matchUnits",
+			"force": "[for (i in 0...after.units.length) i < before.units.length ? i : -1]",
+			"note": "declarations are paired by position instead of by name, so a member inserted in the middle reports every member below it as changed"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-RECORDS-IN-ORDER",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "matchUnits",
+			"find": "for (identical in [true, false])",
+			"replace": "for (identical in [false])",
+			"note": "records sharing a name path pair up in order without first matching identical ones, so a record inserted first reports every record after it as changed"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-BODY-FILTERED",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "inBody",
+			"force": "(version.owner[line] < 0 || !version.units[version.owner[line]].header) && DeclarationLines.carriesWords(version.lines[line])",
+			"note": "a body line of punctuation alone no longer counts, so a closing brace moved past a statement reads as no change and the file falls through to imports or renamed"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-RENAME-UNBOUND",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "boundEverywhere",
+			"force": "true",
+			"note": "every spelling of a renamed name counts as its binding, so a member renamed beside a same-named call on another receiver reads as a rename"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-BODY-TRIMMED",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "bodyLines",
+			"find": "if (inBody(version, line)) version.lines[line]",
+			"replace": "if (inBody(version, line) && DeclarationLines.carriesWords(version.lines[line])) version.lines[line].trim()",
+			"note": "body lines are compared trimmed and without punctuation-only lines, so a closing brace moved past a statement beside an added import reads as an imports-only change"
+		},
+		{
+			"name": "M-GET-STRING-QUOTED",
+			"type": "anyparse.query.cli.DataPath",
+			"method": "render",
+			"force": "json(value, source, shape)",
+			"note": "`apq get` prints a string value as a quoted, escaped JSON literal instead of its decoded text, so a script reading a key gets the quotes and backslashes too"
+		},
+		{
+			"name": "M-DATA-PATH-ESCAPE-IGNORED",
+			"type": "anyparse.query.cli.DataPath",
+			"method": "parse",
+			"force": "path.split(\".\")",
+			"note": "a backslash-escaped dot in a path splits like any other, so a key that holds a dot can no longer be named"
+		},
+		{
+			"name": "M-LANG-OF-FILE-NONE",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "langOfFile",
+			"force": "null",
+			"note": "no extension names a grammar, so every process call without `--lang` is refused even on a `.json` or `.hx` file"
+		},
+		{
+			"name": "M-LANG-OF-CONTENT-NONE",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "langOfContent",
+			"force": "null",
+			"note": "a JSON document on stdin is no longer recognised by its content, so `cat x.json | apq get - k` needs `--lang`"
+		},
+		{
+			"name": "M-LANG-CHOICE-FLAG-VALUE-COUNTED",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "takesValue",
+			"force": "false",
+			"note": "no flag takes a value, so a value such as `sweep --save base.json` reads as a file naming the grammar"
+		},
+		{
+			"name": "M-LANG-PRESET-OVERRIDES",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "choose",
+			"find": "if (ofFiles.length == 1) return",
+			"replace": "if (preset == null && ofFiles.length == 1) return",
+			"note": "a preset's grammar overrides the file extensions, so `hxq fmt arms.json` reads JSON as Haxe and fails with a parse error"
+		},
+		{
+			"name": "M-LANG-PRESET-IGNORED",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "presetAt",
+			"force": "null",
+			"note": "`--lang-default` is dropped unread, so every `hxq` call on a directory or an extension no grammar registers becomes a usage error"
+		},
+		{
+			"name": "M-LANG-PRESET-MIXED-REFUSED",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "choose",
+			"find": "if (ofFiles.length > 1 && preset == null)",
+			"replace": "if (ofFiles.length > 1)",
+			"note": "files of two grammars are refused under a preset too, so `hxq lint F.hx apqlint.json` exits 2 where it read both as Haxe"
+		},
+		{
+			"name": "M-LANG-END-OF-OPTIONS-VALUE",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "takesValue",
+			"find": "return _valued.contains(token)",
+			"replace": "return token == SEPARATOR || _valued.contains(token)",
+			"note": "`--` reads as a flag taking a value, so the first path after it names no grammar and a call picks the grammar of the paths after"
+		},
+		{
+			"name": "M-GET-WALKABLE-ALWAYS",
+			"type": "anyparse.query.cli.DataPath",
+			"method": "walkable",
+			"find": "return shape.objectLiteralKind != null || shape.arrayLiteralKind != null;",
+			"replace": "return true;",
+			"note": "a grammar with no object or array kind (mermaid) is walked anyway, so `apq get x.mmd a` no longer says the grammar has no path to name"
+		},
+		{
+			"name": "M-GRAPH-DIFF-ABSOLUTE-SPEC-UNREAD",
+			"type": "anyparse.query.cli.GitRevision",
+			"method": "filesAt",
+			"find": "specs.map(cwdRelative)",
+			"replace": "specs",
+			"note": "an absolute scope is compared with the cwd-relative paths git lists and names nothing at either revision"
+		},
+		{
+			"name": "M-GIT-REVISION-SPEC-UNRESOLVED",
+			"type": "anyparse.query.cli.GitRevision",
+			"method": "cwdRelative",
+			"find": "segments(FileIdentity.realPath(spec))",
+			"replace": "segments(sys.FileSystem.exists(spec) ? sys.FileSystem.fullPath(spec) : spec)",
+			"note": "an absolute scope gone from the disk keeps its linked spelling while the cwd is resolved, so git is handed a path outside the repository"
+		},
+		{
+			"name": "M-CLI-FLAGS-SWITCH-TAKES-VALUE",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "scan",
+			"find": "if (takesValue(token)) {",
+			"replace": "if (takesValue(token) || isLongFlag(token)) {",
+			"note": "every long flag reads as taking a value, so `fmt --list A.hx b.json` drops A.hx and formats a Haxe file as JSON"
+		},
+		{
+			"name": "M-CLI-UNKNOWN-FLAG-ADMITTED",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "unknownFlag",
+			"force": "null",
+			"note": "an undeclared `--word` passes the dispatcher, so each command's own parser decides whether it is refused, read as a path, or swallowed"
+		},
+		{
+			"name": "M-CLI-OPTIONAL-VALUE-NEVER-TAKEN",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "acceptsOptionalValue",
+			"force": "false",
+			"note": "an optional-value flag never takes the token after it, so `add-element F.hx --after 3:4 x` reads the position as the code"
+		},
+		{
+			"name": "M-CLI-SEPARATOR-ALWAYS-ADMITTED",
+			"type": "anyparse.query.cli.CliFlags",
+			"method": "scan",
+			"find": "} else if (token == SEPARATOR && _separator == Refused) {",
+			"replace": "} else if (false) {",
+			"note": "every spec admits a bare `--`, so `fmt --list -- F.hx` runs and a parser with no `--` arm drops it silently"
+		},
+		{
+			"name": "M-WRITE-VERIFY-NO-ROLLBACK",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "putBackIfBroken",
+			"find": "if (broken.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a write that turns a green build red is replayed and kept, so the op exits 0 over a tree that no longer compiles"
+		},
+		{
+			"name": "M-WRITE-VERIFY-RED-BEFORE-JUDGES",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "putBackIfBroken",
+			"find": "if (confirmed(before[k])) r]",
+			"replace": "r]",
+			"note": "a build red before the write counts as broken by it, so a write into a project that never compiled is always put back"
+		},
+		{
+			"name": "M-WRITE-VERIFY-UNREACHED-KEPT",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "keptUnreached",
+			"find": "} else if (created.contains(file)) {",
+			"replace": "} else if (false) {",
+			"note": "a created module no configured build compiles, even when named to it, stays on disk as unverified"
+		},
+		{
+			"name": "M-WRITE-VERIFY-COUNTS-EVERY-BUILD",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "judge",
+			"find": "(sources.length == 0 || sources.exists(s -> parsedBy(a, s)))",
+			"replace": "true",
+			"note": "every green build vouches for the write, including one that never parsed a written file"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-NO-RECORD",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "note",
+			"find": "recording?.record(path);",
+			"replace": "",
+			"note": "the run records none of its writes, so nothing is verified and a rollback restores nothing"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-DIRS-KEPT",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "rollback",
+			"find": "CliIo.removeCreatedDirectories(_directories);",
+			"replace": "",
+			"note": "a rollback deletes the files the run created but leaves the directories it made for them"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-NO-RESTORE",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "rollback",
+			"find": "replay(originals());",
+			"replace": "",
+			"note": "a rollback leaves every file as the run wrote it, so a write the build rejects stays on disk"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-SEAT-KEPT",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "during",
+			"find": "recording = outer;\n\t\t\tthrow exception;",
+			"replace": "throw exception;",
+			"note": "a run whose body throws leaves its journal recording, so every later write in the process lands in a finished run's journal"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-PLAIN-KEY",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "record",
+			"find": "if (_entries.exists(entry -> entry.identity == identity)) return;",
+			"replace": "if (_entries.exists(entry -> entry.path == absolute)) return;",
+			"note": "the journal keys a file by its spelling, so a second spelling records the text the run already wrote as its original and a rollback restores that"
+		},
+		{
+			"name": "M-WRITE-SAME-TARGET-BY-SPELLING",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "refuseSameTarget",
+			"find": "final identity: String = FileIdentity.realPath(w.path);",
+			"replace": "final identity: String = w.path;",
+			"note": "a change set is keyed by the spelling of each path, so one file named twice through a symlink or a dot segment passes the refusal and half-writes the set"
+		},
+		{
+			"name": "M-WRITE-JOURNAL-MODE-LOST",
+			"type": "anyparse.query.cli.WriteJournal",
+			"method": "rollback",
+			"find": "if (mode != null && sys.FileSystem.exists(entry.path)) js.node.Fs.chmodSync(entry.path, mode);",
+			"replace": "",
+			"note": "a rolled-back deletion restores the file with the default mode, so an executable script comes back 0644"
+		}
+	]
+}

@@ -1,0 +1,158 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.query.graph. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-GRAPH-ID-UNDERSCORE-BARE",
+			"type": "anyparse.query.graph.CodeGraph",
+			"method": "idOf",
+			"find": "out.add('__')",
+			"replace": "out.add('_')",
+			"note": "a `_` is written bare, so it reads as the escape a `.` or another character opens and two names share one id (`a_d` and `a.`)"
+		},
+		{
+			"name": "M-GRAPH-LAMBDA-UNFOLDED",
+			"type": "anyparse.query.graph.MemberGraphBuilder",
+			"method": "memberRoot",
+			"force": "fnId",
+			"note": "a lambda or local function stays a node of its own instead of folding into the member that declares it"
+		},
+		{
+			"name": "M-GRAPH-DEPTH-SPENT-ON-LOCALS",
+			"type": "anyparse.query.graph.MemberGraphBuilder",
+			"method": "chains",
+			"find": "for (fn in folded[member] ?? [member])",
+			"replace": "for (fn in [member])",
+			"note": "a member is expanded through its own body only, so what its lambdas and local functions call is a hop further, and one hop from it draws nothing"
+		},
+		{
+			"name": "M-GRAPH-CALLER-HOP-ON-LOCALS",
+			"type": "anyparse.query.graph.MemberGraphBuilder",
+			"method": "chains",
+			"find": "final other: String = builder.memberRoot(outward ? e.to : e.from);",
+			"replace": "final other: String = outward ? e.to : e.from;",
+			"note": "the walk queues the lambda a call came from instead of its member, so the next hop inward spends itself on the edge from the member to its own lambda"
+		},
+		{
+			"name": "M-GRAPH-LOCAL-RECURSION-DRAWN",
+			"type": "anyparse.query.graph.MemberGraphBuilder",
+			"method": "link",
+			"find": "(from != to || memberRoot(from) != from)",
+			"replace": "from != to",
+			"note": "a local function calling itself is drawn as its member calling itself"
+		},
+		{
+			"name": "M-GRAPH-EXTERNAL-ID-MERGED",
+			"type": "anyparse.query.graph.CodeGraph",
+			"method": "idOf",
+			"find": "if (external) out.add('e');",
+			"replace": "",
+			"note": "an external node takes the id of a node of the scope that bears its name, so a std `String` and a root-package `String` are one node"
+		},
+		{
+			"name": "M-GRAPH-VIEW-BACK-EDGE-HIDDEN",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "filter",
+			"find": " || graph.weightBetween(e.to, e.from) >= filter.minWeight",
+			"replace": "",
+			"note": "a weight floor judges each direction alone, so the light way back of a heavy pair disappears and the cycle it closes is hidden"
+		},
+		{
+			"name": "M-GRAPH-VIEW-FOLDED-EDGE-AS-RECURSION",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "isOwnRecursion",
+			"find": "e.from == e.to && e.from == into",
+			"replace": "e.from == into",
+			"note": "an edge from a package into its own subpackage folds into a self-loop of the ancestor, a recursion nobody wrote"
+		},
+		{
+			"name": "M-GRAPH-VIEW-NAMED-ANY-LEVEL",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "named",
+			"find": "graph.nodes().filter(n -> n.level == level)",
+			"replace": "graph.nodes()",
+			"note": "a focus at the type level names the package a lift brought in above the types, and the view silently centres on it"
+		},
+		{
+			"name": "M-GRAPH-DIFF-UNCHANGED-UNFOLDED",
+			"type": "anyparse.query.graph.GraphDiff",
+			"method": "folded",
+			"find": "|| status[id] != null ? id :",
+			"replace": "|| true ? id :",
+			"note": "every member stays a node of its own, so the comparison of a large scope is every member it declares instead of what changed"
+		},
+		{
+			"name": "M-GRAPH-DIFF-WEIGHT-IGNORED",
+			"type": "anyparse.query.graph.GraphDiff",
+			"method": "edgeChange",
+			"find": "was.weight != now.weight",
+			"replace": "false",
+			"note": "an edge both versions hold reads unchanged whatever its weight, so a call site added or removed beside another one goes unseen"
+		},
+		{
+			"name": "M-GRAPH-DIFF-UNCHANGED-EDGE-KEPT",
+			"type": "anyparse.query.graph.GraphDiff",
+			"method": "compare",
+			"find": "if (change == null && status[e.from] == null && status[e.to] == null) continue;",
+			"replace": "",
+			"note": "every edge between unchanged types is drawn, burying the change in the whole graph of the scope"
+		},
+		{
+			"name": "M-GRAPH-DIFF-INVERSION-AS-CYCLE",
+			"type": "anyparse.query.graph.CodeGraph",
+			"method": "isMutual",
+			"find": "(e.change != Added && back.change != Added) || (e.change != Removed && back.change != Removed)",
+			"replace": "true",
+			"note": "a dependency removed one way and added the other reads as a cycle, though neither version holds both ways"
+		},
+		{
+			"name": "M-GRAPH-VIEW-OPENING-INSIDE-TWICE",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "opening",
+			"find": "if (e.from != id && inside.exists(e.from)) continue;",
+			"replace": "if (false) continue;",
+			"note": "an edge between two nodes inside the node opened is counted from both its ends and drawn at twice its weight"
+		},
+		{
+			"name": "M-GRAPH-IMPORT-TYPE-UNNESTED",
+			"type": "anyparse.query.graph.ImportGraph",
+			"method": "nodeOf",
+			"find": "type, packageId, false)",
+			"replace": "type, null, false)",
+			"note": "a type of the import graph stands outside its package, so a page has no package to open and draws one flat view"
+		},
+		{
+			"name": "M-GRAPH-VIEW-HOLDER-UNCHANGED",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "changeWithin",
+			"find": "found = Changed;",
+			"replace": "found = null;",
+			"note": "a type or a package holding an added, removed or changed member reads unchanged once folded, so a view above the members shows no change at all"
+		},
+		{
+			"name": "M-GRAPH-VIEW-FOLD-UNSUMMED",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "fold",
+			"find": "sum.before += change == Changed ? (e.before ?? e.weight) : e.weight;",
+			"replace": "sum.before += e.weight;",
+			"note": "an edge folded from a reweighted one counts its later weight as its earlier, so the folded edge's earlier weight is wrong"
+		},
+		{
+			"name": "M-GRAPH-VIEW-EDGE-CHANGE-DROPPED",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "drawFolded",
+			"find": "drawn.change = change;",
+			"replace": "",
+			"note": "a view draws every edge of a comparison uncoloured: what was added, removed or reweighted is lost at the first fold or filter"
+		},
+		{
+			"name": "M-GRAPH-VIEW-SHUT-EDGE-UNMARKED",
+			"type": "anyparse.query.graph.GraphView",
+			"method": "markChanged",
+			"find": "if (current.change == null) current.change = Changed;",
+			"replace": "",
+			"note": "a changed edge between two unchanged nodes folding into one is dropped unmarked, so the package or type holding the change reads unchanged"
+		}
+	]
+}

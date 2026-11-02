@@ -1,6 +1,11 @@
 package testkit;
 
+import anyparse.query.RegistryFiles;
 import haxe.Json;
+import haxe.io.Path;
+#if (sys || nodejs)
+import sys.io.File;
+#end
 
 using Lambda;
 
@@ -65,8 +70,14 @@ typedef ArmTable = {
 	errors: Array<String>
 };
 
+/** One document of the registry: where it was read from, and its text. */
+typedef ArmSource = {
+	file: String,
+	text: String
+};
+
 /**
- * `test/testkit/mutation-arms.json` read as data — the registry that makes a
+ * `test/testkit/arms/*.json` read as data — the registry that makes a
  * `@:killer` name mean something.
  *
  * `@:pin('control')` + `@:killer('<arm>')` already refused to BUILD a control
@@ -221,6 +232,41 @@ final class MutationArms {
 		final at: Int = member.indexOf(':');
 		return at == -1 ? '$DEFAULT_KIND:$member' : member;
 	}
+
+	/**
+	 * Read a registry kept as several documents: each one by `parse`, its errors named by file, the arms in the order of
+	 * `sources`. A name declared in two documents is an error — the split must not make a name mean two arms.
+	 */
+	public static function parseAll(sources: Array<ArmSource>): ArmTable {
+		final arms: Array<MutationArm> = [];
+		final errors: Array<String> = [];
+		final declaredIn: Map<String, String> = [];
+		if (sources.length == 0) errors.push('the arm registry holds no .json document');
+		for (source in sources) {
+			final table: ArmTable = parse(source.text);
+			for (error in table.errors) errors.push('${source.file}: $error');
+			for (arm in table.arms) {
+				final first: Null<String> = declaredIn[arm.name];
+				if (first == null)
+					declaredIn[arm.name] = source.file;
+				else if (first != source.file)
+					errors.push(
+						'"${arm.name}" is declared in both $first and ${source.file} — two arms under one name make the name useless'
+					);
+				arms.push(arm);
+			}
+		}
+		return { arms: arms, errors: errors };
+	}
+
+	#if (sys || nodejs)
+	/** `parseAll` over the documents of the registry directory `path`, each named by its file name. */
+	public static function parseDirectory(path: String): ArmTable {
+		return parseAll([
+			for (file in RegistryFiles.of(path)) { file: Path.withoutDirectory(file), text: File.getContent(file) }
+		]);
+	}
+	#end
 
 	/**
 	 * Everything wrong with the way ONE row declares its cut: the two spellings are

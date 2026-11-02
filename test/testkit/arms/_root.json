@@ -1,0 +1,15 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package (root). Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-RUNNER-PIPE-ASYNC",
+			"type": "RunTests",
+			"method": "main",
+			"find": "'for (const s of [process.stdout, process.stderr]) if (s._handle && s._handle.setBlocking) s._handle.setBlocking(true)'",
+			"replace": "''",
+			"note": "the runner's streams stay asynchronous, so a transcript read through a pipe loses its tail at the exit utest ends the run with"
+		}
+	]
+}

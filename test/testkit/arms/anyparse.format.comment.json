@@ -1,0 +1,22 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.format.comment. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-TCO-DIRECTIVE-MOVED",
+			"type": "anyparse.format.comment.CommentDirective",
+			"method": "relocatableTrailing",
+			"find": "comment.startsWith('//') && !isDirective(comment.substring(2))",
+			"replace": "comment.startsWith('//')",
+			"note": "a `// noqa` / `CHECKSTYLE` / `@formatter` comment moves off the line it governs, so it silences or marks a different line"
+		},
+		{
+			"name": "M-COMMENT-DIRECTIVE-NONE",
+			"type": "anyparse.format.comment.CommentDirective",
+			"method": "isDirective",
+			"force": "false",
+			"note": "no comment reads as a directive, so the reflow and the trailing-comment move both treat `noqa` / `CHECKSTYLE` / `@formatter` markers as prose"
+		}
+	]
+}

@@ -1,0 +1,15 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.macro.strategy. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-KW-SECOND-OVERWRITES",
+			"type": "anyparse.macro.strategy.Kw",
+			"method": "annotate",
+			"find": "if (seen)",
+			"replace": "if (false)",
+			"note": "a second @:kw on one node silently overwrites the first, dropping a keyword from the grammar"
+		}
+	]
+}

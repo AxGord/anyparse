@@ -1,0 +1,217 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.nullsafety. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-NULLABLE-FLOW-REPORT-INDEX",
+			"type": "anyparse.check.common.nullsafety.UnguardedNullableDeref",
+			"method": "run",
+			"find": "final index: SymbolIndex = IndexScope.resolution(files, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(files, plugin);",
+			"note": "the flow seed asks the REPORT index again, so a nullable-returning member declared outside the reported files stops seeding anything"
+		},
+		{
+			"name": "M-NULLABLE-INDEX-EXCLUSION",
+			"type": "anyparse.check.common.nullsafety.NullableSource",
+			"method": "crossFileReturnCallSource",
+			"find": "if (cfg.excludedCalls.contains('${lookupType}.${parts.method}')) return null;",
+			"replace": "if (cfg.excludedCalls.contains('${lookupType}.${parts.method}.')) return null;",
+			"note": "the exclusion key can never match, so `Array.pop` comes back through the index lookup the build-time filter never sees and the length-guarded accessors seed the flow again"
+		},
+		{
+			"name": "M-NULLABLE-REPORT-INDEX",
+			"type": "anyparse.check.common.nullsafety.PossibleNullDereference",
+			"method": "run",
+			"find": "final index: SymbolIndex = IndexScope.resolution(files, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(files, plugin);",
+			"note": "the cross-file return arc asks the REPORT index again, so every member declared outside the reported files is unknown and the arc is dead where it matters"
+		},
+		{
+			"name": "M-DECL-NULLABLE-BLIND",
+			"type": "anyparse.check.common.nullsafety.NullableSource",
+			"method": "declaredNullable",
+			"force": "false",
+			"note": "the written `Null<T>` on a local declaration stops being evidence, so a receiver no nullable EXPRESSION feeds goes back to Unknown and the declaration-side half of the flow seed is dead"
+		},
+		{
+			"name": "M-NULLABLE-NO-CHAIN",
+			"type": "anyparse.check.common.nullsafety.NullableSource",
+			"method": "receiverTypeName",
+			"find": "nominalOf == null ? null : nominalOf(node);",
+			"replace": "null;",
+			"note": "the receiver type is the written annotation or nothing, so every field-path / call receiver falls back to unknown and the null family stops seeing the sources only the chain resolver names"
+		},
+		{
+			"name": "M-NULLABLE-FLOW-EXCLUDE-NONE",
+			"type": "anyparse.check.common.nullsafety.UnguardedNullableDeref",
+			"method": "run",
+			"find": "NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? [])",
+			"replace": "NullableSource.build(shape, [])",
+			"note": "nothing is excluded from the flow seed, so Reflect.copy and the length-guarded collection accessors seed MaybeNull again and every write through the result is a Warning"
+		},
+		{
+			"name": "M-DECL-INIT-NONNULL-BLIND",
+			"type": "anyparse.check.common.nullsafety.NullableSource",
+			"method": "initTypeIsNonNull",
+			"force": "false",
+			"note": "no initializer is ever proved non-null, so the declaration seed fires again over a redundant `Null<T>` whose value cannot be null"
+		},
+		{
+			"name": "M-DECL-INIT-TERNARY-ANY-ARM",
+			"type": "anyparse.check.common.nullsafety.NullableSource",
+			"method": "initTypeIsNonNull",
+			"find": "return initTypeIsNonNull(init.children[1], cfg, valueNominalOf) && initTypeIsNonNull(init.children[2], cfg, valueNominalOf);",
+			"replace": "return initTypeIsNonNull(init.children[1], cfg, valueNominalOf) || initTypeIsNonNull(init.children[2], cfg, valueNominalOf);",
+			"note": "one proven arm carries the whole ternary, so `flag ? a : null` reads as non-null and a real NPE goes silent"
+		},
+		{
+			"name": "M-DECL-INIT-LITERAL-BLIND",
+			"type": "anyparse.check.common.nullsafety.NullableSource",
+			"method": "initTypeIsNonNull",
+			"find": "if (NullFlow.NON_NULL_RHS_KINDS.contains(init.kind)) return true;",
+			"replace": "if (NullFlow.NON_NULL_RHS_KINDS.contains('')) return true;",
+			"note": "a bare literal arm is judged by the chain resolver alone, which types an Int literal and an array or object literal by its slot type but not against a typedef it cannot see, so a ternary with such a [] or {} branch stays seeded"
+		},
+		{
+			"name": "M-DECL-INIT-RECEIVER-MODE-NOMINAL",
+			"type": "anyparse.check.common.nullsafety.UnguardedNullableDeref",
+			"method": "run",
+			"find": "NullFlow.declInit(decl, declTypeChildKinds), cfg, valueNominalOf);",
+			"replace": "NullFlow.declInit(decl, declTypeChildKinds), cfg, nominalOf);",
+			"note": "the initializer is typed through the RECEIVER arc, which peels `Null<>`, so a field declared `Null<T>` reads as non-null and its seed is dropped"
+		},
+		{
+			"name": "M-DSN-NULLSAFE-ALWAYS",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "mayBeOn",
+			"force": "true",
+			"note": "plain code is treated as null-checked, so a runtime-sound Bool-local proof loses its fix (dead-safe-nav, dead-null-guard, dead-null-coalescing) where nothing typechecks it"
+		},
+		{
+			"name": "M-DSN-MACRO-BLIND",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "buildMayEnableNullSafety",
+			"force": "false",
+			"note": "a project-wide `--macro nullSafety` in the oracle hxml is ignored, so a meta-free module gets the `.` rewrite its build rejects"
+		},
+		{
+			"name": "M-DSN-HXML-ALWAYS-ON",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "buildMayEnableNullSafety",
+			"force": "true",
+			"note": "every oracle build reads as enabling null-safety, so a plain project loses the runtime-sound fix"
+		},
+		{
+			"name": "M-DSN-HXML-COMMENT-READ",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "buildMayEnableNullSafety",
+			"find": "if (line == '' || line.startsWith('#')) continue;",
+			"replace": "if (line == '') continue;",
+			"note": "a commented-out `#--macro nullSafety` is read as live, so the fix is declined in a plain build"
+		},
+		{
+			"name": "M-DSN-HXML-LIB-PLAIN",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "buildMayEnableNullSafety",
+			"find": "} else if (line.startsWith('-') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))",
+			"replace": "} else if (line.startsWith('-') && !line.startsWith('-lib') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))",
+			"note": "a `-lib` is taken as plain although its extraParams may add `@:nullSafety`, so the build-breaking fix lands"
+		},
+		{
+			"name": "M-DSN-HXML-INCLUDE-SKIPPED",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "buildMayEnableNullSafety",
+			"find": "mayEnable(LintDocuments.resolveAgainstConfigDir(base, line), base, depth + 1)",
+			"replace": "false",
+			"note": "an included hxml is never read, so a `nullSafety` macro in it goes unseen and the build-breaking fix lands"
+		},
+		{
+			"name": "M-DSN-HXML-UNREADABLE-PLAIN",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "buildMayEnableNullSafety",
+			"find": "if (text == null) return true;",
+			"replace": "if (text == null) return false;",
+			"note": "an oracle hxml not generated yet reads as plain, so the fix lands before the build that may reject it exists"
+		},
+		{
+			"name": "M-NULLPASS-MUTATES",
+			"type": "anyparse.check.common.nullsafety.PreferNullCoalescing",
+			"method": "guardOf",
+			"find": "if (guarded == null || subtreeMutates(guarded, seams.unsafeKinds)) return null;",
+			"replace": "if (guarded == null) return null;",
+			"note": "a guarded value that calls is collapsed from two evaluations to one"
+		},
+		{
+			"name": "M-NULLCOAL-NULL-FALLBACK",
+			"type": "anyparse.check.common.nullsafety.PreferNullCoalescing",
+			"method": "fix",
+			"find": "m.fallback.kind == seams.nullKind\n\t\t\t\t\t\t? { span: span, text: guardedSrc, holes: [] }\n\t\t\t\t\t\t: ParenGuard",
+			"replace": "ParenGuard",
+			"note": "a null fallback is rewritten to the no-op `x ?? null` instead of the guarded value"
+		},
+		{
+			"name": "M-REDUNDANT-COAL-NULL-RIGHT",
+			"type": "anyparse.check.common.nullsafety.RedundantNullCoalescing",
+			"method": "run",
+			"find": "if (nullKind != null && node.children[1].kind == nullKind)",
+			"replace": "if (false)",
+			"note": "`x ?? null` is no longer reported, so the no-op coalescing a rule cascade or a hand writes survives"
+		},
+		{
+			"name": "M-DNG-UNSEEN-DROPPED",
+			"type": "anyparse.check.common.nullsafety.DeadNullGuard",
+			"method": "run",
+			"find": "declineReason: gate.unseenProofReason(entry.file, root, compared.span, shape, facts, compared.name, UNSEEN_CONSEQUENCE)",
+			"replace": "declineReason: null",
+			"note": "a guard proven only through a Bool local / alias / lone if-arm / try is offered for removal under null-safety, so `return reads ? node : other` fails `Cannot return nullable value` (the N25 FactsView revert)"
+		},
+		{
+			"name": "M-DNG-DECLINED-FIXED",
+			"type": "anyparse.check.common.nullsafety.DeadNullGuard",
+			"method": "fix",
+			"find": "violations.filter(v -> v.declineReason == null)",
+			"replace": "violations",
+			"note": "a declined dead guard is removed anyway, so the build-breaking edit reaches the oracle net again"
+		},
+		{
+			"name": "M-DNC-UNSEEN-DROPPED",
+			"type": "anyparse.check.common.nullsafety.DeadNullCoalescing",
+			"method": "run",
+			"find": "declineReason: gate.unseenProofReason(entry.file, root, left.span, shape, facts, left.name, UNSEEN_CONSEQUENCE)",
+			"replace": "declineReason: null",
+			"note": "a `??` proven only through a Bool local is unwrapped under null-safety by a SAFE fix, and `return node` breaks the build with no net"
+		},
+		{
+			"name": "M-DNC-DECLINED-FIXED",
+			"type": "anyparse.check.common.nullsafety.DeadNullCoalescing",
+			"method": "fix",
+			"find": "violations.filter(v -> v.declineReason == null)",
+			"replace": "violations",
+			"note": "a declined dead fallback is unwrapped anyway, so the build-breaking safe fix lands"
+		},
+		{
+			"name": "M-NSG-GATE-NEVER",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "mayBeOn",
+			"force": "false",
+			"note": "null-safety is never on, so every unseen proof keeps its rewrite and the three checks break a @:nullSafety build"
+		},
+		{
+			"name": "M-NSG-VISIBLE-IGNORED",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "unseenProofReason",
+			"find": "return facts.nonNullVisible(name) || !mayBeOn",
+			"replace": "return !mayBeOn",
+			"note": "a proof the compiler follows counts as unseen too, so a nested-guard / early-exit removal the compiler accepts is declined"
+		},
+		{
+			"name": "M-GSN-VALUE-TAIL",
+			"type": "anyparse.check.common.nullsafety.GroupSafeNav",
+			"method": "collectRuns",
+			"find": "roots.length < 2 || (tailUsed && last == kids.length - 1)",
+			"replace": "roots.length < 2",
+			"note": "a run that is a used block's value is wrapped in a Void guard, which no longer compiles"
+		}
+	]
+}

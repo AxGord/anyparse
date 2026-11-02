@@ -1,0 +1,1113 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.facts. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-FACTS-CALL-TARGET",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "fieldCall",
+			"find": "'{\"t\":${q(targetName)},\"a\":\"$kind\"$chosen,",
+			"replace": "'{\"a\":\"$kind\"$chosen,",
+			"note": "a field call is written without its target, so an abstract operator or an accessor is a call of nothing"
+		},
+		{
+			"name": "M-FACTS-SUPER",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "call",
+			"find": "',\"t\":' + q(c.toString() + '.new');",
+			"replace": "'';",
+			"note": "a super call names no constructor, so the implicit constructor reaches nothing"
+		},
+		{
+			"name": "M-FACTS-INITIALIZER",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "classType",
+			"find": "case FVar(_, _): 'var';",
+			"replace": "case FVar(_, _): 'method';",
+			"note": "a field initializer is written as a method node"
+		},
+		{
+			"name": "M-FACTS-ITER",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "add('iters', '{\"v\":${q(str(v.t))},\"i\":${q(str(it.t))},\"p\":${at(e.pos)}}');",
+			"replace": "",
+			"note": "a kept for loop records no iteration"
+		},
+		{
+			"name": "M-FACTS-STRING-OPERAND",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "stringSite",
+			"find": "add('strs', '{\"o\":${q(str(operand.t))},\"p\":${at(operand.pos)}' + (exactObject(operand) ? ',\"x\":true}' : '}'));",
+			"replace": "",
+			"note": "a non-String operand of a concatenation is not recorded"
+		},
+		{
+			"name": "M-FACTS-LOCAL-CALL",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!_written.exists(v.id)) _locals[v.id] = made;",
+			"replace": "{}",
+			"note": "a local function is not remembered, so its call is a call of a value"
+		},
+		{
+			"name": "M-FACTS-FIELD-WRITE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "target",
+			"find": "fieldFact(lhs, receiver, fa, true,",
+			"replace": "fieldFact(lhs, receiver, fa, false,",
+			"note": "an assigned field is recorded as read, never written"
+		},
+		{
+			"name": "M-FACTS-REFLECT-NAME",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflection",
+			"find": "literal = ',\"n\":${Json.stringify(s)}';",
+			"replace": "literal = '';",
+			"note": "a reflected literal name is dropped, so every reflection site reads as computed"
+		},
+		{
+			"name": "M-FACTS-NATIVE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "fieldCall",
+			"find": "add('native', '{\"w\":\"syntax\",\"n\":${q(targetName)},\"p\":$where$code${handedText(args)}}');",
+			"replace": "{}",
+			"note": "a Syntax.code call is no native site"
+		},
+		{
+			"name": "M-FACTS-FLOW-CAST",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "flowText(sourceType(inner), sink == '?' ? 'Dynamic' : sink, 'cast', e.pos);",
+			"replace": "",
+			"note": "an unchecked cast carries no flow"
+		},
+		{
+			"name": "M-FACTS-TYPE-PARAMETER",
+			"type": "anyparse.check.facts.TypedFactsTypeStrings",
+			"method": "instString",
+			"find": "return isParam ? '$$$path' : path + paramString(params, depth);",
+			"replace": "return path + paramString(params, depth);",
+			"note": "a type parameter prints as a class path"
+		},
+		{
+			"name": "M-FACTS-INLINE-POSITIONS",
+			"type": "anyparse.check.facts.TypedFactsProbe",
+			"method": "compileArgs",
+			"find": "defines.concat(['keep-inline-positions'])",
+			"replace": "defines",
+			"note": "an inlined body takes the call site's range, so its facts read as the type of the call"
+		},
+		{
+			"name": "M-FACTS-READS",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))},${q(v.name)}]');",
+			"replace": "{}",
+			"note": "a local read records no type"
+		},
+		{
+			"name": "M-FACTS-BRANCH-LEAVES",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "flowInto",
+			"find": "collectLeaves(value, leaves);",
+			"replace": "leaves.push(value);",
+			"note": "a branching value flows once, at the type its branches unify to"
+		},
+		{
+			"name": "M-FACTS-MONO-SINK",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "flowInto",
+			"find": "final sink: String = to == '?' ? 'Dynamic' : to;",
+			"replace": "final sink: String = to;",
+			"note": "a place of no type stays unknown instead of Dynamic"
+		},
+		{
+			"name": "M-FACTS-CAST-ALWAYS",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "flowText",
+			"find": "if (how != 'cast' && FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;",
+			"replace": "if (FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;",
+			"note": "an unchecked cast between equal types records no source"
+		},
+		{
+			"name": "M-FACTS-THROW",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "flowInto(value, 'Dynamic', 'throw', e.pos);",
+			"replace": "",
+			"note": "a thrown value reaches no place"
+		},
+		{
+			"name": "M-FACTS-UNTYPED-ARGS",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "argFlows",
+			"find": "for (a in args) flowInto(a, 'Dynamic', 'arg', a.pos);",
+			"replace": "",
+			"note": "an argument of a callee with no function type reaches no place"
+		},
+		{
+			"name": "M-FACTS-REST",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "argFlows",
+			"find": "if (element != null) rest = str(element);",
+			"replace": "",
+			"note": "rest arguments flow into the rest type itself or nowhere"
+		},
+		{
+			"name": "M-FACTS-GENERIC",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "moduleType",
+			"find": "case KTypeParameter(_), KMacroType, KGenericBuild, KExpr(_):",
+			"replace": "case KGenericInstance(_, _), KTypeParameter(_), KMacroType, KGenericBuild, KExpr(_):",
+			"note": "a @:generic instance is skipped"
+		},
+		{
+			"name": "M-FACTS-INIT",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "classType",
+			"find": "walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0, genericCopy);",
+			"replace": "",
+			"note": "__init__ is not walked"
+		},
+		{
+			"name": "M-FACTS-REASSIGNED-LOCAL",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!_written.exists(v.id)) _locals[v.id] = made;",
+			"replace": "_locals[v.id] = made;",
+			"note": "a reassigned local is read as one fixed function"
+		},
+		{
+			"name": "M-FACTS-FIELD-VALUE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "calledKind",
+			"find": "'fieldValue'",
+			"replace": "kind",
+			"note": "a call of a field value names the field as a fixed body"
+		},
+		{
+			"name": "M-FACTS-REFLECTION-INLINED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "at",
+			"find": "incomplete('reflection-inlined');",
+			"replace": "",
+			"note": "an inlined Reflect call leaves no mark"
+		},
+		{
+			"name": "M-FACTS-OVERLOADS",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "classType",
+			"find": "for (o in m.f.overloads.get())",
+			"replace": "for (o in new Array<ClassField>())",
+			"note": "overload bodies past the first are not walked"
+		},
+		{
+			"name": "M-FACTS-INLINED-CHILD",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "child",
+			"find": "if (!_inBody || !inside) nested._header += ',\"inl\":${q(id)}';",
+			"replace": "",
+			"note": "a function spliced in from another body claims a range of the file it was declared in"
+		},
+		{
+			"name": "M-FACTS-GENERATED",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "walkBody",
+			"find": "if (fileOf(body.pos) != home) walk.flag('gen');",
+			"replace": "",
+			"note": "a macro-built body claims a range of the macro file"
+		},
+		{
+			"name": "M-FACTS-DROPPED",
+			"type": "anyparse.check.facts.TypedFactsProbe",
+			"method": "finish",
+			"find": "facts.dropped.push({ name: OracleDeclaration.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
+			"replace": "{}",
+			"note": "a configuration that failed is dropped in silence"
+		},
+		{
+			"name": "M-FACTS-INLINED-CALL",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "spliced",
+			"find": "inlinedCall(callee, e.t, at(e.pos));",
+			"replace": "",
+			"note": "an inlined call leaves no call fact"
+		},
+		{
+			"name": "M-FACTS-SAME-FILE-INLINE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "walk",
+			"find": "final inside: Bool = info.file == _home && info.min >= _min && info.max <= _max;",
+			"replace": "final inside: Bool = info.file == _home;",
+			"note": "a body inlined from the same file reads as the caller's own code"
+		},
+		{
+			"name": "M-FACTS-MACRO-EXPANSION",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "spliced",
+			"find": "incomplete('macro-expansion');",
+			"replace": "",
+			"note": "a macro expansion leaves no mark"
+		},
+		{
+			"name": "M-FACTS-REFLECT-VALUE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflectionValue",
+			"find": "add('refl', '{\"t\":${q(c.toString() + '.' + cf.toString())},\"v\":true,\"p\":${at(e.pos)}}');",
+			"replace": "{}",
+			"note": "a reflection member read as a value is no reflection site"
+		},
+		{
+			"name": "M-FACTS-UNTYPED-DECLARED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "sourceType",
+			"force": "str(leaf.t)",
+			"note": "an untyped-retyped value flows at its retyped type"
+		},
+		{
+			"name": "M-FACTS-IDENT-READ",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "add('native', '{\"w\":\"ident\",\"n\":${q(identifier)},\"p\":${at(e.pos)}$rooted}');",
+			"replace": "",
+			"note": "a native identifier read is no native site"
+		},
+		{
+			"name": "M-FACTS-BUILDS",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "metaList",
+			"find": "for (p in m.params ?? []) q(haxe.macro.ExprTools.toString(p))",
+			"replace": "for (p in new Array<haxe.macro.Expr>()) q(haxe.macro.ExprTools.toString(p))",
+			"note": "a build macro is not recorded"
+		},
+		{
+			"name": "M-FACTS-REFLECTION-PATH",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "reflectionModule",
+			"force": "StringTools.endsWith(file, 'Type.hx') || StringTools.endsWith(file, 'Reflect.hx')",
+			"note": "any Type.hx or Reflect.hx counts as the std reflection"
+		},
+		{
+			"name": "M-FACTS-SPLICE-SITE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "inlinedCall",
+			"find": ",\"s\":[${_site.min},${_site.max}]",
+			"replace": "",
+			"note": "an inlined call records no site, so all it spliced in may run anywhere in its caller"
+		},
+		{
+			"name": "M-FACTS-SPLICE-SITE-INNERMOST",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "enterRange",
+			"find": "_site = { min: info.min, max: info.max }",
+			"replace": "_site = { min: _min, max: _max }",
+			"note": "(precision) an inlined call ran anywhere in its caller's body, not in the innermost expression around its call site"
+		},
+		{
+			"name": "M-FACTS-SPLICE-BODY",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "inlinedCall",
+			"find": ",\"d\":$declared",
+			"replace": "",
+			"note": "an inlined call records no declared range, so nothing it spliced in is attributed to it"
+		},
+		{
+			"name": "M-FACTS-NESTED-SPLICE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "enterRange",
+			"find": "nestedSplice(e, info);",
+			"replace": "{}",
+			"note": "a body a spliced body spliced in turn is no call of its own: its code is attributed to no call, or to a call of it elsewhere"
+		},
+		{
+			"name": "M-FACTS-EXPANSION-RECORDED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "spliced",
+			"find": "expanded(_host.macroCallee(info.file, info.min, info.max), e.pos, _home, _site);",
+			"replace": "",
+			"note": "an expansion the body's own code holds is recorded nowhere, so the code it built is attributed to no call the text writes"
+		},
+		{
+			"name": "M-FACTS-EXPANSION-NESTED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "nestedSplice",
+			"find": "expanded(expander, e.pos, splice.file, _spliceSite);",
+			"replace": "",
+			"note": "an expansion an inlined method's code holds is recorded nowhere, so the code it built is attributed to no call the text writes"
+		},
+		{
+			"name": "M-FACTS-MACRO-CALLEE",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "collectFields",
+			"find": "case FMethod(MethMacro): _macros;",
+			"replace": "case FMethod(MethMacro): null;",
+			"note": "no macro method is known where it is declared, so no expansion is matched to the macro that built it"
+		},
+		{
+			"name": "M-FACTS-CALL-SITE-INLINE",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "collectFields",
+			"find": "case FMethod(MethInline | MethNormal): _inlines;",
+			"replace": "case FMethod(MethInline): _inlines;",
+			"note": "only an `inline` method is matched to a splice, so a method its call site inlines reads as a macro expansion"
+		},
+		{
+			"name": "M-FACTS-SPLICE-OWN-ARGUMENTS",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "spliced",
+			"find": "if (at.file == _home && at.min >= _min && at.max <= _max) continue;",
+			"replace": "",
+			"note": "a spliced body's own call-site arguments are searched for the method it came from, so a macro expansion is read as an inlined call of the caller itself"
+		},
+		{
+			"name": "M-FACTS-ABSTRACT-THIS",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "walk",
+			"find": "final straddles: Bool = !inside && info.file == _home && info.min <= _max && info.max >= _min;",
+			"replace": "final straddles: Bool = false;",
+			"note": "a range meeting the body without lying inside it — an abstract method's own `this`, placed at the whole abstract — reads as a splice, and the method is marked as a macro expansion"
+		},
+		{
+			"name": "M-FACTS-ELEMENT-WRITE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "target",
+			"find": "add('elems', '{\"r\":${q(str(array.t))},\"rp\":${at(array.pos)},\"p\":${at(lhs.pos)}}');",
+			"replace": "",
+			"note": "an element write leaves no fact, so an array written through its elements reads as never mutated"
+		},
+		{
+			"name": "M-FACTS-USE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "fieldFact(e, receiver, fa, false, ',${useText(use)}');",
+			"replace": "fieldFact(e, receiver, fa, false, ',${useText(Value)}');",
+			"note": "every field read is used as a value, so no read says it only calls, indexes or compares"
+		},
+		{
+			"name": "M-FACTS-HELD",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "_aliases[v.id] = alias;",
+			"replace": "",
+			"note": "a field read held in a local is no longer followed through the local's reads, so a lowered loop's array reads as escaping"
+		},
+		{
+			"name": "M-FACTS-CAPTURE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "localRead",
+			"find": "if (alias.owner != id) {",
+			"replace": "if (false) {",
+			"note": "a local read from a nested function keeps its own use, so a captured field value reads as used in place"
+		},
+		{
+			"name": "M-FACTS-FRESH",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "target",
+			"find": "fresh ? ',\"fresh\":true' : ''",
+			"replace": "''",
+			"note": "no field write is fresh, so a member only ever reset to a new array reads as holding a shared one"
+		},
+		{
+			"name": "M-FACTS-FRESH-DISCARDED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "use == Statement && TypedFactsShapes.isFresh(rhs)",
+			"replace": "TypedFactsShapes.isFresh(rhs)",
+			"note": "a fresh value stored by an assignment used as a value counts as the field's alone, though the assignment hands it on"
+		},
+		{
+			"name": "M-FACTS-INLINED-RECEIVER",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "final called: Null<String> = receiverCall(v, e.pos, block);",
+			"replace": "final called: Null<String> = null;",
+			"note": "the receiver of an inlined method is held in the compiler's local like any value, so the key-value loop's array reads as handed to `new ArrayKeyValueIterator` and escapes"
+		},
+		{
+			"name": "M-FACTS-RECEIVER-BLOCK",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "receiverCall",
+			"find": "return at.file != around.file || at.min != around.min || at.max != around.max",
+			"replace": "return false",
+			"note": "a local the inlined method's own code names `_this` counts as the compiler's receiver binding, so an argument it keeps reads as the receiver of a call of the array's own method"
+		},
+		{
+			"name": "M-FACTS-RECEIVER-PARAM",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "collectFields",
+			"find": "receiver: !takes(f, INLINED_RECEIVER)",
+			"replace": "receiver: true",
+			"note": "a parameter named `_this`, bound by the compiler as it binds a receiver, counts as the receiver, so the argument it keeps reads as the receiver of a call of the array's own method"
+		},
+		{
+			"name": "M-FACTS-THROW-TEXT",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!TypedFactsShapes.isString(value.t) && !thrownAsIs(value)) stringSite(value);",
+			"replace": "",
+			"note": "a thrown value is recorded as converted to no string, though the exception wrapping hands it to `Std.string`"
+		},
+		{
+			"name": "M-FACTS-HANDS",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "handed",
+			"find": "for (leaf in leaves) add('hands', '{\"t\":${q(target)},\"s\":${q(sourceType(leaf))},\"d\":${q(declared)},\"p\":${at(leaf.pos)}}');",
+			"replace": "",
+			"note": "an argument handed to target code is recorded nowhere, so a value an extern keeps never escapes"
+		},
+		{
+			"name": "M-FACTS-GENS",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "instantiated",
+			"find": "if (field != null && field.params.length > 0) add('gens', '{\"d\":${q(str(field.type))},\"s\":${q(str(applied))},\"p\":${at(p)}}');",
+			"replace": "",
+			"note": "the instantiation of a generic method is recorded nowhere, so what its type parameters stand for is never known"
+		},
+		{
+			"name": "M-FACTS-STRING-EXACT",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "exactObject",
+			"force": "false",
+			"note": "no converted value is an object of exactly its own class, so a fresh one runs the conversion of whatever its type may hold"
+		},
+		{
+			"name": "M-FACTS-EXACT-WRITTEN",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "exactObject",
+			"find": "_built.exists(v.id) && !_written.exists(v.id);",
+			"replace": "_built.exists(v.id);",
+			"note": "a local initialized with a construction is taken to hold it even after it is written again"
+		},
+		{
+			"name": "M-FACTS-THROW-EXCEPTION",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "thrownAsIs",
+			"force": "false",
+			"note": "a thrown exception of exactly its class is recorded as converted to a string, though the wrapping throws it as it is"
+		},
+		{
+			"name": "M-FACTS-ALIAS-TYPEDEF",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "run",
+			"find": "writer.printedAliases();",
+			"replace": "",
+			"note": "an import alias, which no module lists, gets no record, so a type naming it names no type the table holds"
+		},
+		{
+			"name": "M-FACTS-STATICS-TYPEDEF",
+			"type": "anyparse.check.facts.TypedFactsTypeStrings",
+			"method": "typeString",
+			"find": "name.endsWith('>') ? name : name + paramString(params, depth);",
+			"replace": "name + paramString(params, depth);",
+			"note": "the typedef of an enum's statics is printed with arguments after its name (`Enum<pack.E><?>`), which the type grammar does not read"
+		},
+		{
+			"name": "M-FACTS-FLOW-EXACT",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "flowInto",
+			"find": "flowText(sourceType(value), sink, how, p, exactObject(value));",
+			"replace": "flowText(sourceType(value), sink, how, p);",
+			"note": "the exactness of a value flowing whole is recorded nowhere"
+		},
+		{
+			"name": "M-FACTS-TREE-OPTIONAL",
+			"type": "anyparse.check.facts.FactsTypeTree",
+			"method": "functionType",
+			"find": "final optional: Bool = peek() == '?'.code && !separatorAt(_pos + 1);",
+			"replace": "final optional: Bool = peek() == '?'.code;",
+			"note": "a lone `?` argument is read as an optional argument, so an unknown argument type reads as a malformed type"
+		},
+		{
+			"name": "M-RUNMEMO-NO-BASELINE-AHEAD",
+			"type": "anyparse.check.facts.TypedFactsProbe",
+			"method": "wanted",
+			"force": "false",
+			"note": "the facts compile no longer brings the baseline along, so the baseline asked next is a compile of its own"
+		},
+		{
+			"name": "M-FACTS-EARLY-DIRS-LEFT",
+			"type": "anyparse.check.facts.TypedFactsProbe",
+			"method": "abandon",
+			"find": "for (a in probe.asked) discard(a.dir);",
+			"replace": "",
+			"note": "facts compiles no check asked for leave their probe directories behind"
+		},
+		{
+			"name": "M-FACTS-ORACLE-AGREE",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "agreed",
+			"find": "else if (types.length > 1)",
+			"replace": "else if (false)",
+			"note": "the first of two types the configurations disagree on is answered, so an annotation is right in one build and wrong in the other"
+		},
+		{
+			"name": "M-FACTS-ORACLE-RAW-AGREE",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "factsTypeAt",
+			"find": "return types.length == 1 ? Typed(types[0]) : Declined(FactsDecline.NoFact);",
+			"replace": "return types.length > 0 ? Typed(types[0]) : Declined(FactsDecline.NoFact);",
+			"note": "the first of the types the facts give a value at its range is its type, though the configurations disagree"
+		},
+		{
+			"name": "M-FACTS-SPELL-UNKNOWN",
+			"type": "anyparse.check.facts.FactsTypeSpelling",
+			"method": "type",
+			"find": "case Unknown: fail(FactsDecline.Unbound);",
+			"replace": "case Unknown: 'Dynamic';",
+			"note": "an unbound monomorph is spelled Dynamic, so a type the compiler never pinned is written as one"
+		},
+		{
+			"name": "M-FACTS-SPELL-SCOPE",
+			"type": "anyparse.check.facts.FactsTypeSpelling",
+			"method": "inScope",
+			"force": "true",
+			"note": "every type parameter is in scope, so a parameter of another declaration is written where it names nothing"
+		},
+		{
+			"name": "M-FACTS-SPELL-IMPL",
+			"type": "anyparse.check.facts.FactsTypeSpelling",
+			"method": "nominal",
+			"find": "if (name == 'Abstract' || name.indexOf('_Impl_') >= 0) return fail(FactsDecline.Unspellable);",
+			"replace": "",
+			"note": "an abstract's statics and implementation class are spelled like any path, which no source can write"
+		},
+		{
+			"name": "M-FACTS-DYNAMIC-SOURCE",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "localType",
+			"find": "return Declined(FactsDecline.DynamicSource);",
+			"replace": "{}",
+			"note": "a local a Dynamic value initializes is annotated with the structure its uses bound, which the value need not have"
+		},
+		{
+			"name": "M-ORACLE-WHOLE-MEMBER",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "resolve",
+			"find": [
+				"return switch journal.back(site.text, site.current, member) {",
+				"case Mapped(at) if (site.text.substring(at.from, at.to) == site.current.substring(member.from, member.to)):\n\t\t\t\tquery(site, new Span(key.from + at.from - member.from, key.to + at.from - member.from), here);"
+			],
+			"replace": [
+				"return switch journal.back(site.text, site.current, key) {",
+				"case Mapped(at):\n\t\t\t\tquery(site, at, here);"
+			],
+			"note": "only the declaration's name is placed, so an edit elsewhere in its member — a changed signature the inferred type rests on — goes unseen"
+		},
+		{
+			"name": "M-ORACLE-HOME-GUARD",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "sameHome",
+			"force": "true",
+			"note": "facts of any member answer for code the file now holds in another"
+		},
+		{
+			"name": "M-ORACLE-HOME-MODIFIED-TYPE",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "homeOf",
+			"find": "type = node.name ?? node.children.find(c -> c.name != null)?.name;",
+			"replace": "type = node.name;",
+			"note": "a `final class` names no type, so every declaration in one reads as homeless and declines"
+		},
+		{
+			"name": "M-FACTS-WRITTEN-DURING",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "writtenSince",
+			"force": "false",
+			"note": "a file written while the facts compile ran is certified by a hash of the text it has now"
+		},
+		{
+			"name": "M-FACTS-VALUE-TYPE-FLOWS",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "typeIdAt",
+			"find": "final spelled: String = switch valueType(file, expr) {",
+			"replace": "final spelled: String = switch expressionType(file, expr) {",
+			"note": "a value's type is read with the flows at its range, so a check-type `(e : T)` answers the type of `e`, not `T`"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-DECLARED",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "inheritedMember",
+			"find": "if (declared.fields.exists(f -> f.name == name)) return Declared(sup);",
+			"replace": "",
+			"note": "a member a supertype declares, an abstract one's implementation among them, is deleted"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-AUTOBUILD",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "inheritedMember",
+			"find": "if (declared.meta.contains(AUTO_BUILD_META)) return AutoBuilt(sup);",
+			"replace": "",
+			"note": "a member of a class a supertype's `@:autoBuild` builds is deleted"
+		},
+		{
+			"name": "M-FACTS-ESCAPE-SHIFT",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "escapedBefore",
+			"force": "false",
+			"note": "an expression in a string after an escape is typed by the fact the compiler shifted onto its range"
+		},
+		{
+			"name": "M-FOLD-FACTS-PLAIN-KINDS",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "nonOverloadingName",
+			"find": "return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))",
+			"replace": "return id != null",
+			"note": "any type the facts name is named, an abstract included, and the overload table judges another declaration of that simple name"
+		},
+		{
+			"name": "M-FACTS-ALIKE-FOLD",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "nonOverloadingName",
+			"find": "(declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind))",
+			"replace": "(declared != null && PLAIN_KINDS.contains(declared.kind))",
+			"note": "a type one configuration declares a class and another an overloading abstract is named by the first one's record"
+		},
+		{
+			"name": "M-FACTS-FIXED-LOOP-ANY",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "callResultClosed",
+			"find": "return calls.length > 0 && calls.foreach(c -> closedResult(c.target));",
+			"replace": "return true;",
+			"note": "every loop binder counts as fixed, so one over a local or a generic call a later call typed is rewritten and no longer compiles"
+		},
+		{
+			"name": "M-FACTS-CTOR-EVERY",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "constructorArgumentClosed",
+			"find": "\t\t\t\t\tcase _:\n\t\t\t\t\t\treturn false;\n",
+			"replace": "\t\t\t\t\tcase _:\n",
+			"note": "a constructor of the name typed by an enum parameter is ignored once another is closed, so the name alone decides which enum the pattern is of"
+		},
+		{
+			"name": "M-FACTS-CTOR-ARITY",
+			"type": "anyparse.check.facts.FactsTypeOracle",
+			"method": "constructorArgumentClosed",
+			"find": "\t\t\t\t\tcase Named(_, _):\n\t\t\t\t\tcase Function(args, _) if (index >= args.length):\n",
+			"replace": "",
+			"note": "a same-named constructor taking no argument, or fewer, refuses the capture though a pattern with that argument cannot be of it"
+		},
+		{
+			"name": "M-FACTS-CLOSED-PARAMETER",
+			"type": "anyparse.check.facts.FactsTypeTree",
+			"method": "isClosed",
+			"find": "case Unknown, Parameter(_): false;",
+			"replace": "case Unknown: false;\n\t\t\tcase Parameter(_): true;",
+			"note": "a type parameter counts as closed, so a capture or a loop result a parameter types is rewritten while a monomorph may stand for it"
+		},
+		{
+			"name": "M-FACTS-NULL-PEEL-UNMATCHED",
+			"type": "anyparse.check.facts.FactsTypeText",
+			"method": "closesAtEnd",
+			"force": "true",
+			"note": "a leading Null<...> is peeled off a facts type it does not enclose, mangling Null<A>->Null<B>"
+		},
+		{
+			"name": "M-FACTS-WALK-WRITTEN-CONSTANT",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "splicedCode",
+			"find": "return code || (e.expr.match(TConst(_)) && _host.inlineCallee(info.file, info.min, info.max) != null);",
+			"replace": "return code;",
+			"note": "an inlined method of which the compiler kept only the constants it wrote as another inline call's arguments is no splice"
+		},
+		{
+			"name": "M-FACTS-WALK-JOINED-START",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "nestedSplice",
+			"find": "final written: Null<InlineMethod> = fieldWriter(e, info);",
+			"replace": "final written: Null<InlineMethod> = null;",
+			"note": "a field read the compiler joined across two methods' code records no splice of the method writing the field"
+		},
+		{
+			"name": "M-FACTS-CALL-OPERAND",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "dynamicOperand",
+			"find": "\t: ',\"o\":${q(sourceType(first))}' + (exactObject(first) ? ',\"x\":true' : '');",
+			"replace": "\t: '';",
+			"note": "a call handing a value to a `Dynamic` parameter records none of it, so a conversion an inlined body spliced in from another file converts a value of any type (the client's `StringBuf.add` in `EReg.replace`)"
+		},
+		{
+			"name": "M-FACTS-CALL-OPERAND-LEAF",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "dynamicOperand",
+			"find": "',\"o\":${q(sourceType(first))}'",
+			"replace": "',\"o\":' + q(sourceType({\n\t\t\t\tfinal leaves: Array<TypedExpr> = [];\n\t\t\t\tTypedFactsShapes.collectLeaves(first, leaves);\n\t\t\t\tleaves[0];\n\t\t\t}))",
+			"note": "the first leaf of a value handed to a `Dynamic` parameter is the value, so `Std.string(c ? new Plain() : d)` converts a `Plain` only"
+		},
+		{
+			"name": "M-FACTS-CALL-OPERAND-EXACT",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "dynamicOperand",
+			"find": " + (exactObject(first) ? ',\"x\":true' : '')",
+			"replace": "",
+			"note": "the exactness of a value handed to a `Dynamic` parameter is recorded nowhere"
+		},
+		{
+			"name": "M-FACTS-REFL-RECEIVER",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflection",
+			"find": "add('refl', '{\"t\":${q(targetName)}$literal$spelled$named$receiver,\"p\":$where}');",
+			"replace": "add('refl', '{\"t\":${q(targetName)}$literal$spelled$named,\"p\":$where}');",
+			"note": "a reflective call records nothing of the object it acts on, so every access by a computed name may reach any member"
+		},
+		{
+			"name": "M-FACTS-REFL-SELF",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflection",
+			"find": " + (isThis(first) ? ',\"h\":true' : '')",
+			"replace": "",
+			"note": "(precision) `this` handed to a reflective call is any object of its type, an escaped instance of another type included"
+		},
+		{
+			"name": "M-FACTS-REFL-EXACT",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflection",
+			"find": " + (exactObject(first) ? ',\"x\":true' : '')",
+			"replace": "",
+			"note": "(precision) an object built of exactly its class and handed to a reflective call may be an instance of a subclass"
+		},
+		{
+			"name": "M-FACTS-NATIVE-CODE",
+			"type": "anyparse.check.facts.TypedFactsShapes",
+			"method": "nativeCode",
+			"force": "''",
+			"note": "a native call records no text, so the code it pastes names nothing"
+		},
+		{
+			"name": "M-FACTS-CODE-META",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "metaList",
+			"find": "code.length == 0 ? '' : ',\"code\":' + arr(code)",
+			"replace": "''",
+			"note": "the target code a metadata pastes is recorded nowhere"
+		},
+		{
+			"name": "M-FACTS-NATIVE-HANDED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "handedText",
+			"find": "for (a in args) TypedFactsShapes.collectLeaves(a, leaves);",
+			"replace": "",
+			"note": "a native site records no value a call of it hands its target code"
+		},
+		{
+			"name": "M-FACTS-NATIVE-CHAIN",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "nativeChain",
+			"force": "false",
+			"note": "a field chain rooted at a native identifier is recorded as the bare identifier: no text, nothing handed"
+		},
+		{
+			"name": "M-FACTS-WALK-BLOCK-GAP",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!own(ranges[i])) _site = between(exprs, ranges, i, site);",
+			"replace": "",
+			"note": "a statement a splice or an expansion replaced is placed at its whole block"
+		},
+		{
+			"name": "M-FACTS-SITE-HOLDS-OWN-CODE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "between",
+			"find": " && holdsOwnCode(exprs[index], site) ? site : outer;",
+			"replace": " ? site : outer;",
+			"note": "a splice is placed between the statements around it although a statement the compiler bound at the whole block bounds it: the site holds none of the call's text, so an expression macro in its arguments reads as no text's call"
+		},
+		{
+			"name": "M-FACTS-REFL-FRESH",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflection",
+			"find": "freshStructure(first) ? ',\"o\":true' : ''",
+			"replace": "false ? ',\"o\":true' : ''",
+			"note": "(precision) an object literal handed to a reflective call is recorded as any value of its type"
+		},
+		{
+			"name": "M-FACTS-REFL-FRESH-LOCAL",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (objectLiteral(init)) _literals[v.id] = true;",
+			"replace": "",
+			"note": "(precision) a local initialized with an object literal holds any value of its type"
+		},
+		{
+			"name": "M-FACTS-REFL-FRESH-WRITTEN",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "freshStructure",
+			"find": "_literals.exists(v.id) && !_written.exists(v.id);",
+			"replace": "_literals.exists(v.id);",
+			"note": "a local initialized with an object literal holds that structure even after code assigns it another value"
+		},
+		{
+			"name": "M-FACTS-REFL-FRESH-ANY",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "freshStructure",
+			"find": "case _: objectLiteral(e);",
+			"replace": "case _: true;",
+			"note": "any expression handed to a reflective call — a field of a literal another write may replace, a call — is a structure the code built"
+		},
+		{
+			"name": "M-FACTS-GENERIC-RECORDED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "(generic == null ? '' : ',\"gb\":${q(generic)}')",
+			"replace": "''",
+			"note": "a construction is written without the `@:genericBuild` class its text constructs"
+		},
+		{
+			"name": "M-FACTS-GENERIC-BUILT",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "genericBuilt",
+			"find": "if (_genericBuilds[key] == built.toString()) return id;",
+			"replace": "if (_genericBuilds[key] != null) return id;",
+			"note": "a `@:genericBuild` class the text names is recorded whatever class its build at the text's type arguments resolves to: a build macro that constructs another class there leaves its type its text"
+		},
+		{
+			"name": "M-FACTS-ROUNDS",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "run",
+			"find": "final earlier: Null<TypedFactsMacro> = current;",
+			"replace": "final earlier: Null<TypedFactsMacro> = null;",
+			"note": "each round of the hook rewrites the facts file with only the types defined since the last: a type a `@:genericBuild` asked again defines leaves the facts of that one type"
+		},
+		{
+			"name": "M-FACTS-SPLICED-REFLECTION-FROM",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "at",
+			"find": "incomplete(from == null ? 'reflection-unattributed' : 'reflection-from:${from.id}');",
+			"replace": "incomplete('reflection-unattributed');",
+			"note": "(precision) the facts never name the method a spliced reflective fact lies in, so no such body is read"
+		},
+		{
+			"name": "M-FACTS-ASSIGN-HELD",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "walkAs(rhs, Held(into));",
+			"replace": "walk(rhs);",
+			"note": "a field's value an assignment statement stores in a local is used as a value, so a local assigned in branches reads as an escape"
+		},
+		{
+			"name": "M-FACTS-ASSIGNED-NO-USE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "localRead",
+			"find": "case Assigned:",
+			"replace": "case Assigned: aliasUse(alias, Value);",
+			"note": "a write of a local holding the value is a use of it as a value, so every assigned local escapes"
+		},
+		{
+			"name": "M-FACTS-ASSIGNED-TARGET",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "target",
+			"find": "walkAs(lhs, Assigned);",
+			"replace": "walk(lhs);",
+			"note": "the local an assignment writes is walked as a read used as a value, so every assigned local escapes"
+		},
+		{
+			"name": "M-FACTS-ALIAS-LINK",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "localRead",
+			"find": "if (!alias.links.contains(other)) alias.links.push(other);",
+			"replace": "aliasUse(alias, Value);",
+			"note": "a local stored in another local is used as a value, so its reads through the second local are never followed"
+		},
+		{
+			"name": "M-FACTS-HELD-LOCAL",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "case TField(_, _), TLocal(_): true;",
+			"replace": "case TField(_, _): true;",
+			"note": "a local initialized with another local is walked as a value, so the first local's value escapes there"
+		},
+		{
+			"name": "M-FACTS-SUBSTITUTED-RECEIVER",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "localRead",
+			"find": "aliasUse(alias, method == null ? use : Call(method));",
+			"replace": "aliasUse(alias, use);",
+			"note": "a local an inline method of no parameter was spliced in with is used as that method's code uses it, so a key-value loop over a local hands it to `new ArrayKeyValueIterator`"
+		},
+		{
+			"name": "M-FACTS-SUBSTITUTED-ARITY",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "substitutedReceiver",
+			"find": "substituted.arity != 0",
+			"replace": "false",
+			"note": "a local spliced into an inline method's body as an argument is taken for its receiver, a call of that method"
+		},
+		{
+			"name": "M-FACTS-SUBSTITUTED-OWNER",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "substitutedReceiver",
+			"find": "case TInst(c, _) if (TypedFactsTypeStrings.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;",
+			"replace": "case TInst(c, _): name;",
+			"note": "a local spliced into an inline method of another class than its own is taken for that method's receiver"
+		},
+		{
+			"name": "M-FACTS-ASSIGN-STATEMENT",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "use == Statement ? storedLocal(lhs, rhs) : null",
+			"replace": "storedLocal(lhs, rhs)",
+			"note": "an assignment whose own value goes on still stores the value only in its local, so `keep(l = items)` hands nothing on"
+		},
+		{
+			"name": "M-FACTS-ASSIGN-OWNER",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "storedLocal",
+			"find": "if (_aliases[v.id]?.owner == id)",
+			"replace": "if (_aliases.exists(v.id))",
+			"note": "a store into a local of an enclosing function is followed through the reads that function made so far, never the later ones"
+		},
+		{
+			"name": "M-FACTS-HELD-FLAG",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "root",
+			"find": "',\"h\":true,'",
+			"replace": "','",
+			"note": "a field read held in a local no longer says so, so the touch through the local is placed at the store"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-IF",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "otherwise != null && (heldValue(then) || heldValue(otherwise));",
+			"replace": "false;",
+			"note": "a field read in a branch of an if-expression (a ternary is one) initializing or assigned to a local is a value read again, so `final l = if (c) items else null;` escapes where `l = items;` in a branch of a statement `if` is followed"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-SWITCH",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "for (c in cases) held = held || heldValue(c.expr);",
+			"replace": "",
+			"note": "a field read in an arm of a switch-expression initializing a local is a value read again, so the local's value escapes there"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-PAREN",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "heldValue(inner);",
+			"replace": "false;",
+			"note": "a parenthesised field read initializing a local is a value read, so `var l = (items);` escapes where `var l = items;` is followed"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-BLOCK",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "exprs.length > 0 && heldValue(exprs[exprs.length - 1]);",
+			"replace": "false;",
+			"note": "the block the typer wraps each branch of an if- or switch-expression in hands nothing on, so every such branch read is a value read again"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-TRY",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "var held: Bool = heldValue(body);",
+			"replace": "var held: Bool = false;",
+			"note": "a field read as the body of a try-expression initializing a local is a value read again, so the local's value escapes there"
+		},
+		{
+			"name": "M-FACTS-ASSIGN-HELD-THROUGH",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "storedLocal",
+			"find": "if (!heldValue(rhs)) return null;",
+			"replace": "if (!rhs.expr.match(TField(_, _) | TLocal(_))) return null;",
+			"note": "an assignment statement storing an if-expression whose branch reads a field is no store of that value any more, so `l = if (c) items else null;` escapes where the declaration form is followed"
+		},
+		{
+			"name": "M-FACTS-KEPT-DEFAULT",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "root",
+			"find": "if (a.value == null && !_written.exists(a.v.id)) kept.push(i);",
+			"replace": "if (!_written.exists(a.v.id)) kept.push(i);",
+			"note": "(soundness) a parameter a default value replaces a null for is recorded as holding what each call hands it"
+		},
+		{
+			"name": "M-FACTS-KEPT-WRITTEN",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "root",
+			"find": "if (a.value == null && !_written.exists(a.v.id)) kept.push(i);",
+			"replace": "if (a.value == null) kept.push(i);",
+			"note": "(soundness) a parameter the body assigns is recorded as holding what each call hands it"
+		},
+		{
+			"name": "M-FACTS-FRESH-MAP",
+			"type": "anyparse.check.facts.TypedFactsShapes",
+			"method": "isFresh",
+			"find": "FRESH_CLASSES.contains(c.toString())",
+			"replace": "c.toString() == 'Array'",
+			"note": "(precision) a `new Map()` stored by an assignment is not recorded as held by its target alone"
+		},
+		{
+			"name": "M-FACTS-IDENTITY-CAST-VALUE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "sink == str(inner.t) ||",
+			"replace": "",
+			"note": "a value read through a cast to the type it already has is a plain value under it, so a Map handed to a method that only iterates it escapes in the facts and keeps its key"
+		},
+		{
+			"name": "M-FACTS-ARGUMENT-USE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "walkArguments",
+			"find": "walkAs(args[i], Argument(to, handedVia, i))",
+			"replace": "walk(args[i])",
+			"note": "an argument of a declared method is recorded as a plain value, so no read names the parameter it is handed to and every argument escapes again"
+		},
+		{
+			"name": "M-FACTS-PARAM-ALIAS",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "root",
+			"find": "_aliases[a.v.id] = param;",
+			"replace": "",
+			"note": "a parameter is no local of its node, so its reads record no use and every method reads as keeping nothing of what it is handed — a store into a static among them"
+		},
+		{
+			"name": "M-FACTS-ARGUMENT-CAST",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "|| use.match(Argument(_, _, _))",
+			"replace": "",
+			"note": "an argument the compiler casts (a Map handed to an Iterable) is a plain value under the cast, so passing a map to Lambda.count escapes again"
+		},
+		{
+			"name": "M-FACTS-ABSTRACT-WRAPPED-CAST",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "|| sink == str(wrapped(inner.t))",
+			"replace": "",
+			"note": "a local spliced into an inlined abstract method as its this is cast from the abstract to the type it wraps, and that cast hands the value on, so a Map parameter a method only iterates escapes"
+		},
+		{
+			"name": "M-FACTS-REFL-MEMBER-NAME",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflection",
+			"find": "$literal$spelled$named$receiver",
+			"replace": "$literal$named$receiver",
+			"note": "(precision) a reflective call records no member its name argument names by a literal"
+		},
+		{
+			"name": "M-FACTS-REFL-MEMBER-NAME-ANY",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflection",
+			"find": "TypedFactsShapes.literalText(args[at])",
+			"replace": "TypedFactsShapes.literalText(args[args.length - 1])",
+			"note": "the member a reflective call names is its last argument's literal: the value `setField` stores"
+		},
+		{
+			"name": "M-FACTS-REFL-MEMBER-NAME-TABLE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "reflection",
+			"find": "final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName];",
+			"replace": "final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName] ?? 1;",
+			"note": "every reflective call names a member by its second argument: `Type.createEnum`'s constructor name too"
+		},
+		{
+			"name": "M-FACTS-READ-EMIT-NAME",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": ",${q(localType(v))},${q(v.name)}]');",
+			"replace": ",${q(localType(v))},\"\"]');",
+			"note": "a local read records no name, so no read is the text's own"
+		}
+	]
+}

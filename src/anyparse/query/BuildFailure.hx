@@ -78,7 +78,7 @@ final class BuildFailure {
 	private static inline final POSITION_MARKER: String = '.hx:';
 
 	/**
-	 * Marker of the registry's own build-macro cross-checks.
+	 * Marker of the registry's own build-macro cross-checks (the registry directory's path).
 	 *
 	 * The registry's own path rather than a message template, because a message
 	 * gets reworded and a path does not — and rather than the two metadata
@@ -88,7 +88,7 @@ final class BuildFailure {
 	 * error about a fixture's own pin SHAPE carries no path, so it lands in
 	 * `other` with its line quoted.
 	 */
-	private static final ARM_REGISTRY_MARKER: String = 'mutation-arms.json';
+	private static final ARM_REGISTRY_MARKER: String = 'testkit/arms';
 
 	/** Markers of a cut that left the source unparseable. */
 	private static final SYNTAX_MARKERS: Array<String> = [

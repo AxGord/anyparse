@@ -339,10 +339,10 @@ final class LandTest extends Test {
 	@:pin('control')
 	@:killer('M-LAND-ARMS-REGISTRY-ASKS-FULL')
 	public function testTheArmRegistryAloneAsksForNoFullBattery(): Void {
-		Assert.isNull(Land.fullReason(['test/testkit/mutation-arms.json', 'docs/a.md'], 1, false, Land.FULL_EVERY));
+		Assert.isNull(Land.fullReason(['test/testkit/arms/anyparse.query.json', 'docs/a.md'], 1, false, Land.FULL_EVERY));
 		Assert.equals(
 			'touches test/testkit/Extra.hx',
-			Land.fullReason(['test/testkit/mutation-arms.json', 'test/testkit/Extra.hx'], 1, false, Land.FULL_EVERY)
+			Land.fullReason(['test/testkit/arms/anyparse.query.json', 'test/testkit/Extra.hx'], 1, false, Land.FULL_EVERY)
 		);
 	}
 

@@ -1,0 +1,1296 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.macro. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-CURLY-CTORS-NONE",
+			"type": "anyparse.macro.WriterCtorPatternLowering",
+			"method": "collectCurlyBlockCtorPatterns",
+			"force": "[]",
+			"note": "no branch ctor reads as a CURLY block, so the shape-aware separator sends every value-`if` branch to the hardline arm and the `} else` join stops firing"
+		},
+		{
+			"name": "M-SBE-UNGATED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "semicolonBeforeSiblingWrap",
+			"find": "final emit: Expr = dropTest == null ? policyDispatch : macro (_sbeSibling && $dropTest ? _de() : $policyDispatch);",
+			"replace": "final emit: Expr = dropTest == null ? policyDispatch : macro ($dropTest ? _de() : $policyDispatch);",
+			"note": "the optional `;` drop stops being gated on a following sibling, so an else-less value-`if` loses the terminator its enclosing statement needs"
+		},
+		{
+			"name": "M-TRAILOPT-KEEP-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "pushStmtBodyTrailOpt",
+			"find": "parts.push(macro $structTrailOptAccess == true ? _dt($v{trailOptText}) : _de());",
+			"replace": "parts.push(macro _de());",
+			"note": "no if / else / for / while body writes back its `@:trailOpt(';')` slot, so the `;` after a `}` is dropped by the formatter and the `;` after an unterminated `#if` region body is lost, failing the next statement with `Missing ;`"
+		},
+		{
+			"name": "M-TRAILOPT-KEEP-PRESENCE-BLIND",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "pushStmtBodyTrailOpt",
+			"find": "parts.push(macro $structTrailOptAccess == true ? _dt($v{trailOptText}) : _de());",
+			"replace": "parts.push(macro _dt($v{trailOptText}));",
+			"note": "the body slot stops reading source presence, so a region whose branches carry their own `;` gains a second one after `#end`"
+		},
+		{
+			"name": "M-SSB-TRAILSEMI-GATE-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "macro ($slot == true);",
+			"replace": "macro false;",
+			"note": "a mandatory body's kept `;` no longer holds its braces under brace removal, so `for (…) { x; };` is de-braced into `for (…) x;;`, which Haxe rejects"
+		},
+		{
+			"name": "M-TRAILSEP-KEEP-OFF",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockSepExprs",
+			"find": "return macro (_arr[$i].sepAfter && !anyparse.core.DocMeasure.endsWithSemi($doc));",
+			"replace": "return macro (_arr[$i].sepAfter && !anyparse.core.DocMeasure.endsWithSemi($doc) && !(${pred(i)}));",
+			"note": "a block's trailing `;` after a `stmtNoSemi` element is dropped again, so `#end;` before `}` loses the only terminator of the region's last branch and `switch … {};` loses a source token"
+		},
+		{
+			"name": "M-CATCH-TRAILOPT-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalRefField",
+			"find": "// A statement body's `;` (`catch (e) { … };`) is a source token like the mandatory path's.\npushStmtBodyTrailOpt(optParts, trailOptText, structTrailOptAccess);",
+			"replace": "",
+			"note": "an optional statement body without a keyword (the last `catch` body) stops writing back its `@:trailOpt(';')` slot, so `try … catch (e) { … };` loses its `;` to the formatter"
+		},
+		{
+			"name": "M-GLUE-TO-PREVIOUS-OFF",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockGlueExpr",
+			"force": "macro false",
+			"note": "a stray member `;` is written on its own line again (`}` newline `;`) and the blank line before the next member is lost"
+		},
+		{
+			"name": "M-SEP-GLUE-OFF",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockSepExprs",
+			"find": "_sepGlued = _t.trailingComment != null && (_si < _arr.length - 1 ? $ownBetween : $ownTrail);",
+			"replace": "_sepGlued = false;",
+			"note": "an element's separator goes after its trailing comment again, so `#end; // c` comments out its own terminator and `fmt` refuses the file"
+		},
+		{
+			"name": "M-TRY-BODY-SYM-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "tryBraceSymmetryWrap",
+			"force": "fieldAccess",
+			"note": "the try BODY stops going through `SingleStmtBraces.trySymmetryBody`, so a bare body opposite a braced catch keeps its asymmetry instead of gaining a block of its own"
+		},
+		{
+			"name": "M-TRY-CATCHES-SYM-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "tryCatchesSymmetryWrap",
+			"force": "fieldAccess",
+			"note": "the catch LIST stops going through `SingleStmtBraces.trySymmetryCatches`, so a braced group never de-braces and every catch but the last keeps the `;` Haxe rejects in front of `catch`"
+		},
+		{
+			"name": "M-NONCURLY-SAME-DROP",
+			"type": "anyparse.macro.WriterPolicyLowering",
+			"method": "sameLineNonCurlyBlockPolicySwitch",
+			"force": "sameLinePolicySwitch(optFlag, keepExpr)",
+			"note": "a `[ … ]` block ctor separator falls back to the curly switch, where `SameOnBlock` matches no case and lands on the default space - so a bracket branch the `next` layout moved to its own line glues its `else` to the `]` (`[1] else if (b)` / `[] else`)"
+		},
+		{
+			"name": "M-VIF-SEAM-BRACKET-REFUSED",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "valueIfFitSeam",
+			"find": "collectCurlyBlockCtorPatterns(ctx.ctorPat, prevBody.typePath)",
+			"replace": "collectBlockCtorPatterns(ctx.ctorPat, prevBody.typePath)",
+			"note": "the `expressionIfFit` soft pre-`else` seam is refused after a `[ … ]` branch as well as after a curly one, so a fitting bracket chain written as the ladder can never collapse onto one line"
+		},
+		{
+			"name": "M-VIF-SEAM-GLUE-BLIND",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "valueIfFitSeam",
+			"find": "final fitGate: Expr = glueTest == null ? macro _vifFit : macro (_vifFit && !$glueTest);",
+			"replace": "final fitGate: Expr = macro _vifFit;",
+			"note": "the `expressionIfFit` soft pre-`else` seam ignores the bracket hug, so a `]` the knob glues to its `else` is split onto two lines whenever the fit group breaks"
+		},
+		{
+			"name": "M-NEWLINE-SIGNALS-NONE",
+			"type": "anyparse.macro.WriterTriviaSlotLowering",
+			"method": "collectFollowingNewlineSignals",
+			"force": "[]",
+			"note": "no downstream field contributes a captured-newline signal, so the conditional-expression seam has nothing to read and the source ladder collapses onto one line"
+		},
+		{
+			"name": "M-WORDOP-NO-RESTORE",
+			"type": "anyparse.macro.OperatorLoopLowering",
+			"method": "buildWordOpRestoreExpr",
+			"force": "macro {}",
+			"note": "the operator loop stops rewinding to `_preWsPos` when the token that ended it is a WORD operator, so the trivia the loop consumed is lost and a conditional region after a metadata block no longer parses"
+		},
+		{
+			"name": "M-BLANK-MULTILINE-OFF",
+			"type": "anyparse.macro.WriterBlankLowering",
+			"method": "blankAroundMultilineExprs",
+			"find": "if (optField == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
+			"replace": "if (true) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
+			"note": "the knob wires empty mark/seen/apply splices whatever the grammar asked for, so nothing measures a multiline member and no blank is inserted around one"
+		},
+		{
+			"name": "M-SSB-WRAP-DIRECTION",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "final isThenBodyExpr: Expr = elseFieldName != null ? macro true : macro false;",
+			"replace": "final isThenBodyExpr: Expr = macro false;",
+			"note": "an `if` then-body stops identifying itself as one, so it is exempted from gate 8 alongside the loop bodies and a bare then opposite a braced else is never wrapped"
+		},
+		{
+			"name": "M-SSB-TRAIL-COMMENT-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "final ssbTrailCommentExpr: Null<Expr> = dropBraces",
+			"replace": "final ssbTrailCommentExpr: Null<Expr> = false",
+			"note": "the de-braced statement's same-line trailing comment is never hoisted, so it stays inside the block the unwrap just removed and leaves the output"
+		},
+		{
+			"name": "M-SSB-FRAME-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "final ssbSuppressCond: Null<Expr> = elseAccess == null\n\t? null",
+			"replace": "final ssbSuppressCond: Null<Expr> = true\n\t? null",
+			"note": "the `_setSsbSuppress` frame is never armed, so an unwrap nested inside a then-body stops being gated on the trailing `else` and a dangling else loses the braces that keep it bound"
+		},
+		{
+			"name": "M-SSB-CHAIN-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "final thenChainSuppressExpr: Expr = elseAccess == null\n\t? macro false",
+			"replace": "final thenChainSuppressExpr: Expr = true\n\t? macro false",
+			"note": "chain symmetry stops forcing braces, so one keeper branch of an else-if chain no longer makes its bare siblings keep theirs"
+		},
+		{
+			"name": "M-EICR-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildElseIfCommentReflowLayout",
+			"find": "final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow\n\t\t\t\t&& $afterKwExpr == null\n\t\t\t\t&& _eicrLead.length == 1",
+			"replace": "final _eicrDoc: Null<anyparse.core.Doc> = $afterKwExpr == null\n\t\t\t\t&& _eicrLead.length == 1",
+			"note": "the runtime gate stops reading `opt.elseIfCommentReflow`, so the reflow fires with the knob off and every pre-knob layout moves"
+		},
+		{
+			"name": "M-LOOPIF-POLICY-BLIND",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyCoreWrap",
+			"find": "final loopPolicy: Expr = loopIfElseTest == null ? optFlag : macro ($loopIfElseTest ? $nextPat : $optFlag);",
+			"replace": "final loopPolicy: Expr = optFlag;",
+			"note": "the loop-body `if`/`else` shape stops substituting `Next` for the placement, so `loopBodyIfElseNext` is inert at every `forBody` / `whileBody` / `doWhileBody` value and the reported site glues again"
+		},
+		{
+			"name": "M-LOOPIF-KEEP-BLIND",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyCoreWrap",
+			"find": "return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
+			"replace": "return { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
+			"note": "the outer `Keep` switch reads the raw placement again, so a `keep` body routes to the source-preserving layout before any substitution can be seen - the S157 blind spot at `loopBodyIfElseNext`, and since S154 the bracket-hug substitution too, which is why `M-BRACKET-GLUE-KEEP-BLIND` cuts the same line one substitution narrower"
+		},
+		{
+			"name": "M-BRACKET-GLUE-KEEP-BLIND",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyCoreWrap",
+			"find": "return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
+			"replace": "return { expr: ESwitch(loopPolicy, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
+			"note": "the outer `Keep` switch reads the placement from before the bracket substitution, so `expressionIfWithBrackets` goes blind at `sameLine.expressionIf: keep` and only there - the knob still cuddles `] else` through its two close seams and refuses the `[` hug, which is the half shape it exists to prevent"
+		},
+		{
+			"name": "M-COND-KIND-NAME-CONVENTION",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "condKindsReaching",
+			"find": "\t\treturn collectKinds(declaring -> fieldRuleRefs(declaring).exists(ref -> reachesCondSeed(ref, seeds, [])));",
+			"replace": "\t\treturn collectKinds(declaring -> fieldRuleRefs(declaring).exists(ref -> reachesCondSeed(ref, seeds, [])))\n\t\t\t.filter(kind -> StringTools.startsWith(kind, 'CondSplice'));",
+			"note": "the derived vocabulary is filtered back to the grammar's NAMING convention, so the two ctors that already break it - `CondSharedBodyDecl`, named for a declaration region rather than a splice, and `MetaCondStmt`, named for the metadata it dispatches on - fall out of the gate, which is the hole a prefix list could never close"
+		},
+		{
+			"name": "M-PEB-WS-REWIND-OFF",
+			"type": "anyparse.macro.StarLoopLowering",
+			"method": "buildBlockEndedByteCheck",
+			"find": "_bc == ' '.code || _bc == '\\t'.code || _bc == '\\n'.code || _bc == '\\r'.code",
+			"replace": "false",
+			"note": "the block-ended byte check reads _prevEndPos - 1 raw, so an element that consumed trailing whitespace (a missed @:trailOpt, or the Pratt loop declining to rewind) hides its own `;` and the Star throws expected-separator"
+		},
+		{
+			"name": "M-BRACKET-GLUE-NONE",
+			"type": "anyparse.macro.WriterCtorPatternLowering",
+			"method": "buildBracketBodyGlueTest",
+			"force": "null",
+			"note": "no branch value ever reads as a bracket block the knob may hug, so a `[`-valued branch stops joining its head and the close stops cuddling the `else`"
+		},
+		{
+			"name": "M-ELSE-SWITCH-TESTS-NONE",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildElseSwitchTests",
+			"find": "final cases: Array<Case> = buildElseSwitchCases(bp, opts, macro true, macro false);",
+			"replace": "final cases: Array<Case> = [];",
+			"note": "the `elseSwitch` knob contributes no case, so the policy selector never substitutes and `same` leaves the `switch` on its own line whatever the config asked for"
+		},
+		{
+			"name": "M-ELSE-SWITCH-CLOSE-NONE",
+			"type": "anyparse.macro.WriterCtorPatternLowering",
+			"method": "buildElseSwitchGlueTest",
+			"force": "null",
+			"note": "no branch body ever reads as a `switch` the knob glued to its head, so the pre-`else` gap falls back to the shape-aware hardline and a glued then-`switch` closes under an `else` on its own line"
+		},
+		{
+			"name": "M-ELSE-SWITCH-CLOSE-COMMENT",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitBodyPolicyBareRef",
+			"find": "macro ($glueCtorTest && $atRt == null && $blRt.length == 0);",
+			"replace": "glueCtorTest;",
+			"note": "the close-side glue stops asking whether a captured comment forced the body onto its own line, so the `else` cuddles a `}` that never moved up to the `if` head"
+		},
+		{
+			"name": "M-PEB-WS-REWIND-TRYPARSE-OFF",
+			"type": "anyparse.macro.StarLoopLowering",
+			"method": "buildTryparseSepLoop",
+			"find": "_bc == ' '.code || _bc == '\\t'.code || _bc == '\\n'.code || _bc == '\\r'.code",
+			"replace": "false",
+			"note": "the tryparse Star's own copy of the block-ended byte check reads _prevEndPos - 1 raw, so a `#if` region's statement whose terminator was swallowed hides its `;`, the loop breaks at the missing sep and the enclosing @:trail('#end') no longer matches - the file stops parsing"
+		},
+		{
+			"name": "M-PEB-WS-REWIND-SEPSTARTS-OFF",
+			"type": "anyparse.macro.StarFieldLowering",
+			"method": "lowerStarBlockEndedSepStarts",
+			"find": "_bc == ' '.code || _bc == '\\t'.code || _bc == '\\n'.code || _bc == '\\r'.code",
+			"replace": "false",
+			"note": "the enum-branch lead/trail Star's own copy of the byte check reads _prevEndPos - 1 raw, so a nested `{ … }` block whose statement swallowed its own terminator refuses the following statement and the file stops parsing"
+		},
+		{
+			"name": "M-SEPSTAR-RESTPROBE-UNGATED",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "emitSepStarList",
+			"find": "final groupRestProbeExpr: Expr = groupRestProbe ? (macro !opt._suppressPatternRestProbe) : (macro false);",
+			"replace": "final groupRestProbeExpr: Expr = macro $v{groupRestProbe};",
+			"note": "the non-trivia struct-Star dispatch goes back to the macro-time constant, so a list below a case pattern charges the trailing guard to its own fit again"
+		},
+		{
+			"name": "M-TRIVIASEP-RESTPROBE-UNGATED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "groupRestProbe: $v{c.groupRestProbe} && !opt._suppressPatternRestProbe,",
+			"replace": "groupRestProbe: $v{c.groupRestProbe},",
+			"note": "the trivia dispatch stops reading the pattern flag, so a @:trivia Star below a case pattern rest-probes while the plain writer does not"
+		},
+		{
+			"name": "M-FILEHEADER-HEAD-NOT-PIU",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofHeadIsPiuExpr",
+			"find": "_headIsPiu = true;",
+			"replace": "_headIsPiu = false;",
+			"note": "no module head ever classifies as package / import / using, so a real file header above one of them loses its blank line"
+		},
+		{
+			"name": "M-FILEHEADER-HEAD-ALWAYS-PIU",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofHeadIsPiuExpr",
+			"find": "_headIsPiu = true;\ncase _:",
+			"replace": "_headIsPiu = true;\ncase _:\n_headIsPiu = true;",
+			"note": "every module head classifies as package / import / using, so a lone doc comment above a type is treated as a file header and a blank splits it from what it documents"
+		},
+		{
+			"name": "M-FILEHEADER-ANY-DECL",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofFileheaderBlanksExpr",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t&& _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t&& _isBlock",
+			"note": "the first-decl guard goes, so a doc comment leading the SECOND declaration is read as the module's file header"
+		},
+		{
+			"name": "M-FILEHEADER-ANY-COMMENT",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofFileheaderBlanksExpr",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t&& _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _isBlock",
+			"note": "the first-comment guard goes, so the SECOND comment of a leading run is a file header too and a type's own doc is split from it"
+		},
+		{
+			"name": "M-FILEHEADER-ANY-COMMENT-KIND",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofFileheaderBlanksExpr",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t&& _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t",
+			"note": "the block-comment guard goes, so a line-comment header takes the file-header blank the knob reserves for a block one"
+		},
+		{
+			"name": "M-FILEHEADER-NO-TWO-COMMENT-ARM",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofFileheaderBlanksExpr",
+			"find": "&& (_headIsPiu || _t.leadingComments.length >= 2);",
+			"replace": "&& _headIsPiu;",
+			"note": "the two-comments arm goes, so a header comment standing above a type's own doc with no package / import / using anywhere keeps no blank between them"
+		},
+		{
+			"name": "M-FILEHEADER-COND-OPAQUE",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofHeadIsPiuExpr",
+			"find": "case Conditional(_c):\nif (_c.body.length > 0)\n$condHeadClassify;",
+			"replace": "",
+			"note": "the module-head #if stops being transparent, so a file header above a guarded import block reads as leading a type and loses its blank"
+		},
+		{
+			"name": "M-SSB-FRAME-BLANKET",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "\t\t\t\t&& !anyparse.format.SingleStmtBraces.keepsBraces(\n\t\t\t\t\t$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true\n\t\t\t\t)",
+			"replace": "\t\t\t\t&& !(false && anyparse.format.SingleStmtBraces.keepsBraces(\n\t\t\t\t\t$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true\n\t\t\t\t))",
+			"note": "the suppress frame is armed without the span-precision probe, so a then-body that renders WITH its braces still gates every unwrap nested inside it"
+		},
+		{
+			"name": "M-ELSE-SEP-EXPR-BLIND",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "sameLineSeparatorShapeAware",
+			"find": "\t\tmacro (\n\t\t\t!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)\n\t\t\t\t? _dhl()\n\t\t\t\t: ${c.flagBased}\n\t\t);",
+			"replace": "\t\tmacro (\n\t\t\topt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)\n\t\t\t\t? _dhl()\n\t\t\t\t: ${c.flagBased}\n\t\t);",
+			"note": "the semicolon-next-line `else` rule stops asking whether it is at expression position, so a value-`if` inside a case body is governed by the statement rule"
+		},
+		{
+			"name": "M-KEEP-ELSEIF-NEXT-OFF",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyKeepLayout",
+			"find": "\tfinal elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null }];\n\tfinal elseIfSwitchForKeep: Expr = {",
+			"replace": "\tfinal elseIfCases: Array<Case> = [];\n\tfinal elseIfSwitchForKeep: Expr = {",
+			"note": "the Keep layout stops honouring `elseIf: next`, so a nested `if` under a source-preserved `else` keeps whatever line the source wrote instead of moving to its own"
+		},
+		{
+			"name": "M-KEEP-ELSEIF-ALWAYS-GLUED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyKeepLayout",
+			"find": "\t\texpr: ESwitch(macro opt.elseIf, elseIfCases, keepBaseExpr),",
+			"replace": "\t\texpr: ESwitch(macro opt.elseIf, elseIfCases, sameLayoutExpr),",
+			"note": "the Keep layout glues every `IfStmt` else body onto the `else` line instead of falling back to the source-preserved gap, so a comment-led `else` / `if` pair loses its break"
+		},
+		{
+			"name": "M-BEFORE-KW-TRAILING-DROP",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "beforeKwSeparator",
+			"find": "\tfinal sepExpr: Expr = beforeKwTrailingExpr != null\n\t\t? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)\n\t\t: sepWithBeforeKwExpr;",
+			"replace": "\tfinal sepExpr: Expr = sepWithBeforeKwExpr;",
+			"note": "the gap before an optional keyword loses its BeforeKwTrailing layer, so a same-line trailing comment on the statement in front of `else` is dropped"
+		},
+		{
+			"name": "M-BEFORE-KW-LEADING-DROP",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "beforeKwSeparator",
+			"find": "\tfinal sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null\n\t\t? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)\n\t\t: sepBaseExpr;",
+			"replace": "\tfinal sepWithBeforeKwExpr: Expr = sepBaseExpr;",
+			"note": "the gap before an optional keyword loses its BeforeKwLeading layer, so an own-line comment written between a closing brace and `else` is dropped"
+		},
+		{
+			"name": "M-BEFORE-LEADING-COMMENT-DROP",
+			"type": "anyparse.macro.WriterTriviaSlotLowering",
+			"method": "buildBeforeLeadingSep",
+			"force": "triviaSepExpr",
+			"note": "a bare non-first Ref emits the plain inter-field separator, so the comments captured in the BeforeLeading gap - a multiline block comment between a member modifier and the `var` keyword - never reach the output"
+		},
+		{
+			"name": "M-KWLEAD-NEVER-WORD",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "isWordStart",
+			"force": "false",
+			"note": "no `@:lead` ever reads as starting with a word character, so the keyword's trailing space is stripped in front of a word lead too and `static var` / `static final` come out glued - after which the writer cannot re-parse its own output"
+		},
+		{
+			"name": "M-BLOCK-SHAPE-EQUIV-NONE",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "isBlockShapeEquivalentBranch",
+			"force": "false",
+			"note": "no branch is block-shape equivalent - both disjuncts go, the block ctor and the `@:fmt(blockShape)` flag - so the bare try-catch ctor contributes no ctor pattern and the shape-aware separator glues `catch` onto the bare body instead of breaking the way the braced form does"
+		},
+		{
+			"name": "M-KWREF-BARE-BODY-BREAKS-BLIND",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "subStructStartsWithBareBodyBreaks",
+			"force": "false",
+			"note": "a sub-struct whose first field carries `@:fmt(bareBodyBreaks)` stops stripping the keyword's trailing space, so a de-braced `try` is written with two spaces before its bare body and the second pass no longer reproduces the first"
+		},
+		{
+			"name": "M-KWREF-TIGHT-LEAD-BLIND",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "subStructStartsWithTightLead",
+			"force": "false",
+			"note": "a `default` branch's sub-struct opening on a tight `:` lead stops stripping the keyword's trailing space, so a `default` label is written `default :`"
+		},
+		{
+			"name": "M-CASE-CTRLFLOW-STAR-FLAG-BLIND",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "ownStarHasFlag",
+			"force": "false",
+			"note": "no direct Star child reads as carrying its `@:fmt` flag, so `refuseGlueOnControlFlowRoot` never reaches the case-list pre-pass and a sibling case unit glues to its own label beside a control-flow body"
+		},
+		{
+			"name": "M-PROJECTED-KINDS-ALT-ONLY",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "eachProjectedKind",
+			"find": "\t\t\t\tif (isSpanned(node)) visit(node, node.readMetaString(PairedShapeLowering.SPANNED_META));\n",
+			"replace": "",
+			"note": "the projected vocabulary loses its @:spanned half, so CatchClause / KeyValueBinder / VarMore stop being projected while the six kind sets that declare them keep naming them - the exact fail-open shape the differential exists to see, and the census floors stay satisfied so only the subset assertion goes red"
+		},
+		{
+			"name": "M-FOR-BODY-PROBE-EAGER",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "wrapBodyAllman",
+			"find": "final _bodyForAllman: Null<anyparse.core.Doc> =",
+			"replace": "final _eagerProbe: anyparse.core.Doc = $writeCall;\n\t\t\tfinal _bodyForAllman: Null<anyparse.core.Doc> =",
+			"note": "the Allman probe writes every body whatever its ctor and the layout writes it again, so a comprehension nest writes its innermost body 2^depth times"
+		},
+		{
+			"name": "M-CHAIN-WALK-EAGER",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "wrapChainTriviaBody",
+			"find": "if (_isChain) {",
+			"replace": "if (true) {",
+			"note": "the method-chain walk writes every call's arguments before it knows the value is a chain, and the plain call writes them again, so `a.m(a.m(\u2026))` doubles per level"
+		},
+		{
+			"name": "M-SPANINFO-BOUND-MORE",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "constraintCollect",
+			"find": "out.push(macro for (_cm in $e{field(ident('v'), CONSTRAINT_MORE_FIELD)}) $push);",
+			"replace": "",
+			"note": "only a type parameter's first bound is kept, the `& Type` tail is dropped"
+		},
+		{
+			"name": "M-KWTRAIL-FLAT-GAP-KEPT",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "kwBeforeTrailingDocField",
+			"find": "case Text(_s, _) if (StringTools.trim(_s) == ''): _dhl();",
+			"replace": "case Text(_s, _) if (StringTools.trim(_s) == ''): sepDoc;",
+			"note": "a flat gap after a trailing line comment stays flat, so `else` lands on the comment's line and the round trip refuses the file"
+		},
+		{
+			"name": "M-KWTRAIL-GUARD-HARD",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "kwBeforeTrailingDocField",
+			"find": "case _: _dc([_dohsbh(), sepDoc]);",
+			"replace": "case _: _dc([_dhl(), sepDoc]);",
+			"note": "a gap that already opens with a break gets a second one, so a trailing comment followed by an own-line comment gains a blank line"
+		},
+		{
+			"name": "M-CLOSE-TRAIL-BLOCK-BREAKS",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElseBody",
+			"find": "_parts.push(trailingCommentDocGuarded(_trailClose, opt));",
+			"replace": "_parts.push(trailingCommentDocGuarded(_trailClose, opt));\n_parts.push(_dohsbh());",
+			"note": "a close-trailing comment is followed by a forward hardline whatever its style again, so `} /* c */` breaks before a same-line `else` / `while` / `catch`"
+		},
+		{
+			"name": "M-CLOSE-TRAIL-EMPTY-HARD",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockStarExpr",
+			"find": "final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);",
+			"replace": "final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt), _dhl()]);",
+			"note": "an empty block's close-trailing comment is followed by a hard newline again, so a block comment breaks and a line comment pushes the keyword one space out"
+		},
+		{
+			"name": "M-CATCH-CLOSE-TRAIL-ANY",
+			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
+			"method": "buildCloseTrailingFirstSepOverride",
+			"find": "guard: macro _ct != null && StringTools.startsWith(_ct, '//')",
+			"replace": "guard: macro _ct != null",
+			"note": "the first-catch separator is dropped after ANY close-trailing comment again, so `} /* c */catch` loses its gap under every policy"
+		},
+		{
+			"name": "M-OPEN-TRAIL-EMPTY-UNGUARDED",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockMainExpr",
+			"find": "trailingCommentDocGuarded(_trailClose, opt)",
+			"replace": "trailingCommentDocVerbatim(_trailClose, opt)",
+			"note": "`{ /* n */ } // c` emits its line comment with no forward break, so the keyword after it is swallowed into the comment"
+		},
+		{
+			"name": "M-OPEN-TRAIL-SEP-UNGUARDED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepEmptyOpenTrailExpr",
+			"find": "trailingCommentDocGuarded(_trailClose, opt)",
+			"replace": "trailingCommentDocVerbatim(_trailClose, opt)",
+			"note": "`(/* n */) // c` emits its line comment with no forward break, so the function body's `{` is swallowed into the comment"
+		},
+		{
+			"name": "M-FNBODY-GAP-COMMENT-NONE",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitLeftCurlyBody",
+			"find": "if (hasBeforeLeadingSlot) {",
+			"replace": "if (false) {",
+			"note": "the function body's `BeforeLeading` slot goes unread again, so `function f():Int /* c */ {` drops the comment"
+		},
+		{
+			"name": "M-BEFORE-LEAD-CAPTURE-NONE",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "emitOptionalRefLeadCommit",
+			"find": "$i{beforeLeadLocal} = _leadGapComment;",
+			"replace": "$i{beforeLeadLocal} = null;",
+			"note": "an optional lead commit forgets the block comment before its lead, so `var x /* c */ = 1` drops it"
+		},
+		{
+			"name": "M-BEFORE-LEAD-MANDATORY-NONE",
+			"type": "anyparse.macro.StructFieldTrailLowering",
+			"method": "emitFieldLeadIn",
+			"find": "if (beforeLeadLocal != null) parseSteps.push(macro $i{beforeLeadLocal} = collectTrailingBlock(ctx));",
+			"replace": "if (false) parseSteps.push(macro $i{beforeLeadLocal} = collectTrailingBlock(ctx));",
+			"note": "a mandatory lead skips the block comment before it as whitespace again, so `{x /* c */:Int}` drops it"
+		},
+		{
+			"name": "M-BEFORE-LEAD-WRITER-OPT-NONE",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalRefField",
+			"find": "if (beforeLead != null) optParts.push(beforeLeadDoc(beforeLead));",
+			"replace": "if (false) optParts.push(beforeLeadDoc(beforeLead));",
+			"note": "an optional lead's captured comment is never written, so `var x /* c */ = 1` drops it"
+		},
+		{
+			"name": "M-BEFORE-LEAD-WRITER-MANDATORY-NONE",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitFieldLeadIn",
+			"find": "if (beforeLead != null) parts.push(beforeLeadDoc(beforeLead));",
+			"replace": "if (false) parts.push(beforeLeadDoc(beforeLead));",
+			"note": "a mandatory lead's captured comment is never written, so `{x /* c */:Int}` drops it"
+		},
+		{
+			"name": "M-JSON-KEY-PARSE",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "lowerStructByName",
+			"find": "final key: String = MetaInspect.wireKey(child, fieldName);",
+			"replace": "final key: String = fieldName;",
+			"note": "a ByName parser matches a field by its Haxe name, so a key declared with `@:key` (a keyword, a hyphenated key) is never read"
+		},
+		{
+			"name": "M-JSON-KEY-WRITE",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerStructByName",
+			"find": "final keyPrefix: String = '\"${child.wireKey(fieldName)}\"$keyValueSep';",
+			"replace": "final keyPrefix: String = '\"$fieldName\"$keyValueSep';",
+			"note": "a ByName writer spells a field by its Haxe name, so what it writes its own parser cannot read back"
+		},
+		{
+			"name": "M-JSON-KEY-UNCHECKED",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "wireKey",
+			"find": "if (key == null)",
+			"replace": "if (false)",
+			"note": "a `@:key` that is not one string literal is ignored, and the field silently keeps its Haxe name as its key"
+		},
+		{
+			"name": "M-JSON-KEY-UNWRITABLE",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "wireKey",
+			"find": "if (unwritable.match(key))",
+			"replace": "if (false)",
+			"note": "a key holding a quote or a backslash builds, and the writer emits a document no JSON parser reads"
+		},
+		{
+			"name": "M-JSON-KEY-DUPLICATES",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "checkWireKeys",
+			"find": "if (other != null)",
+			"replace": "if (false)",
+			"note": "two fields spelled with one key build, and the parser fills only the first"
+		},
+		{
+			"name": "M-JSON-KEY-DUP-AT-FIELD",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "checkWireKeys",
+			"find": "child.annotations.get(AnnotationKeys.BASE_FIELD_POS) ?? Context.currentPos()",
+			"replace": "Context.currentPos()",
+			"note": "two fields sharing a key are reported at the build macro, not at the field"
+		},
+		{
+			"name": "M-DOWHILE-PLAIN-SEMI",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefParts",
+			"find": "} else if (branch.fmtHasFlag('trailOptParseOnly')) {",
+			"replace": "} else if (false) {",
+			"note": "the plain writer emits `do i++; while (c)` again, which Haxe rejects (`Expected while`)"
+		},
+		{
+			"name": "M-WALK-TYPE-ARGS-UNCOUNTED",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "seqTypeArgCount",
+			"find": "rule.children.find(f -> f.hasMeta(QUERY_TYPE_ARGS_META))",
+			"replace": "rule.children.find(f -> false)",
+			"note": "the walker records no type-argument count, so the matcher sees one flat child run"
+		},
+		{
+			"name": "M-XREN-EXTENDS-HEAD-UNEMITTED",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "typeRefsDescendCore",
+			"find": "final head: Null<Expr> = nominal ? nameOfValue(child, access) : null;",
+			"replace": "final head: Null<Expr> = null;",
+			"note": "a nominal reference reached through a `type` slot emits no head again, so a struct extension nested in an annotation (`Array<{ > T, }>`) projects its fields' types and never `T`"
+		},
+		{
+			"name": "M-OUTLINE-OFF",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "rewrite",
+			"find": "if (!isTrial(mapped)) return mapped;",
+			"replace": "return mapped;",
+			"note": "no trial is moved: every enum-branch trial stays inline in its rule and BranchOutliningTest reads the unchanged body"
+		},
+		{
+			"name": "M-OUTLINE-WRITE-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "written",
+			"find": "refuse('a write to the rule local $name');",
+			"replace": "{}",
+			"note": "a trial that writes a rule local is moved, so the helper writes its own copy and the rule never sees the write"
+		},
+		{
+			"name": "M-OUTLINE-BREAK-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "walk",
+			"find": "if (_loops == 0) refuse('a break / continue that leaves the trial');",
+			"replace": "{}",
+			"note": "a break that leaves the trial is moved into a helper, where it has no loop to target"
+		},
+		{
+			"name": "M-OUTLINE-SWITCH-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "walk",
+			"find": "refuse('a switch');",
+			"replace": "ExprTools.iter(e, walk);",
+			"note": "a trial holding a switch is moved although its pattern bindings are not scoped"
+		},
+		{
+			"name": "M-OUTLINE-FOR-PATTERN-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "walk",
+			"find": "refuse('a for over a non-identifier pattern');",
+			"replace": "ExprTools.iter(e, walk);",
+			"note": "a for over a key-value pattern is moved although its bindings are not scoped"
+		},
+		{
+			"name": "M-OUTLINE-NULLABLE-RETURN-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "walk",
+			"find": "if (_fns == 0 && !cannotBeNull(value)) refuse('a return whose value may be null');",
+			"replace": "{}",
+			"note": "a return that may hand back null is moved, and the call site reads that null as a failed trial and tries the next branch"
+		},
+		{
+			"name": "M-OUTLINE-CONSTANT-AS-CTOR",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "isCtorName",
+			"find": "first <= 'Z'.code && name.toUpperCase() != name",
+			"replace": "first <= 'Z'.code",
+			"note": "an all-capitals constant counts as a constructor, so its possibly-null value is returned through a helper"
+		},
+		{
+			"name": "M-OUTLINE-UNTYPED-CAPTURE",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "rewrite",
+			"find": "if (type == null) {",
+			"replace": "if (false) {",
+			"note": "a captured rule local with no single declared type becomes a helper parameter without a type"
+		},
+		{
+			"name": "M-OUTLINE-NESTED-ALT-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "cannotBeNull",
+			"find": "case EConst(CIdent(name)): name == BranchOutlining.ALT_LOCAL;",
+			"replace": "case EConst(CIdent(_)): false;",
+			"note": "the outer trial of a moved nested trial returns _alt and stays inline"
+		},
+		{
+			"name": "M-QUERY-NAME-IGNORED",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "lowerNameSeq",
+			"find": "if (tagged != null) {",
+			"replace": "if (false) {",
+			"note": "a `@:queryName` field names nothing, so a JSON object member projects unnamed and `Member:<key>` matches no node"
+		},
+		{
+			"name": "M-PAREN-BROKEN-CHAIN-PINNED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "opAddSubParenShape",
+			"find": "|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
+			"replace": "|| false",
+			"note": "an expression paren around a `+`/`-` chain an operand already broke pins that chain flat again when no `expressionWrapping` rule is set, so every continuation line renders at column 0 and the next write re-indents it"
+		},
+		{
+			"name": "M-BREAKMARK-FIT-NAMED",
+			"type": "anyparse.macro.WriterPolicyLowering",
+			"method": "nestBodyOnSourceNewlineWrap",
+			"find": "_dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $namedCall]);",
+			"replace": "_dn(_cols, _dc([_dl(), $namedCall])) : _dc([_dt(' '), $namedCall]);",
+			"note": "an `#if` body under `conditionalExprFit` is named too, though the next write reads the region's directive seams back as well as the literal, so a ladder main settles in one write becomes the glued shape"
+		},
+		{
+			"name": "M-DROPPED-SEP-UNREHOMED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepArrDecls",
+			"find": ": macro final _arr = anyparse.runtime.DroppedSepComment.last(_arrSrc, $appendTrailingCommaExpr, $tailRehomeFn);",
+			"replace": ": macro final _arr = _arrSrc;",
+			"note": "a list whose trailing separator the writer drops is laid out from the source tree, the comment outside the element the next parse reads it inside of"
+		},
+		{
+			"name": "M-TAIL-SLOT-OVERWRITTEN",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "starField",
+			"find": "return macro $slotAccess == null ? $copy : null;",
+			"replace": "return macro $copy;",
+			"note": "a struct close slot already holding a comment is overwritten, and that comment is lost"
+		},
+		{
+			"name": "M-TAIL-ALT-SLOT-OVERWRITTEN",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altCase",
+			"find": "macro $slot == null ? ${rebuild(index, macro $i{COMMENT_ARG})} : null;",
+			"replace": "macro ${rebuild(index, macro $i{COMMENT_ARG})};",
+			"note": "a ctor close slot already holding a comment is overwritten, and that comment is lost"
+		},
+		{
+			"name": "M-TAIL-WRITTEN-SEMICOLON-IGNORED",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "refField",
+			"find": "return macro $presentAccess == true ? null : $rebuilt;",
+			"replace": "return rebuilt;",
+			"note": "a body the source closed with `;` takes the comment in front of the `;`, which the comment then swallows"
+		},
+		{
+			"name": "M-TAIL-ONLY-KNOWN-METAS",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "onlyMetas",
+			"find": "return meta == null || meta.foreach(entry -> allowed.contains(entry.name));",
+			"replace": "return true;",
+			"note": "a shape with a token after its operand (a paren pair, a trail literal) passes the comment into the operand, ahead of that token"
+		},
+		{
+			"name": "M-TAIL-ABSENT-FIELD-STOPS",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "seqField",
+			"find": "return macro $access == null ? $before : $present;",
+			"replace": "return present;",
+			"note": "an absent optional last field (an if with no else) answers null instead of the field emitted before it"
+		},
+		{
+			"name": "M-TAIL-ARRAY-SLOT-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch) || TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"replace": "if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"note": "an array literal tail no longer takes the comment its close captures"
+		},
+		{
+			"name": "M-TAIL-CALL-SLOT-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch) || TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"replace": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch)) {",
+			"note": "a call tail no longer takes the comment its close paren captures"
+		},
+		{
+			"name": "M-TAIL-INFIX-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':infix')) return children.length == 2 && onlyMetas(branch, [':infix', ':fmt']) ? Operand(1) : None;",
+			"replace": "if (branch.hasMeta(':infix')) return None;",
+			"note": "an infix expression's right operand is not asked, so `t + {a: 1}` keeps the comment outside"
+		},
+		{
+			"name": "M-TAIL-TERNARY-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':ternary')) return children.length == 3 && onlyMetas(branch, [':ternary', ':fmt']) ? Operand(2) : None;",
+			"replace": "if (branch.hasMeta(':ternary')) return None;",
+			"note": "a ternary's else operand is not asked"
+		},
+		{
+			"name": "M-TAIL-PREFIX-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':prefix')) return children.length == 1 && onlyMetas(branch, [':prefix', ':fmt']) ? Operand(0) : None;",
+			"replace": "if (branch.hasMeta(':prefix')) return None;",
+			"note": "a prefix operator's operand is not asked"
+		},
+		{
+			"name": "M-TAIL-OPERAND-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "return single && onlyMetas(branch, TRANSPARENT_BRANCH_METAS) ? Operand(0) : None;",
+			"replace": "return None;",
+			"note": "a keyword or lead ctor (if, for, object literal, new, function) does not pass the comment to its one operand"
+		},
+		{
+			"name": "M-REGION-UNNAMED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefFinalDoc",
+			"find": "? macro (opt.conditionalExprFit ? anyparse.core.BreakCommits.namedRegion($concatDoc) : $concatDoc)",
+			"replace": "? macro (opt.conditionalExprFit ? _dgrp($concatDoc) : $concatDoc)",
+			"note": "a fit region is an undecided group again, so a call filling its line measures it flat and opens before the `#if` the next write glues"
+		},
+		{
+			"name": "M-REGION-SEAMS-BOUNDED",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseDefaultTerminal",
+			"find": "? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs))",
+			"replace": "? macro _dwb($finalWrapDocs)",
+			"note": "the elseifs Star of a fit region keeps its force-flat boundary, so inside a glued comprehension body the seams before the #elseif flatten and the ones after it break"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-BARRIER",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "statementListElemOpt",
+			"find": "return macro _clearCallArgChainNest($optExpr);",
+			"replace": "return optExpr;",
+			"note": "a statement-list element keeps the call-argument chain flag: the first chain in a lambda argument's body wraps its operator at the statement's indent"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-BLOCK",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElemCallExpr",
+			"find": "WriterOptFanout.statementListElemOpt(elemOptExpr)",
+			"replace": "elemOptExpr",
+			"note": "a block statement (lambda / anonymous function body) bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-CASE",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseElemCallExprs",
+			"find": "WriterOptFanout.statementListElemOpt(macro _writerOpt)",
+			"replace": "macro _writerOpt",
+			"note": "a case-body statement of an arrow-body switch argument bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-TCO-KNOB-IGNORED",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElemPushExpr",
+			"find": "opt.trailingCommentAbove && _t.leadingComments.length == 0",
+			"replace": "_t.leadingComments.length == 0",
+			"note": "the runtime gate stops reading `opt.trailingCommentAbove`, so every opted-in block moves its overflowing trailing comments with the knob off"
+		},
+		{
+			"name": "M-TCO-LEADING-IGNORED",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElemPushExpr",
+			"find": "opt.trailingCommentAbove && _t.leadingComments.length == 0",
+			"replace": "opt.trailingCommentAbove",
+			"note": "an element that already carries a leading comment moves its trailing one too, where the second pass reads a longer leading list and the blank / doc / run rules may answer differently"
+		},
+		{
+			"name": "M-CHAIN-REST-UNSET",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "final _restAware: Bool = !opt._keepChainInParen && !_condWrapForced;",
+			"replace": "final _restAware: Bool = false;",
+			"note": "no `&&` / `+` chain is rest-aware, so every one-or-two-column overrun breaks inside an operand or not at all"
+		},
+		{
+			"name": "M-CHAIN-REST-IN-KEPT-PAREN",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "final _restAware: Bool = !opt._keepChainInParen && !_condWrapForced;",
+			"replace": "final _restAware: Bool = true;",
+			"note": "a chain inside a paren that owns the wrap counts the paren's rest too, so it breaks where the paren should open first"
+		},
+		{
+			"name": "M-COLLAPSE-COUNTED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "(_smlKeep || _breakAsOnePerLine && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0)",
+			"replace": "(_smlKeep)",
+			"note": "a source-flat list its cascade commits to one-per-line reaches its host counted while the next write reads it back deferred, so a chain or an arrow around it breaks once and glues on the next write"
+		},
+		{
+			"name": "M-COLLAPSE-ANY-RESULT",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "_breakAsOnePerLine && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0",
+			"replace": "_breakAsOnePerLine",
+			"note": "every source-flat list is deferred, a flat one included, so a host under-measures a literal that still stands flat and glues past the limit"
+		},
+		{
+			"name": "M-SPANINFO-RETURN-SOURCES",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "spanInfoWrites",
+			"find": "if (_rs != null) b.returnTypeSources[_sp.from] = source.substring(_rs.from, _rs.to);",
+			"replace": "",
+			"note": "the span info records no return type source, so no signature reads one"
+		},
+		{
+			"name": "M-PAREN-KEPT-CHAIN-OPENS",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "opAddSubParenShape",
+			"find": "opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep",
+			"replace": "false",
+			"note": "a `keep` chain its source broke opens the paren its source glued again, adding a break after `(` and before `)` the source does not have"
+		},
+		{
+			"name": "M-PAREN-KEPT-CHAIN-SOURCE-NEST",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "opAddSubParenShape",
+			"find": "? _dc([$leadDoc, _wrapInner, _wrapTrail])",
+			"replace": "? (opt._varKwNewline ? _dc([$leadDoc, _wrapInner, _wrapTrail]) : _dn(_cols, _dc([$leadDoc, _wrapInner, _wrapTrail])))",
+			"note": "the glued paren nests its kept chain by the SOURCE break after `return`, which the `return` policy may drop or add, so one write is no longer a fixed point"
+		},
+		{
+			"name": "M-CATCH-BLOCK-LINE-END-GLUED",
+			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
+			"method": "buildCloseTrailingFirstSepOverride",
+			"find": "guard: macro _ct != null && _t.newlineBefore",
+			"replace": "guard: macro false",
+			"note": "a block comment that ended its source line after the try body's `}` glues the first `catch` onto its line again under a same-line policy"
+		},
+		{
+			"name": "M-PAREN-KEPT-CHAIN-OPERAND",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "opAddSubParenShape",
+			"find": "&& anyparse.format.wrap.WrapList.breaksAtOwnAddSubOperator(_wrapInner)",
+			"replace": "&& anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
+			"note": "a kept chain broken only inside an operand (an array one item per line) counts as one its source broke, so its paren stays glued instead of opening"
+		},
+		{
+			"name": "M-TRAIL-FORCEMULTI-UNGATED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "? $appendTrailingCommaExpr && ($flatTrailingCommaExpr || !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_elem))",
+			"replace": "? $appendTrailingCommaExpr",
+			"note": "a list laid out one item per line by a comment appends the trailing comma after a region ending it"
+		},
+		{
+			"name": "M-TRAIL-CALL-FORCEMULTI-UNGATED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixForceMultiDoc",
+			"find": "final _mTrail: Bool = _mLast && $tcExpr && !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_docs[_mj]);",
+			"replace": "final _mTrail: Bool = _mLast && $tcExpr;",
+			"note": "call arguments laid out one per line by a line comment append the trailing comma after a region ending them"
+		},
+		{
+			"name": "M-CASCADE-LEAD-BREAKS",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "_parts.push(_glueLeads ? _dt(' ') : _dhl());",
+			"replace": "_parts.push(_dhl());",
+			"note": "the wrap cascade breaks after a block comment the source glued to its parameter, so the next write moves the parameter"
+		},
+		{
+			"name": "M-CLOSE-LOOP-LEAD-UNGLUED",
+			"type": "anyparse.macro.StarLoopLowering",
+			"method": "buildTriviaCloseLoopBody",
+			"find": "leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,",
+			"replace": "",
+			"note": "a closed trivia list records no glued leading comment, so a parameter's glued block comment is written on a line of its own"
+		},
+		{
+			"name": "M-NOWRAP-LEAD-IN-CASCADE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepInlineableLeadExpr",
+			"find": "_ignoreEmit && $inlineLead && (!_noWrapRules || $e{triviaSepGluedLeadExpr()});",
+			"replace": "_ignoreEmit && $inlineLead;",
+			"note": "a pure noWrap cascade takes an own-line comment and writes it after the previous parameter's comma"
+		},
+		{
+			"name": "M-CALL-SOURCE-TRAIL-OFF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixStar",
+			"find": "final tcExpr: Expr = trailingCommaExpr(branch, isTriviaStar ? postfixSourceTrailExpr() : null);",
+			"replace": "final tcExpr: Expr = trailingCommaExpr(branch);",
+			"note": "a call laid out one argument per line drops the trailing comma its source wrote"
+		},
+		{
+			"name": "M-CALL-FLAT-SOURCE-TRAIL-OFF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixCascadeCall",
+			"find": "final flatTcExpr: Expr = c.isTriviaStar ? postfixSourceTrailExpr() : macro false;",
+			"replace": "final flatTcExpr: Expr = macro false;",
+			"note": "a call that stays on one line drops the trailing comma its source wrote"
+		},
+		{
+			"name": "M-TERNARY-MLB-OPTION-IGNORED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "multilineBranchInlineExpr",
+			"find": "return macro $optAccess && ($pred($i{argNames[1]}) || $pred($i{argNames[2]}));",
+			"replace": "return macro ($pred($i{argNames[1]}) || $pred($i{argNames[2]}));",
+			"note": "the option is not consulted, so `break` and an absent key keep a block-holding ternary glued like `inline`"
+		},
+		{
+			"name": "M-MERMAID-ENCODE-DROPPED",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerTerminal",
+			"find": "return macro return _dt($encodeCall);",
+			"replace": "return macro return _dt(value);",
+			"note": "an `@:encode` terminal is written as its decoded value, so a Mermaid label holding a quote or a pipe comes out bare and the writer's output no longer parses back to the AST it was given"
+		},
+		{
+			"name": "M-RETURN-SAME-WIDTH-BREAK",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": ": _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);",
+			"replace": ": _difle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);",
+			"note": "`same` asks whether the value's FLAT width fits instead of whether its natural glued first line does, so a value that can wrap after the `return` head is moved to the next line whole"
+		},
+		{
+			"name": "M-RETURN-SAME-MULTILINE-PROBED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": "$isBlockValue ? _gluedW : _dinfler(",
+			"replace": "_dinfler(",
+			"note": "`same` probes the first line of a control-flow value too, so `if (…) return switch x {` is moved under the `return` instead of keeping the switch head on the return line"
+		},
+		{
+			"name": "M-RETURN-SAME-EXEMPTS-BY-DOC",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": "$isBlockValue ? _gluedW :",
+			"replace": "anyparse.format.wrap.WrapList.flatLength(_bodyW) == -1 ? _gluedW :",
+			"note": "`same` exempts any value whose Doc spans lines instead of a control-flow ctor, so an object literal's kept source break decides whether the call moves under `return`"
+		},
+		{
+			"name": "M-BYNAME-NULL-ABSENT",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "lowerStructByName",
+			"find": "final nullAware: Bool = nullLiteral != null && refName != sc.formatInfo.anyType;",
+			"replace": "final nullAware: Bool = false;",
+			"note": "a ByName field stops reading the format's null literal as an absent key, so a config the fork itself writes fails to parse on every file"
+		},
+		{
+			"name": "M-TRIVIA-SYNTH-ONCE-PER-COMPILATION",
+			"type": "anyparse.macro.TriviaTypeSynth",
+			"method": "arm",
+			"find": "!defined.exists(modulePath)",
+			"replace": "!defined.exists(\"\") && (defined[\"\"] = true)",
+			"note": "the synth Converters / TailComments classes are emitted once per compilation, so a second trivia grammar built beside the first finds neither in its own synth module"
+		},
+		{
+			"name": "M-CHAIN-FORCE-KEEPS-OWN-RULES",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "setChainModeOverrideField",
+			"find": "_c.opAddSubChainWrap = _addSub;",
+			"replace": "",
+			"note": "a forcing site (interpolation body, switch subject, expression paren in a condition) leaves `+` / `-` chains on their own cascade, so they break inside `${…}` and in a switch subject"
+		},
+		{
+			"name": "M-CONDWRAP-REPACKS",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitCondWrapSingleRef",
+			"find": "_setCondWrapChainMode(opt, _chainOvr)",
+			"replace": "_setChainModeOverride(opt, _chainOvr)",
+			"note": "an if / while condition that breaks repacks its chains to the condition's fill mode again (haxe-formatter collapseChainWraps), so a chain in it no longer breaks at every operator"
+		},
+		{
+			"name": "M-CONDWRAP-FOR-REPACKS",
+			"type": "anyparse.macro.WriterCondWrapLowering",
+			"method": "spliceCondWrapEnd",
+			"find": "_setCondWrapChainMode(opt, _chainOvr)",
+			"replace": "_setChainModeOverride(opt, _chainOvr)",
+			"note": "a for head that breaks repacks the chain in it to the condition's fill mode again, so the chain no longer breaks at every operator"
+		},
+		{
+			"name": "M-TCO-FIELD-KNOB-IGNORED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "opt.trailingCommentAbove && _ownLine",
+			"replace": "_ownLine",
+			"note": "an object-literal field moves its overflowing trailing comment with the knob off"
+		},
+		{
+			"name": "M-TCO-FIELD-LEADING-IGNORED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "_ownLine && _t.leadingComments.length == 0",
+			"replace": "_ownLine",
+			"note": "a sep-list element already led by a comment moves its trailing one too, so the next pass reads a longer leading list"
+		},
+		{
+			"name": "M-TCO-FIELD-OWN-LINE-IGNORED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "!_noWrapFlatten && (!_keepEmit || _t.newlineBefore)",
+			"replace": "true",
+			"note": "a Keep-mode element glued to the open delimiter moves its comment, which then trails the delimiter instead of standing above the element"
+		},
+		{
+			"name": "M-TCO-ARG-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixRelocateArgComment",
+			"find": " || !opt.trailingCommentAbove",
+			"replace": "",
+			"note": "a force-multi call argument moves its overflowing trailing comment with the knob off"
+		},
+		{
+			"name": "M-TCO-ARG-LEADING-IGNORED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixRelocateArgComment",
+			"find": " || _args[_mj].leadingComments.length > 0",
+			"replace": "",
+			"note": "a call argument led by its own comment relocates the trailing one over the bare argument, dropping the leading comment"
+		},
+		{
+			"name": "M-TCO-ARG-LAST-STAYS",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixRelocateArgComment",
+			"find": "(_mLast && !_mSep ? _mTc : null)",
+			"replace": "null",
+			"note": "only the after-separator comment is considered, so the last argument (no separator follows it) keeps an overflowing comment"
+		},
+		{
+			"name": "M-CHAIN-ABOVE-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "? macro opt.trailingCommentAbove : macro false",
+			"replace": "? macro true : macro false",
+			"note": "a chain operator's overflowing comment moves above its operand with the knob off"
+		},
+		{
+			"name": "M-NEW-LEAD-COMMENT-INLINED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepInlineableLeadExpr",
+			"find": "relocateTrailingComments ? triviaSepInlineLeadExpr() : macro true",
+			"replace": "macro true",
+			"note": "a `new` argument led by an own-line comment rides the cascade as a fill item instead of putting the list one argument per line"
+		},
+		{
+			"name": "M-CHAIN-ARGS-CASCADE-ONLY",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "wrapWithChainDispatch",
+			"find": "_forceArgMulti ? $e{WriterChainLowering.lowerPostfixForceMultiDoc(segStar)} : $cascadeExpr;",
+			"replace": "$cascadeExpr;",
+			"note": "a method-chain segment call lays out line-commented arguments through the cascade, which has no place for an after-separator comment"
+		},
+		{
+			"name": "M-ADDSUB-BREAK-BEFORE-OP-LOST",
+			"type": "anyparse.macro.PrattPostfixLowering",
+			"method": "buildPrattBranchBody",
+			"find": ": macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || ctx.lineBreakBefore(_opStart);",
+			"replace": ": macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);",
+			"note": "an additive chain misses a source break before a non-head operator that its left operand's parse consumed, so a kept chain is glued there on the next pass"
+		},
+		{
+			"name": "M-TYPEDEF-EDGE-SOURCE-ADDED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepKeepCurlyOpenClose",
+			"find": "!(opt._inTypedefBody && opt.typedefBeginType != null)",
+			"replace": "true",
+			"note": "a typedef body adds the kept source blank on top of a stated `typedefEmptyLines.beginType`, so a stated 0 keeps the blank"
+		},
+		{
+			"name": "M-TYPE-BODY-EDGE-NO-SWITCH",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "beginEndKnobAccess",
+			"find": "if (args.length == KNOB_PAIR) return own;",
+			"replace": "return own;",
+			"note": "the context-flag second knob pair is never read, so an `enum abstract` takes the `abstract` edges and an `extern class` the class ones"
+		},
+		{
+			"name": "M-HERITAGE-RULE-INDENT",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseHeritageResolveExpr",
+			"find": "_ai = _cols * (_rule.additionalIndent ?? 0);",
+			"replace": "",
+			"note": "a matched heritage rule keeps the cascade default indent instead of its own"
+		},
+		{
+			"name": "M-FORCEMULTI-COLS-ONE-UNIT",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "forceMultiColsFor",
+			"find": "if (wrapRulesField == null) return",
+			"replace": "if (true) return",
+			"note": "a source-multiline brace list charges one unit whatever its cascade says, so a list the cascade broke at 1 + additionalIndent moves back on the next pass"
+		},
+		{
+			"name": "M-TYPEDEF-BODY-TAKES-ANON-INDENT",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepStarExpr",
+			"find": "|| opt._inTypedefBody",
+			"replace": "",
+			"note": "a typedef body charges the anon-type cascade indent, which the fork never applies to a typedef RHS"
+		},
+		{
+			"name": "M-SSB-LIFT-TRAIL-ALWAYS",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "stmtLift",
+			"find": "final trail: Expr = gate == null || gate.length != 1",
+			"replace": "final trail: Expr = true || gate == null || gate.length != 1",
+			"note": "a wrapped branch expression always takes a `;` inside its new block, so a `}`-ended value such as a `switch` comes out `{ switch k {…}; }`, a statement plus an empty one"
+		},
+		{
+			"name": "M-SSB-LIFT-PARSE-GATE",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "stmtLift",
+			"find": "fmtReadStringArgs('liftNoSemi')",
+			"replace": "fmtReadStringArgs('trailOptParseGate')",
+			"note": "the lift asks the parser's statement gate instead of the `}` rule, so a `]`-ended value such as `[1, 2]` is written into its new block without the `;` the compiler requires"
+		},
+		{
+			"name": "M-SSB-LIFT-TRAIL-NEVER",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "stmtLift",
+			"find": ": macro !${AstPredLowering",
+			"replace": ": macro false && !${AstPredLowering",
+			"note": "every lifted value loses its `;`, so a wrapped `3` or `[1, 2]` comes out unterminated before the block's `}`"
+		},
+		{
+			"name": "M-ANON-SEP-PLAIN-OPTIONAL",
+			"type": "anyparse.macro.StarFieldLowering",
+			"method": "lowerStarSepAltBranch",
+			"find": "expectLit(ctx, $v{sepText});",
+			"replace": "{}",
+			"note": "the plain @:sepAlt loop no longer demands a separator, so `typedef T = { a:Int b:String }` parses although Haxe refuses it"
+		},
+		{
+			"name": "M-ANON-SEP-TRIVIA-OPTIONAL",
+			"type": "anyparse.macro.Lowering",
+			"method": "lowerTriviaStarBranch",
+			"find": "? sepAltCheck : macro {}",
+			"replace": "? macro {} : macro {}",
+			"note": "the trivia @:sepAlt loop no longer demands a separator, so sep-less anon fields parse and the writer round-trips non-compiling source"
+		},
+		{
+			"name": "M-ANON-SEP-PLAIN-NO-BYTE-WAIVER",
+			"type": "anyparse.macro.StarFieldLowering",
+			"method": "lowerStarSepAltBranch",
+			"find": "ctx.input.charCodeAt(ctx.pos - 1) == $v{sepAltCharCode} || ",
+			"replace": "",
+			"note": "a field that consumed its own `;` still owes a separator in the plain parser, so `{ var a:Int; var b:String; }` is refused"
+		},
+		{
+			"name": "M-ANON-SEP-TRIVIA-NO-BYTE-WAIVER",
+			"type": "anyparse.macro.Lowering",
+			"method": "triviaSepAltWaiverExpr",
+			"find": "ctx.input.charCodeAt(_elemEnd - 1) == $v{altText.charCodeAt(0)} || ",
+			"replace": "",
+			"note": "a field that consumed its own `;` still owes a separator in the trivia parser, so `{ var a:Int; var b:String; }` is refused"
+		},
+		{
+			"name": "M-AFTERKW-STRIPPED",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "commitTriviaAction",
+			"find": "$i{afterKwLocal} = collectTrailingFull(ctx);",
+			"replace": "$i{afterKwLocal} = collectTrailing(ctx);",
+			"note": "the comment cuddled to a keyword is captured without its delimiters, so `else /* b2 */` cannot be written back as the block comment it was"
+		},
+		{
+			"name": "M-KW-SAME-UNNESTED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "sameGlue",
+			"find": "if (!shared.hasKwSlots) return macro _dc([$sameSepNb, $body]);",
+			"replace": "if (true) return macro _dc([$sameSepNb, $body]);",
+			"note": "a body a comment pushed off the `else` line lands at the keyword's own column, reading as a sibling of the `if` rather than its branch"
+		},
+		{
+			"name": "M-VALUE-WRAP-NO-ADOPT",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "valueWrapAdopting",
+			"find": "return wrapped == fieldAccess",
+			"replace": "return true",
+			"note": "a value branch the mirror braces leaves its head-gap comment outside the new braces, with the `{` alone on the next line"
+		},
+		{
+			"name": "M-CATCH-BEFORE-LEADING-UNREAD",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalBodyPolicyOnly",
+			"find": "? beforeLeadingAccess(fieldName)",
+			"replace": "? null",
+			"note": "the own-line comment captured before a statement catch body is never written, so fmt refuses the file as dropping it"
+		},
+		{
+			"name": "M-CATCH-GAP-UNREAD",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "withHeadGap",
+			"find": "if (headGap == null) return layout;",
+			"replace": "if (true) return layout;",
+			"note": "a comment before an expression catch body (bare statement or value try) is never written, so fmt refuses the file as dropping it"
+		}
+	]
+}

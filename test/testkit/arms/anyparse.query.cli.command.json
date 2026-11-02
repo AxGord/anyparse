@@ -1,0 +1,777 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.query.cli.command. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-LINT-FIX-CENSUS-UNGATED",
+			"type": "anyparse.query.cli.command.LintFixLedger",
+			"method": "ledgerLines",
+			"find": "fixedCount == 0 && !verbose",
+			"replace": "false",
+			"note": "the zero-edit gate is dropped, so a `--fix` run that wrote nothing prints the whole per-rule accounting about it again - ~1450 bytes of stderr per write op, which is what the slice measured and removed"
+		},
+		{
+			"name": "M-REGION-NOTES-ALWAYS",
+			"type": "anyparse.query.cli.command.FmtCommand",
+			"method": "opaqueCondRegionNotes",
+			"find": "if (listedExplicitly) return [];",
+			"replace": "",
+			"note": "the notes are built even for an explicit --list, so the whole-tree gate pays a second front end per file that has a #if again"
+		},
+		{
+			"name": "M-ADDMETA-CLI-UNROUTED",
+			"type": "anyparse.query.cli.command.AddMetaCommand",
+			"method": "name",
+			"force": "'add-meta-unrouted'",
+			"note": "the CLI no longer answers to `add-meta`, so the dispatch, argument parsing and --write half of the op has no test reaching it"
+		},
+		{
+			"name": "M-LINT-RANGE-INERT",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withinRange",
+			"find": "if (range == null) return all;",
+			"replace": "if (range == null) return all;\nif (all != null) return all;",
+			"note": "the --range window stops filtering, so a write op's --fix rewrites every finding in the file instead of only those on the lines it changed"
+		},
+		{
+			"name": "M-LINTFIX-ACCEPTED-BLAMED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintPass",
+			"find": "case Ok(text, rewrites):\nsettled = { text: text, rewrites: rewrites };",
+			"replace": "case Ok(text, rewrites):\nif (!noted.contains(entry.file)) noted.push(entry.file);\nsettled = { text: text, rewrites: rewrites };",
+			"note": "a file whose whole edit set the gate accepted is still counted as refused, so the run summary blames a rule nothing declined"
+		},
+		{
+			"name": "M-EXIT-STATUS-AGREES",
+			"type": "anyparse.query.cli.command.TestSummaryCommand",
+			"method": "reconcileExitStatus",
+			"force": "EXIT_OK",
+			"note": "a transcript is never reconciled against the exit status its runner returned, so a shard killed mid-run summarises green again and its partial counts enter the aggregate as if the missing tests had passed"
+		},
+		{
+			"name": "M-MOVE-CANONICALISE-ALWAYS",
+			"type": "anyparse.query.cli.command.MoveCommand",
+			"method": "canonicalMoveChange",
+			"find": "return CanonicalEdit.isWriterCanonical(original, plugin, opts) ? fixedPointChange(cmd, change, plugin, opts) : change;",
+			"replace": "return fixedPointChange(cmd, change, plugin, opts);",
+			"note": "a move canonicalises every file it writes, so a source that was already non-canonical on disk is reformatted by an edit that asked only for a splice"
+		},
+		{
+			"name": "M-SOURCE-READ-GUARD-OFF",
+			"type": "anyparse.query.cli.command.SourceCommand",
+			"method": "wholeFileRefusal",
+			"force": "null",
+			"note": "`apq source <file>` with nothing narrowing the read prints the whole file again at exit 0 — the cat behaviour that cost 617 585 bytes over this tree's three largest files"
+		},
+		{
+			"name": "M-PROBE-SLOT-CONST",
+			"type": "anyparse.query.cli.command.ProbeCommand",
+			"method": "stageProbePath",
+			"force": "'/tmp/anyparse-last-probe.hx'",
+			"note": "every process stages to one machine-global path again, so a second worker's source answers the first one's `strip` / `recon --probe` with exit 0 and no exception"
+		},
+		{
+			"name": "M-PROBE-STAGE-ANY-TARGET",
+			"type": "anyparse.query.cli.command.ProbeCommand",
+			"method": "isStageTargetSafe",
+			"force": "true",
+			"note": "staging writes whatever the slot names, so a planted symlink there is a write-anywhere primitive with this process's rights"
+		},
+		{
+			"name": "M-TEST-SUMMARY-GLOBAL-DEFAULT",
+			"type": "anyparse.query.cli.command.TestSummaryCommand",
+			"method": "runTestSummary",
+			"find": "final resolved: Null<String> = sourcePath ?? Sys.getEnv(TRANSCRIPT_ENV);",
+			"replace": "final resolved: Null<String> = sourcePath ?? '/tmp/test.out';",
+			"note": "a source-less run reaches for one machine-global transcript again, so a second worker's suite log answers the first worker's counts at exit 0"
+		},
+		{
+			"name": "M-STDLIB-DUP-WORKDIR-SHARED",
+			"type": "anyparse.query.cli.command.StdlibDupCommand",
+			"method": "stdlibDupWorkDir",
+			"find": "final base: String = requested ?? TempScratch.slot(WORK_DIR_STEM);",
+			"replace": "final base: String = requested ?? haxe.io.Path.join([TempScratch.root(), WORK_DIR_STEM]);",
+			"note": "every run stages its generated probe into one machine-global directory under one fixed module name again, so two concurrent runs compile each other's program and report a fully-formed finding about the wrong function"
+		},
+		{
+			"name": "M-STDLIB-DUP-WORK-ANY-TARGET",
+			"type": "anyparse.query.cli.command.StdlibDupCommand",
+			"method": "isWorkDirSafe",
+			"force": "true",
+			"note": "the work directory is whatever the slot names, so a symlink planted there is adopted: the generated probe is written through it and every non-directory entry of the victim is deleted when the run ends"
+		},
+		{
+			"name": "M-LEDGER-CROSS-FILE-MUTE",
+			"type": "anyparse.query.cli.command.LintFixLedger",
+			"method": "unfixedVerdict",
+			"find": "\tfinal withCross: String = crossFile",
+			"replace": "\tfinal withCross: String = !crossFile",
+			"note": "the cross-file clause attaches to the rules that do NOT carry the seam, so the one rule whose edits only land there is reported as saying nothing again"
+		},
+		{
+			"name": "M-SCOPE-GAP-UNWIRED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "warnScopeNotices",
+			"find": "\t\tConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths);\n",
+			"replace": "",
+			"note": "the missing-roots notice is written but never called, which is what moving it below the --fix early return would also do - the message fixtures stay green and every run goes silent"
+		},
+		{
+			"name": "M-SCOPE-GAP-ROOT-UNWIRED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "readResolutionRoots",
+			"find": "\t\tConfigDisagreement.warnUnreachableProjectRoots(unreachable);\n",
+			"replace": "",
+			"note": "a declared resolutionRoots entry that matches no .hx goes back to being read, dropped and never mentioned - the only place that learns it stops saying so"
+		},
+		{
+			"name": "M-LIT-SYNTHETIC-KINDS-EMPTY",
+			"type": "anyparse.query.cli.command.LitCommand",
+			"method": "syntheticKinds",
+			"force": "[]",
+			"note": "`apq lit` stops declaring the two kinds it mints itself, so the gate - which reads the grammar and nothing else - refuses the documented `--kind Comment` / `--kind Directive` as typos and every comment or directive hunt becomes a usage error"
+		},
+		{
+			"name": "M-AST-SELECT-UNKNOWN-KIND-EXIT-OK",
+			"type": "anyparse.query.cli.command.AstCommand",
+			"method": "runAstSelect",
+			"find": "if (Address.unknownSelectorKinds(tree, plugin, selector).length > 0) return EXIT_USAGE;",
+			"replace": "if (Address.unknownSelectorKinds(tree, plugin, selector).length < 0) return EXIT_USAGE;",
+			"note": "`apq ast --select` on a kind no grammar projects goes back to exit 0, so the message says typo and the status says answer - and a script driving ast cannot tell a misspelling from a file that simply holds none"
+		},
+		{
+			"name": "M-AST-SELECT-NO-CROSS-PROJECT-HINT",
+			"type": "anyparse.query.cli.command.AstCommand",
+			"method": "reportAstSelectEmpty",
+			"find": "final crossProjectHint: String = firstKind.length > 0 && firstKind.fastCodeAt(0) >= 'A'.code && firstKind.fastCodeAt(0) <= 'Z'.code",
+			"replace": "final crossProjectHint: String = firstKind.length < 0 && firstKind.fastCodeAt(0) >= 'A'.code && firstKind.fastCodeAt(0) <= 'Z'.code",
+			"note": "a `--select` miss on a TypeName loses the pointer at the multi-file walkers, so the reader of a single-file miss is told the kind is wrong and never that `refs` / `uses` / `blast` are where the declaration would be found"
+		},
+		{
+			"name": "M-ORACLE-EXCLUSIONS-UNNAMED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "nameExclusions",
+			"find": "CliIo.stderr('apq lint --fix: compiler oracle ${exclusion.sentence}\\n');",
+			"replace": "continue;",
+			"note": "the driver stops naming excluded configurations, so a net or phase shrunk to the green subset reads as covering every build"
+		},
+		{
+			"name": "M-DISPLAY-ORACLE-DROPS-DEFINES",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "startDisplay",
+			"find": "CompilerDisplayOracle.start(typeSyntax, config.hxml, config.dir, config.defines)",
+			"replace": "CompilerDisplayOracle.start(typeSyntax, config.hxml, config.dir)",
+			"note": "the display server is warmed and queried without its configuration's defines, so it names types for a build nobody judges"
+		},
+		{
+			"name": "M-ORACLE-EXCLUSIONS-KEYED-BY-SENTENCE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "nameExclusions",
+			"find": "final key: String = CompilerOracle.exclusionKey(exclusion);",
+			"replace": "final key: String = exclusion.sentence;",
+			"note": "exclusions are deduped by sentence, so a red build whose error line moved after a safe fix is named twice with two reasons"
+		},
+		{
+			"name": "M-GENERATE-RACED-VERIFIES-FIXES",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "verifiable",
+			"force": "oracles",
+			"note": "a generation that raced an input still verifies --fix, so a build that does not match the tree can veto a sound fix"
+		},
+		{
+			"name": "M-ORACLE-SUMMARY-SILENT",
+			"type": "anyparse.query.cli.command.OracleCommand",
+			"method": "verdictSummary",
+			"force": "''",
+			"note": "apq oracle ends without counting the unavailable configurations, so its exit 0 reads as every configuration confirmed"
+		},
+		{
+			"name": "M-FIAD-ROOTS-MATCH-IGNORED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "readResolutionRoots",
+			"find": "matched: unreachable.length < roots.length",
+			"replace": "matched: roots.length > 0",
+			"note": "a declared `resolutionRoots` entry matching no `.hx` counts as a working root, so the crossing path admits an init over a scope that is the report alone"
+		},
+		{
+			"name": "M-REACH-CONFIGS-COMPLETE",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "if (!complete) return declared ?",
+			"replace": "if (false) return declared ?",
+			"note": "the oracle list is read as every build the project ships, so a platform branch no configuration compiles is skipped"
+		},
+		{
+			"name": "M-REACH-CONFIGS-AGREE",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "reachComplete",
+			"find": "return all;",
+			"replace": "return resolveConfig(paths[0]).reachConfigurationsComplete();",
+			"note": "the first path's config decides the flag for the run, so a path whose own config ships other builds is judged under the first's"
+		},
+		{
+			"name": "M-RUNMEMO-NOT-ATTACHED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "oraclesOf",
+			"find": "return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file]));",
+			"replace": "return prepared.oracles;",
+			"note": "a lint run's configurations carry no memo, so every phase compiles the tree it asks about again"
+		},
+		{
+			"name": "M-FACTS-NEVER-EARLY",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "startsFactsEarly",
+			"find": "return fix && scoped && oracles > 0 && !noOracle && !narrowed;",
+			"replace": "return false;",
+			"note": "no run starts its facts compiles ahead, so they follow the first check that asks instead of overlapping the checks"
+		},
+		{
+			"name": "M-ASSISTED-FACTS-FIRST",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "assistedOracle",
+			"force": "displayOf(display)",
+			"note": "the oracle-assisted phase asks the display server although the run holds every configuration's facts"
+		},
+		{
+			"name": "M-ASSISTED-DECLINE-CENSUS",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "assistedDeclineLines",
+			"force": "[]",
+			"note": "the oracle-assisted phase prints no decline reason"
+		},
+		{
+			"name": "M-FIX-FACTS-SETTLED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintFixes",
+			"find": "// no disk write before this one but a create, which settled the facts compiles already\n\t\tcached.compilerFactsSettled();",
+			"replace": "",
+			"note": "the safe pass writes while the early facts compiles may still be reading the files"
+		},
+		{
+			"name": "M-LINT-SUMMARY-NEVER",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "summarises",
+			"find": "return format == FORMAT_TEXT && (forced ?? (threshold > 0 && shown > threshold));",
+			"replace": "return false;",
+			"note": "a text report over its threshold, or asked for --summary, still lists every finding"
+		},
+		{
+			"name": "M-REFLECTIVE-BUILDS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "bounded",
+			"find": "if (builds != null && reflective != null) builds.reflectiveClasses = reflective;",
+			"replace": "",
+			"note": "the declared `reflectiveClasses` never reach the builds the reach analysis reads"
+		},
+		{
+			"name": "M-REFLECTIVE-WARN",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "for (glob in FactsEscapes.unmatchedGlobs(built, reflective ?? []))",
+			"replace": "for (glob in ([] : Array<String>))",
+			"note": "a declared glob matching no class the builds typed goes unreported"
+		},
+		{
+			"name": "M-REFLECTIVE-AGREE",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "declaredBound",
+			"find": "return alike ? first : null;",
+			"replace": "return first;",
+			"note": "the first path's declaration bounds the run, so a path declaring other classes, or none, is judged under the first's"
+		},
+		{
+			"name": "M-HOLDERS-BUILDS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "bounded",
+			"find": "if (builds != null && holders != null) builds.reflectiveMethodHolders = holders;",
+			"replace": "",
+			"note": "the declared `reflectiveMethodHolders` never reach the builds the reach analysis reads"
+		},
+		{
+			"name": "M-HOLDERS-WARN",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "for (glob in FactsEscapes.unmatchedGlobs(built, holders ?? []))",
+			"replace": "for (glob in ([] : Array<String>))",
+			"note": "a declared method-holder glob matching no class the builds typed goes unreported"
+		},
+		{
+			"name": "M-HOLDERS-READ",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": "c -> c.reflectiveMethodHolders()",
+			"replace": "c -> null",
+			"note": "the run never reads the declared `reflectiveMethodHolders`"
+		},
+		{
+			"name": "M-LINTFIX-FINDING-SPLIT-NONE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "salvageFileLintEdits",
+			"find": "final pieces: Array<RuleEdits> = split == null || group.findings.length < 2 ? [] : split(group);",
+			"replace": "final pieces: Array<RuleEdits> = [];",
+			"note": "a refused edit set is never re-asked a finding at a time, so one refused finding costs its rule every other finding in the file"
+		},
+		{
+			"name": "M-LINTFIX-GUARD-SPLIT-NONE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "collectFileLintEdits",
+			"find": "if (whole.refusal == null || own.length < 2)",
+			"replace": "if (true)",
+			"note": "a guard refusal drops the check's whole edit set again, so the finding the guard names costs its clean siblings their fix"
+		},
+		{
+			"name": "M-LINTFIX-BLAME-SITE-ALWAYS",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "salvageFileLintEdits",
+			"find": "${parts.contains(group) ? findingAt(source, group) : ''}",
+			"replace": "${findingAt(source, group)}",
+			"note": "a whole group's blame line names a site too, so the bare rule id the reader keys on changes shape whenever the group holds one finding"
+		},
+		{
+			"name": "M-ASSISTED-SALVAGE-NONE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "settleAssistedFile",
+			"find": "if (settled == null || settled.text == source) return null;",
+			"replace": "if (settled == null || settled.text == source || true) return null;",
+			"note": "a refused oracle-assisted edit set keeps nothing, so one un-writable annotation costs the file every other"
+		},
+		{
+			"name": "M-ASSISTED-SPLIT-NONE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "settleAssistedFile",
+			"find": "source, groups, why, plugin, optsJson, blamed, split",
+			"replace": "source, groups, why, plugin, optsJson, blamed",
+			"note": "a refused assisted rule is never re-asked a finding at a time, so one refused finding costs the rule its others in the file"
+		},
+		{
+			"name": "M-ASSISTED-SALVAGED-COUNT-ALL",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "settleAssistedFile",
+			"find": "for (group in groups) if (group.refusal == null && !group.overlapped) edits += group.edits.length;",
+			"replace": "for (group in groups) edits += group.edits.length;",
+			"note": "a salvaged file reports the edits it was asked for, the refused ones included, as applied"
+		},
+		{
+			"name": "M-ASSISTED-REFUSAL-SILENT",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "assistedRefusal",
+			"find": "if (first != null) into.push(",
+			"replace": "if (first != null && false) into.push(",
+			"note": "an assisted refusal is dropped without a line or a summary count again"
+		},
+		{
+			"name": "M-ASSISTED-REFUSAL-LEDGER-NONE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "assistedRefusal",
+			"find": "LintFixDriver.bumpReason(LintFixDriver.ledgerFor(ledger, group.rule).refusals, refusal, 1);",
+			"replace": "if (false) LintFixDriver.bumpReason(LintFixDriver.ledgerFor(ledger, group.rule).refusals, refusal, 1);",
+			"note": "an assisted refusal reaches no ledger row, so the gate-refusal block never names the rule"
+		},
+		{
+			"name": "M-ORPHAN-FMT-GATE-OFF",
+			"type": "anyparse.query.cli.command.FmtCommand",
+			"method": "formatOneFile",
+			"find": "final stranded: Null<String> = isCanonical ? null : OrphanContinuation.introduced(source, formatted, plugin);",
+			"replace": "final stranded: Null<String> = null;",
+			"note": "fmt writes whatever the writer emits, so a writer defect that strands an else rewrites the file to code the compiler rejects"
+		},
+		{
+			"name": "M-AHEAD-NEVER-READ",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);",
+			"replace": "final found: Null<ReachBuilds> = ReachDefinesProbe.probeAll(oracles);",
+			"note": "the compiles started ahead are never read, so every run that escalates pays the builds twice"
+		},
+		{
+			"name": "M-AHEAD-READ-AFTER-WRITE",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "\t\tdropAhead(ahead);\n",
+			"replace": "",
+			"note": "the compiles started ahead answer a question asked after the run wrote, so the builds describe a tree that is gone"
+		},
+		{
+			"name": "M-BUILDS-WITH-FACTS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "startBuildsWithFacts",
+			"find": "if (factsEarly && start != null) start();",
+			"replace": "",
+			"note": "the builds' probe compiles wait for the first reach question, which then waits on them alone half-way through the first pass"
+		},
+		{
+			"name": "M-SAFE-NET-PLAIN",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "reconcileSafePass",
+			"find": "CompilerOracle.typecheckAll(judging, true)",
+			"replace": "CompilerOracle.typecheckAll(judging)",
+			"note": "the safe-write net compiles the written tree plainly, so the risky phase's coverage probe compiles every configuration of it again with -v"
+		},
+		{
+			"name": "M-SCORE-LOST-EXIT",
+			"type": "anyparse.query.cli.command.LintScoreCommand",
+			"method": "runLintScore",
+			"find": "return result.lost.length == 0 ? EXIT_OK : EXIT_RUNTIME;",
+			"replace": "return EXIT_OK;",
+			"note": "a lost real stall no longer fails the scoring run"
+		},
+		{
+			"name": "M-LINT-NOFILE-DROPPED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "reportFindings",
+			"find": "paths.concat([''])",
+			"replace": "paths",
+			"note": "a finding naming no file only counts in the summary line"
+		},
+		{
+			"name": "M-LINT-EXPLAIN-UNSET",
+			"type": "anyparse.query.cli.command.LintExplainLong",
+			"method": "explainer",
+			"find": "check.explainLongLocks(true);",
+			"replace": "",
+			"note": "`--explain-long` never asks the check to explain, so the run prints no evidence"
+		},
+		{
+			"name": "M-LINT-EXPLAIN-NO-ENVELOPE",
+			"type": "anyparse.query.cli.command.LintExplainLong",
+			"method": "outcome",
+			"find": "if (!on) return null;",
+			"replace": "if (!on || explainer == null) return null;",
+			"note": "--explain-long --format json prints the bare array when thread-safety is not in the run, so a consumer cannot tell asked from not asked"
+		},
+		{
+			"name": "M-REMOVE-ELEMENT-KIND-IGNORED",
+			"type": "anyparse.query.cli.command.RemoveElementCommand",
+			"method": "runRemoveElement",
+			"find": "if (liftKind != null) {",
+			"replace": "if (false) {",
+			"note": "remove-element ignores --kind and re-reads the address by its first token, so a match that starts no statement removes the call ARGUMENT instead of the statement the kind names"
+		},
+		{
+			"name": "M-RISKYARM-NOT-VERIFIED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "partitionChecks",
+			"find": " || (oracleConfigured && c is RiskyArm)",
+			"replace": "",
+			"note": "a RiskyArm check never reaches the verifier, so its arm is report-only even with an oracle"
+		},
+		{
+			"name": "M-SAFE-REVERT-ABORTS",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintFixes",
+			"find": "fixedCount -= settleRevert(safePass, safeEditsOf, changedFiles, files, originalOf, true);",
+			"replace": "if (safePass.reverted) {\n\t\t\tCliIo.stderr(safePass.notice);\n\t\t\treturn EXIT_RUNTIME;\n\t\t}",
+			"note": "the run stops after a safe revert, before the risky and oracle-assisted phases, although the revert left the tree green"
+		},
+		{
+			"name": "M-SAFE-REVERT-EDITS-COUNTED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "settleRevert",
+			"find": "for (file in outcome.revertedFiles) takenBack += editsOf[file] ?? 0;",
+			"replace": "",
+			"note": "the summary still counts the edits of the files the net rolled back"
+		},
+		{
+			"name": "M-SAFE-REVERT-FILES-COUNTED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "settleRevert",
+			"find": "changedFiles.resize(0);",
+			"replace": "stillChanged.resize(0);",
+			"note": "the summary still counts a reverted file as changed"
+		},
+		{
+			"name": "M-SAFE-REVERT-EXIT-OK",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintFixes",
+			"find": "return safePass.reverted || followUp.reverted ? EXIT_RUNTIME : EXIT_OK;",
+			"replace": "return EXIT_OK;",
+			"note": "a run that had to revert a safe fix exits as a success"
+		},
+		{
+			"name": "M-SAFE-REVERT-UNSAID",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "settleRevert",
+			"find": "if (goesOn)",
+			"replace": "if (false)",
+			"note": "the run goes on after a safe revert without saying so"
+		},
+		{
+			"name": "M-FIXDRIVER-SUPERSEDES-IGNORED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintPass",
+			"find": "final violations: Array<Violation> = Linter.withoutSuperseded(found, checks);",
+			"replace": "final violations: Array<Violation> = found;",
+			"note": "the fixer counts an underscore-prefixed binding twice - once from the active scope, once from the full one"
+		},
+		{
+			"name": "M-ARM-LEDGER-REPORTED-TWICE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "ledgerRiskyTallies",
+			"find": "if (!armRules.contains(tally.rule)) entry.reported += tally.findings;",
+			"replace": "entry.reported += tally.findings;",
+			"note": "a RiskyArm rule's arm findings reach `reported` a second time (the safe loop counted them), so the row reads 5 of 7 for five findings"
+		},
+		{
+			"name": "M-ARM-LEDGER-HANDOFF-KEPT",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "ledgerRiskyTallies",
+			"find": "entry.declined -= entry.handedOff;",
+			"replace": "entry.declined -= 0;",
+			"note": "the safe arm's hand-off declines stay beside the arm's own verdict, so each arm finding is declined twice, or declined although the arm fixed it"
+		},
+		{
+			"name": "M-ARM-LEDGER-HANDOFF-UNRECORDED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "noteHandOff",
+			"find": "entry.handedOff++;",
+			"replace": "entry.handedOff += 0;",
+			"note": "no hand-off is recorded, so the risky phase has nothing to take back and the arm findings are declined twice"
+		},
+		{
+			"name": "M-ARM-LEDGER-ARM-BLIND",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "ledgerFileLintEdits",
+			"find": "arm.riskyArmFindings(group.findings).concat(arm.riskyCrossFileFindings(group.findings))",
+			"replace": "[]",
+			"note": "the safe loop does not ask the RiskyArm which findings its arm owns, so no hand-off is ever recorded"
+		},
+		{
+			"name": "M-LEDGER-ARM-LISTED-ABSENT",
+			"type": "anyparse.query.cli.command.LintFixLedger",
+			"method": "ledgerLines",
+			"find": "if (!(c is RiskyArm)) c.id()",
+			"replace": "c.id()",
+			"note": "a RiskyArm rule is footnoted as absent from the ledger (and counted never asked) beside its own row"
+		},
+		{
+			"name": "M-HELPER-DRY-RUN-WRITES",
+			"type": "anyparse.query.cli.command.MoveToHelperCommand",
+			"method": "emit",
+			"find": "final write: Bool = flags.contains('--write') && !flags.contains('--dry-run');",
+			"replace": "final write: Bool = flags.contains('--write') || flags.contains('--dry-run');",
+			"note": "a dry run writes the files it was only asked to print"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-ADDRESSED-UNROUTED",
+			"type": "anyparse.query.cli.command.ExtractConstantCommand",
+			"method": "runExtractConstant",
+			"find": "if (ADDRESSED_FLAGS.exists(flag -> spec.given(args, flag))) return ExtractConstantToMode.run(args);",
+			"replace": "",
+			"note": "the addressed flags reach the literal modes, which reject them"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-DRY-RUN-UNROUTED",
+			"type": "anyparse.query.cli.command.MoveElementsCommand",
+			"method": "runMoveElements",
+			"find": "if (o.dryRun) {",
+			"replace": "if (false) {",
+			"note": "--dry-run prints the two previews instead of the entries and their digest"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-INTO-SCAN-BY-SPELLING",
+			"type": "anyparse.query.cli.command.ExtractConstantCommand",
+			"method": "runExtractConstantInto",
+			"find": "!FileIdentity.same(path, intoPath)",
+			"replace": "sys.FileSystem.absolutePath(path) != sys.FileSystem.absolutePath(intoPath)",
+			"note": "the module reached through a symlinked scope is scanned as a consumer of itself, so its sites and the module are written from one stale source"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-TO-INTO-BY-SPELLING",
+			"type": "anyparse.query.cli.command.ExtractConstantToMode",
+			"method": "run",
+			"find": "FileIdentity.same(into, filePath)",
+			"replace": "sys.FileSystem.absolutePath(into) == sys.FileSystem.absolutePath(filePath)",
+			"note": "--into naming the source through a symlink counts as another module, so --to refuses the source's own type"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-INTO-BY-SPELLING",
+			"type": "anyparse.query.cli.command.MoveElementsCommand",
+			"method": "runMoveElements",
+			"find": "FileIdentity.same(into, sourceFile)",
+			"replace": "sys.FileSystem.absolutePath(into) == sys.FileSystem.absolutePath(sourceFile)",
+			"note": "--into naming the source through a symlink counts as a second module, so one file is staged twice and the write half-lands"
+		},
+		{
+			"name": "M-ADDIMPORT-CLI-BLIND-SEAT",
+			"type": "anyparse.query.cli.command.AddImportCommand",
+			"method": "runAddImport",
+			"find": "ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source)",
+			"replace": "CliArgs.pickPlugin(lang)",
+			"note": "the op reads the file with no project resolution scope, so the insert seat takes every wildcard for a run boundary and places the import where the import-order rule does not"
+		},
+		{
+			"name": "M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED",
+			"type": "anyparse.query.cli.command.RemoveImportCommand",
+			"method": "runRemoveImport",
+			"find": "final path: String = usingFlag ? '${ImportSpelling.USING_WORD} ${spelled.path}' : modulePath;",
+			"replace": "final path: String = modulePath;",
+			"note": "remove-import --using parses and then drops the flag, so the bare path beside an import of the same module is ambiguous again"
+		},
+		{
+			"name": "M-MENTIONS-IMPORT-KINDS-UNPASSED",
+			"type": "anyparse.query.cli.command.MentionsCommand",
+			"method": "emitMentionsLit",
+			"find": "Lit.find(target, entry.tree, true, null, delimiters, ModuleScan.IMPORT_DECL_KINDS)",
+			"replace": "Lit.find(target, entry.tree, true, null, delimiters)",
+			"note": "mentions <Name> answers the uses and not the dotted `import pkg.Name;` that makes them resolve, and the reader concludes there is no import"
+		},
+		{
+			"name": "M-FIX-REMOVE-IGNORED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "commitRemoves",
+			"force": "[]",
+			"note": "a slice that removes a file is staged and never committed, so a fix that deletes a file reports success and leaves it on disk"
+		},
+		{
+			"name": "M-FIX-REMOVE-NO-RESTORE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "reconcileSafePass",
+			"find": "if (original == null || files.exists(entry -> entry.file == path)) continue;",
+			"replace": "if (original == null || true) continue;",
+			"note": "the safe-pass revert restores the files the run still holds only, so a deletion the oracle rejected stays deleted and the tree the revert claims green does not compile"
+		},
+		{
+			"name": "M-FIX-AMBIENT-HELD",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "writeAmbientSources",
+			"find": "CliIo.writeFiles(ambient);",
+			"replace": "ambient.resize(0);",
+			"note": "an ambient source a pass rewrote stays in memory until the end of the run, so every later pass resolves the chain from the statements the source no longer carries"
+		},
+		{
+			"name": "M-FIX-OVERLAP-BLIND",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "overlappingFile",
+			"force": "null",
+			"note": "the edits two cross-file fixes make in one file are merged unchecked, so where they overlap the later silently swallows the earlier and the run reports both as landed"
+		},
+		{
+			"name": "M-REACH-STORED-UNREAD",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);",
+			"replace": "if (noOracle) return resolution;",
+			"note": "a run that compiles nothing never reads the builds an oracle run stored, so it knows no build and the alias branch no build takes is read again"
+		},
+		{
+			"name": "M-HOIST-MIXED-LISTS-GUESSED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "return declared ?",
+			"replace": "return false ?",
+			"note": "a run over paths whose configs name different oracle lists, one of them declared complete, carries no hold, so hoist-common-import falls back on classpath evidence and `--fix` writes an ambient statement a build of the declared list cannot resolve"
+		},
+		{
+			"name": "M-HELD-NOTE-LOST-WITH-FACTS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "buildsHeld: resolution.buildsHeld,",
+			"replace": "",
+			"note": "the scope an oracle run hands its checks drops the hold, so a run whose declared builds did not answer falls back on classpath evidence and says nothing"
+		},
+		{
+			"name": "M-CATEGORY-FILTER-IGNORED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "resolveLintChecks",
+			"find": "if (categoryFilters.length == 0 || categoryFilters.contains(check.category()))",
+			"replace": "if (categoryFilters.length == 0 || categoryFilters.length > 0)",
+			"note": "--category is parsed and validated but narrows nothing, so a run reports every category"
+		},
+		{
+			"name": "M-CATEGORY-FORCES-RULES",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": "final applyEnablement: Bool = o.ruleFilters.length == 0;",
+			"replace": "final applyEnablement: Bool = o.ruleFilters.length == 0 && o.categoryFilters.length == 0;",
+			"note": "--category bypasses the config the way --rule does, so a rule the config disables runs under its category"
+		},
+		{
+			"name": "M-SAFE-BAN-OFF",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "isBanned",
+			"force": "false",
+			"note": "an edit the safe-pass net took back is offered again by the follow-up round, which re-applies it and reverts it a second time"
+		},
+		{
+			"name": "M-SAFE-PLACE-SKIPPED",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "settle",
+			"find": "restore(whole);",
+			"replace": "",
+			"note": "a culprit the net reverts whole is left on disk at the last candidate an isolation probe wrote, while the run reports the tree back to a green build"
+		},
+		{
+			"name": "M-LINT-STD-IN-DECLARED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "resolutionThunk",
+			"find": "declaredLibrary = rootFiles.concat(libraryRead.declared);",
+			"replace": "declaredLibrary = rootFiles.concat(libraryRead.declared).concat(libraryRead.std);",
+			"note": "the declared half of the scope carries the std too, so a scan of the project's own code reads the std"
+		},
+		{
+			"name": "M-SAFE-PROBE-WRITE-ESCAPES",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "seat",
+			"find": "catch (failure: WriteFailure)",
+			"replace": "catch (failure: UsageFailure)",
+			"note": "a candidate the disk refuses escapes the isolation as a WriteFailure, so the settle never runs and the disk stays on a candidate the oracle may have rejected"
+		},
+		{
+			"name": "M-SAFE-DELETE-REFUSAL-IGNORED",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "remove",
+			"find": "if (!CliIo.deletePath(file)) throw new WriteFailure(file, 'the file could not be deleted');",
+			"replace": "CliIo.deletePath(file);",
+			"note": "a file the filesystem refuses to delete is taken as gone, so a probe compiles a candidate that still holds it"
+		},
+		{
+			"name": "M-SAFE-SETTLE-RAW-EXCEPTION",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "assertOnDisk",
+			"find": "throw new WriteFailure(wrong.join(', '), reason);",
+			"replace": "throw new Exception('cannot write ' + wrong.join(', ') + ': ' + reason);",
+			"note": "a settled tree the disk does not hold stops the run with a bare exception: a raw stack, no summary line, not EXIT_RUNTIME"
+		},
+		{
+			"name": "M-FOREIGN-RULE-ANSWERED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "foreignRuleError",
+			"find": "if (o.ruleFilters.length == 0) return null;",
+			"replace": "return null;",
+			"note": "an explicit --rule naming a rule the run's grammar never runs is answered with an empty report, which reads as a clean file"
+		},
+		{
+			"name": "M-FOREIGN-RULE-ALWAYS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "foreignRuleError",
+			"find": "if (o.ruleFilters.length == 0) return null;",
+			"replace": "",
+			"note": "a default or --category lint over a grammar some builtin is not bound to is refused, so every apq lint --lang json|mermaid exits 2"
+		},
+		{
+			"name": "M-SCOPED-LISTING-UNFILTERED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "printEffectiveRules",
+			"find": "checks.filter(c -> Linter.runsOn(c, io.plugin.langName()))",
+			"replace": "checks",
+			"note": "the scoped --list-rules lists a rule the scope's grammar never runs as a state of that scope's lint"
+		},
+		{
+			"name": "M-GRAPH-DIFF-MODULE-FUNCTION-UNNAMED",
+			"type": "anyparse.query.cli.command.GraphCommand",
+			"method": "changedMembers",
+			"find": "if (change.depth == 0) names.push(",
+			"replace": "if (false) names.push(",
+			"note": "a module-level function is named without the module type the call graph places it in, so a change to its text is never seen"
+		},
+		{
+			"name": "M-GRAPH-DIFF-RENAME-UNPAIRED",
+			"type": "anyparse.query.cli.command.GraphCommand",
+			"method": "changedMembers",
+			"find": "earlier.sources[renamed[f.file] ?? f.file]",
+			"replace": "earlier.sources[f.file]",
+			"note": "a file renamed between the revisions is paired by path, finds no earlier text, and every edit inside it goes unseen"
+		}
+	]
+}

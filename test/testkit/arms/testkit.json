@@ -1,0 +1,81 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package testkit. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-ARM-ANYNAME",
+			"type": "testkit.MutationArms",
+			"method": "find",
+			"force": "arms[0]",
+			"note": "arm lookup answers the first declared arm for every name, so an undeclared @:killer resolves and the build-time refusal is gone"
+		},
+		{
+			"name": "M-ARM-ROW-OK",
+			"type": "testkit.MutationArms",
+			"method": "rowErrors",
+			"force": "[]",
+			"note": "per-row validation reports nothing, so an arm declaring neither cut — or both — is accepted"
+		},
+		{
+			"name": "M-CLAIM-ALL-RECORDED",
+			"type": "testkit.ProseClaims",
+			"method": "records",
+			"force": "true",
+			"note": "every prose claim reads as already recorded by an annotation, so the census empties and the ratchet has nothing to compare"
+		},
+		{
+			"name": "M-CLAIM-CODE-BLIND",
+			"type": "testkit.ProseClaims",
+			"method": "withoutCodeSenses",
+			"find": "return without(text, CODE_SENSES);",
+			"replace": "return text;",
+			"note": "the code senses of `control` stay in the text, so a rule's doc about control flow reads as a fixture claiming to be a control"
+		},
+		{
+			"name": "M-CLAIM-NEG-BLIND",
+			"type": "testkit.ProseClaims",
+			"method": "withoutNegatedArm",
+			"find": "return without(text, NEGATED_ARM);",
+			"replace": "return text;",
+			"note": "`NOT killed by` stays in the text, so the one fixture that says it has no arm reads as claiming one"
+		},
+		{
+			"name": "M-CLAIM-NOKINDS",
+			"type": "testkit.ProseClaims",
+			"method": "kindsOf",
+			"force": "[]",
+			"note": "no doc comment claims anything, so the census is empty and every prose convention reads as already annotated"
+		},
+		{
+			"name": "M-CLAIM-RAW-DOC",
+			"type": "testkit.ProseClaims",
+			"method": "normalize",
+			"force": "doc ?? ''",
+			"note": "the doc keeps its gutter and line breaks, so a claim wrapped across two lines is invisible — the failure mode of a line-oriented search"
+		},
+		{
+			"name": "M-ARM-PATH-FLAT",
+			"type": "testkit.MutationArms",
+			"method": "candidateFiles",
+			"find": "final relative: String = '${type.split('.').join('/')}.hx';",
+			"replace": "final relative: String = '$type.hx';",
+			"note": "a dotted type path stops becoming a directory path, so every arm resolves to a file that does not exist and the addressability gate can check nothing"
+		},
+		{
+			"name": "M-ARM-KIND-UNSPELLED",
+			"type": "testkit.MutationArms",
+			"method": "address",
+			"force": "'${arm.type}#${arm.method}'",
+			"note": "an arm's address never spells its kind, so a cut aimed at a grammar declaration asks for FnMember and the addressability gate reaches nothing"
+		},
+		{
+			"name": "M-FIXTURE-CACHE-CWD-WRITE",
+			"type": "testkit.FixtureCompileCache",
+			"method": "record",
+			"find": "if (r == 0 && changed(before[0], after[0])) return null;",
+			"replace": "",
+			"note": "a compile writing into the fixture it shares with the compiles beside it is recorded, and its replay overwrites the lines a concurrent writer appended"
+		}
+	]
+}

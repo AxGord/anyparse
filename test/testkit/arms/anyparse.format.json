@@ -1,0 +1,345 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.format. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-FIRST-LINE-FIT",
+			"type": "anyparse.format.BodyFit",
+			"method": "strictFitLineLayout",
+			"find": "\treturn if (WrapList.flatLength(body) != -1)",
+			"replace": "\treturn if (true)",
+			"note": "expression-position FitLine goes back to placing a body by its FIRST line: a body that cannot render flat takes the plain glue, whose width gate measures only that line, so it glues to the head line again"
+		},
+		{
+			"name": "M-STRICT-HEAD-DELIM-OFF",
+			"type": "anyparse.format.BodyFit",
+			"method": "strictFitLineLayout",
+			"find": "\telse if (!keywordLedBody || lineWidth <= 0)",
+			"replace": "\telse if (true)",
+			"note": "restores the blanket refusal, so an expression-`for` whose body is a keyword-led construct opening a delimiter leaves the head line again"
+		},
+		{
+			"name": "M-WRAP-SEPAFTER-ALWAYS",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "wrapInBlock",
+			"find": "sepAfter: raise == null && !innerSelfTerminates(value),",
+			"replace": "sepAfter: true,",
+			"note": "a synthesized block records a source `;` after its statement, so the block writer appends one after the `}` of an `if` it braced"
+		},
+		{
+			"name": "M-SSB-CHAIN-TRAILSEMI-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "chainForcesBraces",
+			"find": "stmt.elseBodyTrailPresent == true",
+			"replace": "false",
+			"note": "the if/else chain scan ignores the `;` kept after the terminal else body, so brace removal strips the chain and writes `else b();;`"
+		},
+		{
+			"name": "M-TRY-TRAILSEMI-GATE-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tryBraceVerdict",
+			"find": "catchCarriesSemi(catches[catches.length - 1])",
+			"replace": "false",
+			"note": "a `try` group de-braces although its last catch body carries a kept `;`, so the writer emits `catch (e) b();;`"
+		},
+		{
+			"name": "M-SSB-TAIL-SEALED-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tailSealed",
+			"force": "false",
+			"note": "no ctor reads as sealing its own tail, so a block, switch or do-while at the end of a body stops shielding the trailing `else` and the branch keeps braces it does not need"
+		},
+		{
+			"name": "M-SSB-OPEN-TRAIL-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "openTrailingOf",
+			"force": "null",
+			"note": "a body whose single statement carries an OPEN trailing comment reads as carrying none, so the comment stops travelling with the statement the de-brace lifts out"
+		},
+		{
+			"name": "M-SSB-DANGLING-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tailDanglingIf",
+			"force": "false",
+			"note": "no statement tail reads as a dangling `if`, so the de-brace stops refusing a body whose last statement would capture the enclosing `else`"
+		},
+		{
+			"name": "M-EICR-BOUNDARY-SKIP",
+			"type": "anyparse.format.ElseIfCommentReflow",
+			"method": "scan",
+			"find": "case WrapBoundary(inner): afterCond ? rewrap(scan(inner, trailing, true), d -> Doc.WrapBoundary(d)) : Scanning(true);",
+			"replace": "case WrapBoundary(inner): Scanning(true);",
+			"note": "a `WrapBoundary` past the condition is skipped whole instead of scanned, so the body's own boundary hides the anchor and every else-if comment reflow refuses"
+		},
+		{
+			"name": "M-EICR-HEADTEXT-ANY",
+			"type": "anyparse.format.ElseIfCommentReflow",
+			"method": "scan",
+			"find": "isHeadText(s) ? Scanning(afterCond) : Refused;",
+			"replace": "Scanning(afterCond);",
+			"note": "every rendered token reads as head text, so a `//`, a `}` or a `;` no longer ends the head line and the comment anchors past the position it belongs to"
+		},
+		{
+			"name": "M-EICR-SOFTLINE-ANCHOR",
+			"type": "anyparse.format.ElseIfCommentReflow",
+			"method": "scan",
+			"find": "afterCond && isHardline(flat) ? Anchored(Doc.Concat([trailing, doc])) : Refused;",
+			"replace": "afterCond ? Anchored(Doc.Concat([trailing, doc])) : Refused;",
+			"note": "a width-only break anchors the comment as readily as an unconditional one, so a body that merely COULD break takes the trailing comment the reflow was written to refuse"
+		},
+		{
+			"name": "M-SSB-DOBODY-KEEP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "unwrapDoBody",
+			"force": "block",
+			"note": "the do-body arm stops substituting its single clean statement for the block, so `do { g(); } while (c)` keeps braces the suppress frame is explicitly told not to gate"
+		},
+		{
+			"name": "M-LOOPIF-NEVER",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isIfWithElse",
+			"force": "false",
+			"note": "the loop-body probe never sees an `if` with an `else`, so `loopBodyIfElseNext` never breaks the body under the header and every glued shape stays glued"
+		},
+		{
+			"name": "M-LOOPIF-ALWAYS",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isIfWithElse",
+			"force": "true",
+			"note": "the same probe answers yes for every body, so a bare guard `if` and a non-`if` body break under the loop header alongside the shape the knob exists for"
+		},
+		{
+			"name": "M-LOOPIF-NOWRAP",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isIfWithElse",
+			"find": "return Type.enumConstructor(body) == wrapperCtor && isIfWithElse(Type.enumParameters(body)[0], ifCtor, elseField);",
+			"replace": "return false;",
+			"note": "the one-level unwrap answers no, so a `do ... while` body - an `HxDoWhileBody.ExprBody` around the `if` - is invisible to the probe while the bare `for` / `while` body still reaches it"
+		},
+		{
+			"name": "M-SSB-TRY-SUBST-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "trySubstBody",
+			"force": "body",
+			"note": "the try/catch group verdict is computed and then not applied - neither the wrap direction nor the de-brace one reaches a body"
+		},
+		{
+			"name": "M-SSB-TRY-DEBRACE-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tryDeBraced",
+			"force": "null",
+			"note": "verdict 2 can no longer strip a braced try/catch body, so only the wrap direction of the group verdict survives"
+		},
+		{
+			"name": "M-SSB-BARE-ILLEGAL",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "bareLegalAt",
+			"force": "false",
+			"note": "an ALREADY bare body blocks the group verdict instead of passing it, so a try/catch that is half de-braced is wrapped back up rather than finished"
+		},
+		{
+			"name": "M-SSB-VALUE-WRAP-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "symmetryNeedsValueWrap",
+			"force": "false",
+			"note": "the value-if/value-try symmetry wrap never fires, so a bare branch opposite a braced one keeps its shape and the semicolon drop that rides on the wrap stops happening"
+		},
+		{
+			"name": "M-SSB-CHAIN-TAIL-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "chainForcesBraces",
+			"find": "return elseBody != null && keepsBraces(elseBody, drop, symmetry, suppress, false, stmt.elseBodyTrailPresent == true, false);",
+			"replace": "return false;",
+			"note": "the chain scan stops probing the FINAL else branch, so an asymmetry that only the tail of an else-if chain carries no longer forces the earlier branches to keep their braces"
+		},
+		{
+			"name": "M-SSB-ELEM-TRAIL-COMMENT-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "hoistTrailingComment",
+			"find": "\tfinal own: Null<String> = elem.trailingComment;",
+			"replace": "\tfinal own: Null<String> = null;",
+			"note": "the de-braced statements OWN same-line trailing comment is never read, so only a block openTrailing comment can travel and the else-body splice loses its comment"
+		},
+		{
+			"name": "M-SSB-SYMMETRY-ONLY-BLIND",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "keepsBraces",
+			"find": "\treturn if (!drop)\n\t\tsymmetry && Type.enumConstructor(cast body) == 'BlockStmt'",
+			"replace": "\treturn if (!drop)\n\t\tfalse",
+			"note": "under symmetry-only (`singleStatementBraces: symmetric`) no body reads as brace-keeping, so the repair direction never sees a braced sibling to mirror"
+		},
+		{
+			"name": "M-CHAIN-STAIRCASE-OFF",
+			"type": "anyparse.format.BodyFit",
+			"method": "chainStaircase",
+			"find": "\tif (second == null || chainBodyInner(second) == null) return sameLine;",
+			"replace": "\tif (second == null || chainBodyInner(second) == null) return sameLine;\n\treturn sameLine;",
+			"note": "a chain of three links or more never staircases, so an over-long chain keeps the same-line layout instead of breaking every link"
+		},
+		{
+			"name": "M-PAREN-PIN-NONE",
+			"type": "anyparse.format.BodyFit",
+			"method": "pinParenGlued",
+			"force": "null",
+			"note": "no glued body carries a pinnable collapse probe, so the arrow-continuation rescue has nothing to pin and the body breaks instead of gluing"
+		},
+		{
+			"name": "M-ARROW-HEAD-WIDTH-NONE",
+			"type": "anyparse.format.BodyFit",
+			"method": "arrowConstructHeadWidth",
+			"force": "NO_CONSTRUCT_HEAD",
+			"note": "a multi-line arrow body reports no construct head, so the glue threshold stops discounting the head width and an overflowing block-`if` body is measured whole"
+		},
+		{
+			"name": "M-GLUE-NEVER-BREAKS",
+			"type": "anyparse.format.BodyFit",
+			"method": "glueLayout",
+			"find": "\treturn lineWidth <= 0 ? glued : Doc.IfGluedFirstLineExceeds(lineWidth, cols, breakLayout(cols, body), glued);",
+			"replace": "\treturn glued;",
+			"note": "the glued body is emitted with no width test at all, so a header whose glued first line overflows never falls back to the break layout"
+		},
+		{
+			"name": "M-SSB-CHAIN-THEN-TRAILSEMI-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "chainForcesBraces",
+			"find": "stmt.thenBodyTrailPresent == true, true))",
+			"replace": "false, true))",
+			"note": "the if/else chain scan ignores a `;` kept after a then-body, so brace removal strips the rest of the chain while that body keeps its braces - an asymmetric chain"
+		},
+		{
+			"name": "M-SSB-ELSE-SPINE-STOP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "elseTailDanglingIf",
+			"find": "\treturn elseBody == null || tailDanglingIf(elseBody);",
+			"replace": "\treturn true;",
+			"note": "a trailing `if` that HAS its own `else` still reads as dangling, so the spine walk stops continuing into that else branch and the body keeps braces it does not need"
+		},
+		{
+			"name": "M-EICR-AFTERCOND-RESET",
+			"type": "anyparse.format.ElseIfCommentReflow",
+			"method": "scanItems",
+			"find": "\t\tcase Scanning(next):\n\t\t\tseenCond = next;",
+			"replace": "\t\tcase Scanning(_):",
+			"note": "the after-condition flag is not threaded from one sibling to the next, so a comment anchor that sits past the condition in a LATER item is never recognised"
+		},
+		{
+			"name": "M-SSB-GATE8-ANY-POSITION",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "deBracedElem",
+			"find": "\telse if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt')",
+			"replace": "\telse if (Type.enumConstructor(cast inner) == 'IfStmt')",
+			"note": "gate 8's keep stops being restricted to then-position, so an else body whose single statement is an `if` no longer collapses into an `else if`"
+		},
+		{
+			"name": "M-GAP-DOC-PRECEDENCE",
+			"type": "anyparse.format.MemberGap",
+			"method": "docGap",
+			"find": "return if (docVetoes(nextDocLed, before))\n\t\tNoBlank\n\telse if (docAdds(prevDocLed, nextDocLed, after, before))\n\t\tBlank",
+			"replace": "return if (docAdds(prevDocLed, nextDocLed, after, before))\n\t\tBlank\n\telse if (docVetoes(nextDocLed, before))\n\t\tNoBlank",
+			"note": "the after-doc blank beats `beforeDocCommentEmptyLines: none`, the reverse of the writer's precedence, so the check demands a blank between two doc-commented members the writer removes"
+		},
+		{
+			"name": "M-GAP-MULTILINE-AFTER-NOBLANK",
+			"type": "anyparse.format.MemberGap",
+			"method": "forcedBlanks",
+			"find": "else if (multilineNeighbour && aroundMultiline > 0)\n\t\taroundMultiline\n\telse if (doc == NoBlank)\n\t\t0",
+			"replace": "else if (doc == NoBlank)\n\t\t0\n\telse if (multilineNeighbour && aroundMultiline > 0)\n\t\taroundMultiline",
+			"note": "a forced zero beats the multi-line rule, though the writer tops the empty gap up afterwards, so the check demands a tight gap before a multi-line doc-commented member the writer sets off"
+		},
+		{
+			"name": "M-GAP-DOCLED-ANY-COMMENT",
+			"type": "anyparse.format.MemberGap",
+			"method": "docLed",
+			"find": "return leadingComments.exists(c -> c.startsWith(DOC_OPEN));",
+			"replace": "return leadingComments.exists(c -> c.startsWith('/'));",
+			"note": "every leading comment counts as a doc comment, in the writer and the check alike, so a line-comment-led field is set off by blanks it never had"
+		},
+		{
+			"name": "M-BREAK-COMMITTED-BARE",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "BreakCommits.committed(brk, Doc.BodyGroup(brk))",
+			"replace": "brk",
+			"note": "a literal broken by its own width is laid out bare where the next write reads it in a `BodyGroup` every width probe defers, so a method chain dot-breaks and an arrow body leaves `->` on the first write and both glue back on the second"
+		},
+		{
+			"name": "M-BREAK-READBACK-BARE",
+			"type": "anyparse.format.BodyAllman",
+			"method": "asReadBack",
+			"force": "body",
+			"note": "a literal its own rule breaks statically keeps the bare layout where the next write reads it back in a `BodyGroup`, so an arrow body it leads leaves `->` on the first write and glues back on the second"
+		},
+		{
+			"name": "M-ALLMAN-GLUED-SPACE-KEPT",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):",
+			"replace": "case Doc.Concat([Doc.OptSpace(' '), body]) if (false):",
+			"note": "the layout a list is offered for an Allman body break keeps the glued placement's space, so a cuddled head measured on it counts a column the output never has and opens at exactly the limit"
+		},
+		{
+			"name": "M-ALLMAN-GLUED-SPACE-UNGUARDED",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):",
+			"replace": "case Doc.Concat([Doc.OptSpace(' '), body]):",
+			"note": "the space is dropped also before a body that only ends in the decision (a nested `for`), gluing `)for` in the offered layout"
+		},
+		{
+			"name": "M-WIDTH-RULE-TAIL-UNREAD",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "Doc.Group(Doc.IfWidthExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
+			"replace": "Doc.Group(Doc.IfLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
+			"note": "the Allman break of a lineLength-rule literal is not offered to its one-item list, which stays laddered where the next write cuddles"
+		},
+		{
+			"name": "M-SIBLING-OFFER-UNALIASED",
+			"type": "anyparse.format.BodyFit",
+			"method": "aliasSiblingBreak",
+			"find": "return walk(elem);",
+			"replace": "return elem;",
+			"note": "the emitted widest case unit no longer ties its named break to the sibling offer, so the measure render never takes the offer and the switch spreads on the flat width the next write no longer reads"
+		},
+		{
+			"name": "M-BODY-EDGE-STATED-IGNORED",
+			"type": "anyparse.format.MemberGap",
+			"method": "bodyEdge",
+			"find": "return stated ?? (policy == Keep && sourceBlank ? 1 : 0);",
+			"replace": "return policy == Keep && sourceBlank ? 1 : 0;",
+			"note": "a stated type-body edge count stops winning, so `<kind>EmptyLines.beginType: 0` leaves the source blank `afterLeftCurly: keep` carries"
+		},
+		{
+			"name": "M-SSB-WRAP-FROM-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "wrappedFrom",
+			"force": "false",
+			"note": "no body reads as one the symmetry wrap braced, so the own-line comment before a bare branch stays outside the braces the repair adds, dedented onto the head with the brace alone below it"
+		},
+		{
+			"name": "M-SSB-THEN-SKIP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "needsSymmetryWrap",
+			"find": "(isIfThenBody || !SYMMETRY_WRAP_SKIP_CTORS",
+			"replace": "(false || !SYMMETRY_WRAP_SKIP_CTORS",
+			"note": "the else-position skip list also exempts a then-position `switch`, so `if (a) switch k {…} else { … }` stays half-braced under symmetric"
+		},
+		{
+			"name": "M-SSB-WRAP-FROM-UNLIFTED",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "wrappedFrom",
+			"find": "return node == raw || Reflect.isEnumValue(node) && paramAt(cast node, 0) == raw;",
+			"replace": "return node == raw;",
+			"note": "a value branch lifted into a statement inside its new block no longer reads as wrapped, so its head-gap comments stay outside the braces"
+		},
+		{
+			"name": "M-CLAUSE-GAP-NO-ADOPT",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "adoptClauseHeadGap",
+			"find": "if (!wrappedFrom(wrapped, raw)) return wrapped;",
+			"replace": "if (true || !wrappedFrom(wrapped, raw)) return wrapped;",
+			"note": "a catch body the try group braces leaves the clause's comments outside the new braces, with the `{` alone below them"
+		}
+	]
+}

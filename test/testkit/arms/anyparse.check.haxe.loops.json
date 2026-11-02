@@ -1,0 +1,47 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.haxe.loops. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-BOOL-LOOP-USING-COVERED-KEPT",
+			"type": "anyparse.check.haxe.loops.LambdaLoopScan",
+			"method": "withUsingInsert",
+			"find": "if (usingEdit == null) return [];",
+			"replace": "if (usingEdit == null) return flat;",
+			"note": "a covered insert byte hands back the ungrouped rewrites again, so `prefer-exists` / `prefer-foreach` write extension calls with no `using Lambda;` to bind them"
+		},
+		{
+			"name": "M-FIND-CONFLICT-SILENT",
+			"type": "anyparse.check.haxe.loops.PreferFind",
+			"method": "fix",
+			"find": "\t\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
+			"replace": "\t\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
+			"note": "the second copy of the same branch goes silent again"
+		},
+		{
+			"name": "M-BOOL-LOOP-CONFLICT-SILENT",
+			"type": "anyparse.check.haxe.loops.LambdaLoopScan",
+			"method": "edits",
+			"find": "\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));",
+			"replace": "\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));",
+			"note": "the third copy, the one `prefer-exists` and `prefer-foreach` share, goes silent again"
+		},
+		{
+			"name": "M-FIND-CONFLICT-MIS-ATTRIBUTED",
+			"type": "anyparse.check.haxe.loops.PreferFind",
+			"method": "fix",
+			"find": "\t\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
+			"replace": "\t\tUsingScan.noteDeclineWhereUnset(violations, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
+			"note": "the conflict sentence is written on every finding the rule reported again, including the ones the candidate map never matched"
+		},
+		{
+			"name": "M-PMB-ANY-ITERABLE",
+			"type": "anyparse.check.haxe.loops.PreferMapBind",
+			"method": "matches",
+			"find": "seams.arrayTypeNames.contains(type)",
+			"replace": "true",
+			"note": "a List comprehension becomes ls.map, which returns a List"
+		}
+	]
+}

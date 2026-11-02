@@ -1,0 +1,1004 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.members. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-WRITEINDEX-PROJECT-FINAL",
+			"type": "anyparse.check.common.members.PreferFinalPublicField",
+			"method": "run",
+			"find": "IndexScope.resolutionWrites(scope, plugin)",
+			"replace": "FieldWriteIndex.build(scope, plugin, index)",
+			"note": "prefer-final-public-field goes back to a project-scoped write index, so a write through a third-party subtype is invisible again"
+		},
+		{
+			"name": "M-WRITEINDEX-PROJECT-READONLY",
+			"type": "anyparse.check.common.members.PreferReadOnlyField",
+			"method": "run",
+			"find": "IndexScope.resolutionWrites(scope, plugin)",
+			"replace": "FieldWriteIndex.build(scope, plugin, index)",
+			"note": "prefer-read-only-field goes back to a project-scoped write index, so a write through a third-party subtype is invisible again"
+		},
+		{
+			"name": "M-CHECKINDEX-PROJECT-FINAL",
+			"type": "anyparse.check.common.members.PreferFinalPublicField",
+			"method": "run",
+			"find": "final index: SymbolIndex = IndexScope.resolution(scope, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(scope, plugin);",
+			"note": "prefer-final-public-field goes back to a project-scoped name/type index, so a library supertype, interface or build macro is unresolvable again"
+		},
+		{
+			"name": "M-CHECKINDEX-PROJECT-READONLY",
+			"type": "anyparse.check.common.members.PreferReadOnlyField",
+			"method": "run",
+			"find": "final index: SymbolIndex = IndexScope.resolution(scope, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(scope, plugin);",
+			"note": "prefer-read-only-field goes back to a project-scoped name/type index, so a library supertype, interface or build macro is unresolvable again"
+		},
+		{
+			"name": "M-ORPHAN-UNREADABLE-ANY-FILE",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "unreadableDecline",
+			"find": "\t\t\tname,\n",
+			"replace": "\t\t\t'',\n",
+			"note": "the reflection-shaped probe asks an EMPTY name, which `skippedFilesMentioning` reads as every admitted skipped file, so the per-NAME shape collapses back into the run-wide veto and an unparseable project file spelling nothing declines the deletion"
+		},
+		{
+			"name": "M-ORPHAN-UNREADABLE-REPORT-SCOPE",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "run",
+			"find": "scopeIndex: wide,",
+			"replace": "scopeIndex: index,",
+			"note": "both unreadable probes narrow back to the REPORT index, so a skip-parsing sibling in the resolution scope licenses everything again: `hxq lint <one file> --fix` with `resolutionRoots` declared DELETES a `get_x` an unparseable sibling calls, and reports a proven orphan where an unparseable subtype may declare the property"
+		},
+		{
+			"name": "M-ORPHAN-FIX-UNREADABLE-BLIND",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "unreadableDecline",
+			"force": "null",
+			"note": "the FIX side stops asking the unreadable question at all, so an unparseable file spelling the accessor, the property or a computed accessor name blocks no deletion and no finding says why one went through"
+		},
+		{
+			"name": "M-ORPHAN-REPORT-UNREADABLE-BLIND",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "reportOrphan",
+			"find": "final unreadable: Array<String> = found.declared ? [] : scopeIndex.text.skippedFilesMentioning([prop], file);",
+			"replace": "final unreadable: Array<String> = [];",
+			"note": "the REPORT side stops asking it, so an unparseable file that may declare a subtype declaring the property gets the confident `Warning` back instead of the honest `Info` naming the file"
+		},
+		{
+			"name": "M-ORPHAN-UNREADABLE-REFLECTIVE-NARROWED",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "unreadableDecline",
+			"find": "\t\t\twantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX\n\t\t]);",
+			"replace": "\t\t\twantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX\n\t\t], ownerFile);",
+			"note": "the REFLECTION-shaped names take the per-owner narrowing too, so an unparseable installed source holding `Reflect.field(o, 'get_data')` or a computed accessor name stops vetoing a project deletion — T868's argument, unlearned one seam over"
+		},
+		{
+			"name": "M-ORPHAN-UNREADABLE-SUBTYPE-OWNER-WIDE",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "unreadableDecline",
+			"find": "skippedFilesMentioning([prop], ownerFile)",
+			"replace": "skippedFilesMentioning([prop])",
+			"note": "the SUBTYPE name loses its per-owner narrowing, so one unparseable haxelib source spelling an ordinary property word declines the deletion of every accessor of that property in the project"
+		},
+		{
+			"name": "M-ORPHAN-REPORT-OWNER-WIDE",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "reportOrphan",
+			"find": "skippedFilesMentioning([prop], file)",
+			"replace": "skippedFilesMentioning([prop])",
+			"note": "the report arm loses the same narrowing, so an unparseable installed source spelling the property downgrades a proven orphan to Info and takes its deletion with it"
+		},
+		{
+			"name": "M-ORPHAN-ARMS-SHARE-REASON",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "reportOrphan",
+			"find": "'a supertype did not resolve in scope, so the property\\'s absence is not proven and the method cannot be deleted'",
+			"replace": "'a file in scope did not parse, so the property\\'s absence is not proven and the method cannot be deleted'",
+			"note": "the two report-only arms decline with one sentence, so the ledger no longer says which fact stopped the edit"
+		},
+		{
+			"name": "M-INLINE-SUBTYPE-REPORT-INDEX",
+			"type": "anyparse.check.common.members.PreferInline",
+			"method": "run",
+			"find": "\t\tfinal built: SymbolIndex = IndexScope.widest(files, plugin);",
+			"replace": "\t\tfinal built: SymbolIndex = IndexScope.report(files, plugin);",
+			"note": "the subtype / build-macro / interface ABSENCE questions go back to the report index, so `hxq lint <one file> --fix` inserts `inline` on a method a subtype in an unlinted file overrides — the S177 shape in the prefer-inline rule; re-encoded in S190 when the index became a per-candidate thunk"
+		},
+		{
+			"name": "M-INLINE-LOCAL-BUILD-MACRO",
+			"type": "anyparse.check.common.members.PreferInline",
+			"method": "considerClass",
+			"find": "MemberWriteScan.carriesBuildMacro(source)",
+			"replace": "false",
+			"note": "the own-file half of the build-macro question stops being asked from the source the run already holds, so every class with a locally-eligible method builds the widest index again to answer hop zero of a closure its own file already decided — 3.21s instead of 0.12s on one file, and 18 of the 23 refusals over src + test paying for it"
+		},
+		{
+			"name": "M-INLINE-REFLECT-REPORT-SCOPE",
+			"type": "anyparse.check.common.members.PreferInline",
+			"method": "run",
+			"find": "\t\t\tfor (entry in ReflectionScan.scopeFiles(files, plugin)) {",
+			"replace": "\t\t\tfor (entry in files) {",
+			"note": "the reflection gate narrows back to the REPORT files, so `hxq lint <one file> --fix` inlines a method a `Reflect.field` in an unlinted file names — MEASURED on Haxe 4.3.7: under `--dce full` a statically-called method read reflectively answers FOUND while plain and MISSING once inline"
+		},
+		{
+			"name": "M-ORPHAN-ACCESSOR-REPORT-SCOPE",
+			"type": "anyparse.check.common.members.OrphanAccessor",
+			"method": "run",
+			"find": "referenced: referencedAccessorNames(ReflectionScan.scopeFiles(files, plugin), plugin),",
+			"replace": "referenced: referencedAccessorNames(files, plugin),",
+			"note": "the accessor-CALL scan narrows back to the REPORT files, so `hxq lint <one file> --fix` with `resolutionRoots` declared DELETES a public `get_x` a sibling file calls by hand — the S177 shape in the orphan-accessor rule, found by T895's `accessor-call` cell"
+		},
+		{
+			"name": "M-INLINE-UNREADABLE-BLIND",
+			"type": "anyparse.check.common.members.PreferInline",
+			"method": "run",
+			"find": "RawSourceScan.mentionsWord(entry.source, candidate)",
+			"replace": "false",
+			"note": "prefer-inline's reflection gate goes blind to a scope file the parser could not read, so a method an unparseable sibling names by `Reflect.field` is folded inline and answers MISSING under --dce full — the same T867 residue as M-REFLECTION-UNREADABLE-BLIND, in the check that scans names itself"
+		},
+		{
+			"name": "M-FIAD-CROSS-SUPER-UNPROVED",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "crossingAdmitted",
+			"force": "false",
+			"note": "the crossing narrowings never hold, so every init hoisted across an explicit `super(...)` is refused again - the blanket refusal that made the rule silent on openfl display classes"
+		},
+		{
+			"name": "M-FIAD-EARLY-READ-IGNORED",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "observableRead",
+			"force": "false",
+			"note": "no occurrence of the field ever counts as observable, so an early read that compares, defaults, stores or passes on the `null` no longer refuses the crossing move"
+		},
+		{
+			"name": "M-FIAD-EARLY-READ-CALL-ARG",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "faultsOnNull",
+			"find": "return parent != null && index == 0 && scan.faultingKinds.contains(parent.kind);",
+			"replace": "return parent != null && (index == 0 || parent.kind == scan.shape.callKind) && scan.faultingKinds.contains(parent.kind);",
+			"note": "a call ARGUMENT is admitted as a null-faulting position, so a crossing init whose field is passed on as a value moves and the callee now sees `[]` where it saw `null`"
+		},
+		{
+			"name": "M-FIAD-EARLY-READ-SAME-FILE",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "readObservableInScope",
+			"find": "for (entry in scope) if (",
+			"replace": "for (entry in scope) if (entry.file == file && ",
+			"note": "the early-read scan looks at the field's own file only, so a subclass in another file reading the early `null` in a value position no longer refuses the move"
+		},
+		{
+			"name": "M-FIAD-INERT-ADMITS-ALL",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "inertCollection",
+			"force": "true",
+			"note": "every right-hand side reads as an inert collection, so a `new`, a static call, a literal holding an identifier, a bare string or a bare scalar is hoisted ahead of the base constructor"
+		},
+		{
+			"name": "M-FIAD-CROSS-SUPER-NO-SOLE",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "candidateFor",
+			"find": "!(sole && earlyInitSafe(",
+			"replace": "!(earlyInitSafe(",
+			"note": "the crossing path no longer demands the sole write, so a field another member also writes moves across `super(...)` and a write the base constructor reaches outlives the deleted init"
+		},
+		{
+			"name": "M-FIAD-CROSS-SUPER-CHAIN",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "acceptableCoMover",
+			"find": "else if (hoistCrossesSuper(ctor, container, span.from, shape))",
+			"replace": "else if (false)",
+			"note": "the fix-side chain reading admits a crossing init as a co-mover, so a refused crossing init holds back the fix of an accepted one after it"
+		},
+		{
+			"name": "M-FIAD-DENOTES-ALL",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "mayDenoteField",
+			"force": "true",
+			"note": "every occurrence of the name is read as the field, so a same-named member of an unrelated type - a bare read or a `this.` one - blocks the move"
+		},
+		{
+			"name": "M-FIAD-INERT-ELEMENT-ADMITS-ALL",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "inertElement",
+			"force": "true",
+			"note": "every collection element reads as inert, so a literal holding a foreign static read or a call is evaluated ahead of the base constructor"
+		},
+		{
+			"name": "M-FIAD-CROSSING-ADMITS-SCALARS",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "inertCollection",
+			"find": "return collectionKinds.contains(node.kind) && node.children.foreach(c -> inertElement(c, plugin, shape));",
+			"replace": "return collectionKinds.contains(node.kind) ? node.children.foreach(c -> inertElement(c, plugin, shape)) : ConstantFieldScan.isConstantScalarInitializer(node, plugin) || (shape.stringLiteralKinds ?? []).contains(node.kind);",
+			"note": "a bare scalar or string crosses `super(...)` again, although a `null` String answers `length` on hxcpp instead of faulting"
+		},
+		{
+			"name": "M-FIAD-TRY-IGNORED",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "observableRead",
+			"find": "(inTry || !faultsOnNull(parent, index, scan))",
+			"replace": "!faultsOnNull(parent, index, scan)",
+			"note": "a faulting read inside a `try` body counts as unobservable, although the catch turns the early `null` into working code that changes once the field is initialised"
+		},
+		{
+			"name": "M-FIAD-NO-ROOTS-ADMITTED",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "crossingAdmitted",
+			"find": "host == null || !host.projectRootsMatched()",
+			"replace": "host == null",
+			"note": "a run whose project declared no `resolutionRoots` (a `resolutionLibs`-only scope) scans the report files alone, so a narrow `--fix` moves an init a reader in an unlinted file observes"
+		},
+		{
+			"name": "M-FIAD-ANY-DECLARED-TYPE",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "faultingFieldType",
+			"force": "true",
+			"note": "every declared type is admitted, so an abstract whose `@:from` runs code (or whose method accepts a `null` receiver) takes a hoisted literal"
+		},
+		{
+			"name": "M-FIAD-TRY-BOUNDARY-CLEARED",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "observableRead",
+			"find": "final childInTry: Bool = inTry || tryNode && child.kind != scan.catchKind;",
+			"replace": "final childInTry: Bool = !(scan.shape.functionKinds ?? []).concat(scan.shape.lambdaKinds ?? []).contains(node.kind) && (inTry || tryNode && child.kind != scan.catchKind);",
+			"note": "the try flag is cleared again at every function and lambda boundary, so a lambda or local function written inside a `try` and called there reads the early `null` under a catch that turns it into working code"
+		},
+		{
+			"name": "M-FIAD-SHADOW-IGNORED",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "coreNameShadowed",
+			"force": "false",
+			"note": "a core type name the file shadows - an imported, wildcard-reached or same-package user `Map` / `Array` - passes as the core type, so an abstract whose `@:from` runs code takes a hoisted literal"
+		},
+		{
+			"name": "M-FIAD-PROVEN-NEVER",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"force": "false",
+			"note": "no crossing is ever proven, so an init after `super(...)` whose move nothing can observe is refused again whenever its right-hand side is no inert collection"
+		},
+		{
+			"name": "M-FIAD-PROVEN-ALWAYS",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"force": "true",
+			"note": "every crossing counts as proven, with or without the truth: an init an override, a listener or a shared static can observe is hoisted ahead of the base constructor"
+		},
+		{
+			"name": "M-FIAD-PROVEN-NO-READER",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"find": "if (truth.mayReach(Region(file, crossed), field, Read) != Proven) return false;",
+			"replace": "if (false && truth.mayReach(Region(file, crossed), field, Read) != Proven) return false;",
+			"note": "the crossed code is never asked whether it can read the field, so a base constructor calling an override that reads it, or a listener the prefix fires, sees the value instead of nothing"
+		},
+		{
+			"name": "M-FIAD-PROVEN-NO-COMMUTE",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"find": "if (truth.mayReach(Region(file, crossed), { owner: r.owner, name: r.name }, changes) != Proven) return false;",
+			"replace": "",
+			"note": "what the right-hand side reads is never checked against what the crossed code writes, so a construction reading a static the prefix sets runs before the prefix sets it"
+		},
+		{
+			"name": "M-FIAD-PROVEN-EXPOSED",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"find": "?.reachBuilds() == null || MemberKinds.fieldExposed(tree, member, container, plugin, shape)",
+			"replace": "?.reachBuilds() == null",
+			"note": "a public field crosses too, though code outside the project may read it before the base constructor returns"
+		},
+		{
+			"name": "M-ISVAR-SLOTS-ANY",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "candidateOf",
+			"find": "AccessorClauseText.storageless(access)",
+			"replace": "true",
+			"note": "every accessor slot counts as storageless, so an @:isVar over a `default` / `null` slot that has storage anyway is reported"
+		},
+		{
+			"name": "M-ISVAR-INIT-BLIND",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "candidateOf",
+			"find": "&& CtorFieldFold.declInitializer(member, shape) == null",
+			"replace": "&& true",
+			"note": "a declaration initializer is ignored, so the fix strips the metadata an `= v` needs to write the field"
+		},
+		{
+			"name": "M-ISVAR-SCOPE-REPORT-ONLY",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "run",
+			"find": "scope: ReflectionScan.scopeFiles(files, plugin),",
+			"replace": "scope: files,",
+			"note": "the storage scan reads the report set alone, so a one-file lint misses an override in a resolution-scope subclass that writes the field"
+		},
+		{
+			"name": "M-ISVAR-REFLECTION-BLIND",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "considerClass",
+			"find": "!ReflectionScan.runtimeName(ctx.reflection, c.name) && ",
+			"replace": "",
+			"note": "a reflective string naming the property is ignored, so the fix removes a field `Reflect.field` reads by name"
+		},
+		{
+			"name": "M-ISVAR-RTTI-BLIND",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "considerClass",
+			"find": "scopeIndex.traits.transitivelyCarriesRtti(owner) || ",
+			"replace": "",
+			"note": "an @:rtti owner is judged like any other, so the fix changes the field set its runtime type information describes"
+		},
+		{
+			"name": "M-ISVAR-CHAIN-UNRESOLVED-ADMITTED",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "considerClass",
+			"find": " || !scopeIndex.subtypes.supertypeChainResolved(owner)",
+			"replace": "",
+			"note": "an owner whose supertype chain does not resolve is judged anyway, so an ancestor the index never read may carry what reaches the field"
+		},
+		{
+			"name": "M-ISVAR-MACRO-FIXED",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "fix",
+			"find": "v.declineReason == null && ",
+			"replace": "",
+			"note": "a finding on a macro-built owner is fixed without a compiler oracle, so the metadata a builder's generated access may need is removed unverified"
+		},
+		{
+			"name": "M-ISVAR-MACRO-NEVER-ADMITTED",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "run",
+			"find": "oracleVerified: _oracleRelaxed",
+			"replace": "oracleVerified: false",
+			"note": "a macro-built owner's finding is declined even under a compiler oracle, so the verified path the oracle offers never removes its metadata"
+		},
+		{
+			"name": "M-ISVAR-MEMBER-KEEP-BLIND",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "candidateOf",
+			"find": "if (retained != null && run.exists(n -> MemberKinds.META_KINDS.contains(n.kind) && n.name == retained)) return null;",
+			"replace": "",
+			"note": "a member-level `@:keep` is ignored, so a member pinned against removal by machinery no scan models loses its storage"
+		},
+		{
+			"name": "M-ISVAR-EMPTY-CALL-UNFIXED",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "isVarSpelling",
+			"find": "text == IS_VAR_META || text.replace(' ', '').replace('\\t', '') == '$IS_VAR_META()'",
+			"replace": "text == IS_VAR_META",
+			"note": "an argument-less `@:isVar()` is reported but `fix` answers no edit and no reason for it"
+		},
+		{
+			"name": "M-PFF-MACRO-SILENT",
+			"type": "anyparse.check.common.members.PreferFinalField",
+			"method": "considerField",
+			"find": "final decline: Null<String> = CtorFieldFold.macroFinalDecline(index, builders, owner, file, folded, oracleRelaxed);",
+			"replace": "if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return; final decline: Null<String> = null;",
+			"note": "a macro-built owner's private field gets no finding at all, so the rule stays silent on every OpenFL Sprite subclass"
+		},
+		{
+			"name": "M-PFF-MACRO-FIXED",
+			"type": "anyparse.check.common.members.PreferFinalField",
+			"method": "fix",
+			"find": "[for (v in violations) if (v.declineReason == null) v.span]",
+			"replace": "[for (v in violations) v.span]",
+			"note": "a declined macro-built owner's field is finalized without a compiler oracle, which a builder assigning it outside the constructor breaks"
+		},
+		{
+			"name": "M-PFF-MACRO-NEVER-ADMITTED",
+			"type": "anyparse.check.common.members.PreferFinalField",
+			"method": "run",
+			"find": "_oracleRelaxed",
+			"replace": "false",
+			"note": "a macro-built owner's field is declined even under a compiler oracle, so the verified path never finalizes it"
+		},
+		{
+			"name": "M-PFPF-MACRO-SILENT",
+			"type": "anyparse.check.common.members.PreferFinalPublicField",
+			"method": "considerField",
+			"find": "final decline: Null<String> = CtorFieldFold.macroFinalDecline(index, index, owner, file, folded, oracleRelaxed);",
+			"replace": "if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return; final decline: Null<String> = null;",
+			"note": "a macro-built owner's public field gets no finding at all, so the rule stays silent on every OpenFL Sprite subclass"
+		},
+		{
+			"name": "M-PFPF-MACRO-FIXED",
+			"type": "anyparse.check.common.members.PreferFinalPublicField",
+			"method": "fix",
+			"find": "[for (v in violations) if (v.declineReason == null) v.span]",
+			"replace": "[for (v in violations) v.span]",
+			"note": "a declined macro-built owner's public field is finalized without a compiler oracle"
+		},
+		{
+			"name": "M-PFPF-MACRO-NEVER-ADMITTED",
+			"type": "anyparse.check.common.members.PreferFinalPublicField",
+			"method": "run",
+			"find": "_oracleRelaxed",
+			"replace": "false",
+			"note": "a macro-built owner's public field is declined even under a compiler oracle"
+		},
+		{
+			"name": "M-OPTPARAM-COMMENT-DROPPED",
+			"type": "anyparse.check.common.members.OptionalParamShorthand",
+			"method": "nullableDefaultInner",
+			"find": "typed.argumentsSource() ?? unwrapped.text, raw: raw",
+			"replace": "unwrapped.text, raw: raw",
+			"note": "the suggested spelling drops a comment the author wrote inside the Null<...> wrapper"
+		},
+		{
+			"name": "M-DRA-MIDDLE-ARGUMENT",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "collectCalls",
+			"find": "final last: Int = args.length - 1;",
+			"replace": "final last: Int = 0;",
+			"note": "a constant that is not the call's last argument is counted, so the fix cuts it and every later argument slides one slot left"
+		},
+		{
+			"name": "M-DRA-SKIPPED-SLOT",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "requiredPrefix",
+			"force": "member.params.length",
+			"note": "an argument past an optional parameter is attributed to the parameter at its own index, though Haxe may have skipped a slot by type"
+		},
+		{
+			"name": "M-SCRATCH-SILENT",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "run",
+			"find": "if (span == null) continue;",
+			"replace": "continue;",
+			"note": "no scratch field is ever reported or fixed"
+		},
+		{
+			"name": "M-SCRATCH-VALUE-TYPES-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "(outer == null || !c.seams.valueTypes.contains(outer))",
+			"replace": "true",
+			"note": "a method called on a value type declines as if the field kept an object alive"
+		},
+		{
+			"name": "M-SCRATCH-NAME-UNCHECKED",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "localNameOf",
+			"find": "&& !OccurrenceScan.referencedInRange(source, bare, method.from, method.to, []);",
+			"replace": ";",
+			"note": "the stripped name is taken even where the method already uses it, which rebinds that use to the new local"
+		},
+		{
+			"name": "M-SCRATCH-DOMINANCE-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "read",
+			"find": "if (!assigned) dominated = false;",
+			"replace": "",
+			"note": "a read before any write of the call counts as dominated, so a field carrying a value between calls becomes a local"
+		},
+		{
+			"name": "M-SCRATCH-BRANCH-OPTIMISTIC",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "branch",
+			"find": "return thenState && elseState;",
+			"replace": "return thenState || elseState;",
+			"note": "a write in one arm of an `if` counts as dominating a read after it"
+		},
+		{
+			"name": "M-SCRATCH-CONDITIONAL-KEEPS",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "conditional",
+			"find": "return head;",
+			"replace": "return sequence(kids, 0, assigned);",
+			"note": "a write in a loop body (or a switch arm, or a short-circuit's right side) survives the construct as if it always ran"
+		},
+		{
+			"name": "M-SCRATCH-TRY-ALWAYS",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "statement",
+			"find": "else if (s.doWhileKinds.contains(node.kind) || s.tryKinds.contains(node.kind))",
+			"replace": "else if (s.doWhileKinds.contains(node.kind))",
+			"note": "a `try` body is walked as plain code, so a write it may never reach counts as dominating a read after it"
+		},
+		{
+			"name": "M-SCRATCH-SLOT-ANYWHERE",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "planOf",
+			"find": "if (lastTo > blockSpan.to) return null;",
+			"replace": "",
+			"note": "the local is declared in a block whose end comes before a later use, which then names nothing"
+		},
+		{
+			"name": "M-SCRATCH-UNTYPED",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "fix",
+			"find": [
+				"final decline: Null<String> = typeSource == null",
+				"wholeProgramDecline(c, plan, typeSource, v.file"
+			],
+			"replace": [
+				"final decline: Null<String> = false",
+				"wholeProgramDecline(c, plan, typeSource ?? '', v.file"
+			],
+			"note": "an untyped field is fixed with an empty annotation, which no longer keeps the field's type"
+		},
+		{
+			"name": "M-SCRATCH-LIFETIME-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "if (c.retained && (outer == null || !c.seams.valueTypes.contains(outer)))",
+			"replace": "if (false)",
+			"note": "an object with a method called on it becomes a local, though only the field kept it alive past the call"
+		},
+		{
+			"name": "M-SCRATCH-RECURSION-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "return bodySpan == null || OccurrenceScan.referencedInRange(source, c.methodName, bodySpan.from, bodySpan.to, [], mask)",
+			"replace": "return bodySpan == null",
+			"note": "a recursive method's scratch field becomes a local, so the outer call stops seeing what the inner one wrote"
+		},
+		{
+			"name": "M-SCRATCH-INIT-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "if (init != null && !MemberKinds.isSideEffectFree(init, shape) && !trivialConstruction(init, file, plugin, traits))",
+			"replace": "if (false)",
+			"note": "an initializer that calls something is dropped with the field"
+		},
+		{
+			"name": "M-SCRATCH-TRIVIAL-CTOR-ANY",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "ctorOnlyAssigns",
+			"force": "true",
+			"note": "any constructor counts as only assigning its own fields, so a construction that traces is dropped"
+		},
+		{
+			"name": "M-SCRATCH-MACRO-IGNORED",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "if (!oracleRelaxed && traits.traits.transitivelyCarriesBuildMacro(c.owner, file))",
+			"replace": "if (false)",
+			"note": "a field of a macro-built type is deleted with no oracle to typecheck the builder's view of it"
+		},
+		{
+			"name": "M-SCRATCH-ONE-METHOD",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "occurrencesIn",
+			"find": "refs.exists(r -> r.span == null || r.span.from < inside.from || r.span.to > inside.to)",
+			"replace": "false",
+			"note": "a field used in two methods counts as the scratch value of the last one"
+		},
+		{
+			"name": "M-SCRATCH-CLOSURE",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "occurrencesOf",
+			"find": "if (hidden || !s.functionKinds.contains(member.kind))",
+			"replace": "if (!s.functionKinds.contains(member.kind))",
+			"note": "an occurrence inside a closure, which may run after the call returns, counts as the method's own"
+		},
+		{
+			"name": "M-SCRATCH-REFLECTION-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "run",
+			"find": "if (strings.whole.exists(s -> OccurrenceScan.referencedInRange(s, c.name, 0, s.length, []))) continue;",
+			"replace": "",
+			"note": "a field a string names, a possible `Reflect.field` target, is still reported"
+		},
+		{
+			"name": "M-SCRATCH-MODIFIERS",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "isPlainPrivateVar",
+			"find": "!mods.exists(m -> !s.visibility.contains(m.kind) || textOf(m, source) != s.defaultVis)",
+			"replace": "true",
+			"note": "a public field, or one carrying metadata, counts as a plain private one"
+		},
+		{
+			"name": "M-SCRATCH-CONFINED-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "run",
+			"find": "!MemberWriteScan.referencesConfined(c.owner, c.name, entry.source, index, plugin)",
+			"replace": "false",
+			"note": "a subtype mentioning the field no longer keeps it from being reported"
+		},
+		{
+			"name": "M-SCRATCH-FOREIGN-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "useOf",
+			"find": "else if (s.binderKinds.contains(node.kind) || node.kind == s.fieldAccessKind)",
+			"replace": "else if (s.binderKinds.contains(node.kind))",
+			"note": "another object's member of the field's name is unrelated, so the field of another instance is missed"
+		},
+		{
+			"name": "M-SCRATCH-WRITE-ONLY",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "candidateOf",
+			"find": "if (walk.reads == 0) return null;",
+			"replace": "",
+			"note": "a field the method only writes is reported as a scratch value"
+		},
+		{
+			"name": "M-SCRATCH-RTTI-OFF",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "run",
+			"find": "if (index.traits.transitivelyCarriesRtti(c.owner)) continue;",
+			"replace": "",
+			"note": "a field of an `@:rtti` type, reachable by name at run time, is reported"
+		},
+		{
+			"name": "M-SCRATCH-CTOR-RECURSES",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "if (c.methodName == shape.constructorName) return null;",
+			"replace": "",
+			"note": "a constructor's own `new` of another object reads as a recursive call, so every scratch field of a constructor that constructs is declined"
+		},
+		{
+			"name": "M-MO-INLINE-BOUNDARY-OFF",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "inlineSubgroupBoundary",
+			"find": "return separateInline &&",
+			"replace": "return false &&",
+			"note": "`separateInlineSubgroup` reads no boundary at all, so the option is accepted and does nothing: the blank it asks for is still reported as a gap inside one rank group, and a glued boundary is never flagged"
+		},
+		{
+			"name": "M-MO-INLINE-OPTION-IGNORED",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "inlineSubgroupBoundary",
+			"find": "return separateInline && a.condition",
+			"replace": "return a.condition",
+			"note": "the inline-subgroup blank is demanded whatever the config says, so every project (the option's default is OFF) gets its tight constant groups split"
+		},
+		{
+			"name": "M-MO-INLINE-CONDITIONAL-BOUNDARY",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "inlineSubgroupBoundary",
+			"find": "separateInline && a.condition == null && b.condition == null && ",
+			"replace": "separateInline && ",
+			"note": "a boundary is read inside an `#if` block too, where inline and non-inline members carry no sub-order and interleave freely"
+		},
+		{
+			"name": "M-MO-INLINE-SEPARATOR-DROPPED",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "separatorBetween",
+			"find": "return if (want != null)\n\t\tseparatorOf(want.count)",
+			"replace": "return if (false)\n\t\tseparatorOf(0)",
+			"note": "the reorder rebuild stops reading `wantedBlanks` and joins every same-rank field pair with a bare newline, so a reordered type comes out without the inline-subgroup blank or the writer's doc-comment / multi-line blank the check then demands"
+		},
+		{
+			"name": "M-MO-INLINE-REPORT-UNREAD",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "run",
+			"find": "optionOn(entry.file, 'separateInlineSubgroup')",
+			"replace": "false",
+			"note": "the REPORT path ignores the option, so it flags the very blank the option asks for while the fix path inserts it"
+		},
+		{
+			"name": "M-MO-INLINE-FIX-UNREAD",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "fix",
+			"find": "optionOn(violations[0].file, 'separateInlineSubgroup')",
+			"replace": "false",
+			"note": "the FIX path ignores the option, so a boundary finding re-derives as no issue there and is never fixed"
+		},
+		{
+			"name": "M-MO-INLINE-MESSAGE-AS-RANK",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "messageOf",
+			"find": "case InlineBoundary: 'the inline members of a rank group are not separated from the rest of it by a blank line';",
+			"replace": "case InlineBoundary: 'rank groups are not separated by a blank line';",
+			"note": "a missing blank at the inline-subgroup boundary is reported as a missing RANK-group blank, naming a boundary that is not there"
+		},
+		{
+			"name": "M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "ownWant",
+			"find": "else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull\n\telse if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }",
+			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }\n\telse if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull",
+			"note": "the boundary is asked before the non-field and comment-led exemptions, so a same-rank method pair and a line-comment-led field are demanded a blank they never were"
+		},
+		{
+			"name": "M-MO-INLINE-BOUNDARY-AT-LEAST-ONE",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "spacingViolation",
+			"find": "want.atLeast ? blanks < want.count : blanks != want.count",
+			"replace": "want.atLeast || want.rule == InlineBoundary ? blanks < want.count : blanks != want.count",
+			"note": "the boundary wants AT LEAST one blank instead of exactly one, so two blank lines there are left standing"
+		},
+		{
+			"name": "M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "buildConditionalRegion",
+			"find": "MemberSpacing.separatorBetween(prevMember, m, source, spacing)",
+			"replace": "MemberSpacing.separatorBetween(prevMember, m, source, { separateInline: false, writer: spacing.writer })",
+			"note": "the `#if`-region rebuild ignores the option, so a type with any conditional member loses the inline-subgroup blank on reorder"
+		},
+		{
+			"name": "M-MO-INLINE-SPACING-ONLY-UNREAD",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "emitReorder",
+			"find": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, spacing);",
+			"replace": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, { separateInline: false, writer: spacing.writer });",
+			"note": "the spacing-only fallback of a pinned container ignores the option, so its glued boundary is reported for ever and never fixed"
+		},
+		{
+			"name": "M-MO-WRITER-REPORT-UNREAD",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "run",
+			"find": "MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'))",
+			"replace": "{ separateInline: optionOn(entry.file, 'separateInlineSubgroup'), writer: null }",
+			"note": "the REPORT path ignores the writer's member-gap policy, so it flags a blank the writer forces (the 44 client blanks around multi-line fields) while the fix path - reading the policy - finds nothing to do"
+		},
+		{
+			"name": "M-MO-WRITER-FIX-UNREAD",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "fix",
+			"find": "? MemberSpacing.policyOf(violations[0].file, plugin, optionOn(violations[0].file, 'separateInlineSubgroup'))",
+			"replace": "? { separateInline: optionOn(violations[0].file, 'separateInlineSubgroup'), writer: null }",
+			"note": "the FIX path ignores the writer's member-gap policy, so a doc-commented field the report flags re-derives as no issue there and is never set off"
+		},
+		{
+			"name": "M-MO-WRITER-DOC-IGNORED",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "final forced: Null<Int> = writer.docBlanks(a.leadComments, b.leadComments);",
+			"replace": "final forced: Null<Int> = null;",
+			"note": "the writer's doc-comment rule is not asked, so a glued doc-commented field stays exempt and `lint` is silent about the blanks `fmt` then adds"
+		},
+		{
+			"name": "M-MO-WRITER-MULTILINE-IGNORED",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "if (base == null || base.count != 0) return base;",
+			"replace": "if (true) return base;",
+			"note": "the writer's multi-line rule is not asked, so the blank `aroundMultilineFields` writes around a multi-line field is reported as a gap inside one rank group, for ever - the fix's edit is undone by the canonical round-trip"
+		},
+		{
+			"name": "M-MO-WRITER-UNMEASURABLE-GUESS",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "else if (multiA == null || multiB == null)\n\t\tnull\n\telse",
+			"replace": "else",
+			"note": "a slot the multi-line measure cannot read is guessed to be one-line, so the check demands a tight gap the writer may keep open"
+		},
+		{
+			"name": "M-MO-WRITER-CONDITIONAL",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "a.condition == null && b.condition == null ? spacing.writer : null",
+			"replace": "spacing.writer",
+			"note": "the writer's member-gap policy is applied inside an `#if` body too, whose members the writer writes with their source gaps"
+		},
+		{
+			"name": "M-MO-WRITER-CONTAINER-KIND",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "forContainer",
+			"find": "return writer == null || writer.containerKinds.contains(containerKind)",
+			"replace": "return true",
+			"note": "the writer's member-gap policy is applied to a container kind the writer does not run it on"
+		},
+		{
+			"name": "M-MO-WRITER-MINIMUM-AS-EXACT",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "spacingViolation",
+			"find": "want.atLeast ? blanks < want.count : blanks != want.count",
+			"replace": "blanks != want.count",
+			"note": "the writer's doc / multi-line blank is read as an EXACT count, though the writer keeps a fuller gap as the source has it, so two blanks before a doc-commented method are reported against a writer that writes them"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NULL-SITE-ADMITTED",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "report",
+			"find": " || nullable['${member.name}#$index'] == true",
+			"replace": "",
+			"note": "a call passing null where the default lands is ignored, so it silently takes the default"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NONNULL-ANY",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "provenNonNull",
+			"force": "true",
+			"note": "every argument counts as non-null, a variable or a call included"
+		},
+		{
+			"name": "M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "collectCalls",
+			"find": "if (called != null && scope.memberOwners.exists(called))",
+			"replace": "if (called != null && resolveCallee(call, owner, entry, scope, seams) != null)",
+			"note": "only resolved calls are read, so a null handed through a receiver the rule cannot type escapes"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NULL-CONST-NONNULL",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "literalInitializer",
+			"force": "true",
+			"note": "an inline constant whose value is null proves its argument non-null"
+		},
+		{
+			"name": "M-OVERRIDDEN-INLINE-FIX-NONE",
+			"type": "anyparse.check.common.members.OverriddenInline",
+			"method": "fix",
+			"find": "if (span != null)",
+			"replace": "if (span != null && false)",
+			"note": "the fix finds the overridden method's inline modifier and deletes nothing, so --fix leaves the override failing in every build that compiles it"
+		},
+		{
+			"name": "M-RTTI-HOMONYM-REFUSES",
+			"type": "anyparse.check.common.members.PreferEnumAbstract",
+			"method": "fixGrouped",
+			"find": "ownerCarriesRtti(index, plan.name, v.file)",
+			"replace": "index.traits.transitivelyCarriesRtti(plan.name)",
+			"note": "the @:rtti gate reads every declaration of the owner's simple name again, so another package's @:rtti namesake refuses the enum-abstract conversion"
+		},
+		{
+			"name": "M-PLAN-GUARDED-META-ALLOWED",
+			"type": "anyparse.check.common.members.PreferEnumAbstract",
+			"method": "conversionPlan",
+			"find": "if (cfg.conditionalKinds.contains(prev.kind) && prev.children.exists(c -> cfg.declarationLeadKinds.contains(c.kind)))",
+			"replace": "if (false)",
+			"note": "a conditional region of metadata above the type no longer refuses the enum-abstract conversion, so `#if !x @:keep #end class C` converts and the build that keeps the region loses the kept class"
+		},
+		{
+			"name": "M-TRIVIAL-GETTER-GRANTEE-UNSEEN",
+			"type": "anyparse.check.common.members.TrivialGetter",
+			"method": "backingFieldReachedOutside",
+			"find": "|| MemberWriteScan.accessGrantMayReference(className, field, index, plugin)",
+			"replace": "",
+			"note": "trivial-getter asks the subtype graph alone again, so a backing field a grantee reads is deleted by a collapse that rewrites only the owner"
+		},
+		{
+			"name": "M-TRIVIAL-GETTER-ACCESSOR-UNSEEN",
+			"type": "anyparse.check.common.members.TrivialGetter",
+			"method": "accessorReachedOutside",
+			"force": "false",
+			"note": "trivial-getter deletes an accessor a subtype or a grantee calls by name, guarding the backing field alone"
+		},
+		{
+			"name": "M-SCRATCH-UNSTORED-BLIND",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "candidateOf",
+			"find": "if (unstored != null) {",
+			"replace": "if (unstored != null && false) {",
+			"note": "the setter of a property it never stores is fixed like any method, so the field holding the value it forgot to store becomes a local and the evidence is gone"
+		},
+		{
+			"name": "M-SCRATCH-MEMBER-NAME-TAKEN",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "localNameOf",
+			"find": "&& !container.children.exists(m -> m.name == bare)",
+			"replace": "",
+			"note": "the stripped name is taken even when a member of the type holds it, so the local shadows that member in the method"
+		},
+		{
+			"name": "M-UNSTORED-INIT-BLIND",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "considerSetter",
+			"find": "CtorFieldFold.declInitializer(property, shape) != null\n\t\t\t||",
+			"replace": "",
+			"note": "a declaration initializer is not seen as a store, so a property whose field holds that value is reported as never stored"
+		},
+		{
+			"name": "M-UNSTORED-REFLECTION-BLIND",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "considerSetter",
+			"find": "ReflectionScan.runtimeName(reflection, name)",
+			"replace": "false",
+			"note": "a reflective string naming the property is ignored, although Reflect.setField writes its field by name"
+		},
+		{
+			"name": "M-UNSTORED-META-ADMITTED",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "carriesMetadata",
+			"force": "false",
+			"note": "metadata on the property is ignored, so the fix rewrites the read access of a property a macro or the runtime may reach"
+		},
+		{
+			"name": "M-UNSTORED-KEEP-ADMITTED",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "ownerDecline",
+			"find": "if (info.hasKeep)",
+			"replace": "if (false)",
+			"note": "a @:keep owner is fixed like any other, although its field may be reached by name"
+		},
+		{
+			"name": "M-UNSTORED-RTTI-ADMITTED",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "ownerDecline",
+			"find": "if (index.traits.transitivelyCarriesRtti(owner))",
+			"replace": "if (false)",
+			"note": "an @:rtti owner is fixed like any other, so the access its runtime type information describes changes"
+		},
+		{
+			"name": "M-UNSTORED-CHAIN-ADMITTED",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "ownerDecline",
+			"find": "index.subtypes.supertypeChainResolved(owner) ?",
+			"replace": "true ?",
+			"note": "an owner whose supertype chain does not resolve is fixed anyway, although an unseen supertype may declare the property with the access it must keep"
+		},
+		{
+			"name": "M-UNSTORED-EXTERN-ADMITTED",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "run",
+			"find": "declared != null && declared.isExtern",
+			"replace": "false",
+			"note": "an extern owner is judged like a class, although the native side stores its field where no text shows it"
+		},
+		{
+			"name": "M-UNSTORED-DYNAMIC-WRITE-BLIND",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "considerSetter",
+			"find": "if (writes.hasUnresolvedWrite(name, file)) return;",
+			"replace": "",
+			"note": "a write through Dynamic is not seen as a store, so the fix removes a field that write needs and the program fails at run time"
+		},
+		{
+			"name": "M-UNSTORED-ENUMERATION-ADMITTED",
+			"type": "anyparse.check.common.members.UnstoredProperty",
+			"method": "enumerates",
+			"force": "false",
+			"note": "code listing or rendering an object's fields is ignored, so the fix changes what it prints"
+		},
+		{
+			"name": "M-STATICINIT-ANY-ORDER",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "m.index > owner.index",
+			"replace": "m.index != owner.index",
+			"note": "a read of a static declared above the reader is flagged too"
+		},
+		{
+			"name": "M-STATICINIT-NO-DEFERRED",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "if (deferredKinds.contains(node.kind)) return null;",
+			"replace": "",
+			"note": "a read inside a function literal counts as an eager read"
+		},
+		{
+			"name": "M-STATICINIT-BY-NAME",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "memberNamed",
+			"find": "declaredAt(members, name, Refs.bindingAt(name, span.from, tree, shape))",
+			"replace": "members.find(m -> m.node.name == name)",
+			"note": "an identifier is matched to a field by its spelling, not by the declaration it binds"
+		},
+		{
+			"name": "M-STATICINIT-ANY-QUALIFIER",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "memberNamed",
+			"find": "kids[0].name == ownerType",
+			"replace": "true",
+			"note": "another type's static of the same name counts as a read of the field"
+		},
+		{
+			"name": "M-STATICINIT-CALLS-NOT-ENTERED",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "if (ran != null && !ran.isField",
+			"replace": "if (false && ran != null && !ran.isField",
+			"note": "a static method the initializer calls is never entered, so a later field its body reads is missed"
+		},
+		{
+			"name": "M-STATICINIT-REFERENCE-RUNS",
+			"type": "anyparse.check.common.members.MemberInitDeps",
+			"method": "firstEarlyRead",
+			"find": "node.kind == shape.callKind && kids.length > 0 ? memberAt(kids[0]) : null",
+			"replace": "memberAt(node)",
+			"note": "a method named as a value reads as run, so its body's reads are flagged though nothing calls it at initialization"
+		},
+		{
+			"name": "M-DRA-NONLITERAL-INLINE",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "literalInitializer",
+			"find": "&& ConstantFieldScan.isConstantLiteral(init, entry.source, constantFields)",
+			"replace": "",
+			"note": "any inline constant other than null reads as a default, so the fix writes a concatenated string constant as a default Haxe refuses as not constant"
+		},
+		{
+			"name": "M-PAM-GRANT-PUBLIC",
+			"type": "anyparse.check.common.members.PreferAccessMeta",
+			"method": "addGrants",
+			"find": "!hosted.members.exists(m -> StaticExtensions.accessible(m, host))",
+			"replace": "true",
+			"note": "a public member read under the waiver gets its type granted too"
+		}
+	]
+}

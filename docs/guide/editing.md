@@ -40,7 +40,7 @@ strictly ascending; an entry already present is refused. Each refusal names why 
 The file's formatting is the writer's, as for every insert op. JSON is out of reach: the only grammar
 plugin is Haxe's (`--lang haxe`). The `anyparse.grammar.json` grammar has a parser and a writer, but
 no `GrammarPlugin`: no spanned `QueryNode` projection for `--select` to address, and no canonical
-writer configured to the layout `test/testkit/mutation-arms.json` is kept in — both are needed before
+writer configured to the layout `test/testkit/arms/*.json` is kept in — both are needed before
 an op can insert an arm object there (an arm is an OBJECT appended in declaration order, `--append`'s
 job, not `--sorted`'s).
 
@@ -84,7 +84,7 @@ spacing):
 hxq add-element apqlint.json --append --select 'Member:thread-safety > JObject > Member:registers > JArray' \
     '"api.NetRequest2.success"' --write
 hxq remove-element apqlint.json --select 'Member:spawns > JArray > JString:api.NetRequest2.success' --write
-hxq add-element test/testkit/mutation-arms.json --append --select 'Member:arms > JArray' - --write <<'EOF'
+hxq add-element test/testkit/arms/anyparse.query.json --append --select 'Member:arms > JArray' - --write <<'EOF'
 {"name": "M-X", "type": "anyparse.query.Foo", "method": "bar", "force": "null", "note": "…"}
 EOF
 ```

@@ -5,7 +5,6 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.Type;
 import sys.FileSystem;
-import sys.io.File;
 import testkit.MutationArms.ArmTable;
 import testkit.MutationArms.MutationArm;
 
@@ -92,8 +91,11 @@ class TestDiscovery {
 	/** The one `@:pin` role that requires at least one `@:killer`. */
 	private static inline final CONTROL_ROLE: String = 'control';
 
-	/** The arm registry, beside this file — every `@:killer` name has to resolve into it. */
-	private static inline final ARMS_FILE: String = 'mutation-arms.json';
+	/** The arm registry's directory, beside this file — every `@:killer` name has to resolve into one of its documents. */
+	private static inline final ARMS_DIR: String = 'arms';
+
+	/** The registry as the build errors spell it. */
+	private static inline final ARMS_LABEL: String = 'test/testkit/arms';
 
 	/**
 	 * A directory's AMBIENT IMPORT source. It declares no type, so it is neither a case nor an entry
@@ -137,15 +139,15 @@ class TestDiscovery {
 		final self: ClassType = Context.getLocalClass().get();
 		final here: String = Path.directory(Context.getPosInfos(self.pos).file);
 		final root: String = Path.directory(here);
-		final armsPath: String = Path.join([here, ARMS_FILE]);
+		final armsPath: String = Path.join([here, ARMS_DIR]);
 		if (!FileSystem.exists(armsPath))
 			Context.error(
 				'$armsPath is missing, and every @$KILLER_META in the test tree resolves through it'
 				+ ' — restore it, or drop the pins it answers for',
 				Context.currentPos()
 			);
-		final table: ArmTable = MutationArms.parse(File.getContent(armsPath));
-		for (error in table.errors) Context.error('$ARMS_FILE: $error', Context.currentPos());
+		final table: ArmTable = MutationArms.parseDirectory(armsPath);
+		for (error in table.errors) Context.error('$ARMS_LABEL/$error', Context.currentPos());
 		final modules: Array<String> = [];
 		final testFiles: Map<String, String> = [];
 		collectModules(root, [], modules, testFiles);
@@ -333,7 +335,7 @@ class TestDiscovery {
 	 * A `@:pin('control')` with no `@:killer` is a build error: a control whose
 	 * killing arm nobody names is a claim the reviewer has to take on trust, which
 	 * is the state this metadata exists to end. A `@:killer` naming an arm
-	 * `mutation-arms.json` does not declare is the same error one level down — the
+	 * `test/testkit/arms` does not declare is the same error one level down — the
 	 * name was free text until the registry existed, so nothing said the arm could be
 	 * found, let alone run.
 	 *
@@ -376,7 +378,7 @@ class TestDiscovery {
 			for (killer in killers) {
 				if (MutationArms.find(arms, killer) == null)
 					Context.error(
-						'$fq#${f.name} names @$KILLER_META(\'$killer\'), which $ARMS_FILE declares no arm for'
+						'$fq#${f.name} names @$KILLER_META(\'$killer\'), which $ARMS_LABEL declares no arm for'
 						+ ' — declare the arm (layer, member, cut) or fix the name; an arm nobody can run is prose retyped as metadata',
 						f.pos
 					);
@@ -407,14 +409,14 @@ class TestDiscovery {
 		for (arm in arms) {
 			if (!killers.contains(arm.name))
 				Context.error(
-					'$ARMS_FILE declares "${arm.name}", which no @$KILLER_META in the test tree names'
+					'$ARMS_LABEL declares "${arm.name}", which no @$KILLER_META in the test tree names'
 					+ ' — an arm exists to kill a pin, so give it one or drop it',
 					Context.currentPos()
 				);
 			final types: Null<Array<Type>> = moduleTypes(arm.type);
 			if (types == null) {
 				Context.error(
-					'$ARMS_FILE: "${arm.name}" names the type ${arm.type}, and no module of that path is on the classpath'
+					'$ARMS_LABEL: "${arm.name}" names the type ${arm.type}, and no module of that path is on the classpath'
 					+ ' — check the spelling, or the root the module lives under',
 					Context.currentPos()
 				);
@@ -428,10 +430,12 @@ class TestDiscovery {
 			} else {
 				final owner: Null<ClassType> = classIn(types, arm.type, arm.method);
 				if (owner == null)
-					Context.error('$ARMS_FILE: "${arm.name}" names the type ${arm.type}, which resolves to no class', Context.currentPos());
+					Context.error(
+						'$ARMS_LABEL: "${arm.name}" names the type ${arm.type}, which resolves to no class', Context.currentPos()
+					);
 				else if (!declaresMethod(owner, arm.method))
 					Context.error(
-						'$ARMS_FILE: "${arm.name}" cuts ${arm.type}#${arm.method}, and ${arm.type} declares no such method'
+						'$ARMS_LABEL: "${arm.name}" cuts ${arm.type}#${arm.method}, and ${arm.type} declares no such method'
 						+ ' — a rename or a move left the arm behind; re-point it at the member the cut belongs to now',
 						Context.currentPos()
 					);

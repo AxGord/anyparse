@@ -1,0 +1,709 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.loops. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-EMPTY-B-ANY-NONEMPTY",
+			"type": "anyparse.check.common.loops.RedundantReplaceLoop",
+			"method": "emptyReplacementMessage",
+			"find": "loop is redundant only for a SINGLE-CHARACTER $search — '",
+			"replace": "loop is redundant for any non-empty $search — '",
+			"note": "the empty-B message claims the single call does the same work for every non-empty S again, which 'aabb'.replace('ab', '') == 'ab' refutes"
+		},
+		{
+			"name": "M-SEAM-BLIND",
+			"type": "anyparse.check.common.loops.RedundantReplaceLoop",
+			"method": "replacementCanReformSearch",
+			"force": "false",
+			"note": "no join can ever re-form S, so arm A claims the two-space squeeze is redundant and the autofix deletes a required loop again"
+		},
+		{
+			"name": "M-PIA-OBJLIT-SET-FLAGGED",
+			"type": "anyparse.check.common.loops.PreferIndexAccess",
+			"method": "structuralMatch",
+			"find": "if (isSet && cfg.objectLiteralKind != null && call.children[2].kind == cfg.objectLiteralKind) return null;",
+			"replace": "",
+			"note": "a `set` whose value argument is an OBJECT LITERAL is matched again at the seam `run` and `fix` share, so the fixer rewrites it to an index assignment Haxe rejects (`No @:arrayAccess function for haxe.ds.Map accepts arguments of String and { ... }`)"
+		},
+		{
+			"name": "M-COUNT-CONFLICT-SILENT",
+			"type": "anyparse.check.common.loops.DeadBinderCounterLoop",
+			"method": "fixWalk",
+			"find": "\t\t\tfound.declineReason = UsingScan.conflictingUsingDecline(LAMBDA_MODULE, COUNT_METHOD);",
+			"replace": "\t\t\tUsingScan.conflictingUsingDecline(LAMBDA_MODULE, COUNT_METHOD);",
+			"note": "the per-site conflicting-`using` skip drops the `count()` rewrite silently again, and the `length`-form rewrites in the same file hide it from the ledger"
+		},
+		{
+			"name": "M-COUNT-GUARDED-MIS-ATTRIBUTED",
+			"type": "anyparse.check.common.loops.DeadBinderCounterLoop",
+			"method": "fix",
+			"find": "\tfinal accepted: Array<Violation> = keptViolations(collected, edits, violations);",
+			"replace": "\tfinal accepted: Array<Violation> = violations;",
+			"note": "the guard's sentence is written on every finding the rule reported again, including the ones the containment filter dropped and the ones no site matched"
+		},
+		{
+			"name": "M-VALUE-LOOP-READS-UNSPLICED",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "elementReadEdits",
+			"find": "\t\tfor (span in readSpans) edits.push({ span: span, text: binder });\n",
+			"replace": "",
+			"note": "the X[i] occurrences are left unspliced, so prefer-value-loop rewrites the header into a value loop and the body still reads an index binding that no longer exists, and prefer-keyvalue-loop leaves the element reads it promised to re-spell"
+		},
+		{
+			"name": "M-VALUE-LOOP-INDEX-TEXT-BLIND",
+			"type": "anyparse.check.common.loops.PreferValueLoop",
+			"method": "analyze",
+			"find": "\t\tif (OccurrenceScan.referencedInRange(f.source, h.index, bodySpan.from, bodySpan.to, indexSpans, f.inert)) return null;\n",
+			"replace": "",
+			"note": "the completeness gate is gone, so prefer-value-loop trusts node walks that prune a macro quotation and deletes an index the quotation still reads"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-UNSTABLE",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "bodyAdmitsElementLoop",
+			"find": "return LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core)\n\t\t\t&&",
+			"replace": "return true &&",
+			"note": "a write to X[i] or a push onto X no longer declines, so an element-loop rewrite assigns to a copy or follows the growth a bounded range ignored"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-REBIND",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "bodyAdmitsElementLoop",
+			"find": ["!LoopScan.bindsName(h.body, h.index, core)", "!LoopScan.bindsName(h.body, h.collection, core)"],
+			"replace": ["true", "true"],
+			"note": "an X[i] under a nested binder of i is re-spelled as the outer element, and a body reaching the collection as this.X is rewritten"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-CLOSURE",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "bodyAdmitsElementLoop",
+			"find": "&& !LoopScan.capturedByClosure(h.body, source, h.collection, core);",
+			"replace": "&& true;",
+			"note": "an X[i] read inside a closure becomes the binder, so a closure run after the loop sees the element of its iteration instead of the slot as it is then"
+		},
+		{
+			"name": "M-KV-NOOPENER-BODY-GATES",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "\t\tif (!ElementLoopRewrite.bodyAdmitsElementLoop(h, f.source, LENGTH_MEMBER, core)) return null;\n",
+			"replace": "",
+			"note": "the no-opener arm stops asking the shared body gates, so a closure, a nested binder or a length change reaches its rewrite"
+		},
+		{
+			"name": "M-VALUE-LOOP-BODY-GATES",
+			"type": "anyparse.check.common.loops.PreferValueLoop",
+			"method": "analyze",
+			"find": "\t\tif (!ElementLoopRewrite.bodyAdmitsElementLoop(h, f.source, LENGTH_MEMBER, core)) return null;\n",
+			"replace": "",
+			"note": "prefer-value-loop stops asking the shared body gates, so a closure, a nested binder or a length change reaches its rewrite"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-NESTED-BINDER",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "binderFor",
+			"find": "\t\telse if (nestingLoopDerives(f.root, forNode, candidate, f))\n\t\t\t'an enclosing or nested indexed loop derives the same element name `$candidate`'\n",
+			"replace": "",
+			"note": "an outer and an inner indexed loop that derive one binder are both fixed in one pass, and the inner binder shadows the outer for the whole inner body"
+		},
+		{
+			"name": "M-SINGULAR-INNER-WORD",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "singularOf",
+			"find": "final singular: Null<String> = endsWord(name, end) ? singularOfEnding",
+			"replace": "final singular: Null<String> = end == name.length ? singularOfEnding",
+			"note": "only the end of a name is read as a plural, so gridLinesVertical has no singular and its loop keeps no binder"
+		},
+		{
+			"name": "M-SINGULAR-WORD-END-ANYWHERE",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "endsWord",
+			"find": "return next < 'a'.code || next > 'z'.code;",
+			"replace": "return true;",
+			"note": "every position is a word end, so an s inside a word reads as a plural and nodesPosition becomes nodesPoition"
+		},
+		{
+			"name": "M-KV-OPENER-SELF-CALL",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "fixWalk",
+			"find": "openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header)",
+			"replace": "openerDecline(m, f)",
+			"note": "the opener arm never asks the body's reach, so a callee that grows the collection runs on under the key-value iterator"
+		},
+		{
+			"name": "M-VALUE-LOOP-SELF-CALL",
+			"type": "anyparse.check.common.loops.PreferValueLoop",
+			"method": "fixWalk",
+			"find": "ElementLoopRewrite.gatedEdits(buildEdits(m, f.source), gate, m.header, m.forSpan, m.decline, out);",
+			"replace": "for (e in buildEdits(m, f.source)) out.push(e);",
+			"note": "the value-loop fix never asks the body's reach, so a callee that replaces X[i] after the binder was read, or grows the collection, changes what the loop reads"
+		},
+		{
+			"name": "M-KV-NOOPENER-INDEX-ONLY",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "\t\tif (LoopScan.countReads(h.body, h.index, core) == reads.length) return null;\n",
+			"replace": "",
+			"note": "a loop whose index only ever indexes X is claimed by both prefer-keyvalue-loop and prefer-value-loop, so two autofixes race for one header"
+		},
+		{
+			"name": "M-KV-NOOPENER-OPENER-CLAIM",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "if (h == null || LoopScan.opensWithIndexBinding(h.body, h.collection, h.index, core)) return null;",
+			"replace": "if (h == null) return null;",
+			"note": "a body opening with final v = X[i] that the opener arm declined is picked up by the no-opener arm, which renames the opener initializer into final v = v-binder"
+		},
+		{
+			"name": "M-KV-NOOPENER-INDEX-WRITE",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "\t\tif (LoopScan.countWrites(h.body, h.index, core) != 0) return null;\n",
+			"replace": "",
+			"note": "a body that writes the index is rewritten, and the binder no longer follows the index it was read with"
+		},
+		{
+			"name": "M-KV-NOOPENER-SELF-CALL",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "fixWalk",
+			"find": "ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.source), gate, r.header, r.forSpan, r.decline, out);",
+			"replace": "for (e in buildReadEdits(r, f.source)) out.push(e);",
+			"note": "the no-opener arm never asks the body's reach, so a callee that replaces X[i] after the binder was read, or grows the field, changes what the loop reads"
+		},
+		{
+			"name": "M-KV-NOOPENER-NON-ARRAY",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "\t\tif (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource, f.typeSyntax) != ARRAY_TYPE) return null;\n",
+			"replace": "",
+			"note": "a container resolved to something other than Array is reported with a key-value form it has no iterator for"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-UNDERSCORE",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "withoutLeadingUnderscores",
+			"force": "name",
+			"note": "the private-member prefix stays on the collection name, the singularizer refuses it, and both element-loop rules withhold the rewrite of _points"
+		},
+		{
+			"name": "M-KV-NOOPENER-TAKEN-SCOPE",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "binderOf",
+			"find": "if (hidden != null) return",
+			"replace": "if (false) return",
+			"note": "the binder name is checked against the loop only, so it shadows a parameter or outer local of the same name for the whole loop"
+		},
+		{
+			"name": "M-KV-NOOPENER-TAKEN-MEMBER",
+			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
+			"method": "declaresValue",
+			"force": "false",
+			"note": "a binder named like a field of the type is written, shadowing the field for the whole loop"
+		},
+		{
+			"name": "M-MAPVALUE-SUBTYPE-REPORT-INDEX",
+			"type": "anyparse.check.common.loops.MapValueScan",
+			"method": "proven",
+			"find": "\t\tfinal scope: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;",
+			"replace": "\t\tfinal scope: SymbolIndex = report;",
+			"note": "the no-null-value census asks the REPORT index for the access-grant and subtype doors, so `hxq lint <one file> --fix` with `resolutionRoots` declared collapses `m.exists(k) ? m[k] : d` into `m[k] ?? d` for a map an unlinted subtype stores a null into — the S177 shape in the redundant-map-exists rule, found by T918's `subtype-map-write` cell"
+		},
+		{
+			"name": "M-ULB-WILDCARD-KEY-ADMITTED",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "loopCandidates",
+			"find": "if (keyName == WILDCARD) {",
+			"replace": "if (false) {",
+			"note": "a key already spelled `_` is judged like any other, so `for (_ in xs)` is reported as unread and a discarded key is taken from redundant-map-iter-key"
+		},
+		{
+			"name": "M-ULB-OUTER-WILDCARD-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "wildcardBoundOutside",
+			"force": "false",
+			"note": "a body read of an outer `_` is ignored, so the renamed binder captures it"
+		},
+		{
+			"name": "M-ULB-SHADOW-COUNTED-AS-READ",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "unread",
+			"find": "\t\t\tcovered.push(hit.span.from);\n",
+			"replace": "",
+			"note": "a read of an inner shadow is left unaccounted, so a binder the body only shadows is kept as though read"
+		},
+		{
+			"name": "M-ULB-OUTER-BINDING-AS-SHADOW",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "boundOutside",
+			"find": ": !within(bound, bodySpan);",
+			"replace": ": false;",
+			"note": "a read resolving to the loop binder itself counts as a shadow, so a binder read before its re-declaration is renamed"
+		},
+		{
+			"name": "M-ULB-INTERP-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "unread",
+			"find": "return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
+			"replace": "return true;",
+			"note": "occurrences are never accounted for, so a `$i` interpolation read and anything else the tree hides is renamed away"
+		},
+		{
+			"name": "M-ULB-INTERP-LITERAL-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "unread",
+			"find": "return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
+			"replace": "return occurrences.foreach(at -> covered.contains(at));",
+			"note": "an occurrence inside an interpolating literal is trusted once resolved, so a `${i}` read of a shadow no longer refuses"
+		},
+		{
+			"name": "M-ULB-COVERAGE-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "unread",
+			"find": "return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
+			"replace": "return occurrences.foreach(at -> !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
+			"note": "an occurrence no hit accounts for is trusted, so a read inside a macro reification is renamed away"
+		},
+		{
+			"name": "M-ULB-OPAQUE-COND-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "unread",
+			"find": [
+				"if (CondRegionScan.opaqueCondRegionMentioning(body, ctx.source, name, ctx.s.shape) != null) return false;",
+				"return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));"
+			],
+			"replace": [
+				"",
+				"return true;"
+			],
+			"note": "an unparsed `#if` region spelling the name is trusted as empty, although nothing inside it projects for the scan to see"
+		},
+		{
+			"name": "M-ULB-NATIVE-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "hazardMentions",
+			"find": " || NativeCodeScan.isCarrier(node, ctx.s.shape, ctx.fold)",
+			"replace": "",
+			"note": "target code pasted as a string is not read, so a binder a `Syntax.code` body names is renamed and only the target build fails"
+		},
+		{
+			"name": "M-ULB-UNTYPED-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "seamsOf",
+			"find": "shape.untypedKinds, ",
+			"replace": "",
+			"note": "an untyped subtree is trusted to resolve like typed code, so a binder it mentions is judged by the resolver alone"
+		},
+		{
+			"name": "M-ULB-CLOSURE-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "seamsOf",
+			"find": "shape.lambdaKinds, ",
+			"replace": "",
+			"note": "a closure mentioning the name is judged by the resolver alone, so a lambda whose own parameter shadows the binder lets the rename through"
+		},
+		{
+			"name": "M-ULB-COUNTER-CLAIM-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "counterClaimed",
+			"force": "false",
+			"note": "a loop dead-binder-counter-loop claims is reported too, so one loop has two owners"
+		},
+		{
+			"name": "M-MAPITERKEY-UNPROVEN-DROPPED",
+			"type": "anyparse.check.common.loops.RedundantMapIterKey",
+			"method": "fix",
+			"find": "case _: UNPROVEN_DECLINE;",
+			"replace": "case _: null;",
+			"note": "the key prefix is dropped over any iterable, so a Map loop whose body removes an entry switches to the iterator that yields its stale value"
+		},
+		{
+			"name": "M-ULB-PATTERN-WILDCARD-UNEXEMPT",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "boundOutside",
+			"find": "!OccurrenceScan.offsetWithinAny(hit.span.from, ctx.patterns)",
+			"replace": "true",
+			"note": "a `case _:` wildcard pattern counts as a read of an outer `_`, so every loop whose body switches is refused"
+		},
+		{
+			"name": "M-ULB-UNBOUND-WILDCARD-ADMITTED",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "boundOutside",
+			"find": "!OccurrenceScan.offsetWithinAny(hit.span.from, ctx.patterns)",
+			"replace": "false",
+			"note": "a `_` the resolver cannot bind (an inherited field) counts as no read, so the renamed binder captures it"
+		},
+		{
+			"name": "M-ULB-FIELD-NAME-AS-READ",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "occurrencesIn",
+			"find": "ctx.fieldNames",
+			"replace": "[]",
+			"note": "an object-literal field name spelling the binder counts as a read, so the binder is kept"
+		},
+		{
+			"name": "M-ULB-WILDCARD-KEY-VALUE-BLIND",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "loopCandidates",
+			"find": "if (valueBinder != null && valueSpan != null) valueCandidate(ctx, body, bodySpan, valueBinder.name, valueSpan, out);",
+			"replace": "",
+			"note": "a loop whose key is `_` is skipped whole, so its unread value binder is fixed by nobody"
+		},
+		{
+			"name": "M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN",
+			"type": "anyparse.check.common.loops.RedundantMapIterKey",
+			"method": "walk",
+			"find": "case Unprovable: UNPROVEN_MESSAGE;",
+			"replace": "case Unprovable: PROVEN_MESSAGE;",
+			"note": "every finding recommends for (v in …), including over a Map where the fix declines because the drop is unsafe"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-NEVER",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "loopText",
+			"find": "fill ?? ",
+			"replace": "",
+			"note": "a sequential index fill into the empty array is never folded, which is the rule before it learnt the shape"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-VALUE-UNCHECKED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "indexFill",
+			"find": "acc.checks.push(value);",
+			"replace": "",
+			"note": "the written value skips the self-reference gate, so `out[j] = out.length` folds to a comprehension reading a different array"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-ANY-START",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "indexFill",
+			"find": " || !isZeroLiteral(range.children[0], ctx)",
+			"replace": "",
+			"note": "a fill from a non-zero start folds, although its first write leaves slot 0 empty rather than appending"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-ANY-INDEX",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "indexWriteValue",
+			"find": " && index.kind == s.identKind && index.name == binder",
+			"replace": "",
+			"note": "a write at an index other than the loop binder folds, although it does not append"
+		},
+		{
+			"name": "M-COMPR-NESTED-NEVER",
+			"type": "anyparse.check.common.loops.PreferComprehension",
+			"method": "buildBlock",
+			"find": "if (nested != null) return nested;",
+			"replace": "",
+			"note": "a nested build is never folded, which is the rule before it learnt the shape"
+		},
+		{
+			"name": "M-COMPR-GAP-COMMENT-DROPPED",
+			"type": "anyparse.check.common.loops.PreferComprehension",
+			"method": "tryMatch",
+			"find": "if (!gapped) hoistCommentsIn(new Span(declSpan.to, forSpan.from), ctx, acc);",
+			"replace": "",
+			"note": "an own-line comment between an adjacent declaration and its loop is swallowed by the merge"
+		},
+		{
+			"name": "M-COMPR-NESTED-ANY-LENGTH",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": "kids.length != NESTED_BODY_LENGTH || ",
+			"replace": "",
+			"note": "an outer body holding a statement beyond the inner build folds, and the fix drops that statement"
+		},
+		{
+			"name": "M-COMPR-NESTED-PUSH-ANY",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": " || pushed.kind != s.identKind || pushed.name != innerName",
+			"replace": "",
+			"note": "an outer push of something other than the inner array folds as if it pushed the inner array"
+		},
+		{
+			"name": "M-COMPR-NESTED-INNER-UNCHECKED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": " || innerAcc.checks.exists(cn -> PreferComprehension.referencesName(cn, innerName, s))",
+			"replace": "",
+			"note": "the inner fill may read the inner array it builds, which its comprehension no longer is"
+		},
+		{
+			"name": "M-COMPR-NESTED-CHECKS-UNMERGED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": "for (c in innerAcc.checks) acc.checks.push(c);",
+			"replace": "",
+			"note": "the inner fill's element and bounds skip the outer self-reference gate, so they may read the outer array being built"
+		},
+		{
+			"name": "M-COMPR-NESTED-ASCRIPTION-DROPPED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "innerElement",
+			"find": "return restated ? '[$text]' : '([$text] : $annotation)';",
+			"replace": "return '[$text]';",
+			"note": "the inner declaration's annotation is dropped where the outer element type does not restate it, which can change the elements' type"
+		},
+		{
+			"name": "M-COMPR-GAP-NAME-BLIND",
+			"type": "anyparse.check.common.loops.PreferComprehension",
+			"method": "gapAdmits",
+			"find": "!OccurrenceScan.referencedInRange(source, declName, declSpan.to, forSpan.from, [])",
+			"replace": "true",
+			"note": "a gap statement touching the array is crossed, so an index fill into an array the gap already pushed to no longer starts at slot 0"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-ANY-CONTAINER",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "loopText",
+			"find": "indexesLikeArray(annotation, ctx.seams.typeSyntax) ? indexFill(loop, name, ctx, acc) : null",
+			"replace": "indexFill(loop, name, ctx, acc)",
+			"note": "an index fill into a Map or an @:arrayAccess abstract folds, which does not compile or skips the setter"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-RANGE-UNCHECKED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "indexFill",
+			"find": "acc.checks.push(range);",
+			"replace": "",
+			"note": "the fill's bound skips the self-reference gate, so `0...out.length` folds against a different array"
+		},
+		{
+			"name": "M-COMPR-WELD-BLIND",
+			"type": "anyparse.check.common.loops.PreferComprehension",
+			"method": "hoistLeadOrRefuse",
+			"find": "if (ctx.source.substring(before.from + before.text.length, acc.hoisted[i].from).trim() != '') return null;",
+			"replace": "",
+			"note": "two hoisted comments code separated are welded, and the linter's guard then drops every edit of the rule in the file"
+		},
+		{
+			"name": "M-COMPR-NESTED-DECL-COMMENT",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": "if (PreferComprehension.commentIntersects(declSpan, ctx)) return null;",
+			"replace": "",
+			"note": "a comment inside the inner declaration is stranded when the nest dissolves it"
+		},
+		{
+			"name": "M-MAPITER-KEYED-NEVER",
+			"type": "anyparse.check.common.loops.ValueIterationProof",
+			"method": "kindOf",
+			"find": "else if (NominalTypes.keyedIterationContainer(iterable, root, shape, declaredTypes, index, file, importMap))",
+			"replace": "else if (false)",
+			"note": "a standard map is never a keyed container, so a loop over one the body provably leaves unchanged keeps its discarded key"
+		},
+		{
+			"name": "M-MAPITER-REACH-SKIPPED",
+			"type": "anyparse.check.common.loops.ValueIterationProof",
+			"method": "keyedDecline",
+			"find": "final result: ReachResult = reach.mayMutateNamed(file, name, at, body, MemberTouchScan.mapMethods(shape));",
+			"replace": "final result: ReachResult = Proven;",
+			"note": "a map's key is dropped without asking whether the body changes the map, so a loop that removes an entry starts yielding its stale value"
+		},
+		{
+			"name": "M-ULB-KEYED-UNPROVED-DROPPED",
+			"type": "anyparse.check.common.loops.UnusedLoopBinder",
+			"method": "fix",
+			"find": "ValueIterationProof.keyedDecline(built, file, keyed.iterable, keyed.body, s.shape) == null;",
+			"replace": "true;",
+			"note": "an unread key over a map is dropped without the reach, so a loop that removes an entry switches to the iterator that yields its stale value"
+		},
+		{
+			"name": "M-LOOPBOUND-SILENT",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "compare",
+			"find": "if (same) return;",
+			"replace": "return;",
+			"note": "no loop is ever reported, so a proven mismatch between a bound and a length passes unseen"
+		},
+		{
+			"name": "M-LOOPBOUND-FIXED-WRITE",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "admitted",
+			"find": "return src.fixedLength || !isWriteTarget(parent, grand, s);",
+			"replace": "return !isWriteTarget(parent, grand, s);",
+			"note": "an index write refuses a fixed-length construction too, though it never resizes one"
+		},
+		{
+			"name": "M-LOOPBOUND-ARRAY-WRITE",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "admitted",
+			"find": "return src.fixedLength || !isWriteTarget(parent, grand, s);",
+			"replace": "return true;",
+			"note": "an index write past the end of an array is read as keeping its length, though it extends it"
+		},
+		{
+			"name": "M-LOOPBOUND-VECTOR-IMPORT",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "isFixedLengthType",
+			"find": "typeName == SourceText.lastSegment(path)\n&& ctx.tree.children.exists(c -> ctx.seams.modulePathKinds.contains(c.kind) && c.name == path)",
+			"replace": "typeName == SourceText.lastSegment(path)\n|| false && ctx.tree.children.exists(c -> ctx.seams.modulePathKinds.contains(c.kind) && c.name == path)",
+			"note": "any type spelled `Vector` is read as the fixed-length one, OpenFL's growable `Vector` included"
+		},
+		{
+			"name": "M-LOOPBOUND-FOLD-OFF",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "fold",
+			"force": "null",
+			"note": "no bound folds, so `G.N + 1` and `5` compare as different texts though the constant makes them equal"
+		},
+		{
+			"name": "M-LOOPBOUND-RELATED-OFF",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "compare",
+			"find": "if (related.exists(name -> mentions(bound, name, owner, isField, s))) return;",
+			"replace": "",
+			"note": "a bound naming the array or a parallel one (`xs.length - 1`) is compared as unrelated text"
+		},
+		{
+			"name": "M-LOOPBOUND-REACH-IGNORED",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "readReach",
+			"find": "return k != null && k >= 0 ? k : null;",
+			"replace": "return k != null && k >= 0 ? 0 : null;",
+			"note": "a read of `xs[i + 1]` reaches no further than `xs[i]`, so a pairwise loop one short of the length is reported"
+		},
+		{
+			"name": "M-LOOPBOUND-ADMIT-ALL",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "admitted",
+			"force": "true",
+			"note": "every occurrence keeps the length, so an array handed to a call or appended elsewhere still counts as proven"
+		},
+		{
+			"name": "M-LOOPBOUND-PUBLIC",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "fieldSource",
+			"find": "if (mods.exists(m -> s.visibility.contains(m.kind) && textOf(m, ctx.source) != s.defaultVis)) return null;",
+			"replace": "",
+			"note": "a public field, which another file may resize, gets a proven length"
+		},
+		{
+			"name": "M-LOOPBOUND-CONFINED-OFF",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "scanFields",
+			"find": "MemberWriteScan.referencesConfined(owner, src.name, ctx.source, confined, ctx.plugin)",
+			"replace": "true",
+			"note": "a subtype that appends to the field no longer refuses its proven length"
+		},
+		{
+			"name": "M-LOOPBOUND-EXITS",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "fillLoopOf",
+			"find": "if (containsAnyKind(body, s.exitKinds)) return null;",
+			"replace": "",
+			"note": "a fill loop that may `continue` past its append is read as appending once per iteration"
+		},
+		{
+			"name": "M-LOOPBOUND-WRITE-READ",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "readReach",
+			"find": "&& isRef(node.children[0], name, owner, isField, s)\n\t\t\t\t&& !isWriteTarget(node, parent, s)",
+			"replace": "&& isRef(node.children[0], name, owner, isField, s)\n\t\t\t\t",
+			"note": "a loop that only writes the array is reported as reading it"
+		},
+		{
+			"name": "M-LOOPBOUND-NESTED-FILL",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "checkLoops",
+			"find": "if (span == null || span.from >= fillFrom && span.to <= fillTo) return;",
+			"replace": "if (span == null) return;",
+			"note": "a loop inside the fill loop, reading an array still being filled, is compared with its final length"
+		},
+		{
+			"name": "M-LOOPBOUND-SHADOW",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "keepsLength",
+			"find": "if (node.name == src.name && s.binderKinds.contains(node.kind) && from != src.declFrom) {",
+			"replace": "if (from == -1) {",
+			"note": "a binder taking the array's name no longer refuses it, so the occurrences of the binder count as the array's"
+		},
+		{
+			"name": "M-LOOPBOUND-UNSIZED",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "fixedSource",
+			"find": "init.children.length == 0 || init.children.exists(c -> s.unsizedElementKinds.contains(c.kind)) ? null",
+			"replace": "init.children.length == 0 ? null",
+			"note": "a comprehension literal counts as a one-element literal"
+		},
+		{
+			"name": "M-LOOPBOUND-STATIC-FILL",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "fieldSource",
+			"find": "mods.exists(m -> m.kind == s.staticKind)",
+			"replace": "false",
+			"note": "a static field filled in the constructor, which grows with every instance, gets the fill loop's bound as its length"
+		},
+		{
+			"name": "M-LOOPBOUND-SELF-REF",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "isRef",
+			"find": "receiver.name == owner || s.selfText != null && receiver.name == s.selfText",
+			"replace": "receiver.name == owner",
+			"note": "`this.xs` is no occurrence of the field `xs`, so a read through it is missed"
+		},
+		{
+			"name": "M-LOOPBOUND-TYPE-OFF",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "declaredTypeFits",
+			"force": "true",
+			"note": "a declared type other than the one the source builds no longer refuses the length"
+		},
+		{
+			"name": "M-LOOPBOUND-AHEAD",
+			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
+			"method": "keepsLength",
+			"find": "|| !isField && (from ?? -1) < src.declFrom",
+			"replace": "",
+			"note": "a field's occurrence ahead of a same-named local's declaration is read as the local's, so the field's loop is compared with the local's length"
+		},
+		{
+			"name": "M-LOOPGUARD-DO-WHILE-BODY-LAST",
+			"type": "anyparse.check.common.loops.LoopGuard",
+			"method": "match",
+			"find": "LoopScan.loopBody(loop, s.doWhileKinds)",
+			"replace": "LoopScan.loopBody(loop, [])",
+			"note": "a do-while's body is read off its LAST child, its condition, so loop-guard never sees the guard that opens it"
+		},
+		{
+			"name": "M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY",
+			"type": "anyparse.check.common.loops.LoopGuard",
+			"method": "match",
+			"find": "if (s.bodyBlockKinds.contains(body.kind)) return shielded",
+			"replace": "if (body.kind == s.blockStmtKind) return shielded",
+			"note": "the LIFT arm takes a statement block alone, so a do-while's body block is never lifted"
+		},
+		{
+			"name": "M-LOOPGUARD-EXPR-BODY-KEPT",
+			"type": "anyparse.check.common.loops.LoopGuard",
+			"method": "match",
+			"find": "s.exprBodyKinds.contains(body.kind) && body.children.length == 1 ? body.children[0] : body",
+			"replace": "body",
+			"note": "the MERGE arm reads a do-while's expression-body wrapper as its header, so `do if (c) { … } while (x)` is never merged"
+		},
+		{
+			"name": "M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY",
+			"type": "anyparse.check.common.loops.LoopGuard",
+			"method": "match",
+			"find": "!s.headerIfKinds.contains(header.kind)",
+			"replace": "!s.ifKinds.contains(header.kind)",
+			"note": "a MERGE header must be an if-statement, so a do-while's if-expression header is never merged"
+		},
+		{
+			"name": "M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY",
+			"type": "anyparse.check.common.loops.LoopGuard",
+			"method": "match",
+			"find": "s.bodyBlockKinds.contains(thenBranch.kind) ?",
+			"replace": "thenBranch.kind == s.blockStmtKind ?",
+			"note": "a MERGE header's branch must be a statement block, so a do-while header's block expression is never merged"
+		},
+		{
+			"name": "M-MAS-ANY-VALUE",
+			"type": "anyparse.check.common.loops.MapValueScan",
+			"method": "provenValue",
+			"find": "value.kind == seams.boolLitKind && value.name == TRUE_LITERAL",
+			"replace": "true",
+			"note": "a map storing false is read as a set of its keys"
+		}
+	]
+}

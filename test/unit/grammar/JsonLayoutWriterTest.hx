@@ -2,6 +2,7 @@ package unit.grammar;
 
 import anyparse.grammar.json.JsonLayoutWriter;
 import anyparse.grammar.json.JsonQueryPlugin;
+import anyparse.query.RegistryFiles;
 import anyparse.runtime.Span;
 #if (sys || nodejs)
 import sys.io.File;
@@ -25,9 +26,12 @@ class JsonLayoutWriterTest extends Test {
 		'haxelib.json',
 		'hxformat.json',
 		'test/apqlint.json',
-		'test/testkit/mutation-arms.json',
+
 		'tools/data/xconfig-hxformat.json'
 	];
+
+	/** The arm registry, one document per package. */
+	private static final ARM_REGISTRY: String = 'test/testkit/arms';
 
 	private final _plugin: JsonQueryPlugin = new JsonQueryPlugin();
 
@@ -46,10 +50,10 @@ class JsonLayoutWriterTest extends Test {
 		]) Assert.equals(source, JsonLayoutWriter.layout(source, []), 'round trip of ${haxe.Json.stringify(source)}');
 	}
 
-	/** The repository's own JSON — the arm registry, the lint and formatter configs — comes back byte for byte. */
+	/** The repository's own JSON — the arm registry's documents, the lint and formatter configs — comes back byte for byte. */
 	public function testTheRepositoryJsonFilesRoundTrip(): Void {
 		#if (sys || nodejs)
-		for (path in REPO_FILES) {
+		for (path in REPO_FILES.concat(RegistryFiles.of(ARM_REGISTRY))) {
 			final source: String = File.getContent(path);
 			Assert.isTrue(JsonLayoutWriter.layout(source, []) == source, '$path round-trips');
 		}

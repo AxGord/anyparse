@@ -1,0 +1,69 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.query.merge. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-KEYED-MERGE-THEIRS-LOST",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "childText",
+			"find": "if (old != null && old.text == mine.text) return other.text;",
+			"replace": "if (old != null && old.text == mine.text) return mine.text;",
+			"note": "a child only theirs changed keeps our unchanged text, so the merge driver drops the other branch's change without a conflict"
+		},
+		{
+			"name": "M-KEYED-MERGE-APPEND-ORDER",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "seatAfter",
+			"find": "while (at < out.length && oursAdded.contains(out[at].key)) at++;",
+			"replace": "at += 0;",
+			"note": "a child theirs added lands before the one ours added at the same place, so the merged order depends on which side merged into which"
+		},
+		{
+			"name": "M-KEYED-MERGE-NO-RECURSION",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "childText",
+			"find": "if (oldTree != null && mineTree != null && otherTree != null)",
+			"replace": "if (oldTree != null && mineTree != null && otherTree != null && false)",
+			"note": "a type both sides changed is a conflict as a whole instead of being merged member by member, so two members added beside each other stop merging"
+		},
+		{
+			"name": "M-DECLARATION-TREE-SPACING-IS-CONTENT",
+			"type": "anyparse.query.merge.DeclarationTree",
+			"method": "childOf",
+			"find": "final lead: String = blankLead(whole);",
+			"replace": "final lead: String = '';",
+			"note": "the blank line a member gains when ours inserts one above it reads as a change of that member, so theirs' edit of it becomes a conflict"
+		},
+		{
+			"name": "M-KEYED-MERGE-NO-PLACE-LINE-MERGE",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "settle",
+			"find": "if (merged != null) {",
+			"replace": "if (merged != null && false) {",
+			"note": "a body both sides edited on different lines becomes a conflict although git's line merge of that one place is clean"
+		},
+		{
+			"name": "M-DECLARATION-TREE-CONDITIONAL-BLIND",
+			"type": "anyparse.query.merge.DeclarationTree",
+			"method": "conditionalBetween",
+			"force": "false",
+			"note": "a member added inside an #if region is merged by key and can land past its #end, silently unconditional"
+		},
+		{
+			"name": "M-KEYED-MERGE-REPLACEMENTS-UNITED",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "replacedOnBothSides",
+			"force": "false",
+			"note": "two different renames of one member, or two replacements of one list value, are both kept instead of conflicting"
+		},
+		{
+			"name": "M-KEYED-MERGE-RENAME-AGAINST-DELETE",
+			"type": "anyparse.query.merge.KeyedMerge",
+			"method": "replacedOnBothSides",
+			"find": "|| theirs.children.exists(c -> find(base, c.key) == null)",
+			"replace": "&& theirs.children.exists(c -> find(base, c.key) == null)",
+			"note": "a member one side renamed and the other deleted comes back under its new name, silently, because by key a rename is a removal and an addition"
+		}
+	]
+}

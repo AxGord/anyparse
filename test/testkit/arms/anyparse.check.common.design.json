@@ -1,0 +1,1154 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.design. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-DUP-CODE-BARE-RUN-OFF",
+			"type": "anyparse.check.common.design.DuplicateCode",
+			"method": "bareRun",
+			"force": "false",
+			"note": "no run is bare any more, so a row of declarations and field fills whose values are names and literals is reported as a clone again under both readings, though nothing in it can be extracted"
+		},
+		{
+			"name": "M-DUP-CODE-NORM-KEY",
+			"type": "anyparse.check.common.design.DuplicateCode",
+			"method": "normalizeStmt",
+			"find": "text: SpanRender.renderSpan(ctx.source, span.from, span.to, node, holes),",
+			"replace": "text: CheckScan.normalizeSpan(ctx.source, span.from, span.to).norm,",
+			"note": "statements compare on the whitespace-collapsed norm again, so two runs differing only inside a string literal bucket into one three-gram and are reported as a clone"
+		},
+		{
+			"name": "M-DUP-CODE-RENAMED-GATE-RAW",
+			"type": "anyparse.check.common.design.DuplicateCode",
+			"method": "gateNonWs",
+			"force": "CheckScan.normalizeSpan(stmt.text, 0, stmt.text.length).nonWs",
+			"note": "the content gate measures each copy's own bytes again, binder names and hole markers included, so a run whose bytes are mostly long names passes on the anchor's spelling and is reported as a renamed clone"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-RENDER-SPLIT",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "splitByRender",
+			"force": "[occ[0].norm => occ]",
+			"note": "every norm bucket stays one group, so occurrences whose literals differ are still counted as one repeated expression and the message quotes a spelling the reported span does not carry"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-WRITE-SPLIT",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "splitAtWrites",
+			"force": "[sorted]",
+			"note": "a write of an operand between two occurrences no longer cuts the group, so `k(Std.int(i)); i++; k(Std.int(i)); k(Std.int(i));` is reported as one value"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-UNKNOWN-WRITE",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "ownWrites",
+			"find": "if (written != null && !bucket.paths",
+			"replace": "if (written == null || !bucket.paths",
+			"note": "a write whose target no key names (`f().x = …`) is taken to write nothing instead of every operand"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-CLOSURE-WRITE",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "ownWrites",
+			"find": "return null;",
+			"replace": "continue;",
+			"note": "a write inside a nested or sibling closure, which runs whenever that closure is called, no longer kills the group"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-BACK-EDGE",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "carriedRound",
+			"force": "false",
+			"note": "a write later in a loop than an occurrence is not carried round the back edge, so the occurrences after the loop and the next iteration's read are one value"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-REBIND",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "bindingBuckets",
+			"find": "paths.join(',')",
+			"replace": "''",
+			"note": "occurrences whose operands bind different declarations (three comprehension binders) stay one group"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-TARGET-COUNTED",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "collect",
+			"find": "(node.kind == ctx.callKind || ctx.shape.writeParentKinds.contains(node.kind))",
+			"replace": "node.kind == ctx.callKind",
+			"note": "a write target counts as an occurrence, so two reads of `a.b.c` and the assignment that replaces it are reported as three readings of one value"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-REFERENCE-READ",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "ownWrites",
+			"find": "p == bucket.own",
+			"replace": "false",
+			"note": "a write BELOW a chain the group itself is (`a.b.c.d = …` under `a.b.c`) is taken to change the reference the chain holds"
+		},
+		{
+			"name": "M-GATE-TS-SINKS-BLIND",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "skipReason",
+			"find": "'needs-config'",
+			"replace": "null",
+			"note": "thread-safety without sinks is reported as running"
+		},
+		{
+			"name": "M-GATE-TS-EXCLUDE-BLIND",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "scanSkipReason",
+			"find": "'config-excluded'",
+			"replace": "null",
+			"note": "a thread-safety exclude path is reported as scanned"
+		},
+		{
+			"name": "M-TS-FIRST-FILE-LISTS",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "run",
+			"find": "listsOfFile.bind(byFile)",
+			"replace": "_ -> sets[0]",
+			"note": "every file is judged by the thread-safety lists of the chain the first file sits under"
+		},
+		{
+			"name": "M-ANON-FIRST-FILE-CONFIG",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "run",
+			"find": "LintConfig.resolveWith(_resolveConfig, entry.file)",
+			"replace": "LintConfig.resolveWith(_resolveConfig, files[0].file)",
+			"note": "every file is held to the thresholds of the chain the first file sits under"
+		},
+		{
+			"name": "M-ANON-ANCHOR-UNGATED",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "report",
+			"find": " && (reportable == null || reportable(hit.file))",
+			"replace": "",
+			"note": "a group anchored in a file that disables the rule is dropped for every file"
+		},
+		{
+			"name": "M-DUP-ANCHOR-UNGATED",
+			"type": "anyparse.check.common.design.DuplicateCode",
+			"method": "collectCrossFindings",
+			"find": "if (silent[fa] != silent[fb]) return silent[fa] ? -1 : 1;",
+			"replace": "",
+			"note": "a clone whose later copy sits in a disabled file is reported nowhere"
+		},
+		{
+			"name": "M-TS-LONG-NEVER-GROWS",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "if (!a.window.exists(",
+			"replace": "if (true || !a.window.exists(",
+			"note": "a hold across a blocking call no longer makes its lock long, so the main-thread take of a lock a worker sleeps under goes unreported"
+		},
+		{
+			"name": "M-TS-HELD-ANY-THREAD",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) ||",
+			"replace": "if (a.uncontended ||",
+			"note": "a hold of a lock only background threads take is reported as a main-thread stall"
+		},
+		{
+			"name": "M-TS-EVIDENCE-UNCAPPED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "capped",
+			"find": "final more: Int = evidence.length - EVIDENCE_CAP;",
+			"replace": "final more: Int = 0;",
+			"note": "a hold's blocking calls past the cap vanish from its finding instead of being counted"
+		},
+		{
+			"name": "M-TS-HOLD-ANCHOR-LAST",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final anchor: CallEdge = blocking[0].edge;",
+			"replace": "final anchor: CallEdge = blocking[blocking.length - 1].edge;",
+			"note": "a hold's finding sits at its last blocking call, not where the stall first begins"
+		},
+		{
+			"name": "M-TS-UNKNOWN-LOCK-UNNAMED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "${lock ?? a.pair.lockId}",
+			"replace": "${lock ?? ''}",
+			"note": "a hold of a lock no member names is reported naming nothing"
+		},
+		{
+			"name": "M-TS-QUIET-LOUD-CALLER",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "settleContexts",
+			"find": "if (loud.length == 0) return states;",
+			"replace": "return states;",
+			"note": "a quiet root loud UI code also calls stays quiet, so everything it reaches from that handler goes unreported"
+		},
+		{
+			"name": "M-TS-QUIET-INTO-CALLBACK",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "callbackContext",
+			"find": "final loud: Int = ((ctx & CTX_QUIET) != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));",
+			"replace": "final loud: Int = ctx;",
+			"note": "a callback a quiet root registers or spawns inherits its quiet, so a listener or worker it hands on is never reported"
+		},
+		{
+			"name": "M-TS-ORDER-NO-HELPER-HOLDS",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "run",
+			"find": "new LockOrder(graph, conditions, acquires.concat(helperHolds))",
+			"replace": "new LockOrder(graph, conditions, acquires)",
+			"note": "a helper taking two locks leaves neither held in its caller, so a re-take under them reads as a new order"
+		},
+		{
+			"name": "M-TS-THROW-PER-TAKE",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportThrowHeld",
+			"find": "if (seen.contains(key)) continue;",
+			"replace": "",
+			"note": "two takes of one lock held at one throw are two findings"
+		},
+		{
+			"name": "M-TS-THROW-HELPER-HOLDS-UNREAD",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "run",
+			"find": "reportThrowHeld(graph, writes, acquires.concat(helperHolds), throws, violations);",
+			"replace": "reportThrowHeld(graph, writes, acquires, throws, violations);",
+			"note": "the holds a multi-lock helper opens in its caller never escape, so a throw under them is quiet"
+		},
+		{
+			"name": "M-TS-STORE-INERT",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "runsNothing",
+			"find": "sealedSlots.contains(edge.storedInto ?? '')\n\t\t\t||",
+			"replace": "",
+			"note": "a method assigned to a dynamic member runs where it is assigned, so a handler a worker invokes reads as run by the constructor that stored it"
+		},
+		{
+			"name": "M-TS-STORE-UNMIRRORED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "deriveStoredCalls",
+			"find": "for (id in runs) for (e in graph.inEdges(id).copy()) if (e.kind != Contains) graph.deriveEdge({",
+			"replace": "for (id in runs) for (e in graph.inEdges(id).copy()) if (false) graph.deriveEdge({",
+			"note": "a value stored into a dynamic member is never called where the member is, so the chain to it names no invoker and its thread is a guess"
+		},
+		{
+			"name": "M-TS-STORE-SEALED-BLIND",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "deriveStoredCalls",
+			"find": "!sealed.contains(slotId) && !unresolvedNames.contains(name) && ",
+			"replace": "!sealed.contains(slotId) && ",
+			"note": "a call of the member's name the graph cannot resolve is taken to run nothing stored, so the value loses the context it may run in"
+		},
+		{
+			"name": "M-TS-NEVER-INVOKES-BY-TARGET",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "neverInvoked",
+			"find": "lists.neverInvokeIds.contains(via) || ",
+			"replace": "",
+			"note": "a qualified neverInvokes entry is never matched, so removing a handler still reads as running it"
+		},
+		{
+			"name": "M-TS-NEVER-INVOKES-BY-NAME",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "neverInvoked",
+			"find": " || lists.neverInvokeNames.contains(member)",
+			"replace": "",
+			"note": "a bare neverInvokes name matches only a call the graph resolves, so removing a handler inherited from a library type still runs it"
+		},
+		{
+			"name": "M-TS-MAIN-CHECK-NO-GETTER",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "chainLists",
+			"find": "matchAll(graph, mainChecks.concat([for (c in mainChecks) getterOf(c, accessorPrefixes)]))",
+			"replace": "matchAll(graph, mainChecks)",
+			"note": "a main-thread check written as a property is never recognised at its reads, which call the getter"
+		},
+		{
+			"name": "M-TS-CLOSED-WORLD-UNREAD",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "mayRunFromOutside",
+			"find": "byFile[graph.node(id)?.file ?? '']?.closedWorld == true && ",
+			"replace": "false && ",
+			"note": "closedWorld is never read, so a method nothing calls is still assumed to run on the main thread"
+		},
+		{
+			"name": "M-TS-SEAL-CTOR",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "sealedFromOutside",
+			"find": "name == (shape.constructorName ?? 'new') || ",
+			"replace": "",
+			"note": "a constructor nothing in the run constructs reads as dead, so the app's entry object runs on no thread"
+		},
+		{
+			"name": "M-TS-SEAL-OVERRIDE",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "plainMember",
+			"find": "m.kind == shape.overrideModifierKind || ",
+			"replace": "",
+			"note": "an override of a library method reads as dead, though the library calls it"
+		},
+		{
+			"name": "M-TS-SEAL-SUPERTYPE",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "sealedFromOutside",
+			"find": " || !inheritsNothingNamed(graph, type, name)",
+			"replace": "",
+			"note": "a method an unindexed interface may declare reads as dead, though code outside the run calls it through that interface"
+		},
+		{
+			"name": "M-TS-SEAL-UNRESOLVED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "sealedFromOutside",
+			"find": "if (unresolvedNames.contains(name) || graph.unresolvedAccessesRunning([node]).length > 0) return false;",
+			"replace": "if (graph.unresolvedAccessesRunning([node]).length > 0) return false;",
+			"note": "a method an unresolved call may name reads as dead"
+		},
+		{
+			"name": "M-TS-DEAD-HOLDS-KEPT",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "run",
+			"find": "final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];",
+			"replace": "final acquires: Array<LockAcquire> = sites.acquires;",
+			"note": "a hold in a function no thread runs is reported, and makes its lock long"
+		},
+		{
+			"name": "M-IDIOM-GETTER-HOP",
+			"type": "anyparse.check.common.design.PreferApiIdiom",
+			"method": "fieldType",
+			"find": "m.hasGetter || ",
+			"replace": "",
+			"note": "a getter hop in a receiver path reads as a plain field, so a call that runs the getter once replaces writes that ran it once each"
+		},
+		{
+			"name": "M-IDIOM-NO-PURITY",
+			"type": "anyparse.check.common.design.PreferApiIdiom",
+			"method": "windowMatch",
+			"find": "!PurityScan.isPure(window[k].rhs, ctx.purity) || ",
+			"replace": "",
+			"note": "an impure right-hand side is carried into the call, where every argument is evaluated before any write"
+		},
+		{
+			"name": "M-IDIOM-NO-EARLIER-READ-GATE",
+			"type": "anyparse.check.common.design.PreferApiIdiom",
+			"method": "windowMatch",
+			"find": " || mentionsAny(window[k].rhs, earlier, ctx.seams)",
+			"replace": "",
+			"note": "a right-hand side reading a field written above it reads the NEW value today and the old one in the call"
+		},
+		{
+			"name": "M-IDIOM-SUBTYPES-ALWAYS",
+			"type": "anyparse.check.common.design.PreferApiIdiom",
+			"method": "receiverMatches",
+			"find": "|| idiom.spec.subtypes",
+			"replace": "|| true",
+			"note": "a subclass receiver matches without the opt-in, though its override of the method may not be the declared equivalence"
+		},
+		{
+			"name": "M-IDIOM-NO-COMMENT-GATE",
+			"type": "anyparse.check.common.design.PreferApiIdiom",
+			"method": "carriedOnly",
+			"force": "true",
+			"note": "a comment between the writes, or trailing the last one, is deleted with them or left describing the whole call"
+		},
+		{
+			"name": "M-IDIOM-NO-SELF-TYPE-GATE",
+			"type": "anyparse.check.common.design.PreferApiIdiom",
+			"method": "windowMatch",
+			"find": "if (host == null || ConfiguredTypes.inherits(ctx.index, host, idiom.type) != false) return null;",
+			"replace": "",
+			"note": "the declared method's own body is rewritten into a call of itself, which recurses forever"
+		},
+		{
+			"name": "M-IDIOM-READER-LENIENT",
+			"type": "anyparse.check.common.design.RuleDeclaration",
+			"method": "parseEntry",
+			"find": "if (distinct.length != declaredFields.length) {",
+			"replace": "if (false) {",
+			"note": "an idiom naming a field twice survives the reader, so a window writing one field twice is matched against a two-field method"
+		},
+		{
+			"name": "M-IDIOM-VALIDATE-TRUSTS",
+			"type": "anyparse.check.common.design.PreferApiIdiom",
+			"method": "isPlainField",
+			"force": "true",
+			"note": "a declared field that is a property with an accessor, or a static, is trusted as the plain field the equivalence needs"
+		},
+		{
+			"name": "M-EVENT-NO-MISMATCH",
+			"type": "anyparse.check.common.design.TypedEventConstant",
+			"method": "mismatchOf",
+			"force": "null",
+			"note": "a listener typed for another event class is not reported, and its constant is retyped into a compile error"
+		},
+		{
+			"name": "M-EVENT-ABSTRACT-TRUSTED",
+			"type": "anyparse.check.common.design.TypedEventConstant",
+			"method": "isStringAbstract",
+			"force": "true",
+			"note": "an abstract without the String conversions is trusted, so every comparison or String use of a retyped constant stops compiling"
+		},
+		{
+			"name": "M-EVENT-NO-BASE-GATE",
+			"type": "anyparse.check.common.design.TypedEventConstant",
+			"method": "collectCandidates",
+			"find": "&& ConfiguredTypes.inherits(index, decl, types.base) == true",
+			"replace": "",
+			"note": "a String constant of a class that is no event is retyped to an event type"
+		},
+		{
+			"name": "M-EVENT-NO-USE-GATE",
+			"type": "anyparse.check.common.design.TypedEventConstant",
+			"method": "report",
+			"find": "if (eventUses.length == 0) return;",
+			"replace": "",
+			"note": "a constant no use names as an event type — none at all, or only the constructor of a class that is no event — is reported and retyped"
+		},
+		{
+			"name": "M-EVENT-STATIC-VAR",
+			"type": "anyparse.check.common.design.TypedEventConstant",
+			"method": "candidateOf",
+			"find": "!seams.finalKinds.contains(member.kind)",
+			"replace": "!seams.fieldKinds.contains(member.kind)",
+			"note": "a mutable static var is retyped as if it were a constant"
+		},
+		{
+			"name": "M-EVENT-ANY-NEW-IS-A-USE",
+			"type": "anyparse.check.common.design.TypedEventConstant",
+			"method": "isEventUse",
+			"force": "true",
+			"note": "a string handed to the constructor of a class that is no event counts as a dispatch, and is reported as one of the wrong class"
+		},
+		{
+			"name": "M-TS-DATA-MEMBER-LAMBDA",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "memberOf",
+			"force": "id",
+			"note": "a finding in a lambda keys by the lambda's own id, which moves with every lambda written before it"
+		},
+		{
+			"name": "M-TS-ASIDE-KEEPS-SEEDS",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "a.lock != aside && ",
+			"replace": "",
+			"note": "the counterfactual keeps the lock's own leak and blind reasons, so a lock long by a leak never shows what else holds it long"
+		},
+		{
+			"name": "M-TS-DATA-SUBJECT-UNSORTED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "sortedIds",
+			"find": "sorted.sort(Reflect.compare);",
+			"replace": "",
+			"note": "a subject naming several ids keeps the graph's order, so one finding re-keys when the graph or the walk meets them another way"
+		},
+		{
+			"name": "M-TS-DATA-RAISER-CHAIN",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportThrowHeld",
+			"find": "chain: [holder].concat(raiser == null ? [] : throws.chain(raiser))",
+			"replace": "chain: [holder]",
+			"note": "a throw raised by a callee keys with no chain, so the evidence of which call raises is lost to every tool"
+		},
+		{
+			"name": "M-TS-DATA-INIT-LAMBDA",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "memberOf",
+			"find": "final container: Null<String> = graph.inEdges(cursor).find(e -> e.kind == Contains)?.from;",
+			"replace": "final container: Null<String> = null;",
+			"note": "a field initializer's lambda keys as the bare type, apart from the initializer's own calls"
+		},
+		{
+			"name": "M-TS-MAINSHORT-LOUD-ONLY",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "explained",
+			"find": "if ((ctx & (CTX_MAIN | CTX_QUIET)) != 0)",
+			"replace": "if ((ctx & CTX_MAIN) != 0)",
+			"note": "a short lock a quiet root takes on the main thread is missing from the main-thread takes"
+		},
+		{
+			"name": "M-TS-UPWARD-INERT",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "run",
+			"find": "!(e.kind == Ref && inertRef(e)) && (states.edgeContext(e)",
+			"replace": "(states.edgeContext(e)",
+			"note": "a value stored where it never runs from repeats with the loop that stores it"
+		},
+		{
+			"name": "M-TS-B-MAIN-ONLY-KEPT",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final mainOnly: Bool = lock != null && (states.edgeContext(a.edge) & CTX_BG) == 0",
+			"replace": "final mainOnly: Bool = false",
+			"note": "a hold only the main thread runs is a stall like any other"
+		},
+		{
+			"name": "M-TS-B-ASSUMED-IGNORED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": " && !states.assumed.exists(a.edge.from);",
+			"replace": ";",
+			"note": "a holder whose thread is only assumed main is taken for a main-only one"
+		},
+		{
+			"name": "M-TS-B-UNKNOWN-AS-MAIN-ONLY",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final mainOnly: Bool = lock != null && ",
+			"replace": "final mainOnly: Bool = ",
+			"note": "a hold of a lock no member names is judged by the holder's thread alone, as if no other could hold it"
+		},
+		{
+			"name": "M-TS-NEST-OFF",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "nestHolds",
+			"find": "if (outer == null) continue;",
+			"replace": "if (outer == null || true) continue;",
+			"note": "a hold inside another hold of its function warns on its own"
+		},
+		{
+			"name": "M-TS-HELPER-CROSSING",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "&& !sites.helpers.contains(c.edge.from)) long.push(c.lock);",
+			"replace": ") long.push(c.lock);",
+			"note": "a helper twin's give makes its locks long as a crossing release"
+		},
+		{
+			"name": "M-TS-COVER-NOTE",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "listsByFile",
+			"find": "if (declaredClosed && !closedWorld)",
+			"replace": "if (false)",
+			"note": "a closedWorld the run does not cover is read as false without a word"
+		},
+		{
+			"name": "M-TS-ENCLOSED-OFF",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "foldEnclosed(reported, judged.enclosed, covers, judged.suppressed);",
+			"replace": "",
+			"note": "a hold every caller's hold of its lock encloses warns on its own"
+		},
+		{
+			"name": "M-TS-UNNAMED-PAIR",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) ||",
+			"replace": "if (a.uncontended || a.lock != null && !mainTaken.contains(HoldGrade.takenKey(a)) ||",
+			"note": "a hold of an unnamed lock warns though the main thread never takes its pair"
+		},
+		{
+			"name": "M-TS-NEST-HANDOFF",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "nestHolds",
+			"find": "for (inner in reported) if (!inner.handOff) {",
+			"replace": "for (inner in reported) if (true) {",
+			"note": "a handed-off hold counts as an inner hold of the hold around its take, though it outlives that window"
+		},
+		{
+			"name": "M-TS-ENCLOSED-NOTE",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "foldEnclosed",
+			"find": "is long through the call into this one'",
+			"replace": "names these calls'",
+			"note": "the enclosed hold's note claims the enclosing finding names its calls, which it may not"
+		},
+		{
+			"name": "M-TS-COVER-PARSED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "listsByFile",
+			"find": "new ProjectCoverage([for (h in graph.heldFiles()) h.file])",
+			"replace": "new ProjectCoverage([for (f in files) f.file])",
+			"note": "a run file that fails to parse counts as covering its part of the project"
+		},
+		{
+			"name": "M-TS-OPT-SINKS-UNMATCHED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "listsByFile",
+			"find": "else if (option('sinks').length > 0 && configured.length == 0)",
+			"replace": "else if (false)",
+			"note": "a sinks list naming no call of the run reads as a working one"
+		},
+		{
+			"name": "M-TS-OPT-SKIP-DECLARED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "skipReason",
+			"find": "config.optionKeys('thread-safety').length == 0",
+			"replace": "(config.stringListOption('thread-safety', 'sinks') ?? []).length == 0",
+			"note": "a chain with no usable sinks is not scanned, so what its config lost is never said"
+		},
+		{
+			"name": "M-TS-OPT-NO-SINK-NOTICES",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "run",
+			"find": "if (sinkIds.length == 0) return reportConfigProblems(problems, []);",
+			"replace": "if (sinkIds.length == 0) return [];",
+			"note": "a run no sink matches returns before its config problems are said"
+		},
+		{
+			"name": "M-TS-QUIET-HOLD",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": " || (states.edgeContext(a.edge) & (CTX_MAIN | CTX_BG)) == 0)",
+			"replace": ")",
+			"note": "a hold only a quiet root runs reports as the main thread's own long work, though the root waits on purpose"
+		},
+		{
+			"name": "M-TS-BUILTIN-NEEDS-SINKS",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "chainLists",
+			"find": "reports: options.declared,",
+			"replace": "reports: option('sinks').length > 0,",
+			"note": "a chain writing no sinks of its own is no config to report on, so a malformed option of it goes unsaid"
+		},
+		{
+			"name": "M-TS-REPORT-NEEDS-SINKS",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "skipReason",
+			"find": "return config.optionKeys('thread-safety').length == 0 ? 'needs-config' : scanSkipReason(file, config);",
+			"replace": "return (config.stringListOption('thread-safety', 'sinks') ?? []).length == 0 ? 'needs-config' : scanSkipReason(file, config);",
+			"note": "the report gate wants sinks of the chain's own, so a chain writing other options only reports nothing though the builtin sinks apply"
+		},
+		{
+			"name": "M-TS-WAIVE-SINKS-WIN",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "chainLists",
+			"find": "final sinkIds: Array<String> = configured.copy();",
+			"replace": "final sinkIds: Array<String> = [for (id in configured) if (!waived.contains(id)) id];",
+			"note": "a nonBlocking entry waives a call the project's own sinks list"
+		},
+		{
+			"name": "M-TS-BUILTIN-NOTICE-OFF",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "listsByFile",
+			"find": "if (sets.exists(s -> s.reports))",
+			"replace": "if (false)",
+			"note": "a run never says which builtin sinks it applied"
+		},
+		{
+			"name": "M-TS-LIB-NOT-SINKS",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "chainLists",
+			"find": ".concat(positive.libraryFor(options))",
+			"replace": "",
+			"note": "a library call whose body blocks is no sink of the chain that walked it"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-ANYWHERE",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "run",
+			"find": "e -> states.runsHere(e, listsOf(e.file));",
+			"replace": "e -> ThreadStates.runsWith(e, inertRef);",
+			"note": "a value a spawns or registers call runs elsewhere is walked as if it ran under the hold"
+		},
+		{
+			"name": "M-TS-PAIR-OFF",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "nestHolds",
+			"find": "(o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))",
+			"replace": "o.hold.window.contains(inner.hold.edge)",
+			"note": "two holds one call of a multi-lock helper opens, across the same calls, warn twice"
+		},
+		{
+			"name": "M-TS-PAIR-ORDER",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "takenFirst",
+			"find": "first.to <= then.from",
+			"replace": "true",
+			"note": "either hold one helper call opens folds onto the other, whichever comes first, not the lock the helper takes first"
+		},
+		{
+			"name": "M-TS-FOLD-HELPER-CROSSING",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (!sites.helpers.contains(c.edge.from)) c.lock",
+			"replace": "c.lock",
+			"note": "a multi-lock helper's give counts as a crossing release for the fold: a wait for its lock is never covered"
+		},
+		{
+			"name": "M-TS-NEST-SUPPRESSED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "nestHolds",
+			"find": "!suppressed(o.finding)\n\t\t\t\t\t&&",
+			"replace": "",
+			"note": "a hold taken inside a hold whose warning a directive silences turns info onto it"
+		},
+		{
+			"name": "M-TS-ENCLOSED-SUPPRESSED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "foldEnclosed",
+			"find": "!suppressed(w.finding)\n\t\t\t\t\t&&",
+			"replace": "",
+			"note": "a hold enclosed by a hold whose warning a directive silences turns info onto it"
+		},
+		{
+			"name": "M-TS-UNSEALED-NOTE",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "${graded.note}$unsealed'",
+			"replace": "${graded.note}'",
+			"note": "a hold whose lock member a reflective write unsealed no longer says which member and which writers (review R3 M4)"
+		},
+		{
+			"name": "M-TS-UNSEALED-THROW",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "reportThrowHeld",
+			"find": "final escapes: String = capped(evidence) + (writes.unsealedNote(a.edge.receiverField, a.lock) ?? '');",
+			"replace": "final escapes: String = capped(evidence);",
+			"note": "a hold left on a throw whose lock member a reflective write unsealed no longer says who unsealed it"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-INERT",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "runsNothing",
+			"find": "|| stored.stored(edge)\n\t\t\t||",
+			"replace": "|| ",
+			"note": "a value a constructor only stores runs where it is handed, under the hold around the `new` (R7 L1b, client ItemList.reload)"
+		},
+		{
+			"name": "M-OWNED-OWNERS-IGNORED",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "ownedAt",
+			"force": "false",
+			"note": "no owner glob owns anything, so every mention inside a declared owner is reported"
+		},
+		{
+			"name": "M-OWNED-DECLARING-MODULE",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "ownedAt",
+			"find": "if (subject.modules.contains(info.module)) return true;",
+			"replace": "",
+			"note": "the module declaring an owned type is no owner of it, so its own declaration and body are reported"
+		},
+		{
+			"name": "M-OWNED-ENCLOSING-TYPE",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "ownedAt",
+			"find": "if (enclosing != null) names.push(TypeRefIndex.importPathFor(info, enclosing));",
+			"replace": "",
+			"note": "an owner naming a sub-type owns nothing, since only the module path is matched"
+		},
+		{
+			"name": "M-OWNED-FREE-REPORTED",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "typesNamed",
+			"find": "case Free: null;",
+			"replace": "case Free: { decls: [], outside: [], open: true };",
+			"note": "a name no resolution tier binds, which only a built-in can be, is reported as an unknown mention"
+		},
+		{
+			"name": "M-OWNED-UNKNOWN-SILENT",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "typesNamed",
+			"find": "case Unknown: denotedBy(names.unknownCandidates(spelled, scan.info, at));",
+			"replace": "case Unknown: null;",
+			"note": "a name a tier could bind to something the index does not hold reads as provably another type, and the reach goes unreported"
+		},
+		{
+			"name": "M-OWNED-BOUND-BY-NAME",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "typeSubjectsDenoted",
+			"find": "candidates.filter(s -> denotes(scan, named, s))",
+			"replace": "candidates",
+			"note": "a name bound to a same-named type of another package is reported as the owned type"
+		},
+		{
+			"name": "M-OWNED-VALUE-IS-TYPE",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "valueBound",
+			"find": "return TypeResolver.resolveBindingFrom(name, span, tree, scan.shape) != null;",
+			"replace": "return false;",
+			"note": "an identifier the scope binds to a value is read as the type it is named like"
+		},
+		{
+			"name": "M-OWNED-IMPORTS-IGNORED",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "scanImports",
+			"find": "for (s in scan.subjects) if (s.member != null ? path == s.label : importNames(path, s, scan.index)) report(scan, s, imp.span);",
+			"replace": "",
+			"note": "an import or an alias of an owned type is not a mention"
+		},
+		{
+			"name": "M-OWNED-ALIAS-IGNORED",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "spellingsOf",
+			"find": "if (aliased.length > 0) out[alias] = (out[alias] ?? []).concat(aliased);",
+			"replace": "",
+			"note": "a type position spelling an owned type through an import alias is not seen"
+		},
+		{
+			"name": "M-OWNED-QUALIFIED-EXPR-IGNORED",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "visitTypeName",
+			"find": "pathOf(scan, node)?.join('.')",
+			"replace": "null",
+			"note": "a qualified owned type in an expression (`pkg.T.make()`) is not a mention"
+		},
+		{
+			"name": "M-OWNED-CTOR-ANY-TYPE",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "visitNew",
+			"find": "made != null && denotes(scan, made, s)",
+			"replace": "made != null",
+			"note": "constructing a same-named type of another package is reported as constructing the owned one"
+		},
+		{
+			"name": "M-OWNED-INSTANCE-BY-NAME",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "typedReceiver",
+			"find": "if (nominal == null) return null;",
+			"replace": "if (nominal == null) return [];",
+			"note": "an instance member is matched by name on a receiver the typer cannot type"
+		},
+		{
+			"name": "M-OWNED-STATIC-UNKNOWN-SILENT",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "reaches",
+			"find": "return named != null && denotes(scan, named, subject);",
+			"replace": "return named != null && !named.open && denotes(scan, named, subject);",
+			"note": "a static reached through a receiver whose meaning is unknown goes unreported"
+		},
+		{
+			"name": "M-OWNED-NO-SUPERTYPE-WALK",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "reaches",
+			"find": "found != null && subject.keys.contains(scan.index.refs.seenKey(found.owner));",
+			"replace": "subject.keys.contains(scan.index.refs.seenKey(t));",
+			"note": "an owned instance member reached through a receiver of a subtype is not seen"
+		},
+		{
+			"name": "M-OWNED-STATIC-THROUGH-SUBTYPE",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "reaches",
+			"find": "if (subject.isStatic) {",
+			"replace": "if (false) {",
+			"note": "a static reached through a subtype of its type is reported, a reach Haxe itself rejects (`Class<B> has no field`)"
+		},
+		{
+			"name": "M-OWNED-SKIP-REASON-NULL",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "skipReason",
+			"force": "null",
+			"note": "the rule claims every file of a config that declares no ownedTypes"
+		},
+		{
+			"name": "M-OVERSIZED-GRANT-UNBOUNDED",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "checkType",
+			"find": "final maxMembers: Int = grant?.members ?? cfg.maxMembers;",
+			"replace": "final maxMembers: Int = grant == null ? cfg.maxMembers : 1000000;",
+			"note": "a grant silences its type's member count at any size again, the ceiling read and ignored"
+		},
+		{
+			"name": "M-OVERSIZED-GRANT-LINES-UNBOUNDED",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "checkType",
+			"find": "final maxLines: Int = grant?.lines ?? cfg.maxLines;",
+			"replace": "final maxLines: Int = grant == null ? cfg.maxLines : 1000000;",
+			"note": "a grant silences its type's line extent at any size, whether it gave a line ceiling or not"
+		},
+		{
+			"name": "M-OVERSIZED-UNGRANTED-DIMENSION",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "checkType",
+			"find": "final maxLines: Int = grant?.lines ?? cfg.maxLines;",
+			"replace": "final maxLines: Int = grant == null ? cfg.maxLines : grant.lines ?? 1000000;",
+			"note": "a members-only grant forgives the line extent too"
+		},
+		{
+			"name": "M-OVERSIZED-BEYOND-UNNAMED",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "checkType",
+			"find": "final beyond: String = grant == null ? '' : '$BEYOND_GRANT${grant.head}\\'';",
+			"replace": "final beyond: String = '';",
+			"note": "a type past its grant's ceiling is reported without naming the grant it outgrew"
+		},
+		{
+			"name": "M-OVERSIZED-PROBLEM-ONCE",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "run",
+			"find": "for (problem in grants.problems) if (!told.contains(problem)) {",
+			"replace": "for (problem in grants.problems) if (true) {",
+			"note": "a refused grant is reported once per FILE resolving its config, not once per run"
+		},
+		{
+			"name": "M-OVERSIZED-PROBLEM-SILENT",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "run",
+			"find": "violations.push(configProblem(problem));",
+			"replace": "",
+			"note": "a refused grant grants nothing but says nothing either"
+		},
+		{
+			"name": "M-OVERSIZED-LEGACY-GRANT",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "readGrant",
+			"find": "\t\tif (identifier.match(head)) {\n",
+			"replace": "\t\tif (identifier.match(head)) return { name: head, members: 1000000, lines: 1000000, head: head };\n\t\tif (false) {\n",
+			"note": "a ceiling-less `Name: reason` grant is read as an unbounded grant again, silently"
+		},
+		{
+			"name": "M-OVERSIZED-GRANT-REASONLESS",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "readGrant",
+			"find": "if (at < 0 || entry.substr(at + 1).trim().length == 0) {",
+			"replace": "if (at < 0) {",
+			"note": "a grant whose `:` is followed by no reason is accepted"
+		},
+		{
+			"name": "M-OVERSIZED-GRANT-NAME",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "readGrant",
+			"find": "if (identifier.match(name)) return readCeilings(",
+			"replace": "if (name.length != 0) return readCeilings(",
+			"note": "a grant head naming no identifier (`C<T> <= …`) is accepted"
+		},
+		{
+			"name": "M-OVERSIZED-CLAUSE-ORDER",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "readCeilings",
+			"find": "if (unit == 'members' && i == 0)",
+			"replace": "if (unit == 'members' && members == null)",
+			"note": "a members ceiling written after the lines ceiling is accepted"
+		},
+		{
+			"name": "M-OVERSIZED-CLAUSE-REPEATED",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "readCeilings",
+			"find": "else if (unit == 'lines' && lines == null)",
+			"replace": "else if (unit == 'lines')",
+			"note": "a second lines ceiling overwrites the first instead of refusing the grant"
+		},
+		{
+			"name": "M-OVERSIZED-CEILING-DIGITS",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "readCeilings",
+			"find": "([0-9]{1,9})",
+			"replace": "([0-9]+)",
+			"note": "a ceiling of ten or more digits is read, by a parseInt whose answer differs per target"
+		},
+		{
+			"name": "M-OVERSIZED-DUPLICATE-GRANT",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "readGrants",
+			"find": "if (read.count(g -> g.name == grant.name) == 1) {",
+			"replace": "if (true) {",
+			"note": "two grants for one type both stand, and the first found wins"
+		},
+		{
+			"name": "M-OVERSIZED-CEILING-AT-THRESHOLD",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "readCeilings",
+			"find": "if (ceiling != null && ceiling <= (unit == 'members' ? maxMembers : maxLines)) grantsNothing = true;",
+			"replace": "",
+			"note": "a ceiling at or below the rule's threshold is read as a tighter limit instead of being refused"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-COUNTED",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "checkType",
+			"find": "final names: Array<String> = [for (i => m in all) if (!constant[i]) m.node.name ?? ''];",
+			"replace": "final names: Array<String> = [for (i => m in all) m.node.name ?? ''];",
+			"note": "the constants count toward the member total again"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-LINES-COUNTED",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "checkType",
+			"find": "final lines: Int = extent - constantLines(source, span.from, all, constant);",
+			"replace": "final lines: Int = extent;",
+			"note": "the lines of the constants count toward the line extent again"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-REGION-OWN-LINES",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "constantLines",
+			"find": "final owned: Int = newlinesIn(source, previousEnd, span.to);",
+			"replace": "final owned: Int = newlinesIn(source, span.from, span.to) + 1;",
+			"note": "a constant owns only its own lines, so its doc comment and the blank lines above it count as behaviour"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-SHARED-LINE",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "constantLines",
+			"find": "lines += shared && owned > 0 ? owned - 1 : owned;",
+			"replace": "lines += owned;",
+			"note": "a line a constant shares with a behaviour member is dropped with the constant"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-NEEDS-STATIC",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "isConstant",
+			"find": "if (run.exists(m -> m.kind == seams.staticKind)) {",
+			"replace": "if (true) {",
+			"note": "an instance final of a literal is read as a constant"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-STATIC-VAR",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "isConstant",
+			"find": "if (!seams.finalFieldKinds.contains(node.kind) || init == null) return false;",
+			"replace": "if (init == null) return false;",
+			"note": "a static var (state) is read as a constant"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-INLINE-PROOF",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "isConstant",
+			"find": "return compilerFolds || ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName);",
+			"replace": "return ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName);",
+			"note": "the inline modifier is no longer the compiler's proof, so an inline final the compiler folds from a call counts"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-ANY-STATIC-FINAL",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "isConstant",
+			"find": "return compilerFolds || ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName);",
+			"replace": "return true;",
+			"note": "every static final with an initializer is a constant, a run-time call included"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-ACCESSOR",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "isConstant",
+			"find": "if (span == null || kit.accessors.exists(span.from)) return false;",
+			"replace": "if (span == null) return false;",
+			"note": "a property of an enum abstract is read as an enum value"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-ANY-ENUM-HOST",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "isConstant",
+			"find": "if (!EnumAbstractForms.isValue(span, kit.valueStarts)) return false;",
+			"replace": "",
+			"note": "a non-static field of ANY type is read as an enum value"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-NO-ENUM-VALUES",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "isConstant",
+			"find": "if (!EnumAbstractForms.isValue(span, kit.valueStarts)) return false;",
+			"replace": "return false;",
+			"note": "the values of an @:enum abstract count as members again"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-ENUM-VALUE-NEEDS-INIT",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "isConstant",
+			"find": "(init == null || ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName))",
+			"replace": "(init != null && ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName))",
+			"note": "an implicit enum value (no initializer) counts as a member"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-NAME-NOT-CONSTANT",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "namesOnlyConstants",
+			"find": "if (!flags[i]) return false;",
+			"replace": "",
+			"note": "a reference to a non-constant member of the type is read as a constant one"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-NAME-UNDECLARED",
+			"type": "anyparse.check.common.design.OversizedType",
+			"method": "namesOnlyConstants",
+			"find": "return named;",
+			"replace": "return true;",
+			"note": "a name the type does not declare (an import, an inherited or module-level symbol) is read as a constant"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-CONTEXT",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "callbackContext",
+			"find": "return if (ThreadStates.runsOnMain(graph, edge, lists))",
+			"replace": "return if (false)",
+			"note": "a value at a main position takes the spawn's background context"
+		},
+		{
+			"name": "M-OWNED-TIER-NO-USE-SITE",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "typesNamed",
+			"find": "names.tierOf(spelled, scan.info, at)",
+			"replace": "names.tierOf(spelled, scan.info)",
+			"note": "a simple name is resolved with no use site, so a #if-guarded import never decides a use inside its own branch and the receiver reads as unknown"
+		},
+		{
+			"name": "M-OWNED-MEMO-IGNORES-SITE",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "typesNamed",
+			"find": "final key: String = scan.guardedImports ? '$spelled@$at' : spelled;",
+			"replace": "final key: String = spelled;",
+			"note": "a file holding a guarded import answers every use of a name as its first use did, whichever #if branch each sits in"
+		},
+		{
+			"name": "M-OWNED-CANDIDATES-IGNORED",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "typesNamed",
+			"find": "denotedBy(names.unknownCandidates(spelled, scan.info, at))",
+			"replace": "denotedBy(null)",
+			"note": "an Unknown name whose every candidate is read and none is owned is still reported, by the member name alone"
+		},
+		{
+			"name": "M-OWNED-OUTSIDE-CANDIDATE-IGNORED",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "denotes",
+			"find": "|| named.outside.exists(path -> SourceText.lastSegment(path) == subject.simple)",
+			"replace": "",
+			"note": "a candidate outside the index — a std type a guarded alias names — is never the owned type"
+		},
+		{
+			"name": "M-REFUSAL-ASSERT-BINDER-READ-IGNORED",
+			"type": "anyparse.check.common.design.RefusalAssertIgnoresMessage",
+			"method": "silentRefusal",
+			"find": "for (group in groups) if (CasePatternScan.mentionCount(seams, arm, group[0].name) > group.length) return null;",
+			"replace": "if (groups.length < 0) return null;",
+			"note": "a binder the arm reads no longer spares it, so a test that checks the refusal's message is reported as passing on any refusal"
+		},
+		{
+			"name": "M-REFUSAL-ASSERT-PASS-UNREQUIRED",
+			"type": "anyparse.check.common.design.RefusalAssertIgnoresMessage",
+			"method": "silentRefusal",
+			"find": "return body.exists(node -> callsAny(seams, node, options.passes)) ? ctor : null;",
+			"replace": "return ctor;",
+			"note": "an arm is reported whatever its body does, so the arm that FAILS on an unexpected refusal reads as a pass"
+		},
+		{
+			"name": "M-ZERO-FIXTURE-PARSE-IGNORED",
+			"type": "anyparse.check.common.design.ZeroCountUnparsedFixture",
+			"method": "parses",
+			"find": "return text == null || ParseGate.parseOrNull(scan.plugin, text) != null;",
+			"replace": "return text == null;",
+			"note": "every fixture reads as unparseable, so a zero-count assertion over a well-formed file is reported"
+		},
+		{
+			"name": "M-ZERO-FIXTURE-WRAP-FOLLOWED",
+			"type": "anyparse.check.common.design.ZeroCountUnparsedFixture",
+			"method": "reachesSource",
+			"find": "if (parent.kind != seams.callKind || hops >= MAX_HOPS) return false;",
+			"replace": "if (parent.kind != seams.callKind || hops >= MAX_HOPS) return true;",
+			"note": "a value concatenated into the source on the way counts as the source itself, so a member snippet a helper wraps in a class reads as an unparseable fixture"
+		},
+		{
+			"name": "M-ZERO-FIXTURE-SKIP-IGNORED",
+			"type": "anyparse.check.common.design.ZeroCountUnparsedFixture",
+			"method": "fixtures",
+			"find": "if (inside != null && scan.options.skipParseTests.contains(inside)) return out;",
+			"replace": "",
+			"note": "a declared skip-parse test is read like any other, so its deliberately unparseable fixture is reported"
+		},
+		{
+			"name": "M-GUARD-PIN-OWN-KILLER-COUNTED",
+			"type": "anyparse.check.common.design.GuardPinArmReach",
+			"method": "checkClass",
+			"find": "!own.contains(k.arm.name)",
+			"replace": "own.length >= 0",
+			"note": "an arm the guard names as its own killer counts as a hidden one, so a declared kill is reported"
+		},
+		{
+			"name": "M-GUARD-PIN-TYPE-UNREAD",
+			"type": "anyparse.check.common.design.GuardPinArmReach",
+			"method": "checkClass",
+			"find": "&& names(scan, guarded, SourceText.lastSegment(k.arm.type))",
+			"replace": "",
+			"note": "a member name alone reaches an arm, so a guard calling a same-named member of another type is reported"
+		}
+	]
+}

@@ -1,0 +1,389 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-SCOPE-GAP-SILENT",
+			"type": "anyparse.check.ConfigDisagreement",
+			"method": "missingProjectRootsMessage",
+			"force": "null",
+			"note": "a scope declaring resolutionLibs and no resolutionRoots goes back to saying nothing, so a narrow --fix on such a project writes the orphan the cross-scope repairs were built to refuse and no byte of output warns that the proofs had nothing to widen into"
+		},
+		{
+			"name": "M-ORACLE-UNKNOWN-COVERAGE-NO-VETO",
+			"type": "anyparse.check.FixVerifier",
+			"method": "prepareEntry",
+			"find": "verifying: covering.concat(usable.unknown)",
+			"replace": "verifying: covering",
+			"note": "a configuration whose compiled set is unknown is dropped from the post-edit typecheck, so an edit that compiles on the covering build and breaks the unknown one is applied although its green baseline makes the rejection attributable"
+		},
+		{
+			"name": "M-EFFECTIVE-IGNORES-CONFIG",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "stateOf",
+			"find": [
+				"final stated: Null<RuleSwitch> = config.switchFor(id, check.category());",
+				"final enabled: Bool = Linter.enabledBy(config, check);"
+			],
+			"replace": [
+				"final stated: Null<RuleSwitch> = null;",
+				"final enabled: Bool = !(check is anyparse.check.Check.DefaultOff);"
+			],
+			"note": "the listing reads the registry defaults and never the config, so a disabled rule is reported as run"
+		},
+		{
+			"name": "M-EFFECTIVE-IGNORES-DEFAULT-OFF",
+			"type": "anyparse.check.Linter",
+			"method": "enabledBy",
+			"find": "!(check is DefaultOff)",
+			"replace": "true",
+			"note": "an opt-in rule no config enables is listed as on"
+		},
+		{
+			"name": "M-EFFECTIVE-IGNORES-VERSION",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "stateOf",
+			"find": "final gated: Bool = enabled && minimum != null && !config.allowsLanguageVersion(minimum);",
+			"replace": "final gated: Bool = false;",
+			"note": "a rule whose findings the languageVersion gate drops is listed as on"
+		},
+		{
+			"name": "M-EFFECTIVE-GROUPS-PER-DIR",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "groupFor",
+			"find": "if (existing != null) return existing;",
+			"replace": "",
+			"note": "two directories under one chain are listed as two groups"
+		},
+		{
+			"name": "M-CHAIN-NEAREST-ONLY",
+			"type": "anyparse.check.LintConfig",
+			"method": "discoverChain",
+			"find": "if (doc.inherit == false) break;",
+			"replace": "break;",
+			"note": "the nearest apqlint.json replaces its ancestors instead of extending them"
+		},
+		{
+			"name": "M-CHAIN-IGNORES-INHERIT",
+			"type": "anyparse.check.LintConfig",
+			"method": "discoverChain",
+			"find": "if (doc.inherit == false) break;",
+			"replace": "",
+			"note": "a document declaring inherit:false still folds its ancestors"
+		},
+		{
+			"name": "M-CHAIN-UNBOUNDED",
+			"type": "anyparse.check.LintConfig",
+			"method": "discoverChain",
+			"find": "ConfigFinder.findUpAll(path, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS)",
+			"replace": "ConfigFinder.findUpAll(path, 'apqlint.json')",
+			"note": "the chain climbs past the project root and folds a stray ancestor document"
+		},
+		{
+			"name": "M-GATE-COLLECT-BYPASS",
+			"type": "anyparse.check.Linter",
+			"method": "scannedBy",
+			"find": "if (!(check is FileGated)) return files;",
+			"replace": "return files;",
+			"note": "the run ignores the FileGated answer the listing reports, so an excluded file is scanned"
+		},
+		{
+			"name": "M-EFFECTIVE-IGNORES-FILEGATE",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "stateOf",
+			"find": "final skipped: Null<String> = enabled && !gated && check is FileGated ? (cast check: FileGated).skipReason(file, config) : null;",
+			"replace": "final skipped: Null<String> = null;",
+			"note": "the listing ignores a rule's own per-file gate"
+		},
+		{
+			"name": "M-EFFECTIVE-RENDER-HEADER",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "render",
+			"find": "'=== effective lint rules — config chain: $chain ===\\n'",
+			"replace": "'=== lint rules: $chain ===\\n'",
+			"note": "the header review tooling detects the scoped form by changes"
+		},
+		{
+			"name": "M-FIXVERIFY-DISCOVERS-CONFIG",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verifyWith",
+			"find": "Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)",
+			"replace": "Linter.collect(files, plugin, [check], null, applyEnablement)",
+			"note": "the risky checks' file gate resolves each file's config by an unmemoised discover instead of the run's resolver"
+		},
+		{
+			"name": "M-FIXVERIFY-CHECK-DISCOVERS-CONFIG",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verifyWith",
+			"find": "(cast check: ConfigAware).setConfigResolver(resolveConfig);",
+			"replace": "{};",
+			"note": "a ConfigAware risky check reads its own options by an unmemoised discover instead of the run's resolver"
+		},
+		{
+			"name": "M-TS-GRAPH-CUT",
+			"type": "anyparse.check.Linter",
+			"method": "scannedBy",
+			"find": "if (!(check is GraphScoped) || reported.length == 0) return reported;",
+			"replace": "return reported;",
+			"note": "a graph-scoped rule reads only the files it reports in, so a file without sinks loses its spawns registrations"
+		},
+		{
+			"name": "M-TS-REPORT-UNGATED",
+			"type": "anyparse.check.Linter",
+			"method": "runGated",
+			"find": "return found.filter(v -> v.file == '' || gated.skipReason(v.file, LintConfig.resolveWith(resolveConfig, v.file)) == null);",
+			"replace": "return found;",
+			"note": "a graph-scoped rule's findings in a file its report gate refuses are kept, so a file whose chain writes no option reports findings of its own"
+		},
+		{
+			"name": "M-PARENS-QUOTED-DROPPED",
+			"type": "anyparse.check.ReificationScan",
+			"method": "exemptIdsOf",
+			"force": "[]",
+			"note": "no rule declines the quotation drop, so redundant-parens reports and fixes nothing inside a macro quotation"
+		},
+		{
+			"name": "M-COLLECT-NO-ENABLEMENT",
+			"type": "anyparse.check.Linter",
+			"method": "collect",
+			"find": "resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement)",
+			"replace": "kept",
+			"note": "no path that writes a fix honours a file's own enabled:false"
+		},
+		{
+			"name": "M-FIXVERIFY-ENABLEMENT-DROPPED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verifyWith",
+			"find": "Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)",
+			"replace": "Linter.collect(files, plugin, [check], resolveConfig, false)",
+			"note": "the risky verifier rewrites a file whose config disables the rule"
+		},
+		{
+			"name": "M-VERSION-LIFTED-BY-RULE",
+			"type": "anyparse.check.Linter",
+			"method": "passesGates",
+			"find": "(minVersion == null || config.allowsLanguageVersion(minVersion))",
+			"replace": "(minVersion == null || !applyEnablement || config.allowsLanguageVersion(minVersion))",
+			"note": "an explicit --rule selection lifts the languageVersion floor, so a fix writes syntax the project cannot compile"
+		},
+		{
+			"name": "M-LINT-SUMMARY-THRESHOLD-UNREAD",
+			"type": "anyparse.check.LintConfig",
+			"method": "reportSummaryThreshold",
+			"force": "LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD",
+			"note": "an apqlint.json reportSummaryThreshold is ignored and every run summarises at the default"
+		},
+		{
+			"name": "M-REFLECTIVE-MERGE",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,",
+			"replace": "reflectiveClasses: near.reflectiveClasses,",
+			"note": "a nested document that leaves `reflectiveClasses` unsaid drops the ancestor's declaration"
+		},
+		{
+			"name": "M-HOLDERS-MERGE",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "reflectiveMethodHolders: near.reflectiveMethodHolders ?? far.reflectiveMethodHolders,",
+			"replace": "reflectiveMethodHolders: near.reflectiveMethodHolders,",
+			"note": "a nested document that leaves `reflectiveMethodHolders` unsaid drops the ancestor's declaration"
+		},
+		{
+			"name": "M-HOLDERS-PARSE",
+			"type": "anyparse.check.LintDocuments",
+			"method": "parseDocument",
+			"find": "reflectiveMethodHolders: config.reflectiveMethodHolders,",
+			"replace": "",
+			"note": "`reflectiveMethodHolders` is never read out of `apqlint.json`"
+		},
+		{
+			"name": "M-WRITER-NARROW-NONE",
+			"type": "anyparse.check.FixVerifier",
+			"method": "prepareEntry",
+			"find": "? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write, rounds)",
+			"replace": "? Reverted(NotCanonical(message))",
+			"note": "a risky edit set the writer refuses is reverted whole again, so its writable units go with the refused one"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-NONE",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeBatch",
+			"find": "if (n < 2) return",
+			"replace": "if (n >= 0) return",
+			"note": "every candidate of a risky check is typechecked alone again, so a check whose edits all build costs one oracle round per file"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-NO-SPLIT",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeHalves",
+			"force": "[for (c in candidates) judgeAlone(c, plugin, write, rounds)]",
+			"note": "a rejected batch is judged file by file instead of in halves, so the halves holding no failing file are no longer kept in one round"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-NO-RESTORE",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeBatch",
+			"find": "for (candidate in candidates) write(candidate.entry.file, candidate.entry.source);",
+			"replace": "",
+			"note": "files a rejected batch did not keep stay on disk at their candidate text, so a file judged alone afterwards is confirmed or rejected against edits that were never kept"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-UNAVAILABLE-SPLITS",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeBatch",
+			"find": "outcome.match(Rejected(_))",
+			"replace": "!outcome.match(Confirmed)",
+			"note": "a batch the oracle could not judge at all is split into halves and asked again, spending rounds on a compiler that cannot run"
+		},
+		{
+			"name": "M-OWNED-MERGE",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "ownedTypes: near.ownedTypes ?? far.ownedTypes,",
+			"replace": "ownedTypes: near.ownedTypes,",
+			"note": "a nested document that leaves `ownedTypes` unsaid drops the ancestor's declarations"
+		},
+		{
+			"name": "M-OWNED-PARSE",
+			"type": "anyparse.check.LintDocuments",
+			"method": "parseDocument",
+			"find": "ownedTypes: ownedTypes,",
+			"replace": "",
+			"note": "`ownedTypes` is never read out of `apqlint.json`"
+		},
+		{
+			"name": "M-FIXVERIFY-RISKYARM-FIX",
+			"type": "anyparse.check.FixVerifier",
+			"method": "flatFix",
+			"force": "check.fix(source, own, plugin, index)",
+			"note": "the verifier asks a RiskyArm check for its SAFE fix, which declines the arm's findings"
+		},
+		{
+			"name": "M-LINT-SUPERSEDES-IGNORED",
+			"type": "anyparse.check.Linter",
+			"method": "withoutSuperseded",
+			"force": "found",
+			"note": "naming and no-underscore-prefix both report the same underscore-prefixed binding"
+		},
+		{
+			"name": "M-XVERIFY-NO-MERGE",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "componentsOf",
+			"find": "group.files.exists(f -> touched.contains(f))",
+			"replace": "false",
+			"note": "edit sets sharing a file are judged apart, over spans the other one moved"
+		},
+		{
+			"name": "M-RISKYARM-CROSS-NOT-VERIFIED",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "extend",
+			"find": "if (cross.length == 0) continue;",
+			"replace": "continue;",
+			"note": "the verifier never runs the cross-file arm"
+		},
+		{
+			"name": "M-XVERIFY-NO-BISECT",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "judgeComponent",
+			"find": "safe.length > 0 && ",
+			"replace": "false && ",
+			"note": "one failing rename reverts every rename of its component"
+		},
+		{
+			"name": "M-REACH-COMPLETE-FOLLOWS-LIST",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "near.compilerOracles == null ? far.reachConfigurationsComplete : null",
+			"replace": "far.reachConfigurationsComplete",
+			"note": "a nested document naming a compilerOracle list of its own inherits the completeness its ancestor declared for another list, so the reach analysis reads a partial list as every build the project ships"
+		},
+		{
+			"name": "M-CATEGORY-OUTRANKS-RULE",
+			"type": "anyparse.check.LintConfig",
+			"method": "switchFor",
+			"find": [
+				"if (byRule != null) return { on: byRule, byCategory: false };",
+				"if (byCategory != null) return { on: byCategory, byCategory: true };"
+			],
+			"replace": [
+				"",
+				"if (byCategory != null) return { on: byCategory, byCategory: true };\n\t\tif (byRule != null) return { on: byRule, byCategory: false };"
+			],
+			"note": "inside one document the category entry is asked before the rule's own entry, so a rule switched on by name inside a disabled category stays off"
+		},
+		{
+			"name": "M-CATEGORY-IGNORED",
+			"type": "anyparse.check.LintConfig",
+			"method": "switchFor",
+			"find": "final byCategory: Null<Bool> = category == null ? null : level.categories[category];",
+			"replace": "final byCategory: Null<Bool> = null;",
+			"note": "the categories section is never asked, so enabling a category switches none of its default-off members on and disabling it switches nothing off"
+		},
+		{
+			"name": "M-RULE-SHORTHAND-DROPPED",
+			"type": "anyparse.check.LintDocuments",
+			"method": "parseRule",
+			"find": "{ enabled: v, props: [] };",
+			"replace": "null;",
+			"note": "a true / false rule entry is no entry, so the boolean shorthand switches nothing"
+		},
+		{
+			"name": "M-OPTIONS-OBJECT-INERT",
+			"type": "anyparse.check.LintDocuments",
+			"method": "parseRule",
+			"find": "{ enabled: enabled ?? true, severity: severity, props: props };",
+			"replace": "{ enabled: enabled, severity: severity, props: props };",
+			"note": "an object of options states no enablement, so it no longer enables a default-off rule"
+		},
+		{
+			"name": "M-UNKNOWN-CATEGORY-SILENT",
+			"type": "anyparse.check.LintDocuments",
+			"method": "parseCategories",
+			"find": "drops.push('categories declares unknown category",
+			"replace": "drops.remove('categories declares unknown category",
+			"note": "a misspelt category id is dropped without the diagnostic that names it"
+		},
+		{
+			"name": "M-CATEGORIES-NOT-INHERITED",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "switches: near.switches.concat(far.switches),",
+			"replace": "switches: near.switches,",
+			"note": "a nested document drops every rule and category switch of the documents above it instead of deferring to them for what it does not name"
+		},
+		{
+			"name": "M-CHAIN-WIDE-RULE-ENTRY",
+			"type": "anyparse.check.LintConfig",
+			"method": "switchFor",
+			"find": "final byCategory: Null<Bool> = category == null ? null : level.categories[category];",
+			"replace": "final byCategory: Null<Bool> = category == null || Lambda.exists(_switches, l -> l.rules[id] != null) ? null : level.categories[category];",
+			"note": "a rule entry anywhere in the chain outranks a category entry anywhere in it, so a nested category no longer overrides an outer config's entry for one of its rules"
+		},
+		{
+			"name": "M-LANGUAGE-BOUND-RUNS-EVERYWHERE",
+			"type": "anyparse.check.Linter",
+			"method": "runsOn",
+			"find": "return !(check is LanguageBound) || (cast check: LanguageBound).languages().contains(lang);",
+			"replace": "return true;",
+			"note": "a check bound to one grammar runs on every grammar, so a Haxe standard-library rule reads a JSON or Mermaid tree"
+		},
+		{
+			"name": "M-LANGUAGE-COLUMN-ANY",
+			"type": "anyparse.check.RuleIndex",
+			"method": "languageOf",
+			"find": "return check is LanguageBound ? (cast check: LanguageBound).languages().join(', ') : 'any';",
+			"replace": "return 'any';",
+			"note": "the rule listings call a language-bound rule one that runs on every grammar"
+		},
+		{
+			"name": "M-FIXVERIFIER-NAMES-NOT-INSTALLED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verify",
+			"find": "for (check in aware) check.setNameOracle(names);",
+			"replace": "",
+			"note": "the verified pass hands no name oracle to the rules that ask one, so no value site is ever rewritten"
+		}
+	]
+}

@@ -178,7 +178,7 @@ final class MutationArmAddressTest extends Test {
 	@:killer('M-ARM-FRAGMENT-NONE')
 	public function testEveryFragmentArmStillCutsItsNode(): Void {
 		#if (sys || nodejs)
-		final table: ArmTable = MutationArms.parse(File.getContent('test/testkit/mutation-arms.json'));
+		final table: ArmTable = MutationArms.parseDirectory('test/testkit/arms');
 		Assert.equals(0, table.errors.length, 'the registry has to read cleanly first: ${table.errors.join('; ')}');
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final sources: Map<String, String> = [];
@@ -246,7 +246,7 @@ final class MutationArmAddressTest extends Test {
 	@:access(anyparse.query.Patch)
 	public function testEveryForceArmStillOpensABodyToCutInto(): Void {
 		#if (sys || nodejs)
-		final table: ArmTable = MutationArms.parse(File.getContent('test/testkit/mutation-arms.json'));
+		final table: ArmTable = MutationArms.parseDirectory('test/testkit/arms');
 		Assert.equals(0, table.errors.length, 'the registry has to read cleanly first: ${table.errors.join('; ')}');
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final sources: Map<String, String> = [];

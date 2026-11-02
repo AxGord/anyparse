@@ -30,7 +30,7 @@ using Lambda;
  * regenerated on every test added.
  *
  * The pins and the arms need no list either: `@:pin` / `@:killer` live on the
- * fixtures, the arms in `mutation-arms.json`, and the build refuses a dangling
+ * fixtures, the arms in `test/testkit/arms`, and the build refuses a dangling
  * killer, an arm nobody names and an arm whose member is gone.
  */
 @:nullSafety(Strict)

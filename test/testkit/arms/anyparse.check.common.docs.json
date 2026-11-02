@@ -1,0 +1,181 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.docs. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-COMMENT-WIDTH-CONFIG-BLIND",
+			"type": "anyparse.check.common.docs.CommentWidth",
+			"method": "collectUnit",
+			"find": "if (cols <= metrics.lineWidth || seen.contains(lineFrom)) continue;",
+			"replace": "if (cols <= 140 || seen.contains(lineFrom)) continue;",
+			"note": "the width stops coming from the file's own hxformat.json, so a project declaring 60 gets this repository's 140 and its over-width comment lines are reported clean"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-CODE-BLIND",
+			"type": "anyparse.check.common.docs.CommentWidth",
+			"method": "collectUnit",
+			"find": "if (CheckScan.displayColumn(code, 0, code.length, tab) > metrics.lineWidth) continue;",
+			"replace": "if (code.length < 0) continue;",
+			"note": "the rule stops asking whether the COMMENT is what puts the line over, so a short marker riding a 174-column line of code is reported as a comment-width finding the formatter owns"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-TRAILING-WRAPPED",
+			"type": "anyparse.check.common.docs.CommentWidth",
+			"method": "collectUnit",
+			"find": "refusal: i == 0 && headHasCode ? TRAILING : inFence ? FENCED : SourceComments.reflowRefusal(text)",
+			"replace": "refusal: inFence ? FENCED : SourceComments.reflowRefusal(text)",
+			"note": "a comment trailing after code reads as own-line prose, so the rule offers a fix whose continuation would be a NEW own-line comment the writer then relocates"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-FENCE-BLIND",
+			"type": "anyparse.check.common.docs.CommentWidth",
+			"method": "collectUnit",
+			"find": "final inFence: Bool = fenced || marker;",
+			"replace": "final inFence: Bool = false;",
+			"note": "the fence state is never consulted, so a line inside a ``` code sample reads as prose and the fix breaks the sample at spaces"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-PROTECTION-OFF",
+			"type": "anyparse.check.common.docs.CommentWidth",
+			"method": "fix",
+			"find": "w.refusal == null && wanted.contains(w.from)",
+			"replace": "w.refusal == null",
+			"note": "the protection list goes, so a whole-body edit re-wraps every over-width line of the block including the ones no surviving finding asked for"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-CLOSER-UNSEEN",
+			"type": "anyparse.check.common.docs.CommentWidth",
+			"method": "probeReflow",
+			"find": "reflow(source, unit, body, [w.body], metrics, unit.to - bodySpan.to)",
+			"replace": "reflow(source, unit, body, [w.body], metrics, 0)",
+			"note": "the probe stops handing the reflow the block closer, so a one-line doc block over by exactly its `*/` comes back unwrapped and is blamed on having no break point instead of being fixed"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-OPAQUE-OPEN",
+			"type": "anyparse.check.common.docs.CommentWidth",
+			"method": "opaqueRegionsOf",
+			"force": "[]",
+			"note": "the raw `#if` regions come back empty, so a comment whose bytes the model dropped is offered a fix no tree can corroborate"
+		},
+		{
+			"name": "M-DOC-CLAIM-BARE-NUMBER",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "durationAt",
+			"find": "return unit < 0 ? null : { at: at, to: unit, shape: 'a duration' };",
+			"replace": "return { at: at, to: digits, shape: 'a duration' };",
+			"note": "the unit stops being required, so every number in prose reads as a reading and a doc naming the code's own minimum or maximum is reported as one"
+		},
+		{
+			"name": "M-DOC-CLAIM-ARROW-ANY",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "deltaAt",
+			"find": "return left < 0 || right < 0 ? null : { at: left, to: right, shape: 'a before-and-after pair' };",
+			"replace": "return { at: at, to: arrow, shape: 'a before-and-after pair' };",
+			"note": "digits on both sides stop being required, so a function type, a lambda and a map entry described in prose each read as a before-and-after pair"
+		},
+		{
+			"name": "M-DOC-CLAIM-VERB-UNGATED",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "readingAt",
+			"find": "if (lineHasDigit(source, from, to, at)) return { at: at, to: token, shape: 'a recording verb beside a number' };",
+			"replace": "return { at: at, to: token, shape: 'a recording verb beside a number' };",
+			"note": "the recording verb no longer needs a number beside it mid-clause, so prose saying what the code itself measures is reported as a reading of a tree"
+		},
+		{
+			"name": "M-DOC-CLAIM-VERB-ANY-DIGIT",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "lineHasDigit",
+			"find": "&& !insideCodeSpan(source, from, i)",
+			"replace": "&& i >= from",
+			"note": "a digit inside inline code beside the recording verb mid-clause makes it a record again, so a code sample the sentence quotes is reported as a reading"
+		},
+		{
+			"name": "M-DOC-CLAIM-PERCENT-REMAINDER-BLIND",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "percentAt",
+			"find": "if (source.fastCodeAt(i) == '%'.code && numberAfter(source, end, i + 1) >= 0)",
+			"replace": "if (source.fastCodeAt(i) == '%'.code && numberAfter(source, end, i + 1) < 0)",
+			"note": "the remainder guard inverts, so prose about operator precedence reads as a share and a share written as one stops being read at all"
+		},
+		{
+			"name": "M-DOC-CLAIM-CLAUSE-BLIND",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "opensClause",
+			"force": "true",
+			"note": "every position reads as a clause opening, so the recording verb in the passive voice, as an adjective, or glued to a prefix is reported as a claim"
+		},
+		{
+			"name": "M-DOC-CLAIM-REFERENCE-BLIND",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "insideReference",
+			"force": "false",
+			"note": "a marker inside a path or a URL, and one on a doc-tag line, stop being references, so a pointer at where the numbers live is reported as if it carried them"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-NOUN-ANY",
+			"type": "anyparse.check.common.docs.ProseNumbers",
+			"method": "isCensusNoun",
+			"force": "true",
+			"note": "every word after a count reads as a census noun, so a contract's own bound on a dimension (lines, members) is reported as a census of a tree"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-FLOOR",
+			"type": "anyparse.check.common.docs.ProseNumbers",
+			"method": "isCensusSized",
+			"force": "true",
+			"note": "a single-digit count and a version number read as census-sized, so a fixture's own size and a language version before a noun are reported as readings"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-CODESPAN",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "censusAt",
+			"find": "if (insideCodeSpan(source, from, at)) return null;",
+			"replace": "if (insideCodeSpan(source, from, at) && at < from) return null;",
+			"note": "a count fenced as inline code stops being quoted data, so a tool's output quoted in prose is reported as a census"
+		},
+		{
+			"name": "M-DOC-CLAIM-SHORT-ID-TYPE-BLIND",
+			"type": "anyparse.check.common.docs.DocMeasurementClaim",
+			"method": "namesAType",
+			"force": "false",
+			"note": "a short id written as code stops naming a type, so a type parameter in backticks or after a colon is reported as a slice or backlog id"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-BOUND-BLIND",
+			"type": "anyparse.check.common.docs.ProseNumbers",
+			"method": "readsAsContract",
+			"force": "false",
+			"note": "a bound, a standard's or a year's number and a count glued to the token before it all read as a census, so a doc stating the code's own limit or a version is reported as a reading"
+		},
+		{
+			"name": "M-DOC-LENGTH-CONFIG-BLIND",
+			"type": "anyparse.check.common.docs.DocLength",
+			"method": "maxLinesFor",
+			"force": "DEFAULT_MAX_LINES",
+			"note": "the project's declared maximum stops being read, so a project asking for a shorter contract gets this rule's default and its own long blocks are reported clean"
+		},
+		{
+			"name": "M-DOC-LENGTH-ANY-COMMENT",
+			"type": "anyparse.check.common.docs.DocLength",
+			"method": "isDocBlock",
+			"force": "true",
+			"note": "a line-comment run and a plain block banner read as doc blocks, so prose that belongs to the statements it stands over is reported as an over-long contract"
+		},
+		{
+			"name": "M-GATE-NOOP-DOC",
+			"type": "anyparse.check.common.docs.DocCoverage",
+			"method": "skipReason",
+			"force": "null",
+			"note": "doc-coverage asking for no docs is reported as running"
+		},
+		{
+			"name": "M-FRAGMENTED-DOC-MERGES-ORPHAN",
+			"type": "anyparse.check.common.docs.FragmentedDocComment",
+			"method": "fix",
+			"find": "if (bodies.count(opensADoc) > 1) {",
+			"replace": "if (false) {",
+			"note": "two blocks that each open a doc are merged, so an orphan doc of a moved member becomes part of the next declaration's doc"
+		}
+	]
+}

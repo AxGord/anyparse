@@ -14,6 +14,7 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -82,8 +83,8 @@ final class Land {
 		'src/anyparse/runtime/'
 	];
 
-	/** The paths under `DIVERGENCE_PATHS` that bring in no divergence: the arm registry is data, no runner or cache reads it. */
-	private static final DIVERGENCE_EXEMPT: Array<String> = ['test/testkit/mutation-arms.json'];
+	/** The path prefixes under `DIVERGENCE_PATHS` that bring in no divergence: the arm registry is data, no runner or cache reads it. */
+	private static final DIVERGENCE_EXEMPT: Array<String> = ['test/testkit/arms/', 'test/testkit/mutation-arms.json'];
 
 	private final _summary: Summary = new Summary();
 	private final _repo: String;
@@ -452,7 +453,7 @@ final class Land {
 		if (asked) return '--full';
 		if (changed == null) return 'the merged paths are unknown';
 		for (path in changed)
-			if (!DIVERGENCE_EXEMPT.contains(path))
+			if (!DIVERGENCE_EXEMPT.exists(exempt -> path.startsWith(exempt)))
 				for (prefix in DIVERGENCE_PATHS)
 					if (path.startsWith(prefix)) return 'touches $path';
 		return every > 0 && landing % every == 0 ? 'landing $landing' : null;

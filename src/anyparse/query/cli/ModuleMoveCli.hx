@@ -100,7 +100,7 @@ final class ModuleMoveCli {
 			scopeFiles: scopeFiles,
 			libraryFiles: resolution == null ? [] : resolution.sources().library.entries(),
 			textFiles: textFiles,
-			registries: declaration.registries,
+			registries: registriesOf(declaration),
 			sortedLists: declaration.sortedLists,
 			mirrors: opts.mirror ? declaration.mirrors : []
 		}, plugin);
@@ -155,10 +155,9 @@ final class ModuleMoveCli {
 				if (!out.contains(abs) && !d.textExclude.exists(x -> abs == x || abs.startsWith('$x/'))) out.push(abs);
 			}
 		}
-		for (r in d.registries) {
-			if (!ConfigFinder.fileExists(r.file)) return Left('the "move" section declares registry "${r.file}", which does not exist');
-			if (!out.contains(r.file)) out.push(r.file);
-		}
+		for (r in d.registries) if (RegistryFiles.of(r.file).length == 0)
+			return Left('the "move" section declares registry "${r.file}", which does not exist');
+		for (r in registriesOf(d)) if (!out.contains(r.file)) out.push(r.file);
 		return Right(out);
 	}
 
@@ -314,6 +313,13 @@ final class ModuleMoveCli {
 	/** Whether `path` exists, as a file or a directory. */
 	private static function exists(path: String): Bool {
 		return #if (sys || nodejs) sys.FileSystem.exists(path) #else false #end;
+	}
+
+	/** The declared registries with each directory one names replaced by the documents inside it. */
+	private static function registriesOf(d: MoveDeclarationData): Array<{ file: String, keys: Array<String> }> {
+		return [
+			for (r in d.registries) for (file in RegistryFiles.of(r.file)) { file: file, keys: r.keys }
+		];
 	}
 
 }

@@ -1,0 +1,837 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.control. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-INVERT-REGION-UNGUARDED",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "statementEdits",
+			"find": "\t\tif (RegionTerminator.unterminatedRegion(thenBranch, source, shape)) return;\n",
+			"replace": "",
+			"note": "a then-region closed only by the `else` is swapped into the tail slot with no terminator"
+		},
+		{
+			"name": "M-PTR-RIDES-NEVER",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "ridesItsBranch",
+			"force": "false",
+			"note": "a guard-line trailing comment no longer counts as riding its own branch, so the cascade narrowing refuses a fold the march would have carried correctly"
+		},
+		{
+			"name": "M-PTR-CASCADE-NEVER-STRANDS",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "strandsCascadeComment",
+			"force": "false",
+			"note": "the cascade narrowing never fires, so an own-line comment between two rungs is hoisted off the gate it explains"
+		},
+		{
+			"name": "M-PIEC-SPINE-CLAIM-ANY",
+			"type": "anyparse.check.common.control.PreferIfExpressionChain",
+			"method": "spineClaimed",
+			"force": "true",
+			"note": "every chain head reads as claimed by simplify-boolean-ternary, so the deferral fires on chains that check never touches"
+		},
+		{
+			"name": "M-TAILMERGE-NORM-ONLY",
+			"type": "anyparse.check.common.control.TailMerge",
+			"method": "sameStatement",
+			"find": "if (!MemberKinds.structurallyEqual(a, b)) return false;",
+			"replace": "",
+			"note": "statement identity is decided by whitespace-normalized source alone, so two calls differing only INSIDE a string literal read as the same statement and a tail that is not duplicated is reported"
+		},
+		{
+			"name": "M-TAILMERGE-FALL-KEPT",
+			"type": "anyparse.check.common.control.TailMerge",
+			"method": "visit",
+			"find": "for (c in node.children) visit(c, EMPTY_FALL, source, seams, out);",
+			"replace": "for (c in node.children) visit(c, fall, source, seams, out);",
+			"note": "the fall-through run is handed to EVERY node's children instead of being reset, so a loop body, a switch arm, a catch body and a lambda all look like they complete into the run after the construct"
+		},
+		{
+			"name": "M-NO-AUTOFIX-STILL-EDITS",
+			"type": "anyparse.check.common.control.IdenticalOperands",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 1), text: '' }]",
+			"note": "a rule declaring `NoAutofix` answers with an edit, so the declaration is a claim the run contradicts"
+		},
+		{
+			"name": "M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME",
+			"type": "anyparse.check.common.control.IdenticalOperands",
+			"method": "noAutofixReason",
+			"force": "'identical operands has no autofix'",
+			"note": "the declared reason is the rule name read back, which tells a reader nothing the id did not"
+		},
+		{
+			"name": "M-COLLAPSE-BINDER-UNPROVEN",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "isolatedBinder",
+			"find": "return CasePatterns.provesCaptureAt(arm, switchNode, node, resolve, scan.scope, scan.tree, seams.shape) ? node : null;",
+			"replace": "return node;",
+			"note": "a nested switch over a binder that may be a constant is spliced into the pattern"
+		},
+		{
+			"name": "M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND",
+			"type": "anyparse.check.common.control.ComparisonToBoolean",
+			"method": "spelledAsTypeParam",
+			"force": "false",
+			"note": "a member type or method return written `Bool` is proven a Bool even where a declaring type or method names a type parameter Bool"
+		},
+		{
+			"name": "M-DECLCHAIN-UNTYPED",
+			"type": "anyparse.check.common.control.DeclFallbackChain",
+			"method": "match",
+			"find": " || !types.exists(declSpan.from)",
+			"replace": "",
+			"note": "an unannotated declaration folds too, so its type comes from the if-expression's unified type rather than from its first write - measured to differ (`UInt` vs `Int`) and to stop compiling for a subclass in the first branch"
+		},
+		{
+			"name": "M-DECLCHAIN-INIT-ANY",
+			"type": "anyparse.check.common.control.DeclFallbackChain",
+			"method": "match",
+			"find": "if (!MemberKinds.isMovableLiteral(init, s.shape)) return null;",
+			"replace": "",
+			"note": "any initializer is relocated past the conditions, so a call, a read a condition could change, or an allocation runs after them instead of before"
+		},
+		{
+			"name": "M-DECLCHAIN-OCCURRENCE-COUNT",
+			"type": "anyparse.check.common.control.DeclFallbackChain",
+			"method": "match",
+			"find": "if (Refs.find(name, head, s.shape).length != probe.leafCount) return null;",
+			"replace": "",
+			"note": "any further occurrence of the target in the chain - a read in a condition or a value, a capture, a nested write - survives the fold, naming the variable inside its own initializer"
+		},
+		{
+			"name": "M-DECLCHAIN-LVALUE",
+			"type": "anyparse.check.common.control.DeclFallbackChain",
+			"method": "match",
+			"find": "if (lvalue.kind != s.tree.identKind || lvalue.name != name) return null;",
+			"replace": "",
+			"note": "a chain assigning another target folds into the declaration, which then takes that target's values"
+		},
+		{
+			"name": "M-DECLCHAIN-PREFIX-DANGLING",
+			"type": "anyparse.check.common.control.DeclFallbackChain",
+			"method": "match",
+			"find": "TryExpressionShape.danglingLineComment(source, new Span(declSpan.from, declSpan.from + prefix.text.length), comments)",
+			"replace": "false",
+			"note": "a line comment ending the copied declaration prefix swallows the rebuilt ` = <value>;`"
+		},
+		{
+			"name": "M-DECLCHAIN-OWNED-BY-TERNARY",
+			"type": "anyparse.check.common.control.DeclFallbackChain",
+			"method": "ownedByTernary",
+			"find": "m.branches.length == 1 && ",
+			"replace": "",
+			"note": "every chain of plain assignments goes to the ternary rule, which builds its edit from the first branch alone, and the if-expression rule reports none"
+		},
+		{
+			"name": "M-DECLIF-CARRY",
+			"type": "anyparse.check.common.control.PreferIfExpressionAssignment",
+			"method": "declEdits",
+			"find": "final carried: Null<Carried> = IfExpressionChain.carriedComments(m.region, kept, m.probe.gaps, source, comments);",
+			"replace": "final carried: Null<Carried> = IfExpressionChain.noCarry();",
+			"note": "the decl arm stops classifying the comments in its region, so one between the declaration and the chain is dropped by the rebuild"
+		},
+		{
+			"name": "M-DECLIF-PREFIX-KEPT",
+			"type": "anyparse.check.common.control.PreferIfExpressionAssignment",
+			"method": "declEdits",
+			"find": "kept.push(new Span(m.declSpan.from, m.prefix.keptTo));",
+			"replace": "",
+			"note": "the copied declaration prefix is no longer a kept span, so a comment inside it - which the prefix carries - refuses the site"
+		},
+		{
+			"name": "M-DECLTERN-NARROWING",
+			"type": "anyparse.check.common.control.PreferTernaryAssignment",
+			"method": "declEdits",
+			"find": "if (BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)) continue;",
+			"replace": "",
+			"note": "the decl arm collapses a null-narrowing guard onto bool literals, which the boolean simplification then flattens out of its narrowing"
+		},
+		{
+			"name": "M-DECLTERN-COMMENT",
+			"type": "anyparse.check.common.control.PreferTernaryAssignment",
+			"method": "declEdits",
+			"find": "if (IfExpressionChain.droppedComment(m.region, kept, comments)) continue;",
+			"replace": "",
+			"note": "the decl arm ignores comments outside its copied spans, so one in the `if` header is dropped by the rebuild"
+		},
+		{
+			"name": "M-PASSTHROUGH-TERNARY",
+			"type": "anyparse.check.common.control.PreferTernaryAssignment",
+			"method": "passThroughEdit",
+			"force": "null",
+			"note": "a ternary that only passes a nullable value through is written as `x != null ? x : null`, which prefer-null-coalescing then turns into the no-op `x ?? null`"
+		},
+		{
+			"name": "M-GUARD-ELSE-ADMITTED",
+			"type": "anyparse.check.common.control.GuardScan",
+			"method": "guardedIf",
+			"find": " || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT",
+			"replace": "",
+			"note": "an `if` with an `else` is inverted as if it had none, so both guard rules drop the else branch"
+		},
+		{
+			"name": "M-GUARD-UNBRACED-THEN",
+			"type": "anyparse.check.common.control.GuardScan",
+			"method": "guardedIf",
+			"find": "blockKinds.contains(thenBlock.kind) && ",
+			"replace": "",
+			"note": "an un-braced then-branch is taken for a block, so its braces are cut off text that has none"
+		},
+		{
+			"name": "M-GUARD-MIN-THEN-IGNORED",
+			"type": "anyparse.check.common.control.GuardScan",
+			"method": "guardedIf",
+			"find": " && thenBlock.children.length >= minThen",
+			"replace": "",
+			"note": "a then-branch under the rule's minimum is inverted, so guard-return flattens a one-statement branch"
+		},
+		{
+			"name": "M-GUARD-GLUE-COMMENT-BLIND",
+			"type": "anyparse.check.common.control.GuardScan",
+			"method": "headerHasComment",
+			"force": "false",
+			"note": "a comment in the `if (` or `) {` glue no longer refuses the rewrite, which drops it"
+		},
+		{
+			"name": "M-GUARD-UNCLEAN-INVERSION-REPORTED",
+			"type": "anyparse.check.common.control.GuardScan",
+			"method": "report",
+			"find": " && NegationScan.negationIsClean(g.cond, source, logic, types)",
+			"replace": "",
+			"note": "a condition that can only invert into a `!( … )` wrap is reported, so the guard form reads worse than the nesting it removes"
+		},
+		{
+			"name": "M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY",
+			"type": "anyparse.check.common.control.GuardContinue",
+			"method": "loopGuardClaims",
+			"find": "if (!shielded) return false;",
+			"replace": "if (body.kind != s.blockStmtKind || !shielded) return false;",
+			"note": "guard-continue defers to loop-guard on a statement-block body alone, so a do-while both rules read is reported by both"
+		},
+		{
+			"name": "M-NEGCOND-ANY-KIND",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "negatedOperand",
+			"find": "not.kind != s.notKind || ",
+			"replace": "",
+			"note": "any one-operand condition reads as a negation, so `a.b ? 1 : 2` is \"inverted\" to `b ? 2 : 1`"
+		},
+		{
+			"name": "M-NEGCOND-PAREN-KEPT",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "negatedOperand",
+			"find": "operand.kind == s.parenKind && operand.children.length == 1",
+			"replace": "false",
+			"note": "the redundant paren around the negated operand is kept: `!(a || b) ? x : y` becomes `(a || b) ? y : x`"
+		},
+		{
+			"name": "M-NEGCOND-OVERLOAD-BLIND",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "builtin",
+			"force": "true",
+			"note": "an `@:op(!A)` overload is ignored, so a `!` that need not be the complement is dropped and the branches swapped"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-BEFORE-KEPT",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "commentOutside",
+			"find": "return SourceComments.hasCommentMarker(source, outer.from, inner.from)",
+			"replace": "return false",
+			"note": "a comment between the `!` and its operand is not seen, and the positive rebuild drops it"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-AFTER-KEPT",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "commentOutside",
+			"find": "inner.to, outer.to",
+			"replace": "inner.to, inner.to",
+			"note": "a comment after the operand inside the dropped paren is not seen, and the positive rebuild drops it"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-WHOLE-COND",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "commentOutside",
+			"force": "SourceComments.hasCommentMarker(source, outer.from, outer.to)",
+			"note": "a comment INSIDE the kept operand blocks the inversion too, though it travels verbatim"
+		},
+		{
+			"name": "M-NEGCOND-SWAP-OFF",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "ternaryEdit",
+			"find": "final kept: Null<QueryNode> = positive(cond, elseValue, site);",
+			"replace": "final kept: Null<QueryNode> = null;",
+			"note": "a ternary built from a negated guard keeps the `!` (`x = !a ? 1 : 2`)"
+		},
+		{
+			"name": "M-INVERT-VALUE-CHAIN-SWAPPED",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "if (sameConstruct(thenBranch, node, scan.seams) || sameConstruct(elseBranch, node, scan.seams)) return Skip;",
+			"replace": "",
+			"note": "a ternary chain or else-if value chain is swapped, re-nesting it"
+		},
+		{
+			"name": "M-INVERT-VALUE-GLUE-BEFORE-BLIND",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "condSpan.to, thenSpan.from",
+			"replace": "condSpan.to, condSpan.to",
+			"note": "a comment between the condition and the then-branch stays while the branches move"
+		},
+		{
+			"name": "M-INVERT-VALUE-GLUE-AFTER-BLIND",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "thenSpan.to, elseSpan.from",
+			"replace": "thenSpan.to, thenSpan.to",
+			"note": "a comment between the two branches stays while the branches move"
+		},
+		{
+			"name": "M-INVERT-VALUE-NO-DESCEND",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "walk",
+			"find": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));\n",
+			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));\n\t\t\t\t\t\treturn;\n",
+			"note": "a report-only value form stops the walk, so an invertible conditional inside it is never fixed"
+		},
+		{
+			"name": "M-INVERT-VALUE-DESCEND-FIXED",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "walk",
+			"find": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams)));\n\t\t\t\t\t\treturn;\n",
+			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams)));\n",
+			"note": "a fixable value form does not stop the walk, so a nested one is rewritten in the same pass (overlapping edits)"
+		},
+		{
+			"name": "M-INVERT-VALUE-UNGUARDED",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "fix",
+			"find": "edits.concat(ParenGuard.guard(source, guarded, plugin))",
+			"replace": "edits.concat([for (g in guarded) { span: g.span, text: g.text }])",
+			"note": "value splices skip the parse round-trip: `!(a = b) ? 1 : 2` becomes `a = b ? 2 : 1`"
+		},
+		{
+			"name": "M-INVERT-VALUE-LOOSE-SPAN",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "tight",
+			"force": "node.span",
+			"note": "a splice over a node span that runs on through trailing trivia welds the condition to the `?` (`a? 2 : 1`)"
+		},
+		{
+			"name": "M-PTR-NO-ORIENT",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "fixCarrying",
+			"find": "NegatedCondition.siteOf(negation, file, source, tree)",
+			"replace": "null",
+			"note": "prefer-ternary-return writes `return !c ? a : b;` again"
+		},
+		{
+			"name": "M-PTR-TRAILING-SWAPS",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "buildEdit",
+			"find": "Null<Span> = split.branchTrailing == null",
+			"replace": "Null<Span> = true",
+			"note": "a guard's own trailing comment is left riding the value that moved to the `:` slot"
+		},
+		{
+			"name": "M-RRT-NO-ORIENT",
+			"type": "anyparse.check.common.control.ReturnReassignTernary",
+			"method": "matchesIn",
+			"find": "NegatedCondition.siteOf(s.negation, file, source, tree)",
+			"replace": "null",
+			"note": "return-reassign-ternary writes `return !c ? e : x;` again"
+		},
+		{
+			"name": "M-PTA-NO-ORIENT",
+			"type": "anyparse.check.common.control.PreferTernaryAssignment",
+			"method": "fix",
+			"find": "NegatedCondition.siteOf(negation, file, source, tree)",
+			"replace": "null",
+			"note": "prefer-ternary-assignment writes `x = !c ? a : b;` again, in both arms"
+		},
+		{
+			"name": "M-PTE-NO-ORIENT",
+			"type": "anyparse.check.common.control.PreferTernaryExpression",
+			"method": "collect",
+			"find": "NegatedCondition.siteOf(s.negation, file, source, root)",
+			"replace": "null",
+			"note": "prefer-ternary-expression writes `!c ? a : b` again"
+		},
+		{
+			"name": "M-RETURN-CHAIN-COMMENT-ADMITTED",
+			"type": "anyparse.check.common.control.SimplifyBooleanReturnChain",
+			"method": "fix",
+			"find": "if (SourceComments.hasCommentMarker(source, span.from, span.to)) {",
+			"replace": "if (false) {",
+			"note": "the flat guard-chain rewrite drops a comment inside the chain"
+		},
+		{
+			"name": "M-PIEC-FIX-REPORT-INDEX",
+			"type": "anyparse.check.common.control.PreferIfExpressionChain",
+			"method": "fix",
+			"find": "OperatorSelection.of(plugin, [{ file: file, source: source }], index)",
+			"replace": "OperatorSelection.of(plugin, [{ file: file, source: source }])",
+			"note": "the chain rule's fix reads a chain over a sibling module's overloading type as one the switch rule claims, and drops the edit its run reported"
+		},
+		{
+			"name": "M-PIEC-RUN-SELECTION",
+			"type": "anyparse.check.common.control.PreferIfExpressionChain",
+			"method": "run",
+			"find": "for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection))",
+			"replace": "for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, OperatorSelection.of(plugin, [entry])))",
+			"note": "the chain rule asks a per-file operator table, which sees no overload a sibling module declares, and leaves a chain the switch rule refuses to nobody"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-BLIND",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "keepsDefaultElse",
+			"force": "false",
+			"note": "`keepDefaultElse` never keeps a negation: `!a ? x : null` is still inverted to `a ? null : x` with the option on"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-ON",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "site",
+			"find": "KEEP_DEFAULT_ELSE) ?? false",
+			"replace": "KEEP_DEFAULT_ELSE) ?? true",
+			"note": "`keepDefaultElse` is read as on when no config sets it, so every project silently stops inverting `!a ? x : null`"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-NO-RETURN",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "armValue",
+			"find": "value.kind == d.returnKind",
+			"replace": "false",
+			"note": "a statement else branch `return null;` is not read through to its value, so `if (!a) return x; else return null;` is inverted"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-NO-BLOCK",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "armValue",
+			"find": "value.kind == d.blockKind",
+			"replace": "false",
+			"note": "a braced else branch `{ return false; }` is not read through, so it is inverted while the bare one is kept"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-NO-PAREN",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "armValue",
+			"find": "BoolExprShape.unwrapParens(returned ? value.children[0] : value, site.seams.parenKind)",
+			"replace": "returned ? value.children[0] : value",
+			"note": "a parenthesised default `!a ? x : (null)` is no default arm and is inverted"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "isDefault",
+			"find": "CaseValueKey.isDefaultLiteral(value.kind, site.source.substring(span.from, span.to), site.seams.defaults.values)",
+			"replace": "true",
+			"note": "every else arm counts as a default, so `!a ? x : 1` is no longer inverted under the option"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-THEN-ARM",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "ternaryEdit",
+			"find": "positive(cond, elseValue, site)",
+			"replace": "positive(cond, thenValue, site)",
+			"note": "a ternary builder asks the gate about the THEN value: `if (!a) y = x; else y = 0;` is oriented positive to `y = a ? 0 : x;` under the option"
+		},
+		{
+			"name": "M-PTR-KEEP-DEFAULT-THEN-ARM",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "buildEdit",
+			"find": "match.condition, match.elseValue, site",
+			"replace": "match.condition, match.thenValue, site",
+			"note": "prefer-ternary-return asks the gate about the guard value: `if (!a) return x; return null;` becomes `return a ? null : x;` under the option"
+		},
+		{
+			"name": "M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "statementSwap",
+			"find": "NegatedCondition.swapOf(ifNode.children[0], ifNode.children[1], elseBranch, scan.site)",
+			"replace": "NegatedCondition.swapOf(ifNode.children[0], elseBranch, ifNode.children[1], scan.site)",
+			"note": "an if statement is gated on its THEN branch: `if (!a) return null; else return x;` is no longer inverted under the option"
+		},
+		{
+			"name": "M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "NegatedCondition.swapOf(cond, thenBranch, elseBranch, scan.site)",
+			"replace": "NegatedCondition.swapOf(cond, elseBranch, thenBranch, scan.site)",
+			"note": "a value form is gated on its THEN arm: `!a ? null : x` is no longer reported under the option"
+		},
+		{
+			"name": "M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "swapOf",
+			"find": "final turned: Null<String> = defaultLastCondition(cond, thenArm, elseArm, site);",
+			"replace": "final turned: Null<String> = null;",
+			"note": "the swap never asks the `defaultLast` turn: `a ? null : x` stays default-first under the option"
+		},
+		{
+			"name": "M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "swapOf",
+			"find": "defaultLastCondition(cond, thenArm, elseArm, site)",
+			"replace": "defaultLastCondition(cond, elseArm, thenArm, site)",
+			"note": "the turn reads the arms the wrong way round: `a ? null : x` is left and `a ? x : null` is turned default-first"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-ANY-COND",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": "\t\tif (!d.turnableKinds.contains(written.kind)) return null;\n",
+			"replace": "",
+			"note": "any condition is turned: a compound or an ordered comparison is wrapped `!( … )` instead of being left"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-BOTH-LITERALS",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": " || isLiteral(last.value, site)",
+			"replace": "",
+			"note": "two literals are turned too: `a ? 0.0 : 1.0` becomes `!a ? 1.0 : 0.0`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-THEN-ANY",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": " || !isDefault(first.value, site)",
+			"replace": "",
+			"note": "a non-default then arm is turned: `a ? x : y` becomes `!a ? y : x`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-RETURN-MISMATCH",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": "first.returned != last.returned\n\t\t\t||",
+			"replace": "",
+			"note": "a returning then arm is turned against a non-returning else statement: `if (a) return null; else g();`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": "\n\t\t\t|| !builtin(written, d.negationKinds, site)",
+			"replace": "",
+			"note": "the `!` added and the `==` flipped are never asked of the operator table: an `@:op(!A)` / `@:op(A == B)` abstract is turned"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-EQ-UNASKED",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "readSeams",
+			"find": "negationKinds: [notKind].concat(equality)",
+			"replace": "negationKinds: [notKind]",
+			"note": "only the not is asked: an `@:op(A == B)` without its `!=` twin is flipped"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-BOOL-COND",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "readSeams",
+			"find": "if (k != shape.boolLitKind && k != shape.parenKind) k",
+			"replace": "if (k != shape.parenKind) k",
+			"note": "a bool-literal condition is turned: `true ? null : x` becomes `!true ? x : null`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-ON",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "site",
+			"find": "DEFAULT_LAST) ?? false",
+			"replace": "DEFAULT_LAST) ?? true",
+			"note": "`defaultLast` is read as on when no config sets it, so every project silently turns `a ? null : x`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-NO-KEEP",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "site",
+			"find": "keep: last || ",
+			"replace": "keep: ",
+			"note": "`defaultLast` no longer implies `keepDefaultElse`: `!a ? x : null` is inverted back to `a ? null : x` and the two directions ping-pong"
+		},
+		{
+			"name": "M-INVERT-DEFAULT-LAST-VALUE-MESSAGE",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "valueMessage",
+			"find": "swap.defaultLast ? MSG_DEFAULT_TERNARY : MSG_TERNARY",
+			"replace": "MSG_TERNARY",
+			"note": "a default-last turn of a ternary is worded as a dropped negation"
+		},
+		{
+			"name": "M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE",
+			"type": "anyparse.check.common.control.InvertNegatedIfElse",
+			"method": "walk",
+			"find": "swap.defaultLast ? MSG_DEFAULT_STATEMENT : MSG_STATEMENT",
+			"replace": "MSG_STATEMENT",
+			"note": "a default-last turn of an if statement is worded as a dropped negation"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL",
+			"type": "anyparse.check.common.control.NegatedCondition",
+			"method": "isLiteral",
+			"find": "\n\t\t\t&& !value.children.exists(c -> d.interpolationKinds.contains(c.kind))",
+			"replace": "",
+			"note": "an interpolating string reads as a literal, so `folder ? null : '${item.id}'` is left default-first"
+		},
+		{
+			"name": "M-PIER-MERGE-ANY-VALUE",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (!marchable(values, s) || !s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"replace": "if (!marchable(values, s)) return null;",
+			"note": "any repeated value merges, so two equal calls (or field reads typed under different narrowings) become one ternary branch"
+		},
+		{
+			"name": "M-PIER-MERGE-UNMARCHABLE",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (!marchable(values, s) || !s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"replace": "if (!s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"note": "a statement-like value merges into a ternary branch the pairwise march would refuse"
+		},
+		{
+			"name": "M-PIER-MERGE-COMMENT",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (comments.exists(tok -> tok.to > region.from && tok.from < region.to)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a merge ignores comments in its region, and the rebuild drops them"
+		},
+		{
+			"name": "M-PIER-MERGE-ANY-COUNT",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "if (from < 0 || from > 0 && from >= rungs.length) return null;",
+			"replace": "if (from != 0) return null;",
+			"note": "only a run of exactly three merges, so the mergeable tail of a longer run keeps its statements"
+		},
+		{
+			"name": "M-PIER-LEADING-AS-OUTER",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (valueText(values[1], source, comments) == repeated) return Leading;",
+			"replace": "if (false) return Leading;",
+			"note": "two leading branches with one value no longer merge by `||`"
+		},
+		{
+			"name": "M-PIER-REWRITES-FOLDED",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "rewritesChain",
+			"find": "return m.merge != null || m.writtenRungs >= MIN_CHAIN_RUNGS;",
+			"replace": "return true;",
+			"note": "every owned chain is rewritten, so a two-branch chain with a ternary tail becomes a three-branch value chain the author never wrote"
+		},
+		{
+			"name": "M-PIER-CLAIMSCHAIN-OWNS",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "claimsChain",
+			"find": "return m != null && rewritesChain(m);",
+			"replace": "return m != null;",
+			"note": "the chain claim answers ownership, so `redundant-else-after-return` loses its de-nest on a chain this rule leaves alone"
+		},
+		{
+			"name": "M-PIER-CASCADE-UNMERGED-REPORTED",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "eachMergedRun",
+			"find": "final merge: Null<Merge> = m?.merge;",
+			"replace": "final merge: Null<Merge> = m == null ? null : m.merge ?? { shape: Leading, from: 0, span: m.prefix, prefix: m.prefix };",
+			"note": "an owned cascade that does not merge is reported, with no fix behind the finding"
+		},
+		{
+			"name": "M-PIER-OUTER-UNNEGATED",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergedEdit",
+			"find": "case Outer: NegationScan.negateConditionText(m.conds[rung], source, s.negation, emit.logic, emit.types());",
+			"replace": "case Outer: text(source, m.pairs[rung].cond);",
+			"note": "the outer merge keeps the first condition positive, inverting which branch returns what"
+		},
+		{
+			"name": "M-PIER-MERGE-NO-PARENS",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergedEdit",
+			"find": "if (i % 2 == 0) holes.push(new Span(at, at + piece.length));",
+			"replace": "if (false) holes.push(new Span(at, at + piece.length));",
+			"note": "no merged piece is a ParenGuard hole, so a ternary condition re-associates across the new `&&`"
+		},
+		{
+			"name": "M-PIER-TAIL-REPORTED-AT-HEAD",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "eachMergedRun",
+			"find": "final reported: Null<Span> = kids[i + merge.from].span;",
+			"replace": "final reported: Null<Span> = kids[i].span;",
+			"note": "a merged tail is reported and keyed at the run head, so the finding names a guard the edit does not touch"
+		},
+		{
+			"name": "M-PIER-TAIL-SPAN-WHOLE",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "final span: Span = new Span(start.from, region.to);",
+			"replace": "final span: Span = region;",
+			"note": "a merged tail replaces the whole run, dropping the guards in front of it"
+		},
+		{
+			"name": "M-PIER-TAIL-FROM-FOLDED",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "if (from < 0 || from > 0 && from >= rungs.length) return null;",
+			"replace": "if (from < 0 || from > 0 && from > rungs.length) return null;",
+			"note": "a tail may start at a value folded out of the terminal ternary, past the last written rung"
+		},
+		{
+			"name": "M-PIER-TAIL-LADDER",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "return shape == null || from > 0 && repeatsTail(values[from - 1], tail, source, comments) ? null : {",
+			"replace": "return shape == null ? null : {",
+			"note": "a tail merges although the value before it repeats one of its own, so a guard ladder merges again on every pass into one nested condition"
+		},
+		{
+			"name": "M-ASYM-FIX-NO-EDIT",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "braceFix",
+			"force": "Declined('mutated')",
+			"note": "no bare branch is ever braced, so asymmetric-branch-braces stays report-only although the wrap is the writer's symmetric repair"
+		},
+		{
+			"name": "M-ASYM-FIX-UNTERMINATED",
+			"type": "anyparse.check.common.control.BranchChain",
+			"method": "selfTerminated",
+			"force": "true",
+			"note": "a bare branch with no terminator of its own is braced: `if (a) p() else { … }` becomes `{ p() }`, which Haxe rejects with Missing ;"
+		},
+		{
+			"name": "M-ASYM-FIX-NESTED-OVERLAP",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "braceFix",
+			"find": "if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))",
+			"replace": "if (false)",
+			"note": "a pair inside a bare branch the same call braces gets its own edit, nested inside the outer one"
+		},
+		{
+			"name": "M-ASYM-FIX-DECL",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "braceFix",
+			"find": "if (site.seams.declKinds.contains(bare.kind))",
+			"replace": "if (false)",
+			"note": "a bare declaration branch is braced, scoping its binding"
+		},
+		{
+			"name": "M-ASYM-FIX-NO-TERMINATOR-ADDED",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "braceFix",
+			"find": "text + site.terminator",
+			"replace": "text",
+			"note": "an unterminated bare expression statement is braced without its terminator: `{ p() }`, which Haxe rejects with Missing ;"
+		},
+		{
+			"name": "M-ASYM-FIX-CHAIN-TAIL-ONLY",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "chainOf",
+			"find": "while (at >= 0 && elseOf(path[at], seams) == head) {",
+			"replace": "while (false) {",
+			"note": "only the flagged tail pair of an else-if chain is braced, leaving `if (a) x(); else if (b) { y(); } else { … }` braced in its tail and bare in its head"
+		},
+		{
+			"name": "M-ASYM-FIX-OPEN-TAIL-ANY",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "openTail",
+			"force": "true",
+			"note": "any unterminated bare branch takes an appended terminator, a conditional-compilation region included, whose terminator its parent owns"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-DANGLING-ELSE",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "removable",
+			"find": "(shielded || !IfExpressionChain.holdsElseLessConditional(statement, seams.shield.conditionalKinds))",
+			"replace": "true",
+			"note": "a block holding an else-less conditional loses its braces where an else follows, and that else re-binds onto the inner if"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-DECL",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "removable",
+			"find": "!seams.keptKinds.contains(statement.kind)",
+			"replace": "true",
+			"note": "a block holding one declaration loses its braces, widening the binding's scope"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-ASYMMETRIC",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "chainFinding",
+			"find": "if (!removable(last, site, at)) return null;",
+			"replace": "if (!removable(last, site, at)) continue;",
+			"note": "a chain whose else must stay braced is stripped in its then branch alone, leaving the asymmetry asymmetric-branch-braces reports"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-COMMENT",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "removable",
+			"find": "&& unbraceEdits(block, site) != null",
+			"replace": "",
+			"note": "a block with a comment between a brace and its statement is reported, though stripping its braces would drop or misplace the comment"
+		},
+		{
+			"name": "M-ASYM-CHAIN-UNFLAGGED",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "chainFinding",
+			"find": "headSpan != null && braced && bareBranches(links, seams).length > 0",
+			"replace": "headSpan != null && false && bareBranches(links, seams).length > 0",
+			"note": "a chain whose braced and bare branches disagree outside its tail pair - one with no final else - is not a finding, although the writer symmetric mode braces it"
+		},
+		{
+			"name": "M-ASYM-CHAIN-PER-LINK",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "walk",
+			"find": "link || !seams.ifKinds.contains(node.kind)",
+			"replace": "!seams.ifKinds.contains(node.kind)",
+			"note": "every else-if link is read as the head of a chain of its own, so one chain reports its tail pair once per link above it"
+		},
+		{
+			"name": "M-ASYM-CHAIN-PAIR-SKIPPED",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "chainFinding",
+			"find": "return pairFinding(tail, last, seams) ?? (",
+			"replace": "return (",
+			"note": "an asymmetric tail pair is reported as the whole chain, losing the message that names which branch is braced"
+		},
+		{
+			"name": "M-ASYM-CHAIN-SWITCH-BRACED",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "bareBranches",
+			"find": " && !seams.exemptElseKinds.contains(last.kind)) out.push(last);",
+			"replace": ") out.push(last);",
+			"note": "a terminal else switch counts as a bare branch, so a braced chain ending in one is flagged and its switch braced, though the writer glues it to its else"
+		},
+		{
+			"name": "M-ASYM-FIX-COMMENT-OUTSIDE",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "bracesOpenAt",
+			"force": "from",
+			"note": "a bare branch is braced around its statement alone, leaving its own comments between the header and the `{`"
+		},
+		{
+			"name": "M-ASYM-TRY-UNFLAGGED",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "tryFinding",
+			"force": "null",
+			"note": "a try/catch whose body is braced and whose catch is bare is not a finding, although the writer symmetric mode braces the catch"
+		},
+		{
+			"name": "M-ASYM-TRY-FIX-NO-EDIT",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "tryBraceFix",
+			"force": "Declined('mutated')",
+			"note": "no bare body of an asymmetric try/catch is ever braced, so the try half of asymmetric-branch-braces stays report-only"
+		},
+		{
+			"name": "M-ASYM-TRY-FIX-UNTERMINATED",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "tryBraceFix",
+			"find": "? text : text + site.terminator",
+			"replace": "? text : text",
+			"note": "a bare expression body is braced without a terminator, `{ p() }`, which Haxe rejects as Missing ;"
+		}
+	]
+}

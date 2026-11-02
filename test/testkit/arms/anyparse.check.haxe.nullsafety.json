@@ -1,0 +1,15 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.haxe.nullsafety. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-NSSTRICT-TYPE-OFF-TWICE",
+			"type": "anyparse.check.haxe.nullsafety.NullSafetyStrict",
+			"method": "findings",
+			"find": "!typeEntries.contains(node)",
+			"replace": "true",
+			"note": "a class-level @:nullSafety(Off) is reported a second time as a below-type Off"
+		}
+	]
+}

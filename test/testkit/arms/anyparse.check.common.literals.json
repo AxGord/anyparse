@@ -1,0 +1,209 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.literals. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-STRING-LITERAL-DUP-REASON-MUTE",
+			"type": "anyparse.check.common.literals.StringLiteralDup",
+			"method": "noAutofixReason",
+			"force": "''",
+			"note": "the rule declares `NoAutofix` with an empty sentence, so `--fix` reports it as report-only without saying that `apq extract-constant` does the hoist"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-TABLE-ARITY",
+			"type": "anyparse.check.common.literals.LiteralTables",
+			"method": "isCollectionTable",
+			"find": "return node.kind == t.arrayLiteralKind && node.children.foreach(kid -> isDataEntry(kid, source, t));",
+			"replace": "return node.kind == t.arrayLiteralKind && node.children.length >= 3\n\t\t\t&& node.children.foreach(kid -> isDataEntry(kid, source, t));",
+			"note": "the arity floor is back, so a one- or two-name vocabulary array (`arrayTypeNames: ['Array']`) is read as logic again and its entries count toward the repetition"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-TABLE-ANY",
+			"type": "anyparse.check.common.literals.LiteralTables",
+			"method": "isCollectionTable",
+			"find": " && node.children.foreach(kid -> isDataEntry(kid, source, t))",
+			"replace": "",
+			"note": "homogeneity is dropped and every collection literal is a table, so an expression list mixing identifiers with literals exempts its literals"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND",
+			"type": "anyparse.check.common.literals.LiteralTables",
+			"method": "isDataEntry",
+			"find": "node.kind == t.mapEntryKind",
+			"replace": "false",
+			"note": "a map ENTRY is no longer a data entry, so a `kind => type` table has no bare-literal child and every key of it counts as a repetition again"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES",
+			"type": "anyparse.check.common.literals.LiteralTables",
+			"method": "isScalarData",
+			"find": " || (node.children.length == 0 && t.literalKinds.contains(node.kind))",
+			"replace": "",
+			"note": "only a string literal is a data entry, so a map storing numbers (`['Map' => 1, 'Array' => 0]`) stops being a table and its keys count again"
+		},
+		{
+			"name": "M-TOSTRING-RETURN-TRUSTED",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "callReceiver",
+			"find": "&& ctx.nullity.ofMemberReturn(owners, method) != Unproven",
+			"replace": "",
+			"note": "an instance call's declared return is trusted by name under null safety, so a method returning a typedef of `Null<…>` loses its `.toString()`"
+		},
+		{
+			"name": "M-TOSTRING-FACTS-CLASS",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "compiledClass",
+			"force": "false",
+			"note": "a receiver the resolution scope does not declare keeps its `.toString()` whatever the compiler's facts say"
+		},
+		{
+			"name": "M-TOSTRING-FACTS-EXTERN",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "compiledClass",
+			"find": "&& declared.kind == CLASS_KIND && !declared.isExtern;",
+			"replace": "&& declared.kind == CLASS_KIND;",
+			"note": "an extern class's `.toString()` is dropped, though the string coercion may call the native one"
+		},
+		{
+			"name": "M-FACTS-ALIKE-TOSTRING",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "compiledClass",
+			"find": "declared != null && declared.alike && declared.kind == CLASS_KIND",
+			"replace": "declared != null && declared.kind == CLASS_KIND",
+			"note": "a class extern in one configuration and not in another is proven by the first one's record"
+		},
+		{
+			"name": "M-TOSTRING-CALL-BY-NAME",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "callReceiver",
+			"find": ["final owners: Null<Array<ResolvedType>> = binder.receiverDecls(owner);", "decls: boundDecls(binder.tierOf(call)),"],
+			"replace": ["final owners: Null<Array<ResolvedType>> = ctx.index.refs.resolvedDeclsNamed(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '');", "decls: ctx.index.refs.resolvedDeclsNamed(ctx.index.members.returnNominalOf(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '', method) ?? ''),"],
+			"note": "a call receiver is typed by its owner's SIMPLE name, so `far.Holder.get()` reads as the same-package `Holder.get()`"
+		},
+		{
+			"name": "M-TOSTRING-CALL-CUT",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "callReceiver",
+			"force": "{ decls: null, nonNull: false }",
+			"note": "no call receiver is ever typed"
+		},
+		{
+			"name": "M-TOSTRING-IDENT-CUT",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "resolveReceiver",
+			"find": "decls: boundDecls(ctx.binder?.tierOf(receiver)),",
+			"replace": "decls: null,",
+			"note": "an identifier or construction receiver's type is never bound"
+		},
+		{
+			"name": "M-TOSTRING-STRING-BINDING",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "isStringTyped",
+			"find": "&& isBuiltinBinding(ctx.binder?.tierOf(node), stringTypeName);",
+			"replace": ";",
+			"note": "an identifier typed `String` counts as the built-in even where an import binds `String` to another type"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-BLIND",
+			"type": "anyparse.check.common.literals.MagicNumber",
+			"method": "isIgnoredCall",
+			"force": "false",
+			"note": "a direct argument of a call ignoreCallArguments names is flagged as a magic number"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-SUFFIX-LOOSE",
+			"type": "anyparse.check.common.literals.MagicNumber",
+			"method": "pathEndsWith",
+			"find": ["suffix.length > path.length", "for (i in 0...suffix.length)"],
+			"replace": ["false", "for (i in suffix.length - 1...suffix.length)"],
+			"note": "an ignoreCallArguments entry matches any callee sharing its last segment, so Lang.t exempts a bare t()"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-NEG-BLIND",
+			"type": "anyparse.check.common.literals.MagicNumber",
+			"method": "childKeyCtx",
+			"find": "currentCtx && node.kind == cfg.negationKind",
+			"replace": "false",
+			"note": "a negation does not hand the argument context to its literal, so f(-18) is flagged while f(18) is exempt"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-NEW-BLIND",
+			"type": "anyparse.check.common.literals.MagicNumber",
+			"method": "calledPath",
+			"find": "node.kind == cfg.newExprKind",
+			"replace": "false",
+			"note": "a constructor never matches an ignoreCallArguments entry, so `SpriteDescriptor.new` exempts nothing"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-NESTED-NEW",
+			"type": "anyparse.check.common.literals.MagicNumber",
+			"method": "walk",
+			"find": " || keyCtx && node.kind == cfg.newExprKind",
+			"replace": "",
+			"note": "a value object built in place as a listed argument (`new SpriteDescriptor(id, new Point(-18, -83))`) no longer carries the callee's context, so its literals are flagged"
+		},
+		{
+			"name": "M-MAGIC-TABLE-SWITCH-BLIND",
+			"type": "anyparse.check.common.literals.LiteralTables",
+			"method": "isSwitchTable",
+			"force": "false",
+			"note": "no switch is a lookup table, so `case 0x410300: 0xC0;` is flagged under literalTables"
+		},
+		{
+			"name": "M-MAGIC-TABLE-SWITCH-ARM-LOOSE",
+			"type": "anyparse.check.common.literals.LiteralTables",
+			"method": "isTableArm",
+			"find": "for (i in 0...last) if (!isTablePattern(arm.children[i], source, t)) return false;",
+			"replace": "",
+			"note": "an arm is judged by its value alone, so a guarded or capturing switch reads as a table and its literals are exempt"
+		},
+		{
+			"name": "M-MAGIC-TABLE-COLLECTION-BLIND",
+			"type": "anyparse.check.common.literals.MagicNumber",
+			"method": "isNamedTable",
+			"force": "false",
+			"note": "no named collection of literals is a table, so `final widths = [30, 45]` is flagged under literalTables"
+		},
+		{
+			"name": "M-MAGIC-TABLE-COLLECTION-UNNAMED",
+			"type": "anyparse.check.common.literals.MagicNumber",
+			"method": "isNamedTable",
+			"find": "parent != null && cfg.localDeclKinds.contains(parent.kind)",
+			"replace": "true",
+			"note": "every all-literal collection is a table, so an inline `draw([3, 4])` is exempt though nothing names it"
+		},
+		{
+			"name": "M-MAGIC-TABLES-DEFAULT-ON",
+			"type": "anyparse.check.common.literals.MagicNumber",
+			"method": "run",
+			"find": "boolOption(RULE_ID, 'literalTables') ?? false",
+			"replace": "boolOption(RULE_ID, 'literalTables') ?? true",
+			"note": "literalTables is on when no project sets it, so every existing configuration silently loses its switch-table findings"
+		},
+		{
+			"name": "M-LITERAL-TABLE-NEG-ENTRY-BLIND",
+			"type": "anyparse.check.common.literals.LiteralTables",
+			"method": "isScalarData",
+			"find": "node.kind == t.negationKind",
+			"replace": "false",
+			"note": "a negative number is no data entry, so a table holding -1 is logic again (Base64 decode table, a map of negative values)"
+		},
+		{
+			"name": "M-FOLD-FIX-REPORT-INDEX",
+			"type": "anyparse.check.common.literals.FoldStringLiterals",
+			"method": "fix",
+			"find": "OperatorSelection.of(plugin, [{ file: file, source: source }], index)",
+			"replace": "OperatorSelection.of(plugin, [{ file: file, source: source }])",
+			"note": "the fold's fix judges a construct the run left report-only against its own file's overloads alone, and merges past a sibling module's"
+		},
+		{
+			"name": "M-FOLD-STATEMENT-UNPROVEN",
+			"type": "anyparse.check.common.literals.FoldStringLiterals",
+			"method": "scopeFor",
+			"find": "return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;",
+			"replace": "return statementScope != null ? statementScope : memberScope;",
+			"note": "a body statement stands in for its member without the evidence that the member renders it as it renders alone, and a function literal's body the source under-indents is measured a tab narrow"
+		}
+	]
+}

@@ -1,0 +1,1131 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.scan. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-REGION-TERM-OFF",
+			"type": "anyparse.check.scan.RegionTerminator",
+			"method": "terminatorAt",
+			"force": "-1",
+			"note": "no region owns the terminator after its `#end`, so a fix moving the region drops it and `empty-statement` deletes it"
+		},
+		{
+			"name": "M-DECL-NULLABLE-OVERRIDES-EXISTS",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "handleDecl",
+			"find": "else if (!nullableInit && isDeclaredNullable(node, ctx))",
+			"replace": "else if (isDeclaredNullable(node, ctx))",
+			"note": "the written annotation is consulted even where the initializer already had a verdict, so a map read an `m.exists(k)` guard proved present is seeded MaybeNull again through its `Null<V>` declaration"
+		},
+		{
+			"name": "M-SAFENAV-NO-NARROW",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "safeNavChainRoot",
+			"force": "null",
+			"note": "a `?.` guard narrows nothing, so `if (u?.b != null) u.b.c()` reports its own guarded dereference again"
+		},
+		{
+			"name": "M-RENDER-SPAN-TOKENS",
+			"type": "anyparse.check.scan.SpanRender",
+			"method": "renderParts",
+			"force": "[]",
+			"note": "no byte is ever inside a token, so the display renderer collapses whitespace INSIDE a string literal again and a finding advertises a call the fix would not write"
+		},
+		{
+			"name": "M-TERMINAL-RUNGS-ANY",
+			"type": "anyparse.check.scan.AssignmentTreeHoist",
+			"method": "terminalTernaryRungs",
+			"force": "1",
+			"note": "every assignment r-value answers as a ternary tail, so the widened gate claims sites that belong to prefer-ternary-assignment"
+		},
+		{
+			"name": "M-EXISTS-GUARD-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "collectExists",
+			"find": "final kind: String = cond.kind;\n\t\tif (kind == combineKind) {",
+			"replace": "if (true) return;\n\t\tfinal kind: String = cond.kind;\n\t\tif (kind == combineKind) {",
+			"note": "no exists-guard fact is ever established, so every map read under `m.exists(k)` is reported point-wise and seeded MaybeNull again"
+		},
+		{
+			"name": "M-GUARDED-USING-ABSENT",
+			"type": "anyparse.check.scan.UsingScan",
+			"method": "usingScopeAt",
+			"find": "if (regions.length == 0) return UsingScope.Absent;",
+			"replace": "return UsingScope.Absent;",
+			"note": "a `using` a `#if` region guards is invisible again, so every rule sharing the insert seam splices a SECOND, unguarded one beside it"
+		},
+		{
+			"name": "M-USING-INSERT-COVERED-SILENT",
+			"type": "anyparse.check.scan.UsingScan",
+			"method": "appendUsingInsert",
+			"find": "if (insert == null) return false;",
+			"replace": "if (insert == null) return true;",
+			"note": "an insert the accepted edits already cover is dropped while the helper still answers `true`, so every rule sharing it keeps a rewritten extension call with no `using` to bind it"
+		},
+		{
+			"name": "M-USING-SCOPE-EMPTY-OFFSETS-INSCOPE",
+			"type": "anyparse.check.scan.UsingScan",
+			"method": "usingScopeAt",
+			"find": "\tif (offsets.length == 0) return UsingScope.Guarded;",
+			"replace": "\tif (offsets.length == 0) return UsingScope.InScope;",
+			"note": "an empty offset list reads as coverage again, so a caller deciding the insert before it has collected its sites is told the guarded `using` covers them all"
+		},
+		{
+			"name": "M-REFLECTION-REPORT-INDEX-DELETE",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "scopeFiles",
+			"find": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);",
+			"replace": "final resolution: Null<Array<ScopeFile>> = null;",
+			"note": "the ONE name-keyed reflection scope collapses to the report files again, so a `Reflect.field(x, 'name')` in a file the run does not lint contributes nothing: the autofix DELETES the member that reflective read still names, and the rename orphans it"
+		},
+		{
+			"name": "M-REFLECTION-SCOPE-PROJECT-ONLY",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "scopeFiles",
+			"find": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);",
+			"replace": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionProjectSourcesOf(plugin);",
+			"note": "the T868 fork put back: the name-keyed reflection scope narrows to report UNION resolutionRoots, so a reflective string in the LIBRARY half of the very same declared scope stops counting and the two halves answer differently"
+		},
+		{
+			"name": "M-NON-NULL-RHS-DROP-HEX",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "NON_NULL_RHS_KINDS",
+			"kind": "FinalMember",
+			"find": "\t'HexLit',\n",
+			"replace": "",
+			"note": "the hexadecimal literal leaves the last hand-written list of the literal vocabulary. The side-effect-free and root vocabularies are now DERIVED from the same declaration the differential reads, so cutting one of those is unfalsifiable; this list is a second, independent spelling and is exactly where the original HexLit gap lived"
+		},
+		{
+			"name": "M-REFLECTION-MEMO-DEAD",
+			"type": "anyparse.check.scan.ReflectionMemo",
+			"method": "surfaceFor",
+			"force": "null",
+			"note": "the run-scoped memo is never consulted, so every one of the five checks sharing the reflection gate walks the whole scope again — the state before S192, and the half that makes the staleness cell beside it vacuous if nobody pins it"
+		},
+		{
+			"name": "M-REFLECTION-MEMO-STALE",
+			"type": "anyparse.check.scan.ReflectionMemo",
+			"method": "surfaceFor",
+			"force": "_surface",
+			"note": "the memo answers without checking the sources it read, so a scope file a `--fix` pass has just rewritten — or a second, different scope in the same run — is answered from the earlier text: the reflective read a pass introduced stops vetoing, and the next rewrite orphans it silently"
+		},
+		{
+			"name": "M-REFLECTION-UNREADABLE-BLIND",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "runtimeName",
+			"find": "\t\t\t|| surface.unreadable.exists(source -> RawSourceScan.mentionsWord(source, name));",
+			"replace": "\t\t\t|| false;",
+			"note": "the name-keyed reflection gate goes blind to a scope file the parser could not read, so `inline-constant` erases a constant whose `Reflect.field` read lives in an unparseable sibling — T867's residue, reachable only once the fixture selects its cells by the FORM of the evidence (T921)"
+		},
+		{
+			"name": "M-ISVAR-ACCESSOR-BODY-BLIND",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "touchesStorage",
+			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
+			"replace": "(bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
+			"note": "accessor bodies are never read, so the fix strips the metadata from a property whose get_x / set_x, or a subclass override of one, reads or writes the field"
+		},
+		{
+			"name": "M-ISVAR-BYPASS-BLIND",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "touchesStorage",
+			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
+			"replace": "(accessor || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
+			"note": "an @:bypassAccessor construct is never read, so the fix strips the metadata from a field a bypass access still reaches"
+		},
+		{
+			"name": "M-ISVAR-OPAQUE-BLIND",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "storageReachable",
+			"find": "if (CondRegionScan.opaqueCondRegionMentioning(tree, entry.source, name, ctx.shape) != null) return true;",
+			"replace": "",
+			"note": "an unparsed `#if` region spelling the name is trusted as empty, although nothing inside it projects for the scan to see"
+		},
+		{
+			"name": "M-ISVAR-NATIVE-BLIND",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "touchesStorage",
+			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
+			"replace": "(accessor || bypass)",
+			"note": "target code pasted as a string is not read, so the fix strips the metadata a `__cpp__` / `Syntax.code` / `@:functionCode` access needs, and only the native build fails"
+		},
+		{
+			"name": "M-DSN-UNSEEN-DROPPED",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "narrowedCopy",
+			"find": "if (!seen && !out.unseen.contains(n)) out.unseen.push(n);",
+			"replace": "if (!seen && false) out.unseen.push(n);",
+			"note": "no narrowing is ever marked invisible to the compiler, so dead-safe-nav rewrites a Bool-local / alias / `?.`-comparison proof to `.` under null-safety and the build breaks"
+		},
+		{
+			"name": "M-DSN-UNSEEN-ALL",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "narrowedCopy",
+			"find": "final visible: Array<String> = nonNull.copy();",
+			"replace": "final visible: Array<String> = [];",
+			"note": "a direct `== null` / `!= null` guard counts as invisible too, so dead-safe-nav declines the fix the compiler would accept"
+		},
+		{
+			"name": "M-DSN-JOIN-EITHER",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "unseenAfterJoin",
+			"find": "a.unseen.contains(n) || b.unseen.contains(n)",
+			"replace": "a.unseen.contains(n) && b.unseen.contains(n)",
+			"note": "a join forgets that one arm proved the name only invisibly, so the fix lands on a path the compiler never narrowed"
+		},
+		{
+			"name": "M-DSN-RENARROW-HIDES",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "narrowedCopy",
+			"find": "final seen: Bool = visible.contains(n) || out.nonNull.contains(n) && !out.unseen.contains(n);",
+			"replace": "final seen: Bool = visible.contains(n);",
+			"note": "an invisible re-narrowing hides a proof the compiler already has, so an accepted fix is declined"
+		},
+		{
+			"name": "M-DSN-ASSIGN-KEEPS-UNSEEN",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "markNonNull",
+			"find": "state.unseen.remove(name);",
+			"replace": "if (false) state.unseen.remove(name);",
+			"note": "a non-null assignment no longer makes the proof visible, so the fix after `x = new T()` is declined"
+		},
+		{
+			"name": "M-DSN-TRY-KEEPS-ALL",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "handleTry",
+			"find": "setState(state, survivor(post ?? emptyState(), kept));",
+			"replace": "setState(state, post ?? emptyState());",
+			"note": "a proof made inside a `try` stays visible past it, so the `.` rewrite after the try does not compile"
+		},
+		{
+			"name": "M-DSN-TRY-HIDES-ALL",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "handleTry",
+			"find": "final kept: Array<String> = visibleUnwritten(state, node, ctx);",
+			"replace": "final kept: Array<String> = [];",
+			"note": "a proof made before a `try` is hidden past it, so an accepted fix is declined"
+		},
+		{
+			"name": "M-DSN-LONE-ARM-KEEPS-BODY",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "handleIf",
+			"find": [
+				"survivor(elseState, elseKept);",
+				"survivor(thenState, thenKept);"
+			],
+			"replace": [
+				"elseState;",
+				"thenState;"
+			],
+			"note": "what the body of a lone surviving `if` arm proved stays visible past the `if`, so the `.` rewrite does not compile"
+		},
+		{
+			"name": "M-DSN-LONE-ARM-HIDES-ALL",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "handleIf",
+			"find": "final elseKept: Array<String> = elseArm == null ? visibleIn(elseState) : visibleUnwritten(elseState, elseArm, ctx);",
+			"replace": "final elseKept: Array<String> = [];",
+			"note": "the condition's own narrowing is hidden past a lone surviving arm, so the fix after `if (x == null || b) return;`-style guards is declined"
+		},
+		{
+			"name": "M-DSN-JOIN-HIDES-ALL",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "unseenAfterJoin",
+			"force": "nonNull",
+			"note": "every join hides its proof, so two live arms that each narrow visibly lose their fix"
+		},
+		{
+			"name": "M-DSN-LONE-BRANCH-KEEPS-BODY",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "handleSwitch",
+			"find": "setState(state, survivor(exitStates[0], visibleUnwritten(state, live, ctx)));",
+			"replace": "setState(state, exitStates[0]);",
+			"note": "what a lone live `switch` branch proved stays visible past the switch, so the `.` rewrite does not compile"
+		},
+		{
+			"name": "M-DSN-OWNS-NONE",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "ownsVisibility",
+			"force": "false",
+			"note": "no construct keeps what its children proved, so an assignment inside a call argument loses a fix the compiler accepts"
+		},
+		{
+			"name": "M-NULLFLOW-BINDER-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "walk",
+			"find": "final bound: Array<String> = ctx.selfScopeDeclKinds.contains(kind) ? boundNames(node, ctx) : [];",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a loop binder no longer shadows the outer name, so the outer non-null proof reaches `x?.f` on the binder and the fix / dead-fallback deletion crashes at runtime on a null element"
+		},
+		{
+			"name": "M-NULLFLOW-CHILD-BINDER-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "boundNames",
+			"find": "for (c in node.children) if (ctx.binderKinds.contains(c.kind)) add(c.name);",
+			"replace": "",
+			"note": "a key-value loop's VALUE binder no longer shadows, so `for (k => x in m)` inherits the outer `x` proof"
+		},
+		{
+			"name": "M-NULLFLOW-CASE-BINDER-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "walkBranch",
+			"find": "final bound: Array<String> = boundNames(b, ctx);",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a case capture no longer shadows, so `case x:` / `case var x:` inherit the outer proof"
+		},
+		{
+			"name": "M-NULLFLOW-CATCH-BINDER-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "handleTry",
+			"find": "final bound: Array<String> = ctx.selfScopeDeclKinds.contains(clause.kind) ? boundNames(clause, ctx) : [];",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a catch variable no longer shadows, so `catch (x:Dynamic)` inherits the outer proof"
+		},
+		{
+			"name": "M-NULLFLOW-SHADOW-NO-RESTORE",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "unshadow",
+			"find": "if (written.contains(n)) continue;",
+			"replace": "continue;",
+			"note": "the outer fact is never restored past a shadowing scope, so the fix after the loop is lost"
+		},
+		{
+			"name": "M-NULLFLOW-SHADOW-RESTORES-WRITTEN",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "unshadow",
+			"find": "if (written.contains(n)) continue;",
+			"replace": "",
+			"note": "the outer fact is restored even when the construct writes the name, so a null written by the iterable is read as non-null"
+		},
+		{
+			"name": "M-FOLD-FACTS-OPERAND",
+			"type": "anyparse.check.scan.OperatorSelection",
+			"method": "factsProof",
+			"find": "oracle = FactsTypeOracle.forFixRun(_plugin, file, source);",
+			"replace": "oracle = null;",
+			"note": "an operand the binding leaves unproven is never asked of the compiler's facts, so a construct only they type stays report-only (fold) or unreported (the negation family)"
+		},
+		{
+			"name": "M-PSE-USING-MODULE-WIDE",
+			"type": "anyparse.check.scan.UsingScan",
+			"method": "typesUsedBy",
+			"find": "for (t in fi.types) out.push(",
+			"replace": "for (t in fi.types) if (t.isMain) out.push(",
+			"note": "a using of a module weighs only the type named after it, not its sub-types"
+		},
+		{
+			"name": "M-PSE-USING-ALIAS-HOST",
+			"type": "anyparse.check.scan.UsingScan",
+			"method": "supplied",
+			"find": "aliasedHost(t.type, t.file, index)",
+			"replace": "t.type",
+			"note": "a typedef in a used module is read as a type with no statics instead of the class it aliases"
+		},
+		{
+			"name": "M-PSE-USING-SELF-MODULE",
+			"type": "anyparse.check.scan.UsingScan",
+			"method": "usingConflict",
+			"find": "worse(verdict, supplied(module, module, method, symbols, file))",
+			"replace": "verdict",
+			"note": "the configured module's own using is not weighed, so its other types go unchecked"
+		},
+		{
+			"name": "M-OPERAND-MEMBER-SCOPE-LOST",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "boundMembers",
+			"find": "DeclaredNullity.headTierIn(written, host.file, m.declFrom, _index,",
+			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? host.file, m.declFrom, _index,",
+			"note": "a member's written type is bound in the READING file instead of the declaring one"
+		},
+		{
+			"name": "M-OPERAND-MEMBER-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "memberTier",
+			"force": "Unknown",
+			"note": "no member read or call types an operand"
+		},
+		{
+			"name": "M-OPERAND-METHOD-PARAMS-IGNORED",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "boundMembers",
+			"find": "ownParams.concat(m.typeParamNames)",
+			"replace": "ownParams",
+			"note": "a method's own type parameters do not shadow a type of the same name in its return type"
+		},
+		{
+			"name": "M-OPERAND-STATIC-RECEIVER-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "receiverDecls",
+			"find": "return switch _index.refs.names.tierOf(name, fi, receiver.span?.from) {",
+			"replace": "return switch Unknown {",
+			"note": "a type name never serves as a receiver, so no static access types an operand"
+		},
+		{
+			"name": "M-OPERAND-LOCAL-CALL-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "localCallTier",
+			"force": "Unknown",
+			"note": "a call to a function this file declares is never typed by its return type"
+		},
+		{
+			"name": "M-OPERAND-CASE-CAPTURE",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "capturedBetween",
+			"force": "false",
+			"note": "a `case` capture between a read and the binding the walk found is not seen, so the read binds to the outer declaration"
+		},
+		{
+			"name": "M-OPERAND-CASE-CAPTURE-INSIDE",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "capturedBetween",
+			"find": "node.kind == branchKind\n\t\t\t\t&& !inside\n\t\t\t\t&&",
+			"replace": "node.kind == branchKind\n\t\t\t\t&& ",
+			"note": "a binding declared inside the capturing branch is refused too, though it shadows the capture"
+		},
+		{
+			"name": "M-OPERAND-OVERLOAD-SIGNATURE",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "typedByItsReturn",
+			"find": "return !m.hasOverloadMeta && !m.isMacro;",
+			"replace": "return !m.isMacro;",
+			"note": "a call to an `@:overload`ed member is typed by the written signature alone"
+		},
+		{
+			"name": "M-OPERAND-MACRO-RETURN",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "typedByItsReturn",
+			"find": "return !m.hasOverloadMeta && !m.isMacro;",
+			"replace": "return !m.hasOverloadMeta;",
+			"note": "a call to a macro is typed by the macro's written return"
+		},
+		{
+			"name": "M-OPERAND-LOCAL-MACRO",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "localCallTier",
+			"find": "return if (member != null && !typedByItsReturn(member))",
+			"replace": "return if (false)",
+			"note": "an unqualified call to the file's own macro or overloaded member is typed by its written return"
+		},
+		{
+			"name": "M-SWITCH-BARE-BODY-VERBATIM",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "terminatedBody",
+			"force": "spanText(source, span)",
+			"note": "a case body is taken verbatim, so a branch whose `;` was elided before `else` arrives bare"
+		},
+		{
+			"name": "M-SWITCH-TERMINATED-BODY-DOUBLED",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "terminatedBody",
+			"find": "seams.selfTerminatingEndings.exists(ending -> text.endsWith(ending))",
+			"replace": "false",
+			"note": "the terminator is appended even after a body that already ends in `;` or `}`"
+		},
+		{
+			"name": "M-NULLFLOW-VALUE-FACT-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "indexFact",
+			"force": "null",
+			"note": "a `m[k] != null` guard or a non-null write to `m[k]` proves nothing about a re-read of the same entry"
+		},
+		{
+			"name": "M-NULLFLOW-VALUE-FACT-UNKILLED",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "killValueFacts",
+			"find": "if (state.present.exists(e -> e.value)) state.present = state.present.filter(e -> !e.value);",
+			"replace": "return;",
+			"note": "a value fact survives a call, a `new`, a write through a path and a loop's back edge"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "predicateArgs",
+			"force": "[]",
+			"note": "a true call to a non-null predicate proves nothing about its argument"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-UNCHECKED",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "predicateModifiers",
+			"find": "return fn.kind == shape.finalModifierMemberKind || ",
+			"replace": "return true || ",
+			"note": "an overridable member is trusted as a non-null predicate"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-TYPE-UNCHECKED",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "predicateArgs",
+			"find": " && ctx.argType(arg) == written",
+			"replace": "",
+			"note": "a predicate argument counts whatever its written type, so an implicit @:from / @:to conversion into the parameter launders a null"
+		},
+		{
+			"name": "M-SWITCH-VALUES-NOT-DISTINCT",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "distinctValues",
+			"find": "\t\tif (seen.contains(key)) return false;\n",
+			"replace": "",
+			"note": "two rungs testing one value tuple pass gate 9, so the switch carries a case the compiler reports unused"
+		},
+		{
+			"name": "M-SWITCH-UNKNOWN-VALUE-ACCEPTED",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "distinctValues",
+			"find": "if (value == null) return false;",
+			"replace": "if (value == null) continue;",
+			"note": "a pattern whose value is not proved is keyed as empty instead of refusing the chain, so its distinctness is never established"
+		},
+		{
+			"name": "M-CASEVALUE-IMPLICIT-NOT-COUNTED",
+			"type": "anyparse.check.scan.CaseValueKey",
+			"method": "countedValue",
+			"find": ": value + 1;",
+			"replace": ": value;",
+			"note": "an uninitialized counting enum-abstract value repeats the previous value instead of adding one"
+		},
+		{
+			"name": "M-CASEVALUE-NAMING-UNKNOWN",
+			"type": "anyparse.check.scan.CaseValueKey",
+			"method": "ofMember",
+			"find": "\tif (seams.namingTypes.contains(underlying)) return STRING_PREFIX + member.name;\n",
+			"replace": "",
+			"note": "an uninitialized String enum-abstract value is no longer read as its own name, so every chain testing one is refused"
+		},
+		{
+			"name": "M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "selectsBuiltinEq",
+			"force": "true",
+			"note": "a pattern whose declaring abstract overloads == passes gate 10, and the switch bypasses the overload the chain called"
+		},
+		{
+			"name": "M-SWITCH-DISC-EQ-OVERLOAD-IGNORED",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "scopeOf",
+			"find": "operandBuiltin: builtin }",
+			"replace": "operandBuiltin: _ -> true }",
+			"note": "a discriminant declared as an abstract overloading == passes gate 10, and the switch bypasses the overload the chain called"
+		},
+		{
+			"name": "M-SWITCH-ELSELESS-REFUSED",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "closesWithWildcard",
+			"force": "false",
+			"note": "no else-less chain may close with an empty case _, so a chain without a trailing else is never converted"
+		},
+		{
+			"name": "M-SWITCH-ELSELESS-GUARDED-ELSE",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "closesWithWildcard",
+			"find": "\tif (next != null && CondRegionScan.isConditionalKind(next.kind, seams.shape)) return false;\n",
+			"replace": "",
+			"note": "a chain followed by a #if region carrying its else closes with case _, stranding the guarded else"
+		},
+		{
+			"name": "M-SWITCH-ELSELESS-ANY-HOST",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "closesWithWildcard",
+			"find": "return hosts.anywhere.contains(parent.kind) || (next != null && hosts.beforeAnother.contains(parent.kind));",
+			"replace": "return true;",
+			"note": "an else-less chain that is a brace-less body of another construct closes with case _ too"
+		},
+		{
+			"name": "M-SWITCH-ELSELESS-LAST-IN-VALUE-BLOCK",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "closesWithWildcard",
+			"find": "(next != null && hosts.beforeAnother.contains(parent.kind))",
+			"replace": "hosts.beforeAnother.contains(parent.kind)",
+			"note": "an else-less chain ending a nested block, possibly its value, closes with case _"
+		},
+		{
+			"name": "M-SWITCH-FIX-REPORT-INDEX-FIRST",
+			"type": "anyparse.check.scan.SwitchChain",
+			"method": "lazyIndexOf",
+			"find": "IndexScope.resolutionIndexOf(plugin) ?? given ?? IndexScope.report(files, plugin)",
+			"replace": "given ?? IndexScope.resolutionIndexOf(plugin) ?? IndexScope.report(files, plugin)",
+			"note": "the report-scoped index a --fix hands the check wins over the resolution index, so a constant declared outside the report scope is unprovable in fix though run proved it"
+		},
+		{
+			"name": "M-ELSELESS-FINAL-ELSE",
+			"type": "anyparse.check.scan.IfExpressionChain",
+			"method": "collectElseLess",
+			"find": " || !ifKinds.contains(elseBranch.kind)",
+			"replace": "",
+			"note": "whatever follows an `else` is read as another `if` link, so `else while (b) x = 3;` becomes a branch guarded by the loop's condition"
+		},
+		{
+			"name": "M-OPERAND-NEW-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "constructionTier",
+			"find": "return at == null ? Unknown : writtenTier(node.name, at.from);",
+			"replace": "return Unknown;",
+			"note": "a construction is no longer of the type it writes, so its operator and its toString go unproven"
+		},
+		{
+			"name": "M-CONST-EXPR-NO-NAMES",
+			"type": "anyparse.check.scan.ConstantFieldScan",
+			"method": "isConstantExpression",
+			"find": "if (node.kind == seams.identKind) return name != null && isConstantName(name);",
+			"replace": "if (node.kind == seams.identKind) return false;",
+			"note": "a reference to another constant is never constant"
+		},
+		{
+			"name": "M-CONST-EXPR-NO-OPERATORS",
+			"type": "anyparse.check.scan.ConstantFieldScan",
+			"method": "isConstantExpression",
+			"find": "final grouping: Bool = seams.operatorKinds.contains(node.kind) || node.kind == seams.parenKind;",
+			"replace": "final grouping: Bool = node.kind == seams.parenKind;",
+			"note": "an operator over constants is not folded"
+		},
+		{
+			"name": "M-CONST-EXPR-NO-PARENS",
+			"type": "anyparse.check.scan.ConstantFieldScan",
+			"method": "isConstantExpression",
+			"find": "final grouping: Bool = seams.operatorKinds.contains(node.kind) || node.kind == seams.parenKind;",
+			"replace": "final grouping: Bool = seams.operatorKinds.contains(node.kind);",
+			"note": "a parenthesised constant is not seen through"
+		},
+		{
+			"name": "M-CONST-EXPR-ANY-OPERAND",
+			"type": "anyparse.check.scan.ConstantFieldScan",
+			"method": "isConstantExpression",
+			"find": "node.children.foreach(c -> isConstantExpression(c, source, seams, isConstantName))",
+			"replace": "node.children.exists(c -> isConstantExpression(c, source, seams, isConstantName))",
+			"note": "an operator with ONE constant operand is read as constant"
+		},
+		{
+			"name": "M-CONST-EXPR-INTERPOLATED",
+			"type": "anyparse.check.scan.ConstantFieldScan",
+			"method": "isConstantLiteral",
+			"find": "return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;",
+			"replace": "return seams.stringLiteralKinds.contains(init.kind);",
+			"note": "an interpolated string is read as a plain literal"
+		},
+		{
+			"name": "M-OPSEL-REPORT-DROPPED",
+			"type": "anyparse.check.scan.OperatorSelection",
+			"method": "indexes",
+			"find": "_report ?? IndexScope.report(_files, _plugin)",
+			"replace": "IndexScope.report(_files, _plugin)",
+			"note": "a fix's report index is ignored, so an `@:op(!A)` declared in a sibling module is unseen by the fix that orients a ternary"
+		},
+		{
+			"name": "M-REACH-AUTOBUILD-IGNORED",
+			"type": "anyparse.check.scan.PublicReach",
+			"method": "chainOutOfReach",
+			"find": " || (autoBuildCounts && chain.generated)",
+			"replace": "",
+			"note": "an @:autoBuild ancestor no longer keeps unused-public-member from deleting a method its macro may call"
+		},
+		{
+			"name": "M-BINDER-INITIALIZER-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "initializerOf",
+			"find": "return NominalTypes.localInitializer(use, _tree, _shape, _annotations);",
+			"replace": "return null;",
+			"note": "an unannotated local is no longer typed by its initializer, so an operand it holds goes unproven"
+		},
+		{
+			"name": "M-BINDER-SELF-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "selfTier",
+			"force": "Unknown",
+			"note": "the self reference is no longer its enclosing type, so `this.f` goes unproven"
+		},
+		{
+			"name": "M-BINDER-INHERITED-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "inheritedTier",
+			"force": "Unknown",
+			"note": "a member the enclosing type inherits, read or called bare, goes unproven"
+		},
+		{
+			"name": "M-BINDER-EXTENSION-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "extensionTier",
+			"force": "Unknown",
+			"note": "a static extension call goes unproven"
+		},
+		{
+			"name": "M-BINDER-RESOLVE-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "resolveTier",
+			"force": "Unknown",
+			"note": "an abstract's @:op(a.b) field goes unproven"
+		},
+		{
+			"name": "M-BINDER-INHERITED-STATIC",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "inheritedTier",
+			"find": "declared == null || declared.members.exists(m -> m.isStatic)",
+			"replace": "declared == null",
+			"note": "a supertype's static, which is not in scope bare, types the bare name an import binds"
+		},
+		{
+			"name": "M-BINDER-CLOSURE-UNRESOLVED",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "declarationOf",
+			"find": "else if (_index.typing.members.declarationFreeOfExtensionTypes(owner))",
+			"replace": "else if (true)",
+			"note": "an inherited member is read past a supertype link the index cannot resolve, where a covariant override may sit"
+		},
+		{
+			"name": "M-BINDER-RESOLVE-USING-SHADOW",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "resolveTier",
+			"find": "_index.typing.extensions.maySupply(fi, name)",
+			"replace": "false",
+			"note": "the @:op(a.b) resolver is taken although a using in scope declares a static of the field's name, which 4.3.7 binds first"
+		},
+		{
+			"name": "M-DEFLIT-NULL-DROPPED",
+			"type": "anyparse.check.scan.CaseValueKey",
+			"method": "isDefaultLiteral",
+			"find": "key == NULL_KEY || ",
+			"replace": "",
+			"note": "`null` is no default literal, so `!a ? x : null` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-DEFLIT-FALSE-DROPPED",
+			"type": "anyparse.check.scan.CaseValueKey",
+			"method": "isDefaultLiteral",
+			"find": "key == '${BOOL_PREFIX}false' || ",
+			"replace": "",
+			"note": "`false` is no default literal, so `!a ? x : false` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-DEFLIT-ZERO-DROPPED",
+			"type": "anyparse.check.scan.CaseValueKey",
+			"method": "isDefaultLiteral",
+			"find": "key == numberKey(0) || ",
+			"replace": "",
+			"note": "a numeric zero is no default literal, so `!a ? x : 0` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-DEFLIT-EMPTY-STRING-DROPPED",
+			"type": "anyparse.check.scan.CaseValueKey",
+			"method": "isDefaultLiteral",
+			"find": " || key == STRING_PREFIX",
+			"replace": "",
+			"note": "an empty string is no default literal, so `!a ? x : \"\"` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-BINDER-LAMBDA-PARAM-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "lambdaParamTier",
+			"force": "null",
+			"note": "an untyped lambda parameter is never typed by the function type the lambda is expected to be"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "argumentType",
+			"force": "null",
+			"note": "a call argument expects no type, so a lambda passed to a member of the file types no parameter"
+		},
+		{
+			"name": "M-BINDER-ANNOTATION-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "annotationOf",
+			"force": "null",
+			"note": "a declaration or an assigned binding written with a function type expects nothing of the lambda it holds"
+		},
+		{
+			"name": "M-BINDER-RETURN-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "returnOf",
+			"force": "null",
+			"note": "a returned lambda is never typed by the function type its function writes as its result"
+		},
+		{
+			"name": "M-BINDER-FIELD-CUT",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "anonField",
+			"force": "null",
+			"note": "an object-literal field expects nothing of the lambda it holds"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-REST",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "argumentType",
+			"find": "params.rest ? Std.int(Math.min(index, params.params.length - 1)) : index",
+			"replace": "index",
+			"note": "an argument past a rest parameter's position binds no parameter"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-SKIPPABLE",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "argumentType",
+			"find": "written == null || bound >= params.skippableFrom",
+			"replace": "written == null",
+			"note": "a lambda after an optional or defaulted parameter is typed by the parameter at its position, which the call may have skipped"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-OVERLOAD",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "memberParams",
+			"find": "if (m.hasOverloadMeta && signature == null) return null;",
+			"replace": "",
+			"note": "a lambda passed to an @:overload member whose call selects no one signature is typed by the member's own, which the call may not select"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-TWIN",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "selectsItsSignature",
+			"find": "owner.members.filter(o -> o.name == m.name).length == 1",
+			"replace": "true",
+			"note": "a lambda passed to a member a #if declares twice is typed by one build's signature"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-SCOPE",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "argumentType",
+			"find": "at: callee.at,",
+			"replace": "at: call.span?.from ?? callee.at,",
+			"note": "a callee parameter is bound where the CALL is, so the callee's own type parameter binds a namesake class"
+		},
+		{
+			"name": "M-NULLFLOW-FROZEN-STALE",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "frozenFacts",
+			"find": "if (last != null && lastFacts != null && sameReadState(last, state)) return lastFacts;",
+			"replace": "if (last != null && lastFacts != null) return lastFacts;",
+			"note": "a recording walk hands every visit the facts it froze first, so the replay answers what the state held at the first visit of the unit"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-SEED-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || declaredNullable != null || typeSources != null) {",
+			"note": "a seeded walk is answered from the seedless recording and loses every MaybeNull the seed makes"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-DECLARED-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || seed != null || typeSources != null) {",
+			"note": "a declaredNullable walk is answered from the seedless recording and loses the annotation seed"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-TYPES-BLIND",
+			"type": "anyparse.check.scan.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || seed != null || declaredNullable != null) {",
+			"note": "a walk given the written types is answered from the recording made without them, so a non-null predicate call no longer narrows"
+		},
+		{
+			"name": "M-ACCESSOR-STORAGELESS-TRUE",
+			"type": "anyparse.check.scan.AccessorClauseText",
+			"method": "storageless",
+			"force": "true",
+			"note": "every accessor clause counts as storage-less, so a `null` / `default` slot leaves the field rules too"
+		},
+		{
+			"name": "M-CARRY-USING-DOOR-OFFSET",
+			"type": "anyparse.check.scan.UsingSites",
+			"method": "calledThrough",
+			"find": "at -> !mayBindThrough(from + at, raw)",
+			"replace": "at -> !mayBindThrough(at, raw)",
+			"note": "the carry asks the door at declaration-relative offsets"
+		},
+		{
+			"name": "M-MEMBER-DOOR-SHADOW",
+			"type": "anyparse.check.scan.UsingSites",
+			"method": "siteAt",
+			"find": "!NominalTypes.shadowedByNonStdType(index, nominal) && StdTypes.declaresInstanceMember(_plugin, nominal, name)",
+			"replace": "StdTypes.declaresInstanceMember(_plugin, nominal, name)",
+			"note": "the std listing answers for a name a project type takes"
+		},
+		{
+			"name": "M-BINDER-CALLEE-MEMBER-OFF",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "calleeParams",
+			"find": ": memberCallParams(binder, callee.children[0], name, call);",
+			"replace": ": null;",
+			"note": "`recv.m(…)` selects no parameter list, so a lambda handed to a member of another file stays untyped"
+		},
+		{
+			"name": "M-BINDER-CALLEE-NEW-OFF",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "calleeParams",
+			"find": "if (call.kind == binder._shape.newExprKind) return constructionParams(binder, call);",
+			"replace": "if (call.kind == binder._shape.newExprKind) return null;",
+			"note": "a construction selects no parameter list, so a lambda handed to a constructor stays untyped"
+		},
+		{
+			"name": "M-BINDER-CALLEE-INHERITED-OFF",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "bareCallParams",
+			"find": "? null : memberParams(binder, declared, [], 0, [], args);",
+			"replace": "? null : null;",
+			"note": "a bare call to an inherited member selects no parameter list"
+		},
+		{
+			"name": "M-BINDER-CALLEE-LOCAL-OFF",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "bareCallParams",
+			"find": "final local: Bool = ShapeVocab.localFunctionScopeKinds(binder._shape).contains(fn.kind);",
+			"replace": "final local: Bool = false;",
+			"note": "a call to a local function selects no parameter list"
+		},
+		{
+			"name": "M-BINDER-OWNER-BINDINGS-OFF",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "memberCallParams",
+			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, [], args);",
+			"replace": ": memberParams(binder, declared, [], 0, [], args);",
+			"note": "the receiver's type arguments bind nothing, so `Box<Use>.each`'s `T` stays unbound"
+		},
+		{
+			"name": "M-BINDER-LOCATED-HOST-OFF",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "locatedTier",
+			"find": "final host: Null<WrittenHost> = written.host;",
+			"replace": "final host: Null<WrittenHost> = null;",
+			"note": "a callee's parameter type is bound in the calling file, where the callee's private type means nothing"
+		},
+		{
+			"name": "M-BINDER-METHOD-SHADOWS-OFF",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "memberParams",
+			"find": "if (!typeParams.contains(k)) k => v",
+			"replace": "k => v",
+			"note": "a method's own type parameter does not shadow its type's, so `Box<Use>.shadow<T>` reads `T` as `Use`"
+		},
+		{
+			"name": "M-BINDER-CALLEE-OVERLOAD",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "memberParams",
+			"find": "final written: Null<CallSignature> = signature == m.signatures[0] ? null : signature;",
+			"replace": "final written: Null<CallSignature> = null;",
+			"note": "the `@:overload` signature a call selects is read as the member's own, so `three(1, c -> …)` types `c` by the own `(cb:(c:FlagOn) -> Void)`"
+		},
+		{
+			"name": "M-BINDER-ITERABLE-OFF",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "iterableBinding",
+			"find": "final iterable: Null<String> = binder._shape.iterableTypeName;",
+			"replace": "final iterable: Null<String> = null;",
+			"note": "a std Iterable parameter binds nothing, so `xs.iter(c -> …)`'s `c` stays untyped"
+		},
+		{
+			"name": "M-BINDER-ITERABLE-ANY-TYPE",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "iterableBinding",
+			"find": "if (i < args.length && stdNamed(binder, path, binder._file, name))",
+			"replace": "if (i < args.length)",
+			"note": "any generic type binds an Iterable's element, a haxe.ds.Vector included"
+		},
+		{
+			"name": "M-BINDER-OVERLOAD-SELECTED",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "selectedSignature",
+			"find": "return candidates == null ? null : calls.select(candidates, passed)?.signature;",
+			"replace": "return candidates == null ? null : candidates.candidates[0].signature;",
+			"note": "a call to an `@:overload` member always reads its own signature, which the call may not select"
+		},
+		{
+			"name": "M-BINDER-OVERLOAD-OWN-BARE",
+			"type": "anyparse.check.scan.OperandCallees",
+			"method": "bareCallParams",
+			"find": "return member.hasOverloadMeta ? ownMemberParams(binder, member, args) : localParams(binder, fn);",
+			"replace": "return member.hasOverloadMeta ? null : localParams(binder, fn);",
+			"note": "a bare call to an `@:overload` member of this file selects no parameter list"
+		},
+		{
+			"name": "M-BINDER-RETURN-ANNOTATION",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "returnOf",
+			"find": "final written: Null<String> = CallGraphNames.returnSourceOf(fn, _returns);",
+			"replace": "final written: Null<String> = [for (c in fn.children) if ((_shape.typeAnnotationKinds ?? []).contains(c.kind)) _source.substring(c.span?.from ?? 0, c.span?.to ?? 0)].pop();",
+			"note": "a function's result is its last annotation child, so a type parameter's bound beside no return type types the lambda it returns"
+		},
+		{
+			"name": "M-BINDER-LOCAL-CALL-ANNOTATION",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "localCallTier",
+			"find": "_declared.headTier(CallGraphNames.returnSourceOf(fn, _returns), from, _wrappers, _builtins)",
+			"replace": "_declared.headTier([for (c in fn.children) if ((_shape.typeAnnotationKinds ?? []).contains(c.kind)) _source.substring(c.span?.from ?? 0, c.span?.to ?? 0)].pop(), from, _wrappers, _builtins)",
+			"note": "a local function's result is its last annotation child, so a call of one written with no return type is its type parameter's bound"
+		},
+		{
+			"name": "M-USING-STATIC-RECEIVER",
+			"type": "anyparse.check.scan.UsingSites",
+			"method": "staticSite",
+			"force": "Unknown",
+			"note": "a static of the type a type expression names no longer binds first, so `Type.name(...)` keeps every `using` offering `name`"
+		},
+		{
+			"name": "M-USING-CONTEST-ANY",
+			"type": "anyparse.check.scan.UsingSites",
+			"method": "contested",
+			"force": "true",
+			"note": "any other `using` in scope contests the statement again, so redundant-import, hoist and sink refuse past a rival no access of the module shares"
+		},
+		{
+			"name": "M-USING-STATIC-SHADOW",
+			"type": "anyparse.check.scan.UsingSites",
+			"method": "staticSite",
+			"find": "if (!ValueDoors.bindsNoValue(recv, typeName, span, fi, tree, _plugin.refShape(), _file, index)) return Unknown;",
+			"replace": "",
+			"note": "a value spelled like a type — an inherited field, a module-level field, an imported static or constructor — reads as that type, so its static seems to bind and a `using` the value needs is deleted"
+		},
+		{
+			"name": "M-PROPSTORE-READS-BLIND",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "readAnywhere",
+			"force": "false",
+			"note": "no read is ever found, so a property something reads is offered a never read access, which breaks every read"
+		},
+		{
+			"name": "M-PROPSTORE-WRITE-TARGETS-OFF",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "plainWriteToken",
+			"force": "null",
+			"note": "a plain write counts as a read, so a property only ever written through its setter is never offered the never read access"
+		},
+		{
+			"name": "M-PROPSTORE-COMPOUND-AS-WRITE",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "plainWriteToken",
+			"find": "node.kind == shape.assignKind",
+			"replace": "true",
+			"note": "a compound assignment or an increment counts as a pure write, although it reads the property first"
+		},
+		{
+			"name": "M-PROPSTORE-MENTION-BLIND",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "unstoredBy",
+			"find": "&& !SourceText.mentionsIdent(source, methodSpan, name)",
+			"replace": "",
+			"note": "a setter is judged unstored without reading its body, so one that stores its property is reported"
+		},
+		{
+			"name": "M-PROPSTORE-BODILESS-ADMITTED",
+			"type": "anyparse.check.scan.PropertyStorage",
+			"method": "unstoredBy",
+			"find": "method.children[method.children.length - 1].kind == noBodyKind",
+			"replace": "false",
+			"note": "a setter declared without a body is read as one that stores nothing, so an abstract or extern accessor is reported"
+		},
+		{
+			"name": "M-REFLECT-ENUM-BLIND",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "enumeratesObjects",
+			"force": "false",
+			"note": "no scope is ever seen enumerating an object, so a printing call no longer declines the fix"
+		},
+		{
+			"name": "M-REFLECT-ENUM-COMPUTED-BLIND",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "literalNameArg",
+			"force": "nameArg >= 0",
+			"note": "a member read by a computed name is taken for a literal one, so it no longer counts as enumerating"
+		},
+		{
+			"name": "M-REFLECT-ENUM-LITERAL-ENUMERATES",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "literalNameArg",
+			"force": "false",
+			"note": "a member read by a literal name counts as enumerating, so a read of another member declines the fix"
+		},
+		{
+			"name": "M-REFLECT-ENUM-STD-INCLUDED",
+			"type": "anyparse.check.scan.ReflectionScan",
+			"method": "enumeratesObjects",
+			"find": "RefactorSupport.declaredLibraryOf(plugin)?.entries()",
+			"replace": "RefactorSupport.resolutionSourcesOf(plugin)",
+			"note": "the std joins the enumeration scan, and since it spells every enumerating call itself the fix is declined in every real run"
+		},
+		{
+			"name": "M-ORDERGUARD-NO-PROOF",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "provesNonNegative",
+			"find": "if (rest.terms.empty() && rest.constant >= 0 && unwritten(bound, ctx) && uncalled(bound, path, ctx)) return true;",
+			"replace": "",
+			"note": "no enclosing bound proves a start non-negative"
+		},
+		{
+			"name": "M-ORDERGUARD-ELSE-AS-THEN",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "bounds",
+			"find": "facts(kids[0], slot == 1, region, kids[0].span, ctx, out);",
+			"replace": "facts(kids[0], true, region, kids[0].span, ctx, out);",
+			"note": "a ternary or if condition bounds its else branch as if it held there"
+		},
+		{
+			"name": "M-ORDERGUARD-WRITES-IGNORED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "unwritten",
+			"find": "WriteSites.mayOverlap(written, atom, false)",
+			"replace": "false",
+			"note": "a write in the guarded region to an operand of the bound leaves it standing"
+		},
+		{
+			"name": "M-ORDERGUARD-TEXT-ATOMS",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "linear",
+			"find": "final key: Null<String> = WriteSites.accessPath(node, ctx.tree, seams.shape);",
+			"replace": "final key: Null<String> = text;",
+			"note": "an operand is keyed by its spelling, so a shadowing local is the guard's operand"
+		},
+		{
+			"name": "M-ORDERGUARD-NO-BARRIER",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "bounds",
+			"find": "if (seams.barrierKinds.contains(node.kind)) out.resize(0);",
+			"replace": "",
+			"note": "a bound above a function literal reaches its body"
+		},
+		{
+			"name": "M-ORDERGUARD-CALLS-IGNORED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "uncalled",
+			"force": "true",
+			"note": "a call in the guarded region never voids a bound, so a field, a static or a member a callee changes keeps a proof it lost"
+		},
+		{
+			"name": "M-ORDERGUARD-LOCALS-VOLATILE",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "survivesCalls",
+			"force": "false",
+			"note": "every operand reads as storage a call may change, so a call beside a bound over locals voids a proof that holds"
+		},
+		{
+			"name": "M-ORDERGUARD-STRING-MUTABLE",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "survivesCalls",
+			"find": "survivesCalls(kids[0], ctx) && ctx.effects.immutable(kids[0])",
+			"replace": "false",
+			"note": "a member read off an immutable local reads as changeable by a call, so a local string's length loses its bound across any call"
+		},
+		{
+			"name": "M-ORDERGUARD-EFFECT-FREE-IGNORED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "uncalled",
+			"find": "if (!ctx.effects.effectFree(c.node)) return false;",
+			"replace": "return false;",
+			"note": "an effect-free std call voids a bound as any call does, so a proof that holds is lost"
+		},
+		{
+			"name": "M-ORDERGUARD-DEFERRED-CALLS-RUN",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "uncalled",
+			"find": "if (within != null && covers(bound, within.from)) continue;",
+			"replace": "if (false) continue;",
+			"note": "a call inside a function literal of the region reads as run there, so a literal that is only defined voids a bound"
+		},
+		{
+			"name": "M-ORDERGUARD-CAUSE-UNSCANNED",
+			"type": "anyparse.check.scan.OrderGuards",
+			"method": "covers",
+			"find": "|| (cause != null && at >= cause.from && at < cause.to)",
+			"replace": "",
+			"note": "a write or call in the condition that proved a bound, after its comparison, is never seen, so the bound outlives the change"
+		}
+	]
+}

@@ -1,0 +1,690 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.grammar.haxe. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-ALWAYS-NEXT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
+			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Next);",
+			"note": "every value of sameLine.comprehensionFor becomes `next`, so a body the key asked to keep on the head line leaves it"
+		},
+		{
+			"name": "M-ALWAYS-SAME",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
+			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Same);",
+			"note": "every value of sameLine.comprehensionFor becomes `same`, so `keep` stops reproducing the source break"
+		},
+		{
+			"name": "M-FANOUT-FIRST",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": [
+				"applyExpressionIfFanout(section, opt);",
+				"if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);"
+			],
+			"replace": [
+				"if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);\n\tapplyExpressionIfFanout(section, opt);",
+				""
+			],
+			"note": "the specific comprehensionFor key is read BEFORE the general expressionIf fanout, so the fanout clobbers it — the S77 precedence PERMUTED, which is what its note asked for and what one find/replace pair could not express"
+		},
+		{
+			"name": "M-KINDS",
+			"type": "anyparse.grammar.haxe.HxComplexItems",
+			"method": "kinds",
+			"find": "subtreeHasCallOrNew(node, 0) ? CONTAINER : CONTAINER_PLAIN;",
+			"replace": "subtreeHasCallOrNew(node, 0) ? CONTAINER : NONE;",
+			"note": "CONTAINER_PLAIN collapses into NONE, so the generated forwarder and the classifier stop agreeing on the four codes"
+		},
+		{
+			"name": "M-NO-WIRE",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
+			"replace": "",
+			"note": "the one read that wires sameLine.comprehensionFor is gone, so the key goes back to the inert state S77 found it in"
+		},
+		{
+			"name": "M-EXPR-ELSE-KEEP",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "case BodyPolicy.Next: SameLinePolicy.SameOnBlock;",
+			"replace": "case BodyPolicy.Next: SameLinePolicy.Keep;",
+			"note": "`sameLine.expressionIf: next` maps the else-gap back to `Keep`, so a value-`if` with a `{ … }` branch reproduces whatever break the source wrote while its statement twin joins"
+		},
+		{
+			"name": "M-EXPR-ELSE-PLAIN-SAME",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "case BodyPolicy.Next: SameLinePolicy.SameOnBlock;",
+			"replace": "case BodyPolicy.Next: SameLinePolicy.Same;",
+			"note": "the refuted cheap fix, wired as an arm: `next` maps onto a plain `Same`, so the shape-aware bracket arm joins an `else` onto a `]` and the curly `;` drop stops firing"
+		},
+		{
+			"name": "M-KEEP-JOINS",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "case BodyPolicy.Keep: SameLinePolicy.Keep;",
+			"replace": "case BodyPolicy.Keep: SameLinePolicy.SameOnBlock;",
+			"note": "`sameLine.expressionIf: keep` stops meaning keep for the else-gap and joins a break the config asked to preserve"
+		},
+		{
+			"name": "M-ELSE-BODY-SAME",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {\n\t\topt.expressionIfBody = p;\n\t\topt.expressionElseBody = p;\n\t}",
+			"replace": "else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {\n\t\topt.expressionIfBody = p;\n\t\topt.expressionElseBody = BodyPolicy.Same;\n\t}",
+			"note": "the else BODY stops following `expressionIf: next`, so the shape-aware forced break is suppressed and `SameOnBlock` joins an `else` onto an object-literal close"
+		},
+		{
+			"name": "M-OPAQUE-REGION-HAND-LIST",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "table.opaqueCondRegionKinds = HaxeQueryWalker.opaqueCondRegionKinds();",
+			"replace": "table.opaqueCondRegionKinds = ['CondSpliceExpr', 'CondSpliceOpExpr', 'CondSpliceTail', 'CondSpliceStmt', 'CondSpliceBlockOpen', 'CondSpliceBlockTail', 'CondSpliceSwitchOpen', 'CondSpliceBlockClose', 'CondSpliceCase', 'CondSpliceMember', 'CondSharedBodyDecl'];",
+			"note": "the fallback-ctor family is enumerated by hand again, exactly as it stood on 2026-08-18 instead of being derived from the grammar's `@:condRegionRaw` terminals - the three raw-capture ctors the grammar gained two days later (both `return` splices and the metadata-prefixed `MetaCondStmt`) fall out of the gate and every name-driven op rewrites around such a region in silence"
+		},
+		{
+			"name": "M-COND-BLOCK-TAIL-NEVER",
+			"type": "anyparse.grammar.haxe.HxCondBlockTailRaw",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "@:re('",
+			"replace": "@:re('(?!)",
+			"note": "the block-tail terminal never matches, so a `#if` region that closes its enclosing block and opens one of its own falls back to CondSpliceStmt and the whole region is raw bytes again"
+		},
+		{
+			"name": "M-PATTERN-RESTPROBE-UNSET",
+			"type": "anyparse.grammar.haxe.HxCasePattern",
+			"method": "@:fmt",
+			"kind": "MetaCall",
+			"find": "@:fmt(suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe)",
+			"replace": "@:fmt(suppressCallRestProbe, suppressComplexItems)",
+			"note": "the pattern subtree never declines the rest-of-line fit bias, so a ctor below a collection pattern is charged the trailing guard and breaks its own args"
+		},
+		{
+			"name": "M-DECL-HOST-KIND-STALE",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "DECL_HOST_KINDS",
+			"kind": "FinalMember",
+			"find": "\t\t'Rest',\n",
+			"replace": "\t\t'Rest',\n\t\t'LambdaParam',\n",
+			"note": "a retired ctor name is put back into a kind set the hand-written side declares - the exact shape of this slice's real catch, where `LambdaParam` outlived the grammar rule that projected it by three months. A dead name in a kind set changes no behaviour, so no other test can see it and only the subset assertion goes red"
+		},
+		{
+			"name": "M-ELLIPSIS-STMT-TOKEN-STALE",
+			"type": "anyparse.grammar.haxe.HxStatement",
+			"method": "EllipsisStmt",
+			"kind": "SimpleCtor",
+			"find": "@:lit('....')",
+			"replace": "@:lit('.....')",
+			"note": "the statement-scope `....` placeholder is respelled as a five-dot token. The ctor stays declared and stays projected, and no source under PARSE_ROOTS spells the token at all, so nothing in the tree changes except that one row of the kind-source table stops emitting the kind it claims - the fail-open shape the coverage census exists to see"
+		},
+		{
+			"name": "M-AND-OPERATOR-TEXT-STALE",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "table.andOperatorText = '&&';",
+			"replace": "table.andOperatorText = '&';",
+			"note": "the declared logical-and token is respelled as the bitwise one, which still parses and still is an operator, so nothing in the tree breaks and the shape simply names text the parser reads as a different node"
+		},
+		{
+			"name": "M-CONSTRUCTOR-NAME-PADDED",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "table.constructorName = 'new';",
+			"replace": "table.constructorName = 'new ';",
+			"note": "the declared constructor name gains a trailing space, so the probe source is `function new () {}` - it still parses, the FnMember still SPANS text holding `new `, and only the projected NAME stops being the declared token. The span-containment reading this arm was written against is green on it; the name-slot reading is what goes red"
+		},
+		{
+			"name": "M-AMBIENT-CHAIN-EMPTY",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "chainFor",
+			"force": "{ sources: [], bounded: true }",
+			"note": "the grammar reports no ambient source for any module and calls the empty chain bounded, so every name an `import.hx` binds is invisible again while nothing refuses to pin"
+		},
+		{
+			"name": "M-AMBIENT-CHAIN-ROOT",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "sourceRootOf",
+			"force": "null",
+			"note": "no module has a computable source root, so the chain shrinks to the module's own directory and every ancestor ambient source is lost"
+		},
+		{
+			"name": "M-AMBIENT-GOVERNANCE-BLIND",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "governanceFor",
+			"force": "null",
+			"note": "no file is recognised as an ambient import source, so its statements are judged against its own text — which is nothing but those statements — and every one of them reads as dead"
+		},
+		{
+			"name": "M-AMBIENT-GOVERNANCE-SHORT",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "collectModules",
+			"force": "false",
+			"note": "the modules an ambient source governs are never reported as fully enumerated, so every verdict about such a file is withheld and a dead statement in one is never found"
+		},
+		{
+			"name": "M-AMBIENT-GOVERNANCE-COMPLETE",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "collectModules",
+			"force": "true",
+			"note": "a governed set that could not be listed is claimed complete, so an ambient source whose readers the engine never saw has every statement called dead and deleted"
+		},
+		{
+			"name": "M-AMBIENT-IMPORT-MAP",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "importMap",
+			"force": "importMapFromRoot(parseRoot(source), source)",
+			"note": "the import map drops the path it was given, so every type-aware reader of it sees a module's own imports and never what its ambient chain binds"
+		},
+		{
+			"name": "M-AMBIENT-DISK-BLIND",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "chainFor",
+			"find": "\t\tif (!ConfigFinder.fileExists(path)) return { sources: [], bounded: true };\n",
+			"replace": "",
+			"note": "the chain is walked for a module that is not on disk, so an analysed source with an invented path takes the ambient bindings of whatever directory its path happens to name"
+		},
+		{
+			"name": "M-AMBIENT-UNREADABLE-BOUNDED",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "chainFor",
+			"find": "bounded: root != null && walk.unreadable.length == 0",
+			"replace": "bounded: root != null",
+			"note": "an ambient source that exists and could not be read is reported as a complete chain, so a consumer pins a reference against bindings the engine never saw"
+		},
+		{
+			"name": "M-REACH-STRINGBUF-PURE",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "\t\t\t\t'Std.isOfType',\n\t\t\t\t'StringBuf.add',\n",
+			"replace": "\t\t\t\t'Std.isOfType',\n",
+			"note": "a string buffer write counts as code that may change the caller's array"
+		},
+		{
+			"name": "M-ENTRY-POINT-UNREACHED",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "isEntryPoint",
+			"force": "false",
+			"note": "`static function main()` is an ordinary private method, so `unused-private` deletes the program's entry point"
+		},
+		{
+			"name": "M-ENTRY-POINT-ANY-ARITY",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "isEntryPoint",
+			"find": "&& !node.children.exists(c -> categoryOf(c, []) == NamingCategory.Param)",
+			"replace": "",
+			"note": "a `main` taking parameters counts as the entry point, which the compiler never calls"
+		},
+		{
+			"name": "M-FOLD-CONSTANT-AS-EXPRESSION",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "expressionSegment",
+			"find": "\tif (constant != null) return SegText(\"'\", constant);\n",
+			"replace": "",
+			"note": "a constant operand or block decomposes as an expression again, so the fold writes '${0} ' for 0 + ' ' and the re-render keeps the block"
+		},
+		{
+			"name": "M-CONSTANT-NEGATIVE-ZERO-SIGNED",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "constantText",
+			"find": "magnitude == null || magnitude == '0' ? magnitude : '-$magnitude'",
+			"replace": "magnitude == null ? magnitude : '-$magnitude'",
+			"note": "a negated zero is spliced as -0, while the Int it evaluates to prints 0"
+		},
+		{
+			"name": "M-CONSTANT-FLOAT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "constantText",
+			"find": "case 'BoolLit', 'NullLit':",
+			"replace": "case 'BoolLit', 'NullLit', 'FloatLit':",
+			"note": "a Float literal counts as target-invariant text, though 1.0 prints 1 on js and 1.0 on python"
+		},
+		{
+			"name": "M-CONSTANT-HEX-RANGE-UNCHECKED",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "hexText",
+			"find": "\tif (digits.length == HEX_INT_DIGITS && digits.charAt(0) > '7') return null;\n",
+			"replace": "",
+			"note": "a hex literal past 0x7FFFFFFF is spliced as its unsigned value, though the Int it types as wraps negative"
+		},
+		{
+			"name": "M-CONSTANT-DECIMAL-RANGE-UNCHECKED",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "decimalText",
+			"find": "digits.length < INT_MAX.length || (digits.length == INT_MAX.length && digits <= INT_MAX);",
+			"replace": "true;",
+			"note": "a decimal literal past 2147483647 counts as Int text, though it types as Float and prints per target"
+		},
+		{
+			"name": "M-SHAPE-PURE-GETENV",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "'StringBuf.toString',\n\t\t\t\t// reads the process environment: no callback, on every target\n\t\t\t\t'Sys.getEnv'\n",
+			"replace": "'StringBuf.toString'\n",
+			"note": "(precision) an environment read may run project code"
+		},
+		{
+			"name": "M-TS-BUILTIN-EVENTS",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": [
+				"'sys.net.UdpSocket.readFrom',\n",
+				"'sys.db.ResultSet.get_length',\n",
+				"'sys.thread.EventLoop.loop',\n",
+				"'sys.thread.EventLoop.wait',\n"
+			],
+			"replace": [
+				"",
+				"",
+				"",
+				""
+			],
+			"note": "a datagram read, a result set's length and the event loop's waits block only where a project lists them"
+		},
+		{
+			"name": "M-SEARCH-TRY-EXPR-UNRELATED",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "SEARCH_KIND_EQUIVALENCE",
+			"kind": "FinalMember",
+			"find": "\t\t['TryCatchStmt', 'TryCatchStmtBare', 'TryExpr'],\n\t\t['BlockStmt', 'BlockExpr']\n",
+			"replace": "\t\t['TryCatchStmt', 'TryCatchStmtBare']\n",
+			"note": "a `try` pattern parses through the Stmt attempt and no longer matches a `try` used as a value (an initializer, an argument, a return value), nor a braced value body - the shape a parse-or-null sweep exists to find, reported as 0 hits"
+		},
+		{
+			"name": "M-VOCAB-DOWHILE-EXPR-NOT-LOOP",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "table.doWhileLoopKinds = ['DoWhileStmt', 'DoWhileExpr'];",
+			"replace": "table.doWhileLoopKinds = ['DoWhileStmt'];",
+			"note": "a do-while in expression position (`() -> do x while (c)`) is no loop to any reader of the loop vocabulary"
+		},
+		{
+			"name": "M-NAMED-FN-STMT-NO-ARM",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "stmtExprNoSemiAtField",
+			"find": "\t\t\tcaseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], namedFnBodySwitch),\n",
+			"replace": "",
+			"note": "`x = function n() { return 1; } trace(x());` no longer parses: the named literal's `}` does not end the statement"
+		},
+		{
+			"name": "M-NAMED-FN-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "endsWithCloseBraceField",
+			"find": "\t\t\tcaseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], fnBodySwitch),\n",
+			"replace": "",
+			"note": "`var g = function n() { … }` keeps a `;` the anonymous spelling drops: the var-rhs gate reads the named literal as not brace-ended"
+		},
+		{
+			"name": "M-NAMED-FN-EXPR-BODY-RELAXED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "stmtExprNoSemiAtField",
+			"find": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], at(ident('_e'), macro true))",
+			"replace": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro true)",
+			"note": "a named literal's EXPRESSION body ends its statement with no `;`, so `x = function n() return 1 trace(x());` (Haxe: `Missing ;`) parses"
+		},
+		{
+			"name": "M-VOCAB-WHILE-EXPR-NOT-BRANCH",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "'WhileStmt',\n\t\t\t'WhileExpr',\n\t\t\t'DoWhileStmt',\n\t\t\t'DoWhileExpr',",
+			"replace": "'WhileStmt',\n\t\t\t'DoWhileStmt',\n\t\t\t'DoWhileExpr',",
+			"note": "a `while` comprehension or lambda body is no decision point: complexity counts nothing for it and a binding under it is hoisted"
+		},
+		{
+			"name": "M-RESERVED-IDENT-NAME",
+			"type": "anyparse.grammar.haxe.HxIdentLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"replace": "",
+			"note": "a declaration name (parameter, binder, type, enum constructor, structure field) takes a reserved word Haxe refuses"
+		},
+		{
+			"name": "M-RESERVED-VAR-NAME",
+			"type": "anyparse.grammar.haxe.HxVarNameLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"replace": "(?!(?:var|final)\\\\b)",
+			"note": "a `var` / `final` name takes every reserved word but `var` and `final` again"
+		},
+		{
+			"name": "M-RESERVED-FN-NAME",
+			"type": "anyparse.grammar.haxe.HxFnNameLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"replace": "",
+			"note": "a function name takes a reserved word Haxe refuses"
+		},
+		{
+			"name": "M-RESERVED-VERSIONED-REFUSED",
+			"type": "anyparse.grammar.haxe.HxVarNameLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "|null|override|",
+			"replace": "|null|operator|overload|override|",
+			"note": "a `var` name refuses `operator` / `overload` too, and a module declaring one under a `#if` for an older Haxe skip-parses"
+		},
+		{
+			"name": "M-NARROWING-OR-FLAT",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"force": "flat",
+			"note": "every `||` a boolean reduction writes joins flat, stranding a null test past the first operand"
+		},
+		{
+			"name": "M-NARROWING-OR-COMPOUND-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (leaf.tested.contains(name) && !leaf.providers.contains(name)) return null;",
+			"replace": "if (false && leaf.tested.contains(name)) return null;",
+			"note": "a null comparison buried in a compound operand no longer refuses a reduction whose later operand it narrows"
+		},
+		{
+			"name": "M-NARROWING-OR-GLUE-COMMENT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (commented(glue) || commented(leaf.op.src)) return null;",
+			"replace": "if (commented(leaf.op.src)) return null;",
+			"note": "a regrouped chain drops a comment standing between two of its operands"
+		},
+		{
+			"name": "M-NARROWING-OR-INNER-COMMENT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (commented(glue) || commented(leaf.op.src)) return null;",
+			"replace": "if (commented(glue)) return null;",
+			"note": "a regrouped chain joins an operand whose span carries a line comment, which swallows the rest of the line"
+		},
+		{
+			"name": "M-OR-LEAVES-OR-OPAQUE",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "orLeaves",
+			"find": "if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))",
+			"replace": "if (kids.length == 2 && negated && node.kind == 'And')",
+			"note": "an `||` is one opaque operand, so a null test inside it is never seen as stranded"
+		},
+		{
+			"name": "M-OR-LEAVES-NEGATED-AND-OPAQUE",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "orLeaves",
+			"find": "if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))",
+			"replace": "if (kids.length == 2 && !negated && node.kind == 'Or')",
+			"note": "a negated `&&` is one opaque operand, so the De Morgan `||` it writes is never regrouped"
+		},
+		{
+			"name": "M-TERNARY-OR-BRANCH-UNREAD",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "simplifyBooleanTernary",
+			"find": "orLeaves(elseNode, false, source, typeNominalOf, orLeaves(cond, false, source, typeNominalOf, []))",
+			"replace": "orLeaves(cond, false, source, typeNominalOf, [])",
+			"note": "the kept branch is left out of the `||` chain the reduction judges, so a null test inside it is never regrouped"
+		},
+		{
+			"name": "M-GUARD-CHAIN-NEGATED-RUN-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "reduceBooleanGuardChain",
+			"find": "run = orLeaves(cond, true, source, typeNominalOf, []);",
+			"replace": "run = null;",
+			"note": "a negated `&&` guard's `||` is one opaque operand of the chain before it, so its null test strands"
+		},
+		{
+			"name": "M-NAMING-ENUMVALUE-PROPERTY",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "isEnumAbstractValue",
+			"find": "(span == null || !properties().exists(span.from))",
+			"replace": "true",
+			"note": "a property of an enum abstract (`var x(get, never)`) reads as one of its values again"
+		},
+		{
+			"name": "M-NAMING-ENUMVALUE-STATIC",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "isEnumAbstractValue",
+			"find": "!mods.contains('static') && ",
+			"replace": "",
+			"note": "a static member of an enum abstract reads as one of its values again"
+		},
+		{
+			"name": "M-NAMING-ALLOWGRANT-AS-ANNOTATION",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "implicitReachOf",
+			"find": "metaInRun(node, ancestors, category, null, ALLOW_META)",
+			"replace": "metaInRun(node, ancestors, category)",
+			"note": "a member carrying only @:allow is refused as annotated again"
+		},
+		{
+			"name": "M-XREN-EXTENDS-KIND-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "typeRefShape",
+			"find": "'NewExpr', 'ExtendsField']",
+			"replace": "'NewExpr']",
+			"note": "the `ExtendsField` node is no type reference again, so `uses` and `rename --scope` are blind to a typedef's `> T`"
+		},
+		{
+			"name": "M-SORTED-RAW-ESCAPES",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "valueOf",
+			"find": "literal.content.contains('\\\\') || HxStringEscape.carriesDollar(literal.content) ? null : literal.content",
+			"replace": "literal.content",
+			"note": "an escaped or interpolated literal sorts by its RAW text, which is not its value"
+		},
+		{
+			"name": "M-NAMING-PROPERTY-MODS-NONE",
+			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
+			"method": "modsOf",
+			"force": "[]",
+			"note": "no property earns a storage modifier, so a storage-less private property needs the `_` again and a static read-only one is a camelCase public field"
+		},
+		{
+			"name": "M-NAMING-STORAGELESS-ISVAR",
+			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
+			"method": "grantsStorage",
+			"find": "node.kind == CONDITIONAL_KIND || MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"replace": "node.kind == CONDITIONAL_KIND",
+			"note": "an `@:isVar` property counts as storage-less, so its storage escapes the private-field rule"
+		},
+		{
+			"name": "M-NAMING-STORAGELESS-REGION",
+			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
+			"method": "grantsStorage",
+			"find": "node.kind == CONDITIONAL_KIND || MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"replace": "MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"note": "a run that steps over a `#if` region counts as proven, so an `@:isVar` one build sees there is missed"
+		},
+		{
+			"name": "M-NAMING-STORAGELESS-RULE-PUBLIC",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "defaults",
+			"find": "requireMods: [HaxePropertyStorage.STORAGELESS_MOD],\nforbidMods: ['public', 'static'],",
+			"replace": "requireMods: [HaxePropertyStorage.STORAGELESS_MOD],\nforbidMods: ['static'],",
+			"note": "the storage-less property rule reaches a PUBLIC property, whose `_` the public-field rule rejects"
+		},
+		{
+			"name": "M-NAMING-READONLY-RULE-INSTANCE",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "defaults",
+			"find": "requireMods: ['public', 'static', HaxePropertyStorage.READ_ONLY_MOD],",
+			"replace": "requireMods: ['public', HaxePropertyStorage.READ_ONLY_MOD],",
+			"note": "an INSTANCE read-only property takes the static-final format too"
+		},
+		{
+			"name": "M-SHAPE-COMMUTATIVE-UNSET",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "table.commutativeOperatorMetaName = '@:commutative';",
+			"replace": "",
+			"note": "the grammar names no commutativity annotation, so no overload is tried swapped and a misfit leaves the walk undecided"
+		},
+		{
+			"name": "M-COND-PARAM-ELSE-PLAIN",
+			"type": "anyparse.grammar.haxe.HxConditionalParam",
+			"method": "HxConditionalParam",
+			"kind": "TypedefDecl",
+			"find": "@:optional @:kw('#else') @:trivia @:sep(',', sepFaithful)",
+			"replace": "@:optional @:kw('#else') @:sep(',', sepFaithful)",
+			"note": "the `#else` arm of a parameter region captures no per-element separator, so the comma it writes before `#end` is lost and that arm compiles two parameters with nothing between them"
+		},
+		{
+			"name": "M-COND-PARAM-ELSEIF-PLAIN",
+			"type": "anyparse.grammar.haxe.HxElseifParam",
+			"method": "HxElseifParam",
+			"kind": "TypedefDecl",
+			"find": "@:trivia @:sep(',', sepFaithful)",
+			"replace": "@:sep(',')",
+			"note": "an `#elseif` arm of a parameter region captures no per-element separator, so the comma it writes before the next directive is lost"
+		},
+		{
+			"name": "M-ENUM-CTOR-PARAMS-PLAIN",
+			"type": "anyparse.grammar.haxe.HxEnumCtorDecl",
+			"method": "HxEnumCtorDecl",
+			"kind": "TypedefDecl",
+			"find": "@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"replace": "@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"note": "an enum constructor's parameters capture no per-element separator, so every gap gets a comma and a region already ending on its own is followed by `#end, c:Int`"
+		},
+		{
+			"name": "M-TERNARY-MLB-NO-DESCENT",
+			"type": "anyparse.grammar.haxe.HxTernaryBranchBlocks",
+			"method": "holdsBlock",
+			"find": "case _: params.exists(param -> holdsBlock(param, depth + 1));",
+			"replace": "case _: false;",
+			"note": "a block below the branch top (a function argument, an object-literal value) is not found, so `inline` breaks those ternaries"
+		},
+		{
+			"name": "M-TERNARY-MLB-PATH-UNSEARCHED",
+			"type": "anyparse.grammar.haxe.HxTernaryBranchBlocks",
+			"method": "holdsMultilineBlock",
+			"find": "for (i in 1...params.length) if (holdsBlock(params[i], 0)) return true;",
+			"replace": "for (i in 1...params.length) if (false) return true;",
+			"note": "the operands after the opening group are skipped along with it, so `[a, b].map(function() {…})` is not acted on"
+		},
+		{
+			"name": "M-BOM-HAXE-SEAT",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "writeRoundTrip",
+			"find": "ByteOrderMark.carry(source, FormatterOff.restore(source, emitted, HaxeLexicalRegions.scanComments))",
+			"replace": "FormatterOff.restore(source, emitted, HaxeLexicalRegions.scanComments)",
+			"note": "the Haxe whole-file write drops the carry, so fmt and every canonicalising op strip a file byte-order mark"
+		},
+		{
+			"name": "M-HXSHAPE-JSONPRINTER-UNLISTED",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "'JsonPrinter.print' => -1,",
+			"replace": "",
+			"note": "a direct JsonPrinter.print call no longer counts as rendering an object, so the fix changes what it prints"
+		},
+		{
+			"name": "M-HXSHAPE-COPY-UNLISTED",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "'Reflect.copy' => -1,",
+			"replace": "",
+			"note": "a Reflect.copy no longer counts as enumerating an object, so the fix changes which fields the copy carries"
+		},
+		{
+			"name": "M-CHAIN-FITS-ONE-LINE",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultOpBoolChainWrap",
+			"find": "{ mode: WrapMode.NoWrap, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }] },",
+			"replace": "{ mode: WrapMode.OnePerLineAfterFirst, location: WrappingLocation.BeforeLast, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }] },",
+			"note": "a chain that fits is laid one operator per line, so the default no longer keeps a fitting chain on one line"
+		},
+		{
+			"name": "M-CHAIN-BREAK-PACKS",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultOpBoolChainWrap",
+			"find": "mode: WrapMode.OnePerLineAfterFirst,",
+			"replace": "mode: WrapMode.FillLine,",
+			"note": "an overflowing chain packs its operands up to the limit and leaves the rest on a ragged last line instead of breaking at every operator"
+		},
+		{
+			"name": "M-TYPE-BODY-EDGE-NO-INTERFACE",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyTypeBodyEdges",
+			"find": "opt.interfaceBeginType = section.interfaceEmptyLines?.beginType ?? opt.interfaceBeginType;",
+			"replace": "",
+			"note": "`interfaceEmptyLines.beginType` is parsed and dropped, so an interface body keeps the source edge"
+		},
+		{
+			"name": "M-FNBODY-COMMENT-EMPTY",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "fnBlockEmptyExpr",
+			"find": "$openComment == null && ",
+			"replace": "",
+			"note": "a body holding only a comment after its open brace counts as empty and its signature loses the additional indent"
+		},
+		{
+			"name": "M-LOADER-DEFAULT-INDENT-INHERIT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "wrapRulesFromConfig",
+			"find": "resolvedDefault != null ? 0 : base.defaultAdditionalIndent",
+			"replace": "base.defaultAdditionalIndent",
+			"note": "a block restating defaultWrap inherits the built-in fallback indent of the mode it replaced"
+		},
+		{
+			"name": "M-LOADER-RULE-INDENT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "wrapRuleFromConfig",
+			"find": "if (additionalIndent != null) rule.additionalIndent = additionalIndent;",
+			"replace": "",
+			"note": "a configured rule additionalIndent is dropped at load time"
+		},
+		{
+			"name": "M-CHAIN-INDENT-UNREPORTED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigDiagnostics",
+			"method": "collectWrappingIssues",
+			"find": "if (chain != null && chainStatesIndent(chain))",
+			"replace": "if (chain != null && false)",
+			"note": "an indent stated on a chain cascade is accepted silently though the chain emitters never read it"
+		},
+		{
+			"name": "M-ANON-SEP-COND-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "['Conditional'], macro true)",
+			"replace": "['Conditional'], macro false)",
+			"note": "a `#if … #end` field region owes a `,` after its `#end`, so an anon type with a guarded field followed by another field is refused"
+		},
+		{
+			"name": "M-ANON-SEP-FN-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "['Conditional']",
+			"replace": "['Conditional', 'FnField']",
+			"note": "a `function` field is waived like a region, so `function f():Void {}` followed by another field parses though Haxe refuses a body there"
+		},
+		{
+			"name": "M-ANON-SEP-VAR-BRACE-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "[0 => '_b'], varBody)",
+			"replace": "[0 => '_b'], macro false)",
+			"note": "a `var` field whose type ends with `}` owes a `,` before the next field, though Haxe's class notation takes the `}` for its `;`"
+		},
+		{
+			"name": "M-ANON-SEP-ARROW-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "typeEndsWithBraceField",
+			"find": "caseBind(HX_TYPE, 'Arrow', [1 => '_r'], rec(ident('_r')))",
+			"replace": "caseBind(HX_TYPE, 'Arrow', [1 => '_r'], macro false)",
+			"note": "`var a:Int->{x:Int}` is not seen to end with `}`, so the next anon field is refused"
+		},
+		{
+			"name": "M-ANON-SEP-ARROW-FN-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "typeEndsWithBraceField",
+			"find": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))",
+			"replace": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], macro false)",
+			"note": "`var a:(Int) -> {x:Int}` is not seen to end with `}`, so the next anon field is refused"
+		}
+	]
+}

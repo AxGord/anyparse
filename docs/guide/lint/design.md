@@ -69,7 +69,7 @@ log(layout.bounds.width);   // reported: layout.bounds.width appears 3 times
 
 A test pinned as a GUARD whose class names a mutation arm (a killer on a sibling test) that cuts a member this test
 calls — the arm may kill the guard, which would make it a control. `Info`, DEFAULT OFF and report-only: inert until the
-config names the pin spellings and the arm registry. The registry is a JSON document whose `arms` array holds
+config names the pin spellings and the arm registry. The registry is a JSON document (or a directory of them) whose `arms` array holds
 `{name, type, method}` records; a relative `armRegistry` is resolved beside each `apqlint.json` of the file's chain,
 nearest first. A test reaches an arm when its body names both the arm's `method` and the last segment of its `type`; an
 arm the guard names as its own killer is a declared kill and is left out. The match is by spelling, so a finding is a
@@ -77,7 +77,7 @@ question — answer it with a killer, a `control` pin, or a `noqa` beside the re
 
 ```json
 "guard-pin-arm-reach": { "pinMeta": "@:pin", "guardArgument": "guard", "killerMeta": "@:killer",
-    "armRegistry": "testkit/mutation-arms.json" }
+    "armRegistry": "testkit/arms" }
 ```
 
 ## `listener-symmetry`

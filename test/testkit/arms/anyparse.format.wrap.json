@@ -1,0 +1,347 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.format.wrap. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-CUDDLE-FLATONLY",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"find": "if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;",
+			"replace": "if (itemFlat >= 0) return null;",
+			"note": "restores the pre-S146 gate — only an item that CANNOT render flat cuddles, so a comprehension that renders flat and still overflows keeps its `[` on a line of its own"
+		},
+		{
+			"name": "M-CUDDLE-FALLBACK-INDENT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"find": "final item: Null<Doc> = itemFlat < 0 ? items[0] : dropComprehensionBody(items[0]);",
+			"replace": "final item: Null<Doc> = itemFlat < 0 ? items[0] : cols + itemFlat <= lineWidth ? null : dropComprehensionBody(items[0]);",
+			"note": "restores the S146 threshold — a flat item that fits the line `shapeOnePerLine` would give it keeps its own bracket line, so a comprehension whose item fits one indent deeper but not after `[ ` is refused the cuddle (T674)"
+		},
+		{
+			"name": "M-CUDDLE-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"force": "null",
+			"note": "the comprehension cuddled-open shape never fires, so `[ for (…)` goes back to its own bracket line"
+		},
+		{
+			"name": "M-ELSE-GATE",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "isCuddleableComprehensionItem",
+			"find": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item);",
+			"replace": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && !hasTopLevelElse(item, 0);",
+			"note": "restores the S76 veto S78 removed — a comprehension whose body is an if/else refuses to cuddle its `[` again"
+		},
+		{
+			"name": "M-FN-LAMBDA-BODY-DEFERRED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "isFunctionInlineBodyItem",
+			"force": "false",
+			"note": "no `function`-keyword lambda argument opens the BodyGroup re-tag gate, so its parked inline body measures 0 again and the callParameter / methodChain / ifBody cascades above it all read a line short by the whole body - the fixed point of any width the Pony site showed at 146 columns"
+		},
+		{
+			"name": "M-GROUPIFY-SHARED-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "groupifyShared",
+			"find": "if (hit != null) return hit;",
+			"replace": "",
+			"note": "regrouping a comprehension's items copies every shared Doc node once per path to it, so the writer's Doc grows 2^depth"
+		},
+		{
+			"name": "M-BREAK-MULTI-ITEM-HOST-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "final offered: Bool = items.length == 1 ? flatSingle : open != '{';",
+			"replace": "final offered: Bool = items.length == 1 ? flatSingle : false;",
+			"note": "a list of several items stops following a break nested in one of them, so a call around `bar(b, [for …])` stays glued while the literal breaks under it and the next write opens it one argument per line"
+		},
+		{
+			"name": "M-BREAK-OBJECT-LITERAL-HOST",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "final offered: Bool = items.length == 1 ? flatSingle : open != '{';",
+			"replace": "final offered: Bool = items.length == 1 ? flatSingle : true;",
+			"note": "an object literal's field list is wrapped in alternatives too, which hides the literal's width decision from its Allman placement: a comprehension body carrying a comprehension in a field breaks glued and goes Allman one write late"
+		},
+		{
+			"name": "M-FORCED-NOWRAP-UNPROBED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "forcedNoWrap",
+			"find": "return forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap;",
+			"replace": "return false;",
+			"note": "a list a source trailing separator forces into the break-mode cascade goes flat by a shadowing `noWrap` rule with no first-line probe, past the limit, where the unforced first write broke it"
+		},
+		{
+			"name": "M-REGION-OFFER-THROUGH-BODIES",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "BreakCommits.offerItemBreaks(items, out, laidOut)",
+			"replace": "BreakCommits.offerItemBreaks(items, out, laidOut, null, true)",
+			"note": "a list lays itself out for a region inside a comprehension body, whose own seam the next write re-decides"
+		},
+		{
+			"name": "M-CHAIN-REST-PIVOT-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emitCascadePivot",
+			"find": "return WrapBoundary(D.groupOrRestProbe(ifBreak, restAware));",
+			"replace": "return WrapBoundary(Group(ifBreak));",
+			"note": "the chain pivot decides on `col + flatWidth` alone, so a chain whose physical line runs two columns over (the `;` and the space after `=`) stays glued and breaks before a nested `==`"
+		},
+		{
+			"name": "M-CHAIN-REST-ADD-PIVOT-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emitCascadePivot",
+			"find": "final brkDoc: Doc = D.groupOrRestProbe(IfBreak(CollapseAddProbe(brkSide), flatSide), restAware);",
+			"replace": "final brkDoc: Doc = Group(IfBreak(CollapseAddProbe(brkSide), flatSide));",
+			"note": "the tagged `+` chain pivot ignores the rest of its line, so a declaration one column over the limit spills past it unbroken"
+		},
+		{
+			"name": "M-CHAIN-REST-FILL-GROUP-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeFillLine",
+			"find": "return D.groupOrRestProbe(packed, restAware);",
+			"replace": "return Group(packed);",
+			"note": "the fill shape's own group re-decides flat on `col + flatWidth` inside the broken pivot, so a chain one column over breaks before a nested `==` instead of at `&&`"
+		},
+		{
+			"name": "M-CHAIN-REST-SHAPE-UNTHREADED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "layout",
+			"find": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware",
+			"replace": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, false",
+			"note": "`restAware` never reaches the shapes, so the fill group stays plain and undoes the rest-aware pivot's break"
+		},
+		{
+			"name": "M-CHAIN-REGION-OFFER-OFF",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "emit",
+			"find": "return opt.methodChainCuddledLinks",
+			"replace": "return false",
+			"note": "a chain is never offered for a break nested in a part, so the link after a call whose region breaks stays on its own line and the next write cuddles it"
+		},
+		{
+			"name": "M-CHAIN-CLOSE-UNRESOLVED",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "emit",
+			"find": "endsWithMultilineClose(broken, true)",
+			"replace": "endsWithMultilineClose(broken, false)",
+			"note": "the offer gate reads the committed part on the flat side of the conditional around the region, sees no closing line and offers nothing"
+		},
+		{
+			"name": "M-CHAIN-AFTERFIRST-COMMIT-UNREAD",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "shapeOnePerLineAfterFirst",
+			"find": "committed == i || i == 1 && committed == 0",
+			"replace": "false",
+			"note": "the offered layout of a chain whose head is not a call reads the committed part flat, so the offer lays the link out uncuddled as before"
+		},
+		{
+			"name": "M-CHAIN-ONEPERLINE-COMMIT-UNREAD",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "shapeOnePerLine",
+			"find": "segs[i - 1], committed == i)",
+			"replace": "segs[i - 1], false)",
+			"note": "the offered layout of a chain with a call head reads the committed part flat, so the offer lays the link out uncuddled as before"
+		},
+		{
+			"name": "M-THRESHOLD-ARG-UNNAMED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "namedThresholdLiteral",
+			"find": "? BreakCommits.named(item) : item;",
+			"replace": "? item : item;",
+			"note": "an object-literal argument deciding its own threshold break is no longer named, so the argument list lays itself out from the flat literal and the next write, reading the broken literal back committed, packs the list differently"
+		},
+		{
+			"name": "M-NAMED-FIT-PIVOT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "namedThresholdLiteral",
+			"find": "'{'.code) && renderPivotBreakArm(item) != null ?",
+			"replace": "'{'.code) ?",
+			"note": "an object-literal argument under a FIT cascade is named too, though the next write re-decides it instead of reading it back committed, so a call the source opened one argument per line is rewritten into a hug"
+		},
+		{
+			"name": "M-CHAIN-OFFER-OFF",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emit",
+			"find": "(item, _, broken) -> WrapList.flatLength(item) >= 0 && WrapList.flatLength(broken) < 0",
+			"replace": "(item, _, broken) -> false",
+			"note": "a binary chain or ternary no longer re-lays itself out for an operand whose nested break commits, so a ternary hugs a call whose literal broke and the next write, reading that literal back with a hardline, breaks the ternary"
+		},
+		{
+			"name": "M-ELIDED-GAP-HARD",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "startsChunk",
+			"find": "regionAfterElidedSep(items, i, sepBeforeFlags)",
+			"replace": "skipSepBefore(sepBeforeFlags, i)",
+			"note": "every gap the source left without a separator is a forced line break again, so a parameter list that fits breaks after `#end`"
+		},
+		{
+			"name": "M-REGION-GLUED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "regionAfterElidedSep",
+			"force": "false",
+			"note": "a region behind an elided separator glues onto the previous parameter's line, where `= false #if air, …` re-parses as a splice tail of the default value"
+		},
+		{
+			"name": "M-ELIDED-SEP-KEPT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "chunkFill",
+			"find": "final elided: Bool = [for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k)].contains(true);",
+			"replace": "final elided: Bool = false;",
+			"note": "a fill run packs with one uniform separator, so a gap the source left comma-less gains a comma beside the one its region already wrote"
+		},
+		{
+			"name": "M-TRAIL-AFTER-REGION",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "refusesTrailingSeparator",
+			"find": "return DocMeasure.opensDirectiveRegion(item) || DocMeasure.endsWithSemi(item);",
+			"replace": "return DocMeasure.endsWithSemi(item);",
+			"note": "a region ending the list takes the trailing comma again, which compiles to `, ,` once its branch is off"
+		},
+		{
+			"name": "M-TRAIL-AFTER-SEMI",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "refusesTrailingSeparator",
+			"find": "return DocMeasure.opensDirectiveRegion(item) || DocMeasure.endsWithSemi(item);",
+			"replace": "return DocMeasure.opensDirectiveRegion(item);",
+			"note": "a class-notation structure field takes the trailing comma after its own `;`"
+		},
+		{
+			"name": "M-TRAIL-CASCADE-UNGATED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "appendsTrailingComma",
+			"force": "axes.appendTrailingComma",
+			"note": "the wrap cascade appends the trailing comma whatever the last item ends on"
+		},
+		{
+			"name": "M-TERNARY-MLB-INLINE-NONE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "if (inlineMultilineBranch) return IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops));",
+			"replace": "if (false) return broken;",
+			"note": "the inline verdict is never read, so `ternaryMultilineBranch: inline` breaks the ternary like `break`"
+		},
+		{
+			"name": "M-TERNARY-MLB-NO-WIDTH-GUARD",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops))",
+			"replace": "shapeNoWrap(items, ops)",
+			"note": "`inline` glues the ternary whatever the width, so a first line past the limit overflows"
+		},
+		{
+			"name": "M-RULE-LOCATION-FALLS-TO-DEFAULT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "decideRuleWithLineLengthState",
+			"find": "location: rule.location ?? WrappingLocation.AfterLast",
+			"replace": "location: rule.location ?? fallback",
+			"note": "a matched rule that names no location takes the section's `defaultLocation` instead of `afterLast`, so the default overrides a rule that matched"
+		},
+		{
+			"name": "M-CHAIN-THRESHOLD-WRAPS-PIVOT",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "layout",
+			"find": "emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds);",
+			"replace": "extraThresholds.length == 0 ? emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, []) : WrapBoundary(Group(IfBreak(thresholdTree(extraThresholds, [], true, evalAt, shapeAt), thresholdTree(extraThresholds, [], false, evalAt, shapeAt))));",
+			"note": "a cascade holding a lineLength rule wraps a plain Group around its exceeds pivot, which no longer counts the line's trailing columns nor carries the add-chain collapse marker"
+		},
+		{
+			"name": "M-CHAIN-THRESHOLD-UNIFORM-BLIND",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "uniformAnswer",
+			"find": "return reached != null && below != null && sameRule(reached, below) ? below : null;",
+			"replace": "return below;",
+			"note": "every threshold state is taken to answer as the one below it, so a lineLength rule the line reaches below the limit never fires"
+		},
+		{
+			"name": "M-CHAIN-THRESHOLD-REEVAL-UNTAGGED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emitCascadePivot",
+			"find": "final brkSide: Doc = thresholdTree(thresholds, [], true, evalAt, brkShapeAt);",
+			"replace": "final brkSide: Doc = thresholdTree(thresholds, [], true, evalAt, thresholds.length == 0 ? brkShapeAt : shapeAt);",
+			"note": "a cascade holding a lineLength rule never tags its trailing-operator fill for the opBool re-eval, so a chain whose call operand overflows keeps its trailing operators"
+		},
+		{
+			"name": "M-CHAIN-HUG-LAST",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "if (!hugsLast) return broken;",
+			"replace": "return broken;",
+			"note": "a chain whose only multi-line operand is the last one breaks before it instead of hugging it, so `a && xs.foreach(t -> {` moves the call to its own line"
+		},
+		{
+			"name": "M-RULE-MATCH-IGNORED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "decideRuleWithLineLengthState",
+			"find": "mode: rule.mode,\n\tlocation: rule.location ?? WrappingLocation.AfterLast,",
+			"replace": "mode: rules.defaultMode,\n\tlocation: fallback,",
+			"note": "a matched rule answers the section default, so neither its mode nor its operator side reaches the chain"
+		},
+		{
+			"name": "M-RULE-CONDITIONS-IGNORED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "matchesWithLineLengthState",
+			"find": "if (!ok) return false;",
+			"replace": "if (false) return false;",
+			"note": "every rule matches whatever its conditions say, so the first rule of a cascade answers for every list and chain"
+		},
+		{
+			"name": "M-HUG-ANY-FIRST-LINE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, broken, glued)",
+			"replace": "glued",
+			"note": "the chain hugs its last operand whenever the glued first line fits, so a  line inside that operand glues the chain to it"
+		},
+		{
+			"name": "M-CHAIN-ABOVE-NEXT-UNBLOCKED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeKeep",
+			"find": "&& !(prevCandidate && location == BeforeLast)",
+			"replace": "",
+			"note": "under beforeLast the operand after a moved comment still counts as opening a line after an operator, so its comment moves too and the next pass reads it back elsewhere"
+		},
+		{
+			"name": "M-CHAIN-ABOVE-LED-IGNORED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "keepStartsOwnLine",
+			"find": "&& gapComment(owns, i - 1) == null",
+			"replace": "&& true",
+			"note": "an operand already led by an own-line comment takes a moved comment above it too"
+		},
+		{
+			"name": "M-CONTCOLS-NO-ADDITIONAL",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "continuationCols",
+			"find": "baseCols * (1 + probe.additionalIndent)",
+			"replace": "baseCols",
+			"note": "the matched rule additionalIndent is never charged, so a wrapped list stays one unit deep whatever its cascade says"
+		},
+		{
+			"name": "M-CONTCOLS-DEFAULT-ONLY",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "continuationCols",
+			"find": "baseCols * (1 + probe.additionalIndent)",
+			"replace": "baseCols * (1 + (rules.defaultAdditionalIndent ?? 0))",
+			"note": "every break charges the cascade default indent, so a matched rule stating its own indent is overridden"
+		},
+		{
+			"name": "M-CONTCOLS-IGNORE-SUPPRESS",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "continuationCols",
+			"find": "if (suppressAdditionalIndent) return baseCols;",
+			"replace": "",
+			"note": "a function signature over an empty body charges the additional indent like any other"
+		},
+		{
+			"name": "M-CONTCOLS-LEADING-BREAK-INDENT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "continuationCols",
+			"find": "probe.mode == FillLineWithLeadingBreak ? baseCols : ",
+			"replace": "",
+			"note": "a leading-break line charges the additional indent, one unit deeper than its first line belongs"
+		}
+	]
+}

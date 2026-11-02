@@ -1,0 +1,1014 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.oracle. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-ORACLE-FIRST-CONFIGURATION-IS-ENOUGH",
+			"type": "anyparse.check.oracle.CompilerOracle",
+			"method": "typecheckAll",
+			"find": "final asked: Array<OracleConfig> = cut < 0 ? oracles : oracles.slice(0, cut + 1);",
+			"replace": "final asked: Array<OracleConfig> = [oracles[0]];",
+			"note": "only the FIRST configuration is ever asked, so an edit that compiles under one set of defines and breaks another is applied - the cross-configuration hole the list exists to close"
+		},
+		{
+			"name": "M-ORACLE-RED-BASELINE-STOPS-THE-PHASE",
+			"type": "anyparse.check.oracle.CompilerOracle",
+			"method": "judging",
+			"find": "verdict: green.length == 0 ? failing : Confirmed",
+			"replace": "verdict: excluded.length == 0 ? Confirmed : failing",
+			"note": "any configuration red before the run stops the whole phase again, so one broken target leaves every risky fix report-only - including in files that target never reads and a green configuration verifies"
+		},
+		{
+			"name": "M-ORACLE-COVERAGE-PAIRED-BY-INDEX",
+			"type": "anyparse.check.oracle.OracleCoverage",
+			"method": "probedOnce",
+			"find": "return [for (oracle in oracles) probedFor(memo, oracle)];",
+			"replace": "return [for (i in 0...oracles.length) i < memo.probes.length ? memo.probes[i].coverage : probedFor(memo, oracles[i])];",
+			"note": "a seeded probe is handed to whichever configuration sits at its position, so a phase judging a different subset reads another build's compiled set and verifies an edit the judging build never compiles"
+		},
+		{
+			"name": "M-ORACLE-UNKNOWN-COVERAGE-STOPS-THE-PHASE",
+			"type": "anyparse.check.oracle.OracleCoverage",
+			"method": "usable",
+			"find": "stop: configs.length == 0 ? first : null",
+			"replace": "stop: first",
+			"note": "one configuration whose compiled set is unknown stops the whole phase again, so its known siblings judge nothing - the policy a red baseline no longer follows"
+		},
+		{
+			"name": "M-GENERATE-NEVER-STALE-BY-INPUT",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "staleness",
+			"find": "for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input, memo)) return '$input changed';",
+			"replace": "",
+			"note": "a changed generateInputs file no longer makes the recorded generation stale, so an hxml generated from an older project.xml keeps answering for a build that no longer exists"
+		},
+		{
+			"name": "M-GENERATE-NEVER-STALE-BY-COMMAND",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "staleness",
+			"find": "if (record.command != group.generate.command) return 'its generate command changed';",
+			"replace": "",
+			"note": "a changed generate command no longer regenerates, so an entry whose recipe was edited keeps the hxml the old recipe wrote"
+		},
+		{
+			"name": "M-GENERATE-TRUSTS-A-MISSING-HXML",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "staleness",
+			"find": [
+				"for (hxml in group.hxmls) if (!sys.FileSystem.exists(hxml)) return '$hxml is missing';",
+				"for (hxml in group.hxmls) if (hashIn(recordedOutputs, hxml) != hashOf(hxml, memo)) return '$hxml changed since it was generated';"
+			],
+			"replace": [
+				"",
+				""
+			],
+			"note": "an hxml deleted or edited after its generation was recorded is read as current, so the configuration compiles a missing or hand-edited file"
+		},
+		{
+			"name": "M-GENERATE-FAILURE-USES-THE-STALE-HXML",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "ready",
+			"find": "if (failure != null) out.unavailable = failure;",
+			"replace": "",
+			"note": "a failed generate command no longer makes its configuration unavailable, so the hxml an earlier generation left behind silently answers for the build"
+		},
+		{
+			"name": "M-SPAWN-RUN-IGNORES-CWD",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "exec",
+			"find": "if (cwd != null) Reflect.setField(options, 'cwd', cwd);",
+			"replace": "",
+			"note": "a single haxe spawn runs in the process cwd whatever the configuration's dir says, so a relative -cp resolves against the wrong tree and the typecheck and every probe answer about a different project"
+		},
+		{
+			"name": "M-SPAWN-RUNALL-IGNORES-CWD",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "const opts = { cwd: j.cwd == null ? undefined : j.cwd,",
+			"replace": "const opts = { cwd: undefined,",
+			"note": "the parallel driver spawns every job in its own cwd rather than the job's, so overlapped typechecks and coverage probes of a configuration with a dir answer about a different tree"
+		},
+		{
+			"name": "M-DRIVER-CANCELS-EARLIER-JOBS",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "for (let k = i + 1; k < jobs.length; k++)",
+			"replace": "for (let k = 0; k < jobs.length; k++)",
+			"note": "a failing job also kills the jobs declared BEFORE it, so the overlapped verdict is the first failure to finish rather than the first in declared order"
+		},
+		{
+			"name": "M-ORACLE-CACHE-IGNORES-DIR",
+			"type": "anyparse.check.oracle.OracleCache",
+			"method": "scanned",
+			"find": "final root: String = cwd ?? Sys.getCwd();",
+			"replace": "final root: String = Sys.getCwd();",
+			"note": "the verdict fingerprint resolves the hxml's classpath against the process cwd, so an edit under the configuration's dir leaves a stored verdict matching"
+		},
+		{
+			"name": "M-DISPLAY-IGNORES-DIR",
+			"type": "anyparse.check.oracle.CompilerServer",
+			"method": "connect",
+			"find": "if (cwd != null) Reflect.setField(opts, 'cwd', cwd);",
+			"replace": "",
+			"note": "the display server is warmed and queried from the process cwd, so a configuration with a dir never warms and the oracle-assisted phase is skipped"
+		},
+		{
+			"name": "M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "writeRecord",
+			"find": "inputs: inputs,",
+			"replace": "inputs: hashAll(group.inputs ?? [], []),",
+			"note": "the explicit inputs are hashed after the command instead of before, so an edit landing during a generation is recorded beside an hxml built from the old content and never regenerates"
+		},
+		{
+			"name": "M-GENERATE-RECORD-OUTLIVES-THE-RUN",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "claim",
+			"find": "deleteRecord(group);",
+			"replace": "",
+			"note": "the previous generation's record survives while a stale command runs, so a generation killed half way leaves a partial tree that reads as current forever"
+		},
+		{
+			"name": "M-GENERATE-DIRECTORY-INPUT-CONSTANT",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "hashOf",
+			"find": "listTree(path, '', lines, 0, memo);",
+			"replace": "",
+			"note": "a directory input hashes to one constant, so a file added or edited under it never regenerates"
+		},
+		{
+			"name": "M-GENERATE-FIRST-ENTRY-INPUTS",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "groupsOf",
+			"find": "held.inputs = mine == null || theirs == null ? null : theirs.concat([for (input in mine) if (!theirs.contains(input)) input]);",
+			"replace": "",
+			"note": "entries sharing one command keep only the first entry's inputs, so a change to an input only a later entry declares never regenerates"
+		},
+		{
+			"name": "M-GENERATE-LOCK-IGNORED",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "living",
+			"note": "every lock holder reads as dead, so a live run's exclusive hold is taken over and its tree regenerated under it",
+			"force": "false"
+		},
+		{
+			"name": "M-GENERATE-LOCK-NEVER-RECOVERED",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "living",
+			"note": "a lock left by a dead run is waited for as if its owner lived, so one crashed run makes every later one unavailable",
+			"force": "true"
+		},
+		{
+			"name": "M-GENERATE-EMPTY-INPUTS-NEVER",
+			"type": "anyparse.check.oracle.OracleDeclaration",
+			"method": "generateInputs",
+			"find": "if (inputs == null || inputs.length == 0) return null;",
+			"replace": "if (inputs == null) return null;",
+			"note": "an empty generateInputs list is kept, so the entry never regenerates while an absent list regenerates every run"
+		},
+		{
+			"name": "M-GENERATE-MISSING-INPUT-SILENT",
+			"type": "anyparse.check.oracle.OracleDeclaration",
+			"method": "generateInputs",
+			"find": "drops.push('compilerOracle[$index] \"generateInputs\" names $input, which does not exist — kept, it counts once created');",
+			"replace": "{}",
+			"note": "a generateInputs path that does not exist is accepted silently, so a typo makes that input a constant nobody hears about"
+		},
+		{
+			"name": "M-DRIVER-NEVER-STOPS",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": " if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);",
+			"replace": "",
+			"note": "a failing job no longer ends the later ones, so a rejection waits for and pays every compile declared after it"
+		},
+		{
+			"name": "M-DRIVER-KILLS-ONLY-THE-SHELL",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (group) process.kill(-c.pid, s); else c.kill(s);",
+			"replace": "c.kill(s);",
+			"note": "a kill reaches only the shell, so a build tool it started keeps writing into the generated tree after its job was cancelled"
+		},
+		{
+			"name": "M-DRIVER-NO-TIMEOUT",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);",
+			"replace": "",
+			"note": "a job's timeout is ignored, so a hung generate command blocks the run forever"
+		},
+		{
+			"name": "M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT",
+			"type": "anyparse.check.oracle.OracleCache",
+			"method": "storeIfUnchanged",
+			"find": "if (after == null || after.fingerprint != fingerprint || !readsHashed(",
+			"replace": "if (after == null || !readsHashed(",
+			"note": "a verdict is filed under the pre-compile fingerprint even when the tree moved during the compile, so a verdict about a half-regenerated tree is handed to the next run of the complete one"
+		},
+		{
+			"name": "M-GENERATE-IGNORES-LIBRARY-STATE",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "implicitInputs",
+			"force": "[]",
+			"note": "the library state the generated hxml names is not an input, so a haxelib version or dev-path switch leaves an hxml naming the old library paths current"
+		},
+		{
+			"name": "M-GENERATE-READERS-EXCLUDE-EACH-OTHER",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "hold",
+			"note": "every run takes every generation exclusively, so one agent's long --fix run blocks every other lint over a tree nobody regenerates",
+			"find": ": OracleGenerationLock.holdShared(\n\t\t\t\tlock, run.me, run.deadline",
+			"replace": ": OracleGenerationLock.holdExclusive(\n\t\t\t\tlock, run.me, run.deadline"
+		},
+		{
+			"name": "M-GENERATE-WRITER-IGNORES-READERS",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "holdExclusive",
+			"find": "if (others.length == 0) return null;",
+			"replace": "return null;",
+			"note": "a regeneration no longer waits for the runs still compiling the old tree, so its rm -rf lands under their typecheck"
+		},
+		{
+			"name": "M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "writerOf",
+			"find": "abandoned: now - modified(writer) > OWNERLESS_GRACE",
+			"replace": "abandoned: true",
+			"note": "a writer caught between its mkdir and its owner write is taken over at once, so two runs both hold the lock"
+		},
+		{
+			"name": "M-GENERATE-TAKEOVER-UNVERIFIED",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "takeOver",
+			"find": "final same: Bool = current != null && current.identity == stale.identity;",
+			"replace": "final same: Bool = current != null;",
+			"note": "a run that judged an owner dead too late removes the fresh writer that replaced it, so two runs both win the takeover"
+		},
+		{
+			"name": "M-GENERATE-PID-ALONE",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "living",
+			"find": "return signalable && (start == '' || startTime(pid) == start);",
+			"replace": "return signalable;",
+			"note": "a lock owner is judged by its pid alone, so a pid the system reused keeps a dead run's lock for hours"
+		},
+		{
+			"name": "M-DRIVER-SIGNAL-ORPHANS",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, die);",
+			"replace": "",
+			"note": "a signalled driver exits without its detached job groups, so Ctrl-C leaves a build tool writing into dist/oracle"
+		},
+		{
+			"name": "M-GENERATE-REPO-DIR-FROM-NAME",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "repositoryDir",
+			"find": "final dev: Null<String> = libraries.devs[library];",
+			"replace": "final dev: Null<String> = null;",
+			"note": "a dev install is not traced to the repository directory whose .dev points at it, so haxelib dev on a library whose json name differs from its directory never regenerates"
+		},
+		{
+			"name": "M-GENERATE-IMPLICIT-HASHED-AFTER-THE-RUN",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "record",
+			"find": [
+				"hashIn(s.implicitBefore, path) ?? hashOf(path, after)",
+				"if (moved != null) return"
+			],
+			"replace": [
+				"hashOf(path, after)",
+				"if (moved != null && false) return"
+			],
+			"note": "implicit inputs are hashed only after the command, so a library switched while it ran is recorded as the state the hxml was built against"
+		},
+		{
+			"name": "M-GENERATE-HASH-MEMO-UNUSED",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "hashOf",
+			"find": "if (held != null) return held;",
+			"replace": "",
+			"note": "every generation naming a path reads and hashes it again, so a large shared input such as fonts/ is read once per build per run"
+		},
+		{
+			"name": "M-GENERATE-TEMPLATES-UNTRACKED",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "collectHxml",
+			"find": "['haxelib.json', 'include.xml', 'templates/haxe']",
+			"replace": "['haxelib.json', 'include.xml']",
+			"note": "a library's code templates are not inputs, so a changed lime ApplicationMain template leaves the generated sources stale"
+		},
+		{
+			"name": "M-ORACLE-CACHE-MEMO-UNREAD",
+			"type": "anyparse.check.oracle.OracleCache",
+			"method": "walkDir",
+			"find": "final held: Null<String> = memo?.get(full);",
+			"replace": "final held: Null<String> = null;",
+			"note": "the fingerprint memo is never read, so every configuration re-reads and re-hashes the whole source tree before and after the compiles"
+		},
+		{
+			"name": "M-GENERATE-PRODUCED-INCLUDE-IS-INPUT",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "claim",
+			"find": "if (!isProduced(group, held.path)) held.path",
+			"replace": "if (true) held.path",
+			"note": "an hxml the generation writes and includes is compared across the run as if it were an input, so every generation that rewrites it goes unrecorded and regenerates forever (lime's iOS Build.hxml)"
+		},
+		{
+			"name": "M-GENERATE-SHARED-HELD-INTO-PHASE-TWO",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "prepare",
+			"note": "a run keeps its shared holds while it waits for exclusive ones, so two runs that each find two generations stale wait for each other until the deadline and each loses a configuration",
+			"find": "OracleGenerationLock.dropShared(lock, run.me);",
+			"replace": ""
+		},
+		{
+			"name": "M-GENERATE-CLAIM-NEVER-CLEARED",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "takeOver",
+			"find": "if (claimAbandoned(claim)) {",
+			"replace": "if (false) {",
+			"note": "a takeover claim left by a run that died mid-takeover is never cleared, so every later run waits on a writer nobody can take over"
+		},
+		{
+			"name": "M-GENERATE-TAKEOVER-LEAVES-THE-JOB",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "takeOver",
+			"find": "endJob(Path.join([dir, 'writer', 'job']));",
+			"replace": "",
+			"note": "a takeover removes the dead run's writer while its generate job still runs, so that build tool writes on into a tree the next generation owns"
+		},
+		{
+			"name": "M-GENERATE-FORMAT-UNCHECKED",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "staleness",
+			"find": "if (record.format != FORMAT_TAG) return 'its generation was recorded by an older engine';",
+			"replace": "",
+			"note": "a record written under an older scheme is trusted, so records whose implicit inputs an older engine derived differently keep answering as current"
+		},
+		{
+			"name": "M-GENERATE-PRODUCED-BY-ROOT",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "isProduced",
+			"find": "final tree: String = Path.directory(hxml);",
+			"replace": "final tree: String = Path.directory(Path.directory(hxml));",
+			"note": "any include under a wider tree than the hxml's own output directory counts as produced, so an edited project hxml the generated one includes goes unnoticed during a generation"
+		},
+		{
+			"name": "M-DRIVER-OUTLIVES-ITS-PARENT",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "setInterval(() => { if (process.ppid !== parent) die(); }, 500).unref();",
+			"replace": "",
+			"note": "a driver whose apq was SIGKILLed keeps its jobs running, so the next run regenerates concurrently with an orphaned build tool"
+		},
+		{
+			"name": "M-DRIVER-KILLS-WITHOUT-GRACE",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "signal(c, 'SIGTERM');",
+			"replace": "signal(c, 'SIGKILL');",
+			"note": "a killed job gets a bare SIGKILL again, so a pool lease wrapper cannot forward its end and the command it runs in a group of its own outlives the run with its threads"
+		},
+		{
+			"name": "M-DRIVER-NO-HARD-KILL",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (left) signal(c, 'SIGKILL'); ",
+			"replace": "",
+			"note": "a job group that ignores the SIGTERM is never SIGKILLed after the grace, so a stubborn tool keeps running until the driver's last-resort exit or forever"
+		},
+		{
+			"name": "M-GENERATE-SHARE-WITHOUT-REJUDGE",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "share",
+			"find": "if (observe(group, judged) == seen) continue;",
+			"replace": "continue;",
+			"note": "a group judged current before another run wiped it is shared for the compile without being judged again, so a half-written tree is typechecked and vetoes an edit falsely"
+		},
+		{
+			"name": "M-GENERATE-REJUDGE-UNBOUNDED",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "prepare",
+			"find": "refuse(run, group, 'it went stale again $attempts time(s) while this run waited — another run keeps moving it');",
+			"replace": "",
+			"note": "a group still stale after the bounded retries is handed to the compile anyway instead of being made unavailable"
+		},
+		{
+			"name": "M-GENERATE-STATE-IN-TMPDIR",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "stateDir",
+			"find": "return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
+			"replace": "return Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
+			"note": "the generation record and lock live under TMPDIR, so runs with different TMPDIRs share no lock and rm -rf the same tree concurrently"
+		},
+		{
+			"name": "M-GENERATE-STATE-DIR-HASHED",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "listTree",
+			"find": "for (entry in entries) if (entry != STATE_DIR) {",
+			"replace": "for (entry in entries) if (true) {",
+			"note": "a directory input that holds the generation root hashes hxq's own state, which every generation rewrites, so it never reads as current"
+		},
+		{
+			"name": "M-GENERATE-STATE-NOT-IGNORED",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "prepare",
+			"find": "sys.io.File.saveContent(ignore, '*\\n')",
+			"replace": "sys.io.File.saveContent(ignore, '')",
+			"note": "the state directory's .gitignore matches nothing, so every project has to list .apq/ in its own ignore file again"
+		},
+		{
+			"name": "M-GENERATE-IGNORE-OVERWRITTEN",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "prepare",
+			"find": " && !sys.FileSystem.exists(ignore)",
+			"replace": "",
+			"note": "an ignore file already inside the state directory is rewritten on every run, discarding whatever the project put there"
+		},
+		{
+			"name": "M-GENERATE-ORDER-BY-KEY",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "lockOrder",
+			"find": "ordered.sort((a, b) -> Reflect.compare(lockDir(a), lockDir(b)));",
+			"replace": "ordered.sort((a, b) -> Reflect.compare(a.key, b.key));",
+			"note": "waits follow the declaration key rather than the lock identity, so two runs declaring one tree under different commands can take its locks in opposite orders"
+		},
+		{
+			"name": "M-GENERATE-ENDJOB-PID-ONLY",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
+			"method": "endJob",
+			"find": "if (pid == null || start == '' || !living(pid, start)) return;",
+			"replace": "if (pid == null || !living(pid, start)) return;",
+			"note": "a left job with no recorded start time is killed on its pid alone, which may name an unrelated process group by now"
+		},
+		{
+			"name": "M-GENERATE-SHARE-JUDGES-STALENESS",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "share",
+			"find": "if (observe(group, judged) == seen) continue;",
+			"replace": "if (staleness(group, judged) == null) continue;",
+			"note": "the compile hold asks whether a group is current instead of whether it moved since this run looked, so an entry with no inputs, or one whose command writes its own input, is regenerated until it is given up on"
+		},
+		{
+			"name": "M-GENERATE-RIVAL-COMMAND-RETRIED",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "share",
+			"find": "if (rival == null)",
+			"replace": "if (true)",
+			"note": "a tree another configuration regenerated with a different command is sent back through regeneration, so two configurations take it back and forth instead of one being told why it is unavailable"
+		},
+		{
+			"name": "M-GENERATE-RIVAL-COMMANDS-KEPT",
+			"type": "anyparse.check.oracle.OracleDeclaration",
+			"method": "withoutRivalCommands",
+			"force": "[for (entry in entries) entry.config]",
+			"note": "an hxml two different generate commands of one config claim is kept, so both commands run into one tree and one configuration is always unavailable"
+		},
+		{
+			"name": "M-GENERATE-READ-ONLY-ROOT-THROWS",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "hold",
+			"find": "catch (exception: Exception) 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: '\n\t\t\t+ exception.message;",
+			"replace": "catch (exception: Exception) throw exception;",
+			"note": "a generation root where the state cannot be created crashes the run instead of making its configurations unavailable"
+		},
+		{
+			"name": "M-GENERATE-STATE-BY-CONFIG-ROOT",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "stateDir",
+			"find": "return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
+			"replace": "return Path.join([absolute(Sys.getCwd(), group.generate.root), STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
+			"note": "the generation state lives beside the declaring config, so two configs over one tree take two locks and delete the tree under each other"
+		},
+		{
+			"name": "M-GENERATE-STATE-BY-SPELLING",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "stateDir",
+			"find": "group.hxmls.map(FileIdentity.realPath)",
+			"replace": "group.hxmls.copy()",
+			"note": "the generation state is keyed by the hxml as spelled, so a symlinked spelling of one tree takes a second lock"
+		},
+		{
+			"name": "M-GENERATE-STATE-IN-OUTPUT-DIR",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "stateDir",
+			"find": "ConfigFinder.projectRoot(declaring)",
+			"replace": "ConfigFinder.projectRoot(Path.directory(hxmls[0]))",
+			"note": "a project marker in the hxml's own directory puts the generation state inside the tree the command may delete"
+		},
+		{
+			"name": "M-GENERATE-STATE-ROOT-FROM-HXML",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "stateDir",
+			"find": "ConfigFinder.projectRoot(declaring)",
+			"replace": "ConfigFinder.projectRoot(Path.directory(Path.directory(hxmls[0])))",
+			"note": "the project root is searched from above the hxml, so a marker the generation writes at its output root holds the state it deletes, and a top-level hxml climbs into an enclosing repository"
+		},
+		{
+			"name": "M-GENERATE-RIVAL-BY-SPELLING",
+			"type": "anyparse.check.oracle.OracleDeclaration",
+			"method": "withoutRivalCommands",
+			"find": "FileIdentity.realPath(entry.config.hxml)",
+			"replace": "entry.config.hxml",
+			"note": "two spellings of one hxml under two commands are not seen as rivals, so both commands run into one tree"
+		},
+		{
+			"name": "M-GENERATE-EPOCH-UNOBSERVED",
+			"type": "anyparse.check.oracle.OracleGeneration",
+			"method": "observe",
+			"find": "return [epoch, written]",
+			"replace": "return [written]",
+			"note": "another run's generation that left the record and hxml as they were goes unseen, though it rewrote the rest of the tree"
+		},
+		{
+			"name": "M-DEFINES-ONE-ARM",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "parse",
+			"find": "if (arms != 1 || early == null || all == null) return null;",
+			"replace": "if (early == null || all == null) return null;",
+			"note": "a transcript of several compile arms is read as the last arm's alone"
+		},
+		{
+			"name": "M-DEFINES-EARLY",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "parse",
+			"find": "defined: early,",
+			"replace": "defined: all,",
+			"note": "a define an initialization macro sets is read as defined for every file, so a module an earlier one typed is judged under it"
+		},
+		{
+			"name": "M-DEFINES-TYPES",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "macroSource",
+			"find": "if (named != null) Sys.println(",
+			"replace": "if (false) Sys.println(",
+			"note": "the probe names no type the build typed, so a type a macro defined reads as held by the index"
+		},
+		{
+			"name": "M-DEFINES-IMPL",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "macroSource",
+			"find": "case KAbstractImpl(_) | KGenericInstance(_, _): null;",
+			"replace": "case KGenericInstance(_, _): null;",
+			"note": "(precision) an abstract's implementation class is reported, which no source declares, so every build with an abstract reads as incomplete"
+		},
+		{
+			"name": "M-SPAWN-ORDER",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "if (answer != null && answer.length == jobs.length) return answer;",
+			"replace": "if (answer != null && answer.length == jobs.length) return [for (k in 0...answer.length) answer[answer.length - 1 - k]];",
+			"note": "overlapping compiles answer in the order they finished, so one configuration's defines decide another's branches"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-HALF-THE-CORES",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "threadsFor",
+			"find": ": cores - 1;",
+			"replace": ": Std.int(cores / 2);",
+			"note": "the compile budget is half the cores again, so a thirteen-configuration project compiles in four waves on a sixteen-core machine"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-COUNTS-SLOW-CORES",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "threadsFor",
+			"find": "fast > 0 && fast < cores ? fast : cores - 1",
+			"replace": "cores - 1",
+			"note": "the efficiency cores count as compile threads again, so every round waits on the compiles that landed on the slowest cores"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-IGNORES-LEASE",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "parallelism",
+			"find": "PoolLease.threads() ?? machineThreads()",
+			"replace": "machineThreads()",
+			"note": "a run under a pool lease takes the whole machine again, so its compiles crowd out the processes the lease was shared with"
+		},
+		{
+			"name": "M-POOL-SERVERS-NEED-PARALLELISM",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "startTimed",
+			"find": "available.slice(0, HaxeSpawn.resident())",
+			"replace": "HaxeSpawn.parallelism() < available.length ? [] : available",
+			"note": "a compile budget smaller than the configurations starts no warm server at all, so every typecheck of a fix run compiles cold"
+		},
+		{
+			"name": "M-RUNMEMO-PROBE-RECOMPILES",
+			"type": "anyparse.check.oracle.OracleCoverage",
+			"method": "rememberedTimed",
+			"find": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];",
+			"replace": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) null];",
+			"note": "the coverage probe compiles the tree its baseline just compiled with -v, paying a second compile per configuration"
+		},
+		{
+			"name": "M-RUNMEMO-KEY-IGNORES-CONTENT",
+			"type": "anyparse.check.oracle.OracleRunMemo",
+			"method": "key",
+			"find": "\\n$fingerprint'",
+			"replace": "'",
+			"note": "a remembered verdict answers for any content of the tree, so an edit that breaks the build is judged by the verdict of the tree before it"
+		},
+		{
+			"name": "M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS",
+			"type": "anyparse.check.oracle.CompilerOracle",
+			"method": "plainRetries",
+			"find": "final retried: Array<Int> = [for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0) k];",
+			"replace": "final retried: Array<Int> = [];",
+			"note": "a failing -v baseline is quoted with its -v lines, so a rejection's text names every parsed file"
+		},
+		{
+			"name": "M-RUNMEMO-FILES-A-MOVED-INPUT",
+			"type": "anyparse.check.oracle.OracleRunMemo",
+			"method": "file",
+			"find": "before != after || ",
+			"replace": "",
+			"note": "a compile whose input changed while it ran is filed under the content it started from, so that content is later answered with a verdict about another"
+		},
+		{
+			"name": "M-PENDING-RUNS-IN-FOREGROUND",
+			"type": "anyparse.check.oracle.PendingRuns",
+			"method": "await",
+			"find": "final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);",
+			"replace": "final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);",
+			"note": "a background batch is run again in the foreground when it is awaited, so nothing it did while the caller worked is saved"
+		},
+		{
+			"name": "M-PENDING-CANCEL-LEAVES-JOBS",
+			"type": "anyparse.check.oracle.PendingRuns",
+			"method": "cancel",
+			"find": "if (pid != null) try",
+			"replace": "if (pid == -1) try",
+			"note": "a cancelled batch leaves its driver running, so the jobs it started run to their end after the run abandoned them"
+		},
+		{
+			"name": "M-RUNMEMO-WRITTEN-UNHASHED",
+			"type": "anyparse.check.oracle.OracleRunMemo",
+			"method": "fingerprints",
+			"find": "written = written ?? writtenDigest(_written());",
+			"replace": "written = '';",
+			"note": "the run's fingerprint rests on the library directories hashed earlier in the process, so an edit to a project whose sources arrive through -lib leaves it unchanged and the verification is answered from the baseline"
+		},
+		{
+			"name": "M-RUNMEMO-TRUSTS-UNSEEN-SOURCES",
+			"type": "anyparse.check.oracle.OracleRunMemo",
+			"method": "judgeReads",
+			"find": "final inside: Bool = read.length > 0 && ",
+			"replace": "final inside: Bool = true || read.length > 0 && ",
+			"note": "a configuration that reads files outside every directory its fingerprint walks is answered from the memo, so an edit there reuses a verdict about the old content"
+		},
+		{
+			"name": "M-PENDING-JOBS-FILE-KEPT",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "+ \"if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}\"",
+			"replace": "+ \"\"",
+			"note": "the driver leaves the job list in its directory, so a run killed mid-batch leaves the job list behind"
+		},
+		{
+			"name": "M-DEFINES-VALUES-STABLE",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "parse",
+			"find": "if (value != null && finalValues[d] == value) values[d] = value;",
+			"replace": "if (value != null) values[d] = value;",
+			"note": "a value an initialization macro changed after the first one saw it is read as the value every file saw"
+		},
+		{
+			"name": "M-DEFINES-VALUES-MACRO",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "macroSource",
+			"find": "'\\t\\tvalues(\\'$EARLY_VALUE_PREFIX\\');',",
+			"replace": "",
+			"note": "the probe prints no value at the first initialization macro, so no define has one"
+		},
+		{
+			"name": "M-ORACLE-CACHE-WALK-FIRST-ONLY",
+			"type": "anyparse.check.oracle.OracleCache",
+			"method": "mergeDir",
+			"find": "if (!walks.exists(dir)) {",
+			"replace": "if (!walks.keys().hasNext()) {",
+			"note": "a run's shared walk reads only the first directory it is asked for, so a classpath outside the compile root drops out of every later configuration's fingerprint and an edit there is answered from the memo"
+		},
+		{
+			"name": "M-POOL-NO-INVALIDATE",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "moved",
+			"force": "[]",
+			"note": "the pool tells a server nothing moved, so a text the run rewrote within the second the server last compiled is answered as it was"
+		},
+		{
+			"name": "M-POOL-TRUSTS-WARM-RED",
+			"type": "anyparse.check.oracle.CompilerOracle",
+			"method": "warmFirst",
+			"find": "if (warm[k]?.status != 0) k];",
+			"replace": "if (warm[k] == null) k];",
+			"note": "a warm rejection is the verdict, so a server re-emitting a stale diagnostic reverts a sound fix"
+		},
+		{
+			"name": "M-TETHER-IGNORES-EOF",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "TETHER",
+			"kind": "FinalMember",
+			"find": "process.stdin.on(\"end\", end); process.stdin.on(\"close\", end); process.stdin.on(\"error\", end); process.stdin.resume();",
+			"replace": "",
+			"note": "a tether never reads its stdin, so the driver's death goes unnoticed and a tethered server outlives the run"
+		},
+		{
+			"name": "M-POOL-SERVER-UNTETHERED",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "serve",
+			"find": "cwd: oracle.dir, tethered: true }",
+			"replace": "cwd: oracle.dir, tethered: false }",
+			"note": "the run's warm servers are plain jobs of their own process groups, so a SIGKILL of the group apq and the driver share leaves each one running with no owner"
+		},
+		{
+			"name": "M-POOL-NEVER-RESTARTS",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "renew",
+			"find": "moved(server.seen, now).length <= RESTART_AT",
+			"replace": "true",
+			"note": "a server whose tree moved by more paths than invalidating them is worth is invalidated path by path, one walk of its whole cache each, instead of being replaced by a fresh server"
+		},
+		{
+			"name": "M-POOL-END-CANCELS-ALL",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "end",
+			"find": "_batches[keyOf(oracle)]?.cancel();",
+			"replace": "for (batch in _batches) batch.cancel();",
+			"note": "the pool's servers share one fate again: giving up one configuration's server ends every other server with it"
+		},
+		{
+			"name": "M-POOL-POSITION-NEVER-RENEWS",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "positionsIn",
+			"find": "for (i in held) renew(oracles[i], now);",
+			"replace": "",
+			"note": "a position request through a drifted server invalidates it path by path, one walk of its whole cache each, instead of asking a fresh server"
+		},
+		{
+			"name": "M-DISPLAY-SERVER-UNTETHERED",
+			"type": "anyparse.check.oracle.CompilerDisplayOracle",
+			"method": "start",
+			"find": "cwd: null, tethered: true }",
+			"replace": "cwd: null, tethered: false }",
+			"note": "the display server is a plain job of its own process group, so a run killed with its driver leaves it running with no owner"
+		},
+		{
+			"name": "M-HXML-SPLIT-LAST-SPACE",
+			"type": "anyparse.check.oracle.OracleCache",
+			"method": "hxmlArgs",
+			"find": "line.indexOf(' ')",
+			"replace": "line.lastIndexOf(' ')",
+			"note": "a flag line splits at its LAST space, so `-cp lib -lib heaps` reads as the flag `-cp lib -lib` and the compiler's one classpath is lost"
+		},
+		{
+			"name": "M-HXML-QUOTES-KEPT",
+			"type": "anyparse.check.oracle.OracleCache",
+			"method": "unquote",
+			"force": "s",
+			"note": "an hxml argument keeps the quotes the compiler drops, so `-cp \"src\"` names a directory called `\"src\"`"
+		},
+		{
+			"name": "M-COMPILEDIR-PROBE-BLIND",
+			"type": "anyparse.check.oracle.OracleDeclaration",
+			"method": "relativeClasspaths",
+			"force": "[]",
+			"note": "the compile-dir probe reads no classpath, so every nested hxml compiles from its own directory even where its classpaths resolve from the config's"
+		},
+		{
+			"name": "M-GC-RUN-INHERITS",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "exec",
+			"find": "maxBuffer: maxBuffer, env: childEnv() }",
+			"replace": "maxBuffer: maxBuffer }",
+			"note": "a single haxe spawn inherits the caller's environment untouched, so every typecheck run through `run` pays the default collector again"
+		},
+		{
+			"name": "M-GC-DRIVER-INHERITS",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "env: childEnv(),",
+			"replace": "",
+			"note": "the parallel driver and every job it starts run in the caller's environment, so the overlapped typechecks run under the default collector"
+		},
+		{
+			"name": "M-GC-PENDING-INHERITS",
+			"type": "anyparse.check.oracle.PendingRuns",
+			"method": "new",
+			"find": "{ stdio: 'ignore', env: HaxeSpawn.childEnv() }",
+			"replace": "{ stdio: 'ignore' }",
+			"note": "a batch started in the background (the facts compiles, the reach probes, the warm servers) runs under the default collector"
+		},
+		{
+			"name": "M-GC-INHERITED-OVERRIDDEN",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "gcParams",
+			"find": "if (!taken.contains(paramName(p))) p",
+			"replace": "p",
+			"note": "our parameters are appended even where the caller's own OCAMLRUNPARAM sets the same one, so a later duplicate overrides the setting the caller chose"
+		},
+		{
+			"name": "M-GC-OFF-IGNORED",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "gcParams",
+			"find": "asked == GC_OFF ? [] : ",
+			"replace": "",
+			"note": "APQ_ORACLE_GC=off is passed to the runtime as a parameter named off instead of leaving the collector alone"
+		},
+		{
+			"name": "M-GC-EMPTY-DECLARED-OFF",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "gcParams",
+			"find": "declared == null || declared.trim() == ''",
+			"replace": "declared == null",
+			"note": "an empty APQ_ORACLE_GC (how a test restores an unset variable) turns the tuning off instead of meaning the default"
+		},
+		{
+			"name": "M-GC-MEMORY-UNCOUNTED",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "residentFor",
+			"find": "(tunedCollector ? GC_MEMORY : 0)",
+			"replace": "0",
+			"note": "the budget ignores the extra memory a tuned collector's compile holds, so a small machine runs more compiles than it has memory for"
+		},
+		{
+			"name": "M-DRIVER-READS-STDIN",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "stdio: ['ignore', 'pipe', 'pipe'],",
+			"replace": "input: haxe.Json.stringify(jobs),",
+			"note": "the jobs are piped to the driver's stdin again, the channel node's spawnSync can stall for good on macOS, so about one runAll in seven hundred at 200 KB hangs the run forever"
+		},
+		{
+			"name": "M-DRIVER-UNBOUNDED",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "timeout: limit,",
+			"replace": "",
+			"note": "a wedged parallel driver is waited on forever, so one stopped or stalled driver hangs the whole lint run"
+		},
+		{
+			"name": "M-DRIVER-BOUND-IGNORES-ROUNDS",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "driverBound",
+			"find": "rounds * longest",
+			"replace": "longest",
+			"note": "the bound is one job's share however many rounds the parallelism splits the jobs into, so an honest run of many jobs on a small machine is killed as wedged"
+		},
+		{
+			"name": "M-PENDING-UNBOUNDED",
+			"type": "anyparse.check.oracle.PendingRuns",
+			"method": "collectTimed",
+			"find": "if (Date.now().getTime() - _started > _bound) {",
+			"replace": "if (false) {",
+			"note": "await polls a wedged background driver forever: a stopped driver still answers the liveness probe, so the run never ends"
+		},
+		{
+			"name": "M-DEFINES-PARSED-DROPPED",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "parse",
+			"find": "parsed: OracleCoverage.parsedPaths(transcript)",
+			"replace": "parsed: []",
+			"note": "a probed build names no file it parses, so every module it reads looks compiled by none of the builds"
+		},
+		{
+			"name": "M-REACH-STORE-OFF",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
+			"method": "store",
+			"find": "if (before == null || builds == null) return;",
+			"replace": "if (before == null || builds == null || oracles.length > 0) return;",
+			"note": "the builds an oracle run probed are never stored, so the next run that compiles nothing knows no build"
+		},
+		{
+			"name": "M-REACH-KEY-UNCHECKED",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
+			"method": "loadFrom",
+			"find": "return now == null || now.key != text(record['key']) ? null : buildsOf(record);",
+			"replace": "return now == null ? null : buildsOf(record);",
+			"note": "a stored record is read under whatever fingerprint the input hashes to now, so builds probed of a source since edited answer for it"
+		},
+		{
+			"name": "M-REACH-GENERATION-UNCHECKED",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
+			"method": "keyOf",
+			"find": "if (OracleGeneration.staleness(group, hashes) != null) return null;",
+			"replace": "if (OracleGeneration.staleness(group, hashes) == '') return null;",
+			"note": "a generated hxml whose declared input changed still keys the stored builds, though the oracle run would generate it again"
+		},
+		{
+			"name": "M-REACH-LIBRARY-UNCHECKED",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
+			"method": "buildsOf",
+			"find": "if (OracleCache.md5(read) != text(entry['hash'])) return null;",
+			"replace": "if (false) return null;",
+			"note": "a stored library source is read back whatever it holds now, so an edited file outside the fingerprint answers as the one the build compiled"
+		},
+		{
+			"name": "M-REACH-HASHED-UNCHECKED",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
+			"method": "store",
+			"find": "for (i in 0...oracles.length) if (!OracleCache.readsHashed(key.bases[i], configurations[i].parsed, key.hashed[i])) return;",
+			"replace": "for (i in 0...oracles.length) if (false && !OracleCache.readsHashed(key.bases[i], configurations[i].parsed, key.hashed[i])) return;",
+			"note": "a build that parsed a file the fingerprint did not hash — in a dot directory, past the walk's depth, outside every root — is stored, and an edit to that file is answered by the old build"
+		},
+		{
+			"name": "M-ORACLE-VERDICT-READS-UNCHECKED",
+			"type": "anyparse.check.oracle.OracleCache",
+			"method": "storeIfUnchanged",
+			"find": "|| !readsHashed(cwd ?? Sys.getCwd(), parsed, after.hashed)) return false;",
+			"replace": ") return false;",
+			"note": "a verdict whose compile read a file the fingerprint did not hash is stored, so an edit to that file is answered by the old verdict with no compile"
+		},
+		{
+			"name": "M-REACH-RECORD-SHAPE-UNCHECKED",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
+			"method": "texts",
+			"find": "return items != null && items.foreach(item -> item is String) ? cast items : null;",
+			"replace": "return items != null ? cast items : null;",
+			"note": "a record's string lists are read whatever they hold, so a define that is no string reaches the builds"
+		},
+		{
+			"name": "M-NAME-PROOF-ALWAYS-SAME",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "agreed",
+			"force": "true",
+			"note": "every value-site rewrite reads as confirmed, so a call a build macro of the build configuration re-points is shortened"
+		},
+		{
+			"name": "M-DISPLAY-STDIN-DROPPED",
+			"type": "anyparse.check.oracle.CompilerDisplayOracle",
+			"method": "positionJob",
+			"find": "stdin: inputs[request.content]",
+			"replace": "stdin: null",
+			"note": "the text handed in never reaches the compiler, so a rewrite not yet on disk is never asked about"
+		},
+		{
+			"name": "M-DISPLAY-STDIN-NOT-INVALIDATED",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "invalidate",
+			"find": "moved(server.seen, now).concat(dropped)",
+			"replace": "moved(server.seen, now)",
+			"note": "the module the warm compile cached is answered from, so the text handed in is ignored"
+		},
+		{
+			"name": "M-POOL-POSITION-STALE-WRITES",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "invalidate",
+			"find": "moved(server.seen, now).concat(dropped)",
+			"replace": "dropped",
+			"note": "a path the run wrote within the second the server last read it is answered at its old text, since the server compares modification times in whole seconds"
+		},
+		{
+			"name": "M-NAME-PROOF-NO-ASK-AGREES",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "agreed",
+			"find": "return asked.length > 0;",
+			"replace": "return true;",
+			"note": "a site no configuration compiles reads as confirmed, so a rewrite nothing typechecked the meaning of is applied"
+		},
+		{
+			"name": "M-NAME-PROOF-NO-ANSWER-AGREES",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "agreed",
+			"find": "if (was == null || !samePosition(",
+			"replace": "if (was != null && !samePosition(",
+			"note": "a configuration naming no declaration for the original reads as agreement, so a broken display answer confirms any rewrite"
+		},
+		{
+			"name": "M-NAME-PROOF-FIRST-PAIR-FOR-EVERY-SITE",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "pairAt",
+			"find": "[answers[2 * m], answers[2 * m + 1]]",
+			"replace": "[answers[0], answers[1]]",
+			"note": "every site of one round is judged by the first site's two answers, so a rewrite the compiler re-points rides on its neighbour's agreement"
+		},
+		{
+			"name": "M-POOL-POSITIONS-FIRST-ASK-TEXT",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "positionsIn",
+			"find": "asks[owner.oracle][owner.ask]",
+			"replace": "asks[owner.oracle][0]",
+			"note": "every ask of one round is read at the first ask's text, so the rewritten text is never the one asked about"
+		},
+		{
+			"name": "M-POOL-ASKS-NOT-INTERLEAVED",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "interleaved",
+			"find": "for (j in 0...depth) for (i in oracles)",
+			"replace": "for (i in oracles) for (j in 0...depth)",
+			"note": "one configuration's asks are queued together, so the compile budget's overlapping requests wait at one server while the others idle"
+		}
+	]
+}

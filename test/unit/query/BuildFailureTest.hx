@@ -44,10 +44,7 @@ class BuildFailureTest extends Test {
 	public function testTheRegistryOwnCrossCheckIsNamed(): Void {
 		Assert.equals(
 			'arm-registry',
-			classify(
-				'test/unit/T.hx:12: characters 2-20 : test/testkit/mutation-arms.json declares "M-X", which no @:killer in the test tree '
-				+ 'names'
-			)
+			classify('test/unit/T.hx:12: characters 2-20 : test/testkit/arms declares "M-X", which no @:killer in the test tree names')
 		);
 	}
 

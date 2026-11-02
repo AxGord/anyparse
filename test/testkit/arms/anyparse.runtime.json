@@ -1,0 +1,116 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.runtime. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-PARSE-MEMO-REPLAY-OFF",
+			"type": "anyparse.runtime.Parser",
+			"method": "memoReplay",
+			"force": "null",
+			"note": "a `@:memo` rule never replays a recorded run, so every `(`-led alternative re-parses the operand it shares with its siblings and a paren nest costs 2^depth"
+		},
+		{
+			"name": "M-PARSE-MEMO-STASHED-SKIP",
+			"type": "anyparse.runtime.Parser",
+			"method": "memoRecord",
+			"find": "memoRuns++;",
+			"replace": "memoRuns++;\n\t\tif (handed != null) return;",
+			"note": "a run handed a pending trivia stash is not recorded, so a nest whose operands follow a line break (`(a) ->` newline `(`) re-parses 2^depth times"
+		},
+		{
+			"name": "M-SKIM-GAPS-COUNTED",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (gap < _gaps.length && i >= _gaps[gap].from) {",
+			"replace": "if (false) {",
+			"note": "a brace inside a string, a comment or a regex counts, so a skipped body ends at a quoted `}`"
+		},
+		{
+			"name": "M-SKIM-NEVER",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"force": "pos",
+			"note": "no body is ever skipped: the declarations read is a full parse, and a body the grammar cannot read hides the module's declarations"
+		},
+		{
+			"name": "M-SKIM-BRANCH-DEPTH",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (opened.length == 0 || opened[opened.length - 1] != depth) return pos;",
+			"replace": "if (opened.length == 0) return pos;",
+			"note": "a directive branch that does not return to the depth its region opened at is balanced across branches, so a body whose branches each open a brace ends past its own close"
+		},
+		{
+			"name": "M-SKIM-REGION-LEFT-OPEN",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (depth == 0) return opened.length == 0 ? i : pos;",
+			"replace": "if (depth == 0) return i;",
+			"note": "a body may end inside a directive region it opened, so the members after it are read as part of the region"
+		},
+		{
+			"name": "M-SKIM-OUTER-REGION",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (opened.length == 0 || opened[opened.length - 1] != depth) return pos;",
+			"replace": "if (opened.length > 0 && opened[opened.length - 1] != depth) return pos;",
+			"note": "a directive of a region opened before the body is taken for one of the body's own"
+		},
+		{
+			"name": "M-SAMEITEMS-LENGTH-ONLY",
+			"type": "anyparse.runtime.SameItems",
+			"method": "of",
+			"find": "for (i => item in a) if (item != b[i]) return false;",
+			"replace": "{}",
+			"note": "two arrays of one length count as the same whatever they hold"
+		},
+		{
+			"name": "M-SORTED-OFFSETS-LOWER-BLIND",
+			"type": "anyparse.runtime.SortedOffsets",
+			"method": "firstIn",
+			"find": "lo = mid + 1",
+			"replace": "hi = mid",
+			"note": "the search never moves past an offset below the range, so the first offset of the array answers"
+		},
+		{
+			"name": "M-SORTED-OFFSETS-UPPER-BLIND",
+			"type": "anyparse.runtime.SortedOffsets",
+			"method": "firstIn",
+			"find": "return lo < sorted.length && sorted[lo] < to ? sorted[lo] : -1;",
+			"replace": "return lo < sorted.length ? sorted[lo] : -1;",
+			"note": "an offset at or past the upper bound answers, so ArgumentValues reads the written type of the NEXT declaration"
+		},
+		{
+			"name": "M-DROPPED-SEP-KEPT-REHOMED",
+			"type": "anyparse.runtime.DroppedSepComment",
+			"method": "last",
+			"find": "if (sepEmitted || arr.length == 0) return arr;",
+			"replace": "if (arr.length == 0) return arr;",
+			"note": "a comment after a separator the writer keeps is moved into the element, in front of the separator"
+		},
+		{
+			"name": "M-DROPPED-SEP-BLOCK-REHOMED",
+			"type": "anyparse.runtime.DroppedSepComment",
+			"method": "last",
+			"find": "if (comment == null || !StringTools.startsWith(comment, '//')) return arr;",
+			"replace": "if (comment == null) return arr;",
+			"note": "a block comment after a dropped separator moves into the element, changing a layout the first write already settles"
+		},
+		{
+			"name": "M-BOM-NOT-CARRIED",
+			"type": "anyparse.runtime.ByteOrderMark",
+			"method": "carry",
+			"force": "written",
+			"note": "the written text never gets the source byte-order mark back, so a whole-file write strips it"
+		},
+		{
+			"name": "M-CHAIN-OWN-COMMENTS-UNTAKEN",
+			"type": "anyparse.runtime.Parser",
+			"method": "takeStashedComments",
+			"find": ": pending.leadingComments.splice(mark, pending.leadingComments.length - mark);",
+			"replace": ": [];",
+			"note": "a chain operator leaves its own-line comments on the stash, so they drift into whatever its operand parses next"
+		}
+	]
+}

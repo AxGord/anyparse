@@ -1,0 +1,174 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.haxe.expressions. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-PSE-USING-INSERT-SILENT",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
+			"method": "appendUsingInserts",
+			"find": "if (CanonicalEdit.editsOverlapAny([edit], edits)) return false;\n\tedits.push(edit);\n\treturn true;",
+			"replace": "if (!CanonicalEdit.editsOverlapAny([edit], edits)) edits.push(edit);\n\treturn true;",
+			"note": "the merged `using` insert answers `true` whether or not it was appended, so `prefer-static-extension` keeps rewrites whose declaration never landed"
+		},
+		{
+			"name": "M-FACTS-FIXED-CAPTURE",
+			"type": "anyparse.check.haxe.expressions.FactsBindings",
+			"method": "fixedAt",
+			"find": "case Slot(callee, index): oracle.constructorArgumentClosed(callee, index);",
+			"replace": "case Slot(_, _): false;",
+			"note": "no constructor capture counts as fixed, so a capture typed closed stays report-only"
+		},
+		{
+			"name": "M-FACTS-FIXED-LOOP",
+			"type": "anyparse.check.haxe.expressions.FactsBindings",
+			"method": "fixedAt",
+			"find": "return iteratesClosedCall(oracle, file, decl, shape);",
+			"replace": "return false;",
+			"note": "no loop binder counts as fixed, so a binder over a call with a closed result stays report-only"
+		},
+		{
+			"name": "M-FACTS-FIXED-ANY-BINDER",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
+			"method": "factsVerdict",
+			"find": "if (decl == null || !FactsBindings.fixedAt(oracle, file, root, decl, s.shape)) return Verdict.UnresolvedReceiver;",
+			"replace": "if (decl == null) return Verdict.UnresolvedReceiver;",
+			"note": "every inferred binding is asked of the facts, so a receiver a later call typed is rewritten and no longer compiles"
+		},
+		{
+			"name": "M-PSE-FACTS-INFERRED",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
+			"method": "factsVerdict",
+			"find": "if (chain.declaredTypeSources[binding] == null) {",
+			"replace": "if (false) {",
+			"note": "an unannotated local, whose type the rewritten call itself may have bound, is typed by the facts"
+		},
+		{
+			"name": "M-PSE-FACTS-OFF",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
+			"method": "factsVerdict",
+			"force": "Verdict.UnresolvedReceiver",
+			"note": "a receiver only the compiler's facts type stays report-only"
+		},
+		{
+			"name": "M-PSE-FACTS-SHADOW",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "judge",
+			"find": "for (id in chain) if (facts.type(id)?.fields.exists(f -> f.name == method) == true) return Shadowed;",
+			"replace": "",
+			"note": "a same-name member of a supertype or an interface no longer drops the site"
+		},
+		{
+			"name": "M-PSE-FACTS-HOSTS",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "judge",
+			"find": "if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
+			"replace": "if (t == null || t.meta.contains(USING_META)) return Unproven;",
+			"note": "a forwarding abstract counts as a member host whose own fields are its members"
+		},
+		{
+			"name": "M-PSE-FACTS-USING",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "judge",
+			"find": "if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
+			"replace": "if (t == null || !MEMBER_HOSTS.contains(t.kind)) return Unproven;",
+			"note": "a receiver type's own @:using, which wins over the file's, is ignored"
+		},
+		{
+			"name": "M-PSE-FACTS-PARAM",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "accepts",
+			"find": "case _: false;",
+			"replace": "case _: true;",
+			"note": "an abstract first parameter, reached through @:from, is taken as accepting the receiver"
+		},
+		{
+			"name": "M-PSE-FACTS-OVERLOAD",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "firstParam",
+			"find": "\n\t\t\t|| field.overloads.exists(n -> n > 0)",
+			"replace": "",
+			"note": "an overloaded static is judged by its first signature, the only one the facts field records"
+		},
+		{
+			"name": "M-PSE-FACTS-DYNAMIC",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "judge",
+			"find": "if (receiver == DYNAMIC) return DynamicReceiver;",
+			"replace": "if (receiver == DYNAMIC) return Unproven;",
+			"note": "a Dynamic receiver is reported instead of dropped"
+		},
+		{
+			"name": "M-PSE-FACTS-NULL",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "judge",
+			"find": "final receiver: String = FactsTypeText.unwrapNull(typed);",
+			"replace": "final receiver: String = typed;",
+			"note": "a nullable receiver is read as the Null abstract, which hosts no member"
+		},
+		{
+			"name": "M-PSE-FACTS-TEXT",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "judge",
+			"find": "if (!oracle.readsAsCompiled(file)) return Unproven;",
+			"replace": "",
+			"note": "facts of the text the compile read answer for a file edited since"
+		},
+		{
+			"name": "M-PSE-FIRST-PARAM",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "firstParamOf",
+			"find": "case Function(args, _) if (args.length > 0 && !args[0].optional): FactsTypeTree.text(args[0].type);",
+			"replace": "case Function(args, _) if (args.length > 0 && !args[0].optional): FactsTypeTree.text(args[args.length - 1].type);",
+			"note": "the last parameter of a facts signature is read as its first"
+		},
+		{
+			"name": "M-PSE-CHANNEL-ALIAS",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
+			"method": "channelsOf",
+			"find": "elsewhere: paths.length > 0 && !paths.contains(module) || excluded,",
+			"replace": "elsewhere: excluded,",
+			"note": "a module name an import alias rebinds to another type keeps the site as a candidate"
+		},
+		{
+			"name": "M-PSE-CHANNEL-REGION-USING",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
+			"method": "collectUsings",
+			"find": "for (child in node.children) collectUsings(child, out);",
+			"replace": "for (child in node.children) if (child.kind != 'Conditional') collectUsings(child, out);",
+			"note": "a using inside a conditional region is invisible to the conflict gate"
+		},
+		{
+			"name": "M-PSE-CLOSURE-USING",
+			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
+			"method": "verdictFor",
+			"find": "\n\t\t\t&& index.typing.members.closureFreeOfExtensionTypes(receiverType, file, at)",
+			"replace": "",
+			"note": "the structural path ignores @:using on the receiver's type closure"
+		},
+		{
+			"name": "M-PSE-FACTS-USING-MODULE-WIDE",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "usingsSupply",
+			"find": "if (main && home != null)",
+			"replace": "if (false)",
+			"note": "the facts weigh only the type a using names, not the rest of its module"
+		},
+		{
+			"name": "M-PSE-FACTS-USING-SELF-MODULE",
+			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
+			"method": "judge",
+			"find": "usings.contains(module) ? usings : usings.concat([module])",
+			"replace": "usings",
+			"note": "the facts do not weigh the other types of the configured module"
+		},
+		{
+			"name": "M-SUBSTR-ANY-START",
+			"type": "anyparse.check.haxe.expressions.SubstrNegativeStart",
+			"method": "run",
+			"find": "subtractKinds.contains(start.kind)",
+			"replace": "true",
+			"note": "every substr start is flagged, not only a subtraction"
+		}
+	]
+}

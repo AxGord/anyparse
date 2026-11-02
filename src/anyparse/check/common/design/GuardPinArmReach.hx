@@ -8,6 +8,7 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.common.design.RuleDeclaration.ArmTarget;
 import anyparse.query.MemberKinds;
 import anyparse.query.Meta;
+import anyparse.query.RegistryFiles;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -26,9 +27,10 @@ import sys.io.File;
  * a control. Inert until the project names the pin, the killer and the arm registry in `apqlint.json`:
  *
  *     "guard-pin-arm-reach": { "pinMeta": "@:pin", "guardArgument": "guard", "killerMeta": "@:killer",
- *         "armRegistry": "testkit/mutation-arms.json" }
+ *         "armRegistry": "testkit/arms" }
  *
- * The registry is a JSON document whose `arms` array holds `{name, type, method}` records; a relative path is resolved
+ * The registry is a JSON document, or a directory of them, whose `arms`
+ * array holds `{name, type, method}` records; a relative path is resolved
  * against the directory of each `apqlint.json` of the file's chain, nearest first, and read once
  * per run. A test reaches an arm when its body names both the arm's `method` and the last segment
  * of its `type` (an identifier, a field or a constructed type) — a spelling match, which is why
@@ -195,10 +197,19 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 	}
 
 	#if (sys || nodejs)
-	/** The `arms` records of the registry at `path` by name; null when it cannot be read or holds no `arms` array. */
+	/**
+	 * The `arms` records of the registry at `path` (a document, or a directory
+	 * of them) by name; null when one cannot be read or holds no `arms` array.
+	 */
 	private static function readArms(path: String): Null<Map<String, ArmTarget>> {
-		final content: Null<String> = try File.getContent(path) catch (_: Exception) null;
-		return content == null ? null : RuleDeclaration.armRegistry(content);
+		final out: Map<String, ArmTarget> = [];
+		for (file in RegistryFiles.of(path)) {
+			final content: Null<String> = try File.getContent(file) catch (_: Exception) null;
+			final read: Null<Map<String, ArmTarget>> = content == null ? null : RuleDeclaration.armRegistry(content);
+			if (read == null) return null;
+			for (name => arm in read) out[name] = arm;
+		}
+		return out;
 	}
 	#end
 

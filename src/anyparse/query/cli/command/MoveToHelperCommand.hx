@@ -110,12 +110,19 @@ final class MoveToHelperCommand implements CliCommand {
 						CliIo.sysPrint('${c.file}: $tag\n');
 				}
 				if (armsFile != null) {
-					final armsText: Null<String> = try CliIo.readFile(armsFile) catch (exception: Exception) null;
-					if (armsText == null) {
+					final armsFiles: Array<String> = RegistryFiles.of(armsFile);
+					if (armsFiles.length == 0) {
 						CliIo.stderr('apq move-to-helper: cannot read the arm registry $armsFile\n');
 						return EXIT_RUNTIME;
 					}
-					for (line in MoveToHelperArms.hints(armsText, changes, srcTypeName, helper, plugin)) CliIo.sysPrint('$line\n');
+					for (file in armsFiles) {
+						final armsText: Null<String> = try CliIo.readFile(file) catch (exception: Exception) null;
+						if (armsText == null) {
+							CliIo.stderr('apq move-to-helper: cannot read the arm registry $file\n');
+							return EXIT_RUNTIME;
+						}
+						for (line in MoveToHelperArms.hints(armsText, changes, srcTypeName, helper, plugin)) CliIo.sysPrint('$line\n');
+					}
 				}
 				if (write) {
 					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);

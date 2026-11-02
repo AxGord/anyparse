@@ -189,7 +189,7 @@
 		],
 		"registries": [
 			{
-				"file": "test/testkit/mutation-arms.json",
+				"file": "test/testkit/arms",
 				"keys": [
 					"arms.type"
 				]

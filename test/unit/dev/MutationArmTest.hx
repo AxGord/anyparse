@@ -100,13 +100,13 @@ final class MutationArmTest extends Test {
 		TempDir.with(dir -> {
 			final repo: String = dir.file('repo');
 			FileSystem.createDirectory(Path.join([repo, 'src/a']));
-			FileSystem.createDirectory(Path.join([repo, 'test/testkit']));
+			FileSystem.createDirectory(Path.join([repo, 'test/testkit/arms']));
 			File.saveContent(
 				Path.join([repo, 'src/a/B.hx']), 'package a;\n\nclass B {\n\n\tpublic static function f():Int {\n\t\treturn 1;\n\t}\n\n}\n'
 			);
 			final ok: String = '{"name": "M-OK", "type": "a.B", "method": "f", "find": "return 1;", "replace": "return 2;"}';
 			final rotted: String = '{"name": "M-ROT", "type": "a.B", "method": "f", "find": "return 7;", "replace": "return 2;"}';
-			File.saveContent(Path.join([repo, 'test/testkit/mutation-arms.json']), '{"arms": [$ok, $rotted]}');
+			File.saveContent(Path.join([repo, 'test/testkit/arms/a.json']), '{"arms": [$ok, $rotted]}');
 			cmd('git -C $repo init --quiet').check();
 			cmd('git -C $repo add -A').check();
 			cmd('git -C $repo -c user.name=t -c user.email=t@t commit --quiet -m fixture').check();

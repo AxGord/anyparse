@@ -126,6 +126,25 @@ class ModuleMoveCliTest extends Test {
 		#end
 	}
 
+	/** A registry the project declares as a DIRECTORY is every document in it: each is rewritten, the others are left alone. */
+	public function testARegistryDirectoryIsRewrittenDocumentByDocument(): Void {
+		#if (sys || nodejs)
+		final dir: String = project([
+			{ name: 'apqlint.json', source: '{"move": {"scope": ["src"], "registries": [{"file": "arms", "keys": ["arms.type"]}]}}' },
+			{ name: 'src/pkg/A.hx', source: A },
+			{ name: 'arms/one.json', source: '{"arms": [{"type": "pkg.A"}]}' },
+			{ name: 'arms/two.json', source: '{"arms": [{"type": "other.B"}, {"type": "pkg.A"}]}' }
+		]);
+		final rc: Int = Cli.run(['move', '$dir/src/pkg/A.hx', '--to', '$dir/src/pkg/sub', '--write']);
+		Assert.equals(0, rc, 'the move succeeds');
+		Assert.equals('{"arms": [{"type": "pkg.sub.A"}]}', File.getContent('$dir/arms/one.json'));
+		Assert.equals('{"arms": [{"type": "other.B"}, {"type": "pkg.sub.A"}]}', File.getContent('$dir/arms/two.json'));
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** A project directory holding `files`, each `name` a path relative to it. */
 	private static function project(files: Array<{ name: String, source: String }>): String {

@@ -1,0 +1,216 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.types. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-TYPEDTHROW-CATCH-REPORT-ONLY",
+			"type": "anyparse.check.common.types.PreferTypedThrow",
+			"method": "catchAllInScope",
+			"find": "\t\tfinal index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);",
+			"replace": "\t\tfinal index: Null<SymbolIndex> = null;",
+			"note": "the catch-clause gate narrows to the report files, so a one-file `--fix` boxes a raw-string throw that a `catch (e: String)` in an unlinted sibling still catches — the wholesale-degrade twin of the S177 shape, found by T919's `string-catch` cell"
+		},
+		{
+			"name": "M-GATE-AD-EXCLUDE-BLIND",
+			"type": "anyparse.check.common.types.AvoidDynamic",
+			"method": "skipReason",
+			"force": "null",
+			"note": "an avoid-dynamic excludePaths file is reported as scanned"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-ORACLE-PARAMS",
+			"type": "anyparse.check.common.types.ExplicitType",
+			"method": "functionOracleEdits",
+			"find": "for (index in 0...own.length) pushEdit(out, paramOracleEdit(s, fn, own[index], index));",
+			"replace": "",
+			"note": "the oracle-assisted pass types no parameter"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-ORACLE-FIELDS",
+			"type": "anyparse.check.common.types.ExplicitType",
+			"method": "fieldOracleEdit",
+			"force": "null",
+			"note": "the oracle-assisted pass types no field"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-STRUCTURAL-DECLINE",
+			"type": "anyparse.check.common.types.ExplicitType",
+			"method": "recordStructuralDeclines",
+			"find": "v.declineReason = v.message == RETURN_MESSAGE ? DECLINE_NO_STRUCTURAL_RETURN : DECLINE_NO_STRUCTURAL_TYPE;",
+			"replace": "{}",
+			"note": "a finding the structural fix leaves unfixed says nothing about why"
+		},
+		{
+			"name": "M-BAG-INITIALIZER",
+			"type": "anyparse.check.common.types.DynamicBag",
+			"method": "initializerFits",
+			"force": "true",
+			"note": "a bag declaration whose initializer is a typed structure becomes a DynamicAccess its fields may not fit"
+		},
+		{
+			"name": "M-BAG-NULL-OUTER",
+			"type": "anyparse.check.common.types.DynamicBag",
+			"method": "nominalOrNull",
+			"force": "name",
+			"note": "a Null<T> value is typed by its bare wrapper, so the bag becomes DynamicAccess<Null>, which names no type"
+		},
+		{
+			"name": "M-AVOIDDYN-COMPOSITE-SKIPPED",
+			"type": "anyparse.check.common.types.AvoidDynamic",
+			"method": "scanRange",
+			"find": "case Intersection(parts), Conditional(parts):\n\t\t\t\t\tfor (p in parts) visit(p, inArgs);",
+			"replace": "case Intersection(_), Conditional(_):",
+			"note": "a Dynamic inside an intersection or a conditional-type branch goes unreported"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-MACRO-NO-PROOF",
+			"type": "anyparse.check.common.types.ExplicitType",
+			"method": "macroReturnsExpr",
+			"force": "false",
+			"note": "no macro function's returns are proven, so `macro … return macro f($e)` stays an unfixed explicit-type finding although its type is Expr by construction"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-MACRO-NO-COMPANION",
+			"type": "anyparse.check.common.types.ExplicitType",
+			"method": "returnProof",
+			"find": "\t\t? Companion\n",
+			"replace": "\t\t? Unproven\n",
+			"note": "a `return Context.error(…)` is no Dynamic companion, so getProjectVersion's catch arm blocks its Expr annotation"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-MACRO-ANY-RETURN",
+			"type": "anyparse.check.common.types.ExplicitType",
+			"method": "macroReturnsExpr",
+			"force": "true",
+			"note": "every macro function is proven, so `return macro : Int` (a ComplexType) and `return null` get `:Expr`"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-MACRO-SHADOW",
+			"type": "anyparse.check.common.types.ExplicitType",
+			"method": "returnProof",
+			"find": " && !NominalTypes.shadowedByNonStdType(index, call.typeName)",
+			"replace": "",
+			"note": "a project's own `Context.error` counts as the Dynamic macro-API one, so a return of whatever it answers is taken for an Expr companion"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-VALUE",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "outcomeLocal",
+			"find": "if (write.children.length == 2 && !MemberKinds.isMovableLiteral(write.children[1], shape)) return null;",
+			"replace": "",
+			"note": "any value counts as a recorded outcome, so `threw = compute();` and `threw = other;` hide a handler that runs code"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-DECL-KIND",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "outcomeLocal",
+			"find": "decl != null && (shape.localDeclKinds ?? []).contains(decl.kind)",
+			"replace": "decl != null",
+			"note": "a parameter of the enclosing function counts as an outcome local"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-FN-BOUND",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "readAfter",
+			"find": "for (k in fnAt + 1...ancestors.length - 1)",
+			"replace": "for (k in 0...ancestors.length - 1)",
+			"note": "a read after the CLOSURE the try sits in counts as reading the outcome, though the closure runs whenever it is called"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-EVERY-STMT",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "recordsOutcome",
+			"find": "if (hit == null || !readAfter(hit, tree, ancestors, fnAt, scan)) return false;",
+			"replace": "if (hit == null || !readAfter(hit, tree, ancestors, fnAt, scan)) return false;\n\t\tbreak;",
+			"note": "only the FIRST statement of the body is checked, so a call or an unread second local after it rides along"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-READ-KIND",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "readAfter",
+			"find": "h.kind == RefKind.Read",
+			"replace": "h.kind != RefKind.Decl",
+			"note": "a WRITE of the local after the try counts as reading the outcome"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-READ-BINDING",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "readAfter",
+			"find": " && h.bindingSpan?.from == binding.from",
+			"replace": "",
+			"note": "a read of the same NAME bound to another declaration counts as reading the outcome"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-READ-AFTER",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "readAfter",
+			"find": "r.from >= childSpan.to && ",
+			"replace": "",
+			"note": "a read BEFORE the try counts as reading the outcome after it"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-STMT-LIST",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "readAfter",
+			"find": " && scan.statementListKinds.contains(ancestors[k].kind)",
+			"replace": "",
+			"note": "a read in the other arm of the branch the try sits in counts, though it follows the try in the text and on no path"
+		},
+		{
+			"name": "M-SWALLOW-TEST-OUTCOME",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "recordsTestOutcome",
+			"find": "scan.outcomeCalls.contains('$recv.${access.method}')",
+			"replace": "true",
+			"note": "any receiver.method call in the body reads as recording a test outcome, though only the listed Assert calls do"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-COUNTER",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "outcomeLocal",
+			"find": "if (!plain && !counter) return null;",
+			"replace": "if (!plain) return null;",
+			"note": "an increment of a local read after the try (`failed++`) is not read as recording an outcome"
+		},
+		{
+			"name": "M-SWALLOW-BARE-VALUE",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "flagCatch",
+			"find": " || MemberKinds.isSideEffectFree(body, scan.shape) && endsItsList(ancestors, scan)",
+			"replace": "",
+			"note": "a bare body that only yields a value (`null`, a constant) is read as a handler that does nothing, though it is the value the try produces"
+		},
+		{
+			"name": "M-SWALLOW-BARE-TAIL",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "flagCatch",
+			"find": " && endsItsList(ancestors, scan)",
+			"replace": "",
+			"note": "a side-effect-free bare body mid-list reads as the value the try produces, though the statements after it run on and nobody reads that value"
+		},
+		{
+			"name": "M-SWALLOW-BARE-DEFAULT-ARM",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "endsItsList",
+			"find": "scan.armKinds.contains(parent.kind)",
+			"replace": "parent.kind == 'CaseBranch'",
+			"note": "a value body at the tail of a `default` arm is read as a swallow, though it is the value the arm yields like a `case` arm's"
+		},
+		{
+			"name": "M-SWALLOW-BARE-STMT-ONLY",
+			"type": "anyparse.check.common.types.SwallowedException",
+			"method": "flagCatch",
+			"find": "if (bare && !(ancestors.length > 0 && scan.tryStatementKinds.contains(ancestors[ancestors.length - 1].kind))) return;",
+			"replace": "",
+			"note": "a catch of a try EXPRESSION with a bare body counts as a statement-context handler, though its body is the recovery value"
+		},
+		{
+			"name": "M-CATCH-DYNAMIC-LOGGING-NAME-IGNORED",
+			"type": "anyparse.check.common.types.CatchDynamic",
+			"method": "catchName",
+			"force": "DEFAULT_CATCH_NAME",
+			"note": "catch-dynamic recommends and arm (b) writes exception whatever naming.catchVarName says"
+		}
+	]
+}

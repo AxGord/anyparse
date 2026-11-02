@@ -67,6 +67,39 @@ class GuardPinArmReachCheckTest extends Test {
 		Assert.equals(0, violationsOf('@:pin(\'guard\')', 'Widget.spin();', 'arms: [ M-ONE ]').length);
 	}
 
+	/** A registry named as a DIRECTORY is every document in it, and one unreadable document reads nothing. */
+	public function testARegistryDirectoryIsReadDocumentByDocument(): Void {
+		final other: String =
+			'{"arms": [{"name": "M-TWO", "type": "pkg.Gadget", "method": "turn", "force": "0", "note": "the gadget stops"}]}';
+		final dir: String = CliFixture.writeTree('guardpin', [
+			{ name: 'arms/a-other.json', source: other },
+			{ name: 'arms/b-widget.json', source: ARMS },
+			{ name: 'arms/notes.txt', source: 'not a document' }
+		]);
+		final config: String = configNaming('$dir/arms');
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new GuardPinArmReach(),
+			[{ file: 'WidgetTest.hx', source: fixture('@:pin(\'guard\')', 'Widget.spin();') }],
+			null, _ -> LintConfig.parse(config)
+		);
+		CliFixture.removeDir(dir);
+		Assert.equals(1, vs.length, 'the arm of the second document is found');
+		final broken: String = CliFixture.writeTree('guardpin', [
+			{ name: 'arms/a-other.json', source: 'arms: [' },
+			{ name: 'arms/b-widget.json', source: ARMS }
+		]);
+		final brokenConfig: String = configNaming('$broken/arms');
+		Assert.equals(
+			0,
+			CheckFixture.violationsIn(
+				new GuardPinArmReach(), [{ file: 'WidgetTest.hx', source: fixture('@:pin(\'guard\')', 'Widget.spin();') }],
+				null, _ -> LintConfig.parse(brokenConfig)
+			)
+				.length
+		);
+		CliFixture.removeDir(broken);
+	}
+
 	/** A config naming the pin spellings and `registry`. */
 	private function configNaming(registry: String): String {
 		return '{"rules":{"guard-pin-arm-reach":{"pinMeta":"@:pin","guardArgument":"guard","killerMeta":"@:killer",'

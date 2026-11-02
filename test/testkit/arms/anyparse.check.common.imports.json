@@ -1,0 +1,432 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.imports. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-SHORTEN-IMPORT-THRESHOLD-ONE",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "DEFAULT_IMPORT_MIN_USES",
+			"kind": "FinalMember",
+			"find": "DEFAULT_IMPORT_MIN_USES: Int = 2;",
+			"replace": "DEFAULT_IMPORT_MIN_USES: Int = 1;",
+			"note": "one surviving occurrence is enough to buy an import line, so the wash the threshold exists to refuse is written anyway"
+		},
+		{
+			"name": "M-AMBIENT-DECLARER-READS",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "readersOf",
+			"force": "scans",
+			"note": "the module an ambient statement IMPORTS counts as one of the statement's readers, so its own declaration of that type keeps the statement alive and a stale one in a root ambient source is never reportable"
+		},
+		{
+			"name": "M-AMBIENT-DECLARER-READS-USING",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "readersOf",
+			"force": "scans.filter(s -> !([for (r in index.refs.resolveQualifiedRefAll(imp.raw)) if (r.file.file != own) r.file.file].contains(s.file)))",
+			"note": "the declaring module is dropped from the reader set for a `using` as well as for an import, so an ambient `using` that a module calling its own statics extension-style depends on reads as dead and is deleted"
+		},
+		{
+			"name": "M-AMBIENT-REDUNDANT-GUARDED-SKIP",
+			"type": "anyparse.check.common.imports.RedundantImport",
+			"method": "nearestBinder",
+			"force": "info.ambientImports.find(g -> g.imports.exists(o -> !o.guarded && SymbolIndex.bindsAnyOf(o, [name], publicTypes)))",
+			"note": "the search for the group that decides a name skips one whose only binder is `#if`-guarded and lands on a farther identical group, so deleting the module's own statement retargets the name in the builds that guard is on"
+		},
+		{
+			"name": "M-AMBIENT-REDUNDANT-USING-POSITION",
+			"type": "anyparse.check.common.imports.RedundantImport",
+			"method": "usingCompetitorInScope",
+			"force": "false",
+			"note": "a `using` is treated as binding only a name, so an own statement an ambient source repeats is deleted although another `using` in scope then takes the position it held and every method both modules declare resolves elsewhere"
+		},
+		{
+			"name": "M-HOIST-NEVER-SOUND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "hoistSound",
+			"force": "false",
+			"note": "no statement is ever judged safe to add to an ambient source, so the rule proposes nothing at all and the whole hoist is inert"
+		},
+		{
+			"name": "M-HOIST-RETARGET-BAND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "retargetsSomeModule",
+			"force": "false",
+			"note": "a second declaration of the imported simple name is never a retarget, so the ambient statement silently replaces a same-package, root-package or wildcard-reached namesake in the modules that never spelled it"
+		},
+		{
+			"name": "M-HOIST-USING-DEMOTION",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "removable",
+			"force": "true",
+			"note": "a `using` is lifted out of a module that keeps another one, so the extension it held loses its position to the rival that stays and every method both modules declare resolves elsewhere"
+		},
+		{
+			"name": "M-HOIST-CHAIN-INHERITED",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "providedAtOrAbove",
+			"force": "[]",
+			"note": "a statement the chain above a directory already puts in force is proposed again, so a nested ambient source repeats its own parent"
+		},
+		{
+			"name": "M-HOIST-GUARDED-BLIND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "hoistSound",
+			"find": "if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;",
+			"replace": "if (SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;",
+			"note": "a chain carrying a `#if`-guarded statement is added to anyway, so a position this rule writes joins a chain whose every resolution answers the union of two build configurations"
+		},
+		{
+			"name": "M-HOIST-SHORT-CHAIN",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "hoistSound",
+			"find": "if (info == null || !info.ambientImportsBounded) return false;",
+			"replace": "if (info == null) return false;",
+			"note": "a governed module whose chain is knowingly SHORT is judged anyway, so the statement is added against bindings the engine never saw"
+		},
+		{
+			"name": "M-HOIST-MIN-MODULES",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "planSite",
+			"find": "if (governed.length < (cfg.intOption(RULE_ID, 'minModules') ?? DEFAULT_MIN_MODULES)) return;",
+			"replace": "if (governed.length < 0) return;",
+			"note": "a directory with too few modules for a share to mean anything is weighed anyway, so one module of two carries the whole verdict"
+		},
+		{
+			"name": "M-HOIST-SITE-ORDER",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "contextOf",
+			"find": "final wider: Int = (governedAt[b] ?? []).length - (governedAt[a] ?? []).length;",
+			"replace": "final wider: Int = (governedAt[a] ?? []).length - (governedAt[b] ?? []).length;",
+			"note": "the narrowest position is weighed first, so a statement lands in a nested source AND in its parent and the nested copy repeats what the parent already puts in force"
+		},
+		{
+			"name": "M-RUN-GATE-NO-INDEX",
+			"type": "anyparse.check.common.imports.ImportBlockOrder",
+			"method": "run",
+			"find": "new ImportBindings(IndexScope.lazySymbolIndex(files, plugin), plugin)",
+			"replace": "new ImportBindings(() -> null, plugin)",
+			"note": "the report reads no index, so it never admits a wildcard the fix would sort"
+		},
+		{
+			"name": "M-FIX-GATE-NO-INDEX",
+			"type": "anyparse.check.common.imports.ImportBlockOrder",
+			"method": "fix",
+			"find": "new ImportBindings(IndexScope.lazySymbolIndex([], plugin, index), plugin)",
+			"replace": "new ImportBindings(() -> null, plugin)",
+			"note": "the fix reads no index, so it splits a reported block at the wildcard and sorts each piece instead of the block"
+		},
+		{
+			"name": "M-WEDGE-WILDCARD-LIFTED",
+			"type": "anyparse.check.common.imports.ImportBlockOrder",
+			"method": "stayingBelow",
+			"force": "[]",
+			"note": "a wildcard member below a wedged `using` is lifted into the merged block above the group"
+		},
+		{
+			"name": "M-WEDGE-WILDCARD-CROSSES-USING",
+			"type": "anyparse.check.common.imports.ImportBlockOrder",
+			"method": "mergeable",
+			"find": "if (stayingBelow(wedge).exists(line -> line.declFrom < lastUsing)) return false;",
+			"replace": "",
+			"note": "a wildcard between two wedged `using` groups is left below the merged group, crossing the later one"
+		},
+		{
+			"name": "M-UNUSED-VALUES-BLIND",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "valuesKeepAlive",
+			"force": "false",
+			"note": "a module import kept alive only by a bare module-level field or constructor is deleted — the only binder breaks the build, the LAST of two silently rebinds"
+		},
+		{
+			"name": "M-UNUSED-VALUES-UNLISTED-DELETED",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "valuesKeepAlive",
+			"find": "if (!membersByPath.exists(imp.raw) || typeValues != null && fieldValues != null) return false;",
+			"replace": "return false;",
+			"note": "a known module whose constructors cannot be listed is deleted on its type names alone"
+		},
+		{
+			"name": "M-REDUNDANT-VALUES-BLIND",
+			"type": "anyparse.check.common.imports.RedundantImport",
+			"method": "valuesBoundElsewhere",
+			"force": "false",
+			"note": "a sub-type import is deleted though a third line binds one of its constructors, so the bare name moves to that line"
+		},
+		{
+			"name": "M-REDUNDANT-AMBIENT-VALUES",
+			"type": "anyparse.check.common.imports.RedundantImport",
+			"method": "ambientProviderOf",
+			"find": "if (!ImportBindings.bindsNoValue(",
+			"replace": "if (false && !ImportBindings.bindsNoValue(",
+			"note": "an own enum import duplicated by the ambient source is deleted, though an own import of another enum sharing a constructor then wins it"
+		},
+		{
+			"name": "M-HOIST-VALUES-BLIND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "hoistableOf",
+			"find": "return if (!ImportBindings.bindsNoValue(binding))\n\t\t\tnull",
+			"replace": "return if (false && !ImportBindings.bindsNoValue(binding))\n\t\t\tnull",
+			"note": "an enum import is hoisted into the ambient source, where its constructors outrank a module's own field imports in either order"
+		},
+		{
+			"name": "M-GUARD-REBIND-BLIND",
+			"type": "anyparse.check.common.imports.ImportOutsideGuard",
+			"method": "rebindsAName",
+			"force": "false",
+			"note": "a stranded `using` is moved below a guarded import binding the same name, so the LAST statement — and the meaning — changes"
+		},
+		{
+			"name": "M-UNUSED-USING-NO-DOOR",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "addUsingViolation",
+			"find": "scan.sites.calledThrough(imp.raw, methods)",
+			"replace": "OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods)",
+			"note": "unused-import stops asking the door"
+		},
+		{
+			"name": "M-HOIST-USINGS-SOURCE-ORDER",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "builtAmbientSource",
+			"find": "usings.reverse();",
+			"replace": "",
+			"note": "hoisted usings are inserted first-first at a seat that puts each above the first, so they land reversed — and a using order IS its static-extension priority"
+		},
+		{
+			"name": "M-HOIST-RECEIVER-UNVOUCHED",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "reachesEveryReceiver",
+			"force": "true",
+			"note": "every governed module is taken to resolve a statement it would receive, so a library import lands in an ambient source governing a module another build compiles without that library, and that build stops on the ambient source"
+		},
+		{
+			"name": "M-HOIST-RECEIVER-EVIDENCE-BLIND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "resolvesInto",
+			"force": "false",
+			"note": "a receiver's own statements never vouch for the classpath entry it already compiles with, so every statement from a library is withheld wherever one governed module does not spell it"
+		},
+		{
+			"name": "M-HOIST-IMPLICIT-TIER-BLIND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "reachesEveryReceiver",
+			"find": "if (resolve.refs.names.implicitImportFiles().exists(found -> originOf(found) == origin)) return true;",
+			"replace": "if (false) return true;",
+			"note": "the language's implicit tier no longer vouches for a receiver, so an allow-listed using of a top-level std module is withheld from every directory where one module spells no other std statement"
+		},
+		{
+			"name": "M-HOIST-TIE-NEAREST-FIRST",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "contextOf",
+			"find": "wider != 0 ? wider : order.indexOf(b) - order.indexOf(a);",
+			"replace": "wider != 0 ? wider : order.indexOf(a) - order.indexOf(b);",
+			"note": "of two sites governing the same modules the nested one is weighed first, so a parent whose every module sits under one child takes the statement its child already took and one chain carries it twice"
+		},
+		{
+			"name": "M-SINK-NEVER-SOUND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "sinkSound",
+			"force": "false",
+			"note": "no ambient statement is ever judged safe to send back to its readers, so the reverse direction proposes nothing and a statement one module reads stays in the source of a whole directory"
+		},
+		{
+			"name": "M-SINK-SHARE-BLIND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "sinkSite",
+			"find": "if (candidate == null || reading.length == 0 || reading.length * PERCENT >= sink * governed.length) continue;",
+			"replace": "if (candidate == null || reading.length == 0) continue;",
+			"note": "the reader share is never read, so every ambient statement any module reads is sent back into its readers however many of them there are"
+		},
+		{
+			"name": "M-SINK-HYSTERESIS-OFF",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "sinkSite",
+			"find": "if (sink >= (cfg.intOption(RULE_ID, 'threshold') ?? DEFAULT_THRESHOLD)) return;",
+			"replace": "if (sink < 0) return;",
+			"note": "a sink threshold at or above the hoist one is honoured, so one share sits on both sides and a fix run moves the same statement into the ambient source and back out of it pass after pass"
+		},
+		{
+			"name": "M-SINK-RIVAL-BLIND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "sinkSound",
+			"find": "if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;",
+			"replace": "if (imp.guarded) return false;",
+			"note": "a nearer ambient source binding the same name to another type is no rival, so the own copy a sink writes outranks it and the reader's name turns to the sunk statement's type"
+		},
+		{
+			"name": "M-SINK-OWN-RIVAL-BLIND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "sinkSound",
+			"find": "!(statementKeyOf(imp) == key && !imp.guarded) && SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)",
+			"replace": "false",
+			"note": "a reader's own import of the same name is no rival, so the own copy a sink writes lands beside it and whichever sorts last takes the name"
+		},
+		{
+			"name": "M-SINK-USING-RANK-BLIND",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "sinkSound",
+			"find": "if (statement.isUsing && imp.kind == ImportKind.Using && ctx.contested(file, statement.path, imp.raw)) return false;",
+			"replace": "if (statement.isUsing && imp.guarded) return false;",
+			"note": "another using in the reader's chain is no rival, so a sunk using turns own and outranks it, and every extension method both declare resolves to the sunk one"
+		},
+		{
+			"name": "M-EMPTY-AMBIENT-NEVER",
+			"type": "anyparse.check.common.imports.EmptyAmbientSource",
+			"method": "blankness",
+			"force": "null",
+			"note": "no ambient source is ever empty, so the file an emptying fix leaves behind stays on disk unreported"
+		},
+		{
+			"name": "M-EMPTY-AMBIENT-KEEPS",
+			"type": "anyparse.check.common.imports.EmptyAmbientSource",
+			"method": "crossFileFix",
+			"force": "[]",
+			"note": "a blank ambient source is reported and never deleted, so every emptying fix leaves its file behind"
+		},
+		{
+			"name": "M-SINK-WHOLE-FILE",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "sinkSlice",
+			"find": "edits: [narrowedEdit(sourceOf[file] ?? '', textOf[file] ?? '')]",
+			"replace": "edits: [{ span: new Span(0, (sourceOf[file] ?? '').length), text: textOf[file] ?? '' }]",
+			"note": "a sink rewrites each reader as one whole-file edit, so a cross-file rename another rule makes in that reader in the same pass overlaps it and one of the two is lost"
+		},
+		{
+			"name": "M-UNUSED-USING-SELF-MENTION",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "addUsingViolation",
+			"find": "referenced(scans.filter(s -> !declaring.contains(s.file)), SourceText.lastSegment(imp.raw))",
+			"replace": "referenced(scans, SourceText.lastSegment(imp.raw))",
+			"note": "the declaring module's own declaration reads as a use of an ambient `using` of it, so a dead one is never reported"
+		},
+		{
+			"name": "M-HOIST-BUILDS-UNASKED",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "buildsByParsedFile",
+			"force": "null",
+			"note": "the run's declared builds are never asked which files each parses, so a receiver no statement of its own vouches for withholds a statement every build reading it already reads"
+		},
+		{
+			"name": "M-HOIST-BUILD-WITHOUT-MODULE-IGNORED",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "parsedWithEveryReceiver",
+			"find": "if (!readers.foreach(build -> carrying.contains(build))) return false;",
+			"replace": "if (false) return false;",
+			"note": "a build that parses a receiver but not the statement's module no longer withholds the statement, so the ambient source stops that build on an import it cannot resolve"
+		},
+		{
+			"name": "M-HOIST-UNPARSED-RECEIVER-WITHHELD",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "parsedWithEveryReceiver",
+			"find": "parsing[OracleCoverage.canonical(cwd, file)] ?? [];",
+			"replace": "parsing[OracleCoverage.canonical(cwd, file)] ?? [-1];",
+			"note": "a receiver no declared build parses is read as parsed by a build that lacks the statement's module, so a statement is withheld from a directory holding code no build compiles"
+		},
+		{
+			"name": "M-HOIST-UNKNOWN-BUILDS-GUESSED",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "reachesEveryReceiver",
+			"find": "if (ctx.holdsWithoutBuilds()) return false;",
+			"replace": "if (false) return false;",
+			"note": "a project that declared its build list complete and whose builds the run does not know falls back on classpath evidence, so `--fix --no-oracle` writes an ambient statement into a directory a build of that list compiles without the statement's module"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-SITE-BLIND",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "valueNameFree",
+			"force": "true",
+			"note": "a value site is shortened whatever binds the short name there, so a local, a module enum constructor or an imported-beside local silently becomes what the expression reads"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-SITE-NEVER",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "valueNameFree",
+			"force": "false",
+			"note": "no value site is ever shortened, so a static call or a type argument whose short name binds nothing else stays qualified"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-DOORS-SKIPPED",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "valueNameFree",
+			"find": "&& ValueDoors.bindsNoValue(site, name, o.span, info, context.tree, context.shape, file, index);",
+			"replace": ";",
+			"note": "only the file's own text is asked, so a field the enclosing type INHERITS outranks the shortened type at a value site unseen"
+		},
+		{
+			"name": "M-SHORTEN-GUARDED-NEVER",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "guardedTakes",
+			"force": "false",
+			"note": "a `#if` occurrence is never rewritten, so it stays qualified beside an unguarded short use of the name and beside the import its path buys"
+		},
+		{
+			"name": "M-SHORTEN-GUARDED-RIDES-FRESH-IMPORT",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "guardedTakes",
+			"find": "printed.importPath != null || ",
+			"replace": "",
+			"note": "a `#if` occurrence of a path that buys its import keeps the full path, so the guarded spelling ignores the unconditional import the same call adds"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-POSITIONS-ALWAYS",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "planFor",
+			"find": "options.valuePositions && valueNameFree",
+			"replace": "valueNameFree",
+			"note": "value positions are rewritten and counted toward an import although the project never opted them in"
+		},
+		{
+			"name": "M-SHORTEN-IMPORT-MIN-USES-IGNORED",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "optionsFor",
+			"find": "config.intOption(RULE_ID, IMPORT_MIN_USES_KEY) ?? DEFAULT_IMPORT_MIN_USES",
+			"replace": "DEFAULT_IMPORT_MIN_USES",
+			"note": "the project's importMinUses is ignored, so an import is bought at the default count whatever the project declared"
+		},
+		{
+			"name": "M-SHORTEN-COUNT-BY-SPELLING",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "resolvedTypes",
+			"find": "out[o.path] = printer.resolvePath(o.path) ?? o.path;",
+			"replace": "out[o.path] = o.path;",
+			"note": "occurrences are grouped by how they are spelled, so a hybrid and the module-qualified path of the same type each fall short of the import threshold"
+		},
+		{
+			"name": "M-SHORTEN-GUARDED-WITHOUT-SHORT-USE",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "guardedTakes",
+			"force": "true",
+			"note": "every `#if` occurrence takes the short spelling, even where nothing unguarded in the file writes that name"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-POSITIONS-DEFAULT-OFF",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "optionsFor",
+			"find": "VALUE_POSITIONS_KEY) ?? true",
+			"replace": "VALUE_POSITIONS_KEY) ?? false",
+			"note": "value positions are skipped unless the project opts them in, so a static call whose short name the compiler confirms stays qualified"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-UNANSWERED-SKIPPED",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "unansweredValueSites",
+			"force": "[]",
+			"note": "a value-site rewrite needs no compiler answer, so a build macro's static can silently take over the shortened call"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-REFUSAL-NOT-REPLANNED",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "fixGrouped",
+			"find": "for (key in lost) refused.push(key);",
+			"replace": "return edits.filter(e -> !lost.contains(spanKey(e.span)));",
+			"note": "a refused value site is dropped without planning again, so the import it helped buy stays behind for a single rewrite"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-OFFSET-UNSHIFTED",
+			"type": "anyparse.check.common.imports.ShortenTypeRef",
+			"method": "shiftedStart",
+			"force": "at",
+			"note": "the compiler is asked at the original offset in the rewritten text, past the import the same rewrite adds, so it answers about another name"
+		}
+	]
+}

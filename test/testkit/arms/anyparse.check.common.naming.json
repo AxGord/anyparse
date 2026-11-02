@@ -1,0 +1,508 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.common.naming. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-NAMING-SKIPSCAN-REPORT-INDEX",
+			"type": "anyparse.check.common.naming.NamingRenames",
+			"method": "crossFileCandidate",
+			"find": "final unreadable: Array<String> = resolutionIndex.text.skippedFilesMentioning([decl.name, ownerName, targetName], declFile);",
+			"replace": "final unreadable: Array<String> = index.text.skippedFilesMentioning([decl.name, ownerName, targetName]);",
+			"note": "the cross-file rename asks the REPORT index about unreadable files again, so a skip-parsing project module outside the lint scope stops refusing a rename it can invalidate"
+		},
+		{
+			"name": "M-CONFINEMENT-REPORT-INDEX-RENAME",
+			"type": "anyparse.check.common.naming.Naming",
+			"method": "fix",
+			"find": "resolutionIndex, wideIndex,",
+			"replace": "resolutionIndex, index,",
+			"note": "the single-file rename asks the REPORT index for confinement again, so an `@:access` grantee outside the lint scope is invisible, the member reads as confined and the rename rewrites the declaring file alone — orphaning the grantee's access. Cuts the ARGUMENT rather than the local since S180: the local `wideIndex` now feeds the reflection scan beside it, and an arm that cut it would disable two proofs at once"
+		},
+		{
+			"name": "M-REFLECTION-REPORT-INDEX-RENAME",
+			"type": "anyparse.check.common.naming.NamingRenames",
+			"method": "reflectionNamesInOtherFiles",
+			"find": "for (entry in ReflectionScan.scopeFiles(index == null ? [] : indexSources(index), plugin)) if (entry.file != currentFile) {",
+			"replace": "for (entry in (index == null ? [] : indexSources(index))) if (entry.file != currentFile) {",
+			"note": "the cross-file reflection guard walks the REPORT index alone again instead of the shared scope seam, so a `Reflect.field(x, 'name')` in a file the run does not lint contributes no name, the guard has nothing to refuse on and the single-file rename orphans the reflective read"
+		},
+		{
+			"name": "M-GATE-NOOP-UNDERSCORE",
+			"type": "anyparse.check.common.naming.NoUnderscorePrefix",
+			"method": "skipReason",
+			"force": "null",
+			"note": "no-underscore-prefix exempting params and locals is reported as running"
+		},
+		{
+			"name": "M-SHADOWING-BINDER-UNPROVEN",
+			"type": "anyparse.check.common.naming.ShadowingCaseBinder",
+			"method": "armFindings",
+			"find": "if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, binder, scope)) continue;",
+			"replace": "",
+			"note": "a binder that may compare against a constant is reported as a catch-all"
+		},
+		{
+			"name": "M-PRIVATIZE-NO-CANDIDATE",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "isCandidate",
+			"force": "false",
+			"note": "no finding is ever a privatize candidate, so the public `_x` nothing outside reads is renamed again"
+		},
+		{
+			"name": "M-PRIVATIZE-METHOD-CANDIDATE",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "isCandidate",
+			"find": "decl.category != NamingCategory.Field || ",
+			"replace": "",
+			"note": "a method is a candidate too, though its visibility answers to overrides and interfaces"
+		},
+		{
+			"name": "M-PRIVATIZE-NO-UNDERSCORE",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "isCandidate",
+			"find": "!decl.name.startsWith(UNDERSCORE) || ",
+			"replace": "",
+			"note": "a public field without the private marker is a candidate under a policy whose private rule admits it"
+		},
+		{
+			"name": "M-PRIVATIZE-NOT-PUBLIC",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "isCandidate",
+			"find": " || !decl.mods.contains(PUBLIC_MOD)) return false;",
+			"replace": ") return false;",
+			"note": "a field already private is a candidate, whose `public` keyword does not exist"
+		},
+		{
+			"name": "M-PRIVATIZE-NO-OWNER",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "isCandidate",
+			"find": "if (decl.enclosingType == null || ",
+			"replace": "if (",
+			"note": "a declaration with no enclosing type is a candidate"
+		},
+		{
+			"name": "M-PRIVATIZE-IMPLICIT-REACH",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "isCandidate",
+			"find": " || decl.implicitReach != null",
+			"replace": "",
+			"note": "an annotated / registry member some mechanism reaches without a written reference is privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-RENAME-UNSAFE",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "isCandidate",
+			"find": " || decl.renameUnsafe == true",
+			"replace": "",
+			"note": "a member the grammar marks rename-unsafe (accessor property, @:rtti, structure field) is privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-RULE-UNCHECKED",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "isCandidate",
+			"find": "return rule != null && rule.format.match(decl.name);",
+			"replace": "return true;",
+			"note": "a field the private rule would still flag (`_Label`, a static) is privatized and keeps its finding"
+		},
+		{
+			"name": "M-PRIVATIZE-INCOMPLETE-PROJECT",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "verdicts",
+			"find": " || !RefactorSupport.projectIsComplete(plugin)",
+			"replace": "",
+			"note": "the arm runs on a report set that is not the whole project — the lint-fix-scope incident shape"
+		},
+		{
+			"name": "M-PRIVATIZE-UNCERTAIN-RUN",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "if (found == null || !found.certain) return null;",
+			"replace": "if (found == null) return null;",
+			"note": "a modifier run only some builds see is privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-TYPE-REACH",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "PublicReach.typeOutOfReach(type) || ",
+			"replace": "",
+			"note": "a `@:keep` / `@:build` / extern type's field is privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-CHAIN",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": " || PublicReach.chainOutOfReach(scope, host, type, false)",
+			"replace": "",
+			"note": "an unresolved supertype or an RTTI hierarchy does not refuse"
+		},
+		{
+			"name": "M-PRIVATIZE-AUTOBUILD-COUNTS",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "PublicReach.chainOutOfReach(scope, host, type, false)",
+			"replace": "PublicReach.chainOutOfReach(scope, host, type, true)",
+			"note": "an @:autoBuild ancestor refuses, so no openfl display class is ever privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-ACCESS-GRANT",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "if (ctx.wide.text.hasAccessGrant(owner)) return null;",
+			"replace": "",
+			"note": "an @:access grant naming the type does not refuse"
+		},
+		{
+			"name": "M-PRIVATIZE-FRAGMENT",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "if (ReflectionScan.runtimeNameFragment(ctx.fragments, name)) return null;",
+			"replace": "",
+			"note": "an interpolation fragment that may spell the name at runtime does not refuse"
+		},
+		{
+			"name": "M-PRIVATIZE-TOKENS-UNCHECKED",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "if (PublicReach.occursOnlyWithin(name, ctx.tokens, regions, ctx.wide)) return keyword.span;",
+			"replace": "return keyword.span;",
+			"note": "an outside reader does not refuse"
+		},
+		{
+			"name": "M-PRIVATIZE-NO-SUBTYPE-REGION",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "allowedRegions",
+			"find": "out.push({ file: sub.file.file, source: text, span: sub.type.span });",
+			"replace": "",
+			"note": "a subtype's read refuses, though Haxe private is visible to a subclass"
+		},
+		{
+			"name": "M-NAMING-PRIVATIZE-NOT-DECLINED",
+			"type": "anyparse.check.common.naming.Naming",
+			"method": "crossFileFix",
+			"find": "if (privatizedOf(v) != null) {",
+			"replace": "if (false) {",
+			"note": "the rename runs over a finding the privatize arm owns"
+		},
+		{
+			"name": "M-NAMING-RISKYFIX-EMPTY",
+			"type": "anyparse.check.common.naming.Naming",
+			"method": "riskyFix",
+			"force": "[]",
+			"note": "the privatize arm writes nothing"
+		},
+		{
+			"name": "M-NAMING-RISKY-FINDINGS-ALL",
+			"type": "anyparse.check.common.naming.Naming",
+			"method": "riskyArmFindings",
+			"force": "violations",
+			"note": "every naming finding is handed to the risky arm"
+		},
+		{
+			"name": "M-SHADOWING-LOCAL-NO-RENAME",
+			"type": "anyparse.check.common.naming.ShadowingLocal",
+			"method": "renameEdits",
+			"force": "Declined('mutated')",
+			"note": "no shadow is renamed, so `final event:SidebarTabEvent` over an unread `event` parameter stays a finding although the rename is binder-proven"
+		},
+		{
+			"name": "M-SHADOWING-LOCAL-OUTER-READ-IGNORED",
+			"type": "anyparse.check.common.naming.ShadowingLocal",
+			"method": "readAfter",
+			"force": "false",
+			"note": "a hidden binding read after the inner scope ends no longer keeps the finding, so the rule's own defect shape (a write meant for the outer) is renamed away and buried"
+		},
+		{
+			"name": "M-SHADOWING-LOCAL-NO-ASSIGNMENT",
+			"type": "anyparse.check.common.naming.ShadowingLocal",
+			"method": "assignmentEdit",
+			"force": "null",
+			"note": "a same-block `var` redeclaration of the same type is never turned into an assignment (client DatePicker dayIdx stays a finding)"
+		},
+		{
+			"name": "M-SHADOWING-LOCAL-CAPTURE-IGNORED",
+			"type": "anyparse.check.common.naming.ShadowingLocal",
+			"method": "capturedInNestedFunction",
+			"force": "false",
+			"note": "a closure capturing the first binding does not stop the assignment, so the closure reads the redeclaration's value after the fix"
+		},
+		{
+			"name": "M-NAMING-PROPERTY-FACTS-NULL",
+			"type": "anyparse.check.common.naming.Naming",
+			"method": "propertyFacts",
+			"force": "null",
+			"note": "the naming projection gets no property facts, so every enum-abstract var / final stays a value"
+		},
+		{
+			"name": "M-NAMING-LOCAL-CROSS-NOTE",
+			"type": "anyparse.check.common.naming.NamingRenames",
+			"method": "crossFileCandidate",
+			"find": "if (isBodyScopedCategory(decl.category)) return null;",
+			"replace": "",
+			"note": "the cross-file path writes its not-a-member sentence first on a local / parameter, burying the single-file path's collision reason"
+		},
+		{
+			"name": "M-NUP-DECLINE-SILENT",
+			"type": "anyparse.check.common.naming.NoUnderscorePrefix",
+			"method": "renameSpansFor",
+			"find": "refusal(RenameRefusal.nameCollides(target));",
+			"replace": "",
+			"note": "a strip refused on a collision returns no edit and no reason"
+		},
+		{
+			"name": "M-NUP-SUPERSEDES-NONE",
+			"type": "anyparse.check.common.naming.NoUnderscorePrefix",
+			"method": "supersedes",
+			"force": "[]",
+			"note": "no-underscore-prefix no longer replaces naming's finding on the same binding"
+		},
+		{
+			"name": "M-NAMING-CROSS-GRANTEES-DROPPED",
+			"type": "anyparse.check.common.naming.NamingRenames",
+			"method": "crossFileCandidate",
+			"find": "final grantees: Array<String> = opened;",
+			"replace": "final grantees: Array<String> = [];",
+			"note": "a granted member's rename stops at its own hierarchy and strands the grantee's access"
+		},
+		{
+			"name": "M-NAMING-FOREIGN-UNBOUND",
+			"type": "anyparse.check.common.naming.NamingRenames",
+			"method": "foreignBoundSpans",
+			"force": "[]",
+			"note": "an unrelated class's own same-named private blocks a public rename and the privatize arm again"
+		},
+		{
+			"name": "M-NAMING-OUTSIDE-SCOPE-IGNORED",
+			"type": "anyparse.check.common.naming.NamingRenames",
+			"method": "outsideScopeFile",
+			"force": "null",
+			"note": "a narrowed --fix renames a public member a project file outside the run still reads"
+		},
+		{
+			"name": "M-PRIVATIZE-FOREIGN-IGNORED",
+			"type": "anyparse.check.common.naming.NamingPrivatize",
+			"method": "foreignRegions",
+			"force": "[]",
+			"note": "the privatize arm counts an unrelated class's own same-named private as a read of the member"
+		},
+		{
+			"name": "M-NAMING-FOREIGN-LOSES-TO-BARE",
+			"type": "anyparse.check.common.naming.NamingRenames",
+			"method": "otherFileRenameSpans",
+			"find": "for (s in refs.bareBound) if (!OccurrenceScan.offsetWithinAny(s.from, foreign)) s",
+			"replace": "for (s in refs.bareBound) s",
+			"note": "a subtype's same-named parameter read is renamed into the inherited field: `super.setup(accountScreen)` becomes `super.setup(_accountScreen)`, which compiles"
+		},
+		{
+			"name": "M-XRENAME-NOT-CANDIDATE",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "isCandidate",
+			"find": "(decl.category == NamingCategory.Type || decl.category == NamingCategory.EnumValue)",
+			"replace": "false",
+			"note": "no type or enum value reaches the cross-file rename arm"
+		},
+		{
+			"name": "M-XRENAME-FINDINGS-NONE",
+			"type": "anyparse.check.common.naming.Naming",
+			"method": "riskyCrossFileFindings",
+			"force": "[]",
+			"note": "the verifier is handed no finding of the cross-file arm"
+		},
+		{
+			"name": "M-XRENAME-EDITS-DROPPED",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "slicesOf",
+			"find": "edits: change.edits",
+			"replace": "edits: []",
+			"note": "the engine's edits never reach the edit set"
+		},
+		{
+			"name": "M-XRENAME-INDEXED-UNDERLYING",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "!indexed.contains(type.underlyingRaw ?? '')",
+			"replace": "true",
+			"note": "an implicit Int value is refused as if it were its name"
+		},
+		{
+			"name": "M-XRENAME-RUNTIME-TYPE",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "!kinds.contains(type.kind)",
+			"replace": "false",
+			"note": "a class is renamed although its name exists at run time"
+		},
+		{
+			"name": "M-XRENAME-MAIN-TYPE",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "type.isMain",
+			"replace": "false",
+			"note": "a module main type is renamed without its file"
+		},
+		{
+			"name": "M-XRENAME-TYPE-META",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "unsafeTypeMeta",
+			"force": "false",
+			"note": "a type carrying @:native / @:keep is renamed"
+		},
+		{
+			"name": "M-XRENAME-SAFE-META",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "unsafeTypeMeta",
+			"find": "!inert.contains(hit.annotation)",
+			"replace": "true",
+			"note": "an inert @:forward refuses the rename"
+		},
+		{
+			"name": "M-XRENAME-GUARDED",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "type.guarded",
+			"replace": "false",
+			"note": "a type only one build sees is renamed"
+		},
+		{
+			"name": "M-XRENAME-ENUM-CTOR",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "type.kind != ctx.shape.enumAbstractDeclKind",
+			"replace": "false",
+			"note": "a plain enum constructor is treated as an enum-abstract value"
+		},
+		{
+			"name": "M-XRENAME-STRING",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "stringNamesIt",
+			"force": "false",
+			"note": "a literal naming the declaration does not refuse"
+		},
+		{
+			"name": "M-XRENAME-TYPE-PATH",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ReflectionScan.runtimeTypePath(ctx.surface.whole, decl.name)",
+			"replace": "false",
+			"note": "a Type.resolveClass path literal does not refuse"
+		},
+		{
+			"name": "M-XRENAME-OLD-SHARED",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ctx.index.refs.declaringFiles(decl.name).length != 1",
+			"replace": "false",
+			"note": "a second declaration of the old type name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-NEW-DECLARED",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ctx.index.refs.declaringFiles(newName).length > 0",
+			"replace": "false",
+			"note": "a library type of the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-NEW-SPELLED",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "spelledInProject",
+			"force": "false",
+			"note": "a project reference already spelling the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-OLD-SHARED",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "valueDeclaredElsewhere(decl.name, type, ctx)",
+			"replace": "false",
+			"note": "another enum value of the old name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-NEW-SHARED",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "valueDeclaredElsewhere(newName, type, ctx)",
+			"replace": "false",
+			"note": "another enum value of the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-PROPERTY",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "valueDeclaredElsewhere",
+			"find": "!m.hasGetter && !m.hasSetter",
+			"replace": "true",
+			"note": "an enum abstract property of the old name refuses as if it were a value"
+		},
+		{
+			"name": "M-XRENAME-VALUE-BOUND",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "boundWhereRenamed",
+			"force": "false",
+			"note": "a binding of the new name in a file the rename edits does not refuse"
+		},
+		{
+			"name": "M-XRENAME-OUTSIDE",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "slicesOf",
+			"find": "!ctx.files.exists(f -> f.file == change.file)",
+			"replace": "false",
+			"note": "a narrowed run edits a project file outside its scope"
+		},
+		{
+			"name": "M-XRENAME-VALUE-META",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "member.metaNames.length > 0",
+			"replace": "false",
+			"note": "a value carrying metadata is renamed"
+		},
+		{
+			"name": "M-XRENAME-NO-PROJECT",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "edits",
+			"find": "RefactorSupport.completeProjectSourcesOf(plugin);",
+			"replace": "RefactorSupport.completeProjectSourcesOf(plugin) ?? files;",
+			"note": "the arm runs without the whole project indexed"
+		},
+		{
+			"name": "M-XRENAME-STRING-TYPES-ONLY",
+			"type": "anyparse.check.common.naming.NamingCrossRename",
+			"method": "renameFor",
+			"find": "isType && stringNamesIt(decl.name, ctx)",
+			"replace": "stringNamesIt(decl.name, ctx)",
+			"note": "a literal spelling an enum-abstract value's name (data) refuses its rename"
+		},
+		{
+			"name": "M-NAMING-READONLY-IGNORES-WRITE",
+			"type": "anyparse.check.common.naming.Naming",
+			"method": "propertyClauseAt",
+			"find": "storageless && AccessorClauseText.writesNever(clause)",
+			"replace": "storageless",
+			"note": "a `(get, set)` property reads as read-only, so a public static one takes the constant format"
+		},
+		{
+			"name": "M-SHADOWING-PARAM-NO-RENAME",
+			"type": "anyparse.check.common.naming.ShadowingLocal",
+			"method": "shadowFix",
+			"find": "if (site.seams.reportParameters) return renameEdits(site, decl, name, span, path[path.length - 2]);",
+			"replace": "if (site.seams.reportParameters) return Declined('mutated');",
+			"note": "no shadowing parameter is renamed, so `(item:DiskSystemItemData) -> …` over a local `item` stays a finding although the rename is binder-proven"
+		},
+		{
+			"name": "M-SHADOWING-PARAM-ANY-TYPE",
+			"type": "anyparse.check.common.naming.ShadowingLocal",
+			"method": "typeNamedLocal",
+			"force": "'renamed'",
+			"note": "any written type names a replacement, `Null<Array<Item>>` and `String` included, so a parameter is renamed to a name no type gave it"
+		},
+		{
+			"name": "M-NAMING-HANDLER-OVERRIDE",
+			"type": "anyparse.check.common.naming.NamingOptions",
+			"method": "handlerRule",
+			"find": "forbidMods: HANDLER_EXEMPT_MODS.copy()",
+			"replace": "forbidMods: []",
+			"note": "an override of a supertype onX listener is reported as a name the project chose"
+		}
+	]
+}

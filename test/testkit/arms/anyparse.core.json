@@ -1,0 +1,601 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.core. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-COLLAPSE-REWRITE-MEMO-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rewrite",
+			"find": "if (hit != null) return hit;",
+			"replace": "",
+			"note": "the pass rewrites a shared Doc node once per path to it, so a nest of two-branch ctors is rewritten 2^depth times"
+		},
+		{
+			"name": "M-COLLAPSE-SUBTREE-MEMO-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "anyInSubtree",
+			"find": "if (hit != null) return hit;",
+			"replace": "",
+			"note": "every subtree question walks a shared node once per path to it, 2^depth on a nest of two-branch ctors"
+		},
+		{
+			"name": "M-COLLAPSE-COMMIT-MEMO-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "commitOpens",
+			"find": "if (hit != null) return hit;",
+			"replace": "",
+			"note": "committing an opened paren re-commits a shared node once per path to it"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GATE-OFF",
+			"type": "anyparse.core.DocMeasure",
+			"method": "gluedTernaryTail",
+			"find": "run < 0",
+			"replace": "true",
+			"note": "a ternary after a paren group that opens glues its `? a : b` onto the closing `)` line with no width check, so the line overflows or the else branch breaks its own arguments"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GATE-NESTED-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "commitOpensUnmemoized",
+			"find": "return ternaryTailGate(d, opened, decisions, width) ?? WrapBoundary(opened);",
+			"replace": "return WrapBoundary(opened);",
+			"note": "a ternary nested inside a committed glue keeps its `? a : b` on its condition's closing line whatever its width"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GATE-OFF-BY-ONE",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": ": IfArrowContinuationFitsWithRest(0, tail.width, limit, broken, closing);",
+			"replace": ": IfArrowContinuationFitsWithRest(0, tail.width, limit + 1, broken, closing);",
+			"note": "a closing line one column past the limit still carries the ternary tail"
+		},
+		{
+			"name": "M-TERNARY-TAIL-REST-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": ": IfArrowContinuationFitsWithRest(0, tail.width, limit, broken, closing);",
+			"replace": ": IfArrowContinuationFits(0, tail.width, limit, broken, closing);",
+			"note": "what follows the ternary on its tail line (`),` / `);`) is not charged, so a glued tail overflows by that much"
+		},
+		{
+			"name": "M-TERNARY-TAIL-FLAT-WIDTH",
+			"type": "anyparse.core.DocMeasure",
+			"method": "gluedTernaryTail",
+			"find": "flatFirstLineWidthThroughBodyGroup(tail)",
+			"replace": "flatTokenWidth(tail)",
+			"note": "a branch that opens its own paren group is counted flat, so `) ? x && (` breaks its seams although that line fits"
+		},
+		{
+			"name": "M-TERNARY-TAIL-BREAKS-CHARGES-REST",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "? IfArrowContinuationFits(0, tail.width, limit, broken, closing)",
+			"replace": "? IfArrowContinuationFitsWithRest(0, tail.width, limit, broken, closing)",
+			"note": "a tail whose branch breaks is charged the `);` that lands on a later line, so a fitting first tail line breaks its seams"
+		},
+		{
+			"name": "M-TERNARY-TAIL-BREAKS-OFF-BY-ONE",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "? IfArrowContinuationFits(0, tail.width, limit, broken, closing)",
+			"replace": "? IfArrowContinuationFits(0, tail.width, limit + 1, broken, closing)",
+			"note": "a first tail line ending where a branch opens its group glues one column past the limit"
+		},
+		{
+			"name": "M-TERNARY-HEAD-GATE-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "return IfFirstLineExceeds(limit, broken, tailLine);",
+			"replace": "return tailLine;",
+			"note": "the head line of a glued ternary is not width-checked, so a condition head past the limit keeps the tail glued behind it"
+		},
+		{
+			"name": "M-TERNARY-HEAD-LIMIT-LOW",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "return IfFirstLineExceeds(limit, broken, tailLine);",
+			"replace": "return IfFirstLineExceeds(limit - 1, broken, tailLine);",
+			"note": "a head line of exactly the limit counts as overflowing, so the ternary breaks its seams although the head fits"
+		},
+		{
+			"name": "M-TERNARY-REST-AWARE-GLUE-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "restAwareGlues",
+			"find": "case Concat(parts) if (DocMeasure.gluesTernary(flat)):",
+			"replace": "case Concat(parts) if (false):",
+			"note": "a rest-aware ternary whose condition closes an opened group is never glued, so its `?` / `:` always break although the tail fits"
+		},
+		{
+			"name": "M-TERNARY-CLOSING-GATE-OFF",
+			"type": "anyparse.core.DocMeasure",
+			"method": "gluedTernaryTail",
+			"find": "closingLine: thenRun < 0 ? -1 : thenRun + ' : '.length + flatFirstLineWidthThroughBodyGroup(parts[4]),",
+			"replace": "closingLine: -1,",
+			"note": "the `) : else` line of an opened then-branch is not width-checked, so it overflows the limit"
+		},
+		{
+			"name": "M-TERNARY-CLOSING-REST-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "IfArrowContinuationFitsWithRest(0, tail.closingLine, limit, broken, glued);",
+			"replace": "IfArrowContinuationFits(0, tail.closingLine, limit, broken, glued);",
+			"note": "what follows the else branch on the `) : else` line is not charged, so that line overflows by that much"
+		},
+		{
+			"name": "M-TERNARY-CLOSING-ELSE-BREAKS-CHARGES-REST",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "IfArrowContinuationFits(0, tail.closingLine, limit, broken, glued)",
+			"replace": "IfArrowContinuationFitsWithRest(0, tail.closingLine, limit, broken, glued)",
+			"note": "an else branch that breaks on the `) : else` line is charged the content that lands on a later line, so a fitting closing line breaks the seams"
+		},
+		{
+			"name": "M-TERNARY-CLOSING-ELSE-BREAKS-OFF-BY-ONE",
+			"type": "anyparse.core.CollapsePass",
+			"method": "ternaryTailGate",
+			"find": "IfArrowContinuationFits(0, tail.closingLine, limit, broken, glued)",
+			"replace": "IfArrowContinuationFits(0, tail.closingLine, limit + 1, broken, glued)",
+			"note": "the `) : else` line of an else branch that breaks on it glues one column past the limit"
+		},
+		{
+			"name": "M-TERNARY-ELSE-BREAKS-UNDETECTED",
+			"type": "anyparse.core.DocMeasure",
+			"method": "gluedTernaryTail",
+			"find": "elseBreaks: hasForcedBreak(parts[4])",
+			"replace": "elseBreaks: false",
+			"note": "an else branch that breaks on the `) : else` line is not recognised, so the rest after it is charged to that line although it lands later"
+		},
+		{
+			"name": "M-TERNARY-HEAD-PENDING-OFF",
+			"type": "anyparse.core.Renderer",
+			"method": "pushFlatWidthBranch",
+			"find": "final effPending: Int = n > width ? pendingSpace : 0;",
+			"replace": "final effPending: Int = 0;",
+			"note": "a strict-limit first-line probe ignores the separator still pending before it, so a head after `= ` glues one column past the limit"
+		},
+		{
+			"name": "M-PROBE-SEARCH-REVISITS",
+			"type": "anyparse.core.Renderer",
+			"method": "findCollapseProbe",
+			"find": "if (seen.exists(node)) continue;",
+			"replace": "",
+			"note": "the collapse-probe search re-walks a shared Doc node once per path to it, 2^depth on a nest of two-branch ctors"
+		},
+		{
+			"name": "M-PAREN-SIBLING-FLAT",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"force": "null",
+			"note": "a paren-open probe measures the rest of its line flat, so the leftmost of two paren operands opens although only the second crosses the limit"
+		},
+		{
+			"name": "M-PAREN-SIBLING-COLLAPSE",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "open.broke && findCollapseProbe(breakDoc) == null ?",
+			"replace": "open.broke ?",
+			"note": "a collapse-candidate paren counts as a break point although it may stay glued at the expression tail, so the paren before it glues and the line overflows"
+		},
+		{
+			"name": "M-PAREN-LIST-BREAK",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "exact && predicts ? frameSibling.col + total - pending : -1",
+			"replace": "-1",
+			"note": "an argument list that crosses the limit is not seen breaking by itself, so the fitting paren before it opens instead"
+		},
+		{
+			"name": "M-PAREN-FLATTEN-REGION",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "case Flatten(innerDoc), HardFlatten(innerDoc):",
+			"replace": "case Flatten(innerDoc), HardFlatten(innerDoc) if (false):",
+			"note": "a paren inside a pinned-flat argument list counts as a break point, so the paren before it glues and the line overflows"
+		},
+		{
+			"name": "M-PAREN-SIBLING-FORCE-FLAT-FRAME",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "final frameSibling: Null<RestSibling> = f.forceFlat ? null : sibling;",
+			"replace": "final frameSibling: Null<RestSibling> = sibling;",
+			"note": "a probe in a force-flat frame counts as a break point, so the paren before it glues and the line overflows"
+		},
+		{
+			"name": "M-PAREN-EXACT-CONTENT",
+			"type": "anyparse.core.Renderer",
+			"method": "rendersAsMeasured",
+			"force": "true",
+			"note": "a paren whose own content can break trusts the columns after it, glues, and its lambda breaks against a rest it no longer counts"
+		},
+		{
+			"name": "M-PAREN-EXACT-REST",
+			"type": "anyparse.core.Renderer",
+			"method": "keepsColumnExact",
+			"force": "true",
+			"note": "a rest node measured on a guessed flat side keeps the column exact, so a group after it is predicted to break at a column render never reaches"
+		},
+		{
+			"name": "M-PAREN-CHAIN-PREDICTS",
+			"type": "anyparse.core.Renderer",
+			"method": "opensDelimiterAlone",
+			"force": "true",
+			"note": "a method-chain probe trusts a later argument list's break, keeps its link glued, and the short call breaks instead"
+		},
+		{
+			"name": "M-PAREN-EXACT-SOFT-BOUNDARY",
+			"type": "anyparse.core.Renderer",
+			"method": "pushRouteChildren",
+			"find": "push(x, e.grouped && !e.forceFlat, false, false)",
+			"replace": "push(x, e.grouped, false, false)",
+			"note": "a soft break under a WrapBoundary inside a Flatten reads as flat, though render restores break mode there, so the asker trusts columns it never reaches"
+		},
+		{
+			"name": "M-PAREN-SIBLING-OFF-PATH",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "case IfFullLineExceeds(_, breakDoc, _) if (onPath && !sibling.groupAsker):",
+			"replace": "case IfFullLineExceeds(_, breakDoc, _) if (!sibling.groupAsker):",
+			"note": "a paren on the flat side of an unresolved probe counts as a break point, though render may take that probe's break side and run the line on"
+		},
+		{
+			"name": "M-PAREN-PENDING-LAST-ONLY",
+			"type": "anyparse.core.Renderer",
+			"method": "heldBackSpace",
+			"find": "case OptSpace(_), OptSpaceSkipAfterHardline: pending + add;",
+			"replace": "case OptSpace(_), OptSpaceSkipAfterHardline: add;",
+			"note": "only the last of several held-back spaces stays out of the column, so a plain group that fits is predicted to break"
+		},
+		{
+			"name": "M-PAREN-ALT-ROUTE",
+			"type": "anyparse.core.Renderer",
+			"method": "restLineWidth",
+			"find": "return if (!routes.endedByPrediction)",
+			"replace": "return if (true)",
+			"note": "a walk a later paren ends answers the walked route only, though render may take an unresolved probe's break side and run the line on past that paren"
+		},
+		{
+			"name": "M-PAREN-ALT-SURPLUS",
+			"type": "anyparse.core.Renderer",
+			"method": "recordRoute",
+			"find": "if (extra > 0) routes.surplus += extra;",
+			"replace": "",
+			"note": "an untaken side that runs on past its node without breaking adds nothing, so a group that breaks onto its wider IfBreak side is measured too short"
+		},
+		{
+			"name": "M-PAREN-RUNON-SUSPEND",
+			"type": "anyparse.core.Renderer",
+			"method": "recordRoute",
+			"find": "if (route.cont >= 0) routes.suspendedAbove.push(height);",
+			"replace": "",
+			"note": "a prediction inside the walked side of a node whose untaken route runs on ends the walk, so what follows the node on that route's line is never counted"
+		},
+		{
+			"name": "M-PAREN-RUNON-RESUME",
+			"type": "anyparse.core.Renderer",
+			"method": "predictsAt",
+			"find": "while (suspended.length > 0 && height < suspended[suspended.length - 1]) suspended.pop();",
+			"replace": "",
+			"note": "a run-on route's suspension outlives its node, so a later paren after the node no longer ends the line and the fitting asker opens"
+		},
+		{
+			"name": "M-PAREN-RUNON-FRAME",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "routes.suspendedAbove.resize(0);",
+			"replace": "",
+			"note": "a run-on route's suspension survives its frame, so a later paren in the next frame no longer ends the line and the fitting asker opens"
+		},
+		{
+			"name": "M-RESTPROBE-COLUMN-GUESS",
+			"type": "anyparse.core.Renderer",
+			"method": "pushStructural",
+			"find": "exactCol: true,",
+			"replace": "exactCol: false,",
+			"note": "a rest-aware group predicts nothing about the rest of its line, so an anon type hint is weighed against the full flat width of an initializer that breaks anyway and breaks itself"
+		},
+		{
+			"name": "M-RESTPROBE-COLUMN-FLAT",
+			"type": "anyparse.core.Renderer",
+			"method": "pushStructural",
+			"find": "col: f.indent < col ? f.indent : col,",
+			"replace": "col: col + pendingSpace + DocMeasure.flatTokenWidth(inner),",
+			"note": "a rest-aware group predicts the rest from its flat-layout column, so a trailing list that breaks only because the group stayed flat is taken as a break of its own and the group stays flat over it"
+		},
+		{
+			"name": "M-RESTPROBE-FULL-LINE",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "if (onPath && !sibling.groupAsker):",
+			"replace": "if (onPath):",
+			"note": "a later full-line probe ends a rest-aware group's line too, so a call stays flat and its chain link breaks, opening only because the call did not"
+		},
+		{
+			"name": "M-REST-FORCEFLAT-FRAME-INEXACT",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "if (f.forceFlat && !rendersAsMeasured(Flatten(f.doc), groupAsker)) exact = false;",
+			"replace": "if (f.forceFlat) exact = false;",
+			"note": "a force-flat frame ends the column predictions even when it renders as measured, so an anon nested in a flat hint is weighed against the literal behind the hint and breaks inside it"
+		},
+		{
+			"name": "M-REST-GROUP-FRAME-INEXACT",
+			"type": "anyparse.core.Renderer",
+			"method": "rendersAsMeasured",
+			"find": "case GroupWithRestProbe(_) if (!e.forceFlat && !restProbeEnds):",
+			"replace": "case GroupWithRestProbe(_) if (!e.forceFlat):",
+			"note": "a force-flat tail holding a second nested anon ends the column predictions for a group asker, so the first nested anon breaks inside a flat hint"
+		},
+		{
+			"name": "M-REST-GROUP-NODE-INEXACT",
+			"type": "anyparse.core.Renderer",
+			"method": "keepsColumnExact",
+			"find": "case GroupWithRestProbe(_) if (restProbeEnds): true;\n",
+			"replace": "",
+			"note": "a rest-aware group in a group asker's rest ends the column predictions, so a later literal that breaks by itself is measured flat"
+		},
+		{
+			"name": "M-PENDING-HARDLINE-BLANK-FLUSHED",
+			"type": "anyparse.core.Renderer",
+			"method": "absorbedByPendingHardline",
+			"find": "return !verbatim && ctx.pendingHardline >= 0 && trailBlankStart(s) == 0;",
+			"replace": "return false;",
+			"note": "a blank gap flushes a pending forward hardline and is written after it, so the keyword after `} // c` lands one space past the indent"
+		},
+		{
+			"name": "M-BREAK-EVERY-NODE",
+			"type": "anyparse.core.BreakCommits",
+			"method": "outermostPerToken",
+			"force": "commits",
+			"note": "every node of a break is offered again by every list it is nested in, so the alternatives, and the Doc, grow exponentially with the nesting depth"
+		},
+		{
+			"name": "M-PAREN-MEASURES-COMMITTED",
+			"type": "anyparse.core.BreakCommits",
+			"method": "followBare",
+			"find": "(with, _) -> shape(bare(with[0], memo))",
+			"replace": "(with, _) -> shape(with[0])",
+			"note": "an expression paren measures a committed literal break deferred, so the paren that opens for every narrower literal glues once the literal breaks: one write still, but onto the other fixed point than the one the paren reached before"
+		},
+		{
+			"name": "M-BREAKMARK-SITE-OFF",
+			"type": "anyparse.core.BreakCommits",
+			"method": "named",
+			"find": "BreakCommit(committed(brk, BodyGroup(brk)), rebuild(BreakMark(brk, token)), token);",
+			"replace": "rebuild(brk);",
+			"note": "an `#if` branch literal that breaks by its own width decision is no longer named, so a list around it lays itself out from the flat item and the next write, reading the broken literal back, lays the list out by the multi-line-item rules"
+		},
+		{
+			"name": "M-BREAKMARK-UNRECORDED",
+			"type": "anyparse.core.Renderer",
+			"method": "pushStructural",
+			"find": "\t\t\t\tif (!f.forceFlat) decisions?.push({ node: f.doc, crosses: true });\n\t\t\t\tstack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));\n\t\t\tcase BreakCommit(_, flat):",
+			"replace": "\t\t\t\tstack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));\n\t\t\tcase BreakCommit(_, flat):",
+			"note": "the measure render no longer records a rendered `BreakMark`, so no named literal ever resolves its `BreakCommit` to the read-back layout"
+		},
+		{
+			"name": "M-BREAKMARK-UNREAD",
+			"type": "anyparse.core.BreakCommits",
+			"method": "tookNewBreaks",
+			"find": "case BreakMark(_, token): token;",
+			"replace": "case BreakMark(_, _): null;",
+			"note": "the measure's recorded `BreakMark`s are not read as taken breaks, so the read-back layout is never picked"
+		},
+		{
+			"name": "M-BREAKMARK-ONE-ROUND",
+			"type": "anyparse.core.BreakCommits",
+			"method": "resolve",
+			"find": "for (_ in 0...MEASURE_ROUNDS) {",
+			"replace": "for (_ in 0...1) {",
+			"note": "the committed layout is not measured again, so a literal that only the committed layout pushes past the limit (a call that opens around a comprehension) breaks un-read-back"
+		},
+		{
+			"name": "M-BREAKMARK-REBUILD-FRESH-TOKEN",
+			"type": "anyparse.core.D",
+			"method": "mapChildren",
+			"find": "case BreakMark(inner, token): BreakMark(f(inner), token);",
+			"replace": "case BreakMark(inner, _): BreakMark(f(inner), new BreakToken());",
+			"note": "a rebuilt `BreakMark` loses its token, so a copy a list lays out names a break no `BreakCommit` waits for"
+		},
+		{
+			"name": "M-REGION-SEAMS-SOFT",
+			"type": "anyparse.core.BreakCommits",
+			"method": "hardSeams",
+			"find": "case Line(flat, verbatim) if (flat != '\\n'): Line('\\n', verbatim);",
+			"replace": "case Line(flat, verbatim) if (false): Line('\\n', verbatim);",
+			"note": "the read-back form keeps soft seams, so the list measures the broken region as flat as before"
+		},
+		{
+			"name": "M-REGION-MARK-ALWAYS",
+			"type": "anyparse.core.BreakCommits",
+			"method": "namedRegion",
+			"find": "Concat([IfBreak(BreakMark(Empty, token), Empty), inner])",
+			"replace": "Concat([BreakMark(Empty, token), inner])",
+			"note": "the mark renders whether or not the group breaks, so a region that fits is committed broken"
+		},
+		{
+			"name": "M-NESTED-THROUGH-BODIES",
+			"type": "anyparse.core.BreakCommits",
+			"method": "nested",
+			"find": "case BodyGroup(_) if (!throughBodies):",
+			"replace": "case BodyGroup(_) if (false):",
+			"note": "the walk descends fit bodies whatever the caller asked"
+		},
+		{
+			"name": "M-WIDTH-RULE-DECISION-UNREAD",
+			"type": "anyparse.core.BreakCommits",
+			"method": "decisionMapped",
+			"find": "f(brk, b -> Group(IfWidthExceeds(n, b, flat)));",
+			"replace": "null;",
+			"note": "a literal broken by a lineLength rule is no width decision to the shared reader, so its comprehension body stays glued and the next write moves it Allman"
+		},
+		{
+			"name": "M-TCO-OVERWIDE-CODE-MOVED",
+			"type": "anyparse.core.Renderer",
+			"method": "pushTrailingCommentChoice",
+			"find": "end >= 0 && end <= n && end + trailWidth > n",
+			"replace": "end >= 0 && end + trailWidth > n",
+			"note": "the comment moves off code that is over the width on its own, where moving it fixes nothing the knob promises"
+		},
+		{
+			"name": "M-TCO-BOUNDARY",
+			"type": "anyparse.core.Renderer",
+			"method": "pushTrailingCommentChoice",
+			"find": "end >= 0 && end <= n && end + trailWidth > n",
+			"replace": "end >= 0 && end <= n && end + trailWidth >= n",
+			"note": "a line landing exactly on the width reads as overflowing, so a comment that fits moves"
+		},
+		{
+			"name": "M-TCO-MULTILINE-MOVED",
+			"type": "anyparse.core.Renderer",
+			"method": "pushTrailingCommentChoice",
+			"find": "final end: Int = naturalSingleLineEnd(code, col, f.indent, width);",
+			"replace": "final end: Int = naturalFirstLineWidth(code, col, f.indent, width);",
+			"note": "the probe measures the code's FIRST line, so code that spans lines on its own loses the comment from its last line whenever the first line plus the comment is wide"
+		},
+		{
+			"name": "M-COLLAPSE-CHAIN-GROUP-PLAIN-ONLY",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGroup",
+			"find": "case GroupWithRestProbe(inner): { inner: inner, restAware: true };",
+			"replace": "case GroupWithRestProbe(inner): null;",
+			"note": "CollapsePass no longer recognises a rest-aware chain pivot, so a tagged `+` chain keeps its marker and loses its glue / head-break rewrites"
+		},
+		{
+			"name": "M-COLLAPSE-ADD-REBUILD-PLAIN",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rebuildTaggedAddPivot",
+			"find": "rewrite(tagged.flat, decisions, false, width)), tagged.restAware",
+			"replace": "rewrite(tagged.flat, decisions, false, width)), false",
+			"note": "a rewritten tagged `+` chain comes back under a plain `Group` with its rest-awareness dropped, so it spills one column past the limit again"
+		},
+		{
+			"name": "M-COLLAPSE-GLUE-TERNARY",
+			"type": "anyparse.core.CollapsePass",
+			"method": "restAwareGlues",
+			"find": "subtreeOpens(parts[0], decisions) && DocMeasure.closeLineRun(commitOpens(parts[0], decisions, width)) >= 0;",
+			"replace": "subtreeOpens(flat, decisions);",
+			"note": "a rest-aware ternary pivot is forward-glued whenever anything in it opens, not only when its condition closes an opened group, so a ternary call argument hugs an opening paren branch the fork breaks before"
+		},
+		{
+			"name": "M-COLLAPSE-GLUE-REST-CHAIN-SKIPPED",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGluedIfOpens",
+			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (restAwareGlues(gluedSide(fl, width), decisions, width)):\ngluedSide(fl, width);",
+			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): gluedSide(fl, width);",
+			"note": "a rest-aware `&&` / `+` chain whose trailing paren opens is no longer forward-glued, so it breaks before `|| (` instead of hugging the paren"
+		},
+		{
+			"name": "M-TAIL-RESOLVE-IGNORED",
+			"type": "anyparse.core.DocMeasure",
+			"method": "endsWithForcedCloseLine",
+			"find": "scanTailAt(d, 0, resolveForcedBreaks, null)",
+			"replace": "scanTailAt(d, 0, false, null)",
+			"note": "the closing-line read ignores the request to read a conditional that cannot stay flat on its break side"
+		},
+		{
+			"name": "M-OFFER-WANTED-DROPS",
+			"type": "anyparse.core.BreakCommits",
+			"method": "offerItemBreaks",
+			"find": "if (wanted == null || wanted(item, i, broken)) {",
+			"replace": "if (wanted == null) {",
+			"note": "a host that filters its offers gets none, so the chain never lays itself out for the region break"
+		},
+		{
+			"name": "M-OFFER-COPIES-WHOLE",
+			"type": "anyparse.core.D",
+			"method": "mapChildrenShared",
+			"find": "return changed ? out : d;",
+			"replace": "return out;",
+			"note": "a rewrite copies every node it walks instead of sharing what it leaves unchanged, so each offered alternative copies its host whole and nested hosts grow the Doc exponentially in depth"
+		},
+		{
+			"name": "M-OFFER-REPLACES-BOTH-SIDES",
+			"type": "anyparse.core.BreakCommits",
+			"method": "replaced",
+			"find": "f == flat ? n : BreakCommit(brk, f, token);",
+			"replace": "f == flat ? n : BreakCommit(walk(brk), f, token);",
+			"note": "an offer also rewrites the other breaks' alternatives it passes, so every nested host re-walks and re-copies all of them and a deep paren chain writes in a high power of its depth"
+		},
+		{
+			"name": "M-OFFER-REPLACED-COPIES",
+			"type": "anyparse.core.BreakCommits",
+			"method": "replaced",
+			"find": "\t\t\tfinal out: Doc = switch n {\n\t\t\t\tcase BreakCommit(brk, flat, token):\n\t\t\t\t\tfinal f: Doc = walk(flat);\n\t\t\t\t\tf == flat ? n : BreakCommit(brk, f, token);\n\t\t\t\tcase _: D.mapChildrenShared(n, walk);\n\t\t\t};",
+			"replace": "\t\t\tfinal out: Doc = D.mapChildren(n, walk);",
+			"note": "an offer copies every node it walks again, both sides of every other break included, so each nested host copies the alternatives below it whole and the build grows exponentially with the nesting depth"
+		},
+		{
+			"name": "M-TRAIL-REGION-UNDER-COMMENT",
+			"type": "anyparse.core.DocMeasure",
+			"method": "opensDirectiveRegion",
+			"force": "firstVisibleTextStartsWith(d, '#'.code)",
+			"note": "a comment in front of a region ending the list hides the region, so the trailing-comma knob writes `#end,` again"
+		},
+		{
+			"name": "M-LEAD-BLOCK-COMMENT-END",
+			"type": "anyparse.core.DocMeasure",
+			"method": "leadCharOf",
+			"find": "i = end + 2;",
+			"replace": "i = end + 1;",
+			"note": "the scan resumes inside the closing `*/` of a leading block comment and reads its `/` as the item's first token"
+		},
+		{
+			"name": "M-PAREN-REST-THRESHOLD-INEXACT",
+			"type": "anyparse.core.Renderer",
+			"method": "pushExceedsBranch",
+			"find": "rendersAsMeasured(flatDoc, false, col + pendingSpace + flatWidth)",
+			"replace": "rendersAsMeasured(flatDoc)",
+			"note": "a glued paren holding a chain with a lineLength threshold measures the rest of its line flat to the end instead of up to a later argument list that breaks, so it opens on a line that fits"
+		},
+		{
+			"name": "M-CHAIN-GLUE-THRESHOLD-FIRES",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGluedIfOpens",
+			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (restAwareGlues(gluedSide(fl, width), decisions, width)):\ngluedSide(fl, width);",
+			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (restAwareGlues(fl, decisions, width)):\nfl;",
+			"note": "a rest-aware chain whose flat side a lineLength threshold partitions is not recognised as a glued infix chain, so it is never committed glued around its opened paren and breaks at its own operator instead"
+		},
+		{
+			"name": "M-CHAIN-COLLAPSE-THRESHOLD-FIRES",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rewriteTaggedAddChain",
+			"find": "rewrite(gluedSide(tagged.flat, width), decisions, true, width)",
+			"replace": "rewrite(tagged.flat, decisions, true, width)",
+			"note": "an inner add-chain collapsed inside a broken outer one keeps its lineLength threshold, which fires past the limit and breaks the collapsed chain"
+		},
+		{
+			"name": "M-CHAIN-COLLAPSE-PROBED-THRESHOLD-FIRES",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rewriteUnmemoized",
+			"find": "rewrite(gluedSide(probed.flat, width), decisions, true, width)",
+			"replace": "rewrite(probed.flat, decisions, true, width)",
+			"note": "an inner add-chain ending in a bare paren, collapsed inside a broken outer one, keeps its lineLength threshold, which fires past the limit and breaks it"
+		},
+		{
+			"name": "M-CHAIN-GLUE-PAREN-THRESHOLD-FIRES",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGluedIfOpens",
+			"find": "case WrapBoundary(Group(IfBreak(_, fl))): gluedSide(fl, width);",
+			"replace": "case WrapBoundary(Group(IfBreak(_, fl))): fl;",
+			"note": "a chain in a paren of its own, committed glued around an opened paren, keeps its lineLength threshold, which measures the chain flat and breaks it after the commit"
+		},
+		{
+			"name": "M-CHAIN-GLUED-SIDE-DROPS-REACHED-THRESHOLD",
+			"type": "anyparse.core.CollapsePass",
+			"method": "gluedSide",
+			"find": "case IfWidthExceeds(n, _, notFired) if (n > width): gluedSide(notFired, width);",
+			"replace": "case IfWidthExceeds(_, _, notFired): gluedSide(notFired, width);",
+			"note": "a collapse drops every lineLength threshold on the chain's flat side, so a rule below the limit that the collapsed inner chain reaches never fires and the chain stays one over-threshold line"
+		},
+		{
+			"name": "M-GLUE-COMMENT-AFTER-DELIM",
+			"type": "anyparse.core.Renderer",
+			"method": "naturalGluableStep",
+			"find": "s.ltrim().startsWith('//') ? null : DocMeasure.lastCharIsOpenDelim(s)",
+			"replace": "DocMeasure.lastCharIsOpenDelim(s)",
+			"note": "a line comment after an open delimiter ends the natural first line on the comment, so a chain stops hugging `xs.foreach(t -> { // why`"
+		}
+	]
+}

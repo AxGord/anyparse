@@ -4,12 +4,15 @@ import testkit.MutationArms;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+using StringTools;
+
 /**
  * `testkit.MutationArms` — the read that decides whether a `@:killer` name
  * means anything.
  *
  * Every fixture here asks its question of a SECOND arm table, written in this
- * file, and never of `test/testkit/mutation-arms.json`. That is the whole
+ * file, and never of `test/testkit/arms`. That is the whole
  * discipline: the build macro already validated the real table, so a fixture
  * reading it back could not fail — it would be derived from the same
  * declaration the acceptance is generated from. A table of its own is a
@@ -340,6 +343,29 @@ final class MutationArmsTest extends Test {
 		Assert.equals(1, table.errors.length, 'the forced row with a kind is one complaint');
 		Assert.stringContains('X-FORCED-META', table.errors[0]);
 		Assert.stringContains('only FnMember can carry one', table.errors[0]);
+	}
+
+	/** The documents of a split registry read as one table, in the order given; each document's errors name its file. */
+	public function testSeveralDocumentsReadAsOneTable(): Void {
+		final table: ArmTable = MutationArms.parseAll([
+			{ file: 'one.json', text: TWO_ARMS },
+			{ file: 'two.json', text: NO_CUT.replace('X-FORCE', 'Y-FORCE') }
+		]);
+		Assert.same(['X-FORCE', 'X-FRAGMENT', 'Y-FORCE'], table.arms.map(arm -> arm.name));
+		Assert.equals(1, table.errors.length);
+		Assert.isTrue(table.errors[0].startsWith('two.json: '), table.errors[0]);
+	}
+
+	/** A name declared in two documents is one name for two arms, and is refused with both files named. */
+	public function testANameInTwoDocumentsIsRefused(): Void {
+		final table: ArmTable = MutationArms.parseAll([{ file: 'one.json', text: TWO_ARMS }, { file: 'two.json', text: TWO_ARMS }]);
+		Assert.isTrue(table.errors.exists(e -> e.contains('"X-FORCE" is declared in both one.json and two.json')), table.errors.join('; '));
+		Assert.equals(0, MutationArms.parseAll([{ file: 'one.json', text: TWO_ARMS }]).errors.length);
+	}
+
+	/** A registry directory with no document declares nothing, which no build may take for an empty registry. */
+	public function testNoDocumentIsAnError(): Void {
+		Assert.equals(1, MutationArms.parseAll([]).errors.length);
 	}
 
 }

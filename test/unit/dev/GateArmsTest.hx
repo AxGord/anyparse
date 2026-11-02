@@ -28,9 +28,7 @@ final class GateArmsTest extends Test {
 
 	public function testAnArmNewSinceTheBaseGetsTheKillRunOnAnyFile(): Void {
 		final base: String = '{"arms": [{"name": "M-SAME", "type": "a.Untouched", "method": "f", "force": "1"}]}';
-		final picked: ArmSelection = GateArms.select(
-			ArmRegistry.parse(REGISTRY).records, ArmRegistry.parse(base), [], ['a.Reflowed'], [], []
-		);
+		final picked: ArmSelection = GateArms.select(ArmRegistry.parse(REGISTRY), ArmRegistry.parse(base), [], ['a.Reflowed'], [], []);
 		Assert.same(['M-LAYOUT', 'M-LAYOUT-SUB', 'M-EDITED', 'M-PINNED', 'M-ASKED'], picked.fast);
 		Assert.same([], picked.applyOnly);
 	}
@@ -52,8 +50,8 @@ final class GateArmsTest extends Test {
 	private static function select(
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>
 	): ArmSelection {
-		final same: RecordFile = ArmRegistry.parse(REGISTRY);
-		return GateArms.select(same.records, same, touched, layout, killers, extra);
+		final same: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
+		return GateArms.select(same, same, touched, layout, killers, extra);
 	}
 
 }

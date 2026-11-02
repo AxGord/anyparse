@@ -1,7 +1,6 @@
 package dev;
 
 import dev.ArmRegistry.ArmRecord;
-import dev.ArmRegistry.RecordFile;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.Summary;
@@ -24,23 +23,19 @@ final class GateArms {
 	/** How many arm names an arms row spells before it elides the rest. */
 	private static inline final ARMS_SHOWN: Int = 6;
 
-	/** The registry whose records the arms row selects from. */
-	private static inline final ARMS_REGISTRY: String = 'test/testkit/mutation-arms.json';
-
 	/** The source roots whose files are modules a mutation arm can name. */
 	private static final MODULE_ROOTS: Array<String> = ['src/', 'tools/src/', 'test/'];
 
 	/** The arms row of `gate`, the heavy rows' threads as the arms' jobs. */
 	public static function outcome(gate: GateTree): Outcome {
 		if (gate.options.noArms) return Skipped('--no-arms');
-		final now: RecordFile = ArmRegistry.parse(File.getContent(Path.join([gate.tree, ARMS_REGISTRY])));
-		final shown: Result = cmd('git -C ${gate.tree} show ${gate.base}:$ARMS_REGISTRY').run();
-		final old: Null<RecordFile> = shown.ok ? ArmRegistry.parse(shown.out) : null;
+		final now: Array<ArmRecord> = ArmRegistry.read(Path.join([gate.tree, ArmRegistry.DIRECTORY]));
+		final old: Null<Array<ArmRecord>> = baseRecords(gate);
 		final layout: Array<String> = [for (file in layoutFiles(gate)) moduleOf(file)].filter(m -> m != '');
 		final modules: Array<String> = [for (file in gate.touched) moduleOf(file)].filter(m -> m != '' && !layout.contains(m));
 		final extra: Array<String> = gate.options.arms;
-		final picked: ArmSelection = select(now.records, old, modules, layout, pinnedKillers(gate, modules), extra);
-		for (name in extra) if (!picked.fast.contains(name)) return Failed('--arm $name names no arm in $ARMS_REGISTRY');
+		final picked: ArmSelection = select(now, old, modules, layout, pinnedKillers(gate, modules), extra);
+		for (name in extra) if (!picked.fast.contains(name)) return Failed('--arm $name names no arm in ${ArmRegistry.DIRECTORY}');
 		if (picked.fast.length + picked.applyOnly.length == 0) return Skipped('no arm added, re-encoded or on a touched type');
 		final applied: Outcome = picked.applyOnly.length == 0 ? Passed : applyOutcome(gate, picked.applyOnly);
 		return picked.fast.length == 0 || !applied.match(Passed) ? applied : fastOutcome(gate, picked.fast);
@@ -53,7 +48,7 @@ final class GateArms {
 	 * for both versions of that file, so no test can see it.
 	 */
 	public static function select(
-		now: Array<ArmRecord>, old: Null<RecordFile>, modules: Array<String>, layout: Array<String>, killers: Array<String>,
+		now: Array<ArmRecord>, old: Null<Array<ArmRecord>>, modules: Array<String>, layout: Array<String>, killers: Array<String>,
 		extra: Array<String>
 	): ArmSelection {
 		final fast: Array<String> = [];
@@ -125,8 +120,8 @@ final class GateArms {
 	}
 
 	/** Whether `record` is new or re-encoded since `old`. */
-	private static function changed(record: ArmRecord, old: Null<RecordFile>): Bool {
-		final was: Null<ArmRecord> = old?.records.find(r -> r.key == record.key);
+	private static function changed(record: ArmRecord, old: Null<Array<ArmRecord>>): Bool {
+		final was: Null<ArmRecord> = old?.find(r -> r.key == record.key);
 		return was == null || was.text != record.text;
 	}
 
@@ -142,6 +137,23 @@ final class GateArms {
 	private static function moduleOf(file: String): String {
 		final root: Null<String> = MODULE_ROOTS.find(r -> file.startsWith(r));
 		return root == null || !file.endsWith('.hx') ? '' : file.substring(root.length, file.length - '.hx'.length).replace('/', '.');
+	}
+
+	/**
+	 * The records of the registry at the base: its documents, or the single document an older base kept it in; null when
+	 * the base has neither.
+	 */
+	private static function baseRecords(gate: GateTree): Null<Array<ArmRecord>> {
+		final listed: Result = cmd('git -C ${gate.tree} ls-tree -r --name-only ${gate.base} ${ArmRegistry.DIRECTORY}').run();
+		final documents: Array<String> = listed.ok ? listed.lines().filter(path -> path.endsWith('.json')) : [];
+		final texts: Array<String> = [];
+		final paths: Array<String> = documents.length > 0 ? documents : [ArmRegistry.LEGACY_FILE];
+		for (path in paths) {
+			final shown: Result = cmd('git -C ${gate.tree} show ${gate.base}:$path').run();
+			if (!shown.ok) return null;
+			texts.push(shown.out);
+		}
+		return ArmRegistry.parseAll(texts);
 	}
 
 }
