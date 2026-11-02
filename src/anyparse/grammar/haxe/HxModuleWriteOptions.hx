@@ -783,6 +783,14 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * fields fit flat. Cleared per element so nested anons revert to the layout-driven wrap.
 	 */
 	_inTypedefBody: Bool,
+
+	/**
+	 * Set on descent into a type nested in a type argument, parentheses or `#if` arm
+	 * (`@:fmt(propagateNestedType)`) and cleared per anon-body element, whose fields start lines of
+	 * their own. Read by `@:fmt(compactUnlessNested)`: a wrapped function-type signature continues
+	 * one unit past its line, two while nested.
+	 */
+	_inNestedType: Bool,
 	// ω-enumabstract-begin-end: set on the inner `HxAbstractDecl` opt when it is
 	// written as the body of an `enum abstract` (via `EnumAbstractDecl(decl)`'s
 	// `@:fmt(propagateEnumAbstractContext)`), so its `beginEndType` blank count

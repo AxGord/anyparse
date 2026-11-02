@@ -100,7 +100,7 @@ breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, c
 captureCondOpenNewline, captureKwNewline, capturePostfixOpSpace, captureRhsTrail, captureSource(…),
 captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
 catchParensGap, catchParensInsideClose, catchParensInsideOpen, chainNestSuppress,
-clearBracePolicy, clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, complexItems, condExprFitBreak,
+clearBracePolicy, clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, compactUnlessNested, complexItems, condExprFitBreak,
 condExprFitGroup, conditionalBodyIndent, conditionalMarkerDedent, condParensInside(…),
 condSpliceCaseMarkerDedent, condSwitchOpenCasesNest, condWrap(…), condWrapEnd, constructFitBody,
 constructFitGroup(…), constructFitSep, cuddle, deferKwSpace, dropSingleStmtBraces, elemSelfTrailsNewline,
@@ -117,7 +117,7 @@ multilineWhenLeadingTriviaSpansLines(…), multilineWhenStarFieldWrapsCascade(�
 nestBodyOnSourceNewline, noSiblingFallback(…), objectFieldColon, objectLiteralBracesClose,
 objectLiteralBracesOpen, operandBreakAfterMultilineBrace, optionalSemicolon(…), padLeading, padTrailing,
 preWrite(…), propagateAnonFnContext, propagateArrowLambdaBody, propagateElseIfBranch,
-propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, propagateTypedefContext,
+propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, propagateNestedType, propagateTypedefContext,
 propagateValueIfBranch, reflowInExprPosition, reflowSourceMultiline, refuseFlatOnComplexExpr,
 refuseGlueOnControlFlowRoot, relocateTrailingComments, rightCurly[(…)], rightCurlyAnonFnOverride(…), sameLine(…),
 semicolonBeforeSibling(…), semicolonNextLineElse, sepBeforeOpt, setBoolFlagFromStarCtor(…), shapeAware,
@@ -149,10 +149,10 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 
 | module | inventory flags it names |
 |---|---|
-| `WriterRefFieldLowering` | 46 |
-| `WriterStarEmitLowering` | 43 |
+| `WriterRefFieldLowering` | 47 |
+| `WriterStarEmitLowering` | 44 |
 | `WriterTriviaStarDispatch` | 41 |
-| `WriterKwRefLowering` | 31 |
+| `WriterKwRefLowering` | 32 |
 | `WriterTriviaStarEmitLowering` | 28 |
 | `WriterPolicyLowering` | 20 |
 | `WriterCtorBlankLowering` | 17 |
@@ -168,7 +168,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `Lowering` | 4 |
 | `StarFieldLowering` | 4 |
 | `WriterBodyPolicyLowering` | 3 |
-| `WriterLoweringSupport` | 3 |
+| `WriterLoweringSupport` | 4 |
 | `WriterCodegen` | 2 |
 | `WriterBlankLowering` | 2 |
 | `WriterCondWrapLowering` | 2 |

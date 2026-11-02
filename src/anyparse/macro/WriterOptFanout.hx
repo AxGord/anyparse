@@ -1291,6 +1291,8 @@ final class WriterOptFanout {
 			fields.push(setTypedefBodyField(optionsCT));
 			fields.push(clearTypedefBodyField(optionsCT));
 		}
+		// Nested-type context for `@:fmt(compactUnlessNested)`: set at a nesting site, cleared per anon element.
+		if (optionsHasField(optionsTypePath, '_inNestedType')) for (f in nestedTypeFields(optionsCT)) fields.push(f);
 		// ω-enumabstract-begin-end: opt-fanout helper for
 		// `@:fmt(propagateEnumAbstractContext)` on `EnumAbstractDecl(decl)`.
 		// Set-only (an `enum abstract` body nests no further type decl, so no
@@ -1592,6 +1594,32 @@ final class WriterOptFanout {
 			}),
 			pos: Context.currentPos()
 		};
+	}
+
+	/**
+	 * Opt-fanout shims for the nested-type context, `_setNestedType` / `_clearNestedType`.
+	 * `@:fmt(propagateNestedType)` marks the descendant write as a type nested in a type argument,
+	 * parentheses or `#if` arm, which `@:fmt(compactUnlessNested)` reads; an anon-body element starts a
+	 * line of its own and so resets it. Both are idempotent. Emitted only when the opt typedef
+	 * declares `_inNestedType:Bool`.
+	 */
+	private static function nestedTypeFields(optionsCT: ComplexType): Array<Field> {
+		function shim(name: String, nested: Bool): Field return {
+			name: name,
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inNestedType == $v{nested}) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c._inNestedType = $v{nested};
+					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
+		return [shim('_setNestedType', true), shim('_clearNestedType', false)];
 	}
 
 }

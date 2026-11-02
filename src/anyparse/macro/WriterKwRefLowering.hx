@@ -615,6 +615,8 @@ final class WriterKwRefLowering {
 		var optExpr: Expr = macro opt;
 		if (propagateExpr) optExpr = macro _setExprPosition($optExpr, opt);
 		if (propagateEnumAbstract) optExpr = macro _setEnumAbstract($optExpr, opt);
+		// `@:fmt(propagateNestedType)` on `HxType.Parens` / `ConditionalType` marks the inner type as nested.
+		if (branch.fmtHasFlag('propagateNestedType')) optExpr = macro _setNestedType($optExpr, opt);
 		if (clearExpr) {
 			final operandAccess: Expr = macro $i{argNames[0]};
 			final operandIsBlock: Expr = AstPredLowering.predCallExpr(

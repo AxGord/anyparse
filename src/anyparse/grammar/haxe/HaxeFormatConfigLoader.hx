@@ -314,6 +314,7 @@ final class HaxeFormatConfigLoader {
 			_classExtern: base._classExtern,
 			_inAnonFnBody: base._inAnonFnBody,
 			_inTypedefBody: base._inTypedefBody,
+			_inNestedType: base._inNestedType,
 			_inEnumAbstract: base._inEnumAbstract,
 			_chainModeOverride: base._chainModeOverride,
 			_callArgChainNest: base._callArgChainNest,

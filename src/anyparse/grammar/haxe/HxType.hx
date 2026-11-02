@@ -128,7 +128,7 @@ enum HxType {
 	@:trivia @:lead('[') @:trail(']') @:sep(',')
 	BracketExprListType(elems: Array<HxExpr>);
 
-	@:kw('#if') @:trail('#end') @:fmt(spaceBeforeTrail)
+	@:kw('#if') @:trail('#end') @:fmt(spaceBeforeTrail, propagateNestedType)
 	ConditionalType(c: HxConditionalType);
 
 	@:infix('->', 0, 'Right') @:fmt(functionTypeHaxe3)
@@ -161,7 +161,7 @@ enum HxType {
 
 	ArrowFn(fn: HxArrowFnType);
 
-	@:wrap('(', ')')
+	@:wrap('(', ')') @:fmt(propagateNestedType)
 	Parens(inner: HxType);
 
 }

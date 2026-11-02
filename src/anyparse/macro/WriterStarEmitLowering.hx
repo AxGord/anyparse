@@ -98,7 +98,11 @@ final class WriterStarEmitLowering {
 		final isSelfRef: Bool = simpleName(elemRefName) == simpleName(typePath);
 		final elemFn: String = isSelfRef ? writeFnName : ctx.writeFnFor(elemRefName);
 
-		final elemCallArgs: Array<Expr> = [macro _args[_i], macro opt];
+		// An anon-body element starts a line of its own, so the nested-type context ends there (as in the trivia writer).
+		final elemCallArgs: Array<Expr> = [
+			macro _args[_i],
+			branch.fmtHasFlag('forceMultiInTypedef') ? macro _clearNestedType(opt) : macro opt
+		];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, elemCallArgs),
@@ -1535,7 +1539,10 @@ final class WriterStarEmitLowering {
 		return inlineElemTrivia
 			? inlineTriviaElemCall(elemFn, starNode.annotations[AnnotationKeys.BASE_FIELD_NAME], movedPastTrailExpr(starNode) ?? macro null)
 			: {
-				expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro opt]),
+				expr: ECall(macro $i{elemFn}, [
+					macro _arr[_si],
+					starNode.fmtHasFlag('propagateNestedType') ? macro _setNestedType(opt) : macro opt
+				]),
 				pos: Context.currentPos()
 			};
 	}

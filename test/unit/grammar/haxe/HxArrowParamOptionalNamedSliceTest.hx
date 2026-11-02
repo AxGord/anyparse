@@ -148,7 +148,7 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 		final src: String = 'class D {\n\tvar handler:(firstArgument:String, ?secondArgument:Int, ?thirdArgument:Float, '
 			+ '?fourthArgument:Bool, ?fifthArg:String) -> Void;\n}';
 		final expected: String = 'class D {\n\tvar handler:(firstArgument:String, ?secondArgument:Int, ?thirdArgument:Float, '
-			+ '?fourthArgument:Bool,\n\t\t\t?fifthArg:String) -> Void;\n}';
+			+ '?fourthArgument:Bool,\n\t\t?fifthArg:String) -> Void;\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 
@@ -162,7 +162,7 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 		final src: String = 'class D {\n\tvar handler:(firstArgument:String, secondArgument:Int, thirdArgument:Float, fourthArgument:Bool, '
 			+ 'fifthArgum:String) -> Void;\n}';
 		final expected: String = 'class D {\n\tvar handler:(firstArgument:String, secondArgument:Int, thirdArgument:Float, '
-			+ 'fourthArgument:Bool,\n\t\t\tfifthArgum:String) -> Void;\n}';
+			+ 'fourthArgument:Bool,\n\t\tfifthArgum:String) -> Void;\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 

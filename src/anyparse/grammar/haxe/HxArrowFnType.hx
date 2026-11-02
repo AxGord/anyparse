@@ -32,10 +32,13 @@ package anyparse.grammar.haxe;
  * content past the close paren. The function-decl-specific flags (`funcParamParens`,
  * `bodyAwareCompactIndent`, `ignoreSourceNewlinesForWrap`, `trailingComma`) are omitted — a
  * function type has no keyword-to-paren gap, no body-empty signal and no source trailing
- * comma in its param list.
+ * comma in its param list. `compactUnlessNested` drops the cascade's additional indent: the
+ * continuation sits one unit past the line the type starts on, and two while the type is nested
+ * in a type argument, parentheses, an abstract's underlying type or `#if` arm (`opt._inNestedType`, set by
+ * `@:fmt(propagateNestedType)`), where it hangs off an enclosing construct's own opening.
  */
 @:peg
 typedef HxArrowFnType = {
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(wrapRules('functionSignatureWrap'), groupRestProbe) var args: Array<HxArrowParam>;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(wrapRules('functionSignatureWrap'), compactUnlessNested, groupRestProbe) var args: Array<HxArrowParam>;
 	@:fmt(functionTypeHaxe4) @:lead('->') var ret: HxType;
 }

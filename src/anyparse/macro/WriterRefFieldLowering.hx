@@ -573,6 +573,7 @@ final class WriterRefFieldLowering {
 		var e: Expr = macro opt;
 		if (propagateExpr) e = macro _setExprPosition($e, opt);
 		if (propagateAnonFn) e = macro _setAnonFnBody($e, opt);
+		if (child.fmtHasFlag('propagateNestedType')) e = macro _setNestedType($e, opt);
 		if (propagateValueIfBranch) e = macro _setValueIfBranch($e, opt);
 		e = WriterArrowValueIfLowering.arrowValueIfBlockOpt(child, e);
 		if (propagateElseIfBranch) {
@@ -1709,6 +1710,7 @@ final class WriterRefFieldLowering {
 			if (propagateAnonFn) e = macro _setAnonFnBody($e, opt);
 			if (propagateTypedef) e = macro _setTypedefBody($e, opt);
 			if (propagateEnumAbstract) e = macro _setEnumAbstract($e, opt);
+			if (child.fmtHasFlag('propagateNestedType')) e = macro _setNestedType($e, opt);
 			if (switchSubjectNoWrap) e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap, opt);
 			// The helper gates on `opt._inExprPosition` so only a value-if
 			// branch (not a statement-`if`) flips the narrow flag.

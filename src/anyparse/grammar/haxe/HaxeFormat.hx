@@ -365,6 +365,7 @@ final class HaxeFormat implements TextFormat {
 		_classExtern: false,
 		_inAnonFnBody: false,
 		_inTypedefBody: false,
+		_inNestedType: false,
 		_inEnumAbstract: false,
 		_chainModeOverride: null,
 		_callArgChainNest: false,

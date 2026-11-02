@@ -189,7 +189,8 @@ final class TriviaSepLowering {
 		// default fit-driven wrap. Sister to `_clearAnonFnBody` on the
 		// block-Star path.
 		final elemOptBase: Expr = if (forceMultiInTypedef)
-			macro _clearTypedefBody(opt);
+			// The same write ends a nested-type context (`_inNestedType`): an anon element starts a line of its own.
+			macro _clearNestedType(_clearTypedefBody(opt), opt);
 		else if (propagateExprPosition)
 			macro _setExprPosition(opt);
 		else

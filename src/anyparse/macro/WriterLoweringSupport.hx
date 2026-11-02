@@ -40,6 +40,9 @@ final class WriterLoweringSupport {
 	/** The Star flag naming a function signature whose continuation indent depends on its body. */
 	private static inline final BODY_AWARE_FLAG: String = 'bodyAwareCompactIndent';
 
+	/** The Star flag naming a function-type signature that takes no additional indent unless nested in another type. */
+	private static inline final NESTED_FLAG: String = 'compactUnlessNested';
+
 	/**
 	 * Build the field-access Expr `opt.<fieldName>` — used everywhere the
 	 * generated writer reads a `WriteOptions` knob (cascade rules, body
@@ -118,9 +121,11 @@ final class WriterLoweringSupport {
 	 * `@:fmt(bodyAwareCompactIndent)`, `true` for the bare flag (an owner with no body), and for
 	 * `bodyAwareCompactIndent('<bodyField>', '<emptyPredicate>')` the grammar's typed predicate
 	 * applied to `value.<bodyField>` — a signature whose body is empty takes no additional indent.
+	 * `@:fmt(compactUnlessNested)` alone answers `!opt._inNestedType`: a function TYPE has no body,
+	 * so it continues one unit past its line, and two only while nested in another type.
 	 */
 	private static function bodyEmptySuppressExpr(starNode: ShapeNode, rootTypePath: String, trivia: Bool): Expr {
-		if (!starNode.fmtHasFlag(BODY_AWARE_FLAG)) return macro false;
+		if (!starNode.fmtHasFlag(BODY_AWARE_FLAG)) return starNode.fmtHasFlag(NESTED_FLAG) ? macro !opt._inNestedType : macro false;
 		final args: Null<Array<String>> = starNode.fmtReadStringArgs(BODY_AWARE_FLAG);
 		if (args == null || args.length == 0) return macro true;
 		if (args.length != 2)

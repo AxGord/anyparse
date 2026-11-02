@@ -66,6 +66,30 @@
 			"note": "a stray member or case-body `;` is written on its own line again (`}` newline `;`) and the blank line before the next member is lost"
 		},
 		{
+			"name": "M-FNTYPE-COMPACT-OFF",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "bodyEmptySuppressExpr",
+			"find": "? macro !opt._inNestedType : macro false;",
+			"replace": "? macro false : macro false;",
+			"note": "a wrapped function-type signature keeps the cascade's additional unit in every position, so its continuation sits two units past its line instead of one"
+		},
+		{
+			"name": "M-FNTYPE-NEST-RESET-OFF",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepStarExpr",
+			"find": "macro _clearNestedType(_clearTypedefBody(opt), opt);",
+			"replace": "macro _clearTypedefBody(opt);",
+			"note": "an anon field written inside a type argument still counts as nested, so its function type keeps the additional unit although the field starts a line of its own"
+		},
+		{
+			"name": "M-FNTYPE-NEST-RESET-PLAIN-OFF",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "lowerEnumStar",
+			"find": "? macro _clearNestedType(opt) : macro opt",
+			"replace": "? macro opt : macro opt",
+			"note": "the plain writer keeps an anon field inside a type argument or parentheses nested, so its function type gets one unit more than the trivia writer gives the same field"
+		},
+		{
 			"name": "M-GLUE-ELEM-TEST-OFF",
 			"type": "anyparse.macro.WriterLoweringSupport",
 			"method": "glueElemTestExpr",

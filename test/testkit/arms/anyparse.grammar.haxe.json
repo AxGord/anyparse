@@ -703,6 +703,60 @@
 			"find": "@:fmt(atomOperandWhen('ECheckTypeExpr'), tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
 			"replace": "@:fmt(atomOperandWhen('ECheckTypeExpr'))",
 			"note": "`cast` is written like the construct `macro`, so `cast(x)` gains a space and stops reading as a call"
+		},
+		{
+			"name": "M-FNTYPE-NEST-TYPE-ARG-OFF",
+			"type": "anyparse.grammar.haxe.HxTypeArg",
+			"method": "HxTypeArg",
+			"kind": "TypedefDecl",
+			"find": "@:queryType @:fmt(propagateNestedType) var type",
+			"replace": "@:queryType var type",
+			"note": "a type argument is no longer marked nested, so a function type inside `Array<…>` or `Null<…>` loses the additional unit and continues one unit past its line"
+		},
+		{
+			"name": "M-FNTYPE-NEST-PARENS-OFF",
+			"type": "anyparse.grammar.haxe.HxType",
+			"method": "Parens",
+			"kind": "ParamCtor",
+			"find": "@:wrap('(', ')') @:fmt(propagateNestedType)",
+			"replace": "@:wrap('(', ')')",
+			"note": "a parenthesised function type is no longer marked nested, so it continues one unit past its line instead of two"
+		},
+		{
+			"name": "M-FNTYPE-NEST-COND-OFF",
+			"type": "anyparse.grammar.haxe.HxType",
+			"method": "ConditionalType",
+			"kind": "ParamCtor",
+			"find": "@:fmt(spaceBeforeTrail, propagateNestedType)",
+			"replace": "@:fmt(spaceBeforeTrail)",
+			"note": "a function type inside a `#if` type arm is no longer marked nested, so it continues one unit past its line instead of two"
+		},
+		{
+			"name": "M-FNTYPE-NEST-NEW-OFF",
+			"type": "anyparse.grammar.haxe.HxNewExpr",
+			"method": "HxNewExpr",
+			"kind": "TypedefDecl",
+			"find": "groupRestProbe, propagateNestedType) var params",
+			"replace": "groupRestProbe) var params",
+			"note": "the type arguments of a `new` expression are no longer marked nested, so a function type among them continues one unit past its line instead of two"
+		},
+		{
+			"name": "M-FNTYPE-NEST-ABSTRACT-OFF",
+			"type": "anyparse.grammar.haxe.HxAbstractDecl",
+			"method": "HxAbstractDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(tightLead, propagateNestedType)",
+			"replace": "@:fmt(tightLead)",
+			"note": "an abstract's underlying type is no longer marked nested, so a function type there continues one unit past its line instead of two"
+		},
+		{
+			"name": "M-FNTYPE-NEST-ABSTRACT-HEAD-OFF",
+			"type": "anyparse.grammar.haxe.HxAbstractDeclHead",
+			"method": "HxAbstractDeclHead",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(tightLead, propagateNestedType)",
+			"replace": "@:fmt(tightLead)",
+			"note": "an abstract head inside an #if arm no longer marks its underlying type nested, so a function type there continues one unit past its line instead of two"
 		}
 	]
 }

@@ -82,7 +82,8 @@ typedef WrapListOptions = {
 
 	/**
 	 * Drop the cascade's `additionalIndent` from the continuation indent — a function signature
-	 * whose body is empty (`@:fmt(bodyAwareCompactIndent)`). Default `false`.
+	 * whose body is empty (`@:fmt(bodyAwareCompactIndent)`), or a function type outside a nested type
+	 * (`@:fmt(compactUnlessNested)`). Default `false`.
 	 */
 	var ?suppressAdditionalIndent: Bool;
 
