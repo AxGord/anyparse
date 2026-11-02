@@ -67,6 +67,9 @@ final class Shard {
 	private static inline final ASSERTION_WIDTH: Int = 6;
 	private static inline final MILLIS_WIDTH: Int = 3;
 
+	/** How many failing tests of a red shard its report line names. */
+	private static inline final FAILING_SHOWN: Int = 5;
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final short: Null<String> = args.option('-n');
@@ -195,6 +198,12 @@ final class Shard {
 	 */
 	public static function callerGc(command: Command): Command {
 		return command.env('OCAMLRUNPARAM', Sys.getEnv('OCAMLRUNPARAM') ?? Sys.getEnv('CAMLRUNPARAM') ?? '');
+	}
+
+	/** The tests a red shard names, the first `FAILING_SHOWN` of them and how many more there are. */
+	public static function failingLine(names: Array<String>): String {
+		final more: String = names.length > FAILING_SHOWN ? ', … +${names.length - FAILING_SHOWN} more' : '';
+		return 'failing: ${names.slice(0, FAILING_SHOWN).join(', ')}$more';
 	}
 
 	/** Plan, run and report; answers the exit status. Every file it writes goes into `work`. */
@@ -357,6 +366,7 @@ final class Shard {
 		if (counts.failures != 0 || counts.errors != 0) {
 			final locus: Null<String> = summary.locus;
 			if (locus != null) job.print('  shard $s $locus');
+			if (summary.failing.length > 1) job.print('  shard $s ${failingLine(summary.failing)}');
 			verdict.fail('shard $s is red (${counts.failures} failures / ${counts.errors} errors)');
 		}
 		if (counts.tests == 0) {
@@ -446,7 +456,8 @@ final class Shard {
 					errors: 0
 				},
 				rc: 1,
-				locus: null
+				locus: null,
+				failing: []
 			};
 		}
 		final disagreement: Null<String> = TestTranscript.exitStatusDisagreement(exit, result, log);
@@ -459,7 +470,8 @@ final class Shard {
 				errors: result.errors
 			},
 			rc: disagreement == null ? 0 : 2,
-			locus: TestTranscript.firstFailureLine(result)
+			locus: TestTranscript.firstFailureLine(result),
+			failing: result.failureNames
 		};
 	}
 
@@ -584,4 +596,7 @@ typedef Summarised = {
 	var counts: Tally;
 	var rc: Int;
 	var locus: Null<String>;
+
+	/** Every test the transcript names as not passing, `Class.method`. */
+	var failing: Array<String>;
 }

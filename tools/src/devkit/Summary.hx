@@ -32,6 +32,9 @@ final class Summary {
 	/** The note the step `time` is running has set so far (`detail`). */
 	private var _note: String = '';
 
+	/** The lines the step `time` is running has set so far (`excerpt`). */
+	private var _excerpt: Array<String> = [];
+
 	public function new() {}
 
 	/** Inside a step `time` runs: the reading its row shows when the step passes (a count, a gate line). */
@@ -39,13 +42,22 @@ final class Summary {
 		_note = note;
 	}
 
-	/** Record `name` as ended with `outcome` after `ms` milliseconds, with `note` shown beside a pass. */
-	public function add(name: String, outcome: Outcome, ms: Float = 0, note: String = ''): Void {
+	/**
+	 * Inside a step `time` runs: the lines that decide it, shown under the table when the step fails or did not run
+	 * (`Excerpt.cut` bounds them).
+	 */
+	public inline function excerpt(lines: Array<String>): Void {
+		_excerpt = lines;
+	}
+
+	/** Record `name` as ended with `outcome` after `ms` milliseconds, with `note` shown beside a pass and `excerpt` under a failure. */
+	public function add(name: String, outcome: Outcome, ms: Float = 0, note: String = '', ?excerpt: Array<String>): Void {
 		_steps.push({
 			name: name,
 			outcome: outcome,
 			ms: ms,
-			note: note
+			note: note,
+			excerpt: excerpt ?? []
 		});
 	}
 
@@ -53,8 +65,9 @@ final class Summary {
 	public function time(name: String, step: () -> Outcome): Outcome {
 		final started: Float = Timer.stamp();
 		_note = '';
+		_excerpt = [];
 		final outcome: Outcome = try step() catch (exception: Exception) NotRun(exception.message);
-		add(name, outcome, (Timer.stamp() - started) * MS_PER_SECOND, _note);
+		add(name, outcome, (Timer.stamp() - started) * MS_PER_SECOND, _note, _excerpt);
 		return outcome;
 	}
 
@@ -86,6 +99,23 @@ final class Summary {
 			}
 		];
 		return rows.join('\n');
+	}
+
+	/**
+	 * The excerpt of every step that failed or did not run, each under its name and cut to the bound; empty when no
+	 * such step has one.
+	 */
+	public function excerpts(): String {
+		final blocks: Array<String> = [];
+		for (step in _steps) {
+			final failing: Bool = switch step.outcome {
+				case Failed(_), NotRun(_): true;
+				case Passed, Skipped(_): false;
+			};
+			if (!failing || step.excerpt.length == 0) continue;
+			blocks.push('${step.name}:\n' + Excerpt.cut(step.excerpt).map(line -> '  $line').join('\n'));
+		}
+		return blocks.join('\n');
 	}
 
 	private static function label(outcome: Outcome): String {
@@ -125,4 +155,7 @@ typedef Step = {
 
 	/** The reading a passed step shows; empty when it has none. */
 	var note: String;
+
+	/** The lines that decide a step that failed or did not run; empty when it set none. */
+	var excerpt: Array<String>;
 }

@@ -52,6 +52,23 @@ class BuildFailureTest extends Test {
 		Assert.equals('syntax', classify('src/F.hx:41: characters 9-10 : Missing ;'));
 	}
 
+	public function testEveryErrorLineAndItsContinuationIsListedAndNoWarning(): Void {
+		final log: String = [
+			DEPRECATION_WARNING,
+			'src/A.hx:3: characters 1-2 : Warning : Potential typo',
+			'  tools/src/dev/X.hx:10: characters 5-9 : Int should be String',
+			'tools/src/dev/X.hx:10: characters 5-9 : ... For function argument \'cb\'',
+			'Error: Build failed',
+			'building'
+		].join('\n');
+		Assert.same([
+			'tools/src/dev/X.hx:10: characters 5-9 : Int should be String',
+			'tools/src/dev/X.hx:10: characters 5-9 : ... For function argument \'cb\'',
+			'Error: Build failed'
+		], BuildFailure.errorLines(log));
+		Assert.same([], BuildFailure.errorLines(DEPRECATION_WARNING));
+	}
+
 	public function testAWrongTypeIsType(): Void {
 		Assert.equals('type', classify('src/F.hx:41: characters 9-10 : String should be Int'));
 	}

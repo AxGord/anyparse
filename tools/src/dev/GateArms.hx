@@ -81,6 +81,7 @@ final class GateArms {
 		final run: Result = gate.inTree(cmd('node bin/dev.js mutation-arm $names --apply-only'));
 		File.saveContent(gate.log('arms-apply.log'), run.out + run.err);
 		final tally: EReg = ~/^\d+ arms: \d+ apply, (\d+) did not apply$/m;
+		gate.summary.excerpt(GateExcerpt.arms(run.out + run.err));
 		if (!tally.match(run.out)) return Failed('no apply verdict line — ${GateTree.quote(run)}');
 		gate.summary.detail('${tally.matched(0)} on layout-only files (${elided(names)})');
 		return run.ok && tally.matched(1) == '0' ? Passed : Failed(GateTree.clip('${tally.matched(0)} — ${gate.log('arms-apply.log')}'));
@@ -93,6 +94,7 @@ final class GateArms {
 		final run: Result = gate.inTree(cmd('node bin/dev.js mutation-arm $names --fast $jobs'));
 		File.saveContent(gate.log('arms.log'), run.out + run.err);
 		final tally: EReg = ~/^(\d+) tracks: (\d+) killed, .*$/m;
+		gate.summary.excerpt(GateExcerpt.arms(run.out + run.err));
 		if (!tally.match(run.out)) return Failed('no verdict line — ${GateTree.quote(run)}');
 		gate.summary.detail('${tally.matched(0)} (${elided(names)})');
 		return run.ok && tally.matched(1) == tally.matched(2)

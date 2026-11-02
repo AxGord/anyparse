@@ -48,12 +48,13 @@ final class Branches {
 				name: name,
 				outcome: NotRun('its branch left no report: ${why.length > WHY_WIDTH ? why.substr(0, WHY_WIDTH) + '…' : why} — $file.log'),
 				ms: 0,
-				note: ''
+				note: '',
+				excerpt: Excerpt.errors(ran.out + ran.err + ran.failure)
 			};
 		}
 		for (name in order) {
 			final step: Null<Step> = steps[name];
-			if (step != null) into.add(step.name, step.outcome, step.ms, step.note);
+			if (step != null) into.add(step.name, step.outcome, step.ms, step.note, step.excerpt);
 		}
 		return readings;
 	}
@@ -90,7 +91,8 @@ final class Branches {
 					outcome: kind[0],
 					why: kind[1],
 					ms: step.ms,
-					note: step.note
+					note: step.note,
+					excerpt: step.excerpt
 				};
 			}
 		];
@@ -114,7 +116,8 @@ final class Branches {
 							case _: NotRun(row.why);
 						},
 						ms: row.ms,
-						note: row.note
+						note: row.note,
+						excerpt: row.excerpt ?? []
 					}
 			],
 			readings: [for (reading in parsed.readings) reading.name => reading.value]
@@ -181,6 +184,9 @@ typedef StepRecord = {
 	var why: String;
 	var ms: Float;
 	var note: String;
+
+	/** The lines that decide the step; absent in a report an older tool left. */
+	var ?excerpt: Array<String>;
 }
 
 /** One count a branch read, by its name. */

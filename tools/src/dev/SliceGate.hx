@@ -7,6 +7,7 @@ import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.Excerpt;
 import devkit.Lease;
 import devkit.Lease.LeaseMode;
 import devkit.Pool;
@@ -146,6 +147,7 @@ final class SliceGate {
 		gate('frozen', frozenOutcome);
 		gate('porcelain', () -> {
 			final dirty: Array<String> = _gate.git(['status', '--porcelain']).split('\n').filter(l -> l != '');
+			_gate.summary.excerpt(dirty);
 			return dirty.length == 0 ? Passed : Failed('${dirty.length} entr(ies), first `${dirty[0]}`');
 		});
 		return finish(title);
@@ -264,7 +266,9 @@ final class SliceGate {
 	private function build(): Bool {
 		final outcome: Outcome = _gate.summary.time(
 			'build', () -> switch Binaries.compileWith(_gate.tree, _gate.log('build.log'), [], _mode) {
-				case Failed(why): Failed(GateTree.clip(why));
+				case Failed(why):
+					_gate.summary.excerpt(GateExcerpt.compile(File.getContent(_gate.log('build.log'))));
+					Failed(GateTree.clip(why));
 				case other: other;
 			}
 		);
@@ -287,6 +291,8 @@ final class SliceGate {
 	private function finish(title: String): Int {
 		Sys.println(title);
 		Sys.println(_gate.summary.table());
+		final excerpts: String = _gate.summary.excerpts();
+		if (excerpts != '') Sys.println(excerpts);
 		final passed: Bool = _gate.summary.passed();
 		final wall: String = '${Math.round(Timer.stamp() - _started)}s';
 		Sys.println(passed ? 'slice-gate: PASS in $wall' : 'slice-gate: FAIL in $wall — logs ${_gate.logs}');
@@ -317,7 +323,10 @@ final class SliceGate {
 		});
 		File.saveContent(_gate.log('suite.log'), lines.join('\n') + '\n');
 		final sum: Null<Tally> = totals;
-		if (sum == null || sum.tests == 0) return Failed(GateTree.clip('no suite totals: ${lines[0] ?? ''} — ${_gate.log('suite.log')}'));
+		if (sum == null || sum.tests == 0) {
+			_gate.summary.excerpt(GateExcerpt.suite(lines));
+			return Failed(GateTree.clip('no suite totals: ${lines[0] ?? ''} — ${_gate.log('suite.log')}'));
+		}
 		if (recording) {
 			_readings['tests'] = sum.tests;
 			_readings['assertions'] = sum.assertions;
@@ -330,6 +339,7 @@ final class SliceGate {
 			'${sum.tests} tests / ${sum.assertions} assertions / ${sum.failures}F / ${sum.errors}E$delta, $shards shard(s)'
 		);
 		if (status == 0) return Passed;
+		_gate.summary.excerpt(GateExcerpt.suite(lines));
 		final verdict: String = lines.find(l -> l.startsWith('suite-shard: FAILED')) ?? 'dev shard exited $status';
 		final locus: Null<String> = lines.find(l -> ~/^  shard \d+ /.match(l));
 		return Failed(GateTree.clip(locus == null ? verdict : '$verdict — ${locus.trim()}'));
@@ -337,24 +347,27 @@ final class SliceGate {
 
 	/** The lists row of `--baseline`: every registry's count, kept for the baseline. */
 	private function listsRead(): Outcome {
-		final counts: Map<String, Int> = listCounts();
-		for (name in LISTINGS) _readings['list-$name'] = counts[name] ?? 0;
-		_gate.summary.detail([for (name in LISTINGS) '$name ${counts[name]}'].join(' '));
+		final listed: Map<String, Array<String>> = listings();
+		for (name in LISTINGS) _readings['list-$name'] = listed[name]?.length ?? 0;
+		_gate.summary.detail([for (name in LISTINGS) '$name ${listed[name]?.length ?? 0}'].join(' '));
 		return Passed;
 	}
 
 	/** The lists row: every registry's count beside the baseline's, and no dead fixture. */
 	private function listsOutcome(): Outcome {
-		final counts: Map<String, Int> = listCounts();
+		final listed: Map<String, Array<String>> = listings();
 		final readings: Array<String> = [
 			for (name in LISTINGS) {
 				final was: Null<Int> = _gate.baseline?.lists[name];
-				final now: Int = counts[name] ?? 0;
+				final now: Int = listed[name]?.length ?? 0;
 				was == null || was == now ? '$name $now' : '$name $now (${GateTree.signed(now - was)})';
 			}
 		];
 		_gate.summary.detail(readings.join(' '));
-		return (counts['dead'] ?? 0) > 0 ? Failed('a fixture-named method no runner reaches: `node bin/test.js --list-dead`') : Passed;
+		final dead: Array<String> = listed['dead'] ?? [];
+		if (dead.length == 0) return Passed;
+		_gate.summary.excerpt(dead);
+		return Failed('a fixture-named method no runner reaches: `node bin/test.js --list-dead`');
 	}
 
 	/** The corpus row of `--baseline`: the sweep the suite just wrote, saved for the gate to compare with. */
@@ -372,10 +385,15 @@ final class SliceGate {
 		final sweep: Null<String> = baseline.sweep;
 		if (sweep == null || !forkSet()) return NotRun('no corpus: ANYPARSE_HXFORMAT_FORK unset at the baseline or now');
 		final diff: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --diff $sweep'));
-		if (!diff.ok) return Failed(GateTree.quote(diff));
+		if (!diff.ok) {
+			_gate.summary.excerpt(Excerpt.errors(diff.out + diff.err));
+			return Failed(GateTree.quote(diff));
+		}
 		final line: String = diff.lines().find(l -> l.startsWith('--- sweep --diff')) ?? '';
 		_gate.summary.detail(diff.lines()[0] ?? '');
-		return line.indexOf(': 0 fixtures changed') >= 0 ? Passed : Failed(GateTree.clip(line));
+		if (line.indexOf(': 0 fixtures changed') >= 0) return Passed;
+		_gate.summary.excerpt(diff.lines().filter(l -> l != line));
+		return Failed(GateTree.clip(line));
 	}
 
 	/** The fmt row: no file the writer would rewrite, none needing a second pass. */
@@ -383,7 +401,9 @@ final class SliceGate {
 		final fmt: Result = _gate.hxq(_gate.tree, ['fmt', '--list', '--one-pass'].concat(GateTree.TREE_SCOPE)).run();
 		final line: String = '${fmt.out}\n${fmt.err}'.split('\n').find(l -> l.indexOf('would be rewritten') >= 0) ?? '';
 		_gate.summary.detail(line.replace('apq fmt --list: ', ''));
-		return fmt.ok && line.indexOf(': 0 of ') >= 0 ? Passed : Failed(line == '' ? GateTree.quote(fmt) : GateTree.clip(line));
+		if (fmt.ok && line.indexOf(': 0 of ') >= 0) return Passed;
+		_gate.summary.excerpt(Excerpt.linesOf('${fmt.out}\n${fmt.err}').filter(l -> l != line));
+		return Failed(line == '' ? GateTree.quote(fmt) : GateTree.clip(line));
 	}
 
 	/** The jvm row, for a slice that touched `src/`: `dev jvm-portability` and its gate line. */
@@ -393,7 +413,9 @@ final class SliceGate {
 		File.saveContent(_gate.log('jvm.log'), probe.out + probe.err);
 		final line: String = probe.lines().find(l -> l.startsWith('gate:')) ?? '';
 		_gate.summary.detail(line);
-		return probe.ok ? Passed : Failed(line == '' ? GateTree.quote(probe) : GateTree.clip(line));
+		if (probe.ok) return Passed;
+		_gate.summary.excerpt(Excerpt.errors(probe.out + probe.err));
+		return Failed(line == '' ? GateTree.quote(probe) : GateTree.clip(line));
 	}
 
 	/** The scrub row: `dev scrub-guard` over the tree and over what the slice's commits add. */
@@ -403,14 +425,19 @@ final class SliceGate {
 		if ('${tree.err}${range.err}'.indexOf('nothing checked') >= 0)
 			return NotRun('no token list — set ANYPARSE_SCRUB_LIST (or ANYPARSE_SCRUB_PRIVATE_ROOTS)');
 		_gate.summary.detail('tree and ${GateTree.short(_gate.base)}..HEAD clean');
-		return tree.ok && range.ok ? Passed : Failed(GateTree.quote(tree.ok ? range : tree));
+		if (tree.ok && range.ok) return Passed;
+		final failing: Result = tree.ok ? range : tree;
+		_gate.summary.excerpt(Excerpt.linesOf(failing.out + failing.err));
+		return Failed(GateTree.quote(failing));
 	}
 
 	/** The artifacts row: no touched file is build output or over 1 MB, unless `--allow` names its path. */
 	private function artifactsOutcome(): Outcome {
 		final found: Array<String> = ArtifactRow.offendersAtBase(_gate.tree, _gate.base, _gate.touched, _gate.options.allow);
 		_gate.summary.detail('${_gate.touched.length} touched file(s) checked');
-		return found.length == 0 ? Passed : Failed(GateTree.clip('${found.length} artifact(s), first ${found[0]}'));
+		if (found.length == 0) return Passed;
+		_gate.summary.excerpt(found);
+		return Failed(GateTree.clip('${found.length} artifact(s), first ${found[0]}'));
 	}
 
 	/**
@@ -424,7 +451,9 @@ final class SliceGate {
 		final added: Array<String> = Decision.addedLines(shown.ok ? shown.out : '', File.getContent(Path.join([_gate.tree, ledger])));
 		for (line in added) {
 			final why: Null<String> = Decision.entryProblem(line);
-			if (why != null) return Failed(GateTree.clip('$why: $line'));
+			if (why == null) continue;
+			_gate.summary.excerpt([why, line]);
+			return Failed(GateTree.clip('$why: $line'));
 		}
 		_gate.summary.detail('${added.length} new line(s)');
 		return Passed;
@@ -442,11 +471,11 @@ final class SliceGate {
 		return moved.length == 0 ? Passed : Failed('the git diff of ${moved.join(', ')} changed since the baseline');
 	}
 
-	/** The line count of every registry `bin/test.js` lists, all listed at once. */
-	private function listCounts(): Map<String, Int> {
+	/** The lines of every registry `bin/test.js` lists, all listed at once. */
+	private function listings(): Map<String, Array<String>> {
 		final runs: Array<Result> = Pool.of(LISTINGS.length)
 			.map(LISTINGS, name -> cmd('node bin/test.js --list-$name').at(_gate.tree).env('HXQ_BIN', _gate.apq()));
-		return [for (i => name in LISTINGS) name => runs[i].check().lines().length];
+		return [for (i => name in LISTINGS) name => runs[i].check().lines()];
 	}
 
 	public static function main(argv: Array<String>): Int {

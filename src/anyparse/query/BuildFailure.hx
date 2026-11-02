@@ -132,6 +132,20 @@ final class BuildFailure {
 	}
 
 	/**
+	 * Every line of the log that is a compiler ERROR (see `firstError`), trimmed and in log order: the errors themselves and
+	 * the positioned `...` lines that continue them.
+	 */
+	public static function errorLines(log: String): Array<String> {
+		final found: Array<String> = [];
+		for (raw in log.split('\n')) {
+			final line: String = raw.trim();
+			if (line.length == 0 || line.indexOf('Warning :') >= 0) continue;
+			if (line.startsWith('Error:') || positioned(line)) found.push(line);
+		}
+		return found;
+	}
+
+	/**
 	 * The first line of the log that is a compiler ERROR.
 	 *
 	 * A warning carries a position exactly like an error does — every build of
@@ -139,12 +153,7 @@ final class BuildFailure {
 	 * shape alone would name the wrong line on every single run.
 	 */
 	private static function firstError(log: String): Null<String> {
-		for (raw in log.split('\n')) {
-			final line: String = raw.trim();
-			if (line.length == 0 || line.indexOf('Warning :') >= 0) continue;
-			if (line.startsWith('Error:') || positioned(line)) return line;
-		}
-		return null;
+		return errorLines(log)[0];
 	}
 
 	/** Does the line carry a `<file>.hx:<line>:` position stamp? */

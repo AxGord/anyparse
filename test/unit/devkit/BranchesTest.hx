@@ -31,6 +31,17 @@ final class BranchesTest extends Test {
 		Assert.equals(3, read.readings['tests']);
 	}
 
+	public function testAnExcerptSurvivesTheRoundTripAndAnOlderReportHasNone(): Void {
+		final summary: Summary = new Summary();
+		summary.add('lint', Failed('1 new'), 1, '', ['+ a.hx  r  new']);
+		final read: BranchReport = Branches.decode(Branches.encode('r1', summary.steps(), []));
+		Assert.same(['+ a.hx  r  new'], read.steps[0].excerpt);
+		final older: BranchReport = Branches.decode(
+			'{"run": "r0", "steps": [{"name": "a", "outcome": "failed", "why": "w", "ms": 1, "note": ""}], "readings": []}'
+		);
+		Assert.same([], older.steps[0].excerpt);
+	}
+
 	@:pin('control')
 	@:killer('M-BRANCHES-SHARE-WHOLE')
 	public function testTheHeavyRowsShareWhatTheLeaseLeaves(): Void {
@@ -89,7 +100,8 @@ final class BranchesTest extends Test {
 					name: 'a',
 					outcome: Passed,
 					ms: 0,
-					note: ''
+					note: '',
+					excerpt: []
 				}
 			], ['n' => 1]);
 			final readings: Map<String, Int> = Branches.run(
@@ -103,10 +115,11 @@ final class BranchesTest extends Test {
 						report(names),
 						left
 					])
-					: Command.of(['node', '-e', 'process.exit(3)']),
+					: Command.of(['node', '-e', 'console.error("boom: it broke"); process.exitCode = 3']),
 				report, summary
 			);
 			Assert.equals(1, readings['n']);
+			Assert.stringContains('b:\n  boom: it broke', summary.excerpts(), 'the dead branch\'s own last words stand in for its report');
 			Assert.same(['b', 'a'], [for (step in summary.steps()) step.name]);
 			Assert.isTrue(summary.steps()[0].outcome.match(NotRun(_)));
 			Assert.isTrue(summary.steps()[1].outcome.match(Passed));

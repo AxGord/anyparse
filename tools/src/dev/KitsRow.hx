@@ -22,6 +22,7 @@ final class KitsRow {
 		summary.detail('${report.areas} kit(s), ${report.invocations} invocations');
 		if (report.failing == 0) return Passed;
 		show(report.lines);
+		summary.excerpt(report.lines);
 		return Failed(failure(report));
 	}
 

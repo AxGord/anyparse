@@ -3,6 +3,7 @@ package dev;
 import dev.SliceGate.Baseline;
 import dev.SliceGate.InfraSnapshot;
 import devkit.Command;
+import devkit.Excerpt;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -92,7 +93,9 @@ final class GateLint {
 		if (renamed > 0) notes.push('$renamed moved');
 		if (cached != null && scope.length > 0) notes.push('base lint reused');
 		_gate.summary.detail(notes.join(', '));
-		return moved.added == 0 ? Passed : Failed(GateTree.clip('${moved.added} new: ${moved.first} — ${_gate.log('lint-touched.txt')}'));
+		if (moved.added == 0) return Passed;
+		_gate.summary.excerpt(moved.rows.filter(row -> row.startsWith('+ ')));
+		return Failed(GateTree.clip('${moved.added} new: ${moved.first} — ${_gate.log('lint-touched.txt')}'));
 	}
 
 	/**
@@ -170,12 +173,15 @@ final class GateLint {
 			storeLint(trees[i].key, report);
 		}
 		final moves: Array<String> = [];
+		final rows: Array<String> = [];
 		for (i => t in trees) {
 			final now: String = _gate.log('infra-now-$i.json');
 			File.saveContent(now, reports[i] ?? '[]');
 			final moved: LintMove = lintDiff(t.snapshot, now, 'infra-$i.txt');
 			if (moved.added + moved.removed > 0) moves.push('${t.name} +${moved.added} -${moved.removed}');
+			for (row in moved.rows) rows.push('${t.name} $row');
 		}
+		_gate.summary.excerpt(rows);
 		final reused: Int = trees.length - misses.length;
 		_gate.summary.detail('${trees.length} tree(s), nothing moved${reused > 0 ? ', $reused lint(s) reused' : ''}');
 		return moves.length == 0 ? Passed : Failed('findings moved: ${moves.join(', ')} — ${_gate.log('infra-<k>.txt')}');
@@ -183,8 +189,11 @@ final class GateLint {
 
 	/** The report of `run`, `lintCommand`'s `lint --format json` of `tree` for `out`, written there; `NotRun` when it printed none. */
 	private function saveLint(run: Result, tree: String, out: String): Outcome {
-		if (!run.out.trim().startsWith('['))
-			return NotRun('lint of $tree printed no report: ${GateTree.quote(run)} — stderr in ${errLogOf(out)}');
+		if (!run.out.trim().startsWith('[')) {
+			final errors: String = errLogOf(out);
+			_gate.summary.excerpt(Excerpt.errors(run.out + (FileSystem.exists(errors) ? File.getContent(errors) : '')));
+			return NotRun('lint of $tree printed no report: ${GateTree.quote(run)} — stderr in $errors');
+		}
 		File.saveContent(out, run.out);
 		return Passed;
 	}
@@ -205,7 +214,12 @@ final class GateLint {
 		final head: EReg = ~/(\d+) added \/ (\d+) removed/;
 		if (!head.match(diff.out)) throw new Exception('lint-diff printed no headline: ${GateTree.quote(diff)}');
 		final first: String = diff.lines().find(l -> l.startsWith('  + ')) ?? '';
-		return { added: Std.parseInt(head.matched(1)) ?? 0, removed: Std.parseInt(head.matched(2)) ?? 0, first: first.trim() };
+		return {
+			added: Std.parseInt(head.matched(1)) ?? 0,
+			removed: Std.parseInt(head.matched(2)) ?? 0,
+			first: first.trim(),
+			rows: GateExcerpt.lintRows(diff.out, true)
+		};
 	}
 
 	/** The cache entry of the lint of `scope` in the tree `tree` names by this engine; null when the engine has none. */
@@ -288,4 +302,7 @@ typedef LintMove = {
 	var added: Int;
 	var removed: Int;
 	var first: String;
+
+	/** Every row of the report for a finding that appeared (`+ …`) or went (`- …`), in print order. */
+	var rows: Array<String>;
 }
