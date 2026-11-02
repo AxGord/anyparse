@@ -1091,7 +1091,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 
 	/**
 	 * Offering a committed break to every host above it (`BreakCommits.offerItemBreaks`) must stay polynomial in the
-	 * nesting depth: a paren chain five deep and a call nine deep, each level holding its own threshold-pivot literal,
+	 * nesting depth: a paren chain five deep and a call ten deep, each level holding its own threshold-pivot literal,
 	 * write in a small fraction of a second, where copying every alternative whole grew the Doc exponentially.
 	 */
 	@:pin('control')
@@ -1102,13 +1102,13 @@ class WrapFlatSourceFixedPointTest extends Test {
 		var chain: String = 'siteCost(sites, costs, ${literal(99)})';
 		for (k in 0...5) chain = '(siteCost(sites, costs, ${literal(k)}) || $chain)';
 		var call: String = 'call0(sites, costs, ${literal(0)}, ${literal(0)})';
-		for (k in 1...9) call = 'call$k(sites, costs, ${literal(k)}, $call)';
+		for (k in 1...10) call = 'call$k(sites, costs, ${literal(k)}, $call)';
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x = $chain;\n\t\tfinal y = $call;\n\t}\n}';
 		final started: Float = Timer.stamp();
 		final once: String = write(src, TERNARY_CALL_ARG);
 		final seconds: Float = Timer.stamp() - started;
 		Assert.isTrue(seconds < 1.5, 'nested named breaks took ${seconds}s to write');
-		Assert.isTrue(once.indexOf('call8(') != -1 && once.indexOf('more: 99') != -1, 'the write must keep every level:\n<$once>');
+		Assert.isTrue(once.indexOf('call9(') != -1 && once.indexOf('more: 99') != -1, 'the write must keep every level:\n<$once>');
 	}
 
 	private static function write(src: String, config: String): String {
