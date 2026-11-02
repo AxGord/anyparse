@@ -5,6 +5,7 @@ import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.LanguageChoice;
 import anyparse.query.cli.UsageFailure;
+import anyparse.query.cli.command.ChangedCommand;
 import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.GetCommand;
 import anyparse.query.cli.command.LintCommand;
@@ -163,6 +164,16 @@ class LanguageChoiceTest extends Test {
 	public function testAPathAfterEndOfOptionsCounts(): Void {
 		Assert.same(['--lang', 'haxe', 'x', '--', 'A.hx'], choose(new LintCommand(), ['--lang-default', 'haxe', 'x', '--', 'A.hx']).args);
 		Assert.same(['--lang', 'json', 'x', '--', 'a.json'], choose(new LintCommand(), ['x', '--', 'a.json']).args);
+	}
+
+	/**
+	 * A command that routes each file by its own extension needs no
+	 * argument naming a grammar: the file `--diff` names is no positional.
+	 */
+	public function testChangedNeedsNoPositionalFile(): Void {
+		Assert.same(['HEAD', '--diff', 'A.hx'], choose(new ChangedCommand(), ['HEAD', '--diff', 'A.hx']).args);
+		Assert.same(['HEAD'], choose(new ChangedCommand(), ['HEAD']).args);
+		Assert.same(['--lang', 'haxe', 'HEAD'], choose(new ChangedCommand(), ['--lang-default', 'haxe', 'HEAD']).args);
 	}
 
 	private static function choose(command: CliCommand, args: Array<String>): LanguageChoiceResult {

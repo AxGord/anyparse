@@ -53,6 +53,11 @@ typedef DeclarationChange = {
 
 	/** The lines its node spans in the version that holds it. */
 	final spanLines: Int;
+
+	/** The lines it owns in each version as the writer emits them — empty on the side that lacks it. */
+	final before: Array<String>;
+
+	final after: Array<String>;
 }
 
 /** One identifier spelled differently at every one of its places. */
@@ -112,8 +117,14 @@ final class DeclarationDelta {
 	/** The pseudo-declaration owning the lines no declaration owns. */
 	public static inline final MODULE_REST: String = '(module)';
 
+	/** The row of `hunk` standing for a run of unchanged lines. */
+	public static inline final ELIDED: String = '...';
+
 	/** The edit distance past which a line count falls back to the multiset of lines. */
 	private static inline final MAX_LINE_EDITS: Int = 2000;
+
+	/** The mark of a line of `hunk` that no edit touched. */
+	private static inline final UNCHANGED_MARK: String = '  ';
 
 	/**
 	 * The change from `base` to `now`, both read with `plugin`. A version that does not parse makes the whole answer
@@ -165,6 +176,25 @@ final class DeclarationDelta {
 	}
 
 	/**
+	 * One declaration's change as rows a reader follows in place of a raw diff: `+ ` an inserted line, `- ` a deleted one,
+	 * two spaces an unchanged one, and `...` for a run of unchanged lines further than `context` from an edit. A null
+	 * `context` keeps every unchanged line.
+	 */
+	public static function hunk(before: Array<String>, after: Array<String>, ?context: Int): Array<String> {
+		final rows: Array<String> = editRows(before, after);
+		final near: Array<Bool> = [for (_ in rows) context == null];
+		if (context != null) for (i => row in rows) if (!row.startsWith(UNCHANGED_MARK)) {
+			for (k in (i < context ? 0 : i - context) ... (i + context + 1 > rows.length ? rows.length : i + context + 1)) near[k] = true;
+		}
+		final out: Array<String> = [];
+		for (i => row in rows) if (near[i])
+			out.push(row)
+		else if (i == 0 || near[i - 1])
+			out.push(ELIDED);
+		return out;
+	}
+
+	/**
 	 * The simple names of `delta`'s declarations — what a reader asks `mentions` about; with `topOnly`, of the
 	 * module-level ones alone, for a file added or deleted whole, whose members nothing outside it can have reached.
 	 */
@@ -182,6 +212,20 @@ final class DeclarationDelta {
 	 */
 	public static function renamings(before: String, after: String): Null<Array<Renaming>> {
 		return renamingsOf(tokens(before, 0, []), tokens(after, 0, []));
+	}
+
+	/** Every line of `before` and `after` once, marked `- `, `+ ` or two spaces, deletions ahead of the line they sat before. */
+	private static function editRows(before: Array<String>, after: Array<String>): Array<String> {
+		final edits: Null<LineEdits> = LineDiff.edits(before, after, MAX_LINE_EDITS);
+		if (edits == null) return [for (line in before) '- $line'].concat([for (line in after) '+ $line']);
+		final inserted: Map<Int, Bool> = [for (index in edits.inserted) index => true];
+		final rows: Array<String> = [];
+		var next: Int = 0;
+		for (index in 0...after.length + 1) {
+			while (next < edits.deleted.length && edits.deleted[next].before <= index) rows.push('- ${before[edits.deleted[next++].line]}');
+			if (index < after.length) rows.push((inserted.exists(index) ? '+ ' : UNCHANGED_MARK) + after[index]);
+		}
+		return rows;
 	}
 
 	private static function renamingsOf(a: Array<BodyToken>, b: Array<BodyToken>): Null<Array<Renaming>> {
@@ -236,12 +280,16 @@ final class DeclarationDelta {
 			final mine: Array<String> = after.owned[i];
 			if (unit.header || known >= 0 && sameLines(before.owned[known], mine)) continue;
 			final counts: LineCounts = known < 0 ? { added: mine.length, removed: 0 } : lineCounts(before.owned[known], mine);
-			out.push(changeOf(known < 0 ? Added : Changed, unit, nowAddress.describe(after.source, unit.node), counts));
+			out.push(changeOf(
+				known < 0 ? Added : Changed, unit, nowAddress.describe(after.source, unit.node), counts,
+				known < 0 ? [] : before.owned[known], mine
+			));
 		}
 		for (i => unit in before.units) if (!unit.header && !matched[i])
-			out.push(
-				changeOf(Removed, unit, baseAddress.describe(before.source, unit.node), { added: 0, removed: before.owned[i].length })
-			);
+			out.push(changeOf(
+				Removed, unit, baseAddress.describe(before.source, unit.node), { added: 0, removed: before.owned[i].length },
+				before.owned[i], []
+			));
 		// lines no declaration owns, or a difference no declaration's own lines show — where the header sits among them
 		if (!sameLines(before.rest, after.rest) || out.length == 0) {
 			final rest: LineCounts = out.length == 0 ? lineCounts(before.lines, after.lines) : lineCounts(before.rest, after.rest);
@@ -253,7 +301,9 @@ final class DeclarationDelta {
 				added: rest.added,
 				removed: rest.removed,
 				depth: 0,
-				spanLines: 0
+				spanLines: 0,
+				before: before.rest,
+				after: after.rest
 			});
 		}
 		return out;
@@ -285,7 +335,9 @@ final class DeclarationDelta {
 		return partner;
 	}
 
-	private static function changeOf(status: DeclarationStatus, unit: OwnerUnit, selector: String, counts: LineCounts): DeclarationChange {
+	private static function changeOf(
+		status: DeclarationStatus, unit: OwnerUnit, selector: String, counts: LineCounts, before: Array<String>, after: Array<String>
+	): DeclarationChange {
 		return {
 			status: status,
 			key: unit.key,
@@ -294,7 +346,9 @@ final class DeclarationDelta {
 			added: counts.added,
 			removed: counts.removed,
 			depth: unit.depth,
-			spanLines: unit.last - unit.first + 1
+			spanLines: unit.last - unit.first + 1,
+			before: before,
+			after: after
 		};
 	}
 

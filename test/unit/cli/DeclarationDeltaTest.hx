@@ -170,6 +170,33 @@ class DeclarationDeltaTest extends Test {
 		Assert.same([], delta.headerAdded);
 	}
 
+	/** A changed declaration carries the lines it owns in each version, an added one only its new lines, a removed one only its old. */
+	public function testADeclarationCarriesItsLinesOfBothVersions(): Void {
+		final edited: String = BASE.replace('return 2;', 'return 20;').replace('\n\tpublic function h(): Int {\n\t\treturn 3;\n\t}\n', '');
+		final changes: Array<DeclarationChange> = compareHaxe(BASE, edited).declarations;
+		Assert.equals('FnMember:g', changes[0].selector);
+		Assert.isTrue(changes[0].before.contains('\t\treturn 2;'));
+		Assert.isTrue(changes[0].after.contains('\t\treturn 20;'));
+		Assert.equals('FnMember:h', changes[1].selector);
+		Assert.same([], changes[1].after);
+		Assert.isTrue(changes[1].before.contains('\t\treturn 3;'));
+	}
+
+	/**
+	 * A hunk names the lines an edit deleted ahead of the ones that replaced them, keeps `context` unchanged lines around
+	 * each edit and stands one `...` for each run of the rest; a null context keeps them all.
+	 */
+	public function testAHunkMarksEditsAndElidesTheLinesFarFromThem(): Void {
+		final before: Array<String> = ['a', 'b', 'c', 'd', 'e', 'f'];
+		final after: Array<String> = ['a', 'b', 'C', 'd', 'e', 'f'];
+		Assert.same(
+			[DeclarationDelta.ELIDED, '  b', '- c', '+ C', '  d', DeclarationDelta.ELIDED], DeclarationDelta.hunk(before, after, 1)
+		);
+		Assert.same(['  a', '  b', '- c', '+ C', '  d', '  e', '  f'], DeclarationDelta.hunk(before, after));
+		Assert.same(['+ x'], DeclarationDelta.hunk([], ['x'], 2));
+		Assert.same(['- x'], DeclarationDelta.hunk(['x'], [], 2));
+	}
+
 	private static function compareHaxe(base: String, now: String): FileDelta {
 		return DeclarationDelta.compare(new HaxeQueryPlugin(), base, now);
 	}

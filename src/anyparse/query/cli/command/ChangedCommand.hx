@@ -8,6 +8,12 @@ import anyparse.query.cli.GitRevision;
 private typedef ChangedOpts = {
 	final lang: String;
 	final namesOnly: Bool;
+
+	/** `--diff`: each changed declaration's lines follow its summary line. */
+	final diff: Bool;
+
+	/** The declaration `--diff <file>#<selector>` names: shown in full, and the only one shown. */
+	final selector: Null<String>;
 	final ref: String;
 	final paths: Array<String>;
 }
@@ -26,7 +32,10 @@ private typedef FileReading = {
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class ChangedCommand implements CliCommand {
+final class ChangedCommand implements CliCommand implements LanguageFree {
+
+	/** The unchanged lines `--diff` keeps around an edit when no declaration is named. */
+	private static inline final DIFF_CONTEXT: Int = 2;
 
 	public function new() {}
 
@@ -39,7 +48,7 @@ final class ChangedCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(['--names'], []);
+		return new CliFlags(['--names'], ['--diff']);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -59,6 +68,8 @@ final class ChangedCommand implements CliCommand {
 		final names: Array<String> = [];
 		final report: Array<String> = [];
 		final tally: Map<String, Int> = [];
+		final changed: Array<String> = [];
+		var selected: Int = 0;
 		for (entry in entries) {
 			final read: FileReading = readEntry(entry, range[0], range.length > 1 ? range[1] : null, opts.lang);
 			final delta: Null<FileDelta> = read.delta;
@@ -69,7 +80,14 @@ final class ChangedCommand implements CliCommand {
 			for (name in read.names) if (!names.contains(name)) names.push(name);
 			final label: String = labelOf(entry, delta);
 			tally[label] = (tally[label] ?? 0) + 1;
-			report.push(renderEntry(entry, label, delta));
+			final shown: Array<DeclarationChange> = shownOf(entry, delta, opts.selector);
+			selected += shown.length;
+			for (change in delta.declarations) changed.push(change.selector);
+			report.push(renderEntry(entry, label, delta, shown, opts));
+		}
+		if (opts.selector != null && selected == 0) {
+			CliIo.stderr('apq changed: no changed declaration "${opts.selector}" — changed: ${changed.join(', ')}\n');
+			return ExitCode.EXIT_RUNTIME;
 		}
 		if (opts.namesOnly) {
 			for (name in names) CliIo.sysPrint('$name\n');
@@ -87,6 +105,11 @@ final class ChangedCommand implements CliCommand {
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --names             Print only the names of the changed declarations, one per line\n');
+		CliIo.sysPrint(
+			'  --diff <file>[#<sel>]  Add <file> to the paths and print each changed declaration\'s lines as the writer emits them\n'
+		);
+		CliIo.sysPrint('                      (- gone, + new, two lines of context, ... for the rest); with #<sel> only the declaration\n');
+		CliIo.sysPrint('                      whose address, dotted name path or name is <sel>, in full, in every listed file\n');
 		CliIo.sysPrint('  --lang <name>       Grammar plugin for a file no extension routes (default: haxe)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Every file `git diff <base-ref>` reports (the working tree against the revision, or\n');
@@ -107,6 +130,8 @@ final class ChangedCommand implements CliCommand {
 	private function parseArgs(args: Array<String>): Null<ChangedOpts> {
 		var lang: String = 'haxe';
 		var namesOnly: Bool = false;
+		var diff: Bool = false;
+		var selector: Null<String> = null;
 		var ref: Null<String> = null;
 		final paths: Array<String> = [];
 		for (arg in new ChangedCommand().flags().walk(args)) {
@@ -114,6 +139,13 @@ final class ChangedCommand implements CliCommand {
 			switch arg.flag {
 				case '--lang':
 					lang = arg.value();
+				case '--diff':
+					diff = true;
+					final target: String = arg.value();
+					final hash: Int = target.indexOf('#');
+					final file: String = hash < 0 ? target : target.substr(0, hash);
+					if (hash >= 0) selector = target.substr(hash + 1);
+					if (file != '') paths.push(file);
 				case '--names':
 					namesOnly = true;
 				case '-h', '--help':
@@ -127,12 +159,19 @@ final class ChangedCommand implements CliCommand {
 			}
 		}
 		if (ref == null) throw new UsageFailure('missing <base-ref>');
+		if (diff && namesOnly) throw new UsageFailure('--diff and --names are exclusive');
 		return {
 			lang: lang,
 			namesOnly: namesOnly,
+			diff: diff,
+			selector: selector,
 			ref: ref,
 			paths: paths
 		};
+	}
+
+	private static inline function isWhole(entry: ChangedPath): Bool {
+		return entry.status == 'A' || entry.status == 'D';
 	}
 
 	/** Both versions of `entry` and what changed between them; the working tree stands in for a missing `tip`. */
@@ -178,27 +217,45 @@ final class ChangedCommand implements CliCommand {
 		return base.failure == '' && base.status == 0 ? [base.out.trim(), to] : null;
 	}
 
-	private static function renderEntry(entry: ChangedPath, label: String, delta: FileDelta): String {
+	private static function renderEntry(
+		entry: ChangedPath, label: String, delta: FileDelta, shown: Array<DeclarationChange>, opts: ChangedOpts
+	): String {
 		final moved: String = entry.basePath != entry.path ? '  <- ${entry.basePath}' : '';
 		final counts: String = label == ChangeClass.Layout || label == ChangeClass.Unchanged ? '' : '  +${delta.added} -${delta.removed}';
 		final out: StringBuf = new StringBuf();
 		out.add('${entry.status} ${entry.path}$moved  $label$counts\n');
-		final whole: Bool = entry.status == 'A' || entry.status == 'D';
+		final whole: Bool = isWhole(entry);
 		if (!whole) {
 			for (line in delta.headerRemoved) out.add('    - $line\n');
 			for (line in delta.headerAdded) out.add('    + $line\n');
 			if (delta.headerReordered) out.add('    import order changed\n');
 		}
 		for (renaming in delta.renames) out.add('    rename ${renaming.from} -> ${renaming.to}\n');
-		for (change in delta.declarations) if (!whole || change.depth <= 0) {
+		// a file added or deleted whole shows its lines only for the declaration a selector names
+		final lines: Bool = opts.diff && (!whole || opts.selector != null);
+		for (change in shown) {
 			final size: String = switch change.status {
 				case Changed: '+${change.added} -${change.removed}';
 				case Added: '${change.spanLines} line(s)';
 				case Removed: '${change.spanLines} line(s), base';
 			};
 			out.add('    ${change.status} ${change.selector}  $size\n');
+			if (lines) for (row in DeclarationDelta.hunk(change.before, change.after, opts.selector == null ? DIFF_CONTEXT : null))
+				out.add('        $row\n');
 		}
 		return out.toString();
+	}
+
+	/** The declarations of `delta` a report names: a file added or deleted whole, its module-level ones; a selector, the ones it names. */
+	private static function shownOf(entry: ChangedPath, delta: FileDelta, selector: Null<String>): Array<DeclarationChange> {
+		final whole: Bool = isWhole(entry);
+		return [
+			for (change in delta.declarations) if (
+				(selector != null || !whole || change.depth <= 0)
+				&& (selector == null || change.selector == selector || change.key == selector || change.name == selector)
+			)
+				change
+		];
 	}
 
 }
