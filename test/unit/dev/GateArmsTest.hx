@@ -10,6 +10,7 @@ import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -270,6 +271,54 @@ final class GateArmsTest extends Test {
 		});
 	}
 
+	/** The row names the threads its kill run and its base run held, and a rot read on one thread says so beside the word rot. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-LEASE-UNNAMED')
+	public function testTheRowNamesTheThreadsItsRunsHeld(): Void {
+		withTree(tree -> {
+			final tally: String = '4 tracks: 1 killed, 3 survived, 0 mismatch, 0 error';
+			Assert.isTrue(
+				failedWith(outcomeOf(tree, [], '1'), 'rot on base: M-ROT (both runs held 1 thread); not killed: M-OWN, M-NEW — $tally')
+			);
+			Assert.isTrue(failedWith(
+				outcomeOf(tree, [], '4'),
+				'rot on base: M-ROT; not killed: M-OWN, M-NEW — $tally — kill run held 4 threads, base run held 4 threads'
+			));
+			Assert.isTrue(failedWith(
+				outcomeOf(tree, [], ''),
+				'rot on base: M-ROT; not killed: M-OWN, M-NEW — $tally — kill run held no lease, base run held no lease'
+			));
+			knob(tree, 'all-killed');
+			final gate: GateTree = gateOf(tree, []);
+			withLease('1', () -> gate.summary.time('arms', () -> GateArms.outcome(gate)));
+			Assert.stringContains('kill run held 1 thread', gate.summary.steps()[0].note);
+		});
+	}
+
+	/** The excerpt, which the failed message's clip cannot cut, holds the threads line. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-THREADS-OUT-OF-EXCERPT')
+	public function testTheExcerptOfAFailedRowHoldsTheThreadsLine(): Void {
+		withTree(tree -> Assert.contains('kill run held 4 threads, base run held 4 threads', excerptOf(tree, '4')));
+	}
+
+	/** A base that was not read, or that no survivor exists at, names no base run: none ran. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-BASE-THREADS-UNGUARDED')
+	public function testABaseRunThatDidNotRunHoldsNoThreads(): Void {
+		withTree(tree -> {
+			File.saveContent(Path.join([tree, 'fail-base-build']), '');
+			final unread: Array<String> = excerptOf(tree, '4');
+			Assert.contains('kill run held 4 threads', unread);
+			Assert.same([], unread.filter(line -> line.contains('base run held')), unread.join('\n'));
+		});
+		withTree(tree -> {
+			final unasked: Array<String> = excerptOf(tree, '4');
+			Assert.contains('kill run held 4 threads', unasked);
+			Assert.same([], unasked.filter(line -> line.contains('base run held')), unasked.join('\n'));
+		}, ['M-NEW']);
+	}
+
 	private static function select(
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>, ?near: Array<String>
 	): ArmSelection {
@@ -277,8 +326,19 @@ final class GateArmsTest extends Test {
 		return GateArms.select(same, same, touched, layout, killers, extra, near ?? []);
 	}
 
-	private static function outcomeOf(tree: String, allowArms: Array<String>): Outcome {
-		return GateArms.outcome(gateOf(tree, allowArms));
+	/** The row's outcome with the lease `held` (`WF_THREADS` text; empty is no lease) around both its runs. */
+	private static function outcomeOf(tree: String, allowArms: Array<String>, held: String = '4'): Outcome {
+		var outcome: Outcome = Passed;
+		withLease(held, () -> outcome = GateArms.outcome(gateOf(tree, allowArms)));
+		return outcome;
+	}
+
+	private static function withLease(held: String, body: () -> Void): Void {
+		final saved: String = Sys.getEnv('WF_THREADS') ?? '';
+		CliFixture.always(() -> Sys.putEnv('WF_THREADS', saved), () -> {
+			Sys.putEnv('WF_THREADS', held);
+			body();
+		});
 	}
 
 	private static function failedWith(outcome: Outcome, start: String): Bool {
@@ -356,6 +416,13 @@ final class GateArmsTest extends Test {
 
 	private static function member(name: String, ?change: String): String {
 		return change == null ? '{"level": "member", "name": "$name"}' : '{"level": "member", "name": "$name", "change": "$change"}';
+	}
+
+	/** The excerpt lines of the failed arms row of `tree` under the lease `held`. */
+	private static function excerptOf(tree: String, held: String): Array<String> {
+		final gate: GateTree = gateOf(tree, []);
+		withLease(held, () -> gate.summary.time('arms', () -> GateArms.outcome(gate)));
+		return gate.summary.steps()[0].excerpt;
 	}
 
 }

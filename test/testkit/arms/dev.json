@@ -432,6 +432,29 @@
 			"note": "a survivor is never read again at the base, so rot the slice did not cause reads as its own and the worker bisects it by hand"
 		},
 		{
+			"name": "M-GATE-ARMS-LEASE-UNNAMED",
+			"type": "dev.GateArms",
+			"method": "leaseNote",
+			"force": "''",
+			"note": "a row that fails or passes names no thread count, so a rot read on one thread looks like the base's rot to a pin that needs parallel work"
+		},
+		{
+			"name": "M-GATE-ARMS-BASE-THREADS-UNGUARDED",
+			"type": "dev.GateArms",
+			"method": "fastOutcome",
+			"find": "atBase.length > 0 && rot.failure == null",
+			"replace": "true",
+			"note": "a base that was not read, or had no survivor to read, is reported as a base run that held threads"
+		},
+		{
+			"name": "M-GATE-ARMS-THREADS-OUT-OF-EXCERPT",
+			"type": "dev.GateArms",
+			"method": "fastOutcome",
+			"find": "said.concat([threads]).concat(excerpt)",
+			"replace": "said.concat(excerpt)",
+			"note": "the threads line is only in the failed message, which the clip cuts, so a long row loses the lease the reader needs"
+		},
+		{
 			"name": "M-GATE-ARMS-WAIVER-IGNORED",
 			"type": "dev.GateArms",
 			"method": "fastOutcome",

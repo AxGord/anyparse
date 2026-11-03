@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.core.PoolLease;
 import dev.ArmRegistry.ArmRecord;
 import dev.GateExcerpt.ArmRow;
 import devkit.Cmd.cmd;
@@ -17,7 +18,8 @@ using StringTools;
  * a type it touched, every arm a pin of a touched test class names, every arm on a direct call neighbour of a member it
  * changed, and each `--arm`. An arm whose only claim is a touched file that `hxq changed` classes as layout only runs
  * `--apply-only` instead: its cut must still apply, and no test can see a change of layout. An arm that does not kill its
- * pin is run again at the base, and the row names it `rot on base` when it fails there too. The registry's whole `--all` is
+ * pin is run again at the base, and the row names it `rot on base` when it fails there too. The row says how many threads the
+ * kill run and the base run held, since a pin of parallel work cannot kill its arm on one. The registry's whole `--all` is
  * a release run, never a slice gate.
  */
 @:nullSafety(Strict)
@@ -97,10 +99,15 @@ final class GateArms {
 		return [for (line in text.split('\n')) if (row.match(line)) row.matched(1)];
 	}
 
-	/** The lines naming a failed row's arms: those rotten at the base first, then the slice's own, then a base that could not be read. */
-	public static function rotLines(reading: RotReading, own: Array<String>): Array<String> {
+	/**
+	 * The lines naming a failed row's arms: those rotten at the base first, then the slice's own, then a base that could not be
+	 * read. `held` is the lease of both kill runs: a rot read on one thread says so, since a pin of parallel work cannot tell its
+	 * cut apart there.
+	 */
+	public static function rotLines(reading: RotReading, own: Array<String>, held: Null<Int>): Array<String> {
 		final lines: Array<String> = [];
-		if (reading.rot.length > 0) lines.push('rot on base: ${reading.rot.join(', ')}');
+		final solo: String = held == 1 ? ' (both runs held ${leaseNote(held)})' : '';
+		if (reading.rot.length > 0) lines.push('rot on base: ${reading.rot.join(', ')}$solo');
 		if (own.length > 0) lines.push('not killed: ${own.join(', ')}');
 		final failure: Null<String> = reading.failure;
 		if (failure != null) lines.push('base not read: $failure');
@@ -110,6 +117,16 @@ final class GateArms {
 	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
 	private static inline function progressOf(gate: GateTree): String {
 		return gate.branchProgress(SliceGate.ARMS_ROW);
+	}
+
+	/** How many threads a kill run held, as the row says it: the lease the tracks' suites read as `WF_THREADS`, not the `--jobs` slots. */
+	private static function leaseNote(held: Null<Int>): String {
+		return if (held == null)
+			'no lease'
+		else if (held == 1)
+			'1 thread'
+		else
+			'$held threads';
 	}
 
 	/** The runs of a `picked` selection, `old` being the registry at the base: the apply check first, then the kill run. */
@@ -169,7 +186,9 @@ final class GateArms {
 		if (!tally.match(run.out)) return Failed('no verdict line — ${GateTree.quote(run)}');
 		final rows: Array<ArmRow> = GateExcerpt.armRows(log);
 		final standing: Array<ArmRow> = rows.filter(row -> !waived.contains(row.name));
+		final held: Null<Int> = PoolLease.threads();
 		read.notes.push('${tally.matched(0)} (${elided(names)})');
+		read.notes.push('kill run held ${leaseNote(held)}');
 		for (row in rows) read.rows.push(row);
 		gate.summary.detail(passNote(read, waived));
 		final killed: Int = Std.parseInt(tally.matched(2)) ?? 0;
@@ -185,11 +204,13 @@ final class GateArms {
 			.map(row -> row.name);
 		final rot: RotReading = atBase.length == 0 ? { rot: [], failure: null } : rotOnBase(gate, atBase);
 		final own: Array<String> = standing.map(row -> row.name).filter(name -> !rot.rot.contains(name) && !unrendered.contains(name));
-		final named: Array<String> = rotLines(rot, own);
+		final named: Array<String> = rotLines(rot, own, held);
 		if (unrendered.length > 0) named.push('did not render: ${unrendered.join(', ')}');
 		final said: Array<String> = named.length == 0 ? ['no row explains the run (exit ${run.status})'] : named;
-		gate.summary.excerpt(said.concat(excerpt));
-		return Failed(GateTree.clip('${said.join('; ')} — ${tally.matched(0)} — ${gate.log('arms.log')}'));
+		final base: String = atBase.length > 0 && rot.failure == null ? ', base run held ${leaseNote(held)}' : '';
+		final threads: String = 'kill run held ${leaseNote(held)}$base';
+		gate.summary.excerpt(said.concat([threads]).concat(excerpt));
+		return Failed(GateTree.clip('${said.join('; ')} — ${tally.matched(0)} — $threads — ${gate.log('arms.log')}'));
 	}
 
 	/** The first `ARMS_SHOWN` of `names`, then an ellipsis when there are more. */
