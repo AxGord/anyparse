@@ -40,6 +40,7 @@ final class WorkerBuild {
 		if (!['both', 'apq', 'test'].contains(target)) throw new UsageError('unknown target \'$target\' (expected both|apq|test)');
 		FileSystem.createDirectory(workdir);
 		final out: String = FileSystem.fullPath(workdir);
+		refuseTreeRoot(out);
 		if (out == Path.join([repo, 'bin']) && !isLinkedWorktree(repo))
 			throw new UsageError(
 				'<workdir> is the repo\'s own bin/ — that is the shared build this tool exists to avoid; pick a private directory'
@@ -67,6 +68,19 @@ final class WorkerBuild {
 		}
 		for (job in jobs) Sys.println('${job.name}: $out/${job.artifact}');
 		return 0;
+	}
+
+	/**
+	 * Refuses a `workdir` that is the root of a git tree (it holds `.git`, a directory or a linked worktree's file):
+	 * the engine, the test runner and the launcher written there land among the tree's own files, and a gate that checks
+	 * the tree for stray artifacts then fails after the whole run. A directory outside the tree is the
+	 * way out; only the root is refused, because `<tree>/bin` is gitignored and a caller builds there.
+	 */
+	public static function refuseTreeRoot(workdir: String): Void {
+		if (FileSystem.exists(Path.join([workdir, '.git'])))
+			throw new UsageError(
+				'<workdir> $workdir is the root of a git tree — the build would write into its files; pick a directory outside it'
+			);
 	}
 
 	/**
