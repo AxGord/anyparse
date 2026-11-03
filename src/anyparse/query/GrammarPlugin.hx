@@ -3474,6 +3474,13 @@ final class RefShape {
 	public var cPrecedenceDivergences: Null<Array<PrecedenceDivergence>>;
 
 	/**
+	 * The operand slots where a bare operand is correct as written yet reads better parenthesized, in the same row shape as
+	 * `cPrecedenceDivergences`: `a && b || c` groups `a && b` first in every C-family grammar, but a reader forgets which
+	 * logical operator binds tighter. Read by `mixed-logical-parens`; optional, unset makes that rule a no-op.
+	 */
+	public var mixedLogicalOperands: Null<Array<PrecedenceDivergence>>;
+
+	/**
 	 * The ARITHMETIC CORE of the kinds that bind strictly tighter than the comparison
 	 * tier, plus the POSTFIX in/decrements: those that also parse identically across the
 	 * C-family languages, so a `parenKind` wrapping one as an operand of a

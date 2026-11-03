@@ -90,6 +90,7 @@ import anyparse.check.common.expressions.JoinOverrideChain;
 import anyparse.check.common.expressions.JoinReturn;
 import anyparse.check.common.expressions.JoinSingleUseLocal;
 import anyparse.check.common.expressions.LambdaBranchingBodyBlock;
+import anyparse.check.common.expressions.MixedLogicalParens;
 import anyparse.check.common.expressions.NarrowLocalScope;
 import anyparse.check.common.expressions.PreferArrowCallback;
 import anyparse.check.common.expressions.PreferBind;
@@ -270,6 +271,7 @@ final class Linter {
 			new EmptyBlock(),
 			new IdenticalOperands(),
 			new CPrecedenceTrap(),
+			new MixedLogicalParens(),
 			new SubstrNegativeStart(),
 			new PreferReflectCompare(),
 			new StaticInitOrder(),

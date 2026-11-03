@@ -89,9 +89,13 @@ final class RefShapeKindProjectionTest extends Test {
 	 * precedence tier. Its name describes the grouping, not the contents, so the name-based
 	 * reading would skip it — and `testNoUnclassifiedFieldCarriesAProjectedKindName` is what
 	 * stops a future field from being skipped the same way in silence. `cPrecedenceDivergences`
-	 * is the same case one level deeper: rows whose host and operand lists are operator KINDS.
+	 * is the same case one level deeper: rows whose host and operand lists are operator KINDS, as are `mixedLogicalOperands`'.
 	 */
-	private static final EXTRA_KIND_FIELDS: Array<String> = ['leftAssociativeBinaryFamilies', 'cPrecedenceDivergences'];
+	private static final EXTRA_KIND_FIELDS: Array<String> = [
+		'leftAssociativeBinaryFamilies',
+		'cPrecedenceDivergences',
+		'mixedLogicalOperands'
+	];
 
 	/**
 	 * The `RefShape` fields that GROUP other fields into a nested structure (`RefShape.execution`), which exists only to

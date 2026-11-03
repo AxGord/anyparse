@@ -46,9 +46,16 @@ final class CPrecedenceTrap extends RuleBase {
 
 	/** Wrap each flagged operand that no other flagged operand encloses in parentheses. */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return RunScan.editsWith(plugin, source, plugin.refShape().cPrecedenceDivergences, (tree, table) -> {
+		return wrapEdits(source, violations, plugin, plugin.refShape().cPrecedenceDivergences);
+	}
+
+	/** The edits wrapping each flagged operand of `table` that no other flagged operand encloses; shared by rules reading such a table. */
+	public static function wrapEdits(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, table: Null<Array<PrecedenceDivergence>>
+	): Array<FixEdit> {
+		return RunScan.editsWith(plugin, source, table, (tree, rows) -> {
 			final byKey: Map<String, QueryNode> = [];
-			for (operand in divergentOperands(tree, table)) {
+			for (operand in divergentOperands(tree, rows)) {
 				final span: Null<Span> = operand.span;
 				if (span != null) byKey['${span.from}:${span.to}'] = operand;
 			}
@@ -66,7 +73,7 @@ final class CPrecedenceTrap extends RuleBase {
 	}
 
 	/** Every operand under `node` that `table` names as divergent in the slot it occupies, in document order. */
-	private static function divergentOperands(node: QueryNode, table: Array<PrecedenceDivergence>): Array<QueryNode> {
+	public static function divergentOperands(node: QueryNode, table: Array<PrecedenceDivergence>): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
 		function walk(n: QueryNode): Void {
 			if (n.children.length == 2) for (row in table) if (row.hosts.contains(n.kind)) for (slot in row.slots) {

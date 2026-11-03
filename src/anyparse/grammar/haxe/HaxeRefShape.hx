@@ -1504,6 +1504,9 @@ final class HaxeRefShape {
 			{ hosts: ['BitXor'], operands: ['BitOr'], slots: [0] },
 			{ hosts: ['Mul', 'Div'], operands: ['Mod'], slots: [1] }
 		];
+		// `&&` binds tighter than `||` here and in every C-family grammar, so nothing diverges; a reader who forgets which one wins
+		// still gets the group written out.
+		table.mixedLogicalOperands = [{ hosts: ['Or'], operands: ['And'], slots: [0, 1] }];
 		// The arithmetic core plus the POSTFIX in/decrements: tiers 9-11 and the
 		// postfix chain links, strictly tighter than a comparison here AND in every
 		// C-family language, so the drop is right on both readings. `PostIncr` /

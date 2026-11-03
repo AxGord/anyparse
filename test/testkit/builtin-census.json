@@ -80,6 +80,7 @@
 	"member-order",
 	"misplaced-type-doc",
 	"missing-visibility",
+	"mixed-logical-parens",
 	"modifier-order",
 	"naming",
 	"narrow-local-scope",

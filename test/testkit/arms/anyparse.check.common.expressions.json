@@ -311,7 +311,7 @@
 		{
 			"name": "M-CPREC-NESTED-EDITS-OVERLAP",
 			"type": "anyparse.check.common.expressions.CPrecedenceTrap",
-			"method": "fix",
+			"method": "wrapEdits",
 			"find": "!spans.exists(outer -> outer != span && outer.from <= span.from && span.to <= outer.to)",
 			"replace": "true",
 			"note": "a flagged operand nested in another flagged one is wrapped in the same pass, so two edits overlap"
