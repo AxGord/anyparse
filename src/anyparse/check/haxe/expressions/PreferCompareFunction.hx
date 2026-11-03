@@ -191,8 +191,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 
 	private function compareFunctionsOf(file: String, plugin: GrammarPlugin, s: Seams, index: () -> Null<SymbolIndex>): CompareFunctions {
 		return new CompareFunctions(
-			LintConfig.resolveWith(_resolveConfig, file).jsonOption(RULE_ID, OPTION_COMPARE), OPTION_COMPARE, file,
-			[s.intType, s.stringType], s.intType, plugin.typeSyntax, index
+			LintConfig.resolveWith(_resolveConfig, file).jsonOption(RULE_ID, OPTION_COMPARE), OPTION_COMPARE, [s.intType, s.stringType],
+			s.intType, plugin.typeSyntax, index
 		);
 	}
 

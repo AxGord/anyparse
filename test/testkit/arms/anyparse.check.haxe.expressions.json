@@ -290,6 +290,22 @@
 			"note": "a name the index cannot find is dropped in silence and the rule falls back to Reflect.compare"
 		},
 		{
+			"name": "M-RCMP-PRIVATE-TYPE",
+			"type": "anyparse.check.haxe.expressions.CompareFunctions",
+			"method": "read",
+			"find": "if (types[0].type.isPrivate) {",
+			"replace": "if (false) {",
+			"note": "a private type is accepted as the home of the function, so the fix writes an import or a path that does not compile"
+		},
+		{
+			"name": "M-RCMP-FILE-SCOPED",
+			"type": "anyparse.check.haxe.expressions.CompareFunctions",
+			"method": "read",
+			"find": "idx == null ? [] : idx.refs.resolveQualifiedRefAll(named.typePath)",
+			"replace": "[]",
+			"note": "the configured path resolves to nothing, as it did whenever the scanned file held a guarded or unread import of the package"
+		},
+		{
 			"name": "M-RCMP-ANY-SIGNATURE",
 			"type": "anyparse.check.haxe.expressions.CompareFunctions",
 			"method": "isCompareOf",

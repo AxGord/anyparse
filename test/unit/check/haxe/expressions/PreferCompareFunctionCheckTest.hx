@@ -636,6 +636,63 @@ class PreferCompareFunctionCheckTest extends Test {
 		Assert.equals(run.violations[0].message, run.violations[0].declineReason);
 	}
 
+	/** A module whose class follows another type still resolves, whichever file is scanned first. */
+	@:pin('control')
+	@:killer('M-RCMP-FILE-SCOPED')
+	public function testModuleWithAnotherTypeFirstResolves(): Void {
+		final chain: String = ints('xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);');
+		final order: String =
+			'package lib;\nabstract Code(Int) to Int {}\nclass Order {\n\tpublic static function ints(a:Int, b:Int):Int return 0;\n}';
+		for (head in [
+			{ file: 'C.hx', source: chain },
+			{ file: 'app/C.hx', source: 'package app;\n\n$chain' },
+			{ file: 'app/C.hx', source: 'package app;\n\nimport lib.Code;\n\n$chain' },
+			{ file: 'app/C.hx', source: 'package app;\n\nimport lib.Order.Code;\n\n$chain' },
+			{ file: 'app/C.hx', source: 'package app;\n\n#if js\nusing lib.Order;\n#end\n\n$chain' }
+		]) {
+			final files: Array<{ file: String, source: String }> = [head, { file: 'lib/Order.hx', source: order }];
+			final all: Array<Violation> = CheckFixture.violationsIn(
+				new PreferCompareFunction(), files, null, _ -> LintConfig.parse(namedInt('lib.Order.ints'))
+			);
+			Assert.equals(1, all.length, head.source);
+			Assert.notEquals(Severity.Error, all[0].severity, head.source);
+		}
+	}
+
+	/** A configuration error says why: the type is absent, the type is several, or the member is absent. */
+	@:pin('control')
+	@:killer('M-RCMP-PRIVATE-TYPE')
+	public function testConfigurationErrorNamesItsReason(): Void {
+		final chain: String = ints('xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);');
+		final twin: { file: String, source: String } = { file: 'alt/lib/Order.hx', source: ORDER };
+		final privateMain: String = 'package lib;\nprivate class Order {\n\tpublic static function ints(a:Int, b:Int):Int return 0;\n}';
+		final privateSub: String =
+			'package lib;\nclass Order {}\nprivate class Hidden {\n\tpublic static function ints(a:Int, b:Int):Int return 0;\n}';
+		final others: Array<{ file: String, source: String }> = namedFiles(chain).filter(f -> f.file != 'lib/Order.hx');
+		for (reason in [
+			{ path: 'lib.Order.ints', files: others.concat([{ file: 'lib/Order.hx', source: privateMain }]), said: 'names a private type' },
+			{
+				path: 'lib.Order.Hidden.ints',
+				files: others.concat([{ file: 'lib/Order.hx', source: privateSub }]),
+				said: 'names a private type'
+			},
+			{ path: 'lib.Gone.ints', files: namedFiles(chain), said: 'declares no "lib.Gone"' },
+			{ path: 'lib.Order.gone', files: namedFiles(chain), said: 'declares no "lib.Order.gone"' },
+			{ path: 'lib.Order.ints', files: namedFiles(chain).concat([twin]), said: 'is ambiguous: "lib.Order" names 2 types' }
+		]) {
+			final all: Array<Violation> = CheckFixture.violationsIn(
+				new PreferCompareFunction(), reason.files, null, _ -> LintConfig.parse(namedInt(reason.path))
+			);
+			Assert.equals(1, all.length, reason.path);
+			Assert.equals(Severity.Error, all[0].severity, reason.path);
+			Assert.isTrue(all[0].message.indexOf(reason.said) >= 0, '${reason.path}: ${all[0].message}');
+			final run: FixRun = CheckFixture.fixRun(
+				new PreferCompareFunction(), reason.files, 'C.hx', null, _ -> LintConfig.parse(namedInt(reason.path))
+			);
+			Assert.equals(0, run.edits.length, reason.path);
+		}
+	}
+
 	private function sorted(statement: String): String {
 		return 'class Item {\n\tpublic var n:Int;\n\tpublic var m:Int;\n\tpublic var f:Float;\n\tpublic var s:String;\n'
 			+ '\tpublic var g(get, never):Int;\n\tfunction get_g():Int return 1;\n}\n\nclass C {\n\n'

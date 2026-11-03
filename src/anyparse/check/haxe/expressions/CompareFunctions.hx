@@ -28,9 +28,9 @@ final class CompareFunctions {
 
 	private final _named: Map<String, NamedCompare> = [];
 
-	/** The function named for each of the `types` `option` spells, read from `file`'s point of view. */
+	/** The function named for each of the `types` `option` spells; a qualified path means the same from every file. */
 	public function new(
-		option: Null<JValue>, key: String, file: String, types: Array<String>, intType: String, typeSyntax: TypeSyntaxReader,
+		option: Null<JValue>, key: String, types: Array<String>, intType: String, typeSyntax: TypeSyntaxReader,
 		index: () -> Null<SymbolIndex>
 	) {
 		if (option == null) return;
@@ -44,7 +44,7 @@ final class CompareFunctions {
 					}
 					switch field.value {
 						case JString(path):
-							read(key, type, path, file, intType, typeSyntax, index);
+							read(key, type, path, intType, typeSyntax, index);
 						case _:
 							problems.push('$key.$type is not a string');
 					}
@@ -64,8 +64,7 @@ final class CompareFunctions {
 	}
 
 	private function read(
-		key: String, type: String, path: String, file: String, intType: String, typeSyntax: TypeSyntaxReader,
-		index: () -> Null<SymbolIndex>
+		key: String, type: String, path: String, intType: String, typeSyntax: TypeSyntaxReader, index: () -> Null<SymbolIndex>
 	): Void {
 		final dot: Int = path.lastIndexOf('.');
 		if (dot <= 0 || dot == path.length - 1) {
@@ -73,18 +72,27 @@ final class CompareFunctions {
 			return;
 		}
 		final named: NamedCompare = { typePath: path.substring(0, dot), member: path.substring(dot + 1) };
-		final found: Array<MemberInfo> = declared(index(), named, file);
+		final idx: Null<SymbolIndex> = index();
+		final types: Array<ResolvedType> = idx == null ? [] : idx.refs.resolveQualifiedRefAll(named.typePath);
+		if (types.length != 1) {
+			problems.push(
+				types.length == 0
+					? '$key.$type: "$path" names no type: the resolution index declares no "${named.typePath}"'
+					: '$key.$type: "$path" is ambiguous: "${named.typePath}" names ${types.length} types in the resolution index'
+			);
+			return;
+		}
+		if (types[0].type.isPrivate) {
+			problems.push('$key.$type: "$path" names a private type, which no other file can call');
+			return;
+		}
+		final found: Array<MemberInfo> = types[0].type.members.filter(m -> m.name == named.member);
 		if (found.length == 0)
 			problems.push('$key.$type: the resolution index declares no "$path"');
 		else if (found.length == 1 && isCompareOf(found[0], type, intType, typeSyntax))
 			_named[type] = named;
 		else
 			problems.push('$key.$type: "$path" is not one public static function ($type, $type): $intType');
-	}
-
-	private static function declared(index: Null<SymbolIndex>, named: NamedCompare, file: String): Array<MemberInfo> {
-		final types: Array<{ file: FileInfo, type: TypeDeclInfo }> = index == null ? [] : index.resolveTypeRefsFrom(named.typePath, file);
-		return types.length == 1 ? types[0].type.members.filter(m -> m.name == named.member) : [];
 	}
 
 	private static function isCompareOf(m: MemberInfo, type: String, intType: String, typeSyntax: TypeSyntaxReader): Bool {
