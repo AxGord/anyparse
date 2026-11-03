@@ -4,6 +4,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
@@ -32,10 +33,11 @@ using StringTools;
  * version of this test did. Over-approximating "names it" keeps every claim here on the
  * safe side: the test can fail to notice a dead handler, it cannot invent one.
  *
- * The per-module counts are the second half, and they are what makes this a guard on the
+ * The per-module flag NAMES are the second half, and they are what makes this a guard on the
  * MODULE BOUNDARIES rather than only on the vocabulary: fold `WriterPolicyLowering` back
- * into `WriterLowering` and both the module list and two counts change, with the failure
- * naming the row of `docs/strategies.md` to edit.
+ * into `WriterLowering` and the module list and two name sets change, with the failure
+ * naming the module. The record is `test/testkit/fmt-ownership.json`, one name per line;
+ * `APQ_OWNERSHIP_RECORD=1` rewrites it from the scan.
  */
 class FmtFlagOwnershipTest extends Test {
 
@@ -48,41 +50,11 @@ class FmtFlagOwnershipTest extends Test {
 	/** Below this the inventory block was emptied or mis-parsed, and every set comparison would pass vacuously. */
 	private static inline final MIN_INVENTORY_FLAGS: Int = 200;
 
-	/** The `@:fmt` reader modules, and how many inventory flags each one names. */
-	private static final EXPECTED_OWNERSHIP: Map<String, Int> = [
-		'WriterRefFieldLowering' => 47,
-		'WriterStarEmitLowering' => 44,
-		'WriterTriviaStarDispatch' => 41,
-		'WriterKwRefLowering' => 32,
-		'WriterTriviaStarEmitLowering' => 32,
-		'SiblingScope' => 3,
-		'WriterPolicyLowering' => 20,
-		'WriterCtorBlankLowering' => 17,
-		'WriterLowering' => 18,
-		'WriterPrattLowering' => 17,
-		'TriviaPairSlots' => 10,
-		'TriviaPairAltCtor' => 8,
-		'WriterRefLeadLowering' => 8,
-		'StructSeqLowering' => 7,
-		'WriterBraceSymmetryLowering' => 7,
-		'WriterFieldSepLowering' => 6,
-		'PrattPostfixLowering' => 4,
-		'Lowering' => 4,
-		'StarFieldLowering' => 4,
-		'WriterBodyPolicyLowering' => 3,
-		'WriterLoweringSupport' => 4,
-		'WriterCodegen' => 2,
-		'WriterBlankLowering' => 2,
-		'WriterCondWrapLowering' => 2,
-		'WriterTriviaSlotLowering' => 2,
-		'StructFieldTrailLowering' => 1,
-		'TriviaPairConverters' => 1,
-		'WriterArrowValueIfLowering' => 1,
-		'TriviaSlotNames' => 1,
-		'WriterChainLowering' => 1,
-		'WriterCtorPatternLowering' => 1,
-		'WriterOptFanout' => 1
-	];
+	/** Per module, the flag NAMES it reads, one per line, so two branches adding different flags merge without a conflict. */
+	private static inline final RECORD_FILE: String = 'test/testkit/fmt-ownership.json';
+
+	/** Set to `1` to rewrite `RECORD_FILE` from the scan. */
+	private static inline final RECORD_ENV: String = 'APQ_OWNERSHIP_RECORD';
 
 	/**
 	 * Flags a module names that no shipped grammar declares — a handler standing ready for
@@ -124,31 +96,35 @@ class FmtFlagOwnershipTest extends Test {
 	}
 
 	/**
-	 * The doc's ownership table names exactly the modules that name a flag, with exactly
-	 * the counts the scan gives.
+	 * The record names exactly the modules that name a flag, with exactly the flags the scan
+	 * gives.
 	 *
 	 * This is the module-boundary half: moving a handler between modules, or folding one
-	 * back in, changes a count or a row here before it changes anything else observable.
+	 * back in, changes a name set here before it changes anything else observable.
 	 */
-	public function testOwnershipTableMatchesTheMacroPackage(): Void {
+	public function testOwnershipRecordMatchesTheMacroPackage(): Void {
 		final root: String = CliFixture.repoRoot();
 		final named: Map<String, Array<String>> = ownershipScan(root, inventoryFlags(root));
-		for (module => flags in named)
+		final path: String = '$root/$RECORD_FILE';
+		if (Sys.getEnv(RECORD_ENV) == '1') {
+			File.saveContent(path, renderRecord(named));
+			Assert.pass();
+			return;
+		}
+		final recorded: Map<String, Array<String>> = readRecord(path);
+		final modules: Array<String> = [for (module in named.keys()) module];
+		for (module in recorded.keys()) if (!modules.contains(module)) modules.push(module);
+		modules.sort(compareStrings);
+		for (module in modules) {
+			final actual: Array<String> = named[module] ?? [];
+			final expected: Array<String> = recorded[module] ?? [];
+			final added: Array<String> = [for (flag in actual) if (!expected.contains(flag)) flag];
+			final lost: Array<String> = [for (flag in expected) if (!actual.contains(flag)) flag];
 			Assert.isTrue(
-				EXPECTED_OWNERSHIP.exists(module),
-				'$MACRO_DIR/$module.hx names ${flags.length} @:fmt flag(s) and is not in the ownership table - '
-				+ 'add it here and to the table in $STRATEGIES_DOC'
+				added.length == 0 && lost.length == 0,
+				'$MACRO_DIR/$module.hx: names [${added.join(', ')}] that $RECORD_FILE lacks, '
+				+ 'and [${lost.join(', ')}] that it no longer names - re-record with $RECORD_ENV=1'
 			);
-		for (module => count in EXPECTED_OWNERSHIP) {
-			final flags: Null<Array<String>> = named[module];
-			Assert.notNull(
-				flags, 'the ownership table lists $module, which names no @:fmt flag any more - drop the row here and in $STRATEGIES_DOC'
-			);
-			if (flags != null)
-				Assert.equals(
-					count, flags.length,
-					'$module names ${flags.length} @:fmt flag(s), the table says $count - update both this map and $STRATEGIES_DOC'
-				);
 		}
 	}
 
@@ -249,6 +225,36 @@ class FmtFlagOwnershipTest extends Test {
 			if (flags.contains(text) && !found.contains(text)) found.push(text);
 		}
 		for (child in node.children) collectFlagLiterals(child, raw, kinds, flags, found);
+	}
+
+	private static function compareStrings(a: String, b: String): Int {
+		return if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0;
+	}
+
+	private static function readRecord(path: String): Map<String, Array<String>> {
+		final out: Map<String, Array<String>> = [];
+		if (!FileSystem.exists(path)) return out;
+		final root: Any = Json.parse(File.getContent(path));
+		final modules: Any = Reflect.field(root, 'modules');
+		for (module in Reflect.fields(modules)) out[module] = Reflect.field(modules, module);
+		return out;
+	}
+
+	private static function renderRecord(named: Map<String, Array<String>>): String {
+		final modules: Array<String> = [for (module in named.keys()) module];
+		modules.sort(compareStrings);
+		final blocks: Array<String> = [];
+		for (module in modules) {
+			final flags: Array<String> = named[module] ?? [];
+			flags.sort(compareStrings);
+			blocks.push('\t"$module": [\n' + [for (flag in flags) '\t\t"$flag"'].join(',\n') + '\n\t]');
+		}
+		return '{\n"modules": {\n' + blocks.join(',\n') + '\n}\n}\n';
 	}
 
 }

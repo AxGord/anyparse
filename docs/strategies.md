@@ -172,63 +172,31 @@ A star that carries none of these flags is unchanged. A flag on any other shape 
 `@:fmt` has no dispatcher: a flag is not routed to a handler, it is ASKED FOR at the point
 in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(node, [...])`,
 `fmtReadStringArgs(node, 'bodyPolicy')`). So the answer to "who handles this flag" is
-"which module names it", and this table is that, per module, over every string literal in
+"which module names it", and the record is that, per module, over every string literal in
 `src/anyparse/macro` that matches an inventory name.
 
-| module | inventory flags it names |
-|---|---|
-| `WriterRefFieldLowering` | 47 |
-| `WriterStarEmitLowering` | 44 |
-| `WriterTriviaStarDispatch` | 41 |
-| `WriterKwRefLowering` | 32 |
-| `WriterTriviaStarEmitLowering` | 32 |
-| `WriterPolicyLowering` | 20 |
-| `WriterCtorBlankLowering` | 17 |
-| `WriterLowering` | 18 |
-| `WriterPrattLowering` | 17 |
-| `TriviaPairSlots` | 10 |
-| `TriviaPairAltCtor` | 8 |
-| `WriterRefLeadLowering` | 8 |
-| `StructSeqLowering` | 7 |
-| `WriterBraceSymmetryLowering` | 7 |
-| `WriterFieldSepLowering` | 6 |
-| `PrattPostfixLowering` | 4 |
-| `Lowering` | 4 |
-| `StarFieldLowering` | 4 |
-| `WriterBodyPolicyLowering` | 3 |
-| `WriterLoweringSupport` | 4 |
-| `SiblingScope` | 3 |
-| `WriterCodegen` | 2 |
-| `WriterBlankLowering` | 2 |
-| `WriterCondWrapLowering` | 2 |
-| `WriterTriviaSlotLowering` | 2 |
-| `StructFieldTrailLowering` | 1 |
-| `TriviaPairConverters` | 1 |
-| `WriterArrowValueIfLowering` | 1 |
-| `TriviaSlotNames` | 1 |
-| `WriterChainLowering` | 1 |
-| `WriterCtorPatternLowering` | 1 |
-| `WriterOptFanout` | 1 |
+The per-module record, flag NAMES and not counts (a count conflicts between two branches
+that each add a flag), is `test/testkit/fmt-ownership.json`.
 
-Read the shape of it, not just the numbers. The counts sum to far more than the inventory
+Read the shape of it. The names sum to far more than the inventory
 because a flag is named wherever it is asked, and several are asked in two emitters.
 
-The rows are not a per-flag split and never will be. The writer lowering is organised by
+The record's entries are not a per-flag split and never will be. The writer lowering is organised by
 grammar SHAPE — Star, Ref, Terminal, Alt branch, Pratt — and a flag is a branch INSIDE one
 of those emitters, not a unit of its own. The `Writer*Lowering` modules below `WriterLowering`
 are a split by shape family (code motion: one region of the call graph moved whole, with the
-flags its emitters ask travelling along), so a family's row says how `@:fmt`-dense that shape
-is, not that the flag belongs to it; a flag asked on both sides of a seam is counted twice.
+flags its emitters ask travelling along), so a family's entry says how `@:fmt`-dense that shape
+is, not that the flag belongs to it; a flag asked on both sides of a seam is listed under both modules.
 `WriterRefLeadLowering`, `WriterCondWrapLowering`, `WriterTriviaSlotLowering`,
-`WriterBraceSymmetryLowering` and `WriterStarPadLowering` (no row — it names no flag) are a
+`WriterBraceSymmetryLowering` and `WriterStarPadLowering` (no entry — it names no flag) are a
 split along a different axis, what STATE a member reads: pure functions of their arguments
 moved as `private static` with no call-site change, and a family that reads build state moved
 with a ctx bundle as its first argument, built once in `WriterLowering`'s constructor. The
-`TriviaPair*` rows are a third axis, the qualified call site — `TriviaTypeSynth` and
+`TriviaPair*` entries are a third axis, the qualified call site — `TriviaTypeSynth` and
 `WriterCodegen` were already all-static, so the state census decided nothing there and the
 three question-shaped families left instead. The parse side split the same way by RULE SHAPE
 (`TerminalParseLowering`, `StructSeqLowering`, `StarFieldLowering`, `PrattPostfixLowering`
-under `Lowering`), which is why `Lowering`'s row is small. The census readings and the slice
+under `Lowering`), which is why `Lowering`'s name list is short. The census readings and the slice
 narrative behind each split are in `docs/journal/strategies-log.md`.
 
 **Four flags are handler-only** — a macro module names them, no shipped grammar declares
@@ -240,10 +208,11 @@ code — but it is the state that has to be visible, because the same reading co
 handler whose grammar declaration was DELETED.
 
 `unit.lowering.FmtFlagOwnershipTest` pins all of it: every inventory flag is named by at
-least one module, the module list and the per-module counts match the scan, and the four
-handler-only flags are named-but-undeclared. Change any of it and the test says which line
-of this file to edit — the inventory block is read from this file, so it stays here, and the
-table above is the doc twin of the test's `EXPECTED_OWNERSHIP` map.
+least one module, the module list and the per-module flag names match the record, and the
+four handler-only flags are named-but-undeclared. A mismatch with the inventory block says
+which line of this file to edit (the block is read from this file, so it stays here); a
+mismatch with `test/testkit/fmt-ownership.json` says to re-record it with
+`APQ_OWNERSHIP_RECORD=1`.
 
 ### What a split has to pass
 

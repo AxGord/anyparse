@@ -78,6 +78,30 @@ class MergeFileCommandCliTest extends Test {
 		#end
 	}
 
+	public function testTwoFlagsAddedInTheSameGapOfTheOwnershipRecordBothSurvive(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeTree('apq_merge_file_record', [
+			{ name: 'base', source: ownershipRecord(['alpha', 'omega']) },
+			{ name: 'ours', source: ownershipRecord(['alpha', 'beta', 'omega']) },
+			{ name: 'theirs', source: ownershipRecord(['alpha', 'gamma', 'omega']) }
+		]);
+		final status: Int = Cli.run([
+			'merge-file',
+			'$root/base',
+			'$root/ours',
+			'$root/theirs',
+			'--path',
+			'fmt-ownership.json'
+		]);
+		final merged: String = File.getContent('$root/ours');
+		CliFixture.removeDir(root);
+		Assert.equals(0, status);
+		Assert.isTrue(merged.indexOf('"beta"') >= 0 && merged.indexOf('"gamma"') >= 0, merged);
+		#else
+		Assert.pass('file IO needs the nodejs target');
+		#end
+	}
+
 	/** `merge-file` over the three versions under `root`, as the module `C.hx` there. */
 	private static function run(root: String, ?extra: Array<String>): Int {
 		return Cli.run(['merge-file', '$root/base', '$root/ours', '$root/theirs', '--path', '$root/C.hx'].concat(extra ?? []));
@@ -92,6 +116,11 @@ class MergeFileCommandCliTest extends Test {
 		].join('\n');
 		final source: String = 'class C {\n$body}\n';
 		return new HaxeQueryPlugin().writeRoundTrip(source, null) ?? source;
+	}
+
+	/** The shape of `test/testkit/fmt-ownership.json` for one module: one flag name per line. */
+	private static function ownershipRecord(flags: Array<String>): String {
+		return '{\n"modules": {\n\t"M": [\n' + [for (flag in flags) '\t\t"$flag"'].join(',\n') + '\n\t]\n}\n}\n';
 	}
 
 }
