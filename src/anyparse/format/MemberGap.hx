@@ -127,4 +127,9 @@ final class MemberGap {
 			null;
 	}
 
+	/** The blank count a gap takes from `@:fmt(gapRule(...))`: `count` when either side of it runs over several lines. */
+	public static function aroundMultiline(elem: Doc, prior: Null<Doc>, count: Int, opt: WriteOptions): Int {
+		return count > 0 && (multiline(elem, opt) || (prior != null && multiline(prior, opt))) ? count : 0;
+	}
+
 }

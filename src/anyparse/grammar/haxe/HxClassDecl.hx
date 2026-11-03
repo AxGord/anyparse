@@ -38,12 +38,14 @@ package anyparse.grammar.haxe;
 typedef HxClassDecl = {
 	@:kw('class') var name: HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps, heritageWrap) var heritage: Array<HxHeritageClause>;
+	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps,
+		listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap')) var heritage: Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('beginType', 'endType', '_classExtern', 'externClassBeginType', 'externClassEndType'),
 		afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines,
 		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember|FinalModifiedMember'),
 		interMemberCondLookThrough('member', 'Conditional', 'body'), staticVarSubdivision, betweenMultilineCommentsBlanks,
-		blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
+		gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'), relocateTrailingComments,
+		glueToPrevious('member', 'EmptySemiMember'))
 	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }

@@ -350,6 +350,14 @@
 			"find": "probe.mode == FillLineWithLeadingBreak ? baseCols : ",
 			"replace": "",
 			"note": "a leading-break line charges the additional indent, one unit deeper than its first line belongs"
+		},
+		{
+			"name": "M-HERITAGE-RULE-INDENT",
+			"type": "anyparse.format.wrap.ClauseWrap",
+			"method": "layout",
+			"find": "indent = cols * (rule.additionalIndent ?? 0);",
+			"replace": "",
+			"note": "a matched heritage rule keeps the cascade default indent instead of its own"
 		}
 	]
 }

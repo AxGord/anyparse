@@ -88,7 +88,7 @@ accessBrackets, afterFieldsWithDocComments, afterFileHeaderCommentBlanks, allman
 anonFuncParens, anonTypeBracesClose, anonTypeBracesOpen, arrayMatrixWrap, arrowBodyLineWrap,
 arrowBodyOpenPadSuppress, arrowFunctions, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
 atomOperand, atomOperandWhen(…), bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
-beforeNewlineSlotFirst, beginEndType[(…)], betweenMultilineCommentsBlanks, blankAroundMultilineMembers(…),
+beforeNewlineSlotFirst, beginEndType[(…)], betweenMultilineCommentsBlanks,
 blankBeforeFinalDocCommentInLeading, blankBeforeLineCommentLed, blankBeforeOrphanLineCommentTrail,
 blankLinesAfterCtor(…), blankLinesAfterCtorIf(…), blankLinesAfterCtorIfTailLeafNull(…),
 blankLinesAtHeadIfCtor(…), blankLinesBeforeCtorIfPrevNot(…), blankLinesBetweenSameCtorByLevel(…),
@@ -107,10 +107,10 @@ constructFitGroup(…), constructFitSep, cuddle, deferKwSpace, dropSingleStmtBra
 elseIf, elseIfCommentReflow, elseSwitch(…), emptyBlockBreak, emptyCurlyBreak[(…)], existingBetweenFields,
 expressionParenHardFlatten, fillItems, fillParts, fillSeam, fitLineIfWithElse, flatChildOpt(…), forceInlineSep,
 forceMultiInTypedef, forPolicy, forwardNewlineForBody, funcParamParens, functionTypeHaxe3, functionTypeHaxe4,
-groupRestProbe, heritageWrap, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
+gapRule(…), groupRestProbe, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
 inlineBlockBodyIfFlag(…), inlineElemTrivia, inlineSep, interMemberBlankLines(…), interMemberCondLookThrough(…), intervalPolicy,
 keepBlankAfterStarCtor(…), keepCurlyBlanks, keepInnerWhenEmpty(…), kwPolicy(…), leftCurly[(…)],
-leftCurlyAnonFnOverride(…), lineLengthAwareSeps, liftNoSemi(…), loopBodyIfElseNext(…), mapWrapRules(…),
+leftCurlyAnonFnOverride(…), lineLengthAwareSeps, liftNoSemi(…), listLayout(…), loopBodyIfElseNext(…), mapWrapRules(…),
 measuredMultilineDecls, metaBlockGlue(…), metaLineEndPolicy(…), methodChain(…), multilineCtor,
 multilineWhenFieldCtorAndOpt(…), multilineWhenFieldNonEmpty(…), multilineWhenFieldShape(…),
 multilineWhenLeadingTriviaSpansLines(…), multilineWhenStarFieldWrapsCascade(…), multiVarWrap(…), nestBody,
@@ -139,6 +139,26 @@ so a flag added to a grammar shows up without anyone maintaining a second copy. 
 cannot tell you is whether the macro still READS a given flag: a declaration whose handler
 was removed keeps parsing and does nothing. That is the other half of the audit, and it is
 the table below.
+
+### A new layout rule on a hooked shape is a function behind a hook
+
+A layout rule that only looks at Docs already built (wrap a list, open a blank between siblings) is
+ordinary Haxe at write time, so it is NOT a new branch in a macro emitter: the grammar flag names a
+function in the plugin's own package (or under `anyparse.format` when it is not language-specific) and the macro calls it directly. The macro walks the grammar shape
+and hands over the finished Docs; the rule is the function. A rule that must read the AST, the trivia or
+the source's line breaks, or that changes what is built, does not fit a hook (it is a transform, or stays
+in the emitter). Design and measurements: `docs/design/writer-rules.md` (§ 2.1, § 5).
+
+The hooked shapes, and nothing else is hooked yet:
+
+| Hook | Wired into | Function receives | Returns | Example |
+|---|---|---|---|---|
+| `listLayout('<fn>', '<knob>')` | `@:trivia @:tryparse` Stars (`TriviaTryparseLowering`) | the item Docs (never empty: the macro writes nothing for an empty list), the indent step, the `WrapRules` named by `<knob>`, the line width | the list's Doc | `anyparse.format.wrap.ClauseWrap.layout` |
+| `gapRule('<fn>', '<knob>')` | `@:trivia @:trail` block Stars (`WriterBlankLowering`) | the element Doc, the previous element's Doc, the count named by `<knob>`, the options | the number of blank lines to open | `anyparse.format.MemberGap.aroundMultiline` |
+| `siblingShare`, `siblingSlot`, `siblingLead` | block Stars (the list), tryparse Stars (the body) | see the sibling-share lowering | one verdict for every sibling | `sameLine.caseSiblings` |
+
+A star that carries none of these flags is unchanged. A flag on any other shape is silently inert, like any
+`@:fmt` flag nothing reads; extend the hook to the new shape before using it there.
 
 ### Which module answers a flag
 

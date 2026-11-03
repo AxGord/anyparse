@@ -159,7 +159,7 @@
 			"name": "M-BLANK-MULTILINE-OFF",
 			"type": "anyparse.macro.WriterBlankLowering",
 			"method": "blankAroundMultilineExprs",
-			"find": "if (optField == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
+			"find": "if (gapRule == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
 			"replace": "if (true) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
 			"note": "the knob wires empty mark/seen/apply splices whatever the grammar asked for, so nothing measures a multiline member and no blank is inserted around one"
 		},
@@ -1195,14 +1195,6 @@
 			"find": "if (args.length == KNOB_PAIR) return own;",
 			"replace": "return own;",
 			"note": "the context-flag second knob pair is never read, so an `enum abstract` takes the `abstract` edges and an `extern class` the class ones"
-		},
-		{
-			"name": "M-HERITAGE-RULE-INDENT",
-			"type": "anyparse.macro.TriviaTryparseLowering",
-			"method": "triviaTryparseHeritageResolveExpr",
-			"find": "_ai = _cols * (_rule.additionalIndent ?? 0);",
-			"replace": "",
-			"note": "a matched heritage rule keeps the cascade default indent instead of its own"
 		},
 		{
 			"name": "M-FORCEMULTI-COLS-ONE-UNIT",

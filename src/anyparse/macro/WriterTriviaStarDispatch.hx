@@ -314,7 +314,7 @@ final class WriterTriviaStarDispatch {
 		// ω-blank-around-multiline-members: `@:fmt(blankAroundMultilineMembers('<optField>'))`
 		// names the `WriteOptions` Int knob holding the blank count. Absent → the
 		// three splice points are `macro {}` and the loop generates byte-identical.
-		final blankAroundOptField: Null<String> = fmtSingleStringArg(starNode, 'blankAroundMultilineMembers');
+		final gapRule: Null<Array<String>> = starNode.fmtReadStringArgs('gapRule');
 		final uniformBetweenOptField: Null<String> = fmtSingleStringArg(starNode, 'uniformBetween');
 		final anonFnClear: Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
 		// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
@@ -362,7 +362,7 @@ final class WriterTriviaStarDispatch {
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
 			blockEndedFlag ? tc.formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeAccess,
-			endTypeAccess, uniformStmtBlanks, emptyBlockBreak, blankAroundOptField, starNode.fmtHasFlag('relocateTrailingComments'),
+			endTypeAccess, uniformStmtBlanks, emptyBlockBreak, gapRule, starNode.fmtHasFlag('relocateTrailingComments'),
 			starNode.fmtReadStringArgs('glueToPrevious')
 		);
 		final blockStarNested: Expr = macro {

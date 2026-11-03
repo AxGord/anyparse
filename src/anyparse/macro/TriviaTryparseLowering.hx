@@ -98,7 +98,7 @@ final class TriviaTryparseLowering {
 		// Star. When true, MULTI-clause heritage uses fork FillLine layout
 		// (pack-from-front, break overflow clause at additionalIndent 2);
 		// single-clause stays on the lineLengthAwareSeps 1-tab break path.
-		heritageWrap: Bool = false,
+		?listLayout: Array<String>,
 		// ω-cond-indent-policy: cond-comp body Star opts into the runtime
 		// `opt.conditionalPolicy` indent rule. Default false → byte-inert.
 		condBodyIndent: Bool = false,
@@ -300,7 +300,7 @@ final class TriviaTryparseLowering {
 			glueToPreviousExpr: WriterLoweringSupport.triviaGlueToPreviousExpr(glueToPrevious),
 			siblingKnob: siblingKnob
 		};
-		final baseExpr: Expr = heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
+		final baseExpr: Expr = listLayout != null ? triviaTryparseHeritageExpr(c, listLayout) : triviaTryparseMainExpr(c);
 		return fillItems ? triviaTryparseFillExpr(c, baseExpr) : baseExpr;
 	}
 
@@ -386,11 +386,12 @@ final class TriviaTryparseLowering {
 	 * declaration line, and a LINE comment takes a hardline on both sides,
 	 * since a line comment runs to the newline and has no inline spelling.
 	 */
-	private static function triviaTryparseHeritageExpr(c: WriterLowering.TryparseStarCtx): Expr {
+	private static function triviaTryparseHeritageExpr(c: WriterLowering.TryparseStarCtx, listLayout: Array<String>): Expr {
 		final fieldAccess: Expr = c.fieldAccess;
 		final writerOptExpr: Expr = c.writerOptExpr;
 		final triviaElemCall: Expr = c.triviaElemCall;
-		final multiClauseExpr: Expr = triviaTryparseHeritageMultiExpr();
+		final layoutFn: Expr = haxe.macro.MacroStringTools.toFieldExpr(listLayout[0].split('.'));
+		final rulesExpr: Expr = optFieldAccess(listLayout[1]);
 		return macro {
 			final _arr = $fieldAccess;
 			if (_arr.length == 0)
@@ -434,126 +435,8 @@ final class TriviaTryparseLowering {
 						_hj++;
 					}
 					_dn(_cols, _dc(_docs));
-				} else if (_items.length <= 1) {
-					_dn(_cols, _dc([_dile(opt.lineWidth, _dhl(), _dt(' ')), _items[0]]));
 				} else {
-					$multiClauseExpr;
-				}
-			}
-		};
-	}
-
-	/**
-	 * Tryparse-Star heritage multi-clause layout (B4 ω-implements-extends-wrap):
-	 * config-driven multi-clause wrap. Resolves the fork-style WrapRules
-	 * cascade (via triviaTryparseHeritageResolveExpr) then builds the broken
-	 * layout for the resolved mode plus the glued fallback, gated via the
-	 * lineLength threshold. References the runtime `_arr`/`_items`/`_cols`/
-	 * `opt` locals declared in `triviaTryparseHeritageExpr`'s emitted scope.
-	 * Extracted so the heritage emit stays under the complexity gate.
-	 */
-	private static function triviaTryparseHeritageMultiExpr(): Expr {
-		final resolveExpr: Expr = triviaTryparseHeritageResolveExpr();
-		return macro {
-			// B4 ω-implements-extends-wrap: config-driven multi-clause
-			// layout. Resolve the fork-style WrapRules cascade at write
-			// time from opt.implementsExtendsWrap. lineLength rules gate
-			// via IfLineExceeds (prefix-aware); itemCount / defaultMode
-			// resolve as plain Haxe. The continuation indent is the
-			// matched rule's additionalIndent, the cascade's
-			// defaultAdditionalIndent when no rule matches.
-			final _rules = opt.implementsExtendsWrap;
-			var _ai: Int = _cols * (_rules.defaultAdditionalIndent ?? 0);
-			// Resolve mode + lineLength threshold from the first matching
-			// rule (itemCount evaluated now; lineLength deferred to the
-			// render gate via _thr). _thr<0 means "apply mode always".
-			var _mode: anyparse.format.wrap.WrapMode = _rules.defaultMode;
-			var _thr: Int = -1;
-			$resolveExpr;
-			// Build the broken layout for the resolved mode, plus the
-			// all-glued (space-joined) fallback used when the lineLength
-			// gate does not fire.
-			final _glued: Array<anyparse.core.Doc> = [_dt(' ')];
-			var _gj: Int = 0;
-			while (_gj < _items.length) {
-				if (_gj > 0) _glued.push(_dt(' '));
-				_glued.push(_items[_gj]);
-				_gj++;
-			}
-			final _gluedDoc: anyparse.core.Doc = _dc(_glued);
-			final _broken: anyparse.core.Doc = switch (_mode) {
-				case anyparse.format.wrap.WrapMode.OnePerLine:
-					final _ds: Array<anyparse.core.Doc> = [];
-					var _k: Int = 0;
-					while (_k < _items.length) {
-						_ds.push(_dhl());
-						_ds.push(_items[_k]);
-						_k++;
-					}
-					_dn(_ai, _dc(_ds));
-				case anyparse.format.wrap.WrapMode.OnePerLineAfterFirst:
-					final _ds: Array<anyparse.core.Doc> = [_dt(' '), _items[0]];
-					var _k: Int = 1;
-					while (_k < _items.length) {
-						_ds.push(_dhl());
-						_ds.push(_items[_k]);
-						_k++;
-					}
-					_dn(_ai, _dc(_ds));
-				case anyparse.format.wrap.WrapMode.FillLine | anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak:
-					_dn(_ai, _dc([_dt(' '), _dfill(_items, _dl())]));
-				case _:
-					_gluedDoc;
-			};
-			if (_mode == anyparse.format.wrap.WrapMode.NoWrap)
-				_gluedDoc;
-			else if (_thr < 0)
-				_broken;
-			else
-				_dile(_thr, _broken, _gluedDoc);
-		};
-	}
-
-	/**
-	 * Tryparse-Star heritage WrapRules cascade resolution (B4
-	 * ω-implements-extends-wrap): walks `_rules.rules`, evaluates each rule's
-	 * itemCount / lineLength conditions, and assigns the first matching
-	 * rule's `_mode`, lineLength `_thr` and continuation indent `_ai`. References the runtime `_rules`/
-	 * `_arr`/`_mode`/`_thr`/`_ai`/`_cols`/`opt` locals declared in
-	 * `triviaTryparseHeritageMultiExpr`'s emitted scope. Extracted so the
-	 * multi-clause layout stays under the complexity gate.
-	 */
-	private static function triviaTryparseHeritageResolveExpr(): Expr {
-		return macro {
-			var _ri: Int = 0;
-			var _matched: Bool = false;
-			while (_ri < _rules.rules.length && !_matched) {
-				final _rule = _rules.rules[_ri];
-				_ri++;
-				var _llThr: Int = -1;
-				var _ok: Bool = true;
-				var _ci2: Int = 0;
-				while (_ci2 < _rule.conditions.length) {
-					final _cond = _rule.conditions[_ci2];
-					_ci2++;
-					switch (_cond.cond) {
-						case anyparse.format.wrap.WrapConditionType.ItemCountLargerThan:
-							if (_arr.length < _cond.value) _ok = false;
-						case anyparse.format.wrap.WrapConditionType.ItemCountLessThan:
-							if (_arr.length > _cond.value) _ok = false;
-						case anyparse.format.wrap.WrapConditionType.LineLengthLargerThan:
-							_llThr = _cond.value;
-						case anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength:
-							_llThr = opt.lineWidth;
-						case _:
-							_ok = false;
-					}
-				}
-				if (_ok) {
-					_mode = _rule.mode;
-					_thr = _llThr;
-					_ai = _cols * (_rule.additionalIndent ?? 0);
-					_matched = true;
+					$layoutFn(_items, _cols, $rulesExpr, opt.lineWidth);
 				}
 			}
 		};

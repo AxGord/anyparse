@@ -113,13 +113,14 @@ final class WriterBlankLowering {
 	 * through `GrammarPlugin.memberGapPolicy`, so the check never demands a
 	 * tight gap this pass would open again.
 	 */
-	private static function blankAroundMultilineExprs(optField: Null<String>): {
+	private static function blankAroundMultilineExprs(gapRule: Null<Array<String>>): {
 		final markExpr: Expr;
 		final seenExpr: Expr;
 		final applyExpr: Expr;
 	} {
-		if (optField == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };
-		final knob: Expr = { expr: EField(macro opt, optField), pos: Context.currentPos() };
+		if (gapRule == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };
+		final rule: Expr = haxe.macro.MacroStringTools.toFieldExpr(gapRule[0].split('.'));
+		final knob: Expr = optFieldAccess(gapRule[1]);
 		return {
 			// ONE `EVars` node, not `macro { var …; var …; }` — a reified block
 			// is an `EBlock`, i.e. its own scope, and the two sibling splices
@@ -133,18 +134,7 @@ final class WriterBlankLowering {
 			},
 			seenExpr: macro _bamHad = _inner.length > _bamAt,
 			applyExpr: macro {
-				if (_si > 0 && !_bamHad && $knob > 0) {
-					if (
-						anyparse.format.MemberGap.multiline(_elem, opt)
-						|| (_priorElemDoc != null && anyparse.format.MemberGap.multiline(_priorElemDoc, opt))
-					) {
-						var _bami: Int = 0;
-						while (_bami < $knob) {
-							_inner.insert(_bamAt, _dhl());
-							_bami++;
-						}
-					}
-				}
+				if (_si > 0 && !_bamHad) for (_ in 0...$rule(_elem, _priorElemDoc, $knob, opt)) _inner.insert(_bamAt, _dhl());
 			}
 		};
 	}

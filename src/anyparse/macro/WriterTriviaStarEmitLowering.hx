@@ -323,7 +323,7 @@ final class WriterTriviaStarEmitLowering {
 		// `extends_break_before_keyword_not_type_params`). Abstract
 		// `clauses` (from/to) never carries this flag — its
 		// `lineLengthAwareSeps` behaviour is untouched.
-		final tryparseHeritageWrap: Bool = starNode.fmtHasFlag('heritageWrap');
+		final listLayout: Null<Array<String>> = starNode.fmtReadStringArgs('listLayout');
 		// ω-slice-45 / issue_626: `@:fmt(forceInlineSep)` on a `@:trivia
 		// @:tryparse` Star collapses every source linebreak between
 		// consecutive elements to a single space. First consumers are
@@ -398,7 +398,7 @@ final class WriterTriviaStarEmitLowering {
 			cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos, cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
 			cascadeInfos.headCtorInfos, metaLineEndOptField, cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware,
 			tryparsePriorAfterTrailExpr, tryparseForceInlineSep, tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null,
-			tryparseBlockEnded, tryparseSepFaithful, tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
+			tryparseBlockEnded, tryparseSepFaithful, listLayout, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
 			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,
 			refuseGlueOnControlFlow, tryparseFillItems, starNode.fmtReadStringArgs('glueToPrevious'), starNode.fmtReadString('siblingSlot')
 		));

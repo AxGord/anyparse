@@ -523,7 +523,7 @@ final class TriviaBlockLowering {
 		// the blank count, or null when the Star does not carry the flag — the
 		// three splice points then lower to `macro {}` and the generated loop is
 		// byte-identical to the pre-slice one.
-		?blankAroundOptField: String,
+		?gapRule: Array<String>,
 		// FU12: `@:fmt(relocateTrailingComments)` — the element push becomes the
 		// `IfTrailingCommentOverflows` choice under `opt.trailingCommentAbove`.
 		// False keeps the pre-slice push byte for byte.
@@ -638,7 +638,7 @@ final class TriviaBlockLowering {
 			afterFieldsWithDocComments, beforeDocCommentEmptyLines, existingBetweenFields, interMember, indentCaseLabelsGate,
 			lineCommentTrailBlank
 		);
-		final blankAround = blankAroundMultilineExprs(blankAroundOptField);
+		final blankAround = blankAroundMultilineExprs(gapRule);
 		final ctx: WriterLowering.BlockStarCtx = {
 			fieldAccess: fieldAccess,
 			openText: openText,

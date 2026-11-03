@@ -51,6 +51,7 @@ typedef HxAbstractDecl = {
 		afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines,
 		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'), staticVarSubdivision, betweenMultilineCommentsBlanks,
-		blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
+		gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'), relocateTrailingComments,
+		glueToPrevious('member', 'EmptySemiMember'))
 	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }
