@@ -174,7 +174,9 @@ final class TriviaTryparseLowering {
 		// `@:fmt(glueToPrevious(...))`: the element ctor written right after the previous element, no separator
 		// between them (the case body's stray `;` after a block, `};`). Null → byte-identical.
 		?glueToPrevious: Array<String>,
-		?siblingKnob: String
+		?siblingKnob: String,
+		// `@:fmt(belowWrappedLabel)`: the `FitLine` body goes below a head that took more than one line.
+		belowWrappedLabel: Bool = false
 	): Expr {
 		// noqa: complexity
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
@@ -298,7 +300,8 @@ final class TriviaTryparseLowering {
 			elemSelfTrailsNewline: elemSelfTrailsNewline,
 			elemCondFn: elemCondFnExpr,
 			glueToPreviousExpr: WriterLoweringSupport.triviaGlueToPreviousExpr(glueToPrevious),
-			siblingKnob: siblingKnob
+			siblingKnob: siblingKnob,
+			belowWrappedLabel: belowWrappedLabel
 		};
 		final baseExpr: Expr = listLayout != null ? triviaTryparseHeritageExpr(c, listLayout) : triviaTryparseMainExpr(c);
 		return fillItems ? triviaTryparseFillExpr(c, baseExpr) : baseExpr;
@@ -826,7 +829,8 @@ final class TriviaTryparseLowering {
 		final trailPadSpaceDoc: Expr = c.trailPadSpaceDoc;
 		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
 		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(
-			finalWrapDocs, c.glueRefusalExpr, trailPadSpaceDoc, c.regionSeams, c.siblingKnob, c.fitGateExpr, c.shapeRefusalExpr
+			finalWrapDocs, c.glueRefusalExpr, trailPadSpaceDoc, c.regionSeams, c.siblingKnob, c.fitGateExpr, c.shapeRefusalExpr,
+			c.belowWrappedLabel
 		);
 		return macro {
 			$tryparseBlockEndedTrailEmit;
@@ -961,12 +965,12 @@ final class TriviaTryparseLowering {
 	 * `WrapList.flatLength(body) >= 0`, i.e. the body holds no hardline at
 	 * all, so no inner line exists for a `Nest` to move.
 	 */
-	private static function triviaTryparseCaseWrapExpr(glueRefusalExpr: Expr, siblingKnob: Null<String>): Expr {
+	private static function triviaTryparseCaseWrapExpr(glueRefusalExpr: Expr, siblingKnob: Null<String>, belowWrappedLabel: Bool): Expr {
 		final mode: Expr = siblingKnob == null ? macro anyparse.format.SiblingPolicy.Off : optFieldAccess(siblingKnob);
 		return macro {
 			final _caseBody: anyparse.core.Doc = if (_fitCase)
 				anyparse.format.SiblingShare.fitLineSlot(
-					$mode, _cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, $glueRefusalExpr
+					$mode, _cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, $glueRefusalExpr, $v{belowWrappedLabel}
 				);
 			else
 				opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs));
@@ -1012,9 +1016,9 @@ final class TriviaTryparseLowering {
 	 */
 	private static function triviaTryparseWrapDispatchExpr(
 		finalWrapDocs: Expr, glueRefusalExpr: Expr, trailPadSpaceDoc: Expr, regionSeams: Bool, siblingKnob: Null<String>,
-		fitGateExpr: Expr, shapeRefusalExpr: Expr
+		fitGateExpr: Expr, shapeRefusalExpr: Expr, belowWrappedLabel: Bool
 	): Expr {
-		final caseWrap: Expr = triviaTryparseCaseWrapExpr(glueRefusalExpr, siblingKnob);
+		final caseWrap: Expr = triviaTryparseCaseWrapExpr(glueRefusalExpr, siblingKnob, belowWrappedLabel);
 		final nestWrap: Expr = triviaTryparseNestWrapExpr(siblingPolicyExpr(siblingKnob, fitGateExpr), shapeRefusalExpr, glueRefusalExpr);
 		final defaultTerminal: Expr = triviaTryparseDefaultTerminal(finalWrapDocs, regionSeams);
 		return macro {

@@ -612,6 +612,30 @@
 			"find": "s.ltrim().startsWith('//') ? null : DocMeasure.lastCharIsOpenDelim(s)",
 			"replace": "DocMeasure.lastCharIsOpenDelim(s)",
 			"note": "a line comment after an open delimiter ends the natural first line on the comment, so a chain stops hugging `xs.foreach(t -> { // why`"
+		},
+		{
+			"name": "M-LINE-SPAN-IGNORES-TEXT-LINES",
+			"type": "anyparse.core.Renderer",
+			"method": "pushLineSpan",
+			"find": "ctx.lineCount + ctx.textLineEnds.length",
+			"replace": "ctx.lineCount",
+			"note": "a line break inside a token stops counting as leaving the line, so a body stands on a label that took two lines"
+		},
+		{
+			"name": "M-LINE-SPAN-BREAKS-FORCED-FLAT",
+			"type": "anyparse.core.Renderer",
+			"method": "pushLineSpan",
+			"find": "if (f.forceFlat)",
+			"replace": "if (false)",
+			"note": "a forced-flat frame takes the breaking side, so a line break appears where the frame promised none"
+		},
+		{
+			"name": "M-LINE-SPAN-READS-WITHOUT-BEGIN",
+			"type": "anyparse.core.Renderer",
+			"method": "pushLineSpan",
+			"find": "ctx.spanStart >= 0 && written > ctx.spanStart",
+			"replace": "written > ctx.spanStart",
+			"note": "a read with no begin in the render compares against the unset record and always takes the left side"
 		}
 	]
 }

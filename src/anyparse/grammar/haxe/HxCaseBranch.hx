@@ -34,11 +34,11 @@ package anyparse.grammar.haxe;
  * `_inExprPosition = true` on an always-copy, so a case nested in another case's body picks the
  * expression-position `expressionCase` policy. `@:fmt(refuseFlatOnComplexExpr)` AND-s the generated
  * `caseBodyRefusesFlat` predicate into the flat gate: an `A && B` / `A || B` body refuses inline.
+ * `@:fmt(belowWrappedLabel)` puts a `FitLine` body below a label that took more than one line (`anyparse.core.LineSpan`).
  * `@:fmt(refuseGlueOnControlFlowRoot)` gates the `FitLine` path: a body that cannot render flat AND whose
  * single statement is keyword-led control flow takes the BREAK shape — glued, its `else if` / `} while` /
  * `catch` continuation lines would render at the head's indent and read as if they had left the branch.
- * `@:fmt(glueToPrevious('EmptyStmt'))` writes a stray `;` right after the statement before it (`{ … };`), as a
- * block does.
+ * `@:fmt(glueToPrevious('EmptyStmt'))` writes a stray `;` right after the statement before it (`{ … };`).
  */
 @:peg
 typedef HxCaseBranch = {
@@ -46,5 +46,5 @@ typedef HxCaseBranch = {
 	@:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
 		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt'),
-		siblingSlot('caseSiblings')) var body: Array<HxStatement>;
+		siblingSlot('caseSiblings'), belowWrappedLabel) var body: Array<HxStatement>;
 };

@@ -58,6 +58,13 @@ and still takes edits that leave it alone. Whether a seam-adjacent `else` compil
 on the defines (`#if a if (c) f(); #end else g();` compiles only with `-D a`), which no
 whole-file parse knows, so a seam makes an `else` acceptable, never proven valid.
 
+## A case label that wrapped: `sameLine.caseBody`, `sameLine.expressionCase`
+
+`fitLine` means the whole branch fits on one line, and a label that took more than one no longer does: its body goes below
+it at the case indent plus one, however short the label's last row, under either `caseSiblings` mode. That holds for any way
+a label comes to take a second line: a pattern list that wraps, an object or call pattern that breaks inside, a wrap rule,
+a line break in a token.
+
 ## Case branches of one switch: `sameLine.caseSiblings`
 
 `off` by default, each `fitLine` branch deciding alone. Under `anyBreak` the branches of one switch share the decision:
@@ -67,4 +74,5 @@ stays there unless another branch leads. A comment alone does not lead: a branch
 follower when its statement would have fit beside the label, and leads when it would not (that comment weighs nothing
 in the measure). A trailing comment counts as width where the branch stands on its label, so a line that does not fit
 with its comment leads. A two-statement or outermost-`&&` branch leads whether or not a comment holds it. Applies where `caseBody`
-or `expressionCase` is `fitLine`; under `same`, `next` and `keep` the key moves nothing.
+or `expressionCase` is `fitLine`; under `same`, `next` and `keep` the key moves nothing. A label too wide for one row leads, since
+its flat width does not fit; a label wrapped by a rule with a flat width that fits does not lead, and only its own body moves.

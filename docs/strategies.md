@@ -88,7 +88,7 @@ accessBrackets, afterFieldsWithDocComments, afterFileHeaderCommentBlanks, allman
 anonFuncParens, anonTypeBracesClose, anonTypeBracesOpen, arrayMatrixWrap, arrowBodyLineWrap,
 arrowBodyOpenPadSuppress, arrowFunctions, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
 atomOperand, atomOperandWhen(…), bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
-beforeNewlineSlotFirst, beginEndType[(…)], betweenMultilineCommentsBlanks,
+beforeNewlineSlotFirst, belowWrappedLabel, beginEndType[(…)], betweenMultilineCommentsBlanks,
 blankBeforeFinalDocCommentInLeading, blankBeforeLineCommentLed, blankBeforeOrphanLineCommentTrail,
 blankLinesAfterCtor(…), blankLinesAfterCtorIf(…), blankLinesAfterCtorIfTailLeafNull(…),
 blankLinesAtHeadIfCtor(…), blankLinesBeforeCtorIfPrevNot(…), blankLinesBetweenSameCtorByLevel(…),
@@ -155,6 +155,7 @@ The hooked shapes, and nothing else is hooked yet:
 |---|---|---|---|---|
 | `listLayout('<fn>', '<knob>')` | `@:trivia @:tryparse` Stars (`TriviaTryparseLowering`) | the item Docs (never empty: the macro writes nothing for an empty list), the indent step, the `WrapRules` named by `<knob>`, the line width | the list's Doc | `anyparse.format.wrap.ClauseWrap.layout` |
 | `gapRule('<fn>', '<knob>')` | `@:trivia @:trail` block Stars (`WriterBlankLowering`) | the element Doc, the previous element's Doc, the count named by `<knob>`, the options | the number of blank lines to open | `anyparse.format.MemberGap.aroundMultiline` |
+| `belowWrappedLabel` | a tryparse Star (the body) under a `FitLine` policy | the struct records its first line (`anyparse.core.LineSpan`) | the body goes below a head that took more than one line | `sameLine.caseBody`, `sameLine.expressionCase` |
 | `siblingShare`, `siblingSlot`, `siblingLead` | block Stars (the list), tryparse Stars (the body) | see the sibling-share lowering | one verdict for every sibling | `sameLine.caseSiblings` |
 
 A star that carries none of these flags is unchanged. A flag on any other shape is silently inert, like any
@@ -174,10 +175,10 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterStarEmitLowering` | 44 |
 | `WriterTriviaStarDispatch` | 41 |
 | `WriterKwRefLowering` | 32 |
-| `WriterTriviaStarEmitLowering` | 31 |
+| `WriterTriviaStarEmitLowering` | 32 |
 | `WriterPolicyLowering` | 20 |
 | `WriterCtorBlankLowering` | 17 |
-| `WriterLowering` | 17 |
+| `WriterLowering` | 18 |
 | `WriterPrattLowering` | 17 |
 | `TriviaPairSlots` | 10 |
 | `TriviaPairAltCtor` | 8 |

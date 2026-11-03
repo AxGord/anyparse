@@ -373,6 +373,14 @@
 			"find": "return width <= MEASURED;",
 			"replace": "return width < 0;",
 			"note": "any negative width reads as a vote, so a number another rule wrote is overwritten by the verdict"
+		},
+		{
+			"name": "M-CASE-BODY-STANDS-ON-WRAPPED-LABEL",
+			"type": "anyparse.format.SiblingShare",
+			"method": "fitLineSlot",
+			"find": "belowWrappedLabel ? LineSpan.ifLeft(BodyFit.breakLayout(cols, body), fit) : fit",
+			"replace": "fit",
+			"note": "a case body glues to the last row of a wrapped label whenever that row plus the body fits"
 		}
 	]
 }

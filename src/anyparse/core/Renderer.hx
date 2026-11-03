@@ -39,6 +39,8 @@ private typedef RenderCtx = {
 	var pendingHardline: Int;
 	var lastEmit: LastEmit;
 	var lineCount: Int;
+	// The lines written when the last `LineSpan.begin` rendered, or -1 before the first.
+	var spanStart: Int;
 	var markerZeroDepth: Int;
 	var markerDecreaseDepth: Int;
 };
@@ -478,6 +480,7 @@ class Renderer {
 			pendingHardline: -1,
 			lastEmit: Other,
 			lineCount: 0,
+			spanStart: -1,
 			markerZeroDepth: 0,
 			markerDecreaseDepth: 0
 		};
@@ -523,6 +526,8 @@ class Renderer {
 					// `col`/`width`/`f`, writes `stack`). See that helper for each
 					// per-ctor semantic.
 					pushStructural(f, stack, ctx.col, pendingSpaceWidth(ctx), width, decisions);
+				case IfIndentWidthExceeds(spanWidth, _, left, same) if (LineSpan.holds(spanWidth)):
+					pushLineSpan(ctx, f, stack, spanWidth, left, same);
 				case IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _),
 					IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 					IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
@@ -2771,6 +2776,21 @@ class Renderer {
 				// Unresolved only inside the measure render, which lays the construct out as it stands.
 				stack.push(new Frame(f.indent, f.mode, flat, f.forceFlat, f.hardFlat));
 			case _:
+		}
+	}
+
+	/** A `LineSpan` node: `begin` records the lines written; the read takes `left` when more have been, a forced-flat frame never. */
+	private static function pushLineSpan(ctx: RenderCtx, f: Frame, stack: Array<Frame>, width: Int, left: Doc, same: Doc): Void {
+		final written: Int = ctx.lineCount + ctx.textLineEnds.length;
+		if (LineSpan.isBegin(width)) {
+			ctx.spanStart = written;
+			return;
+		}
+		if (f.forceFlat) {
+			stack.push(new Frame(f.indent, f.mode, same, true, f.hardFlat));
+		} else {
+			final broke: Bool = ctx.spanStart >= 0 && written > ctx.spanStart;
+			stack.push(new Frame(f.indent, broke ? MBreak : f.mode, broke ? left : same));
 		}
 	}
 

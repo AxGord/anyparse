@@ -444,8 +444,8 @@ enum Doc {
 	 * cannot depend on the source's line shape and a single format pass
 	 * reaches the `writeRoundTrip(s) == s` fixed point.
 	 *
-	 * A negative width (a sibling slot `SiblingShare.decide` has not resolved yet) never exceeds,
-	 * so it renders `flatDoc`. Pure render-time decision: no static walker evaluates the width, and
+	 * A negative width (a sibling slot `SiblingShare.decide` has not resolved yet, or a `LineSpan` node, which only the render
+	 * loop reads) never exceeds, so it renders `flatDoc`. Pure render-time decision: no static walker evaluates the width, and
 	 * the two branches wrap the SAME body, differing only in the separator
 	 * before it. That last property is load-bearing — a walker asking about
 	 * subtree CONTENT gets the same answer from either branch, so the

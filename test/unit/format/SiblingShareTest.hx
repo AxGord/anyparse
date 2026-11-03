@@ -82,7 +82,7 @@ class SiblingShareTest extends Test {
 	}
 
 	private static function slot(body: String): Doc {
-		return SiblingShare.fitLineSlot(SiblingPolicy.AnyBreak, 1, Doc.Text(body), false, WIDTH, false);
+		return SiblingShare.fitLineSlot(SiblingPolicy.AnyBreak, 1, Doc.Text(body), false, WIDTH, false, false);
 	}
 
 	private static function listOf(items: Array<Doc>): Doc {

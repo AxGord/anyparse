@@ -5,6 +5,7 @@ import anyparse.core.BreakToken;
 import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
+import anyparse.core.LineSpan;
 import anyparse.format.wrap.WrapList;
 
 /**
@@ -42,11 +43,16 @@ final class SiblingShare {
 			: Doc.IfIndentWidthExceeds(MEASURED_COMMENTED, 0, Doc.Concat([Doc.Text(' '), body]), own);
 	}
 
-	/** `BodyFit.fitLineLayout` with its vote; `refuseGlue` leads when the body has no flat form. */
+	/**
+	 * `BodyFit.fitLineLayout` with its vote; `refuseGlue` leads when the body has no flat form. `belowWrappedLabel` says the
+	 * head began a `LineSpan`: `fitLine` asks whether the whole construct stands on one line, so a head that took more
+	 * than one has already answered, whatever room its last row leaves. It takes no part in the vote, which measures flat.
+	 */
 	public static function fitLineSlot(
-		policy: SiblingPolicy, cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, refuseGlue: Bool
+		policy: SiblingPolicy, cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, refuseGlue: Bool, belowWrappedLabel: Bool
 	): Doc {
-		final own: Doc = BodyFit.fitLineLayout(cols, body, nestGluedBody, lineWidth, refuseGlue);
+		final fit: Doc = BodyFit.fitLineLayout(cols, body, nestGluedBody, lineWidth, refuseGlue);
+		final own: Doc = belowWrappedLabel ? LineSpan.ifLeft(BodyFit.breakLayout(cols, body), fit) : fit;
 		if (policy == SiblingPolicy.Off) return own;
 		final vote: Int = if (!refuseGlue)
 			MEASURED

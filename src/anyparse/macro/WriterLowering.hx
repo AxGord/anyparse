@@ -1285,6 +1285,9 @@ class WriterLowering {
 		// the plain writer captures no source-newline slots, so it has nothing
 		// to normalise and stays byte-identical.
 		// Sole consumer: `HxCondSpliceOpExpr` (`#if c (operand op)* #end tail`).
+		// `@:fmt(belowWrappedLabel)` reads the line the struct began on, so the struct records it first.
+		if (_ctx.trivia && node.children.exists(c -> c.fmtHasFlag('belowWrappedLabel')))
+			parts.unshift(macro anyparse.core.LineSpan.begin());
 		final dcExpr: Expr = if (node.fmtHasFlag('fillParts') && _ctx.trivia)
 			macro anyparse.core.D.fillOnOverflow([$a{parts}], opt.lineWidth + 1);
 		else if (multiVarKnob == null || multiVarMoreField == null)
@@ -2568,6 +2571,7 @@ typedef TryparseStarCtx = {
 	 */
 	final regionSeams: Bool;
 	final siblingKnob: Null<String>;
+	final belowWrappedLabel: Bool;
 	final forceInlineSep: Bool;
 	final elemSelfTrailsNewline: Bool;
 
