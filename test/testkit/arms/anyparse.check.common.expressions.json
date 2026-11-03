@@ -315,6 +315,14 @@
 			"find": "!spans.exists(outer -> outer != span && outer.from <= span.from && span.to <= outer.to)",
 			"replace": "true",
 			"note": "a flagged operand nested in another flagged one is wrapped in the same pass, so two edits overlap"
+		},
+		{
+			"name": "M-PB-STRING-BLOCK",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "stringWithoutInterpolation",
+			"find": "c.kind == text || plain.contains(c.kind)",
+			"replace": "true",
+			"note": "a string holding a ${...} expression counts as a stable literal and is bound at creation time"
 		}
 	]
 }

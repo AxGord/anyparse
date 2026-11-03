@@ -233,7 +233,7 @@ loops and the collection / map idioms they spell.
 | [`prefer-foreach`](guide/lint/loops.md#prefer-foreach) | haxe | off | a manual all-match for loop (returning, or setting a bool flag) replaceable with Lambda.foreach |
 | [`prefer-index-access`](guide/lint/loops.md#prefer-index-access) | any | on | a Map get/set call (m.get(k) / m.set(k, v)) replaceable with index access (m[k] / m[k] = v) |
 | [`prefer-keyvalue-loop`](guide/lint/loops.md#prefer-keyvalue-loop) | any | off | an indexed for whose body opens by binding X[i], replaceable with for (i => v in X) |
-| [`prefer-map-bind`](guide/lint/loops.md#prefer-map-bind) | haxe | off | an array comprehension mapping each element through one call, replaceable with xs.map(f.bind(a)) |
+| [`prefer-map`](guide/lint/loops.md#prefer-map) | haxe | off | an array comprehension mapping each element, replaceable with xs.map(f.bind(a)) or xs.map(x -> body) |
 | [`prefer-map-literal`](guide/lint/loops.md#prefer-map-literal) | haxe | on | a new Map() construction replaceable with the map literal [] |
 | [`prefer-range-loop`](guide/lint/loops.md#prefer-range-loop) | any | on | a var-counter while loop (var i = A; while (i < B) { … i++; }) replaceable with for (i in A...B) |
 | [`prefer-value-loop`](guide/lint/loops.md#prefer-value-loop) | any | off | an indexed for whose index only reads X[i], replaceable with for (v in X) |

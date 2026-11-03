@@ -859,7 +859,10 @@ final class LambdaLoopScan {
 		final parts: Null<Parts> = callParts(cand, source, s, kind);
 		if (anchorSpan == null || parts == null) return null;
 		final predicate: Null<String> = parts.predicate;
-		final core: String = callText(cand.head, excerpt(parts.iterable), predicate == null ? null : excerpt(predicate), kind);
+		final core: String = callText(
+			cand.head, SourceText.excerpt(parts.iterable, EXCERPT_MAX),
+			predicate == null ? null : SourceText.excerpt(predicate, EXCERPT_MAX), kind
+		);
 		final guard: Null<String> = parts.guard;
 		final flag: Null<Flag> = cand.flag;
 		// The message shows the SINK the fold writes to, so a reader can tell the two sinks apart
@@ -870,7 +873,7 @@ final class LambdaLoopScan {
 		else if (guard == null)
 			core
 		else
-			'${excerpt(guard)} && $core';
+			'${SourceText.excerpt(guard, EXCERPT_MAX)} && $core';
 		return {
 			file: file,
 			span: anchorSpan,
@@ -1007,12 +1010,6 @@ final class LambdaLoopScan {
 			|| kind == s.parenKind
 			|| kind == s.callKind
 			|| kind == s.newExprKind;
-	}
-
-	/** The text with whitespace runs collapsed and truncated past the excerpt cap, so a multi-line expression fits one message line. */
-	private static function excerpt(text: String): String {
-		final flat: String = SourceText.collapseSpaces(text);
-		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
 	}
 
 }

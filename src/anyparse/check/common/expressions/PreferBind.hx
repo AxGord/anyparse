@@ -329,8 +329,9 @@ final class PreferBind extends RuleBase {
 
 	/** Whether a string-literal node carries no interpolation (every child, if any, is plain literal text). */
 	private static function stringWithoutInterpolation(arg: QueryNode, shape: RefShape): Bool {
-		final interp: Array<String> = shape.interpolationKinds ?? [];
-		return !arg.children.exists(c -> c.kind == shape.stringInterpIdentKind || interp.contains(c.kind));
+		final plain: Array<String> = shape.stringInterpInertSegmentKinds ?? [];
+		final text: Null<String> = shape.stringInterpTextKind;
+		return arg.children.foreach(c -> c.kind == text || plain.contains(c.kind));
 	}
 
 	/** `callee.bind(arg, …)` built from the lambda's wrapped call, or null if it is not bindable. */

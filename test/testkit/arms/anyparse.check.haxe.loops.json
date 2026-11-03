@@ -36,12 +36,76 @@
 			"note": "the conflict sentence is written on every finding the rule reported again, including the ones the candidate map never matched"
 		},
 		{
-			"name": "M-PMB-ANY-ITERABLE",
-			"type": "anyparse.check.haxe.loops.PreferMapBind",
+			"name": "M-PM-ANY-ITERABLE",
+			"type": "anyparse.check.haxe.loops.PreferMap",
 			"method": "matches",
 			"find": "seams.arrayTypeNames.contains(type)",
 			"replace": "true",
 			"note": "a List comprehension becomes ls.map, which returns a List"
+		},
+		{
+			"name": "M-PM-FILTER",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "leavesValue",
+			"find": "node.children.length < IF_ELSE_CHILD_COUNT",
+			"replace": "node.children.length < 0",
+			"note": "an if without else, a filter, becomes a map over every element"
+		},
+		{
+			"name": "M-PM-LEAVING",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "leavesValue",
+			"find": "s.leavingKinds.contains(node.kind)",
+			"replace": "false",
+			"note": "a block, a declaration, a nested loop or a try body is wrapped in a lambda"
+		},
+		{
+			"name": "M-PM-READS-BINDER",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "lambdaMapper",
+			"find": "!readsName(m.body, m.binder, s)",
+			"replace": "false",
+			"note": "a body that never reads the binder is mapped"
+		},
+		{
+			"name": "M-PM-BARE-BINDER",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "lambdaMapper",
+			"find": "isBinder(m.body, m.binder, s)",
+			"replace": "false",
+			"note": "the bare binder becomes the identity map"
+		},
+		{
+			"name": "M-PM-BINDER-WRITE",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "leavesValue",
+			"find": "&& isBinder(node.children[0], binder, s)",
+			"replace": "&& false",
+			"note": "a body that writes the binder is moved into a lambda"
+		},
+		{
+			"name": "M-PM-EXIT-KINDS",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "readSeams",
+			"find": "shape.controlExitKinds,",
+			"replace": "",
+			"note": "a return, break, continue or throw in expression position is moved into a closure"
+		},
+		{
+			"name": "M-PM-BIND-COMMENT",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "boundMapper",
+			"find": " || CheckScan.hasCommentMarker(source, m.bodySpan.from, m.bodySpan.to)",
+			"replace": "",
+			"note": "the bind spelling drops a comment inside the body"
+		},
+		{
+			"name": "M-PM-GAP-COMMENT",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "gapsHoldNoComment",
+			"find": "!CheckScan.hasCommentMarker(source, m.iterableSpan.to, m.bodySpan.from)",
+			"replace": "true",
+			"note": "a comment between the iterable and the body is dropped by the rewrite"
 		}
 	]
 }

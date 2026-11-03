@@ -214,7 +214,7 @@ import anyparse.check.haxe.loops.PreferCount;
 import anyparse.check.haxe.loops.PreferExists;
 import anyparse.check.haxe.loops.PreferFind;
 import anyparse.check.haxe.loops.PreferForeach;
-import anyparse.check.haxe.loops.PreferMapBind;
+import anyparse.check.haxe.loops.PreferMap;
 import anyparse.check.haxe.loops.PreferMapLiteral;
 import anyparse.check.haxe.members.StaticInitOrder;
 import anyparse.check.haxe.nullsafety.NullSafetyStrict;
@@ -305,7 +305,7 @@ final class Linter {
 			new PreferNullCoalescing(),
 			new PreferArrayLiteral(),
 			new PreferMapLiteral(),
-			new PreferMapBind(),
+			new PreferMap(),
 			new PreferMapType(),
 			// Ahead of `fold-adjacent-string-literals` (registered near the top, above) in
 			// READING order only — not load-bearing, `lint --fix` iterates to a fixed point

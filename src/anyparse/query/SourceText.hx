@@ -421,6 +421,15 @@ final class SourceText {
 		return i < n && source.fastCodeAt(i) == '('.code;
 	}
 
+	/**
+	 * `text` on one line — whitespace runs collapsed to one space — capped at `limit` characters with a trailing `…`, so a
+	 * multi-line fragment still names itself in a single diagnostic line.
+	 */
+	public static function excerpt(text: String, limit: Int): String {
+		final flat: String = collapseSpaces(text);
+		return flat.length > limit ? '${flat.substring(0, limit)}…' : flat;
+	}
+
 	/** Whether the occurrence of `name` at `at` in `head` stands alone — no identifier character on either side. */
 	private static inline function standaloneIdentAt(head: String, name: String, at: Int): Bool {
 		final after: Int = at + name.length;

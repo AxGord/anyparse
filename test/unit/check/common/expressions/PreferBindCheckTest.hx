@@ -61,7 +61,7 @@ class PreferBindCheckTest extends Test {
 
 	/** Stable values — a parameter, a final local, a plain string, a negated literal — still convert. */
 	public function testStableArgsFixed(): Void {
-		final src: String = "class C {\n\tfunction h(i:Int, k:String, n:Int, s:String):Void {}\n\tfunction f(i:Int):Void {\n"
+		final src: String = 'class C {\n\tfunction h(i:Int, k:String, n:Int, s:String):Void {}\n\tfunction f(i:Int):Void {\n'
 			+ "\t\tfinal k:String = 'k';\n\t\tvar g = () -> h(i, k, -1, 'plain');\n\t}\n}";
 		final check: PreferBind = new PreferBind();
 		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
@@ -245,6 +245,15 @@ class PreferBindCheckTest extends Test {
 
 	public function testGenericCallNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar g = () -> fn<Int>(x);\n\t}\n}').length);
+	}
+
+	/** A `${...}` expression in a string evaluates at bind time like any other computed argument; not flagged. */
+	@:pin('control')
+	@:killer('M-PB-STRING-BLOCK')
+	public function testBlockInterpolatedStringArgNotFlagged(): Void {
+		final decl: String = 'class C {\n\tfunction h(a:String, b:Int):Void {}\n\tfunction f(n:Int):Void {\n\t\tvar g = () -> ';
+		Assert.equals(1, violations('${decl}h(\'plain\', 0);\n\t}\n}').length);
+		Assert.equals(0, violations('${decl}h(\'$${n + 1}\', 0);\n\t}\n}').length);
 	}
 
 	private function violations(src: String): Array<Violation> {

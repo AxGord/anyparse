@@ -125,7 +125,7 @@
 	"prefer-line-comment",
 	"prefer-local-function",
 	"prefer-lpad",
-	"prefer-map-bind",
+	"prefer-map",
 	"prefer-map-literal",
 	"prefer-map-type",
 	"prefer-null-coalescing",
