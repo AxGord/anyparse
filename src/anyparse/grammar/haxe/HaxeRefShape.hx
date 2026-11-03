@@ -1309,6 +1309,7 @@ final class HaxeRefShape {
 		// matching `p`. Reaching such an arm RUNS code, so a rewrite that newly makes
 		// one reachable has to refuse it.
 		table.casePatternExtractorKinds = ['Arrow'];
+		table.casePatternExtractorArrow = '=>';
 		table.aliasingDeclKinds = ['TypedefDecl', 'AbstractDecl', 'EnumAbstractDecl'];
 		// Delimited expression slots, derived from the grammar productions:
 		// `HxVarDecl.init` is `@:lead('=')` up to the decl's `;` / `,`;

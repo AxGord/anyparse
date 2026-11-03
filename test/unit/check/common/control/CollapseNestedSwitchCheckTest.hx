@@ -319,6 +319,123 @@ class CollapseNestedSwitchCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/** A method call keeps its receiver, and an inner guard rides on the spliced arm. */
+	public function testFieldCallSubjectKeepsReceiverAndGuard(): Void {
+		final src: String = swExpr(nest('R(b)', 'obj.tap(k, b)', 'case Q if (g): p();${INNER_LABEL}case _: r();'));
+		final out: String = applyFixOnce(src);
+		Assert.stringContains('case R(obj.tap(k, _) => Q) if (g): p();', out);
+		Assert.stringContains('case R(_): r();', out);
+	}
+
+	/** A statement switch with a harmless catch-all after the arm collapses without an inner catch-all. */
+	public function testCallSubjectInStatementSwitchWithHarmlessTail(): Void {
+		final src: String = sw(nest('R(b)', 'tap(b)', 'case Q: p();${INNER_LABEL}case A: r();') + EMPTY_TAIL);
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** The extractor is evaluated outside the outer pattern's bindings, so a call that reads one cannot move in. */
+	@:pin('control')
+	@:killer('M-COLLAPSE-CALL-READS-BOUND')
+	public function testCallReadingOuterBindingNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('P(a, b)', 'tap(a, b)', 'case Q: p();${INNER_LABEL}case _: r();'))).length);
+	}
+
+	/** A call that reads a name an inner pattern binds would read the binding after the splice. */
+	public function testCallReadingInnerBindingNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(k, b)', 'case Q(k): p();${INNER_LABEL}case _: r();'))).length);
+	}
+
+	/** The binder must be exactly one argument: twice, as a receiver, or beside the placeholder spelling is not a slot. */
+	public function testBinderNotASingleArgumentNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b, b)', 'case Q: p();${INNER_LABEL}case _: r();'))).length);
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'b.tap(k)', 'case Q: p();${INNER_LABEL}case _: r();'))).length);
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(_, b)', 'case Q: p();${INNER_LABEL}case _: r();'))).length);
+	}
+
+	/** An inner extractor would nest a second call inside the slot; only plain patterns splice. */
+	public function testCallSubjectWithInnerExtractorNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case tap(_) => Q: p();${INNER_LABEL}case _: r();'))).length);
+	}
+
+	/** An inner catch-all first would leave the call unevaluated: the extractor never appears in the run. */
+	public function testCallSubjectLeadingCatchAllNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case _: r();${INNER_LABEL}case Q: p();'))).length);
+	}
+
+	/** A comment in the call is reproduced once per spliced arm, so it refuses like one in the dropped header. */
+	public function testCommentInCallNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(/* why */ k, b)', 'case Q: p();${INNER_LABEL}case _: r();'))).length);
+	}
+
+	/** A call subject reading the binder as one argument collapses into an extractor, the call spelled once per arm. */
+	public function testCallSubjectCollapsesIntoExtractor(): Void {
+		final src: String = swExpr(nest('R(b)', 'tap(k, b)', 'case Q: p();${INNER_LABEL}case A: r();${INNER_LABEL}case _: z();'));
+		Assert.equals(1, violations(src).length);
+		final out: String = applyFixOnce(src);
+		Assert.stringContains('case R(tap(k, _) => Q): p();', out);
+		Assert.stringContains('case R(tap(k, _) => A): r();', out);
+		Assert.stringContains('case R(_): z();', out);
+		Assert.isFalse(out.contains('switch b'), 'the nested switch is gone');
+		Assert.equals(0, violations(out).length, 'the rewritten run is a fixed point');
+	}
+
+	/** An inner multi-pattern arm puts the extractor in front of every pattern. */
+	public function testCallSubjectInnerMultiPatternArm(): Void {
+		final src: String = swExpr(nest('R(b)', 'tap(b)', 'case A, B: p();${INNER_LABEL}case Q: r();${INNER_LABEL}case _: z();'));
+		Assert.stringContains('case R(tap(_) => A), R(tap(_) => B): p();', applyFixOnce(src));
+	}
+
+	/** The outer switch must stay exhaustive: a hole in the inner arms (a literal, or an enum left uncovered) needs a catch-all. */
+	public function testCallSubjectWithoutInnerCatchAllNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case Q: p();${INNER_LABEL}case A: r();') + EMPTY_TAIL)).length);
+		Assert.equals(0, violations(sw(nest('R(b)', 'tap(b)', 'case Q: p();') + ACTING_TAIL)).length);
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case 1: p();'))).length);
+		Assert.equals(
+			0, violations(swExpr(nest('R(b)', 'tap(b)', 'case Q: p();${INNER_LABEL}case A: r();${INNER_LABEL}case B: z();'))).length
+		);
+	}
+
+	/** An extractor right of the binder's slot reorders the calls, and one in the same arm shares the column. */
+	@:pin('control')
+	@:killer('M-COLLAPSE-CALL-OUTER-EXTRACTOR')
+	public function testCallSubjectBesideOwnExtractorNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('P(b, g(_) => A)', 'tap(b)', 'case Q: p();${INNER_LABEL}case _: r();'))).length);
+	}
+
+	/** An extractor in another arm's pattern may share its evaluation with the moved call. */
+	@:pin('control')
+	@:killer('M-COLLAPSE-CALL-OUTER-EXTRACTOR')
+	public function testCallSubjectBesideOtherArmExtractorNotFlagged(): Void {
+		final earlier: String = 'case P(_, g(_) => A): z();\n\t\t\t';
+		Assert.equals(0, violations(swExpr(earlier + nest('P(b, _)', 'tap(b)', 'case Q: p();${INNER_LABEL}case _: r();'))).length);
+	}
+
+	/** The matcher drops a wildcard extractor, so a guarded or non-trailing wildcard arm would skip or reorder the call. */
+	@:pin('control')
+	@:killer('M-COLLAPSE-CALL-WILDCARD-ARM')
+	public function testCallSubjectWithWildcardArmNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case _ if (ok): p();${INNER_LABEL}case _: r();'))).length);
+		Assert.equals(
+			0,
+			violations(swExpr(nest('R(b)', 'tap(b)', 'case _ if (g()): p();${INNER_LABEL}case Q: z();${INNER_LABEL}case _: r();'))).length
+		);
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case (_) if (g()): p();${INNER_LABEL}case _: r();'))).length);
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case (_): p();${INNER_LABEL}case _: r();'))).length);
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case (_), A: p();${INNER_LABEL}case _: r();'))).length);
+		Assert.equals(
+			0,
+			violations(swExpr(nest('R(b)', 'tap(b)', 'case ((_)) if (g()): p();${INNER_LABEL}case Q: z();${INNER_LABEL}case _: r();')))
+				.length
+		);
+	}
+
+	/** A string-interpolated read of a name the outer pattern binds is a read like any other. */
+	@:pin('control')
+	@:killer('M-COLLAPSE-CALL-READS-INTERPOLATED')
+	public function testCallReadingBindingThroughInterpolationNotFlagged(): Void {
+		Assert.equals(0, violations(swExpr(nest('P(a, b)', "tap(b, '$a')", 'case Q: p();${INNER_LABEL}case _: r();'))).length);
+	}
+
 	/** An outer arm labelled `case <label>:` whose ONLY statement is `switch <binder> { <arms> }`. */
 	private inline function nest(label: String, binder: String, arms: String): String {
 		return nestWith(label, '\n\t\t\t\t', binder, arms);
@@ -332,12 +449,12 @@ class CollapseNestedSwitchCheckTest extends Test {
 
 	/** Wrap switch `branches` in a minimal parseable class + method; an outer case label lands at three tabs. */
 	private function sw(branches: String): String {
-		return 'class C {\n\tfunction f(s: String): Void {\n\t\tswitch s {\n\t\t\t$branches\n\t\t}\n\t}\n}' + ENUMS;
+		return 'class C {\n\tfunction f(s: String): Void {\n\t\tswitch s {\n\t\t\t$branches\n\t\t}\n\t}\n}$ENUMS';
 	}
 
 	/** `sw()` with the outer switch in EXPRESSION position, where every arm must yield a value. */
 	private function swExpr(branches: String): String {
-		return 'class C {\n\tfunction f(s: String): Void {\n\t\tfinal v = switch s {\n\t\t\t$branches\n\t\t};\n\t}\n}' + ENUMS;
+		return 'class C {\n\tfunction f(s: String): Void {\n\t\tfinal v = switch s {\n\t\t\t$branches\n\t\t};\n\t}\n}$ENUMS';
 	}
 
 	/** `nest()` with an explicit `gap` between the label's `:` and the nested `switch`. */

@@ -188,6 +188,14 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' c; } }'
 			},
 			{
+				field: 'casePatternExtractorArrow',
+				slot: '',
+				kind: 'Arrow',
+				names: NAME_NONE,
+				before: 'class C { function f() { switch a { case g(_) ',
+				after: ' P: } } }'
+			},
+			{
 				field: 'conditionalElseKeywords',
 				slot: '0',
 				kind: 'Conditional',

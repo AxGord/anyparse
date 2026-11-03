@@ -123,12 +123,23 @@ using StringTools;
  * An emitted run that would be EMPTY (a nested switch whose only arm is the merged
  * catch-all) is refused: that is dead-arm removal, not pattern deepening.
  *
+ * ## The extractor form
+ *
+ * A nested switch on a CALL taking the binder as exactly one bare-identifier argument collapses into
+ * `P(f(…, _, …) => Q_i)`, the call spelled identically in every arm so the matcher evaluates it once.
+ * It runs while matching, so `extractorSound` requires no extractor in any outer pattern, no wildcard
+ * inner arm but the unguarded trailing one (the matcher drops a wildcard extractor), no name the call
+ * reads bound by either pattern, and no inner extractor; the run may not open on a catch-all. Coverage
+ * is the ordinary rule: the outer switch must stay exhaustive, so a hole in the inner arms needs the
+ * trailing catch-all or a harmless fall-through.
+ *
  * ## Seams, autofix, idempotence
  *
  * Detection is seam-driven: `switchKinds`, `switchStatementKinds`, `caseBranchKind`,
  * `defaultBranchKind`, `plainCasePatternKind`, `wildcardPatternName`, `identKind`,
  * `parenKind`, `assignKind`, `stringInterpIdentKind`, `casePatternBinderKinds`,
- * `casePatternExtractorKinds`, `conditionalMemberKind` and `opaqueKinds`. A required
+ * `casePatternExtractorKinds`, `conditionalMemberKind` and `opaqueKinds`, plus `callKind` and
+ * `casePatternExtractorArrow` for the extractor form. A required
  * one unset makes the check a no-op, report and fix alike; an optional one unset only
  * closes the path that reads it (with `switchStatementKinds` unset the outer
  * fall-through path never opens, so only the COVERS shape collapses; with
@@ -258,31 +269,100 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		if (kids.length != COLLAPSIBLE_ARM_CHILD_COUNT) return null;
 		final inner: QueryNode = kids[1];
 		if (!seams.switchKinds.contains(inner.kind) || inner.children.length < MIN_INNER_CHILDREN) return null;
-		final subject: QueryNode = inner.children[0];
-		if (subject.kind != seams.identKind) return null;
-		final binder: Null<String> = subject.name;
+		final site: Site = {
+			switchNode: switchNode,
+			at: at,
+			arm: arm,
+			plain: plain,
+			pat: pat,
+			inner: inner,
+			subject: inner.children[0]
+		};
+		for (use in binderUses(seams, site.subject)) {
+			final candidate: Null<Candidate> = collapseAt(scan, site, use);
+			if (candidate != null) return candidate;
+		}
+		return null;
+	}
+
+	/**
+	 * The nodes the nested switch's subject could read the outer binder through: the subject itself
+	 * when it is a bare identifier, or each bare-identifier ARGUMENT of a call subject when the
+	 * grammar can spell an extractor. A callee is never a use — the call's own head is not a slot.
+	 */
+	private static function binderUses(seams: Seams, subject: QueryNode): Array<QueryNode> {
+		if (subject.kind == seams.identKind) return [subject];
+		if (seams.callKind == null || seams.extractorArrow == null || subject.kind != seams.callKind) return [];
+		return [
+			for (i in 1...subject.children.length) if (subject.children[i].kind == seams.identKind) subject.children[i]
+		];
+	}
+
+	/**
+	 * The collapse of `site` when the nested switch reads the outer binder through `use`, or null
+	 * when a gate refuses. A `use` that is not the subject itself is an extractor collapse.
+	 */
+	private static function collapseAt(scan: Scan, site: Site, use: QueryNode): Null<Candidate> {
+		final seams: Seams = scan.seams;
+		final binder: Null<String> = use.name;
 		if (binder == null || CasePatternScan.startsUpper(binder)) return null;
-		final resolvedBinder: Null<QueryNode> = isolatedBinder(scan, switchNode, arm, pat, subject, binder);
+		final resolvedBinder: Null<QueryNode> = isolatedBinder(scan, site.switchNode, site.arm, site.pat, use, binder);
 		if (resolvedBinder == null) return null;
 		final binderNode: QueryNode = resolvedBinder;
-		if (CasePatternScan.containsAnyKind(pat, [seams.assignKind])) return null;
+		if (CasePatternScan.containsAnyKind(site.pat, [seams.assignKind])) return null;
 		final conditional: Null<String> = seams.conditionalKind;
-		if (conditional != null && CasePatternScan.containsAnyKind(arm, [conditional])) return null;
-		if (CasePatternScan.containsAnyKind(arm, seams.opaqueKinds)) return null;
-		final innerArms: Array<QueryNode> = inner.children.slice(1);
+		if (conditional != null && CasePatternScan.containsAnyKind(site.arm, [conditional])) return null;
+		if (CasePatternScan.containsAnyKind(site.arm, seams.opaqueKinds)) return null;
+		final innerArms: Array<QueryNode> = site.inner.children.slice(1);
 		for (innerArm in innerArms) if (innerArm.kind != seams.caseBranchKind) return null;
-		return bindersCollide(seams, pat, binderNode, innerArms)
+		if (bindersCollide(seams, site.pat, binderNode, innerArms)) return null;
+		final call: Null<QueryNode> = use == site.subject ? null : site.subject;
+		return call != null && !extractorSound(seams, site.switchNode, site.pat, binderNode, call, use, innerArms)
 			? null
 			: emit(scan, {
-				switchNode: switchNode,
-				at: at,
-				arm: arm,
-				plain: plain,
-				pat: pat,
+				switchNode: site.switchNode,
+				at: site.at,
+				arm: site.arm,
+				plain: site.plain,
+				pat: site.pat,
 				binderNode: binderNode,
-				inner: inner,
-				innerArms: innerArms
+				inner: site.inner,
+				innerArms: innerArms,
+				call: call,
+				use: use
 			});
+	}
+
+	/**
+	 * Whether `call` may move into the binder's pattern slot as an extractor. It then runs while MATCHING, so:
+	 * no pattern of the outer switch may hold an extractor and no inner wildcard arm may be anything but the
+	 * unguarded trailing one (both change how often or in what order calls run); no name the call reads
+	 * (an interpolated one included) may be bound by the outer or an inner pattern, since the extractor is
+	 * evaluated outside those bindings; the call may not already spell the placeholder; and an inner
+	 * pattern may not be an extractor itself.
+	 */
+	private static function extractorSound(
+		seams: Seams, switchNode: QueryNode, pat: QueryNode, binderNode: QueryNode, call: QueryNode, use: QueryNode,
+		innerArms: Array<QueryNode>
+	): Bool {
+		if (!outerPatternsExtractorFree(seams, switchNode) || !wildcardArmsSound(seams, innerArms)) return false;
+		final read: Array<String> = [];
+		readNames(seams, call, use, read);
+		if (read.contains(seams.wildcardPatternName)) return false;
+		final bound: Array<String> = [];
+		boundNames(seams, pat, binderNode, bound);
+		for (innerArm in innerArms) for (kid in innerArm.children) if (kid.kind == seams.plainCasePatternKind) {
+			if (CasePatternScan.containsAnyKind(kid, seams.extractorKinds)) return false;
+			boundNames(seams, kid, binderNode, bound);
+		}
+		return read.foreach(name -> !(bound.contains(name)));
+	}
+
+	/** Every identifier name `node` reads, `skip`'s own node aside. */
+	private static function readNames(seams: Seams, node: QueryNode, skip: QueryNode, out: Array<String>): Void {
+		final name: Null<String> = node.name;
+		if (node != skip && name != null && (node.kind == seams.identKind || node.kind == seams.stringInterpIdentKind)) out.push(name);
+		for (child in node.children) readNames(seams, child, skip, out);
 	}
 
 	/**
@@ -304,7 +384,11 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		if (CheckScan.hasCommentMarker(source, binderSpan.to, patSpan.to)) return null;
 		final terminator: String = source.substring(patSpan.to, innerSpan.from).trim();
 		if (terminator != LABEL_TERMINATOR || !innerGapsClean(scan, frame, innerSpan, armSpan)) return null;
+		final spelled: Null<String> = extractorText(scan, frame);
+		if (spelled == null) return null;
+		final extractor: String = spelled;
 		final label: Label = {
+			extractor: extractor,
 			lead: source.substring(armSpan.from, plainSpan.from),
 			prefix: source.substring(patSpan.from, binderSpan.from),
 			suffix: source.substring(binderSpan.to, patSpan.to),
@@ -316,12 +400,20 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 			if (part == null) return null;
 			parts.push(part);
 		}
+		final kept: Null<Array<InnerArm>> = keptArms(scan, frame, parts);
+		return kept == null ? null : { span: armSpan, text: [for (part in kept) render(label, part)].join('\n') };
+	}
+
+	/**
+	 * The inner arms the emitted run keeps, or null when the coverage gate refuses. An extractor collapse
+	 * must open on a real pattern, since a leading catch-all would leave the call unevaluated.
+	 */
+	private static function keptArms(scan: Scan, frame: Frame, parts: Array<InnerArm>): Null<Array<InnerArm>> {
 		final trailing: InnerArm = parts[parts.length - 1];
 		final harmless: Bool = fallThroughHarmless(scan, frame.switchNode, frame.at);
-		final merge: Bool = trailing.catchAll && trailing.body == '' && harmless;
 		if (!trailing.catchAll && !harmless) return null;
-		final kept: Array<InnerArm> = merge ? parts.slice(0, parts.length - 1) : parts;
-		return kept.length == 0 ? null : { span: armSpan, text: [for (part in kept) render(label, part)].join('\n') };
+		final kept: Array<InnerArm> = trailing.catchAll && trailing.body == '' && harmless ? parts.slice(0, parts.length - 1) : parts;
+		return kept.length == 0 || frame.call != null && kept[0].catchAll ? null : kept;
 	}
 
 	/**
@@ -455,6 +547,8 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		for (i in 0...part.patterns.length) {
 			if (i > 0) buf.add(part.separators[i - 1]);
 			buf.add(label.prefix);
+			// a catch-all matches whatever the extractor already evaluated in the arms before it
+			if (!part.catchAll) buf.add(label.extractor);
 			buf.add(part.patterns[i]);
 			buf.add(label.suffix);
 		}
@@ -476,17 +570,17 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 	 * an ordinary identifier, so it satisfies this one.
 	 */
 	private static function isolatedBinder(
-		scan: Scan, switchNode: QueryNode, arm: QueryNode, pat: QueryNode, subject: QueryNode, binder: String
+		scan: Scan, switchNode: QueryNode, arm: QueryNode, pat: QueryNode, use: QueryNode, binder: String
 	): Null<QueryNode> {
 		final seams: Seams = scan.seams;
 		final all: Array<QueryNode> = [];
 		mentions(seams, arm, binder, all);
-		if (all.length != BINDER_MENTION_COUNT || !all.contains(subject)) return null;
+		if (all.length != BINDER_MENTION_COUNT || !all.contains(use)) return null;
 		final inPattern: Array<QueryNode> = [];
 		mentions(seams, pat, binder, inPattern);
 		if (inPattern.length != 1) return null;
 		final node: QueryNode = inPattern[0];
-		if (node == subject) return null;
+		if (node == use) return null;
 		// The splice turns `switch binder` into a sub-pattern, which is only the same program when the
 		// binder CAPTURES; a bare name a constant may claim compares, and `switch binder` reads another binding.
 		final resolve: QueryNode -> Null<QueryNode> = CasePatternScan.subjectResolver(scan.tree, seams.shape);
@@ -587,9 +681,71 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 				stringInterpIdentKind: shape.stringInterpIdentKind,
 				binderKinds: shape.casePatternBinderKinds ?? [],
 				extractorKinds: shape.casePatternExtractorKinds ?? [],
+				callKind: shape.callKind,
+				extractorArrow: (shape.casePatternExtractorKinds ?? []).length == 0 ? null : shape.casePatternExtractorArrow,
 				conditionalKind: shape.conditionalMemberKind,
 				opaqueKinds: shape.opaqueKinds ?? []
 			};
+	}
+
+	/**
+	 * The extractor text every spliced arm puts before its inner pattern: the nested switch's call
+	 * with the binder argument replaced by the placeholder, then the arrow. Empty for a bare-binder
+	 * collapse; null when the grammar or the spans cannot spell one.
+	 */
+	private static function extractorText(scan: Scan, frame: Frame): Null<String> {
+		final call: Null<QueryNode> = frame.call;
+		if (call == null) return '';
+		final callSpan: Null<Span> = call.span;
+		final useSpan: Null<Span> = frame.use?.span;
+		final arrow: Null<String> = scan.seams.extractorArrow;
+		if (callSpan == null || useSpan == null || arrow == null) return null;
+		final source: String = scan.source;
+		return source.substring(callSpan.from, useSpan.from)
+			+ scan.seams.wildcardPatternName
+			+ source.substring(useSpan.to, callSpan.to)
+			+ ' $arrow ';
+	}
+
+	/**
+	 * Whether no PATTERN of any arm of the outer switch, the collapsing arm's own included, holds an
+	 * extractor. An extractor that shares a column with the moved call changes how many times the call
+	 * runs, and one right of the binder's slot changes the order of the calls; bodies and guards are
+	 * not read.
+	 */
+	private static function outerPatternsExtractorFree(seams: Seams, switchNode: QueryNode): Bool {
+		for (arm in switchNode.children) if (arm.kind == seams.caseBranchKind) {
+			final kids: Array<QueryNode> = arm.children;
+			for (i in 0...patternRunLength(seams, kids)) if (CasePatternScan.containsAnyKind(kids[i], seams.extractorKinds)) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether the only inner arm that spells the wildcard as a pattern, parenthesised or not, is an unguarded,
+	 * single-pattern TRAILING one written bare. The matcher drops an extractor whose pattern is the wildcard,
+	 * so any other wildcard arm would leave the call unevaluated or evaluated in another order than the
+	 * nested form.
+	 */
+	private static function wildcardArmsSound(seams: Seams, innerArms: Array<QueryNode>): Bool {
+		for (at => innerArm in innerArms) {
+			final kids: Array<QueryNode> = innerArm.children;
+			final run: Int = patternRunLength(seams, kids);
+			final trailing: Bool = at == innerArms.length - 1 && run == 1 && !(run < kids.length && kids[run].kind == seams.parenKind);
+			for (i in 0...run) {
+				final head: QueryNode = kids[i].children.length == 1 ? kids[i].children[0] : kids[i];
+				final bare: Bool = head.kind == seams.identKind && head.name == seams.wildcardPatternName;
+				if (spelledWildcard(seams, head) && !(trailing && bare)) return false;
+			}
+		}
+		return true;
+	}
+
+	/** Whether `node`, parentheses peeled at any depth, is the wildcard pattern. */
+	private static function spelledWildcard(seams: Seams, node: QueryNode): Bool {
+		var inner: QueryNode = node;
+		while (inner.kind == seams.parenKind && inner.children.length == 1) inner = inner.children[0];
+		return inner.kind == seams.identKind && inner.name == seams.wildcardPatternName;
 	}
 
 }
@@ -612,11 +768,31 @@ private typedef Frame = {
 	final binderNode: QueryNode;
 	final inner: QueryNode;
 	final innerArms: Array<QueryNode>;
+
+	/** The call subject moved into the slot as an extractor; null when the subject is the bare binder. */
+	final call: Null<QueryNode>;
+
+	/** The call's argument that is the outer binder; null with `call`. */
+	final use: Null<QueryNode>;
+};
+
+/** An outer arm that passed the shape gates, before the binder the nested switch reads is chosen. */
+private typedef Site = {
+	final switchNode: QueryNode;
+	final at: Int;
+	final arm: QueryNode;
+	final plain: QueryNode;
+	final pat: QueryNode;
+	final inner: QueryNode;
+	final subject: QueryNode;
 };
 
 /** The outer label text every spliced arm reproduces: the `case` lead, the slot around the binder, the terminator. */
 private typedef Label = {
 	final lead: String;
+
+	/** The call moved into the binder's slot (placeholder where the binder stood, then the arrow); empty for a bare-binder collapse. */
+	final extractor: String;
 	final prefix: String;
 	final suffix: String;
 	final terminator: String;
@@ -672,6 +848,10 @@ private typedef Seams = {
 
 	/** Pattern kinds that RUN code while matching — empty models a family whose patterns evaluate nothing. */
 	final extractorKinds: Array<String>;
+
+	/** The call kind and the extractor operator — both set opens the call-subject collapse. */
+	final callKind: Null<String>;
+	final extractorArrow: Null<String>;
 	final conditionalKind: Null<String>;
 	final opaqueKinds: Array<String>;
 };

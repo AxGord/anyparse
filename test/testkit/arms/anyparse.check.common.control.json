@@ -832,6 +832,36 @@
 			"find": "? text : text + site.terminator",
 			"replace": "? text : text",
 			"note": "a bare expression body is braced without a terminator, `{ p() }`, which Haxe rejects as Missing ;"
+		},
+		{
+			"name": "M-COLLAPSE-CALL-OUTER-EXTRACTOR",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "outerPatternsExtractorFree",
+			"force": "true",
+			"note": "an extractor in an outer pattern shares or reorders the evaluation of the moved call"
+		},
+		{
+			"name": "M-COLLAPSE-CALL-READS-BOUND",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "extractorSound",
+			"find": "return read.foreach(name -> !(bound.contains(name)));",
+			"replace": "return true;",
+			"note": "a call reading a name the outer or an inner pattern binds is evaluated outside that binding after the splice"
+		},
+		{
+			"name": "M-COLLAPSE-CALL-WILDCARD-ARM",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "wildcardArmsSound",
+			"force": "true",
+			"note": "a guarded or non-trailing wildcard inner arm becomes a dropped wildcard extractor, so the call is skipped or reordered"
+		},
+		{
+			"name": "M-COLLAPSE-CALL-READS-INTERPOLATED",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "readNames",
+			"find": " || node.kind == seams.stringInterpIdentKind",
+			"replace": "",
+			"note": "a call reading a bound name only through string interpolation is moved past that binding"
 		}
 	]
 }

@@ -3222,6 +3222,14 @@ final class RefShape {
 	public var casePatternExtractorKinds: Null<Array<String>>;
 
 	/**
+	 * The operator that joins an extractor's call to the pattern its result must match (Haxe
+	 * `f(_) => p`), written without surrounding spaces. A rewrite that moves a call into a
+	 * pattern slot needs this spelling, and `wildcardPatternName` as the placeholder for the
+	 * matched value. Optional; unset closes every rewrite that would have to write an extractor.
+	 */
+	public var casePatternExtractorArrow: Null<String>;
+
+	/**
 	 * Type-declaration kinds with ALIASING semantics — a value's field access does
 	 * not target the declared name itself: a typedef (an alias of another type) and
 	 * an abstract (whose `@:forward` field access reaches the UNDERLYING type).
