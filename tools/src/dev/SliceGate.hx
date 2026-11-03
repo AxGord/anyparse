@@ -122,9 +122,22 @@ final class SliceGate {
 		final title: String = 'slice-gate --baseline ${_gate.tree} @ ${GateTree.short(_gate.base)}';
 		final self: String = keepSelf();
 		_gate.retireBaseline();
+		final key: Null<String> = BaselineCache.keyOfRun(
+			_gate.base, Sys.getEnv(GateTree.FORK_VAR) ?? '', _gate.options.infra, _gate.options.allow,
+			_gate.git(['status', '--porcelain']).trim() == '', BaseEngine.toolchain()
+		);
 		if (!build()) return finish(title);
-		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS);
 		final digests: Array<FrozenTree> = [for (dir in _gate.options.frozen) { dir: dir, digest: GateTree.diffDigest(dir) }];
+		final reused: Null<Baseline> = key == null ? null : BaselineCache.restore(BaselineCache.defaultCache(), key, _gate.logs, digests);
+		if (reused != null) {
+			gate('baseline', () -> {
+				File.saveContent(_gate.log(GateTree.BASELINE_FILE), Json.stringify(reused, null, '\t'));
+				_gate.summary.detail('reused the baseline recorded for ${GateTree.short(_gate.base)}, ${GateTree.short(key ?? '')}');
+				return Passed;
+			});
+			return finish(title);
+		}
+		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS);
 		gate('frozen', () -> {
 			if (digests.length == 0) return Skipped('no --frozen');
 			_gate.summary.detail([for (d in digests) '${Path.withoutDirectory(d.dir)} ${GateTree.short(d.digest)}'].join(', '));
@@ -147,6 +160,8 @@ final class SliceGate {
 				frozen: digests
 			};
 			File.saveContent(_gate.log(GateTree.BASELINE_FILE), Json.stringify(record, null, '\t'));
+			final entry: Null<String> = key;
+			if (entry != null) BaselineCache.store(BaselineCache.defaultCache(), entry, record);
 			return Passed;
 		});
 		return finish(title);

@@ -43,6 +43,10 @@ final class BaseEngine {
 	private static inline final SECONDS_PER_DAY: Float = 86400;
 	private static inline final MS_PER_SECOND: Float = 1000;
 
+	public static inline function remove(path: String): Void {
+		js.Syntax.code("require('fs').rmSync({0}, { recursive: true, force: true })", path);
+	}
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final repo: String = Repo.resolve(args.option('--repo'));
@@ -138,12 +142,8 @@ final class BaseEngine {
 		return Std.parseInt(Sys.getEnv('BASE_ENGINE_MAX_AGE_DAYS') ?? '') ?? MAX_AGE_DAYS;
 	}
 
-	private static inline function remove(path: String): Void {
-		js.Syntax.code("require('fs').rmSync({0}, { recursive: true, force: true })", path);
-	}
-
 	/** The compiler an engine is built by, as `haxe -version` names it. */
-	private static function toolchain(): String {
+	public static function toolchain(): String {
 		final version: Result = cmd('haxe -version').check();
 		return (version.out + version.err).trim();
 	}
