@@ -66,14 +66,17 @@ final class CasePatterns {
 	 * from the `site`: the subjects for the whole pattern, a dynamic subjects for an array element or
 	 * structure field, an in-file enum constructors parameter for its argument. Anything else is unproven.
 	 */
-	public static function isDecidedCapture(ident: PatternIdent, subject: SubjectProof, scope: Null<PatternNameScope>): Bool {
+	public static function isDecidedCapture(
+		ident: PatternIdent, subject: SubjectProof, scope: Null<PatternNameScope>, ?typedSlot: (PatternIdent) -> Bool
+	): Bool {
 		if (ident.role != Capture) return false;
 		if (ident.explicit) return true;
 		if (scope == null || scope.mayCompare(ident.name)) return false;
 		return switch ident.site {
 			case Whole: subject.typed;
 			case Structural: subject.isDynamic;
-			case Slot(callee, index): ctorArgRulesOutConstants(scope.root, scope.shape, callee, index);
+			case Slot(callee, index):
+				ctorArgRulesOutConstants(scope.root, scope.shape, callee, index) || typedSlot != null && typedSlot(ident);
 			case Opaque: false;
 		};
 	}
@@ -85,10 +88,10 @@ final class CasePatterns {
 	 */
 	public static function provesCaptureAt(
 		arm: QueryNode, switchNode: Null<QueryNode>, node: QueryNode, resolve: QueryNode -> Null<QueryNode>, scope: Null<PatternNameScope>,
-		root: QueryNode, shape: RefShape
+		root: QueryNode, shape: RefShape, ?typedSlot: (PatternIdent) -> Bool
 	): Bool {
 		final ident: Null<PatternIdent> = scan(arm, shape, []).idents.find(i -> i.node == node);
-		return ident != null && isDecidedCapture(ident, subjectProof(switchNode, root, shape, resolve), scope);
+		return ident != null && isDecidedCapture(ident, subjectProof(switchNode, root, shape, resolve), scope, typedSlot);
 	}
 
 	/**
@@ -133,12 +136,17 @@ final class CasePatterns {
 		final name: Null<String> = type.name;
 		if (name == null) return true;
 		final wrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
-		if (wrappers.contains(name))
-			return type.children.length == 0 || (type.children.length == 1 && typeRulesOutConstants(type.children[0], root, shape));
+		return wrappers.contains(name)
+			? type.children.length == 0 || (type.children.length == 1 && typeRulesOutConstants(type.children[0], root, shape))
+			: isBuiltinValueType(name, shape) || declaresProvenType(root, shape, name);
+	}
+
+	/** Whether `name` is a built-in value type or the grammar's array type, whose values a bare name never claims. */
+	public static function isBuiltinValueType(name: String, shape: RefShape): Bool {
 		final literals: Map<String, String> = shape.literalTypeNames ?? [];
-		if ((shape.nonNullableTypeNames ?? []).contains(name) || (shape.arrayTypeNames ?? []).contains(name)) return true;
-		for (builtin in literals) if (builtin == name) return true;
-		return declaresProvenType(root, shape, name);
+		return (shape.nonNullableTypeNames ?? []).contains(name)
+			|| (shape.arrayTypeNames ?? []).contains(name)
+			|| Lambda.exists(literals, builtin -> builtin == name);
 	}
 
 	/** Whether a written type is a dynamic one — a nullable-wrapper name carrying no type argument. */

@@ -129,6 +129,14 @@ final class TypingService {
 	}
 
 	/**
+	 * The declaration `spelling` names when the file writing it is not known: the one the whole index declares under it, or
+	 * `Unknown`. The spelling has no reading scope to follow, so a name two declarations share reads as nothing.
+	 */
+	public function resolveUnscoped(spelling: String): Resolution {
+		return single(Bound(spelling.indexOf('.') >= 0 ? _refs.resolveQualifiedRefAll(spelling) : _refs.resolvedDeclsNamed(spelling)));
+	}
+
+	/**
 	 * BODY: how the bare `name` written in `file` reads against the type at the path `canonical`, the builds of every
 	 * `#if`-guarded statement included (`TypeNameBinding.bindingsOf`): `Same` when what binds it on every build is that type
 	 * or a transparent alias of it, `Other` when another type, or a `#if`-guarded declaration, may take it,

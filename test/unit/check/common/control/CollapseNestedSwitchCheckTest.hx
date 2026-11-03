@@ -429,6 +429,15 @@ class CollapseNestedSwitchCheckTest extends Test {
 		);
 	}
 
+	/** An or-pattern of wildcards is a wildcard to the matcher too; one wildcard side leaves the other side to run the call. */
+	@:pin('control')
+	@:killer('M-COLLAPSE-CALL-OR-WILDCARD')
+	public function testCallSubjectWithOrWildcardArm(): Void {
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case _ | _ if (g()): p();${INNER_LABEL}case _: r();'))).length);
+		Assert.equals(0, violations(swExpr(nest('R(b)', 'tap(b)', 'case ((_ | _)) if (g()): p();${INNER_LABEL}case _: r();'))).length);
+		Assert.equals(1, violations(swExpr(nest('R(b)', 'tap(b)', 'case Q | _ if (g()): p();${INNER_LABEL}case _: r();'))).length);
+	}
+
 	/** A string-interpolated read of a name the outer pattern binds is a read like any other. */
 	@:pin('control')
 	@:killer('M-COLLAPSE-CALL-READS-INTERPOLATED')

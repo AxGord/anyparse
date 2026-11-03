@@ -66,7 +66,7 @@
 			"name": "M-COLLAPSE-BINDER-UNPROVEN",
 			"type": "anyparse.check.common.control.CollapseNestedSwitch",
 			"method": "isolatedBinder",
-			"find": "return CasePatterns.provesCaptureAt(arm, switchNode, node, resolve, scan.scope, scan.tree, seams.shape) ? node : null;",
+			"find": "return CasePatterns.provesCaptureAt(arm, switchNode, node, resolve, scan.scope, scan.tree, seams.shape, typedSlot) ? node : null;",
 			"replace": "return node;",
 			"note": "a nested switch over a binder that may be a constant is spliced into the pattern"
 		},
@@ -862,6 +862,21 @@
 			"find": " || node.kind == seams.stringInterpIdentKind",
 			"replace": "",
 			"note": "a call reading a bound name only through string interpolation is moved past that binding"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-COVERAGE",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "innerCovered",
+			"force": "false",
+			"note": "an inner switch with no catch-all stays refused though its arms match every constructor of the subject enum"
+		},
+		{
+			"name": "M-COLLAPSE-CALL-OR-WILDCARD",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "spelledWildcard",
+			"find": "inner.kind == seams.shape.orPatternKind",
+			"replace": "false",
+			"note": "an or-pattern of wildcards loses the call the matcher drops"
 		}
 	]
 }

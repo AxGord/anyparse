@@ -4,9 +4,11 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.scan.CasePatternScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CasePatterns;
+import anyparse.query.CaseSlotTypes;
 import anyparse.query.IndexScope;
 import anyparse.query.PatternNameScope;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 
 using StringTools;
 
@@ -118,7 +120,9 @@ using StringTools;
  *   to carry over verbatim: a failing guard falls to the next spliced arm in the
  *   same order, and the emitted `case P(_)` backstops the whole run exactly as the
  *   inner catch-all did.
- * - Otherwise — no trailing catch-all at all — `fallThroughHarmless` is REQUIRED.
+ * - TYPED — no trailing catch-all, but the inner subject is declared an enum and every constructor of it has an
+ *   unguarded arm matching it whole (`CaseSlotTypes.covers`): nothing falls out, whichever position the outer switch stands in.
+ * - Otherwise `fallThroughHarmless` is REQUIRED.
  *
  * An emitted run that would be EMPTY (a nested switch whose only arm is the merged
  * catch-all) is refused: that is dead-arm removal, not pattern deepening.
@@ -129,9 +133,9 @@ using StringTools;
  * `P(f(…, _, …) => Q_i)`, the call spelled identically in every arm so the matcher evaluates it once.
  * It runs while matching, so `extractorSound` requires no extractor in any outer pattern, no wildcard
  * inner arm but the unguarded trailing one (the matcher drops a wildcard extractor), no name the call
- * reads bound by either pattern, and no inner extractor; the run may not open on a catch-all. Coverage
- * is the ordinary rule: the outer switch must stay exhaustive, so a hole in the inner arms needs the
- * trailing catch-all or a harmless fall-through.
+ * reads bound by either pattern, and no inner extractor; the run may not open on a catch-all. Coverage is
+ * the ordinary rule: the outer switch must stay exhaustive, so a hole in the inner arms needs the trailing
+ * catch-all, the typed proof or a harmless fall-through. An or-pattern of wildcards is a wildcard too.
  *
  * ## Seams, autofix, idempotence
  *
@@ -144,8 +148,8 @@ using StringTools;
  * closes the path that reads it (with `switchStatementKinds` unset the outer
  * fall-through path never opens, so only the COVERS shape collapses; with
  * `casePatternExtractorKinds` unset that path models a family whose patterns evaluate
- * nothing). No resolution index and no line budget are consulted — every gate is a
- * structurally-provable shape invariant, which is why this is NOT a `RiskyFix`: the edit is
+ * nothing). No line budget is consulted; the typed proofs of a capture and of coverage read the resolution index through `CaseSlotTypes`
+ * and decline on an unknown. Every gate is a proof, of a shape or of a declaration, which is why this is NOT a `RiskyFix`: the edit is
  * applied unverified like every other builtin.
  *
  * ONE edit per finding replaces the whole outer arm with the joined run. Layout is
@@ -178,15 +182,10 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = IndexScope.report(files, plugin);
+		// The RESOLUTION index: a subject's enum and the type its slot holds may be declared in a library or the std.
+		final index: SymbolIndex = IndexScope.resolution(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, resolved, violations) -> {
-			final scope: Null<PatternNameScope> = PatternNameScope.of(entry.file, tree, plugin, index);
-			for (candidate in collect({
-				tree: tree,
-				source: entry.source,
-				seams: resolved,
-				scope: scope
-			})) violations.push({
+			for (candidate in collect(scanOf(entry.file, entry.source, tree, plugin, resolved, index))) violations.push({
 				file: entry.file,
 				span: candidate.span,
 				rule: RULE_ID,
@@ -211,20 +210,31 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		final resolved: Seams = seams;
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		return RunScan.edits(plugin, source, tree -> {
-			final resolvedIndex: SymbolIndex = index ?? IndexScope.over([{ file: file, source: source }], plugin);
-			final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, plugin, resolvedIndex);
+			final resolvedIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index ?? IndexScope.over(
+				[{ file: file, source: source }], plugin
+			);
 			final byKey: Map<String, Candidate> = [];
-			for (candidate in collect({
-				tree: tree,
-				source: source,
-				seams: resolved,
-				scope: scope
-			})) byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
+			for (candidate in collect(scanOf(file, source, tree, plugin, resolved, resolvedIndex)))
+				byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
 			return CanonicalEdit.dropContainedEdits(
 				CheckScan.collectSpanEdits(violations, byKey, (candidate, _) -> ({ span: candidate.span, text: candidate.text }))
 			);
 		});
+	}
+
+	/** What a scan of one parsed file reads; a plugin without type info closes the typed proofs alone. */
+	private static function scanOf(
+		file: String, source: String, tree: QueryNode, plugin: GrammarPlugin, seams: Seams, index: SymbolIndex
+	): Scan {
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return {
+			tree: tree,
+			source: source,
+			seams: seams,
+			scope: PatternNameScope.of(file, tree, plugin, index),
+			slots: provider == null ? null : new CaseSlotTypes(file, source, tree, plugin, provider, index)
+		};
 	}
 
 	/** Every collapsible arm in `scan`'s source, in document order. */
@@ -411,9 +421,20 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 	private static function keptArms(scan: Scan, frame: Frame, parts: Array<InnerArm>): Null<Array<InnerArm>> {
 		final trailing: InnerArm = parts[parts.length - 1];
 		final harmless: Bool = fallThroughHarmless(scan, frame.switchNode, frame.at);
-		if (!trailing.catchAll && !harmless) return null;
+		if (!trailing.catchAll && !harmless && !innerCovered(scan, frame)) return null;
 		final kept: Array<InnerArm> = trailing.catchAll && trailing.body == '' && harmless ? parts.slice(0, parts.length - 1) : parts;
 		return kept.length == 0 || frame.call != null && kept[0].catchAll ? null : kept;
+	}
+
+	/** Whether the inner arms match every value the inner subject can hold, by its declared type. */
+	private static function innerCovered(scan: Scan, frame: Frame): Bool {
+		final slots: Null<CaseSlotTypes> = scan.slots;
+		final scope: Null<PatternNameScope> = scan.scope;
+		if (slots == null || scope == null) return false;
+		final type: Null<SlotType> = frame.call == null
+			? slots.slotAt(frame.switchNode, frame.pat, frame.binderNode)
+			: slots.subjectType(frame.inner.children[0]);
+		return type != null && slots.covers(type, frame.innerArms, scope);
 	}
 
 	/**
@@ -584,7 +605,8 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		// The splice turns `switch binder` into a sub-pattern, which is only the same program when the
 		// binder CAPTURES; a bare name a constant may claim compares, and `switch binder` reads another binding.
 		final resolve: QueryNode -> Null<QueryNode> = CasePatternScan.subjectResolver(scan.tree, seams.shape);
-		return CasePatterns.provesCaptureAt(arm, switchNode, node, resolve, scan.scope, scan.tree, seams.shape) ? node : null;
+		final typedSlot: Null<PatternIdent -> Bool> = scan.slots?.slotProof(switchNode, pat);
+		return CasePatterns.provesCaptureAt(arm, switchNode, node, resolve, scan.scope, scan.tree, seams.shape, typedSlot) ? node : null;
 	}
 
 	/** Every node in `node`'s subtree that MENTIONS `binder` — see `isolatedBinder` for the three shapes. */
@@ -745,7 +767,10 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 	private static function spelledWildcard(seams: Seams, node: QueryNode): Bool {
 		var inner: QueryNode = node;
 		while (inner.kind == seams.parenKind && inner.children.length == 1) inner = inner.children[0];
-		return inner.kind == seams.identKind && inner.name == seams.wildcardPatternName;
+		// `_ | _` is a wildcard to the matcher too; one wildcard side leaves the other side to run the call.
+		return inner.kind == seams.shape.orPatternKind
+			? inner.children.foreach(side -> spelledWildcard(seams, side))
+			: inner.kind == seams.identKind && inner.name == seams.wildcardPatternName;
 	}
 
 }
@@ -821,6 +846,9 @@ private typedef Scan = {
 
 	/** What the file's lookup order may bind a bare pattern name to; null when the index does not hold the file. */
 	final scope: Null<PatternNameScope>;
+
+	/** The typed proofs of a capture and of inner coverage; null without type info. */
+	final slots: Null<CaseSlotTypes>;
 };
 
 /** The seam kinds `CollapseNestedSwitch` resolves once per run. */

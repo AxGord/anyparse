@@ -5754,8 +5754,8 @@
 			"name": "M-CAPTURE-SLOT-UNPROVEN",
 			"type": "anyparse.query.CasePatterns",
 			"method": "isDecidedCapture",
-			"find": "case Slot(callee, index): ctorArgRulesOutConstants(scope.root, scope.shape, callee, index);",
-			"replace": "case Slot(_, _): true;",
+			"find": "ctorArgRulesOutConstants(scope.root, scope.shape, callee, index) || typedSlot != null && typedSlot(ident);",
+			"replace": "true;",
 			"note": "a constructor argument capture is decided without its constructor's parameter type"
 		},
 		{
@@ -15051,6 +15051,101 @@
 			"find": "bareBinding(other, name, path) == Same && bareBinding(file, name, path) == Same",
 			"replace": "bareBinding(other, name, path) == Same",
 			"note": "the name is read only in the file it is copied from, so a std name the target module shadows with its own type is copied as the std one"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-SLOT",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "slotProof",
+			"find": "slot != null && rulesOutConstant(slot, ident.name);",
+			"replace": "false;",
+			"note": "a binder at a slot typed by a type argument stays unproven"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-MEMBER-NAME",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "declarationHolds",
+			"find": "return !decl.type.members.exists(m -> m.name == name);",
+			"replace": "return true;",
+			"note": "an enum abstract slot is a capture though it declares the name the binder spells"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-ALIAS",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "declarationHolds",
+			"find": "return decl.type.isAnonStruct;",
+			"replace": "return true;",
+			"note": "a typedef standing for an enum abstract proves a capture"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-ALL-CTORS",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "covers",
+			"find": "return ctors.foreach(m -> matched.contains(m.name));",
+			"replace": "return true;",
+			"note": "arms leaving a constructor out count as covering the enum"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-GUARD",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "covers",
+			"find": "if (run.length < arm.children.length && arm.children[run.length].kind == _shape.parenKind) continue;",
+			"replace": "",
+			"note": "a guarded arm counts as matching its constructor"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-NULLABLE",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "covers",
+			"find": " || unwrapped(type) != type.source",
+			"replace": "",
+			"note": "a nullable subject counts as covered though no constructor arm matches null"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-WHOLE-ARG",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "wholeSlot",
+			"force": "true",
+			"note": "a constructor arm whose argument may compare counts as matching it whole"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-UNSCOPED",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "declarationOf",
+			"find": "_index.typing.resolveUnscoped(path)",
+			"replace": "Declared(_index.refs.resolvedDeclsNamed(path)[0])",
+			"note": "a name two declarations share resolves to the first of them"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-ARGS-UNREAD",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "slotOf",
+			"find": "if (expected.argsUnread) return null;",
+			"replace": "",
+			"note": "type arguments written in terms of an enclosing enum parameter bind as if read in the enum file"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-CTOR-PARAM",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "slotOf",
+			"find": "|| CallGraphNames.mentionsTypeName(written, _provider.typeParamNames(enumSource)[info.declFrom] ?? [], _typeSyntax)",
+			"replace": "",
+			"note": "a slot typed by its constructor own type parameter resolves to a type sharing the name"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-OPTIONAL-SLOT",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "covers",
+			"find": "type.optional || ",
+			"replace": "",
+			"note": "an optional constructor parameter counts as covered though no constructor arm matches its null"
+		},
+		{
+			"name": "M-COLLAPSE-TYPED-ENUM-ABSTRACT",
+			"type": "anyparse.query.CaseSlotTypes",
+			"method": "enumOf",
+			"find": " && !aliases.contains(decl.type.kind)",
+			"replace": "",
+			"note": "an enum abstract counts as covered by naming its declared values, though it holds others"
 		}
 	]
 }

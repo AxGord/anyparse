@@ -150,17 +150,14 @@ final class ModuleMove {
 		// Phase 3: the result parses, and the declared texts follow.
 		return switch changesOf(request, texts, newPathOf, renames, plugin) {
 			case Left(reasons): Refused(reasons);
-			case Right(changes):
-				switch placeRegistries(request, changes) {
-					case Left(reasons): Refused(reasons);
-					case Right(placed): Moved({
-						changes: placed.changes,
-						removed: [for (p in planned) p.move.from].concat(placed.removed),
-						moves: [for (p in planned) p.move],
-						renames: renames,
-						imports: imports
-					});
-				}
+			case Right(placeRegistries(request, _) => Left(reasons)): Refused(reasons);
+			case Right(placeRegistries(request, _) => Right(placed)): Moved({
+				changes: placed.changes,
+				removed: [for (p in planned) p.move.from].concat(placed.removed),
+				moves: [for (p in planned) p.move],
+				renames: renames,
+				imports: imports
+			});
 		};
 	}
 
