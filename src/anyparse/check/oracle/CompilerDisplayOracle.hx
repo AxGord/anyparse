@@ -55,14 +55,6 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	/** Total `typeAt` queries this process — a spawn counter tests read to prove the no-config gate. */
 	public static var invocations(default, null): Int = 0;
 
-	/** Ephemeral-port search: try this many random high ports before giving up on a free one. */
-	private static inline final MAX_PORT_ATTEMPTS: Int = 8;
-
-	/** Random server port range: `[PORT_BASE, PORT_BASE + PORT_SPAN)`. */
-	private static inline final PORT_BASE: Int = 20000;
-
-	private static inline final PORT_SPAN: Int = 40000;
-
 	/** Output the server may write before its batch's driver ends it — far more than a `--wait` server ever prints. */
 	private static inline final SERVER_OUTPUT: Int = 256 * 1024 * 1024;
 
@@ -205,13 +197,15 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	 * They are placed by `CompilerServer.connect`, the one spelling the typecheck shares.
 	 */
 	public static function start(
-		typeSyntax: TypeSyntaxReader, hxml: String, ?cwd: String, ?defines: Array<String>
+		typeSyntax: TypeSyntaxReader, hxml: String, ?cwd: String, ?defines: Array<String>, ?candidate: () -> Int
 	): Null<CompilerDisplayOracle> {
 		#if nodejs
 		var attempt: Int = 0;
-		while (attempt < MAX_PORT_ATTEMPTS) {
+		while (attempt < CompilerServer.MAX_PORT_ATTEMPTS) {
 			attempt++;
-			final port: Int = PORT_BASE + Std.random(PORT_SPAN);
+			final free: Null<Int> = CompilerServer.freePort([], candidate);
+			if (free == null) return null;
+			final port: Int = free;
 			final server: PendingRuns = HaxeSpawn.startAll([{ args: ['--wait', '$port'], cwd: null, tethered: true }], SERVER_OUTPUT, 1);
 			if (CompilerServer.warm(port, hxml, cwd, defines))
 				return new CompilerDisplayOracle(typeSyntax, hxml, cwd, defines ?? [], port, server);

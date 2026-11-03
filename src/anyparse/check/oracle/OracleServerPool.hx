@@ -59,19 +59,6 @@ final class OracleServerPool {
 	/** How many `server/invalidate` rounds a server is given to come up before it is given up on. */
 	private static inline final READY_ATTEMPTS: Int = 40;
 
-	/** Random server ports: `[PORT_BASE, PORT_BASE + PORT_SPAN)`. */
-	private static inline final PORT_BASE: Int = 20000;
-
-	private static inline final PORT_SPAN: Int = 40000;
-
-	/** How many candidate ports are tried for one server before it is given up on (`freePort`). */
-	private static inline final PORT_PROBES: Int = 8;
-
-	/** Exits 1 when the loopback port named by its last argument cannot be bound — the bind `haxe --wait` makes first. */
-	private static inline final BIND_PROBE: String = 'const n=Number(process.argv[process.argv.length-1]);'
-		+ 'require("net").createServer().once("error",()=>process.exit(1))'
-		+ '.listen(n,"127.0.0.1",function(){this.close(()=>process.exit(0))})';
-
 	/**
 	 * How many moved paths a server is invalidated for before it is replaced by a fresh one instead (`renew`): the server
 	 * answers invalidations one at a time, each a walk of everything it holds, so past this many a fresh server's first
@@ -98,7 +85,7 @@ final class OracleServerPool {
 
 	public function new(written: () -> Array<String>, ?candidate: () -> Int) {
 		_written = written;
-		_candidate = candidate ?? (() -> PORT_BASE + Std.random(PORT_SPAN));
+		_candidate = candidate ?? CompilerServer.randomPort;
 	}
 
 	/**
@@ -191,20 +178,27 @@ final class OracleServerPool {
 		_started = true;
 		final ports: Array<Int> = [];
 		final serving: Array<OracleConfig> = [];
+		final servers: Array<PendingRuns> = [];
 		for (o in usable) {
 			final port: Null<Int> = freePort(ports);
 			if (port == null) continue;
 			ports.push(port);
 			serving.push(o);
-			_batches[keyOf(o)] = serve(port, o);
+			final server: PendingRuns = serve(port, o);
+			servers.push(server);
+			_batches[keyOf(o)] = server;
 		}
 		final snapshot: Map<String, Null<String>> = texts();
 		final warm: Array<SpawnJob> = [];
-		for (i => o in serving) if (ready(ports[i], o)) {
-			_servers[keyOf(o)] = { port: ports[i], seen: snapshot };
-			warm.push({ args: compileArgs(ports[i], o), cwd: o.dir });
-		} else {
-			end(o);
+		for (i => o in serving) {
+			if (ready(ports[i], o, servers[i]))
+				_servers[keyOf(o)] = { port: ports[i], seen: snapshot };
+			else if (servers[i].running())
+				end(o);
+			else
+				bringUp(o, ports, snapshot);
+			final up: Null<PoolServer> = _servers[keyOf(o)];
+			if (up != null) warm.push({ args: compileArgs(up.port, o), cwd: o.dir });
 		}
 		_warming = HaxeSpawn.startAll(warm, BUFFER, HaxeSpawn.parallelism());
 		#end
@@ -262,15 +256,29 @@ final class OracleServerPool {
 
 	/** `renew`'s replacement: `oracle` left with a fresh server on a free port, or with none. */
 	private function restart(oracle: OracleConfig, now: Map<String, Null<String>>): Void {
-		end(oracle);
-		final free: Null<Int> = freePort([]);
-		if (free == null) return;
-		final port: Int = free;
-		_batches[keyOf(oracle)] = serve(port, oracle);
-		if (ready(port, oracle))
-			_servers[keyOf(oracle)] = { port: port, seen: now }
-		else
+		bringUp(oracle, [], now);
+	}
+
+	/**
+	 * Brings `oracle`'s server up on a port `freePort` gives, past `taken`, ending whatever it had first. A server that exited
+	 * lost its port after the probe and another port may hold; one that lives and does not answer is this configuration's own
+	 * failure, which no other port mends, so it ends the search.
+	 */
+	private function bringUp(oracle: OracleConfig, taken: Array<Int>, seen: Map<String, Null<String>>): Void {
+		for (_ in 0...CompilerServer.MAX_PORT_ATTEMPTS) {
 			end(oracle);
+			final free: Null<Int> = freePort(taken);
+			if (free == null) return;
+			final port: Int = free;
+			final server: PendingRuns = serve(port, oracle);
+			_batches[keyOf(oracle)] = server;
+			if (ready(port, oracle, server)) {
+				_servers[keyOf(oracle)] = { port: port, seen: seen };
+				return;
+			}
+			if (server.running()) break;
+		}
+		end(oracle);
 	}
 
 	/** End `oracle`'s server: it answers nothing from here on, and the compiled project it holds is freed. */
@@ -280,17 +288,9 @@ final class OracleServerPool {
 		_servers.remove(keyOf(oracle));
 	}
 
-	/**
-	 * A port neither in `taken` nor one a server of the pool listens on, and that nothing else holds (`portIsFree`); null
-	 * when none of `PORT_PROBES` candidates qualified, so the configuration gets no server rather than one that cannot bind.
-	 */
+	/** `CompilerServer.freePort` over `taken` and the ports the pool's own servers listen on. */
 	private function freePort(taken: Array<Int>): Null<Int> {
-		final used: Array<Int> = taken.concat([for (server in _servers) server.port]);
-		for (_ in 0...PORT_PROBES) {
-			final port: Int = _candidate();
-			if (!used.contains(port) && portIsFree(port)) return port;
-		}
-		return null;
+		return CompilerServer.freePort(taken.concat([for (server in _servers) server.port]), _candidate);
 	}
 
 	/**
@@ -327,22 +327,6 @@ final class OracleServerPool {
 		return out;
 	}
 
-	/**
-	 * Whether `haxe --wait` can bind `port` on the loopback now. A listener already there
-	 * makes the server exit at once, and the readiness poll would then be answered by that
-	 * listener or by nothing. A probe that cannot run says free: `ready` is the verdict on a server that does not come up.
-	 */
-	public static function portIsFree(port: Int): Bool {
-		#if nodejs
-		final res: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
-			js.Node.process.execPath, ['-e', BIND_PROBE, '$port'], { stdio: 'ignore' }
-		);
-		return res.status != 1;
-		#else
-		return true;
-		#end
-	}
-
 	private static inline function keyOf(oracle: OracleConfig): String {
 		return OracleDeclaration.oracleKey(oracle);
 	}
@@ -355,20 +339,16 @@ final class OracleServerPool {
 	}
 
 	/** Whether the server on `port` answers a display request yet, given a bounded number of tries. */
-	private static function ready(port: Int, oracle: OracleConfig): Bool {
-		#if nodejs
-		for (_ in 0...READY_ATTEMPTS) {
-			final reply: Null<ConnectResult> = CompilerServer.connect(
-				port, oracle.hxml, oracle.dir,
-				['--display', CompilerServer.invalidateRequest(oracle.hxml)],
-				oracle.defines
-			);
-			if (reply == null) return false;
-			if (CompilerServer.isServerReply(reply.output)) return true;
-			js.node.ChildProcess.spawnSync('sleep', ['0.1']);
-		}
-		#end
-		return false;
+	private static function ready(port: Int, oracle: OracleConfig, server: PendingRuns): Bool {
+		return answers(
+			server,
+			() ->
+				CompilerServer.connect(
+					port, oracle.hxml, oracle.dir,
+					['--display', CompilerServer.invalidateRequest(oracle.hxml)],
+					oracle.defines
+				)
+		);
 	}
 
 	/** The client arguments of a typecheck of `oracle` through the server on `port`. */
@@ -409,6 +389,22 @@ final class OracleServerPool {
 			content: ask.content,
 			at: ask.at
 		};
+	}
+
+	/**
+	 * Polls `ask` until a server reply, while `server` runs: one that exited never answers. A null is a client that did not run,
+	 * which says nothing about the server, so it does not end the poll.
+	 */
+	private static function answers(server: PendingRuns, ask: () -> Null<ConnectResult>): Bool {
+		#if nodejs
+		for (_ in 0...READY_ATTEMPTS) {
+			if (!server.running()) return false;
+			final reply: Null<ConnectResult> = ask();
+			if (reply != null && CompilerServer.isServerReply(reply.output)) return true;
+			js.node.ChildProcess.spawnSync('sleep', ['0.1']);
+		}
+		#end
+		return false;
 	}
 
 }

@@ -112,6 +112,19 @@ final class PendingRuns {
 		_answer = HaxeSpawn.unanswered(_jobs.length, 'cancelled — the batch was abandoned', '', true);
 	}
 
+	/**
+	 * Whether the batch's driver still runs, so a tethered job's process has not ended. A cancelled or finished batch does not, nor one
+	 * that never got a driver.
+	 */
+	public function running(): Bool {
+		#if nodejs
+		final pid: Null<Int> = _pid;
+		return _answer == null && pid != null && !sys.FileSystem.exists(_result) && living(pid);
+		#else
+		return false;
+		#end
+	}
+
 	#if nodejs
 	/** Block until driver `pid` wrote its answer, or died without one, and read it. */
 	private function collect(pid: Int): Array<HaxeRun> {

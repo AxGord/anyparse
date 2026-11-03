@@ -605,6 +605,14 @@
 			"find": ".env(GateTree.FORK_VAR, '')",
 			"replace": "",
 			"note": "the slot processes of a mutation run inherit the caller's corpus fork, so an arm verdict depends on the shell it was started from"
+		},
+		{
+			"name": "M-SLOT-DRAWS-NO-FREE-PORT",
+			"type": "dev.SlotServer",
+			"method": "port",
+			"find": "final free: Null<Int> = CompilerServer.freePort([], _candidate);",
+			"replace": "final free: Null<Int> = (_candidate ?? CompilerServer.randomPort)();",
+			"note": "a mutation slot draws a candidate without asking which port may be taken, so its client connects to whatever holds it before the next attempt"
 		}
 	]
 }

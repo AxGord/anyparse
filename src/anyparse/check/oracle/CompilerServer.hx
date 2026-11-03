@@ -113,16 +113,24 @@ typedef ServerState = {
 @:nullSafety(Strict)
 final class CompilerServer {
 
+	/** How many whole bring-ups (spawn, then warm) a server is given before the caller gets none. */
+	public static inline final MAX_PORT_ATTEMPTS: Int = 8;
+
 	/** Total warm typechecks this process — the counter tests read to prove the no-key gate. */
 	public static var invocations(default, null): Int = 0;
-
-	/** Ephemeral-port search: try this many random high ports before giving up on a free one. */
-	private static inline final MAX_PORT_ATTEMPTS: Int = 8;
 
 	/** Random server port range: `[PORT_BASE, PORT_BASE + PORT_SPAN)`. */
 	private static inline final PORT_BASE: Int = 20000;
 
 	private static inline final PORT_SPAN: Int = 40000;
+
+	/** How many candidate ports `freePort` draws before it reports none. */
+	private static inline final PORT_PROBES: Int = 8;
+
+	/** Exits 1 when the loopback port named by its last argument cannot be bound — the bind `haxe --wait` makes first. */
+	private static inline final BIND_PROBE: String = 'const n=Number(process.argv[process.argv.length-1]);'
+		+ 'require("net").createServer().once("error",()=>process.exit(1))'
+		+ '.listen(n,"127.0.0.1",function(){this.close(()=>process.exit(0))})';
 
 	/** Warm poll budget: short-spaced `--connect` attempts that let a freshly spawned server boot and finish its first full compile. */
 	private static inline final MAX_WARM_ATTEMPTS: Int = 40;
@@ -155,10 +163,12 @@ final class CompilerServer {
 	 * with: a server warmed under one configuration holds that configuration's modules, so
 	 * letting a second configuration reuse it would answer its question with the first's build.
 	 */
-	public static function typecheck(hxml: String, cwd: Null<String>, paths: Array<String>, ?defines: Array<String>): Null<OracleOutcome> {
+	public static function typecheck(
+		hxml: String, cwd: Null<String>, paths: Array<String>, ?defines: Array<String>, ?candidate: () -> Int
+	): Null<OracleOutcome> {
 		#if nodejs
 		final flags: Array<String> = defines ?? [];
-		final ready: Null<ServerState> = reuse(hxml, cwd, paths, flags) ?? startServer(hxml, cwd, flags);
+		final ready: Null<ServerState> = reuse(hxml, cwd, paths, flags) ?? startServer(hxml, cwd, flags, candidate);
 		if (ready == null) return null;
 		invocations++;
 		final startedAt: Int = nowSeconds();
@@ -278,7 +288,8 @@ final class CompilerServer {
 
 	/**
 	 * Poll `--connect` until the server answers (its first real connect drives the initial
-	 * full compile and blocks until it finishes) or the boot budget is spent. A client that
+	 * full compile and blocks until it finishes) or the boot budget is spent. True only for a real compilation
+	 * server (`invalidate`): any other listener that accepts the connection is not one. A client that
 	 * cannot be launched at all fails immediately rather than burning the whole budget on a
 	 * machine that simply has no compiler.
 	 */
@@ -289,12 +300,49 @@ final class CompilerServer {
 			attempt++;
 			final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--no-output'], defines);
 			if (res == null) return false;
-			if (!isConnectRefusal(res)) return true;
+			if (!isConnectRefusal(res)) return invalidate(port, hxml, cwd, hxml, defines ?? []);
 			sleep();
 		}
 		return false;
 		#else
 		return false;
+		#end
+	}
+
+	/**
+	 * A port a `haxe --wait` server may take: the first of `PORT_PROBES` draws of `candidate` (random in the server range
+	 * unless a caller names them, which a test does to hold one) that is not in `taken` and that `portIsFree`; null when none
+	 * qualified, so the caller starts no server rather than one that cannot bind. The one answer to "which port may a
+	 * compilation server take" — the shared server, the display oracle, the pool and a mutation slot all ask it.
+	 */
+	public static function freePort(taken: Array<Int>, ?candidate: () -> Int): Null<Int> {
+		final draw: () -> Int = candidate ?? randomPort;
+		for (_ in 0...PORT_PROBES) {
+			final port: Int = draw();
+			if (!taken.contains(port) && portIsFree(port)) return port;
+		}
+		return null;
+	}
+
+	/** A port drawn at random from the server range. */
+	public static function randomPort(): Int {
+		return PORT_BASE + Std.random(PORT_SPAN);
+	}
+
+	/**
+	 * Whether `haxe --wait` can bind `port` on the loopback now. A listener already there
+	 * makes the server exit at once, and the readiness poll would then be answered by that
+	 * listener or by nothing. A probe that cannot run says free: `warm` and the pool's `ready` are the verdict on a server
+	 * that does not come up, and refusing would leave a machine that cannot run the probe with no warm server at all.
+	 */
+	public static function portIsFree(port: Int): Bool {
+		#if nodejs
+		final res: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
+			js.Node.process.execPath, ['-e', BIND_PROBE, '$port'], { stdio: 'ignore' }
+		);
+		return res.status != 1;
+		#else
+		return true;
 		#end
 	}
 
@@ -380,16 +428,18 @@ final class CompilerServer {
 	 * outlives this one, so it is unref'd rather than reaped; the record is written as soon
 	 * as the server exists, so a run that dies later still leaves it discoverable.
 	 */
-	private static function startServer(hxml: String, cwd: Null<String>, defines: Array<String>): Null<ServerState> {
+	private static function startServer(hxml: String, cwd: Null<String>, defines: Array<String>, ?candidate: () -> Int): Null<ServerState> {
 		var attempt: Int = 0;
 		while (attempt < MAX_PORT_ATTEMPTS) {
 			attempt++;
 			final startedAt: Int = nowSeconds();
-			final port: Int = PORT_BASE + Std.random(PORT_SPAN);
+			final free: Null<Int> = freePort([], candidate);
+			if (free == null) return null;
+			final port: Int = free;
 			final child: Dynamic = spawnServer(port);
 			if (child == null) continue;
 			final spawnedPid: Null<Int> = child.pid;
-			if (spawnedPid != null && warm(port, hxml, cwd, defines) && invalidate(port, hxml, cwd, hxml, defines)) {
+			if (spawnedPid != null && warm(port, hxml, cwd, defines)) {
 				final pid: Int = spawnedPid;
 				final state: ServerState = { port: port, pid: pid, compiledAt: startedAt };
 				writeState(hxml, cwd, state, defines);

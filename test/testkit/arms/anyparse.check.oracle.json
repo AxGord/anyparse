@@ -1011,19 +1011,98 @@
 			"note": "one configuration's asks are queued together, so the compile budget's overlapping requests wait at one server while the others idle"
 		},
 		{
-			"name": "M-POOL-PORT-PROBE",
-			"type": "anyparse.check.oracle.OracleServerPool",
+			"name": "M-SERVER-PORT-PROBE",
+			"type": "anyparse.check.oracle.CompilerServer",
 			"method": "portIsFree",
 			"force": "true",
-			"note": "every port reads as free, so a server is started on a port something else listens on, exits at once, and the pool is left with none"
+			"note": "every port reads as free, so a starter takes a port something else listens on and its client connects to the holder"
 		},
 		{
-			"name": "M-POOL-PROBE-FAILS-CLOSED",
-			"type": "anyparse.check.oracle.OracleServerPool",
+			"name": "M-SERVER-PROBE-FAILS-CLOSED",
+			"type": "anyparse.check.oracle.CompilerServer",
 			"method": "portIsFree",
 			"find": "return res.status != 1;",
 			"replace": "return res.status == 0;",
 			"note": "a probe that cannot run reads as held, so a machine that cannot run it never gets a warm server though the bind would have succeeded"
+		},
+		{
+			"name": "M-SERVER-WARM-TRUSTS-ANY-LISTENER",
+			"type": "anyparse.check.oracle.CompilerServer",
+			"method": "warm",
+			"find": "if (!isConnectRefusal(res)) return invalidate(port, hxml, cwd, hxml, defines ?? []);",
+			"replace": "if (!isConnectRefusal(res)) return true;",
+			"note": "any connection a listener takes reads as a server up, so a display oracle is handed back bound to a port something else holds and its retry never runs"
+		},
+		{
+			"name": "M-SERVER-DRAWS-NO-FREE-PORT",
+			"type": "anyparse.check.oracle.CompilerServer",
+			"method": "startServer",
+			"find": "final free: Null<Int> = freePort([], candidate);",
+			"replace": "final free: Null<Int> = (candidate ?? randomPort)();",
+			"note": "the shared server draws a candidate without asking which port may be taken, so its client connects to whatever holds it before the retry moves on"
+		},
+		{
+			"name": "M-DISPLAY-DRAWS-NO-FREE-PORT",
+			"type": "anyparse.check.oracle.CompilerDisplayOracle",
+			"method": "start",
+			"find": "final free: Null<Int> = CompilerServer.freePort([], candidate);",
+			"replace": "final free: Null<Int> = (candidate ?? CompilerServer.randomPort)();",
+			"note": "the display oracle draws a candidate without asking which port may be taken, so its client connects to whatever holds it before the retry moves on"
+		},
+		{
+			"name": "M-POOL-DRAWS-NO-FREE-PORT",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "freePort",
+			"force": "_candidate()",
+			"note": "the pool draws a candidate without asking which port may be taken, so its client connects to whatever holds it before the bring-up moves on"
+		},
+		{
+			"name": "M-POOL-START-ONE-SHOT",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "startTimed",
+			"find": "bringUp(o, ports, snapshot);",
+			"replace": "end(o);",
+			"note": "a server that exits on its port leaves the configuration with no warm server for the whole run, where every other starter tries another port"
+		},
+		{
+			"name": "M-POOL-RESTART-ONE-SHOT",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "bringUp",
+			"find": "for (_ in 0...CompilerServer.MAX_PORT_ATTEMPTS) {",
+			"replace": "for (_ in 0...1) {",
+			"note": "a restart whose server exits on its port leaves the configuration with no warm server for the rest of the run"
+		},
+		{
+			"name": "M-POOL-START-RETRIES-A-LIVE-SERVER",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "startTimed",
+			"find": "else if (servers[i].running())",
+			"replace": "else if (false)",
+			"note": "a configuration the server cannot process is searched across every port, each costing the whole readiness poll, though no port mends it"
+		},
+		{
+			"name": "M-POOL-RESTART-RETRIES-A-LIVE-SERVER",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "bringUp",
+			"find": "if (server.running()) break;",
+			"replace": "",
+			"note": "a restart of a configuration the server cannot process is searched across every port, each costing the whole readiness poll, though no port mends it"
+		},
+		{
+			"name": "M-POOL-READY-GIVES-UP-ON-A-FAILED-CONNECT",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "answers",
+			"find": "if (reply != null && CompilerServer.isServerReply(reply.output)) return true;",
+			"replace": "if (reply == null) return false; if (CompilerServer.isServerReply(reply.output)) return true;",
+			"note": "one client that did not run, as under load, gives up on a server that is coming up, so the configuration has no warm server"
+		},
+		{
+			"name": "M-POOL-POLLS-AN-EXITED-SERVER",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "answers",
+			"find": "if (!server.running()) return false;",
+			"replace": "",
+			"note": "a server that exited is polled to the end of the budget, so each port it lost costs the whole readiness poll before the next is tried"
 		}
 	]
 }
