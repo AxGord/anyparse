@@ -1,22 +1,22 @@
 package dev;
 
+import anyparse.grammar.json.JsonFormat;
+import dev.AuditReport;
+import dev.BypassSummary;
+import dev.LandedSummary;
+import dev.ModelRow;
+import dev.Rewrite;
+import dev.RewriteSummary;
+import dev.RoleToolRow;
+import dev.SliceCost;
 import dev.SliceStats.Landing;
-import dev.TokenReport.BypassSummary;
-import dev.TokenReport.LandedSummary;
-import dev.TokenReport.ModelRow;
-import dev.TokenReport.Report;
-import dev.TokenReport.Rewrite;
-import dev.TokenReport.RewriteSummary;
-import dev.TokenReport.RoleToolRow;
-import dev.TokenReport.SliceCost;
-import dev.TokenReport.ToolRow;
 import dev.TokenTranscript.AgentReading;
+import dev.ToolRow;
 import devkit.Args;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Table;
 import haxe.Exception;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -72,8 +72,8 @@ final class TokenAudit {
 			? landedIds(SliceStats.landings(tree, since == null ? 'HEAD' : '$since..HEAD', null), read)
 			: null;
 		final agents: Array<AgentReading> = startedFrom(read, from, ids ?? []);
-		final report: Report = TokenReport.summarize(agents, ids);
-		if (jsonFile != null) File.saveContent(jsonFile, Json.stringify(report, null, '  ') + '\n');
+		final report: AuditReport = TokenReport.summarize(agents, ids);
+		if (jsonFile != null) File.saveContent(jsonFile, '${TokenReportWriter.write(report, JsonFormat.instance.defaultWriteOptions)}\n');
 		if (slice == null) {
 			Sys.println(render(report, top));
 			return 0;
@@ -110,7 +110,7 @@ final class TokenAudit {
 	}
 
 	/** The text report: totals, then the tool, model, slice, rewrite and bypass tables. */
-	public static function render(report: Report, top: Int): String {
+	public static function render(report: AuditReport, top: Int): String {
 		final rewrites: RewriteSummary = report.rewrites;
 		final bypass: BypassSummary = report.bypass;
 		final landed: Null<LandedSummary> = report.landed;
@@ -196,7 +196,7 @@ final class TokenAudit {
 	 * The cost line of slice `slice` in `report`, or null when no agent of it was read. The output is the tokens the slice's
 	 * agents generated, summed over their turns: a count that does not grow with the context each round re-reads.
 	 */
-	public static function sliceLine(report: Report, slice: String): Null<String> {
+	public static function sliceLine(report: AuditReport, slice: String): Null<String> {
 		for (row in report.slices) if (row.slice == slice) {
 			return 'slice ${row.slice}: agents ${row.agents}; turns ${row.turns}; output ${row.output} tok; cost ${usd(row.cost)}; '
 				+ 'landed ${row.landed ? 'yes' : 'no'}';
@@ -239,7 +239,7 @@ final class TokenAudit {
 	private static function describe(file: String): Null<String> {
 		final meta: String = '${Path.withoutExtension(file)}.meta.json';
 		if (!FileSystem.exists(meta)) return null;
-		final parsed: Null<Meta> = try Json.parse(File.getContent(meta)) catch (_: Exception) null;
+		final parsed: Null<AgentMeta> = try AgentMetaParser.parse(File.getContent(meta)) catch (_: Exception) null;
 		return parsed?.description;
 	}
 
@@ -299,9 +299,4 @@ final class TokenAudit {
 		return seconds * MS_PER_SECOND;
 	}
 
-}
-
-/** The `.meta.json` beside a transcript: the one-line task of its agent. */
-typedef Meta = {
-	var ?description: String;
 }

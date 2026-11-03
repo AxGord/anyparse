@@ -1,10 +1,7 @@
 package dev;
 
-import dev.SliceGate.Baseline;
-import dev.SliceGate.FrozenTree;
-import dev.SliceGate.InfraSnapshot;
+import anyparse.grammar.json.JsonFormat;
 import haxe.Exception;
-import haxe.Json;
 import haxe.crypto.Sha1;
 import haxe.io.Path;
 import js.node.Fs.Fs;
@@ -66,7 +63,7 @@ final class BaselineCache {
 		final file: String = Path.join([entry, RECORD]);
 		if (!FileSystem.exists(file)) return null;
 		return try {
-			final kept: Baseline = Json.parse(File.getContent(file));
+			final kept: Baseline = BaselineParser.parse(File.getContent(file));
 			final infra: Array<InfraSnapshot> = [];
 			for (i => s in kept.infra) {
 				final snapshot: String = Path.join([logs, 'infra-$i.json']);
@@ -126,7 +123,7 @@ final class BaselineCache {
 				infra: infra,
 				frozen: []
 			};
-			File.saveContent(Path.join([staging, RECORD]), Json.stringify(kept, null, '\t'));
+			File.saveContent(Path.join([staging, RECORD]), BaselineWriter.write(kept, JsonFormat.instance.defaultWriteOptions));
 			FileSystem.rename(staging, entry);
 		} catch (_: Exception) {
 			BaseEngine.remove(staging);

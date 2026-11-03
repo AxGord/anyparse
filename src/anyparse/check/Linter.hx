@@ -218,6 +218,7 @@ import anyparse.check.haxe.loops.PreferMap;
 import anyparse.check.haxe.loops.PreferMapLiteral;
 import anyparse.check.haxe.members.StaticInitOrder;
 import anyparse.check.haxe.nullsafety.NullSafetyStrict;
+import anyparse.check.haxe.types.AvoidHaxeJson;
 import anyparse.check.haxe.types.PreferIsOperator;
 import anyparse.check.haxe.types.PreferMapType;
 import anyparse.core.PhaseTimings;
@@ -273,6 +274,7 @@ final class Linter {
 			new CPrecedenceTrap(),
 			new MixedLogicalParens(),
 			new SubstrNegativeStart(),
+			new AvoidHaxeJson(),
 			new PreferCompareFunction(),
 			new StaticInitOrder(),
 			new NullSafetyStrict(),

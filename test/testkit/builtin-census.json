@@ -5,6 +5,7 @@
 	"assignment-in-condition",
 	"asymmetric-branch-braces",
 	"avoid-dynamic",
+	"avoid-haxe-json",
 	"c-precedence-trap",
 	"case-pattern-separator",
 	"catch-dynamic",

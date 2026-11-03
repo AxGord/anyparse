@@ -1,10 +1,14 @@
 package unit.dev;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JsonFormat;
+import dev.Baseline;
 import dev.BaselineCache;
-import dev.SliceGate.Baseline;
-import dev.SliceGate.FrozenTree;
+import dev.BaselineLists;
+import dev.BaselineParser;
+import dev.BaselineWriter;
+import dev.FrozenTree;
 import devkit.TempDir;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -60,7 +64,7 @@ final class BaselineCacheTest extends Test {
 			Assert.equals('abc', got.base);
 			Assert.equals(7, got.tests);
 			Assert.equals(9, got.assertions);
-			Assert.equals(3, got.lists['classes']);
+			Assert.equals(3, BaselineLists.count(got.lists, 'classes'));
 			Assert.same(frozen, got.frozen);
 			Assert.equals(Path.join([logs, 'sweep-base.json']), got.sweep);
 			Assert.equals('sweep', File.getContent(got.sweep ?? ''));
@@ -116,7 +120,7 @@ final class BaselineCacheTest extends Test {
 			final got: Null<Baseline> = BaselineCache.restore(cache, 'k4', logs, [{ dir: '/frozen/a', digest: 'new' }]);
 			Assert.notNull(got);
 			if (got == null) return;
-			final again: Baseline = Json.parse(Json.stringify(got, null, '\t'));
+			final again: Baseline = BaselineParser.parse(BaselineWriter.write(got, JsonFormat.instance.defaultWriteOptions));
 			Assert.isNull(again.sweep);
 			Assert.isFalse(FileSystem.exists(Path.join([logs, 'sweep-base.json'])));
 			Assert.same(got, again);
@@ -130,10 +134,21 @@ final class BaselineCacheTest extends Test {
 			final cache: String = dir.file('cache');
 			BaselineCache.store(cache, 'k3', recorded(dir.file('logs-a'), 'first'));
 			BaselineCache.store(cache, 'k3', recorded(dir.file('logs-b'), 'second'));
-			final kept: Baseline = Json.parse(File.getContent(Path.join([cache, 'k3', 'baseline.json'])));
+			final kept: Baseline = BaselineParser.parse(File.getContent(Path.join([cache, 'k3', 'baseline.json'])));
 			Assert.equals('first', kept.base);
 			Assert.same(['k3'], FileSystem.readDirectory(cache));
 		});
+	}
+
+	/** A baseline document an earlier engine wrote, `lists` an object of counts and `sweep` null, reads as it did. */
+	public function testADocumentOfAnEarlierEngineIsRead(): Void {
+		final kept: Baseline = BaselineParser.parse(
+			'{"base":"b","tests":1,"assertions":2,"lists":{"classes":3},"sweep":null,"lint":"l","infra":[],"frozen":[]}'
+		);
+		Assert.equals(3, BaselineLists.count(kept.lists, 'classes'));
+		Assert.isNull(BaselineLists.count(kept.lists, 'absent'));
+		Assert.isNull(kept.sweep);
+		Assert.isNull(BaselineLists.count(JArray([]), 'classes'));
 	}
 
 	/** A recorded baseline of `base` whose files live in `logs`, with one infra tree. */
@@ -146,7 +161,7 @@ final class BaselineCacheTest extends Test {
 			base: base,
 			tests: 7,
 			assertions: 9,
-			lists: { classes: 3 },
+			lists: BaselineLists.of(['classes'], _ -> 3),
 			sweep: Path.join([logs, 'sweep-base.json']),
 			lint: Path.join([logs, 'lint-base.json']),
 			infra: [{ tree: '/some/tree', snapshot: Path.join([logs, 'infra-0.json']) }],

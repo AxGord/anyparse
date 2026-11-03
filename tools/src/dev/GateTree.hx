@@ -1,14 +1,13 @@
 package dev;
 
-import dev.SliceGate.Baseline;
-import dev.SliceGate.InfraSnapshot;
+import dev.Baseline;
+import dev.InfraSnapshot;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Result;
 import devkit.Summary;
 import devkit.TempDir;
 import haxe.Exception;
-import haxe.Json;
 import haxe.crypto.Sha1;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -82,7 +81,7 @@ final class GateTree {
 		tree = options.tree;
 		logs = options.logs;
 		final file: String = log(BASELINE_FILE);
-		baseline = !options.baseline && FileSystem.exists(file) ? Json.parse(File.getContent(file)) : null;
+		baseline = !options.baseline && FileSystem.exists(file) ? BaselineParser.parse(File.getContent(file)) : null;
 		base = options.baseline
 			? gitIn(tree, ['rev-parse', 'HEAD']).trim()
 			: baseline?.base ?? gitIn(tree, ['merge-base', 'HEAD', 'main']).trim();

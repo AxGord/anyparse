@@ -392,7 +392,17 @@ final class GateArmsTest extends Test {
 			);
 			cmd('git add -A').at(tree).check();
 			cmd('git $git commit -q -m slice').at(tree).check();
-			File.saveContent('$tree-logs/baseline.json', Json.stringify({ base: base }));
+			File.saveContent(
+				'$tree-logs/baseline.json', Json.stringify({
+					base: base,
+					tests: 0,
+					assertions: 0,
+					lists: {},
+					lint: '',
+					infra: [],
+					frozen: []
+				})
+			);
 			body(tree);
 		});
 	}

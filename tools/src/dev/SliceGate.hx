@@ -1,7 +1,11 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JsonFormat;
 import dev.ArmRegistry.ArmRegistryError;
+import dev.Baseline;
+import dev.FrozenTree;
 import dev.GateArms.ArmPlan;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
@@ -17,9 +21,7 @@ import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
 import devkit.TempDir;
-import haxe.DynamicAccess;
 import haxe.Exception;
-import haxe.Json;
 import haxe.Timer;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -131,8 +133,9 @@ final class SliceGate {
 		final digests: Array<FrozenTree> = [for (dir in _gate.options.frozen) { dir: dir, digest: GateTree.diffDigest(dir) }];
 		final reused: Null<Baseline> = key == null ? null : BaselineCache.restore(BaselineCache.defaultCache(), key, _gate.logs, digests);
 		if (reused != null) {
+			final kept: Baseline = reused;
 			gate('baseline', () -> {
-				File.saveContent(_gate.log(GateTree.BASELINE_FILE), Json.stringify(reused, null, '\t'));
+				File.saveContent(_gate.log(GateTree.BASELINE_FILE), BaselineWriter.write(kept, JsonFormat.instance.defaultWriteOptions));
 				_gate.summary.detail('reused the baseline recorded for ${GateTree.short(_gate.base)}, ${GateTree.short(key ?? '')}');
 				return Passed;
 			});
@@ -148,8 +151,7 @@ final class SliceGate {
 			final unfit: Array<String> = _gate.summary.unfit();
 			if (unfit.length > 0)
 				return Failed(GateTree.clip('not recorded: ${unfit.join(', ')} did not pass, so no gate may compare with this run'));
-			final lists: DynamicAccess<Int> = {};
-			for (name in LISTINGS) lists[name] = _readings['list-$name'] ?? 0;
+			final lists: JValue = BaselineLists.of(LISTINGS, name -> _readings['list-$name'] ?? 0);
 			final record: Baseline = {
 				base: _gate.base,
 				tests: _readings['tests'] ?? 0,
@@ -160,7 +162,7 @@ final class SliceGate {
 				infra: _gate.infraSnapshots(),
 				frozen: digests
 			};
-			File.saveContent(_gate.log(GateTree.BASELINE_FILE), Json.stringify(record, null, '\t'));
+			File.saveContent(_gate.log(GateTree.BASELINE_FILE), BaselineWriter.write(record, JsonFormat.instance.defaultWriteOptions));
 			final entry: Null<String> = key;
 			if (entry != null) BaselineCache.store(BaselineCache.defaultCache(), entry, record);
 			return Passed;
@@ -406,7 +408,7 @@ final class SliceGate {
 		final listed: Map<String, Array<String>> = listings();
 		final readings: Array<String> = [
 			for (name in LISTINGS) {
-				final was: Null<Int> = _gate.baseline?.lists[name];
+				final was: Null<Int> = _gate.baseline == null ? null : BaselineLists.count(_gate.baseline.lists, name);
 				final now: Int = listed[name]?.length ?? 0;
 				was == null || was == now ? '$name $now' : '$name $now (${GateTree.signed(now - was)})';
 			}
@@ -710,25 +712,6 @@ final class SliceGate {
 
 }
 
-/** What `--baseline` records for the gate run, in `<logs>/baseline.json`. */
-typedef Baseline = {
-	var base: String;
-	var tests: Int;
-	var assertions: Int;
-
-	/** Each registry's line count, by its `--list-<name>` name. */
-	var lists: DynamicAccess<Int>;
-
-	/** The corpus snapshot, or null when the suite ran no corpus. */
-	var sweep: Null<String>;
-
-	/** The base tree's whole lint by the base engine. */
-	var lint: String;
-
-	var infra: Array<InfraSnapshot>;
-	var frozen: Array<FrozenTree>;
-}
-
 /** What the threads of a slice gate's branches depend on (`SliceGate.demandOf`). */
 typedef GateDemand = {
 	/** Whether the run is a `--baseline` one. */
@@ -744,16 +727,4 @@ typedef GateDemand = {
 
 	/** The infra trees of the baseline when rule code moved, or null when INFRA gate 4 does not run. */
 	var ruleInfra: Null<Int>;
-}
-
-/** A tree outside this one and its lint by the base engine. */
-typedef InfraSnapshot = {
-	var tree: String;
-	var snapshot: String;
-}
-
-/** A tree no slice may write, and the digest of its `git diff` at the baseline. */
-typedef FrozenTree = {
-	var dir: String;
-	var digest: String;
 }

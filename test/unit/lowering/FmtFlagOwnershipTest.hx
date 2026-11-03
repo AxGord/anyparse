@@ -4,7 +4,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
@@ -239,9 +238,16 @@ class FmtFlagOwnershipTest extends Test {
 	private static function readRecord(path: String): Map<String, Array<String>> {
 		final out: Map<String, Array<String>> = [];
 		if (!FileSystem.exists(path)) return out;
-		final root: Any = Json.parse(File.getContent(path));
-		final modules: Any = Reflect.field(root, 'modules');
-		for (module in Reflect.fields(modules)) out[module] = Reflect.field(modules, module);
+		final record: FmtOwnershipRecord = FmtOwnershipRecordParser.parse(File.getContent(path));
+		for (module => flags in record.modules) out[module] = switch flags {
+			case JArray(items): [
+				for (item in items) switch item {
+					case JString(name): name;
+					case _: throw 'fmt-ownership record: a flag of "$module" is not a string';
+				}
+			];
+			case _: throw 'fmt-ownership record: "$module" is not an array';
+		};
 		return out;
 	}
 

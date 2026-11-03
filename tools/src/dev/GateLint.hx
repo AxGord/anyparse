@@ -1,7 +1,7 @@
 package dev;
 
-import dev.SliceGate.Baseline;
-import dev.SliceGate.InfraSnapshot;
+import dev.Baseline;
+import dev.InfraSnapshot;
 import devkit.Command;
 import devkit.Excerpt;
 import devkit.Pool;

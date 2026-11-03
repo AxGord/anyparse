@@ -157,6 +157,25 @@ A by-name (`FieldLookup.ByName`) field is spelled in the document by its Haxe na
 
 A by-name entry whose value is the format's `nullLiteral` reads as the key being absent (`StructSeqLowering.lowerStructByName`): an optional field stays `null`, a required one fails as missing under its key, and a field typed as the format's `anyType` keeps the literal as a value. A config writer that spells an unset key as `null` — haxe-formatter's `--default-config` does — therefore reads like one that omits it.
 
+## Reading and writing a JSON file of your own
+
+The one way, from `src`, `tools/src` and `test` alike, and what the lint rule `avoid-haxe-json` names instead of `haxe.Json`: a schema typedef, a marker class that generates its parser (and one that generates its writer, when the file is written too), and a one-line call.
+
+```haxe
+// MyRecord.hx — one type per module; the macro finds a rule by its module path
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+typedef MyRecord = { var name: String; @:optional var size: Int; };
+
+// MyRecordParser.hx
+@:build(anyparse.macro.Build.buildParser(my.pkg.MyRecord)) @:nullSafety(Strict)
+class MyRecordParser {}
+
+final record: MyRecord = MyRecordParser.parse(File.getContent(path));          // throws on malformed or wrong-shaped input
+File.saveContent(path, MyRecordWriter.write(record, JsonFormat.instance.defaultWriteOptions));
+```
+
+The writer's marker is `@:build(anyparse.macro.Build.buildWriter(my.pkg.MyRecord, my.pkg.MyRecordWriteOptions))` over `typedef MyRecordWriteOptions = anyparse.format.WriteOptions & {};` and a private constructor. What the schema can say: `Int`, `Float`, `Bool`, `String`, a nested schema typedef, `Array<T>`, `Map<String, T>` for a document whose keys are data (read only: the generated writer refuses a schema holding one), and `@:optional` for a key that may be absent (`Null<T>` alone does not make a key optional; a null optional is omitted on writing). Every nested type sits in a module of its own name. A document with no fixed shape is `JValue`: `JValueParser.parse(text)` reads the whole document and `JValueWriter.write(value, JsonFormat.instance.defaultWriteOptions)` writes one, and a field typed `JValue` (`Map<String, JValue>` for a map whose values are arrays or mixed) keeps one part raw while the rest stays typed. Examples: `SweepSnapshot`, `LintReportJson` (typed), `ApqLintConfig` (typed with raw parts), `FmtOwnershipRecord` (a map of raw values).
+
 ## Not shipping everything
 
 Shipped: `JsonFormat` (the reference `TextFormat`), `SExprFormat` (the `apq ast` output format), `HaxeFormat` (the Haxe grammar's, with its write options), `ArFormat` (`BinaryFormat`, with the `ar` archive grammar under `anyparse.grammar.ar`), and `MermaidFormat` (the Mermaid flowchart grammar under `anyparse.grammar.mermaid`, a line-oriented DSL whose labels decode through a codec rather than an escape table). The other families are interface-only stubs. Real format implementations for XML, YAML, TOML, MessagePack, CBOR, etc. come later, driven by the phase roadmap and real needs.

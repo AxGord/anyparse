@@ -244,6 +244,7 @@
 		"explicit-local-type": true,
 		"anon-type-dup": true,
 		"asymmetric-branch-braces": true,
+		"avoid-haxe-json": true,
 		"case-pattern-separator": true,
 		"collapse-nested-switch": true,
 		"comment-width": true,

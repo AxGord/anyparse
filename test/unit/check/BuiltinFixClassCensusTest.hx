@@ -135,6 +135,7 @@ class BuiltinFixClassCensusTest extends Test {
 		Assert.same([
 			'anon-type-dup',
 			'assignment-in-condition',
+			'avoid-haxe-json',
 			'complexity',
 			'doc-coverage',
 			'doc-length',

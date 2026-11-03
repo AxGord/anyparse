@@ -1,8 +1,12 @@
 package unit.dev;
 
+import anyparse.grammar.json.JsonFormat;
+import dev.AuditReport;
 import dev.SliceStats.Landing;
 import dev.TokenAudit;
 import dev.TokenReport;
+import dev.TokenReportParser;
+import dev.TokenReportWriter;
 import dev.TokenTranscript;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
@@ -35,10 +39,14 @@ final class TokenAuditTest extends Test {
 	private static inline final JAN_1: Float = 1767225600;
 	private static inline final JAN_3: Float = 1767398400;
 
+	/** A `.meta.json` as Claude Code writes one: the task beside keys of every JSON kind this reader does not model. */
+	private static inline final META: String = '{"agentType":"general-purpose","description":"CAT-9 reviewer","isBuiltIn":false,"toolUseId":"toolu_01",'
+		+ '"worktreePath":null,"model":{"name":"m","effort":["high"]},"startedAt":1767225600,"cwd":"/x"}';
+
 	public function testATranscriptReachedByTwoLinksCountsOnceAndOtherFilesAreSkipped(): Void {
 		TempDir.with(dir -> {
 			File.saveContent(dir.file('agent-a.jsonl'), TRANSCRIPT);
-			File.saveContent(dir.file('agent-a.meta.json'), '{"description":"CAT-9 reviewer"}');
+			File.saveContent(dir.file('agent-a.meta.json'), META);
 			js.node.Fs.symlinkSync(dir.file('agent-a.jsonl'), dir.file('link.output'));
 			js.node.Fs.symlinkSync(dir.file('missing.jsonl'), dir.file('dangling.output'));
 			File.saveContent(dir.file('notes.txt'), TRANSCRIPT);
@@ -53,7 +61,7 @@ final class TokenAuditTest extends Test {
 	public function testTheTextReportCarriesEverySectionAndTheJsonRoundTrips(): Void {
 		TempDir.with(dir -> {
 			File.saveContent(dir.file('agent-a.jsonl'), TRANSCRIPT);
-			final report: Report = TokenReport.summarize(TokenAudit.readDirectories([dir.path]), ['CAT-9']);
+			final report: AuditReport = TokenReport.summarize(TokenAudit.readDirectories([dir.path]), ['CAT-9']);
 			final text: String = TokenAudit.render(report, 5);
 			for (section in [
 				'agents 1;',
@@ -70,7 +78,7 @@ final class TokenAuditTest extends Test {
 				Assert.isTrue(text.contains(section), 'missing $section');
 			}
 			Assert.isTrue(text.contains('landed slices 0'));
-			final parsed: Report = Json.parse(Json.stringify(report));
+			final parsed: AuditReport = TokenReportParser.parse(TokenReportWriter.write(report, JsonFormat.instance.defaultWriteOptions));
 			Assert.equals(1, parsed.agents);
 			Assert.equals(report.cost, parsed.cost);
 			Assert.equals('git log', parsed.roles[0].key);
@@ -134,7 +142,7 @@ final class TokenAuditTest extends Test {
 	public function testASliceLineCarriesItsOutputAndLandedAndAMissingSliceHasNone(): Void {
 		final prompt: String = '{"type":"user","message":{"role":"user","content":"You are the worker of anyparse slice CAT-9."}}\n';
 		final agent: AgentReading = TokenTranscript.read('a', prompt + TRANSCRIPT.substr(TRANSCRIPT.indexOf('\n') + 1), null);
-		final report: Report = TokenReport.summarize([agent], ['CAT-9']);
+		final report: AuditReport = TokenReport.summarize([agent], ['CAT-9']);
 		final line: Null<String> = TokenAudit.sliceLine(report, 'CAT-9');
 		Assert.notNull(line);
 		Assert.isTrue(line?.contains('agents 1; turns 1; output 4 tok;') == true);
@@ -204,8 +212,17 @@ final class TokenAuditTest extends Test {
 		});
 	}
 
+	/** A report with no landed set leaves `landed` out of its JSON, and reading that JSON back leaves it null. */
+	public function testAnUnsetOptionalKeyIsLeftOutOfTheWrittenReport(): Void {
+		final report: AuditReport = TokenReport.summarize([], null);
+		final json: String = TokenReportWriter.write(report, JsonFormat.instance.defaultWriteOptions);
+		Assert.isFalse(json.contains('"landed"'));
+		Assert.isNull(TokenReportParser.parse(json).landed);
+		Assert.isTrue(TokenReportWriter.write(TokenReport.summarize([], []), JsonFormat.instance.defaultWriteOptions).contains('"landed"'));
+	}
+
 	private static function landedOf(file: String, slices: Array<String>): Array<Bool> {
-		final report: Report = Json.parse(File.getContent(file));
+		final report: AuditReport = TokenReportParser.parse(File.getContent(file));
 		return [for (slice in slices) report.slices.filter(row -> row.slice == slice)[0].landed];
 	}
 
@@ -237,7 +254,7 @@ final class TokenAuditTest extends Test {
 	}
 
 	private static function hasRow(file: String, slice: String): Bool {
-		final report: Report = Json.parse(File.getContent(file));
+		final report: AuditReport = TokenReportParser.parse(File.getContent(file));
 		return report.slices.exists(row -> row.slice == slice);
 	}
 

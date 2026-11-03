@@ -495,7 +495,17 @@ final class SliceGateTest extends Test {
 		cmd('git add -A').at(tree).check();
 		cmd('git $git commit -q -m slice').at(tree).check();
 		FileSystem.createDirectory('$tree-logs');
-		File.saveContent('$tree-logs/baseline.json', Json.stringify({ base: base, frozen: [], infra: [] }));
+		File.saveContent(
+			'$tree-logs/baseline.json', Json.stringify({
+				base: base,
+				tests: 0,
+				assertions: 0,
+				lists: {},
+				lint: '',
+				infra: [],
+				frozen: []
+			})
+		);
 		File.saveContent('$tree-logs/sweep-base.json', '{}');
 
 		return tree;

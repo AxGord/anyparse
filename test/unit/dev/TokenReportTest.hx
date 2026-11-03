@@ -1,5 +1,8 @@
 package unit.dev;
 
+import dev.AuditReport;
+import dev.Rewrite;
+import dev.RoleToolRow;
 import dev.TokenReport;
 import dev.TokenTranscript;
 import utest.Assert;
@@ -96,7 +99,7 @@ final class TokenReportTest extends Test {
 	}
 
 	public function testGapsAreBucketedByTheCacheLifetimes(): Void {
-		final report: Report = TokenReport.summarize([
+		final report: AuditReport = TokenReport.summarize([
 			agentOf('a', 'S1', rewriting(200)),
 			agentOf('b', 'S1', rewriting(1800)),
 			agentOf('c', 'S2', rewriting(7200))
@@ -113,7 +116,7 @@ final class TokenReportTest extends Test {
 	}
 
 	public function testCostIsSummedPerSliceAndPerLandedSlice(): Void {
-		final report: Report = TokenReport.summarize([
+		final report: AuditReport = TokenReport.summarize([
 			agentOf('a', 'S1', [
 				turn('claude-opus-5-5', 0, {
 					input: MILLION,
@@ -173,7 +176,7 @@ final class TokenReportTest extends Test {
 		final second: AgentReading = agentOf('b', 'S1', []);
 		second.tools['hxq show'] = stat(2, 40000, 1, 0);
 		second.tools['git diff'] = stat(1, 100000, 1, 1);
-		final report: Report = TokenReport.summarize([first, second], null);
+		final report: AuditReport = TokenReport.summarize([first, second], null);
 		Assert.equals('git diff', report.tools[0].key);
 		Assert.equals(3, report.tools[1].calls);
 		Assert.equals(10100, report.tools[1].outTok);
@@ -212,7 +215,7 @@ final class TokenReportTest extends Test {
 		agent.hxWrites = ['Edit /w/src/A.hx'];
 		agent.writeChars = 4000;
 		agent.indentChars = 400;
-		final report: Report = TokenReport.summarize([agent], null);
+		final report: AuditReport = TokenReport.summarize([agent], null);
 		Assert.equals(2, report.bypass.shellHxReads);
 		Assert.equals(1, report.bypass.hxWrites);
 		Assert.equals(1000, report.bypass.writePayloadTok);
