@@ -6,9 +6,8 @@ import anyparse.runtime.Span;
  * A document read as a `MergeTree` by the spans of its nodes, for a data grammar whose lists are its structure (an
  * object's members, an array's elements): a container is a node whose children all carry spans, its head the text
  * before the first, its separator the text between the first two, its tail the text after the last. A named child (a
- * member) is keyed by its name and stands for its value; an unnamed one (an element) by the value of its first member
- * when every sibling's first member carries the same name — a record keyed by whatever field leads it — else by its
- * own text.
+ * member) is keyed by its name and stands for its value; an unnamed one (an element) by its first member, name and value
+ * — a record keyed by whatever field leads it, `arms[name="A"]` — else by its own text, whatever its siblings are.
  */
 @:nullSafety(Strict)
 final class RecordTree {
@@ -25,6 +24,27 @@ final class RecordTree {
 			separator: DEFAULT_SEPARATOR,
 			tail: ''
 		};
+	}
+
+	/**
+	 * The key of each of `items` under `path`, a repeated one numbered from its second occurrence. The one answer to
+	 * "which element of a list is the same record in two versions of its document", for the merge and for a delta: an
+	 * element is keyed by its own first member, name and value, whatever its siblings are.
+	 */
+	public static function identities(source: String, items: Array<QueryNode>, path: String): Array<String> {
+		final seen: Map<String, Int> = [];
+		final out: Array<String> = [];
+		for (item in items) {
+			final name: Null<String> = item.name;
+			final key: String = if (name != null)
+				path == '' ? name : '$path.$name'
+			else
+				'$path[${recordKey(source, item)}]';
+			final count: Int = seen[key] ?? 0;
+			seen[key] = count + 1;
+			out.push(count == 0 ? key : '$key#${count + 1}');
+		}
+		return out;
 	}
 
 	/** `node` past the single children a name or the document wraps around a value — a member to its value. */
@@ -66,34 +86,14 @@ final class RecordTree {
 		};
 	}
 
-	/** The key of each of `items` under `path`, a repeated one numbered from its second occurrence. */
-	private static function identities(source: String, items: Array<QueryNode>, path: String): Array<String> {
-		final lead: Null<String> = leadingName(items);
-		final seen: Map<String, Int> = [];
-		final out: Array<String> = [];
-		for (item in items) {
-			final name: Null<String> = item.name;
-			final key: String = if (name != null)
-				path == '' ? name : '$path.$name'
-			else
-				'$path[${lead == null ? textOf(source, item) : textOf(source, valueOf(item.children[0], false))}]';
-			final count: Int = seen[key] ?? 0;
-			seen[key] = count + 1;
-			out.push(count == 0 ? key : '$key#${count + 1}');
-		}
-		return out;
-	}
-
-	/** The name every one of `items` leads with — the field a list of records is keyed by — or null when they differ. */
-	private static function leadingName(items: Array<QueryNode>): Null<String> {
-		var common: Null<String> = null;
-		for (item in items) {
-			final first: Null<QueryNode> = item.name == null && item.children.length > 0 ? item.children[0] : null;
-			final name: Null<String> = first?.name;
-			if (name == null || common != null && common != name) return null;
-			common = name;
-		}
-		return common;
+	/**
+	 * `item` as a list element without a name: `name=value` of its first member when it leads with one (a member holds its value,
+	 * a string leaf is no member), else its own text.
+	 */
+	private static function recordKey(source: String, item: QueryNode): String {
+		final first: Null<QueryNode> = item.children.length > 0 ? item.children[0] : null;
+		final lead: Null<String> = first != null && first.children.length > 0 ? first.name : null;
+		return first == null || lead == null ? textOf(source, item) : '$lead=${textOf(source, valueOf(first, false))}';
 	}
 
 	private static function textOf(source: String, node: QueryNode): String {

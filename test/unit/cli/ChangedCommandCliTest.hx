@@ -170,4 +170,22 @@ class ChangedCommandCliTest extends Test {
 		#end
 	}
 
+	/** A data file added whole prints its top-level keys and record count under the line count, as a changed one prints its key paths. */
+	public function testADataFileAddedWholeNamesItsKeys(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeTree('apq_changed_json', [{ name: 'notes.txt', source: 'one\n' }]);
+		CliFixture.git(root, ['init', '-q']);
+		CliFixture.git(root, ['add', '-A']);
+		CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']);
+		File.saveContent('$root/arms.json', '{"arms": [{"name": "A"}, {"name": "B"}], "version": 1}\n');
+		CliFixture.git(root, ['add', '-A']);
+		final report: String = CliFixture.inDir(root, ['changed', 'HEAD']);
+		CliFixture.removeDir(root);
+		Assert.isTrue(report.indexOf('A arms.json  new  +2 -0') >= 0, report);
+		Assert.isTrue(report.indexOf('    + .  {arms[2], version}') >= 0, report);
+		#else
+		Assert.pass('a git child process needs the nodejs target');
+		#end
+	}
+
 }

@@ -221,7 +221,33 @@ final class StructuralMergeTest extends Test {
 	public function testTwoDifferentEditsOfOneRecordConflict(): Void {
 		switch merge(JSON, registry([arm('A', '1')]), registry([arm('A', '2')]), registry([arm('A', '3')])) {
 			case Conflicted(_, conflicts):
-				Assert.same([{ key: 'arms["A"].note', ours: 'changed', theirs: 'changed' }], plain(conflicts));
+				Assert.same([{ key: 'arms[name="A"].note', ours: 'changed', theirs: 'changed' }], plain(conflicts));
+			case other:
+				Assert.fail('expected a conflict, got $other');
+		}
+	}
+
+	/** A record of another shape added on one side re-keys none of the others, so the other side's edit of A merges. */
+	public function testAnOddRecordAddedOnOneSideDoesNotConflictWithAnEditOfAnother(): Void {
+		final odd: String = '{ "id": "z" }';
+		Assert.equals(
+			registry([arm('A', '2'), arm('B', '1'), odd]),
+			mergedJson(
+				registry([arm('A', '1'), arm('B', '1')]), registry([arm('A', '1'), arm('B', '1'), odd]),
+				registry([arm('A', '2'), arm('B', '1')])
+			)
+		);
+	}
+
+	/**
+	 * A string-led tuple is keyed by its text, so two edits of it conflict on the list, never on a member
+	 * it does not have.
+	 */
+	public function testAStringLedTupleIsKeyedByItsText(): Void {
+		final base: String = canonJson('{"r": [["a", 1]]}');
+		switch merge(JSON, base, canonJson('{"r": [["a", 2]]}'), canonJson('{"r": [["a", 3]]}')) {
+			case Conflicted(_, conflicts):
+				Assert.same([{ key: 'r', ours: 'changed', theirs: 'changed' }], plain(conflicts));
 			case other:
 				Assert.fail('expected a conflict, got $other');
 		}

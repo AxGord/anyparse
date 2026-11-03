@@ -2,6 +2,7 @@ package anyparse.query.cli;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.DeclarationDelta;
+import anyparse.query.merge.RecordTree;
 import haxe.Json;
 
 using Lambda;
@@ -15,9 +16,10 @@ private typedef Versions = {
 
 /**
  * The one answer to "which key paths of a data document differ between two versions of it": an object is compared by
- * key, an array by element (an identical element, then one with the same first scalar entry, is the same element wherever
- * it sits, so an element inserted in the middle shifts no other one), and every other value as written. Each added,
- * removed or changed value is named by its `DataPath` and carries its value as compact JSON, shortened.
+ * key, an array by element (an element of the same value, then the one `RecordTree` gives the same identity, is the same
+ * element wherever it sits, so an element inserted in the middle shifts no other one), and every other value as
+ * written. Each added, removed or changed value is named by its `DataPath` and carries its value as compact JSON,
+ * shortened. A document added or removed whole is one row naming its top-level keys, or its element count.
  *
  * Grammar-agnostic: it reads the projected tree through `RefShape`'s object, array and string kinds, and applies to
  * a grammar that declares `RefShape.dataDocument`. A version the grammar does not parse makes the answer a line count.
@@ -59,11 +61,18 @@ final class DataDelta {
 		final lines: FileDelta = DeclarationDelta.compareText(base, now);
 		if (base == now) return lines;
 		final shape: RefShape = plugin.refShape();
+		final whole: Bool = base == '' || now == '';
 		final before: Null<QueryNode> = parsed(plugin, base);
 		final after: Null<QueryNode> = parsed(plugin, now);
-		if (before == null || after == null) return lines;
 		final versions: Versions = { shape: shape, base: base, now: now };
 		final changes: Array<ValueChange> = [];
+		if (whole) {
+			final present: Null<QueryNode> = base == '' ? after : before;
+			if (present == null) return lines;
+			changes.push(summary(present, versions, base == ''));
+			return valuesDelta(changes, lines);
+		}
+		if (before == null || after == null) return lines;
 		walk([], before, after, versions, changes);
 		if (changes.length == 0 && !sameKeyOrder(before, after, versions)) changes.push({
 			status: Changed,
@@ -71,17 +80,7 @@ final class DataDelta {
 			before: '',
 			after: ''
 		});
-		return {
-			change: changes.length == 0 ? Layout : Values,
-			headerAdded: [],
-			headerRemoved: [],
-			headerReordered: false,
-			renames: [],
-			declarations: [],
-			values: changes,
-			added: lines.added,
-			removed: lines.removed
-		};
+		return valuesDelta(changes, lines);
 	}
 
 	private static inline function isContainer(value: QueryNode, shape: RefShape): Bool {
@@ -157,30 +156,25 @@ final class DataDelta {
 		}
 	}
 
-	/** The element of `was` standing for each of `is`, or -1 for none: an identical one first, then one with the same identity. */
-	private static function counterparts(was: Array<QueryNode>, is: Array<QueryNode>, versions: Versions): Array<Int> {
+	/**
+	 * The element of `is` (the values of `now`'s elements) standing for each of `was` (those of `old`), or -1 for none: one with the
+	 * same value first, then the one `RecordTree` gives the same identity, the rule the merge driver pairs records by.
+	 */
+	private static function counterparts(
+		old: QueryNode, now: QueryNode, was: Array<QueryNode>, is: Array<QueryNode>, versions: Versions
+	): Array<Int> {
 		final shape: RefShape = versions.shape;
 		final partner: Array<Int> = [for (_ in is) -1];
 		final taken: Array<Bool> = [for (_ in was) false];
-		final oldText: Array<String> = [for (element in was) DataPath.json(element, versions.base, shape)];
-		for (i => element in is) {
-			final text: String = DataPath.json(element, versions.now, shape);
-			for (j in 0...was.length) if (!taken[j] && oldText[j] == text) {
-				partner[i] = j;
-				taken[j] = true;
-				break;
-			}
-		}
-		final oldIdentity: Array<Null<String>> = [for (element in was) identityOf(element, versions.base, shape)];
-		for (i => element in is) if (partner[i] < 0) {
-			final identity: Null<String> = identityOf(element, versions.now, shape);
-			if (identity == null) continue;
-			for (j in 0...was.length) if (!taken[j] && oldIdentity[j] == identity) {
-				partner[i] = j;
-				taken[j] = true;
-				break;
-			}
-		}
+		pairEqual(
+			[for (element in was) DataPath.json(element, versions.base, shape)],
+			[for (element in is) DataPath.json(element, versions.now, shape)],
+			partner, taken
+		);
+		pairEqual(
+			remainingKeys(versions.base, old.children, taken), remainingKeys(versions.now, now.children, [for (j in partner) j >= 0]),
+			partner, taken
+		);
 		return partner;
 	}
 
@@ -194,7 +188,7 @@ final class DataDelta {
 		final shape: RefShape = versions.shape;
 		final was: Array<QueryNode> = [for (element in old.children) DataPath.valueOf(element, shape)];
 		final is: Array<QueryNode> = [for (element in now.children) DataPath.valueOf(element, shape)];
-		final partner: Array<Int> = counterparts(was, is, versions);
+		final partner: Array<Int> = counterparts(old, now, was, is, versions);
 		final taken: Array<Bool> = [for (j in 0...was.length) partner.contains(j)];
 		final leftOld: Array<Int> = [for (j in 0...was.length) if (!taken[j] && !isContainer(was[j], shape)) j];
 		var next: Int = 0;
@@ -232,14 +226,6 @@ final class DataDelta {
 			before: shown(value, versions.base, versions.shape),
 			after: ''
 		};
-	}
-
-	/** What names a record among its siblings: an object's first entry, when its value is a scalar, as `key:value`. */
-	private static function identityOf(value: QueryNode, source: String, shape: RefShape): Null<String> {
-		if (value.kind != shape.objectLiteralKind || value.children.length == 0) return null;
-		final entry: QueryNode = value.children[0];
-		final first: QueryNode = DataPath.valueOf(entry, shape);
-		return isContainer(first, shape) ? null : '${entry.name ?? ''}:${DataPath.json(first, source, shape)}';
 	}
 
 	/** `value` as compact JSON, a digest cut to its head and anything longer than `MAX_SHOWN` cut with an ellipsis. */
@@ -283,6 +269,71 @@ final class DataDelta {
 			before: '',
 			after: ''
 		};
+	}
+
+	/** `changes` as the delta of a file whose text changed by `lines`; no change is layout. */
+	private static function valuesDelta(changes: Array<ValueChange>, lines: FileDelta): FileDelta {
+		return {
+			change: changes.length == 0 ? Layout : Values,
+			headerAdded: [],
+			headerRemoved: [],
+			headerReordered: false,
+			renames: [],
+			declarations: [],
+			values: changes,
+			added: lines.added,
+			removed: lines.removed
+		};
+	}
+
+	/** The one row for a document added or removed whole: an object's top-level keys with the size of each container, an array's length. */
+	private static function summary(document: QueryNode, versions: Versions, added: Bool): ValueChange {
+		final shape: RefShape = versions.shape;
+		final value: QueryNode = DataPath.valueOf(document, shape);
+		final entries: Map<String, QueryNode> = entriesOf(value);
+		final text: String = if (value.kind == shape.objectLiteralKind)
+			'{'
+				+ [
+					for (key in keysOf(value)) sized(key, DataPath.valueOf(entries[key] ?? value, shape), shape)
+				].join(', ')
+				+ '}'
+		else if (value.kind == shape.arrayLiteralKind)
+			'[${value.children.length} element(s)]'
+		else
+			shown(value, added ? versions.now : versions.base, shape);
+		final cut: String = text.length > MAX_SHOWN ? text.substr(0, MAX_SHOWN) + CUT : text;
+		return {
+			status: added ? Added : Removed,
+			path: ROOT,
+			before: added ? '' : cut,
+			after: added ? cut : ''
+		};
+	}
+
+	/** `key`, followed by the number of members or elements when `value` is a container. */
+	private static function sized(key: String, value: QueryNode, shape: RefShape): String {
+		return isContainer(value, shape) ? '$key[${value.children.length}]' : key;
+	}
+
+	/** Pairs each unpaired new element with the first untaken old one under the same key, marking both. */
+	private static function pairEqual(oldKeys: Array<String>, newKeys: Array<String>, partner: Array<Int>, taken: Array<Bool>): Void {
+		for (i => newKey in newKeys) if (partner[i] < 0) {
+			for (j => oldKey in oldKeys) if (!taken[j] && oldKey == newKey) {
+				partner[i] = j;
+				taken[j] = true;
+				break;
+			}
+		}
+	}
+
+	/**
+	 * The `RecordTree` key of each of `items` that is not `paired`, at its own index, and an empty string for the rest;
+	 * only the unpaired elements are numbered among their repeats, so two versions number the same leftovers alike.
+	 */
+	private static function remainingKeys(source: String, items: Array<QueryNode>, paired: Array<Bool>): Array<String> {
+		final keys: Array<String> = RecordTree.identities(source, [for (i => item in items) if (!paired[i]) item], '');
+		var next: Int = 0;
+		return [for (i in 0...items.length) paired[i] ? '' : keys[next++]];
 	}
 
 }
