@@ -113,6 +113,9 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		+ '"defaultWrap": "onePerLine", "rules": ['
 		+ '{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
 
+	private static final COMMENT_CFG: String = '{"wrapping": {"maxLineLength": 60}, "sameLine": {'
+		+ '"caseSiblings": "anyBreak", "caseBody": "fitLine", "expressionCase": "fitLine"}}';
+
 	public function new(): Void {
 		super();
 	}
@@ -331,17 +334,74 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	}
 
 	/**
-	 * A branch below its label because of a comment does not lead, even when it is also too wide. Its fitting sibling stays on its label.
+	 * A comment alone does not lead: a branch held below its label by one whose statement would have fit beside the
+	 * label leaves its sibling on its label, whether the comment leads the body, rides the label or follows the statement.
 	 */
-	public function testABranchHeldBelowItsLabelByACommentDoesNotLead(): Void {
-		final wide: String = ''.lpad('n', 68);
-		final cfg: String = '{"wrapping": {"maxLineLength": 60}, "sameLine": {"caseSiblings": "anyBreak", "caseBody": "fitLine", '
-			+ '"expressionCase": "fitLine"}}';
-		for (branch in ['case 1:\n\t\t\t\t// lead\n\t\t\t\t$wide(bb);', 'case 1: // c\n\t\t\t\taa(bb);']) {
-			final src: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\t$branch\n\t\t\tcase 2: cc(dd);\n\t\t}\n\t}\n}\n';
-			final out: String = write(src, cfg);
+	public function testACommentAloneDoesNotLead(): Void {
+		for (branch in [
+			'case 1:\n\t\t\t\t// lead\n\t\t\t\taa(bb);',
+			'case 1: // c\n\t\t\t\taa(bb);',
+			'case 1:\n\t\t\t\t/* c */\n\t\t\t\taa(bb);',
+			'case 1:\n\t\t\t\t// lead\n\t\t\t\taa(bb); // t'
+		]) {
+			final out: String = write(commented(branch), COMMENT_CFG);
 			Assert.isTrue(out.indexOf('case 2: cc(dd);') != -1, 'a fitting sibling stays on its label: <$out>');
+			Assert.isTrue(out.indexOf('case 1:') != -1 && out.indexOf('aa(bb);') != -1, 'the commented branch keeps its statement: <$out>');
 		}
+	}
+
+	/** A branch held below by a comment that would not fit without it leads: its fitting sibling follows it below. */
+	public function testAWideBranchHeldBelowByACommentLeads(): Void {
+		final wide: String = ''.lpad('n', 68);
+		for (branch in [
+			'case 1:\n\t\t\t\t// lead\n\t\t\t\t$wide(bb);',
+			'case 1: // c\n\t\t\t\t$wide(bb);',
+			'case 1:\n\t\t\t\t/* c */\n\t\t\t\t$wide(bb);',
+			'case 1:\n\t\t\t\t// lead\n\t\t\t\t$wide(bb); // t'
+		]) {
+			final out: String = write(commented(branch), COMMENT_CFG);
+			Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(dd);') != -1, 'a fitting sibling follows a wide commented branch: <$out>');
+		}
+	}
+
+	/** The comment is weightless in the measure: the branch leads exactly when its label and statement overrun the budget. */
+	public function testACommentHeldBranchLeadsAtTheBudgetBoundary(): Void {
+		final fits: String = ''.lpad('n', 35);
+		final out: String = write(commented('case 1:\n\t\t\t\t// lead\n\t\t\t\t$fits(bb);'), COMMENT_CFG);
+		Assert.isTrue(out.indexOf('case 2: cc(dd);') != -1, 'a branch exactly at the budget does not lead: <$out>');
+		final over: String = write(commented('case 1:\n\t\t\t\t// lead\n\t\t\t\t${fits}n(bb);'), COMMENT_CFG);
+		Assert.isTrue(over.indexOf('case 2:\n\t\t\t\tcc(dd);') != -1, 'one column over it leads: <$over>');
+	}
+
+	/** `default:` carries its statements in another ctor and field and reads the comment the same way. */
+	public function testAWideDefaultHeldBelowByACommentLeads(): Void {
+		final wide: String = ''.lpad('n', 68);
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 2: cc(dd);\n\t\t\tdefault:\n\t\t\t\t// lead\n'
+			+ '\t\t\t\t$wide(bb);\n\t\t}\n\t}\n}\n';
+		final out: String = write(src, COMMENT_CFG);
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(dd);') != -1, 'a fitting case follows a wide commented default: <$out>');
+	}
+
+	/**
+	 * The two shapes that hold a branch below the label by themselves, two statements and an outermost `&&`, lead with
+	 * a comment too: the comment adds nothing to the decision, the shape already makes it.
+	 */
+	public function testAShapeHeldBranchWithACommentLeads(): Void {
+		for (branch in [
+			'case 1:\n\t\t\t\t// lead\n\t\t\t\ta();\n\t\t\t\tb();',
+			'case 1:\n\t\t\t\t// lead\n\t\t\t\ta && b;'
+		]) {
+			final out: String = write(commented(branch), COMMENT_CFG);
+			Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(dd);') != -1, 'a fitting sibling follows a shape-held branch: <$out>');
+		}
+	}
+
+	/** `off` moves nothing: a wide commented branch leaves its sibling on its label. */
+	public function testOffLeavesAWideCommentedBranchAlone(): Void {
+		final wide: String = ''.lpad('n', 68);
+		final cfg: String = '{"wrapping": {"maxLineLength": 60}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}}';
+		final out: String = write(commented('case 1:\n\t\t\t\t// lead\n\t\t\t\t$wide(bb);'), cfg);
+		Assert.isTrue(out.indexOf('case 2: cc(dd);') != -1, 'the sibling stays on its label: <$out>');
 	}
 
 	public function testDeeplyNestedSwitchesStayLinear(): Void {
@@ -569,6 +629,70 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		Assert.isTrue(out.indexOf('case _: bar();') != -1, 'a fitting sibling must not be dragged down by a glue-turned-break: <$out>');
 	}
 
+	/**
+	 * The pivot unit held below its label by a comment is measured as it would stand glued: it breaks its own literal
+	 * in the same write that places it, and its fitting siblings stay on their labels.
+	 */
+	public function testCommentHeldPivotCaseUnitDoesNotLeadTheSiblingSpread(): Void {
+		for (held in ['\t\t\tcase Keyed:\n\t\t\t\t// c\n', '\t\t\tcase Keyed: // c\n']) {
+			final msg: String = ''.lpad('k', 108);
+			final src: String = [
+				'class C {\n\tfunction f(): Candidate {\n\t\treturn switch kind {\n',
+				'\t\t\tcase Provable: dropped(\'${''.lpad('k', 79)}\', null);\n',
+				held,
+				'\t\t\t\tdropped(\'$msg\', { iterable: iterable, body: bodySpan });\n',
+				'\t\t\tcase Unprovable: renamed(keyToken, \'${''.lpad('k', 53)}\');\n\t\t};\n\t}\n}'
+			].join('');
+			final once: String = write(src, PIVOT_CONFIG);
+			Assert.isTrue(
+				once.indexOf('\t\t\tcase Provable: dropped(') != -1 && once.indexOf('\t\t\tcase Unprovable: renamed(') != -1,
+				'the fitting siblings must stay on their labels:\n<$once>'
+			);
+			Assert.isTrue(once.indexOf('k\', {\n') != -1, 'the pivot unit must break its own literal:\n<$once>');
+			Assert.equals(once, write(once, PIVOT_CONFIG), 'one round trip must land on the fixed point');
+		}
+	}
+
+	/**
+	 * Keyword-led control flow refuses the glued form only when it has no flat form: a comment-held `if` that would
+	 * have fit beside its label leaves its sibling there, exactly as the same `if` without the comment does.
+	 */
+	public function testACommentHeldControlFlowBranchThatWouldFitDoesNotLead(): Void {
+		for (stmt in ['if (a) b();', 'if (a) b() else c();']) {
+			for (branch in ['case 1:\n\t\t\t\t// c\n\t\t\t\t$stmt', 'case 1: $stmt']) {
+				final out: String = write(commented(branch), COMMENT_CFG);
+				Assert.isTrue(out.indexOf('case 2: cc(dd);') != -1, 'a fitting sibling stays on its label: <$out>');
+			}
+		}
+	}
+
+	/**
+	 * A trailing comment counts as width where the branch stands on its label, so a line that does not fit with its
+	 * comment leads; once a leading comment holds the branch below, only the statement is measured.
+	 */
+	public function testATrailingCommentCountsAsWidthOnTheFitPath(): Void {
+		final near: String = ''.lpad('n', 35);
+		for (branch in ['case 1: aa(bb); // ${''.lpad('t', 56)}', 'case 1: $near(bb); // t']) {
+			final out: String = write(commented(branch), COMMENT_CFG);
+			Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(dd);') != -1, 'a branch too wide with its comment leads: <$out>');
+		}
+		final held: String = write(commented('case 1:\n\t\t\t\t// c\n\t\t\t\t$near(bb); // t'), COMMENT_CFG);
+		Assert.isTrue(held.indexOf('case 2: cc(dd);') != -1, 'a leading comment holds it below and only the statement counts: <$held>');
+	}
+
+	/** Keyword-led control flow with no flat form refuses the glued form, so a comment-held one still leads its siblings. */
+	public function testACommentHeldControlFlowBranchWithoutAFlatFormLeads(): Void {
+		for (stmt in [
+			'if (a) {\n\t\t\t\t\tb();\n\t\t\t\t}',
+			'for (a in b) {\n\t\t\t\t\tc();\n\t\t\t\t}'
+		]) {
+			final out: String = write(commented('case 1:\n\t\t\t\t// c\n\t\t\t\t$stmt'), COMMENT_CFG);
+			Assert.isTrue(
+				out.indexOf('case 2:\n\t\t\t\tcc(dd);') != -1, 'a fitting sibling follows a flat-less control-flow branch: <$out>'
+			);
+		}
+	}
+
 	private inline function jsonCaseBody(maxLineLength: Int): String {
 		return '{"wrapping": {"maxLineLength": $maxLineLength}, "sameLine": {"caseSiblings": "anyBreak", "caseBody": "fitLine"}}';
 	}
@@ -587,6 +711,11 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		var body: String = 'aa(bb);';
 		for (i in 0...d) body = 'switch (y$i) {\n\t\t\tcase 3: $body\n\t\t\tcase _: cc(dd);\n\t\t}';
 		return 'class D {\n\tfunction f():Void {\n\t\t$body\n\t}\n}\n';
+	}
+
+	/** A switch of `branch` and a fitting `case 2` beside it. */
+	private static function commented(branch: String): String {
+		return 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\t$branch\n\t\t\tcase 2: cc(dd);\n\t\t}\n\t}\n}\n';
 	}
 
 }

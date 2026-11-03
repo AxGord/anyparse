@@ -63,5 +63,8 @@ whole-file parse knows, so a seam makes an `else` acceptable, never proven valid
 `off` by default, each `fitLine` branch deciding alone. Under `anyBreak` the branches of one switch share the decision:
 one branch below its label, because it is too wide or because of its shape (two statements, an outermost `&&`), moves
 all of them, `#if` regions and a switch opened inside `#if` included. A branch that glues its opening `{` to the label
-stays there unless another branch leads. A branch held below its label by a comment does not lead, even when it is
-also too wide. Applies where `caseBody` or `expressionCase` is `fitLine`; under `same`, `next` and `keep` the key moves nothing.
+stays there unless another branch leads. A comment alone does not lead: a branch held below its label by a leading comment or one riding the label stays a
+follower when its statement would have fit beside the label, and leads when it would not (that comment weighs nothing
+in the measure). A trailing comment counts as width where the branch stands on its label, so a line that does not fit
+with its comment leads. A two-statement or outermost-`&&` branch leads whether or not a comment holds it. Applies where `caseBody`
+or `expressionCase` is `fitLine`; under `same`, `next` and `keep` the key moves nothing.

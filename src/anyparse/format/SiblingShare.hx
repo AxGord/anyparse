@@ -21,11 +21,25 @@ final class SiblingShare {
 	private static inline final MEASURED: Int = -0x10000001;
 	private static inline final LEADS: Int = -0x10000002;
 	private static inline final MEASURED_CONTROL_FLOW: Int = -0x10000003;
+	private static inline final MEASURED_COMMENTED: Int = -0x10000004;
 	private static inline final FORCE_BREAK: Int = 0x0FFFFFF0;
 
 	/** A sibling already placed below its head by shape: `own` is both of its forms; `leads` says whether it spreads. */
 	public static inline function placedSlot(policy: SiblingPolicy, leads: Bool, own: Doc): Doc {
 		return policy == SiblingPolicy.Off ? own : Doc.IfIndentWidthExceeds(leads ? LEADS : MEASURED, 0, own, own);
+	}
+
+	/**
+	 * A sibling a comment holds below its head although its one statement could stand beside it: `body` is that
+	 * statement. The slot keeps the placed form in `own` and, in its break arm, the statement glued to the head as it
+	 * would stand without the comment, which is the form `decide` measures, so the branch leads exactly when it would not
+	 * have fit without it. A statement with no flat form keeps the plain vote, and leads when `refuseGlue` says its glued
+	 * form is refused.
+	 */
+	public static function commentedSlot(policy: SiblingPolicy, own: Doc, body: Doc, refuseGlue: Bool): Doc {
+		return policy == SiblingPolicy.Off || WrapList.flatLength(body) < 0
+			? placedSlot(policy, refuseGlue, own)
+			: Doc.IfIndentWidthExceeds(MEASURED_COMMENTED, 0, Doc.Concat([Doc.Text(' '), body]), own);
 	}
 
 	/** `BodyFit.fitLineLayout` with its vote; `refuseGlue` leads when the body has no flat form. */
@@ -73,6 +87,15 @@ final class SiblingShare {
 		var widest: Int = -1;
 		var second: Int = -1;
 		var widestDoc: Null<Doc> = null;
+		function consider(unit: Doc, flat: Int): Void {
+			if (flat > widest) {
+				second = widest;
+				widest = flat;
+				widestDoc = unit;
+			} else if (flat > second) {
+				second = flat;
+			}
+		}
 		function measure(d: Doc): Void {
 			if (!holdsSlot(d)) return;
 			switch d {
@@ -81,18 +104,11 @@ final class SiblingShare {
 					return;
 				case _:
 			}
-			final flat: Int = WrapList.flatLength(d);
-			if (flat < 0) {
-				eachChild(d, measure);
-				return;
-			}
-			if (flat > widest) {
-				second = widest;
-				widest = flat;
-				widestDoc = d;
-			} else if (flat > second) {
-				second = flat;
-			}
+			final unit: Null<Doc> = measurable(d);
+			if (unit == null)
+				eachChild(d, measure)
+			else
+				consider(unit, WrapList.flatLength(unit));
 		}
 		measure(list);
 		if (force) return resolved(list, FORCE_BREAK, lineWidth, null);
@@ -104,6 +120,31 @@ final class SiblingShare {
 		return width <= MEASURED;
 	}
 
+	/** `d` when it has a flat width, else `d` as its comment-held slots would stand without the comment, else `null`. */
+	private static function measurable(d: Doc): Null<Doc> {
+		if (WrapList.flatLength(d) >= 0) return d;
+		final bare: Doc = withoutComments(d);
+		return bare != d && WrapList.flatLength(bare) >= 0 ? bare : null;
+	}
+
+	/** `d` with every comment-held slot written as the room its statement takes beside the head, or `d` itself when it holds none. */
+	private static function withoutComments(d: Doc): Doc {
+		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
+		function walk(n: Doc): Doc {
+			final hit: Null<Doc> = memo.get(n);
+			if (hit != null) return hit;
+			final out: Doc = switch n {
+				case Doc.IfIndentWidthExceeds(v, _, glued, _) if (v == MEASURED_COMMENTED):
+					walk(glued);
+				case _:
+					D.mapChildrenShared(n, walk);
+			};
+			memo.set(n, out);
+			return out;
+		}
+		return walk(d);
+	}
+
 	/** Every slot of `d` holding the verdict `width`, and the verdict `offer` when `offer`'s break is committed. */
 	private static function resolved(d: Doc, width: Int, lineWidth: Int, offer: Null<Offer>): Doc {
 		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
@@ -111,6 +152,8 @@ final class SiblingShare {
 			final hit: Null<Doc> = memo.get(n);
 			if (hit != null) return hit;
 			final out: Doc = switch n {
+				case Doc.IfIndentWidthExceeds(v, _, _, own) if (v == MEASURED_COMMENTED):
+					offer == null ? own : walk(own);
 				case Doc.IfIndentWidthExceeds(v, _, brk, own) if (isVote(v)):
 					final o: Doc = offer == null ? own : walk(own);
 					final b: Doc = offer == null ? brk : walk(brk);

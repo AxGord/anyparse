@@ -974,7 +974,10 @@ final class TriviaTryparseLowering {
 		};
 	}
 
-	/** The `_nestBody` terminal: a body placed below its head, as a slot that leads unless it is one statement that could have fit. */
+	/**
+	 * The `_nestBody` terminal: a body placed below its head, as a slot that leads unless it
+	 * is one statement that could have fit, which is measured as if it stood beside the head.
+	 */
 	private static function triviaTryparseNestWrapExpr(policy: Expr, shapeRefusalExpr: Expr, glueRefusalExpr: Expr): Expr {
 		return macro {
 			final _nestDoc: anyparse.core.Doc = if (_arr.length > 0 && _trailDocs.length > 0) {
@@ -983,9 +986,11 @@ final class TriviaTryparseLowering {
 				for (_d in _trailDocs) _docs.push(_d);
 				_dwb(_dn(_cols, _dc(_docs)));
 			};
-			anyparse.format.SiblingShare.placedSlot(
-				$policy, _arr.length >= 2 || (_arr.length == 1 && (!$shapeRefusalExpr || $glueRefusalExpr)), _nestDoc
-			);
+			final _nestLeads: Bool = _arr.length >= 2 || (_arr.length == 1 && !$shapeRefusalExpr);
+			final _held: Null<anyparse.core.Doc> = _arr.length == 1 ? _priorElemDoc : null;
+			_nestLeads || _held == null
+				? anyparse.format.SiblingShare.placedSlot($policy, _nestLeads, _nestDoc)
+				: anyparse.format.SiblingShare.commentedSlot($policy, _nestDoc, _held, $glueRefusalExpr);
 		};
 	}
 

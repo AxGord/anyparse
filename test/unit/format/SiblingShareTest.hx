@@ -16,6 +16,7 @@ class SiblingShareTest extends Test {
 
 	private static inline final WIDTH: Int = 40;
 	private static inline final NO_WIDTH: Int = -1;
+	private static inline final HEAD: String = 'case 1:';
 
 	/** A list of a fitting and an over-wide sibling, both still voting: one verdict reaches both. */
 	public function testTheWidestSiblingDecidesForAll(): Void {
@@ -56,6 +57,30 @@ class SiblingShareTest extends Test {
 		Assert.equals(1, count(list, width -> width == NO_WIDTH), 'the number is left where it was');
 	}
 
+	/** A branch a comment holds below its head is measured as if the comment were gone: its room beside the head decides for all. */
+	public function testACommentHeldBranchIsMeasuredWithoutItsComment(): Void {
+		final body: String = ''.lpad('b', WIDTH);
+		final list: Doc = SiblingShare.decide(held(Doc.Text(body)), SiblingPolicy.AnyBreak, WIDTH);
+		Assert.equals(0, votes(list), 'no slot survives the decision');
+		Assert.equals(
+			1, count(list, width -> width == HEAD.length + 1 + body.length), 'the fitting sibling carries the held branch\'s room'
+		);
+	}
+
+	/** A comment-held branch that would have fit is no wider than its room: the verdict is a width that fits. */
+	public function testAShortCommentHeldBranchFitsItsRoom(): Void {
+		final list: Doc = SiblingShare.decide(held(Doc.Text('bb')), SiblingPolicy.AnyBreak, WIDTH);
+		Assert.equals(1, count(list, width -> width >= 0 && width <= WIDTH), 'the fitting sibling carries a width that fits');
+	}
+
+	/** A comment-held branch whose statement has no flat form has no room to measure: it stays an unmeasured vote. */
+	public function testACommentHeldBranchWithoutAFlatBodyIsNotMeasured(): Void {
+		final body: Doc = Doc.Concat([Doc.Text(''.lpad('b', WIDTH + 1)), D.hardline(), Doc.Text('b')]);
+		final list: Doc = SiblingShare.decide(held(body), SiblingPolicy.AnyBreak, WIDTH);
+		Assert.equals(0, votes(list), 'no slot survives the decision');
+		Assert.equals(0, count(list, width -> width > WIDTH), 'nothing is measured past the budget');
+	}
+
 	private static function slot(body: String): Doc {
 		return SiblingShare.fitLineSlot(SiblingPolicy.AnyBreak, 1, Doc.Text(body), false, WIDTH, false);
 	}
@@ -90,6 +115,19 @@ class SiblingShareTest extends Test {
 		}
 		walk(d);
 		return found;
+	}
+
+	/** A fitting sibling and, on its own line, a branch held below its head by a comment whose statement is `body`. */
+	private static function held(body: Doc): Doc {
+		final comment: Doc = Doc.Concat([D.hardline(), Doc.Text('// c'), D.hardline(), body]);
+		return Doc.Concat([
+			Doc.Concat([Doc.Text('case 2:'), slot('aa')]),
+			D.hardline(),
+			Doc.Concat([
+				Doc.Text(HEAD),
+				SiblingShare.commentedSlot(SiblingPolicy.AnyBreak, comment, body, false)
+			])
+		]);
 	}
 
 }
