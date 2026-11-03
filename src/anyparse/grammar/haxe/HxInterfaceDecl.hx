@@ -15,15 +15,11 @@ package anyparse.grammar.haxe;
  * the same bare `Array<HxHeritageClause>` field as `HxClassDecl.heritage` (`@:trivia
  * @:tryparse @:fmt(padLeading, lineLengthAwareSeps)`).
  *
- * `members` carries the same `interMemberBlankLines` knob as `HxClassDecl.members` and
- * `HxAbstractDecl.members`, but the 6-arg form routes the per-pair counts through the
- * dedicated `interfaceBetweenVars` / `interfaceBetweenFunctions` / `interfaceAfterVars`
- * `HxModuleWriteOptions` fields instead of the shared `betweenVars` / `betweenFunctions` /
- * `afterVars`; their defaults are `0` (interfaces stay tight unless `hxformat.json`'s
- * `emptyLines.interfaceEmptyLines` opts in). The trivia-aware knobs
- * `afterFieldsWithDocComments`, `existingBetweenFields` and `beforeDocCommentEmptyLines` are
- * shared with class and abstract scope, so a doc-commented interface function gets the same
- * trailing blank line.
+ * `members` carries the same `interMemberBlankLines` knob as `HxClassDecl.members` and `HxAbstractDecl.members`,
+ * and routes the per-pair counts through the dedicated `interface*` `HxModuleWriteOptions`
+ * fields, whose defaults are `0` (interfaces stay tight unless `hxformat.json`'s `emptyLines.interfaceEmptyLines` opts in), and
+ * `existingBetweenFields` names `interfaceExistingBetweenFields`. `afterFieldsWithDocComments` and `beforeDocCommentEmptyLines` are
+ * shared with class and abstract scope, so a doc-commented interface function gets the same trailing blank line.
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('members'))
@@ -33,8 +29,8 @@ typedef HxInterfaceDecl = {
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps,
 		listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap')) var heritage: Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('interfaceBeginType', 'interfaceEndType'), afterFieldsWithDocComments,
-		existingBetweenFields, beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'),
-		blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
+		existingBetweenFields('interfaceExistingBetweenFields'), beforeDocCommentEmptyLines,
+		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars'
 		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),

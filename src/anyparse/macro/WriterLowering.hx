@@ -1981,22 +1981,16 @@ typedef BodyLayouts = {
  * (kind `0`). `classifyCases` is a ready-to-use `ESwitch` case list —
  * one entry per enum variant, exhaustive, no wildcard.
  *
- * `betweenVarsField` / `betweenFunctionsField` / `afterVarsField` name
- * the `HxModuleWriteOptions` Int fields read at runtime to gate each
- * blank-line slot (ω-iface-interblank). The 3-arg meta form defaults
- * them to the shared `betweenVars` / `betweenFunctions` / `afterVars`
- * (used by class + abstract); the 6-arg form lets a grammar route to
- * its own dedicated fields (e.g. interface uses
- * `interfaceBetweenVars` / `interfaceBetweenFunctions` /
- * `interfaceAfterVars` so its defaults stay independent of the
- * class/abstract knobs).
+ * `betweenVars` / `betweenFunctions` / `afterVars` are the runtime reads
+ * of the Int knobs that gate each blank-line slot, resolved from the names
+ * the grammar gives by `WriterTriviaStarDispatch.knobReads`.
  */
 typedef InterMemberClassifyInfo = {
 	classifierFieldName: String,
 	classifyCases: Array<Case>,
-	betweenVarsField: String,
-	betweenFunctionsField: String,
-	afterVarsField: String
+	betweenVars: Expr,
+	betweenFunctions: Expr,
+	afterVars: Expr
 };
 
 /**
@@ -2025,19 +2019,19 @@ typedef InterMemberCasesCtx = {
  * yields kind `1` (instance var) AND the `<modifierField>` Star contains
  * a `<staticCtor>`-ctor element, `_currKind` is promoted to `3` (static
  * var). The cascade then routes (1,3)/(3,1) transitions to the
- * `<afterStaticVarsField>` opt knob, leaving (1,1)/(3,3)/(2,2)/var↔fn
+ * `<afterStaticVars>` opt knob, leaving (1,1)/(3,3)/(2,2)/var↔fn
  * arms on the existing `betweenVars` / `betweenFunctions` / `afterVars`.
  *
  * ω-abstract-static-fn-cascade — the same sibling-Star scan also promotes
  * base kind `2` (function) to kind `4` (static function) on encountering
  * the `<staticCtor>` modifier. A (4,4) pair routes to the
- * `<betweenStaticFunctionsField>` opt knob; kinds `2` and `4` are both
+ * `<betweenStaticFunctions>` opt knob; kinds `2` and `4` are both
  * treated as the "function" family for the var↔fn `afterVars` arm, and a
  * (2,4)/(4,2) static-difference falls back to `betweenFunctions` (fork's
  * `afterStaticFunctions` default equals `betweenFunctions` — `1` — so no
  * separate knob is modelled until a fixture distinguishes them).
  *
- * Class and abstract members opt in; interface members do NOT — fork's
+ * Class, abstract and macro-class members opt in; interface members do NOT — fork's
  * `InterfaceFieldsEmptyLinesConfig` lacks `afterStaticVars` and treats
  * static-var transitions as plain `betweenVars`. Skipping the meta on
  * `HxInterfaceDecl.members` keeps that behaviour without a separate
@@ -2046,8 +2040,8 @@ typedef InterMemberCasesCtx = {
 typedef StaticVarSubdivisionInfo = {
 	modifierFieldName: String,
 	staticCtorName: String,
-	afterStaticVarsField: String,
-	betweenStaticFunctionsField: String
+	afterStaticVars: Expr,
+	betweenStaticFunctions: Expr
 };
 
 /**
@@ -2262,7 +2256,7 @@ typedef CascadeInfos = {
 typedef BlockLeafExprs = {
 	final initDocCommentExpr: Expr;
 	final initCurrDocCommentExpr: Expr;
-	final initCurrSplitLeadingExpr: Expr;
+
 	final initPrevKindExpr: Expr;
 	final initCurrKindExpr: Expr;
 	final trackPrevKindExpr: Expr;
@@ -2287,7 +2281,7 @@ typedef BlockStarCtx = {
 	final trackDocCommentExpr: Expr;
 	final initDocCommentExpr: Expr;
 	final initCurrDocCommentExpr: Expr;
-	final initCurrSplitLeadingExpr: Expr;
+
 	final initPrevKindExpr: Expr;
 	final initCurrKindExpr: Expr;
 	final trackPrevKindExpr: Expr;
@@ -2302,7 +2296,7 @@ typedef BlockStarCtx = {
 	final blockTrailSepEmitExpr: Expr;
 	final elemSepGlueExpr: Expr;
 	final afterFieldsWithDocComments: Bool;
-	final existingBetweenFields: Bool;
+	final existingBetweenFields: Null<Expr>;
 	final beforeDocCommentEmptyLines: Bool;
 	final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>;
 	final interMember: Bool;

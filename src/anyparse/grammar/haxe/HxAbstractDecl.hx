@@ -30,9 +30,8 @@ package anyparse.grammar.haxe;
  * line at +1 indent.
  *
  * Members reuse `HxMemberDecl`, as `HxClassDecl` and `HxInterfaceDecl` do, and `members`
- * carries the same `@:fmt(...)` knob set as `HxClassDecl.members`; the fork's
- * `EnumAbstractFieldsEmptyLinesConfig` shares the class defaults, so abstract routes through
- * the same `HxModuleWriteOptions` fields without a dedicated typedef.
+ * carries the same `@:fmt(...)` knob set as `HxClassDecl.members`; a plain abstract reads
+ * its `abstract*` knobs, an `enum abstract` the `enumAbstract*` set behind `_inEnumAbstract`.
  *
  * `enum abstract Name(T) { ... }` is handled at the `HxDecl` level via the `EnumAbstractDecl`
  * ctor (ω-enum-abstract), which consumes the leading `enum` keyword and reuses this typedef
@@ -48,10 +47,18 @@ typedef HxAbstractDecl = {
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps) var clauses: Array<HxAbstractClause>;
 	@:fmt(leftCurly, emptyCurlyBreak,
 		beginEndType('abstractBeginType', 'abstractEndType', '_inEnumAbstract', 'enumAbstractBeginType', 'enumAbstractEndType'),
-		afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines,
-		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
-		interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'), staticVarSubdivision, betweenMultilineCommentsBlanks,
-		gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'), relocateTrailingComments,
-		glueToPrevious('member', 'EmptySemiMember'))
+		afterFieldsWithDocComments,
+		existingBetweenFields('abstractExistingBetweenFields', '_inEnumAbstract', 'enumAbstractExistingBetweenFields'),
+		beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading,
+		blankBeforeOrphanLineCommentTrail,
+		interMemberBlankLines(
+			'member', 'VarMember|FinalMember', 'FnMember', 'abstractBetweenVars', 'abstractBetweenFunctions', 'abstractAfterVars',
+			'_inEnumAbstract', 'enumAbstractBetweenVars', 'enumAbstractBetweenFunctions', 'enumAbstractAfterVars'
+		),
+		staticVarSubdivision(
+			'modifiers', 'Static', 'abstractAfterStaticVars', 'abstractBetweenStaticFunctions', '_inEnumAbstract',
+			'enumAbstractBetweenVars', 'enumAbstractBetweenFunctions'
+		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),
+		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
 	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }

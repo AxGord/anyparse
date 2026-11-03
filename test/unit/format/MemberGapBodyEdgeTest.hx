@@ -3,7 +3,9 @@ package unit.format;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.MemberGap;
 
-/** `MemberGap.bodyEdge`: a stated count is exact whatever the source holds; an unstated one keeps the source blank only under `Keep`. */
+/**
+ * `MemberGap.bodyEdge`: a stated count is exact whatever the source holds; an unstated one keeps the source blank only under `Keep`.
+ */
 @:nullSafety(Strict)
 class MemberGapBodyEdgeTest extends Test {
 

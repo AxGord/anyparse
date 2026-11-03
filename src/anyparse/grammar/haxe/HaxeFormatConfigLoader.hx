@@ -195,6 +195,26 @@ final class HaxeFormatConfigLoader {
 			interfaceBetweenVars: base.interfaceBetweenVars,
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
+			interfaceExistingBetweenFields: base.interfaceExistingBetweenFields,
+			externClassBetweenVars: base.externClassBetweenVars,
+			externClassBetweenFunctions: base.externClassBetweenFunctions,
+			externClassAfterVars: base.externClassAfterVars,
+			abstractExistingBetweenFields: base.abstractExistingBetweenFields,
+			abstractBetweenVars: base.abstractBetweenVars,
+			abstractBetweenFunctions: base.abstractBetweenFunctions,
+			abstractAfterVars: base.abstractAfterVars,
+			abstractAfterStaticVars: base.abstractAfterStaticVars,
+			abstractBetweenStaticFunctions: base.abstractBetweenStaticFunctions,
+			enumAbstractExistingBetweenFields: base.enumAbstractExistingBetweenFields,
+			enumAbstractBetweenVars: base.enumAbstractBetweenVars,
+			enumAbstractBetweenFunctions: base.enumAbstractBetweenFunctions,
+			enumAbstractAfterVars: base.enumAbstractAfterVars,
+			macroClassExistingBetweenFields: base.macroClassExistingBetweenFields,
+			macroClassBetweenVars: base.macroClassBetweenVars,
+			macroClassBetweenFunctions: base.macroClassBetweenFunctions,
+			macroClassAfterVars: base.macroClassAfterVars,
+			macroClassAfterStaticVars: base.macroClassAfterStaticVars,
+			macroClassBetweenStaticFunctions: base.macroClassBetweenStaticFunctions,
 			betweenEnumCtors: base.betweenEnumCtors,
 			beginType: base.beginType,
 			endType: base.endType,
@@ -701,18 +721,10 @@ final class HaxeFormatConfigLoader {
 		if (section.beforeDocCommentEmptyLines != null)
 			opt.beforeDocCommentEmptyLines = HaxeFormatValues.commentEmptyLinesToRuntime(section.beforeDocCommentEmptyLines);
 		applyClassEmptyLines(section, opt);
-		// ω-abstract-static-fn-cascade: `abstractEmptyLines` reuses the
-		// shared `HxFormatClassEmptyLinesConfig` runtime knobs (fork shares
-		// `ClassFieldsEmptyLinesConfig` across class / abstract scopes). Only
-		// `betweenStaticFunctions` is consumed today — the rest land with
-		// their abstract-scoped fixtures. Last-write wins against any
-		// `classEmptyLines` block that set the same shared knob.
-		final abstractSection: Null<HxFormatClassEmptyLinesConfig> = section.abstractEmptyLines;
-		if (abstractSection != null && abstractSection.betweenStaticFunctions != null)
-			opt.betweenStaticFunctions = abstractSection.betweenStaticFunctions;
-		final externClassSection: Null<HxFormatClassEmptyLinesConfig> = section.externClassEmptyLines;
-		if (externClassSection != null && externClassSection.existingBetweenFields != null)
-			opt.externExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(externClassSection.existingBetweenFields);
+		applyAbstractEmptyLines(section, opt);
+		applyExternClassEmptyLines(section, opt);
+		applyEnumAbstractEmptyLines(section, opt);
+		applyMacroClassEmptyLines(section, opt);
 		applyInterfaceEnumTypedefEmptyLines(section, opt);
 		applyTypeBodyEdges(section, opt);
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
@@ -1114,12 +1126,62 @@ final class HaxeFormatConfigLoader {
 		if (classSection.betweenStaticFunctions != null) opt.betweenStaticFunctions = classSection.betweenStaticFunctions;
 	}
 
+	/** `abstractEmptyLines`' between-member keys into the knobs a plain abstract body reads; the class section never reaches them. */
+	private static function applyAbstractEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		final conf: Null<HxFormatClassEmptyLinesConfig> = section.abstractEmptyLines;
+		if (conf == null) return;
+		if (conf.existingBetweenFields != null)
+			opt.abstractExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(conf.existingBetweenFields);
+		if (conf.betweenVars != null) opt.abstractBetweenVars = conf.betweenVars;
+		if (conf.betweenFunctions != null) opt.abstractBetweenFunctions = conf.betweenFunctions;
+		if (conf.afterVars != null) opt.abstractAfterVars = conf.afterVars;
+		if (conf.afterStaticVars != null) opt.abstractAfterStaticVars = conf.afterStaticVars;
+		if (conf.betweenStaticFunctions != null) opt.abstractBetweenStaticFunctions = conf.betweenStaticFunctions;
+	}
+
+	/** `externClassEmptyLines`' between-member keys into the knobs a class body reads while `_classExtern` is set. */
+	private static function applyExternClassEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		final conf: Null<HxFormatInterfaceEmptyLinesConfig> = section.externClassEmptyLines;
+		if (conf == null) return;
+		if (conf.existingBetweenFields != null)
+			opt.externExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(conf.existingBetweenFields);
+		if (conf.betweenVars != null) opt.externClassBetweenVars = conf.betweenVars;
+		if (conf.betweenFunctions != null) opt.externClassBetweenFunctions = conf.betweenFunctions;
+		if (conf.afterVars != null) opt.externClassAfterVars = conf.afterVars;
+	}
+
+	/** `enumAbstractEmptyLines`' between-member keys into the knobs an abstract body reads while `_inEnumAbstract` is set. */
+	private static function applyEnumAbstractEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		final conf: Null<HxFormatInterfaceEmptyLinesConfig> = section.enumAbstractEmptyLines;
+		if (conf == null) return;
+		if (conf.existingBetweenFields != null)
+			opt.enumAbstractExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(conf.existingBetweenFields);
+		if (conf.betweenVars != null) opt.enumAbstractBetweenVars = conf.betweenVars;
+		if (conf.betweenFunctions != null) opt.enumAbstractBetweenFunctions = conf.betweenFunctions;
+		if (conf.afterVars != null) opt.enumAbstractAfterVars = conf.afterVars;
+	}
+
+	/** `macroClassEmptyLines`' between-member keys into the knobs a `macro class` body reads. */
+	private static function applyMacroClassEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		final conf: Null<HxFormatClassEmptyLinesConfig> = section.macroClassEmptyLines;
+		if (conf == null) return;
+		if (conf.existingBetweenFields != null)
+			opt.macroClassExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(conf.existingBetweenFields);
+		if (conf.betweenVars != null) opt.macroClassBetweenVars = conf.betweenVars;
+		if (conf.betweenFunctions != null) opt.macroClassBetweenFunctions = conf.betweenFunctions;
+		if (conf.afterVars != null) opt.macroClassAfterVars = conf.afterVars;
+		if (conf.afterStaticVars != null) opt.macroClassAfterStaticVars = conf.afterStaticVars;
+		if (conf.betweenStaticFunctions != null) opt.macroClassBetweenStaticFunctions = conf.betweenStaticFunctions;
+	}
+
 	private static function applyInterfaceEnumTypedefEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
 		final interfaceSection: Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
 		if (interfaceSection != null) {
 			if (interfaceSection.betweenVars != null) opt.interfaceBetweenVars = interfaceSection.betweenVars;
 			if (interfaceSection.betweenFunctions != null) opt.interfaceBetweenFunctions = interfaceSection.betweenFunctions;
 			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
+			if (interfaceSection.existingBetweenFields != null)
+				opt.interfaceExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(interfaceSection.existingBetweenFields);
 		}
 		final enumSection: Null<HxFormatEnumEmptyLinesConfig> = section.enumEmptyLines;
 		if (enumSection != null) {

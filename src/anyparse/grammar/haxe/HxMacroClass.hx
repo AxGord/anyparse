@@ -25,14 +25,13 @@ package anyparse.grammar.haxe;
  * parse behaviour to `HxClassDecl.members` (`@:lead('{') @:trail('}')
  * @:trivia` with no `@:sep`) — each `HxMemberDecl` self-terminates
  * via its own `;` / `{}` tail and the loop ends on the closing `}`.
- * `members` carries `@:fmt(interMemberBlankLines(...))` — the same
- * inter-member blank cascade `HxClassDecl.members` uses — so a `macro
+ * `members` carries `@:fmt(interMemberBlankLines(...))` — the same inter-member blank
+ * cascade `HxClassDecl.members` uses, on its own `macroClassEmptyLines` knobs — so a `macro
  * class` body gets blank lines between its members (afterVars /
  * betweenFunctions) like a regular class body (emptylines/issue_377),
  * and `beginEndType` its own `macroClassEmptyLines` edge counts.
- * The remaining `@:fmt(…)` knobs `HxClassDecl.members` carries
- * (leftCurly / beforeDocComment / staticVarSubdivision / …) stay
- * omitted: they only shape writer output, never parsing, and no corpus
+ * The remaining `@:fmt(…)` knobs `HxClassDecl.members` carries (leftCurly / beforeDocComment
+ * / …) stay omitted: they only shape writer output, never parsing, and no corpus
  * fixture needs them on a macro-class body yet.
  *
  * `@:trivia` on `members` makes `HxMacroClass` transitively
@@ -45,7 +44,10 @@ typedef HxMacroClass = {
 	var head: HxMacroClassHead;
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps,
 		listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap')) var heritage: Array<HxHeritageClause>;
-	@:fmt(beginEndType('macroClassBeginType', 'macroClassEndType'), interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'),
+	@:fmt(beginEndType('macroClassBeginType', 'macroClassEndType'), existingBetweenFields('macroClassExistingBetweenFields'),
+		interMemberBlankLines(
+			'member', 'VarMember|FinalMember', 'FnMember', 'macroClassBetweenVars', 'macroClassBetweenFunctions', 'macroClassAfterVars'
+		), staticVarSubdivision('modifiers', 'Static', 'macroClassAfterStaticVars', 'macroClassBetweenStaticFunctions'),
 		gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'), relocateTrailingComments,
 		glueToPrevious('member', 'EmptySemiMember'))
 	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;

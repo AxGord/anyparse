@@ -1191,8 +1191,8 @@
 		{
 			"name": "M-TYPE-BODY-EDGE-NO-SWITCH",
 			"type": "anyparse.macro.WriterTriviaStarDispatch",
-			"method": "beginEndKnobAccess",
-			"find": "if (args.length == KNOB_PAIR) return own;",
+			"method": "knobReads",
+			"find": "if (knobs.length == width) return own;",
 			"replace": "return own;",
 			"note": "the context-flag second knob pair is never read, so an `enum abstract` takes the `abstract` edges and an `extern class` the class ones"
 		},
@@ -1339,6 +1339,30 @@
 			"find": "whitespacePolicyLead(child, leadText, spaceKnob(child, 'lead'))",
 			"replace": "whitespacePolicyLead(child, leadText, spaceKnob(child, 'lead') == null ? null : 'typeHintColon')",
 			"note": "a tight optional lead always reads one hard-wired option whatever its flag names, so a second grammar's own option stops reaching it, and every Haxe site on this path spells that option"
+		},
+		{
+			"name": "M-EXTERN-GATE-RESTORED",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockInterMemberSubdivExpr",
+			"find": "return macro ($varArms || $fnArms || $varFnArm);",
+			"replace": "return macro (!opt._classExtern && ($varArms || $fnArms || $varFnArm));",
+			"note": "the extern gate is back in the core macro: an `extern abstract` body loses the abstract blanks because its top-level modifier set the flag"
+		},
+		{
+			"name": "M-EXISTING-READS-CLASS-KNOB",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockBlankBeforeExpr",
+			"find": "? macro ($existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)",
+			"replace": "? macro (opt.existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)",
+			"note": "every body strips on the class policy again, so `<kind>EmptyLines.existingBetweenFields` moves nothing and the class section moves them all"
+		},
+		{
+			"name": "M-SPLIT-LEAD-IGNORED",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockBlankBeforeExpr",
+			"find": "? macro (_currHasDocComment && !anyparse.format.MemberGap.docSplitLead(_t.leadingComments))",
+			"replace": "? macro _currHasDocComment",
+			"note": "a split-led member takes the before-doc blank in the gap above it as well as the one inside its leading cluster"
 		}
 	]
 }

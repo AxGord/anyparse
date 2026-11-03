@@ -21,10 +21,8 @@ using anyparse.macro.MetaInspect;
  * `tailStmtReadsExprPosition` tail barrier, the between-element and
  * trailing `@:sep(text, tailRelax, blockEnded)` separator emission and its
  * predicate elision, and the inter-element blank-line decision (the strip /
- * add gates over doc comments, existing blanks, split-leading clusters, the
- * interMember var/fn cascade and the uniform-between knob, plus the
- * per-element `_currHasDocComment` / `_currKind` / `_currHasSplitLeading`
- * computes feeding them).
+ * add gates over doc comments, existing blanks, the interMember var/fn cascade and the uniform-between
+ * knob, plus the per-element `_currHasDocComment` / `_currKind` computes feeding them).
  *
  * Split out of `WriterLowering` for size — the two are NOT independent. The
  * macro-time surface is small: one inbound entry (`triviaBlockStarExpr`,
@@ -46,13 +44,11 @@ using anyparse.macro.MetaInspect;
  * The GENERATED-code surface is the real contract, and no type carries it:
  * every helper splices identifiers declared elsewhere in the Star body —
  * `_arr` / `_t` / `_si` / `_inner` / `opt` / `_dhl()` from the Star
- * scaffold, `_prevHadDocComment` / `_currHasDocComment` /
- * `_currHasSplitLeading` / `_prevKind` / `_currKind` from
+ * scaffold, `_prevHadDocComment` / `_currHasDocComment` / `_prevKind` / `_currKind` from
  * `triviaBlockLeafExprs`, `_uniformCollapse` from the declaration
  * `triviaBlockElseBody` splices. Those declare sites are gated on the SAME
  * `@:fmt` flags as the computes that read them
- * (`beforeDocCommentEmptyLines`, `existingBetweenFields`, `interMember`,
- * `uniformStmtBlanks`): move a gate on one side only and the generated
+ * (`beforeDocCommentEmptyLines`, `interMember`, `uniformStmtBlanks`): move a gate on one side only and the generated
  * writer either reads an undeclared local or declares a dead one, with
  * nothing in this module's types to catch it.
  */
@@ -144,64 +140,40 @@ final class TriviaBlockLowering {
 	 * Block-Star inter-member add-blank rule (ω-extern-class-no-blanks /
 	 * ω-class-static-var-cascade / ω-abstract-static-fn-cascade). Builds the
 	 * runtime boolean that fires a blank between two members per the var/fn /
-	 * static-var/static-fn cascade, AND-ed out under extern context.
+	 * static-var/static-fn cascade.
 	 */
 	private static function triviaBlockInterMemberAddExpr(
 		interMember: Bool, interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>
 	): Expr {
 		if (!interMember) return macro false;
-		final pos: Position = Context.currentPos();
-		final betweenVarsAccess: Expr = {
-			expr: EField(macro opt, interMemberInfo.betweenVarsField),
-			pos: pos
-		};
-		final betweenFnAccess: Expr = {
-			expr: EField(macro opt, interMemberInfo.betweenFunctionsField),
-			pos: pos
-		};
-		final afterVarsAccess: Expr = {
-			expr: EField(macro opt, interMemberInfo.afterVarsField),
-			pos: pos
-		};
-		// ω-extern-class-no-blanks: `_classExtern` is propagated from
-		// `HxTopLevelDecl.decl` via `@:fmt(setBoolFlagFromStarCtor(...))` when the
-		// sibling `modifiers` Star contains `Extern`. AND-out the entire interMember
-		// add-rule when the flag is set so an `extern class { var; var; function;
-		// function; }` round-trips with zero blanks regardless of `betweenVars` /
-		// `betweenFunctions` / `afterVars` defaults — mirrors fork's
-		// `externClassEmptyLines` config-section override.
-		//
+		final betweenVarsAccess: Expr = interMemberInfo.betweenVars;
+		final betweenFnAccess: Expr = interMemberInfo.betweenFunctions;
+		final afterVarsAccess: Expr = interMemberInfo.afterVars;
 		// ω-class-static-var-cascade / ω-abstract-static-fn-cascade: when
 		// subdivision is active, kinds `3` / `4` represent static-var / static-fn;
 		// the var/fn cascade arms split accordingly (see the subdiv arm helpers).
 		// When subdivision is off, kinds `3` / `4` are unreachable and the cascade
 		// collapses to the pre-slice three arms.
-		if (!staticVarSubdiv) return triviaBlockInterMemberPlainExpr(betweenVarsAccess, betweenFnAccess, afterVarsAccess);
-		final afterStaticVarsAccess: Expr = {
-			expr: EField(macro opt, staticVarSubdivInfo.afterStaticVarsField),
-			pos: pos
-		};
-		final betweenStaticFnAccess: Expr = {
-			expr: EField(macro opt, staticVarSubdivInfo.betweenStaticFunctionsField),
-			pos: pos
-		};
-		return triviaBlockInterMemberSubdivExpr(
-			betweenVarsAccess, betweenFnAccess, afterVarsAccess, afterStaticVarsAccess, betweenStaticFnAccess
-		);
+		return staticVarSubdiv
+			? triviaBlockInterMemberSubdivExpr(
+				betweenVarsAccess, betweenFnAccess, afterVarsAccess, staticVarSubdivInfo.afterStaticVars,
+				staticVarSubdivInfo.betweenStaticFunctions
+			)
+			: triviaBlockInterMemberPlainExpr(betweenVarsAccess, betweenFnAccess, afterVarsAccess);
 	}
 
 	/**
 	 * Block-Star inter-element blank-line build (ω-C-empty-lines-* family). Builds
 	 * the `blankBeforeExpr` consumed in the per-element loop: the strip / add
-	 * doc-comment + existing-between + split-leading + interMember + uniform-
+	 * doc-comment + existing-between + interMember + uniform-
 	 * between gates, the `_currHasDocComment` / `_currKind` / `_currHasSplitLeading`
 	 * computes (via the cascade sub-helpers), and the final `_stripBlank` /
 	 * `_addBlank` / `_sourceBlank` decision.
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaBlockBlankBeforeExpr(
-		afterFieldsWithDocComments: Bool, existingBetweenFields: Bool, beforeDocCommentEmptyLines: Bool,
+		afterFieldsWithDocComments: Bool, existingBetweenFields: Null<Expr>, beforeDocCommentEmptyLines: Bool,
 		condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo>, interMember: Bool,
 		interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>, uniformBetween: Bool, uniformBetweenOptField: Null<String>,
@@ -223,29 +195,20 @@ final class TriviaBlockLowering {
 		final stripByDocExpr: Expr = docRule
 			? macro anyparse.format.MemberGap.docStrips($prevDocExpr, $currDocExpr, $afterPolicyExpr, $beforePolicyExpr)
 			: macro false;
+		final currAddsByDocExpr: Expr = beforeDocCommentEmptyLines
+			? macro (_currHasDocComment && !anyparse.format.MemberGap.docSplitLead(_t.leadingComments))
+			: macro false;
 		final addByDocExpr: Expr = docRule
-			? macro anyparse.format.MemberGap.docAdds($prevDocExpr, $currDocExpr, $afterPolicyExpr, $beforePolicyExpr)
+			? macro anyparse.format.MemberGap.docAdds($prevDocExpr, $currAddsByDocExpr, $afterPolicyExpr, $beforePolicyExpr)
 			: macro false;
-		final stripByExistingExpr: Expr = existingBetweenFields
-			? macro (opt.existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
+		final stripByExistingExpr: Expr = existingBetweenFields != null
+			? macro ($existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
 			: macro false;
-		// ω-extern-existing-between-split-leading: when the current member's
-		// `leadingComments` carries the "split" shape (a trailing `/**` doc-comment
-		// preceded by `//` line-comments), fork's `existingBetweenFields=Remove`
-		// strips the inter-member source blank under the extern-scoped policy.
-		final stripBySplitLeadingExpr: Expr = existingBetweenFields
-			? macro (
-				opt._classExtern && _currHasSplitLeading && opt.externExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove
-			)
-			: macro false;
-		// Companion suppress: in extern context fork never re-adds a blank at the
-		// inter-member slot when the next member's leading carries the split shape.
-		final addSuppressOnSplitLeadingExpr: Expr = existingBetweenFields ? macro (opt._classExtern && _currHasSplitLeading) : macro false;
 		final vetoByDocExpr: Expr = beforeDocCommentEmptyLines
 			? macro anyparse.format.MemberGap.docVetoes(_currHasDocComment, opt.beforeDocCommentEmptyLines)
 			: macro false;
 		final currHasDocComputeExpr: Expr = triviaBlockCurrHasDocComputeExpr(beforeDocCommentEmptyLines, condLeadingDocInfo);
-		final currHasSplitLeadingComputeExpr: Expr = triviaBlockCurrHasSplitLeadingComputeExpr(existingBetweenFields);
+
 		final currKindComputeExpr: Expr = triviaBlockCurrKindComputeExpr(
 			interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo
 		);
@@ -256,12 +219,11 @@ final class TriviaBlockLowering {
 		return triviaBlockBlankBeforeAssemblyExpr({
 			currHasDocComputeExpr: currHasDocComputeExpr,
 			currKindComputeExpr: currKindComputeExpr,
-			currHasSplitLeadingComputeExpr: currHasSplitLeadingComputeExpr,
+
 			stripByDocExpr: stripByDocExpr,
 			stripByExistingExpr: stripByExistingExpr,
 			vetoByDocExpr: vetoByDocExpr,
-			stripBySplitLeadingExpr: stripBySplitLeadingExpr,
-			addSuppressOnSplitLeadingExpr: addSuppressOnSplitLeadingExpr,
+
 			addByDocExpr: addByDocExpr,
 
 			addByInterMemberExpr: addByInterMemberExpr,
@@ -305,7 +267,7 @@ final class TriviaBlockLowering {
 	/**
 	 * Block-Star interMember subdivision-active add rule (ω-class-static-var-
 	 * cascade / ω-abstract-static-fn-cascade). Composes the var-family / fn-family
-	 * / var↔fn arms, AND-ed out under extern context.
+	 * / var↔fn arms.
 	 */
 	private static function triviaBlockInterMemberSubdivExpr(
 		betweenVarsAccess: Expr, betweenFnAccess: Expr, afterVarsAccess: Expr, afterStaticVarsAccess: Expr, betweenStaticFnAccess: Expr
@@ -313,21 +275,18 @@ final class TriviaBlockLowering {
 		final varArms: Expr = triviaBlockSubdivVarArmsExpr(betweenVarsAccess, afterStaticVarsAccess);
 		final fnArms: Expr = triviaBlockSubdivFnArmsExpr(betweenFnAccess, betweenStaticFnAccess);
 		final varFnArm: Expr = triviaBlockSubdivVarFnArmExpr(afterVarsAccess);
-		return macro (!opt._classExtern && ($varArms || $fnArms || $varFnArm));
+		return macro ($varArms || $fnArms || $varFnArm);
 	}
 
 	/**
 	 * Block-Star interMember subdivision-off add rule (the pre-slice three arms):
-	 * same-var `betweenVars`, same-fn `betweenFunctions`, var↔fn `afterVars`,
-	 * AND-ed out under extern context.
+	 * same-var `betweenVars`, same-fn `betweenFunctions`, var↔fn `afterVars`.
 	 */
 	private static function triviaBlockInterMemberPlainExpr(betweenVarsAccess: Expr, betweenFnAccess: Expr, afterVarsAccess: Expr): Expr {
 		return macro (
-			!opt._classExtern && (
-				(_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
-				|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
-				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)
-			)
+			(_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
+			|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
+			|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)
 		);
 	}
 
@@ -342,12 +301,11 @@ final class TriviaBlockLowering {
 	private static function triviaBlockBlankBeforeAssemblyExpr(g: BlankGateExprs): Expr {
 		final currHasDocComputeExpr: Expr = g.currHasDocComputeExpr;
 		final currKindComputeExpr: Expr = g.currKindComputeExpr;
-		final currHasSplitLeadingComputeExpr: Expr = g.currHasSplitLeadingComputeExpr;
+
 		final stripByDocExpr: Expr = g.stripByDocExpr;
 		final stripByExistingExpr: Expr = g.stripByExistingExpr;
 		final vetoByDocExpr: Expr = g.vetoByDocExpr;
-		final stripBySplitLeadingExpr: Expr = g.stripBySplitLeadingExpr;
-		final addSuppressOnSplitLeadingExpr: Expr = g.addSuppressOnSplitLeadingExpr;
+
 		final addByDocExpr: Expr = g.addByDocExpr;
 		final addByInterMemberExpr: Expr = g.addByInterMemberExpr;
 		final addByUniformBetweenExpr: Expr = g.addByUniformBetweenExpr;
@@ -355,8 +313,7 @@ final class TriviaBlockLowering {
 		return macro {
 			$currHasDocComputeExpr;
 			$currKindComputeExpr;
-			$currHasSplitLeadingComputeExpr;
-			final _stripBlank: Bool = $stripByDocExpr || $stripByExistingExpr || $stripBySplitLeadingExpr;
+			final _stripBlank: Bool = $stripByDocExpr || $stripByExistingExpr;
 			// ω-beforedoc-none-precedence: fork's `markDocCommentEmptyLines` applies
 			// `beforeDocCommentEmptyLines` to the before-doc slot AFTER
 			// `afterFieldsWithDocComments` (the prior field's after-slot is the same
@@ -368,36 +325,13 @@ final class TriviaBlockLowering {
 			// Byte-inert when the Star carries no `beforeDocCommentEmptyLines` flag
 			// (`$vetoByDocExpr` is the compile-time literal `false`) or the
 			// runtime policy is not `None`.
-			final _addBlank: Bool = !$vetoByDocExpr
-				&& !$addSuppressOnSplitLeadingExpr
-				&& ($addByDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
+			final _addBlank: Bool = !$vetoByDocExpr && ($addByDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
 			final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) {
 				_inner.push(_dhl());
 				if (_sourceBlank) $blankExtras;
 			}
 		};
-	}
-
-	/**
-	 * Block-Star current-element split-leading scan (ω-extern-existing-between-
-	 * split-leading). Per-element scan that flips `_currHasSplitLeading` true when
-	 * the element's leading cluster ends in a `/**` doc comment whose immediate
-	 * predecessor is a `//` line comment.
-	 */
-	private static function triviaBlockCurrHasSplitLeadingComputeExpr(existingBetweenFields: Bool): Expr {
-		return existingBetweenFields
-			? macro {
-				_currHasSplitLeading = false;
-				var _slLast: Int = -1;
-				var _sli: Int = 0;
-				while (_sli < _t.leadingComments.length) {
-					if (StringTools.startsWith(_t.leadingComments[_sli], '/**')) _slLast = _sli;
-					_sli++;
-				}
-				if (_slLast > 0 && StringTools.startsWith(_t.leadingComments[_slLast - 1], '//')) _currHasSplitLeading = true;
-			}
-			: macro {};
 	}
 
 	/**
@@ -459,7 +393,7 @@ final class TriviaBlockLowering {
 		openText: String,
 		closeText: String,
 		afterFieldsWithDocComments: Bool = false,
-		existingBetweenFields: Bool = false,
+		?existingBetweenFields: Expr,
 		beforeDocCommentEmptyLines: Bool = false,
 		?interMemberInfo: WriterLowering.InterMemberClassifyInfo,
 		indentCaseLabelsGate: Bool = false,
@@ -601,13 +535,13 @@ final class TriviaBlockLowering {
 		final interMember: Bool = interMemberInfo != null;
 		final uniformBetween: Bool = uniformBetweenOptField != null;
 		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments
-			|| existingBetweenFields
+			|| existingBetweenFields != null
 			|| beforeDocCommentEmptyLines
 			|| interMember
 			|| uniformBetween;
-		// ω-extern-existing-between-split-leading / ω-cond-leading-doc-lookthrough /
+		// ω-cond-leading-doc-lookthrough /
 		// ω-class-static-var-cascade / ω-abstract-static-fn-cascade: the per-element
-		// doc-comment / kind / split-leading computes + the strip / add gates moved
+		// doc-comment / kind computes + the strip / add gates moved
 		// to `triviaBlockBlankBeforeExpr` and its cascade
 		// sub-helpers.
 		final staticVarSubdiv: Bool = staticVarSubdivInfo != null;
@@ -635,8 +569,7 @@ final class TriviaBlockLowering {
 		final between = triviaBlockBetweenExprs(blankBeforeFinalDocInLeading, betweenMultilineCommentsBlanks);
 		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath);
 		final leaf = triviaBlockLeafExprs(
-			afterFieldsWithDocComments, beforeDocCommentEmptyLines, existingBetweenFields, interMember, indentCaseLabelsGate,
-			lineCommentTrailBlank
+			afterFieldsWithDocComments, beforeDocCommentEmptyLines, interMember, indentCaseLabelsGate, lineCommentTrailBlank
 		);
 		final blankAround = blankAroundMultilineExprs(gapRule);
 		final ctx: WriterLowering.BlockStarCtx = {
@@ -656,7 +589,7 @@ final class TriviaBlockLowering {
 			trackDocCommentExpr: leaf.trackDocCommentExpr,
 			initDocCommentExpr: leaf.initDocCommentExpr,
 			initCurrDocCommentExpr: leaf.initCurrDocCommentExpr,
-			initCurrSplitLeadingExpr: leaf.initCurrSplitLeadingExpr,
+
 			initPrevKindExpr: leaf.initPrevKindExpr,
 			initCurrKindExpr: leaf.initCurrKindExpr,
 			trackPrevKindExpr: leaf.trackPrevKindExpr,
@@ -1012,8 +945,8 @@ final class TriviaBlockLowering {
 	 * trail-blank).
 	 */
 	private static function triviaBlockLeafExprs(
-		afterFieldsWithDocComments: Bool, beforeDocCommentEmptyLines: Bool, existingBetweenFields: Bool, interMember: Bool,
-		indentCaseLabelsGate: Bool, lineCommentTrailBlank: Bool
+		afterFieldsWithDocComments: Bool, beforeDocCommentEmptyLines: Bool, interMember: Bool, indentCaseLabelsGate: Bool,
+		lineCommentTrailBlank: Bool
 	): WriterLowering.BlockLeafExprs {
 		final trackDocCommentExpr: Expr = afterFieldsWithDocComments
 			? macro _prevHadDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
@@ -1033,7 +966,7 @@ final class TriviaBlockLowering {
 		return {
 			initDocCommentExpr: afterFieldsWithDocComments ? macro var _prevHadDocComment: Bool = false : macro {},
 			initCurrDocCommentExpr: beforeDocCommentEmptyLines ? macro var _currHasDocComment: Bool = false : macro {},
-			initCurrSplitLeadingExpr: existingBetweenFields ? macro var _currHasSplitLeading: Bool = false : macro {},
+
 			initPrevKindExpr: interMember ? macro var _prevKind: Int = 0 : macro {},
 			initCurrKindExpr: interMember ? macro var _currKind: Int = 0 : macro {},
 			trackPrevKindExpr: interMember ? macro _prevKind = _currKind : macro {},
@@ -1157,7 +1090,7 @@ final class TriviaBlockLowering {
 	private static function triviaBlockElseBody(c: WriterLowering.BlockStarCtx): Expr {
 		final initDocCommentExpr: Expr = c.initDocCommentExpr;
 		final initCurrDocCommentExpr: Expr = c.initCurrDocCommentExpr;
-		final initCurrSplitLeadingExpr: Expr = c.initCurrSplitLeadingExpr;
+
 		final initPrevKindExpr: Expr = c.initPrevKindExpr;
 		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
 		final whileExpr: Expr = triviaBlockWhileExpr(c);
@@ -1173,7 +1106,7 @@ final class TriviaBlockLowering {
 			final _inner: Array<anyparse.core.Doc> = [];
 			$initDocCommentExpr;
 			$initCurrDocCommentExpr;
-			$initCurrSplitLeadingExpr;
+
 			$initPrevKindExpr;
 			$uniformCollapseInitExpr;
 			// ω-blockended-trivia (Session 3): tracks the prior iteration's rendered
@@ -1302,12 +1235,11 @@ final class TriviaBlockLowering {
 typedef BlankGateExprs = {
 	final currHasDocComputeExpr: Expr;
 	final currKindComputeExpr: Expr;
-	final currHasSplitLeadingComputeExpr: Expr;
+
 	final stripByDocExpr: Expr;
 	final stripByExistingExpr: Expr;
 	final vetoByDocExpr: Expr;
-	final stripBySplitLeadingExpr: Expr;
-	final addSuppressOnSplitLeadingExpr: Expr;
+
 	final addByDocExpr: Expr;
 
 	final addByInterMemberExpr: Expr;

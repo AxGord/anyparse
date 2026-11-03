@@ -74,11 +74,14 @@ class HxTypeBodyEdgeEmptyLinesTest extends Test {
 
 	public function testTheReportNamesOnlyTheSubKeysHxqDoesNotRead(): Void {
 		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
-			'{"emptyLines":{"enumAbstractEmptyLines":{"beginType":0,"betweenVars":1},"macroClassEmptyLines":{"endType":0},'
-			+ '"interfaceEmptyLines":{"beginType":1,"endType":1}}}'
+			'{"emptyLines":{"enumAbstractEmptyLines":{"beginType":0,"betweenVars":1,"afterVars":1,"betweenFunctions":1,'
+			+ '"existingBetweenFields":"keep"},"macroClassEmptyLines":{"endType":0,"betweenVars":1,"afterVars":1,"betweenFunctions":1,'
+			+ '"afterStaticVars":1,"betweenStaticFunctions":1,"existingBetweenFields":"keep","afterPrivateVars":1},'
+			+ '"externClassEmptyLines":{"betweenVars":1,"afterVars":1,"betweenFunctions":1,"existingBetweenFields":"keep"},'
+			+ '"interfaceEmptyLines":{"beginType":1,"endType":1,"existingBetweenFields":"keep"}}}'
 		);
 		Assert.equals(1, issues.keys.length, 'keys: ${issues.keys.join(', ')}');
-		Assert.isTrue(issues.keys[0].indexOf('betweenVars') == 0, 'keys: ${issues.keys.join(', ')}');
+		Assert.isTrue(issues.keys[0].indexOf('afterPrivateVars') == 0, 'keys: ${issues.keys.join(', ')}');
 	}
 
 	private static function write(src: String, sections: String): String {

@@ -1,22 +1,10 @@
 package anyparse.grammar.haxe.format;
 
 /**
- * Nested `emptyLines.interfaceEmptyLines` section of a haxe-formatter
- * `hxformat.json` config.
- *
- * Mirrors `HxFormatClassEmptyLinesConfig.{betweenVars, betweenFunctions,
- * afterVars}` but lives behind its own typedef so the loader can route
- * the values into the dedicated `opt.interfaceBetweenVars`,
- * `opt.interfaceBetweenFunctions`, `opt.interfaceAfterVars` knobs —
- * matching haxe-formatter's per-decl-type Section configs
- * (`InterfaceFieldsEmptyLinesConfig` defaults `0 / 0 / 0`).
- *
- * `beginType` / `endType` feed the interface body's own
- * `opt.interfaceBeginType` / `opt.interfaceEndType`, never the class pair.
- *
- * Other potential keys (`existingBetweenFields`, …) are silently
- * dropped by the ByName struct parser's `UnknownPolicy.Skip` until the
- * matching writer knob lands. Added in slice ω-iface-interblank.
+ * Nested `emptyLines.interfaceEmptyLines`, `externClassEmptyLines` and `enumAbstractEmptyLines` sections of a
+ * haxe-formatter `hxformat.json` config: a type body with no static or visibility subdivision (the fork's
+ * `InterfaceFieldsEmptyLinesConfig` and `EnumAbstractFieldsEmptyLinesConfig`). The loader routes each section into its
+ * own knobs, never the class ones.
  */
 @:peg typedef HxFormatInterfaceEmptyLinesConfig = {
 
@@ -25,6 +13,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var betweenFunctions: Int;
 
 	@:optional var afterVars: Int;
+
+	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
 
 	@:optional var beginType: Int;
 

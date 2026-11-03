@@ -82,13 +82,24 @@ final class MemberGap {
 		return leadingComments.exists(c -> c.startsWith(DOC_OPEN));
 	}
 
+	/**
+	 * Whether a member's leading comments end in a doc comment directly after a line comment (`/** a *\/ // b /** c *\/`).
+	 * The before-doc blank of such a member belongs inside the cluster, in front of that last doc, so `docAdds` must
+	 * not also put one in the gap above it; the other rules on that gap still apply.
+	 */
+	public static function docSplitLead(leadingComments: Array<String>): Bool {
+		var last: Int = leadingComments.length - 1;
+		while (last >= 0 && !leadingComments[last].startsWith(DOC_OPEN)) last--;
+		return last > 0 && leadingComments[last - 1].startsWith('//');
+	}
+
 	/** The doc-comment rule's whole verdict on one gap, composed from `docVetoes`, `docAdds` and `docStrips` in the writer's precedence. */
 	public static function docGap(
-		prevDocLed: Bool, nextDocLed: Bool, after: CommentEmptyLinesPolicy, before: CommentEmptyLinesPolicy
+		prevDocLed: Bool, nextDocLed: Bool, after: CommentEmptyLinesPolicy, before: CommentEmptyLinesPolicy, nextSplitLead: Bool
 	): DocGapVerdict {
 		return if (docVetoes(nextDocLed, before))
 			NoBlank
-		else if (docAdds(prevDocLed, nextDocLed, after, before))
+		else if (docAdds(prevDocLed, nextDocLed && !nextSplitLead, after, before))
 			Blank
 		else if (docStrips(prevDocLed, nextDocLed, after, before))
 			StripsSource

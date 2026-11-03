@@ -19,9 +19,8 @@ package anyparse.grammar.haxe;
  *
  * `@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers', 'Extern'))` on `decl`
  * (ω-extern-class-no-blanks) propagates a runtime flag down the descendant writer chain
- * whenever the sibling `modifiers` Star contains an `Extern` ctor; the writer for
- * `HxClassDecl.members` reads `opt._classExtern` to suppress `interMemberBlankLines`-driven
- * blanks, mirroring the fork's `externClassEmptyLines`. The mechanism is meta-driven and
+ * whenever the sibling `modifiers` Star contains an `Extern` ctor; only `HxClassDecl.members` names it, switching to its `externClass*`
+ * knobs; `extern abstract` and `extern interface` bodies keep the abstract and interface ones. The mechanism is meta-driven and
  * reusable for any "set bool opt flag from sibling Star ctor presence" rule.
  *
  * ω-orphan-prefix-decl: `decl` is `@:optional @:absentOnEof` — the module-scope twin of

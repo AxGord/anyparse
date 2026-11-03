@@ -757,6 +757,54 @@
 			"find": "@:fmt(tightLead, propagateNestedType)",
 			"replace": "@:fmt(tightLead)",
 			"note": "an abstract head inside an #if arm no longer marks its underlying type nested, so a function type there continues one unit past its line instead of two"
+		},
+		{
+			"name": "M-EXTERN-CLASS-BETWEEN-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExternClassEmptyLines",
+			"find": "if (conf.betweenVars != null) opt.externClassBetweenVars = conf.betweenVars;",
+			"replace": "",
+			"note": "`externClassEmptyLines.betweenVars` is parsed and dropped, so an extern class stays tight between vars whatever the section says"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-BETWEEN-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyEnumAbstractEmptyLines",
+			"find": "if (conf.betweenVars != null) opt.enumAbstractBetweenVars = conf.betweenVars;",
+			"replace": "",
+			"note": "`enumAbstractEmptyLines.betweenVars` is parsed and dropped, so an enum abstract keeps its default count"
+		},
+		{
+			"name": "M-ABSTRACT-BETWEEN-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyAbstractEmptyLines",
+			"find": "if (conf.betweenVars != null) opt.abstractBetweenVars = conf.betweenVars;",
+			"replace": "",
+			"note": "`abstractEmptyLines.betweenVars` is parsed and dropped, so an abstract keeps its default count"
+		},
+		{
+			"name": "M-MACRO-CLASS-BETWEEN-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyMacroClassEmptyLines",
+			"find": "if (conf.betweenVars != null) opt.macroClassBetweenVars = conf.betweenVars;",
+			"replace": "",
+			"note": "`macroClassEmptyLines.betweenVars` is parsed and dropped, so a macro class keeps its default count"
+		},
+		{
+			"name": "M-INTERFACE-EXISTING-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyInterfaceEnumTypedefEmptyLines",
+			"find": "opt.interfaceExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(interfaceSection.existingBetweenFields);",
+			"replace": "{}",
+			"note": "`interfaceEmptyLines.existingBetweenFields` is parsed and dropped, so an interface keeps its source blanks under `remove`"
+		},
+		{
+			"name": "M-MEMBER-GAP-POLICY-NO-SPLIT-LEAD",
+			"type": "anyparse.grammar.haxe.HaxeMemberGap",
+			"method": "policy",
+			"find": "MemberGap.docSplitLead(next)",
+			"replace": "false",
+			"note": "the member-order policy stops reading the split lead, so it demands a before-doc blank above a split-led member that fmt never writes"
 		}
 	]
 }

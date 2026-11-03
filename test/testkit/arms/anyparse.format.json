@@ -252,8 +252,8 @@
 			"name": "M-GAP-DOC-PRECEDENCE",
 			"type": "anyparse.format.MemberGap",
 			"method": "docGap",
-			"find": "return if (docVetoes(nextDocLed, before))\n\t\tNoBlank\n\telse if (docAdds(prevDocLed, nextDocLed, after, before))\n\t\tBlank",
-			"replace": "return if (docAdds(prevDocLed, nextDocLed, after, before))\n\t\tBlank\n\telse if (docVetoes(nextDocLed, before))\n\t\tNoBlank",
+			"find": "return if (docVetoes(nextDocLed, before))\n\t\tNoBlank\n\telse if (docAdds(prevDocLed, nextDocLed && !nextSplitLead, after, before))\n\t\tBlank",
+			"replace": "return if (docAdds(prevDocLed, nextDocLed && !nextSplitLead, after, before))\n\t\tBlank\n\telse if (docVetoes(nextDocLed, before))\n\t\tNoBlank",
 			"note": "the after-doc blank beats `beforeDocCommentEmptyLines: none`, the reverse of the writer's precedence, so the check demands a blank between two doc-commented members the writer removes"
 		},
 		{
@@ -413,6 +413,22 @@
 			"find": "public static inline function bodySlot(",
 			"replace": "public static function bodySlot(",
 			"note": "the slot hook stops inlining, so every body below its head evaluates its facts, the glue predicate among them, even in a list that does not share"
+		},
+		{
+			"name": "M-DOC-SPLIT-LEAD-ANY-PREDECESSOR",
+			"type": "anyparse.format.MemberGap",
+			"method": "docSplitLead",
+			"find": "return last > 0 && leadingComments[last - 1].startsWith('//');",
+			"replace": "return last > 0;",
+			"note": "two adjacent doc comments read as a split lead, which withdraws the before-doc blank from a member that should have it"
+		},
+		{
+			"name": "M-DOC-GAP-SPLIT-LEAD-IGNORED",
+			"type": "anyparse.format.MemberGap",
+			"method": "docGap",
+			"find": "docAdds(prevDocLed, nextDocLed && !nextSplitLead, after, before)",
+			"replace": "docAdds(prevDocLed, nextDocLed, after, before)",
+			"note": "member-order demands a before-doc blank above a split-led member that fmt never writes"
 		}
 	]
 }

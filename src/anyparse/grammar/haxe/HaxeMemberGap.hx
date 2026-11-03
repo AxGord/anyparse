@@ -30,7 +30,8 @@ final class HaxeMemberGap {
 		final unreadable: Array<String> = [];
 		inline function docGap(prev: Array<String>, next: Array<String>): DocGapVerdict {
 			return MemberGap.docGap(
-				MemberGap.docLed(prev), MemberGap.docLed(next), opt.afterFieldsWithDocComments, opt.beforeDocCommentEmptyLines
+				MemberGap.docLed(prev), MemberGap.docLed(next), opt.afterFieldsWithDocComments, opt.beforeDocCommentEmptyLines,
+				MemberGap.docSplitLead(next)
 			);
 		}
 		return {

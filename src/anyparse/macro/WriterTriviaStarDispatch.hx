@@ -43,11 +43,23 @@ using anyparse.macro.MetaInspect;
 	anyparse.macro.WriterPolicyLowering)
 final class WriterTriviaStarDispatch {
 
-	/** `@:fmt(beginEndType(...))` argument count naming one begin/end knob pair. */
-	private static inline final KNOB_PAIR: Int = 2;
+	/** How many knobs `@:fmt(beginEndType(...))` names: begin, end. */
+	private static inline final BEGIN_END_KNOBS: Int = 2;
 
-	/** `@:fmt(beginEndType(...))` argument count naming a knob pair, a context flag and the pair the flag switches to. */
-	private static inline final KNOB_PAIR_SWITCHED: Int = 5;
+	/** The arguments of `@:fmt(interMemberBlankLines(...))` before its knobs: classifier field, var ctors, fn ctors. */
+	private static inline final INTER_MEMBER_HEAD_ARGS: Int = 3;
+
+	/** How many knobs `@:fmt(interMemberBlankLines(...))` names: between vars, between functions, after vars. */
+	private static inline final INTER_MEMBER_KNOBS: Int = 3;
+
+	/** The `@:fmt` flag that subdivides a member Star's kinds into static and instance. */
+	private static inline final STATIC_SUBDIVISION: String = 'staticVarSubdivision';
+
+	/** The arguments of `@:fmt(staticVarSubdivision(...))` before its knobs: modifier field, static ctor. */
+	private static inline final STATIC_SUBDIV_HEAD_ARGS: Int = 2;
+
+	/** How many knobs `@:fmt(staticVarSubdivision(...))` names: after static vars, between static functions. */
+	private static inline final STATIC_SUBDIV_KNOBS: Int = 2;
 
 	/**
 	 * Trivia close-peek (`@:trail`) Star dispatch (the `if (closeText != null)`
@@ -290,7 +302,7 @@ final class WriterTriviaStarDispatch {
 		// string → `_dt('')` is a no-op, and `emptyText = '' +
 		// closeText` stays format-neutral (invariant #5).
 		final afterDocComments: Bool = starNode.fmtHasFlag('afterFieldsWithDocComments');
-		final keepBetweenFields: Bool = starNode.fmtHasFlag('existingBetweenFields');
+		final existingKnob: Null<Expr> = starKnobReads(starNode, 'existingBetweenFields', 1)?.pop();
 		final beforeDocComments: Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
 		final indentCaseLabelsGate: Bool = starNode.fmtHasFlag('indentCaseLabels');
 		final emptyCurlyBreak: Bool = starNode.fmtHasFlag('emptyCurlyBreak');
@@ -300,8 +312,9 @@ final class WriterTriviaStarDispatch {
 		// inside `triviaBlockStarExpr`.
 		final emptyCurlyKnob: Null<String> = fmtFirstStringArg(starNode, 'emptyCurlyBreak');
 		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
-		final beginTypeAccess: Null<Expr> = beginEndType ? beginEndKnobAccess(starNode, 0) : null;
-		final endTypeAccess: Null<Expr> = beginEndType ? beginEndKnobAccess(starNode, 1) : null;
+		final beginEndKnobs: Array<Expr> = starKnobReads(starNode, 'beginEndType', BEGIN_END_KNOBS) ?? [];
+		final beginTypeAccess: Null<Expr> = beginEndKnobs[0];
+		final endTypeAccess: Null<Expr> = beginEndKnobs[1];
 		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
 		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
 		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
@@ -357,7 +370,7 @@ final class WriterTriviaStarDispatch {
 
 		final blockStar: Expr = TriviaBlockLowering.triviaBlockStarExpr(
 			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText,
-			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
+			afterDocComments, existingKnob, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
@@ -407,8 +420,8 @@ final class WriterTriviaStarDispatch {
 		// and call form (`staticVarSubdivision('modifiers', 'Static',
 		// 'afterStaticVars')`) — `fmtReadStringArgs` is null in the
 		// bare form and only carries args when the call form is used.
-		final staticVarSubdiv: Bool = starNode.fmtHasFlag('staticVarSubdivision');
-		final staticVarSubdivArgs: Null<Array<String>> = staticVarSubdiv ? starNode.fmtReadStringArgs('staticVarSubdivision') : null;
+		final staticVarSubdiv: Bool = starNode.fmtHasFlag(STATIC_SUBDIVISION);
+		final staticVarSubdivArgs: Null<Array<String>> = staticVarSubdiv ? starNode.fmtReadStringArgs(STATIC_SUBDIVISION) : null;
 		final staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo> = staticVarSubdiv && interMemberInfo != null
 			? buildStaticVarSubdivisionInfo(tc, elemRefName, staticVarSubdivArgs ?? [])
 			: null;
@@ -466,12 +479,7 @@ final class WriterTriviaStarDispatch {
 	private static function buildInterMemberClassifyInfo(
 		tc: TriviaStarDispatchCtx, elemRefName: String, args: Array<String>, ?condArgs: Array<String>
 	): WriterLowering.InterMemberClassifyInfo {
-		if (args.length != 3 && args.length != 6)
-			Context.fatalError(
-				'WriterLowering: @:fmt(interMemberBlankLines) expects 3 or 6 string args (classifierField, varCtor, fnCtor ['
-				+ ', betweenVarsField, betweenFunctionsField, afterVarsField]), got ${args.length}',
-				Context.currentPos()
-			);
+		final knobs: Array<Expr> = knobReads('interMemberBlankLines', args.slice(INTER_MEMBER_HEAD_ARGS), INTER_MEMBER_KNOBS);
 		final fieldName: String = args[0];
 		// The var-ctor arg accepts a `|`-separated set so grammars whose
 		// element enum splits the "var" family across multiple ctors (Haxe:
@@ -488,9 +496,7 @@ final class WriterTriviaStarDispatch {
 		// `FieldUtils.getFieldType`, which classifies a `final`-modified
 		// `function` as the same `Function(...)` kind as a plain `function`.
 		final fnCtors: Array<String> = args[2].split('|');
-		final betweenVarsField: String = args.length == 6 ? args[3] : 'betweenVars';
-		final betweenFunctionsField: String = args.length == 6 ? args[4] : 'betweenFunctions';
-		final afterVarsField: String = args.length == 6 ? args[5] : 'afterVars';
+
 		// ω-interblank-cond-lookthrough: validate + unpack the optional
 		// look-through config. The classifier field must match
 		// `interMemberBlankLines`'s — both switches read the same enum.
@@ -523,9 +529,9 @@ final class WriterTriviaStarDispatch {
 		return {
 			classifierFieldName: fieldName,
 			classifyCases: cases,
-			betweenVarsField: betweenVarsField,
-			betweenFunctionsField: betweenFunctionsField,
-			afterVarsField: afterVarsField
+			betweenVars: knobs[0],
+			betweenFunctions: knobs[1],
+			afterVars: knobs[2]
 		};
 	}
 
@@ -641,45 +647,27 @@ final class WriterTriviaStarDispatch {
 	}
 
 	/**
-	 * ω-class-static-var-cascade — resolve `@:fmt(staticVarSubdivision)` /
-	 * `@:fmt(staticVarSubdivision('<modifierField>', '<staticCtor>',
-	 * '<afterStaticVarsField>' [, '<betweenStaticFunctionsField>']))` into
-	 * the data the per-iteration kind switch reads to promote kind `1`
-	 * (instance var) to kind `3` (static var) and kind `2` (function) to
-	 * kind `4` (static function). The zero-arg form defaults to the
-	 * `('modifiers', 'Static', 'afterStaticVars', 'betweenStaticFunctions')`
-	 * quadruple — matches the canonical `HxMemberDecl.modifiers` Star +
-	 * `HxMemberModifier.Static` ctor + the matching `HxModuleWriteOptions`
-	 * knobs.
+	 * ω-class-static-var-cascade — resolve `@:fmt(staticVarSubdivision(<modifierField>, <staticCtor>, <afterStaticVars>,
+	 * <betweenStaticFunctions> [, <flag>, <switched afterStaticVars>, <switched betweenStaticFunctions>]))` into the data the
+	 * per-iteration kind switch reads to promote kind `1` (instance var) to kind `3` (static var) and kind `2` (function) to
+	 * kind `4` (static function); the knobs resolve through `knobReads`.
 	 *
-	 * ω-abstract-static-fn-cascade — the optional 4th arg names the
-	 * `betweenStaticFunctions` opt knob consulted at a (4,4) static-fn pair.
-	 *
-	 * The companion meta is read alongside `@:fmt(interMemberBlankLines)`;
-	 * `@:fmt(staticVarSubdivision)` without `interMemberBlankLines` is
-	 * inert (the cascade arms are written by `triviaBlockStarExpr` and
-	 * gated on the interMember presence). Validates that the named
-	 * modifier field exists on the element Seq rule and that it's a Star.
+	 * The companion meta is read alongside `@:fmt(interMemberBlankLines)`; `@:fmt(staticVarSubdivision)` without
+	 * `interMemberBlankLines` is inert (the cascade arms are written by `triviaBlockStarExpr` and gated on the interMember
+	 * presence). Validates that the named modifier field exists on the element Seq rule and that it is a Star.
 	 */
 	private static function buildStaticVarSubdivisionInfo(
 		tc: TriviaStarDispatchCtx, elemRefName: String, args: Array<String>
 	): WriterLowering.StaticVarSubdivisionInfo {
-		if (args.length != 0 && args.length != 3 && args.length != 4)
-			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) expects 0, 3 or 4 string args ('
-				+ 'modifierField, staticCtor, afterStaticVarsField [, betweenStaticFunctionsField]), got ${args.length}',
-				Context.currentPos()
-			);
-		final modifierField: String = args.length >= 3 ? args[0] : 'modifiers';
-		final staticCtor: String = args.length >= 3 ? args[1] : 'Static';
-		final afterStaticVarsField: String = args.length >= 3 ? args[2] : 'afterStaticVars';
-		final betweenStaticFunctionsField: String = args.length == 4 ? args[3] : 'betweenStaticFunctions';
+		final knobs: Array<Expr> = knobReads(STATIC_SUBDIVISION, args.slice(STATIC_SUBDIV_HEAD_ARGS), STATIC_SUBDIV_KNOBS);
+		final modifierField: String = args[0];
+		final staticCtor: String = args[1];
 		validateStaticVarSubdivision(tc, elemRefName, modifierField, staticCtor);
 		return {
 			modifierFieldName: modifierField,
 			staticCtorName: staticCtor,
-			afterStaticVarsField: afterStaticVarsField,
-			betweenStaticFunctionsField: betweenStaticFunctionsField
+			afterStaticVars: knobs[0],
+			betweenStaticFunctions: knobs[1]
 		};
 	}
 
@@ -742,22 +730,32 @@ final class WriterTriviaStarDispatch {
 	}
 
 	/**
-	 * The `Null<Int>` knob read a `@:fmt(beginEndType(...))` type body takes its `side` count from (0 begin, 1 end):
-	 * `('b', 'e')`, that pair; `('b', 'e', 'flag', 'fb', 'fe')`, the second pair while `opt.<flag>` is set — how one
-	 * grammar type written in two roles (`abstract` and `enum abstract`, `class` and `extern class`) keeps two scopes.
-	 * The grammar always names the pair: a default here would be one grammar's knob name in the core macro.
+	 * The one answer to "which option does a type body's `@:fmt` knob read": `meta` names `width` knobs of the body's own;
+	 * a flag and `width` more name the knobs it reads while `opt.<flag>` is set — how one grammar type written in two roles
+	 * (`abstract` and `enum abstract`, `class` and `extern class`) keeps two scopes. The grammar always names them: a
+	 * default here would be one grammar's option name in the core macro.
 	 */
-	private static function beginEndKnobAccess(star: ShapeNode, side: Int): Expr {
-		final args: Null<Array<String>> = star.fmtReadStringArgs('beginEndType');
-		if (args == null || (args.length != KNOB_PAIR && args.length != KNOB_PAIR_SWITCHED))
+	private static function knobReads(meta: String, knobs: Null<Array<String>>, width: Int): Array<Expr> {
+		if (knobs == null || (knobs.length != width && knobs.length != 2 * width + 1))
 			Context.fatalError(
-				'@:fmt(beginEndType) names its knob pair, optionally followed by a flag and a second pair', Context.currentPos()
+				'@:fmt($meta) names its $width knob(s), optionally followed by a flag and the $width it switches to, got $knobs',
+				Context.currentPos()
 			);
-		final own: Expr = macro $p{['opt', args[side]]};
-		if (args.length == KNOB_PAIR) return own;
-		final flag: Expr = macro $p{['opt', args[KNOB_PAIR]]};
-		final switched: Expr = macro $p{['opt', args[KNOB_PAIR + 1 + side]]};
-		return macro ($flag ? $switched : $own);
+		final own: Array<Expr> = [for (i in 0...width) macro $p{['opt', knobs[i]]}];
+		if (knobs.length == width) return own;
+		final flag: Expr = macro $p{['opt', knobs[width]]};
+		return [
+			for (i in 0...width) {
+				final unswitched: Expr = own[i];
+				final switched: Expr = macro $p{['opt', knobs[width + 1 + i]]};
+				macro ($flag ? $switched : $unswitched);
+			}
+		];
+	}
+
+	/** `knobReads` over the names a Star's `@:fmt(<meta>(...))` gives; null when the Star does not carry the flag. */
+	private static function starKnobReads(star: ShapeNode, meta: String, width: Int): Null<Array<Expr>> {
+		return star.fmtHasFlag(meta) ? knobReads(meta, star.fmtReadStringArgs(meta), width) : null;
 	}
 
 }

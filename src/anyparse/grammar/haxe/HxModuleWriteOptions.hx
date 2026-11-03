@@ -354,10 +354,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	existingBetweenFields: KeepEmptyLinesPolicy,
 
 	/**
-	 * `Keep` / `Remove` that takes over from `existingBetweenFields` when `_classExtern` is true
-	 * (`emptyLines.externClassEmptyLines.existingBetweenFields`). `Remove` strips the inter-member
-	 * source blank only when the next member's leading cluster carries a trailing `/**` doc comment
-	 * preceded by `//` line comments; a regular leading cluster keeps its blanks.
+	 * `Keep` / `Remove` that takes over from `existingBetweenFields` on a class body while
+	 * `_classExtern` is true (`emptyLines.externClassEmptyLines.existingBetweenFields`).
 	 */
 	externExistingBetweenFields: KeepEmptyLinesPolicy,
 	beforeDocCommentEmptyLines: CommentEmptyLinesPolicy,
@@ -367,14 +365,41 @@ typedef HxModuleWriteOptions = WriteOptions & {
 
 	/**
 	 * Blanks between an instance var and a static var (either order); with `betweenStaticFunctions`,
-	 * fires only where the member Star ALSO carries `@:fmt(staticVarSubdivision)` — class and abstract
-	 * members opt in, interface members do not — and only when `_classExtern` is false.
+	 * fires only where the member Star ALSO carries `@:fmt(staticVarSubdivision)` — class and abstract members opt in,
+	 * interface members do not; an `extern class` and an `enum abstract` read their own between-counts there instead.
 	 */
 	afterStaticVars: Int,
 	betweenStaticFunctions: Int,
 	interfaceBetweenVars: Int,
 	interfaceBetweenFunctions: Int,
 	interfaceAfterVars: Int,
+
+	/**
+	 * The between-member counts and the source-blank policy of a type body with its own `<kind>EmptyLines` section:
+	 * `interface`, `abstract`, `extern class` (read while `_classExtern`), `enum abstract` (read while `_inEnumAbstract`) and
+	 * `macro class` reification; the `…AfterStaticVars` / `…BetweenStaticFunctions` of `abstract` and `macro class` subdivide
+	 * like the class pair. Each is named by its grammar field's `@:fmt(...)`, so no kind's config moves another kind's body.
+	 */
+	interfaceExistingBetweenFields: KeepEmptyLinesPolicy,
+	externClassBetweenVars: Int,
+	externClassBetweenFunctions: Int,
+	externClassAfterVars: Int,
+	abstractExistingBetweenFields: KeepEmptyLinesPolicy,
+	abstractBetweenVars: Int,
+	abstractBetweenFunctions: Int,
+	abstractAfterVars: Int,
+	abstractAfterStaticVars: Int,
+	abstractBetweenStaticFunctions: Int,
+	enumAbstractExistingBetweenFields: KeepEmptyLinesPolicy,
+	enumAbstractBetweenVars: Int,
+	enumAbstractBetweenFunctions: Int,
+	enumAbstractAfterVars: Int,
+	macroClassExistingBetweenFields: KeepEmptyLinesPolicy,
+	macroClassBetweenVars: Int,
+	macroClassBetweenFunctions: Int,
+	macroClassAfterVars: Int,
+	macroClassAfterStaticVars: Int,
+	macroClassBetweenStaticFunctions: Int,
 	betweenEnumCtors: Int,
 
 	/**
@@ -760,10 +785,9 @@ typedef HxModuleWriteOptions = WriteOptions & {
 
 	/**
 	 * Set by `HxTopLevelDecl.decl` via `@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers',
-	 * 'Extern'))` when the sibling `modifiers` Star contains an `Extern` ctor. Read by
-	 * `triviaBlockStarExpr`'s `addByInterMemberExpr` to suppress `interMemberBlankLines`-driven blank
-	 * emission inside extern decls (the fork's `externClassEmptyLines`); also selects
-	 * `externExistingBetweenFields` and, on a class body, `externClassBeginType` / `externClassEndType`.
+	 * 'Extern'))` when the sibling `modifiers` Star contains an `Extern` ctor. Set for any extern declaration,
+	 * read only where a grammar field names it: `HxClassDecl.members` switches to the `externClass*` knobs
+	 * (`extern abstract` and `extern interface` keep the abstract and interface ones).
 	 */
 	_classExtern: Bool,
 

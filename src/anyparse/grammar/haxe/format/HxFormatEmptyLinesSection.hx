@@ -9,19 +9,15 @@ package anyparse.grammar.haxe.format;
  * not a floor (`0` strips a blank the source had, `2` emits two the source lacked), except
  * `betweenSingleLineTypes`, which is insertion-only (`0` leaves the slot source-driven).
  *
- * Nested sections share the fork's `EmptyLinesFieldsConfig` shape (`HxFormatClassEmptyLinesConfig`) across
- * `classEmptyLines` / `externClassEmptyLines` / `abstractEmptyLines`, and only the sub-keys with a runtime
- * knob are consumed: `existingBetweenFields` (class; the extern variant feeds `externExistingBetweenFields`),
- * `betweenStaticFunctions` (abstract, through the static-function cascade arm on `HxAbstractDecl.members`);
- * the other per-slot sub-keys share the global runtime knobs, last-write wins for a config that mixes
- * sections. `interfaceEmptyLines` feeds the dedicated `interfaceBetweenVars` / `interfaceBetweenFunctions` /
- * `interfaceAfterVars` knobs (0/0/0 defaults, the fork's `InterfaceFieldsEmptyLinesConfig`);
+ * `classEmptyLines`, `abstractEmptyLines` and `macroClassEmptyLines` share
+ * `HxFormatClassEmptyLinesConfig`; `interfaceEmptyLines`, `externClassEmptyLines` and
+ * `enumAbstractEmptyLines` share `HxFormatInterfaceEmptyLinesConfig`; each section feeds its OWN between-member knobs, so one
+ * kind's config never moves another kind's body (`abstract*`, `interface*`, `externClass*`, `enumAbstract*`, `macroClass*`);
  * `enumEmptyLines.betweenFields` feeds the dedicated `betweenEnumCtors`; `typedefEmptyLines` feeds four
  * DEDICATED `typedef*` knobs, kept separate from the class scopes' shared ones because the typedef-RHS anon
  * renders through the `@:sep`-Star writer path, not the class-body Star path (the fork's distinct
- * `TypedefFieldsEmptyLinesConfig`), all defaulting to the no-blank baseline. Every type-kind section's
- * `beginType` / `endType` — `enumAbstractEmptyLines` and `macroClassEmptyLines` carry nothing else — feeds that
- * kind's OWN knob pair (`HaxeFormatConfigLoader.applyTypeBodyEdges`); unset, the source decides. `importAndUsing` feeds
+ * `TypedefFieldsEmptyLinesConfig`), all defaulting to the no-blank baseline. Every type-kind section's `beginType` / `endType`
+ * feeds that kind's OWN knob pair (`HaxeFormatConfigLoader.applyTypeBodyEdges`); unset, the source decides. `importAndUsing` feeds
  * `beforeUsing` / `betweenImports` / `betweenImportsLevel` / `beforeType`.
  *
  * `maxAnywhereInFile` feeds the base `WriteOptions.maxConsecutiveBlanks`, the writer's final-pass cap on
@@ -39,7 +35,7 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var classEmptyLines: HxFormatClassEmptyLinesConfig;
 
-	@:optional var externClassEmptyLines: HxFormatClassEmptyLinesConfig;
+	@:optional var externClassEmptyLines: HxFormatInterfaceEmptyLinesConfig;
 
 	@:optional var abstractEmptyLines: HxFormatClassEmptyLinesConfig;
 
@@ -47,9 +43,9 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var enumEmptyLines: HxFormatEnumEmptyLinesConfig;
 
-	@:optional var enumAbstractEmptyLines: HxFormatTypeBodyEmptyLinesConfig;
+	@:optional var enumAbstractEmptyLines: HxFormatInterfaceEmptyLinesConfig;
 
-	@:optional var macroClassEmptyLines: HxFormatTypeBodyEmptyLinesConfig;
+	@:optional var macroClassEmptyLines: HxFormatClassEmptyLinesConfig;
 
 	@:optional var typedefEmptyLines: HxFormatTypedefEmptyLinesConfig;
 

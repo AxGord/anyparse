@@ -11,8 +11,7 @@ package anyparse.format;
  * `Remove` — strip every blank line between siblings, regardless of
  * what the source had. Produces compact, zero-gap member bodies.
  *
- * Consumed by field-scoped writer flags such as
- * `@:fmt(existingBetweenFields)`: presence of the flag on a
+ * Consumed by field-scoped writer flags such as `@:fmt(existingBetweenFields(<knob>))`: presence of the flag on a
  * trivia-bearing Star field switches the emission loop from honouring
  * only `_t.blankBefore` to a two-way runtime decision driven by the
  * policy. Composes with other blank-line policies on the same slot

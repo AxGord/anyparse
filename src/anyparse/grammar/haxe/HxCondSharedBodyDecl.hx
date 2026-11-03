@@ -45,6 +45,7 @@ typedef HxCondSharedBodyDecl = {
 	@:trivia @:tryparse @:fmt(forceInlineSep) var modifiers: Array<HxModifier>;
 	var head: HxDeclHead;
 	var alt: HxCondAltRaw;
-	@:trail('}') @:trivia @:fmt(padLeading, nestBody, existingBetweenFields, rightCurly, glueToPrevious('member', 'EmptySemiMember'))
+	@:trail('}') @:trivia @:fmt(padLeading, nestBody, existingBetweenFields('existingBetweenFields'), rightCurly,
+		glueToPrevious('member', 'EmptySemiMember'))
 	var members: Array<HxMemberDecl>;
 }

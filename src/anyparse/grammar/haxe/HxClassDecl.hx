@@ -41,11 +41,17 @@ typedef HxClassDecl = {
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps,
 		listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap')) var heritage: Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('beginType', 'endType', '_classExtern', 'externClassBeginType', 'externClassEndType'),
-		afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines,
-		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
-		interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember|FinalModifiedMember'),
-		interMemberCondLookThrough('member', 'Conditional', 'body'), staticVarSubdivision, betweenMultilineCommentsBlanks,
-		gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'), relocateTrailingComments,
-		glueToPrevious('member', 'EmptySemiMember'))
+		afterFieldsWithDocComments, existingBetweenFields('existingBetweenFields', '_classExtern', 'externExistingBetweenFields'),
+		beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading,
+		blankBeforeOrphanLineCommentTrail,
+		interMemberBlankLines(
+			'member', 'VarMember|FinalMember', 'FnMember|FinalModifiedMember', 'betweenVars', 'betweenFunctions', 'afterVars',
+			'_classExtern', 'externClassBetweenVars', 'externClassBetweenFunctions', 'externClassAfterVars'
+		), interMemberCondLookThrough('member', 'Conditional', 'body'),
+		staticVarSubdivision(
+			'modifiers', 'Static', 'afterStaticVars', 'betweenStaticFunctions', '_classExtern', 'externClassBetweenVars',
+			'externClassBetweenFunctions'
+		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),
+		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
 	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }
