@@ -13,7 +13,7 @@ import haxe.Exception;
 import haxe.io.Path;
 
 /**
- * One `apqlint.json` document as DECLARED (`LintDocument`): read off its JSON, folded over the
+ * One `apq.json` document as DECLARED (`LintDocument`): read off its JSON, folded over the
  * documents above it, and finished into the `LintConfig` the rules ask.
  *
  * Its own module rather than more of `LintConfig` because the two hold different things: that
@@ -97,7 +97,7 @@ final class LintDocuments {
 	}
 
 	/**
-	 * The typed parse and mapping of ONE `apqlint.json` document, or null when the
+	 * The typed parse and mapping of ONE `apq.json` document, or null when the
 	 * schema rejects it. Stops at `LintDocument` rather than at `LintConfig` so a
 	 * caller folding a chain can still tell an unsaid key from a defaulted one, and
 	 * so every relative path is resolved here — against THIS document's directory,
@@ -313,7 +313,7 @@ final class LintDocuments {
 }
 
 /**
- * `apqlint.json` documents already parsed in one run, keyed by directory and content (`LintDocuments.parseDocumentIn`),
+ * `apq.json` documents already parsed in one run, keyed by directory and content (`LintDocuments.parseDocumentIn`),
  * null for content the schema rejects. Owned by a caller that resolves the chains of many directories and only READS
  * the documents — the oracle entries a lint run prepares are written in place, so a memo shared with that run's own
  * configs would hand one directory's prepared entries to another.
@@ -321,7 +321,7 @@ final class LintDocuments {
 typedef DocumentMemo = Map<String, Null<LintDocument>>;
 
 /**
- * ONE `apqlint.json` document, as DECLARED — the intermediate a chain of them is
+ * ONE `apq.json` document, as DECLARED — the intermediate a chain of them is
  * folded through before it becomes a `LintConfig`.
  *
  * Two things separate it from the finished config. Every key is optional, so
@@ -329,7 +329,7 @@ typedef DocumentMemo = Map<String, Null<LintDocument>>;
  * default" — a merge has no other way to know whether a nearer document meant to
  * override. And every path is ALREADY resolved against the directory of the
  * document that declared it, so folding a chain never has to remember which
- * `apqlint.json` a relative `"../src"` was written next to.
+ * `apq.json` a relative `"../src"` was written next to.
  */
 typedef LintDocument = {
 	var rules: Map<String, RuleConfig>;

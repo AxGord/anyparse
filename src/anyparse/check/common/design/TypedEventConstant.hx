@@ -20,7 +20,7 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
  * Retypes an event class's `String` event-type constant to the project's TYPED event-type abstract —
  * `public static inline final CLOSE:String = 'close';` on `class ModalEvent extends Event` becomes
  * `public static inline final CLOSE:EventType<ModalEvent> = 'close';` — so a listener written for another event class
- * stops compiling. Inert until the project declares its framework's event types in `apqlint.json`:
+ * stops compiling. Inert until the project declares its framework's event types in `apq.json`:
  *
  *     "typed-event-constant": {
  *         "eventBase": "openfl.events.Event",
@@ -81,7 +81,7 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 @:nullSafety(Strict)
 final class TypedEventConstant extends RuleBase implements ConfigAware implements FileGated implements RiskyFix {
 
-	/** The rule id, also the `apqlint.json` option key. */
+	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'typed-event-constant';
 
 	/** The type parameters `typeAbstract` must declare: the event class goes in the one slot. */

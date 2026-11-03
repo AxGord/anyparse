@@ -759,7 +759,7 @@ class DeadNullGuardTest extends Test {
 		#if (sys || nodejs)
 		final src: String = 'class C { function f(node:Null<String>, other:String):String {'
 			+ ' final reads = node != null && node.length > 1; return reads && node != null ? node : other; } }';
-		final dir: String = CliFixture.writeDir('dngplain', [{ name: 'apqlint.json', source: '{}' }]);
+		final dir: String = CliFixture.writeDir('dngplain', [{ name: 'apq.json', source: '{}' }]);
 		final check: DeadNullGuard = new DeadNullGuard();
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/C.hx', source: src }];
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);

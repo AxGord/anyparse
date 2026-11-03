@@ -20,7 +20,7 @@ import anyparse.query.Cli;
  * without a compiler. The token- and probe-parsing tests are pure and always run.
  *
  * Fixtures are `CliFixture.writeDir` temp dirs holding `Good.hx`, a `-cp .` hxml and an
- * `apqlint.json` naming it. Each `writeDir` call yields a UNIQUE directory, which is
+ * `apq.json` naming it. Each `writeDir` call yields a UNIQUE directory, which is
  * what keeps every test's fingerprint — and therefore its cache file — distinct.
  */
 @:nullSafety(Strict)
@@ -285,47 +285,6 @@ final class OracleCacheTest extends Test {
 		#end
 	}
 
-	#if (sys || nodejs)
-	/** A fixture project: one source, a `-cp .` hxml naming it, and an `apqlint.json` pointing the oracle at that hxml. */
-	private function writeLintDir(main: String): String {
-		return CliFixture.writeDir('oraclecache', [
-			{ name: 'Good.hx', source: main },
-			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: CONFIG }
-		]);
-	}
-
-	/** Pass-and-clean-up for a host where no fingerprint can be derived (no `haxe`): the caller still owns the `return`. */
-	private function skipNoFingerprint(dir: String): Void {
-		Assert.pass('no fingerprint on this host — skipped');
-		CliFixture.removeDir(dir);
-	}
-
-	/**
-	 * Whether the cache these scenarios pin is live at all, reporting the skip itself when
-	 * it is not. `APQ_NO_ORACLE_CACHE` declines the cache process-wide, and no claim about
-	 * REUSE can be made under it — so skipping is the honest answer. The alternative is a
-	 * suite that goes red for anyone who exports the documented opt-out, which is exactly
-	 * how this guard was found.
-	 */
-	private function cacheDeclined(): Bool {
-		if (!EnvFlag.isSet('APQ_NO_ORACLE_CACHE')) return false;
-		Assert.pass('APQ_NO_ORACLE_CACHE declines the cache — skipped');
-		return true;
-	}
-
-	/** Whether this host has a `haxe` that answers at all — the skip gate every compiler-dependent test opens with. */
-	private function oracleWorks(): Bool {
-		final dir: String = CliFixture.writeDir('oraclecacheprobe', [
-			{ name: 'Good.hx', source: VALID },
-			{ name: 'check.hxml', source: HXML }
-		]);
-		final ok: Bool = CompilerOracle.typecheck('check.hxml', dir).match(Confirmed);
-		CliFixture.removeDir(dir);
-		return ok;
-	}
-	#end
-
 	/**
 	 * A verdict is filed under the fingerprint taken BEFORE its compile only while the input still hashes to it: a tree
 	 * that moved during the compile (an editor saving, another run regenerating) produced a verdict about neither state.
@@ -420,5 +379,46 @@ final class OracleCacheTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	#if (sys || nodejs)
+	/** A fixture project: one source, a `-cp .` hxml naming it, and an `apq.json` pointing the oracle at that hxml. */
+	private function writeLintDir(main: String): String {
+		return CliFixture.writeDir('oraclecache', [
+			{ name: 'Good.hx', source: main },
+			{ name: 'check.hxml', source: HXML },
+			{ name: 'apq.json', source: CONFIG }
+		]);
+	}
+
+	/** Pass-and-clean-up for a host where no fingerprint can be derived (no `haxe`): the caller still owns the `return`. */
+	private function skipNoFingerprint(dir: String): Void {
+		Assert.pass('no fingerprint on this host — skipped');
+		CliFixture.removeDir(dir);
+	}
+
+	/**
+	 * Whether the cache these scenarios pin is live at all, reporting the skip itself when
+	 * it is not. `APQ_NO_ORACLE_CACHE` declines the cache process-wide, and no claim about
+	 * REUSE can be made under it — so skipping is the honest answer. The alternative is a
+	 * suite that goes red for anyone who exports the documented opt-out, which is exactly
+	 * how this guard was found.
+	 */
+	private function cacheDeclined(): Bool {
+		if (!EnvFlag.isSet('APQ_NO_ORACLE_CACHE')) return false;
+		Assert.pass('APQ_NO_ORACLE_CACHE declines the cache — skipped');
+		return true;
+	}
+
+	/** Whether this host has a `haxe` that answers at all — the skip gate every compiler-dependent test opens with. */
+	private function oracleWorks(): Bool {
+		final dir: String = CliFixture.writeDir('oraclecacheprobe', [
+			{ name: 'Good.hx', source: VALID },
+			{ name: 'check.hxml', source: HXML }
+		]);
+		final ok: Bool = CompilerOracle.typecheck('check.hxml', dir).match(Confirmed);
+		CliFixture.removeDir(dir);
+		return ok;
+	}
+	#end
 
 }

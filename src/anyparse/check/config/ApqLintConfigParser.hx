@@ -6,7 +6,7 @@ package anyparse.check.config;
  * empty, as with every other `@:build(buildParser(...))` marker in the
  * project.
  *
- * Used by `LintConfig.parse` as the single reader of an `apqlint.json`: this
+ * Used by `LintConfig.parse` as the single reader of an `apq.json`: this
  * parser builds the typed `ApqLintConfig`, `LintConfig` maps it onto the
  * per-rule toggles / severity overrides / option bags the checks read.
  * `parse` throws on malformed or wrong-shaped input; `LintConfig.parse`

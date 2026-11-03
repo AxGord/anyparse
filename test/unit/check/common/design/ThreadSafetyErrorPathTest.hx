@@ -4,6 +4,7 @@ import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.LongLockExplain.LongLockReason;
 import unit.cli.CliFixture;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -66,8 +67,7 @@ class ThreadSafetyErrorPathTest extends Test {
 	public function testAMainSinkCallInACatchIsInfo(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
-			'class A { static function step():Void {}'
-			+ ' static function pause():Void Sys.sleep(2);'
+			'class A { static function step():Void {} static function pause():Void Sys.sleep(2);'
 			+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { Sys.sleep(1); } pause(); } }'
 		]);
 		Assert.same(['info A A.main | Sys.sleep', 'warning A A.pause | Sys.sleep'], graded(found));
@@ -80,7 +80,7 @@ class ThreadSafetyErrorPathTest extends Test {
 	@:pin('control') @:killer('M-TS-ERROR-EXPLAIN-OFF')
 	public function testExplainLongMarksTheErrorPath(): Void {
 		#if (sys || nodejs)
-		final dir: String = CliFixture.writeDir('threadsafetyerrorpath', [{ name: 'apqlint.json', source: CONFIG }]);
+		final dir: String = CliFixture.writeDir('threadsafetyerrorpath', [{ name: 'apq.json', source: CONFIG }]);
 		final check: ThreadSafety = new ThreadSafety();
 		check.explainLongLocks(true);
 		final sources: Array<String> = fixture('function save():Void { try { step(); } catch (e:Dynamic) { Report.send(); } }', 'save();');
@@ -167,9 +167,8 @@ class ThreadSafetyErrorPathTest extends Test {
 	public function testALambdaACatchStoresRunsAnywhere(): Void {
 		#if (sys || nodejs)
 		final stored: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
-			'class A { static var onTick:() -> Void = null; static function step():Void {}'
-			+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { onTick = () -> Sys.sleep(1); }'
-			+ ' for (i in 0...3) onTick(); } }'
+			'class A { static var onTick:() -> Void = null; static function step():Void {} public static function main():Void { try {'
+			+ ' step(); } catch (e:Dynamic) { onTick = () -> Sys.sleep(1); } for (i in 0...3) onTick(); } }'
 		]);
 		Assert.same(['warning A A.main | Sys.sleep'], graded(stored));
 		final called: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
@@ -179,7 +178,7 @@ class ThreadSafetyErrorPathTest extends Test {
 		Assert.same(['info A A.main | Sys.sleep'], graded(called), 'called in the catch');
 		// handed to a call that runs it later, once: no repetition decides it, only where it runs
 		final handed: Array<Violation> = ThreadSafetyCheckTest.violations(
-			StringTools.replace(CONFIG, '"lockPairs"', '"runsOnce":["A.later"],"lockPairs"'),
+			CONFIG.replace('"lockPairs"', '"runsOnce":["A.later"],"lockPairs"'),
 			[
 				'class A { static function step():Void {} static function later(f:() -> Void):Void {}'
 				+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { later(() -> Sys.sleep(1)); } } }'
@@ -199,9 +198,8 @@ class ThreadSafetyErrorPathTest extends Test {
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			REPORT,
 			'class S { final _m:Mutex = new Mutex(); public function new() {} function step():Void {} $members'
-				+ ' public function work():Void { _m.acquire(); $held _m.release(); }'
-				+ ' public function ui():Void { _m.acquire(); _m.release(); }'
-				+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s.ui(); } }'
+				+ ' public function work():Void { _m.acquire(); $held _m.release(); } public function ui():Void { _m.acquire(); '
+				+ '_m.release(); } public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s.ui(); } }'
 		];
 	}
 

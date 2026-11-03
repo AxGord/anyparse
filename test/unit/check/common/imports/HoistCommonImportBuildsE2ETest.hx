@@ -51,7 +51,7 @@ class HoistCommonImportBuildsE2ETest extends Test {
 	public function testARunOverPathsWithDifferentOracleListsHolds(): Void {
 		#if nodejs
 		final dir: Null<String> = tree('{"hxml":"check.hxml"}', [
-			{ name: 'other/apqlint.json', source: '{"compilerOracle":[{"hxml":"other.hxml"}]}' },
+			{ name: 'other/apq.json', source: '{"compilerOracle":[{"hxml":"other.hxml"}]}' },
 			{ name: 'other/other.hxml', source: '-cp ..\n-main Main\n--interp\n' },
 			{ name: 'other/Oqqther.hx', source: 'package other;\n\nclass Oqqther {}\n' }
 		]);
@@ -110,7 +110,7 @@ class HoistCommonImportBuildsE2ETest extends Test {
 			},
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n--interp\n' },
 			{
-				name: 'apqlint.json',
+				name: 'apq.json',
 				source: '{"compilerOracle":[$oracles],"resolutionRoots":["."],"reachConfigurationsComplete":true,'
 				+ '"rules":{"hoist-common-import":{"enabled":true}}}'
 			}

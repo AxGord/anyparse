@@ -270,7 +270,7 @@
 			"method": "choose",
 			"find": "if (ofFiles.length > 1 && preset == null)",
 			"replace": "if (ofFiles.length > 1)",
-			"note": "files of two grammars are refused under a preset too, so `hxq lint F.hx apqlint.json` exits 2 where it read both as Haxe"
+			"note": "files of two grammars are refused under a preset too, so `hxq lint F.hx apq.json` exits 2 where it read both as Haxe"
 		},
 		{
 			"name": "M-LANG-END-OF-OPTIONS-VALUE",

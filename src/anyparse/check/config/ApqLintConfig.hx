@@ -3,7 +3,7 @@ package anyparse.check.config;
 import anyparse.grammar.json.JValue;
 
 /**
- * Declarative schema for `apqlint.json`, parsed by the macro-generated
+ * Declarative schema for `apq.json`, parsed by the macro-generated
  * `ApqLintConfigParser` (ByName struct lowering) — the apq-native
  * counterpart of `HxFormatConfig` and `CheckstyleConfig`.
  *
@@ -15,7 +15,7 @@ import anyparse.grammar.json.JValue;
  *
  * `inherit` is the one key about the DOCUMENT rather than about the lint: false
  * makes this document the end of the chain `LintConfig.discover` folds, so it
- * stands alone instead of extending the `apqlint.json` files above it. Absent
+ * stands alone instead of extending the `apq.json` files above it. Absent
  * means true — a nested document extends its ancestors, which is what every
  * nested document written before the chain existed already meant.
  *

@@ -22,10 +22,10 @@ class JsonLayoutWriterTest extends Test {
 	/** The JSON files this repository holds, read relative to the repository root the suite runs from. */
 	private static final REPO_FILES: Array<String> = [
 		'.hxformat.json',
-		'apqlint.json',
+		'apq.json',
 		'haxelib.json',
 		'hxformat.json',
-		'test/apqlint.json',
+		'test/apq.json',
 
 		'tools/data/xconfig-hxformat.json'
 	];

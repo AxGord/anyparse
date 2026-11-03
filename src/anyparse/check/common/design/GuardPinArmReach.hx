@@ -24,14 +24,14 @@ import sys.io.File;
 /**
  * Flags a test pinned as a GUARD (`@:pin('guard')`) whose class names a mutation arm (`@:killer('<ARM>')` on a sibling — one the test
  * does not name itself) that cuts a member this test calls: a cut that reaches the test can kill it, so the guard pin may be hiding
- * a control. Inert until the project names the pin, the killer and the arm registry in `apqlint.json`:
+ * a control. Inert until the project names the pin, the killer and the arm registry in `apq.json`:
  *
  *     "guard-pin-arm-reach": { "pinMeta": "@:pin", "guardArgument": "guard", "killerMeta": "@:killer",
  *         "armRegistry": "testkit/arms" }
  *
  * The registry is a JSON document, or a directory of them, whose `arms`
  * array holds `{name, type, method}` records; a relative path is resolved
- * against the directory of each `apqlint.json` of the file's chain, nearest first, and read once
+ * against the directory of each `apq.json` of the file's chain, nearest first, and read once
  * per run. A test reaches an arm when its body names both the arm's `method` and the last segment
  * of its `type` (an identifier, a field or a constructed type) — a spelling match, which is why
  * the rule is `Info`, default-off and report-only. Grammar-agnostic over `MetaShape` and `RefShape`.
@@ -39,7 +39,7 @@ import sys.io.File;
 @:nullSafety(Strict)
 final class GuardPinArmReach extends RuleBase implements ConfigAware implements FileGated implements DefaultOff implements NoAutofix {
 
-	/** The rule id, also the `apqlint.json` option key. */
+	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'guard-pin-arm-reach';
 
 	private static inline final PIN_KEY: String = 'pinMeta';

@@ -3,6 +3,7 @@ package dev;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
+import anyparse.query.ConfigFinder;
 import anyparse.query.graph.MemberGraphBuilder;
 import devkit.Cmd.cmd;
 import devkit.Result;
@@ -34,7 +35,7 @@ final class SliceMeasure {
 	private static final CLONE_RULES: Array<String> = ['duplicate-code-renamed', 'duplicate-code'];
 
 	/** The files beside the roots a lint of a copy reads its configuration from. */
-	private static final CONFIG_FILES: Array<String> = ['apqlint.json', 'hxformat.json'];
+	private static final CONFIG_FILES: Array<String> = [ConfigFinder.PROJECT_CONFIG, ConfigFinder.LEGACY_PROJECT_CONFIG, 'hxformat.json'];
 
 	private final _repo: String;
 	private final _roots: Array<String>;
@@ -66,6 +67,23 @@ final class SliceMeasure {
 		return count;
 	}
 
+	/** `body` over a copy of the roots and the configuration files at `sha`, removed afterwards. */
+	public function withCopy<T>(sha: String, body: String -> T): T {
+		return TempDir.with(dir -> {
+			final copy: String = dir.file('tree');
+			FileSystem.createDirectory(copy);
+			final paths: Array<String> = [
+				for (path in _roots.concat(CONFIG_FILES)) if (cmd('git -C $_repo cat-file -e $sha:$path').run().ok) path
+			];
+			if (paths.length > 0) {
+				final archive: String = dir.file('tree.tar');
+				cmd('git -C $_repo archive --format=tar -o $archive $sha $paths').check();
+				cmd('tar -xf $archive -C $copy').check();
+			}
+			body(copy);
+		});
+	}
+
 	/**
 	 * The findings of the duplicate-code rules over the roots of the tree `copy`. The rules read syntax alone, so the lint
 	 * runs without the compiler oracle, which would build a revision the tool never built.
@@ -82,23 +100,6 @@ final class SliceMeasure {
 			count += CloneCensus.parseReport(report).length;
 		}
 		return count;
-	}
-
-	/** `body` over a copy of the roots and the configuration files at `sha`, removed afterwards. */
-	private function withCopy<T>(sha: String, body: String -> T): T {
-		return TempDir.with(dir -> {
-			final copy: String = dir.file('tree');
-			FileSystem.createDirectory(copy);
-			final paths: Array<String> = [
-				for (path in _roots.concat(CONFIG_FILES)) if (cmd('git -C $_repo cat-file -e $sha:$path').run().ok) path
-			];
-			if (paths.length > 0) {
-				final archive: String = dir.file('tree.tar');
-				cmd('git -C $_repo archive --format=tar -o $archive $sha $paths').check();
-				cmd('tar -xf $archive -C $copy').check();
-			}
-			body(copy);
-		});
 	}
 
 	/** The cache file of the reading `kind` of `sha`, keyed by the roots and by the size and time of the `binary` that takes it. */

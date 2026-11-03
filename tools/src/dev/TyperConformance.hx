@@ -12,6 +12,7 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.ComposedValues;
+import anyparse.query.ConfigFinder;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.FileIdentity;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -47,7 +48,7 @@ using StringTools;
  * Two sources, neither copied into this repository. `upstream` reads a pinned Haxe 4.3.7 clone: `tests/display` (the
  * `type`, `position` and `usage` assertions on `{-N-}` markers; every other display assertion is counted, unanswered)
  * and `tests/misc` (the `$type` warnings and `A should be B` errors of every `compile-fail` stderr). `facts`, run in a
- * project root, compiles the project's oracles (`apqlint.json`) with the facts hook and asks the type of every range the
+ * project root, compiles the project's oracles (`apq.json`) with the facts hook and asks the type of every range the
  * compiler typed.
  *
  * `--census` roots every UNKNOWN type answer (`UnknownCauses`) and prints the tallies after the table, which it leaves
@@ -179,14 +180,18 @@ final class TyperConformance {
 	}
 
 	/**
-	 * Every probe project under `dir` — each directory holding an `apqlint.json` that names a compiler oracle — run as
+	 * Every probe project under `dir` — each directory holding an `apq.json` that names a compiler oracle — run as
 	 * `facts` in it, into one report: shapes no census tree holds, each compiled by the compiler and asked of the typer.
 	 * Returns one line per project whose run is no reading (`probeRefusal`), each printed as it is found.
 	 */
 	private static function probes(dir: String, report: Report): Array<String> {
 		final start: String = Sys.getCwd();
 		final root: String = FileSystem.fullPath(dir);
-		final names: Array<String> = FileSystem.readDirectory(root).filter(n -> FileSystem.exists(Path.join([root, n, 'apqlint.json'])));
+		final names: Array<String> = FileSystem.readDirectory(root).filter(
+			n ->
+				FileSystem.exists(Path.join([root, n, ConfigFinder.PROJECT_CONFIG]))
+				|| FileSystem.exists(Path.join([root, n, ConfigFinder.LEGACY_PROJECT_CONFIG]))
+		);
 		names.sort(Reflect.compare);
 		final refused: Array<String> = [];
 		for (name in names) {

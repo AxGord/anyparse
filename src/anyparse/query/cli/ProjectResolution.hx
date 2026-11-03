@@ -6,7 +6,7 @@ import anyparse.query.cli.command.LintCommand;
 
 /**
  * The resolution scope a SINGLE-FILE edit op reads its project by — what `lint` builds for its run, from the nearest
- * `apqlint.json` (`resolutionRoots`, `resolutionLibs`, `resolutionStd`), so an op and the rule it must agree with ask one
+ * `apq.json` (`resolutionRoots`, `resolutionLibs`, `resolutionStd`), so an op and the rule it must agree with ask one
  * index. Read lazily: a file whose edit never asks (`ImportBindings.forPlugin` builds its reader over a thunk) pays nothing.
  */
 @:nullSafety(Strict)

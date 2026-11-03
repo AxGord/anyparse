@@ -27,7 +27,7 @@ using StringTools;
  * the `remove-param` op and its advisory.
  *
  * An `Info` finding is REPORT-ONLY by default. A project that sets the
- * `renameSilence` option (`apqlint.json`, default false) additionally gets the
+ * `renameSilence` option (`apq.json`, default false) additionally gets the
  * conservative `_<name>` silence-rename: a decl-site-only edit that is
  * cross-file-safe (a parameter name is never part of a caller's syntax — Haxe
  * has no named arguments) and skipped on a `_<name>` collision. It is opt-in
@@ -102,12 +102,12 @@ using StringTools;
 @:nullSafety(Strict)
 final class UnusedParameter extends RuleBase implements ConfigAware {
 
-	/** The rule id — also the `apqlint.json` key its options are read under. */
+	/** The rule id — also the `apq.json` key its options are read under. */
 	private static inline final RULE_ID: String = 'unused-parameter';
 
 	/**
 	 * Whether an `Info` finding carries the conservative `_<name>` silence-rename fix,
-	 * unless an `apqlint.json` sets `renameSilence`. Default FALSE: the rename only
+	 * unless an `apq.json` sets `renameSilence`. Default FALSE: the rename only
 	 * HIDES the finding — it removes no dead weight and changes no behaviour — so a
 	 * blanket `--fix` must not rewrite every signature the removal proof cannot
 	 * complete; a project opts into that edit deliberately.
@@ -182,7 +182,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	 * proof and removes the next. An `Info` unused parameter (a signature the removal
 	 * proof cannot complete) is instead RENAMED to `_<name>` — a decl-site-only,
 	 * cross-file-safe silencing, skipped on a `_<name>` name collision — but ONLY when
-	 * the file's `apqlint.json` opts in via `renameSilence`; the default is no edit at
+	 * the file's `apq.json` opts in via `renameSilence`; the default is no edit at
 	 * all for the `Info` bucket. The two edit sets are disjoint (a function's flagged
 	 * parameters share its removability).
 	 */
@@ -228,7 +228,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 
 	/**
 	 * Whether the `_<name>` silence-rename is enabled for the file these `violations`
-	 * belong to — the rule's `apqlint.json` `renameSilence` option, defaulting to
+	 * belong to — the rule's `apq.json` `renameSilence` option, defaulting to
 	 * `DEFAULT_RENAME_SILENCE`. `fix` is called with ONE file's findings, so the first
 	 * one names the file whose config governs the batch; an empty batch cannot produce
 	 * a rename edit anyway and takes the default.

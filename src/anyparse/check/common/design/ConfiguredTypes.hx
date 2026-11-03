@@ -5,7 +5,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 /**
- * Resolution helpers for a rule whose SUBJECT TYPES the project names in its `apqlint.json` by qualified path —
+ * Resolution helpers for a rule whose SUBJECT TYPES the project names in its `apq.json` by qualified path —
  * `prefer-api-idiom`'s idiom types, `typed-event-constant`'s event base and type abstract.
  *
  * Which framework a name belongs to is the project's declaration, never this tool's knowledge: every answer here is a

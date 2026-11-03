@@ -237,7 +237,7 @@ class LintRangeCliTest extends Test {
 		#if (sys || nodejs)
 		// `prefer-doc-comment` is opted in so a safe fix is anchored ON the comment line the write changes.
 		final dir: String = CliFixture.writeDir('lintrange', [
-			{ name: 'apqlint.json', source: '{"rules": {"prefer-doc-comment": {"enabled": true}}}\n' },
+			{ name: 'apq.json', source: '{"rules": {"prefer-doc-comment": {"enabled": true}}}\n' },
 			{
 				name: 'C.hx',
 				source: 'package pkg;\n\nclass C {\n\n\t// note one\n\tpublic static function main(): Void {\n\t\ttrace(1);\n\t}\n\n}\n'

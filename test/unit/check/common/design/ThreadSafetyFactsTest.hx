@@ -9,8 +9,11 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import unit.cli.CliFixture;
 
+using StringTools;
+
 /**
- * `thread-safety` reads its graph through the run's compiler facts when the project asks (`compilerFacts`) and it has them (`SymbolIndexHost.compilerFacts`):
+ * `thread-safety` reads its graph through the run's compiler facts when the
+ * project asks (`compilerFacts`) and it has them (`SymbolIndexHost.compilerFacts`):
  * a call the syntax cannot type — a receiver whose type only inference knows — resolves, and the function it runs is
  * reached where it runs instead of assumed to run on the main thread. Without facts the graph is the syntax's alone.
  */
@@ -20,7 +23,6 @@ class ThreadSafetyFactsTest extends Test {
 		+ 'class Runner { public static function create(fn:()->Void):Void {} }\n'
 		+ 'class Main {\n\tstatic function make()\n\t\treturn new S();\n\n'
 		+ '\tstatic function main():Void Runner.create(() -> {\n\t\tfinal s = make();\n\t\ts.work();\n\t});\n}\n';
-
 	private static inline final CONFIG: String =
 		'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"],"compilerFacts":true}}}';
 
@@ -30,7 +32,7 @@ class ThreadSafetyFactsTest extends Test {
 		final dir: String = CliFixture.writeTree('ts_facts', [
 			{ name: 'Main.hx', source: MAIN },
 			{ name: 'build.hxml', source: '-cp .\n-main Main\n--interp\n' },
-			{ name: 'apqlint.json', source: CONFIG }
+			{ name: 'apq.json', source: CONFIG }
 		]);
 		final facts: Null<CompilerFacts> = CompilerOracle.typecheck('build.hxml', dir).match(Confirmed)
 			? TypedFactsProbe.probeAll([{ hxml: 'build.hxml', dir: dir, defines: [] }])
@@ -59,7 +61,7 @@ class ThreadSafetyFactsTest extends Test {
 		final typed: Array<String> = graded(CheckFixture.violationsIn(new ThreadSafety(), files, plugin));
 		// a project that does not ask reads the syntax alone, facts or not
 		final unasked: ThreadSafety = new ThreadSafety();
-		unasked.setConfigResolver(_ -> LintConfig.parse(StringTools.replace(CONFIG, '"compilerFacts":true', '"compilerFacts":false')));
+		unasked.setConfigResolver(_ -> LintConfig.parse(CONFIG.replace('"compilerFacts":true', '"compilerFacts":false')));
 		final off: Array<String> = graded(CheckFixture.violationsIn(unasked, files, plugin));
 		CliFixture.removeDir(dir);
 		Assert.same(['warning A S.work | Sys.sleep'], syntax, 'syntax alone');

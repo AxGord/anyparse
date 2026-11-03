@@ -234,7 +234,7 @@ final class MoveCommand implements CliCommand {
 		CliIo.sysPrint('module path is rewritten as a bounded token — imports, `using`, access\n');
 		CliIo.sysPrint('grants, qualified code, strings, comments — and so are the texts, type-path\n');
 		CliIo.sysPrint('registries and sorted lists the project declares in the "move" section of\n');
-		CliIo.sysPrint('its apqlint.json, which also names the default --scope and the test mirror\n');
+		CliIo.sysPrint('its apq.json, which also names the default --scope and the test mirror\n');
 		CliIo.sysPrint('(a moved module\'s own test moves with it unless --no-mirror). Every simple\n');
 		CliIo.sysPrint('type name a moved module or a reader writes must mean the same declaration\n');
 		CliIo.sysPrint('after the move: an import restoring it is added, and a name nothing restores\n');

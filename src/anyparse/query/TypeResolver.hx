@@ -87,7 +87,7 @@ final class TypeResolver {
 	 * `UInt`, on a parameter and on a field, for `-cpp` and `-hl`; `-js` / `-neko` / `-python` /
 	 * `-lua` accept all four). So a file that CONTAINS one is a dynamic-target file by
 	 * construction, and there a bare `Int` IS nullable, which is exactly what the guard is
-	 * for. Nothing else the linter can read supplies that: `apqlint.json` carries no target
+	 * for. Nothing else the linter can read supplies that: `apq.json` carries no target
 	 * key, no seam reads compiler defines, and a `compilerOracle` hxml may name several
 	 * targets at once (Pony's names neko AND nodejs).
 	 *

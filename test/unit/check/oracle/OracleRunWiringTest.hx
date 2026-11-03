@@ -62,7 +62,7 @@ final class OracleRunWiringTest extends Test {
 				source: 'package lib;\n\nclass B {\n\tpublic static function poke(a:A):Void {\n\t\ta.x = 2;\n\t}\n}\n'
 			},
 			{ name: 'build.hxml', source: '-lib mylib\n-main Main\n-js out.js\n' },
-			{ name: 'apqlint.json', source: '{"compilerOracle":"build.hxml"}' },
+			{ name: 'apq.json', source: '{"compilerOracle":"build.hxml"}' },
 			{ name: '.haxelib/.repo-version', source: '1\n' },
 			{ name: '.haxelib/mylib/.dev', source: '' }
 		]);
@@ -132,7 +132,7 @@ final class OracleRunWiringTest extends Test {
 			{ name: 'Good.hx', source: GOOD },
 			{ name: 'Counter.hx', source: CompileCounter.SOURCE },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: APQLINT }
+			{ name: 'apq.json', source: APQLINT }
 		]);
 		final probe: Int = Cli.run(['oracle', '$dir/Good.hx']);
 		if (sys.FileSystem.exists('$dir/compiles.log')) sys.FileSystem.deleteFile('$dir/compiles.log');

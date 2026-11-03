@@ -85,7 +85,7 @@ import anyparse.query.TypeSyntax;
  * `Dynamic` token so both rewrites anchor precisely.
  *
  * The check is a `RiskyFix`: even the sound local narrowings apply ONLY under a
- * configured compiler oracle (`apqlint.json` `compilerOracle`), which typechecks
+ * configured compiler oracle (`apq.json` `compilerOracle`), which typechecks
  * each candidate and reverts any that breaks the build — a stricter-than-required
  * belt over the by-construction soundness, and the first real `RiskyFix`
  * consumer. Without an oracle the `--fix` run is byte-identical to report-only.
@@ -125,7 +125,7 @@ import anyparse.query.TypeSyntax;
  * the child-before-the-body rule, mirroring `explicit-type`) locate the declared
  * type positions. An unset `rawDynamicTypeName` makes the check a no-op. Extern
  * types are skipped (interop legitimately uses `Dynamic`); `excludePaths` /
- * `excludeMeta` / `boundaryCalls` are read from `apqlint.json`.
+ * `excludeMeta` / `boundaryCalls` are read from `apq.json`.
  */
 @:nullSafety(Strict)
 final class AvoidDynamic extends RuleBase implements ConfigAware implements RiskyFix implements OracleAssisted implements GroupedFix

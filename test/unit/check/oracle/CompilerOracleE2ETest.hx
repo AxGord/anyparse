@@ -12,7 +12,7 @@ import anyparse.check.oracle.CompilerServer;
 import anyparse.query.Cli;
 
 /**
- * End-to-end coverage of the compiler-oracle (`apqlint.json` `compilerOracle`):
+ * End-to-end coverage of the compiler-oracle (`apq.json` `compilerOracle`):
  * report-mode confirm/reject, the fix-verification apply/revert of a `RiskyFix`
  * check, and the gate-invariant that no `haxe` is spawned without the key.
  *
@@ -20,7 +20,7 @@ import anyparse.query.Cli;
  * availability (`oracleWorks`) and skips gracefully (Assert.pass) when the host
  * has no `haxe` on PATH — the gate-invariant test needs no haxe and always runs.
  * Fixtures are temp dirs laid out CliFixture-style: a root-package `Good.hx` a
- * `-cp .` hxml, and (for the report scenarios) an `apqlint.json`; cleaned per test.
+ * `-cp .` hxml, and (for the report scenarios) an `apq.json`; cleaned per test.
  */
 @:nullSafety(Strict)
 final class CompilerOracleE2ETest extends Test {
@@ -48,7 +48,7 @@ final class CompilerOracleE2ETest extends Test {
 	 */
 	private static final NESTED_HXML: String = '-cp lib\n-cp src\n-main Good\n';
 
-	/** The nested project's `apqlint.json`, living in `src/` and naming the hxml one level up. */
+	/** The nested project's `apq.json`, living in `src/` and naming the hxml one level up. */
 	private static final NESTED_CONFIG: String = '{"compilerOracle":"../build.hxml"}';
 
 	/** A pid far above any process a machine can run — the planted record a warm run must refuse to connect to. */
@@ -188,7 +188,7 @@ final class CompilerOracleE2ETest extends Test {
 	}
 
 	/**
-	 * A nested `apqlint.json` — the config in a SUBDIRECTORY, its `compilerOracle` naming an
+	 * A nested `apq.json` — the config in a SUBDIRECTORY, its `compilerOracle` naming an
 	 * `.hxml` one level up. The hxml's `-cp src` is written relative to the hxml, so the compile
 	 * must run from the HXML's directory; running it from the CONFIG's directory resolves the
 	 * classpath as `src/src` and every type goes missing, so report mode failed the lint of every
@@ -248,7 +248,7 @@ final class CompilerOracleE2ETest extends Test {
 		final config: LintConfig = LintConfig.discover(path);
 		final oracles: Array<OracleConfig> = config.compilerOracles();
 		if (oracles.length == 0) {
-			Assert.fail('the nested apqlint.json declares a compilerOracle');
+			Assert.fail('the nested apq.json declares a compilerOracle');
 			CliFixture.removeDir(dir);
 			return;
 		}
@@ -344,7 +344,7 @@ final class CompilerOracleE2ETest extends Test {
 		final config: LintConfig = LintConfig.discover(path);
 		final oracles: Array<OracleConfig> = config.compilerOracles();
 		if (oracles.length == 0) {
-			Assert.fail('the fixture apqlint.json declares a compilerOracle');
+			Assert.fail('the fixture apq.json declares a compilerOracle');
 			CliFixture.removeDir(dir);
 			return;
 		}
@@ -376,11 +376,11 @@ final class CompilerOracleE2ETest extends Test {
 	}
 
 	#if (sys || nodejs)
-	/** A miniature of this project's own layout: `build.hxml` at the root, the sources and their `apqlint.json` in `src/`. */
+	/** A miniature of this project's own layout: `build.hxml` at the root, the sources and their `apq.json` in `src/`. */
 	private function writeNestedProject(): String {
 		final dir: String = CliFixture.writeDir('oracle_nested', [{ name: 'build.hxml', source: NESTED_HXML }]);
 		writeSharedSources(dir);
-		File.saveContent('$dir/src/apqlint.json', NESTED_CONFIG);
+		File.saveContent('$dir/src/apq.json', NESTED_CONFIG);
 		return dir;
 	}
 
@@ -389,9 +389,7 @@ final class CompilerOracleE2ETest extends Test {
 	 * nested under `dist/haxe/` with its `-cp` entries written relative to the ROOT.
 	 */
 	private function writeLimeShapedProject(): String {
-		final dir: String = CliFixture.writeDir(
-			'oracle_lime', [{ name: 'apqlint.json', source: '{"compilerOracle":"dist/haxe/build.hxml"}' }]
-		);
+		final dir: String = CliFixture.writeDir('oracle_lime', [{ name: 'apq.json', source: '{"compilerOracle":"dist/haxe/build.hxml"}' }]);
 		writeSharedSources(dir);
 		FileSystem.createDirectory('$dir/dist/haxe');
 		File.saveContent('$dir/dist/haxe/build.hxml', NESTED_HXML);
@@ -417,7 +415,7 @@ final class CompilerOracleE2ETest extends Test {
 		final files: Array<{ name: String, source: String }> = [
 			{ name: 'Good.hx', source: main },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: withKey ? keyed : '{"rules":{}}' }
+			{ name: 'apq.json', source: withKey ? keyed : '{"rules":{}}' }
 		];
 		return CliFixture.writeDir('oracle', files);
 	}

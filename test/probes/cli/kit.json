@@ -5389,7 +5389,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "2904bf303a789769",
+				"out": "4a947772c6aa456f",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -5404,7 +5404,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "2904bf303a789769",
+				"out": "4a947772c6aa456f",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -7565,7 +7565,7 @@
 				"--write"
 			],
 			"files": {
-				"apqlint.json": "{\"compilerOracle\":[{\"hxml\":\"build.hxml\",\"dir\":\".\"}]}\n",
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"build.hxml\",\"dir\":\".\"}]}\n",
 				"build.hxml": "-cp src\n-main Main\n--no-output\n",
 				"src/Main.hx": "class Main { static function main() {} }\n"
 			},
@@ -7592,7 +7592,7 @@
 			],
 			"stdin": "f(): Int\n====\nf(x: Int): Int\n",
 			"files": {
-				"apqlint.json": "{\"compilerOracle\":[{\"hxml\":\"build.hxml\",\"dir\":\".\"}]}\n",
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"build.hxml\",\"dir\":\".\"}]}\n",
 				"build.hxml": "-cp src\n-main Main\n--no-output\n",
 				"src/Main.hx": "class Main { static function main() { pkg.B.g(); } }\n",
 				"src/pkg/A.hx": "package pkg;\n\nclass A {\n\tpublic static function f(): Int return 1;\n}\n",
@@ -7619,7 +7619,7 @@
 				"--write"
 			],
 			"files": {
-				"apqlint.json": "{\"compilerOracle\":[{\"hxml\":\"js.hxml\",\"dir\":\".\"},{\"hxml\":\"cross.hxml\",\"dir\":\".\"}]}\n",
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"js.hxml\",\"dir\":\".\"},{\"hxml\":\"cross.hxml\",\"dir\":\".\"}]}\n",
 				"js.hxml": "-cp src\n-main Main\n-js out.js\n",
 				"cross.hxml": "-cp src\n-main Main\n--no-output\n",
 				"src/Main.hx": "class Main { static function main() {} }\n"

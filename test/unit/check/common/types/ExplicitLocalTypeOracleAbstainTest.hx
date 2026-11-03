@@ -248,7 +248,7 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 	private static function fixedMain(hxml: String): Null<String> {
 		final dir: String = CliFixture.writeDir('eltabstain', [
 			{ name: 'check.hxml', source: hxml },
-			{ name: 'apqlint.json', source: APQLINT }
+			{ name: 'apq.json', source: APQLINT }
 		]);
 		FileSystem.createDirectory('$dir/src');
 		FileSystem.createDirectory('$dir/tests');

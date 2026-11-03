@@ -14,7 +14,7 @@ import anyparse.query.SymbolIndex;
  * property whose declaration was changed to `(default, set)` / a plain field, or removed, while
  * the method stayed behind. Haxe never calls such a method: an accessor runs because the
  * property's `(get, …)` / `(…, set)` clause names it, so with the slot gone the body is dead
- * weight that still reads like live behaviour. DEFAULT OFF (`apqlint.json`
+ * weight that still reads like live behaviour. DEFAULT OFF (`apq.json`
  * `"rules": { "orphan-accessor": { "enabled": true } }`, or an explicit `--rule`).
  *
  * ## What counts as declaring the slot

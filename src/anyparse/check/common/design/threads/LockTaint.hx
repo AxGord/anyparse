@@ -9,7 +9,7 @@ import anyparse.query.CallGraph;
 import haxe.Exception;
 
 /**
- * One `apqlint.json` chain's `thread-safety` lists: the three name lists resolved to graph ids, the lock pairs as
+ * One `apq.json` chain's `thread-safety` lists: the three name lists resolved to graph ids, the lock pairs as
  * written (a malformed one is reported) and as resolved.
  */
 typedef ChainLists = {

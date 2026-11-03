@@ -10,12 +10,16 @@ import unit.cli.CliFixture;
  */
 class ThreadSafetyDominanceTest extends Test {
 
-	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
-		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
-
 	/** `CONFIG` declaring that every caller is in the run: only then does the meet over a function's callers say what it holds. */
 	private static inline final CLOSED: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
+
+	/** A reader-writer lock: `lock` takes it exclusive, `lockShared` shared. */
+	private static inline final RW: String = 'class Rw { public function new() {} public function lock():Void {} public function unlock():Void {}'
+		+ ' public function lockShared():Void {} public function unlockShared():Void {} }';
+
+	private static final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
+		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
 	/** the client's `_mutex` under `_batchMutex`: the long hold of `_inner` holds `_outer`, so `quick` waits for no long hold. */
 	public function testATakeUnderTheOuterLockIsBrief(): Void {
@@ -277,8 +281,7 @@ class ThreadSafetyDominanceTest extends Test {
 			'warning B D.slow | D._outer'
 		], holds(run(
 			'public function slow(batch:Bool):Void { if (!batch) _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release();'
-			+ ' if (!batch) _outer.release(); }'
-			+ ' public function outer():Void { _outer.acquire(); slow(true); _outer.release(); }',
+			+ ' if (!batch) _outer.release(); } public function outer():Void { _outer.acquire(); slow(true); _outer.release(); }',
 			'd.slow(false); d.outer();', true, CLOSED
 		)));
 		#else
@@ -303,89 +306,11 @@ class ThreadSafetyDominanceTest extends Test {
 		#end
 	}
 
-	#if (sys || nodejs)
-	/**
-	 * `D` whose worker runs `slow(params)` — `_outer`, `_inner`, then `rest` — beside `members`, and whose main thread runs
-	 * `quick` (`_outer`, then `_inner`), after `main` and with `background` on another worker.
-	 */
-	private static function givingBack(
-		rest: String, members: String, main: String = '', params: String = '', background: String = ''
-	): Array<Violation> {
-		final args: String = params == '' ? '' : 'new D()';
-		return ThreadSafetyCheckTest.violations(CONFIG, [
-			ThreadSafetyCheckTest.MUTEX,
-			'class Runner { public static function create(fn:()->Void):Void {} }',
-			'class U { public static function each(xs:Array<Int>, f:Int->Void):Void { for (x in xs) f(x); }'
-			+ ' public static function now(f:()->Void):Void f(); }',
-			'class D { public final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {} $members'
-			+ ' public function slow($params):Void { _outer.acquire(); $rest }'
-			+ ' public function quick():Void { _outer.acquire(); _inner.acquire(); _inner.release(); _outer.release(); }'
-			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow($args));'
-			+ (background == '' ? '' : ' Runner.create(() -> $background);')
-			+ ' $main d.quick(); } }'
-		]);
-	}
-
-	/** How many of the main thread's takes in `quick` are graded short; -1 when the fixture reports fewer than both. */
-	private static function shortQuickTakes(found: Array<Violation>): Int {
-		final takes: Array<Violation> = [for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.quick') v];
-		// both of `quick`'s takes reach the main thread: fewer means the fixture said nothing (a parse failure)
-		if (takes.length < 2) return -1;
-		return takes.filter(v -> v.message.indexOf(' — short: ') >= 0).length;
-	}
-	/** The severities of the findings (a) at `takeInner`'s take of `_inner`, which only `quick` calls, on the main thread. */
-	private static function mainTakesOfInner(config: String): Array<String> {
-		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
-			ThreadSafetyCheckTest.MUTEX,
-			'class Runner { public static function create(fn:()->Void):Void {} }',
-			'class D { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {}'
-			+ ' public function slow():Void { _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release(); }'
-			+ ' public function quick():Void { _outer.acquire(); takeInner(); _outer.release(); }'
-			+ ' function takeInner():Void { _inner.acquire(); _inner.release(); }'
-			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow()); d.quick(); } }'
-		]);
-		return [
-			for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.takeInner') v.severity.label()
-		];
-	}
-
-	/**
-	 * `D` declares `members`, `quick` (holding `_outer` across a call taking `_inner`) unless `withQuick` is
-	 * false, and `ui` (the main thread's take of `_outer`); a spawned thread runs `background`, then `quick`.
-	 */
-	private static function run(members: String, background: String, withQuick: Bool = true, ?config: String): Array<Violation> {
-		final quick: String = withQuick
-			? ' public function quick():Void { _outer.acquire(); takeInner(); _outer.release(); }'
-				+ ' function takeInner():Void { _inner.acquire(); _inner.release(); }'
-			: '';
-		final runQuick: String = withQuick ? ' d.quick();' : '';
-		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
-			ThreadSafetyCheckTest.MUTEX,
-			'class Runner { public static function create(fn:()->Void):Void {} }',
-			'class D { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {} $members$quick'
-			+ ' public function ui():Void { _outer.acquire(); _outer.release(); }'
-			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> { $background$runQuick }); d.ui(); } }'
-		]);
-	}
-
-	/** The hold findings (b) of `found` as `<severity> B <member> | <lock>`, sorted. */
-	private static function holds(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
-			}
-		];
-		out.sort(Reflect.compare);
-		return out;
-	}
-	#end
-
 	/** `--explain-long` names each dominated lock with the locks dominating it. */
 	@:pin('control') @:killer('M-TS-DOM-EXPLAIN-DROPPED')
 	public function testExplainLongNamesTheDominatedLock(): Void {
 		#if (sys || nodejs)
-		final dir: String = CliFixture.writeDir('threadsafetydominance', [{ name: 'apqlint.json', source: CONFIG }]);
+		final dir: String = CliFixture.writeDir('threadsafetydominance', [{ name: 'apq.json', source: CONFIG }]);
 		final check: ThreadSafety = new ThreadSafety();
 		check.explainLongLocks(true);
 		final sources: Array<String> = [
@@ -439,7 +364,7 @@ class ThreadSafetyDominanceTest extends Test {
 		Assert.same(
 			['info B D.quick | D._outer', 'warning B D.slow | D._outer'],
 			holds(run(
-				slow + ' public function peek():Void { _inner.acquire(); trace("x"); _inner.release(); }', 'd.slow(); d.peek();', true,
+				'$slow public function peek():Void { _inner.acquire(); trace("x"); _inner.release(); }', 'd.slow(); d.peek();', true,
 				config
 			)),
 			'run once'
@@ -447,7 +372,7 @@ class ThreadSafetyDominanceTest extends Test {
 		Assert.same(
 			['warning B D.quick | D._outer', 'warning B D.slow | D._outer'],
 			holds(run(
-				slow + ' public function peek(xs:Array<Int>):Void { _inner.acquire(); for (x in xs) trace(x); _inner.release(); }',
+				'$slow public function peek(xs:Array<Int>):Void { _inner.acquire(); for (x in xs) trace(x); _inner.release(); }',
 				'd.slow(); d.peek([1]);', true, config
 			)),
 			'in a loop'
@@ -457,8 +382,81 @@ class ThreadSafetyDominanceTest extends Test {
 		#end
 	}
 
-	/** A reader-writer lock: `lock` takes it exclusive, `lockShared` shared. */
-	private static inline final RW: String = 'class Rw { public function new() {} public function lock():Void {} public function unlock():Void {}'
-		+ ' public function lockShared():Void {} public function unlockShared():Void {} }';
+	#if (sys || nodejs)
+	/**
+	 * `D` whose worker runs `slow(params)` — `_outer`, `_inner`, then `rest` — beside `members`, and whose main thread runs
+	 * `quick` (`_outer`, then `_inner`), after `main` and with `background` on another worker.
+	 */
+	private static function givingBack(
+		rest: String, members: String, main: String = '', params: String = '', background: String = ''
+	): Array<Violation> {
+		final args: String = params == '' ? '' : 'new D()';
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class U { public static function each(xs:Array<Int>, f:Int->Void):Void { for (x in xs) f(x); }'
+			+ ' public static function now(f:()->Void):Void f(); }',
+			'class D { public final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {} $members'
+			+ ' public function slow($params):Void { _outer.acquire(); $rest }'
+			+ ' public function quick():Void { _outer.acquire(); _inner.acquire(); _inner.release(); _outer.release(); }'
+			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow($args));'
+			+ (background == '' ? '' : ' Runner.create(() -> $background);')
+			+ ' $main d.quick(); } }'
+		]);
+	}
+
+	/** How many of the main thread's takes in `quick` are graded short; -1 when the fixture reports fewer than both. */
+	private static function shortQuickTakes(found: Array<Violation>): Int {
+		final takes: Array<Violation> = [for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.quick') v];
+		// both of `quick`'s takes reach the main thread: fewer means the fixture said nothing (a parse failure)
+		return takes.length < 2 ? -1 : takes.filter(v -> v.message.indexOf(' — short: ') >= 0).length;
+	}
+
+	/** The severities of the findings (a) at `takeInner`'s take of `_inner`, which only `quick` calls, on the main thread. */
+	private static function mainTakesOfInner(config: String): Array<String> {
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class D { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {} public function '
+			+ 'slow():Void { _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release(); } public function '
+			+ 'quick():Void { _outer.acquire(); takeInner(); _outer.release(); } function takeInner():Void { _inner.acquire(); '
+			+ '_inner.release(); } public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow()); d.quick(); } }'
+		]);
+		return [
+			for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.takeInner') v.severity.label()
+		];
+	}
+
+	/**
+	 * `D` declares `members`, `quick` (holding `_outer` across a call taking `_inner`) unless `withQuick` is
+	 * false, and `ui` (the main thread's take of `_outer`); a spawned thread runs `background`, then `quick`.
+	 */
+	private static function run(members: String, background: String, withQuick: Bool = true, ?config: String): Array<Violation> {
+		final quick: String = withQuick
+			? ' public function quick():Void { _outer.acquire(); takeInner(); _outer.release(); }'
+				+ ' function takeInner():Void { _inner.acquire(); _inner.release(); }'
+			: '';
+		final runQuick: String = withQuick ? ' d.quick();' : '';
+		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class D { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {} $members$quick'
+			+ ' public function ui():Void { _outer.acquire(); _outer.release(); }'
+			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> { $background$runQuick }); d.ui(); } }'
+		]);
+	}
+
+	/** The hold findings (b) of `found` as `<severity> B <member> | <lock>`, sorted. */
+	private static function holds(found: Array<Violation>): Array<String> {
+		final out: Array<String> = [
+			for (v in found) {
+				final data: Null<FindingData> = v.data;
+				if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
+			}
+		];
+		out.sort(Reflect.compare);
+		return out;
+	}
+	#end
 
 }

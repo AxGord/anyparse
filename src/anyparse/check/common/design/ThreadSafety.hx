@@ -71,7 +71,7 @@ using StringTools;
  * always long; a hold in the owner's constructor before the object escapes blocks no one. Holding a long lock is itself
  * blocking, so the locks and the taint are solved together (`solveLongLocks`).
  *
- * Configured per project in `apqlint.json` under `"thread-safety"` (inert without any option), read and checked by
+ * Configured per project in `apq.json` under `"thread-safety"` (inert without any option), read and checked by
  * `ThreadSafetyOptions`, which says every option it drops. The sinks are POSITIVE: the grammar's blocking library calls
  * (`ExecutionShape.blockingLibraryCalls`) and the project's natives (`ProjectNatives`) apply wherever the rule runs,
  * `sinks` adds to them and `nonBlocking` waives one on evidence, a run saying once which applied; `sinks`,

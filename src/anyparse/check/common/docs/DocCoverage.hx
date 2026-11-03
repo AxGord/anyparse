@@ -39,7 +39,7 @@ import anyparse.query.SymbolIndex;
  * `requireTypeDoc` / `requireMemberDoc` (requireTypeDoc default true; requireMemberDoc default FALSE, opt-in) toggle the type-level and
  * member-level requirements independently; `includeConstructor` (default false)
  * extends the member requirement to the constructor. A project scopes the rule to
- * its API packages, or turns off the member half, through an `apqlint.json`.
+ * its API packages, or turns off the member half, through an `apq.json`.
  *
  * ## Grammar-agnostic
  *
@@ -54,20 +54,20 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class DocCoverage extends RuleBase implements ConfigAware implements NoAutofix implements FileGated {
 
-	/** Whether an undocumented public top-level type is flagged, unless an `apqlint.json` sets `requireTypeDoc`. */
+	/** Whether an undocumented public top-level type is flagged, unless an `apq.json` sets `requireTypeDoc`. */
 	private static inline final RULE_ID: String = 'doc-coverage';
 
 	private static inline final DEFAULT_REQUIRE_TYPE_DOC: Bool = true;
 
 	/**
-	 * Whether an undocumented public MEMBER is flagged, unless an `apqlint.json` sets
+	 * Whether an undocumented public MEMBER is flagged, unless an `apq.json` sets
 	 * `requireMemberDoc`. Default false: the public-member surface is large (the
 	 * type-level requirement is the bounded default signal), so a project opts into
 	 * member coverage deliberately rather than being flooded by it.
 	 */
 	private static inline final DEFAULT_REQUIRE_MEMBER_DOC: Bool = false;
 
-	/** Whether the constructor is subject to the member requirement, unless an `apqlint.json` sets `includeConstructor`. */
+	/** Whether the constructor is subject to the member requirement, unless an `apq.json` sets `includeConstructor`. */
 	private static inline final DEFAULT_INCLUDE_CONSTRUCTOR: Bool = false;
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */

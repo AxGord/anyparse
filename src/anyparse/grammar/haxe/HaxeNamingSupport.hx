@@ -152,7 +152,7 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	/**
 	 * The frameworks Haxe's own ecosystem ships, unioned with whatever the project declares in
-	 * `apqlint.json` (`frameworks`). utest discovers a test method by PREFIX — which is why
+	 * `apq.json` (`frameworks`). utest discovers a test method by PREFIX — which is why
 	 * `FrameworkContract` carries a prefix set at all: with the built-in stated as a contract, the
 	 * shipped default and the configured roster go through one predicate, instead of the built-in
 	 * being a second code path nothing keeps in step.

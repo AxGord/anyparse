@@ -54,14 +54,14 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
  *
  * ## Default off
  *
- * Implements `DefaultOff`: opt in per project via `apqlint.json`
+ * Implements `DefaultOff`: opt in per project via `apq.json`
  * `"rules": { "redundant-ascription": { "enabled": true } }`, or select it with
  * `--rule redundant-ascription`.
  */
 @:nullSafety(Strict)
 final class RedundantAscription extends RuleBase implements DefaultOff {
 
-	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
+	/** The rule's stable identifier — the `apq.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'redundant-ascription';
 
 	public function new() {

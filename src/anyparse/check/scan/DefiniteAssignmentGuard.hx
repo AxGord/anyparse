@@ -11,7 +11,7 @@ import anyparse.query.ShapeVocab;
  * ## The hole it closes
  *
  * A SAFE check's fix is applied unverified. `Cli.reconcileSafePass` — the green-then-red
- * rollback — exists ONLY for a run that both configures `apqlint.json` `compilerOracle` and
+ * rollback — exists ONLY for a run that both configures `apq.json` `compilerOracle` and
  * measured the tree green before the writes; `--no-oracle` and a config with no
  * `compilerOracle` — the project's own documented edit loop, and every project that never
  * configured a compiler — write a corrupting edit unreverted.

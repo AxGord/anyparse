@@ -48,7 +48,7 @@ import anyparse.query.SymbolIndex;
  *     (`LiteralTables`, `isNamedTable`).
  *  4. its numeric value is not in the exempt set `{0, 1, 2}` plus any number
  *     listed in the `magic-number` `ignore` option of a discovered
- *     `apqlint.json`. A negative literal parses as a negation wrapping a
+ *     `apq.json`. A negative literal parses as a negation wrapping a
  *     non-negative literal (`-1` is `Neg(IntLit 1)`), so the magnitude check on
  *     the bare literal exempts `-1` / `-2` and flags `-5000` with no
  *     special-casing.
@@ -61,7 +61,7 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class MagicNumber extends RuleBase implements ConfigAware implements NoAutofix {
 
-	/** This check's stable id, also the key of its `apqlint.json` options. */
+	/** This check's stable id, also the key of its `apq.json` options. */
 	private static inline final RULE_ID: String = 'magic-number';
 
 	/** Conventional values that carry no hidden meaning and are never flagged. */
@@ -86,7 +86,7 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 		final cfg: MagicNumberCfg = buildCfg(shape, numericKinds, functionKinds, plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			// Exempt base: a project checkstyle `MagicNumber.ignoreNumbers`, else the built-in default;
-			// the apqlint `ignore` list adds to it.
+			// the `apq.json` `ignore` list adds to it.
 			final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final ignore: Array<Float> = config.numberListOption(RULE_ID, 'ignore') ?? [];

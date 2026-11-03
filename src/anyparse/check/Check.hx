@@ -95,7 +95,7 @@ interface Check {
 	/** One-line description for `lint --help` / the rule listing. */
 	public function description(): String;
 
-	/** The subject the rule is about — what an `apqlint.json` `categories` entry and `apq lint --category` select it by. */
+	/** The subject the rule is about — what an `apq.json` `categories` entry and `apq lint --category` select it by. */
 	public function category(): RuleCategory;
 
 	/**
@@ -144,7 +144,7 @@ interface Check {
 }
 
 /**
- * A `Check` that reads per-file `apqlint.json` OPTIONS (e.g. complexity `max`,
+ * A `Check` that reads per-file `apq.json` OPTIONS (e.g. complexity `max`,
  * magic-number `ignore`, thread-safety `sinks`) while it runs — as opposed to
  * enablement / severity, which the framework applies after the fact. `Linter.run`
  * injects the caller's memoised per-file resolver so a large run does not re-walk
@@ -187,7 +187,7 @@ interface QuotationAware {}
  * typecheck caught). A check that does NOT implement this marker is trusted and
  * applied unverified — the default, and the state of EVERY builtin today.
  *
- * When the project configures a compiler oracle (`apqlint.json` `compilerOracle`),
+ * When the project configures a compiler oracle (`apq.json` `compilerOracle`),
  * `apq lint --fix` applies a `RiskyFix` check's edits speculatively, typechecks
  * the project, and REVERTS any file whose risky edit breaks the build — that
  * file's finding degrades to report-only. Without an oracle configured, a risky
@@ -246,10 +246,10 @@ interface RiskyArm {
 
 /**
  * Opt-in MARKER of a `Check` that reads the project's framework roster
- * (`LintConfig.frameworksFor`) — the `apqlint.json` `frameworks` contracts naming which member
+ * (`LintConfig.frameworksFor`) — the `apq.json` `frameworks` contracts naming which member
  * names a framework reaches by name, on which root types.
  *
- * Its one consumer is `Cli.runLint`, which warns when a lint scope spans `apqlint.json` roots
+ * Its one consumer is `Cli.runLint`, which warns when a lint scope spans `apq.json` roots
  * that disagree about that roster. The warning says the first root's roster "applies to all N
  * file(s)", and that sentence is only true when some rule in the run actually reads one: a
  * `--rule prefer-single-quotes` run over two such roots applies no roster at all and gets no
@@ -282,7 +282,7 @@ interface OracleRelaxable {
 /**
  * Opt-in marker for a `Check` that is OFF by default — dropped from the default
  * check set and from a bare `lint … --all` report unless a project explicitly
- * opts in via `apqlint.json` (`"rules": { "<id>": { "enabled": true } }`), or an
+ * opts in via `apq.json` (`"rules": { "<id>": { "enabled": true } }`), or an
  * explicit `--rule <id>` selects it (which bypasses enablement, as for every rule).
  * The framework reads the marker where it applies enablement (`Cli.runLint` builds
  * the active set; `Linter.run` drops a disabled finding), inverting the
@@ -302,7 +302,7 @@ interface DefaultOff {}
  * spread `??` from a single module into dozens, core types among them, and raised the floor of many
  * more, all of which had to be undone by hand beside the library's own `#if (haxe_ver >= 4.2)` guards.
  *
- * A project states its floor once (`apqlint.json` `languageVersion`), and a rule declaring
+ * A project states its floor once (`apq.json` `languageVersion`), and a rule declaring
  * a higher minimum is dropped for that file. No declared version means no constraint —
  * the behaviour every existing config already has.
  *

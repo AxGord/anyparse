@@ -22,7 +22,7 @@ using StringTools;
  * still reads like live behaviour. The public-facing sibling of `unused-private`, whose
  * confinement proof stops at the file boundary: a public member can be reached from anywhere,
  * so the only usable proof is that the name is not written anywhere at all. DEFAULT OFF
- * (`apqlint.json` `"rules": { "unused-public-member": { "enabled": true } }`, or an explicit
+ * (`apq.json` `"rules": { "unused-public-member": { "enabled": true } }`, or an explicit
  * `--rule`).
  *
  * ## RUN IT WHOLE-PROJECT
@@ -318,7 +318,7 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 
 	/**
 	 * Whether a FRAMEWORK reaches `name` with no written call — a utest `test*` method of a class
-	 * transitively extending `Test`, or any member a contract the project declared in `apqlint.json`
+	 * transitively extending `Test`, or any member a contract the project declared in `apq.json`
 	 * (`frameworks`) names. Routed through `CheckScan.frameworkReachableMethod` — the shared adapter
 	 * over `NamingSupport.frameworkReachable`, the same predicate `unused-private` consults and the
 	 * one `prefer-inline` reads for its own carve-out — and asked with the same roster, so the three

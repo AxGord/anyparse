@@ -50,7 +50,7 @@ private typedef Reading = {
  * ## Off by default, and no autofix
  *
  * `DefaultOff`, because what belongs in a comment is a project's own policy and a project that has
- * not declared one should not inherit this one's; a project opts in through `apqlint.json`. The
+ * not declared one should not inherit this one's; a project opts in through `apq.json`. The
  * `fix` seam yields nothing, because the sentence that survives the deletion is a judgement.
  */
 @:nullSafety(Strict)

@@ -43,7 +43,7 @@ import anyparse.query.TypeInfoProvider;
  * invariant the name-keyed flow cannot see — a key just written with a value the flow cannot type
  * as non-null (`m[k] = v; var u = m[k];`), a key drawn from `m.keys()`, or an alias (`var v = u;
  * if (v != null) u.f;`); these are report-only Warning residuals, suppressible via `// noqa`
- * or `apqlint.json`.
+ * or `apq.json`.
  *
  * A `?.` guard on the receiver narrows it too: `u?.f != null` cannot be true with a null `u`,
  * because `?.` short-circuits the whole remaining chain. The `== null` direction proves nothing —

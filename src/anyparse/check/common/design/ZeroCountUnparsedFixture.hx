@@ -16,7 +16,7 @@ import anyparse.query.TypeResolver;
 /**
  * Flags the fixture of a ZERO-COUNT assertion (`Assert.equals(0, violations(src).length)`) that the file's own grammar
  * does not parse: a lint run skips a file it cannot parse, so the zero may say only that, and the assertion passes
- * whatever the rule does. Inert until the project names the assertion and the fixture's destination in `apqlint.json`:
+ * whatever the rule does. Inert until the project names the assertion and the fixture's destination in `apq.json`:
  *
  *     "zero-count-unparsed-fixture": { "zeroAsserts": ["Assert.equals"], "countFields": ["length"], "sourceFields": ["source"] }
  *
@@ -33,7 +33,7 @@ import anyparse.query.TypeResolver;
 @:nullSafety(Strict)
 final class ZeroCountUnparsedFixture extends RuleBase implements ConfigAware implements FileGated implements DefaultOff implements NoAutofix {
 
-	/** The rule id, also the `apqlint.json` option key. */
+	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'zero-count-unparsed-fixture';
 
 	private static inline final ASSERTS_KEY: String = 'zeroAsserts';

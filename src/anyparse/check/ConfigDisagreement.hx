@@ -4,7 +4,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.NamingPolicy.FrameworkContract;
 
 /**
- * The sentences a lint RUN owes its reader about the SET of `apqlint.json` documents its scope spans —
+ * The sentences a lint RUN owes its reader about the SET of `apq.json` documents its scope spans —
  * when two of those roots disagree about a setting resolved once for the whole run, and when a root
  * names no sources of the project's own.
  *
@@ -154,7 +154,7 @@ final class ConfigDisagreement {
 		}
 		return exposed == 0
 			? null
-			: 'apq: $exposed of ${paths.length} file(s) this run reports sit under an apqlint.json declaring resolutionLibs and no '
+			: 'apq: $exposed of ${paths.length} file(s) this run reports sit under an apq.json declaring resolutionLibs and no '
 				+ 'resolutionRoots — their resolution scope is this run\'s own files plus an installed library, with no other source of '
 				+ 'the project in it, so the checks that prove a cross-file rewrite safe answer from the report scope alone: one can '
 				+ 'report a live member as dead, rename a member another file reaches, or drop a parameter a cross-file caller still '
@@ -168,7 +168,7 @@ final class ConfigDisagreement {
 			? null
 			: 'apq lint: resolutionRoots: $named match no .hx — the project\'s own sources are then absent from the'
 				+ ' resolution scope exactly as if the key were never declared, and the checks that prove a cross-file rewrite safe answer '
-				+ 'from the report scope alone. A relative entry resolves against the declaring apqlint.json\'s directory\n';
+				+ 'from the report scope alone. A relative entry resolves against the declaring apq.json\'s directory\n';
 	}
 
 	/**
@@ -205,7 +205,7 @@ final class ConfigDisagreement {
 		}
 		return disagreeing == 0
 			? null
-			: 'apq: this scope spans apqlint.json roots that disagree about $setting — the one'
+			: 'apq: this scope spans apq.json roots that disagree about $setting — the one'
 				+ ' discovered for ${paths[0]} applies to all ${paths.length} file(s), of which $disagreeing file(s) sit under'
 				+ ' a root declaring one of ${others.length} other value(s)\n';
 	}

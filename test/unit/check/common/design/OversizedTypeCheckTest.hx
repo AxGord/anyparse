@@ -15,7 +15,7 @@ using StringTools;
  * The `oversized-type` check: a type whose member count or line extent exceeds
  * the default thresholds (50 members / 2000 lines) is flagged `Warning`; a
  * smaller one is not. Both boundaries are pinned (== max is quiet, over
- * flags); `#if`-guarded members count; an `apqlint.json` overrides both
+ * flags); `#if`-guarded members count; an `apq.json` overrides both
  * thresholds. Report-only — `fix` yields no edits.
  */
 class OversizedTypeCheckTest extends Test {
@@ -97,14 +97,14 @@ class OversizedTypeCheckTest extends Test {
 	}
 
 	public function testRespectsApqlintThresholdsFromDisk(): Void {
-		// End-to-end: an apqlint.json discovered by walking up from the file lowers
+		// End-to-end: an apq.json discovered by walking up from the file lowers
 		// both thresholds; a 3-member, 5-line type exceeds both, and the one finding
 		// names both in a single message.
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_ot_cfg_${Sys.time()}';
 		FileSystem.createDirectory(dir);
-		File.saveContent('$dir/apqlint.json', '{"rules": {"oversized-type": {"maxMembers": 2, "maxLines": 3}}}');
+		File.saveContent('$dir/apq.json', '{"rules": {"oversized-type": {"maxMembers": 2, "maxLines": 3}}}');
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tvar a:Int;\n\tvar b:Int;\n\tvar c:Int;\n}';
 		File.saveContent(path, src);
@@ -113,7 +113,7 @@ class OversizedTypeCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains('3 members (max 2)'));
 		Assert.isTrue(vs[0].message.contains('5 lines (max 3)'));
 		FileSystem.deleteFile(path);
-		FileSystem.deleteFile('$dir/apqlint.json');
+		FileSystem.deleteFile('$dir/apq.json');
 		FileSystem.deleteDirectory(dir);
 	}
 
@@ -197,7 +197,7 @@ class OversizedTypeCheckTest extends Test {
 	}
 
 	/**
-	 * The per-type grant, end to end through a discovered `apqlint.json`: an entry naming the
+	 * The per-type grant, end to end through a discovered `apq.json`: an entry naming the
 	 * type, a CEILING above the rule's threshold and a reason clears the finding while the type
 	 * stays within that ceiling.
 	 */
@@ -621,7 +621,7 @@ class OversizedTypeCheckTest extends Test {
 	}
 
 	/**
-	 * Run the check on `src` under an `apqlint.json` written next to it in a fresh temp
+	 * Run the check on `src` under an `apq.json` written next to it in a fresh temp
 	 * directory — the on-disk path, because a grant is a project decision and the point is that
 	 * the discovered document carries it.
 	 */
@@ -630,12 +630,12 @@ class OversizedTypeCheckTest extends Test {
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_ot_grant_${Sys.time()}_${Std.random(1 << 24)}';
 		FileSystem.createDirectory(dir);
-		File.saveContent('$dir/apqlint.json', config);
+		File.saveContent('$dir/apq.json', config);
 		final path: String = '$dir/C.hx';
 		File.saveContent(path, src);
 		final out: Array<Violation> = CheckFixture.violationsIn(new OversizedType(), [{ file: path, source: src }]);
 		FileSystem.deleteFile(path);
-		FileSystem.deleteFile('$dir/apqlint.json');
+		FileSystem.deleteFile('$dir/apq.json');
 		FileSystem.deleteDirectory(dir);
 		return out;
 	}
@@ -650,7 +650,7 @@ class OversizedTypeCheckTest extends Test {
 		return CheckFixture.violationsIn(new OversizedType(), [{ file: 'C.hx', source: src }], null, _ -> config);
 	}
 
-	/** The `apqlint.json` text granting `entries`, with `options` (each followed by a comma) ahead of the list. */
+	/** The `apq.json` text granting `entries`, with `options` (each followed by a comma) ahead of the list. */
 	private static function grantConfig(entries: Array<String>, options: String): String {
 		return '{"rules": {"oversized-type": {$options"grants": ${Json.stringify(entries)}}}}';
 	}

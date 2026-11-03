@@ -146,7 +146,7 @@ class LintScopeGateTest extends Test {
 		Assert.notNull(message, 'a DECLARED scope holding no project sources is the gap');
 		if (message != null)
 			Assert.equals(
-				'apq: 1 of 1 file(s) this run reports sit under an apqlint.json declaring resolutionLibs and no'
+				'apq: 1 of 1 file(s) this run reports sit under an apq.json declaring resolutionLibs and no'
 				+ ' resolutionRoots — their resolution scope is this run\'s own files plus an installed library, with no other source of '
 				+ 'the project in it, so the checks that prove a cross-file rewrite safe answer from the report scope alone: one can '
 				+ 'report a live member as dead, rename a member another file reaches, or drop a parameter a cross-file caller still '
@@ -197,7 +197,7 @@ class LintScopeGateTest extends Test {
 
 	#if (sys || nodejs)
 	/**
-	 * This project's OWN `apqlint.json` declares its sources as `resolutionRoots` — the residual the
+	 * This project's OWN `apq.json` declares its sources as `resolutionRoots` — the residual the
 	 * union above cannot close from inside a check, because it is a CONFIG fact. Without the key
 	 * there is no resolution scope over the project's own files, so the documented edit-loop call
 	 * `hxq lint <file> --all --no-oracle` answers every reflection gate from the ONE file it was
@@ -216,14 +216,14 @@ class LintScopeGateTest extends Test {
 	 * directory smaller — dropping `test` surfaces `unused-public-member` false positives across
 	 * `src/` that the full scope suppresses. Declaring the roots only in the ROOT
 	 * document once left the whole of `test/` blind, because a nested
-	 * `apqlint.json` REPLACED its parent; it now extends it, so one declaration
+	 * `apq.json` REPLACED its parent; it now extends it, so one declaration
 	 * covers both trees and this assertion covers the fold.
 	 */
 	public function testTheProjectDeclaresItsOwnLintScopeAsResolutionRoots(): Void {
 		final root: String = CliFixture.repoRoot();
 		// BOTH probes, because the ANSWER has to hold for a file under either tree — but only the
-		// ROOT document declares the key now. `test/apqlint.json` used to need its own copy, since
-		// discovery stopped at the FIRST apqlint.json above the linted file and took it WHOLESALE;
+		// ROOT document declares the key now. `test/apq.json` used to need its own copy, since
+		// discovery stopped at the FIRST apq.json above the linted file and took it WHOLESALE;
 		// then the same two-file probe under `test/` reported the finding for the file
 		// alone and refused over both. `LintConfig.discover` now folds the whole chain, so this
 		// asserts INHERITANCE: revert it and the `test/` probe answers an empty scope again.
@@ -233,9 +233,7 @@ class LintScopeGateTest extends Test {
 		]) {
 			final roots: Array<String> = LintConfig.discover(probe).resolutionRoots();
 			for (dir in ['src', 'test'])
-				Assert.isTrue(
-					roots.contains(Path.normalize('$root/$dir')), '$probe: its apqlint.json must declare "$dir" in resolutionRoots'
-				);
+				Assert.isTrue(roots.contains(Path.normalize('$root/$dir')), '$probe: its apq.json must declare "$dir" in resolutionRoots');
 		}
 	}
 	#end

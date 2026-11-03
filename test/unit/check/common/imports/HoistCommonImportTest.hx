@@ -276,7 +276,7 @@ class HoistCommonImportTest extends Test {
 				+ '\tfunction f(x: Fwqqz): String {\n\t\treturn x.tqq();\n\t}\n\n}\n'
 		};
 		final tree: Array<TreeFile> = [
-			{ name: 'apqlint.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee"] } } }\n' },
+			{ name: 'apq.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee"] } } }\n' },
 			{ name: 'src/qqz/Wqqz.hx', source: 'package qqz;\n\nclass Wqqz {}\n' },
 			{ name: 'src/qqz/Fwqqz.hx', source: 'package qqz;\n\n@:forward abstract Fwqqz(Wqqz) from Wqqz {}\n' },
 			{ name: 'src/qqz/Sqqwwee.hx', source: extension('Sqqwwee') },
@@ -299,7 +299,7 @@ class HoistCommonImportTest extends Test {
 	public function testHoistedUsingsKeepTheirSourceOrder(): Void {
 		final tree: Array<TreeFile> = [
 			for (file in usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n'))
-				file.name == 'apqlint.json' ? {
+				file.name == 'apq.json' ? {
 					name: file.name,
 					source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Rqqwwee"] } } }\n'
 				} : file
@@ -622,7 +622,7 @@ class HoistCommonImportTest extends Test {
 	@:killer('M-SINK-HYSTERESIS-OFF')
 	public function testASinkThresholdNotBelowTheHoistOneIsIgnored(): Void {
 		Assert.equals('', sunk(SINK_TREE.concat([
-			{ name: 'apqlint.json', source: '{ "rules": { "hoist-common-import": { "threshold": 50, "sinkThreshold": 50 } } }\n' }
+			{ name: 'apq.json', source: '{ "rules": { "hoist-common-import": { "threshold": 50, "sinkThreshold": 50 } } }\n' }
 		])));
 	}
 
@@ -1017,13 +1017,13 @@ class HoistCommonImportTest extends Test {
 
 	/**
 	 * Three of six modules carrying `using <path>;` plus `extra` and the class body `body`, with `path` on the
-	 * allow-list this fixture's own `apqlint.json` declares — a `using` of a local module, since a direct run
+	 * allow-list this fixture's own `apq.json` declares — a `using` of a local module, since a direct run
 	 * resolves no library.
 	 */
 	private static function usingTree(path: String, extra: String, body: String = ''): Array<TreeFile> {
 		final head: String = 'package aqq;\n\nusing $path;\n$extra';
 		return [
-			{ name: 'apqlint.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee"] } } }\n' },
+			{ name: 'apq.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee"] } } }\n' },
 			{
 				name: 'src/qqz/Sqqwwee.hx',
 				source: 'package qqz;\n\nclass Sqqwwee {\n\n\tpublic static function tqq(s: String): String {\n\t\treturn s;\n\t}\n\n}\n'
@@ -1051,7 +1051,7 @@ class HoistCommonImportTest extends Test {
 			'package qqz;\n\nclass $type {\n\n\tpublic static function $method(s:String):String {\n\t\treturn s;\n\t}\n\n}\n';
 		final tree: Array<TreeFile> = [
 			{
-				name: 'apqlint.json',
+				name: 'apq.json',
 				source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Pqqwwee"] } } }\n'
 			},
 			{ name: 'src/qqz/Sqqwwee.hx', source: extension('Sqqwwee', 'tqq') },

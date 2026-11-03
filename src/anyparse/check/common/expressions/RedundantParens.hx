@@ -146,7 +146,7 @@ using StringTools;
  * ## The four OPERAND arms (opt-in, off by default)
  *
  * All four reach the operand positions the arms above refuse, and all four replace a
- * precedence MODEL with a per-site proof. Each is a separate `apqlint.json` option on
+ * precedence MODEL with a per-site proof. Each is a separate `apq.json` option on
  * this rule, default false, so a project that declares none sees byte-identical
  * behaviour:
  *
@@ -321,7 +321,7 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 	/** A ternary's else-arm child index — `[condition, then, else]`. */
 	private static inline final TERNARY_ELSE_CHILD_INDEX: Int = 2;
 
-	/** The rule id — also the `apqlint.json` key its four opt-in options hang off. */
+	/** The rule id — also the `apq.json` key its four opt-in options hang off. */
 	private static final ID: String = 'redundant-parens';
 
 	/** The characters operators are spelled from — two of them side by side lex as one longer operator. */

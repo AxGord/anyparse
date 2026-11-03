@@ -46,7 +46,7 @@ final class OracleCommand implements CliCommand {
 	 * nothing is recorded that was not observed. A tree that moves between the two commands
 	 * simply misses the fingerprint and recompiles.
 	 *
-	 * The scope is there to locate the project's `apqlint.json` exactly as `lint` does; without
+	 * The scope is there to locate the project's `apq.json` exactly as `lint` does; without
 	 * a `compilerOracle` key the command is inert and exits 0, again exactly like `lint`.
 	 */
 	private static function runOracle(args: Array<String>): Int {
@@ -171,7 +171,7 @@ final class OracleCommand implements CliCommand {
 		CliIo.sysPrint('matches, so an edited tree is recompiled rather than trusted.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('The compiler ALWAYS runs here — there is no flag that records a verdict\n');
-		CliIo.sysPrint('nobody observed. The scope only locates the project apqlint.json; without a\n');
+		CliIo.sysPrint('nobody observed. The scope only locates the project apq.json; without a\n');
 		CliIo.sysPrint('`compilerOracle` key the command is inert. Exit 0 when the build typechecks\n');
 		CliIo.sysPrint('or the oracle could not run, 1 when it does not typecheck, 2 on usage. The\n');
 		CliIo.sysPrint('last stderr line counts both: `N of M configuration(s) typecheck, R do NOT,\n');

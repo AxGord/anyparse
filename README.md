@@ -111,7 +111,7 @@ class Sample {
 
 Close to two hundred rules: unused code, imports, null flow, redundant casts and
 conditions, loop and branch simplifications, naming, member order, documentation,
-thread-context analysis. Configured per directory with `apqlint.json`; can use the Haxe
+thread-context analysis. Configured per directory with `apq.json`; can use the Haxe
 compiler as an oracle that checks every risky fix before keeping it.
 → [Lint](docs/guide/lint.md) · [Rules](docs/lint-rules.md) · [Configuration](docs/guide/lint-config.md)
 

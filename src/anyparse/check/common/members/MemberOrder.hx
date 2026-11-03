@@ -32,7 +32,7 @@ typedef SortPlan = {
 
 /**
  * What one fix pass reads off its file's configs: `movableArglessNew` relaxes the side-effecting
- * init constraint for a pure argless `new` (an ORDER option of `apqlint.json`, read by the fix
+ * init constraint for a pure argless `new` (an ORDER option of `apq.json`, read by the fix
  * path only); `spacing` is the file's spacing context (`MemberSpacing.policyOf`: the spacing-only
  * `separateInlineSubgroup` option and the writer's member-gap policy), which the report path
  * resolves from the same file.
@@ -96,7 +96,7 @@ private typedef FixOptions = {
  * type that transitively carries a BUILD MACRO is gated separately, and only on the FIX path (`macroBuiltMetaOrderKept`, which needs the
  * run`\s `SymbolIndex`): the relative order of its ANNOTATED members is preserved, because a build macro reads the field list in
  * declaration order and dispatches on metadata - Pony`\s `DeclaratorBuilder` turns `@:arg` fields into constructor PARAMETERS that way.
- * The opt-in `movableArglessNew` option (apqlint.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new`
+ * The opt-in `movableArglessNew` option (apq.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new`
  * initializer (`x = new T()`), which the project accepts as order-movable - reordering two independent allocations only changes their
  * relative construction order, unobservable without cross-init data flow.
  */
@@ -195,7 +195,7 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 	}
 
 	/**
-	 * Whether `file`'s `apqlint.json` turns the boolean `member-order` option `key` on (every one
+	 * Whether `file`'s `apq.json` turns the boolean `member-order` option `key` on (every one
 	 * defaults to OFF): `movableArglessNew`, read by the fix path, and the spacing-only
 	 * `separateInlineSubgroup`, read by BOTH paths from the same file so the report and the fix
 	 * cannot disagree about the gap it governs.

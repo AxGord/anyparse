@@ -4,7 +4,7 @@ import anyparse.core.PhaseTimings;
 
 /**
  * The verdict of one compiler-oracle typecheck run — `apq lint`'s bridge to
- * treating the Haxe compiler as ground truth. A project opts in through the `apqlint.json` `compilerOracle` key (an `.hxml` path, or
+ * treating the Haxe compiler as ground truth. A project opts in through the `apq.json` `compilerOracle` key (an `.hxml` path, or
  * a LIST of configurations); the linter then runs `haxe <hxml> --no-output` per configuration and folds the results back into the run:
  *
  *  - `Confirmed`   — the project typechecks; report mode annotates its

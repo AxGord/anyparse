@@ -12,7 +12,7 @@ import anyparse.query.cli.command.LintCommand;
 using StringTools;
 
 /**
- * End-to-end proof of the `apqlint.json` `resolutionRoots` key: the resolution
+ * End-to-end proof of the `apq.json` `resolutionRoots` key: the resolution
  * scope (report files UNION declared library roots) reaches a base class that
  * lives ONLY in a library dir, so a `redundant-this` finding fires on the derived
  * file that would be a conservative miss without the scope — while the library
@@ -61,7 +61,7 @@ class ResolutionScopeCliTest extends Test {
 		// With the library on resolutionRoots the inherited `foo` resolves — this.foo() is flagged (Info trips --fail-on info).
 		final withScope: String = CliFixture.writeDir('resproj', [
 			{ name: 'Derived.hx', source: DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 		Assert.equals(
 			1, Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', '$withScope/Derived.hx']),
@@ -87,7 +87,7 @@ class ResolutionScopeCliTest extends Test {
 		final lib: String = CliFixture.writeDir('reslib', [{ name: 'Base.hx', source: BASE }]);
 		final proj: String = CliFixture.writeDir('resproj', [
 			{ name: 'Derived.hx', source: DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'redundant-this', '$proj/Derived.hx']), 'the fix run succeeds');
@@ -118,7 +118,7 @@ class ResolutionScopeCliTest extends Test {
 			+ '\t\t_a = [];\n\t}\n\n\tfunction g():Int {\n\t\treturn _a.length;\n\t}\n}\n';
 		final base: String = 'class B {\n\tpublic function new() {}\n}\n';
 		final matching: String = CliFixture.writeDir('fiadroots', [{ name: 'B.hx', source: base }, { name: 'C.hx', source: crossing }]);
-		File.saveContent('$matching/apqlint.json', '{"resolutionRoots":["$matching"]}');
+		File.saveContent('$matching/apq.json', '{"resolutionRoots":["$matching"]}');
 		Assert.equals(1, Cli.run([
 			'lint',
 			'--rule',
@@ -129,7 +129,7 @@ class ResolutionScopeCliTest extends Test {
 		]), 'roots that match admit the crossing init');
 		CliFixture.removeDir(matching);
 		final nowhere: String = CliFixture.writeDir('fiadroots', [{ name: 'B.hx', source: base }, { name: 'C.hx', source: crossing }]);
-		File.saveContent('$nowhere/apqlint.json', '{"resolutionRoots":["$nowhere/nowhere"]}');
+		File.saveContent('$nowhere/apq.json', '{"resolutionRoots":["$nowhere/nowhere"]}');
 		Assert.equals(0, Cli.run([
 			'lint',
 			'--rule',
@@ -163,7 +163,7 @@ class ResolutionScopeCliTest extends Test {
 		Sys.setCwd(raw);
 		final dir: String = stripTrailingSlash(Sys.getCwd());
 		final name: String = haxe.io.Path.withoutDirectory(dir);
-		File.saveContent('$dir/apqlint.json', '{"resolutionRoots":["$dir"]}');
+		File.saveContent('$dir/apq.json', '{"resolutionRoots":["$dir"]}');
 		Sys.setCwd(haxe.io.Path.directory(dir));
 		final exit: Int = try {
 			Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', name]);
@@ -207,13 +207,13 @@ class ResolutionScopeCliTest extends Test {
 			return;
 		}
 		// The ROOT is the linked spelling, the report scope the real one.
-		File.saveContent('$dir/apqlint.json', '{"resolutionRoots":["$link"]}');
+		File.saveContent('$dir/apq.json', '{"resolutionRoots":["$link"]}');
 		Assert.equals(
 			1, Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', dir]),
 			'a resolutionRoots entry reaching the report tree through a symlink is the SAME tree, not a second copy of it'
 		);
 		// And the mirror: the report scope is the linked spelling, the root the real one.
-		File.saveContent('$dir/apqlint.json', '{"resolutionRoots":["$dir"]}');
+		File.saveContent('$dir/apq.json', '{"resolutionRoots":["$dir"]}');
 		Assert.equals(
 			1, Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', link]), 'and so is a report scope spelled through one'
 		);
@@ -235,7 +235,7 @@ class ResolutionScopeCliTest extends Test {
 		#if (sys || nodejs)
 		final proj: String = CliFixture.writeDir('reslibmiss', [
 			{ name: 'Derived.hx', source: DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionLibs":["__apq_not_a_real_lib__"]}' }
+			{ name: 'apq.json', source: '{"resolutionLibs":["__apq_not_a_real_lib__"]}' }
 		]);
 		final before: Int = HaxelibResolver.invocations;
 		final exit: Int = Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', '$proj/Derived.hx']);
@@ -258,7 +258,7 @@ class ResolutionScopeCliTest extends Test {
 			'package q;\n\nclass Q {\n\n\tpublic function new() {}\n\n\tpublic function s(): String {\n\t\treturn "plain";\n\t}\n\n}\n';
 		final proj: String = CliFixture.writeDir('reslibquotes', [
 			{ name: 'Q.hx', source: stringy },
-			{ name: 'apqlint.json', source: '{"resolutionLibs":["openfl"]}' }
+			{ name: 'apq.json', source: '{"resolutionLibs":["openfl"]}' }
 		]);
 		final before: Int = HaxelibResolver.invocations;
 		Cli.run(['lint', '--rule', 'prefer-single-quotes', '$proj/Q.hx']);
@@ -360,7 +360,7 @@ class ResolutionScopeCliTest extends Test {
 	}
 
 	/**
-	 * The reproduction: with `apqlint.json` declaring NEITHER `resolutionRoots` nor
+	 * The reproduction: with `apq.json` declaring NEITHER `resolutionRoots` nor
 	 * `resolutionLibs`, a field typed by a std class must still resolve. `haxe.io.BytesOutput` is
 	 * not an abstract, so a method call on the binding rebinds no `this` and `prefer-final-field`
 	 * fires. Before std joined the scope unconditionally the answer depended on the project
@@ -414,7 +414,7 @@ class ResolutionScopeCliTest extends Test {
 			'package q;\n\nclass Z {\n\n\tpublic function new() {}\n\n\tpublic function s(): String {\n\t\treturn "plain";\n\t}\n\n}\n';
 		final proj: String = CliFixture.writeDir('resstdquotes', [
 			{ name: 'Z.hx', source: source },
-			{ name: 'apqlint.json', source: '{"rules":{}}' }
+			{ name: 'apq.json', source: '{"rules":{}}' }
 		]);
 		final haxelibBefore: Int = HaxelibResolver.invocations;
 		final stdBefore: Int = StdResolver.discoveries;
@@ -540,7 +540,7 @@ class ResolutionScopeCliTest extends Test {
 		final lib: String = CliFixture.writeDir('resfieldlib', libFiles);
 		final proj: String = CliFixture.writeDir('resfieldproj', [
 			{ name: name, source: source },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 		final exit: Int = Cli.run(['lint', '--rule', rule, '--fail-on', 'info', '$proj/$name']);
 		CliFixture.removeDir(proj);
@@ -550,14 +550,14 @@ class ResolutionScopeCliTest extends Test {
 
 	/**
 	 * Lint the single report file `name` (source `source`) under `rule` in a project whose
-	 * `apqlint.json` declares NO resolution key at all. Returns the CLI exit code — 1 when an Info
+	 * `apq.json` declares NO resolution key at all. Returns the CLI exit code — 1 when an Info
 	 * finding fires (`--fail-on info`), 0 when the rule stays silent. The config-less sibling of
 	 * `lintWithLib`: whatever resolves here comes from the auto-discovered std alone.
 	 */
 	private static function lintConfigLess(rule: String, name: String, source: String): Int {
 		final proj: String = CliFixture.writeDir('resnocfg', [
 			{ name: name, source: source },
-			{ name: 'apqlint.json', source: '{"rules":{}}' }
+			{ name: 'apq.json', source: '{"rules":{}}' }
 		]);
 		final exit: Int = Cli.run(['lint', '--rule', rule, '--fail-on', 'info', '$proj/$name']);
 		CliFixture.removeDir(proj);

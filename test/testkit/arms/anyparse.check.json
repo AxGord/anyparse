@@ -62,7 +62,7 @@
 			"method": "discoverChain",
 			"find": "if (doc.inherit == false) break;",
 			"replace": "break;",
-			"note": "the nearest apqlint.json replaces its ancestors instead of extending them"
+			"note": "the nearest apq.json replaces its ancestors instead of extending them"
 		},
 		{
 			"name": "M-CHAIN-IGNORES-INHERIT",
@@ -76,8 +76,8 @@
 			"name": "M-CHAIN-UNBOUNDED",
 			"type": "anyparse.check.LintConfig",
 			"method": "discoverChain",
-			"find": "ConfigFinder.findUpAll(path, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS)",
-			"replace": "ConfigFinder.findUpAll(path, 'apqlint.json')",
+			"find": "ConfigFinder.findUpProject(path, ConfigFinder.PROJECT_ROOT_MARKERS)",
+			"replace": "ConfigFinder.findUpProject(path)",
 			"note": "the chain climbs past the project root and folds a stray ancestor document"
 		},
 		{
@@ -172,7 +172,7 @@
 			"type": "anyparse.check.LintConfig",
 			"method": "reportSummaryThreshold",
 			"force": "LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD",
-			"note": "an apqlint.json reportSummaryThreshold is ignored and every run summarises at the default"
+			"note": "an apq.json reportSummaryThreshold is ignored and every run summarises at the default"
 		},
 		{
 			"name": "M-REFLECTIVE-MERGE",
@@ -196,7 +196,7 @@
 			"method": "parseDocument",
 			"find": "reflectiveMethodHolders: config.reflectiveMethodHolders,",
 			"replace": "",
-			"note": "`reflectiveMethodHolders` is never read out of `apqlint.json`"
+			"note": "`reflectiveMethodHolders` is never read out of `apq.json`"
 		},
 		{
 			"name": "M-WRITER-NARROW-NONE",
@@ -251,7 +251,7 @@
 			"method": "parseDocument",
 			"find": "ownedTypes: ownedTypes,",
 			"replace": "",
-			"note": "`ownedTypes` is never read out of `apqlint.json`"
+			"note": "`ownedTypes` is never read out of `apq.json`"
 		},
 		{
 			"name": "M-FIXVERIFY-RISKYARM-FIX",

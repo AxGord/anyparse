@@ -139,16 +139,16 @@ class NoUnderscorePrefixCheckTest extends Test {
 	@:killer('M-FIXDRIVER-SUPERSEDES-IGNORED')
 	public function testTheFixerSeesTheBindingOnce(): Void {
 		#if nodejs
-		final src: String = 'package pkg;\nclass C {\n\tpublic function run(label:String):String {\n\t\tfinal _label:String = label + "!";\n'
-			+ '\t\treturn _label;\n\t}\n}\n';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function run(label:String):String {\n'
+			+ '\t\tfinal _label:String = label + "!";\n\t\treturn _label;\n\t}\n}\n';
 		final dir: String = CliFixture.writeDir('nup-ledger', [
-			{ name: 'apqlint.json', source: '{"rules":{"no-underscore-prefix":{"enabled":true}}}' }
+			{ name: 'apq.json', source: '{"rules":{"no-underscore-prefix":{"enabled":true}}}' }
 		]);
 		FileSystem.createDirectory('$dir/pkg');
 		File.saveContent('$dir/pkg/C.hx', src);
 		var err: String = '';
 		CliFixture.always(
-			() -> CliFixture.removeDir(dir), () -> err = CliFixture.captureStderr(() -> Cli.run([
+			CliFixture.removeDir.bind(dir), () -> err = CliFixture.captureStderr(() -> Cli.run([
 				'lint',
 				'--no-oracle',
 				'--fix',
@@ -731,7 +731,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		return 'package pkg;\nclass C {\n\tpublic function f(_event:Int):Void {\n\t\ttrace(1);\n\t}\n}';
 	}
 
-	/** The check's findings for `src`, with `config` (raw `apqlint.json` text) in effect when given. */
+	/** The check's findings for `src`, with `config` (raw `apq.json` text) in effect when given. */
 	private function violations(src: String, ?config: String): Array<Violation> {
 		final check: NoUnderscorePrefix = configured(config);
 		return CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }]);
@@ -770,7 +770,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		return out;
 	}
 
-	/** A check carrying `config` (raw `apqlint.json` text) as its per-file resolver, or the default one. */
+	/** A check carrying `config` (raw `apq.json` text) as its per-file resolver, or the default one. */
 	private function configured(config: Null<String>): NoUnderscorePrefix {
 		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
 		if (config != null) {

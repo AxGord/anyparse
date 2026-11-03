@@ -73,7 +73,7 @@ class PreferInlineOracleTest extends Test {
 		final dir: String = CliFixture.writeDir('preferinlineoracle', [
 			{ name: 'Main.hx', source: src },
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n' },
-			{ name: 'apqlint.json', source: '{"compilerOracle":"check.hxml"}' }
+			{ name: 'apq.json', source: '{"compilerOracle":"check.hxml"}' }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'prefer-inline', '$dir/Main.hx']);
 		final out: String = File.getContent('$dir/Main.hx');
@@ -100,7 +100,7 @@ class PreferInlineOracleTest extends Test {
 			{ name: 'Lib.hx', source: lib },
 			{ name: 'Main.hx', source: main },
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n' },
-			{ name: 'apqlint.json', source: '{"compilerOracle":"check.hxml"}' }
+			{ name: 'apq.json', source: '{"compilerOracle":"check.hxml"}' }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'prefer-inline', '$dir/Lib.hx', '$dir/Main.hx']);
 		final out: String = File.getContent('$dir/Lib.hx');
@@ -121,7 +121,7 @@ class PreferInlineOracleTest extends Test {
 			{ name: 'Lib.hx', source: PARTIAL_LIB },
 			{ name: 'Main.hx', source: PARTIAL_MAIN },
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n' },
-			{ name: 'apqlint.json', source: '{"compilerOracle":"check.hxml"}' }
+			{ name: 'apq.json', source: '{"compilerOracle":"check.hxml"}' }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'prefer-inline', '$dir/Lib.hx', '$dir/Main.hx']);
 		final out: String = File.getContent('$dir/Lib.hx');
@@ -219,7 +219,7 @@ class PreferInlineOracleTest extends Test {
 	 * framework claim and not from the scope's mere presence.
 	 */
 	private function lintChainUnder(config: String, root: String): Int {
-		final dir: String = CliFixture.writeDir('piwide', [{ name: 'apqlint.json', source: config }]);
+		final dir: String = CliFixture.writeDir('piwide', [{ name: 'apq.json', source: config }]);
 		FileSystem.createDirectory('$dir/lib');
 		FileSystem.createDirectory('$dir/app');
 		File.saveContent('$dir/lib/TestBase.hx', 'class TestBase extends $root {\n\n\tpublic function new() super();\n\n}\n');

@@ -1075,7 +1075,7 @@ final class OracleGenerationTest extends Test {
 	}
 
 	/**
-	 * Two configs over one hxml — a nested `apqlint.json` naming the parent's tree, through another spelling — meet the
+	 * Two configs over one hxml — a nested `apq.json` naming the parent's tree, through another spelling — meet the
 	 * SAME generation lock: its state is keyed by the tree's real paths and kept at the project root, never beside the
 	 * declaring config and never inside the hxml's own directory, which the command may delete.
 	 */
@@ -1225,7 +1225,7 @@ final class OracleGenerationTest extends Test {
 			{ name: 'Main.hx', source: MAIN },
 			{ name: 'good.hxml', source: '-cp .\n-main Main\n' },
 			{
-				name: 'apqlint.json',
+				name: 'apq.json',
 				source: '{"compilerOracle":[{"hxml":"good.hxml","dir":"."},{"hxml":"g.hxml","dir":".","generate":"exit 3"}]}'
 			}
 		]);

@@ -1,6 +1,6 @@
-# Lint configuration: `apqlint.json`
+# Lint configuration: `apq.json`
 
-An `apqlint.json` is discovered by walking up from each linted file (per-file, directory-memoized — a `test/apqlint.json` governs the files beside and below it, and unlike a nested `hxformat.json` it EXTENDS the documents above rather than replacing the nearest one; see below) and configures that file's checks: per
+An `apq.json` is discovered by walking up from each linted file (per-file, directory-memoized — a `test/apq.json` governs the files beside and below it, and unlike a nested `hxformat.json` it EXTENDS the documents above rather than replacing the nearest one; see below) and configures that file's checks: per
 rule it can disable the rule (`"enabled": false`, dropped from the default set — an
 explicit `--rule` still runs it), override its reported severity (`"severity":
 "error|warning|info"`, applied before `--fail-on` and the report), or set a
@@ -9,6 +9,8 @@ rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 JSON, or a wrong-typed top-level key — the file is read through a declared typed
 schema) is skipped with one stderr line naming it, and the documents ABOVE it
 still apply. Wrong-typed values INSIDE a rule's own options stay per-field lenient.
+
+**The legacy name.** `apqlint.json` is still read, in the same format and the same chain, where a directory has no `apq.json`. A directory holding both is an error naming the directory, exit 1, with nothing left written (a creating op removes what it made) — so keep one; rename with `git mv apqlint.json apq.json`.
 
 **A nested document EXTENDS the ones above it; it does not replace them.** The
 whole chain from the linted file's directory to the filesystem root is folded,
@@ -73,8 +75,8 @@ files, so the call answers "nothing in this project reflects that name" from the
 one file it was handed, and `--fix` acts on it — erasing a name a sibling file
 spells to `Reflect`, with the build still green. Declare the same paths the
 project's own gate lints — a narrower root leaves the hole one directory smaller
-— and declare them ONCE, in the outermost `apqlint.json`: a nested document
-inherits the key, so a `test/apqlint.json` that says nothing about roots resolves
+— and declare them ONCE, in the outermost `apq.json`: a nested document
+inherits the key, so a `test/apq.json` that says nothing about roots resolves
 over the same project scope, with the paths still read relative to the ROOT
 document's own directory. (Before the chain existed, discovery stopped at the
 first document and took it wholesale, and a nested config without the key left
@@ -248,7 +250,7 @@ qualified names as in `reflectiveClasses`, matched against the module a mention 
 written in and the type declaration enclosing it; the declaring module always owns its
 types), and `why` — quoted in every finding. An entry naming no owner, nothing owned
 or no reason is dropped with a stderr line. Like every array of the chain, a nearer
-`apqlint.json`'s list replaces an ancestor's. Semantics and limits:
+`apq.json`'s list replaces an ancestor's. Semantics and limits:
 `docs/cli-query-tool.md` § "`owned-types`".
 
 ```json

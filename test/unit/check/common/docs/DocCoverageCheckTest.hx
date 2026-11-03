@@ -184,7 +184,7 @@ class DocCoverageCheckTest extends Test {
 		return CheckFixture.violations(new DocCoverage(), src);
 	}
 
-	/** Run the check with a specific `apqlint.json` config threaded through the resolver. */
+	/** Run the check with a specific `apq.json` config threaded through the resolver. */
 	private function run(configJson: String, src: String): Array<Violation> {
 		final check: DocCoverage = new DocCoverage();
 		final cfg: LintConfig = LintConfig.parse(configJson);

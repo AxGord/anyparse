@@ -5,6 +5,8 @@ import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
 
+using StringTools;
+
 /**
  * A hold judged across its callees: the lock it holds, on the object it holds it on, is carried into each call made on
  * that object (`LockDominance.carry`) — a stable field of the running object, or a stable field of one — so a take of a
@@ -17,16 +19,6 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"reentrantLocks":["Mutex.acquire"],"closedWorld":true}}}';
 
 	/**
-	 * `_mutex` is dominated by `_batch` (its one long hold holds both); `lookup` takes `_mutex`, and `nested` re-takes
-	 * `_batch`.
-	 */
-	private static inline final DB: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex();'
-		+ ' public function new() {} public function batchLock():Void batch.acquire(); public function batchUnlock():Void batch.release();'
-		+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
-		+ ' public function nested():Void { batchLock(); mutex.acquire(); mutex.release(); batchUnlock(); }'
-		+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
-
-	/**
 	 * `DB` with `drop`, which gives `_batch` back without taking it: `_batch` then excludes no one for sure, so it
 	 * dominates nothing (`LockDominance`) — wherever `drop` is called.
 	 */
@@ -35,6 +27,16 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
 		+ ' public function nested():Void { batchLock(); mutex.acquire(); mutex.release(); batchUnlock(); }'
 		+ ' public function drop():Void { batchUnlock(); mutex.acquire(); mutex.release(); }'
+		+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
+
+	/**
+	 * `_mutex` is dominated by `_batch` (its one long hold holds both); `lookup` takes `_mutex`, and `nested` re-takes
+	 * `_batch`.
+	 */
+	private static final DB: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex();'
+		+ ' public function new() {} public function batchLock():Void batch.acquire(); public function batchUnlock():Void batch.release();'
+		+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
+		+ ' public function nested():Void { batchLock(); mutex.acquire(); mutex.release(); batchUnlock(); }'
 		+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
 
 	/** the client's `RemoteDiskSystemBase.removeFileBlocked`: `_batchMutex` held, `_cloudDatabase.getFileByCloudId` takes `_mutex`. */
@@ -78,12 +80,9 @@ class ThreadSafetyCarriedHoldTest extends Test {
 			['warning B Fs.work | Db.batch'], work(own('_db.batchLock(); _other.batchLock(); _other.batchUnlock(); _db.batchUnlock();'))
 		);
 		// `Fs` a `Db` itself: its own `batch` is not the one it holds on `_db`
-		final self: String = StringTools.replace(
-			StringTools.replace(
-				own('_db.batchLock(); batch.acquire(); batch.release(); _db.batchUnlock();'), 'class Fs {', 'class Fs extends Db {'
-			),
-			'{ _db = db;', '{ super(); _db = db;'
-		);
+		final self: String = own('_db.batchLock(); batch.acquire(); batch.release(); _db.batchUnlock();')
+			.replace('class Fs {', 'class Fs extends Db {')
+			.replace('{ _db = db;', '{ super(); _db = db;');
 		Assert.same(['warning B Fs.work | Db.batch'], work(self), 'its own object');
 		#else
 		Assert.pass('non-sys target');
@@ -166,14 +165,13 @@ class ThreadSafetyCarriedHoldTest extends Test {
 			['warning'],
 			graded(
 				'final o:Base = f; Reflect.setField(o, key, b);', '',
-				'class Base {} class Fs extends Base { public var db:Db;' + ' public function new(a:Db, b:Db) { db = a; } }'
+				'class Base {} class Fs extends Base { public var db:Db; public function new(a:Db, b:Db) { db = a; } }'
 			),
 			'a superclass of the field\'s'
 		);
 		Assert.same(
 			['warning'],
-			graded('final o:Sub = null; Reflect.setField(o, key, b);', '', plain + ' class Sub extends Fs {}'),
-			'a subclass of the field\'s'
+			graded('final o:Sub = null; Reflect.setField(o, key, b);', '', '$plain class Sub extends Fs {}'), 'a subclass of the field\'s'
 		);
 		Assert.same(['warning'], graded('final w:W = null; Reflect.setField(w, key, f);'), 'a final field');
 		Assert.same(
@@ -262,17 +260,17 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/**
-	 * A nested `apqlint.json` restating `closedWorld` closes no project of its own: the project is the outermost
+	 * A nested `apq.json` restating `closedWorld` closes no project of its own: the project is the outermost
 	 * document's, and a run over the nested directory alone leaves the outer one's `plugins/` out — the notice names
 	 * that project (review round 2 `pc`).
 	 */
 	@:pin('control') @:killer('M-TS-COVER-OUTERMOST')
 	public function testANestedRestatementClosesNoProjectOfItsOwn(): Void {
 		#if (sys || nodejs)
-		final root: String = CliFixture.writeDir('threadsafetynested', [{ name: 'apqlint.json', source: CONFIG }]);
+		final root: String = CliFixture.writeDir('threadsafetynested', [{ name: 'apq.json', source: CONFIG }]);
 		FileSystem.createDirectory('$root/core');
 		FileSystem.createDirectory('$root/plugins');
-		File.saveContent('$root/core/apqlint.json', '{"rules":{"thread-safety":{"closedWorld":true}}}');
+		File.saveContent('$root/core/apq.json', '{"rules":{"thread-safety":{"closedWorld":true}}}');
 		File.saveContent('$root/plugins/Plugin.hx', PLUGIN);
 		final run: Array<String> = sources(path(''));
 		final found: Array<Violation> = Linter.run(
@@ -281,7 +279,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		);
 		CliFixture.removeDir(root);
 		Assert.same(['info B Fs.work | Db.batch (folded)'], holds(found));
-		Assert.isTrue(StringTools.endsWith(closedNote(found) ?? '', '$root/apqlint.json'), closedNote(found));
+		final note: String = closedNote(found) ?? '';
+		Assert.isTrue(note.endsWith('$root/apq.json'), note);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -291,7 +290,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	@:pin('control') @:killer('M-TS-COVER-EXCLUDE')
 	public function testAnExcludedFileIsNoPartOfTheProject(): Void {
 		#if (sys || nodejs)
-		final config: String = StringTools.replace(CONFIG, '"closedWorld":true', '"closedWorld":true,"exclude":["Plugin.hx"]');
+		final config: String = CONFIG.replace('"closedWorld":true', '"closedWorld":true,"exclude":["Plugin.hx"]');
 		final found: Array<Violation> =
 			ThreadSafetyCheckTest.violations(config, sources(path('')), [{ name: 'Plugin.hx', source: PLUGIN }]);
 		Assert.same(['info B Fs.work | Db.batch'], holds(found));
@@ -351,8 +350,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			db ?? DB,
 			fs,
-			'class M { public static function main():Void { final db:Db = new Db(); final fs:Fs = new Fs(db, new Db());'
-				+ ' Runner.create(() -> db.slow()); Runner.create(() -> fs.work()); db.batchLock(); db.batchUnlock(); db.lookup(); db.nested(); } }'
+			'class M { public static function main():Void { final db:Db = new Db(); final fs:Fs = new Fs(db, new Db()); Runner.create(() '
+				+ '-> db.slow()); Runner.create(() -> fs.work()); db.batchLock(); db.batchUnlock(); db.lookup(); db.nested(); } }'
 		];
 	}
 
@@ -376,10 +375,10 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	private static function swapGraded(fsDecl: String, fsType: String, swapper: String): Array<String> {
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
 			+ '"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
-		final db: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex(); public function new() {}'
-			+ ' public function batchLock():Void batch.acquire(); public function batchUnlock():Void batch.release();'
-			+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
-			+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
+		final db: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex(); public function '
+			+ 'new() {} public function batchLock():Void batch.acquire(); public function batchUnlock():Void '
+			+ 'batch.release(); public function lookup():Void { mutex.acquire(); mutex.release(); } public function '
+			+ 'slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
 		final main: String = 'class M { public static function main():Void { final a:Db = new Db(); final b:Db = new Db();'
 			+ ' final fs:Fs = new Fs(a, b); final w:W = new W(fs); Runner.create(() -> { a.slow(); b.slow(); });'
 			+ ' Runner.create(() -> w.work()); Runner.create(() -> Swapper.go(fs, b)); a.batchLock(); a.batchUnlock(); } }';
@@ -403,7 +402,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	/** The run's notice of a `closedWorld` it does not cover (`CLOSED_NOTE`, then the project's document); null for none. */
 	private static function closedNote(found: Array<Violation>): Null<String> {
 		final notes: Array<String> = [
-			for (v in found) if (v.file == '' && StringTools.startsWith(v.message, CLOSED_NOTE)) v.message
+			for (v in found) if (v.file == '' && v.message.startsWith(CLOSED_NOTE)) v.message
 		];
 		return notes.length == 1 ? notes[0] : null;
 	}

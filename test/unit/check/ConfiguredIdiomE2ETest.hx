@@ -112,7 +112,7 @@ final class ConfiguredIdiomE2ETest extends Test {
 		final dir: Null<String> = tree('apiidiom', [
 			{ name: 'Main.hx', source: POINT_MAIN },
 			{ name: 'geom/Point.hx', source: POINT },
-			{ name: 'apqlint.json', source: POINT_CONFIG }
+			{ name: 'apq.json', source: POINT_CONFIG }
 		]);
 		if (dir == null) return;
 		final before: String = run(dir);
@@ -144,7 +144,7 @@ final class ConfiguredIdiomE2ETest extends Test {
 			{ name: 'ev/Event.hx', source: EVENT },
 			{ name: 'ev/EventType.hx', source: EVENT_TYPE },
 			{ name: 'ev/Dispatcher.hx', source: DISPATCHER },
-			{ name: 'apqlint.json', source: EVENT_CONFIG }
+			{ name: 'apq.json', source: EVENT_CONFIG }
 		]);
 		if (dir == null) return;
 		final fixLog: String = CliFixture.captureStderr(() -> Cli.run([

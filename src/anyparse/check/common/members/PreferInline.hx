@@ -64,7 +64,7 @@ import anyparse.query.SymbolIndex;
  *   another file and possibly another project.
  * - A method a FRAMEWORK reaches by NAME rather than through a written call —
  *   `NamingSupport.frameworkReachable` through `CheckScan.frameworkReachableMethod`, the same
- *   predicate and the same `apqlint.json` `frameworks` roster the two unused-* rules read. NOT a
+ *   predicate and the same `apq.json` `frameworks` roster the two unused-* rules read. NOT a
  *   soundness gate: marking a utest `test*` method `inline` is legal and changes nothing — utest
  *   discovers by NAME out of `Context.getBuildFields()` at compile time, and an A/B of a `setup` /
  *   sync test / async test / `spec` method is discovered and runs identically with and without
@@ -581,7 +581,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			// macro writes or its runtime dispatches, and it runs once — so the fold buys nothing
 			// and the rule's premise ("inlining BUYS something") is unmet. Asked through the shared
 			// adapter over `NamingSupport.frameworkReachable`, so a project that declares a
-			// framework in `apqlint.json` gets the carve-out here and from the two unused-* rules at
+			// framework in `apq.json` gets the carve-out here and from the two unused-* rules at
 			// once, and no framework NAME appears in this file.
 			//
 			// The index is the report UNION RESOLUTION scope, like the sibling rule's: a contract's

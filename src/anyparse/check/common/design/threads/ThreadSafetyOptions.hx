@@ -50,7 +50,7 @@ typedef SpawnArguments = {
 @:nullSafety(Strict)
 final class ThreadSafetyOptions {
 
-	/** The rule's id, under which `apqlint.json` keeps these options. */
+	/** The rule's id, under which `apq.json` keeps these options. */
 	public static inline final RULE: String = 'thread-safety';
 
 	/** The keys holding a list of call patterns (`lockPairs`: of pairs; `exclude`: of path runs). */

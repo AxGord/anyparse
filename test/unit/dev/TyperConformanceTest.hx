@@ -5,6 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
 #end
+import anyparse.query.ConfigFinder;
 import dev.TyperConformance;
 import utest.Assert;
 import utest.Test;
@@ -50,6 +51,19 @@ final class TyperConformanceTest extends Test {
 		#end
 	}
 
+	/** A probe project named by the legacy config file name is a probe project too. */
+	public function testALegacyNamedProbeProjectIsRun(): Void {
+		#if (sys || nodejs)
+		final dir: String = corpus(PROBE);
+		FileSystem.rename('$dir/probe/apq.json', '$dir/probe/${ConfigFinder.LEGACY_PROJECT_CONFIG}');
+		CliFixture.always(
+			CliFixture.removeDir.bind(dir), () -> Assert.equals(0, TyperConformance.main(['probes', dir]), 'the legacy name')
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A compiler that does not start (no `haxe` on the `PATH`) fails the gate rather than reading zero cases as a pass. */
 	public function testACompilerThatDoesNotStartFailsTheGate(): Void {
 		#if (sys || nodejs)
@@ -84,7 +98,7 @@ final class TyperConformanceTest extends Test {
 		FileSystem.createDirectory('$root/probe/src');
 		File.saveContent('$root/probe/src/Probe.hx', source);
 		File.saveContent('$root/probe/typer.hxml', HXML);
-		File.saveContent('$root/probe/apqlint.json', CONFIG);
+		File.saveContent('$root/probe/apq.json', CONFIG);
 		return root;
 	}
 	#end

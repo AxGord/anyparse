@@ -106,9 +106,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	public function testEverySpansBlockingCallIsListed(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _l:Mutex = new Mutex(); public function new() {}'
-			+ ' function work():Void { _l.acquire(); nap(); nap2(); _l.release(); }'
-			+ ' function more():Void { _l.acquire(); nap(); _l.release(); }'
-			+ ' function nap():Void Sys.sleep(1); function nap2():Void Sys.sleep(2); }';
+			+ ' function work():Void { _l.acquire(); nap(); nap2(); _l.release(); } function more():Void {'
+			+ ' _l.acquire(); nap(); _l.release(); } function nap():Void Sys.sleep(1); function nap2():Void Sys.sleep(2); }';
 		Assert.same([
 			{ kind: 'spans-blocking', holder: 'A.work', at: source.indexOf('nap();') },
 			{ kind: 'spans-blocking', holder: 'A.work', at: source.indexOf('nap2();') },
@@ -128,9 +127,9 @@ class ThreadSafetyLongLocksTest extends Test {
 		#if (sys || nodejs)
 		final sources: Array<String> = [
 			'class W { final _w:Mutex = new Mutex(); final _s:Mutex = new Mutex(); public function new() {}'
-				+ ' function keep(x:Bool):Void { if (x) _w.acquire(); } function blindS(f:() -> Void):Void { _s.acquire(); f(); _s.release(); }'
-				+ ' public function save(t:Int):Void { _w.acquire(); upd(t); _w.release(); } public function upd(t:Int):Void write();'
-				+ ' function write():Void { _s.acquire(); _s.release(); } }',
+				+ ' function keep(x:Bool):Void { if (x) _w.acquire(); } function blindS(f:() -> Void):Void {'
+				+ ' _s.acquire(); f(); _s.release(); } public function save(t:Int):Void { _w.acquire(); upd(t); _w.release(); } '
+				+ 'public function upd(t:Int):Void write(); function write():Void { _s.acquire(); _s.release(); } }',
 			'class D extends W { override public function upd(t:Int):Void super.upd(t); }',
 			'class E extends W { override public function upd(t:Int):Void super.upd(t); }'
 		];
@@ -201,9 +200,8 @@ class ThreadSafetyLongLocksTest extends Test {
 		Assert.same(['spans-blocking'], [for (r in longLock(report, 'A._n')?.aside ?? []) r.kind]);
 		// `_n` is long only because its hold takes `_m`: with `_m`'s leak set aside `_n` is short, so `_m`'s hold of `_n` blocks nothing
 		final circular: String = 'class B { final _m:Mutex = new Mutex(); final _n:Mutex = new Mutex(); public function new() {}'
-			+ ' function keep(x:Bool):Void { if (x) _m.acquire(); }'
-			+ ' function a():Void { _n.acquire(); _m.acquire(); _m.release(); _n.release(); }'
-			+ ' function b():Void { _m.acquire(); _n.acquire(); _n.release(); _m.release(); } }';
+			+ ' function keep(x:Bool):Void { if (x) _m.acquire(); } function a():Void { _n.acquire(); _m.acquire(); _m.release(); '
+			+ '_n.release(); } function b():Void { _m.acquire(); _n.acquire(); _n.release(); _m.release(); } }';
 		final loop: LongLockReport = explain([circular]);
 		Assert.same(
 			['spans-blocking'],
@@ -310,7 +308,7 @@ class ThreadSafetyLongLocksTest extends Test {
 	private static function run(
 		sources: Array<String>, explaining: Bool, config: String
 	): { found: Array<Violation>, report: Null<LongLockReport> } {
-		final dir: String = CliFixture.writeDir('threadsafetylong', [{ name: 'apqlint.json', source: config }]);
+		final dir: String = CliFixture.writeDir('threadsafetylong', [{ name: 'apq.json', source: config }]);
 		final check: ThreadSafety = new ThreadSafety();
 		check.explainLongLocks(explaining);
 		final found: Array<Violation> = Linter.run(

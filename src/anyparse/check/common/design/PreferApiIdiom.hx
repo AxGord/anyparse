@@ -19,7 +19,7 @@ import anyparse.check.scan.PurityScan;
 /**
  * Rewrites consecutive writes of a type's fields into the one method call the PROJECT declares equivalent —
  * `p.x = a; p.y = b;` into `p.setTo(a, b);`, `p.x = q.x; p.y = q.y;` into `p.copyFrom(q);`. `Severity.Info`, with an
- * autofix. Inert until the project declares an idiom in `apqlint.json`:
+ * autofix. Inert until the project declares an idiom in `apq.json`:
  *
  *     "prefer-api-idiom": { "idioms": [
  *         { "type": "openfl.geom.Point", "fields": ["x", "y"], "method": "setTo" },
@@ -87,7 +87,7 @@ import anyparse.check.scan.PurityScan;
 @:nullSafety(Strict)
 final class PreferApiIdiom extends RuleBase implements ConfigAware implements FileGated {
 
-	/** The rule id, also the `apqlint.json` option key. */
+	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'prefer-api-idiom';
 
 	/** The linter's memoised per-file config resolver; null when run outside it. */
@@ -96,7 +96,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	public function new() {
 		super(
 			RULE_ID,
-			'consecutive writes of every field an apqlint.json idiom declares, on one receiver of the declared type, replaceable '
+			'consecutive writes of every field an apq.json idiom declares, on one receiver of the declared type, replaceable '
 			+ 'with the declared method call (p.x = a; p.y = b; -> p.setTo(a, b))',
 			RuleCategory.Design
 		);

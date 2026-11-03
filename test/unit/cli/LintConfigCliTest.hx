@@ -4,7 +4,7 @@ import anyparse.check.LintConfig;
 import anyparse.query.Cli;
 
 /**
- * End-to-end wiring of an `apqlint.json` sitting in the linted file's
+ * End-to-end wiring of an `apq.json` sitting in the linted file's
  * directory. Asserted via `Cli.run(['lint', ...])` exit codes: a disabled rule
  * produces no finding (cannot trip `--fail-on`), a promoted severity can trip a
  * gate the default level would not, and a tightened `complexity.max` flags a
@@ -106,7 +106,7 @@ class LintConfigCliTest extends Test {
 	#if (sys || nodejs)
 	private function dirWith(config: Null<String>, foo: String): String {
 		final files: Array<{ name: String, source: String }> = [{ name: 'Foo.hx', source: foo }];
-		if (config != null) files.push({ name: 'apqlint.json', source: config });
+		if (config != null) files.push({ name: 'apq.json', source: config });
 		return CliFixture.writeDir('lintcfg', files);
 	}
 	#end

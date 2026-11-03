@@ -513,7 +513,7 @@ class PreferStaticExtensionFactsTest extends Test {
 			{ name: 'Main.hx', source: MAIN },
 			{ name: 'check.hxml', source: BUILD },
 			{
-				name: 'apqlint.json',
+				name: 'apq.json',
 				source: '{"compilerOracle":"check.hxml","rules":{"prefer-static-extension":{"types":["Main.Util","StringTools"]}}}'
 			}
 		]);
@@ -555,7 +555,7 @@ class PreferStaticExtensionFactsTest extends Test {
 			{ name: 'Main.hx', source: BINDER_MAIN },
 			{ name: 'check.hxml', source: BUILD },
 			{
-				name: 'apqlint.json',
+				name: 'apq.json',
 				source: '{"compilerOracle":"check.hxml","rules":{"prefer-static-extension":{"types":["StringTools"]}}}'
 			}
 		]);

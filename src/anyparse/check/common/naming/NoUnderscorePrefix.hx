@@ -130,15 +130,15 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 
 	private static inline final RULE_ID: String = 'no-underscore-prefix';
 
-	/** Whether parameters are in scope, unless an `apqlint.json` sets `params`. */
+	/** Whether parameters are in scope, unless an `apq.json` sets `params`. */
 	private static inline final DEFAULT_PARAMS: Bool = true;
 
-	/** Whether locals are in scope, unless an `apqlint.json` sets `locals`. */
+	/** Whether locals are in scope, unless an `apq.json` sets `locals`. */
 	private static inline final DEFAULT_LOCALS: Bool = true;
 
 	/**
 	 * Whether the supertype-shadow veto stands for a local / parameter / catch variable,
-	 * unless an `apqlint.json` sets `allowInheritedShadow`. Default keeps the veto.
+	 * unless an `apq.json` sets `allowInheritedShadow`. Default keeps the veto.
 	 */
 	private static inline final DEFAULT_ALLOW_INHERITED_SHADOW: Bool = false;
 

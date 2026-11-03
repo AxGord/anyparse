@@ -324,7 +324,7 @@ class DeadSafeNavTest extends Test {
 	): Void {
 		#if (sys || nodejs)
 		final src: String = 'package app; class C { function f(x:Null<Foo>) { final ok = x != null; if (ok) { var n = x?.bar; } } }';
-		final dir: String = CliFixture.writeDir('dsnbuild', [{ name: 'apqlint.json', source: config }].concat(files));
+		final dir: String = CliFixture.writeDir('dsnbuild', [{ name: 'apq.json', source: config }].concat(files));
 		final vs: Array<Violation> = CheckFixture.violationsIn(new DeadSafeNav(), [{ file: '$dir/C.hx', source: src }]);
 		CliFixture.removeDir(dir);
 		Assert.equals(1, vs.length);

@@ -12,7 +12,7 @@ import sys.io.File;
  * whose value is not a small conventional one is flagged `Warning`. The "in
  * logic" gate (member field initializers and enum-abstract values exempt), the
  * named-local-binding exemption, the `{0,1,2}` exempt set with its boundary,
- * negative-magnitude handling, hex / float coverage, and the `apqlint.json`
+ * negative-magnitude handling, hex / float coverage, and the `apq.json`
  * `ignore` option are all pinned. Report-only — `fix` yields no edits.
  */
 class MagicNumberCheckTest extends Test {
@@ -139,11 +139,9 @@ class MagicNumberCheckTest extends Test {
 	@:killer('M-MAGIC-TABLE-SWITCH-ARM-LOOSE')
 	public function testASwitchOfLiteralArmsIsATable(): Void {
 		final src: String = 'class C {\n\tfunction g(base:Int, c:Bool, k:Int):Int {\n'
-			+ '\t\tfinal a:Int = switch base << 16 { case 0x410300: 0xC0; case 33 | 44: -55; case _: -1; };\n'
-			+ '\t\tfinal b:Int = switch k { case 21: 22; case 23: k; case _: 0; };\n'
-			+ '\t\tfinal d:Int = switch k { case 31 if (c): 32; case _: 0; };\n'
-			+ '\t\tfinal e:Int = switch k { case 41: 42; case z: 0; };\n'
-			+ '\t\tfinal f:Int = switch k { case 51: { 52; } default: 0; };\n'
+			+ '\t\tfinal a:Int = switch base << 16 { case 0x410300: 0xC0; case 33 | 44: -55; case _: -1; };\n\t\tfinal b:Int = switch k {'
+			+ ' case 21: 22; case 23: k; case _: 0; };\n\t\tfinal d:Int = switch k { case 31 if (c): 32; case _: 0; };\n'
+			+ '\t\tfinal e:Int = switch k { case 41: 42; case z: 0; };\n\t\tfinal f:Int = switch k { case 51: { 52; } default: 0; };\n'
 			+ '\t\treturn switch k { case 61: 62; default: 63; };\n\t}\n}';
 		final flagged: Array<String> = [for (v in withTables(src)) v.message.split(' ')[2]];
 		Assert.same(
@@ -255,19 +253,19 @@ class MagicNumberCheckTest extends Test {
 	}
 
 	public function testRespectsIgnoreFromDisk(): Void {
-		// End-to-end: an apqlint.json discovered by walking up adds 5000 to the
+		// End-to-end: an apq.json discovered by walking up adds 5000 to the
 		// exempt set, so a literal the check would otherwise flag is left alone.
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_mn_cfg_${Sys.time()}';
 		FileSystem.createDirectory(dir);
-		File.saveContent('$dir/apqlint.json', '{"rules":{"magic-number":{"ignore":[5000]}}}');
+		File.saveContent('$dir/apq.json', '{"rules":{"magic-number":{"ignore":[5000]}}}');
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f(k:Int):Int { return 5000 * k; }\n}';
 		File.saveContent(path, src);
 		Assert.equals(0, CheckFixture.violationsIn(new MagicNumber(), [{ file: path, source: src }]).length);
 		FileSystem.deleteFile(path);
-		FileSystem.deleteFile('$dir/apqlint.json');
+		FileSystem.deleteFile('$dir/apq.json');
 		FileSystem.deleteDirectory(dir);
 	}
 
@@ -398,7 +396,7 @@ class MagicNumberCheckTest extends Test {
 		return withConfig(src, '{"rules":{"magic-number":{"literalTables":true}}}');
 	}
 
-	/** The findings on `src` under the `apqlint.json` text `json`. */
+	/** The findings on `src` under the `apq.json` text `json`. */
 	private function withConfig(src: String, json: String): Array<Violation> {
 		final check: MagicNumber = new MagicNumber();
 		final config: LintConfig = LintConfig.parse(json);

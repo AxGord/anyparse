@@ -6,7 +6,7 @@ import anyparse.grammar.json.JValue;
 using StringTools;
 
 /**
- * One `ownedTypes` declaration of `apqlint.json`: the types and members a layer of the project OWNS, the code that
+ * One `ownedTypes` declaration of `apq.json`: the types and members a layer of the project OWNS, the code that
  * owns them, and why — what the `owned-types` rule reads.
  *
  *  - `types` — qualified type paths (`pkg.Module` for a module's main type, `pkg.Module.Sub` for a sub-type) whose
@@ -25,7 +25,7 @@ typedef TypeOwnership = {
 }
 
 /**
- * The `apqlint.json` `ownedTypes` key's reader: one JSON array → the declarations it carries.
+ * The `apq.json` `ownedTypes` key's reader: one JSON array → the declarations it carries.
  *
  * Per-ENTRY lenient, like `frameworks`: an entry that is not an object, names no owner, owns nothing or gives no
  * reason is dropped, and every drop or ignored value appends a line to `drops`, which `LintConfig.discover` prints once

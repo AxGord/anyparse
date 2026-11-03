@@ -96,7 +96,7 @@ final class OracleAssistedRefusalTest extends Test {
 		final dir: String = CliFixture.writeDir('assistedrefusal', [
 			{ name: 'Main.hx', source: DRIFTED },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		]);
 		final err: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--verbose', '--rule', 'explicit-local-type', dir]));
 		Assert.equals(DRIFTED, File.getContent('$dir/Main.hx'), 'nothing is written to a file the writer refuses');

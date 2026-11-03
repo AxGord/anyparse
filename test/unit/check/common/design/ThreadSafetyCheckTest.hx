@@ -15,7 +15,7 @@ using Lambda;
  * (spawn callbacks go BG, marshal callbacks come back MAIN), finding (a) —
  * a main-context function directly calling a configured sink, finding (b) —
  * a lock held across a call that transitively reaches a sink. The rule is
- * config-driven and inert without a `thread-safety` entry in `apqlint.json`.
+ * config-driven and inert without a `thread-safety` entry in `apq.json`.
  */
 class ThreadSafetyCheckTest extends Test {
 
@@ -671,10 +671,10 @@ class ThreadSafetyCheckTest extends Test {
 	public function testEachCallSiteJudgedByItsOwnChain(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
-			{ name: 'apqlint.json', source: '{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}' },
+			{ name: 'apq.json', source: '{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}' },
 			// `a` waives the builtin `Sys.sleep`, which `b`'s call, judged by the root chain, keeps
 			{
-				name: 'a/apqlint.json',
+				name: 'a/apq.json',
 				source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Gate.block"],'
 					+ '"nonBlocking":["Sys.sleep a/ sleeps on purpose"]}}}'
 			},
@@ -699,9 +699,9 @@ class ThreadSafetyCheckTest extends Test {
 	public function testASinkOfOneChainIsAPlainCallInAnother(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
-			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["A.n"]}}}' },
+			{ name: 'x/apq.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["A.n"]}}}' },
 			{
-				name: 'y/apqlint.json',
+				name: 'y/apq.json',
 				source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"lockPairs":["Mutex.acquire/release"]}}}'
 			},
 			{ name: 'x/X.hx', source: 'class X { static function main():Void { A.n(); } }' },
@@ -727,8 +727,8 @@ class ThreadSafetyCheckTest extends Test {
 	public function testAFileWithoutSinksStillShapesTheGraph(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
-			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["W.run"]}}}' },
-			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"spawns":["W.run"]}}}' },
+			{ name: 'x/apq.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["W.run"]}}}' },
+			{ name: 'y/apq.json', source: '{"inherit":false,"rules":{"thread-safety":{"spawns":["W.run"]}}}' },
 			{
 				name: 'x/X.hx',
 				source: 'class W { public static function run(f:()->Void):Void {} } class X { public static function work():Void {'
@@ -740,8 +740,8 @@ class ThreadSafetyCheckTest extends Test {
 		// a chain writing no thread-safety option at all is no report of the rule's, and its calls are still the graph's:
 		// under `closedWorld` the only call of `X.helper` is `y`'s
 		final silent: Array<{ name: String, source: String }> = [
-			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"closedWorld":true}}}' },
-			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{}}' },
+			{ name: 'x/apq.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"closedWorld":true}}}' },
+			{ name: 'y/apq.json', source: '{"inherit":false,"rules":{}}' },
 			{ name: 'x/X.hx', source: 'class X { public static function helper():Void Sys.sleep(1); }' },
 			{ name: 'y/Reg.hx', source: 'class Reg { static function main():Void X.helper(); }' }
 		];
@@ -763,8 +763,8 @@ class ThreadSafetyCheckTest extends Test {
 	public function testNoFindingInAFileWhoseChainWritesNoOption(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
-			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"spawns":["W.run"]}}}' },
-			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{}}' },
+			{ name: 'x/apq.json', source: '{"inherit":false,"rules":{"thread-safety":{"spawns":["W.run"]}}}' },
+			{ name: 'y/apq.json', source: '{"inherit":false,"rules":{}}' },
 			{ name: 'x/X.hx', source: 'class X { public static function work():Void { Sys.sleep(1); } }' },
 			{ name: 'y/Y.hx', source: 'class Y { public static function f():Void { Sys.sleep(2); X.work(); } }' }
 		];
@@ -792,8 +792,8 @@ class ThreadSafetyCheckTest extends Test {
 	public function testAMalformedOptionOfANonReportingChainIsSaid(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
-			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"lockPairs":["bad2"]}}}' },
-			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"lockPairs":["bad"]}}}' },
+			{ name: 'x/apq.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"lockPairs":["bad2"]}}}' },
+			{ name: 'y/apq.json', source: '{"inherit":false,"rules":{"thread-safety":{"lockPairs":["bad"]}}}' },
 			{ name: 'x/X.hx', source: 'class X { public static function work():Void { Sys.sleep(1); } }' },
 			{ name: 'y/Y.hx', source: 'class Y { static function main():Void { X.work(); } }' }
 		];
@@ -1602,7 +1602,7 @@ class ThreadSafetyCheckTest extends Test {
 		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>, withNotice: Bool = false,
 		?library: Array<String>, ?defines: Array<ReachConfiguration>
 	): Array<Violation> {
-		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }].concat(beside ?? []));
+		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apq.json', source: config }].concat(beside ?? []));
 		// Each source a root module named after its first type: the compiler binds a bare name to a module's MAIN type only.
 		final files: Array<{ file: String, source: String }> = [
 			for (entry in QueryTestHelpers.rootModules(sources)) { file: '$dir/${entry.file}', source: entry.source }

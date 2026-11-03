@@ -48,7 +48,7 @@ typedef ServerState = {
  * add cost. It is recorded in a state file under the OS temp dir keyed by the (hxml, cwd, defines) triple — one server per
  * CONFIGURATION, since a server holds the modules of the build it was warmed for — and `stopShared` is its explicit teardown.
  *
- * Opt-in per project through the `apqlint.json` `compilerOracleServer` key, and
+ * Opt-in per project through the `apq.json` `compilerOracleServer` key, and
  * declinable process-wide with `APQ_NO_ORACLE_SERVER` — a daemon that outlives the run
  * is a bigger commitment than the typecheck the `compilerOracle` key asks for, so it is
  * never implied by that key alone.

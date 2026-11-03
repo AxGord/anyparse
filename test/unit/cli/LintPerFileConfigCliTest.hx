@@ -10,7 +10,7 @@ import anyparse.query.Cli;
 import unit.CheckFixture;
 
 /**
- * Per-file `apqlint.json` discovery across a multi-directory lint run. A rule
+ * Per-file `apq.json` discovery across a multi-directory lint run. A rule
  * disabled (or a severity overridden) by a config in ONE directory must apply
  * ONLY to that directory's files, not leak to sibling directories through the
  * first-expanded-path — the defect where `runLint` discovered a single config
@@ -31,7 +31,7 @@ class LintPerFileConfigCliTest extends Test {
 		'package p;\n\nclass C {\n\tpublic function f(a:Bool, b:Bool):Bool {\n\t\treturn a && b;\n\t}\n}\n';
 
 	/**
-	 * A run whose scope spans two `apqlint.json` roots naming DIFFERENT `compilerOracle` builds
+	 * A run whose scope spans two `apq.json` roots naming DIFFERENT `compilerOracle` builds
 	 * says so once.
 	 *
 	 * `runLint` resolves the oracle from `paths[0]`, and that stays: an oracle names ONE build, and
@@ -192,7 +192,7 @@ class LintPerFileConfigCliTest extends Test {
 		// Tightening complexity.max to 1 in
 		// ONE directory flags it there; the sibling with no config keeps the built-in max
 		// and stays silent — the option-reading `complexity` check must honour EACH file's
-		// own apqlint.json in a combined run, now fed by the memoised resolver.
+		// own apq.json in a combined run, now fed by the memoised resolver.
 		final tight: String = dirWith('Foo.hx', SCORE_TWO, '{"rules":{"complexity":{"max":1}}}');
 		final loose: String = dirWith('Bar.hx', SCORE_TWO, null);
 		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', tight]), 'max 1 flags the score-2 function');
@@ -211,7 +211,7 @@ class LintPerFileConfigCliTest extends Test {
 	public function testDirectCheckRunDiscoversConfig(): Void {
 		#if (sys || nodejs)
 		// A check invoked directly (as unit callers do) gets no injected resolver and must
-		// still discover the on-disk apqlint.json by walking up from the file path — the
+		// still discover the on-disk apq.json by walking up from the file path — the
 		// fallback that keeps checks usable outside the CLI.
 		final dir: String = dirWith('Foo.hx', SCORE_TWO, '{"rules":{"complexity":{"max":1}}}');
 		final vs: Array<Violation> = CheckFixture.violationsIn(new Complexity(), [{ file: '$dir/Foo.hx', source: SCORE_TWO }]);
@@ -233,7 +233,7 @@ class LintPerFileConfigCliTest extends Test {
 			{ name: name, source: source },
 			{ name: 'Unused.hx', source: 'package a.b;\n\nclass Unused {}\n' }
 		];
-		if (config != null) files.push({ name: 'apqlint.json', source: config });
+		if (config != null) files.push({ name: 'apq.json', source: config });
 		return CliFixture.writeDir('perfilecfg', files);
 	}
 	#end

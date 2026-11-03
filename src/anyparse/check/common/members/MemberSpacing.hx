@@ -88,7 +88,7 @@ final class MemberSpacing {
 
 	/**
 	 * `file`'s spacing context, the same for the report and the fix: its `separateInlineSubgroup` option
-	 * (`separateInline`, read off the file's `apqlint.json` by the caller) and the writer's member-gap policy under the
+	 * (`separateInline`, read off the file's `apq.json` by the caller) and the writer's member-gap policy under the
 	 * file's own `hxformat.json` (discovered from its path, as `fmt` does), so the blank lines the rule demands are the
 	 * ones the writer keeps.
 	 */

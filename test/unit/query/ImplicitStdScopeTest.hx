@@ -88,7 +88,7 @@ class ImplicitStdScopeTest extends Test {
 		]);
 		final proj: String = CliFixture.writeDir('implstdprivproj', [
 			{ name: 'Cond.hx', source: COND },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'unused-private', '$proj/Cond.hx']), 'the fix run succeeds');
 		Assert.isTrue(
@@ -116,7 +116,7 @@ class ImplicitStdScopeTest extends Test {
 		}
 		final proj: String = CliFixture.writeDir('implstd', [
 			{ name: 'Crash.hx', source: CRASH },
-			{ name: 'apqlint.json', source: '{"resolutionLibs":["__apq_scope_activator__"]}' }
+			{ name: 'apq.json', source: '{"resolutionLibs":["__apq_scope_activator__"]}' }
 		]);
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'unused-import', '$proj/Crash.hx']), 'the fix run succeeds');
 		final after: String = File.getContent('$proj/Crash.hx');
@@ -130,7 +130,7 @@ class ImplicitStdScopeTest extends Test {
 	}
 
 	/**
-	 * The same file with NO apqlint.json at all: std joins the resolution scope even when the
+	 * The same file with NO apq.json at all: std joins the resolution scope even when the
 	 * project declares neither `resolutionRoots` nor `resolutionLibs`, so `haxe.Exception` is
 	 * resolvable and the unused import is a verified `Warning` that `--fix` deletes. Whether a std
 	 * type resolves must not depend on the project happening to declare an unrelated library —
@@ -195,7 +195,7 @@ class ImplicitStdScopeTest extends Test {
 		#if (sys || nodejs)
 		final proj: String = CliFixture.writeDir('implstdoptout', [
 			{ name: 'Crash.hx', source: CRASH },
-			{ name: 'apqlint.json', source: '{"resolutionStd":false}' }
+			{ name: 'apq.json', source: '{"resolutionStd":false}' }
 		]);
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'unused-import', '$proj/Crash.hx']), 'the fix run succeeds');
 		Assert.isTrue(
@@ -225,7 +225,7 @@ class ImplicitStdScopeTest extends Test {
 			'package proj;\n\nclass DateUse {\n\n\tpublic function new() {\n\t\tfinal d = Date.now();\n\t\ttrace(d);\n\t}\n\n}\n';
 		final proj: String = CliFixture.writeDir('statret', [
 			{ name: 'DateUse.hx', source: src },
-			{ name: 'apqlint.json', source: '{"resolutionStd":false}' }
+			{ name: 'apq.json', source: '{"resolutionStd":false}' }
 		]);
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', '$proj/DateUse.hx']), 'the fix run succeeds');
 		final after: String = File.getContent('$proj/DateUse.hx');

@@ -44,13 +44,13 @@ final class ArmMoveTest extends Test {
 			final body: String = '\tpublic static function ${arm.method}():Int {\n\t\t${arm.find}\n\t\treturn 1;\n\t}\n\n}\n';
 			final source: String = head + body;
 			File.saveContent(from, source);
-			final entry: Null<Any> = (cast Json.parse(File.getContent('apqlint.json'))
+			final entry: Null<Any> = (cast Json.parse(File.getContent('apq.json'))
 				.move.registries: Array<Any>).find(r -> Reflect.field(r, 'file') == ArmRegistry.DIRECTORY);
 			if (entry == null) {
-				Assert.fail('apqlint.json declares no move registry for ${ArmRegistry.DIRECTORY}');
+				Assert.fail('apq.json declares no move registry for ${ArmRegistry.DIRECTORY}');
 				return;
 			}
-			File.saveContent(Path.join([repo, 'apqlint.json']), Json.stringify({ move: { scope: ['src'], registries: [entry] } }));
+			File.saveContent(Path.join([repo, 'apq.json']), Json.stringify({ move: { scope: ['src'], registries: [entry] } }));
 			final printed: String = CliFixture.captureStderr(() ->
 				Assert.equals(0, Cli.run(['move', from, '--to', Path.directory(to), '--write']))
 			);

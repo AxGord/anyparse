@@ -24,7 +24,7 @@ typedef RuleState = {
 	var description: String;
 }
 
-/** The files that resolve through one `apqlint.json` chain, and the state of every rule for them. */
+/** The files that resolve through one `apq.json` chain, and the state of every rule for them. */
 typedef RuleStateGroup = {
 	var chain: Array<String>;
 	var files: Array<String>;

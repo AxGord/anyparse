@@ -82,7 +82,7 @@ class ApqOracleServerLifetimeCliTest extends Test {
 			{ name: 'Main.hx', source: MAIN },
 			{ name: 'Hold.hx', source: HOLD },
 			{ name: 'build.hxml', source: '-cp .\n-main Main\n--js out.js\n--macro Hold.run()\n' },
-			{ name: 'apqlint.json', source: '{"compilerOracle": "build.hxml", "rules": {"explicit-local-type": {"enabled": true}}}' }
+			{ name: 'apq.json', source: '{"compilerOracle": "build.hxml", "rules": {"explicit-local-type": {"enabled": true}}}' }
 		]);
 		final rules: Array<String> = server == Display ? ['--rule', 'explicit-local-type'] : [];
 		final args: Array<String> = [sys.FileSystem.absolutePath(engine), 'lint', '--lang', 'haxe', '--fix'].concat(rules)

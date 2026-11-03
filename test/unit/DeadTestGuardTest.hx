@@ -29,7 +29,7 @@ import sys.io.File;
  * language — it is a property of one build. `src/` carries `#elseif sys` on purpose at six
  * sites (the core also targets neko and hxcpp; `tools/jvm-portability.hxml` probes it), so a
  * rule reporting `sys` as dead over `src test` is wrong at every one of them; and a
- * `deadDefines` key in `test/apqlint.json` would re-create the original defect one level up —
+ * `deadDefines` key in `test/apq.json` would re-create the original defect one level up —
  * a claim about the build that nothing verifies, going stale in silence the day a sys-target
  * runner appears. `CondRegionLiveness` already declines to make that claim: its define set is
  * positive-only and its docs call `#if sys` on a js compile UNKNOWN rather than dead.

@@ -639,7 +639,7 @@ class FactsFixGateE2ETest extends Test {
 		name: String, files: Array<{ name: String, source: String }>, hxml: String, apqlint: String = APQLINT
 	): Null<String> {
 		final dir: String = CliFixture.writeTree(
-			name, files.concat([{ name: 'check.hxml', source: hxml }, { name: 'apqlint.json', source: apqlint }])
+			name, files.concat([{ name: 'check.hxml', source: hxml }, { name: 'apq.json', source: apqlint }])
 		);
 		if (CompilerOracle.typecheck('check.hxml', dir).match(Confirmed)) return dir;
 		CliFixture.removeDir(dir);

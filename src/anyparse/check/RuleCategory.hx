@@ -3,7 +3,7 @@ package anyparse.check;
 using Lambda;
 
 /**
- * The subject a rule is about: the closed set every `Check` names one of, which an `apqlint.json` switches on or off
+ * The subject a rule is about: the closed set every `Check` names one of, which an `apq.json` switches on or off
  * as a whole (`categories`) and `apq lint --category` narrows a run to. A category is a SUBJECT, never a verb — the
  * verb (`prefer-…`, `redundant-…`) is already in the rule id — and each subject exists in any C-family grammar, so a
  * new category is one value here, never a property of one grammar.

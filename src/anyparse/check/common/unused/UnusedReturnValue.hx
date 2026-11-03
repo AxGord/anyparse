@@ -60,7 +60,7 @@ import anyparse.query.TypeResolver;
  *
  * Mutators whose non-`Void` result is idiomatically discarded (`push` returns the new
  * length, `remove` a `Bool`, …) are exempt by CALL NAME via `DEFAULT_ALLOW`; a project
- * extends it through `apqlint.json` (`unused-return-value.allow`, a list of names ADDED
+ * extends it through `apq.json` (`unused-return-value.allow`, a list of names ADDED
  * to the default). The match is on the called name for every receiver form.
  */
 @:nullSafety(Strict)
@@ -71,7 +71,7 @@ final class UnusedReturnValue extends RuleBase implements ConfigAware implements
 	 * mutators / membership tests where dropping the return is the norm (`push` /
 	 * `unshift` new length, `pop` / `shift` / `splice` the removed element(s),
 	 * `remove` / `exists` a `Bool`, `add` / `set` / `insert` / `sort` / `resize`
-	 * collection mutations). A project adds to this via `apqlint.json`.
+	 * collection mutations). A project adds to this via `apq.json`.
 	 */
 	private static final DEFAULT_ALLOW: Array<String> = [
 		'push',

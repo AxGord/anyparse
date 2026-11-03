@@ -1571,7 +1571,7 @@ class MemberOrderCheckTest extends Test {
 		return CheckFixture.violations(check, src);
 	}
 
-	/** A resolver pinning the EMPTY config, so a test run's verdicts cannot depend on an `apqlint.json` discovered from the process cwd. */
+	/** A resolver pinning the EMPTY config, so a test run's verdicts cannot depend on an `apq.json` discovered from the process cwd. */
 	private function emptyConfigResolver(): (String) -> LintConfig {
 		final cfg: LintConfig = LintConfig.parse('{}');
 		return _ -> cfg;

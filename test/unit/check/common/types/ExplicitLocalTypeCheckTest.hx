@@ -8,7 +8,7 @@ import anyparse.check.common.types.ExplicitLocalType;
  * The `explicit-local-type` check: a local `var` / `final` with no `:Type`
  * annotation is flagged (statement-position locals only; a typed local, a macro-
  * reification local, and non-local bindings are exempt). Default OFF — dropped from
- * the default set unless `apqlint.json` opts in (`enabled:true`) or an explicit rule
+ * the default set unless `apq.json` opts in (`enabled:true`) or an explicit rule
  * selection bypasses enablement.
  *
  * This part covers the detection and that gate, plus the autofix on a STRUCTURALLY

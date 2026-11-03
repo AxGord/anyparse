@@ -75,7 +75,7 @@ class ReachBuildsCacheTest extends Test {
 		File.saveContent('$dir/check.hxml', '$HXML-D apq_reach_edited\n');
 		Assert.isTrue(sleeps(dir, true), 'an edited hxml');
 		File.saveContent('$dir/check.hxml', HXML);
-		File.saveContent('$dir/apqlint.json', '{"compilerOracle":[{"hxml":"check.hxml","defines":["apq_reach_edited"]}],$RULES}');
+		File.saveContent('$dir/apq.json', '{"compilerOracle":[{"hxml":"check.hxml","defines":["apq_reach_edited"]}],$RULES}');
 		Assert.isTrue(sleeps(dir, true), 'a configuration with another define');
 		CliFixture.removeDir(dir);
 		#else
@@ -225,7 +225,7 @@ class ReachBuildsCacheTest extends Test {
 			{ name: 'W.hx', source: MAKER },
 			{ name: 'Main.hx', source: MAIN },
 			{ name: 'check.hxml', source: hxml ?? HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		].concat(extra ?? []));
 		if (CompilerOracle.typecheck('check.hxml', dir).match(Confirmed)) return dir;
 		CliFixture.removeDir(dir);

@@ -19,7 +19,7 @@ import anyparse.query.TypeRefPrinter;
  * ## Default OFF — opt-in
  *
  * A `DefaultOff` marker: dropped from the default set and from a bare `lint … --all`
- * report unless a project opts in via `apqlint.json`
+ * report unless a project opts in via `apq.json`
  * (`"rules": { "prefer-typed-throw": { "enabled": true } }`), or an explicit
  * `--rule prefer-typed-throw` selects it. Boxing a throw is a project-wide convention
  * decision, not a universal default.

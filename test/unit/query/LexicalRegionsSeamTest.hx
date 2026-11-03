@@ -108,7 +108,7 @@ class LexicalRegionsSeamTest extends Test {
 	 *
 	 *  - `check/LintConfig.hx`, `check/LintDocuments.hx`, `check/common/design/RuleDeclaration.hx`,
 	 *    `check/common/design/threads/ThreadSafetyOptions.hx`,
-	 *    `check/config/ApqLintConfig.hx`, `check/config/OwnedTypesDeclaration.hx` and `check/oracle/OracleDeclaration.hx` — `apqlint.json`
+	 *    `check/config/ApqLintConfig.hx`, `check/config/OwnedTypesDeclaration.hx` and `check/oracle/OracleDeclaration.hx` — `apq.json`
 	 *    IS a JSON document, so the config reader and the readers of keys whose shape it does not type (`compilerOracle`, `ownedTypes`, the
 	 *    declarative rule options, the `thread-safety` options) consume `anyparse.grammar.json.JValue` as their value type. A shipped
 	 *    grammar used as the serialization of the tool's own data, not as a language.

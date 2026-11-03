@@ -359,7 +359,7 @@ class PreferStaticExtensionCheckTest extends Test {
 
 	public function testDefaultTypesActiveWithoutConfig(): Void {
 		// An explicitly EMPTY rule config, so the assertion pins the `types` default rather than
-		// the absence of an `apqlint.json` anywhere above the test's working directory.
+		// the absence of an `apq.json` anywhere above the test's working directory.
 		Assert.equals(1, violationsOf([{ file: 'C.hx', source: stringToolsUser('urlEncode') }], EMPTY_CONFIG).length);
 	}
 

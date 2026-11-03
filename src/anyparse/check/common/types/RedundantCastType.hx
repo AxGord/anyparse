@@ -34,7 +34,7 @@ import anyparse.query.SymbolIndex;
  *
  * ## Default off
  *
- * Implements `DefaultOff`: opt in per project via `apqlint.json`
+ * Implements `DefaultOff`: opt in per project via `apq.json`
  * `"rules": { "redundant-cast-type": { "enabled": true } }`, or select it with `--rule`.
  *
  * ## Type identity and the comment guard
@@ -54,7 +54,7 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class RedundantCastType extends RuleBase implements DefaultOff {
 
-	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
+	/** The rule's stable identifier — the `apq.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'redundant-cast-type';
 
 	public function new() {

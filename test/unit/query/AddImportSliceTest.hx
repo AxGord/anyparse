@@ -287,7 +287,7 @@ class AddImportSliceTest extends Test {
 		final head: String = 'package q;\n\nimport a.A;\nimport a.B;\nimport a.Fields.*;\nimport a.G;\nimport a.H;\n';
 		final tail: String = '\nfinal class Target {\n\n\tfunction f():Void {}\n\n}\n';
 		final dir: String = CliFixture.writeTree('addimportseat', [
-			{ name: 'apqlint.json', source: '{"resolutionRoots": ["src"], "resolutionStd": false}\n' },
+			{ name: 'apq.json', source: '{"resolutionRoots": ["src"], "resolutionStd": false}\n' },
 			{ name: 'src/a/A.hx', source: module('a', 'A') },
 			{ name: 'src/a/B.hx', source: module('a', 'B') },
 			{ name: 'src/a/G.hx', source: module('a', 'G') },

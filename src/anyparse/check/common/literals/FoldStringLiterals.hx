@@ -199,7 +199,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
 	private static inline final RULE_ID: String = 'fold-adjacent-string-literals';
 
-	/** The `apqlint.json` option naming the macros PROVEN to fold a `+` chain of string constants. */
+	/** The `apq.json` option naming the macros PROVEN to fold a `+` chain of string constants. */
 	private static inline final MACRO_WHITELIST_OPTION: String = 'concatFoldingMacros';
 
 	/** What a finding adds when the macro gate turned it report-only — the reason, and the key that lifts it. */
@@ -243,7 +243,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			final operators: OperatorGate = new OperatorGate(selection, seams, entry.file, entry.source, tree);
 			final ctx: Null<PlanContext> = contextFor(plugin, seams, entry.source, FormatConfigDiscovery.discover(entry.file), operators);
 			if (ctx == null) return;
-			// The whitelist is resolved PER FILE: `apqlint.json` is discovered by walking up
+			// The whitelist is resolved PER FILE: `apq.json` is discovered by walking up
 			// from each file, so one run can span several configs, and reading the first
 			// file's would apply one project's claim about its macros to another's.
 			final whitelist: Null<Array<String>> = LintConfig.resolveWith(_resolveConfig, entry.file)

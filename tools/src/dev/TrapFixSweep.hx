@@ -28,7 +28,7 @@ final class TrapFixSweep {
 	/** The verdict of a probe the formatter alone changed: it no longer runs, or prints otherwise. */
 	public static inline final FORMAT_CHANGED: String = 'FORMAT-CHANGED';
 
-	/** The build each probe's `apqlint.json` names as its `compilerOracle`: the probe's main class, typechecked. */
+	/** The build each probe's `apq.json` names as its `compilerOracle`: the probe's main class, typechecked. */
 	private static inline final ORACLE_HXML: String = 'build.hxml';
 
 	/** The catalog swept when the caller names none, from the tree's root. */
@@ -118,7 +118,7 @@ final class TrapFixSweep {
 
 	/**
 	 * The verdict of one probe: its project run as written, after the formatter, and after the fix, in a scratch directory of
-	 * its own whose `build.hxml` typechecks it — the `compilerOracle` its `apqlint.json` declares, so the risky and
+	 * its own whose `build.hxml` typechecks it — the `compilerOracle` its `apq.json` declares, so the risky and
 	 * oracle-assisted fixes run where a typecheck verifies them.
 	 */
 	private static function sweepProbe(trap: SweepTrap, probe: SweepProbe, engine: String, ruleArgs: Array<String>): SweptProbe {
@@ -128,7 +128,7 @@ final class TrapFixSweep {
 		if (own != null) write(dir, probe.file, own);
 		final main: String = Path.withoutExtension(probe.file).split('/').join('.');
 		File.saveContent(dir.file(ORACLE_HXML), '-cp .\n-main $main\n--no-output\n');
-		File.saveContent(dir.file('apqlint.json'), '{\n\t"compilerOracle": "$ORACLE_HXML"\n}\n');
+		File.saveContent(dir.file('apq.json'), '{\n\t"compilerOracle": "$ORACLE_HXML"\n}\n');
 		final raw: Result = cmd('haxe -cp . -main $main --interp').at(dir.path).run();
 		// the fixer declines every edit in a file the writer would rewrite, so the project is made canonical first
 		final formatted: Result = cmd('node $engine fmt --write . --lang haxe').at(dir.path).run();

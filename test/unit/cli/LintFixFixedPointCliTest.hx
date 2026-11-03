@@ -221,7 +221,7 @@ class LintFixFixedPointCliTest extends Test {
 		final dir: String = CliFixture.writeDir('fixrename', [
 			{ name: 'A.hx', source: a },
 			{ name: 'B.hx', source: b },
-			{ name: 'apqlint.json', source: '{"rules": {"unused-parameter": {"renameSilence": true}}}' }
+			{ name: 'apq.json', source: '{"rules": {"unused-parameter": {"renameSilence": true}}}' }
 		]);
 		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');
 		final outA: String = File.getContent('$dir/A.hx');

@@ -97,7 +97,7 @@ import anyparse.query.TypeResolver;
  * ## Default OFF -- opt-in
  *
  * A `DefaultOff` marker: dropped from the default set and from a bare `lint ... --all`
- * report unless a project opts in via `apqlint.json`
+ * report unless a project opts in via `apq.json`
  * (`"rules": { "return-reassign-ternary": { "enabled": true } }`), or an explicit
  * `--rule return-reassign-ternary` selects it.
  *
@@ -120,7 +120,7 @@ import anyparse.query.TypeResolver;
 @:nullSafety(Strict)
 final class ReturnReassignTernary extends RuleBase implements DefaultOff implements ConfigAware {
 
-	/** The rule's stable identifier -- the `apqlint.json` key and the `--rule` selector. */
+	/** The rule's stable identifier -- the `apq.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'return-reassign-ternary';
 
 	/** The finding message when the pair collapses cleanly. */

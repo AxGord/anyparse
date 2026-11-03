@@ -57,7 +57,7 @@ final class LintFixFollowUpRoundTest extends Test {
 		final dir: String = CliFixture.writeDir('fixfollowup', [
 			{ name: 'Main.hx', source: CASCADE },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: '{"compilerOracle":"check.hxml"}' }
+			{ name: 'apq.json', source: '{"compilerOracle":"check.hxml"}' }
 		]);
 		final path: String = '$dir/Main.hx';
 		Assert.equals(0, Cli.run(['lint', '--rule', 'prefer-inline', '--rule', 'member-order', '--fix', path]), 'lint --fix exits ok');
@@ -96,7 +96,7 @@ final class LintFixFollowUpRoundTest extends Test {
 		final dir: String = CliFixture.writeDir('fixfollowupoa', [
 			{ name: 'Main.hx', source: CASCADE.replace('function thin():Int {', 'function thin() {') },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: '{"compilerOracle":"check.hxml"}' }
+			{ name: 'apq.json', source: '{"compilerOracle":"check.hxml"}' }
 		]);
 		final path: String = '$dir/Main.hx';
 		Assert.equals(0, Cli.run([

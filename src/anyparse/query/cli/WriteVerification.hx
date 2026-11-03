@@ -52,8 +52,12 @@ final class WriteVerification {
 		if (changed.length == 0 || !forced && !journal.createdOrDeleted()) return exit;
 		final oracles: Array<OracleConfig> = try {
 			oraclesOf(changed);
+		} catch (conflict: ConfigConflict) {
+			journal.rollback();
+			CliIo.stderr('apq $op: the project config names two files — every file put back\n');
+			throw conflict;
 		} catch (exception: Exception) {
-			CliIo.stderr('apq $op: unverified — the apqlint.json naming the builds could not be read: ${exception.message}\n');
+			CliIo.stderr('apq $op: unverified — the apq.json naming the builds could not be read: ${exception.message}\n');
 			return exit;
 		}
 		if (oracles.length != 0) return try {
@@ -63,11 +67,11 @@ final class WriteVerification {
 			CliIo.stderr('apq $op: the typecheck after the write threw: ${exception.message} — every file put back\n');
 			ExitCode.EXIT_RUNTIME;
 		}
-		CliIo.stderr('apq $op: unverified — no "compilerOracle" in apqlint.json covers the written files\n');
+		CliIo.stderr('apq $op: unverified — no "compilerOracle" in apq.json covers the written files\n');
 		return exit;
 	}
 
-	/** Every configured build the `apqlint.json` of each of `paths` names, each once. */
+	/** Every configured build the `apq.json` of each of `paths` names, each once. */
 	private static function oraclesOf(paths: Array<String>): Array<OracleConfig> {
 		final dirs: Array<String> = [];
 		for (path in paths) {

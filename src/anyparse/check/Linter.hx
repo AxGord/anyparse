@@ -719,7 +719,7 @@ final class Linter {
 	 * per-check exceptions. `ConfigAware` checks receive `resolveConfig`
 	 * (or null) before running, so they read their per-file options through it.
 	 *
-	 * `resolveConfig` maps a file path to the `apqlint.json` in effect there
+	 * `resolveConfig` maps a file path to the `apq.json` in effect there
 	 * (walk-up discovered, per-directory memoised by the caller): each finding
 	 * is remapped to its own file's configured severity, and — ONLY when
 	 * `applyEnablement` is true — DROPPED when that file disables its rule. A

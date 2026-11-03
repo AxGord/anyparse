@@ -3,7 +3,7 @@ package anyparse.query;
 /**
  * Walks up the directory tree from a file looking for a named project config,
  * returning its content. The shared IO half of every walk-up config lookup
- * (`checkstyle.json` via `CheckstyleConfigFinder`, `apqlint.json` via
+ * (`checkstyle.json` via `CheckstyleConfigFinder`, `apq.json` via
  * `LintConfig.discover`); the conditional compilation for file IO lives here in
  * one place so callers stay target-agnostic.
  */
@@ -18,29 +18,32 @@ final class ConfigFinder {
 	 */
 	public static final PROJECT_ROOT_MARKERS: Array<String> = ['.git', 'haxelib.json'];
 
+	/** The project config's file name — the one answer to "what is the config called"; every reader goes through it. */
+	public static final PROJECT_CONFIG: String = 'apq.json';
+
+	/** The former name of `PROJECT_CONFIG`, still read (same format, same inheritance chain); a directory holding both is an error. */
+	public static final LEGACY_PROJECT_CONFIG: String = 'apqlint.json';
+
 	/**
-	 * EVERY `filename` on the way up from `path`'s directory, NEAREST FIRST — the chain
-	 * a config that EXTENDS its ancestors is folded from (`LintConfig.discover`), as
-	 * opposed to the two nearest-only entries below, which are what a config that
-	 * REPLACES its ancestors wants.
+	 * EVERY project config on the way up from `path`'s directory, NEAREST FIRST — the chain a config that
+	 * EXTENDS its ancestors is folded from (`LintConfig.discover`), as opposed to the nearest-only entries below,
+	 * which are what a config that REPLACES its ancestors wants. In each directory `PROJECT_CONFIG` or, failing
+	 * it, `LEGACY_PROJECT_CONFIG`; a directory holding BOTH throws `ConfigConflict` — choosing one silently would
+	 * apply settings the other was written to override.
 	 *
-	 * `boundary` names the files that mark a project root (`.git`, `haxelib.json`): the
-	 * directory holding one is the LAST the walk reads, its own document included. That
-	 * bound is not tidiness. A nearest-only lookup treats a stray document in `/tmp` or
-	 * `$HOME` as a fallback nobody reaches once the project ships its own; a CHAIN folds
-	 * it in regardless, and `apqlint.json` carries `compilerOracle`, an hxml
-	 * `CompilerOracle.typecheck` executes — an hxml is not inert (`--macro`, `--cmd`).
-	 * Unbounded inheritance would let any writable ancestor directory choose what a lint
-	 * of an unrelated project runs. Pass no boundary to walk to the filesystem root.
+	 * `boundary` names the files that mark a project root (`.git`, `haxelib.json`): the directory holding one is
+	 * the LAST the walk reads, its own document included. That bound is not tidiness. A nearest-only lookup treats
+	 * a stray document in `/tmp` or `$HOME` as a fallback nobody reaches once the project ships its own; a CHAIN
+	 * folds it in regardless, and the project config carries `compilerOracle`, an hxml `CompilerOracle.typecheck`
+	 * executes — an hxml is not inert (`--macro`, `--cmd`). Unbounded inheritance would let any writable ancestor
+	 * directory choose what a lint of an unrelated project runs. Pass no boundary to walk to the filesystem root.
 	 *
-	 * An unreadable document does not stop the walk — the nearest config failing to open
-	 * must not hide the ones above it — but its path is REPORTED in `unreadable` rather
-	 * than dropped: silently losing a document the project wrote is the one outcome with
-	 * no diagnostic at all. (`findUpFile` keeps its own contract: an unreadable nearest
-	 * match is a null answer there, exactly as before.)
+	 * An unreadable document does not stop the walk — the nearest config failing to open must not hide the ones
+	 * above it — but its path is REPORTED in `unreadable` rather than dropped: silently losing a document the
+	 * project wrote is the one outcome with no diagnostic at all.
 	 */
-	public static inline function findUpAll(path: String, filename: String, ?boundary: Array<String>): ConfigChain {
-		return walkUp(path, filename, false, boundary);
+	public static inline function findUpProject(path: String, ?boundary: Array<String>): ConfigChain {
+		return walkUp(path, PROJECT_CONFIG, false, boundary, null, LEGACY_PROJECT_CONFIG);
 	}
 
 	/**
@@ -124,7 +127,7 @@ final class ConfigFinder {
 	 * files, so a project root's own document is still read; `stopDir` ends it after that directory itself.
 	 */
 	private static function walkUp(
-		path: String, filename: String, stopAtFirst: Bool, ?boundary: Array<String>, ?stopDir: String
+		path: String, filename: String, stopAtFirst: Bool, ?boundary: Array<String>, ?stopDir: String, ?alias: String
 	): ConfigChain {
 		final out: Array<ConfigFile> = [];
 		final unreadable: Array<String> = [];
@@ -132,7 +135,11 @@ final class ConfigFinder {
 		final bound: Null<String> = stopDir == null ? null : sys.FileSystem.absolutePath(stopDir);
 		var dir: String = haxe.io.Path.directory(sys.FileSystem.absolutePath(path));
 		while (dir != '') {
-			final candidate: String = '$dir/$filename';
+			var candidate: String = '$dir/$filename';
+			if (alias != null && fileExists('$dir/$alias')) {
+				if (fileExists(candidate)) throw new ConfigConflict(dir, filename, alias);
+				candidate = '$dir/$alias';
+			}
 			if (sys.FileSystem.exists(candidate) && !sys.FileSystem.isDirectory(candidate)) {
 				final content: Null<String> = try sys.io.File.getContent(candidate) catch (exception: haxe.Exception) null;
 				// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.

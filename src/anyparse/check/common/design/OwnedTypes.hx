@@ -90,7 +90,7 @@ typedef Denoted = {
 }
 
 /**
- * Reports every reach past a layer's boundary the project declares in `apqlint.json` `ownedTypes`: a mention of an
+ * Reports every reach past a layer's boundary the project declares in `apq.json` `ownedTypes`: a mention of an
  * owned TYPE outside its `owners`, and a read or call of an owned MEMBER outside them. `Warning`, report-only, INERT
  * until the key declares something; the message is `<path> belongs to <owners> — <why>`. The full contract and its
  * named limits are in `docs/cli-query-tool.md` § "`owned-types`".

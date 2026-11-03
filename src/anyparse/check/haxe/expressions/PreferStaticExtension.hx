@@ -19,7 +19,7 @@ import anyparse.query.TypeResolver;
  * Rewrites a STATIC UTILITY call on a configured module to extension-method form —
  * `Lambda.map(xs, f)` → `xs.map(f)`, `StringTools.trim(s)` → `s.trim()` — inserting a
  * `using <module>;` when the file lacks one. `Severity.Info` (a readability cleanup), with an
- * autofix. Configured per project in `apqlint.json`:
+ * autofix. Configured per project in `apq.json`:
  *
  *     "prefer-static-extension": {
  *         "types":    ["Lambda", "StringTools", "pkg.TextUtil"],
@@ -169,7 +169,7 @@ import anyparse.query.TypeResolver;
 @:nullSafety(Strict)
 final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 
-	/** The rule id, also the `apqlint.json` option key. */
+	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'prefer-static-extension';
 
 	/** A candidate call has at least [callee, receiver] children. */
@@ -233,7 +233,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		if (seams == null || violations.length == 0) return [];
 		final s: Seams = seams;
 		// The violations belong to ONE file; its path drives config resolution (an empty path
-		// would silently resolve the wrong `apqlint.json`).
+		// would silently resolve the wrong `apq.json`).
 		final file: String = violations[0].file;
 		final options: Options = readOptions(LintConfig.resolveWith(_resolveConfig, file));
 		return options.modules.length == 0
@@ -798,7 +798,7 @@ private typedef Seams = {
 	var parenKind: Null<String>;
 };
 
-/** One file's resolved `apqlint.json` options: the configured modules (full entry + simple name) and the `using`-insert toggle. */
+/** One file's resolved `apq.json` options: the configured modules (full entry + simple name) and the `using`-insert toggle. */
 private typedef Options = {
 	var modules: Array<String>;
 	var simpleNames: Array<String>;

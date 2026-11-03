@@ -10,7 +10,7 @@ import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 
 /**
  * Resolves a haxelib library NAME to its on-disk source directory, so an
- * `apqlint.json` can declare a resolution-scope library by name
+ * `apq.json` can declare a resolution-scope library by name
  * (`resolutionLibs`) instead of a brittle machine-specific path. `haxelib
  * libpath <name>` prints the library's install/dev root (honouring a `haxelib
  * dev` link and the currently-selected version); the library's `haxelib.json`

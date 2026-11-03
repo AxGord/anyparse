@@ -14,7 +14,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * The FRAMEWORK CONTRACT seam: a project declares in `apqlint.json` (`frameworks`) which root types
+ * The FRAMEWORK CONTRACT seam: a project declares in `apq.json` (`frameworks`) which root types
  * a framework drives and which member names it reaches BY NAME, and one seam
  * (`NamingSupport.frameworkReachable` for the unused-* rules, the narrower
  * `frameworkOwnsName` for `naming`) serves all three rules that ask the question — `naming`,
@@ -76,7 +76,7 @@ import anyparse.runtime.Span;
 		final plain: Naming = new Naming();
 		// An explicit empty config, not an absent resolver: with none the check falls through to
 		// `LintConfig.discover`, which walks up from a fixture path that exists nowhere and lands on
-		// whatever `apqlint.json` the suite's cwd sits under — a real file deciding a unit assertion.
+		// whatever `apq.json` the suite's cwd sits under — a real file deciding a unit assertion.
 		plain.setConfigResolver(_ -> LintConfig.parse('{}'));
 		final open: Array<Violation> = CheckFixture.violationsIn(plain, files).filter(v -> v.file == DRIVER_FILE);
 		Assert.equals(1, open.length, 'without a contract the callback is reported');
@@ -206,7 +206,7 @@ import anyparse.runtime.Span;
 
 	// --- the config mapping ---
 
-	/** `apqlint.json`'s `frameworks` maps onto the neutral contract; a half-stated entry is dropped, not half-applied. */
+	/** `apq.json`'s `frameworks` maps onto the neutral contract; a half-stated entry is dropped, not half-applied. */
 	public function testFrameworksKeyMapsAndDropsHalfStatedEntries(): Void {
 		final stated: LintConfig = LintConfig.parse(
 			'{"frameworks":[{"root":"MonoBehaviour","names":["Start","Update"],"prefixes":["On"]}]}'
@@ -266,7 +266,7 @@ import anyparse.runtime.Span;
 	}
 
 	/**
-	 * A scope spanning two `apqlint.json` roots still applies the FIRST root's roster to every file —
+	 * A scope spanning two `apq.json` roots still applies the FIRST root's roster to every file —
 	 * and now names the disagreement.
 	 *
 	 * The single resolution stays, for the reason `frameworksFor` gives: `unused-public-member` builds
@@ -292,7 +292,7 @@ import anyparse.runtime.Span;
 		Assert.notNull(message, 'a two-root scope with two rosters is a disagreement');
 		if (message != null)
 			Assert.equals(
-				'apq: this scope spans apqlint.json roots that disagree about the framework roster — the one discovered for a/A.hx'
+				'apq: this scope spans apq.json roots that disagree about the framework roster — the one discovered for a/A.hx'
 				+ ' applies to all 3 file(s), of which 1 file(s) sit under a root declaring one of 1 other value(s)\n',
 				message
 			);
@@ -391,7 +391,7 @@ import anyparse.runtime.Span;
 	/**
 	 * An `unused-private` check reading an EXPLICIT empty config, which is not the same as one with
 	 * no resolver: with none it falls through to `LintConfig.discover`, which walks up from a fixture
-	 * path that exists nowhere and lands on whatever `apqlint.json` the suite's cwd sits under — a
+	 * path that exists nowhere and lands on whatever `apq.json` the suite's cwd sits under — a
 	 * real file on disk deciding a unit assertion.
 	 */
 	private function unconfigured(): UnusedPrivate {

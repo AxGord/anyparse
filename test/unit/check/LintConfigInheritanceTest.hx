@@ -10,13 +10,13 @@ import haxe.io.Path;
 import unit.cli.CliFixture;
 
 /**
- * A nested `apqlint.json` EXTENDS the documents above it instead of replacing the
+ * A nested `apq.json` EXTENDS the documents above it instead of replacing the
  * nearest one wholesale.
  *
  * The defect these pin is silent by construction: a nested document that names four
  * relaxations inherited nothing else — not the resolution scope, not the oracle, not
  * the rules the root opted into — and a rule that is not in the set does not fail, it
- * finds nothing. This project's own `test/apqlint.json` had `compilerOracle`,
+ * finds nothing. This project's own `test/apq.json` had `compilerOracle`,
  * `compilerOracleServer` and `resolutionRoots`/`resolutionLibs` copied down into it
  * commit by commit, each time somebody noticed another absence, while the root's
  * opt-in rules were never noticed at all and the whole of `test/` was linted with a
@@ -168,11 +168,11 @@ class LintConfigInheritanceTest extends Test {
 		// project's config, and `compilerOracle` names an hxml the oracle EXECUTES. So the
 		// walk ends at the directory holding a project marker, its own document included.
 		// The fixture is three deep: outer (the stray), root (the project), nested (the file).
-		final outer: String = CliFixture.writeDir('lintbound', [{ name: 'apqlint.json', source: '{"resolutionLibs": ["intruder"]}' }]);
+		final outer: String = CliFixture.writeDir('lintbound', [{ name: 'apq.json', source: '{"resolutionLibs": ["intruder"]}' }]);
 		FileSystem.createDirectory('$outer/root');
-		File.saveContent('$outer/root/apqlint.json', '{"languageVersion": "4.3"}');
+		File.saveContent('$outer/root/apq.json', '{"languageVersion": "4.3"}');
 		FileSystem.createDirectory('$outer/root/nested');
-		File.saveContent('$outer/root/nested/apqlint.json', '{"rules": {}}');
+		File.saveContent('$outer/root/nested/apq.json', '{"rules": {}}');
 		File.saveContent('$outer/root/nested/Probe.hx', 'class Probe {}\n');
 		// No marker yet: the stray IS inherited, which is what makes the next arm mean something.
 		Assert.same(['intruder'], LintConfig.discover('$outer/root/nested/Probe.hx').resolutionLibs(), 'unbounded, the stray reaches in');
@@ -200,16 +200,16 @@ class LintConfigInheritanceTest extends Test {
 		//   apq: <path> could not be read — ignored, the rest of the chain still applies
 		final root: String = tree('{"resolutionLibs": ["utest"]}', '{"resolutionLibs": ["nested"]}');
 		Assert.same(['nested'], LintConfig.discover('$root/nested/Probe.hx').resolutionLibs(), 'readable, the nested answer wins');
-		Sys.command('chmod', ['000', '$root/nested/apqlint.json']);
+		Sys.command('chmod', ['000', '$root/nested/apq.json']);
 		// Skipped rather than asserted when the chmod does not bite (a root-owned CI runner
 		// reads it anyway) — a probe that cannot create the condition must not claim it did.
-		if (readable('$root/nested/apqlint.json')) {
+		if (readable('$root/nested/apq.json')) {
 			Assert.pass('chmod 000 did not make the file unreadable for this user');
 		} else {
 			final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
 			Assert.same(['utest'], config.resolutionLibs(), 'unreadable, the ancestor applies');
 		}
-		Sys.command('chmod', ['644', '$root/nested/apqlint.json']);
+		Sys.command('chmod', ['644', '$root/nested/apq.json']);
 		CliFixture.removeDir(root);
 		#else
 		Assert.pass('non-sys target');
@@ -231,7 +231,7 @@ class LintConfigInheritanceTest extends Test {
 
 	public function testTheProjectsOwnNestedConfigIsItsSixRelaxationsAndNothingElse(): Void {
 		#if (sys || nodejs)
-		// The acceptance test for the shrinkage: `test/apqlint.json` is back to the
+		// The acceptance test for the shrinkage: `test/apq.json` is back to the
 		// exemptions it was written as — the original four, plus the two the user added
 		// (`duplicate-code` and `prefer-typed-throw`, the bulk of the test tree's stream, both
 		// correct checks whose fix test code cannot take) — and every key it used to carry a
@@ -294,9 +294,9 @@ class LintConfigInheritanceTest extends Test {
 	}
 
 	private function tree(rootConfig: String, nestedConfig: String): String {
-		final root: String = CliFixture.writeDir('lintinherit', [{ name: 'apqlint.json', source: rootConfig }]);
+		final root: String = CliFixture.writeDir('lintinherit', [{ name: 'apq.json', source: rootConfig }]);
 		FileSystem.createDirectory('$root/nested');
-		File.saveContent('$root/nested/apqlint.json', nestedConfig);
+		File.saveContent('$root/nested/apq.json', nestedConfig);
 		File.saveContent('$root/nested/Probe.hx', 'class Probe {}\n');
 		return root;
 	}

@@ -91,7 +91,7 @@ import anyparse.query.SymbolIndex;
  *
  * ## Configuration
  *
- * Both thresholds are read per-file from a discovered `apqlint.json`:
+ * Both thresholds are read per-file from a discovered `apq.json`:
  * `string-literal-dup.minOccurrences` and `string-literal-dup.minLength`
  * (integer options). An absent or malformed value falls back to the default.
  *

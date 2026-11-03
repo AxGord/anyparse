@@ -568,12 +568,12 @@ final class OracleConfigListE2ETest extends Test {
 			{ name: 'main.hxml', source: REGION_HXML }
 		]);
 	}
-	/** A one-module `Main` fixture with the given `apqlint.json`, for the scenarios that run the whole CLI. */
+	/** A one-module `Main` fixture with the given `apq.json`, for the scenarios that run the whole CLI. */
 	private static function cliDir(apqlint: String, main: String): String {
 		return CliFixture.writeDir('oraclelistcli', [
 			{ name: 'Main.hx', source: main },
 			{ name: 'check.hxml', source: CLI_HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		]);
 	}
 

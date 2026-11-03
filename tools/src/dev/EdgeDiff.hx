@@ -19,7 +19,7 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * The edge-diff harness of the compiler-facts call graph: over the project in the working directory (its `apqlint.json`
+ * The edge-diff harness of the compiler-facts call graph: over the project in the working directory (its `apq.json`
  * names the roots, the libraries and the compiler oracles), build the call graph twice — by syntax alone and with the
  * compiler facts — and write, for every function the facts replaced, the records each reading gives it: its edges but
  * lexical containment, its unresolved calls and its unresolved accesses, one JSON line per function.

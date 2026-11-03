@@ -114,7 +114,7 @@ typedef CallRef = {
  * tell whether a given macro folds one, so the default is to refuse the fix and report
  * the construct with the reason.
  *
- * A call target is named in `apqlint.json`'s `concatFoldingMacros` by its QUALIFIED path
+ * A call target is named in `apq.json`'s `concatFoldingMacros` by its QUALIFIED path
  * (`pkg.Type.member`), by any dotted SUFFIX of it (`Type.member`, `member`), and listing
  * it is a claim about that target's implementation — that it folds an `OpAdd` chain of
  * constants before it reads the string. The list comes from the CALLER's own config, so

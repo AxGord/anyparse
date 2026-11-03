@@ -283,7 +283,7 @@ class MemberOrderWriterGapTest extends Test {
 		return new HaxeQueryPlugin().writeRoundTrip(src, config) ?? '';
 	}
 
-	/** The EMPTY lint config, so no `apqlint.json` discovered from the process cwd decides a verdict. */
+	/** The EMPTY lint config, so no `apq.json` discovered from the process cwd decides a verdict. */
 	private static function emptyConfig(): (String) -> LintConfig {
 		final cfg: LintConfig = LintConfig.parse('{}');
 		return _ -> cfg;

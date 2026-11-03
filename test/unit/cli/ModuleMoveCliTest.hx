@@ -10,7 +10,7 @@ using StringTools;
 
 /**
  * `apq move <file>... --to <dir>` end to end, on a project written to the temp directory: the declaration is read from
- * the project's `apqlint.json`, a write relocates the module and deletes the original, a refusal writes nothing, and
+ * the project's `apq.json`, a write relocates the module and deletes the original, a refusal writes nothing, and
  * `--verify` puts every file back when the build the move broke was green before it.
  */
 class ModuleMoveCliTest extends Test {
@@ -22,7 +22,7 @@ class ModuleMoveCliTest extends Test {
 	public function testTheWriteRelocatesTheModuleRewritesItsReadersAndDeletesTheOriginal(): Void {
 		#if (sys || nodejs)
 		final dir: String = project([
-			{ name: 'apqlint.json', source: '{"move": {"scope": ["src"], "text": ["run.sh"]}}' },
+			{ name: 'apq.json', source: '{"move": {"scope": ["src"], "text": ["run.sh"]}}' },
 			{ name: 'run.sh', source: 'node probe.js src/pkg/A.hx\n' },
 			{ name: 'src/pkg/A.hx', source: A },
 			{ name: 'src/pkg/User.hx', source: 'package pkg;\n\nclass User {\n\tfunction g(): Int return A.f();\n}\n' }
@@ -48,7 +48,7 @@ class ModuleMoveCliTest extends Test {
 		final user: String =
 			"package other;\n\nclass User {\n\tstatic function f(n: String): Dynamic return Type.resolveClass('pkg.' + n);\n}\n";
 		final dir: String = project([
-			{ name: 'apqlint.json', source: '{"move": {"scope": ["src"]}}' },
+			{ name: 'apq.json', source: '{"move": {"scope": ["src"]}}' },
 			{ name: 'src/pkg/A.hx', source: A },
 			{ name: 'src/other/User.hx', source: user }
 		]);
@@ -79,7 +79,7 @@ class ModuleMoveCliTest extends Test {
 		final owner: String = 'package pkg;\n\nclass Owner {\n\tpublic static function secret(): Int return 1;\n}\n';
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function f(): Int return Owner.secret();\n}\n';
 		final dir: String = project([
-			{ name: 'apqlint.json', source: '{"compilerOracle": "build.hxml", "move": {"scope": ["src"]}}' },
+			{ name: 'apq.json', source: '{"compilerOracle": "build.hxml", "move": {"scope": ["src"]}}' },
 			{ name: 'build.hxml', source: '-cp src\n-cp lib\npkg.A\n' },
 			{ name: 'src/pkg/A.hx', source: a },
 			{ name: 'lib/pkg/Owner.hx', source: owner }
@@ -107,7 +107,7 @@ class ModuleMoveCliTest extends Test {
 	public function testADeclaredTextRootThatDoesNotExistRefuses(): Void {
 		#if (sys || nodejs)
 		final dir: String = project([
-			{ name: 'apqlint.json', source: '{"move": {"scope": ["src"], "text": ["tool.sh"]}}' },
+			{ name: 'apq.json', source: '{"move": {"scope": ["src"], "text": ["tool.sh"]}}' },
 			{ name: 'src/pkg/A.hx', source: A }
 		]);
 		var rc: Int = 0;
@@ -130,7 +130,7 @@ class ModuleMoveCliTest extends Test {
 	public function testARegistryDirectoryIsRewrittenDocumentByDocument(): Void {
 		#if (sys || nodejs)
 		final dir: String = project([
-			{ name: 'apqlint.json', source: '{"move": {"scope": ["src"], "registries": [{"file": "arms", "keys": ["arms.type"]}]}}' },
+			{ name: 'apq.json', source: '{"move": {"scope": ["src"], "registries": [{"file": "arms", "keys": ["arms.type"]}]}}' },
 			{ name: 'src/pkg/A.hx', source: A },
 			{ name: 'arms/one.json', source: '{"arms": [{"type": "pkg.A"}]}' },
 			{ name: 'arms/two.json', source: '{"arms": [{"type": "other.B"}, {"type": "pkg.A"}]}' }

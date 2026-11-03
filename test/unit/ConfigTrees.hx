@@ -6,7 +6,7 @@ import sys.io.File;
 
 /**
  * Fresh fixture directories under the system temp, for a test whose subject reads a config it DISCOVERS from a
- * file's path (`hxformat.json`, `apqlint.json`): no ancestor of a tree holds either, so the fixture's own config is
+ * file's path (`hxformat.json`, `apq.json`): no ancestor of a tree holds either, so the fixture's own config is
  * the one read. Every tree `make` built is deleted by `removeAll` - call it from `teardown`; the shared parent
  * directory is reused across runs. Each tree is uniquely named, so a per-directory discovery cache never answers
  * one fixture from another's config.

@@ -48,7 +48,7 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class ShadowingParameter extends RuleBase implements DefaultOff {
 
-	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
+	/** The rule's stable identifier — the `apq.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shadowing-parameter';
 
 	public function new() {

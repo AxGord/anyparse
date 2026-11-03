@@ -7,7 +7,7 @@ import anyparse.check.oracle.OracleDeclaration;
 import unit.cli.CliFixture;
 
 /**
- * The project-level `apqlint.json` config: the pure `LintConfig.parse`
+ * The project-level `apq.json` config: the pure `LintConfig.parse`
  * accessors (enabled / severity / int option, plus malformed-input tolerance)
  * and the `Linter.run` severity remap that rewrites a real finding's severity
  * from the config. Enable-filtering and the complexity-threshold option are
@@ -157,7 +157,6 @@ class LintConfigTest extends Test {
 		Assert.isTrue(mixed.resolutionStd(), 'and every other key degrades with it, back to the default');
 	}
 
-
 	/**
 	 * The `resolutionLibs` key: absent yields no declared libs — again a statement about what the
 	 * project DECLARED, not about the run being inert (the implicit std scope is independent of
@@ -215,7 +214,6 @@ class LintConfigTest extends Test {
 		Assert.isTrue(numeric.resolutionStd(), 'a number rejects the document too');
 		Assert.equals(0, numeric.resolutionLibs().length, 'discriminating: the co-declared key is wiped with it');
 	}
-
 
 	/**
 	 * The `compilerOracle` key resolves against the config directory, but the compile CWD is the
@@ -356,11 +354,6 @@ class LintConfigTest extends Test {
 		Assert.isNull(oracle.dir, 'and claims no compile dir');
 	}
 
-	/** The one configuration `content` declares under `baseDir` — every oracle fixture here wants exactly this. */
-	private static function only(content: String, baseDir: String): OracleConfig {
-		return LintConfig.parse(content, baseDir).compilerOracles()[0];
-	}
-
 	@:pin('control') @:killer('M-REACH-CONFIGS-COMPLETE')
 	@:access(anyparse.query.cli.command.LintCommand)
 	public function testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList(): Void {
@@ -431,6 +424,11 @@ class LintConfigTest extends Test {
 		Assert.isTrue(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'a'], resolve));
 		Assert.isFalse(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'b'], resolve));
 		Assert.isFalse(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'c'], resolve));
+	}
+
+	/** The one configuration `content` declares under `baseDir` — every oracle fixture here wants exactly this. */
+	private static function only(content: String, baseDir: String): OracleConfig {
+		return LintConfig.parse(content, baseDir).compilerOracles()[0];
 	}
 
 }

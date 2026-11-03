@@ -7,7 +7,7 @@ import anyparse.query.Cli;
  * NARROWER than the project: the field is declared in the one file named on the command line and
  * assigned from a DIFFERENT module that the run never lints.
  *
- * That module is reachable — the project declares it under `apqlint.json` `resolutionRoots`, the
+ * That module is reachable — the project declares it under `apq.json` `resolutionRoots`, the
  * key whose whole purpose is that a narrow lint still answers over the whole project — but
  * neither rule used to look there: both built their `FieldWriteIndex` from the report files alone.
  * The reproduction was `hxq lint src/anyparse/core --fix`, which turned three `public var` on
@@ -96,7 +96,7 @@ class LintProjectWriteScopeCliTest extends Test {
 	}
 
 	/**
-	 * Lint the ONE report file under a project whose `apqlint.json` declares `rootFiles`' directory
+	 * Lint the ONE report file under a project whose `apq.json` declares `rootFiles`' directory
 	 * as a `resolutionRoots` entry. `--fail-on info` turns the answer into the exit code: 1 when the
 	 * rule reports, 0 when it does not.
 	 */
@@ -106,7 +106,7 @@ class LintProjectWriteScopeCliTest extends Test {
 		final root: String = CliFixture.writeDir('projwriteroot', rootFiles);
 		final proj: String = CliFixture.writeDir('projwriteproj', [
 			{ name: name, source: source },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$root"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$root"]}' }
 		]);
 		final exit: Int = Cli.run(['lint', '--rule', rule, '--fail-on', 'info', '$proj/$name']);
 		CliFixture.removeDir(proj);

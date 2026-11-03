@@ -144,8 +144,7 @@ class LintFixSafePassRevertTest extends Test {
 		final reverted: Array<String> = [];
 		final changed: Array<String> = ['/p/A.hx', '/p/B.hx', '/p/C.hx'];
 		final outcome: SafePassNarrowing = LintFixSafePass.narrow(
-			'/p/B.hx:4: characters 1-2 : boom', changed, [], list -> for (f in list) reverted.push(f), () -> OracleOutcome.Confirmed,
-			LintFixSafePass.NARROW_ROUNDS
+			'/p/B.hx:4: characters 1-2 : boom', changed, [], list -> for (f in list) reverted.push(f), () -> OracleOutcome.Confirmed
 		);
 		switch outcome {
 			case Narrowed(files, probes):
@@ -165,7 +164,7 @@ class LintFixSafePassRevertTest extends Test {
 		];
 		final outcome: SafePassNarrowing = LintFixSafePass.narrow(
 			'/p/A.hx:4: characters 1-2 : boom', ['/p/A.hx', '/p/B.hx', '/p/C.hx'],
-			[], list -> for (f in list) reverted.push(f), () -> answers.shift() ?? OracleOutcome.Confirmed, LintFixSafePass.NARROW_ROUNDS
+			[], list -> for (f in list) reverted.push(f), () -> answers.shift() ?? OracleOutcome.Confirmed
 		);
 		switch outcome {
 			case Narrowed(files, probes):
@@ -186,8 +185,7 @@ class LintFixSafePassRevertTest extends Test {
 			'/p/Z.hx:4: characters 1-2 : boom', ['/p/A.hx', '/p/B.hx'], [], _ -> reverts++, () -> {
 				probes++;
 				OracleOutcome.Confirmed;
-			},
-			LintFixSafePass.NARROW_ROUNDS
+			}
 		);
 		switch outcome {
 			case WholeWave(why, _):
@@ -203,12 +201,10 @@ class LintFixSafePassRevertTest extends Test {
 		var probes: Int = 0;
 		var reverts: Int = 0;
 		final outcome: SafePassNarrowing = LintFixSafePass.narrow(
-			'/p/A.hx:1: characters 1-2 : boom\n/p/B.hx:1: characters 1-2 : boom', ['/p/A.hx', '/p/B.hx'],
-			[], _ -> reverts++, () -> {
+			'/p/A.hx:1: characters 1-2 : boom\n/p/B.hx:1: characters 1-2 : boom', ['/p/A.hx', '/p/B.hx'], [], _ -> reverts++, () -> {
 				probes++;
 				OracleOutcome.Confirmed;
-			},
-			LintFixSafePass.NARROW_ROUNDS
+			}
 		);
 		switch outcome {
 			case WholeWave(why, _):
@@ -224,8 +220,7 @@ class LintFixSafePassRevertTest extends Test {
 
 	public function testAnOracleThatStopsAnsweringMidNarrowingGivesUpOnTheWholeWave(): Void {
 		final outcome: SafePassNarrowing = LintFixSafePass.narrow(
-			'/p/A.hx:1: characters 1-2 : boom', ['/p/A.hx', '/p/B.hx'],
-			[], _ -> {}, OracleOutcome.Unavailable.bind('spawn failed'), LintFixSafePass.NARROW_ROUNDS
+			'/p/A.hx:1: characters 1-2 : boom', ['/p/A.hx', '/p/B.hx'], [], _ -> {}, OracleOutcome.Unavailable.bind('spawn failed')
 		);
 		switch outcome {
 			case WholeWave(why, _):
@@ -245,8 +240,7 @@ class LintFixSafePassRevertTest extends Test {
 			[], _ -> {}, () -> {
 				probes++;
 				OracleOutcome.Rejected('${blame.shift()}:1: characters 1-2 : still broken');
-			},
-			LintFixSafePass.NARROW_ROUNDS
+			}
 		);
 		switch outcome {
 			case WholeWave(why, _):
@@ -314,7 +308,7 @@ class LintFixSafePassRevertTest extends Test {
 		// narrowing had already rolled back — and hide /p/Z.hx, the one that actually blocked it.
 		final outcome: SafePassNarrowing = LintFixSafePass.narrow(
 			'/p/A.hx:1: characters 1-2 : boom', ['/p/A.hx', '/p/B.hx'],
-			[], _ -> {}, OracleOutcome.Rejected.bind('/p/Z.hx:9: characters 1-2 : the caller broke'), LintFixSafePass.NARROW_ROUNDS
+			[], _ -> {}, OracleOutcome.Rejected.bind('/p/Z.hx:9: characters 1-2 : the caller broke')
 		);
 		final notice: String = switch outcome {
 			case WholeWave(why, _):
@@ -347,7 +341,7 @@ class LintFixSafePassRevertTest extends Test {
 		final unconfigured: String = LintFixSafePass.netNotice([], false, false) ?? '';
 		Assert.stringContains('no safe-pass revert net', unconfigured);
 		Assert.stringContains('compilerOracle', unconfigured);
-		Assert.stringContains('apqlint.json', unconfigured);
+		Assert.stringContains('apq.json', unconfigured);
 		// `--no-oracle` on a project that configured nothing: the actionable remedy is still
 		// the config key, not the flag, so the two collapse to one sentence — and this arm is
 		// the one `verbose` does NOT gate, so a quiet run still gets it.
@@ -357,7 +351,7 @@ class LintFixSafePassRevertTest extends Test {
 		// waits for `--verbose`; `LintFixQuietDefaultTest` owns why.
 		final declined: String = LintFixSafePass.netNotice(configured, true, true) ?? '';
 		Assert.stringContains('--no-oracle', declined);
-		Assert.equals(-1, declined.indexOf('apqlint.json'), 'a configured project is not told to configure: $declined');
+		Assert.equals(-1, declined.indexOf('apq.json'), 'a configured project is not told to configure: $declined');
 		// And a run that WILL ask the compiler says nothing, because it HAS a net.
 		Assert.isNull(LintFixSafePass.netNotice(configured, false, true));
 	}

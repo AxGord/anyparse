@@ -45,7 +45,7 @@ private typedef CatchHeader = {
  * COINCIDE: `ValueException.toString()` returns `Std.string(value)` of the very same raw value —
  * verified by a compiler probe (throw a String, catch as `Exception`: `trace` / `Std.string` /
  * `'$e'` all yield text identical to the `Dynamic` path). Because the equivalence is a
- * runtime-behaviour claim, arm (b) is GATED behind the rule option `apqlint.json` →
+ * runtime-behaviour claim, arm (b) is GATED behind the rule option `apq.json` →
  * `"catch-dynamic": { "fixLoggingUses": true }` (default OFF): the option IS the project's
  * explicit acceptance of that equivalence. With it ON, `fix` swaps the type, RENAMES the variable to the project's
  * `naming.catchVarName` (`exception` when unset), and rewrites every logging use (`$msg` → `$exception`), adding the import by the

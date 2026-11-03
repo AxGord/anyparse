@@ -73,7 +73,7 @@ private typedef FilePlan = {
 	var plans: Array<PathPlan>;
 }
 
-/** The per-file `apqlint.json` options: the add-import threshold and whether value positions are rewritten at all. */
+/** The per-file `apq.json` options: the add-import threshold and whether value positions are rewritten at all. */
 private typedef RuleOptions = {
 	var importMinUses: Int;
 	var valuePositions: Bool;
@@ -235,7 +235,7 @@ private typedef ScanContext = {
 @:nullSafety(Strict)
 final class ShortenTypeRef extends RuleBase implements ConfigAware implements RiskyFix implements GroupedFix implements NameOracleAware {
 
-	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
+	/** The rule's stable identifier — the `apq.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shorten-type-ref';
 
 	/**
@@ -247,10 +247,10 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	 */
 	private static inline final DEFAULT_IMPORT_MIN_USES: Int = 2;
 
-	/** The `apqlint.json` option overriding `DEFAULT_IMPORT_MIN_USES`. */
+	/** The `apq.json` option overriding `DEFAULT_IMPORT_MIN_USES`. */
 	private static inline final IMPORT_MIN_USES_KEY: String = 'importMinUses';
 
-	/** The `apqlint.json` option that opts VALUE positions (static-access chains) in; type positions are always on. */
+	/** The `apq.json` option that opts VALUE positions (static-access chains) in; type positions are always on. */
 	private static inline final VALUE_POSITIONS_KEY: String = 'valuePositions';
 
 	/** The finding message when the short name is ALREADY reachable — the rewrite needs no import. */

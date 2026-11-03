@@ -26,8 +26,9 @@ class LintExplainLongCliTest extends Test {
 	 * `_l` long by a crossing release, its hold taking `_m`, long by a leak; `_s` taken on the main thread and short.
 	 * The take of `_m` under `_l` sits on line 3, column 39.
 	 */
-	private static final CASCADE: String = 'class A { final _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); final _s:Mutex = new Mutex();\n'
-		+ ' public function new() {} function give():Void { tick(); _l.release(); } function keep(x:Bool):Void { if (x) _m.acquire(); }\n'
+	private static final CASCADE: String = 'class A { final _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); final _s:Mutex = new '
+		+ 'Mutex();\n public function new() {} function give():Void { tick(); _l.release(); } '
+		+ 'function keep(x:Bool):Void { if (x) _m.acquire(); }\n'
 		+ ' function work():Void { _l.acquire(); _m.acquire(); _m.release(); _l.release(); }\n'
 		+ ' function boot():Void { _s.acquire(); tick(); _s.release(); } function tick():Void {} }';
 	#end
@@ -75,11 +76,10 @@ class LintExplainLongCliTest extends Test {
 	public function testUnresolvedCallsAndQuietTakes(): Void {
 		#if nodejs
 		final source: String = 'class A { final _m:Mutex = new Mutex(); final _s:Mutex = new Mutex(); public function new() {}\n'
-			+ ' function work(f:() -> Void):Void { _m.acquire();\n'
-			+ ' f(); _m.release(); }\n'
+			+ ' function work(f:() -> Void):Void { _m.acquire();\n f(); _m.release(); }\n'
 			+ ' function shutdown():Void { _s.acquire(); tick(); _s.release(); } function tick():Void {} }';
-		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],'
-			+ '"quietRoots":["A.shutdown"]}}}';
+		final config: String =
+			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"quietRoots":["A.shutdown"]}}}';
 		final json: Dynamic = Json.parse(lint(source, config, ['--format', 'json', '--explain-long']).out).longLocks;
 		final blind: Dynamic = (json.long: Array<Dynamic>).filter(l -> l.lock == 'A._m')[0].reasons[0];
 		Assert.same(['blind', 'f', 3, 2], [
@@ -121,11 +121,10 @@ class LintExplainLongCliTest extends Test {
 	public function testAnErrorPathReasonNamesItsCatch(): Void {
 		#if nodejs
 		final source: String = 'class Runner { public static function create(fn:()->Void):Void {} }'
-			+ ' class Report { public static function send():Void Sys.sleep(1); }\n'
-			+ 'class A { final _m:Mutex = new Mutex(); public function new() {} static function step():Void {}\n'
-			+ ' function save():Void { try { step(); } catch (e:Dynamic) { Report.send(); } }\n'
-			+ ' public function work():Void { _m.acquire(); save(); _m.release(); }'
-			+ ' public static function main():Void { final a:A = new A(); Runner.create(() -> a.work()); a._m.acquire(); a._m.release(); } }';
+			+ ' class Report { public static function send():Void Sys.sleep(1); }\nclass A { final _m:Mutex = new Mutex(); public '
+			+ 'function new() {} static function step():Void {}\n function save():Void { try { step(); } catch (e:Dynamic) {'
+			+ ' Report.send(); } }\n public function work():Void { _m.acquire(); save(); _m.release(); } public static function '
+			+ 'main():Void { final a:A = new A(); Runner.create(() -> a.work()); a._m.acquire(); a._m.release(); } }';
 		final json: Dynamic = Json.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out)
 			.longLocks;
 		final reasons: Array<Dynamic> = (json.long: Array<Dynamic>).filter(l -> l.lock == 'A._m')[0].reasons;
@@ -202,7 +201,7 @@ class LintExplainLongCliTest extends Test {
 	public function testFixAndCheckstyleRefuseIt(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('explainlong', [
-			{ name: 'apqlint.json', source: ThreadSafetyLongLocksTest.CONFIG },
+			{ name: 'apq.json', source: ThreadSafetyLongLocksTest.CONFIG },
 			{ name: 'A.hx', source: SOURCE }
 		]);
 		var fix: Int = -1;
@@ -220,7 +219,7 @@ class LintExplainLongCliTest extends Test {
 	/** What a lint of `source` (plus `Mutex`) under `config` with `flags` prints — `thread-safety` only unless `onlyRule` is off. */
 	private static function lint(source: String, config: String, flags: Array<String>, onlyRule: Bool = true): LintOutput {
 		final dir: String = CliFixture.writeDir('explainlong', [
-			{ name: 'apqlint.json', source: config },
+			{ name: 'apq.json', source: config },
 			{ name: 'Mutex.hx', source: ThreadSafetyCheckTest.MUTEX },
 			{ name: 'A.hx', source: source }
 		]);

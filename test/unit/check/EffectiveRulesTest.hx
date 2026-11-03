@@ -37,7 +37,7 @@ class EffectiveRulesTest extends Test {
 			'{"rules": {"$OPT_IN": {"enabled": true}, "magic-number": {"enabled": false}}}', '{"rules": {"$PLAIN": {"enabled": false}}}'
 		);
 		final group: RuleStateGroup = only('$root/nested/Probe.hx');
-		Assert.same(['$root/nested/apqlint.json', '$root/apqlint.json'], group.chain, 'the chain is folded nearest first');
+		Assert.same(['$root/nested/apq.json', '$root/apq.json'], group.chain, 'the chain is folded nearest first');
 		assertState(group, OPT_IN, true, 'config');
 		assertState(group, 'magic-number', false, 'config');
 		assertState(group, PLAIN, false, 'config');
@@ -54,7 +54,7 @@ class EffectiveRulesTest extends Test {
 		#if (sys || nodejs)
 		final root: String = project('{"rules": {"magic-number": {"enabled": false}}}', '{"inherit": false, "rules": {}}');
 		final group: RuleStateGroup = only('$root/nested/Probe.hx');
-		Assert.same(['$root/nested/apqlint.json'], group.chain, 'the ancestor is not folded');
+		Assert.same(['$root/nested/apq.json'], group.chain, 'the ancestor is not folded');
 		assertState(group, 'magic-number', true, 'default');
 		CliFixture.removeDir(root);
 		#else
@@ -214,7 +214,7 @@ class EffectiveRulesTest extends Test {
 	@:killer('M-EFFECTIVE-RENDER-HEADER')
 	public function testTheListingOpensWithTheHeaderToolingDetects(): Void {
 		final group: RuleStateGroup = {
-			chain: ['/p/apqlint.json'],
+			chain: ['/p/apq.json'],
 			files: ['/p/A.hx'],
 			rules: [
 				{
@@ -232,7 +232,7 @@ class EffectiveRulesTest extends Test {
 			]
 		};
 		Assert.equals(
-			'=== effective lint rules — config chain: /p/apqlint.json ===\nfile: /p/A.hx\ndead-code            on   default      d\n'
+			'=== effective lint rules — config chain: /p/apq.json ===\nfile: /p/A.hx\ndead-code            on   default      d\n'
 			+ 'explicit-local-type  off  default-off  e\n',
 			EffectiveRules.render([group])
 		);
@@ -253,10 +253,10 @@ class EffectiveRulesTest extends Test {
 
 	/** A fixture project: `rootConfig` at its root (a `.git` marks it), `nestedConfig` (if any) and a `Probe.hx` under `nested/`. */
 	private function project(rootConfig: String, nestedConfig: Null<String>): String {
-		final root: String = CliFixture.writeDir('effrules', [{ name: 'apqlint.json', source: rootConfig }]);
+		final root: String = CliFixture.writeDir('effrules', [{ name: 'apq.json', source: rootConfig }]);
 		FileSystem.createDirectory('$root/.git');
 		FileSystem.createDirectory('$root/nested');
-		if (nestedConfig != null) File.saveContent('$root/nested/apqlint.json', nestedConfig);
+		if (nestedConfig != null) File.saveContent('$root/nested/apq.json', nestedConfig);
 		File.saveContent('$root/nested/Probe.hx', 'class Probe {}\n');
 		return root;
 	}

@@ -82,7 +82,7 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 		final dir: String = CliFixture.writeDir('addynparam', [
 			{ name: 'Param.hx', source: PARAM_APPLIES },
 			{ name: 'check.hxml', source: PARAM_HXML },
-			{ name: 'apqlint.json', source: PARAM_APQLINT }
+			{ name: 'apq.json', source: PARAM_APQLINT }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'avoid-dynamic', '$dir/Param.hx']);
 		final onDisk: String = File.getContent('$dir/Param.hx');
@@ -198,11 +198,11 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 			{ name: 'a/Main.hx', source: 'class Main {\n\tstatic function main():Void {\n\t\tGood.run();\n\t\tBad.run();\n\t}\n}\n' },
 			{ name: 'check.hxml', source: '-cp a\n-cp b\n-main Main\n' },
 			{
-				name: 'apqlint.json',
+				name: 'apq.json',
 				source: '{"compilerOracle":"check.hxml","rules":{"avoid-dynamic":{"enabled":true},"prefer-final":{"enabled":false},'
 				+ '"join-single-use-local":{"enabled":false}}}'
 			},
-			{ name: 'b/apqlint.json', source: '{"rules":{"avoid-dynamic":{"enabled":false},"unused-import":{"enabled":false}}}' }
+			{ name: 'b/apq.json', source: '{"rules":{"avoid-dynamic":{"enabled":false},"unused-import":{"enabled":false}}}' }
 		]);
 		Cli.run(['lint', '--fix', '$root/a', '$root/b']);
 		final good: String = File.getContent('$root/a/Good.hx');

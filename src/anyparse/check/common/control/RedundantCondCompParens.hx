@@ -59,7 +59,7 @@ using StringTools;
  * A finding lands on a directive LINE, which the writer keeps as its own line — so a trailing
  * `// noqa` is relocated off it during canonicalisation and cannot suppress this rule in a
  * canonically formatted project. Use a `CHECKSTYLE:OFF` / `ON` region, or disable the rule in
- * `apqlint.json`.
+ * `apq.json`.
  */
 @:nullSafety(Strict)
 final class RedundantCondCompParens extends RuleBase {

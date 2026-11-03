@@ -462,10 +462,10 @@ final class NamingPrivatizeTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	/** A project directory: `pkg/C.hx`, `pkg/D.hx`, a `Main` the oracle compiles, and `config` as its `apqlint.json`. */
+	/** A project directory: `pkg/C.hx`, `pkg/D.hx`, a `Main` the oracle compiles, and `config` as its `apq.json`. */
 	private function writeProject(config: String): String {
 		final dir: String = CliFixture.writeDir('privatize', [
-			{ name: 'apqlint.json', source: config },
+			{ name: 'apq.json', source: config },
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n' }
 		]);
 		sys.FileSystem.createDirectory('$dir/pkg');

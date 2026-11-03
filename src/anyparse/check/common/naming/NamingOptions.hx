@@ -15,7 +15,7 @@ import anyparse.query.SymbolIndex;
  *
  * `catchVarName` names every catch variable that one name (an `_`-prefixed discard keeps its marker), and
  * `handlerSuffix` turns a listener method spelled `onX` into `xHandler`. The options are resolved per file from the
- * `apqlint.json` chain, so the rename paths and the report read one policy.
+ * `apq.json` chain, so the rename paths and the report read one policy.
  */
 @:nullSafety(Strict)
 final class NamingOptions implements NamingSupport {

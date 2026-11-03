@@ -150,8 +150,8 @@ class ModuleMoveTest extends Test {
 		final reasons: Array<String> = refused(
 			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
 			[file('src/pkg/A.hx', a)],
-			[file('apqlint.json', config)],
-			[{ file: 'apqlint.json', keys: ['ownedTypes.owners'] }]
+			[file('apq.json', config)],
+			[{ file: 'apq.json', keys: ['ownedTypes.owners'] }]
 		);
 		Assert.equals(1, reasons.length);
 		Assert.isTrue(reasons[0].contains('holds the pattern "pkg.A*", which matches pkg.A but not pkg.sub.A'), reasons[0]);

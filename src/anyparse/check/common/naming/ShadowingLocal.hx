@@ -96,7 +96,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class ShadowingLocal extends RuleBase {
 
-	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
+	/** The rule's stable identifier — the `apq.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shadowing-local';
 
 	/** What a plain local declaration is called — in the message and in `Hidden.label`. */

@@ -80,7 +80,7 @@ class LintLanguageVersionGateTest extends Test {
 		for (version => rewrites in ['4.0' => false, '4.3' => true]) {
 			final dir: String = CliFixture.writeDir('versionrule', [
 				{ name: 'V.hx', source: SAFE_NAV },
-				{ name: 'apqlint.json', source: '{"languageVersion":"$version"}' }
+				{ name: 'apq.json', source: '{"languageVersion":"$version"}' }
 			]);
 			Cli.run(['lint', '--fix', '--no-oracle', '--rule', 'prefer-safe-nav', '$dir/V.hx']);
 			Assert.equals(rewrites, File.getContent('$dir/V.hx').indexOf('a?.push(1)') != -1, 'languageVersion $version');

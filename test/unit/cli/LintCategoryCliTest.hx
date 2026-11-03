@@ -34,7 +34,7 @@ class LintCategoryCliTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('lintcategory', [
 			{ name: 'C.hx', source: SOURCE },
-			{ name: 'apqlint.json', source: '{"rules": {"empty-comment": false}}' }
+			{ name: 'apq.json', source: '{"rules": {"empty-comment": false}}' }
 		]);
 		final docs: String = CliFixture.captureStdout(() ->
 			Cli.run(['lint', '--no-oracle', '--format', 'json', '--category', 'docs', '$dir/C.hx'])

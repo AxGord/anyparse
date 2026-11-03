@@ -79,7 +79,7 @@ using StringTools;
  * `NamingSupport.frameworkReachable` answers that, over the frameworks the
  * language ships (utest's `test` / `spec` / `setup` / `teardown` prefixes on a
  * `Test` subclass) UNIONED with the contracts the project declares in
- * `apqlint.json` (`frameworks`). `unused-public-member` reads that roster through
+ * `apq.json` (`frameworks`). `unused-public-member` reads that roster through
  * the same predicate and `naming` through the narrower `frameworkOwnsName`, so a
  * project that declares a framework cannot get the carve-out from one rule and not
  * its siblings.

@@ -232,7 +232,7 @@ final class LintFixSafePass {
 	 */
 	public static function narrow(
 		errors: String, changed: Array<String>, coupled: Array<Array<String>>, revert: (Array<String>) -> Void,
-		typecheck: () -> OracleOutcome, maxRounds: Int
+		typecheck: () -> OracleOutcome, maxRounds: Int = NARROW_ROUNDS
 	): SafePassNarrowing {
 		final reverted: Array<String> = [];
 		var text: String = errors;
@@ -318,7 +318,7 @@ final class LintFixSafePass {
 	public static function netNotice(oracles: Array<OracleConfig>, noOracle: Bool, verbose: Bool): Null<String> {
 		return if (oracles.length == 0)
 			'apq lint --fix: no compilerOracle configured — no safe-pass revert net, risky fixes stay report-only,'
-				+ ' oracle-assisted fixes are inert; add a "compilerOracle" hxml to apqlint.json to arm it\n'
+				+ ' oracle-assisted fixes are inert; add a "compilerOracle" hxml to apq.json to arm it\n'
 		else if (noOracle && verbose)
 			'apq lint --fix: compiler oracle SKIPPED (--no-oracle) — no safe-pass revert net, risky fixes stay report-only,'
 				+ ' oracle-assisted fixes are inert\n'

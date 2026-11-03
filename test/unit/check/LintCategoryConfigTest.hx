@@ -14,7 +14,7 @@ import anyparse.check.haxe.loops.PreferFind;
 import unit.cli.CliFixture;
 
 /**
- * The `apqlint.json` rule switches: a `rules` entry as `true` / `false` or as an object of options, and the
+ * The `apq.json` rule switches: a `rules` entry as `true` / `false` or as an object of options, and the
  * `categories` section that switches a whole `RuleCategory`. A rule entry outranks its category's entry, which
  * outranks the rule's own default, and both sections fold over a nested chain key by key.
  */
@@ -81,8 +81,8 @@ class LintCategoryConfigTest extends Test {
 	public function testANestedDocumentInheritsBothSectionsKeyByKey(): Void {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('lintcategory', [
-			{ name: 'apqlint.json', source: '{"categories": {"docs": true, "literals": false}, "rules": {"empty-comment": false}}' },
-			{ name: 'nested/apqlint.json', source: '{"categories": {"literals": true}}' },
+			{ name: 'apq.json', source: '{"categories": {"docs": true, "literals": false}, "rules": {"empty-comment": false}}' },
+			{ name: 'nested/apq.json', source: '{"categories": {"literals": true}}' },
 			{ name: 'nested/Probe.hx', source: 'class Probe {}\n' }
 		]);
 		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
@@ -150,12 +150,12 @@ class LintCategoryConfigTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	/** A root `apqlint.json` with `nested/apqlint.json` below it and one probe file in each directory. */
+	/** A root `apq.json` with `nested/apq.json` below it and one probe file in each directory. */
 	private function nestedTree(rootConfig: String, nestedConfig: String): String {
 		return CliFixture.writeTree('lintcategory', [
-			{ name: 'apqlint.json', source: rootConfig },
+			{ name: 'apq.json', source: rootConfig },
 			{ name: 'Top.hx', source: 'class Top {}\n' },
-			{ name: 'nested/apqlint.json', source: nestedConfig },
+			{ name: 'nested/apq.json', source: nestedConfig },
 			{ name: 'nested/Probe.hx', source: 'class Probe {}\n' }
 		]);
 	}

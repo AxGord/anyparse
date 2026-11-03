@@ -15,7 +15,7 @@ import anyparse.query.TypeResolver;
 /**
  * Flags a `.toString()` call sitting in a position that ALREADY stringifies, so the call only
  * restates what the language does anyway. `Severity.Info`; `fix` drops the call. **DEFAULT OFF** —
- * opt in per project with `apqlint.json` `"rules": { "redundant-tostring": { "enabled": true } }`, or
+ * opt in per project with `apq.json` `"rules": { "redundant-tostring": { "enabled": true } }`, or
  * select it with `--rule redundant-tostring`.
  *
  * ## The four stringifying contexts

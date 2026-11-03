@@ -86,7 +86,7 @@ prefix is not compared: it is the layout's.
 A typed answer crossing files carries no file: a member's written type is spelled for the reading file
 (`TypeRefIndex.spelledIn`) before it leaves `MemberLookup.memberRead`, so a namesake the reader declares never takes its
 place. The primitives a resolution reads — the import and module tables, the package chain, the on-disk module lookup,
-the std name lists — are owned by the typing layer (`apqlint.json` `ownedTypes`); `owned-types` reports a reader outside it.
+the std name lists — are owned by the typing layer (`apq.json` `ownedTypes`); `owned-types` reports a reader outside it.
 
 ## Cache keys
 
@@ -135,7 +135,7 @@ here keeps: the compiler's answer or Unknown, never another one. The UNKNOWN sha
   `usage` assertions asked of the typer (the written-source and the nominal currency apart); every other display
   assertion is counted, unanswered. From `tests/misc`: each `compile-fail` stderr's `$type` warnings (only where
   `$type(` encloses the range) and its top `A should be B` errors (a `... ` line belongs to the chain above it).
-- `facts [<configuration>]`, in a project root, compiles the project's oracles (`apqlint.json`) with the facts hook and
+- `facts [<configuration>]`, in a project root, compiles the project's oracles (`apq.json`) with the facts hook and
   asks the type of every range the compiler gave a value type (`FactsTypeOracle.valueType`), by node kind.
 
 What the harness may not do is make an answer match. It compares two spellings of one type in one spelling (`TypeText`:

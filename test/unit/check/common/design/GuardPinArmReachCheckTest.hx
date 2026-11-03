@@ -40,7 +40,7 @@ class GuardPinArmReachCheckTest extends Test {
 	public function testARelativeRegistryResolvesBesideTheConfigThatNamesIt(): Void {
 		final config: String = configNaming('arms.json');
 		final dir: String = CliFixture.writeTree('guardpin', [
-			{ name: 'apqlint.json', source: config },
+			{ name: 'apq.json', source: config },
 			{ name: 'arms.json', source: ARMS }
 		]);
 		final vs: Array<Violation> = CheckFixture.violationsIn(new GuardPinArmReach(), [

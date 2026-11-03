@@ -76,7 +76,7 @@ class LintFixQuietDefaultTest extends Test {
 		Assert.isNull(LintFixSafePass.netNotice(configured, true, false), 'the flag the reader just passed');
 		Assert.stringContains('--no-oracle', LintFixSafePass.netNotice(configured, true, true) ?? '');
 		final unconfigured: Null<String> = LintFixSafePass.netNotice([], false, false);
-		Assert.stringContains('apqlint.json', unconfigured ?? '', 'the arm that names a remedy still speaks');
+		Assert.stringContains('apq.json', unconfigured ?? '', 'the arm that names a remedy still speaks');
 		Assert.isNull(LintFixSafePass.netNotice(configured, false, false), 'a run WITH a net says nothing either way');
 	}
 

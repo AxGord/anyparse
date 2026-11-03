@@ -11,7 +11,7 @@ using StringTools;
 /**
  * The `doc-length` check: a doc block longer than the maximum the project declares is flagged
  * `Info`, and nothing else is — a line-comment run and a plain block banner are never measured
- * whatever their length, and the threshold is read per file from `apqlint.json`.
+ * whatever their length, and the threshold is read per file from `apq.json`.
  *
  * Every fixture builds its block from a LINE COUNT rather than from typed-out prose, so an
  * assertion about the threshold cannot drift with the text it happens to be written in, and the
@@ -108,7 +108,7 @@ class DocLengthCheckTest extends Test {
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'doc-length is opt-in');
 	}
 
-	/** The check's findings on `src` under the `apqlint.json` document `configJson`. */
+	/** The check's findings on `src` under the `apq.json` document `configJson`. */
 	private function violations(configJson: String, src: String): Array<Violation> {
 		final check: DocLength = new DocLength();
 		final cfg: LintConfig = LintConfig.parse(configJson);

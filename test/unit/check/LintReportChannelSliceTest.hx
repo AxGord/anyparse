@@ -222,7 +222,7 @@ class LintReportChannelSliceTest extends Test {
 	public function testATextRunOverTheThresholdPrintsTheSummary(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('lintsum', [
-			{ name: 'apqlint.json', source: '{ "reportSummaryThreshold": 2 }' },
+			{ name: 'apq.json', source: '{ "reportSummaryThreshold": 2 }' },
 			{
 				name: 'C.hx',
 				source: 'package pkg;\n\nclass C {\n\n\tpublic function f(k: Int): Int {\n\t\treturn k * 7 + k * 9 + k * 11;\n\t}\n\n}\n'

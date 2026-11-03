@@ -25,14 +25,14 @@ import anyparse.query.SymbolIndex;
  *
  * ## The threshold
  *
- * A project declares its own through `apqlint.json` (`"doc-length": { "max": N }`); the default
+ * A project declares its own through `apq.json` (`"doc-length": { "max": N }`); the default
  * stands for one that does not. There is no ratio of comment to code here and there will not be
  * one: a share is a metric, and a metric names no block to rewrite.
  *
  * ## Off by default, and no autofix
  *
  * `DefaultOff`, because the length at which prose stops being a contract is a project's own
- * judgement; a project opts in through `apqlint.json`. The `fix` seam yields nothing: which
+ * judgement; a project opts in through `apq.json`. The `fix` seam yields nothing: which
  * sentences are the contract and which are the essay is the whole of the work.
  */
 @:nullSafety(Strict)
@@ -41,7 +41,7 @@ final class DocLength extends RuleBase implements ConfigAware implements Default
 	/** This check's `id()`, and the `rule` every finding carries. */
 	private static inline final RULE_ID: String = 'doc-length';
 
-	/** The `apqlint.json` option a project overrides the default with. */
+	/** The `apq.json` option a project overrides the default with. */
 	private static inline final MAX_KEY: String = 'max';
 
 	/**

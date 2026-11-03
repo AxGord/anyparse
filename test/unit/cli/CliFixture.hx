@@ -188,7 +188,7 @@ final class CliFixture {
 	 *
 	 * Here rather than in either caller because the on-disk drift guards need the same answer:
 	 * `BuildMacroMetaSeamTest` locates the layer sources it scans for spelled grammar tags,
-	 * `LintScopeGateTest` locates the `apqlint.json` documents whose resolution scope it asserts.
+	 * `LintScopeGateTest` locates the `apq.json` documents whose resolution scope it asserts.
 	 * Two copies of a walk-up are two things to keep in step.
 	 *
 	 * THROWS rather than returning null, which is what let both call sites collapse to one line.

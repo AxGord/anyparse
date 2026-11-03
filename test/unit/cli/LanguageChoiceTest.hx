@@ -152,10 +152,8 @@ class LanguageChoiceTest extends Test {
 	@:killer('M-LANG-PRESET-MIXED-REFUSED')
 	@:pin('control')
 	public function testAPresetReadsMixedFilesAsItsOwn(): Void {
-		Assert.same(
-			['--lang', 'haxe', 'A.hx', 'apqlint.json'], choose(new LintCommand(), ['A.hx', 'apqlint.json', '--lang-default', 'haxe']).args
-		);
-		Assert.raises(() -> choose(new LintCommand(), ['A.hx', 'apqlint.json']), UsageFailure);
+		Assert.same(['--lang', 'haxe', 'A.hx', 'apq.json'], choose(new LintCommand(), ['A.hx', 'apq.json', '--lang-default', 'haxe']).args);
+		Assert.raises(() -> choose(new LintCommand(), ['A.hx', 'apq.json']), UsageFailure);
 	}
 
 	/** `--` is no flag and takes no value, so the path after it is a file. */

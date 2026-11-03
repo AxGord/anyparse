@@ -195,7 +195,7 @@
 				"byPackage": true
 			},
 			{
-				"file": "apqlint.json",
+				"file": "apq.json",
 				"keys": [
 					"ownedTypes.types",
 					"ownedTypes.members",

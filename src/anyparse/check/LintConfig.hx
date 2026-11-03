@@ -27,7 +27,7 @@ typedef RuleConfig = {
 }
 
 /**
- * What ONE `apqlint.json` document says about enablement: its `rules` entries' switches by rule id and its
+ * What ONE `apq.json` document says about enablement: its `rules` entries' switches by rule id and its
  * `categories` switches by category id. A config keeps one per document of its chain, nearest first, because the
  * nearest document that names a rule or its category decides it (`LintConfig.switchFor`).
  */
@@ -102,7 +102,7 @@ typedef OracleGenerate = {
 }
 
 /**
- * A discovered config together with the `apqlint.json` documents it was folded from, nearest
+ * A discovered config together with the `apq.json` documents it was folded from, nearest
  * first; `chain` is empty when no document applies and the config is the builtin defaults.
  */
 typedef DiscoveredConfig = {
@@ -111,7 +111,7 @@ typedef DiscoveredConfig = {
 }
 
 /**
- * Project-level lint configuration, read from an `apqlint.json` discovered by
+ * Project-level lint configuration, read from an `apq.json` discovered by
  * walking up from a linted file's directory (the apq-native counterpart of the
  * `checkstyle.json` compat config). Grammar-agnostic — it keys rules by their
  * `Check.id()`, so any grammar's checks are configurable. Three knobs per rule:
@@ -521,7 +521,7 @@ final class LintConfig {
 	}
 
 	/**
-	 * Discover the `apqlint.json` CHAIN above `path` — every one from its own directory
+	 * Discover the `apq.json` CHAIN above `path` — every one from its own directory
 	 * up to the filesystem root, nearest first — and fold it into one config; an empty
 	 * config (every rule enabled, no overrides) when the chain is empty.
 	 *
@@ -556,7 +556,7 @@ final class LintConfig {
 	 * files by chain rather than by directory.
 	 */
 	public static function discoverChain(path: String, ?documents: DocumentMemo): DiscoveredConfig {
-		final chain: ConfigChain = ConfigFinder.findUpAll(path, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS);
+		final chain: ConfigChain = ConfigFinder.findUpProject(path, ConfigFinder.PROJECT_ROOT_MARKERS);
 		final folded: Array<String> = [];
 		var merged: Null<LintDocument> = null;
 		// A document that EXISTS and cannot be read is the one outcome with no other
@@ -604,7 +604,7 @@ final class LintConfig {
 	 * question every framework-aware check asks, so they cannot disagree about a member by reading the
 	 * config differently.
 	 *
-	 * Resolved ONCE, from the first file. A scope spanning two roots with different `apqlint.json` files
+	 * Resolved ONCE, from the first file. A scope spanning two roots with different `apq.json` files
 	 * therefore applies the first one's roster throughout; that is deliberate, because the rules sharing
 	 * this answer do not all have a per-file seam to resolve at (`unused-public-member` builds one
 	 * whole-scope context before it sees a file), and a roster that differed between two of them would
@@ -622,7 +622,7 @@ final class LintConfig {
 	}
 
 	/**
-	 * Parse `apqlint.json` content through the declared `ApqLintConfig` schema.
+	 * Parse `apq.json` content through the declared `ApqLintConfig` schema.
 	 * Tolerant: malformed JSON, a non-object root, or a value contradicting the
 	 * schema all yield an empty config — never throws, so a broken config
 	 * degrades to default behaviour rather than failing the lint.

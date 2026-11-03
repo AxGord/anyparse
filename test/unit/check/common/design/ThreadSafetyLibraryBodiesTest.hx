@@ -4,6 +4,7 @@ import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.PositiveSinks;
 import unit.cli.CliFixture;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -18,6 +19,9 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 	/** The build: the project's own classpath, the library's, a define spelled with a dash and the target. */
 	private static inline final HXML: String = '-cp .\n-cp vendorlib\n-D gate-on\n-cpp out\n';
 
+	/** The options walking the fixture's libraries. */
+	private static inline final OPTIONS: String = '"libraryBodies":["build.hxml"],"spawns":["Thread.create"]';
+
 	/**
 	 * The library: a native read only under every define of the build — the hxml's, the oracle entry's, the target's and
 	 * the compiler's — and files the build does not compile: another target's package and file, and a plain file the
@@ -27,12 +31,10 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 		{
 			name: 'vendorlib/vendor/Loader.hx',
 			source: 'package vendor; class Loader { static var prim:Dynamic = cpp.Lib.load("v", "read_file", 1);'
-				+ ' public static function load(p:String):String {'
-				+ ' #if (gate_on && cpp && haxe_ver >= 4 && ORACLE_FLAG) return readNow(p); #else return p; #end }'
-				+ ' public static function cached(p:String):String { #if !gate_on return readNow(p); #else return p; #end }'
-				+ ' public static function later(p:String):Void sys.thread.Thread.create(() -> readNow(p));'
-				+ ' public static function quiet(p:String):String return p;'
-				+ ' static function readNow(p:String):String return prim(p); }'
+				+ ' public static function load(p:String):String { #if (gate_on && cpp && haxe_ver >= 4 && ORACLE_FLAG) return readNow(p); '
+				+ '#else return p; #end } public static function cached(p:String):String { #if !gate_on return readNow(p); #else return p; '
+				+ '#end } public static function later(p:String):Void sys.thread.Thread.create(() -> readNow(p));'
+				+ ' public static function quiet(p:String):String return p; static function readNow(p:String):String return prim(p); }'
 		},
 		{
 			name: 'vendorlib/vendor/Base.hx',
@@ -60,9 +62,10 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 		}
 	];
 
-	private static final PROJECT: String = 'import vendor.Loader; import vendor.Base; import vendor.Hold; import vendor.Quiet; import php.Db;'
-		+ ' class Mine extends Base {} class A { static function main():Void { Loader.load("x"); Loader.cached("y"); Loader.later("z");'
-		+ ' Loader.quiet("q"); Hold.run(); Quiet.run(); Db.query(); } static function viaBase(b:Base):Void b.work();'
+	private static final PROJECT: String = 'import vendor.Loader; import vendor.Base; import vendor.Hold; import vendor.Quiet; import '
+		+ 'php.Db; class Mine extends Base {} class A { static function main():Void {'
+		+ ' Loader.load("x"); Loader.cached("y"); Loader.later("z"); Loader.quiet("q"); Hold.run(); '
+		+ 'Quiet.run(); Db.query(); } static function viaBase(b:Base):Void b.work();'
 		+ ' static function viaMine(m:Mine):Void m.work(); static function nap():Void Sys.sleep(0); }';
 
 	/** What the fixture reports with the libraries walked: the library calls that block, and a builtin sink of its own. */
@@ -71,9 +74,6 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 		'warning A A.nap | Sys.sleep',
 		'warning A A.viaBase | Base.work'
 	];
-
-	/** The options walking the fixture's libraries. */
-	private static inline final OPTIONS: String = '"libraryBodies":["build.hxml"],"spawns":["Thread.create"]';
 
 	/**
 	 * A library call whose body reaches the library's native is a sink where the project calls it, its chain going on into
@@ -169,7 +169,7 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 			'{"compilerOracle":[{"hxml":"lost.hxml"}],"rules":{"thread-safety":{"closedWorld":false,"libraryBodies":["lost.hxml"]}}}';
 		final project: String = 'class A { static function main():Void Sys.sleep(0); }';
 		final dir: String = CliFixture.writeTree('threadsafety_lib_lost', [
-			{ name: 'apqlint.json', source: config },
+			{ name: 'apq.json', source: config },
 			{ name: 'lost.hxml', source: '-cp .\n-cp nowhere\n-lib no_such_haxelib_fx2\n-cpp out\n' },
 			{ name: 'F0.hx', source: project }
 		]);
@@ -192,7 +192,7 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 		final config: String =
 			'{"compilerOracle":[{"hxml":"build.hxml","defines":["ORACLE_FLAG"]}],"rules":{"thread-safety":{"closedWorld":false,$options}}}';
 		final dir: String = CliFixture.writeTree('threadsafety_lib', [
-			{ name: 'apqlint.json', source: config },
+			{ name: 'apq.json', source: config },
 			{ name: 'build.hxml', source: HXML },
 			{ name: 'F0.hx', source: PROJECT }
 		].concat(LIBRARY));
@@ -215,7 +215,7 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 
 	/** The run's notice of the sinks it applied. */
 	private static function notice(found: Array<Violation>): String {
-		return found.find(v -> v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE))?.message ?? '';
+		return found.find(v -> v.file == '' && v.message.startsWith(PositiveSinks.NOTICE))?.message ?? '';
 	}
 	#end
 

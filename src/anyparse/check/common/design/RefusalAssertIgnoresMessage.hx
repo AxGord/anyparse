@@ -12,7 +12,7 @@ import anyparse.query.SymbolIndex;
 /**
  * Flags a `case` arm that matches a REFUSAL constructor (`Err(_)`) without reading what the refusal carries and then
  * passes (`Assert.pass()`) — an assertion any refusal satisfies, so a call refused for another reason stays green.
- * Inert until the project names both halves in `apqlint.json`:
+ * Inert until the project names both halves in `apq.json`:
  *
  *     "refusal-assert-ignores-message": { "refusalConstructors": ["Err"], "passCalls": ["Assert.pass"] }
  *
@@ -25,7 +25,7 @@ import anyparse.query.SymbolIndex;
 final class RefusalAssertIgnoresMessage extends RuleBase implements ConfigAware implements FileGated implements DefaultOff
 		implements NoAutofix {
 
-	/** The rule id, also the `apqlint.json` option key. */
+	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'refusal-assert-ignores-message';
 
 	private static inline final REFUSALS_KEY: String = 'refusalConstructors';

@@ -173,13 +173,13 @@ class WriteVerificationCliTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	/** A one-class project in the temp directory holding `good`, its build, and — with `oracle` — an `apqlint.json` naming it. */
+	/** A one-class project in the temp directory holding `good`, its build, and — with `oracle` — an `apq.json` naming it. */
 	private static function project(good: String, oracle: Bool): String {
 		final files: Array<{ name: String, source: String }> = [
 			{ name: 'Good.hx', source: good },
 			{ name: 'build.hxml', source: '-cp .\n-main Good\n' }
 		];
-		if (oracle) files.push({ name: 'apqlint.json', source: '{"compilerOracle": "build.hxml"}' });
+		if (oracle) files.push({ name: 'apq.json', source: '{"compilerOracle": "build.hxml"}' });
 		return CliFixture.writeDir('writeverify', files);
 	}
 
@@ -196,11 +196,11 @@ class WriteVerificationCliTest extends Test {
 		return Cli.run(['add-member', '$dir/Good.hx', '--type', 'Good', member, '--write', '--verify'].concat(extra));
 	}
 
-	/** A project whose build reaches `src/Good.hx` only, through `-cp src`, with an `apqlint.json` naming it. */
+	/** A project whose build reaches `src/Good.hx` only, through `-cp src`, with an `apq.json` naming it. */
 	private static function sourceProject(): String {
 		final dir: String = CliFixture.writeDir('writeverify', [
 			{ name: 'build.hxml', source: '-cp src\n-main Good\n' },
-			{ name: 'apqlint.json', source: '{"compilerOracle": "build.hxml"}' }
+			{ name: 'apq.json', source: '{"compilerOracle": "build.hxml"}' }
 		]);
 		FileSystem.createDirectory('$dir/src');
 		File.saveContent('$dir/src/Good.hx', GOOD);

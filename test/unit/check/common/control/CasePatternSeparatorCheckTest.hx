@@ -12,7 +12,7 @@ import anyparse.query.CanonicalEdit;
  * separator character.
  *
  * Both styles are driven by an INJECTED config so the repository's own
- * `apqlint.json` can never decide a verdict here. The comma style is the default,
+ * `apq.json` can never decide a verdict here. The comma style is the default,
  * asserted through a config that names no `style` at all.
  */
 class CasePatternSeparatorCheckTest extends Test {

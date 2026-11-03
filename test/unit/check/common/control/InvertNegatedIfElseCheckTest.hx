@@ -509,12 +509,12 @@ class InvertNegatedIfElseCheckTest extends Test {
 		return CheckFixture.fixedUnder(new InvertNegatedIfElse(), src, keepConfig(on));
 	}
 
-	/** The `apqlint.json` text setting `invert-negated-if-else` `keepDefaultElse` to `on`. */
+	/** The `apq.json` text setting `invert-negated-if-else` `keepDefaultElse` to `on`. */
 	public static function keepConfig(on: Bool): String {
 		return '{"rules":{"invert-negated-if-else":{"keepDefaultElse":$on}}}';
 	}
 
-	/** The `apqlint.json` text setting `invert-negated-if-else` `defaultLast`. */
+	/** The `apq.json` text setting `invert-negated-if-else` `defaultLast`. */
 	public static function lastConfig(): String {
 		return '{"rules":{"invert-negated-if-else":{"defaultLast":true}}}';
 	}

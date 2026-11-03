@@ -138,7 +138,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 		final dir: String = CliFixture.writeDir('etrcli', [
 			{ name: 'Main.hx', source: SRC },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'explicit-type', '$dir/Main.hx']);
 		final packed: String = File.getContent('$dir/Main.hx').replace(' ', '');
@@ -164,7 +164,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 			{ name: 'Box.hx', source: BOX },
 			{ name: 'Main.hx', source: BOXMAIN },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'explicit-type', dir]);
 		final packed: String = File.getContent('$dir/Box.hx').replace(' ', '');
@@ -191,7 +191,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 		final dir: String = CliFixture.writeDir('etrshort', [
 			{ name: 'Main.hx', source: 'class Main {\n\n\tstatic function main() {\n\t\tnew pkg.sub.Holder();\n\t}\n\n}\n' },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: '{"compilerOracle":"check.hxml"}' }
+			{ name: 'apq.json', source: '{"compilerOracle":"check.hxml"}' }
 		]);
 		FileSystem.createDirectory('$dir/pkg/sub');
 		File.saveContent('$dir/pkg/Entity.hx', 'package pkg;\n\nclass Entity<T> {\n\tpublic function new(path:String) {}\n}\n');

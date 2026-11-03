@@ -21,7 +21,7 @@ import sys.FileSystem;
  *
  * `APQ_NO_STD` (any value but empty or `0`) DECLINES the whole channel before any of
  * that runs — the process-wide opt-out for a project targeting a different Haxe
- * version, mirrored per-project by the `apqlint.json` `resolutionStd: false` key.
+ * version, mirrored per-project by the `apq.json` `resolutionStd: false` key.
  * Without one of the two there is NO way to refuse: step 3 finds a std on any
  * Haxe-equipped machine however `HAXE_STD_PATH` and `PATH` are set.
  *
@@ -213,7 +213,7 @@ final class StdResolver {
 
 	/**
 	 * Whether `APQ_NO_STD` DECLINES the auto-discovered std: set to anything other than the
-	 * empty string or `0`. The env twin of the `apqlint.json` `resolutionStd: false` key, and
+	 * empty string or `0`. The env twin of the `apq.json` `resolutionStd: false` key, and
 	 * the only way to refuse the std on a machine where `KNOWN_LOCATIONS` finds one whatever
 	 * `HAXE_STD_PATH` and `PATH` say. It cuts the WHOLE channel — the implicit resolution
 	 * scope and the std-derived tables alike — so `Cli.resolutionThunk`'s null branch and the

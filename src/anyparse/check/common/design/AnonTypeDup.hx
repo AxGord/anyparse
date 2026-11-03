@@ -67,7 +67,7 @@ using StringTools;
  * ## Configuration
  *
  * `anon-type-dup.minOccurrences` (default 3) and `anon-type-dup.minFields`
- * (default 2), read from a discovered `apqlint.json` against the FIRST file of
+ * (default 2), read from a discovered `apq.json` against the FIRST file of
  * the run — the grouping is cross-file, so a per-file threshold would make the
  * verdict depend on which occurrence happened to come first.
  */

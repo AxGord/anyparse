@@ -35,7 +35,7 @@ private typedef WideLine = {
  * ## Off by default, and reported at `Info`
  *
  * `DefaultOff`, because the threshold is a project's own style choice and a project that has not
- * declared one should not inherit this rule's opinion; a project opts in through `apqlint.json`.
+ * declared one should not inherit this rule's opinion; a project opts in through `apq.json`.
  * `Info` rather than `Warning` for the reason `prefer-line-comment` and
  * `fold-adjacent-string-literals` are: the finding names a layout preference, never a defect, and
  * a rule that can report several hundred lines of standing prose must not flip a warning-gated

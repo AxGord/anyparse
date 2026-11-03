@@ -236,7 +236,7 @@ typedef PropertyClause = {
  * whose SUBTYPES it drives, and `nominated` proves the claim by walking that supertype closure, so
  * no `static` member is ever claimed - by the built-in contract or by a declared one.
  *
- * A project states these in `apqlint.json` (`frameworks`), because that is the only place the fact
+ * A project states these in `apq.json` (`frameworks`), because that is the only place the fact
  * lives: WHICH framework drives a tree is a property of the project, not of the language, and the
  * metadata that looks like it answers this does not. On a real Unity tree, files carrying a lifecycle
  * callback need not carry `@:nativeGen` at all — `@:nativeGen` answers EMISSION, never INVOCATION.
@@ -289,7 +289,7 @@ interface NamingSupport {
 	/**
 	 * Whether `decl` is reachable through a framework rather than an in-source reference: its
 	 * enclosing type transitively extends some contract's `root`, and that contract reaches its
-	 * name. `contracts` is the PROJECT's declared roster (`apqlint.json` `frameworks`); an
+	 * name. `contracts` is the PROJECT's declared roster (`apq.json` `frameworks`); an
 	 * implementation unions it with the frameworks its own language ships with and runs both
 	 * through one predicate, so a project that declares a framework can never get the carve-out
 	 * from one rule and not from its siblings.

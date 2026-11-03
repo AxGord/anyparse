@@ -31,7 +31,7 @@ class RedundantParensOperandArmsTestBase extends Test {
 		return configured('{"rules": {"redundant-parens": {"comparisonOperands": true}}}');
 	}
 
-	/** An explicit EMPTY project config — hermetic, unlike falling through to a discovered `apqlint.json`. */
+	/** An explicit EMPTY project config — hermetic, unlike falling through to a discovered `apq.json`. */
 	private inline function none(): (String) -> LintConfig {
 		return configured('{}');
 	}

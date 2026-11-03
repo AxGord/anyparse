@@ -112,13 +112,13 @@ final class CheckFixture {
 		return CanonicalEdit.applyEdits(source, edits(check, source, plugin));
 	}
 
-	/** `fixRun` over `source` as `C.hx` under the `apqlint.json` text `json` — the config every file of the run reads. */
+	/** `fixRun` over `source` as `C.hx` under the `apq.json` text `json` — the config every file of the run reads. */
 	public static function fixRunUnder(check: Check, source: String, json: String): FixRun {
 		final config: LintConfig = LintConfig.parse(json);
 		return fixRun(check, [{ file: 'C.hx', source: source }], null, null, _ -> config);
 	}
 
-	/** `fixedSource` under the `apqlint.json` text `json` (`fixRunUnder`). */
+	/** `fixedSource` under the `apq.json` text `json` (`fixRunUnder`). */
 	public static function fixedUnder(check: Check, source: String, json: String): String {
 		return CanonicalEdit.applyEdits(source, fixRunUnder(check, source, json).edits);
 	}

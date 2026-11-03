@@ -11,7 +11,7 @@ any command are its `--help`; the CLI contract (exit codes, pattern and selector
 - [File creation and formatting](formatting.md) — `new`, `fmt`, and the guards every rewrite passes
   ([`hxformat.json` values](../haxe-format-config.md))
 - [Lint](lint.md) — running the checks, `--fix`, suppression, report formats
-- [Lint configuration](lint-config.md) — every `apqlint.json` key
+- [Lint configuration](lint-config.md) — every `apq.json` key
 - Lint rules — the [index by category](../lint-rules.md) (generated from the registry), and each rule's prose:
   [`imports`](lint/imports.md) · [`docs`](lint/docs.md) · [`naming`](lint/naming.md) ·
   [`nullsafety`](lint/nullsafety.md) · [`types`](lint/types.md) · [`members`](lint/members.md) ·

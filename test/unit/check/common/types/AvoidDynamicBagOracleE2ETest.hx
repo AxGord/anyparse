@@ -43,7 +43,7 @@ class AvoidDynamicBagOracleE2ETest extends Test {
 		final dir: String = CliFixture.writeDir('bage2e', [
 			{ name: 'Main.hx', source: POSITIVE },
 			{ name: 'check.hxml', source: POSITIVE_HXML },
-			{ name: 'apqlint.json', source: APQLINT }
+			{ name: 'apq.json', source: APQLINT }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'avoid-dynamic', '$dir/Main.hx']);
 		final onDisk: String = File.getContent('$dir/Main.hx');
@@ -65,7 +65,7 @@ class AvoidDynamicBagOracleE2ETest extends Test {
 		final dir: String = CliFixture.writeDir('bage2e', [
 			{ name: 'Form.hx', source: FORM },
 			{ name: 'check.hxml', source: FORM_HXML },
-			{ name: 'apqlint.json', source: APQLINT }
+			{ name: 'apq.json', source: APQLINT }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'avoid-dynamic', '$dir/Form.hx']);
 		final onDisk: String = File.getContent('$dir/Form.hx');

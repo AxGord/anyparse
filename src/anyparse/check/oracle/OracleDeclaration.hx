@@ -7,7 +7,7 @@ import haxe.Exception;
 import haxe.io.Path;
 
 /**
- * The `apqlint.json` `compilerOracle` key's reader: one JSON value → the configurations it
+ * The `apq.json` `compilerOracle` key's reader: one JSON value → the configurations it
  * declares, every path resolved and every compile directory probed.
  *
  * Its own module rather than more of `LintConfig` because the two do different kinds of work: that

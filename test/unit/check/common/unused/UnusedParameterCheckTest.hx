@@ -312,7 +312,7 @@ class UnusedParameterCheckTest extends Test {
 		return CheckFixture.violations(new UnusedParameter(), src);
 	}
 
-	/** Apply the check's own fix edits to `src`; `renameSilence` opts the `Info` silence-rename in, as an `apqlint.json` would. */
+	/** Apply the check's own fix edits to `src`; `renameSilence` opts the `Info` silence-rename in, as an `apq.json` would. */
 	private function applyFix(src: String, renameSilence: Bool = false): String {
 		final check: UnusedParameter = new UnusedParameter();
 		if (renameSilence) check.setConfigResolver(_ -> LintConfig.parse('{"rules": {"unused-parameter": {"renameSilence": true}}}'));

@@ -31,7 +31,7 @@ typedef MoveDeclarationData = {
 }
 
 /**
- * The `move` section of a project config (`apqlint.json`) — the declaration that tells a module relocation which other
+ * The `move` section of a project config (`apq.json`) — the declaration that tells a module relocation which other
  * files spell module paths and how. STRICT, unlike the lint keys: a relocation that silently lost a registry would rewrite
  * the code and leave the registry naming modules that no longer exist, so any malformed entry refuses the whole section.
  */

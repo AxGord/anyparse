@@ -15,7 +15,7 @@ import sys.io.File;
  * first occurrence. The occurrence threshold and its boundary, the length boundary,
  * the by-construction empty / single-char exemption, the interpolation
  * exclusion (in both directions), the metadata-argument exclusion, quote-style-
- * agnostic grouping, and the `apqlint.json` overrides are all pinned. So is the
+ * agnostic grouping, and the `apq.json` overrides are all pinned. So is the
  * DATA-TABLE criterion, in the shape a lowered threshold could not have expressed: a collection
  * literal of only literals is a table at ANY arity and in the map spelling too, while one mixing an
  * identifier with its literals stays logic.
@@ -111,7 +111,7 @@ class StringLiteralDupCheckTest extends Test {
 	}
 
 	public function testConfigOverrideMinOccurrences(): Void {
-		// An apqlint.json lowering minOccurrences to 2 flags a two-occurrence group.
+		// An apq.json lowering minOccurrences to 2 flags a two-occurrence group.
 		Assert.equals(
 			1,
 			findingsWithConfig('sld_occ', '{"rules":{"string-literal-dup":{"minOccurrences":2}}}', body('trace("hello"); trace("hello");'))
@@ -119,7 +119,7 @@ class StringLiteralDupCheckTest extends Test {
 	}
 
 	public function testConfigOverrideMinLength(): Void {
-		// An apqlint.json lowering minLength to 3 flags a three-char literal the default exempts.
+		// An apq.json lowering minLength to 3 flags a three-char literal the default exempts.
 		Assert.equals(
 			1,
 			findingsWithConfig(
@@ -322,7 +322,7 @@ class StringLiteralDupCheckTest extends Test {
 	/** Write `configJson` + `fixture` to a fresh temp dir, run the check with on-disk config discovery, return the finding count. */
 	private function findingsWithConfig(tag: String, configJson: String, fixture: String): Int {
 		final dir: String = tmpDir(tag);
-		File.saveContent('$dir/apqlint.json', configJson);
+		File.saveContent('$dir/apq.json', configJson);
 		final path: String = '$dir/Foo.hx';
 		File.saveContent(path, fixture);
 		final count: Int = CheckFixture.violationsIn(new StringLiteralDup(), [{ file: path, source: fixture }]).length;
@@ -340,7 +340,7 @@ class StringLiteralDupCheckTest extends Test {
 
 	private function cleanup(dir: String, path: String): Void {
 		FileSystem.deleteFile(path);
-		FileSystem.deleteFile('$dir/apqlint.json');
+		FileSystem.deleteFile('$dir/apq.json');
 		FileSystem.deleteDirectory(dir);
 	}
 

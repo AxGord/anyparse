@@ -57,7 +57,7 @@ import anyparse.check.scan.RenameClaims;
  * own name and stays reported — only the autofix keeps away from it.
  *
  * A THIRD suppression is the PROJECT's rather than the grammar's: a member a framework reaches BY
- * NAME — its enclosing type extends a root declared in `apqlint.json` (`frameworks`), and that
+ * NAME — its enclosing type extends a root declared in `apq.json` (`frameworks`), and that
  * contract names it — carries the framework's spelling, not a name the project chose, so `run`
  * drops the finding too.
  */

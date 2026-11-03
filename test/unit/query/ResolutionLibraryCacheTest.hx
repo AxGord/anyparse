@@ -65,7 +65,7 @@ class ResolutionLibraryCacheTest extends Test {
 		final lib: String = CliFixture.writeDir('resservelib', [{ name: 'ServeBase.hx', source: SERVE_BASE }]);
 		final proj: String = CliFixture.writeDir('resserveproj', [
 			{ name: 'ServeDerived.hx', source: SERVE_DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 		final args: Array<String> = ['lint', '--rule', 'redundant-this', '--fail-on', 'info', '$proj/ServeDerived.hx'];
 
@@ -113,7 +113,7 @@ class ResolutionLibraryCacheTest extends Test {
 		final lib: String = CliFixture.writeDir('rescachelib', [{ name: 'Base.hx', source: BASE }]);
 		final proj: String = CliFixture.writeDir('rescacheproj', [
 			{ name: 'Derived.hx', source: DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 		final args: Array<String> = ['lint', '--rule', 'redundant-this', '--fail-on', 'info', '$proj/Derived.hx'];
 
@@ -143,7 +143,7 @@ class ResolutionLibraryCacheTest extends Test {
 		final lib: String = CliFixture.writeDir('resgrowlib', [{ name: 'Base.hx', source: BASE }]);
 		final proj: String = CliFixture.writeDir('resgrowproj', [
 			{ name: 'Derived.hx', source: DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 		Assert.equals(0, Cli.run(['lint', '--rule', 'redundant-this', '$proj/Derived.hx']), 'the warming report run succeeds');
 		final parsesWarm: Int = SharedParseTier.libraryParses;
@@ -170,7 +170,7 @@ class ResolutionLibraryCacheTest extends Test {
 		final lib: String = CliFixture.writeDir('resstalelib', [{ name: 'Base.hx', source: BASE }]);
 		final proj: String = CliFixture.writeDir('resstaleproj', [
 			{ name: 'Derived.hx', source: DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 		final args: Array<String> = ['lint', '--rule', 'redundant-this', '--fail-on', 'info', '$proj/Derived.hx'];
 		Assert.equals(1, Cli.run(args), 'the base declaring foo makes this.foo() a finding');
@@ -202,11 +202,11 @@ class ResolutionLibraryCacheTest extends Test {
 		]);
 		final projA: String = CliFixture.writeDir('resisoproja', [
 			{ name: 'Derived.hx', source: DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$libWithBase"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$libWithBase"]}' }
 		]);
 		final projB: String = CliFixture.writeDir('resisoprojb', [
 			{ name: 'Derived.hx', source: DERIVED },
-			{ name: 'apqlint.json', source: '{"resolutionRoots":["$libWithoutBase"]}' }
+			{ name: 'apq.json', source: '{"resolutionRoots":["$libWithoutBase"]}' }
 		]);
 
 		Assert.equals(

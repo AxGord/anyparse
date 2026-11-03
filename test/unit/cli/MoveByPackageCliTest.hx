@@ -61,9 +61,7 @@ class MoveByPackageCliTest extends Test {
 		FileSystem.createDirectory('$dir/reg');
 		File.saveContent('$dir/src/a/X.hx', 'package a;\n\nclass X {}\n');
 		final flag: String = byPackage ? ', "byPackage": true' : '';
-		File.saveContent(
-			'$dir/apqlint.json', '{"move": {"scope": ["src"], "registries": [{"file": "reg", "keys": ["arms.type"]$flag}]}}\n'
-		);
+		File.saveContent('$dir/apq.json', '{"move": {"scope": ["src"], "registries": [{"file": "reg", "keys": ["arms.type"]$flag}]}}\n');
 		File.saveContent('$dir/reg/a.json', '{\n\t"arms": [\n\t\t{\n\t\t\t"name": "M-X",\n\t\t\t"type": "a.X"\n\t\t}\n\t]\n}\n');
 		return dir;
 	}

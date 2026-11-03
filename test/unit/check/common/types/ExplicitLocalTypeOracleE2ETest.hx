@@ -143,7 +143,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		final dir: String = CliFixture.writeDir('eltquoted', [
 			{ name: 'Main.hx', source: QUOTED },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		]);
 		final packed: String = fixedPacked('$dir/Main.hx', '$dir/Main.hx');
 		Assert.isTrue(packed.indexOf('varcomp:Array<Int>') != -1, 'the RUNTIME local is annotated, so the oracle path did run');
@@ -164,7 +164,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		final dir: String = CliFixture.writeDir('eltoracle', [
 			{ name: 'Main.hx', source: SRC },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		]);
 		final packed: String = fixedPacked('$dir/Main.hx', '$dir/Main.hx');
 		Assert.isTrue(packed.indexOf('varmapped:Array<Int>') != -1, 'disk carries the oracle-annotated .map() local');
@@ -187,7 +187,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 			{ name: 'Box.hx', source: BOX },
 			{ name: 'Main.hx', source: BOXMAIN },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		]);
 		final packed: String = fixedPacked(dir, '$dir/Box.hx');
 		Assert.isTrue(packed.indexOf('varheld:Array<T>') != -1, 'the CLASS type parameter is annotated bare');

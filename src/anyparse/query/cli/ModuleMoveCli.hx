@@ -38,7 +38,7 @@ private typedef WrittenState = {
 /**
  * `apq move <file>... --to <dir> [<file>... --to <dir>]... [--scope <dir>]... [--write] [--verify] [--no-mirror]` — the
  * module form of `move`: whole modules relocated to another package by `ModuleMove`, with the project's declared texts,
- * registries, sorted lists and test mirrors read from the `move` section of its `apqlint.json` (`MoveDeclaration`).
+ * registries, sorted lists and test mirrors read from the `move` section of its `apq.json` (`MoveDeclaration`).
  *
  * The write is all or nothing: every changed file is staged and committed together, the relocated originals deleted after.
  * A move creates and deletes files, so the typecheck after the write and the put-back of every file when it breaks a build run for
@@ -126,9 +126,9 @@ final class ModuleMoveCli {
 		return new CliFlags(['--no-mirror', '--verify', '--write'], ['--scope', '--to']);
 	}
 
-	/** The move declaration of the nearest `apqlint.json` above `file` that carries one, or an empty one. */
+	/** The move declaration of the nearest `apq.json` above `file` that carries one, or an empty one. */
 	private static function declarationFor(file: String): Either<String, MoveDeclarationData> {
-		final chain: ConfigChain = ConfigFinder.findUpAll(file, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS);
+		final chain: ConfigChain = ConfigFinder.findUpProject(file, ConfigFinder.PROJECT_ROOT_MARKERS);
 		for (doc in chain.documents) switch MoveDeclaration.read(doc.content, Path.directory(doc.path)) {
 			case Left(message):
 				return Left('${doc.path}: "move" section: $message');
@@ -185,7 +185,7 @@ final class ModuleMoveCli {
 	): Int {
 		if (!opts.write) return preview(outcome);
 		if (opts.verify && LintConfig.discover(outcome.moves[0].from).compilerOracles().length == 0) {
-			CliIo.stderr('apq move: --verify needs a "compilerOracle" in apqlint.json — nothing written\n');
+			CliIo.stderr('apq move: --verify needs a "compilerOracle" in apq.json — nothing written\n');
 			return EXIT_RUNTIME;
 		}
 		final originalOf: Map<String, String> = [for (e in scopeFiles) e.file => e.source];

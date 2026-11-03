@@ -32,20 +32,28 @@ using Lambda;
 final class NamingCrossRenameTest extends Test {
 
 	/** A module whose sub-type `JSON_POINT` is a typedef, read through its qualified path elsewhere. */
-	private static final TYPES: String = 'package pkg;\n\nclass T {\n\tpublic static function make():JSON_POINT {\n\t\treturn {x: 1, y: 2};\n\t}\n}\n\n'
-		+ 'typedef JSON_POINT = {\n\tx:Float,\n\ty:Float\n}\n';
+	private static final TYPES: String = 'package pkg;\n\nclass T {\n\tpublic static function make():JSON_POINT {\n'
+		+ '\t\treturn {x: 1, y: 2};\n\t}\n}\n\ntypedef JSON_POINT = {\n\tx:Float,\n\ty:Float\n}\n';
 
 	/** A reader naming the typedef through its module. */
 	private static final USER: String =
 		'package pkg;\n\nclass U {\n\tpublic static function sum(p:T.JSON_POINT):Float {\n\t\treturn p.x + p.y;\n\t}\n}\n';
 
 	/** An enum abstract with an explicitly-valued value, one over `Int` with an implicit one, one over `String` with an implicit one. */
-	private static final ENUMS: String = 'package pkg;\n\nclass E {}\n\nenum abstract MY_ACTIONS(String) to String {\n\tfinal goals = \'g\';\n}\n\n'
-		+ 'enum abstract Levels(Int) {\n\tvar Low;\n\tvar high;\n}\n\nenum abstract Mode(String) {\n\tvar fast;\n}\n';
+	private static final ENUMS: String = 'package pkg;\n\nclass E {}\n\nenum abstract MY_ACTIONS(String) to String {\n'
+		+ '\tfinal goals = \'g\';\n}\n\nenum abstract Levels(Int) {\n\tvar Low;\n\tvar high;\n}\n\n'
+		+ 'enum abstract Mode(String) {\n\tvar fast;\n}\n';
 
 	/** A reader of the enum abstracts. */
 	private static final ENUM_USER: String = 'package pkg;\n\nclass F {\n\tpublic static function f():String {\n'
 		+ '\t\treturn MY_ACTIONS.goals + Levels.high + Mode.fast;\n\t}\n}\n';
+
+	/** The oracle project's module: two typedefs, the second an alias of a class that `Main` reads as a bare VALUE. */
+	private static final ORACLE_TYPES: String =
+		'package pkg;\n\nclass T {}\n\ntypedef JSON_POINT = {\n\tx:Int\n}\n\ntypedef JSON_RECT = T;\n';
+
+	/** The latest refusal `armSets` read off the arm's finding. */
+	private var _lastReason: String = '';
 
 	@:pin('control')
 	@:killer('M-XRENAME-NOT-CANDIDATE', 'M-XRENAME-FINDINGS-NONE', 'M-XRENAME-EDITS-DROPPED')
@@ -103,7 +111,7 @@ final class NamingCrossRenameTest extends Test {
 		}> = [
 			{
 				what: 'a class',
-				files: [{ file: 'pkg/T.hx', source: TYPES + 'class Helper_Box {}\n' }],
+				files: [{ file: 'pkg/T.hx', source: '${TYPES}class Helper_Box {}\n' }],
 				roots: [],
 				name: 'Helper_Box',
 				reason: NamingCrossRename.RUNTIME_TYPE
@@ -149,7 +157,7 @@ final class NamingCrossRenameTest extends Test {
 			},
 			{
 				what: 'a plain enum constructor',
-				files: [{ file: 'pkg/E.hx', source: ENUMS + 'enum Kind {\n\tsmall;\n}\n' }],
+				files: [{ file: 'pkg/E.hx', source: '${ENUMS}enum Kind {\n\tsmall;\n}\n' }],
 				roots: [],
 				name: 'small',
 				reason: NamingCrossRename.ENUM_CONSTRUCTOR
@@ -287,7 +295,10 @@ final class NamingCrossRenameTest extends Test {
 		Assert.equals(NamingCrossRename.NEW_NAME_TAKEN, _lastReason, 'a library type of the new name');
 	}
 
-	/** Metadata the compiler reads and no tool resolves by name does not refuse, and neither does an enum abstract's PROPERTY of the old name. */
+	/**
+	 * Metadata the compiler reads and no tool resolves by name does not
+	 * refuse, and neither does an enum abstract's PROPERTY of the old name.
+	 */
 	@:pin('control')
 	@:killer('M-XRENAME-SAFE-META', 'M-XRENAME-VALUE-PROPERTY', 'M-XRENAME-STRING-TYPES-ONLY')
 	public function testInertNeighboursDoNotRefuse(): Void {
@@ -425,8 +436,28 @@ final class NamingCrossRenameTest extends Test {
 		#end
 	}
 
-	/** The latest refusal `armSets` read off the arm's finding. */
-	private var _lastReason: String = '';
+	/**
+	 * A private member of a type whose SIMPLE name another package reuses: the namesake's subtypes are not
+	 * this type's, so the member stays confined and the single-file rename takes it (a
+	 * client sub-type beside a top-level type of the same simple name in another package).
+	 */
+	@:pin('control')
+	@:killer('M-CONFINED-NO-OWNER-FILE')
+	public function testANamesakesSubtypesDoNotUnconfineAPrivate(): Void {
+		final zoom: String = 'package pkg;\n\nclass Zoom {}\n\nprivate final class IconButton {\n\tprivate final icon:Int = 1;\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function f():Int {\n\t\treturn icon;\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Zoom.hx', source: zoom },
+			{ file: 'other/IconButton.hx', source: 'package other;\n\nclass IconButton {}\n' },
+			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub extends IconButton {}\n' }
+		];
+		final plugin: GrammarPlugin = new HaxeQueryPlugin();
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'pkg/Zoom.hx');
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(zoom, vs, plugin, CheckFixture.index(files, plugin));
+		Assert.stringContains('return _icon;', CanonicalEdit.applyEdits(zoom, edits));
+	}
 
 	/**
 	 * The arm's edit sets for the `name` finding `naming` reports in `report`'s FIRST file, with `roots` the project
@@ -454,11 +485,10 @@ final class NamingCrossRenameTest extends Test {
 		return CheckFixture.violationsIn(check, files, plugin).filter(v -> v.message.endsWith('\'$name\''));
 	}
 
-	private static function sourceOf(files: Array<{ file: String, source: String }>, file: String): String {
-		return files.find(f -> f.file == file)?.source ?? '';
-	}
-
-	/** A run host indexing the whole project: a declared scope, every root matched, `roots` its files outside `report`, `libs` a library. */
+	/**
+	 * A run host indexing the whole project: a declared scope, every
+	 * root matched, `roots` its files outside `report`, `libs` a library.
+	 */
 	private function scoped(
 		report: Array<{ file: String, source: String }>, roots: Array<{ file: String, source: String }>,
 		?libs: Array<{ file: String, source: String }>
@@ -477,15 +507,11 @@ final class NamingCrossRenameTest extends Test {
 		return plugin;
 	}
 
-	/** The oracle project's module: two typedefs, the second an alias of a class that `Main` reads as a bare VALUE. */
-	private static final ORACLE_TYPES: String =
-		'package pkg;\n\nclass T {}\n\ntypedef JSON_POINT = {\n\tx:Int\n}\n\ntypedef JSON_RECT = T;\n';
-
 	#if (sys || nodejs)
-	/** A project directory: `pkg/T.hx`, a `Main` the oracle compiles that reads both typedefs, and `config` as its `apqlint.json`. */
+	/** A project directory: `pkg/T.hx`, a `Main` the oracle compiles that reads both typedefs, and `config` as its `apq.json`. */
 	private function writeProject(config: String): String {
 		final dir: String = CliFixture.writeDir('xrename', [
-			{ name: 'apqlint.json', source: config },
+			{ name: 'apq.json', source: config },
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n' }
 		]);
 		sys.FileSystem.createDirectory('$dir/pkg');
@@ -509,27 +535,8 @@ final class NamingCrossRenameTest extends Test {
 	}
 	#end
 
-	/**
-	 * A private member of a type whose SIMPLE name another package reuses: the namesake's subtypes are not
-	 * this type's, so the member stays confined and the single-file rename takes it (a
-	 * client sub-type beside a top-level type of the same simple name in another package).
-	 */
-	@:pin('control')
-	@:killer('M-CONFINED-NO-OWNER-FILE')
-	public function testANamesakesSubtypesDoNotUnconfineAPrivate(): Void {
-		final zoom: String = 'package pkg;\n\nclass Zoom {}\n\nprivate final class IconButton {\n\tprivate final icon:Int = 1;\n\n'
-			+ '\tpublic function new() {}\n\n\tpublic function f():Int {\n\t\treturn icon;\n\t}\n}\n';
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/Zoom.hx', source: zoom },
-			{ file: 'other/IconButton.hx', source: 'package other;\n\nclass IconButton {}\n' },
-			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub extends IconButton {}\n' }
-		];
-		final plugin: GrammarPlugin = new HaxeQueryPlugin();
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'pkg/Zoom.hx');
-		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(zoom, vs, plugin, CheckFixture.index(files, plugin));
-		Assert.stringContains('return _icon;', CanonicalEdit.applyEdits(zoom, edits));
+	private static function sourceOf(files: Array<{ file: String, source: String }>, file: String): String {
+		return files.find(f -> f.file == file)?.source ?? '';
 	}
 
 }

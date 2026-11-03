@@ -188,7 +188,7 @@ class MisplacedTypeDocCheckTest extends Test {
 		Assert.notNull(Linter.byId('misplaced-type-doc'));
 	}
 
-	/** New rule, project convention: OFF unless an `apqlint.json` opts in. */
+	/** New rule, project convention: OFF unless an `apq.json` opts in. */
 	public function testDefaultOff(): Void {
 		Assert.isTrue(new MisplacedTypeDoc() is DefaultOff);
 	}

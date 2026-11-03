@@ -995,7 +995,7 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/**
-	 * The check's findings for `src`, with `config` (raw `apqlint.json` text) in effect when given and `libs` joined to
+	 * The check's findings for `src`, with `config` (raw `apq.json` text) in effect when given and `libs` joined to
 	 * the stub library.
 	 */
 	private function violations(src: String, ?config: String, ?libs: Array<{ file: String, source: String }>): Array<Violation> {
@@ -1019,7 +1019,7 @@ class ImportBlockOrderCheckTest extends Test {
 		return CanonicalEdit.applyEdits(src, edits(src, config, libs));
 	}
 
-	/** A check carrying `config` (raw `apqlint.json` text) as its per-file resolver, or the default one. */
+	/** A check carrying `config` (raw `apq.json` text) as its per-file resolver, or the default one. */
 	private function configured(config: Null<String>): ImportBlockOrder {
 		final check: ImportBlockOrder = new ImportBlockOrder();
 		if (config != null) {

@@ -23,7 +23,7 @@ final class RuleIndex {
 			+ 'regenerate this file instead of editing it. '
 		);
 		out.add(
-			'A rule\'s category is what an `apqlint.json` `"categories"` entry and `apq lint --category <id>` select it by ('
+			'A rule\'s category is what an `apq.json` `"categories"` entry and `apq lint --category <id>` select it by ('
 			+ '[cli-query-tool.md](cli-query-tool.md) § "`apq lint`"). '
 		);
 		out.add('Each rule id links to its prose in the [user guide](guide/README.md): what it flags, why, the fix, an example.\n\n');

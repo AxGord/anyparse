@@ -50,7 +50,7 @@ using StringTools;
  * Type bodies are the plugin's `RefShape.visibilityContainerKinds` — for Haxe the class-like declarations (class / abstract class
  * / abstract); an interface, enum, enum abstract or typedef is deliberately out of scope (a grammar-sized enum is a definition
  * table, not a decomposition candidate). A grammar that declares no containers or no member kinds makes the check a no-op. The
- * thresholds are the built-in defaults unless a discovered `apqlint.json`
+ * thresholds are the built-in defaults unless a discovered `apq.json`
  * configures `maxMembers` / `maxLines` on the `oversized-type` rule, or grants a type a CEILING of its own
  * (`readGrant`: silent within it, reported again past it).
  */
@@ -59,13 +59,13 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 
 	/**
 	 * The member count above which a type is flagged — generous enough that only
-	 * genuine god-types trip it; used unless an `apqlint.json` configures `maxMembers`.
+	 * genuine god-types trip it; used unless an `apq.json` configures `maxMembers`.
 	 */
 	private static inline final DEFAULT_MAX_MEMBERS: Int = 50;
 
 	/**
 	 * The line extent above which a type is flagged — generous enough that only
-	 * genuine god-files trip it; used unless an `apqlint.json` configures `maxLines`.
+	 * genuine god-files trip it; used unless an `apq.json` configures `maxLines`.
 	 */
 	private static inline final DEFAULT_MAX_LINES: Int = 2000;
 
@@ -110,7 +110,7 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	private static inline final NO_SEAM_TAIL: String =
 		' — a decomposition candidate; no member-reference seam — look for an architectural one (a command / handler / responsibility per module)';
 
-	/** Separator between a grant's HEAD (`<Name> <= <ceiling>`) and the reason it is granted, in an `apqlint.json` entry. */
+	/** Separator between a grant's HEAD (`<Name> <= <ceiling>`) and the reason it is granted, in an `apq.json` entry. */
 	private static inline final GRANT_SEP: String = ':';
 
 	/** The grant shape after its name, as every refusal spells it — the one shape `readGrant` accepts. */
@@ -122,7 +122,7 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	/** The fragment that opens a reported type's grant clause — the grant was not enough for its current size. */
 	private static inline final BEYOND_GRANT: String = ' — beyond its grant \'';
 
-	/** This rule's id — the key its `apqlint.json` options sit under, and the `rule` field of its findings. */
+	/** This rule's id — the key its `apq.json` options sit under, and the `rule` field of its findings. */
 	private static inline final RULE_ID: String = 'oversized-type';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
@@ -271,7 +271,7 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	}
 
 	/**
-	 * The grants this project declares in `apqlint.json`
+	 * The grants this project declares in `apq.json`
 	 * (`"oversized-type": { "grants": ["Renderer <= 71 members / 4150 lines: <reason>", …] }`),
 	 * each read by `readGrant`, and the refusals: one line per entry left out.
 	 *

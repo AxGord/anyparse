@@ -11,7 +11,7 @@ import haxe.io.Path;
 /**
  * The `compilerOracle` entries that say how to OBTAIN their hxml: each one's `generate` command is run to (re)create
  * the hxml before the configuration is used, so a project whose build tool writes the hxml (lime, a code generator)
- * declares the whole recipe in `apqlint.json` instead of a script every caller has to remember to run first.
+ * declares the whole recipe in `apq.json` instead of a script every caller has to remember to run first.
  *
  * ## When a command runs
  *
@@ -482,7 +482,7 @@ final class OracleGeneration {
 	/**
 	 * The directory holding `group`'s record, lock and epoch: `<project root>/.apq/oracle-generate/<md5>/`, keyed by the
 	 * TREE the generation writes — the real paths of its hxmls — and by nothing about the config or process asking. Every
-	 * config over that tree (a nested `apqlint.json` naming the same hxml included) therefore meets the same lock and the
+	 * config over that tree (a nested `apq.json` naming the same hxml included) therefore meets the same lock and the
 	 * same record, whatever its `TMPDIR` or engine version (a record's own `format` answers the version). The project root is
 	 * the nearest directory at or above the DECLARING config's directory holding a project marker (`ConfigFinder.projectRoot`),
 	 * else that directory itself: never a walk from the hxml, which could stop at a marker the generation writes into the tree

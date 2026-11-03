@@ -31,7 +31,7 @@ import anyparse.query.TypeSyntax;
  * ## Default OFF — opt-in
  *
  * The check is a `DefaultOff` marker: it is dropped from the default set and from a
- * bare `lint … --all` report unless a project opts in via `apqlint.json`
+ * bare `lint … --all` report unless a project opts in via `apq.json`
  * (`"rules": { "explicit-local-type": { "enabled": true } }`), or an explicit
  * `--rule explicit-local-type` selects it (which bypasses enablement). This keeps it
  * a per-project style preference, not a codebase-wide default.
@@ -405,7 +405,7 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 
 	/**
 	 * The `maxInferredTypeLength` cap (chars) for an anonymous-structure annotation,
-	 * read from the file's `apqlint.json` via the injected resolver (or discovered), or
+	 * read from the file's `apq.json` via the injected resolver (or discovered), or
 	 * `DEFAULT_MAX_ANON_LEN` when unset. Resolved off the first violation's file — the
 	 * oracle pass groups a `fixWithOracle` call per file.
 	 */

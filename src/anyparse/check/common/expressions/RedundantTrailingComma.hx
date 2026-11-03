@@ -48,7 +48,7 @@ import anyparse.query.SymbolIndex;
  * ## Default OFF - opt-in
  *
  * A `DefaultOff` marker: dropped from the default set and from a bare `lint ... --all`
- * report unless a project opts in via `apqlint.json`
+ * report unless a project opts in via `apq.json`
  * (`"rules": { "redundant-trailing-comma": { "enabled": true } }`), or an explicit
  * `--rule redundant-trailing-comma` selects it. Whether a list ends on a comma is a
  * project style decision, not a defect - the same call `shorten-type-ref` makes about

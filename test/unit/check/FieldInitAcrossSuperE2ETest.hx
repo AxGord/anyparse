@@ -381,7 +381,7 @@ class FieldInitAcrossSuperE2ETest extends Test {
 		final dir: String = CliFixture.writeTree(name, [
 			{ name: 'Main.hx', source: main },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: apqlint }
+			{ name: 'apq.json', source: apqlint }
 		]);
 		if (CompilerOracle.typecheck('check.hxml', dir).match(Confirmed)) return dir;
 		CliFixture.removeDir(dir);

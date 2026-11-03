@@ -14,7 +14,7 @@ import sys.io.File;
 
 /**
  * Whether a lint run holds every source of the project a `closedWorld` declaration closes — the half of "every caller
- * and every write is in the run" a declaration cannot promise, since the same `apqlint.json` governs `hxq lint src` and
+ * and every write is in the run" a declaration cannot promise, since the same `apq.json` governs `hxq lint src` and
  * `hxq lint src/core` alike.
  *
  * The project is the declaring document's: the `.hx` files under its `resolutionRoots` when it declares any (relative
@@ -38,7 +38,7 @@ final class ProjectCoverage {
 	private final _covered: Map<String, Bool> = [];
 
 	/**
-	 * Every `apqlint.json` this coverage read, parsed once: each run directory resolves its chain and then reads each
+	 * Every `apq.json` this coverage read, parsed once: each run directory resolves its chain and then reads each
 	 * document of it again for its own declarations, so a single-config project used
 	 * to parse its one document twice per directory. Only read here, never handed on.
 	 */

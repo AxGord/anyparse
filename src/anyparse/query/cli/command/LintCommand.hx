@@ -256,7 +256,7 @@ final class LintCommand implements CliCommand {
 			sourceOf[path] = fileSource;
 		}
 
-		// Per-file config: discover an apqlint.json by walking up from EACH linted
+		// Per-file config: discover an apq.json by walking up from EACH linted
 		// file's directory, memoised per directory so a large run walks the tree once
 		// per directory, not once per file. Mirrors the per-file hxformat.json the
 		// writer-emit ops discover; a single-config project resolves the same config
@@ -300,7 +300,7 @@ final class LintCommand implements CliCommand {
 		final unconfigured: Null<ResolutionScope> = resolutionThunk(
 			files, resolutionRoots, resolutionLibs, paths.foreach(p -> resolveConfig(p).resolutionStd())
 		);
-		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
+		// Compiler oracle (opt-in via apq.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
 		// whole run — every configuration it declares is typechecked as ground truth below, and a
 		// project with conditional compilation needs more than one. That stays; what it owes
@@ -656,7 +656,7 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * The three scope-level `apqlint.json` diagnostics, once per run, from the one place that can
+	 * The three scope-level `apq.json` diagnostics, once per run, from the one place that can
 	 * afford them and can tell whether the run consults each setting.
 	 *
 	 * All three ask their question of EVERY path where the answer they serve costs one resolve, and
@@ -733,7 +733,7 @@ final class LintCommand implements CliCommand {
 	 * tell a project-declared scope from one that exists only because a std was found.
 	 *
 	 * Null only when `roots` and `libNames` are BOTH empty AND no std joins: either `stdEnabled` is
-	 * false (an `apqlint.json` `"resolutionStd": false`) or `StdResolver.stdDir()` finds none (no Haxe
+	 * false (an `apq.json` `"resolutionStd": false`) or `StdResolver.stdDir()` finds none (no Haxe
 	 * on the machine, or `APQ_NO_STD` declining it). The short-circuit order matters: with either key
 	 * declared, `StdResolver.stdDir()` is never reached, so those projects stay byte-identical. A
 	 * project declaring NEITHER key pays one memoised `which haxe` probe (`StdResolver.stdDir` computes
@@ -1091,7 +1091,7 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('Inline suppression: a trailing "// noqa" (or "// noqa: <rule>,<rule>") clears\n');
 		CliIo.sysPrint('findings on its line; "// CHECKSTYLE:OFF" ... "// CHECKSTYLE:ON" clears a region.\n');
 		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Project config: an "apqlint.json" discovered by walking up from a linted file\n');
+		CliIo.sysPrint('Project config: an "apq.json" discovered by walking up from a linted file\n');
 		CliIo.sysPrint('enables/disables rules and overrides their severity or options, e.g.\n');
 		CliIo.sysPrint('{ "rules": { "naming": { "severity": "error" }, "complexity": { "max": 15 },\n');
 		CliIo.sysPrint('"fold-adjacent-string-literals": false } }. A rule entry is true / false or an\n');
@@ -1114,7 +1114,7 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('                    names). With --list-rules, list only that category\n');
 		CliIo.sysPrint('  --list-rules      List every registered check and exit. Given a scope, list\n');
 		CliIo.sysPrint('                    each rule as on/off for those files instead, one block per\n');
-		CliIo.sysPrint('                    distinct apqlint.json chain (config, default-off and\n');
+		CliIo.sysPrint('                    distinct apq.json chain (config, default-off and\n');
 		CliIo.sysPrint('                    languageVersion resolved); nothing is linted\n');
 		CliIo.sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
 		CliIo.sysPrint('  --fix-probes <n>  With --fix: the typechecks the safe-pass net may spend in one\n');
@@ -1141,7 +1141,7 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('  --full           Always list every finding (text format only)\n');
 		CliIo.sysPrint('  --summary        Always print the per-rule summary instead (text format only)\n');
 		CliIo.sysPrint('                   Without either, a text report listing more findings than the\n');
-		CliIo.sysPrint('                   apqlint.json reportSummaryThreshold (default 200; 0 = never)\n');
+		CliIo.sysPrint('                   apq.json reportSummaryThreshold (default 200; 0 = never)\n');
 		CliIo.sysPrint('                   prints the summary instead: one line per rule (count, severity,\n');
 		CliIo.sysPrint('                   files) sorted by count, each with its top 3 files — a single\n');
 		CliIo.sysPrint('                   rule gets its top 10 files one per line. --rule follows the\n');

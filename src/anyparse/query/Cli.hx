@@ -243,6 +243,10 @@ final class Cli {
 			// (the empty / `--help` argv returned above).
 			CliIo.stderr('apq ${args[0]}: ${failure.message}\n');
 			return EXIT_RUNTIME;
+		} catch (failure: ConfigConflict) {
+			// The project's own config files disagree: a fact about the tree, not a bug.
+			CliIo.stderr('apq ${args[0]}: ${failure.message}\n');
+			return EXIT_RUNTIME;
 		} catch (failure: UsageFailure) {
 			// A bad flag (missing value, unparseable `--limit`, unknown `--lang`) is a fact about
 			// the argv, not a bug — same shape as the WriteFailure catch above, EXIT_USAGE instead

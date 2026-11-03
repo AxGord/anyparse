@@ -61,7 +61,7 @@ final class LintFixSafeRevertContinuesTest extends Test {
 			{ name: 'Other.hx', source: OTHER },
 			{ name: 'geom/Point.hx', source: POINT },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: CONFIG }
+			{ name: 'apq.json', source: CONFIG }
 		]);
 		var code: Int = -1;
 		final err: String = CliFixture.captureStderr(() -> code = Cli.run([
@@ -116,7 +116,7 @@ final class LintFixSafeRevertContinuesTest extends Test {
 			{ name: 'Third.hx', source: THIRD },
 			{ name: 'geom/Point.hx', source: POINT },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: CONFIG }
+			{ name: 'apq.json', source: CONFIG }
 		]);
 		final main: String = File.getContent('$dir/Main.hx');
 		var code: Int = -1;

@@ -141,7 +141,7 @@ using StringTools;
  * ## Default OFF — opt-in
  *
  * A brand-new check ships `DefaultOff`: dropped from the default set and from a
- * bare `lint … --all` report until a project opts in via `apqlint.json`
+ * bare `lint … --all` report until a project opts in via `apq.json`
  * (`"rules": { "redundant-replace-loop": { "enabled": true } }`), or an explicit
  * `--rule redundant-replace-loop` selects it (which bypasses enablement).
  *
