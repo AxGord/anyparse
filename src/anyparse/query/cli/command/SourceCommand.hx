@@ -380,10 +380,11 @@ final class SourceCommand implements CliCommand {
 		final node: QueryNode = rows[k].entry.node;
 		final span: Null<Span> = node.span;
 		if (span == null) return '';
+		final windowFrom: Int = rows[k].window.from;
 		var from: Int = SourceText.lineStartOf(source, span.from);
 		// A member written on its type's line starts at the member, with its own annotations.
 		if (rows[k].onTypeLine) {
-			from = rows[k].window.from;
+			from = windowFrom;
 		} else {
 			// An annotation run that reaches this line from above (a multi-line argument) is part of
 			// the header, from the line it starts on; walked last to first, so an earlier annotation
@@ -400,6 +401,10 @@ final class SourceCommand implements CliCommand {
 				if (end <= span.from && end > from) from = end;
 			}
 		}
+		// A declaration's own text starts at its window: text before it on that line belongs to a
+		// neighbour, a doc comment (`/** d */ class K`) or a conditional opener (`#if x class K`), none of
+		// which is header. A type reference keeps the keyword written before it (`extends Q`), which no window holds.
+		if (windowFrom > from && !(shape.typeAnnotationKinds ?? []).contains(node.kind)) from = windowFrom;
 		// A doc block above the first member is trivia outside its window, so the type's header
 		// ends where that block begins.
 		final lead: Null<Int> = until == null ? null : SourceComments.leadingCommentBlockStart(source, comments, until);
@@ -422,6 +427,7 @@ final class SourceCommand implements CliCommand {
 		final rows: Array<OutlineRow> = [];
 		var headerLine: Int = 0;
 		var foldedTo: Int = -1;
+		var tailAnon: Null<QueryNode> = null;
 		for (i => entry in entries) {
 			final found: Null<Span> = windows[i] ?? entry.node.span;
 			if (found == null) continue;
@@ -437,12 +443,15 @@ final class SourceCommand implements CliCommand {
 				}
 				continue;
 			}
-			if (entry.depth == 0) headerLine = (nodeSpan ?? window).lineCol(source).line;
+			if (entry.depth == 0) {
+				headerLine = (nodeSpan ?? window).lineCol(source).line;
+				tailAnon = tailStructure(entry.node, window.to, source, shape);
+			}
 			final onTypeLine: Bool = entry.depth > 0 && bounds.from <= headerLine;
 			final hidden: Bool = onTypeLine && bounds.to <= headerLine;
-			// On the type's own line only a member bounds the headers; a supertype or a type
-			// parameter there is part of the type's header.
-			if (hidden && !(shape.memberDeclKinds ?? []).contains(entry.node.kind)) continue;
+			// On the type's own line only a member bounds the headers; a supertype, a type
+			// parameter or a type written in the header is part of the type's header.
+			if (hidden && !isTypeLineMember(entry, tailAnon, shape)) continue;
 			rows.push({
 				entry: entry,
 				index: i,
@@ -454,6 +463,63 @@ final class SourceCommand implements CliCommand {
 			});
 		}
 		return rows;
+	}
+
+	/**
+	 * The annotations and modifiers `--select` folds into `resolved`'s window, as outline entries
+	 * that precede it: the whole-file outline sees them as siblings and folds them into the
+	 * declaration's header, so a selection must meet them too or a run reaching the declaration's
+	 * line from above loses its first lines.
+	 */
+	private static function foldedBefore(resolved: ResolvedNode): Array<OutlineEntry> {
+		final span: Null<Span> = resolved.node.span;
+		final parent: Null<QueryNode> = TreePath.parentOf(resolved.tree, resolved.node);
+		if (span == null || parent == null) return [];
+		final walked: Array<OutlineEntry> = [];
+		final shape: RefShape = resolved.plugin.refShape();
+		for (sibling in parent.children) {
+			final siblingSpan: Null<Span> = sibling.span;
+			if (siblingSpan != null && siblingSpan.to > resolved.window.from && siblingSpan.from < span.from)
+				collectOutline(sibling, 0, shape, walked);
+		}
+		return walked.filter(entry -> {
+			final entrySpan: Null<Span> = entry.node.span;
+			entrySpan != null && entrySpan.from >= resolved.window.from && entrySpan.to <= span.from;
+		});
+	}
+
+	/**
+	 * The anonymous structure that ends `type`'s declaration, whose fields are the members of a
+	 * `typedef T = { … }`: a type declaration's direct child of the anonymous-structure kind with
+	 * nothing but a terminator after it. One written inside the header (`<T: { … }>`, an abstract's
+	 * underlying type) has more text after it, so it is a type and not a body.
+	 */
+	private static function tailStructure(type: QueryNode, end: Int, source: String, shape: RefShape): Null<QueryNode> {
+		final anonKind: Null<String> = shape.anonTypeKind;
+		if (anonKind == null || !(shape.typeDeclKinds ?? []).contains(type.kind)) return null;
+		var found: Null<QueryNode> = null;
+		for (child in type.children) {
+			final childSpan: Null<Span> = child.span;
+			if (
+				child.kind == anonKind
+				&& childSpan != null
+				&& childSpan.to <= end
+				&& source.substring(childSpan.to, end).trim().replace(';', '') == ''
+			)
+				found = child;
+		}
+		return found;
+	}
+
+	/**
+	 * True when a node written on its type's own line is a MEMBER of the type — a class member, an enum
+	 * constructor, a field of its trailing structure — and not part of the header (a supertype, a
+	 * type parameter or a type written there, whatever named nodes those hold).
+	 */
+	private static function isTypeLineMember(entry: OutlineEntry, tailAnon: Null<QueryNode>, shape: RefShape): Bool {
+		return (shape.memberDeclKinds ?? []).contains(entry.node.kind)
+			|| (shape.execution?.enumConstructorKinds ?? []).contains(entry.node.kind)
+			|| (entry.depth == 1 && tailAnon != null && tailAnon.children.contains(entry.node));
 	}
 
 	#if (sys || nodejs)
@@ -787,7 +853,8 @@ final class SourceCommand implements CliCommand {
 				failed = true;
 				continue;
 			}
-			final entries: Array<OutlineEntry> = [{ node: resolved.node, depth: 0 }];
+			final entries: Array<OutlineEntry> = foldedBefore(resolved);
+			entries.push({ node: resolved.node, depth: 0 });
 			if (namedAncestors(resolved.tree, resolved.node, 0) < MENU_NAMED_DEPTH) for (child in resolved.node.children)
 				collectOutline(child, 1, resolved.plugin.refShape(), entries);
 			sections.push({

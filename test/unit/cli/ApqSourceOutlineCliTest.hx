@@ -352,11 +352,250 @@ class ApqSourceOutlineCliTest extends Test {
 		#end
 	}
 
+	/** A selected type prints the rows the whole-file outline prints for it: a multi-line annotation run stays whole in the header. */
+	public function testSelectedTypeKeepsAMultiLineAnnotationRun(): Void {
+		#if (sys || nodejs)
+		final source: String = '@:keep @:build(Foo.bar({\n\tx: 1\n})) class K {\n\tvar a: Int;\n}\n';
+		#if nodejs
+		Assert.stringContains('ClassDecl:K  @:keep @:build(Foo.bar({ x: 1 })) class K\n', selectOutlineOf(source, 'ClassDecl:K'));
+		Assert.equals(outlineOf(source), selectOutlineOf(source, 'ClassDecl:K'));
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/**
+	 * Constructors written on the enum's own line are no part of its
+	 * header, whole file or selected, and a selected one prints its own row.
+	 */
+	public function testEnumConstructorsOnTheEnumsLineAreNotInItsHeader(): Void {
+		#if (sys || nodejs)
+		final source: String = '@:keep enum F { A; B;\n\tC(x: Int);\n}\n';
+		#if nodejs
+		final whole: String = outlineOf(source);
+		Assert.stringContains('EnumDecl:F  @:keep enum F\n', whole);
+		Assert.stringContains('ParamCtor:C  C(x: Int)\n', whole);
+		Assert.equals(whole, selectOutlineOf(source, 'EnumDecl:F'));
+		Assert.equals('1-1  SimpleCtor:B  B\n', selectOutlineOf(source, 'SimpleCtor:B'));
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/**
+	 * Fields written on the typedef's own line are no part of its header,
+	 * whole file or selected, and a selected one prints its own row.
+	 */
+	public function testTypedefFieldsOnTheTypedefsLineAreNotInItsHeader(): Void {
+		#if (sys || nodejs)
+		final source: String = '@:keep typedef U = { var a: Int;\n\tvar b: Int;\n}\n';
+		#if nodejs
+		final whole: String = outlineOf(source);
+		Assert.stringContains('TypedefDecl:U  @:keep typedef U =\n', whole);
+		Assert.stringContains('VarField:b  var b: Int\n', whole);
+		Assert.equals(whole, selectOutlineOf(source, 'TypedefDecl:U'));
+		Assert.equals('1-1  VarField:a  var a: Int\n', selectOutlineOf(source, 'VarField:a'));
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** A member after a supertype line starts its header at the member, whole file or selected. */
+	public function testAMemberAfterASupertypeLineStartsItsHeaderAtTheMember(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class P\n\textends Q { function g(): Void {\n\t}\n\tvar z: Int; }\n';
+		#if nodejs
+		final whole: String = outlineOf(source);
+		Assert.stringContains('ClassDecl:P  class P\n', whole);
+		Assert.stringContains('Named:Q  extends Q\n', whole);
+		Assert.stringContains('FnMember:g  function g(): Void\n', whole);
+		Assert.equals(whole, selectOutlineOf(source, 'ClassDecl:P'));
+		Assert.equals('2-3  FnMember:g  function g(): Void\n', selectOutlineOf(source, 'FnMember:g'));
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** An annotation run under a conditional stays whole in the header of a selected type, as in the whole-file outline. */
+	public function testSelectedTypeKeepsAnAnnotationRunUnderAConditional(): Void {
+		#if (sys || nodejs)
+		final source: String = '#if foo @:a({\n\tx: 1\n}) #end class K {\n\tvar a: Int;\n}\n';
+		#if nodejs
+		final whole: String = outlineOf(source);
+		Assert.stringContains('ClassDecl:K  #if foo @:a({ x: 1 }) #end class K\n', whole);
+		Assert.equals(whole, selectOutlineOf(source, 'ClassDecl:K'));
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** An annotation run under a conditional stays whole in the header of a selected member. */
+	public function testSelectedMemberKeepsAnAnnotationRunUnderAConditional(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class K {\n\t#if foo @:a({\n\t\tx: 1\n\t}) #end function f(): Void {\n\t}\n}\n';
+		#if nodejs
+		Assert.stringContains('FnMember:f  #if foo @:a({ x: 1 }) #end function f(): Void\n', outlineOf(source));
+		Assert.equals('2-5  FnMember:f  #if foo @:a({ x: 1 }) #end function f(): Void\n', selectOutlineOf(source, 'FnMember:f'));
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** A selected type does not take the declaration before it on its line into its header, with or without an annotation run. */
+	public function testSelectedTypeDoesNotTakeItsNeighbourOnTheLine(): Void {
+		#if (sys || nodejs)
+		#if nodejs
+		Assert.stringContains(
+			'ClassDecl:K  @:b({ x: 1 }) class K\n',
+			selectOutlineOf('class A {} @:b({\n\tx: 1\n}) class K {\n\tvar a: Int;\n}\n', 'ClassDecl:K')
+		);
+		Assert.stringContains(
+			'ClassDecl:K  class K\n', selectOutlineOf('class A { var z: Int; } class K {\n\tvar a: Int;\n}\n', 'ClassDecl:K')
+		);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** A selected member does not take the member or the type before it on its line into its header, with or without an annotation run. */
+	public function testSelectedMemberDoesNotTakeItsNeighbourOnTheLine(): Void {
+		#if (sys || nodejs)
+		#if nodejs
+		Assert.equals(
+			'2-5  FnMember:f  @:a({ x: 1 }) function f(): Void\n',
+			selectOutlineOf('class K {\n\tvar z: Int; @:a({\n\t\tx: 1\n\t}) function f(): Void {\n\t}\n}\n', 'FnMember:f')
+		);
+		Assert.equals(
+			'1-1  FnMember:f  @:a({ x: 1 }) function f(): Void\n',
+			selectOutlineOf('class K { @:a({ x: 1 }) function f(): Void {} }\n', 'FnMember:f')
+		);
+		Assert.equals('1-2  FnMember:f  function f(): Void\n', selectOutlineOf('class K { function f(): Void {\n\t}\n}\n', 'FnMember:f'));
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/**
+	 * A type written in a type's header holds named nodes (a function type's parameters,
+	 * an anonymous structure's fields) that are no members: the header stays whole.
+	 */
+	public function testNamedNodesInsideTheHeaderTypesAreNotMembers(): Void {
+		#if (sys || nodejs)
+		final body: String = ' {\n\tvar x: Int;\n}\n';
+		final headers: Array<String> = [
+			'abstract A((a: Int, b: Int) -> Void)',
+			'abstract A({ var a: Int; })',
+			'abstract A(Int) from (a: Int) -> Void',
+			'class A<T: (a: Int) -> Void>',
+			'enum A<T: (a: Int) -> Void>',
+			'typedef A<T: { var a: Int; }> ='
+		];
+		#if nodejs
+		for (header in headers) {
+			final source: String = header.indexOf('enum') == 0 ? '$header {\n\tA;\n}\n' : '$header$body';
+			final text: String = outlineOf(source);
+			Assert.stringContains('  $header\n', text, source);
+		}
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** A doc comment before a declaration on its line is no part of the header. */
+	public function testADocCommentOnTheDeclarationsLineIsNotInTheHeader(): Void {
+		#if (sys || nodejs)
+		final out: String = outlineOf('/** doc */ class K {\n\t/** doc */ function f(): Void {\n\t}\n}\n');
+		#if nodejs
+		Assert.stringContains('ClassDecl:K  class K\n', out);
+		Assert.stringContains('FnMember:f  function f(): Void\n', out);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** A conditional-compilation opener before a declaration on its line is no part of the header. */
+	public function testAConditionalOpenerOnTheDeclarationsLineIsNotInTheHeader(): Void {
+		#if (sys || nodejs)
+		final out: String = outlineOf('#if foo class K {\n\t#if foo var a: Int; #end\n\tvar b: Int;\n}\n#end\n');
+		#if nodejs
+		Assert.stringContains('ClassDecl:K  class K\n', out);
+		Assert.stringContains('VarMember:a  var a: Int\n', out);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/** A data member's header starts at its key: the comma and the braces of its neighbour on the line are not part of it. */
+	public function testADataMemberHeaderStartsAtItsKey(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.writeAs('apq_source_outline_json', 'json', '{"a": 1, "b": {"c": 2,\n"d": 3}}\n');
+		var out: String = '';
+		CliFixture.captureStderr(() -> out = CliFixture.captureStdout(() -> Cli.run(['source', path, '--outline'])));
+		FileSystem.deleteFile(path);
+		#if nodejs
+		Assert.stringContains('Member:b  "b": {"c": 2,\n', out);
+		Assert.isFalse(out.indexOf(', "b"') >= 0, 'the neighbour\'s comma is no header text: $out');
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
+	/**
+	 * Only the typedef's trailing structure holds its members: the one after `Foo &`, one in a typedef
+	 * without a `;` that a declaration follows (a doc comment on that declaration runs the typedef's node span
+	 * on, so the end is read at its window), and not a constraint's structure.
+	 */
+	public function testOnlyTheTrailingStructureOfATypedefHoldsItsMembers(): Void {
+		#if (sys || nodejs)
+		#if nodejs
+		Assert.stringContains(
+			'TypedefDecl:H  typedef H = Foo &\n', outlineOf('typedef H = Foo & { var a: Int;\n\tvar b: Int;\n}\n'), 'an intersection'
+		);
+		Assert.stringContains(
+			'TypedefDecl:U  typedef U =\n', outlineOf('typedef U = { var a: Int;\n\tvar b: Int;\n}\nclass Y {\n\tvar d: Int;\n}\n'),
+			'no terminator, a declaration follows'
+		);
+		Assert.stringContains(
+			'TypedefDecl:H  typedef H = Foo &\n',
+			outlineOf('typedef H = Foo & { var a: Int;\n\tvar b: Int;\n}\n\n/** doc */ class D {\n\tvar d: Int;\n}\n'),
+			'a documented declaration follows'
+		);
+		Assert.stringContains(
+			'TypedefDecl:G  typedef G<T: { var a: Int; }> =\n',
+			outlineOf('typedef G<T: { var a: Int; }> = { var b: T;\n\tvar c: Int;\n}\n'), 'a constraint\'s structure holds no member'
+		);
+		#end
+		#else
+		Assert.pass('non-sys/nodejs target');
+		#end
+	}
+
 	/** The outline of `source` as the command prints it. */
 	private function outlineOf(source: String): String {
 		final path: String = CliFixture.writeAs('apq_source_outline_case', 'hx', source);
 		var out: String = '';
 		CliFixture.captureStderr(() -> out = CliFixture.captureStdout(() -> Cli.run(['source', path, '--outline'])));
+		FileSystem.deleteFile(path);
+		return out;
+	}
+
+	/** The outline of the node `selector` addresses in `source`, as the command prints it. */
+	private function selectOutlineOf(source: String, selector: String): String {
+		final path: String = CliFixture.writeAs('apq_source_outline_select', 'hx', source);
+		var out: String = '';
+		CliFixture.captureStderr(() -> out = CliFixture.captureStdout(() -> Cli.run(['source', path, '--select', selector, '--outline'])));
 		FileSystem.deleteFile(path);
 		return out;
 	}
