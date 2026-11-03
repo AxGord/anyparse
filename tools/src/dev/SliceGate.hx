@@ -117,6 +117,7 @@ final class SliceGate {
 	private function recordBaseline(): Int {
 		final title: String = 'slice-gate --baseline ${_gate.tree} @ ${GateTree.short(_gate.base)}';
 		final self: String = keepSelf();
+		_gate.retireBaseline();
 		if (!build()) return finish(title);
 		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS);
 		final digests: Array<FrozenTree> = [for (dir in _gate.options.frozen) { dir: dir, digest: GateTree.diffDigest(dir) }];
@@ -125,19 +126,25 @@ final class SliceGate {
 			_gate.summary.detail([for (d in digests) '${Path.withoutDirectory(d.dir)} ${GateTree.short(d.digest)}'].join(', '));
 			return Passed;
 		});
-		final lists: DynamicAccess<Int> = {};
-		for (name in LISTINGS) lists[name] = _readings['list-$name'] ?? 0;
-		final record: Baseline = {
-			base: _gate.base,
-			tests: _readings['tests'] ?? 0,
-			assertions: _readings['assertions'] ?? 0,
-			lists: lists,
-			sweep: forkSet() ? _gate.log('sweep-base.json') : null,
-			lint: _gate.log('lint-base.json'),
-			infra: _gate.infraSnapshots(),
-			frozen: digests
-		};
-		File.saveContent(_gate.log('baseline.json'), Json.stringify(record, null, '\t'));
+		gate('baseline', () -> {
+			final unfit: Array<String> = _gate.summary.unfit();
+			if (unfit.length > 0)
+				return Failed(GateTree.clip('not recorded: ${unfit.join(', ')} did not pass, so no gate may compare with this run'));
+			final lists: DynamicAccess<Int> = {};
+			for (name in LISTINGS) lists[name] = _readings['list-$name'] ?? 0;
+			final record: Baseline = {
+				base: _gate.base,
+				tests: _readings['tests'] ?? 0,
+				assertions: _readings['assertions'] ?? 0,
+				lists: lists,
+				sweep: forkSet() ? _gate.log(GateTree.SWEEP_BASE) : null,
+				lint: _gate.log('lint-base.json'),
+				infra: _gate.infraSnapshots(),
+				frozen: digests
+			};
+			File.saveContent(_gate.log(GateTree.BASELINE_FILE), Json.stringify(record, null, '\t'));
+			return Passed;
+		});
 		return finish(title);
 	}
 
@@ -314,6 +321,7 @@ final class SliceGate {
 	 * counts beside the baseline's — or, when `recording`, kept for the baseline.
 	 */
 	private function suiteOutcome(recording: Bool): Outcome {
+		_gate.clearSnapshot();
 		final lines: Array<String> = [];
 		var totals: Null<Tally> = null;
 		final shards: Int = _gate.options.threads ?? Shard.DEFAULT_SHARDS;
@@ -383,7 +391,9 @@ final class SliceGate {
 	/** The corpus row of `--baseline`: the sweep the suite just wrote, saved for the gate to compare with. */
 	private function corpusSaved(): Outcome {
 		if (!forkSet()) return Skipped('ANYPARSE_HXFORMAT_FORK unset — the suite ran no corpus');
-		final saved: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --save ${_gate.log('sweep-base.json')}'));
+		final problem: Null<String> = _gate.corpusProblem();
+		if (problem != null) return Failed(problem);
+		final saved: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --save ${_gate.log(GateTree.SWEEP_BASE)}'));
 		_gate.summary.detail(saved.lines()[0] ?? '');
 		return saved.ok ? Passed : Failed(GateTree.quote(saved));
 	}
@@ -394,6 +404,9 @@ final class SliceGate {
 		if (baseline == null) return NotRun(GateTree.NO_BASELINE);
 		final sweep: Null<String> = baseline.sweep;
 		if (sweep == null || !forkSet()) return NotRun('no corpus: ANYPARSE_HXFORMAT_FORK unset at the baseline or now');
+		final problem: Null<String> = _gate.corpusProblem();
+		if (problem != null) return Failed(problem);
+		if (!FileSystem.exists(sweep)) return NotRun('the baseline snapshot $sweep is gone — take the baseline again');
 		final diff: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --diff $sweep'));
 		if (!diff.ok) {
 			_gate.summary.excerpt(Excerpt.errors(diff.out + diff.err));
@@ -645,7 +658,7 @@ final class SliceGate {
 
 	/** Whether the corpus harness runs: the fork it reads is named. */
 	private static inline function forkSet(): Bool {
-		return (Sys.getEnv('ANYPARSE_HXFORMAT_FORK') ?? '') != '';
+		return (Sys.getEnv(GateTree.FORK_VAR) ?? '') != '';
 	}
 
 }

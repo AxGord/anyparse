@@ -78,12 +78,12 @@ final class Summary {
 
 	/** Whether every step passed or was skipped. */
 	public function passed(): Bool {
-		for (step in _steps) switch step.outcome {
-			case Passed, Skipped(_):
-			case Failed(_), NotRun(_):
-				return false;
-		}
-		return true;
+		return unfit().length == 0;
+	}
+
+	/** The names of the steps that failed or could not run, in run order. */
+	public function unfit(): Array<String> {
+		return [for (step in _steps) if (!step.outcome.match(Passed | Skipped(_))) step.name];
 	}
 
 	/** One aligned row per step: name, outcome, seconds, and the reason when there is one. */

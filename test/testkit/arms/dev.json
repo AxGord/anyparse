@@ -494,6 +494,70 @@
 			"find": "return try GateArms.plan(_gate) catch (_: Exception) null;",
 			"replace": "return GateArms.plan(_gate);",
 			"note": "a plan that cannot be made ends the gate after every other row has run, instead of failing the arms row"
+		},
+		{
+			"name": "M-GATE-BASELINE-RECORDED-AFTER-FAILURE",
+			"type": "dev.SliceGate",
+			"method": "recordBaseline",
+			"find": "if (unfit.length > 0)",
+			"replace": "if (false)",
+			"note": "a baseline taken with a failed row is written and the gate compares with it as if it were whole"
+		},
+		{
+			"name": "M-GATE-BASELINE-NOT-RETIRED",
+			"type": "dev.GateTree",
+			"method": "retireBaseline",
+			"find": "for (name in [BASELINE_FILE, SWEEP_BASE]) {",
+			"replace": "for (name in ([]: Array<String>)) {",
+			"note": "a baseline run that fails leaves the previous baseline and its corpus snapshot in place, and the gate compares with the older base"
+		},
+		{
+			"name": "M-GATE-CORPUS-FORK-NOT-CHECKED",
+			"type": "dev.GateTree",
+			"method": "corpusProblem",
+			"find": "final fork: String = Sys.getEnv(FORK_VAR) ?? '';",
+			"replace": "final fork: String = '';",
+			"note": "a corpus fork that names no directory is not named as the cause of the missing snapshot"
+		},
+		{
+			"name": "M-GATE-CORPUS-SNAPSHOT-NOT-CHECKED",
+			"type": "dev.GateTree",
+			"method": "corpusProblem",
+			"find": "return FileSystem.exists(Path.join([tree, SWEEP_SNAPSHOT]))",
+			"replace": "return (true || FileSystem.exists(Path.join([tree, SWEEP_SNAPSHOT])))",
+			"note": "the corpus row goes on to save or compare a snapshot the suite never wrote"
+		},
+		{
+			"name": "M-GATE-CORPUS-BASELINE-SNAPSHOT-GONE",
+			"type": "dev.SliceGate",
+			"method": "corpusOutcome",
+			"find": "if (!FileSystem.exists(sweep)) return NotRun(",
+			"replace": "if (false) return NotRun(",
+			"note": "a baseline whose corpus snapshot file is gone is not named as such"
+		},
+		{
+			"name": "M-GATE-STALE-SNAPSHOT-KEPT",
+			"type": "dev.SliceGate",
+			"method": "suiteOutcome",
+			"find": "_gate.clearSnapshot();",
+			"replace": "",
+			"note": "a snapshot an earlier run left in the tree stands for the suite that just ran"
+		},
+		{
+			"name": "M-ARM-DELETES-CALLER-FORK",
+			"type": "dev.MutationArm",
+			"method": "execute",
+			"find": "var status: Int = 0;",
+			"replace": "js.Syntax.code('delete process.env.ANYPARSE_HXFORMAT_FORK'); var status: Int = 0;",
+			"note": "a full run in the caller's process unsets the corpus fork for every later suite of that runner, which then writes no sweep snapshot"
+		},
+		{
+			"name": "M-CHECK-SLOT-KEEPS-FORK",
+			"type": "dev.MutationCheck",
+			"method": "slotCommand",
+			"find": ".env(GateTree.FORK_VAR, '')",
+			"replace": "",
+			"note": "the slot processes of a mutation run inherit the caller's corpus fork, so an arm verdict depends on the shell it was started from"
 		}
 	]
 }

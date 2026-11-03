@@ -1,8 +1,11 @@
 package unit.dev;
 
+import dev.GateTree;
 import dev.MutationCheck;
+import devkit.Result;
 import devkit.TempDir;
 import sys.io.File;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -100,6 +103,27 @@ final class MutationCheckTest extends Test {
 	public function testAJobsAskThatIsNoPositiveIntegerIsRefusedWhateverTheLease(): Void {
 		for (asked in ['0', '00', '-1', 'two']) for (held in [null, 4])
 			Assert.same(Unusable('--jobs must be a positive integer, got \'$asked\''), MutationCheck.jobsFor(asked, held, 16, 1e12));
+	}
+
+	/**
+	 * The slot processes of a mutation run see no corpus fork, whatever the caller's shell holds, and the caller keeps its own
+	 * value: a verdict does not depend on the shell it was started from.
+	 */
+	@:pin('control')
+	@:killer('M-CHECK-SLOT-KEEPS-FORK')
+	public function testASlotProcessSeesNoCorpusForkAndTheCallerKeepsIt(): Void {
+		TempDir.with(dir -> {
+			final script: String = dir.file('slot.js');
+			File.saveContent(script, 'process.stdout.write("[" + (process.env.${GateTree.FORK_VAR} ?? "unset") + "]");');
+			final fork: String = GateTree.FORK_VAR;
+			final before: String = Sys.getEnv(fork) ?? '';
+			CliFixture.always(() -> Sys.putEnv(fork, before), () -> {
+				Sys.putEnv(fork, '/a/fork');
+				final seen: Result = MutationCheck.slotCommand(script, 1, dir.file('work')).run();
+				Assert.isTrue(seen.out == '[]' || seen.out == '[unset]', 'the slot saw ${seen.out}');
+				Assert.equals('/a/fork', Sys.getEnv(fork));
+			});
+		});
 	}
 
 	private static function parsed(text: String): Array<TrackRow> {

@@ -3,6 +3,7 @@ package dev;
 import anyparse.core.PoolLease;
 import devkit.Args;
 import devkit.Cmd.cmd;
+import devkit.Command;
 import devkit.FixtureCache;
 import devkit.Pool;
 import devkit.Result;
@@ -212,6 +213,15 @@ final class MutationCheck {
 		return 'timing:$builds suite runs $runs (mean ${runs == 0 ? 0 : Math.round(runSeconds / runs)}s)$killerNote';
 	}
 
+	/**
+	 * The process that runs slot `slot` of the run in `workroot`, by the script `devJs`: the corpus fork is blanked for it, since
+	 * the corpus harness is not what an arm measures and a verdict must not depend on the caller's shell; the caller's own
+	 * environment is left alone.
+	 */
+	public static function slotCommand(devJs: String, slot: Int, workroot: String): Command {
+		return cmd('node $devJs mutation-check --slot $slot $workroot').env(GateTree.FORK_VAR, '').tethered().timeout(SLOT_TIMEOUT_MS);
+	}
+
 	/** Make the slots, run every track in them and print the report; answers the exit status. */
 	private static function execute(job: CheckJob, rows: Array<TrackRow>, jobs: Int, workroot: String, slots: Array<Int>): Int {
 		// created one after another: concurrent `git worktree add`s race over `.git/worktrees`
@@ -236,10 +246,7 @@ final class MutationCheck {
 		File.saveContent(Path.join([workroot, MutationSlot.ORDER]), dealOrder(rows, schema).join('\n') + '\n');
 		if (slots.length > 0) {
 			final devJs: String = FileSystem.fullPath(js.Node.__filename);
-			final ran: Array<Result> = Pool.of(slots.length)
-				.map(
-					slots, s -> Shard.callerGc(cmd('node $devJs mutation-check --slot $s $workroot').tethered().timeout(SLOT_TIMEOUT_MS))
-				);
+			final ran: Array<Result> = Pool.of(slots.length).map(slots, s -> Shard.callerGc(slotCommand(devJs, s, workroot)));
 			for (i => result in ran) {
 				File.saveContent(Path.join([workroot, 'slot-${slots[i]}.log']), result.out + result.err + result.failure);
 				if (!result.ok)

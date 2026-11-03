@@ -27,8 +27,19 @@ final class GateTree {
 	/** Why a gate that compares with the baseline cannot run. */
 	public static inline final NO_BASELINE: String = 'no baseline — run `dev slice-gate <worktree> --baseline` before the first edit';
 
+	/** The file `--baseline` records its readings in, beside the corpus snapshot it saves. */
+	public static inline final BASELINE_FILE: String = 'baseline.json';
+
+	public static inline final SWEEP_BASE: String = 'sweep-base.json';
+
+	/** The environment variable that names the corpus the suite's harness reads. */
+	public static inline final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';
+
 	/** The scope of a whole-tree lint of this project. */
 	public static final TREE_SCOPE: Array<String> = ['src', 'test', 'tools'];
+
+	/** The snapshot the suite's corpus class writes in a tree, relative to it. */
+	private static inline final SWEEP_SNAPSHOT: String = 'bin/.last-sweep.json';
 
 	/** How long a quoted error may grow in a report row. */
 	private static inline final QUOTE_WIDTH: Int = 150;
@@ -67,7 +78,7 @@ final class GateTree {
 		this.options = options;
 		tree = options.tree;
 		logs = options.logs;
-		final file: String = log('baseline.json');
+		final file: String = log(BASELINE_FILE);
 		baseline = !options.baseline && FileSystem.exists(file) ? Json.parse(File.getContent(file)) : null;
 		base = options.baseline
 			? gitIn(tree, ['rev-parse', 'HEAD']).trim()
@@ -156,6 +167,39 @@ final class GateTree {
 	/** The snapshot each `--infra-tree` of a `--baseline` run is linted into. */
 	public function infraSnapshots(): Array<InfraSnapshot> {
 		return [for (i => dir in options.infra) { tree: dir, snapshot: log('infra-$i.json') }];
+	}
+
+	/**
+	 * Remove the recorded baseline and its corpus snapshot before a new one is taken: a `--baseline` run that fails a row, or the
+	 * build, must leave the gate with NO baseline, never with the older one.
+	 */
+	public function retireBaseline(): Void {
+		for (name in [BASELINE_FILE, SWEEP_BASE]) {
+			final file: String = log(name);
+			if (FileSystem.exists(file)) FileSystem.deleteFile(file);
+		}
+	}
+
+	/**
+	 * Remove the corpus snapshot a previous run of the suite left in the tree: the one a row reads afterwards is then the run's
+	 * own, or none.
+	 */
+	public function clearSnapshot(): Void {
+		final file: String = Path.join([tree, SWEEP_SNAPSHOT]);
+		if (FileSystem.exists(file)) FileSystem.deleteFile(file);
+	}
+
+	/**
+	 * Why the suite that just ran left no corpus snapshot to read, or null when it left one: the corpus class skips quietly when
+	 * the fork names no directory, and writes nothing when none of its cases ran.
+	 */
+	public function corpusProblem(): Null<String> {
+		final fork: String = Sys.getEnv(FORK_VAR) ?? '';
+		if (fork != '' && (!FileSystem.exists(fork) || !FileSystem.isDirectory(fork)))
+			return clip('$FORK_VAR=$fork is no directory, so the suite ran no corpus');
+		return FileSystem.exists(Path.join([tree, SWEEP_SNAPSHOT]))
+			? null
+			: 'the suite left no corpus snapshot ($SWEEP_SNAPSHOT): no corpus case ran under $FORK_VAR';
 	}
 
 	public static inline function short(hash: String): String {

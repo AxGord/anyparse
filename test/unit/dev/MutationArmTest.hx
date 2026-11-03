@@ -1,11 +1,13 @@
 package unit.dev;
 
 import dev.ArmRegistry.ArmRegistryError;
+import dev.GateTree;
 import dev.MutationArm;
 import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -189,16 +191,40 @@ final class MutationArmTest extends Test {
 	@:killer('M-ARM-RENDER-FAILURE-REFUSES')
 	public function testAFullRunOverAnArmThatDoesNotRenderAnswersARowNotARefusal(): Void {
 		TempDir.with(dir -> {
-			final repo: String = dir.file('repo');
-			FileSystem.createDirectory(Path.join([repo, 'src/a']));
-			FileSystem.createDirectory(Path.join([repo, 'test/testkit/arms']));
-			File.saveContent(Path.join([repo, 'src/a/B.hx']), 'package a;\n\nclass B {\n\n}\n');
-			File.saveContent(
-				Path.join([repo, 'test/testkit/arms/a.json']),
-				'{"arms": [{"name": "M-GONE", "type": "a.Gone", "method": "f", "force": "7"}]}'
-			);
+			final repo: String = unrenderedArmRepo(dir);
 			Assert.equals(1, ArmApply.run(repo, ['M-GONE']), 'a row and exit 1; a refusal answered 2');
 		});
+	}
+
+	/**
+	 * A full run leaves the caller's corpus fork as it found it: the run is in the caller's process, and every suite process after
+	 * it in the same runner would otherwise find no corpus, run none of its cases and write no sweep snapshot.
+	 */
+	@:pin('control')
+	@:killer('M-ARM-DELETES-CALLER-FORK')
+	public function testAFullRunLeavesTheCallersCorpusFork(): Void {
+		TempDir.with(dir -> {
+			final repo: String = unrenderedArmRepo(dir);
+			final fork: String = GateTree.FORK_VAR;
+			final before: String = Sys.getEnv(fork) ?? '';
+			CliFixture.always(() -> Sys.putEnv(fork, before), () -> {
+				Sys.putEnv(fork, '/a/fork');
+				Assert.equals(1, ArmApply.run(repo, ['M-GONE']));
+				Assert.equals('/a/fork', Sys.getEnv(fork));
+			});
+		});
+	}
+
+	/** A scratch repo whose one arm names a type that does not exist, so the run answers a row for it and starts no track. */
+	private static function unrenderedArmRepo(dir: TempDir): String {
+		final repo: String = dir.file('repo');
+		FileSystem.createDirectory(Path.join([repo, 'src/a']));
+		FileSystem.createDirectory(Path.join([repo, 'test/testkit/arms']));
+		File.saveContent(Path.join([repo, 'src/a/B.hx']), 'package a;\n\nclass B {\n\n}\n');
+		File.saveContent(
+			Path.join([repo, 'test/testkit/arms/a.json']), '{"arms": [{"name": "M-GONE", "type": "a.Gone", "method": "f", "force": "7"}]}'
+		);
+		return repo;
 	}
 
 }

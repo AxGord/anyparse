@@ -303,8 +303,6 @@ final class MutationArm {
 		cmd('git -C ${job.repo} worktree remove --force $gen').run();
 		cmd('git -C ${job.repo} worktree prune').run();
 		Sys.println('manifest: $manifest');
-		// the corpus harness is not what an arm measures, and a verdict must not depend on the caller's shell
-		js.Syntax.code('delete process.env.ANYPARSE_HXFORMAT_FORK');
 		var status: Int = 0;
 		if (lines.length > 0) {
 			status = MutationCheck.run({
