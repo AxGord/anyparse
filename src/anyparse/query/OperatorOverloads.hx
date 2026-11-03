@@ -180,12 +180,13 @@ final class OperatorOverloads {
 	}
 
 	/**
-	 * The ends of the two parameters of the overload `m` of `decl`: null for one the walk does not model — one under `#if`,
-	 * with type parameters, a signature overload, one with a parameter type the cast graph does not model, and one not
-	 * taking exactly two parameters: an instance overload takes one, its `this` the left operand.
+	 * The ends of the two parameters of the overload `m` of `decl`: null for one the walk does not model — one with type
+	 * parameters, a signature overload, one with a parameter type the cast graph does not model, and one not taking exactly two
+	 * parameters: an instance overload takes one, its `this` the left operand. A member under `#if` never gets here:
+	 * `branchSelection` leaves the branch undecided first.
 	 */
 	private function candidateParams(decl: ResolvedType, m: MemberInfo): Null<Array<TypeEnd>> {
-		if (m.guarded || m.typeParamNames.length > 0 || m.isOverload || m.hasOverloadMeta) return null;
+		if (m.typeParamNames.length > 0 || m.isOverload || m.hasOverloadMeta) return null;
 		if (m.paramTypeSources.length != 2) return null;
 		final ends: Array<TypeEnd> = [];
 		for (p in m.paramTypeSources) {

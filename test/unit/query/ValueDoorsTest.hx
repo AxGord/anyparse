@@ -20,7 +20,7 @@ class ValueDoorsTest extends Test {
 	private static final SOURCE: String = 'package p;\n\nenum E {\n\tA;\n}\n\nenum F {\n\tItemCtor;\n}\n\n'
 		+ 'interface I {}\n\nclass Item {}\n\nclass ItemCtor {}\n\nclass Shadow {}\n\nclass Box<T> {}\n\nclass C {\n'
 		+ '\tvar Shadow: Int;\n\n\tfunction f(x: Int) {\n\t\tItem;\n\t\tE;\n\t\tI;\n\t\tBox;\n\t\tShadow;\n\t\tItemCtor;\n'
-		+ '\t\tfinal written: Array<Int> = [];\n\t\tfinal inferred = 5;\n\t\tfinal open = null;\n'
+		+ '\t\tfinal written: Array<Int> = [];\n\t\tfinal promoted: Float = 5;\n\t\tfinal inferred = 5;\n\t\tfinal open = null;\n'
 		+ '\t\tvar first: Int = 1, second = 2;\n\t\t(x : Float);\n\t\tfinal held = (x : Float);\n\t\theld;\n'
 		+ '\t\t\'a $$x b\';\n\t\tfinal big = 3000000000;\n\t\tfinal wide = 1i64;\n\t\tfinal unsigned = 1u32;\n'
 		+ '\t\tfinal wideHex = 0xFFi64;\n\t\tfinal hex = 0xFF;\n\t\tfinal grouped = 1_000;\n\t}\n}\n';
@@ -92,6 +92,7 @@ class ValueDoorsTest extends Test {
 	@:killer('M-DOOR-DECLARATION-WRITTEN-FIRST')
 	public function testADeclarationWrittenWithATypeIsThatTypeWhateverItsInitializer(): Void {
 		Assert.equals('Array<Int>', typed('FinalStmt', 'final written').source, 'not its `[]`');
+		Assert.equals('Float', typed('FinalStmt', 'final promoted').source, 'not its `5`');
 	}
 
 	@:pin('control')

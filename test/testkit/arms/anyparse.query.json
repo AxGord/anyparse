@@ -12774,9 +12774,9 @@
 		{
 			"name": "M-OPS-GUARDED",
 			"type": "anyparse.query.OperatorOverloads",
-			"method": "candidateParams",
-			"find": "if (m.guarded || m.typeParamNames.length > 0",
-			"replace": "if (m.typeParamNames.length > 0",
+			"method": "branchSelection",
+			"find": "\t\tif (members.exists(m -> m.guarded && m.operatorOverloads.contains(kind))) return Undecided;\n",
+			"replace": "",
 			"note": "an overload under `#if` is taken in every build"
 		},
 		{
