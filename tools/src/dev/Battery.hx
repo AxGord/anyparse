@@ -227,6 +227,7 @@ final class Battery {
 
 	/** The suite, sharded through `dev shard` (the monolith cross-check unless `--quick`), its counts kept. */
 	private function suite(): Outcome {
+		GateTree.clearSnapshotIn(_plan.repo);
 		var totals: Null<Tally> = null;
 		final status: Int = Shard.run({
 			repo: _plan.repo,

@@ -41,6 +41,9 @@ final class GateTree {
 	/** The snapshot the suite's corpus class writes in a tree, relative to it. */
 	private static inline final SWEEP_SNAPSHOT: String = 'bin/.last-sweep.json';
 
+	/** Where the corpus class rotates the previous snapshot to before each write, relative to the tree. */
+	private static inline final SWEEP_PREVIOUS: String = 'bin/.prev-sweep.json';
+
 	/** How long a quoted error may grow in a report row. */
 	private static inline final QUOTE_WIDTH: Int = 150;
 
@@ -181,15 +184,6 @@ final class GateTree {
 	}
 
 	/**
-	 * Remove the corpus snapshot a previous run of the suite left in the tree: the one a row reads afterwards is then the run's
-	 * own, or none.
-	 */
-	public function clearSnapshot(): Void {
-		final file: String = Path.join([tree, SWEEP_SNAPSHOT]);
-		if (FileSystem.exists(file)) FileSystem.deleteFile(file);
-	}
-
-	/**
 	 * Why the suite that just ran left no corpus snapshot to read, or null when it left one: the corpus class skips quietly when
 	 * the fork names no directory, and writes nothing when none of its cases ran.
 	 */
@@ -208,6 +202,15 @@ final class GateTree {
 
 	public static inline function signed(n: Int): String {
 		return n >= 0 ? '+$n' : '$n';
+	}
+
+	/**
+	 * Move the corpus snapshot a previous run of the suite left in `tree` to the previous-sweep slot, the rotation the corpus class
+	 * does before its own write: the snapshot a row reads afterwards is then the run's own, or none.
+	 */
+	public static function clearSnapshotIn(tree: String): Void {
+		final file: String = Path.join([tree, SWEEP_SNAPSHOT]);
+		if (FileSystem.exists(file)) FileSystem.rename(file, Path.join([tree, SWEEP_PREVIOUS]));
 	}
 
 	/** Whether `file` is code that can move a lint rule's findings: `query` and `check`, `query/cli` excepted. */

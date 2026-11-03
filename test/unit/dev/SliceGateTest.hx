@@ -408,6 +408,7 @@ final class SliceGateTest extends Test {
 			File.saveContent(stale, '{}');
 			Assert.equals(0, SliceGate.main([tree, '--rows', 'suite', '--logs', '$tree-logs', '--run', 'r']));
 			Assert.isFalse(FileSystem.exists(stale));
+			Assert.equals('{}', File.getContent(Path.join([tree, 'bin/.prev-sweep.json'])), 'it is rotated, as the corpus class would');
 		});
 	}
 

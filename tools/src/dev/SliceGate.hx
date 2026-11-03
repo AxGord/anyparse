@@ -333,7 +333,7 @@ final class SliceGate {
 	 * counts beside the baseline's — or, when `recording`, kept for the baseline.
 	 */
 	private function suiteOutcome(recording: Bool): Outcome {
-		_gate.clearSnapshot();
+		GateTree.clearSnapshotIn(_gate.tree);
 		final lines: Array<String> = [];
 		var totals: Null<Tally> = null;
 		final shards: Int = _gate.options.threads ?? Shard.DEFAULT_SHARDS;

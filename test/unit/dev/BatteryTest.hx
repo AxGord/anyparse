@@ -6,6 +6,7 @@ import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.Summary.Outcome;
 import devkit.TempDir;
+import haxe.Json;
 import js.node.Fs.Fs;
 import sys.FileSystem;
 import sys.io.File;
@@ -21,6 +22,14 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class BatteryTest extends Test {
+
+	/**
+	 * A `bin/test.js` that lists the two classes the shard plan pins and answers every run with a green utest report, so the suite
+	 * step passes and the corpus class — which would write the sweep snapshot — never runs.
+	 */
+	private static final GREEN_RUNNER: String = "const a=process.argv.slice(2);if(a.includes('--list-classes'))"
+		+ "console.log('unit.grammar.haxe.HxFormatterCorpusTest\\nunit.cli.ApqDxTier5CliTest');else console.log('tests executed: 1\\n"
+		+ "assertations: 1\\nsuccesses: 1\\nerrors: 0\\nfailures: 0\\nwarnings: 0\\n\\nresults: ALL TESTS OK (success: true)');";
 
 	public function testASnapshotSuiteLineIsTwoCounts(): Void {
 		TempDir.with(dir -> {
@@ -136,6 +145,49 @@ final class BatteryTest extends Test {
 			Assert.isTrue(FileSystem.exists(dir.file('abc-anyparse.json')));
 			Assert.same([], saved, 'a sweep nobody read is not saved');
 			Assert.equals('stale', File.getContent(dir.file('abc-sweep.json')), 'a row that read nothing keeps the earlier file');
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-BATTERY-SNAPSHOT-KEPT')
+	public function testTheSuiteRunsOverNoSnapshotOfAPreviousRun(): Void {
+		TempDir.with(dir -> {
+			final tree: String = dir.file('tree');
+			final work: String = dir.file('work');
+			FileSystem.createDirectory(dir.file('tree/bin'));
+			FileSystem.createDirectory(work);
+			File.saveContent(dir.file('tree/bin/test.js'), GREEN_RUNNER);
+			final engine: String = Sys.getEnv('HXQ_BIN') ?? FileSystem.fullPath('bin/apq.js');
+			File.saveContent(dir.file('tree/bin/hxq'), 'cmd="$$1"; shift; exec node "$engine" "$$cmd" --lang haxe "$$@"\n');
+			File.saveContent(dir.file('tree/bin/.last-sweep.json'), '{"stale":1}');
+			final plan: BatteryPlan = {
+				repo: tree,
+				work: work,
+				cache: dir.file('cache'),
+				head: 'h1',
+				base: null,
+				baseSuite: null,
+				shards: 1,
+				quick: true,
+				snapshot: false,
+				allowBlast: false,
+				allow: [],
+				client: null,
+				jvmSkip: '--no-jvm',
+				run: 'r',
+				ownLease: false
+			};
+			File.saveContent(dir.file('work/plan.json'), Json.stringify(plan));
+			Assert.equals(0, Battery.main(['--rows', 'suite,corpus', '--plan', dir.file('work/plan.json')]));
+			Assert.isFalse(FileSystem.exists(dir.file('tree/bin/.last-sweep.json')), 'the previous run\'s sweep is not there to be read');
+			Assert.equals(
+				'{"stale":1}', File.getContent(dir.file('tree/bin/.prev-sweep.json')), 'it is moved to where the corpus class rotates it'
+			);
+			final steps: Array<{ name: String, outcome: String }> = Json.parse(File.getContent(dir.file('work/branch-suite.json'))).steps;
+			Assert.same(
+				[{ name: 'suite', outcome: 'passed' }, { name: 'corpus', outcome: 'failed' }],
+				steps.map(s -> {name: s.name, outcome: s.outcome })
+			);
 		});
 	}
 

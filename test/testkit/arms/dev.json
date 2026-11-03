@@ -586,7 +586,7 @@
 			"name": "M-GATE-STALE-SNAPSHOT-KEPT",
 			"type": "dev.SliceGate",
 			"method": "suiteOutcome",
-			"find": "_gate.clearSnapshot();",
+			"find": "GateTree.clearSnapshotIn(_gate.tree);",
 			"replace": "",
 			"note": "a snapshot an earlier run left in the tree stands for the suite that just ran"
 		},
@@ -613,6 +613,14 @@
 			"find": "final free: Null<Int> = CompilerServer.freePort([], _candidate);",
 			"replace": "final free: Null<Int> = (_candidate ?? CompilerServer.randomPort)();",
 			"note": "a mutation slot draws a candidate without asking which port may be taken, so its client connects to whatever holds it before the next attempt"
+		},
+		{
+			"name": "M-BATTERY-SNAPSHOT-KEPT",
+			"type": "dev.Battery",
+			"method": "suite",
+			"find": "GateTree.clearSnapshotIn(_plan.repo);",
+			"replace": "",
+			"note": "the suite runs over the previous run's corpus snapshot, so a suite in which no corpus case ran compares an old sweep with the base and the head is saved with it"
 		}
 	]
 }
