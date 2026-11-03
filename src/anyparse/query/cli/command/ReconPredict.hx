@@ -230,7 +230,7 @@ final class ReconPredict {
 			final dir: Null<String> = stack.pop();
 			if (dir == null) break;
 			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> Reflect.compare(a, b));
+			names.sort(Reflect.compare);
 			for (name in names) {
 				final path: String = '$dir/$name';
 				if (FileSystem.isDirectory(path)) {

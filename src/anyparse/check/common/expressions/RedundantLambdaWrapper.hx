@@ -1,8 +1,13 @@
 package anyparse.check.common.expressions;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.RiskyArm;
+import anyparse.check.Check.RiskyCrossFileEdit;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.BinderScan;
+import anyparse.query.IndexScope;
+import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
@@ -14,18 +19,10 @@ import anyparse.query.TypeSyntax;
  * parameters, in order, and does nothing else — `x -> f(x)`, `(a, b) -> f(a, b)`, `() -> f()` —
  * and rewrites it to the bare `f`. `Severity.Info`, with an autofix.
  *
- * The rule is a READABILITY one and says nothing about speed. On hxcpp the reduced `f` is
- * SLOWER per call and per creation than the wrapper it replaces: a static method handed to a
- * function parameter builds a closure object of its own, while the wrapper's body gets the
- * call inlined into it. Do not claim a performance benefit.
- *
- * That is a statement about TODAY'S hxcpp, not about the code. A static method has no captured
- * state, so its function value could be a cached singleton rather than a fresh allocation, and the
- * wrapper only wins because inlining hides the same work. The project's position, recorded
- * deliberately: a codegen weakness is not a reason to write the worse expression. The wrapper form
- * asks every author to remember a trick that will stop paying the moment the backend improves, and
- * source outlives backends. So the rule stands on readability, the measurement stands as a fact about
- * the current toolchain, and the gap belongs upstream.
+ * The rule is a READABILITY one and says nothing about speed. On hxcpp a generic static (`Reflect.compare`) runs
+ * faster bare and a non-generic user static at most slightly slower; on node they are the same. The faster spelling
+ * of a comparator is a lambda whose body is `inline Reflect.compare(a, b)`, which this rule never touches because
+ * that body is not a call node.
  *
  * `prefer-bind` is the neighbour, and the two can never claim the same lambda: it requires a
  * ZERO-parameter lambda wrapping a call with AT LEAST ONE argument (`() -> f(a, b)`, rewritten
@@ -82,6 +79,12 @@ import anyparse.query.TypeSyntax;
  *   member is `static`. An ambiguous simple name, a lower-initial receiver (an instance whose
  *   type the rule cannot know), a longer receiver chain, and a receiver name that is also a
  *   local are all refused;
+ * - a `static` of a STD type (`Reflect.compare`, `Math.sqrt`) is accepted on a complete project when no file in
+ *   scope declares the simple name, the project index binds it to exactly one std declaration, and the member is one
+ *   plain function of that arity: not optional, rest, overloaded, macro, dynamic or under `#if`. The
+ *   finding is the RISKY arm: a bare std function is typed by its own signature where the lambda coerces
+ *   (`ints.map(x -> Math.sqrt(x))`), and a parameter annotation the reduction drops no longer steers
+ *   inference, so the rewrite is offered to the compiler oracle and is report-only without one;
  * - the declaration must carry NO metadata annotation. `@:overload` makes the value ambiguous;
  *   blocking the whole class keeps the gate grammar-agnostic and closes the annotations nobody
  *   has thought about yet;
@@ -114,6 +117,11 @@ import anyparse.query.TypeSyntax;
  * inside a project-wide lint resolves its `Type.member` callees and reports them. That is the
  * safe direction (no evidence → no finding) but it makes a narrow run useless as a census.
  *
+ * That holds for the callees the project declares. A STD callee reads the resolution index instead, which holds the
+ * std and the whole declared project, so it needs a COMPLETE project (every declared `resolutionRoots` entry matched,
+ * `RefactorSupport.projectIsComplete`): one file linted inside such a project reports its std findings, and a project
+ * declaring no roots reports none.
+ *
  * ## Grammar-agnostic
  *
  * Hosts come from `RefShape.lambdaKinds`, the body unwrap from `expressionBodyKinds` +
@@ -127,9 +135,13 @@ import anyparse.query.TypeSyntax;
  * declaration seams. An unset seam degrades to a refusal, never to a wrong accept.
  */
 @:nullSafety(Strict)
-final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
+final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implements RiskyArm {
 
 	private static inline final RULE_ID: String = 'redundant-lambda-wrapper';
+
+	/** The finding for a std callee — the risky arm's marker, since `fix` and `riskyArmFindings` split the findings on it. */
+	private static inline final STD_MESSAGE: String =
+		'this lambda only forwards its parameters to one std function — pass the function itself (the fix needs the compiler oracle)';
 
 	public function new() {
 		super(RULE_ID, 'a lambda that only forwards its parameters to one call — x -> f(x) is f', RuleCategory.Expressions);
@@ -144,9 +156,14 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
 		final types: Map<String, Null<Map<String, Signature>>> = collectTypes(parsed, seams);
 		final typeInfo: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final shape: RefShape = plugin.refShape();
+		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
+		final projectComplete: Bool = RefactorSupport.projectIsComplete(plugin);
 		final violations: Array<Violation> = [];
 		for (entry in parsed) {
 			final ctx: Ctx = {
+				file: entry.file,
+				index: index,
+				projectComplete: projectComplete,
 				seams: seams,
 				shape: shape,
 				types: types,
@@ -165,6 +182,40 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		for (v in violations) if (isStd(v)) decline(v);
+		return replaceWithCallee(source, violations.filter(v -> !isStd(v)), plugin);
+	}
+
+	public function riskyArmFindings(violations: Array<Violation>): Array<Violation> {
+		return violations.filter(isStd);
+	}
+
+	/** The std callees' reductions — the same rewrite as `fix`, applied only where the compiler oracle confirms it compiles. */
+	public function riskyFix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return replaceWithCallee(source, violations, plugin);
+	}
+
+	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation> {
+		return [];
+	}
+
+	public function riskyCrossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<RiskyCrossFileEdit> {
+		return [];
+	}
+
+	private static inline function isStd(v: Violation): Bool {
+		return v.message == STD_MESSAGE;
+	}
+
+	private static inline function decline(v: Violation): Void {
+		v.declineReason = 'a std callee is typed by its own signature, so the reduction needs the compiler oracle to confirm it compiles';
+	}
+
+	private static function replaceWithCallee(source: String, violations: Array<Violation>, plugin: GrammarPlugin): Array<FixEdit> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		return seams == null
 			? []
@@ -183,18 +234,19 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
 			? membersOf(node, ctx.seams)
 			: enclosing;
 		final forward: Null<Forward> = forwarding(node, ctx.seams);
-		if (forward != null && reducible(forward, host, ctx)) {
-			final span: Null<Span> = node.span;
-			if (span != null) {
-				out.push({
-					file: file,
-					span: span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: 'this lambda only forwards its parameters to one call — pass the function itself'
-				});
-				return;
-			}
+		final reduction: Reduction = forward == null ? Reduction.None : reductionOf(forward, host, ctx);
+		final span: Null<Span> = node.span;
+		if (reduction != Reduction.None && span != null) {
+			out.push({
+				file: file,
+				span: span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: reduction == Reduction.Std
+					? STD_MESSAGE
+					: 'this lambda only forwards its parameters to one call — pass the function itself'
+			});
+			return;
 		}
 		for (c in node.children) walk(out, file, c, host, ctx);
 	}
@@ -271,15 +323,19 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
 		return node.name == name || node.children.exists(c -> mentions(c, name));
 	}
 
-	/** Whether the forwarded callee resolves to a declaration this rule may reduce to a method value. */
-	private static function reducible(forward: Forward, enclosing: Null<Map<String, Signature>>, ctx: Ctx): Bool {
+	/**
+	 * What the forwarded callee resolves to: a declaration this rule may
+	 * reduce to a method value, a std function (the risky arm), or neither.
+	 */
+	private static function reductionOf(forward: Forward, enclosing: Null<Map<String, Signature>>, ctx: Ctx): Reduction {
 		final callee: QueryNode = forward.callee;
 		final name: Null<String> = callee.name;
-		if (name == null) return false;
+		if (name == null) return Reduction.None;
 		final signature: Null<Signature> = callee.kind == ctx.seams.identKind
 			? bareSignature(name, enclosing, ctx)
 			: staticSignature(callee, name, ctx);
-		return signature != null && signature.safe && signature.arity == forward.arity;
+		if (signature != null) return signature.safe && signature.arity == forward.arity ? Reduction.Plain : Reduction.None;
+		return stdStatic(callee, name, forward.arity, ctx) ? Reduction.Std : Reduction.None;
 	}
 
 	/**
@@ -343,21 +399,53 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
 		return any;
 	}
 
-	/**
-	 * What a `Type.member` callee resolves to. Null unless `Type` is an upper-initial simple name
-	 * declared exactly once in scope, shadowed by no local, and `member` is one of its statics.
-	 */
-	private static function staticSignature(callee: QueryNode, name: String, ctx: Ctx): Null<Signature> {
+	/** The simple type name of a `Type.member` callee: an upper-initial identifier no local shadows, else null. */
+	private static function staticReceiver(callee: QueryNode, ctx: Ctx): Null<String> {
 		final seams: Seams = ctx.seams;
 		if (callee.kind != seams.fieldAccessKind || !seams.upperInitialTypes || callee.children.length != 1) return null;
 		final receiver: QueryNode = callee.children[0];
 		final typeName: Null<String> = receiver.name;
 		if (receiver.kind != seams.identKind || typeName == null || typeName == '') return null;
 		if (typeName.charAt(0).toUpperCase() != typeName.charAt(0)) return null;
-		if (ctx.scope.valueNames.exists(typeName)) return null;
-		final members: Null<Map<String, Signature>> = ctx.types[typeName];
+		return ctx.scope.valueNames.exists(typeName) ? null : typeName;
+	}
+
+	/**
+	 * What a `Type.member` callee resolves to. Null unless `Type` is an upper-initial simple name
+	 * declared exactly once in scope, shadowed by no local, and `member` is one of its statics.
+	 */
+	private static function staticSignature(callee: QueryNode, name: String, ctx: Ctx): Null<Signature> {
+		final typeName: Null<String> = staticReceiver(callee, ctx);
+		final members: Null<Map<String, Signature>> = typeName == null ? null : ctx.types[typeName];
 		final member: Null<Signature> = members == null ? null : members[name];
 		return member != null && member.isStatic ? member : null;
+	}
+
+	/**
+	 * Whether a `Type.member` callee is a lone plain static function of `arity` parameters on a STD type: the name is
+	 * declared by no file in scope, the project index binds it to exactly one std declaration, and the member is one
+	 * non-optional, non-rest, non-overloaded, non-macro, non-dynamic function outside any `#if`. It need not be
+	 * non-generic: `Reflect.compare` is the motivating case.
+	 */
+	private static function stdStatic(callee: QueryNode, name: String, arity: Int, ctx: Ctx): Bool {
+		final typeName: Null<String> = staticReceiver(callee, ctx);
+		final index: Null<SymbolIndex> = ctx.index;
+		if (typeName == null || index == null || !ctx.projectComplete || ctx.types.exists(typeName)) return false;
+		final std: Null<ResolvedType> = index.stdDeclarationOf(typeName, ctx.file);
+		if (std == null) return false;
+		final named: Array<MemberInfo> = std.type.members.filter(m -> m.name == name);
+		if (named.length != 1) return false;
+		final m: MemberInfo = named[0];
+		return m.isStatic
+			&& ctx.seams.functionKinds.contains(m.kind)
+			&& !m.guarded
+			&& !m.isMacro
+			&& !m.isDynamic
+			&& !m.isOverload
+			&& !m.hasOverloadMeta
+			&& !m.paramRest
+			&& m.paramSkippableFrom == m.paramTypeSources.length
+			&& m.paramTypeSources.length == arity;
 	}
 
 	/** Every type simple name declared across `parsed`, mapped to its function members — null when the name is declared more than once. */
@@ -589,6 +677,13 @@ private typedef Forward = {
 	final arity: Int;
 };
 
+/** How a forwarded callee may be reduced: not at all, as a plain method value, or as a std function the compiler oracle must confirm. */
+private enum Reduction {
+	None;
+	Plain;
+	Std;
+}
+
 /** What one declaration offers a caller that wants its VALUE rather than its result. */
 private typedef Signature = {
 	final arity: Int;
@@ -613,6 +708,14 @@ private typedef FileScope = {
 
 /** The resolved seams plus the per-run tables `walk` reads. */
 private typedef Ctx = {
+	final file: String;
+
+	/** The resolution-scope index, or null on a bare plugin — a std callee is then never proven. */
+	final index: Null<SymbolIndex>;
+
+	/** Whether the index spans the whole project, the precondition of reading a name as the std's. */
+	final projectComplete: Bool;
+
 	final seams: Seams;
 	final shape: RefShape;
 	final types: Map<String, Null<Map<String, Signature>>>;

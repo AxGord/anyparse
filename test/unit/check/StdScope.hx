@@ -29,7 +29,15 @@ final class StdScope {
 			'Lambda.hx',
 			'class Lambda {\n\tpublic static function count<A>(it:Iterable<A>, ?pred:(item:A) -> Bool):Int {\n\t\treturn 0;\n\t}\n}'
 		],
-		['StringTools.hx', 'class StringTools {}']
+		['StringTools.hx', 'class StringTools {}'],
+		[
+			'Reflect.hx',
+			'extern class Reflect {\n\tpublic static function compare<T>(a:T, b:T):Int;\n}'
+		],
+		[
+			'Math.hx',
+			'extern class Math {\n\tpublic static function sqrt(v:Float):Float;\n}'
+		]
 	];
 
 	/**

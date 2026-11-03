@@ -323,6 +323,30 @@
 			"find": "c.kind == text || plain.contains(c.kind)",
 			"replace": "true",
 			"note": "a string holding a ${...} expression counts as a stable literal and is bound at creation time"
+		},
+		{
+			"name": "M-ETA-STD-ARM-UNSPLIT",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "riskyArmFindings",
+			"find": "return violations.filter(isStd);",
+			"replace": "return [];",
+			"note": "a std callee's finding is no longer the risky arm's, so the oracle is never asked and the rewrite never lands"
+		},
+		{
+			"name": "M-ETA-STD-STATIC-NEVER-PROVEN",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "stdStatic",
+			"find": "return m.isStatic",
+			"replace": "return false && m.isStatic",
+			"note": "no std static is ever proven, so the rule stays silent on Reflect.compare as before"
+		},
+		{
+			"name": "M-ETA-STD-FIX-KEEPS-STD",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "fix",
+			"find": "return replaceWithCallee(source, violations.filter(v -> !isStd(v)), plugin);",
+			"replace": "return replaceWithCallee(source, violations, plugin);",
+			"note": "the safe fix rewrites a std callee without the oracle's compile check"
 		}
 	]
 }

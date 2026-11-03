@@ -195,7 +195,7 @@ final class LintFixLedger {
 			else
 				reportedOnly++;
 		}
-		exercised.sort((a, b) -> Reflect.compare(a, b));
+		exercised.sort(Reflect.compare);
 		return [
 			'apq lint --fix: rule census — of the ${ruleIds.length} rule(s) this run was given, ${exercised.length} produced an edit, '
 				+ '$reportedOnly reported and got none, $never were never asked, $silent reported nothing at all. Comparing what this run '
@@ -245,7 +245,7 @@ final class LintFixLedger {
 		// `RiskyArm` rule is never absent either way: it runs in the safe loop as well, whose row
 		// counts its arm's findings as hand-off declines until the risky phase answers for them.
 		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) if (!(c is RiskyArm)) c.id()];
-		riskyIds.sort((a, b) -> Reflect.compare(a, b));
+		riskyIds.sort(Reflect.compare);
 		final oracleIds: Array<String> = [for (c in oracleAssisted) c.id()];
 		final reasons: Map<String, String> = [
 			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()

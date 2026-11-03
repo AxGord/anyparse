@@ -25,7 +25,7 @@ final class SourceTree {
 	public static function collect(dir: String): Array<String> {
 		final paths: Array<String> = [];
 		walk(dir, paths);
-		paths.sort((a: String, b: String) -> Reflect.compare(a, b));
+		paths.sort(Reflect.compare);
 		return paths;
 	}
 
