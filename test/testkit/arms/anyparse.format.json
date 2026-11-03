@@ -281,13 +281,6 @@
 			"note": "a literal broken by its own width is laid out bare where the next write reads it in a `BodyGroup` every width probe defers, so a method chain dot-breaks and an arrow body leaves `->` on the first write and both glue back on the second"
 		},
 		{
-			"name": "M-BREAK-READBACK-BARE",
-			"type": "anyparse.format.BodyAllman",
-			"method": "asReadBack",
-			"force": "body",
-			"note": "a literal its own rule breaks statically keeps the bare layout where the next write reads it back in a `BodyGroup`, so an arrow body it leads leaves `->` on the first write and glues back on the second"
-		},
-		{
 			"name": "M-ALLMAN-GLUED-SPACE-KEPT",
 			"type": "anyparse.format.BodyAllman",
 			"method": "tailBreak",

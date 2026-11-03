@@ -193,10 +193,10 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 
 	/**
 	 * The same lambda body under the `objectLiteral` rule, which breaks the literal STATICALLY past its width: the
-	 * forced Allman placement lays it out in the `BodyGroup` the next write reads it back in.
+	 * forced Allman placement is already the layout the next write reads back, so the body stays glued to `->` on both.
 	 */
 	@:pin('control')
-	@:killer('M-BREAK-READBACK-BARE')
+	@:killer('M-COLLAPSE-COUNTED')
 	public function testAStaticallyBrokenLambdaBodyStaysGlued(): Void {
 		for (config in [CFG_SAME, CFG_SAME_LADDER, CFG_KEEP]) for (k in 1...101) assertOneWriteWithinLimit(lambdaShape(k), config, k);
 	}
