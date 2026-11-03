@@ -17,6 +17,9 @@ import anyparse.query.GrammarPlugin;
  */
 class PreferReflectCompareCheckTest extends Test {
 
+	private static inline final INLINE_ON: String = '{"rules":{"prefer-reflect-compare":{"enabled":true,"inline":true}}}';
+	private static inline final INLINE_OFF: String = '{"rules":{"prefer-reflect-compare":{"enabled":true,"inline":false}}}';
+
 	public function testTernaryChainFlaggedAndFixed(): Void {
 		final src: String = ints('xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);');
 		final vs: Array<Violation> = violations(src);
@@ -292,6 +295,61 @@ class PreferReflectCompareCheckTest extends Test {
 			ints('xs.sort((a:Int, b:Int) -> { return Reflect.compare(a, b); });'),
 			applyFix(ints('xs.sort((a:Int, b:Int) -> { if (a < b) return -1; if (a > b) return 1; return 0; });'))
 		);
+	}
+
+	/** `inline: true` makes the fix write the call-site `inline`, in an expression body and in a returned value alike. */
+	@:pin('control')
+	@:killer('M-RCMP-INLINE-IGNORED')
+	public function testInlineOptionWritesInlineCall(): Void {
+		final lambda: String = ints('xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);');
+		Assert.equals(
+			ints('xs.sort((a:Int, b:Int) -> inline Reflect.compare(a, b));'),
+			CheckFixture.fixedUnder(new PreferReflectCompare(), lambda, INLINE_ON)
+		);
+		final on: Array<Violation> = CheckFixture.fixRunUnder(new PreferReflectCompare(), lambda, INLINE_ON).violations;
+		final off: Array<Violation> = CheckFixture.fixRunUnder(new PreferReflectCompare(), lambda, INLINE_OFF).violations;
+		Assert.equals(1, on.length);
+		Assert.equals(off[0].message, on[0].message);
+		Assert.equals(-1, on[0].message.indexOf('inline'));
+		final closing: String = ints('xs.sort(function(a:Int, b:Int) { trace(1); if (a < b) return -1; if (a > b) return 1; return 0; });');
+		Assert.equals(
+			ints('xs.sort(function(a:Int, b:Int) { trace(1); return inline Reflect.compare(a, b); });'),
+			CheckFixture.fixedUnder(new PreferReflectCompare(), closing, INLINE_ON)
+		);
+	}
+
+	/**
+	 * Option `false` writes the plain call.
+	 */
+	@:pin('control')
+	@:killer('M-RCMP-INLINE-ALWAYS')
+	public function testInlineOptionOffWritesPlainCall(): Void {
+		final src: String = ints('xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);');
+		final plain: String = ints('xs.sort((a:Int, b:Int) -> Reflect.compare(a, b));');
+		Assert.equals(plain, CheckFixture.fixedUnder(new PreferReflectCompare(), src, INLINE_OFF));
+
+	}
+
+	/** Without a proof of non-null there is no fix, and the option does not give one. */
+	@:pin('control')
+	@:killer('M-RCMP-INLINE-FIXES-UNPROVED')
+	public function testInlineOptionDoesNotFixAnUnprovedSite(): Void {
+		final src: String = sorted('xs.sort((a:Item, b:Item) -> a.n < b.n ? -1 : a.n > b.n ? 1 : 0);');
+		Assert.equals(1, CheckFixture.fixRunUnder(new PreferReflectCompare(), src, INLINE_ON).violations.length);
+		Assert.equals(src, CheckFixture.fixedUnder(new PreferReflectCompare(), src, INLINE_ON));
+	}
+
+	/** The option unset, in a config that names the rule or in none, writes the plain call: the option is opt-in. */
+	@:pin('control')
+	@:killer('M-RCMP-INLINE-DEFAULT-ON')
+	public function testInlineOptionUnsetWritesPlainCall(): Void {
+		final src: String = ints('xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);');
+		final plain: String = ints('xs.sort((a:Int, b:Int) -> Reflect.compare(a, b));');
+		Assert.equals(plain, CheckFixture.fixedUnder(new PreferReflectCompare(), src, '{}'));
+		Assert.equals(
+			plain, CheckFixture.fixedUnder(new PreferReflectCompare(), src, '{"rules":{"prefer-reflect-compare":{"enabled":true}}}')
+		);
+		Assert.equals(plain, applyFix(src));
 	}
 
 	private function sorted(statement: String): String {

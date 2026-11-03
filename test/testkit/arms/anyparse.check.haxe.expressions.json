@@ -225,6 +225,38 @@
 			"find": "nonNull: t.nonNull(left) && t.nonNull(right)",
 			"replace": "nonNull: t.nonNull(left) || t.nonNull(right)",
 			"note": "one proved operand is enough, so a chain whose other operand may be null is rewritten into a call that answers differently"
+		},
+		{
+			"name": "M-RCMP-INLINE-IGNORED",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "edits",
+			"find": "inlined ? INLINE_PREFIX + m.call : m.call",
+			"replace": "m.call",
+			"note": "the option is not read, so a project that opts in still gets the plain call"
+		},
+		{
+			"name": "M-RCMP-INLINE-ALWAYS",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "edits",
+			"find": "inlined ? INLINE_PREFIX + m.call : m.call",
+			"replace": "INLINE_PREFIX + m.call",
+			"note": "every fix writes inline, so a project that never opted in gets the call-site inline, which no target but hxcpp was tried with"
+		},
+		{
+			"name": "M-RCMP-INLINE-DEFAULT-ON",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "fix",
+			"find": ".boolOption(RULE_ID, OPTION_INLINE) ?? false",
+			"replace": ".boolOption(RULE_ID, OPTION_INLINE) ?? true",
+			"note": "an unset option reads as on, so a project that never configured it gets the call-site inline"
+		},
+		{
+			"name": "M-RCMP-INLINE-FIXES-UNPROVED",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "edits",
+			"find": "for (m in found) if (m.fixable) {",
+			"replace": "for (m in found) if (m.fixable || inlined) {",
+			"note": "the option also rewrites a site whose operands are not proved non-null, so a chain that answers 0 for null becomes a call that answers -1"
 		}
 	]
 }

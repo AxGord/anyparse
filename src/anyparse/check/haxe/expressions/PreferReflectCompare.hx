@@ -1,5 +1,6 @@
 package anyparse.check.haxe.expressions;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Supersedes;
@@ -47,9 +48,16 @@ using StringTools;
  *
  * `Reflect.compare` compares as `Dynamic`, which a static target may box: a speed-critical sort there keeps the explicit
  * chain, hence `DefaultOff`.
+ *
+ * ## Option
+ *
+ * `inline: true` (default `false`) makes the fix write `inline Reflect.compare(a, b)`: the call-site `inline` removes the cost of
+ * the call on hxcpp. It stays off because not every target survives it: on hl, where `Reflect.compare` is a native stub with a
+ * placeholder body, the inline writes that body and the comparator answers `0` with no error; on jvm it does not compile over
+ * `Int`. The report and the message do not depend on it.
  */
 @:nullSafety(Strict)
-final class PreferReflectCompare extends HaxeRule implements DefaultOff implements Supersedes {
+final class PreferReflectCompare extends HaxeRule implements DefaultOff implements Supersedes implements ConfigAware {
 
 	private static inline final RULE_ID: String = 'prefer-reflect-compare';
 
@@ -57,6 +65,11 @@ final class PreferReflectCompare extends HaxeRule implements DefaultOff implemen
 	private static inline final SORT: String = 'sort';
 
 	private static inline final COMPARE: String = 'Reflect.compare';
+
+	/** The option that makes the fix write the call as `inline Reflect.compare(…)`; off by default. */
+	private static inline final OPTION_INLINE: String = 'inline';
+
+	private static inline final INLINE_PREFIX: String = 'inline ';
 	private static inline final LESS: String = 'lt';
 	private static inline final GREATER: String = 'gt';
 
@@ -71,11 +84,18 @@ final class PreferReflectCompare extends HaxeRule implements DefaultOff implemen
 	private static inline final DESCENDING: String = '1';
 	private static inline final EQUAL: String = '0';
 
+	/** The linter's per-file config resolver (`inline`), or null to read each file's chain from disk. */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {
 		super(
 			RULE_ID, 'a sort callback spelling a three-way comparison by hand where Reflect.compare(a, b) says it',
 			RuleCategory.Expressions
 		);
+	}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -87,7 +107,7 @@ final class PreferReflectCompare extends HaxeRule implements DefaultOff implemen
 				rule: RULE_ID,
 				severity: Severity.Info,
 				message: 'this sort callback spells ${m.call} by hand'
-				+ (m.replacement == null ? '; no fix, an operand may be null and the call then answers differently' : '')
+				+ (m.fixable ? '' : '; no fix, an operand may be null and the call then answers differently')
 			});
 		});
 	}
@@ -96,9 +116,10 @@ final class PreferReflectCompare extends HaxeRule implements DefaultOff implemen
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final file: String = RunScan.oneFile(violations, RULE_ID);
+		final inlined: Bool = LintConfig.resolveWith(_resolveConfig, file).boolOption(RULE_ID, OPTION_INLINE) ?? false;
 		final scope: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, index);
 		return CheckScan.applyTextMatches(
-			plugin, source, violations, (tree, text) -> edits(matches(tree, file, text, seams, plugin, scope))
+			plugin, source, violations, (tree, text) -> edits(matches(tree, file, text, seams, plugin, scope), inlined)
 		);
 	}
 
@@ -176,8 +197,12 @@ final class PreferReflectCompare extends HaxeRule implements DefaultOff implemen
 	}
 
 	private static function matched(chain: Chain, extent: Span, called: Called): Match {
-		final replacement: String = chain.asReturn ? 'return ${called.call};' : called.call;
-		return { span: extent, call: called.call, replacement: called.nonNull ? replacement : null };
+		return {
+			span: extent,
+			call: called.call,
+			fixable: called.nonNull,
+			asReturn: chain.asReturn
+		};
 	}
 
 	private static function rung(cond: QueryNode, value: QueryNode): Rung {
@@ -361,11 +386,11 @@ final class PreferReflectCompare extends HaxeRule implements DefaultOff implemen
 	}
 
 	/** The fixes of the matches that have one. */
-	private static function edits(found: Array<Match>): Array<FixEdit> {
+	private static function edits(found: Array<Match>, inlined: Bool): Array<FixEdit> {
 		final out: Array<FixEdit> = [];
-		for (m in found) {
-			final text: Null<String> = m.replacement;
-			if (text != null) out.push(edit(m.span, text));
+		for (m in found) if (m.fixable) {
+			final call: String = inlined ? INLINE_PREFIX + m.call : m.call;
+			out.push(edit(m.span, m.asReturn ? 'return $call;' : call));
 		}
 		return out;
 	}
@@ -424,5 +449,10 @@ private typedef Typed = {
 /** The call a chain computes, and whether both its operands are proved non-null. */
 private typedef Called = { call: String, nonNull: Bool }
 
-/** A finding; `replacement` is null where the rewrite would not be behaviour-preserving. */
-private typedef Match = { span: Span, call: String, replacement: Null<String> }
+/** A finding; `fixable` is false where the rewrite would not be behaviour-preserving. */
+private typedef Match = {
+	span: Span,
+	call: String,
+	fixable: Bool,
+	asReturn: Bool
+}
