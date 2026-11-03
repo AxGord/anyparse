@@ -172,7 +172,7 @@
 		},
 		{
 			"name": "M-RCMP-ANY-OPERAND-TYPE",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "comparison",
 			"find": "&& (type == s.intType || type == s.stringType)",
 			"replace": "&& true",
@@ -180,7 +180,7 @@
 		},
 		{
 			"name": "M-RCMP-IMPURE-OPERAND",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "comparison",
 			"find": "&& PurityScan.isPure(left, t.purity)",
 			"replace": "&& true",
@@ -188,7 +188,7 @@
 		},
 		{
 			"name": "M-RCMP-ANY-TERMINAL",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "comparison",
 			"find": "valueText(chain.terminal, source, s) != EQUAL",
 			"replace": "false",
@@ -196,7 +196,7 @@
 		},
 		{
 			"name": "M-RCMP-ANY-CALL",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "matches",
 			"find": "callee.name == SORT",
 			"replace": "true",
@@ -204,7 +204,7 @@
 		},
 		{
 			"name": "M-RCMP-ANY-NONNULL",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "comparison",
 			"find": "nonNull: t.nonNull(left) && t.nonNull(right)",
 			"replace": "nonNull: true",
@@ -212,7 +212,7 @@
 		},
 		{
 			"name": "M-RCMP-MIXED-OPERANDS",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "comparison",
 			"find": "&& t.nominal(right) == type",
 			"replace": "&& true",
@@ -220,43 +220,105 @@
 		},
 		{
 			"name": "M-RCMP-NONNULL-EITHER",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "comparison",
 			"find": "nonNull: t.nonNull(left) && t.nonNull(right)",
 			"replace": "nonNull: t.nonNull(left) || t.nonNull(right)",
 			"note": "one proved operand is enough, so a chain whose other operand may be null is rewritten into a call that answers differently"
 		},
 		{
-			"name": "M-RCMP-INLINE-IGNORED",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
-			"method": "edits",
-			"find": "inlined ? INLINE_PREFIX + m.call : m.call",
-			"replace": "m.call",
-			"note": "the option is not read, so a project that opts in still gets the plain call"
+			"name": "M-RCMP-BARE-ANY-ORDER",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "comparesParameters",
+			"force": "true",
+			"note": "any two operands count as the parameters in order, so a swapped comparison loses its lambda and the sort turns over"
 		},
 		{
-			"name": "M-RCMP-INLINE-ALWAYS",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
-			"method": "edits",
-			"find": "inlined ? INLINE_PREFIX + m.call : m.call",
-			"replace": "INLINE_PREFIX + m.call",
-			"note": "every fix writes inline, so a project that never opted in gets the call-site inline, which no target but hxcpp was tried with"
+			"name": "M-RCMP-BARE-NOT-WHOLE",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "matched",
+			"find": "chain.whole && ",
+			"replace": "",
+			"note": "a chain closing a longer body replaces the whole callback, so the statements before it are deleted"
 		},
 		{
-			"name": "M-RCMP-INLINE-DEFAULT-ON",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
-			"method": "fix",
-			"find": ".boolOption(RULE_ID, OPTION_INLINE) ?? false",
-			"replace": ".boolOption(RULE_ID, OPTION_INLINE) ?? true",
-			"note": "an unset option reads as on, so a project that never configured it gets the call-site inline"
+			"name": "M-RCMP-MOVE-IGNORED",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "fromCallback",
+			"find": "if (t != null) movedCalls(",
+			"replace": "if (t != null && named.isEmpty()) movedCalls(",
+			"note": "a Reflect.compare call in a callback is never moved to the function the project names"
 		},
 		{
-			"name": "M-RCMP-INLINE-FIXES-UNPROVED",
-			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
-			"method": "edits",
-			"find": "for (m in found) if (m.fixable) {",
-			"replace": "for (m in found) if (m.fixable || inlined) {",
-			"note": "the option also rewrites a site whose operands are not proved non-null, so a chain that answers 0 for null becomes a call that answers -1"
+			"name": "M-RCMP-BARE-ANY-ELEMENT",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "fromBareReference",
+			"find": "t.element(receiver)",
+			"replace": "'Int'",
+			"note": "the element type is not read, so a bare Reflect.compare over any array moves to the Int function and does not compile"
+		},
+		{
+			"name": "M-RCMP-ANY-NAMED",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "fromCallback",
+			"find": "named.of(called.type)",
+			"replace": "named.of('String')",
+			"note": "the chain operand type does not pick the function, so an Int chain is rewritten to the String function"
+		},
+		{
+			"name": "M-RCMP-MOVE-NONNULL",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "movedCalls",
+			"find": "t.nonNull(left) && t.nonNull(right)",
+			"replace": "true",
+			"note": "a moved call is fixed without a proof of non-null, where Reflect.compare and the typed function answer differently"
+		},
+		{
+			"name": "M-RCMP-IMPORT-LOST",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "fixGrouped",
+			"find": "edits.push({ span: edit.span, text: edit.text, group: group });",
+			"replace": "edits.push({ span: edit.span, text: '', group: group });",
+			"note": "the fix writes the short name of the function and no import of its type, so the file stops compiling"
+		},
+		{
+			"name": "M-RCMP-UNRESOLVED-SILENT",
+			"type": "anyparse.check.haxe.expressions.CompareFunctions",
+			"method": "read",
+			"find": "problems.push('$key.$type: the resolution index declares no \"$path\"');",
+			"replace": "{}",
+			"note": "a name the index cannot find is dropped in silence and the rule falls back to Reflect.compare"
+		},
+		{
+			"name": "M-RCMP-ANY-SIGNATURE",
+			"type": "anyparse.check.haxe.expressions.CompareFunctions",
+			"method": "isCompareOf",
+			"force": "true",
+			"note": "any declaration of the name is accepted, so the fix writes a call that does not compile or does not compare"
+		},
+		{
+			"name": "M-RCMP-ERROR-NO-FILE",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "run",
+			"find": "file: problem.file,",
+			"replace": "file: '',",
+			"note": "the configuration error stands on no file, where the per-file gate reads a default-off rule as off and drops it from every normal run"
+		},
+		{
+			"name": "M-RCMP-ERROR-FIRST-FILE",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "anchorProblem",
+			"find": "enabled && !known.enabled",
+			"replace": "false",
+			"note": "the error stays on the first file seen, which the gate drops when the rule is off there though it is on elsewhere"
+		},
+		{
+			"name": "M-RCMP-MOVE-ANY-POSITION",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "movedCalls",
+			"find": "!results.contains(call)",
+			"replace": "false",
+			"note": "a call read for more than its sign is rewritten, so a callback doing arithmetic on it sorts differently under a function of another magnitude"
 		}
 	]
 }

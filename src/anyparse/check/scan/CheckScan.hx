@@ -22,6 +22,14 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 
+/** The shape, the declared types, the index and the chain context `NominalTypes` reads an expression's type through. */
+private typedef ExpressionTyping = {
+	final shape: RefShape;
+	final declaredTypes: Map<Int, String>;
+	final index: Null<SymbolIndex>;
+	final chain: ChainTypeContext;
+}
+
 /**
  * Shared scan helpers for the `run` / `fix` paths of the analysis checks.
  * A check parses INDEPENDENTLY in `run` and in `fix` — the platform's
@@ -345,20 +353,22 @@ final class CheckScan {
 		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex, asReceiver: Bool = false,
 		resolution: Bool = true
 	): Null<(QueryNode) -> Null<String>> {
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		if (provider == null) return null;
-		final declaredTypes: Map<Int, String> = provider.declaredTypes(source);
-		final shape: RefShape = plugin.refShape();
-		// The resolution index sees the std + configured libraries, so a member type such as
-		// `Array.length` resolves; the report index alone would stop at the project boundary.
-		final resolved: Null<SymbolIndex> = resolution ? IndexScope.resolutionIndexOf(plugin) ?? index : index;
-		final chain: ChainTypeContext = {
-			declaredTypeSources: provider.declaredTypeSources(source),
-			source: source,
-			castTargetSources: TypeInfoMemo.castTargetSources(provider, source),
-			typeSyntax: plugin.typeSyntax
-		};
-		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain, asReceiver);
+		final found: Null<ExpressionTyping> = expressionTyping(
+			source, plugin, resolution ? IndexScope.resolutionIndexOf(plugin) ?? index : index
+		);
+		if (found == null) return null;
+		final t: ExpressionTyping = found;
+		return node -> NominalTypes.expressionTypeNominal(node, tree, t.shape, t.declaredTypes, t.index, file, t.chain, asReceiver);
+	}
+
+	/** `typeNominalResolver`'s sibling for the WRITTEN type of an expression, its type arguments kept. */
+	public static function typeSourceResolver(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex
+	): Null<(QueryNode) -> Null<String>> {
+		final found: Null<ExpressionTyping> = expressionTyping(source, plugin, IndexScope.resolutionIndexOf(plugin) ?? index);
+		if (found == null) return null;
+		final t: ExpressionTyping = found;
+		return node -> NominalTypes.expressionTypeSource(node, tree, t.shape, t.declaredTypes, t.index, file, t.chain);
 	}
 
 	/**
@@ -917,6 +927,25 @@ final class CheckScan {
 			&& !ScopeFrames.collidesWithScope(body.children, seams.localDeclKinds, frames[parent] ?? [])
 			? source.substring(bs.from + 1, bs.to - 1).trim()
 			: whole;
+	}
+
+	/**
+	 * What a type question about an expression of `source` reads. A caller's resolution index sees the std + configured
+	 * libraries, so a member type such as `Array.length` resolves; the report index alone would stop at the project boundary.
+	 */
+	private static function expressionTyping(source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>): Null<ExpressionTyping> {
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return provider == null ? null : {
+			shape: plugin.refShape(),
+			declaredTypes: provider.declaredTypes(source),
+			index: index,
+			chain: {
+				declaredTypeSources: provider.declaredTypeSources(source),
+				source: source,
+				castTargetSources: TypeInfoMemo.castTargetSources(provider, source),
+				typeSyntax: plugin.typeSyntax
+			}
+		};
 	}
 
 }

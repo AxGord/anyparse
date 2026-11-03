@@ -277,10 +277,10 @@ locals, statement syntax, lambdas, the shape of a call.
 | [`narrow-local-scope`](guide/lint/expressions.md#narrow-local-scope) | any | on | a bare local declaration whose every occurrence sits inside one nested block, sinkable into that block |
 | [`prefer-arrow-callback`](guide/lint/expressions.md#prefer-arrow-callback) | any | on | a function-literal callback argument replaceable with an arrow lambda |
 | [`prefer-bind`](guide/lint/expressions.md#prefer-bind) | any | on | a () -> f(a, b) wrapper lambda replaceable with f.bind(a, b) |
+| [`prefer-compare-function`](guide/lint/expressions.md#prefer-compare-function) | haxe | off | a sort callback spelling a three-way comparison by hand, or using Reflect.compare where the project names a typed function |
 | [`prefer-final`](guide/lint/expressions.md#prefer-final) | any | on | a local var never reassigned that can be final |
 | [`prefer-lambda-expression-body`](guide/lint/expressions.md#prefer-lambda-expression-body) | any | on | an arrow lambda whose block body is a single return, expression or control-flow statement, collapsible to an expression body |
 | [`prefer-local-function`](guide/lint/expressions.md#prefer-local-function) | any | on | a function literal bound to a never-reassigned local, replaceable with a local function declaration |
-| [`prefer-reflect-compare`](guide/lint/expressions.md#prefer-reflect-compare) | haxe | off | a sort callback spelling a three-way comparison by hand where Reflect.compare(a, b) says it |
 | [`prefer-static-extension`](guide/lint/expressions.md#prefer-static-extension) | haxe | on | a static utility call (Lambda.map(xs, f)) rewritable to extension style (xs.map(f)) with a using import |
 | [`redundant-lambda-wrapper`](guide/lint/expressions.md#redundant-lambda-wrapper) | any | off | a lambda that only forwards its parameters to one call — x -> f(x) is f |
 | [`redundant-parens`](guide/lint/expressions.md#redundant-parens) | any | on | parentheses that cannot affect the parse — ((e)), a lone (e) in a delimited position, or (opt-in) one around an inert operand |

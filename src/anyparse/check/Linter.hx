@@ -205,7 +205,7 @@ import anyparse.check.common.unused.UnusedParameter;
 import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.check.common.unused.UnusedPublicMember;
 import anyparse.check.common.unused.UnusedReturnValue;
-import anyparse.check.haxe.expressions.PreferReflectCompare;
+import anyparse.check.haxe.expressions.PreferCompareFunction;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.check.haxe.expressions.SubstrNegativeStart;
 import anyparse.check.haxe.literals.PreferInterpolation;
@@ -273,7 +273,7 @@ final class Linter {
 			new CPrecedenceTrap(),
 			new MixedLogicalParens(),
 			new SubstrNegativeStart(),
-			new PreferReflectCompare(),
+			new PreferCompareFunction(),
 			new StaticInitOrder(),
 			new NullSafetyStrict(),
 			new SelfAssignment(),
