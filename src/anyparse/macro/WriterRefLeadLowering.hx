@@ -45,7 +45,7 @@ final class WriterRefLeadLowering {
 	 */
 	private static function emitMandatoryLead(child: ShapeNode, parts: Array<Expr>, leadText: String, fieldAccess: Expr): Void {
 		// ω-typedef-intersection-operand-break: `HxIntersectionClause.type`
-		// (`@:lead('&') @:fmt(typedefIntersection, typedefIntersectionBreak)`)
+		// (`@:lead('&') @:fmt(space(…), typedefIntersectionBreak)`)
 		// makes the `&`→operand whitespace a runtime decision. When the
 		// consuming Star (`HxTypedefDecl.intersections`) sets
 		// `opt._intersectionOperandBreak == true` — this clause follows a
@@ -58,8 +58,9 @@ final class WriterRefLeadLowering {
 		// follows a `BrClose`. Flag false (every single-line intersection)
 		// falls through to the `typedefIntersection` After space, byte-
 		// identical to the pre-slice layout.
+		final knob: Null<String> = spaceKnob(child, 'lead');
 		final leadDoc: Expr = if (child.fmtHasFlag('typedefIntersectionBreak')) {
-			final gluedLead: Expr = whitespacePolicyLead(child, leadText, ['typedefIntersection']);
+			final gluedLead: Expr = whitespacePolicyLead(child, leadText, knob);
 			macro opt._intersectionOperandBreak
 				? _dc([
 					_dt($v{leadText}),
@@ -67,7 +68,7 @@ final class WriterRefLeadLowering {
 				])
 				: $gluedLead;
 		} else {
-			whitespacePolicyLead(child, leadText, LEAD_POLICY_FLAGS);
+			whitespacePolicyLead(child, leadText, knob);
 		};
 		// ω-switch-subject-parens: drop the switch-subject open `(` when the knob
 		// is on and the subject is not a leading-brace expr (object literal / block

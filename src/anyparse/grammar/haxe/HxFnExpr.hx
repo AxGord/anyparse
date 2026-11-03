@@ -43,7 +43,7 @@ typedef HxFnExpr = {
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'),
 		keepInnerWhenEmpty('anonFuncParamParensKeepInnerWhenEmpty'), wrapRules('anonFunctionSignatureWrap'),
 		bodyAwareCompactIndent('body', 'fnExprBodyEmpty')) var params: Array<HxLambdaParam>;
-	@:optional @:fmt(typeHintColon) @:lead(':') var returnType: Null<HxType>;
+	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') var returnType: Null<HxType>;
 	@:optional @:absentOn(',', ')', ';', '}', ']') @:fmt(leftCurly('anonFunctionLeftCurly'), propagateAnonFnContext,
 		bodyPolicyForCtor('ExprBody', 'anonFunctionBody')) var body: Null<HxFnExprBody>;
 }

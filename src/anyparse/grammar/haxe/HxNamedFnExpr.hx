@@ -28,7 +28,7 @@ typedef HxNamedFnExpr = {
 	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens,
 		wrapRules('functionSignatureWrap'), bodyAwareCompactIndent('body', 'fnExprBodyEmpty'), groupRestProbe,
 		ignoreSourceNewlinesForWrap) var params: Array<HxParam>;
-	@:optional @:fmt(typeHintColon) @:lead(':') var returnType: Null<HxType>;
+	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') var returnType: Null<HxType>;
 	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
 	var body: HxFnExprBody;
 }

@@ -14,7 +14,7 @@ import utest.Assert;
  * `HxParamBody.type` was a mandatory `@:lead(':') var type:HxType`,
  * so `function f(x)` (no `:Type`) failed to parse — yet it is valid
  * Haxe (the parameter type is inferred). The field is now the exact
- * `HxVarDecl.type` shape: `@:optional @:fmt(typeHintColon)
+ * `HxVarDecl.type` shape: `@:optional @:fmt(space('typeHintColon', 'lead'))
  * @:lead(':') var type:Null<HxType>`. The sibling `HxLambdaParam`
  * was already untyped-tolerant, so untyped function-declaration
  * parameters now round-trip on the same footing.

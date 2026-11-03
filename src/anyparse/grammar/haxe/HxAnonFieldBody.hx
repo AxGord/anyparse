@@ -12,7 +12,7 @@ package anyparse.grammar.haxe;
  * share the same name-and-type body without duplicating the field
  * declarations.
  *
- * `@:fmt(typeHintColon)` mirrors `HxParam.type` / `HxVarDecl.type` —
+ * `@:fmt(space('typeHintColon', 'lead')))` mirrors `HxParam.type` / `HxVarDecl.type` —
  * the colon emission flips between tight (`x:Int`) and around
  * (`x : Int`) per `HxModuleWriteOptions.typeHintColon`.
  *
@@ -32,5 +32,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxAnonFieldBody = {
 	var name: HxIdentLit;
-	@:fmt(typeHintColon) @:lead(':') @:queryTypeRef var type: HxType;
+	@:fmt(space('typeHintColon', 'lead')) @:lead(':') @:queryTypeRef var type: HxType;
 }

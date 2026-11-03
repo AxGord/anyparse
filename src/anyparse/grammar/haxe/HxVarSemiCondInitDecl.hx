@@ -44,6 +44,6 @@ package anyparse.grammar.haxe;
 typedef HxVarSemiCondInitDecl = {
 	var name: HxVarNameLit;
 	@:optional @:fmt(tightLead) @:lead('(') var access: Null<HxAccessClause>;
-	@:optional @:fmt(typeHintColon) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
+	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
 	var region: HxVarSemiInitRegion;
 }

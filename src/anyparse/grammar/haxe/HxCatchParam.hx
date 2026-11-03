@@ -19,7 +19,7 @@ package anyparse.grammar.haxe;
  * optional `:Type`), minus the default-value slot — catch clauses
  * have no default-value form in any Haxe surface syntax.
  *
- * `@:fmt(typeHintColon)` on `type` mirrors `HxParamBody.type` /
+ * `@:fmt(space('typeHintColon', 'lead')))` on `type` mirrors `HxParamBody.type` /
  * `HxLambdaParamBody.type` / `HxVarDecl.type`: the colon emission
  * flips between tight (`e:E`) and around (`e : E`) per
  * `HxModuleWriteOptions.typeHintColon`.
@@ -27,5 +27,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCatchParam = {
 	var name: HxIdentLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
+	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
 }

@@ -35,5 +35,5 @@ typedef HxEnumCtorDecl = {
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
 	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),
 		bodyAwareCompactIndent, groupRestProbe, ignoreSourceNewlinesForWrap) var params: Array<HxParam>;
-	@:optional @:fmt(typeHintColon) @:lead(':') var returnType: Null<HxType>;
+	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') var returnType: Null<HxType>;
 };

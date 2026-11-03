@@ -10,7 +10,7 @@ package anyparse.grammar.haxe;
  * Case 3 single-Ref-with-`@:lead(':')` lowering used by sibling
  * name-and-type bodies (`HxAnonFieldBody`, `HxParamBody`).
  *
- * Unlike `HxAnonFieldBody`, no `@:fmt(typeHintColon)` is wired on the
+ * Unlike `HxAnonFieldBody`, no `@:fmt(space('typeHintColon', 'lead')))` is wired on the
  * `:` lead — haxe-formatter has no separate knob for the colon inside
  * an arrow-type's named arg, and the corpus reference always emits
  * `name:Type` tight regardless of the type-hint policy elsewhere.

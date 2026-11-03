@@ -5,7 +5,7 @@ package anyparse.grammar.haxe;
  * `HxObjectField` typedef before Slice 18 promoted `HxObjectField` to a
  * sum-type enum to host the cond-comp wrapper. Carried verbatim from
  * the previous typedef: same `HxObjectKeyLit` name terminal, same
- * `@:lead(':') HxExpr` value, same writer-side `@:fmt(objectFieldColon,
+ * `@:lead(':') HxExpr` value, same writer-side `@:fmt(space('objectFieldColon', 'lead'),
  * indentValueIfCtor, propagateExprPosition)` markers.
  *
  * Wrapped in `HxObjectField.Field(body)` rather than living directly on
@@ -16,7 +16,7 @@ package anyparse.grammar.haxe;
  * full per-field writer/parser metadata stack working through the
  * `@:peg` macro.
  *
- * Doc on the slices (`@:fmt(objectFieldColon)`, `@:fmt(indentValueIfCtor)`)
+ * Doc on the slices (`@:fmt(space('objectFieldColon', 'lead'))`, `@:fmt(indentValueIfCtor)`)
  * lives on the original typedef site; refer to `HxObjectField` history
  * for the colon-spacing and nested-objectLit-indent rationales — both
  * apply unchanged to this body shape.
@@ -24,7 +24,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxObjectFieldBody = {
 	var name: HxObjectKeyLit;
-	@:fmt(objectFieldColon, indentValueIfCtor(
-		'ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'
-	), propagateExprPosition) @:lead(':') var value: HxExpr;
+	@:fmt(space('objectFieldColon', 'lead'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
+		propagateExprPosition) @:lead(':') var value: HxExpr;
 }

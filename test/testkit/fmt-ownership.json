@@ -190,25 +190,16 @@
 	],
 	"WriterPolicyLowering": [
 		"arrowBodyOpenPadSuppress",
-		"arrowFunctions",
 		"blockBodyKeepsInline",
-		"catchParensInsideOpen",
-		"functionTypeHaxe4",
 		"intervalPolicy",
 		"keepInnerWhenEmpty",
 		"leftCurly",
 		"leftCurlyAnonFnOverride",
-		"objectFieldColon",
+		"space",
 		"spaceAfterLead",
-		"switchCondParensInsideOpen",
 		"tightOnParenOperand",
 		"trailingComma",
-		"trailingCommaRemovable",
-		"typeCheckColon",
-		"typeHintColon",
-		"typedefAssign",
-		"typedefIntersection",
-		"whileCondParensInsideOpen"
+		"trailingCommaRemovable"
 	],
 	"WriterPrattLowering": [
 		"accessBrackets",
@@ -273,7 +264,6 @@
 		"switchSubjectNoWrap",
 		"switchSubjectParensStrip",
 		"tightLead",
-		"typeHintColon",
 		"typeParamDefaultEquals",
 		"whileCondParensInsideClose",
 		"whilePolicy"
@@ -285,7 +275,6 @@
 		"suppressComplexItems",
 		"suppressPatternRestProbe",
 		"switchSubjectParensStrip",
-		"typedefIntersection",
 		"typedefIntersectionBreak"
 	],
 	"WriterStarEmitLowering": [

@@ -44,7 +44,7 @@ typedef HxVarDecl = {
 	@:trivia @:tryparse var meta: Array<HxMetadata>;
 	var name: HxVarNameLit;
 	@:optional @:fmt(tightLead) @:lead('(') var access: Null<HxAccessClause>;
-	@:optional @:fmt(typeHintColon, indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
+	@:optional @:fmt(space('typeHintColon', 'lead'), indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
 	@:lead(':') @:queryTypeSlot var type: Null<HxType>;
 	@:optional @:kw('#if') var condInit: Null<HxVarInitRegion>;
 	@:optional

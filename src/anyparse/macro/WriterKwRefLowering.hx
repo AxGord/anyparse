@@ -1114,7 +1114,7 @@ final class WriterKwRefLowering {
 	 * option then spaces the lead and the keyword's own trailing space is stripped.
 	 */
 	private static function leadHasPolicy(branch: ShapeNode): Bool {
-		return firstFmtFlag(branch, LEAD_POLICY_FLAGS) != null;
+		return spaceKnob(branch, 'lead') != null;
 	}
 
 	/**
@@ -1125,7 +1125,7 @@ final class WriterKwRefLowering {
 	 */
 	private static function kwRefLeadDoc(branch: ShapeNode, leadText: String, leadIsWord: Bool): Expr {
 		if (!leadIsWord && leadHasPolicy(branch))
-			return whitespacePolicyLead(branch, leadText, LEAD_POLICY_FLAGS, branch.fmtHasFlag('spaceBeforeLead'));
+			return whitespacePolicyLead(branch, leadText, spaceKnob(branch, 'lead'), branch.fmtHasFlag('spaceBeforeLead'));
 		final leadEmit: String = leadIsWord || branch.fmtHasFlag('spaceAfterLead') ? '$leadText ' : leadText;
 		return macro _dt($v{leadEmit});
 	}

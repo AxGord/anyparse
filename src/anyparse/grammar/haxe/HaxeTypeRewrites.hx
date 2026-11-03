@@ -29,7 +29,7 @@ final class HaxeTypeRewrites {
 	 * `(Int->Int)->Int` parses as
 	 * `ArrowFn([Positional(Arrow(Int,Int))], Int)` — the parser
 	 * canonically routes any `(...)->R` shape through `ArrowFn`. The
-	 * writer would then emit ` -> ` per `@:fmt(functionTypeHaxe4)`
+	 * writer would then emit ` -> ` per `@:fmt(space('functionTypeHaxe4', 'lead'))`
 	 * (default `Around`), giving `(Int->Int) -> Int`. haxe-formatter's
 	 * canonical form is fully tight `(Int->Int)->Int` because the outer
 	 * arrow is grammatically the same `T -> X` curry — the parens are

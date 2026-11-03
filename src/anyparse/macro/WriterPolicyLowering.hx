@@ -32,23 +32,8 @@ using anyparse.macro.MetaInspect;
 @:access(anyparse.macro.WriterLoweringSupport)
 final class WriterPolicyLowering {
 
-	/**
-	 * The `WhitespacePolicy` options a `@:lead` literal can be spaced by, in the order
-	 * `whitespacePolicyLead` resolves several tags on one site: a struct field's mandatory
-	 * lead and an enum branch's ctor-level lead read the same vocabulary.
-	 */
-	private static final LEAD_POLICY_FLAGS: Array<String> = [
-		'objectFieldColon',
-		'typeHintColon',
-		'typeCheckColon',
-		'typedefAssign',
-		'typedefIntersection',
-		'functionTypeHaxe4',
-		'arrowFunctions',
-		'catchParensInsideOpen',
-		'switchCondParensInsideOpen',
-		'whileCondParensInsideOpen'
-	];
+	/** The sides `@:fmt(space)` can name; another one is a typo the build refuses, since nothing would read it. */
+	private static final SPACE_SIDES: Array<String> = ['lead'];
 
 	/**
 	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
@@ -515,55 +500,15 @@ final class WriterPolicyLowering {
 	}
 
 	/**
-	 * Return a Doc expression for a `@:lead(text)` whose field carries a
-	 * writer-only whitespace-policy flag. The helper picks the first flag
-	 * from `flagNames` that is present on `child` and emits a runtime
-	 * switch on `opt.<flagName>:WhitespacePolicy`; when no flag matches
-	 * the output is plain `_dt(leadText)`, matching the tight default of
-	 * the mandatory-lead path.
+	 * Return a Doc expression for a `@:lead(text)` spaced by the option `knob`: a runtime switch on
+	 * `opt.<knob>: WhitespacePolicy`. No knob means `_dt(leadText)`, the tight default of the mandatory-lead
+	 * path, or a droppable space after it under `@:fmt(spaceAfterLead)`.
 	 *
-	 * Defined flags today:
-	 *  - `objectFieldColon` (ψ₇) — `HxObjectField.value`'s `@:lead(':')`.
-	 *    Default `After` on `HaxeFormat.instance.defaultWriteOptions`:
-	 *    `{a: 0}`.
-	 *  - `typeHintColon` (ω-E-whitespace) — the three type-annotation
-	 *    colons: `HxVarDecl.type`, `HxParam.type`, `HxFnDecl.returnType`.
-	 *    Default `None` — `x:Int`, `f():Void` stay compact.
-	 *  - `typedefAssign` (ω-typedef-assign) — `HxTypedefDecl.type`'s
-	 *    `@:lead('=')`. Default `Both` — `typedef Foo = Bar;`. The
-	 *    `None` policy reverts to the pre-slice tight `=` via the
-	 *    same switch's fall-through path.
-	 *  - `typeParamDefaultEquals` (ω-typeparam-default-equals) —
-	 *    `HxTypeParamDecl.defaultValue`'s `@:optional @:lead('=')`.
-	 *    Default `Both` — `<T = Int>` / `<T:Foo = Bar>`. `None`
-	 *    collapses the optional non-tight lead's `sameLineSeparator +
-	 *    leadText + ' '` pair into a tight `<T=Int>` (matches
-	 *    `whitespace.binopPolicy: "none"`). Routed from the optional
-	 *    non-tight branch in `lowerStruct` Case 5, NOT from the
-	 *    mandatory-lead path that handles the other knobs above.
-	 *
-	 * Runtime dispatch for each switch (cases built as raw `EField`
-	 * patterns to avoid macro-time enum resolution against
-	 * `WhitespacePolicy`):
-	 *  - `Before` → `_dt(' ' + leadText)`.
-	 *  - `After`  → `_dt(leadText + ' ')`.
-	 *  - `Both`   → `_dt(' ' + leadText + ' ')`.
-	 *  - `None`   → default, `_dt(leadText)` (tight).
-	 *
-	 * Pre-concatenating each case into a single `_dt` (instead of three
-	 * Doc atoms) keeps the output byte-identical to the pre-flag layout
-	 * for the `None` case and avoids introducing Doc boundaries the
-	 * Renderer might break across.
-	 *
-	 * Per-field flags stay scoped to their own grammar sites — sibling
-	 * leads on the same struct are unaffected. Adding a new tag follows
-	 * the ψ₆ principle (one meta = one options field); multiple tags on
-	 * one field are resolved by `flagNames` order.
+	 * The knob is what `spaceKnob` reads off the node, so one option per site stays scoped to that grammar
+	 * site and sibling leads on the same struct are unaffected. `typeParamDefaultEquals` still arrives by name
+	 * from the optional non-tight branch of `emitOptionalRefLead`.
 	 */
-	private static function whitespacePolicyLead(
-		child: ShapeNode, leadText: String, flagNames: Array<String>, addBefore: Bool = false
-	): Expr {
-		final flagName: Null<String> = firstFmtFlag(child, flagNames);
+	private static function whitespacePolicyLead(child: ShapeNode, leadText: String, knob: Null<String>, addBefore: Bool = false): Expr {
 		// Opt-in `@:fmt(spaceAfterLead)` on a struct-
 		// field mandatory `@:lead(LIT)` appends an OptSpace after the
 		// lead literal — mirror of the enum-ctor `spaceAfterLead`
@@ -581,12 +526,12 @@ final class WriterPolicyLowering {
 		// because nothing emits a hardline before the lead.
 		// `addBefore` pins the space before the lead whatever the option says (the policy's
 		// `add(Before)`), so the option decides only the space after it.
-		final policy: Null<Expr> = if (flagName == null)
+		final policy: Null<Expr> = if (knob == null)
 			null
 		else if (addBefore)
-			macro ${optFieldAccess(flagName)}.add(anyparse.format.WhitespacePolicy.Before)
+			macro ${optFieldAccess(knob)}.add(anyparse.format.WhitespacePolicy.Before)
 		else
-			optFieldAccess(flagName);
+			optFieldAccess(knob);
 		return if (policy != null)
 			buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], policy, [
 				{ values: ['Before'], expr: macro _dc([_dt(' '), _dt($v{leadText})]) },
@@ -812,6 +757,27 @@ final class WriterPolicyLowering {
 		final fitPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'FitLine']);
 		final optFlag: Expr = optFieldAccess(flagName);
 		return macro ($optFlag == $fitPat);
+	}
+
+	/**
+	 * The option a node's `@:fmt(space('<knob>', '<side>'))` spaces `side` by, or null when it names none: the
+	 * one reader of that flag. The flag spells the option's own name, so the macro does not. Only the positions
+	 * that call this read the flag at all, and elsewhere it is ignored unchecked, like any flag no emitter asks for.
+	 */
+	private static function spaceKnob(node: ShapeNode, side: String): Null<String> {
+		final unreadable: Null<String> = node.fmtUnreadableForm('space');
+		if (unreadable != null) refuseSpaceFlag(unreadable);
+		for (args in node.fmtReadStringArgsAll('space')) {
+			if (args.length != 2 || !SPACE_SIDES.contains(args[1])) refuseSpaceFlag(args.join(', '));
+			if (args[1] == side) return args[0];
+		}
+		return null;
+	}
+
+	private static function refuseSpaceFlag(got: String): Void {
+		Context.fatalError(
+			'@:fmt(space) takes an option name and one of the sides ${SPACE_SIDES.join(', ')}: got ($got)', Context.currentPos()
+		);
 	}
 
 }

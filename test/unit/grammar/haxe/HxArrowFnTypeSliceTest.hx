@@ -36,7 +36,7 @@ import utest.Assert;
  *    named form rejects (bare typeref, qualified, parameterised,
  *    nested arrow, anon struct, `(Inner)` parens).
  *
- * Writer emission: `@:fmt(functionTypeHaxe4)` on `HxArrowFnType.ret`'s
+ * Writer emission: `@:fmt(space('functionTypeHaxe4', 'lead'))` on `HxArrowFnType.ret`'s
  * `@:lead('->')` routes through `whitespacePolicyLead` so
  * `opt.functionTypeHaxe4:WhitespacePolicy` controls the spacing.
  * Default `Both` matches haxe-formatter's

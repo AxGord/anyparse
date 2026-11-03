@@ -9,7 +9,7 @@ package anyparse.grammar.haxe;
  *
  * `type` is a full `HxType`, so struct typedefs and function types compose through
  * `HxType.Anon` and `HxType.Arrow`. Writer-side `=` spacing is driven by
- * `@:fmt(typedefAssign)` (ω-typedef-assign): the default `WhitespacePolicy.Both` emits
+ * `@:fmt(space('typedefAssign', 'lead'))` (ω-typedef-assign): the default `WhitespacePolicy.Both` emits
  * `typedef Foo = Bar;` (haxe-formatter's `binopPolicy` default), `None` the tight form.
  *
  * `@:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon', 'anonTypeLeftCurly',
@@ -46,6 +46,6 @@ package anyparse.grammar.haxe;
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name: HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:fmt(typedefAssign, propagateTypedefContext, captureAfterLead) @:lead('=') @:queryTypeSlot var type: HxType;
+	@:fmt(space('typedefAssign', 'lead'), propagateTypedefContext, captureAfterLead) @:lead('=') @:queryTypeSlot var type: HxType;
 	@:trivia @:tryparse @:fmt(padLeading, operandBreakAfterMultilineBrace) var intersections: Array<HxIntersectionClause>;
 }

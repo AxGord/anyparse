@@ -12,7 +12,7 @@ package anyparse.grammar.haxe;
  * name / type / default-value body without duplicating the field
  * declarations.
  *
- * `@:fmt(typeHintColon)` mirrors `HxVarDecl.type` / `HxAnonFieldBody.type` —
+ * `@:fmt(space('typeHintColon', 'lead')))` mirrors `HxVarDecl.type` / `HxAnonFieldBody.type` —
  * the colon emission flips between tight (`x:Int`) and around (`x : Int`)
  * per `HxModuleWriteOptions.typeHintColon`. The default-value lead
  * (`@:optional @:lead('=')`) reuses the same pattern as `HxVarDecl.init`.
@@ -32,6 +32,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxParamBody = {
 	var name: HxIdentLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
+	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
 	@:optional @:lead('=') var defaultValue: Null<HxExpr>;
 }

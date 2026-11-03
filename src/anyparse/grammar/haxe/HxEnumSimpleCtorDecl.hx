@@ -8,5 +8,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxEnumSimpleCtorDecl = {
 	var name: HxIdentLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') var returnType: Null<HxType>;
+	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') var returnType: Null<HxType>;
 };

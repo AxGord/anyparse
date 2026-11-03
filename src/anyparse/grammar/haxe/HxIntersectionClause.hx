@@ -16,12 +16,12 @@ package anyparse.grammar.haxe;
  * whose word-boundary check would reject `A&B`.
  *
  * Around-spacing (`A & B`) is split like the `extends`/`from` heritage clauses: the post-`&`
- * space comes from `@:fmt(typedefIntersection)` on the `type` field (routes the `@:lead('&')`
+ * space comes from `@:fmt(space('typedefIntersection', 'lead'))` on the `type` field (routes the `@:lead('&')`
  * through `WriterPolicyLowering.whitespacePolicyLead`; the option defaults to `After`), while
  * the pre-`&` space is structural, supplied by the consuming Star's `@:fmt(padLeading)` (first
  * clause) and the bare-Star inter-element separator (subsequent clauses). A struct is required
  * so the field hits the non-optional-lead `whitespacePolicyLead` path; sibling mechanism of
- * `HxTypedefDecl.type`'s `@:fmt(typedefAssign)` `=` spacing.
+ * `HxTypedefDecl.type`'s `@:fmt(space('typedefAssign', 'lead'))` `=` spacing.
  *
  * `@:fmt(typedefIntersectionBreak)` (ω-typedef-intersection-operand-break) makes the
  * `&`→operand whitespace a runtime decision: when the consuming Star sets
@@ -39,5 +39,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxIntersectionClause = {
-	@:fmt(typedefIntersection, typedefIntersectionBreak, captureAfterLead) @:lead('&') var type: HxType;
+	@:fmt(space('typedefIntersection', 'lead'), typedefIntersectionBreak, captureAfterLead) @:lead('&') var type: HxType;
 }

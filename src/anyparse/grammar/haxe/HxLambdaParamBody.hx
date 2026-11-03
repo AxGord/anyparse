@@ -42,6 +42,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxLambdaParamBody = {
 	var name: HxIdentLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
+	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
 	@:optional @:lead('=') var defaultValue: Null<HxExpr>;
 }

@@ -139,9 +139,9 @@ enum HxExpr {
 
 	/**
 	 * `macro : T`. The space before the colon is always written; the one after it follows
-	 * `typeHintColon` (`@:fmt(spaceBeforeLead, typeHintColon)` = the policy's `add(Before)`).
+	 * `typeHintColon` (`@:fmt(spaceBeforeLead, space('typeHintColon', 'lead'))` = the policy's `add(Before)`).
 	 */
-	@:kw('macro') @:lead(':') @:fmt(spaceBeforeLead, typeHintColon)
+	@:kw('macro') @:lead(':') @:fmt(spaceBeforeLead, space('typeHintColon', 'lead'))
 	MacroTypeExpr(t: HxType);
 
 	@:kw('macro') @:fmt(clearBracePolicy)

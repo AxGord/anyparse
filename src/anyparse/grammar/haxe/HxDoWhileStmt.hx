@@ -35,6 +35,6 @@ typedef HxDoWhileStmt = {
 	@:trailOpt(';') @:fmt(bodyPolicy('doBody'), dropSingleStmtBraces,
 		loopBodyIfElseNext('loopBodyIfElseNext', 'IfExpr', 'elseBranch', 'ExprBody')) var body: HxDoWhileBody;
 	@:kw('while') @:lead('(') @:trail(')')
-	@:fmt(sameLine('sameLineDoWhile'), whilePolicy, whileCondParensInsideOpen, whileCondParensInsideClose)
+	@:fmt(sameLine('sameLineDoWhile'), whilePolicy, space('whileCondParensInsideOpen', 'lead'), whileCondParensInsideClose)
 	var cond: HxExpr;
 };

@@ -12,7 +12,7 @@ package anyparse.format;
  * for `HxObjectField.value`.
  * `Both` — single space on both sides (`a : b`).
  *
- * Consumed by field-scoped writer flags such as `@:fmt(objectFieldColon)`:
+ * Consumed by field-scoped writer flags such as `@:fmt(space('objectFieldColon', 'lead'))`:
  * presence of the flag on a lead switches the emission from the plain
  * tight lead (`_dt(':')`) to a runtime switch on the `WriteOptions`
  * flag, so the policy applies only at the tagged site — sibling leads

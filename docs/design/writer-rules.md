@@ -124,7 +124,7 @@ Macro lines are today's attribution from § 1, so `gap` reads low: its cost sits
 
 | Family | Flags | Sites | Macro lines | Intro | What the rules do | Smallest form | Proved? |
 |---|---:|---:|---:|---:|---|---|---|
-| spacing | 51 | 225 | 1,192 | 1,330 | a space or not between two tokens, by a knob | one flag `space('<knob>', side)`; no new Doc. `LEAD_POLICY_FLAGS` already has ten flags whose name is the knob's name | no |
+| spacing | 51 | 225 | 1,192 | 1,330 | a space or not between two tokens, by a knob | one flag `space('<knob>', side)`; no new Doc. ten moved; 24 of the other 41 could, 17 cannot (§ 5) | **refuted as a size step** |
 | placement | 40 | 173 | 1,474 | 2,783 | body on the head's line or below, braces | a runtime `(head, body, policy) → Doc`; `BodyFit` is already half of it | no; do after CANON |
 | wrap | 43 | 144 | 1,451 | 3,165 | breaking by width | `listLayout('<fn>', '<knob>')`: the macro hands over the item Docs. Separately, one `IfFits(measure, n, brk, flat)` in place of the 13 probes | one rule on one Star shape; the probes no |
 | gap | 31 | 98 | 660 | 3,504 | blank lines between siblings | `gapRule('<fn>', '<knob>')`; the ctor cascade (2,151 lines in two files) as a table read at write time | one rule on one Star shape; the cascade no |
@@ -413,13 +413,48 @@ Costs in queue-line difficulty (`lib/difficulty.md`) and lines; H8, a comparable
 | 2 | Land `listLayout` and `gapRule`; a new layout rule on a hooked shape uses a hook | one slice, 5–6 | −50 lines; a new rule stays out of the macro on 9 % of today's uses (§ 2.1), and the rest still grow it | low |
 | **STOP** | **Measure the next 5 new rules: macro lines each, against the median 64, counting eligible (hooked shape) and non-eligible rules separately.** A run of non-eligible rules says the next hook to build, or that this was not worth it | | | |
 | 3 | CANON-1..6 as queued, independent of this audit | as queued | 1.0–1.5k lines, `source` family | as queued |
-| 4 | `spacing` to one flag | 1–2 slices, 6; mechanical through hxq | est. 50 flags → 3, about −1k macro lines; 0 output change | low; estimate unproved |
+| 4 | `spacing` to one flag: **stopped**, the first ten landed | one slice | measured: 10 flags → 1, +18 code lines; 0 output change; § Step 4, measured | refuted as a size step |
 | 5 | The 13 width probes into one `IfFits` | one slice, 7 | est. most of the 851 code mentions; a dedicated slot ctor becomes cheap | medium, the renderer is hot |
 | 6 | `placement` to runtime, after CANON | re-measure first | up to about 2k | high |
 | 7 | Gap cascade as a table | prototype first | up to about 2k | high; not tried |
 | 8 | Lint: new mechanical rules as `pattern → rewrite` | language work, 2–3 slices, 7 | 0 at first | medium |
 
-Steps 4–8 show estimates, not measurements, apart from the mentions and line counts they start from.
+Steps 5–8 show estimates, not measurements, apart from the mentions and line counts they start from. Step 4 is measured below.
+
+### Step 4, measured
+
+SPACING-ONE-FLAG-PROTO moved the ten `LEAD_POLICY_FLAGS` to `@:fmt(space('<knob>', 'lead'))` and stopped under its own 100-line bar, so no second shape was moved.
+
+| Moved flag | Macro lines removed | Generated writer lines differing |
+|---|---:|---:|
+| `objectFieldColon`, `typeCheckColon`, `typedefAssign`, `functionTypeHaxe4`, `arrowFunctions`, `catchParensInsideOpen`, `switchCondParensInsideOpen`, `whileCondParensInsideOpen` | 1 each, its list entry | 0 |
+| `typeHintColon`, `typedefIntersection` | 1 each, plus a call-site array rewritten in place | 0 |
+
+The list's 12 code lines went, and the reader and its refusals outweigh them: **+18 code lines, −10 counting comments** (24,696 → 24,714 code lines). The generated engine holds the same multiset of lines, 369,512 of them in 13,568,476 bytes, so no call, allocation or dispatch appeared. Interleaved CPU on a loaded machine, base against tip: `fmt src` medians 19.85 s and 18.32 s (7 each, spread 13.75–29.54), and the macro's typecheck 14.65 s and 13.52 s (5 each, spread 12.91–23.49). The differences are inside the spread and the code is the same, so run time did not move and compile time paid nothing measurable. Each grammar site grew instead, and 22 of them now spell `space(…, 'lead')`.
+
+The estimate failed because § 2's 1,192 share out whole emit functions among the flags they name. A flag's own cost is its literal; the switch it reaches stays for whoever spells the flag.
+
+The other 41, re-estimated by reading their sites:
+
+| Flags | One flag? | Why | Code lines it would remove |
+|---|---|---|---:|
+| `ifPolicy`, `forPolicy`, `whilePolicy`, `switchPolicy`, `tryPolicy`, `sharpCondParensGap`, `catchParensGap`, `anonFuncParens` | yes, a keyword side | knob-named, read from lists | about 9 |
+| `catchParensInsideClose`, `switchCondParensInsideClose`, `whileCondParensInsideClose` | yes, a trail side | knob-named, read from a list | about 4 |
+| `funcParamParens`, `typeParamOpen`, `typeParamClose`, `objectLiteralBracesOpen`, `objectLiteralBracesClose`, `anonTypeBracesOpen`, `anonTypeBracesClose` | yes, open and inside sides | each call stays, with a side for its list; `typeParamOpen` is read at two sides, so its 14 sites declare twice | 0 |
+| `callParens`, `functionTypeHaxe3`, `typeParamDefaultEquals` | yes | the branch testing the flag stays | up to 2 |
+| `condParensInside`, `callParensInside`, `accessBrackets` | yes, declared twice | each names two options; the emit path stays | up to 6 |
+| `tight`, `tightLead`, `tightKw`, `spaceAfterLead`, `spaceBeforeLead`, `spaceBeforeTrail` | **no** | no option exists: the answer is constant, and the tight ones also steer which emit path runs | |
+| `deferKwSpace` | **no** | no option, and it picks a droppable space over a hard one, a Doc kind and not a presence | |
+| `padLeading`, `padTrailing` | **no** | no option, and state across fields: the next separator is dropped at run time if this pad fired | |
+| `intervalPolicy` | **no** | beside its option it reads the left operand's last digit at run time, so `1...2` cannot fuse | |
+| `sharpCondParensInside` | **no** | pads inside a captured verbatim `#if (cond)` string, where there is no token | |
+| `kwPolicy` | **no** | its option goes through `bodyPolicyWrap`, a placement path on the body | |
+| `switchWrapSpace`, `tightOnParenOperand`, `bracketKindPad` | **no** | the decision reads the operand's AST at run time | |
+| `atomOperand`, `atomOperandWhen` | **no** | not spacing: parser shape and open-right dispatch, filed here by § 2's name match | |
+
+So 24 can move for about 20 code lines, and 17 cannot: 51 flags become 18 at best, not 3.
+
+**Verdict: stop.** Step 4 is not a size step: the ten cheapest flags added 18 code lines against an estimate of about −1k, and what remains would remove about 20, because the lines § 2 counted belong to emit functions every form still needs. What the move did buy is real and small: ten of Haxe's option names left the macro, which is invariant 4, at no run time. It holds only where the flag is read, which is three positions: a mandatory Ref lead, a tight optional Ref lead and a non-word ctor lead. Everywhere else it is ignored without a complaint, even misspelt: on an optional non-tight lead, `@:optional @:lead('=') @:fmt(space('gap', 'lead'))` writes `a = b` under `gap` at `None` and at `Both`. So a new spaced lead at those three positions adds no macro line, and elsewhere `space` does nothing until a reader is added there. That is a reason to take `space` for a new lead at those positions, and to move the 11 keyword-side and trail-side flags named above when one of their lists is next edited. It is no reason for a slice of its own, and the rest of the family stays as it is.
 
 ### What is not worth doing
 

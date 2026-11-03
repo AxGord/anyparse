@@ -5,6 +5,7 @@ import anyparse.core.ShapeTree.ShapeNode;
 import haxe.macro.Context;
 import haxe.macro.Expr.Metadata;
 import haxe.macro.Expr.MetadataEntry;
+import haxe.macro.ExprTools;
 
 using Lambda;
 
@@ -218,6 +219,28 @@ final class MetaInspect {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * The first `@:fmt` form of `name` that `fmtReadStringArgsAll` leaves out, as source, or null when
+	 * none: the bare flag, or a call with an argument that is not a string literal. For a reader that must
+	 * refuse what it cannot read, since taking it for an absent flag fails in silence.
+	 */
+	public static function fmtUnreadableForm(node: ShapeNode, name: String): Null<String> {
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
+		if (meta == null) return null;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case EConst(CIdent(id)) if (id == name):
+					return name;
+				case ECall({ expr: EConst(CIdent(id)) }, args) if (
+					id == name && !args.foreach(arg -> arg.expr.match(EConst(CString(_, _))))
+				):
+					return ExprTools.toString(param);
+				case _:
+			}
+		}
+		return null;
 	}
 
 }

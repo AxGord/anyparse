@@ -16,12 +16,12 @@ package anyparse.grammar.haxe;
  * last, for the zero/multi/optional-param shapes that cannot parse as
  * an expression.
  *
- * `@:fmt(arrowFunctions)` on `body` gates the spacing around the `->`
+ * `@:fmt(space('arrowFunctions', 'lead'))` on `body` gates the spacing around the `->`
  * separator on `opt.arrowFunctions:WhitespacePolicy`. Default `Both`
  * matches haxe-formatter's `whitespace.arrowFunctionsPolicy:
  * @:default(Around)` — emits `(params) -> body`. Setting the runtime
  * policy to `None` produces the tight `(params)->body` shape. Sibling
- * to `@:fmt(functionTypeHaxe4)` on `HxArrowFnType.ret` (the type-
+ * to `@:fmt(space('functionTypeHaxe4', 'lead'))` on `HxArrowFnType.ret` (the type-
  * position `(args) -> ret`); the two knobs are independent so a config
  * can space the type form while keeping the expression form tight, or
  * vice versa, mirroring upstream's separate JSON keys. The single-
@@ -32,5 +32,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxThinParenLambda = {
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('anonFunctionSignatureWrap')) var params: Array<HxLambdaParam>;
-	@:fmt(arrowFunctions, propagateExprPosition, propagateAnonFnContext, propagateArrowLambdaBody, arrowBodyLineWrap) @:lead('->') var body: HxExpr;
+	@:fmt(space(
+		'arrowFunctions', 'lead'
+	), propagateExprPosition, propagateAnonFnContext, propagateArrowLambdaBody, arrowBodyLineWrap) @:lead('->') var body: HxExpr;
 }

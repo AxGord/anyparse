@@ -41,7 +41,7 @@ package anyparse.grammar.haxe;
 @:spanned('CatchClause')
 typedef HxCatchClause = {
 	@:kw('catch') @:lead('(') @:trail(')')
-	@:fmt(catchParensGap, catchParensInsideOpen, catchParensInsideClose)
+	@:fmt(catchParensGap, space('catchParensInsideOpen', 'lead'), catchParensInsideClose)
 	var param: HxCatchParam;
 	@:optional @:absentOn('}') @:trailOpt(';') @:fmt(bodyPolicy('catchBody'), constructFitBody, bareRefSepWhenPresent) var body: Null<HxStatement>;
 };

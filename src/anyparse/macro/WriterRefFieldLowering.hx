@@ -247,13 +247,13 @@ final class WriterRefFieldLowering {
 		var breakAfterEqEmitted: Bool = false;
 		final isFieldTight: Bool = child.fmtHasFlag('tightLead');
 		if (ctx.isTightLead(leadText)) {
-			// ω-E-whitespace: `@:fmt(typeHintColon)` on
+			// ω-E-whitespace: `@:fmt(space('<knob>', 'lead'))` on
 			// optional-Ref tight leads routes through the same
 			// WhitespacePolicy helper as mandatory leads.
 			// Without the flag the `None` default keeps the
 			// tight `_dt(leadText)` byte-identical to the pre-
 			// flag path (`f():Void`).
-			optParts.push(whitespacePolicyLead(child, leadText, ['typeHintColon']));
+			optParts.push(whitespacePolicyLead(child, leadText, spaceKnob(child, 'lead')));
 		} else if (isFieldTight) {
 			// Per-field `@:fmt(tightLead)`: opts an
 			// optional Ref's `@:lead` into tight emission
@@ -276,7 +276,7 @@ final class WriterRefFieldLowering {
 			// The default `Both` branch emits ` = ` — byte-
 			// identical to the previous pair when the field has
 			// no `@:fmt(sameLine(...))` companion.
-			optParts.push(whitespacePolicyLead(child, leadText, ['typeParamDefaultEquals']));
+			optParts.push(whitespacePolicyLead(child, leadText, 'typeParamDefaultEquals'));
 		} else {
 			optParts.push(sameLineSeparator(ctx.fieldSep, child, prevBodyField, typePath, prevPadTrailing));
 			// ω-N-break-after-eq: `@:fmt(breakAfterLeadOnOverflow('type'))`

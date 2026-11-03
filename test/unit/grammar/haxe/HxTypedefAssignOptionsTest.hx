@@ -17,7 +17,7 @@ import utest.Test;
  * `whitespace.binopPolicy: @:default(Around)`. The other three
  * policies expose the remaining single-character-separator spacings.
  *
- * The knob is wired via `@:fmt(typedefAssign)` on `HxTypedefDecl.type`
+ * The knob is wired via `@:fmt(space('typedefAssign', 'lead'))` on `HxTypedefDecl.type`
  * only — regression tests below assert that the optional `=` leads on
  * `HxVarDecl.init` and `HxParam.defaultValue` keep their pre-slice
  * ` = ` layout regardless of the configured typedef policy. They flow

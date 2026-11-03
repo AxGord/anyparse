@@ -1323,6 +1323,22 @@
 			"find": "if (path != null)",
 			"replace": "if (false)",
 			"note": "a slot outside every sharing list builds and ships unresolved"
+		},
+		{
+			"name": "M-SPACE-FLAG-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterPolicyLowering",
+			"method": "spaceKnob",
+			"find": "if (args[1] == side) return args[0];",
+			"replace": "if (args[1] == side) return 'typeHintColon';",
+			"note": "every space flag reads one hard-wired option, so a second grammar whose options do not hold it no longer builds and Haxe's other knobs stop deciding their literals"
+		},
+		{
+			"name": "M-SPACE-FLAG-TIGHT-OPTIONAL-HARDWIRED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalRefLead",
+			"find": "whitespacePolicyLead(child, leadText, spaceKnob(child, 'lead'))",
+			"replace": "whitespacePolicyLead(child, leadText, spaceKnob(child, 'lead') == null ? null : 'typeHintColon')",
+			"note": "a tight optional lead always reads one hard-wired option whatever its flag names, so a second grammar's own option stops reaching it, and every Haxe site on this path spells that option"
 		}
 	]
 }

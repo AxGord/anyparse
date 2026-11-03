@@ -80,13 +80,23 @@ both forms in different places. Arguments are opaque strings the lowering forwar
 name); the lowering never interprets one as a grammar type of its own — see "The engine
 never spells a grammar's own type or constructor" above.
 
+**`space('<knob>', '<side>')`** names the `WhitespacePolicy` option that spaces a literal at
+`side`, today only `lead`; `WriterPolicyLowering.spaceKnob` is its one reader. The argument is the
+option's own name, so the macro does not spell it. Three positions read the flag: a mandatory Ref lead
+(`emitMandatoryLead`), a tight optional Ref lead (`emitOptionalRefLead`) and a non-word ctor lead
+(`kwRefLeadDoc`). There, a misspelt knob stops the build as a missing option field, and
+`spaceKnob` refuses an unknown or missing side, a non-string argument and the bare flag. **Everywhere else
+the flag is ignored without a complaint**, even misspelt: an optional non-tight lead, a Star's lead,
+a field with no lead. An option named there has no effect. The other spacing flags still name their
+options in the macro; `docs/design/writer-rules.md` § 5 says which could move.
+
 **The inventory.** `(…)` marks a flag that takes arguments, `[(…)]` one seen in both
 forms; everything else is bare.
 
 ```
 accessBrackets, afterFieldsWithDocComments, afterFileHeaderCommentBlanks, allmanIndentForCtor(…),
 anonFuncParens, anonTypeBracesClose, anonTypeBracesOpen, arrayMatrixWrap, arrowBodyLineWrap,
-arrowBodyOpenPadSuppress, arrowFunctions, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
+arrowBodyOpenPadSuppress, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
 atomOperand, atomOperandWhen(…), bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
 beforeNewlineSlotFirst, belowWrappedLabel, beginEndType[(…)], betweenMultilineCommentsBlanks,
 blankBeforeFinalDocCommentInLeading, blankBeforeLineCommentLed, blankBeforeOrphanLineCommentTrail,
@@ -99,14 +109,14 @@ bodyPolicyForCtor(…), bodyPolicyOverride(…), bodyPolicySingleLine(…), brac
 breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, captureAfterLead, captureChainNewline,
 captureCondOpenNewline, captureKwNewline, capturePostfixOpSpace, captureRhsTrail, captureSource(…),
 captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
-catchParensGap, catchParensInsideClose, catchParensInsideOpen, chainNestSuppress,
+catchParensGap, catchParensInsideClose, chainNestSuppress,
 clearBracePolicy, clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, compactUnlessNested, complexItems, condExprFitBreak,
 condExprFitGroup, conditionalBodyIndent, conditionalMarkerDedent, condParensInside(…),
 condSpliceCaseMarkerDedent, condSwitchOpenCasesNest, condWrap(…), condWrapEnd, constructFitBody,
 constructFitGroup(…), constructFitSep, cuddle, deferKwSpace, dropSingleStmtBraces, elemSelfTrailsNewline,
 elseIf, elseIfCommentReflow, elseSwitch(…), emptyBlockBreak, emptyCurlyBreak[(…)], existingBetweenFields,
 expressionParenHardFlatten, fillItems, fillParts, fillSeam, fitLineIfWithElse, flatChildOpt(…), forceInlineSep,
-forceMultiInTypedef, forPolicy, forwardNewlineForBody, funcParamParens, functionTypeHaxe3, functionTypeHaxe4,
+forceMultiInTypedef, forPolicy, forwardNewlineForBody, funcParamParens, functionTypeHaxe3,
 gapRule(…), groupRestProbe, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
 inlineBlockBodyIfFlag(…), inlineElemTrivia, inlineSep, interMemberBlankLines(…), interMemberCondLookThrough(…), intervalPolicy,
 keepBlankAfterStarCtor(…), keepCurlyBlanks, keepInnerWhenEmpty(…), kwPolicy(…), leftCurly[(…)],
@@ -114,7 +124,7 @@ leftCurlyAnonFnOverride(…), lineLengthAwareSeps, liftNoSemi(…), listLayout(�
 measuredMultilineDecls, metaBlockGlue(…), metaLineEndPolicy(…), methodChain(…), multilineCtor,
 multilineWhenFieldCtorAndOpt(…), multilineWhenFieldNonEmpty(…), multilineWhenFieldShape(…),
 multilineWhenLeadingTriviaSpansLines(…), multilineWhenStarFieldWrapsCascade(…), multiVarWrap(…), nestBody,
-nestBodyOnSourceNewline, noSiblingFallback(…), objectFieldColon, objectLiteralBracesClose,
+nestBodyOnSourceNewline, noSiblingFallback(…), objectLiteralBracesClose,
 objectLiteralBracesOpen, operandBreakAfterMultilineBrace, optionalSemicolon(…), padLeading, padTrailing,
 preWrite(…), propagateAnonFnContext, propagateArrowLambdaBody, propagateElseIfBranch,
 propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, propagateNestedType, propagateTypedefContext,
@@ -122,15 +132,15 @@ propagateValueIfBranch, reflowInExprPosition, reflowSourceMultiline, refuseFlatO
 refuseGlueOnControlFlowRoot, relocateTrailingComments, rightCurly[(…)], rightCurlyAnonFnOverride(…), sameLine(…),
 semicolonBeforeSibling(…), semicolonNextLineElse, sepBeforeOpt, setBoolFlagFromStarCtor(…), shapeAware,
 sharpCondParensGap, sharpCondParensInside(…), siblingLead(…), siblingShare(…), siblingSlot(…),
-softFill, spaceAfterLead, spaceBeforeLead, spaceBeforeTrail,
+softFill, space(…), spaceAfterLead, spaceBeforeLead, spaceBeforeTrail,
 staticVarSubdivision, suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe,
-switchCondParensInsideClose, switchCondParensInsideOpen, switchPolicy, switchSubjectNoWrap,
+switchCondParensInsideClose, switchPolicy, switchSubjectNoWrap,
 switchSubjectParensStrip, switchWrapSpace, tight, tightKw, tightLead, tightOnParenOperand(…), trailingComma(…),
 trailingCommaRemovable, trailOptParseGate(…), trailOptShapeGate(…), tryBraceSymmetry(…),
-tryCatchBraceSymmetry(…), tryDeBrace, tryPolicy, typeCheckColon, typedefAssign, typedefBodyBlanks,
-typedefIntersection, typedefIntersectionBreak, typeHintColon, typeParamClose, typeParamDefaultEquals,
+tryCatchBraceSymmetry(…), tryDeBrace, tryPolicy, typedefBodyBlanks,
+typedefIntersectionBreak, typeParamClose, typeParamDefaultEquals,
 typeParamOpen, uniformBetween(…), uniformStmtBlanks, valueBraceSymmetry(…), whileCondParensInsideClose,
-whileCondParensInsideOpen, whilePolicy, widthAware, wrapRules(…)
+whilePolicy, widthAware, wrapRules(…)
 ```
 
 Regenerate it with `apq meta '@:fmt' src/anyparse/grammar --limit 500 --flat` and collect

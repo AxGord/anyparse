@@ -11,7 +11,7 @@ package anyparse.grammar.haxe;
  * source-order Alt-enum so the parser tries the arrow-fn shape first; when the trailing `->`
  * is missing the branch rolls back and `Parens` (or any other `(`-prefixed atom) takes over.
  *
- * `@:fmt(functionTypeHaxe4)` on `ret` gates the spacing around `->` on
+ * `@:fmt(space('functionTypeHaxe4', 'lead'))` on `ret` gates the spacing around `->` on
  * `opt.functionTypeHaxe4:WhitespacePolicy`: the default `Both` matches haxe-formatter's
  * `whitespace.functionTypeHaxe4Policy` default and emits `(args) -> ret`; `None` produces
  * the tight `(args)->ret`. The old curried form `Int->Bool` runs through the sibling
@@ -40,5 +40,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxArrowFnType = {
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(wrapRules('functionSignatureWrap'), compactUnlessNested, groupRestProbe) var args: Array<HxArrowParam>;
-	@:fmt(functionTypeHaxe4) @:lead('->') var ret: HxType;
+	@:fmt(space('functionTypeHaxe4', 'lead')) @:lead('->') var ret: HxType;
 }
