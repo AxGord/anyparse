@@ -41,6 +41,10 @@ final class SliceGateTest extends Test {
 	private static inline final GROWN_REGISTRY: String = '{"arms": [{"name": "M-SAME", "type": "a.Untouched", "method": "f", "force": "1"},'
 		+ '{"name": "M-NEW", "type": "a.Other", "method": "f", "force": "1"}]}';
 
+	/** A registry whose one arm belongs to a package other than the document's (`a.json`). */
+	private static inline final MISPLACED_REGISTRY: String =
+		'{"arms": [{"name": "M-BAD", "type": "b.Other", "method": "f", "force": "1"}]}';
+
 	/** A `bin/hxq` that answers every graph call with an empty graph. */
 	private static inline final GRAPH_HXQ: String = 'echo \'{"nodes": []}\'\n';
 
@@ -186,7 +190,7 @@ final class SliceGateTest extends Test {
 	@:killer('M-GATE-CHECK-DROPS-ARMS-PHASE')
 	public function testCheckRunsTheArmsPhase(): Void {
 		final ran: GateRan = gateRun(GROWN_REGISTRY);
-		Assert.isTrue(ran.branches.contains('arms'), 'branches: ${ran.branches}');
+		Assert.isTrue(ran.branches.contains('arms'), 'branches: ${ran.branches}\n${ran.table}');
 		Assert.isTrue(ran.leases.contains(' arms -- '), 'leases: ${ran.leases}');
 	}
 
@@ -196,7 +200,7 @@ final class SliceGateTest extends Test {
 	public function testAnEmptyArmsSelectionTakesNoLease(): Void {
 		final ran: GateRan = gateRun(BASE_REGISTRY);
 		Assert.isTrue(ran.branches.contains('suite'), 'the other rows still run: ${ran.branches}');
-		Assert.isFalse(ran.branches.contains('arms'), 'branches: ${ran.branches}');
+		Assert.isFalse(ran.branches.contains('arms'), 'branches: ${ran.branches}\n${ran.table}');
 		Assert.isFalse(ran.leases.contains(' arms -- '), 'leases: ${ran.leases}');
 	}
 
@@ -229,8 +233,45 @@ final class SliceGateTest extends Test {
 	public function testASettledArmsFailureFailsTheGateWithoutABranch(): Void {
 		final ran: GateRan = gateRun(BASE_REGISTRY, ['--arm', 'M-NOPE']);
 		Assert.equals(1, ran.status);
-		Assert.isFalse(ran.branches.contains('arms'), 'branches: ${ran.branches}');
+		Assert.isFalse(ran.branches.contains('arms'), 'branches: ${ran.branches}\n${ran.table}');
 		Assert.isFalse(ran.leases.contains(' arms -- '), 'leases: ${ran.leases}');
+	}
+
+	/** A registry that does not read (a misplaced arm) fails the gate at once, the row naming the document and the arm. */
+	@:pin('control')
+	@:killer('M-GATE-REGISTRY-REFUSAL-DROPPED')
+	public function testAnUnreadableArmRegistryFailsTheGateBeforeAnyBranch(): Void {
+		final ran: GateRan = gateRun(MISPLACED_REGISTRY);
+		Assert.equals(1, ran.status, ran.table);
+		Assert.equals('', ran.branches, ran.table);
+		Assert.stringContains('a.json: arm M-BAD', ran.table);
+		Assert.isTrue(~/(^|\n)arms +FAILED/.match(ran.table), ran.table);
+		Assert.isFalse(~/(^|\n)build /.match(ran.table), 'the refusal comes before the build: ${ran.table}');
+	}
+
+	/** `--allow arms` does not waive a registry that does not read: the gate ran no other row, so it cannot pass. */
+	@:pin('control')
+	@:killer('M-GATE-REGISTRY-REFUSAL-WAIVABLE')
+	public function testAnUnreadableArmRegistryIsNotWaivedByAllowArms(): Void {
+		final ran: GateRan = gateRun(MISPLACED_REGISTRY, ['--allow', 'arms']);
+		Assert.equals(1, ran.status, ran.table);
+		Assert.stringContains('a.json: arm M-BAD', ran.table);
+	}
+
+	/** A document that does not parse is named in the row. */
+	@:pin('guard')
+	public function testABrokenArmDocumentIsNamedInTheRefusal(): Void {
+		final ran: GateRan = gateRun('{"arms": [{"name": }]}');
+		Assert.equals(1, ran.status, ran.table);
+		Assert.stringContains('a.json: ', ran.table);
+	}
+
+	/** `--no-arms` leaves the registry unread: the other rows still run. */
+	@:pin('control')
+	@:killer('M-GATE-REGISTRY-REFUSAL-READS-NOARMS')
+	public function testNoArmsLeavesAnUnreadableRegistryUnread(): Void {
+		final ran: GateRan = gateRun(MISPLACED_REGISTRY, ['--no-arms']);
+		Assert.isTrue(ran.branches.contains('suite'), ran.table);
 	}
 
 	/** A plan that cannot be made (the graph call fails) is left to the branch, which reports the row; the gate does not throw. */
@@ -238,7 +279,7 @@ final class SliceGateTest extends Test {
 	@:killer('M-GATE-ARMS-PLAN-THROWS-IN-GATE')
 	public function testAPlanThatThrowsIsLeftToTheBranch(): Void {
 		final ran: GateRan = gateRun(GROWN_REGISTRY, [], 'exit 1\n');
-		Assert.isTrue(ran.branches.contains('arms'), 'branches: ${ran.branches}');
+		Assert.isTrue(ran.branches.contains('arms'), 'branches: ${ran.branches}\n${ran.table}');
 	}
 
 	/**
@@ -429,7 +470,8 @@ final class SliceGateTest extends Test {
 			rowLogs: [],
 			logsHad: [],
 			baselineText: '',
-			followWhy: ''
+			followWhy: '',
+			table: ''
 		};
 		TempDir.with(dir -> {
 			final tree: String = scratchTree(dir, registry, hxq);
@@ -480,6 +522,7 @@ final class SliceGateTest extends Test {
 				rowLogs: rowLogs,
 				logsHad: FileSystem.exists('$tree-logs') ? FileSystem.readDirectory('$tree-logs') : [],
 				baselineText: read('$tree-logs/baseline.json'),
+				table: read('$tree-logs/${SliceGate.TABLE_FILE}'),
 				followWhy: switch Branches.reportOf('$tree-logs/rows/corpus.json', 'follow')?.steps[0]?.outcome {
 					case Failed(reason), NotRun(reason): reason;
 					case _: '';
@@ -541,6 +584,9 @@ private typedef GateRan = {
 
 	/** With `corpus`: why the corpus row of the gate run that followed the first run did not pass, empty when it did. */
 	var followWhy: String;
+
+	/** The table the gate printed, for the message of a failed assertion. */
+	var table: String;
 }
 
 /** What the corpus row of a scratch tree meets (`SliceGateTest.corpusWhy`). */

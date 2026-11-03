@@ -44,19 +44,26 @@ final class ArmRegistry {
 		return records;
 	}
 
-	/** The records of several documents, in their order; a name declared in two of them is refused. */
-	public static function parseAll(texts: Array<String>): Array<ArmRecord> {
+	/** The records of several documents, in their order; a name declared in two of them is refused, naming both when `documents` does. */
+	public static function parseAll(texts: Array<String>, ?documents: Array<String>): Array<ArmRecord> {
 		final records: Array<ArmRecord> = [];
-		for (text in texts) for (record in parse(text)) {
-			if (records.exists(r -> r.key == record.key)) throw new ArmRegistryError('arm ${record.key} is declared in two documents');
+		final homes: Array<Int> = [];
+		for (i => text in texts) for (record in parse(text)) {
+			final first: Int = records.findIndex(r -> r.key == record.key);
+			if (first >= 0) {
+				final where: String = documents == null ? '' : ': ${documents[homes[first]]} and ${documents[i]}';
+				throw new ArmRegistryError('arm ${record.key} is declared in two documents$where');
+			}
 			records.push(record);
+			homes.push(i);
 		}
 		return records;
 	}
 
 	/**
-	 * The records of the registry at `path` — a directory of documents, or one document. A directory is refused when a document
-	 * holds an arm that `PackageDocuments.misplacement` places elsewhere; a single document is read whatever it is called.
+	 * The records of the registry at `path` — a directory of documents, or one document. A directory is
+	 * refused, naming the document, when one does not parse or holds an arm that
+	 * `PackageDocuments.misplacement` places elsewhere; a single document is read whatever it is called.
 	 */
 	public static function read(path: String): Array<ArmRecord> {
 		final files: Array<String> = RegistryFiles.of(path);
@@ -64,13 +71,20 @@ final class ArmRegistry {
 		final texts: Array<String> = [for (file in files) File.getContent(file)];
 		if (FileSystem.isDirectory(path)) for (i => text in texts) {
 			final document: String = Path.withoutDirectory(files[i]);
-			for (record in parse(text)) {
+			final parsed: Array<ArmRecord> =
+				try parse(text) catch (refusal: ArmRegistryError) throw new ArmRegistryError('$document: ${refusal.message}');
+			for (record in parsed) {
 				final type: Null<String> = typeOf(record.text);
 				final complaint: Null<String> = type == null ? null : PackageDocuments.misplacement(document, type);
 				if (complaint != null) throw new ArmRegistryError('$document: arm ${record.key} $complaint');
 			}
 		}
-		return parseAll(texts);
+		return parseAll(texts, [for (file in files) Path.withoutDirectory(file)]);
+	}
+
+	/** Reads the registry at `path` for nothing but its refusal: raises what `read` raises, answers nothing. */
+	public static function verify(path: String): Void {
+		read(path).iter(_ -> {});
 	}
 
 	/** The registry at `path` as ONE document — what `MutationArm.cuts` and `armNames` read. */

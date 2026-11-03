@@ -519,6 +519,30 @@
 			"note": "a plan that cannot be made ends the gate after every other row has run, instead of failing the arms row"
 		},
 		{
+			"name": "M-GATE-REGISTRY-REFUSAL-DROPPED",
+			"type": "dev.SliceGate",
+			"method": "check",
+			"find": "if (refusal != null) {",
+			"replace": "if (refusal != null && false) {",
+			"note": "an arm registry that does not read shows only as branches that never ran, not as the cause"
+		},
+		{
+			"name": "M-GATE-REGISTRY-REFUSAL-WAIVABLE",
+			"type": "dev.SliceGate",
+			"method": "check",
+			"find": "_gate.summary.time(ARMS_ROW, () -> Failed(why));",
+			"replace": "gate(ARMS_ROW, () -> Failed(why));",
+			"note": "--allow arms would turn the refusal into a pass of a gate that ran no other row"
+		},
+		{
+			"name": "M-GATE-REGISTRY-REFUSAL-READS-NOARMS",
+			"type": "dev.SliceGate",
+			"method": "registryRefusal",
+			"find": "if (_gate.options.noArms) return null;",
+			"replace": "if (false) return null;",
+			"note": "--no-arms must leave the registry unread"
+		},
+		{
 			"name": "M-GATE-BASELINE-RECORDED-AFTER-FAILURE",
 			"type": "dev.SliceGate",
 			"method": "recordBaseline",

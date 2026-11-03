@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import dev.ArmRegistry.ArmRegistryError;
 import dev.GateArms.ArmPlan;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
@@ -50,6 +51,9 @@ final class SliceGate {
 
 	/** The row the arms phase runs. */
 	public static inline final ARMS_ROW: String = 'arms';
+
+	/** The file of the logs that keeps the table a run printed (not `table.txt`, which the workflows redirect the gate's stdout into). */
+	public static inline final TABLE_FILE: String = 'printed-table.txt';
 
 	/**
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote; the
@@ -154,6 +158,12 @@ final class SliceGate {
 		final title: String =
 			'slice-gate ${_gate.tree} @ $head base ${GateTree.short(_gate.base)}: ${_gate.touched.length} file(s) touched';
 		final self: String = keepSelf();
+		final refusal: Null<String> = registryRefusal();
+		if (refusal != null) {
+			final why: String = GateTree.clip(refusal);
+			_gate.summary.time(ARMS_ROW, () -> Failed(why));
+			return finish(title);
+		}
 		if (!build()) return finish(title);
 		fanOut(self, GATE_BRANCHES, GATE_ROWS);
 		armsPhase(self);
@@ -307,7 +317,9 @@ final class SliceGate {
 	/** Print the title, the table and the verdict with the run's wall time; answers the exit status. */
 	private function finish(title: String): Int {
 		Sys.println(title);
-		Sys.println(_gate.summary.table());
+		final table: String = _gate.summary.table();
+		Sys.println(table);
+		File.saveContent(_gate.log(TABLE_FILE), '$table\n');
 		final excerpts: String = _gate.summary.excerpts();
 		if (excerpts != '') Sys.println(excerpts);
 		final passed: Bool = _gate.summary.passed();
@@ -501,6 +513,21 @@ final class SliceGate {
 		final runs: Array<Result> = Pool.of(LISTINGS.length)
 			.map(LISTINGS, name -> cmd('node bin/test.js --list-$name').at(_gate.tree).env('HXQ_BIN', _gate.apq()));
 		return [for (i => name in LISTINGS) name => runs[i].check().lines()];
+	}
+
+	/**
+	 * Why the arm registry cannot be read (`ArmRegistryError`: a misplaced arm, a broken document), null when it can or when
+	 * `--no-arms` leaves it unread: a registry that does not read ends the gate before the build, unwaivable, so no row
+	 * shows it only as branches that never ran.
+	 */
+	private function registryRefusal(): Null<String> {
+		if (_gate.options.noArms) return null;
+		return try {
+			ArmRegistry.verify(Path.join([_gate.tree, ArmRegistry.DIRECTORY]));
+			null;
+		} catch (refusal: ArmRegistryError) {
+			'arm registry unreadable: ${refusal.message}';
+		};
 	}
 
 	/**
