@@ -490,8 +490,8 @@
 			"name": "M-GATE-ARMS-LEASE-BEFORE-PLAN",
 			"type": "dev.SliceGate",
 			"method": "armsPhase",
-			"find": "case Settled(outcome):",
-			"replace": "case Settled(outcome) if (false):",
+			"find": "return;",
+			"replace": "ARMS_THREADS;",
 			"note": "an arms phase that does not ask the plan first leases and starts a branch for a selection that is empty"
 		},
 		{
@@ -621,6 +621,22 @@
 			"find": "GateTree.clearSnapshotIn(_plan.repo);",
 			"replace": "",
 			"note": "the suite runs over the previous run's corpus snapshot, so a suite in which no corpus case ran compares an old sweep with the base and the head is saved with it"
+		},
+		{
+			"name": "M-GATE-ARMS-ASK-UNBOUNDED",
+			"type": "dev.GateArms",
+			"method": "armsAsk",
+			"find": "Std.int(Math.min(SliceGate.ARMS_THREADS, Math.max(1, tracks)))",
+			"replace": "SliceGate.ARMS_THREADS",
+			"note": "the arms lease asks for the top of its range whatever the kill run's track count, so a selection under the top holds threads no slot can use and a single track waits the whole-share window that closes the pool to every waiter behind it"
+		},
+		{
+			"name": "M-GATE-ARMS-ASK-IGNORES-PLAN",
+			"type": "dev.SliceGate",
+			"method": "armsPhase",
+			"find": "picked.fast.length",
+			"replace": "ARMS_THREADS",
+			"note": "the arms lease asks for the top of its range whatever the plan selected, so a one-arm selection waits for a whole share it cannot use and closes the pool to the waiters behind it"
 		}
 	]
 }

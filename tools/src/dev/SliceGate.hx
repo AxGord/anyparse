@@ -47,7 +47,7 @@ final class SliceGate {
 	public static inline final SELF_VAR: String = 'SLICE_GATE_SELF';
 
 	/** The most threads the arms phase takes. */
-	public static inline final ARMS_THREADS: Int = 2;
+	public static inline final ARMS_THREADS: Int = 6;
 
 	/** The row the arms phase runs. */
 	public static inline final ARMS_ROW: String = 'arms';
@@ -71,8 +71,9 @@ final class SliceGate {
 
 	/**
 	 * The phase after every other branch has ended: the arms row alone, on a lease of its own. The kill run is a compile
-	 * server and a suite process per job and holds one or two cores, so it asks for `ARMS_THREADS` at most and gives them
-	 * back the moment it ends, instead of keeping a gate's lease for it.
+	 * server and a suite process per job, so it asks for a range from one thread up to `ARMS_THREADS`: it
+	 * takes what the pool has free when it starts, its `--jobs` follow the lease granted (never the top
+	 * of the range), and the threads go back the moment it ends, instead of keeping a gate's lease for it.
 	 */
 	public static final ARMS_BRANCHES: Array<Array<String>> = [[ARMS_ROW]];
 
@@ -259,15 +260,17 @@ final class SliceGate {
 	 * (`--no-arms`, no arm selected) is read in this process and takes no lease.
 	 */
 	private function armsPhase(self: String): Void {
-		switch armsPlan() {
+		final plan: Null<ArmPlan> = armsPlan();
+		final tracks: Int = switch plan {
 			case Settled(outcome):
 				gate(ARMS_ROW, () -> outcome);
 				return;
-			case _:
-		}
-		final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode));
+			case Runs(picked, _): picked.fast.length;
+			case null: ARMS_THREADS;
+		};
+		final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode, tracks));
 		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)} arms';
-		final leased: Array<String> -> Command = rows -> armsCommand(_mode, command(rows), label);
+		final leased: Array<String> -> Command = rows -> armsCommand(_mode, command(rows), label, tracks);
 		for (name => value in Branches.run(_gate.options.run, ARMS_BRANCHES, [ARMS_ROW], leased, branchReport, _gate.summary))
 			_readings[name] = value;
 	}
@@ -667,22 +670,24 @@ final class SliceGate {
 	}
 
 	/**
-	 * The threads the arms branch takes of a lease its caller `mode` holds: what that lease has, up to `ARMS_THREADS`; null
+	 * The threads the arms branch takes of a lease its caller `mode` holds: what that
+	 * lease has, up to the ask for a kill run of `tracks` tracks (`GateArms.armsAsk`); null
 	 * when the caller holds none (the branch's own lease says it).
 	 */
-	public static function armsThreads(mode: LeaseMode): Null<Int> {
+	public static function armsThreads(mode: LeaseMode, tracks: Int): Null<Int> {
 		return switch mode {
-			case Held(held): Std.int(Math.min(held, ARMS_THREADS));
+			case Held(held): Std.int(Math.min(held, GateArms.armsAsk(tracks)));
 			case _: null;
 		};
 	}
 
 	/**
-	 * `command` of the arms branch as `mode` runs it: under `Own` a lease of its own from one thread up to `ARMS_THREADS`,
+	 * `command` of the arms branch as `mode` runs it: under `Own` a lease of its own from one thread up to
+	 * the ask for `tracks` tracks (`GateArms.armsAsk`; exactly one thread, with no wait, for one track),
 	 * labelled `label`, which goes back to the pool as the arms end; under `Held` and `Unpooled` as it is.
 	 */
-	public static function armsCommand(mode: LeaseMode, command: Command, label: String): Command {
-		return Lease.take(mode, command, { min: 1, max: ARMS_THREADS }, label);
+	public static function armsCommand(mode: LeaseMode, command: Command, label: String, tracks: Int): Command {
+		return Lease.take(mode, command, { min: 1, max: GateArms.armsAsk(tracks) }, label);
 	}
 
 	/**

@@ -114,6 +114,15 @@ final class GateArms {
 		return lines;
 	}
 
+	/**
+	 * The top of the arms lease for a kill run of `tracks` tracks: a run holds no more slots than it has tracks, and a thread no
+	 * slot can use would still keep the pool closed to every waiter behind it for the whole-share window. One track asks for
+	 * exactly one thread, with no window.
+	 */
+	public static function armsAsk(tracks: Int): Int {
+		return Std.int(Math.min(SliceGate.ARMS_THREADS, Math.max(1, tracks)));
+	}
+
 	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
 	private static inline function progressOf(gate: GateTree): String {
 		return gate.branchProgress(SliceGate.ARMS_ROW);

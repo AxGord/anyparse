@@ -137,15 +137,17 @@ final class SliceGateTest extends Test {
 		Assert.isFalse(SliceGate.GATE_BRANCHES.exists(rows -> rows.contains('arms')), 'no branch of the main fan-out runs the arms');
 		Assert.same([['arms']], SliceGate.ARMS_BRANCHES);
 		final command: Command = Command.of(['node', 'arms']);
-		final own: Array<String> = SliceGate.armsCommand(Own('/p/scripts/wf-run', 10), command, 'gate arms').argv;
+		final tracks: Int = SliceGate.ARMS_THREADS + 13;
+		final own: Array<String> = SliceGate.armsCommand(Own('/p/scripts/wf-run', 10), command, 'gate arms', tracks).argv;
 		Assert.contains('1-${SliceGate.ARMS_THREADS}', own);
 		Assert.isFalse(own.contains('10'), 'the pool budget is not what it asks for: $own');
-		Assert.same(['node', 'arms'], SliceGate.armsCommand(Held(4), command, 'gate arms').argv);
-		Assert.same(['node', 'arms'], SliceGate.armsCommand(Unpooled, command, 'gate arms').argv);
-		Assert.equals(SliceGate.ARMS_THREADS, SliceGate.armsThreads(Held(4)));
-		Assert.equals(1, SliceGate.armsThreads(Held(1)));
-		Assert.isNull(SliceGate.armsThreads(Own('/p/scripts/wf-run', 10)));
-		Assert.isNull(SliceGate.armsThreads(Unpooled));
+		Assert.same(['node', 'arms'], SliceGate.armsCommand(Held(4), command, 'gate arms', tracks).argv);
+		Assert.same(['node', 'arms'], SliceGate.armsCommand(Unpooled, command, 'gate arms', tracks).argv);
+		Assert.equals(SliceGate.ARMS_THREADS, SliceGate.armsThreads(Held(SliceGate.ARMS_THREADS + 3), tracks));
+		Assert.equals(SliceGate.ARMS_THREADS, SliceGate.armsThreads(Held(SliceGate.ARMS_THREADS), tracks));
+		Assert.equals(1, SliceGate.armsThreads(Held(1), tracks));
+		Assert.isNull(SliceGate.armsThreads(Own('/p/scripts/wf-run', 10), tracks));
+		Assert.isNull(SliceGate.armsThreads(Unpooled, tracks));
 	}
 
 	/** A branch is the process that reads a waiver, so a waiver its gate did not hand over would never apply. */
@@ -424,6 +426,45 @@ final class SliceGateTest extends Test {
 		Assert.stringContains('sweep-base.json', ran.baselineText);
 		Assert.isFalse(ran.logsHad.contains('sweep-base.json'), 'logs: ${ran.logsHad}');
 		Assert.stringContains('is gone', ran.followWhy);
+	}
+
+	/**
+	 * The arms lease asks for no more threads than the kill run has tracks, since a run holds no more slots than that: one track
+	 * asks for exactly one thread and so waits no whole-share window, a few tracks ask for a range up to their count, and a
+	 * selection past the top asks for the top. A held lease is bounded by the same ask.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-ASK-UNBOUNDED')
+	public function testTheArmsLeaseAsksNoMoreThreadsThanTheKillRunHasTracks(): Void {
+		final command: Command = Command.of(['node', 'arms']);
+		final own: LeaseMode = Own('/p/scripts/wf-run', 10);
+		final one: Array<String> = SliceGate.armsCommand(own, command, 'gate arms', 1).argv;
+		Assert.equals('1', one[one.indexOf('--threads') + 1], 'one track asks for one thread: $one');
+		Assert.isFalse(one.exists(arg -> arg.startsWith('--wait-full')), 'a fixed ask waits for no whole share: $one');
+		final three: Array<String> = SliceGate.armsCommand(own, command, 'gate arms', 3).argv;
+		Assert.equals('1-3', three[three.indexOf('--threads') + 1]);
+		Assert.isTrue(three.exists(arg -> arg.startsWith('--wait-full')), 'a range waits for its whole share first: $three');
+		final many: Array<String> = SliceGate.armsCommand(own, command, 'gate arms', 19).argv;
+		Assert.equals('1-${SliceGate.ARMS_THREADS}', many[many.indexOf('--threads') + 1]);
+		Assert.equals(1, SliceGate.armsThreads(Held(4), 1));
+		Assert.equals(3, SliceGate.armsThreads(Held(4), 3));
+		Assert.equals(2, SliceGate.armsThreads(Held(2), 3));
+		Assert.equals(1, SliceGate.armsThreads(Held(4), 0), 'no track still asks for the one thread the branch runs on');
+	}
+
+	/**
+	 * The arms lease is asked for the kill run the plan selected, not for the top of the range: a selection of one arm asks for
+	 * exactly one thread and waits for no whole share.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-ASK-IGNORES-PLAN')
+	public function testTheArmsLeaseIsAskedForTheTracksThePlanSelected(): Void {
+		final ran: GateRan = gateRun(GROWN_REGISTRY);
+		final asked: Array<String> = ran.leases.split('\n').filter(line -> line.contains(' arms -- '));
+		Assert.equals(1, asked.length, 'leases: ${ran.leases}');
+		final line: String = asked.join('\n');
+		Assert.isTrue(line.contains('--threads 1 '), line);
+		Assert.isFalse(line.contains('--wait-full'), line);
 	}
 
 	/**

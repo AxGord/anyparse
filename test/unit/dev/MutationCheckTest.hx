@@ -2,6 +2,7 @@ package unit.dev;
 
 import dev.GateTree;
 import dev.MutationCheck;
+import dev.SliceGate;
 import devkit.Result;
 import devkit.TempDir;
 import sys.io.File;
@@ -124,6 +125,22 @@ final class MutationCheckTest extends Test {
 				Assert.equals('/a/fork', Sys.getEnv(fork));
 			});
 		});
+	}
+
+	/**
+	 * The arms phase asks for a range up to `SliceGate.ARMS_THREADS`, so the kill run's slots follow the lease the pool granted,
+	 * never the top of the range: a grant below it runs that many, and the top asked outright is clamped to it.
+	 */
+	public function testTheKillRunsJobsFollowTheGrantedLeaseNotTheTopOfTheRange(): Void {
+		final gib: Float = 1024 * 1024 * 1024;
+		for (granted in 1...SliceGate.ARMS_THREADS + 1) {
+			Assert.same(Count(granted, null), MutationCheck.jobsFor(null, granted, 16, 64 * gib), 'no ask under a grant of $granted');
+			final top: String = '${SliceGate.ARMS_THREADS}';
+			final expected: JobCount = granted == SliceGate.ARMS_THREADS
+				? Count(granted, null)
+				: Count(granted, '--jobs $top exceeds the pool lease of $granted thread(s): running $granted');
+			Assert.same(expected, MutationCheck.jobsFor(top, granted, 16, 64 * gib), 'the top asked under a grant of $granted');
+		}
 	}
 
 	private static function parsed(text: String): Array<TrackRow> {
