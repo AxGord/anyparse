@@ -1,5 +1,6 @@
 package dev;
 
+import dev.SliceStats.Landing;
 import dev.TokenReport.BypassSummary;
 import dev.TokenReport.LandedSummary;
 import dev.TokenReport.ModelRow;
@@ -11,6 +12,8 @@ import dev.TokenReport.SliceCost;
 import dev.TokenReport.ToolRow;
 import dev.TokenTranscript.AgentReading;
 import devkit.Args;
+import devkit.Args.UsageError;
+import devkit.Cmd.cmd;
 import devkit.Table;
 import haxe.Exception;
 import haxe.Json;
@@ -18,40 +21,69 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+using Lambda;
+using StringTools;
+
 /**
- * `dev token-audit <dir>...` — where the tokens of a batch of agents went, read from their Claude Code transcripts (the `*.output`
- * links of a session's `tasks/` directory, or the `*.jsonl` files of its `subagents/` directory): per tool, hxq subcommand,
- * dev command, git subcommand and plugin call the calls and the size of what they sent and got back; per agent role (the
- * opening of its first prompt) and tool the same with the three largest calls; per model the turns and
- * usage with a priced estimate; per slice the cost (and per landed slice with `--landed`); the cache rewrites with the idle
- * gap before each; and the reads and writes of repo `.hx` that went round hxq. `--json <file>` writes the whole reading for a
- * before/after diff. This is the meter only; the readings live in the journal, never in a doc.
+ * `dev token-audit [<dir>...]` — where the tokens of a batch of agents went, read from their Claude Code transcripts (the
+ * `*.output` links of a session's `tasks/` directory, or the `*.jsonl` files of its `subagents/` directory): per tool, hxq
+ * subcommand, dev command, git subcommand and plugin call the calls and the size of what they sent and got back; per agent role
+ * (the opening of its first prompt) and tool the same with the three largest calls; per model the turns and usage with a priced
+ * estimate; per slice the cost (and per landed slice with `--landed`); the cache rewrites with the idle gap before each; and
+ * the reads and writes of repo `.hx` that went round hxq. `--json <file>` writes the whole reading for a before/after diff.
+ *
+ * With no `<dir>` it reads the `subagents/` of every session of the repo's Claude Code project (`--project <dir>` names another),
+ * which a restart does not empty the way it does `tasks/`. `--since <rev>` makes the window `<rev>..HEAD`: only agents that began
+ * after that commit, plus every agent of a slice that landed inside it. A landing (what `SliceStats.landings` reads: a merge of its
+ * branch or a commit with its `Slice` trailer) marks a slice landed only when an agent of that slice began at or before it, so an
+ * older landing of a reused id never marks a later slice that closed without a commit. `--since` windows by agent start, so one
+ * slice's cost is `--slice <ID>` with no `--since`. `--slice <ID>` prints that slice's one cost line (agents, turns, generated tokens,
+ * cost, landed) and exits 1 when no agent of it was read. This is the meter only; the readings live in the journal, never in a doc.
  */
 @:nullSafety(Strict)
 final class TokenAudit {
 
-	public static inline final USAGE: String = 'usage: dev token-audit <dir>... [--json <file>] [--top <n>] [--landed] [--repo <tree>]';
+	public static inline final USAGE: String =
+		'usage: dev token-audit [<dir>...] [--project <dir>] [--since <rev>] [--slice <ID>] [--json <file>] [--top <n>] [--landed] [--repo <tree>]';
 
 	/** How many rows of a long table the text report prints, unless `--top` says otherwise. */
 	private static inline final DEFAULT_TOP: Int = 25;
 
 	private static inline final THOUSAND: Float = 1000;
+	private static inline final MS_PER_SECOND: Float = 1000;
+	private static inline final SUBAGENTS: String = 'subagents';
 	private static final TRANSCRIPT: EReg = ~/\.(output|jsonl)$/;
 
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final jsonFile: Null<String> = args.option('--json');
 		final top: Int = Std.parseInt(args.option('--top') ?? '') ?? DEFAULT_TOP;
-		final landed: Bool = args.flag('--landed');
 		final repo: Null<String> = args.option('--repo');
-		final dirs: Array<String> = args.rest(['<dir>']);
-		final agents: Array<AgentReading> = readDirectories(dirs);
-		final ids: Null<Array<String>> = landed ? [
-			for (landing in SliceStats.landings(Repo.resolve(repo), 'HEAD', null)) landing.id
-		] : null;
+		final since: Null<String> = args.option('--since');
+		final slice: Null<String> = args.option('--slice');
+		final project: Null<String> = args.option('--project');
+		final landed: Bool = args.flag('--landed') || since != null || slice != null;
+		final dirs: Array<String> = args.rest([]);
+		final tree: String = Repo.resolve(repo);
+		final sources: Array<String> = dirs.length > 0 ? dirs : subagentDirs(project ?? projectOf(tree));
+		final from: Float = since == null ? 0 : commitMillis(tree, since);
+		final read: Array<AgentReading> = readDirectories(sources);
+		final ids: Null<Array<String>> = landed
+			? landedIds(SliceStats.landings(tree, since == null ? 'HEAD' : '$since..HEAD', null), read)
+			: null;
+		final agents: Array<AgentReading> = startedFrom(read, from, ids ?? []);
 		final report: Report = TokenReport.summarize(agents, ids);
-		Sys.println(render(report, top));
 		if (jsonFile != null) File.saveContent(jsonFile, Json.stringify(report, null, '  ') + '\n');
+		if (slice == null) {
+			Sys.println(render(report, top));
+			return 0;
+		}
+		final line: Null<String> = sliceLine(report, slice);
+		if (line == null) {
+			Sys.stderr().writeString('token-audit: no agent of slice $slice in the window\n');
+			return 1;
+		}
+		Sys.println(line);
 		return 0;
 	}
 
@@ -130,6 +162,61 @@ final class TokenAudit {
 		return lines.join('\n');
 	}
 
+	/**
+	 * The directories of `project` (a Claude Code project directory) that hold subagent transcripts: the `subagents/` of every
+	 * session in it, so a restart that dropped a session's `tasks/` links loses nothing. Throws `UsageError` when `project` is no
+	 * directory.
+	 */
+	public static function subagentDirs(project: String): Array<String> {
+		if (!FileSystem.exists(project) || !FileSystem.isDirectory(project)) throw new UsageError('no project directory $project');
+		final names: Array<String> = FileSystem.readDirectory(project);
+		names.sort(Reflect.compare);
+		return [
+			for (name in names) if (FileSystem.exists(Path.join([project, name, SUBAGENTS]))) Path.join([project, name, SUBAGENTS])
+		];
+	}
+
+	/** The Claude Code project directory of the tree `tree`: its path with every character outside `[A-Za-z0-9]` turned into `-`. */
+	public static function projectOf(tree: String): String {
+		final home: String = Sys.getEnv('CLAUDE_CONFIG_DIR') ?? Path.join([Sys.getEnv('HOME') ?? '', '.claude']);
+		return Path.join([home, 'projects', ~/[^A-Za-z0-9]/g.replace(tree, '-')]);
+	}
+
+	/**
+	 * The agents of `agents` that began at or after `from` (ms since the epoch) or whose slice is in `landed`, so a slice that
+	 * landed inside the window keeps its whole cost; all of them when `from` is not positive.
+	 */
+	public static function startedFrom(agents: Array<AgentReading>, from: Float, landed: Array<String>): Array<AgentReading> {
+		return from <= 0
+			? agents
+			: agents.filter(a -> a.turns.length > 0 && (a.turns[0].start >= from || a.slice != null && landed.contains(a.slice)));
+	}
+
+	/**
+	 * The cost line of slice `slice` in `report`, or null when no agent of it was read. The output is the tokens the slice's
+	 * agents generated, summed over their turns: a count that does not grow with the context each round re-reads.
+	 */
+	public static function sliceLine(report: Report, slice: String): Null<String> {
+		for (row in report.slices) if (row.slice == slice) {
+			return 'slice ${row.slice}: agents ${row.agents}; turns ${row.turns}; output ${row.output} tok; cost ${usd(row.cost)}; '
+				+ 'landed ${row.landed ? 'yes' : 'no'}';
+		}
+		return null;
+	}
+
+	/**
+	 * The ids of `landings` that count as landed: a landing counts for a slice only when an agent of that slice began at or before
+	 * it, so an older landing of a reused id never marks a later slice that closed without one.
+	 */
+	public static function landedIds(landings: Array<Landing>, agents: Array<AgentReading>): Array<String> {
+		return [
+			for (l in landings) if (agents.exists(a ->
+				a.slice == l.id && a.turns.length > 0 && a.turns[0].start <= l.landed * MS_PER_SECOND
+			))
+				l.id
+		];
+	}
+
 	private static inline function usd(amount: Float): String {
 		return '$$${amount}';
 	}
@@ -204,6 +291,12 @@ final class TokenAudit {
 	/** `tokens` in thousands, with a `k`. */
 	private static function thousands(tokens: Int): String {
 		return '${Math.round(tokens / THOUSAND)}k';
+	}
+
+	/** The commit time of `rev` in `tree`, in ms since the epoch. */
+	private static function commitMillis(tree: String, rev: String): Float {
+		final seconds: Float = Std.parseFloat(cmd('git -C $tree log -1 --format=%ct $rev').check().out.trim());
+		return seconds * MS_PER_SECOND;
 	}
 
 }

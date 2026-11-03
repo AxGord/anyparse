@@ -1,14 +1,19 @@
 package unit.dev;
 
+import dev.SliceStats.Landing;
 import dev.TokenAudit;
 import dev.TokenReport;
 import dev.TokenTranscript;
+import devkit.Args.UsageError;
+import devkit.Cmd.cmd;
 import devkit.TempDir;
 import haxe.Json;
+import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -23,6 +28,12 @@ final class TokenAuditTest extends Test {
 		+ '[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"git log"}}],"usage":{"input_tokens":3,'
 		+ '"output_tokens":4,"cache_read_input_tokens":5,"cache_creation":{"ephemeral_5m_input_tokens":6,"ephemeral_1h_input_tokens":0}}}}\n'
 		+ '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"commit abc"}]}}\n';
+	private static inline final MS_PER_SECOND: Float = 1000;
+	private static inline final SECONDS_PER_HOUR: Float = 3600;
+	private static inline final DEC_1: Float = 1764547200;
+	private static inline final DEC_2: Float = 1764633600;
+	private static inline final JAN_1: Float = 1767225600;
+	private static inline final JAN_3: Float = 1767398400;
 
 	public function testATranscriptReachedByTwoLinksCountsOnceAndOtherFilesAreSkipped(): Void {
 		TempDir.with(dir -> {
@@ -87,6 +98,147 @@ final class TokenAuditTest extends Test {
 		Assert.equals('    50 tok  ** foo bar', lines[at + 3]);
 		Assert.isTrue(lines[at + 4].contains('sh date'));
 		Assert.equals('    10 tok  date', lines[at + 5]);
+	}
+
+	public function testTheSubagentDirectoriesOfEverySessionOfAProjectAreFoundAndOthersSkipped(): Void {
+		TempDir.with(dir -> {
+			for (session in ['s2', 's1']) {
+				FileSystem.createDirectory(dir.file(session));
+				FileSystem.createDirectory(dir.file('$session/subagents'));
+			}
+			FileSystem.createDirectory(dir.file('memory'));
+			File.saveContent(dir.file('s1.jsonl'), TRANSCRIPT);
+			Assert.same([dir.file('s1/subagents'), dir.file('s2/subagents')], TokenAudit.subagentDirs(dir.path));
+			Assert.raises(() -> TokenAudit.subagentDirs(dir.file('missing')), UsageError);
+		});
+	}
+
+	public function testTheProjectDirectoryNamesATreeByItsPathWithEveryOddCharacterDashed(): Void {
+		final project: String = TokenAudit.projectOf('/Users/a.b/dev/x_y');
+		Assert.isTrue(project.endsWith('/projects/-Users-a-b-dev-x-y'));
+	}
+
+	public function testAWindowKeepsTheAgentsThatBeganInsideItAndThoseOfASliceThatLandedInIt(): Void {
+		final kept: AgentReading = TokenTranscript.read('kept', transcript('KEEP-1', '2026-01-01'), null);
+		final dropped: AgentReading = TokenTranscript.read('dropped', transcript('DROP-1', '2026-01-01'), null);
+		final late: AgentReading = TokenTranscript.read('late', transcript('LATE-1', '2026-02-01'), null);
+		final empty: AgentReading = TokenTranscript.read('empty', '', null);
+		final all: Array<AgentReading> = [kept, dropped, late, empty];
+		final edge: Float = kept.turns[0].start;
+		Assert.equals(4, TokenAudit.startedFrom(all, 0, []).length);
+		Assert.same(['kept', 'dropped', 'late'], TokenAudit.startedFrom(all, edge, []).map(a -> a.id));
+		Assert.same(['late'], TokenAudit.startedFrom(all, edge + 1, []).map(a -> a.id));
+		Assert.same(['kept', 'late'], TokenAudit.startedFrom(all, edge + 1, ['KEEP-1']).map(a -> a.id));
+	}
+
+	public function testASliceLineCarriesItsOutputAndLandedAndAMissingSliceHasNone(): Void {
+		final prompt: String = '{"type":"user","message":{"role":"user","content":"You are the worker of anyparse slice CAT-9."}}\n';
+		final agent: AgentReading = TokenTranscript.read('a', prompt + TRANSCRIPT.substr(TRANSCRIPT.indexOf('\n') + 1), null);
+		final report: Report = TokenReport.summarize([agent], ['CAT-9']);
+		final line: Null<String> = TokenAudit.sliceLine(report, 'CAT-9');
+		Assert.notNull(line);
+		Assert.isTrue(line?.contains('agents 1; turns 1; output 4 tok;') == true);
+		Assert.isTrue(line?.endsWith('landed yes') == true);
+		Assert.isNull(TokenAudit.sliceLine(report, 'CAT-8'));
+		Assert.isTrue(TokenAudit.sliceLine(TokenReport.summarize([agent], []), 'CAT-9')?.endsWith('landed no') == true);
+	}
+
+	public function testALandingMarksOnlyASliceWithAnAgentThatBeganAtOrBeforeIt(): Void {
+		final early: AgentReading = TokenTranscript.read('early', transcript('W-1', '2026-01-01'), null);
+		final late: AgentReading = TokenTranscript.read('late', transcript('W-2', '2026-02-01'), null);
+		final empty: AgentReading = TokenTranscript.read('empty', '', null);
+		final started: Float = early.turns[0].start / MS_PER_SECOND;
+		final landings: Array<Landing> = [
+			landing('W-1', started),
+			landing('W-2', started + SECONDS_PER_HOUR),
+			landing('W-3', started)
+		];
+		Assert.same(['W-1'], TokenAudit.landedIds(landings, [early, late, empty]));
+		Assert.same([], TokenAudit.landedIds([landing('W-1', started - 1)], [early]));
+	}
+
+	public function testTheCommandWindowsTheLandingsAndTheAgentsByTheCommitAndReadsLandedWithoutAWindow(): Void {
+		TempDir.with(dir -> {
+			final sessions: String = dir.file('project/s1/subagents');
+			FileSystem.createDirectory(dir.file('project'));
+			FileSystem.createDirectory(dir.file('project/s1'));
+			FileSystem.createDirectory(sessions);
+			File.saveContent('$sessions/agent-in.jsonl', transcript('SLICE-IN', '2026-01-02'));
+			File.saveContent('$sessions/agent-out.jsonl', transcript('SLICE-OUT', '2026-01-02'));
+			File.saveContent('$sessions/agent-old.jsonl', transcript('SLICE-OLD', '2025-12-01'));
+			final repo: String = dir.file('repo');
+			FileSystem.createDirectory(repo);
+			git(repo, ['init', '-q', '-b', 'main']);
+			git(repo, ['commit', '-q', '--allow-empty', '-m', 'base']);
+			git(repo, ['commit', '-q', '--allow-empty', '-m', 'old\n\nSlice: SLICE-OLD']);
+			git(repo, ['commit', '-q', '--allow-empty', '-m', 'out\n\nSlice: SLICE-OUT'], DEC_2);
+			git(repo, ['commit', '-q', '--allow-empty', '-m', 'window'], JAN_1);
+			git(repo, ['commit', '-q', '--allow-empty', '-m', 'in\n\nSlice: SLICE-IN'], JAN_3);
+			final windowed: String = dir.file('windowed.json');
+			Assert.equals(0, TokenAudit.main([
+				'--repo',
+				repo,
+				'--project',
+				dir.file('project'),
+				'--since',
+				'HEAD~1',
+				'--json',
+				windowed
+			]));
+			Assert.same([true, false], landedOf(windowed, ['SLICE-IN', 'SLICE-OUT']));
+			Assert.isFalse(hasRow(windowed, 'SLICE-OLD'));
+			final whole: String = dir.file('whole.json');
+			Assert.equals(0, TokenAudit.main([
+				'--repo',
+				repo,
+				'--project',
+				dir.file('project'),
+				'--slice',
+				'SLICE-IN',
+				'--json',
+				whole
+			]));
+			Assert.same([true, false], landedOf(whole, ['SLICE-IN', 'SLICE-OUT']));
+			Assert.same([true], landedOf(whole, ['SLICE-OLD']));
+			Assert.equals(1, TokenAudit.main(['--repo', repo, '--project', dir.file('project'), '--slice', 'NO-SUCH']));
+		});
+	}
+
+	private static function landedOf(file: String, slices: Array<String>): Array<Bool> {
+		final report: Report = Json.parse(File.getContent(file));
+		return [for (slice in slices) report.slices.filter(row -> row.slice == slice)[0].landed];
+	}
+
+	private static function transcript(slice: String, day: String): String {
+		return '{"type":"user","message":{"role":"user","content":"You are the worker of anyparse slice $slice."}}\n'
+			+ TRANSCRIPT.substr(TRANSCRIPT.indexOf('\n') + 1).replace('2026-01-01', day);
+	}
+
+	private static function landing(id: String, landed: Float): Landing {
+		return {
+			id: id,
+			commit: 'c',
+			base: 'b',
+			branch: 'b..c',
+			landed: landed,
+			started: landed,
+			rounds: null,
+			tokens: null
+		};
+	}
+
+	/** `git <words>` in `repo`, authored and committed at `at` seconds. */
+	private static function git(repo: String, words: Array<String>, at: Float = DEC_1): Void {
+		cmd('git -c user.name=audit -c user.email=audit@example.com -c commit.gpgsign=false -C $repo $words')
+			.env('GIT_AUTHOR_DATE', '@${Std.int(at)} +0000')
+			.env('GIT_COMMITTER_DATE', '@${Std.int(at)} +0000')
+			.run()
+			.check();
+	}
+
+	private static function hasRow(file: String, slice: String): Bool {
+		final report: Report = Json.parse(File.getContent(file));
+		return report.slices.exists(row -> row.slice == slice);
 	}
 
 }
