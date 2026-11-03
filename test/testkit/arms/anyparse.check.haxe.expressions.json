@@ -169,6 +169,62 @@
 			"find": "subtractKinds.contains(start.kind)",
 			"replace": "true",
 			"note": "every substr start is flagged, not only a subtraction"
+		},
+		{
+			"name": "M-RCMP-ANY-OPERAND-TYPE",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "comparison",
+			"find": "&& (type == s.intType || type == s.stringType)",
+			"replace": "&& true",
+			"note": "every operand type is accepted, so a Float chain, which answers 0 for a NaN where Reflect.compare answers a sign, is rewritten"
+		},
+		{
+			"name": "M-RCMP-IMPURE-OPERAND",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "comparison",
+			"find": "&& PurityScan.isPure(left, t.purity)",
+			"replace": "&& true",
+			"note": "an operand that runs code is accepted, so a call the chain evaluates twice is evaluated once by the rewrite"
+		},
+		{
+			"name": "M-RCMP-ANY-TERMINAL",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "comparison",
+			"find": "valueText(chain.terminal, source, s) != EQUAL",
+			"replace": "false",
+			"note": "any closing value is accepted, so a chain that answers something other than 0 for equal operands is rewritten"
+		},
+		{
+			"name": "M-RCMP-ANY-CALL",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "matches",
+			"find": "callee.name == SORT",
+			"replace": "true",
+			"note": "every two-parameter function literal passed to any call is read as a comparator, whose exact -1 / 1 a caller outside a sort may read"
+		},
+		{
+			"name": "M-RCMP-ANY-NONNULL",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "comparison",
+			"find": "nonNull: t.nonNull(left) && t.nonNull(right)",
+			"replace": "nonNull: true",
+			"note": "every chain is rewritten, so one that answers 0 for a null operand is rewritten into a call that answers -1"
+		},
+		{
+			"name": "M-RCMP-MIXED-OPERANDS",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "comparison",
+			"find": "&& t.nominal(right) == type",
+			"replace": "&& true",
+			"note": "the right operand's type is not compared, so an Int against a Float is rewritten into a call that does not compile"
+		},
+		{
+			"name": "M-RCMP-NONNULL-EITHER",
+			"type": "anyparse.check.haxe.expressions.PreferReflectCompare",
+			"method": "comparison",
+			"find": "nonNull: t.nonNull(left) && t.nonNull(right)",
+			"replace": "nonNull: t.nonNull(left) || t.nonNull(right)",
+			"note": "one proved operand is enough, so a chain whose other operand may be null is rewritten into a call that answers differently"
 		}
 	]
 }

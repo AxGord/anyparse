@@ -130,6 +130,7 @@
 	"prefer-null-coalescing",
 	"prefer-range-loop",
 	"prefer-read-only-field",
+	"prefer-reflect-compare",
 	"prefer-safe-nav",
 	"prefer-safe-nav-comparison",
 	"prefer-single-quotes",
