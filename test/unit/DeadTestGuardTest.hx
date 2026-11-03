@@ -76,12 +76,7 @@ class DeadTestGuardTest extends Test {
 			for (guard in unprovenGuards(source, shape)) if (path != PROBE_FILE || !expected.contains(guard.text))
 				unproven.push('$path:${guard.line}: ${guard.text}');
 		}
-		unproven.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		unproven.sort((a: String, b: String) -> Reflect.compare(a, b));
 		Assert.isTrue(paths.length > 0, '$TEST_ROOT must contain .hx files');
 		Assert.equals(
 			0, unproven.length,

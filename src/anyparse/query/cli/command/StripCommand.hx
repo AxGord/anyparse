@@ -322,12 +322,7 @@ final class StripCommand implements CliCommand {
 		// rejoin with the root so file IO uses absolute paths regardless
 		// of CWD.
 		final out: Array<String> = [for (p in cluster.paths) '$root/$p'];
-		out.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		out.sort((a: String, b: String) -> Reflect.compare(a, b));
 		return out;
 		#else
 		CliIo.stderr('apq strip: --from-cluster requires a sys target (filesystem walk)\n');

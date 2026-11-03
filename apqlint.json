@@ -294,6 +294,7 @@
 		"prefer-keyvalue-loop": true,
 		"prefer-line-comment": true,
 		"prefer-lpad": true,
+		"prefer-reflect-compare": true,
 		"prefer-typed-throw": true,
 		"prefer-value-loop": true,
 		"redundant-ascription": true,

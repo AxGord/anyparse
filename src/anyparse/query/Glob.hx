@@ -56,12 +56,7 @@ final class Glob {
 			else
 				out.push(norm);
 		}
-		out.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		out.sort((a: String, b: String) -> Reflect.compare(a, b));
 		#end
 		return out;
 	}
@@ -79,12 +74,7 @@ final class Glob {
 		} else {
 			listed.filter(p -> p == norm || ((norm == '' || p.startsWith('$norm/')) && p.endsWith(extension)));
 		};
-		out.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		out.sort((a: String, b: String) -> Reflect.compare(a, b));
 		return out;
 	}
 

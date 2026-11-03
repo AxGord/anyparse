@@ -178,12 +178,7 @@ class HxFormatterCorpusTest extends Test {
 		final parseReasons: Map<String, Int> = [];
 
 		final names: Array<String> = FileSystem.readDirectory(dir);
-		names.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		names.sort((a: String, b: String) -> Reflect.compare(a, b));
 
 		for (name in names) if (name.endsWith(HXTEST_EXT)) {
 			final path: String = '$dir/$name';
