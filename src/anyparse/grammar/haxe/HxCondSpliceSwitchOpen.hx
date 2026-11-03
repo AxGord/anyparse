@@ -37,7 +37,8 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCondSpliceSwitchOpen = {
 	var raw: HxCondSwitchOpenRaw;
-	@:trail('}') @:trivia @:fmt(nestBody, indentCaseLabels, rightCurly, condSwitchOpenCasesNest, siblingShare('caseSiblings')) var cases: Array<HxSwitchCase>;
+	@:trail('}') @:trivia @:fmt(nestBody, indentCaseLabels, rightCurly, condSwitchOpenCasesNest,
+		siblingShare('anyparse.format.SiblingShare.decide', 'caseSiblings')) var cases: Array<HxSwitchCase>;
 	@:trail('}') @:trivia @:fmt(nestBody, rightCurly, emptyBlockBreak) @:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
 }

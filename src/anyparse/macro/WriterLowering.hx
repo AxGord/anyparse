@@ -2570,7 +2570,7 @@ typedef TryparseStarCtx = {
 	 * force-flat boundary while the knob is on, so the seams follow the one region group's mode.
 	 */
 	final regionSeams: Bool;
-	final siblingKnob: Null<String>;
+	final siblingSlot: Null<Array<String>>;
 	final belowWrappedLabel: Bool;
 	final forceInlineSep: Bool;
 	final elemSelfTrailsNewline: Bool;

@@ -44,5 +44,7 @@ package anyparse.grammar.haxe;
 typedef HxCondSpliceCase = {
 	var raw: HxCondSpliceRaw;
 	var tail: HxStatement;
-	@:trivia @:tryparse @:fmt(padLeading, siblingLead('caseSiblings')) var rest: Array<HxStatement>;
+	@:trivia @:tryparse @:fmt(padLeading, siblingLead(
+		'anyparse.format.SiblingShare.placedSlot', 'caseSiblings'
+	)) var rest: Array<HxStatement>;
 }

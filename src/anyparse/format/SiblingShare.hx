@@ -5,7 +5,6 @@ import anyparse.core.BreakToken;
 import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
-import anyparse.core.LineSpan;
 import anyparse.format.wrap.WrapList;
 
 /**
@@ -31,6 +30,18 @@ final class SiblingShare {
 	}
 
 	/**
+	 * A body that stands below its head, as the sibling it is: `own` is its Doc, `fitLine` says its head's policy lets a
+	 * body stand beside the head at all, `count` is its statements, `soleFlat` says a sole statement could by shape, `last`
+	 * is the last statement's Doc and `refuseGlue` says the sole statement's glued form is refused. Inline so an off list
+	 * costs one test per branch, and the plain arguments allocate nothing.
+	 */
+	public static inline function bodySlot(
+		policy: SiblingPolicy, fitLine: Bool, own: Doc, count: Int, soleFlat: Bool, last: Null<Doc>, refuseGlue: Bool
+	): Doc {
+		return policy == SiblingPolicy.Off || !fitLine ? own : votedBody(policy, own, count, soleFlat, last, refuseGlue);
+	}
+
+	/**
 	 * A sibling a comment holds below its head although its one statement could stand beside it: `body` is that
 	 * statement. The slot keeps the placed form in `own` and, in its break arm, the statement glued to the head as it
 	 * would stand without the comment, which is the form `decide` measures, so the branch leads exactly when it would not
@@ -44,15 +55,13 @@ final class SiblingShare {
 	}
 
 	/**
-	 * `BodyFit.fitLineLayout` with its vote; `refuseGlue` leads when the body has no flat form. `belowWrappedLabel` says the
-	 * head began a `LineSpan`: `fitLine` asks whether the whole construct stands on one line, so a head that took more
-	 * than one has already answered, whatever room its last row leaves. It takes no part in the vote, which measures flat.
+	 * `BodyFit.fitLineBelowLabel` with its vote; `refuseGlue` leads when the body has
+	 * no flat form. `belowWrappedLabel` takes no part in the vote, which measures flat.
 	 */
 	public static function fitLineSlot(
 		policy: SiblingPolicy, cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, refuseGlue: Bool, belowWrappedLabel: Bool
 	): Doc {
-		final fit: Doc = BodyFit.fitLineLayout(cols, body, nestGluedBody, lineWidth, refuseGlue);
-		final own: Doc = belowWrappedLabel ? LineSpan.ifLeft(BodyFit.breakLayout(cols, body), fit) : fit;
+		final own: Doc = BodyFit.fitLineBelowLabel(cols, body, nestGluedBody, lineWidth, refuseGlue, belowWrappedLabel);
 		if (policy == SiblingPolicy.Off) return own;
 		final vote: Int = if (!refuseGlue)
 			MEASURED
@@ -124,6 +133,13 @@ final class SiblingShare {
 
 	private static inline function isVote(width: Int): Bool {
 		return width <= MEASURED;
+	}
+
+	/** More than one statement, or one no shape lets beside the head, leads; one a comment held below keeps its glued form to measure. */
+	private static function votedBody(policy: SiblingPolicy, own: Doc, count: Int, soleFlat: Bool, last: Null<Doc>, refuseGlue: Bool): Doc {
+		final leads: Bool = count >= 2 || (count == 1 && !soleFlat);
+		final held: Null<Doc> = count == 1 ? last : null;
+		return leads || held == null ? placedSlot(policy, leads, own) : commentedSlot(policy, own, held, refuseGlue);
 	}
 
 	/** `d` when it has a flat width, else `d` as its comment-held slots would stand without the comment, else `null`. */

@@ -401,7 +401,7 @@ final class WriterTriviaStarEmitLowering {
 			tryparseBlockEnded, tryparseSepFaithful, listLayout, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
 			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,
 			refuseGlueOnControlFlow, tryparseFillItems, starNode.fmtReadStringArgs('glueToPrevious'),
-			starNode.fmtReadString('siblingSlot'), starNode.fmtHasFlag('belowWrappedLabel')
+			starNode.fmtReadStringArgs('siblingSlot'), starNode.fmtHasFlag('belowWrappedLabel')
 		));
 	}
 
@@ -603,13 +603,13 @@ final class WriterTriviaStarEmitLowering {
 	 * whatever the Star's shape. An enum-ctor Star does not pass here, and `anyparse.macro.SiblingScope` refuses it as a sharing list.
 	 */
 	private static function wrapSiblingFlags(starNode: ShapeNode, parts: Array<Expr>): Void {
-		final lead: Null<String> = starNode.fmtReadString('siblingLead');
-		final shared: Null<String> = starNode.fmtReadString('siblingShare');
+		final lead: Null<Array<String>> = starNode.fmtReadStringArgs('siblingLead');
+		final shared: Null<Array<String>> = starNode.fmtReadStringArgs('siblingShare');
 		if (lead == null && shared == null) return;
 		final star: Null<Expr> = parts.pop();
 		if (star == null) return;
-		final voted: Expr = lead == null ? star : macro anyparse.format.SiblingShare.placedSlot(${optFieldAccess(lead)}, true, $star);
-		parts.push(shared == null ? voted : macro anyparse.format.SiblingShare.decide($voted, ${optFieldAccess(shared)}, opt.lineWidth));
+		final voted: Expr = lead == null ? star : macro ${hookFn(lead[0])}(${optFieldAccess(lead[1])}, true, $star);
+		parts.push(shared == null ? voted : macro ${hookFn(shared[0])}($voted, ${optFieldAccess(shared[1])}, opt.lineWidth));
 	}
 
 }

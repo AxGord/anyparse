@@ -35,5 +35,7 @@ typedef HxDefaultBranch = {
 	@:lead(':') @:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
 		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt'),
-		siblingSlot('caseSiblings')) var stmts: Array<HxStatement>;
+		siblingSlot(
+			'anyparse.format.SiblingShare.bodySlot', 'anyparse.format.SiblingShare.fitLineSlot', 'caseSiblings'
+		)) var stmts: Array<HxStatement>;
 };

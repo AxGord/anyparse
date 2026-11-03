@@ -376,11 +376,43 @@
 		},
 		{
 			"name": "M-CASE-BODY-STANDS-ON-WRAPPED-LABEL",
-			"type": "anyparse.format.SiblingShare",
-			"method": "fitLineSlot",
-			"find": "belowWrappedLabel ? LineSpan.ifLeft(BodyFit.breakLayout(cols, body), fit) : fit",
+			"type": "anyparse.format.BodyFit",
+			"method": "fitLineBelowLabel",
+			"find": "belowWrappedLabel ? LineSpan.ifLeft(breakLayout(cols, body), fit) : fit",
 			"replace": "fit",
 			"note": "a case body glues to the last row of a wrapped label whenever that row plus the body fits"
+		},
+		{
+			"name": "M-SIBLING-BODY-HELD-NOT-MEASURED",
+			"type": "anyparse.format.SiblingShare",
+			"method": "votedBody",
+			"find": "final held: Null<Doc> = count == 1 ? last : null;",
+			"replace": "final held: Null<Doc> = null;",
+			"note": "a comment-held statement votes as a plain body and stops measuring its glued form"
+		},
+		{
+			"name": "M-SIBLING-BODY-SOLE-SHAPE-DOES-NOT-LEAD",
+			"type": "anyparse.format.SiblingShare",
+			"method": "votedBody",
+			"find": "count >= 2 || (count == 1 && !soleFlat)",
+			"replace": "count >= 2",
+			"note": "a sole statement its shape keeps below the label stops moving its siblings"
+		},
+		{
+			"name": "M-SIBLING-BODY-IGNORES-FITLINE",
+			"type": "anyparse.format.SiblingShare",
+			"method": "bodySlot",
+			"find": "policy == SiblingPolicy.Off || !fitLine ? own",
+			"replace": "policy == SiblingPolicy.Off ? own",
+			"note": "a body below its head under a policy that never asks to stand beside it votes, so a next-line switch moves on a fitLine knob it does not use"
+		},
+		{
+			"name": "M-SIBLING-BODY-SLOT-NOT-INLINE",
+			"type": "anyparse.format.SiblingShare",
+			"method": "bodySlot",
+			"find": "public static inline function bodySlot(",
+			"replace": "public static function bodySlot(",
+			"note": "the slot hook stops inlining, so every body below its head evaluates its facts, the glue predicate among them, even in a list that does not share"
 		}
 	]
 }

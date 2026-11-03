@@ -2,6 +2,7 @@ package anyparse.format;
 
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
+import anyparse.core.LineSpan;
 import anyparse.format.wrap.WrapList;
 
 /**
@@ -55,6 +56,17 @@ final class BodyFit {
 	 */
 	public static inline function breakLayout(cols: Int, body: Doc): Doc {
 		return Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), body]));
+	}
+
+	/**
+	 * `fitLineLayout` under a head. `belowWrappedLabel` says the head began a `LineSpan`: `fitLine` asks whether the whole
+	 * construct stands on one line, so a head that took more than one has already answered, whatever room its last row leaves.
+	 */
+	public static inline function fitLineBelowLabel(
+		cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, refuseGlue: Bool, belowWrappedLabel: Bool
+	): Doc {
+		final fit: Doc = fitLineLayout(cols, body, nestGluedBody, lineWidth, refuseGlue);
+		return belowWrappedLabel ? LineSpan.ifLeft(breakLayout(cols, body), fit) : fit;
 	}
 
 	/**

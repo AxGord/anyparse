@@ -119,7 +119,7 @@ final class WriterBlankLowering {
 		final applyExpr: Expr;
 	} {
 		if (gapRule == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };
-		final rule: Expr = haxe.macro.MacroStringTools.toFieldExpr(gapRule[0].split('.'));
+		final rule: Expr = hookFn(gapRule[0]);
 		final knob: Expr = optFieldAccess(gapRule[1]);
 		return {
 			// ONE `EVars` node, not `macro { var …; var …; }` — a reified block

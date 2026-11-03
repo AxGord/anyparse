@@ -8,8 +8,8 @@ import haxe.macro.Context;
 /**
  * The one answer to "can a sibling slot reach the renderer undecided".
  *
- * `anyparse.format.SiblingShare.decide` resolves every slot in the Doc of a `@:trivia` Star declaring
- * `siblingShare`, a region nested in that Star included, and nothing else resolves one. So the walk from the
+ * The function a `@:trivia` Star names in `siblingShare` (`anyparse.format.SiblingShare.decide`) resolves every
+ * slot in that Star's Doc, a region nested in it included, and nothing else resolves one. So the walk from the
  * writer's root stops at those Stars, and a slot it still reaches would ship unresolved: some walkers read an
  * unresolved slot's break side, which is why this is a build error and not a layout surprise.
  */
@@ -28,15 +28,23 @@ final class SiblingScope {
 			if (path != null)
 				Context.fatalError(
 					'WriterLowering: a sibling slot of knob "$knob" at ${path.join('.')} is outside every list declaring '
-					+ '@:fmt(siblingShare(\'$knob\')), so nothing resolves it',
+					+ '@:fmt(siblingShare(\'<fn>\', \'$knob\')), so nothing resolves it',
 					Context.currentPos()
 				);
 		}
 	}
 
+	/**
+	 * A hook flag names its functions first and its knob last.
+	 */
+	private static function hookKnob(node: ShapeNode, flag: String): Null<String> {
+		final args: Null<Array<String>> = MetaInspect.fmtReadStringArgs(node, flag);
+		return args == null ? null : args[args.length - 1];
+	}
+
 	private static function collectKnobs(node: ShapeNode, knobs: Map<String, Bool>): Void {
 		for (flag in SLOT_FLAGS) {
-			final knob: Null<String> = MetaInspect.fmtReadString(node, flag);
+			final knob: Null<String> = hookKnob(node, flag);
 			if (knob != null) knobs[knob] = true;
 		}
 		for (child in node.children) collectKnobs(child, knobs);
@@ -46,9 +54,8 @@ final class SiblingScope {
 	private static function unsharedPath(
 		node: ShapeNode, knob: String, rules: Map<String, ShapeNode>, entered: Map<String, Bool>, path: Array<String>
 	): Null<Array<String>> {
-		if (node.kind == ShapeKind.Star && MetaInspect.hasMeta(node, ':trivia') && MetaInspect.fmtReadString(node, 'siblingShare') == knob)
-			return null;
-		for (flag in SLOT_FLAGS) if (MetaInspect.fmtReadString(node, flag) == knob) return path;
+		if (node.kind == ShapeKind.Star && MetaInspect.hasMeta(node, ':trivia') && hookKnob(node, 'siblingShare') == knob) return null;
+		for (flag in SLOT_FLAGS) if (hookKnob(node, flag) == knob) return path;
 		for (child in node.children) {
 			final found: Null<Array<String>> = unsharedPath(child, knob, rules, entered, path.concat(step(child)));
 			if (found != null) return found;

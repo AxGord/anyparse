@@ -59,6 +59,11 @@ final class WriterLoweringSupport {
 		return { expr: EField(macro opt, fieldName), pos: Context.currentPos() };
 	}
 
+	/** The function a `@:fmt` hook flag names, as an expression to call. */
+	private static inline function hookFn(path: String): Expr {
+		return haxe.macro.MacroStringTools.toFieldExpr(path.split('.'));
+	}
+
 	/** The generated read `value.<fieldName>` of the struct being written — a field, or a trivia slot named after one. */
 	private static inline function valueFieldAccess(fieldName: String): Expr {
 		return { expr: EField(macro value, fieldName), pos: Context.currentPos() };

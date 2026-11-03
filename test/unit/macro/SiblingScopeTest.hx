@@ -19,10 +19,22 @@ class SiblingScopeTest extends Test {
 	/** The grammar's `Item`, its list reached through a struct field. */
 	private static final ITEM_SOURCE: String = "package g; enum Item { @:trail(';') Word(s: Atom); Open(open: g.Open); }\n";
 
+	private static final SHARED: String = "siblingShare('anyparse.format.SiblingShare.decide', 'k')";
+	private static final SLOT: String =
+		"siblingSlot('anyparse.format.SiblingShare.bodySlot', 'anyparse.format.SiblingShare.fitLineSlot', 'k')";
+
+	/** A rule of the second grammar's own, spelled exactly as the macro hands the facts over. */
+	private static final HOOKS: String = 'class Hooks {\npublic static function decide(list: anyparse.core.Doc, k: '
+		+ 'anyparse.format.SiblingPolicy, w: Int): anyparse.core.Doc return list;\n'
+		+ 'public static function placed(k: anyparse.format.SiblingPolicy, fit: Bool, own: anyparse.core.Doc, '
+		+ 'count: Int, soleFlat: Bool, last: Null<anyparse.core.Doc>, glue: Bool): anyparse.core.Doc return '
+		+ 'own;\npublic static function fit(k: anyparse.format.SiblingPolicy, cols: Int, body: '
+		+ 'anyparse.core.Doc, nest: Bool, w: Int, glue: Bool, below: Bool): anyparse.core.Doc return body;\n}\n';
+
 	/** Every slot is under a list declaring its knob, one of them through a nested region. */
 	public function testASharedSlotBuilds(): Void {
 		#if nodejs
-		Assert.equals('', compilerError("siblingShare('k')"));
+		Assert.equals('', compilerError(SHARED));
 		#else
 		Assert.pass('node only: spawns the compiler');
 		#end
@@ -45,7 +57,7 @@ class SiblingScopeTest extends Test {
 	/** A list sharing another knob resolves nothing of this one. */
 	public function testAListSharingAnotherKnobDoesNotCount(): Void {
 		#if nodejs
-		final error: String = compilerError("siblingShare('other')");
+		final error: String = compilerError("siblingShare('anyparse.format.SiblingShare.decide', 'other')");
 		Assert.isTrue(error.indexOf('sibling slot of knob "k"') != -1, error);
 		#else
 		Assert.pass('node only: spawns the compiler');
@@ -59,7 +71,7 @@ class SiblingScopeTest extends Test {
 	public function testAListOnAnEnumCtorDoesNotCount(): Void {
 		#if nodejs
 		final item: String = "package g; enum Item { @:trail(';') Word(s: Atom); "
-			+ "@:lead('{') @:trail('}') @:trivia @:fmt(siblingShare('k')) Open(cases: Array<Case>); }\n";
+			+ '@:lead(\'{\') @:trail(\'}\') @:trivia @:fmt($SHARED) Open(cases: Array<Case>); }\n';
 		final error: String = compilerError('nestBody', item);
 		Assert.isTrue(error.indexOf('sibling slot of knob "k"') != -1, error);
 		#else
@@ -67,14 +79,55 @@ class SiblingScopeTest extends Test {
 		#end
 	}
 
+	/** The rule is the flag's to name: the second grammar's own functions take the hand-over, and SiblingShare is not reached. */
+	public function testAGrammarNamesItsOwnRule(): Void {
+		#if nodejs
+		Assert.equals('', compilerError("siblingShare('g.Hooks.decide', 'k')", null, "siblingSlot('g.Hooks.placed', 'g.Hooks.fit', 'k')"));
+		#else
+		Assert.pass('node only: spawns the compiler');
+		#end
+	}
+
+	/** A function the flag names that does not exist stops the build naming it, which a rule the macro still hard-wired would not. */
+	public function testAHookIsReadFromTheFlag(): Void {
+		#if nodejs
+		final error: String = compilerError("siblingShare('g.Hooks.missing', 'k')");
+		Assert.isTrue(error.indexOf('missing') != -1, error);
+		#else
+		Assert.pass('node only: spawns the compiler');
+		#end
+	}
+
+	/** The old spelling names no function: it has nothing to call, so it does not build. */
+	public function testAFlagNamingNoFunctionStopsTheBuild(): Void {
+		#if nodejs
+		Assert.notEquals('', compilerError("siblingShare('k')"));
+		#else
+		Assert.pass('node only: spawns the compiler');
+		#end
+	}
+
+	/** Sibling decisions live in the functions the flags name: a lowering calling the rule or reading its policy is the regression. */
+	public function testTheMacroCallsNoSiblingRule(): Void {
+		#if nodejs
+		final macroDir: String = '${Sys.getCwd()}/src/anyparse/macro';
+		final rule: EReg = ~/\bSibling(Share\.\w+\(|Policy\.)/;
+		for (name in FileSystem.readDirectory(macroDir))
+			Assert.isFalse(name.endsWith('.hx') && rule.match(File.getContent('$macroDir/$name')), name);
+		#else
+		Assert.pass('node only: reads the tree');
+		#end
+	}
+
 	#if nodejs
 	/** The compiler's complaint about a grammar whose case list carries `listFlag`, empty when it builds. */
-	private static function compilerError(listFlag: String, ?itemSource: String): String {
+	private static function compilerError(listFlag: String, ?itemSource: String, ?slotFlag: String): String {
 		final dir: String = CliFixture.writeDir(
 			'sibling-scope', [{ name: 'Main.hx', source: 'class Main { static function main() { g.W; } }\n' }]
 		);
 		FileSystem.createDirectory('$dir/g');
-		for (file in grammarFiles(listFlag, itemSource ?? ITEM_SOURCE)) File.saveContent('$dir/g/${file.name}', file.source);
+		for (file in grammarFiles(listFlag, itemSource ?? ITEM_SOURCE, slotFlag ?? SLOT))
+			File.saveContent('$dir/g/${file.name}', file.source);
 		final build: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', [
 			'-cp',
 			'${Sys.getCwd()}/src',
@@ -97,7 +150,7 @@ class SiblingScopeTest extends Test {
 	}
 
 	/** Words, and a `{ … }` list of labelled branches whose bodies are slots, with an `if … ;` region among the branches. */
-	private static function grammarFiles(listFlag: String, itemSource: String): Array<{ name: String, source: String }> {
+	private static function grammarFiles(listFlag: String, itemSource: String, slotFlag: String): Array<{ name: String, source: String }> {
 		final head: String = 'package g;\n';
 		return [
 			{ name: 'Atom.hx', source: '$head@:re(\'[a-z]+\') @:rawString abstract Atom(String) from String to String {}\n' },
@@ -115,7 +168,7 @@ class SiblingScopeTest extends Test {
 			{
 				name: 'Branch.hx',
 				source: '$head@:peg typedef Branch = { @:lead(\'-\') '
-					+ 'var label: Atom; @:trivia @:tryparse @:fmt(nestBody, siblingSlot(\'k\')) var body: Array<Item>; }\n'
+					+ 'var label: Atom; @:trivia @:tryparse @:fmt(nestBody, $slotFlag) var body: Array<Item>; }\n'
 			},
 			{ name: 'Doc.hx', source: '$head@:peg @:schema(g.Format) @:ws typedef Doc = { @:trivia var items: Array<Item>; }\n' },
 			{
@@ -124,6 +177,7 @@ class SiblingScopeTest extends Test {
 					+ ' k: anyparse.format.SiblingPolicy, other: anyparse.format.SiblingPolicy };\n'
 			},
 			{ name: 'W.hx', source: '$head@:build(anyparse.macro.Build.buildWriter(g.Doc, g.Opts, { trivia: true })) class W {}\n' },
+			{ name: 'Hooks.hx', source: head + HOOKS },
 			{ name: 'Format.hx', source: head + formatWithKnobs() }
 		];
 	}
