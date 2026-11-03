@@ -78,7 +78,7 @@
 			"type": "anyparse.check.common.literals.RedundantToString",
 			"method": "callReceiver",
 			"find": ["final owners: Null<Array<ResolvedType>> = binder.receiverDecls(owner);", "decls: boundDecls(binder.tierOf(call)),"],
-			"replace": ["final owners: Null<Array<ResolvedType>> = ctx.index.refs.resolvedDeclsNamed(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '');", "decls: ctx.index.refs.resolvedDeclsNamed(ctx.index.members.returnNominalOf(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '', method) ?? ''),"],
+			"replace": ["final owners: Null<Array<ResolvedType>> = ctx.index.refs.resolvedDeclsNamed(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '');", "decls: ctx.index.refs.resolvedDeclsNamed(ctx.index.typing.members.returnNominalOf(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '', method) ?? ''),"],
 			"note": "a call receiver is typed by its owner's SIMPLE name, so `far.Holder.get()` reads as the same-package `Holder.get()`"
 		},
 		{

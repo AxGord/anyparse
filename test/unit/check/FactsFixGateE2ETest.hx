@@ -8,6 +8,8 @@ import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 
+using StringTools;
+
 /**
  * Three `--fix` gates that decline where the run cannot type something, answered by the compiler's facts over a real
  * compile: an operand of a concatenation a type in scope could overload (`fold-adjacent-string-literals`), the `extends`
@@ -25,408 +27,163 @@ class FactsFixGateE2ETest extends Test {
 
 	#if (sys || nodejs)
 	private static final FOLD_MAIN: String = 'abstract Dir(String) from String to String {\n'
-		+ '\t@:op(A + B) static function add(a:Dir, b:String):Dir\n'
-		+ '\t\treturn (a : String) + \'/\' + b;\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Main {\n'
-		+ '\tstatic function name():String {\n'
-		+ '\t\treturn \'n\';\n'
-		+ '\t}\n'
-		+ '\n'
-		+ '\tstatic function main() {\n'
-		+ '\t\tfinal out:Array<String> = [];\n'
-		+ '\t\tfinal xs:Array<Int> = [1, 2];\n'
-		+ '\t\tfor (i in xs) {\n'
-		+ '\t\t\tout.push(\'h\' + (i - 1) + \'_p1\');\n'
-		+ '\t\t\tout.push(i + 1 + \' \' + (i * 2));\n'
-		+ '\t\t}\n'
-		+ '\t\tout.push((name() : Dir) + \'x\' + \'y\');\n'
+		+ '\t@:op(A + B) static function add(a:Dir, b:String):Dir\n\t\treturn (a : String) + \'/\' + b;\n'
+		+ '}\n\nclass Main {\n\tstatic function name():String {\n\t\treturn \'n\';\n\t}\n\n'
+		+ '\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n\t\tfinal xs:Array<Int> = ['
+		+ '1, 2];\n\t\tfor (i in xs) {\n\t\t\tout.push(\'h\' + (i - 1) + \'_p1\');\n\t\t\tout.push(i + 1 '
+		+ '+ \' \' + (i * 2));\n\t\t}\n\t\tout.push((name() : Dir) + \'x\' + \'y\');\n'
 		+ '\t\tSys.println(out.join(\',\'));\n'
 		+ '\t}\n'
 		+ '}\n';
-	private static final NEGATED_MAIN: String = 'import haxe.xml.Access;\n\nusing StringTools;\n\n'
-		+ 'abstract Flag(Bool) from Bool to Bool {\n\t@:op(!A) public inline function inv():Bool\n\t\treturn this;\n}\n\n'
-		+ 'class Item {\n\tpublic final folder:Bool;\n\tpublic final name:String;\n\n'
-		+ '\tpublic function new(folder:Bool, name:String) {\n\t\tthis.folder = folder;\n\t\tthis.name = name;\n\t}\n}\n\n'
-		+ 'class Main {\n\tstatic function each(items:Array<Item>, f:(Item) -> Void):Void {\n\t\tfor (i in items) f(i);\n\t}\n\n'
-		+ '\tstatic function thumb(xml:String):String {\n\t\tfinal model:Access = new Access(Xml.parse(xml).firstElement());\n'
-		+ '\t\treturn !model.hasNode.thumbnail ? \'none\' : model.node.thumbnail.innerData;\n\t}\n\n'
-		+ '\tstatic function named(fileName:String, ext:String):String {\n'
-		+ '\t\treturn fileName + (!fileName.toLowerCase().endsWith(ext) ? ext : \'\');\n\t}\n\n'
-		+ '\tstatic function flag(f:Flag):String {\n\t\treturn !f ? \'n\' : \'y\';\n\t}\n\n'
-		+ '\tstatic function id<T>(x:T):T {\n\t\treturn x;\n\t}\n\n'
-		+ '\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n'
-		+ '\t\teach([new Item(true, \'a\'), new Item(false, \'b\')], child -> {\n'
-		+ '\t\t\tout.push(!child.folder ? child.name + \'.mdl\' : child.name);\n\t\t});\n'
-		+ '\t\tout.push(thumb(\'<d><thumbnail>T</thumbnail></d>\'));\n\t\tout.push(thumb(\'<d/>\'));\n'
-		+ '\t\tfinal raw = [{folder: true, name: \'r\'}];\n\t\tfinal g = id(raw[0]);\n\t\tout.push(!g.folder ? \'c\' : \'d\');\n'
-		+ '\t\tout.push(named(\'x.MDL\', \'.mdl\'));\n\t\tout.push(named(\'y\', \'.mdl\'));\n\t\tout.push(flag(true));\n'
-		+ '\t\tSys.println(out.join(\',\'));\n\t}\n}\n';
-	private static final CHAIN_MAIN: String = 'class Impl extends Base {\n'
-		+ '\tprivate function hook():Void {\n'
-		+ '\t\tSys.println(\'hook\');\n'
-		+ '\t}\n'
-		+ '\n'
-		+ '\tprivate function spare():Void {\n'
-		+ '\t\tSys.println(\'s\');\n'
-		+ '\t}\n'
-		+ '\n'
-		+ '\tprivate function gone():Void {\n'
-		+ '\t\tSys.println(\'g\');\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Leaf extends Built {\n'
-		+ '\tprivate function kept():Void {\n'
-		+ '\t\tSys.println(\'k\');\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Main {\n'
-		+ '\tstatic function main() {\n'
+	private static final NEGATED_MAIN: String = 'import haxe.xml.Access;\n\nusing StringTools;\n\nabstract Flag(Bool) from Bool to Bool {\n'
+		+ '\t@:op(!A) public inline function inv():Bool\n\t\treturn this;\n}\n\nclass Item {\n\tpublic final folder:Bool;\n'
+		+ '\tpublic final name:String;\n\n\tpublic function new(folder:Bool, name:String) {\n\t\tthis.folder = folder;\n'
+		+ '\t\tthis.name = name;\n\t}\n}\n\nclass Main {\n\tstatic function each(items:Array<Item>, f:(Item) -> Void):Void {\n'
+		+ '\t\tfor (i in items) f(i);\n\t}\n\n\tstatic function thumb(xml:String):String {\n\t\tfinal model:Access = new '
+		+ 'Access(Xml.parse(xml).firstElement());\n\t\treturn !model.hasNode.thumbnail ? \'none\' : model.node.thumbnail.innerData;\n\t}\n'
+		+ '\n\tstatic function named(fileName:String, ext:String):String {\n\t\treturn fileName + (!fileName.toLowerCase().endsWith(ext) '
+		+ '? ext : \'\');\n\t}\n\n\tstatic function flag(f:Flag):String {\n\t\treturn !f ? \'n\' : \'y\';\n\t}\n\n\tstatic function '
+		+ 'id<T>(x:T):T {\n\t\treturn x;\n\t}\n\n\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n\t\teach([new Item(true, '
+		+ '\'a\'), new Item(false, \'b\')], child -> {\n\t\t\tout.push(!child.folder ? child.name + \'.mdl\' : child.name);\n\t\t});\n'
+		+ '\t\tout.push(thumb(\'<d><thumbnail>T</thumbnail></d>\'));\n\t\tout.push(thumb(\'<d/>\'));\n\t\tfinal raw = [{folder: true, '
+		+ 'name: \'r\'}];\n\t\tfinal g = id(raw[0]);\n\t\tout.push(!g.folder ? \'c\' : \'d\');\n\t\tout.push(named(\'x.MDL\', \'.mdl\'));\n'
+		+ '\t\tout.push(named(\'y\', \'.mdl\'));\n\t\tout.push(flag(true));\n\t\tSys.println(out.join(\',\'));\n\t}\n}\n';
+	private static final CHAIN_MAIN: String = 'class Impl extends Base {\n\tprivate function hook():Void {\n\t\tSys.println(\'hook\');\n'
+		+ '\t}\n\n\tprivate function spare():Void {\n\t\tSys.println(\'s\');\n\t}\n\n'
+		+ '\tprivate function gone():Void {\n\t\tSys.println(\'g\');\n\t}\n}\n\n'
+		+ 'class Leaf extends Built {\n\tprivate function kept():Void {\n\t\tSys.println(\'k\');\n\t}\n'
+		+ '}\n\nclass Main {\n\tstatic function main() {\n'
 		+ '\t\tnew Impl().run();\n'
 		+ '\t\tnew Leaf();\n'
 		+ '\t}\n'
 		+ '}\n';
-	private static final CHAIN_BASE: String = 'abstract class Base {\n'
-		+ '\tpublic function new() {}\n'
-		+ '\n'
-		+ '\tpublic function run():Void {\n'
-		+ '\t\thook();\n'
-		+ '\t}\n'
-		+ '\n'
-		+ '\tprivate abstract function hook():Void;\n'
-		+ '\n'
-		+ '\tprivate abstract function spare():Void;\n'
-		+ '}\n';
-	private static final CHAIN_BUILT: String = '@:autoBuild(Noop.build())\n' + 'class Built {\n' + '\tpublic function new() {}\n' + '}\n';
-	private static final CHAIN_NOOP: String = 'import haxe.macro.Expr;\n'
-		+ '\n'
-		+ 'class Noop {\n'
-		+ '\tpublic static macro function build():Array<Field> {\n'
-		+ '\t\treturn null;\n'
-		+ '\t}\n'
-		+ '}\n';
-	private static final TOSTRING_MAIN: String = 'import haxe.io.Path;\n'
-		+ '\n'
-		+ '@:nullSafety(Strict)\n'
-		+ 'class Main {\n'
-		+ '\tstatic function main() {\n'
-		+ '\t\tfinal p:Path = new Path(\'a/b.txt\');\n'
-		+ '\t\tSys.println(\'$${p.toString()}\');\n'
-		+ '\t\tSys.println(\'x\' + p.toString());\n'
-		+ '\t\tSys.println(\'d $${Date.now().toString()}\'.length);\n'
-		+ '\t\tfinal d:Date = Date.now();\n'
-		+ '\t\tSys.println(\'at $${d.toString()}\'.length);\n'
-		+ '\t\tfinal n:Named = new Named();\n'
-		+ '\t\tSys.println(\'\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t$${d.toString()}$${n.label}\'.length);\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Named {\n'
-		+ '\tpublic final label:String = \'l\';\n'
-		+ '\n'
-		+ '\tpublic function new() {}\n'
-		+ '}\n';
-	private static final FAR_MAIN: String = 'import far.Path2;\n'
-		+ '\n'
-		+ 'abstract Dir(String) from String to String {\n'
-		+ '\t@:op(A + B) static function add(a:Dir, b:String):Dir\n'
-		+ '\t\treturn (a : String) + \'/\' + b;\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Holder {\n'
-		+ '\tpublic final fp:Path2 = \'r\';\n'
-		+ '\n'
-		+ '\tpublic function new() {}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Main {\n'
-		+ '\tstatic function pick<T>(v:T):T {\n'
-		+ '\t\treturn v;\n'
-		+ '\t}\n'
-		+ '\n'
-		+ '\tstatic function main() {\n'
-		+ '\t\tfinal out:Array<String> = [];\n'
-		+ '\t\tfinal c:Bool = out.length == 0;\n'
-		+ '\t\tfinal fp:Path2 = \'r\';\n'
-		+ '\t\tfinal h:Holder = new Holder();\n'
-		+ '\t\tfinal hs:Array<Holder> = [h];\n'
-		+ '\t\tout.push((c ? fp : fp) + \'x\' + \'y\');\n'
-		+ '\t\tout.push(hs[0].fp + \'x\' + \'y\');\n'
-		+ '\t\tout.push(pick(h).fp + \'x\' + \'y\');\n'
-		+ '\t\tout.push(hs.copy()[0].fp + \'x\' + \'y\');\n'
-		+ '\t\tSys.println(out.join(\',\'));\n'
-		+ '\t}\n'
-		+ '}\n';
-	private static final FAR_PATH: String = 'package far;\n'
-		+ '\n'
-		+ 'abstract Path2(String) from String to String {\n'
-		+ '\t@:op(A + B) static function add(a:Path2, b:String):Path2\n'
-		+ '\t\treturn (a : String) + \'/\' + b;\n'
-		+ '}\n';
-	private static final NEAR_PATH: String = 'package other;\n' + '\n' + 'class Path2 {\n' + '\tpublic function new() {}\n' + '}\n';
-	private static final SPLIT_MAIN: String = 'import far.Buf;\n'
-		+ 'import far.Tag;\n'
-		+ '\n'
-		+ '@:nullSafety(Strict)\n'
-		+ 'class Holder {\n'
-		+ '\tpublic final tag:Tag = new Tag();\n'
-		+ '\n'
-		+ '\tpublic function new() {}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Leaf extends Built {\n'
-		+ '\tprivate function kept():Void {\n'
-		+ '\t\ttrace(\'k\');\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '\n'
-		+ '@:nullSafety(Strict)\n'
-		+ 'class Main {\n'
-		+ '\tstatic function main() {\n'
-		+ '\t\tfinal hs:Array<Holder> = [new Holder()];\n'
-		+ '\t\tnew Leaf();\n'
-		+ '\t\ttrace((hs[0].tag) + \'x\' + \'y\');\n'
-		+ '\t\ttrace(\'$${new Buf().toString()}|\');\n'
-		+ '\t}\n'
-		+ '}\n';
-	private static final SPLIT_TAG: String = 'package far;\n'
-		+ '\n'
-		+ '#if interp\n'
-		+ 'class Tag {\n'
-		+ '\tpublic function new() {}\n'
-		+ '\n'
-		+ '\tpublic function toString():String {\n'
-		+ '\t\treturn \'r\';\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '#else\n'
-		+ 'abstract Tag(String) {\n'
-		+ '\tpublic function new() {\n'
-		+ '\t\tthis = \'r\';\n'
-		+ '\t}\n'
+	private static final CHAIN_BASE: String = 'abstract class Base {\n\tpublic function new() {}\n\n\tpublic function run():Void {\n'
+		+ '\t\thook();\n\t}\n\n\tprivate abstract function hook():Void;\n\n'
+		+ '\tprivate abstract function spare():Void;\n}\n';
+	private static final CHAIN_BUILT: String = '@:autoBuild(Noop.build())\nclass Built {\n\tpublic function new() {}\n}\n';
+	private static final CHAIN_NOOP: String =
+		'import haxe.macro.Expr;\n\nclass Noop {\n\tpublic static macro function build():Array<Field> {\n\t\treturn null;\n\t}\n}\n';
+	private static final TOSTRING_MAIN: String = 'import haxe.io.Path;\n\n@:nullSafety(Strict)\nclass Main {\n\tstatic function main() {\n'
+		+ '\t\tfinal p:Path = new Path(\'a/b.txt\');\n\t\tSys.println(\'$${p.toString()}\');\n\t\tSys.println(\'x\' + p.toString());\n'
+		+ '\t\tSys.println(\'d $${Date.now().toString()}\'.length);\n\t\tfinal d:Date = Date.now();\n'
+		+ '\t\tSys.println(\'at $${d.toString()}\'.length);\n\t\tfinal n:Named = new Named();\n'
+		+ '\t\tSys.println(\'\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t$${d.toString()}$${[n].map(d '
+		+ '-> d.label)}\'.length);\n\t}\n}\n\nclass Named {\n\tpublic final label:String = \'l\';\n\n\tpublic function new() {}\n}\n';
+	private static final FAR_MAIN: String = 'import far.Path2;\n\nabstract Dir(String) from String to String {\n'
+		+ '\t@:op(A + B) static function add(a:Dir, b:String):Dir\n\t\treturn (a : String) + \'/\' + b;\n'
+		+ '}\n\nclass Holder {\n\tpublic final fp:Path2 = \'r\';\n\n\tpublic function new() {}\n}\n\n'
+		+ 'class Main {\n\tstatic function pick<T>(v:T):T {\n\t\treturn v;\n\t}\n\n'
+		+ '\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n'
+		+ '\t\tfinal c:Bool = out.length == 0;\n\t\tfinal fp:Path2 = \'r\';\n\t\tfinal h:Holder = new '
+		+ 'Holder();\n\t\tfinal hs:Array<Holder> = [h];\n\t\tout.push((c ? fp : fp) + \'x\' + \'y\');\n'
+		+ '\t\tout.push(hs[0].fp + \'x\' + \'y\');\n\t\tout.push(pick(h).fp + \'x\' + \'y\');\n'
+		+ '\t\tout.push(hs.copy()[0].fp + \'x\' + \'y\');\n\t\tSys.println(out.join(\',\'));\n\t}\n}\n';
+	private static final FAR_PATH: String = 'package far;\n\nabstract Path2(String) from String to String {\n\t@:op(A + B) '
+		+ 'static function add(a:Path2, b:String):Path2\n\t\treturn (a : String) + \'/\' + b;\n}\n';
+	private static final NEAR_PATH: String = 'package other;\n\nclass Path2 {\n\tpublic function new() {}\n}\n';
+	private static final SPLIT_MAIN: String = 'import far.Buf;\nimport far.Tag;\n\n@:nullSafety(Strict)\nclass Holder {\n'
+		+ '\tpublic final tag:Tag = new Tag();\n\n\tpublic function new() {}\n}\n\nclass Leaf extends Built {\n'
+		+ '\tprivate function kept():Void {\n\t\ttrace(\'k\');\n\t}\n}\n\n@:nullSafety(Strict)\nclass Main {\n'
+		+ '\tstatic function main() {\n\t\tfinal hs:Array<Holder> = [new Holder()];\n\t\tnew Leaf();\n'
+		+ '\t\ttrace((hs[0].tag) + \'x\' + \'y\');\n\t\ttrace(\'$${new Buf().toString()}|\');\n\t}\n}\n';
+	private static final SPLIT_TAG: String = 'package far;\n\n#if interp\nclass Tag {\n\tpublic function new() {}\n\n'
+		+ '\tpublic function toString():String {\n\t\treturn \'r\';\n\t}\n}\n#else\nabstract Tag(String) {\n'
+		+ '\tpublic function new() {\n\t\tthis = \'r\';\n\t}\n'
 		+ '\n'
 		+ '\t@:op(A + B) static function add(a:Tag, b:String):String\n'
 		+ '\t\treturn (cast a : String) + \'/\' + b;\n'
 		+ '}\n'
 		+ '#end\n';
-	private static final SPLIT_NEAR_TAG: String = 'package other;\n' + '\n' + 'class Tag {\n' + '\tpublic function new() {}\n' + '}\n';
-	private static final SPLIT_BUF: String = 'package far;\n'
-		+ '\n'
-		+ '#if js\n'
-		+ 'extern class Buf {\n'
-		+ '\tpublic function new();\n'
-		+ '\n'
-		+ '\tpublic function toString():String;\n'
-		+ '}\n'
-		+ '#else\n'
-		+ 'class Buf {\n'
-		+ '\tpublic function new() {}\n'
-		+ '\n'
-		+ '\tpublic function toString():String {\n'
-		+ '\t\treturn \'b\';\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '#end\n';
-	private static final SPLIT_BUILT: String = '#if js\n'
-		+ '@:autoBuild(Noop.build())\n'
-		+ '#end\n'
-		+ 'class Built {\n'
-		+ '\tpublic function new() {}\n'
-		+ '}\n';
-	private static final REFLECT_MAIN: String = 'import lib.Text;\n'
-		+ '\n'
-		+ 'class Main {\n'
-		+ '\tpublic static var items:Array<Int> = [1, 2];\n'
-		+ '\n'
-		+ '\tstatic function main() {\n'
-		+ '\t\tvar o:Obj = new Obj();\n'
-		+ '\t\tText.keep(o);\n'
-		+ '\t\tvar n:String = \'lib.Pla\' + \'in\';\n'
-		+ '\t\tType.createInstance(Type.resolveClass(n), []);\n'
-		+ '\t\tvar sum:Int = 0;\n'
-		+ '\t\tfor (i in 0...items.length) {\n'
-		+ '\t\t\tfinal v:Int = items[i];\n'
-		+ '\t\t\tsum += v;\n'
-		+ '\t\t\tText.fail();\n'
-		+ '\t\t}\n'
-		+ '\t\tSys.println(sum);\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Obj {\n'
-		+ '\tpublic function new() {}\n'
-		+ '\n'
-		+ '\tpublic function toString():String {\n'
-		+ '\t\tMain.items = [];\n'
-		+ '\t\treturn \'o\';\n'
-		+ '\t}\n'
-		+ '}\n';
-	private static final REFLECT_TEXT: String = 'package lib;\n'
-		+ '\n'
-		+ 'class Plain {\n'
-		+ '\tpublic function new() {}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Text {\n'
-		+ '\tpublic static var last:Plain = new Plain();\n'
-		+ '\n'
-		+ '\tpublic static var failing:Bool = false;\n'
-		+ '\n'
-		+ '\tpublic static function keep<A>(x:A):Void {}\n'
-		+ '\n'
-		+ '\tpublic static function fail():Void {\n'
-		+ '\t\tif (failing) {\n'
-		+ '\t\t\tthrow last;\n'
-		+ '\t\t}\n'
-		+ '\t}\n'
-		+ '}\n';
-	private static final HOLDER_MAIN: String = 'class Main {\n'
-		+ '\tpublic static var items:Array<Int> = [1, 2];\n'
-		+ '\tpublic static var keep:Null<(Rx) -> String> = null;\n'
-		+ '\n'
-		+ '\tstatic function main() {\n'
-		+ '\t\tvar g:Dynamic = new Grower();\n'
-		+ '\t\tvar o:Dynamic = new Plain();\n'
-		+ '\t\tvar n:String = \'lo\' + \'ok\';\n'
-		+ '\t\tkeep = Reflect.field(o, n);\n'
-		+ '\t\tfinal r:Rx = new Rx();\n'
-		+ '\t\tvar sum:Int = 0;\n'
-		+ '\t\tfor (i in 0...items.length) {\n'
-		+ '\t\t\tfinal v:Int = items[i];\n'
-		+ '\t\t\tsum += v;\n'
-		+ '\t\t\tr.map(keep);\n'
-		+ '\t\t}\n'
-		+ '\t\tSys.println(sum);\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Rx {\n'
-		+ '\tpublic function new() {}\n'
-		+ '\n'
-		+ '\tpublic function map(f:(Rx) -> String):String {\n'
-		+ '\t\tfinal h:(Rx) -> String = f;\n'
-		+ '\t\treturn h(this);\n'
-		+ '\t}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Plain {\n'
-		+ '\tpublic function new() {}\n'
-		+ '\n'
-		+ '\tpublic function look(s:String):Void {}\n'
-		+ '}\n'
-		+ '\n'
-		+ 'class Grower {\n'
-		+ '\tpublic function new() {}\n'
-		+ '\n'
-		+ '\tpublic function grow(s:String):Void {\n'
-		+ '\t\tMain.items = [];\n'
-		+ '\t}\n'
-		+ '}\n';
-	private static final ALIAS_MAIN: String = 'class Main {\n'
-		+ '\tpublic static var items:Array<Int> = [1, 2];\n'
-		+ '\n'
-		+ '\tstatic function main() {\n'
-		+ '\t\tvar sum:Int = 0;\n'
-		+ '\t\tfor (i in 0...items.length) {\n'
-		+ '\t\t\tfinal v:Int = items[i];\n'
-		+ '\t\t\tsum += v;\n'
-		+ '\t\t\tOther.go();\n'
-		+ '\t\t}\n'
-		+ '\t\tSys.println(sum);\n'
-		+ '\t}\n'
-		+ '}\n';
-	private static final ALIAS_OTHER: String = 'import Main.items as stuff;\n'
-		+ '\n'
-		+ 'class Other {\n'
-		+ '\tstatic var done:Bool = false;\n'
-		+ '\n'
-		+ '\t#if other\n'
-		+ '\tpublic static function go():Void {}\n'
-		+ '\t#else\n'
-		+ '\tpublic static function go():Void {\n'
-		+ '\t\tif (!done) {\n'
-		+ '\t\t\tdone = true;\n'
-		+ '\t\t\tstuff.push(5);\n'
-		+ '\t\t}\n'
+	private static final SPLIT_NEAR_TAG: String = 'package other;\n\nclass Tag {\n\tpublic function new() {}\n}\n';
+	private static final SPLIT_BUF: String = 'package far;\n\n#if js\nextern class Buf {\n\tpublic function new();\n\n'
+		+ '\tpublic function toString():String;\n}\n#else\nclass Buf {\n\tpublic function new() {}\n\n'
+		+ '\tpublic function toString():String {\n\t\treturn \'b\';\n\t}\n}\n#end\n';
+	private static final SPLIT_BUILT: String = '#if js\n@:autoBuild(Noop.build())\n#end\nclass Built {\n\tpublic function new() {}\n}\n';
+	private static final REFLECT_MAIN: String = 'import lib.Text;\n\nclass Main {\n\tpublic static var items:Array<Int> = [1, 2];\n\n'
+		+ '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n\t\tText.keep(o);\n'
+		+ '\t\tvar n:String = \'lib.Pla\' + \'in\';\n\t\tType.createInstance(Type.resolveClass(n), []);\n'
+		+ '\t\tvar sum:Int = 0;\n\t\tfor (i in 0...items.length) {\n\t\t\tfinal v:Int = items[i];\n\t\t\tsum += v;\n'
+		+ '\t\t\tText.fail();\n\t\t}\n\t\tSys.println(sum);\n\t}\n}\n\nclass Obj {\n\tpublic function new() {}\n\n'
+		+ '\tpublic function toString():String {\n\t\tMain.items = [];\n\t\treturn \'o\';\n\t}\n}\n';
+	private static final REFLECT_TEXT: String = 'package lib;\n\nclass Plain {\n\tpublic function new() {}\n}\n\nclass Text {\n'
+		+ '\tpublic static var last:Plain = new Plain();\n\n\tpublic static var failing:Bool = '
+		+ 'false;\n\n\tpublic static function keep<A>(x:A):Void {}\n\n\tpublic static function '
+		+ 'fail():Void {\n\t\tif (failing) {\n\t\t\tthrow last;\n\t\t}\n\t}\n}\n';
+	private static final HOLDER_MAIN: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n'
+		+ '\tpublic static var keep:Null<(Rx) -> String> = null;\n\n\tstatic function main() {\n'
+		+ '\t\tvar g:Dynamic = new Grower();\n\t\tvar o:Dynamic = new Plain();\n'
+		+ '\t\tvar n:String = \'lo\' + \'ok\';\n\t\tkeep = Reflect.field(o, n);\n\t\tfinal r:Rx = new '
+		+ 'Rx();\n\t\tvar sum:Int = 0;\n\t\tfor (i in 0...items.length) {\n\t\t\tfinal v:Int = '
+		+ 'items[i];\n\t\t\tsum += v;\n\t\t\tr.map(keep);\n\t\t}\n\t\tSys.println(sum);\n\t}\n}\n\n'
+		+ 'class Rx {\n\tpublic function new() {}\n\n\tpublic function map(f:(Rx) -> String):String {\n'
+		+ '\t\tfinal h:(Rx) -> String = f;\n\t\treturn h(this);\n\t}\n}\n\nclass Plain {\n\tpublic '
+		+ 'function new() {}\n\n\tpublic function look(s:String):Void {}\n}\n\nclass Grower {\n\tpublic '
+		+ 'function new() {}\n\n\tpublic function grow(s:String):Void {\n\t\tMain.items = [];\n\t}\n}\n';
+	private static final ALIAS_MAIN: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n\n\tstatic function main() {\n'
+		+ '\t\tvar sum:Int = 0;\n\t\tfor (i in 0...items.length) {\n\t\t\tfinal v:Int = items[i];\n'
+		+ '\t\t\tsum += v;\n\t\t\tOther.go();\n\t\t}\n\t\tSys.println(sum);\n\t}\n}\n';
+	private static final ALIAS_OTHER: String = 'import Main.items as stuff;\n\nclass Other {\n\tstatic var done:Bool = false;\n\n'
+		+ '\t#if other\n\tpublic static function go():Void {}\n\t#else\n\tpublic static function '
+		+ 'go():Void {\n\t\tif (!done) {\n\t\t\tdone = true;\n\t\t\tstuff.push(5);\n\t\t}\n'
 		+ '\t}\n'
 		+ '\t#end\n'
 		+ '}\n';
-	private static final REPLACE_OTHER: String = 'class Other {\n'
-		+ '\tstatic var done:Bool = false;\n'
-		+ '\n'
-		+ '\tpublic static function go():Void {\n'
-		+ '\t\tif (!done) {\n'
-		+ '\t\t\tdone = true;\n'
-		+ '\t\t\tstuff = [10, 20, 30, 40];\n'
-		+ '\t\t}\n'
-		+ '\t}\n'
-		+ '}\n';
+	private static final REPLACE_OTHER: String = 'class Other {\n\tstatic var done:Bool = false;\n\n\tpublic static function go():Void {\n'
+		+ '\t\tif (!done) {\n\t\t\tdone = true;\n\t\t\tstuff = [10, 20, 30, 40];\n\t\t}\n\t}\n}\n';
 	private static final HELD_MAIN: String = 'class Main {\n\tstatic function main() {\n\t\tnew Grid().run();\n\t\tnew Pushed().run();\n'
-		+ '\t\tnew Handed().run();\n\t\tnew Captured().run();\n\t\tnew Returned().run();\n'
-		+ '\t\tnew Shadowed().run();\n\t\tnew Region().run();\n\t}\n}\n\nclass Line {\n'
-		+ '\tpublic var n:Int = 0;\n\n\tpublic function new() {}\n\n\tpublic function redraw():Void {\n'
-		+ '\t\tn++;\n\t}\n}\n\nclass Grid {\n\tvar verticals:Array<Line> = [new Line(), new Line()];\n'
-		+ '\tvar horizontals:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
-		+ '\tfunction move(c:String):Void {\n\t\tvar lines:Array<Line> = null;\n\t\tif (c == \'h\')\n'
-		+ '\t\t\tlines = verticals;\n\t\telse if (c == \'v\')\n\t\t\tlines = horizontals;\n'
-		+ '\t\tfor (i => line in lines) line.n += i;\n\t\tvar copy:Array<Line> = lines;\n'
-		+ '\t\tfor (l in copy) l.n += copy.length;\n\t}\n\n\tpublic function run():Void {\n\t\tmove(\'h\');\n'
-		+ '\t\tfor (i in 0...verticals.length) verticals[i].redraw();\n'
-		+ '\t\tfor (l in verticals) Sys.println(l.n);\n\t}\n}\n\nclass Pushed {\n'
-		+ '\tvar items:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n\tfunction grow():Void {\n'
-		+ '\t\tvar l:Array<Line> = null;\n\t\tl = items;\n\t\tif (l.length < 3) l.push(new Line());\n\t}\n\n'
-		+ '\tpublic function run():Void {\n\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
-		+ '\t\t\tgrow();\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\nclass Handed {\n'
-		+ '\tstatic var kept:Array<Line> = [];\n\n\tvar items:Array<Line> = [new Line()];\n\n'
-		+ '\tpublic function new() {}\n\n\tstatic function keep(a:Array<Line>):Void {\n\t\tkept = a;\n\t}\n\n'
-		+ '\tfunction hand():Void {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n\t\tkeep(l);\n\t}\n\n'
-		+ '\tpublic function run():Void {\n\t\thand();\n\t\tfor (i in 0...items.length) {\n'
-		+ '\t\t\titems[i].redraw();\n\t\t\tif (kept.length < 3) kept.push(new Line());\n\t\t}\n'
-		+ '\t\tSys.println(items.length);\n\t}\n}\n\nclass Captured {\n'
-		+ '\tvar items:Array<Line> = [new Line()];\n\tvar later:Null<() -> Void> = null;\n\n'
-		+ '\tpublic function new() {}\n\n\tfunction hold():Void {\n\t\tvar l:Array<Line> = null;\n'
-		+ '\t\tl = items;\n\t\tlater = () -> if (l.length < 3) l.push(new Line());\n\t}\n\n'
-		+ '\tpublic function run():Void {\n\t\thold();\n\t\tfor (i in 0...items.length) {\n'
-		+ '\t\t\titems[i].redraw();\n\t\t\tlater();\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\n'
-		+ 'class Returned {\n\tvar items:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
-		+ '\tfunction get():Array<Line> {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n\t\treturn l;\n\t}\n'
-		+ '\n\tpublic function run():Void {\n\t\tfinal g:Array<Line> = get();\n'
-		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
-		+ '\t\t\tif (g.length < 3) g.push(new Line());\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\n'
-		+ 'class Shadowed {\n\tstatic var kept:Array<Line> = [];\n\n\tvar items:Array<Line> = [new Line()];\n\n'
-		+ '\tpublic function new() {}\n\n\tfunction hand():Void {\n\t\tvar l:Array<Line> = null;\n'
-		+ '\t\tl = items;\n\t\t{\n\t\t\tvar l:Array<Line> = [new Line()];\n\t\t\tfor (x in l) x.redraw();\n'
-		+ '\t\t}\n\t\tkept = l;\n\t}\n\n\tpublic function run():Void {\n\t\thand();\n'
-		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
+		+ '\t\tnew Handed().run();\n\t\tnew Captured().run();\n\t\tnew Returned().run();\n\t\tnew Shadowed().run();\n'
+		+ '\t\tnew Region().run();\n\t}\n}\n\nclass Line {\n\tpublic var n:Int = 0;\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function redraw():Void {\n\t\tn++;\n\t}\n}\n\nclass Grid {\n\tvar verticals:Array<Line> = ['
+		+ 'new Line(), new Line()];\n\tvar horizontals:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
+		+ '\tfunction move(c:String):Void {\n\t\tvar lines:Array<Line> = null;\n\t\tif (c == \'h\')\n\t\t\tlines = '
+		+ 'verticals;\n\t\telse if (c == \'v\')\n\t\t\tlines = horizontals;\n\t\tfor (i => line in lines) '
+		+ 'line.n += i;\n\t\tvar copy:Array<Line> = lines;\n\t\tfor (l in copy) l.n += copy.length;\n\t}\n\n\tpublic '
+		+ 'function run():Void {\n\t\tmove(\'h\');\n\t\tfor (i in 0...verticals.length) verticals[i].redraw();\n'
+		+ '\t\tfor (l in verticals) Sys.println(l.n);\n\t}\n}\n\nclass Pushed {\n\tvar items:Array<Line> = [new '
+		+ 'Line()];\n\n\tpublic function new() {}\n\n\tfunction grow():Void {\n\t\tvar l:Array<Line> = null;\n\t\tl '
+		+ '= items;\n\t\tif (l.length < 3) l.push(new Line());\n\t}\n\n\tpublic function run():Void {\n\t\tfor ('
+		+ 'i in 0...items.length) {\n\t\t\titems[i].redraw();\n\t\t\tgrow();\n\t\t}\n\t\tSys.println(items.length);\n'
+		+ '\t}\n}\n\nclass Handed {\n\tstatic var kept:Array<Line> = [];\n\n\tvar items:Array<Line> = ['
+		+ 'new Line()];\n\n\tpublic function new() {}\n\n\tstatic function keep(a:Array<Line>):Void {\n\t\tkept = '
+		+ 'a;\n\t}\n\n\tfunction hand():Void {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n\t\tkeep(l);\n\t}\n\n'
+		+ '\tpublic function run():Void {\n\t\thand();\n\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
 		+ '\t\t\tif (kept.length < 3) kept.push(new Line());\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\n'
-		+ 'class Region {\n\tvar items:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
-		+ '\tpublic function run():Void {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n'
-		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
+		+ 'class Captured {\n\tvar items:Array<Line> = [new Line()];\n\tvar later:Null<() -> Void> = null;\n\n'
+		+ '\tpublic function new() {}\n\n\tfunction hold():Void {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n'
+		+ '\t\tlater = () -> if (l.length < 3) l.push(new Line());\n\t}\n\n\tpublic function run():Void {\n'
+		+ '\t\thold();\n\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n\t\t\tlater();\n\t\t}\n'
+		+ '\t\tSys.println(items.length);\n\t}\n}\n\nclass Returned {\n\tvar items:Array<Line> = [new Line()];\n\n'
+		+ '\tpublic function new() {}\n\n\tfunction get():Array<Line> {\n\t\tvar l:Array<Line> = null;\n'
+		+ '\t\tl = items;\n\t\treturn l;\n\t}\n\n\tpublic function run():Void {\n\t\tfinal g:Array<Line> = get();\n'
+		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n\t\t\tif (g.length < 3) g.push(new Line());\n'
+		+ '\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\nclass Shadowed {\n\tstatic var kept:Array<Line> = [];\n\n'
+		+ '\tvar items:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n\tfunction hand():Void {\n'
+		+ '\t\tvar l:Array<Line> = null;\n\t\tl = items;\n\t\t{\n\t\t\tvar l:Array<Line> = [new Line()];\n'
+		+ '\t\t\tfor (x in l) x.redraw();\n\t\t}\n\t\tkept = l;\n\t}\n\n\tpublic function run():Void {\n\t\thand();\n'
+		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n\t\t\tif (kept.length < 3) kept.push(new '
+		+ 'Line());\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\nclass Region {\n\tvar items:Array<Line> = ['
+		+ 'new Line()];\n\n\tpublic function new() {}\n\n\tpublic function run():Void {\n\t\tvar l:Array<Line> = '
+		+ 'null;\n\t\tl = items;\n\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
 		+ '\t\t\tif (l.length < 3) l.push(new Line());\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n';
 	private static final MAP_MAIN: String = 'class Holder {\n\tpublic static var kept:Map<String, Int> = [];\n\n'
 		+ '\tpublic static function keep(m:Map<String, Int>):Void {\n\t\tkept = m;\n\t}\n\n'
 		+ '\tpublic static function poke():Void {\n\t\tkept.set(\'x\', 20);\n\t}\n}\n\nclass Registry {\n'
-		+ '\tprivate final _byId:Map<Int, Array<String>> = [];\n'
-		+ '\tprivate final _counts:Map<String, Int> = [\'a\' => 1, \'b\' => 2, \'c\' => 3];\n\n'
-		+ '\tpublic function new() {}\n\n\tpublic function add(id:Int, s:String):Void {\n'
-		+ '\t\tfinal items:Null<Array<String>> = _byId[id];\n\t\tif (items != null)\n\t\t\titems.push(s);\n'
-		+ '\t\telse\n\t\t\t_byId[id] = [s];\n\t\tif (_byId.exists(-1)) _byId.remove(-1);\n\t}\n\n'
-		+ '\tpublic function wipe():Void {\n\t\t_counts.clear();\n\t}\n\n\tpublic function total():Int {\n'
-		+ '\t\tvar sum:Int = 0;\n\t\tfor (_ => items in _byId) sum += items.length;\n\t\treturn sum;\n\t}\n\n'
-		+ '\tpublic function widest():Int {\n\t\tvar most:Int = 0;\n'
+		+ '\tprivate final _byId:Map<Int, Array<String>> = [];\n\tprivate final _counts:Map<String, Int> = ['
+		+ '\'a\' => 1, \'b\' => 2, \'c\' => 3];\n\n\tpublic function new() {}\n\n\tpublic function '
+		+ 'add(id:Int, s:String):Void {\n\t\tfinal items:Null<Array<String>> = _byId[id];\n\t\tif (items != '
+		+ 'null)\n\t\t\titems.push(s);\n\t\telse\n\t\t\t_byId[id] = [s];\n\t\tif (_byId.exists(-1)) '
+		+ '_byId.remove(-1);\n\t}\n\n\tpublic function wipe():Void {\n\t\t_counts.clear();\n\t}\n\n'
+		+ '\tpublic function total():Int {\n\t\tvar sum:Int = 0;\n\t\tfor (_ => items in _byId) sum += '
+		+ 'items.length;\n\t\treturn sum;\n\t}\n\n\tpublic function widest():Int {\n\t\tvar most:Int = 0;\n'
 		+ '\t\tfor (id => items in _byId) if (items.length > most) most = items.length;\n\t\treturn most;\n'
-		+ '\t}\n\n\tpublic function removing():String {\n\t\tfinal out:Array<Null<Int>> = [];\n'
-		+ '\t\tfor (_ => n in _counts) {\n\t\t\tout.push(n);\n\t\t\t_counts.remove(\'a\');\n\t\t}\n'
-		+ '\t\treturn out.join(\',\');\n\t}\n\n\tpublic function replacing():String {\n'
+		+ '\t}\n\n\tpublic function removing():String {\n\t\tfinal out:Array<Null<Int>> = [];\n\t\tfor ('
+		+ '_ => n in _counts) {\n\t\t\tout.push(n);\n\t\t\t_counts.remove(\'a\');\n\t\t}\n\t\treturn '
+		+ 'out.join(\',\');\n\t}\n\n\tpublic function replacing():String {\n\t\tfinal out:Array<Null<Int>> '
+		+ '= [];\n\t\tfor (_ => n in _counts) {\n\t\t\tout.push(n);\n\t\t\t_counts[\'b\'] = 20;\n\t\t}\n'
+		+ '\t\treturn out.join(\',\');\n\t}\n\n\tpublic function clearing():String {\n'
 		+ '\t\tfinal out:Array<Null<Int>> = [];\n\t\tfor (_ => n in _counts) {\n\t\t\tout.push(n);\n'
-		+ '\t\t\t_counts[\'b\'] = 20;\n\t\t}\n\t\treturn out.join(\',\');\n\t}\n\n'
-		+ '\tpublic function clearing():String {\n\t\tfinal out:Array<Null<Int>> = [];\n'
-		+ '\t\tfor (_ => n in _counts) {\n\t\t\tout.push(n);\n\t\t\twipe();\n\t\t}\n'
-		+ '\t\treturn out.join(\',\');\n\t}\n}\n\nclass Main {\n\tstatic function main() {\n'
-		+ '\t\tfinal r:Registry = new Registry();\n\t\tr.add(1, \'a\');\n\t\tr.add(2, \'b\');\n'
+		+ '\t\t\twipe();\n\t\t}\n\t\treturn out.join(\',\');\n\t}\n}\n\nclass Main {\n\tstatic function '
+		+ 'main() {\n\t\tfinal r:Registry = new Registry();\n\t\tr.add(1, \'a\');\n\t\tr.add(2, \'b\');\n'
 		+ '\t\tr.add(2, \'c\');\n\t\tSys.println(r.total());\n\t\tSys.println(r.widest());\n'
 		+ '\t\tfinal fresh:Map<String, Int> = [\'p\' => 1, \'q\' => 2];\n\t\tfinal seen:Array<Int> = [];\n'
 		+ '\t\tfor (_ => n in fresh) seen.push(n);\n\t\tSys.println(seen.length);\n'
@@ -435,19 +192,15 @@ class FactsFixGateE2ETest extends Test {
 		+ '\t\t\tHolder.poke();\n\t\t}\n\t\tSys.println(got.join(\',\'));\n\t\tSys.println(r.replacing());\n'
 		+ '\t\tSys.println(r.removing());\n\t\tSys.println(r.clearing());\n\t}\n}\n';
 	private static final ARG_MAIN: String = 'using Lambda;\n\nclass Holder {\n\tpublic static var kept:Map<String, Int> = [];\n\n'
-		+ '\tpublic static function keep(m:Map<String, Int>):Void {\n\t\tkept = m;\n\t}\n\n'
-		+ '\tpublic static function poke():Void {\n\t\tkept.set(\'b\', 20);\n\t}\n}\n\nclass Registry {\n'
-		+ '\tprivate final _counts:Map<String, Int> = [\'a\' => 1, \'b\' => 2, \'c\' => 3];\n'
-		+ '\tprivate final _shared:Map<String, Int> = [\'a\' => 1, \'b\' => 2, \'c\' => 3];\n\n'
-		+ '\tpublic function new() {}\n\n\tpublic function total():String {\n\t\tfinal out:Array<Int> = [];\n'
-		+ '\t\tfor (_ => n in _counts) out.push(n);\n'
-		+ '\t\treturn out.join(\',\') + \'/\' + _counts.count() + \'/\' + widest(_counts);\n\t}\n\n'
-		+ '\tpublic function shared():String {\n\t\tHolder.keep(_shared);\n\t\tfinal out:Array<Null<Int>> = [];\n'
-		+ '\t\tfor (_ => n in _shared) {\n\t\t\tout.push(n);\n\t\t\tHolder.poke();\n\t\t}\n'
-		+ '\t\treturn out.join(\',\');\n\t}\n\n\tprivate static function widest(m:Map<String, Int>):Int {\n'
-		+ '\t\tvar most:Int = 0;\n\t\tfor (n in m) if (n > most) most = n;\n\t\treturn most;\n\t}\n}\n\n'
-		+ 'class Main {\n\tstatic function main() {\n\t\tfinal r:Registry = new Registry();\n'
-		+ '\t\tSys.println(r.total());\n\t\tSys.println(r.shared());\n\t}\n}\n';
+		+ '\tpublic static function keep(m:Map<String, Int>):Void {\n\t\tkept = m;\n\t}\n\n\tpublic static function poke():Void {\n'
+		+ '\t\tkept.set(\'b\', 20);\n\t}\n}\n\nclass Registry {\n\tprivate final _counts:Map<String, Int> = [\'a\' => 1, \'b\' => 2, \'c\' '
+		+ '=> 3];\n\tprivate final _shared:Map<String, Int> = [\'a\' => 1, \'b\' => 2, \'c\' => 3];\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function total():String {\n\t\tfinal out:Array<Int> = [];\n\t\tfor (_ => n in _counts) out.push(n);\n'
+		+ '\t\treturn out.join(\',\') + \'/\' + _counts.count() + \'/\' + widest(_counts);\n\t}\n\n\tpublic function shared():String {\n'
+		+ '\t\tHolder.keep(_shared);\n\t\tfinal out:Array<Null<Int>> = [];\n\t\tfor (_ => n in _shared) {\n\t\t\tout.push(n);\n'
+		+ '\t\t\tHolder.poke();\n\t\t}\n\t\treturn out.join(\',\');\n\t}\n\n\tprivate static function widest(m:Map<String, Int>):Int {\n'
+		+ '\t\tvar most:Int = 0;\n\t\tfor (n in m) if (n > most) most = n;\n\t\treturn most;\n\t}\n}\n\nclass Main {\n\tstatic function '
+		+ 'main() {\n\t\tfinal r:Registry = new Registry();\n\t\tSys.println(r.total());\n\t\tSys.println(r.shared());\n\t}\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -561,7 +314,8 @@ class FactsFixGateE2ETest extends Test {
 	/**
 	 * A receiver of a class the resolution scope does not declare (`haxe.io.Path`) loses its `.toString()` once the facts
 	 * show every configuration compiled it as a non-extern class; an extern one (`Date` on `--interp`) keeps it — also
-	 * where, after fifteen escapes, the compiler places the read of `n` exactly at `d`'s range. `'at ${d.toString()}'` is
+	 * where, after twenty-eight escapes, the compiler places the read of the lambda's `d` (a `Named`) exactly at the range
+	 * of the receiver `d`, which the facts' own text check cannot tell apart. `'at ${d.toString()}'` is
 	 * the site only the extern gate decides: `Date.now()` is not provably non-null while the unindexed `haxe.io.Path`
 	 * import may declare a `Date` of its own, and the escaped read is declined before its type is asked.
 	 */
@@ -603,7 +357,8 @@ class FactsFixGateE2ETest extends Test {
 			{ name: 'lib/Built.hx', source: SPLIT_BUILT },
 			{ name: 'lib/Noop.hx', source: CHAIN_NOOP },
 			{ name: 'js.hxml', source: '-cp src\n-cp lib\n-main Main\n-js out.js\n' }
-		], '-cp src\n-cp lib\n-main Main\n--interp\n', '{"compilerOracle":[{"hxml":"check.hxml"},{"hxml":"js.hxml"}],"resolutionRoots":["src"]}');
+		], '-cp src\n-cp lib\n-main Main\n--interp\n', '{"compilerOracle":[{"hxml":"check.hxml"},{"hxml":"js.hxml"}],'
+		+ '"resolutionRoots":["src"]}');
 		if (dir == null) return;
 		final before: String = run(dir);
 		CliFixture.captureStderr(() -> Cli.run([
@@ -647,7 +402,7 @@ class FactsFixGateE2ETest extends Test {
 			Assert.equals(REFLECT_MAIN, File.getContent('$dir/Main.hx'), declared);
 			CliFixture.removeDir(dir);
 		}
-		final dir: Null<String> = tree('reflectbound', files, HXML, complete + ',"reflectiveClasses":["lib.*","nope.**"]}');
+		final dir: Null<String> = tree('reflectbound', files, HXML, '$complete,"reflectiveClasses":["lib.*","nope.**"]}');
 		if (dir == null) return;
 		final before: String = run(dir);
 		final err: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
@@ -680,7 +435,7 @@ class FactsFixGateE2ETest extends Test {
 			Assert.equals(HOLDER_MAIN, File.getContent('$dir/Main.hx'), declared);
 			CliFixture.removeDir(dir);
 		}
-		final dir: Null<String> = tree('holderbound', files, HXML, complete + ',"reflectiveMethodHolders":["Plain","nope.**"]}');
+		final dir: Null<String> = tree('holderbound', files, HXML, '$complete,"reflectiveMethodHolders":["Plain","nope.**"]}');
 		if (dir == null) return;
 		final before: String = run(dir);
 		final err: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
@@ -731,7 +486,7 @@ class FactsFixGateE2ETest extends Test {
 		final own: Array<{ name: String, source: String }> = [
 			{
 				name: 'Other.hx',
-				source: 'import Main.items as stuff;\n\n' + REPLACE_OTHER
+				source: 'import Main.items as stuff;\n\n$REPLACE_OTHER'
 			}
 		];
 		final ambient: Array<{ name: String, source: String }> = [
@@ -767,8 +522,8 @@ class FactsFixGateE2ETest extends Test {
 		if (dir == null) return;
 		final before: String = run(dir);
 		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-value-loop', '$dir/Main.hx']));
-		final expected: String = StringTools.replace(
-			HELD_MAIN, 'for (i in 0...verticals.length) verticals[i].redraw();', 'for (vertical in verticals) vertical.redraw();'
+		final expected: String = HELD_MAIN.replace(
+			'for (i in 0...verticals.length) verticals[i].redraw();', 'for (vertical in verticals) vertical.redraw();'
 		);
 		Assert.notEquals(HELD_MAIN, expected);
 		Assert.equals(expected, File.getContent('$dir/Main.hx'));
@@ -832,7 +587,10 @@ class FactsFixGateE2ETest extends Test {
 	}
 
 	#if (sys || nodejs)
-	/** The map fixture fixed by both key-dropping rules under `apqlint`: exactly the three provable loops change, and the output does not. */
+	/**
+	 * The map fixture fixed by both key-dropping rules under `apqlint`:
+	 * exactly the three provable loops change, and the output does not.
+	 */
 	private static function mapKeysDropped(apqlint: String): Void {
 		final dir: Null<String> = tree('mapkeys', [{ name: 'Main.hx', source: MAP_MAIN }], HXML, apqlint);
 		if (dir == null) return;
@@ -853,13 +611,16 @@ class FactsFixGateE2ETest extends Test {
 			['for (_ => n in fresh)', 'for (n in fresh)']
 		]) {
 			Assert.isTrue(expected.indexOf(pair[0]) >= 0, pair[0]);
-			expected = StringTools.replace(expected, pair[0], pair[1]);
+			expected = expected.replace(pair[0], pair[1]);
 		}
 		Assert.equals(expected, File.getContent('$dir/Main.hx'));
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 	}
-	/** The argument fixture fixed by `redundant-map-iter-key` under `apqlint`: the `_counts` loop changes when `dropped`, and the output does not. */
+	/**
+	 * The argument fixture fixed by `redundant-map-iter-key` under `apqlint`:
+	 * the `_counts` loop changes when `dropped`, and the output does not.
+	 */
 	private static function argumentKeysDropped(apqlint: String, dropped: Bool): Void {
 		final dir: Null<String> = tree('argkeys', [{ name: 'Main.hx', source: ARG_MAIN }], HXML, apqlint);
 		if (dir == null) return;
@@ -867,14 +628,12 @@ class FactsFixGateE2ETest extends Test {
 		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'redundant-map-iter-key', '$dir/Main.hx']));
 		final from: String = 'for (_ => n in _counts) out';
 		Assert.isTrue(ARG_MAIN.indexOf(from) >= 0, from);
-		final expected: String = dropped ? StringTools.replace(ARG_MAIN, from, 'for (n in _counts) out') : ARG_MAIN;
+		final expected: String = dropped ? ARG_MAIN.replace(from, 'for (n in _counts) out') : ARG_MAIN;
 		Assert.equals(expected, File.getContent('$dir/Main.hx'));
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 	}
-	#end
 
-	#if (sys || nodejs)
 	/** The fixture tree, or null — the test passed as skipped — when no `haxe` typechecks it. */
 	private static function tree(
 		name: String, files: Array<{ name: String, source: String }>, hxml: String, apqlint: String = APQLINT

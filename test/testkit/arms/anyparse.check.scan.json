@@ -358,7 +358,7 @@
 			"type": "anyparse.check.scan.OperandBinder",
 			"method": "receiverDecls",
 			"find": "return switch _index.refs.names.tierOf(name, fi, receiver.span?.from) {",
-			"replace": "return switch Unknown {",
+			"replace": "return switch (Unknown : Tier) {",
 			"note": "a type name never serves as a receiver, so no static access types an operand"
 		},
 		{
