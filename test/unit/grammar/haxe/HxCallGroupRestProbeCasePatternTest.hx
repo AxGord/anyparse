@@ -141,7 +141,7 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 	public function testCasePatternCtorStaysGlued(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tswitch (x) {\n'
 			+ '\t\t\tcase Nest(_, _) | Concat(_) | Group(_) | BodyGroup(_) | GroupProbe(_) | Flatten(_) | WrapBoundary(_) '
-			+ '| HardFlatten(_) | CollapseProbe(\n\t\t\t\t_\n\t\t\t):\n\t\t\t\tg();\n\t\t}\n\t}\n}';
+			+ '| HardFlatten(_) |\n\t\t\t\tCollapseProbe(_):\n\t\t\t\tg();\n\t\t}\n\t}\n}';
 		final out: String = triviaWrite(src);
 		Assert.equals(src, out);
 		// Explicit glued invariant: the leading multi-arg ctor never splits.

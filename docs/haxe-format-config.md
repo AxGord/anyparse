@@ -40,6 +40,21 @@ The classes (`HxFormatWrappingSection`) — each takes the same rules object:
 not puts every operator at the head of its own line. A chain inside a `conditionWrapping` paren that broke keeps its
 own cascade; haxe-formatter instead repacks such a chain to the condition's fill mode, and hxq deliberately does not.
 
+`casePattern` governs the whole label of a `case`: its `,` and its top-level `|` are gaps of one chain, so a fill packs
+across both and the location places both (`defaultLocation: beforeLast` opens a line with `| b` or `, b`). The cascade
+counts every operand. `|` inside delimiters (`Foo(a | b)`, `(a | b)`) belongs to that operand, and a guard wraps on its
+own. Every operand continues the label, the first included, so an operand breaking inside itself sits one unit past
+that continuation, the same on a `,` list and on a `|` label.
+
+A block naming `defaultWrap` replaces the built-in rules, as `opBoolChain` does, except `keep` and `ignore`, which name
+no layout here: the built-in rules stay beside them and `|` stays inside its element. The list layout also stands, `|`
+inside its element and no location, when the cascade names an `additionalIndent` or `defaultAdditionalIndent`, when an
+operand opens on its own line (`lineEnds.leftCurly: before` on an object pattern), and when a line comment ends an
+operand.
+
+`onePerLine` opens every label, a single-operand one included (`case`, then `_`, then `:`): the operands sit one unit in
+and `:` stands alone at the `case` indent. `onePerLineAfterFirst` and the fill modes keep `:` on the last operand.
+
 `mapWrap` governs a MAP literal — a bracket list whose FIRST element is a `=>` arrow
 (`[k => v, …]`) — and `arrayWrap` governs an ordinary array literal, matching the fork's
 split between `mapLiteralWrapping` and `arrayLiteralWrapping`. A COMPREHENSION

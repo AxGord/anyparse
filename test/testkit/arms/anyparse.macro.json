@@ -1363,6 +1363,78 @@
 			"find": "? macro (_currHasDocComment && !anyparse.format.MemberGap.docSplitLead(_t.leadingComments))",
 			"replace": "? macro _currHasDocComment",
 			"note": "a split-led member takes the before-doc blank in the gap above it as well as the one inside its leading cluster"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-TRIVIA",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "!plainPath",
+			"replace": "false",
+			"note": "a trivia Star outside inlineElemTrivia builds, and the flag does nothing with no error"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-LEAD",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "|| openText != null",
+			"replace": "|| false",
+			"note": "a list with an open delimiter builds, and ElemChainEmit loses it on a label holding the operator"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-NO-TRAIL",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "|| closeText == null",
+			"replace": "|| false",
+			"note": "a list with no closer builds, and the flag does nothing with no error"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-NO-SEP",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "|| sepText == null",
+			"replace": "|| false",
+			"note": "a list with no separator builds, and the flag does nothing with no error"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-BARE",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "|| starNode.fmtReadString(ELEM_CHAIN_OP) == null",
+			"replace": "|| false",
+			"note": "a flag naming no operator builds and does nothing"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-NO-RULES",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "|| starNode.fmtReadString('wrapRules') == null",
+			"replace": "|| false",
+			"note": "a list with no cascade builds, and the flag does nothing with no error"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-TRAILING-COMMA",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "starNode.fmtHasFlag('trailingComma')",
+			"replace": "false",
+			"note": "a list with a trailing comma builds, and ElemChainEmit drops the comma on a label holding the operator"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-TYPE-PARAM-CLOSE",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "|| starNode.fmtHasFlag('typeParamClose')",
+			"replace": "|| false",
+			"note": "close-side inside spacing builds, and ElemChainEmit drops it on a label holding the operator"
+		},
+		{
+			"name": "M-ELEM-CHAIN-FLAG-ALLOWS-BRACES-CLOSE",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "checkElemChainFlag",
+			"find": "|| starNode.fmtHasFlag('objectLiteralBracesClose')",
+			"replace": "|| false",
+			"note": "close-side inside spacing builds, and ElemChainEmit drops it on a label holding the operator"
 		}
 	]
 }

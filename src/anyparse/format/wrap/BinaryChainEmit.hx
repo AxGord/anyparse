@@ -108,12 +108,12 @@ final class BinaryChainEmit {
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
 		?afterComments: Array<Null<Doc>>, restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>,
-		inlineMultilineBranch: Bool = false, ?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>
+		inlineMultilineBranch: Bool = false, ?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList
 	): Doc {
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return layout(
 				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, headBreak, forceKeep, afterComments, restAware,
-				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments
+				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments, list
 			);
 		}
 		return BreakCommits.offerItemBreaks(
@@ -234,6 +234,11 @@ final class BinaryChainEmit {
 		return items.exists(DocMeasure.operandIsCall);
 	}
 
+	/** What ends the line under `AfterLast` for one gap: a list separator hugs its operand, an operator keeps its space. */
+	private static inline function trailingOp(op: String, listSep: Null<String>): String {
+		return op == listSep ? op : ' ${op}';
+	}
+
 	private static function layout(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
@@ -253,7 +258,9 @@ final class BinaryChainEmit {
 		inlineMultilineBranch: Bool = false,
 		// The Keep shape's other two per-gap comment channels (`shapeKeep`); null for every caller but the infix chain.
 		?ownComments: Array<Null<Doc>>,
-		?aboveComments: Array<Null<Doc>>
+		?aboveComments: Array<Null<Doc>>,
+		// The list this chain writes (`ElemChainEmit`). Null for every plain chain.
+		?list: ChainList
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -271,7 +278,7 @@ final class BinaryChainEmit {
 		//     would lay out flat. Replaces the old `HARDLINE_LEN` (~1M)
 		//     inflation that conflated "has hardline anywhere" with
 		//     "rule-bound widths".
-		final measure: WrapItemMeasure = measureChain(items, ops);
+		final measure: WrapItemMeasure = measureChain(items, ops, list?.sep);
 		final total: Int = measure.total;
 		final maxLen: Int = measure.maxLen;
 		final anyHardline: Bool = measure.anyHardline;
@@ -341,7 +348,7 @@ final class BinaryChainEmit {
 		function shapeWith(r: { mode: WrapMode, location: WrappingLocation }, cuddleLast: Bool): Doc {
 			return shape(
 				r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware,
-				{ own: ownComments, above: aboveComments, lineWidth: opt.lineWidth }
+				{ own: ownComments, above: aboveComments, lineWidth: opt.lineWidth }, list
 			);
 		}
 
@@ -353,7 +360,7 @@ final class BinaryChainEmit {
 		}
 
 		function shapeNoWrapAt(location: WrappingLocation): Doc {
-			return shape(NoWrap, location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak);
+			return shape(NoWrap, location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, null, false, false, null, list);
 		}
 
 		// ω-keep-infix-operand-comment: when an operand carries a captured
@@ -623,8 +630,9 @@ final class BinaryChainEmit {
 	private static function shape(
 		mode: WrapMode, location: WrappingLocation, items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int,
 		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, ?afterComments: Array<Null<Doc>>, cuddleLast: Bool = false,
-		restAware: Bool = false, ?keepComments: KeepGapComments
+		restAware: Bool = false, ?keepComments: KeepGapComments, ?list: ChainList
 	): Doc {
+		if (list != null) return shapeList(mode, location, items, ops, cols, indentUnit, restAware, list);
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location, cuddleLast);
@@ -651,10 +659,38 @@ final class BinaryChainEmit {
 		};
 	}
 
-	private static function shapeNoWrap(items: Array<Doc>, ops: Array<String>): Doc {
+	/**
+	 * The shape of a chain that writes a list. A mode that opens the list puts its closer on a line of its own, as
+	 * `WrapList.shapeOnePerLine` does; every other mode glues it. What follows the last element's chain stays out of the
+	 * chain's measure unless the mode measures nothing.
+	 */
+	private static function shapeList(
+		mode: WrapMode, location: WrappingLocation, items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int, restAware: Bool,
+		list: ChainList
+	): Doc {
+		function body(operands: Array<Doc>): Doc {
+			return switch mode {
+				case NoWrap, Keep, Ignore: shapeNoWrap(operands, ops, list.sep);
+				case OnePerLine: shapeOnePerLine(operands, ops, cols, location, false, list.sep);
+				case FillLine, FillLineWithLeadingBreak: shapeFillLine(operands, ops, cols, indentUnit, location, restAware, list.sep);
+				case _: shapeOnePerLineAfterFirst(operands, ops, cols, location, false, list.sep);
+			};
+		}
+		function endingIn(end: Array<Doc>): Array<Doc> {
+			final operands: Array<Doc> = items.copy();
+			operands[operands.length - 1] = Concat([operands[operands.length - 1]].concat(end));
+			return operands;
+		}
+		final opensList: Bool = mode == OnePerLine;
+		final close: Doc = Text(list.close);
+		if (opensList) return Concat([body(endingIn(list.tail)), Line('\n'), close]);
+		return list.tail.length == 0 ? body(endingIn([close])) : Concat([body(items)].concat(list.tail).concat([close]));
+	}
+
+	private static function shapeNoWrap(items: Array<Doc>, ops: Array<String>, ?listSep: String): Doc {
 		final inner: Array<Doc> = [items[0]];
 		for (i => op in ops) {
-			inner.push(Text(' ${op} '));
+			inner.push(Text(op == listSep ? '${op} ' : ' ${op} '));
 			inner.push(items[i + 1]);
 		}
 		return Concat(inner);
@@ -772,7 +808,7 @@ final class BinaryChainEmit {
 	}
 
 	private static function shapeOnePerLineAfterFirst(
-		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, cuddleLast: Bool = false
+		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, cuddleLast: Bool = false, ?listSep: String
 	): Doc {
 		// First operand stays at the call-site column; remaining operands
 		// each on their own indented continuation line.
@@ -803,18 +839,18 @@ final class BinaryChainEmit {
 				// continuation line carries items[i] and, when there is
 				// a next op, a trailing ` op_i`.
 				final head: Array<Doc> = [items[0]];
-				if (ops.length > 0) head.push(Text(' ${ops[0]}'));
+				if (ops.length > 0) head.push(Text(trailingOp(ops[0], listSep)));
 				for (i in 1...items.length) {
 					tail.push(Line('\n'));
 					tail.push(items[i]);
-					if (i < ops.length) tail.push(Text(' ${ops[i]}'));
+					if (i < ops.length) tail.push(Text(trailingOp(ops[i], listSep)));
 				}
 				return Concat([Concat(head), Nest(cols, Concat(tail))]);
 		}
 	}
 
 	private static function shapeOnePerLine(
-		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, cuddleLast: Bool = false
+		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, cuddleLast: Bool = false, ?listSep: String
 	): Doc {
 		// Every operand on its own indented line.
 		//
@@ -837,7 +873,7 @@ final class BinaryChainEmit {
 		switch location {
 			case AfterLast:
 				for (i => op in ops) {
-					inner.push(Text(' ${op}'));
+					inner.push(Text(trailingOp(op, listSep)));
 					inner.push(Line('\n'));
 					inner.push(items[i + 1]);
 				}
@@ -857,7 +893,8 @@ final class BinaryChainEmit {
 	}
 
 	private static function shapeFillLine(
-		items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int, location: WrappingLocation, restAware: Bool = false
+		items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int, location: WrappingLocation, restAware: Bool = false,
+		?listSep: String
 	): Doc {
 		// Soft-line packing through `Fill`. Per-item-fit decision packs
 		// operands inline until the next one would overflow, then the
@@ -888,13 +925,20 @@ final class BinaryChainEmit {
 		// statement — mirror fork `wrapFillLine2AfterLast`'s
 		// `indent + 1 + addIndent`. For a non-suppressed chain
 		// (`cols == indentUnit`) both branches are byte-identical.
+		final tightGaps: Bool = listSep != null && ops.contains(listSep);
 		final enriched: Array<Doc> = switch location {
 			case BeforeLast:
 				final acc: Array<Doc> = [items[0]];
-				for (i => op in ops) acc.push(Concat([Text('${op} '), items[i + 1]]));
+				// A list separator hugs its left operand when the gap stays on the line, so the gap's own soft line
+				// carries no space and an operator charges its leading space itself, which a break then drops.
+				for (i => op in ops) acc.push(Concat([
+					tightGaps && op != listSep ? OptSpaceSkipAfterHardline : Empty,
+					Text('${op} '),
+					items[i + 1]
+				]));
 				acc;
 			case AfterLast:
-				final acc: Array<Doc> = [for (i in 0...ops.length) Concat([items[i], Text(' ${ops[i]}')])];
+				final acc: Array<Doc> = [for (i in 0...ops.length) Concat([items[i], Text(trailingOp(ops[i], listSep))])];
 				acc.push(items[items.length - 1]);
 				acc;
 		}
@@ -918,7 +962,9 @@ final class BinaryChainEmit {
 		// omega-chain-rest-width: a `restAware` chain's own fill Group counts the
 		// whole physical line as the pivot that picked this shape did; left plain,
 		// it re-decided flat on `col + flatWidth` alone and undid that pivot's break.
-		final packed: Doc = Nest(nestCols, Fill(enriched, Line(' '), 1));
+		// A list's gaps charge one column more, the budget `WrapList.shapeFillLine` leaves a `,` list: an element that
+		// reaches the limit with its separator breaks the same way whichever separator follows it.
+		final packed: Doc = Nest(nestCols, Fill(enriched, Line(location == BeforeLast && tightGaps ? '' : ' '), listSep != null ? 2 : 1));
 		return D.groupOrRestProbe(packed, restAware);
 	}
 
@@ -1138,7 +1184,7 @@ final class BinaryChainEmit {
 	 * has a hardline anywhere (drives the break-commit shortcut). Split out of
 	 * `emit` for the complexity threshold.
 	 */
-	private static function measureChain(items: Array<Doc>, ops: Array<String>): WrapItemMeasure {
+	private static function measureChain(items: Array<Doc>, ops: Array<String>, ?listSep: String): WrapItemMeasure {
 		var total: Int = 0;
 		var maxLen: Int = 0;
 		var minLen: Int = WrapList.MAX_ITEM_LEN;
@@ -1194,7 +1240,7 @@ final class BinaryChainEmit {
 		// Add ` op ` width per gap so the cascade's `totalLength` /
 		// `exceedsMaxLineLength` predicates measure the realistic flat
 		// span (`items joined by ' op '`).
-		for (op in ops) total += op.length + 2;
+		for (op in ops) total += op == listSep ? op.length + 1 : op.length + 2;
 		return {
 			total: total,
 			maxLen: maxLen,
@@ -1447,6 +1493,17 @@ final class BinaryChainEmit {
 	}
 
 }
+
+/**
+ * What makes a chain the layout of a separated list. `sep` is the gap text that is the list's separator rather than an
+ * operator: it hugs its left operand (`a, b`) while the other gaps keep their spaces. `tail` is what follows the last
+ * element's chain, `close` the list's closer.
+ */
+typedef ChainList = {
+	final sep: String;
+	final tail: Array<Doc>;
+	final close: String;
+};
 
 /**
  * The Keep shape's per-gap comment channels besides the after-operator one, parallel to `ops`: `own` the run of

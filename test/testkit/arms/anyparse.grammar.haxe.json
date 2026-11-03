@@ -805,6 +805,21 @@
 			"find": "MemberGap.docSplitLead(next)",
 			"replace": "false",
 			"note": "the member-order policy stops reading the split lead, so it demands a before-doc blank above a split-led member that fmt never writes"
+		},
+		{
+			"name": "M-CASE-PATTERN-RULES-KEPT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyWrappingRulesA",
+			"find": "casePatternClearsRules(section.casePattern)",
+			"replace": "false",
+			"note": "a `casePattern` block naming `defaultWrap` still runs the built-in rules, so that default and its location never answer"
+		},
+		{
+			"name": "M-CASE-PATTERN-KEEP-CLEARS-RULES",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "casePatternClearsRules",
+			"force": "true",
+			"note": "`keep` and `ignore` drop the built-in rules, and the plain list then writes one flat line past the limit"
 		}
 	]
 }

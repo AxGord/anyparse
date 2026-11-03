@@ -358,6 +358,82 @@
 			"find": "indent = cols * (rule.additionalIndent ?? 0);",
 			"replace": "",
 			"note": "a matched heritage rule keeps the cascade default indent instead of its own"
+		},
+		{
+			"name": "M-ELEM-CHAIN-OFF",
+			"type": "anyparse.format.wrap.ElemChainEmit",
+			"method": "emit",
+			"force": "null",
+			"note": "every case pattern list takes the plain list layout again, so `|` stays inside its element and breaks one per line after the first overflow"
+		},
+		{
+			"name": "M-ELEM-CHAIN-LEADS-OFF",
+			"type": "anyparse.format.wrap.ElemChainEmit",
+			"method": "leadsWithSep",
+			"force": "false",
+			"note": "a list with no alternative stays on the list layout under `beforeLast`, whose `,` always ends the line"
+		},
+		{
+			"name": "M-ELEM-CHAIN-GUARD-MEASURED",
+			"type": "anyparse.format.wrap.ElemChainEmit",
+			"method": "emit",
+			"find": "tail = elem.tail;",
+			"replace": "parts[parts.length - 1] = Concat([parts[parts.length - 1]].concat(elem.tail));",
+			"note": "the guard joins the last operand, so the chain breaks to make room for a condition that wraps on its own"
+		},
+		{
+			"name": "M-LIST-CHAIN-RESERVE-LOOSE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeFillLine",
+			"find": "listSep != null ? 2 : 1",
+			"replace": "1",
+			"note": "a list chain packs one column further than the `,` list path, so an element ending past the budget stays on the line"
+		},
+		{
+			"name": "M-LIST-CHAIN-RESERVE-TIGHT",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeFillLine",
+			"find": "listSep != null ? 2 : 1",
+			"replace": "listSep != null ? 3 : 1",
+			"note": "a list chain packs one column short of the `,` list path, so an element ending on the budget breaks"
+		},
+		{
+			"name": "M-LIST-SEP-TIGHT-OFF",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeFillLine",
+			"find": "final tightGaps: Bool = listSep != null && ops.contains(listSep);",
+			"replace": "final tightGaps: Bool = false;",
+			"note": "a leading `,` keeps the soft line's space in front of it while the line holds: `a , b`"
+		},
+		{
+			"name": "M-ELEM-CHAIN-INDENT-DROPPED",
+			"type": "anyparse.format.wrap.ElemChainEmit",
+			"method": "namesAdditionalIndent",
+			"force": "false",
+			"note": "a cascade naming an additional indent reaches the chain, whose answer carries mode and location only, so the indent stops answering"
+		},
+		{
+			"name": "M-ELEM-CHAIN-TAKES-KEEP",
+			"type": "anyparse.format.wrap.ElemChainEmit",
+			"method": "cascadeLeavesTheList",
+			"force": "false",
+			"note": "a `keep` or `ignore` label holding `|` moves to the chain on the built-in rules, away from what those modes write"
+		},
+		{
+			"name": "M-LIST-CHAIN-CLOSER-GLUED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeList",
+			"find": "final opensList: Bool = mode == OnePerLine;",
+			"replace": "final opensList: Bool = false;",
+			"note": "an opened label holding `|` glues its `:` to the last operand while a plain list puts it alone"
+		},
+		{
+			"name": "M-ELEM-CHAIN-HARDLINE-OPERAND",
+			"type": "anyparse.format.wrap.ElemChainEmit",
+			"method": "operandOpensItsOwnLine",
+			"find": "parts.exists(WrapList.startsWithHardline)",
+			"replace": "false",
+			"note": "an operand opening with a hardline joins the fill, whose flat gap leaves a space at the line end and takes a second rewrite"
 		}
 	]
 }

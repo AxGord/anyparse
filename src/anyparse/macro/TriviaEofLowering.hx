@@ -346,9 +346,8 @@ final class TriviaEofLowering {
 	private static function triviaEofHeadIsPiuExpr(): Expr {
 		inline function classify(subject: Expr): Expr {
 			return macro switch ($subject) {
-				case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportAliasInDecl(_) | ImportWildDecl(_) | UsingDecl(
-					_
-				) | UsingWildDecl(_):
+				case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportAliasInDecl(_) | ImportWildDecl(_) |
+					UsingDecl(_) | UsingWildDecl(_):
 					_headIsPiu = true;
 				case _:
 			};

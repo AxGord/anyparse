@@ -831,7 +831,10 @@ final class HaxeFormatConfigLoader {
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
 		if (section.mapWrap != null) opt.mapLiteralWrap = wrapRulesFromConfig(section.mapWrap, opt.mapLiteralWrap);
 		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
-		if (section.casePattern != null) opt.casePatternWrap = wrapRulesFromConfig(section.casePattern, opt.casePatternWrap);
+		if (section.casePattern != null)
+			opt.casePatternWrap = wrapRulesFromConfig(
+				section.casePattern, opt.casePatternWrap, casePatternClearsRules(section.casePattern)
+			);
 		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
 		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
 		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap, true);
@@ -840,6 +843,12 @@ final class HaxeFormatConfigLoader {
 		if (section.objectLiteral != null) opt.objectLiteralWrap = wrapRulesFromConfig(section.objectLiteral, opt.objectLiteralWrap);
 		if (section.conditionWrapping != null) opt.conditionWrap = wrapRulesFromConfig(section.conditionWrapping, opt.conditionWrap);
 		if (section.ternaryExpression != null) opt.ternaryWrap = wrapRulesFromConfig(section.ternaryExpression, opt.ternaryWrap);
+	}
+
+	/** `keep` and `ignore` name no layout of their own on the case label's plain list, so the built-in rules stay beside them. */
+	private static function casePatternClearsRules(cfg: HxFormatWrapRules): Bool {
+		final named: Null<WrapMode> = cfg.defaultWrap != null ? HaxeFormatValues.wrapModeFromString(cfg.defaultWrap) : null;
+		return named != WrapMode.Keep && named != WrapMode.Ignore;
 	}
 
 	private static function applyWrappingRulesB(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {

@@ -67,6 +67,12 @@ final class WriterStarEmitLowering {
 	private static inline final INLINE_ELEM_TRIVIA: String = 'inlineElemTrivia';
 
 	/**
+	 * `@:fmt(elemChainOp('<op>'))`: the Star's elements may be chains
+	 * of `<op>`, which then count as gaps of the list (`ElemChainEmit`).
+	 */
+	private static inline final ELEM_CHAIN_OP: String = 'elemChainOp';
+
+	/**
 	 * The three-way blockEnded predicate channel, shared by the plain
 	 * writer's sep-elision sites: no predicate → inert `false`; an
 	 * `astPreds` format → the generated typed predicate of the build's
@@ -268,6 +274,7 @@ final class WriterStarEmitLowering {
 		// close, last field), and try-parse (no close, last field,
 		// `@:tryparse`).
 		final inlineElemTrivia: Bool = isInlineElemTriviaStar(isTriviaStar, starNode, closeText, sepText);
+		checkElemChainFlag(starNode, openText, closeText, sepText, isTriviaStar == inlineElemTrivia);
 		if (isTriviaStar != inlineElemTrivia) {
 			WriterTriviaStarEmitLowering.emitTriviaStar(ctx, args, parts);
 			return;
@@ -547,13 +554,19 @@ final class WriterStarEmitLowering {
 		final listCall: Expr = if (wrapRulesField != null) {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
 			final suppressAdditionalExpr: Expr = bodyAware;
-			macro anyparse.format.wrap.WrapList.emit(
+			final wrapListCall: Expr = macro anyparse.format.wrap.WrapList.emit(
 				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
 					suppressAdditionalIndent: $suppressAdditionalExpr,
 					groupRestProbe: $groupRestProbeExpr
 				}
 			);
+			// `@:fmt(elemChainOp('<op>'))`: the Star's elements may be chains of `<op>`, which then count as gaps of the list
+			// itself (`ElemChainEmit`, null when the list layout stands).
+			final elemChainOp: Null<String> = starNode.fmtReadString(ELEM_CHAIN_OP);
+			elemChainOp == null
+				? wrapListCall
+				: macro anyparse.format.wrap.ElemChainEmit.emit($v{closeText}, $v{sepText}, $v{elemChainOp}, _docs, opt, $rulesExpr) ?? $wrapListCall;
 		} else if (useFill) {
 			macro fillList(
 				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr,
@@ -1532,6 +1545,33 @@ final class WriterStarEmitLowering {
 		isTriviaStar: Bool, starNode: ShapeNode, closeText: Null<String>, sepText: Null<String>
 	): Bool {
 		return isTriviaStar && closeText != null && sepText != null && starNode.fmtHasFlag(INLINE_ELEM_TRIVIA);
+	}
+
+	/**
+	 * `@:fmt(elemChainOp('<op>'))` holds on the plain sep-list path only, and `ElemChainEmit` writes no open delimiter, inside
+	 * spacing or trailing separator: anywhere else the flag would drop them, or do nothing, with no error.
+	 */
+	private static function checkElemChainFlag(
+		starNode: ShapeNode, openText: Null<String>, closeText: Null<String>, sepText: Null<String>, plainPath: Bool
+	): Void {
+		if (!starNode.fmtHasFlag(ELEM_CHAIN_OP)) return;
+		final dropped: Bool = starNode.fmtHasFlag('trailingComma')
+			|| starNode.fmtHasFlag('typeParamClose')
+			|| starNode.fmtHasFlag('objectLiteralBracesClose');
+		if (
+			!plainPath
+			|| dropped
+			|| openText != null
+			|| closeText == null
+			|| sepText == null
+			|| starNode.fmtReadString(ELEM_CHAIN_OP) == null
+			|| starNode.fmtReadString('wrapRules') == null
+		)
+			Context.error(
+				'WriterLowering: @:fmt(elemChainOp(\'<op>\')) needs a @:sep Star with @:trail and @:fmt(wrapRules(...)), no @:lead, no '
+				+ 'trailing comma and no inside spacing, and @:fmt(inlineElemTrivia) under @:trivia',
+				Context.currentPos()
+			);
 	}
 
 	/** The per-element write call of a plain-layout Star: the bare element, or its `Trivial` wrapper with its comments. */
