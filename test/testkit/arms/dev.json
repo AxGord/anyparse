@@ -193,9 +193,9 @@
 			"name": "M-LAND-ARMS-REGISTRY-ASKS-FULL",
 			"type": "dev.Land",
 			"method": "fullReason",
-			"find": "if (!DIVERGENCE_EXEMPT.exists(exempt -> path.startsWith(exempt)))",
+			"find": "if (!isInertData(path))",
 			"replace": "if (true)",
-			"note": "the arm registry is not exempt, so nearly every slice that adds an arm lands on the full battery"
+			"note": "a data record under the test kit is not exempt, so a landing that only moves one lands on the full battery"
 		},
 		{
 			"name": "M-LAND-ROLLBACK-RESETS-HARD",

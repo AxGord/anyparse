@@ -84,16 +84,6 @@ final class Land {
 		'src/anyparse/runtime/'
 	];
 
-	/**
-	 * The path prefixes under `DIVERGENCE_PATHS` that bring in no divergence: data no runner or cache reads.
-	 * The arm registry is one; the formatter-flag ownership record is another, read by a single test.
-	 */
-	private static final DIVERGENCE_EXEMPT: Array<String> = [
-		'test/testkit/arms/',
-		'test/testkit/mutation-arms.json',
-		'test/testkit/fmt-ownership.json'
-	];
-
 	private final _summary: Summary = new Summary();
 	private final _repo: String;
 	private final _branch: String;
@@ -104,7 +94,6 @@ final class Land {
 	private final _print: String -> Void;
 	private final _format: LandFormat;
 	private final _prose: LandProse;
-
 
 	/** The trailers the commit carries beside `Slice`, each `<key>: <value>`. */
 	private final _trailers: Array<String>;
@@ -465,10 +454,7 @@ final class Land {
 	public static function fullReason(changed: Null<Array<String>>, landing: Int, asked: Bool, every: Int): Null<String> {
 		if (asked) return '--full';
 		if (changed == null) return 'the merged paths are unknown';
-		for (path in changed)
-			if (!DIVERGENCE_EXEMPT.exists(exempt -> path.startsWith(exempt)))
-				for (prefix in DIVERGENCE_PATHS)
-					if (path.startsWith(prefix)) return 'touches $path';
+		for (path in changed) if (!isInertData(path)) for (prefix in DIVERGENCE_PATHS) if (path.startsWith(prefix)) return 'touches $path';
 		return every > 0 && landing % every == 0 ? 'landing $landing' : null;
 	}
 
@@ -519,6 +505,14 @@ final class Land {
 	/** `word` as one shell word: git runs a merge driver through the shell, and quotes only its own `%` placeholders. */
 	public static function shellQuoted(word: String): String {
 		return "'" + word.replace("'", "'\\''") + "'";
+	}
+
+	/**
+	 * Whether `path` is a data record under the test kit: a `.json` there is read as data, by a test or at build time,
+	 * the same way by a shard and by the one-process suite, so they cannot diverge on it; a `.hx` there is the kit itself.
+	 */
+	private static function isInertData(path: String): Bool {
+		return path.startsWith('test/testkit/') && path.endsWith('.json');
 	}
 
 	/** Why the battery of a base left no snapshot. */

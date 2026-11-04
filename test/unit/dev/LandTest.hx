@@ -592,6 +592,19 @@ final class LandTest extends Test {
 		Assert.isTrue(run.proseLog.indexOf('/skills/s/SKILL.md:2 old/moved.txt') >= 0, run.proseLog);
 	}
 
+	public function testAJsonRecordUnderTheTestKitAsksForNothingButItsHxSiblingsDo(): Void {
+		for (path in [
+			'test/testkit/builtin-census.json',
+			'test/testkit/fmt-ownership.json',
+			'test/testkit/mutation-arms.json',
+			'test/testkit/arms/anyparse.check.config.json',
+			'test/testkit/records/future.json'
+		]) Assert.isNull(Land.fullReason([path], 1, false, Land.FULL_EVERY), path);
+		Assert.notNull(Land.fullReason(['test/testkit/builtin-census.json', 'test/testkit/MutationArms.hx'], 1, false, Land.FULL_EVERY));
+		Assert.notNull(Land.fullReason(['test/testkit/builtin-census.json'], 10, false, 10));
+		Assert.notNull(Land.fullReason(['src/anyparse/runtime/record.json'], 1, false, Land.FULL_EVERY));
+	}
+
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
