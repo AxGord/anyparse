@@ -84,8 +84,15 @@ final class Land {
 		'src/anyparse/runtime/'
 	];
 
-	/** The path prefixes under `DIVERGENCE_PATHS` that bring in no divergence: the arm registry is data, no runner or cache reads it. */
-	private static final DIVERGENCE_EXEMPT: Array<String> = ['test/testkit/arms/', 'test/testkit/mutation-arms.json'];
+	/**
+	 * The path prefixes under `DIVERGENCE_PATHS` that bring in no divergence: data no runner or cache reads.
+	 * The arm registry is one; the formatter-flag ownership record is another, read by a single test.
+	 */
+	private static final DIVERGENCE_EXEMPT: Array<String> = [
+		'test/testkit/arms/',
+		'test/testkit/mutation-arms.json',
+		'test/testkit/fmt-ownership.json'
+	];
 
 	private final _summary: Summary = new Summary();
 	private final _repo: String;

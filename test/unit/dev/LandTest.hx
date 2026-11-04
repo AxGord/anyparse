@@ -347,6 +347,16 @@ final class LandTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-LAND-ARMS-REGISTRY-ASKS-FULL')
+	public function testTheFmtOwnershipRecordAloneAsksForNoFullBattery(): Void {
+		Assert.isNull(Land.fullReason(['test/testkit/fmt-ownership.json', 'docs/a.md'], 1, false, Land.FULL_EVERY));
+		Assert.equals(
+			'touches test/testkit/Extra.hx',
+			Land.fullReason(['test/testkit/fmt-ownership.json', 'test/testkit/Extra.hx'], 1, false, Land.FULL_EVERY)
+		);
+	}
+
+	@:pin('control')
 	@:killer('M-LAND-ROLLBACK-RESETS-HARD')
 	public function testARollbackKeepsWhatTheUserEditedMeanwhile(): Void {
 		final run: Landing = landing(
