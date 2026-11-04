@@ -5,6 +5,7 @@ import anyparse.check.Check.VolatileMessage;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.SpanRender;
+import anyparse.query.BranchPaths;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.SameValueRuns;
@@ -315,14 +316,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 
 	/** Whether every pair of occurrences is mutually exclusive — so at most one runs per invocation. */
 	private static function allPairsExclusive(occ: Array<Candidate>): Bool {
-		for (i in 0...occ.length) for (j in i + 1...occ.length) if (!mutuallyExclusive(occ[i].path, occ[j].path)) return false;
-		return true;
-	}
-
-	/** Whether two branch paths diverge at a shared conditional — different branch children of one `if` / `switch`. */
-	private static function mutuallyExclusive(a: Array<BranchStep>, b: Array<BranchStep>): Bool {
-		for (sa in a) for (sb in b) if (sa.key == sb.key && sa.idx != sb.idx) return true;
-		return false;
+		return BranchPaths.allPairsExclusive([for (o in occ) o.path]);
 	}
 
 	/**
@@ -491,12 +485,6 @@ private typedef Candidate = {
 	final span: Span;
 	var norm: String;
 	var path: Array<BranchStep>;
-}
-
-/** One step of a branch path: the span key of an `if` / `switch` node and the branch child index taken. */
-private typedef BranchStep = {
-	var key: String;
-	var idx: Int;
 }
 
 /** A repeated-expression group: the shared RENDERED text (`SpanRender`) and its occurrences (earliest first). */

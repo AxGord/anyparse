@@ -1189,6 +1189,30 @@
 			"find": "if (declaresOperand(statement, run[0])) return null;",
 			"replace": "",
 			"note": "the local goes ahead of the statement declaring its operand, so it casts an outer binding of that name, or fails to compile with none"
+		},
+		{
+			"name": "M-RCAST-CASE-GUARD",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "hoistStatement",
+			"find": " || home.children.indexOf(path[at]) < CasePatterns.bodyStart(home, scan.shape)",
+			"replace": "",
+			"note": "a case arm's guard counts as a statement of its body, so the local is put ahead of the guard and the arm no longer parses"
+		},
+		{
+			"name": "M-RCAST-SHORT-CIRCUIT",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "inOrderKinds",
+			"find": "if (!shortCircuit.contains(k)) k",
+			"replace": "k",
+			"note": "a short-circuit operator counts as evaluating every operand, so a cast its right side may never run is bound ahead of it and throws where it never did"
+		},
+		{
+			"name": "M-RCAST-CAPTURE-WRITTEN",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "homes",
+			"find": "writes != null && !writes.exists(w -> TreePath.covers(top, w.node.span))",
+			"replace": "writes != null",
+			"note": "a function literal's cast joins the outer run though the function writes the operand later, so the literal reads the value the local bound before the write"
 		}
 	]
 }

@@ -15408,6 +15408,36 @@
 			"find": "[target.typeName]",
 			"replace": "movedBoundNames(target.bindings, cursorInfo, target.typeName)",
 			"note": "the walk also scans what the type binds, so a bare name another statement binds earns an import of the moved type and rebinds that read"
+		},
+		{
+			"name": "M-RCAST-VAR-FIELD",
+			"type": "anyparse.query.StableChain",
+			"method": "isFinalField",
+			"force": "true",
+			"note": "a var field or a getter counts as final, so a call reassigning it or a getter computing it is bound to one stale value"
+		},
+		{
+			"name": "M-RCAST-EXCLUSIVE-BRANCHES",
+			"type": "anyparse.query.BranchPaths",
+			"method": "mostOnOnePath",
+			"force": "paths.length",
+			"note": "occurrences in different branches of one if, switch or ternary count as evaluated together, so one evaluation per run is reported as several"
+		},
+		{
+			"name": "M-RCAST-INTERFACE-FIELD",
+			"type": "anyparse.query.StableChain",
+			"method": "memberLink",
+			"find": " || !(_shape.classDeclKinds ?? []).contains(hit.host.type.kind)",
+			"replace": "",
+			"note": "a final field of an interface or a structure counts as stable, though a property with a getter may implement it"
+		},
+		{
+			"name": "M-RCAST-LINK-READER-SPELLING",
+			"type": "anyparse.query.StableChain",
+			"method": "memberLink",
+			"find": "memberRead(host, name, [], reader)",
+			"replace": "memberRead(host, name, [], host.file)",
+			"note": "a link's type is spelled as the declaring file sees it and resolved in the reading file, so a same-named type of the reading file stands for it"
 		}
 	]
 }

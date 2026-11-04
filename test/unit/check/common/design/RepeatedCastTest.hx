@@ -1,9 +1,11 @@
 package unit.check.common.design;
 
 import anyparse.check.common.design.RepeatedCast;
+import anyparse.query.CanonicalEdit;
 
 /**
- * The `repeated-cast` check: one local or parameter cast to one type several times in a function body is bound once
+ * The `repeated-cast` check: one stable value — a local, a parameter or a chain of
+ * final fields — cast to one type several times in a function body is bound once
  * to a typed `final` local by the fix, placed where the first cast runs unconditionally.
  */
 class RepeatedCastTest extends Test {
@@ -126,7 +128,7 @@ class RepeatedCastTest extends Test {
 			'do cast(o, B).a() while (k); cast(o, B).c();',
 			'while (cast(o, B).more()) cast(o, B).a();',
 			'k && cast(o, B).more(); cast(o, B).c();',
-			'k ? cast(o, B).a() : cast(o, B).c();'
+			'k ? cast(o, B).a() : log(); cast(o, B).c();'
 		]) {
 			final src: String = 'class C { function m(o:Dynamic, k:Bool, xs:Array<Int>) { $body } }';
 			Assert.equals(1, violations(src).length, body);
@@ -210,6 +212,141 @@ class RepeatedCastTest extends Test {
 				'class C { function m(other:Dynamic) { var o:Dynamic = other; var y:Int = cast(o, B).n; cast(o, B).a(); } }'
 			)
 		);
+	}
+
+	public function testAFinalFieldIsOneValue(): Void {
+		Assert.equals(
+			'class C { final o:Dynamic; function m() { final b: B = cast(o, B); b.a(); b.c(); } }',
+			CheckFixture.fixedSource(
+				new RepeatedCast(), 'class C { final o:Dynamic; function m() { cast(o, B).a(); cast(this.o, B).c(); } }'
+			)
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-RCAST-VAR-FIELD')
+	public function testAVarFieldOrAGetterIsNoOperand(): Void {
+		for (field in ['var o:Dynamic;', 'final o(get, never):Dynamic; function get_o() return null;']) {
+			final src: String = 'class C { $field function m() { cast(o, B).a(); cast(this.o, B).c(); } }';
+			Assert.equals(0, violations(src).length, field);
+		}
+	}
+
+	@:pin('control')
+	@:killer('M-RCAST-INTERFACE-FIELD')
+	public function testAFieldAPropertyMayImplementIsNoOperand(): Void {
+		for (host in ['interface I { final o:Dynamic; }', 'typedef I = { final o:Dynamic; }']) {
+			final src: String = '$host class C { final i:I; function m() { cast(i.o, B).a(); cast(i.o, B).c(); } }';
+			Assert.equals(0, violations(src).length, host);
+		}
+	}
+
+	public function testAChainOfFinalFieldsAcrossFilesIsOneValue(): Void {
+		final model: String = 'class Model { public final view:Dynamic; public var loose:Dynamic; public function new() {} }';
+		final src: String = 'class C { final model:Model; function m(p:Model) { cast(model.view, B).a(); cast(this.model.view, B).c();'
+			+ ' cast(p.view, D).a(); cast(p.view, D).c(); cast(model.loose, E).a(); cast(model.loose, E).c(); } }';
+		Assert.equals(
+			'class C { final model:Model; function m(p:Model) { final b: B = cast(model.view, B); b.a(); b.c();'
+			+ ' final d: D = cast(p.view, D); d.a(); d.c(); cast(model.loose, E).a(); cast(model.loose, E).c(); } }',
+			CanonicalEdit.applyEdits(
+				src, CheckFixture.fixRun(new RepeatedCast(), [{ file: 'C.hx', source: src }, { file: 'Model.hx', source: model }]).edits
+			)
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-RCAST-EXCLUSIVE-BRANCHES')
+	public function testCastsInExclusiveBranchesAreOneEvaluation(): Void {
+		for (body in [
+			'if (k) cast(o, B).a(); else cast(o, B).b();',
+			'switch k { case true: cast(o, B).a(); case _: cast(o, B).b(); }',
+			'sink(k ? cast(o, B).a : cast(o, B).b);'
+		]) Assert.equals(0, violations('class C { function m(o:Dynamic, k:Bool) { $body } }').length, body);
+		final src: String = 'class C { function m(o:Dynamic, k:Bool) { cast(o, B).a(); if (k) cast(o, B).c(); else cast(o, B).d(); } }';
+		Assert.isTrue(violations(src)[0].message.indexOf('evaluated 2 times') != -1);
+		Assert.equals(
+			'class C { function m(o:Dynamic, k:Bool) { final b: B = cast(o, B); b.a(); if (k) b.c(); else b.d(); } }',
+			CheckFixture.fixedSource(new RepeatedCast(), src)
+		);
+	}
+
+	public function testBoundInTheCaseArmHoldingTheCasts(): Void {
+		Assert.equals(
+			'class C { function m(o:Dynamic, k:Int) { switch k { case 1: final b: B = cast(o, B); b.a(); b.c(); case _: } } }',
+			CheckFixture.fixedSource(
+				new RepeatedCast(),
+				'class C { function m(o:Dynamic, k:Int) { switch k { case 1: cast(o, B).a(); cast(o, B).c(); case _: } } }'
+			)
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-RCAST-CASE-GUARD')
+	public function testNeverBoundAheadOfACaseGuard(): Void {
+		final src: String = 'class C { function m(o:Dynamic, k:Int) { switch k { case 1 if (cast(o, B).ok): cast(o, B).a(); case _: } } }';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, CheckFixture.fixedSource(new RepeatedCast(), src));
+	}
+
+	public function testAnOperandOfAnOperatorRunsInOrder(): Void {
+		Assert.equals(
+			'class C { function m(o:Dynamic):Int { final b: B = cast(o, B); return b.n + b.m; } }',
+			CheckFixture.fixedSource(new RepeatedCast(), 'class C { function m(o:Dynamic):Int { return cast(o, B).n + cast(o, B).m; } }')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-RCAST-SHORT-CIRCUIT')
+	public function testNeverBoundAheadOfAShortCircuit(): Void {
+		final src: String = 'class C { function m(o:Dynamic, k:Bool):Bool { return k && cast(o, B).ok && cast(o, B).on; } }';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, CheckFixture.fixedSource(new RepeatedCast(), src));
+	}
+
+	public function testAFunctionLiteralCapturesTheBoundLocal(): Void {
+		Assert.equals(
+			'class C { function m(o:Dynamic, xs:Array<Int>) { final b: B = cast(o, B); b.a(); xs.map(x -> b.n + x); } }',
+			CheckFixture.fixedSource(
+				new RepeatedCast(), 'class C { function m(o:Dynamic, xs:Array<Int>) { cast(o, B).a(); xs.map(x -> cast(o, B).n + x); } }'
+			)
+		);
+		Assert.equals(
+			0,
+			violations('class C { function m(o:Dynamic, xs:Array<Int>) { xs.map(x -> cast(o, B).n); xs.map(x -> cast(o, B).m); } }').length,
+			'two literals each run their own cast, maybe never'
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-RCAST-CAPTURE-WRITTEN')
+	public function testAFunctionLiteralNeverCapturesAWrittenOperand(): Void {
+		Assert.equals(
+			0,
+			violations('class C { function m(o:Dynamic, p:Dynamic, xs:Array<Int>) { cast(o, B).a(); xs.map(x -> cast(o, B).n); o = p; } }')
+				.length
+		);
+	}
+
+	/**
+	 * A link's type is read as the reading file spells it: a same-named
+	 * type of the reading file never stands for the declaring one's one.
+	 */
+	@:pin('control')
+	@:killer('M-RCAST-LINK-READER-SPELLING')
+	public function testAChainLinkIsTypedAsTheReadingFileSpellsIt(): Void {
+		final view: String = 'package m; class View { public var data:Dynamic; public function new() {} }';
+		final model: String = 'package m; class Model { public final view:View; public function new() { view = new View(); } }';
+		final own: String = 'package p; class View { public final data:Dynamic; public function new() { data = null; } }';
+		final src: String = 'package p; import m.Model; class A { function f(model:Model) { cast(model.view.data, B).a(); reset(model);'
+			+ ' cast(model.view.data, B).c(); } static function reset(model:Model) { model.view.data = null; } }';
+		final run: FixRun = CheckFixture.fixRun(new RepeatedCast(), [
+			{ file: 'p/A.hx', source: src },
+			{ file: 'm/Model.hx', source: model },
+			{ file: 'm/View.hx', source: view },
+			{ file: 'p/View.hx', source: own }
+		]);
+		Assert.equals(0, run.violations.length);
+		Assert.equals(0, run.edits.length);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -90,6 +90,11 @@ final class UnchangedLocal {
 		return out;
 	}
 
+	/** Whether `binding` is the offset of a declaration inside a function: a local or a parameter. */
+	public function isLocal(binding: Int): Bool {
+		return binding >= 0 && _functions.exists(f -> f.from < binding && binding < f.to);
+	}
+
 	/** The storage key and binding offset `ident` reads when it is an identifier bound inside a function; else null. */
 	private function localRead(ident: QueryNode): Null<LocalRead> {
 		final name: Null<String> = ident.name;
@@ -107,11 +112,6 @@ final class UnchangedLocal {
 			if (at != null && overlaps(w, local.key) && fromCall(at.from, local.binding, null)) return true;
 		}
 		return false;
-	}
-
-	/** Whether `binding` is the offset of a declaration inside a function: a local or a parameter. */
-	private function isLocal(binding: Int): Bool {
-		return binding >= 0 && _functions.exists(f -> f.from < binding && binding < f.to);
 	}
 
 	/**

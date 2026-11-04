@@ -268,6 +268,12 @@ final class CasePatterns {
 		return leaves;
 	}
 
+	/** The index of a `case` arm's first body child: past its patterns (`patternRun`) and the parenthesised guard after them. */
+	public static function bodyStart(branch: QueryNode, shape: RefShape): Int {
+		final n: Int = patternRun(branch, shape).length;
+		return n < branch.children.length && branch.children[n].kind == shape.parenKind ? n + 1 : n;
+	}
+
 	/**
 	 * Walk one pattern node; `whole` marks the node that IS the entire pattern, `site` what its expected
 	 * type is known from (`PatternSite`).

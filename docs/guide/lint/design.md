@@ -129,20 +129,30 @@ switch result {
 
 ## `repeated-cast`
 
-A local or parameter cast to the same type two or more times in one function body — `cast(o, Bubble)`
-written for each use. `Info`, with a fix: one typed `final` local takes the cast and the repeats read it.
-Checked casts (`cast(x, T)`, each a runtime check) report from 2 repeats (`minChecked`); unchecked ones
-(`(cast x : T)`, `(x : T)`) from 3 (`minUnchecked`), and the two families are never merged. The operand
-must be the same local or parameter in every cast with no write to it between the first and the last;
-writing a member of it (`o.color = c`) is no write of the operand. A write takes effect where it ends, so
-`o = cast(o, B).next; cast(o, B).a();` is two values, and a write a loop carries round to an earlier cast
-drops the run unless the local would go inside that loop.
+One value cast to the same type two or more times in one function body — `cast(o, Bubble)` written for
+each use. `Info`, with a fix: one typed `final` local takes the cast and the repeats read it. Checked casts
+(`cast(x, T)`, each a runtime check) report from 2 repeats (`minChecked`); unchecked ones (`(cast x : T)`,
+`(x : T)`) from 3 (`minUnchecked`), and the two families are never merged. A repeat counts when one run of
+the function evaluates it: of the branches of one `if`, `switch` or ternary only the one holding the most
+casts counts, so `if (k) cast(o, B).a(); else cast(o, B).b();` is one evaluation and no finding.
 
-The local goes before the statement holding the first cast, in the innermost block holding them all, and
-only when that cast runs first and always in the statement: through an expression, a declaration, a
-`return`, or the condition of an `if` or `switch`, with only pure code ahead of it. It is never lifted above
-a guard (`if (o is Bubble) …`, braced or not), out of an `else`, a loop or a `try`, past a short-circuit,
-or across a call or write ahead of it; such a finding stays report-only, as does one whose type suggests no
+The operand is a local or parameter no function literal writes, or a `final` field with no getter
+(`item`, `this.item`), followed by `final` fields only (`model.view`, `p.view`), resolved across files. A
+`var` field, a property with a getter, or a `final` field of an interface or a structure (a property may
+implement it) is no operand. It must read the same storage in every cast with no write to it between the
+first and the last; writing a member of it (`o.color = c`) is no write of the operand. A write takes effect
+where it ends, so `o = cast(o, B).next; cast(o, B).a();` is two values, and a write a loop carries round to
+an earlier cast drops the run unless the local would go inside that loop. A cast in a function literal
+joins the run of the function holding it, after a cast of that function's own, when nothing in the
+function writes the operand: the literal then captures the local.
+
+The local goes before the statement holding the first cast, in the innermost block or case arm holding
+them all, and only when that cast runs first and always in the statement: through an expression, a
+declaration, a `return`, an operator that evaluates every operand, the left side of `&&`, `||` or `??`, or
+the condition of an `if`, `switch` or ternary, with only pure code ahead of it. It is never lifted above a
+guard (`if (o is Bubble) …`, braced or not, or a case guard), out of an `else`, a loop or a `try`, past a
+short-circuit, into a function literal, or across a call or write ahead of it; such a finding stays
+report-only, as does one whose type suggests no
 value name (`Void -> Void`, `Null<T>`, `Array<T>`, `Int`). The name is the lower-camel type name
 (`XMLNode` gives `xmlNode`), suffixed when the file already uses it.
 
