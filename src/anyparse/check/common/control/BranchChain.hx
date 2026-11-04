@@ -44,6 +44,9 @@ final class BranchChain {
 	/** The else branch is the third child of an if node - `[cond, then, else]`. */
 	private static inline final ELSE_BRANCH_INDEX: Int = 2;
 
+	/** The then branch is the second child of an if node - `[cond, then, else]`. */
+	private static inline final THEN_BRANCH_INDEX: Int = 1;
+
 	/** The else branch of `node` when it is an `if` (one of `ifKinds`) with one, else null. */
 	public static function elseOf(node: QueryNode, ifKinds: Array<String>): Null<QueryNode> {
 		return ifKinds.contains(node.kind) && node.children.length == IF_WITH_ELSE_CHILD_COUNT ? node.children[ELSE_BRANCH_INDEX] : null;
@@ -108,6 +111,19 @@ final class BranchChain {
 			tryKinds: (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []),
 			catchKind: catchKind
 		};
+	}
+
+	/**
+	 * The branches of the chain `head` starts, in source order - every link's then branch, then the final `else` - or null
+	 * when the chain has no final `else`.
+	 */
+	public static function branchesOf(head: QueryNode, ifKinds: Array<String>): Null<Array<QueryNode>> {
+		final links: Array<QueryNode> = linksFrom(head, ifKinds);
+		final finalElse: Null<QueryNode> = elseOf(links[links.length - 1], ifKinds);
+		if (finalElse == null) return null;
+		final branches: Array<QueryNode> = [for (link in links) link.children[THEN_BRANCH_INDEX]];
+		branches.push(finalElse);
+		return branches;
 	}
 
 }

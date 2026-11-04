@@ -26,6 +26,7 @@ import anyparse.check.common.control.EmptyCaseArm;
 import anyparse.check.common.control.GuardContinue;
 import anyparse.check.common.control.GuardReturn;
 import anyparse.check.common.control.HoistBranchStringAffix;
+import anyparse.check.common.control.HoistCommonBranchTail;
 import anyparse.check.common.control.IdenticalOperands;
 import anyparse.check.common.control.IfFalseDeadCode;
 import anyparse.check.common.control.InvertNegatedIfElse;
@@ -620,6 +621,7 @@ final class Linter {
 			new ExtractRepeatedExpression(),
 			new RepeatedCast(),
 			new TailMerge(),
+			new HoistCommonBranchTail(),
 			new NoUnderscorePrefix(),
 			new ShortenTypeRef(),
 			new CondAssignMerge(),

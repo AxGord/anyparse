@@ -572,6 +572,186 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "HC1",
+			"note": "hoist-common-branch-tail over a plain chain, an else-if chain, an emptied final else and a branch that may return early, beside the forms it must leave: a loop body, a tail reading a branch local, a tail that exits; the fix must keep what the program prints",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-tail",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function t(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function plain(c:Bool):Void {\n\t\tif (c) {\n\t\t\tout.push('a');\n\t\t\tt('t');\n\t\t} else {\n\t\t\tout.push('b');\n\t\t\tt('t');\n\t\t}\n\t}\n\n\tstatic function chain(c:Int):Void {\n\t\tif (c == 0) {\n\t\t\tout.push('0');\n\t\t\tt('x');\n\t\t\tt('y');\n\t\t} else if (c == 1) {\n\t\t\tout.push('1');\n\t\t\tt('x');\n\t\t\tt('y');\n\t\t} else {\n\t\t\tout.push('2');\n\t\t\tt('x');\n\t\t\tt('y');\n\t\t}\n\t}\n\n\tstatic function emptied(c:Bool):Void {\n\t\tif (c) {\n\t\t\tout.push('a');\n\t\t\tt('t');\n\t\t} else {\n\t\t\tt('t');\n\t\t}\n\t}\n\n\tstatic function early(c:Bool):Int {\n\t\tif (c) {\n\t\t\tif (out.length > 100) return 1;\n\t\t\tout.push('a');\n\t\t\tt('t');\n\t\t} else {\n\t\t\tout.push('b');\n\t\t\tt('t');\n\t\t}\n\t\treturn 0;\n\t}\n\n\tstatic function loopBody(c:Bool):Void {\n\t\tfor (i in 0...2) if (c) {\n\t\t\tout.push('a$i');\n\t\t\tt('t');\n\t\t} else {\n\t\t\tout.push('b$i');\n\t\t\tt('t');\n\t\t}\n\t}\n\n\tstatic function captured(c:Bool):Void {\n\t\tif (c) {\n\t\t\tfinal v = 1;\n\t\t\tt('v$v');\n\t\t} else {\n\t\t\tfinal v = 2;\n\t\t\tt('v$v');\n\t\t}\n\t}\n\n\tstatic function exits(c:Bool):Void {\n\t\tif (c) {\n\t\t\tout.push('a');\n\t\t\treturn;\n\t\t} else {\n\t\t\tout.push('b');\n\t\t\treturn;\n\t\t}\n\t}\n\n\tstatic function main():Void {\n\t\tfor (c in [true, false]) {\n\t\t\tplain(c);\n\t\t\temptied(c);\n\t\t\tearly(c);\n\t\t\tloopBody(c);\n\t\t\tcaptured(c);\n\t\t\texits(c);\n\t\t}\n\t\tfor (i in 0...3) chain(i);\n\t\tSys.println(out.join(','));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "e2ad9010f21fcf52",
+				"files": "653262efc33ff10c",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HC2",
+			"note": "hoist-common-branch-tail on a chain whose kept statement before the shared outer tail is itself a chain with a shared tail: the outer rewrite lands first and the inner waits for the next pass, so no call vanishes",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-tail",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function t(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function use(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function a():Void {\n\t\tout.push(\"a\");\n\t}\n\n\tstatic function b():Void {\n\t\tout.push(\"b\");\n\t}\n\n\tstatic function run(c:Bool, d:Bool) {\n\t\tif (c) {\n\t\t\tif (d) {\n\t\t\t\tout.push(\"x\");\n\t\t\t\tt(\"t\");\n\t\t\t} else {\n\t\t\t\tout.push(\"y\");\n\t\t\t\tt(\"t\");\n\t\t\t}\n\t\t\tt(\"u\");\n\t\t} else {\n\t\t\tb();\n\t\t\tt(\"u\");\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (c in [true, false]) for (d in [true, false]) {\n\t\t\trun(c, d);\n\t\t}\n\t\tSys.println(out.join(\",\"));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "6beaba21345c410a",
+				"files": "d168b46eb8dfa5b6",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HC3",
+			"note": "the same nested shape in the final else of the outer chain",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-tail",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function t(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function use(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function a():Void {\n\t\tout.push(\"a\");\n\t}\n\n\tstatic function b():Void {\n\t\tout.push(\"b\");\n\t}\n\n\tstatic function run(c:Bool, d:Bool) {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tt(\"u\");\n\t\t} else {\n\t\t\tif (d) {\n\t\t\t\tout.push(\"x\");\n\t\t\t\tt(\"t\");\n\t\t\t} else {\n\t\t\t\tout.push(\"y\");\n\t\t\t\tt(\"t\");\n\t\t\t}\n\t\t\tt(\"u\");\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (c in [true, false]) for (d in [true, false]) {\n\t\t\trun(c, d);\n\t\t}\n\t\tSys.println(out.join(\",\"));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "6beaba21345c410a",
+				"files": "988adb66bc0cc879",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HC4",
+			"note": "hoist-common-branch-tail on an outer tail that ends in a chain with its own shared tail: the inner chain waits for the outer rewrite, so no call runs a second time",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-tail",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function t(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function use(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function a():Void {\n\t\tout.push(\"a\");\n\t}\n\n\tstatic function b():Void {\n\t\tout.push(\"b\");\n\t}\n\n\tstatic function run(c:Bool, d:Bool) {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tif (d) {\n\t\t\t\tout.push(\"x\");\n\t\t\t\tt(\"t\");\n\t\t\t} else {\n\t\t\t\tout.push(\"y\");\n\t\t\t\tt(\"t\");\n\t\t\t}\n\t\t} else {\n\t\t\tb();\n\t\t\tif (d) {\n\t\t\t\tout.push(\"x\");\n\t\t\t\tt(\"t\");\n\t\t\t} else {\n\t\t\t\tout.push(\"y\");\n\t\t\t\tt(\"t\");\n\t\t\t}\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (c in [true, false]) for (d in [true, false]) {\n\t\t\trun(c, d);\n\t\t}\n\t\tSys.println(out.join(\",\"));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "6beaba21345c410a",
+				"files": "28397a136cf680a2",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HC5",
+			"note": "hoist-common-branch-tail on a chain written as a statement with its own semicolon, final else kept and emptied: the moved tail leaves no empty statement for the compiler to refuse",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-tail",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function t(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function use(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function a():Void {\n\t\tout.push(\"a\");\n\t}\n\n\tstatic function b():Void {\n\t\tout.push(\"b\");\n\t}\n\n\tstatic function runA(c:Bool, d:Bool) {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tt(\"t\");\n\t\t} else {\n\t\t\tb();\n\t\t\tt(\"t\");\n\t\t};\n\t\tt(\"z\");\n\t}\n\n\tstatic function runB(c:Bool, d:Bool) {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tt(\"t\");\n\t\t} else {\n\t\t\tt(\"t\");\n\t\t};\n\t\tt(\"z\");\n\t}\n\n\tstatic function main() {\n\t\tfor (c in [true, false]) for (d in [true, false]) {\n\t\t\trunA(c, d);\n\t\t\trunB(c, d);\n\t\t}\n\t\tSys.println(out.join(\",\"));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "11dcb512d3cb6f1d",
+				"files": "e9228e8e082be50b",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HC6",
+			"note": "hoist-common-branch-tail on a chain followed by a comment before its own semicolon, block and line form, final else kept and emptied: the tail goes after the semicolon, the emptied form is left alone, and the program compiles and prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-tail",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function t(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function use(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function a():Void {\n\t\tout.push(\"a\");\n\t}\n\n\tstatic function b():Void {\n\t\tout.push(\"b\");\n\t}\n\n\tstatic function runA(c:Bool, d:Bool) {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tt(\"t\");\n\t\t} else {\n\t\t\tb();\n\t\t\tt(\"t\");\n\t\t} /* note */;\n\t\tt(\"z\");\n\t}\n\n\tstatic function runB(c:Bool, d:Bool) {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tt(\"t\");\n\t\t} else {\n\t\t\tt(\"t\");\n\t\t} /* note */;\n\t\tt(\"z\");\n\t}\n\n\tstatic function runC(c:Bool, d:Bool) {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tt(\"t\");\n\t\t} else {\n\t\t\tb();\n\t\t\tt(\"t\");\n\t\t} // note\n\t\t;\n\t\tt(\"z\");\n\t}\n\n\tstatic function main() {\n\t\tfor (c in [true, false]) for (d in [true, false]) {\n\t\t\trunA(c, d);\n\t\t\trunB(c, d);\n\t\t\trunC(c, d);\n\t\t}\n\t\tSys.println(out.join(\",\"));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "fa13557ffeb461ef",
+				"files": "f92713afe31de842",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

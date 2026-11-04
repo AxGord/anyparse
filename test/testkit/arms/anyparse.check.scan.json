@@ -1126,6 +1126,14 @@
 			"find": "|| (cause != null && at >= cause.from && at < cause.to)",
 			"replace": "",
 			"note": "a write or call in the condition that proved a bound, after its comparison, is never seen, so the bound outlives the change"
+		},
+		{
+			"name": "M-TAILMERGE-NORM-ONLY",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "sameStatement",
+			"find": "if (!MemberKinds.structurallyEqual(a, b)) return false;",
+			"replace": "",
+			"note": "statement identity is decided by whitespace-normalized source alone, so two calls differing only INSIDE a string literal read as the same statement and a tail that is not duplicated is reported"
 		}
 	]
 }

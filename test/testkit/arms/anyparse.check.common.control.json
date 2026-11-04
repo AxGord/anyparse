@@ -33,14 +33,6 @@
 			"note": "every chain head reads as claimed by simplify-boolean-ternary, so the deferral fires on chains that check never touches"
 		},
 		{
-			"name": "M-TAILMERGE-NORM-ONLY",
-			"type": "anyparse.check.common.control.TailMerge",
-			"method": "sameStatement",
-			"find": "if (!MemberKinds.structurallyEqual(a, b)) return false;",
-			"replace": "",
-			"note": "statement identity is decided by whitespace-normalized source alone, so two calls differing only INSIDE a string literal read as the same statement and a tail that is not duplicated is reported"
-		},
-		{
 			"name": "M-TAILMERGE-FALL-KEPT",
 			"type": "anyparse.check.common.control.TailMerge",
 			"method": "visit",
@@ -877,6 +869,102 @@
 			"find": "inner.kind == seams.shape.orPatternKind",
 			"replace": "false",
 			"note": "an or-pattern of wildcards loses the call the matcher drops"
+		},
+		{
+			"name": "M-HCBT-NO-EXIT",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "admissible",
+			"find": "\tif (tail.exists(s -> seams.support.isTerminal(s))) return false;\n",
+			"replace": "",
+			"note": "a tail ending in a return, throw, break or continue is moved after the if as if the branches completed normally, so the exit leaves the if and the code after it never runs"
+		},
+		{
+			"name": "M-HCBT-TAIL-DECL",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "admissible",
+			"find": "TailScan.localDeclNames(tail, seams).length != 0 || TailScan.hasOpaqueDecl(tail, seams)",
+			"replace": "false",
+			"note": "a local variable or function the tail declares is moved out of its branch, where it can capture a name the enclosing block reads later"
+		},
+		{
+			"name": "M-HCBT-NO-CAPTURE",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "admissible",
+			"find": "TailScan.referencesAny(tail, TailScan.localDeclNames(kept, seams), seams.identKinds)",
+			"replace": "false",
+			"note": "a tail reading a local its own branch declares is moved out of that scope, so the same spelling no longer names the branch's declaration"
+		},
+		{
+			"name": "M-HCBT-STATEMENT-POSITION",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "walk",
+			"find": "inBlock && ",
+			"replace": "",
+			"note": "an if that is a brace-less loop body or a value is a chain head, so the tail is written after the loop body's statement and runs once instead of every iteration, or lands inside an expression"
+		},
+		{
+			"name": "M-HCBT-NESTED-ALL-OR-NOTHING",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "fix",
+			"find": "!applied.exists(o -> o.head != c.head && TreePath.covers(o.head, c.head.span))",
+			"replace": "true",
+			"note": "a chain nested in a chain being rewritten applies its edits too, so the outer deletion swallows some of them and keeps others: a call vanishes, or runs a second time"
+		},
+		{
+			"name": "M-HCBT-CHAIN-TERMINATOR",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "fixEdits",
+			"find": "terminatorEnd(source, chainEnd.to, terminator)",
+			"replace": "chainEnd.to",
+			"note": "the moved tail is written in front of the chain's own `;`, which is left as an empty statement the compiler refuses after the tail's own `;`"
+		},
+		{
+			"name": "M-HCBT-FINAL-ELSE",
+			"type": "anyparse.check.common.control.BranchChain",
+			"method": "branchesOf",
+			"find": "\tif (finalElse == null) return null;\n",
+			"replace": "\tif (finalElse == null) return [for (link in links) link.children[THEN_BRANCH_INDEX]];\n",
+			"note": "a chain without a final else is read as if it had one, so a tail common to the branches that exist is moved to run on the path where no branch ran"
+		},
+		{
+			"name": "M-HCBT-TERMINATOR-TRIVIA",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "terminatorEnd",
+			"find": "SourceComments.skipForwardTrivia(source, from)",
+			"replace": "from",
+			"note": "the terminator is looked for only where the chain ends, so a comment between the chain and its `;` hides it and the moved tail is written in front of the `;`, which the compiler refuses after the tail's own"
+		},
+		{
+			"name": "M-HCBT-REPORT-ONLY-OUTER",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "fix",
+			"find": "c.edits.length != 0 && ",
+			"replace": "",
+			"note": "a report-only outer chain counts as one being rewritten, so the chain nested in it waits for a pass that never rewrites its parent and its tail is never moved"
+		},
+		{
+			"name": "M-HCBT-CAPTURE-EVERY-BRANCH",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "admissible",
+			"find": "for (l in lists) {",
+			"replace": "for (l in lists.slice(0, 1)) {",
+			"note": "only the first branch is searched for a local the tail reads, so a name bound in a later branch is moved out of its scope and the moved copy reads an outer variable of the same spelling"
+		},
+		{
+			"name": "M-HCBT-SHORTEN",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "admissibleLength",
+			"find": "while (count > 0 && !admissible(lists, count, seams)) count--;",
+			"replace": "if (count > 0 && !admissible(lists, count, seams)) count = 0;",
+			"note": "the tail is not shortened from its front when the whole shared suffix is refused, so a chain whose suffix starts with a declaration moves nothing although its last statement could move"
+		},
+		{
+			"name": "M-HCBT-SUPPRESSED",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "fix",
+			"find": " && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')",
+			"replace": "",
+			"note": "fix rewrites every chain scan finds, not only the findings it was handed, so a chain inside a CHECKSTYLE:OFF region is rewritten as well"
 		}
 	]
 }
