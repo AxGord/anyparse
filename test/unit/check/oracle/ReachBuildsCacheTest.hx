@@ -182,7 +182,7 @@ class ReachBuildsCacheTest extends Test {
 	}
 
 	/** A record under the right key whose shape is not the one written — a value pair that is no pair — is a miss, not a crash. */
-	@:pin('control') @:killer('M-REACH-RECORD-SHAPE-UNCHECKED')
+	@:pin('control') @:killer('M-NATIVE-STRING-UNCHECKED')
 	public function testAMisshapenRecordIsAMiss(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('shape', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');

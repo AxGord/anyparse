@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.oracle.OracleCache;
 import anyparse.core.ParseProjectionEngine;
 import anyparse.core.TempScratch;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -12,12 +13,6 @@ import haxe.io.Path;
 typedef StoredProjections = {
 	final tree: QueryNode;
 	final spans: SpanTypeInfo;
-};
-
-/** The wire form of a tree: every node as a run of integers over one string table, in pre-order. */
-private typedef StoredTree = {
-	final strings: Array<String>;
-	final ints: Array<Int>;
 };
 
 /**
@@ -114,8 +109,7 @@ final class ParseDiskCache {
 		final stored: StoredTree = { strings: [], ints: [] };
 		final interned: Map<String, Int> = [];
 		writeNode(tree, stored, interned);
-		// noqa avoid-haxe-json: one stringify per cached source, whose output the parse below reads back whole.
-		return haxe.Json.stringify(stored); // noqa: avoid-haxe-json
+		return StoredTreeWriter.write(stored, JsonFormat.instance.compactWriteOptions);
 	}
 
 	private static function writeNode(node: QueryNode, into: StoredTree, interned: Map<String, Int>): Void {
@@ -143,8 +137,7 @@ final class ParseDiskCache {
 
 	/** The tree `encodeTree` wrote; throws on a text that is not exactly one tree. */
 	private static function decodeTree(text: String): QueryNode {
-		// noqa avoid-haxe-json: the counterpart of the one stringify above, over a text this class wrote.
-		final stored: StoredTree = haxe.Json.parse(text); // noqa: avoid-haxe-json
+		final stored: StoredTree = StoredTreeParser.parse(text);
 		final cursor: Array<Int> = [0];
 		final tree: QueryNode = readNode(stored, cursor);
 		if (cursor[0] != stored.ints.length) throw new Exception('trailing data in a stored tree');

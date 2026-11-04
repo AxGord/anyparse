@@ -12,8 +12,9 @@ import anyparse.query.TypeResolver;
 /**
  * Flags a use of `haxe.Json.parse` or `haxe.Json.stringify` — a call, or the function taken as a value (`a.map(Json.parse)`):
  * a JSON document read or written with no schema, which the project describes with its own JSON grammar instead. The message
- * names that way — a `@:schema(JsonFormat)` typedef with its generated parser and writer, or for a document with no fixed shape
- * `JValueParser` (a parse) / `JValueWriter` (a stringify).
+ * names that way — a `@:schema(JsonFormat)` typedef with its generated parser and writer, which read and write through the
+ * engine's own JSON where the format's native door is declared (`JsonFormat.nativeDoor`), or for a document with no fixed
+ * shape `JValueParser` (a parse) / `JValueWriter` (a stringify).
  *
  * A bare receiver is the std type where the file binds its name to `haxe.Json` (`TypeNameBinding.bindingsOf`, an `import
  * haxe.Json as J` included); a local or parameter of that name (`TypeResolver.identBindingFrom`), a project type, a same-package
@@ -65,7 +66,8 @@ final class AvoidHaxeJson extends HaxeRule implements NoAutofix implements Defau
 						rule: RULE_ID,
 						severity: Severity.Warning,
 						message: 'haxe.Json.$method reads or writes a JSON document with no schema: declare a @:schema(JsonFormat) '
-						+ 'typedef and use its generated parser and writer, or $alternative for a document with no fixed shape'
+						+ 'typedef and use its generated parser and writer, which go through the engine\'s own JSON behind '
+						+ 'JsonFormat.nativeDoor, or $alternative for a document with no fixed shape'
 					});
 					for (c in node.children) walk(c);
 				}

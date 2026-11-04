@@ -55,6 +55,22 @@ using anyparse.macro.MetaInspect;
 	anyparse.macro.TriviaSlotNames)
 final class StructSeqLowering {
 
+	/**
+	 * True when the struct node should be lowered as a key-dispatched
+	 * (ByName) object. Two conditions must hold: the resolved format
+	 * has `fieldLookup == ByName` and no field on the struct carries
+	 * positional metadata (`@:kw`, `@:lead`, `@:trail`, `@:sep`) or
+	 * binary metadata. The positional Haxe grammar uses anchors to
+	 * describe fixed syntax — those structs stay on the original
+	 * positional codepath even though `HaxeFormat` also declares
+	 * `ByName`. Binary schemas never reach this branch (`isBinary`
+	 * short-circuits `fieldLookup` to a non-ByName default inside
+	 * `FormatReader`).
+	 */
+	private static inline function shouldLowerByName(sc: StructSeqCtx, node: ShapeNode): Bool {
+		return MetaInspect.isByNameStruct(node, sc.formatInfo);
+	}
+
 	// -------- struct rule --------
 
 	private static function lowerStruct(sc: StructSeqCtx, node: ShapeNode, typePath: String): Expr {
@@ -340,34 +356,6 @@ final class StructSeqLowering {
 		return macro $b{parseSteps};
 	}
 
-
-	/**
-	 * True when the struct node should be lowered as a key-dispatched
-	 * (ByName) object. Two conditions must hold: the resolved format
-	 * has `fieldLookup == ByName` and no field on the struct carries
-	 * positional metadata (`@:kw`, `@:lead`, `@:trail`, `@:sep`) or
-	 * binary metadata. The positional Haxe grammar uses anchors to
-	 * describe fixed syntax — those structs stay on the original
-	 * positional codepath even though `HaxeFormat` also declares
-	 * `ByName`. Binary schemas never reach this branch (`isBinary`
-	 * short-circuits `fieldLookup` to a non-ByName default inside
-	 * `FormatReader`).
-	 */
-	private static function shouldLowerByName(sc: StructSeqCtx, node: ShapeNode): Bool {
-		if (sc.formatInfo.isBinary) return false;
-		if (sc.formatInfo.fieldLookup != ByName) return false;
-		if (sc.formatInfo.keySyntax != Quoted) return false;
-		if (node.annotations[AnnotationKeys.BIN_MAGIC] != null) return false;
-		if (node.annotations['bin.align'] != null) return false;
-		for (child in node.children) {
-			if (child.readMetaString(':kw') != null) return false;
-			if (child.readMetaString(':lead') != null) return false;
-			if (child.readMetaString(':trail') != null) return false;
-			if (child.readMetaString(':sep') != null) return false;
-		}
-		return true;
-	}
-
 	/**
 	 * Lower a typedef struct as a JSON-style key-dispatched object. The
 	 * generated body emits one `Null<T>` local per field, then runs a
@@ -414,9 +402,7 @@ final class StructSeqLowering {
 			// universal value keeps the literal as a value: there `null` IS one.
 			final refName: Null<String> = child.kind == Ref ? child.annotations.get(AnnotationKeys.BASE_REF) : null;
 			final nullAware: Bool = nullLiteral != null && refName != sc.formatInfo.anyType;
-			final nullMatch: Expr = nullLiteral != null && ParseDispatchLowering.endsWithWordChar(nullLiteral)
-				? macro matchKw(ctx, $v{nullLiteral})
-				: macro matchLit(ctx, $v{nullLiteral});
+			final nullMatch: Expr = nullMatchExpr(sc);
 			switchCases.push({
 				values: [{ expr: EConst(CString(key)), pos: Context.currentPos() }],
 				expr: nullAware ? macro if (!$nullMatch) $assign : assign
@@ -538,7 +524,7 @@ final class StructSeqLowering {
 	 * The element shape must be a single `Ref` child; nested `Star` is
 	 * deferred until a real schema needs `Array<Array<T>>`.
 	 */
-	private static function byNameStarParseExpr(sc: StructSeqCtx, child: ShapeNode, fieldName: String): Expr {
+	private static function byNameStarParseExpr(sc: StructSeqCtx, child: ShapeNode, fieldName: String, ?declared: ComplexType): Expr {
 		final seqOpen: Null<String> = sc.formatInfo.sequenceOpen;
 		final seqClose: Null<String> = sc.formatInfo.sequenceClose;
 		if (seqOpen == null || seqClose == null) {
@@ -557,18 +543,30 @@ final class StructSeqLowering {
 			throw 'unreachable';
 		}
 		final inner: ShapeNode = child.children[0];
-		if (inner.kind != Ref) {
-			Context.fatalError(
-				'Lowering: ByName Array<T> field "$fieldName" element kind ${inner.kind} is not supported '
-				+ '— only Array<RefType> (a single named element type) is implemented',
-				Context.currentPos()
-			);
-			throw 'unreachable';
-		}
-		final refName: String = inner.annotations[AnnotationKeys.BASE_REF];
-		final fnName: String = sc.parseFnName(refName);
-		final fieldCT: Null<ComplexType> = child.annotations[AnnotationKeys.BASE_FIELD_TYPE];
-		final innerCT: ComplexType = extractArrayElementCT(fieldCT) ?? sc.ruleReturnCT(refName);
+		final fieldCT: Null<ComplexType> = declared ?? child.annotations[AnnotationKeys.BASE_FIELD_TYPE];
+		final elementCT: Null<ComplexType> = extractArrayElementCT(fieldCT);
+		final element: Expr = switch inner.kind {
+			case Star: byNameStarParseExpr(sc, inner, fieldName, elementCT);
+			case Ref:
+				final call: Expr = {
+					expr: ECall(macro $i{sc.parseFnName(inner.annotations[AnnotationKeys.BASE_REF])}, [macro ctx]),
+					pos: Context.currentPos()
+				};
+				inner.annotations[AnnotationKeys.BASE_OPTIONAL] == true
+					? macro if (${nullMatchExpr(sc)})
+						null
+					else
+						$call
+					: call;
+			case _:
+				Context.fatalError(
+					'Lowering: ByName Array<T> field "$fieldName" element kind ${inner.kind} is not supported '
+					+ '— only an array of a single named element type, or of such arrays, is implemented',
+					Context.currentPos()
+				);
+				throw 'unreachable';
+		};
+		final innerCT: ComplexType = elementCT ?? sc.ruleReturnCT(inner.annotations[AnnotationKeys.BASE_REF]);
 		final closeCharCode: Int = seqClose.charCodeAt(0);
 		final entrySep: String = sc.formatInfo.entrySep;
 		return macro {
@@ -579,7 +577,7 @@ final class StructSeqLowering {
 			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
 				while (true) {
 					skipWs(ctx);
-					_arr.push($i{fnName}(ctx));
+					_arr.push($element);
 					skipWs(ctx);
 					if (!matchLit(ctx, $v{entrySep})) break;
 				}
@@ -704,7 +702,6 @@ final class StructSeqLowering {
 			expectLit(ctx, $v{mappingClose});
 		};
 	}
-
 
 	/**
 	 * Emit the `case Ref if (isOptional)` struct-field arm: the lead/kw/absentOn
@@ -1599,6 +1596,14 @@ final class StructSeqLowering {
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEAD_SUFFIX, expr: macro $i{beforeLeadLocal} });
 		if (afterLeadLocal != null)
 			structFields.push({ field: fieldName + TriviaTypeSynth.AFTER_LEAD_SUFFIX, expr: macro $i{afterLeadLocal} });
+	}
+
+	/** The match of the format's null literal at the parse position. */
+	private static function nullMatchExpr(sc: StructSeqCtx): Expr {
+		final nullLiteral: Null<String> = sc.formatInfo.nullLiteral;
+		return nullLiteral != null && ParseDispatchLowering.endsWithWordChar(nullLiteral)
+			? macro matchKw(ctx, $v{nullLiteral})
+			: macro matchLit(ctx, $v{nullLiteral});
 	}
 
 }

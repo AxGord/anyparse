@@ -269,12 +269,11 @@
 				"test/unit/grammar/MermaidAst.hx",
 				"test/unit/cli/CliFixture.hx",
 				"test/unit/cli/CliCommandSeamTest.hx",
-				"src/anyparse/query/FactNodeRecords.hx",
-				"src/anyparse/query/FactMerge.hx",
-				"src/anyparse/query/CompilerFacts.hx",
 				"tools/src/devkit/Command.hx",
 				"src/anyparse/check/oracle/HaxeSpawn.hx",
-				"tools/src/dev/ParseProf.hx"
+				"src/anyparse/grammar/json/JsonNative.hx",
+				"tools/src/dev/ParseProf.hx",
+				"tools/src/dev/JsonProf.hx"
 			]
 		},
 		"avoid-haxe-json": true,

@@ -115,11 +115,11 @@
 		},
 		{
 			"name": "M-JSON-QUOTE-LONE-SURROGATE",
-			"type": "anyparse.grammar.json.JsonFormat",
+			"type": "anyparse.grammar.json.JsonText",
 			"method": "quote",
-			"find": "out.add(isLoneSurrogate(text, i, c) ? unicodeEscape(c) : escapeChar(c));",
-			"replace": "out.add(escapeChar(c));",
-			"note": "a lone surrogate is written bare, and UTF-8 output turns it into a different character"
+			"find": "return js.Syntax.code('JSON.stringify({0})', text);",
+			"replace": "return '\"' + text + '\"';",
+			"note": "a string is quoted with nothing escaped: a lone surrogate is written bare, and UTF-8 output turns it into a different character"
 		},
 		{
 			"name": "M-JVALUE-FIELD-NULL-HELD",
@@ -128,6 +128,14 @@
 			"find": "case JNull: null;",
 			"replace": "case JNull: JNull;",
 			"note": "a key holding null reads as a held value, unlike every schema reader of the same document"
+		},
+		{
+			"name": "M-NATIVE-COMPACT-NEVER",
+			"type": "anyparse.grammar.json.JsonNative",
+			"method": "isCompact",
+			"find": "return options == JsonFormat.instance.compactWriteOptions;",
+			"replace": "return false;",
+			"note": "the compact options go to the Doc writer, which spells a space after every comma"
 		}
 	]
 }

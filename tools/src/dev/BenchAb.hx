@@ -13,6 +13,8 @@ using StringTools;
  * a `bin/dev.js` build, run as `node <binary> parse-prof …`; any other arm is executed as it is, so a native build of the
  * harness (`tools/bench-hxcpp.hxml`) is just another arm. Arms run one at a time, because parallel arms share caches and
  * turbo, and a single before/after pair cannot tell a win from machine drift (`docs/testing.md` § "Layer 5").
+ *
+ * `<label>:<binary>@<mode>` is an arm running a mode of its own, so two modes of one build can be interleaved.
  */
 @:nullSafety(Strict)
 final class BenchAb {
@@ -44,16 +46,17 @@ final class BenchAb {
 		final rounds: Null<Int> = Std.parseInt(given[2]);
 		final reps: String = given[3];
 		if (rounds == null) throw new UsageError('<rounds> is a count, not ${given[2]}');
-		final arms: Array<{ label: String, binary: String }> = given.slice(RUN_ARGUMENTS).map(arm);
+		final arms: Array<BenchArm> = given.slice(RUN_ARGUMENTS).map(arm);
 		final root: String = cmd('git rev-parse --show-toplevel').text().trim();
 		final nice: Int = js.Syntax.code("require('os').getPriority()");
 		final clock: String = DateTools.format(Date.now(), '%H:%M:%S');
 		Sys.println('# config=$config mode=$mode target=$target rounds=$rounds reps=$reps nice=$nice $clock');
 		final times: Map<String, Array<Float>> = [for (arm in arms) arm.label => []];
 		for (round in 1...rounds + 1) for (arm in arms) {
+			final armMode: String = arm.mode ?? mode;
 			final run: Command = arm.binary.endsWith('.js')
-				? cmd('node ${arm.binary} parse-prof $mode $target $reps $config')
-				: cmd('${arm.binary} $mode $target $reps $config');
+				? cmd('node ${arm.binary} parse-prof $armMode $target $reps $config')
+				: cmd('${arm.binary} $armMode $target $reps $config');
 			final lines: Array<String> = run.at(root).run().lines();
 			final line: String = lines.length == 0 ? '' : lines[lines.length - 1];
 			final ms: Null<String> = msPerRep(line);
@@ -80,15 +83,28 @@ final class BenchAb {
 		return '${label.rpad(' ', LABEL_WIDTH)} median=${pick(Std.int((n + 1) / 2) - 1)}  n=$n  min=${pick(0)}  max=${pick(n - 1)}';
 	}
 
+	/** One `<label>:<binary>[@<mode>]` arm; an arm with no label is labelled by its binary. */
+	public static function arm(spec: String): BenchArm {
+		final at: Int = spec.lastIndexOf('@');
+		final path: String = at < 0 ? spec : spec.substr(0, at);
+		final colon: Int = path.indexOf(':');
+		return {
+			label: colon < 0 ? path : path.substr(0, colon),
+			binary: colon < 0 ? path : path.substr(colon + 1),
+			mode: at < 0 ? null : spec.substr(at + 1)
+		};
+	}
+
 	/** `value` to one decimal place, as `printf %.1f` writes it. */
 	private static inline function fixed(value: Float): String {
 		return js.Syntax.code('{0}.toFixed(1)', value);
 	}
 
-	/** One `<label>:<binary>` arm; an arm with no label is labelled by its binary. */
-	private static function arm(spec: String): { label: String, binary: String } {
-		final colon: Int = spec.indexOf(':');
-		return colon < 0 ? { label: spec, binary: spec } : { label: spec.substr(0, colon), binary: spec.substr(colon + 1) };
-	}
+}
 
+/** One arm of a run: the build, its label, and the mode it runs when not the run's. */
+typedef BenchArm = {
+	final label: String;
+	final binary: String;
+	final mode: Null<String>;
 }

@@ -96,6 +96,7 @@ final class ParseProf {
 		final mode: String = args.length > 0 ? args[0] : 'tparse';
 		final target: String = args.length > 1 ? args[1] : 'src';
 		final reps: Int = args.length > 2 ? (Std.parseInt(args[2]) ?? 1) : 1;
+		if (mode.startsWith('json-')) return JsonProf.run(mode, target, reps);
 		final config: Null<String> = args.length > 3 ? args[3] : null;
 		final files: Array<String> = resolveTargets(target);
 		final sources: Array<Src> = [for (f in files) { file: f, source: sys.io.File.getContent(f) }];

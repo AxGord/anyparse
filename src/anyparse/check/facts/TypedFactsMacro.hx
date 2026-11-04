@@ -1,7 +1,6 @@
 package anyparse.check.facts;
 
 #if macro
-import haxe.Json;
 import haxe.macro.Context;
 import haxe.macro.Expr.ComplexType;
 import haxe.macro.Expr.MetadataEntry;
@@ -14,6 +13,7 @@ import sys.io.File;
 import sys.io.FileOutput;
 import anyparse.check.facts.TypedFactsTypeStrings.*;
 import anyparse.query.FileIdentity;
+import anyparse.grammar.json.JsonText;
 
 /**
  * The compile-time half of `TypedFactsProbe`: an `onAfterTyping` hook that writes what the compiler typed as JSON Lines
@@ -108,7 +108,7 @@ final class TypedFactsMacro {
 		if (index == null) {
 			index = _fileCount++;
 			_files[file] = index;
-			line('{"k":"file","i":$index,"path":${Json.stringify(file)}}');
+			line('{"k":"file","i":$index,"path":${JsonText.quote(file)}}');
 		}
 		return '[$index,$min,$max]';
 	}
@@ -151,7 +151,7 @@ final class TypedFactsMacro {
 		if (bytes == null) return;
 		final changed: Bool = writtenSince(file, started);
 		line(
-			'{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"md5":"${haxe.crypto.Md5.make(bytes).toHex()}"'
+			'{"k":"src","path":${JsonText.quote(file)},"len":${bytes.length},"md5":"${haxe.crypto.Md5.make(bytes).toHex()}"'
 			+ (changed ? ',"changed":true}' : '}')
 		);
 	}
@@ -533,7 +533,7 @@ final class TypedFactsMacro {
 		];
 		final code: Array<String> = [
 			for (m in meta) if (TypedFactsShapes.CODE_METAS.contains(m.name)) for (p in m.params ?? []) switch p.expr {
-				case EConst(CString(s, _)): Json.stringify(s);
+				case EConst(CString(s, _)): JsonText.quote(s);
 				case _: 'null';
 			}
 		];

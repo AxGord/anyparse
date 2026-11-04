@@ -1,7 +1,7 @@
 package anyparse.check.facts;
 
 #if macro
-import haxe.Json;
+import anyparse.grammar.json.JsonText;
 import haxe.macro.Type;
 
 using StringTools;
@@ -35,7 +35,7 @@ final class TypedFactsTypeStrings {
 
 	/** `s` as a JSON string. Names, paths and type strings carry no control character, so only a quote or a backslash needs the printer. */
 	public static function q(s: String): String {
-		return s.indexOf('"') < 0 && s.indexOf('\\') < 0 ? '"$s"' : Json.stringify(s);
+		return s.indexOf('"') < 0 && s.indexOf('\\') < 0 ? '"$s"' : JsonText.quote(s);
 	}
 
 	/** `items`, each already JSON, as a JSON array. */

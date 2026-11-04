@@ -22,6 +22,11 @@ using StringTools;
  */
 final class BinaryParseLowering {
 
+	// -------- @:raw post-processing --------
+
+	/** The name of the std nullable wrapper a declared field type may carry. */
+	private static inline final NULL_TYPE: String = 'Null';
+
 	/**
 	 * Emit parse steps for a `@:bin(N, Dec|Oct)` Int field — read N bytes
 	 * as an ASCII slice, strip trailing spaces, and decode as an integer
@@ -56,8 +61,16 @@ final class BinaryParseLowering {
 		return ct == null
 			? null
 			: switch ct {
-				case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }): inner;
-				case TPath({ pack: [], name: 'Null', params: [TPType(inner)] }): extractArrayElementCT(inner);
+				case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }):
+					inner;
+				// `Null<T>` as written, or as the compiler spells it back from a typed field (`StdTypes.Null<T>`)
+				case TPath({
+					pack: [],
+					name: name,
+					sub: sub,
+					params: [TPType(inner)]
+				}) if ((sub ?? name) == NULL_TYPE && (sub == null || name == 'StdTypes')):
+					extractArrayElementCT(inner);
 				case _: null;
 			};
 	}
@@ -222,6 +235,5 @@ final class BinaryParseLowering {
 		};
 	}
 
-	// -------- @:raw post-processing --------
 }
 #end

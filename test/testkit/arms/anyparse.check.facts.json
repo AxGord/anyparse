@@ -63,7 +63,7 @@
 			"name": "M-FACTS-REFLECT-NAME",
 			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
-			"find": "literal = ',\"n\":${Json.stringify(s)}';",
+			"find": "literal = ',\"n\":${JsonText.quote(s)}';",
 			"replace": "literal = '';",
 			"note": "a reflected literal name is dropped, so every reflection site reads as computed"
 		},

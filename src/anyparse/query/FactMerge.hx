@@ -4,7 +4,6 @@ import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FactSignature;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.TypeFact;
-import haxe.Json;
 
 using Lambda;
 
@@ -48,9 +47,7 @@ final class FactMerge {
 
 	/** `into` with the signature `signature` and parameters `params`, unless an entry already holds both. */
 	public static function variant(into: Array<FactSignature>, signature: String, params: Array<{ name: String, type: String }>): Void {
-		// std Json: native code, several times faster than the generated writer on this hot path
-		final key: String = Json.stringify(params); // noqa: avoid-haxe-json
-		if (!into.exists(v -> v.signature == signature && Json.stringify(v.params) == key)) // noqa: avoid-haxe-json
+		if (!into.exists(v -> v.signature == signature && sameParams(v.params, params)))
 			into.push({ signature: signature, params: params });
 	}
 
@@ -71,20 +68,28 @@ final class FactMerge {
 		return out;
 	}
 
-	/** Every record of `records` whose position resolves and is `fresh`, made into a fact and appended to `into`. */
+	/** Every record of `records` whose position resolves and whose `text` is `fresh`, made into a fact and appended to `into`. */
 	public static function collect<R, F>(
-		records: Null<Array<R>>, position: (R) -> Null<FactPos>, fresh: (Any, FactPos) -> Bool, make: (R, FactPos) -> F, into: Array<F>
+		records: Null<Array<R>>, position: (R) -> Null<FactPos>, text: (R) -> String, fresh: (String, FactPos) -> Bool,
+		make: (R, FactPos) -> F, into: Array<F>
 	): Void {
 		if (records == null) return;
 		for (record in records) {
 			final where: Null<FactPos> = position(record);
-			if (where != null && fresh(record, where)) into.push(make(record, where));
+			if (where != null && fresh(text(record), where)) into.push(make(record, where));
 		}
 	}
 
 	/** Add to `into` each of `from` it does not hold yet. */
 	public static function absent<T>(into: Array<T>, from: Array<T>): Void {
 		for (x in from) if (!into.contains(x)) into.push(x);
+	}
+
+	/** Whether two parameter lists name the same parameters in the same order. */
+	private static function sameParams(a: Array<{ name: String, type: String }>, b: Array<{ name: String, type: String }>): Bool {
+		if (a.length != b.length) return false;
+		for (i => p in a) if (p.name != b[i].name || p.type != b[i].type) return false;
+		return true;
 	}
 
 }

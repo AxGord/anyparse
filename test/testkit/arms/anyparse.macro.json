@@ -1617,6 +1617,30 @@
 			"find": "optionsType.match(TInst(_, _))",
 			"replace": "false",
 			"note": "a record class clones through Reflect.copy, into a plain object of another shape"
+		},
+		{
+			"name": "M-NATIVE-STRING-UNCHECKED",
+			"type": "anyparse.macro.NativeDocLowering",
+			"method": "checkValue",
+			"find": "if (!$p{doorPath}.isString($value)) return false]",
+			"replace": "if (!$p{doorPath}.isString($value) && false) return false]",
+			"note": "the shape check takes any value for a String field, so a number under a string key is handed back as the record"
+		},
+		{
+			"name": "M-NATIVE-INT-UNCHECKED",
+			"type": "anyparse.macro.NativeDocLowering",
+			"method": "checkValue",
+			"find": "if (!$p{doorPath}.isInt($value)) return false]",
+			"replace": "if (!$p{doorPath}.isFloat($value)) return false]",
+			"note": "an Int field takes any number, so a fraction the byte-level parser refuses is read as the record's Int"
+		},
+		{
+			"name": "M-NATIVE-KEY-UNRENAMED",
+			"type": "anyparse.macro.NativeDocLowering",
+			"method": "checkEntry",
+			"find": "if (key != name) steps.push(macro $p{doorPath}.set(raw, $v{name}, $value));",
+			"replace": "",
+			"note": "a field spelled with @:key is checked under its key but never set under its Haxe name, so the record reads it as absent"
 		}
 	]
 }

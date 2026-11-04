@@ -1,0 +1,8 @@
+# The hxcpp arm of the typed-JSON benchmark (`tools/src/dev/JsonProf.hx`): the same source the js arm runs as
+# `node bin/dev.js parse-prof json-…`, so the arms differ only in the backend. Build from the repo root with a
+# persistent HXCPP_COMPILE_CACHE, then pass bin/json-prof-cpp/JsonProf to `dev bench-ab` as any other arm.
+-cp src
+-cp tools/src
+-main dev.JsonProf
+-D analyzer-optimize
+-cpp bin/json-prof-cpp

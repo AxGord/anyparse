@@ -1,9 +1,9 @@
 package anyparse.query;
 
+import anyparse.grammar.json.JsonNative;
 import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
-import haxe.Json;
 import haxe.io.Bytes;
 
 /**
@@ -35,10 +35,9 @@ final class FactText {
 	 * body was generated; null for a line that is not one.
 	 */
 	public static function nodeHead(line: String): Null<NodeHead> {
-		// std Json: native code, several times faster than the generated parser/writer on this hot path
 		return NODE_HEAD.match(line) ? {
-			id: Json.parse(NODE_HEAD.matched(1)), // noqa: avoid-haxe-json
-			file: Json.parse(NODE_HEAD.matched(2)), // noqa: avoid-haxe-json
+			id: JsonNative.unquote(NODE_HEAD.matched(1)),
+			file: JsonNative.unquote(NODE_HEAD.matched(2)),
 			min: Std.parseInt(NODE_HEAD.matched(HEAD_MIN)) ?? 0,
 			max: Std.parseInt(NODE_HEAD.matched(HEAD_MAX)) ?? 0,
 			foreign: FOREIGN_POSITION.match(line),

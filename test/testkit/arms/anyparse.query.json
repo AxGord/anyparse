@@ -5516,7 +5516,7 @@
 			"name": "M-FACTS-SIGNATURE-VARIANTS",
 			"type": "anyparse.query.FactMerge",
 			"method": "variant",
-			"find": "if (!into.exists(v -> v.signature == signature && Json.stringify(v.params) == key))",
+			"find": "if (!into.exists(v -> v.signature == signature && sameParams(v.params, params)))",
 			"replace": "if (into.length == 0)",
 			"note": "only the first configuration's signature is kept, so a return or parameter the builds type apart reads as agreed"
 		},
@@ -8604,7 +8604,7 @@
 			"name": "M-FACTS-TARGET-RECORD",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "add",
-			"find": "targets[index] = record.n;",
+			"find": "targets[index] = FactTargetRecordParser.parse(line).n;",
 			"replace": "",
 			"note": "the target a facts file names is not read: no build is known to convert"
 		},
@@ -12591,7 +12591,7 @@
 			"name": "M-FACTS-READ-RECORD-NAME",
 			"type": "anyparse.query.FactNodeRecords",
 			"method": "collectFacts",
-			"find": "name: (r[r.length - 1]: String),",
+			"find": "name: readString(r[r.length - 1]),",
 			"replace": "name: '',",
 			"note": "a read's recorded name is dropped, so no read is the text's own"
 		},

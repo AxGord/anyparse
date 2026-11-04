@@ -7,33 +7,9 @@ import anyparse.core.ReachBuildsEngine;
 import anyparse.core.TempScratch;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;
-import haxe.DynamicAccess;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.io.File;
-
-/**
- * A record as `ReachBuildsCache.store` writes it. Nothing reads it through this type: a read checks every field
- * (`buildsOf`), since what comes off disk may be anything.
- */
-typedef ReachBuildsRecord = {
-	var format: String;
-	var key: String;
-	var stats: Array<Array<String>>;
-	var configurations: Array<ReachConfigurationRecord>;
-	var library: Array<{ file: String, hash: String }>;
-}
-
-/** One build of a record: a `ReachConfiguration`, its define values as pairs. */
-typedef ReachConfigurationRecord = {
-	var name: String;
-	var defined: Array<String>;
-	var everDefined: Array<String>;
-	var values: Array<Array<String>>;
-	var compiled: Array<String>;
-	var types: Array<{ name: String, file: String }>;
-	var parsed: Null<Array<String>>;
-}
 
 /**
  * The key one list of configurations' builds is stored under: one hash over the engine code a record's answer depends
@@ -98,8 +74,9 @@ final class ReachBuildsCache {
 		final path: String = cacheFile(oracles);
 		// staged under this process's name and renamed, so a concurrent reader meets the old record or the new one whole
 		final staged: String = TempScratch.slot(stem(oracles), '.staged');
-		// std Json: native code, several times faster than the generated parser/writer on this hot path
 		try {
+			// recordOf builds the record in the schema's key order with no held null, the compact document's own: the engine's
+			// writer spells it without the generated writer's key-ordered copy
 			sys.io.File.saveContent(staged, haxe.Json.stringify(record)); // noqa: avoid-haxe-json
 			sys.FileSystem.rename(staged, path);
 		} catch (exception: Exception) { // noqa: swallowed-exception
@@ -133,11 +110,10 @@ final class ReachBuildsCache {
 
 	/** `load`'s answer from the record at `path`; it may throw on a record of no shape `buildsOf` foresaw. */
 	private static function loadFrom(oracles: Array<OracleConfig>, path: String): Null<ReachBuilds> {
-		// std Json: native code, several times faster than the generated parser/writer on this hot path
-		final record: Null<DynamicAccess<Any>> = object(haxe.Json.parse(File.getContent(path))); // noqa: avoid-haxe-json
-		if (record == null || text(record['format']) != FORMAT_TAG || !statsHold(record['stats'])) return null;
+		final record: ReachBuildsRecord = ReachBuildsRecordParser.parse(File.getContent(path));
+		if (record.format != FORMAT_TAG || !statsHold(record.stats)) return null;
 		final now: Null<ReachBuildsKey> = fingerprint(oracles);
-		return now == null || now.key != text(record['key']) ? null : buildsOf(record);
+		return now == null || now.key != record.key ? null : buildsOf(record);
 	}
 
 	/** `fingerprint`'s answer. */
@@ -188,110 +164,63 @@ final class ReachBuildsCache {
 	}
 
 	/** Whether every `[file, stat]` pair of `stats` names a file whose size and modification time are as recorded. */
-	private static function statsHold(stats: Null<Any>): Bool {
-		final entries: Null<Array<Any>> = list(stats);
-		return entries != null && entries.foreach(entry -> {
-			final pair: Null<Array<String>> = texts(entry);
-			pair != null && pair.length == 2 && pair[1] != '' && statOf(pair[0]) == pair[1];
-		});
+	private static function statsHold(stats: Array<Array<String>>): Bool {
+		return stats.foreach(pair -> pair.length == 2 && pair[1] != '' && statOf(pair[0]) == pair[1]);
 	}
 
+	/** `c` as its record, in the schema's key order; an absent `parsed` is left out, never held as null. */
 	private static function recordOf(c: ReachConfiguration): ReachConfigurationRecord {
-		return {
+		final record: ReachConfigurationRecord = {
 			name: c.name,
 			defined: c.defined,
 			everDefined: c.everDefined,
 			values: [for (name => value in c.values) [name, value]],
 			compiled: c.compiled,
-			types: [for (t in c.types) { name: t.name, file: t.file }],
-			parsed: c.parsed
+			types: [for (t in c.types) { name: t.name, file: t.file }]
 		};
+		final parsed: Null<Array<String>> = c.parsed;
+		if (parsed != null) record.parsed = parsed;
+		return record;
 	}
 
 	/** The builds `record` holds, every library source read and checked against its hash; null for any field of no shape. */
-	private static function buildsOf(record: DynamicAccess<Any>): Null<ReachBuilds> {
+	private static function buildsOf(record: ReachBuildsRecord): Null<ReachBuilds> {
 		final configurations: Array<ReachConfiguration> = [];
-		for (c in list(record['configurations']) ?? []) {
+		for (c in record.configurations) {
 			final read: Null<ReachConfiguration> = configurationOf(c);
 			if (read == null) return null;
 			configurations.push(read);
 		}
 		if (configurations.length == 0) return null;
 		final library: Array<{ file: String, source: String }> = [];
-		for (e in list(record['library']) ?? []) {
-			final entry: Null<DynamicAccess<Any>> = object(e);
-			final file: Null<String> = entry == null ? null : text(entry['file']);
-			if (entry == null || file == null) return null;
-			final source: Null<String> = try File.getContent(file) catch (exception: Exception) null;
+		for (entry in record.library) {
+			final source: Null<String> = try File.getContent(entry.file) catch (exception: Exception) null;
 			if (source == null) return null;
 			final read: String = source;
-			if (OracleCache.md5(read) != text(entry['hash'])) return null;
-			library.push({ file: file, source: read });
+			if (OracleCache.md5(read) != entry.hash) return null;
+			library.push({ file: entry.file, source: read });
 		}
 		return { configurations: configurations, library: library };
 	}
 
 	/** The build one record entry holds, or null for an entry of any other shape. */
-	private static function configurationOf(value: Null<Any>): Null<ReachConfiguration> {
-		final c: Null<DynamicAccess<Any>> = object(value);
-		if (c == null) return null;
-		final name: Null<String> = text(c['name']);
-		final defined: Null<Array<String>> = texts(c['defined']);
-		final everDefined: Null<Array<String>> = texts(c['everDefined']);
-		final compiled: Null<Array<String>> = texts(c['compiled']);
-		final parsed: Null<Array<String>> = texts(c['parsed']);
-		if (name == null || defined == null || everDefined == null || compiled == null) return null;
-		if (parsed == null && c['parsed'] != null) return null;
+	private static function configurationOf(c: ReachConfigurationRecord): Null<ReachConfiguration> {
 		final values: Map<String, String> = [];
-		for (p in list(c['values']) ?? []) {
-			final pair: Null<Array<String>> = texts(p);
-			if (pair == null || pair.length != 2) return null;
+		for (pair in c.values) {
+			if (pair.length != 2) return null;
 			values[pair[0]] = pair[1];
 		}
-		final types: Array<{ name: String, file: String }> = [];
-		for (t in list(c['types']) ?? []) {
-			final type: Null<DynamicAccess<Any>> = object(t);
-			final typeName: Null<String> = type == null ? null : text(type['name']);
-			final file: Null<String> = type == null ? null : text(type['file']);
-			if (typeName == null || file == null) return null;
-			types.push({ name: typeName, file: file });
-		}
-		// re-bound: strict null-safety does not carry a narrowed local into a structure literal
-		final buildName: String = name;
-		final defines: Array<String> = defined;
-		final everDefines: Array<String> = everDefined;
-		final files: Array<String> = compiled;
 		final read: ReachConfiguration = {
-			name: buildName,
-			defined: defines,
-			everDefined: everDefines,
+			name: c.name,
+			defined: c.defined,
+			everDefined: c.everDefined,
 			values: values,
-			compiled: files,
-			types: types
+			compiled: c.compiled,
+			types: [for (t in c.types) { name: t.name, file: t.file }]
 		};
+		final parsed: Null<Array<String>> = c.parsed;
 		if (parsed != null) read.parsed = parsed;
 		return read;
-	}
-
-	/** `value` when it is a string, else null. */
-	private static function text(value: Null<Any>): Null<String> {
-		return value is String ? cast value : null;
-	}
-
-	/** `value` when it is an array, else null. */
-	private static function list(value: Null<Any>): Null<Array<Any>> {
-		return value is Array ? cast value : null;
-	}
-
-	/** `value` when it is an array of strings, else null. */
-	private static function texts(value: Null<Any>): Null<Array<String>> {
-		final items: Null<Array<Any>> = list(value);
-		return items != null && items.foreach(item -> item is String) ? cast items : null;
-	}
-
-	/** `value` when it is a JSON object — no string, no array — else null. */
-	private static function object(value: Null<Any>): Null<DynamicAccess<Any>> {
-		return value != null && Reflect.isObject(value) && !(value is String) && !(value is Array) ? cast value : null;
 	}
 
 }

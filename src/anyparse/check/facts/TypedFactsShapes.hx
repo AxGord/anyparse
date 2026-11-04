@@ -1,7 +1,7 @@
 package anyparse.check.facts;
 
 #if macro
-import haxe.Json;
+import anyparse.grammar.json.JsonText;
 import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import haxe.macro.TypedExprTools;
@@ -87,7 +87,7 @@ final class TypedFactsShapes {
 	public static function nativeCode(args: Array<TypedExpr>, carrying: Bool): String {
 		final text: Null<String> = args.length == 0 ? null : literalText(args[0]);
 		return if (text != null)
-			',"c":${Json.stringify(text)}'
+			',"c":${JsonText.quote(text)}'
 		else if (carrying)
 			',"cc":true'
 		else

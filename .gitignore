@@ -16,3 +16,4 @@ dump/
 bin/parse-prof-cpp/
 bin/.suite-timings.tsv
 __pycache__/
+bin/json-prof-cpp/

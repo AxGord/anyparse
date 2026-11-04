@@ -102,6 +102,7 @@ class Build {
 		else
 			'parse$rootSimple';
 		final fields: Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName);
+		if (!ctx.trivia && !ctx.spans) NativeDocLowering.overParser(fields, shape, formatInfo, rootReturnCT);
 
 		#if anyparse_dump
 		final printer: haxe.macro.Printer = new haxe.macro.Printer();
@@ -207,6 +208,7 @@ class Build {
 		final rootFnName: String = rootBearing ? 'write${rootSimple}T' : 'write$rootSimple';
 		final fields: Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath, rootFnName);
 		if (textLowering != null) for (f in textLowering.extraFields) fields.push(f);
+		if (!ctx.trivia) NativeDocLowering.overWriter(fields, shape, formatInfo, readBoolOption(buildOptions, 'direct', false));
 
 		#if anyparse_dump
 		final printer: haxe.macro.Printer = new haxe.macro.Printer();
@@ -214,6 +216,17 @@ class Build {
 		#end
 
 		return fields;
+	}
+
+	/**
+	 * `@:build` entry of a marker class that wants the compact text of a schema's records and no document: one public
+	 * `compact<Rule>(value)` per rule that writer can write (`NativeDocLowering`).
+	 */
+	public static macro function buildCompactWriter(target: Expr): Array<Field> {
+		final resolved: ResolvedTarget = resolveTarget(target, 'buildCompactWriter');
+		final ctx: LoweringCtx = new LoweringCtx();
+		ctx.mode = Mode.Fast;
+		return NativeDocLowering.compactOnly(buildShapeWithTrivia(resolved.formatInfo, resolved.rootType, ctx), resolved.formatInfo);
 	}
 
 	/** `@:build` entry of a write-options class: `OptionsRecord.build`. */

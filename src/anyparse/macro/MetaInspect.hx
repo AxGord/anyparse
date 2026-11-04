@@ -229,5 +229,21 @@ final class MetaInspect {
 		return null;
 	}
 
+	/**
+	 * Whether `format` reads and writes the struct `node` by key, as a mapping: the one predicate of the by-name lowering of
+	 * the parser and the writer, and of what the native door generates over them.
+	 */
+	public static function isByNameStruct(node: ShapeNode, format: FormatReader.FormatInfo): Bool {
+		if (format.isBinary || format.fieldLookup != ByName || format.keySyntax != Quoted) return false;
+		if (node.annotations[AnnotationKeys.BIN_MAGIC] != null || node.annotations['bin.align'] != null) return false;
+		for (child in node.children) {
+			if (readMetaString(child, ':kw') != null) return false;
+			if (readMetaString(child, ':lead') != null) return false;
+			if (readMetaString(child, ':trail') != null) return false;
+			if (readMetaString(child, ':sep') != null) return false;
+		}
+		return true;
+	}
+
 }
 #end

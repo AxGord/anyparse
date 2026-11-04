@@ -3,7 +3,7 @@ package anyparse.check.facts;
 #if macro
 import anyparse.check.facts.TypedFactsMacro.InlineMethod;
 import anyparse.check.facts.TypedFactsShapes.FieldRef;
-import haxe.Json;
+import anyparse.grammar.json.JsonText;
 import haxe.macro.Context;
 import haxe.macro.Expr.Position;
 import haxe.macro.Type;
@@ -1011,7 +1011,7 @@ final class TypedFactsWalk {
 		var named: String = '';
 		for (a in args) switch a.expr {
 			case TConst(TString(s)) if (literal == ''):
-				literal = ',"n":${Json.stringify(s)}';
+				literal = ',"n":${JsonText.quote(s)}';
 			case TTypeExpr(m) if (named == ''):
 				named = ',"c":${q(TypedFactsShapes.moduleTypeId(m))}';
 			case _:
@@ -1019,7 +1019,7 @@ final class TypedFactsWalk {
 		// the member the call names: the literal its name argument holds, through what leaves a value as it is
 		final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName];
 		final member: Null<String> = at == null || at >= args.length ? null : TypedFactsShapes.literalText(args[at]);
-		final spelled: String = member == null ? '' : ',"m":${Json.stringify(member)}';
+		final spelled: String = member == null ? '' : ',"m":${JsonText.quote(member)}';
 		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
 		final receiver: String = first == null
 			? ''

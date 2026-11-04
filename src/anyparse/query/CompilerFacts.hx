@@ -1,9 +1,16 @@
 package anyparse.query;
 
-import anyparse.query.FactNodeRecords.NodeRecord;
 import anyparse.query.FactText.NodeHead;
+import anyparse.query.format.json.FactFileRecord;
+import anyparse.query.format.json.FactFileRecordParser;
+import anyparse.query.format.json.FactNodeRecord;
+import anyparse.query.format.json.FactSourceRecord;
+import anyparse.query.format.json.FactSourceRecordParser;
+import anyparse.query.format.json.FactTargetRecordParser;
+import anyparse.query.format.json.FactTypeFieldRecord;
+import anyparse.query.format.json.FactTypeRecord;
+import anyparse.query.format.json.FactTypeRecordParser;
 import anyparse.runtime.Span;
-import haxe.Json;
 
 using Lambda;
 
@@ -861,20 +868,18 @@ final class CompilerFacts {
 		configurations.push(dump.name);
 		targets.push(null);
 
-		// std Json: native code, several times faster than the generated parser on this hot path
 		for (raw in lines) {
 			final line: String = FactText.detached(raw);
 			if (line.startsWith('{"k":"node"')) {
 				addNode(line, index, dump);
 			} else if (line.startsWith('{"k":"type"')) {
-				addType(Json.parse(line), dump, index); // noqa: avoid-haxe-json
+				addType(FactTypeRecordParser.parse(line), dump, index);
 			} else if (line.startsWith('{"k":"src"')) {
-				addSource(Json.parse(line), dump); // noqa: avoid-haxe-json
+				addSource(FactSourceRecordParser.parse(line), dump);
 			} else if (line.startsWith('{"k":"target"')) {
-				final record: TargetRecord = Json.parse(line); // noqa: avoid-haxe-json
-				targets[index] = record.n;
+				targets[index] = FactTargetRecordParser.parse(line).n;
 			} else if (line.startsWith('{"k":"file"')) {
-				final record: FileRecord = Json.parse(line); // noqa: avoid-haxe-json
+				final record: FactFileRecord = FactFileRecordParser.parse(line);
 				files.paths[record.i] = dump.file(record.path);
 			}
 		}
@@ -1031,7 +1036,7 @@ final class CompilerFacts {
 	}
 
 	/** Record the text a configuration read of a file; two configurations that read different texts leave it stale. */
-	private function addSource(record: SourceRecord, dump: FactsDump): Void {
+	private function addSource(record: FactSourceRecord, dump: FactsDump): Void {
 		final file: String = dump.file(record.path);
 		final hash: String = '${record.len}:${record.md5}';
 		final known: Null<String> = _expected[file];
@@ -1042,7 +1047,7 @@ final class CompilerFacts {
 			_expected[file] = hash;
 	}
 
-	private function addType(record: TypeRecord, dump: FactsDump, build: Int): Void {
+	private function addType(record: FactTypeRecord, dump: FactsDump, build: Int): Void {
 		final made: TypeFact = {
 			id: record.id,
 			kind: record.kind,
@@ -1142,8 +1147,7 @@ final class CompilerFacts {
 		var made: Null<FactNode> = null;
 		final seen: Map<String, Bool> = [];
 		for (line in lines) {
-			// std Json: native code, several times faster than the generated parser on this hot path
-			final record: NodeRecord = Json.parse(line.text); // noqa: avoid-haxe-json
+			final record: FactNodeRecord = FactNodeRecords.parseLine(line.text);
 			final files: DumpFiles = _dumps[line.dump];
 			final home: String = files.file(record.f);
 			final at: Null<FactPos> = position(home, record.p, files.paths);
@@ -1162,7 +1166,7 @@ final class CompilerFacts {
 	 * its facts and expansions — each placed in `home` and kept once across configurations (`seen`) — and its local functions.
 	 */
 	private function mergeRecord(
-		id: String, node: FactNode, record: NodeRecord, home: String, paths: Array<Null<String>>, seen: Map<String, Bool>
+		id: String, node: FactNode, record: FactNodeRecord, home: String, paths: Array<Null<String>>, seen: Map<String, Bool>
 	): Void {
 		FactMerge.variant(node.variants, record.t, [for (p in record.params ?? []) { name: p.n, type: p.t }]);
 		for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
@@ -1176,9 +1180,7 @@ final class CompilerFacts {
 			return where;
 		}
 		// a fact is identified by its resolved text, so the same site from two configurations is one fact
-		function fresh(category: String, fact: Any, where: FactPos): Bool {
-			// std Json: native code, several times faster than the generated writer on this hot path
-			final text: String = Json.stringify(fact); // noqa: avoid-haxe-json
+		function fresh(category: String, text: String, where: FactPos): Bool {
 			final identity: String = '$category ${where.file} ${where.span.from} ${where.span.to} $text';
 			if (seen.exists(identity)) return false;
 			seen[identity] = true;
@@ -1225,7 +1227,7 @@ final class CompilerFacts {
 	}
 
 	/** The declared field a type record's field record `f` describes, as one configuration recorded it. */
-	private static function declaredField(f: FieldRecord): FieldDeclFact {
+	private static function declaredField(f: FactTypeFieldRecord): FieldDeclFact {
 		return {
 			name: f.n,
 			kind: f.k,
@@ -1302,52 +1304,4 @@ private typedef NodeRange = {
 private typedef DumpFiles = {
 	final paths: Array<Null<String>>;
 	final file: (String) -> String;
-}
-
-private typedef SourceRecord = {
-	final path: String;
-	final len: Int;
-	final md5: String;
-	final ?changed: Bool;
-}
-
-private typedef FileRecord = {
-	final i: Int;
-	final path: String;
-}
-
-/** The target a configuration generates code for (`{"k":"target","n":S}`). */
-private typedef TargetRecord = {
-	final n: String;
-}
-
-private typedef FieldRecord = {
-	final n: String;
-	final k: String;
-	final t: String;
-	final ?s: Bool;
-	final ?meta: Array<String>;
-	final ?code: Array<Null<String>>;
-	final ?over: Int;
-}
-
-private typedef TypeRecord = {
-	final id: String;
-	final f: String;
-	final p: Array<Int>;
-	final kind: String;
-	final pack: String;
-	final ?params: Array<String>;
-	final ?meta: Array<String>;
-	final ?ext: Bool;
-	final ?sup: String;
-	final ?of: String;
-	final ?builds: Array<String>;
-	final ?code: Array<Null<String>>;
-	final ?ifaces: Array<String>;
-	final ?fields: Array<FieldRecord>;
-	final ?target: String;
-	final ?under: String;
-	final ?impl: String;
-	final ?ctors: Array<{ n: String, t: String }>;
 }

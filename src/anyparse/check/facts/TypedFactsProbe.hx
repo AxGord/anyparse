@@ -11,6 +11,7 @@ import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.PendingRuns;
 import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.core.TempScratch;
+import anyparse.grammar.json.JsonText;
 import anyparse.macro.EmbeddedSource;
 import anyparse.query.CompilerFacts;
 import anyparse.query.ReachLiveness.ReachConfiguration;
@@ -177,7 +178,8 @@ final class TypedFactsProbe {
 		},
 		{ path: 'anyparse/check/facts/TypedFactsShapes.hx', text: EmbeddedSource.text('anyparse/check/facts/TypedFactsShapes.hx') },
 		{ path: 'anyparse/check/facts/FactsTypeText.hx', text: EmbeddedSource.text('anyparse/check/facts/FactsTypeText.hx') },
-		{ path: 'anyparse/query/FileIdentity.hx', text: EmbeddedSource.text('anyparse/query/FileIdentity.hx') }
+		{ path: 'anyparse/query/FileIdentity.hx', text: EmbeddedSource.text('anyparse/query/FileIdentity.hx') },
+		{ path: 'anyparse/grammar/json/JsonText.hx', text: EmbeddedSource.text('anyparse/grammar/json/JsonText.hx') }
 	];
 
 	/**
@@ -302,7 +304,7 @@ final class TypedFactsProbe {
 	 * hook — anyparse — still runs the one written under `dir`, which writes to `out`.
 	 */
 	private static function hookArgs(dir: String, out: String): Array<String> {
-		return ['-cp', dir, '--macro', '$HOOK(${haxe.Json.stringify(out)})'];
+		return ['-cp', dir, '--macro', '$HOOK(${JsonText.quote(out)})'];
 	}
 
 	/**

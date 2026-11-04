@@ -384,6 +384,24 @@ class WriterLowering {
 		return rules;
 	}
 
+	// -------- struct rule --------
+
+	/**
+	 * Mirror of `StructSeqLowering.shouldLowerByName` for the writer side. When
+	 * the resolved format has `fieldLookup == ByName + keySyntax ==
+	 * Quoted` and no struct field carries positional metadata
+	 * (`@:kw / @:lead / @:trail / @:sep`) or binary metadata, the
+	 * writer emits the struct as a JSON-style key-dispatched object —
+	 * `"<key>": <value>` entries joined by the format's `entrySep` and
+	 * wrapped in `mappingOpen` / `mappingClose`. Symmetric to the
+	 * parser's ByName codepath so `@:peg @:schema(JsonFormat) typedef
+	 * T = { … }` round-trips through `Build.buildParser` /
+	 * `Build.buildWriter` without any positional metadata.
+	 */
+	private inline function shouldWriteByName(node: ShapeNode): Bool {
+		return MetaInspect.isByNameStruct(node, _formatInfo);
+	}
+
 	private function lowerRule(typePath: String, node: ShapeNode): Array<WriterRule> {
 		final fnName: String = writeFnFor(typePath);
 		final valueCT: ComplexType = ruleValueCT(typePath);
@@ -749,35 +767,6 @@ class WriterLowering {
 		throw 'unreachable';
 	}
 
-	// -------- struct rule --------
-
-	/**
-	 * Mirror of `StructSeqLowering.shouldLowerByName` for the writer side. When
-	 * the resolved format has `fieldLookup == ByName + keySyntax ==
-	 * Quoted` and no struct field carries positional metadata
-	 * (`@:kw / @:lead / @:trail / @:sep`) or binary metadata, the
-	 * writer emits the struct as a JSON-style key-dispatched object —
-	 * `"<key>": <value>` entries joined by the format's `entrySep` and
-	 * wrapped in `mappingOpen` / `mappingClose`. Symmetric to the
-	 * parser's ByName codepath so `@:peg @:schema(JsonFormat) typedef
-	 * T = { … }` round-trips through `Build.buildParser` /
-	 * `Build.buildWriter` without any positional metadata.
-	 */
-	private function shouldWriteByName(node: ShapeNode): Bool {
-		if (_formatInfo.isBinary) return false;
-		if (_formatInfo.fieldLookup != ByName) return false;
-		if (_formatInfo.keySyntax != Quoted) return false;
-		if (node.annotations[AnnotationKeys.BIN_MAGIC] != null) return false;
-		if (node.annotations['bin.align'] != null) return false;
-		for (child in node.children) {
-			if (child.readMetaString(':kw') != null) return false;
-			if (child.readMetaString(':lead') != null) return false;
-			if (child.readMetaString(':trail') != null) return false;
-			if (child.readMetaString(':sep') != null) return false;
-		}
-		return true;
-	}
-
 	/**
 	 * Emit the writer body for a struct lowered as a key-dispatched
 	 * object. For each child field, build a `Doc` for
@@ -886,19 +875,27 @@ class WriterLowering {
 			throw 'unreachable';
 		}
 		final inner: ShapeNode = child.children[0];
-		if (inner.kind != Ref) {
-			Context.fatalError(
-				'WriterLowering: ByName Array<T> field "$fieldName" element kind ${inner.kind} is not supported '
-				+ '— only Array<RefType> (a single named element type) is implemented',
-				Context.currentPos()
-			);
-			throw 'unreachable';
-		}
-		final refName: String = inner.annotations[AnnotationKeys.BASE_REF];
-		final elemFn: String = writeFnFor(refName);
+		final element: Expr = switch inner.kind {
+			case Star: byNameStarWriteExpr(inner, fieldName, macro _e);
+			case Ref:
+				final elemFn: String = writeFnFor(inner.annotations[AnnotationKeys.BASE_REF]);
+				inner.annotations[AnnotationKeys.BASE_OPTIONAL] == true
+					? macro if (_e == null)
+						_dt($v{_formatInfo.nullLiteral})
+					else
+						$i{elemFn}(_e, opt)
+					: macro $i{elemFn}(_e, opt);
+			case _:
+				Context.fatalError(
+					'WriterLowering: ByName Array<T> field "$fieldName" element kind ${inner.kind} is not supported '
+					+ '— only an array of a single named element type, or of such arrays, is implemented',
+					Context.currentPos()
+				);
+				throw 'unreachable';
+		};
 		final entrySep: String = _formatInfo.entrySep;
 		return macro {
-			final _items: Array<anyparse.core.Doc> = [for (_e in $valueAccess) $i{elemFn}(_e, opt)];
+			final _items: Array<anyparse.core.Doc> = [for (_e in $valueAccess) $element];
 			sepList($v{seqOpen}, $v{seqClose}, $v{entrySep}, _items, opt, false, _de(), _de(), false, false);
 		};
 	}

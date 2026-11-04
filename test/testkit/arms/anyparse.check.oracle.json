@@ -911,7 +911,7 @@
 			"name": "M-REACH-KEY-UNCHECKED",
 			"type": "anyparse.check.oracle.ReachBuildsCache",
 			"method": "loadFrom",
-			"find": "return now == null || now.key != text(record['key']) ? null : buildsOf(record);",
+			"find": "return now == null || now.key != record.key ? null : buildsOf(record);",
 			"replace": "return now == null ? null : buildsOf(record);",
 			"note": "a stored record is read under whatever fingerprint the input hashes to now, so builds probed of a source since edited answer for it"
 		},
@@ -927,7 +927,7 @@
 			"name": "M-REACH-LIBRARY-UNCHECKED",
 			"type": "anyparse.check.oracle.ReachBuildsCache",
 			"method": "buildsOf",
-			"find": "if (OracleCache.md5(read) != text(entry['hash'])) return null;",
+			"find": "if (OracleCache.md5(read) != entry.hash) return null;",
 			"replace": "if (false) return null;",
 			"note": "a stored library source is read back whatever it holds now, so an edited file outside the fingerprint answers as the one the build compiled"
 		},
@@ -946,14 +946,6 @@
 			"find": "|| !readsHashed(cwd ?? Sys.getCwd(), parsed, after.hashed)) return false;",
 			"replace": ") return false;",
 			"note": "a verdict whose compile read a file the fingerprint did not hash is stored, so an edit to that file is answered by the old verdict with no compile"
-		},
-		{
-			"name": "M-REACH-RECORD-SHAPE-UNCHECKED",
-			"type": "anyparse.check.oracle.ReachBuildsCache",
-			"method": "texts",
-			"find": "return items != null && items.foreach(item -> item is String) ? cast items : null;",
-			"replace": "return items != null ? cast items : null;",
-			"note": "a record's string lists are read whatever they hold, so a define that is no string reaches the builds"
 		},
 		{
 			"name": "M-NAME-PROOF-ALWAYS-SAME",
