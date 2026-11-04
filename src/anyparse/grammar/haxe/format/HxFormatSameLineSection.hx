@@ -165,6 +165,10 @@ package anyparse.grammar.haxe.format;
 	 * spacing whenever `whitespace.bracketConfig.comprehensionBrackets` has not
 	 * already asked for it. State the padding through that key when the body
 	 * policy you want is not `fitLine`.
+	 *
+	 * `fitLine` ALSO makes an object-literal body ignore its source lines, so one that fits collapses onto the line.
+	 * Under `forBody: fitLine` an object-literal body stays on the `for` line unless this key says `keep` or `next`
+	 * (`HaxeFormatConfigLoader.applyComprehensionForPadding`).
 	 */
 	@:optional var comprehensionFor: HxFormatBodyPolicy;
 };

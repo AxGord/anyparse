@@ -22,7 +22,7 @@ package anyparse.grammar.haxe;
  * `sameLine.expressionIf` default, and the JSON key `sameLine.expressionIf` overrides all
  * three expression-knob defaults uniformly. Single-line bodies under any policy stay flat.
  *
- * `@:fmt(bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral'))` on `body` — a
+ * `@:fmt(bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'))` on `body` — a
  * structural runtime override that fires when the body's runtime ctor is `ObjectLit`, the
  * body's writeCall has internal hardlines (`flatLength == -1`) and `opt.indentObjectLiteral`
  * is true: the layout becomes `_dn(_cols, [_dhl(), _dn(_cols, body)])` — `{` on its own line
@@ -33,13 +33,20 @@ package anyparse.grammar.haxe;
  * source-multi-line literal gets. The comprehension body breaks the object literal out
  * structurally per the fork's rule for `[for (x in xs) {<multi>}]`; the asymmetry vs
  * `HxIfExpr.thenBranch` (which stays cuddled for `if (cond) {<obj>}`) is the fork's
- * per-construct rule.
+ * per-construct rule. Its third argument is the exception: under `opt.comprehensionObjectLitGlue` (the loader derives
+ * it from `sameLine.forBody: fitLine`) a literal body takes the glued placement however it breaks.
+ *
+ * `@:fmt(reflowCtorOnFitLine('expressionForBody', 'ObjectLit'))` on `body` — under `sameLine.comprehensionFor: fitLine`
+ * a literal body ignores its source lines: the literal's wrap cascade alone decides them, so one that fits collapses.
  */
 @:peg
 typedef HxForExpr = {
 	@:lead('(') var varName: HxIdentLit;
 	@:optional @:lead('=>') var valueName: Null<HxKeyValueBinder>;
 	@:kw('in') @:trail(')') var iterable: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral'),
-		strictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr')) var body: HxExpr;
+	@:trailOpt(';') @:fmt(bodyPolicy('expressionForBody'),
+		bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),
+		reflowCtorOnFitLine('expressionForBody', 'ObjectLit'), strictFitLineBody(
+			'IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'
+		)) var body: HxExpr;
 };

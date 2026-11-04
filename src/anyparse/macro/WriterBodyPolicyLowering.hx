@@ -148,7 +148,8 @@ final class WriterBodyPolicyLowering {
 		final keepLayoutExpr: Expr = buildBodyKeepLayout(bp, opts, layouts, blockSplit, ifStmtPattern);
 		final coreWrapExpr: Expr = buildBodyCoreWrap(bp, opts, optFlag, layouts, keepLayoutExpr, blockSplit, ifStmtPattern);
 		final wrapExpr: Expr = wrapBodyAfterTrail(opts, coreWrapExpr, writeCall, shared.isBlockBody);
-		final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall);
+		final glueLayoutExpr: Expr = wrapBodyAfterTrail(opts, sameLayoutExpr, writeCall, shared.isBlockBody);
+		final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall, glueLayoutExpr);
 		final mbgWrapExpr: Expr = wrapBodyMetaBlockGlue(opts, finalWrapExpr, sameLayoutExpr);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -899,14 +900,14 @@ final class WriterBodyPolicyLowering {
 	 * (`@:fmt(bodyAllmanIndentForCtor(...))`). Returns `wrapExpr` unchanged
 	 * when no args.
 	 */
-	private static function wrapBodyAllman(opts: WriterLowering.WrapBodyOpts, wrapExpr: Expr, writeCall: Expr): Expr {
+	private static function wrapBodyAllman(opts: WriterLowering.WrapBodyOpts, wrapExpr: Expr, writeCall: Expr, glueLayoutExpr: Expr): Expr {
 		final bodyAllmanIndentArgs: Null<Array<String>> = opts.bodyAllmanIndentArgs;
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
 		if (bodyAllmanIndentArgs == null) return wrapExpr;
-		if (bodyAllmanIndentArgs.length != 2)
+		if (bodyAllmanIndentArgs.length != 2 && bodyAllmanIndentArgs.length != 3)
 			Context.fatalError(
-				'WriterLowering: bodyPolicyWrap bodyAllmanIndentArgs requires (ctorName, optField), got ${bodyAllmanIndentArgs.length}'
-				+ ' args',
+				'WriterLowering: bodyPolicyWrap bodyAllmanIndentArgs requires (ctorName, optField[, glueField]), got '
+				+ '${bodyAllmanIndentArgs.length} args',
 				Context.currentPos()
 			);
 		final ctorName: String = bodyAllmanIndentArgs[0];
@@ -916,7 +917,7 @@ final class WriterBodyPolicyLowering {
 		// nests the same construct (`[for (…) [for (…) …]]`) is written `2^depth` times.
 		// A matching body with no forced hardline may still break by width where the policy
 		// glued it; `BodyAllman.gluedLayout` makes that break and the Allman move one verdict.
-		return macro {
+		final allmanExpr: Expr = macro {
 			final _bodyForAllman: Null<anyparse.core.Doc> = $optAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
 				? $writeCall
 				: null;
@@ -927,6 +928,12 @@ final class WriterBodyPolicyLowering {
 				_bodyForAllman == null ? _layoutForAllman : anyparse.format.BodyAllman.gluedLayout(_cols, _layoutForAllman);
 			}
 		};
+		if (bodyAllmanIndentArgs.length == 2) return allmanExpr;
+		// The optional third argument names a Bool knob under which a matching body takes the glued placement whatever its
+		// lines, so `{` stays on the header line and the literal breaks in place. `glueLayoutExpr` already yields to a head-gap
+		// comment, which forces the next-line layout there as on every other placement.
+		final glueAccess: Expr = optFieldAccess(bodyAllmanIndentArgs[2]);
+		return macro $glueAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName} ? $glueLayoutExpr : $allmanExpr;
 	}
 
 	/**

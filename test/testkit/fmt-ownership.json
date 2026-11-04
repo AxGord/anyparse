@@ -258,6 +258,7 @@
 		"propagateNestedType",
 		"propagateTypedefContext",
 		"propagateValueIfBranch",
+		"reflowCtorOnFitLine",
 		"semicolonBeforeSibling",
 		"sharpCondParensInside",
 		"switchCondParensInsideClose",

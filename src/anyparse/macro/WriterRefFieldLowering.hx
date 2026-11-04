@@ -1715,6 +1715,7 @@ final class WriterRefFieldLowering {
 			// The helper gates on `opt._inExprPosition` so only a value-if
 			// branch (not a statement-`if`) flips the narrow flag.
 			if (propagateValueIfBranch) e = macro _setValueIfBranch($e, opt);
+			e = reflowCtorOnFitLineOpt(child, fieldAccess, e);
 			if (clearElseIfBranch) e = macro _clearElseIfBranch($e, opt);
 			e = WriterArrowValueIfLowering.arrowValueIfBlockOpt(child, e);
 			e;
@@ -1993,6 +1994,19 @@ final class WriterRefFieldLowering {
 		return macro leadingCommentsBefore(
 			$access, _dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl()), opt
 		);
+	}
+
+	/**
+	 * `@:fmt(reflowCtorOnFitLine('<policyKnob>', '<ctor>'))`: under `FitLine` on the named body-policy knob, a body of that
+	 * ctor is written in the value-if-branch frame, the one that drops a literal's source newlines, so its wrap cascade
+	 * decides by width alone. Other placements keep their source-driven shape. Without the meta `e` is unchanged.
+	 */
+	private static function reflowCtorOnFitLineOpt(child: ShapeNode, fieldAccess: Expr, e: Expr): Expr {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('reflowCtorOnFitLine');
+		if (args == null) return e;
+		final knob: Expr = optFieldAccess(args[0]);
+		final isCtor: Expr = macro Type.enumConstructor($fieldAccess) == $v{args[1]};
+		return macro ($knob == anyparse.format.BodyPolicy.FitLine && $isCtor ? _setValueIfBranch($e, opt) : $e);
 	}
 
 }

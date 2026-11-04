@@ -619,6 +619,9 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionTry: SameLinePolicy,
 	indentCaseLabels: Bool,
 	indentObjectLiteral: Bool,
+	// An object-literal body of a comprehension `for` stays glued to the header instead of taking the Allman placement.
+	// Derived by the config loader from `sameLine.forBody` and `sameLine.comprehensionFor`; no config key of its own.
+	comprehensionObjectLitGlue: Bool,
 	indentComplexValueExpressions: Bool,
 	indentVarTypeHintAnon: Bool,
 	functionTypeHaxe4: WhitespacePolicy,
@@ -744,7 +747,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// `_setExprPosition` on any descent into a fresh expression-position
 	// frame (call-arg / array-element / operand / arrow-body) so the flag
 	// never leaks into an object literal nested deeper than the immediate
-	// branch value. Default `false`.
+	// branch value. `HxForExpr.body`'s `@:fmt(reflowCtorOnFitLine)` sets it on a
+	// literal comprehension body too. Default `false`.
 	_inValueIfBranch: Bool,
 	// ω-arrow-body-objlit-pad — sister to `_inValueIfBranch`, set ONLY on the
 	// immediate body of an arrow lambda (`HxExpr.ThinArrow` right operand /

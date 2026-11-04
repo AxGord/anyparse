@@ -417,7 +417,7 @@ reaches `HxForExpr.body` / `HxForReif.body` through the same `expressionForBody`
 `sameLine.expressionIf` fans out into and is read AFTER that fanout, so the specific key outranks
 the general one; the four values are the engine's own `BodyPolicy`.
 
-Two traps:
+Traps:
 
 1. **An absent key is `keep`, not the fork's `same`.** Every fork corpus fixture omits the key, and
    defaulting to `Same` would re-lay every comprehension body those fixtures wrote on their own
@@ -429,6 +429,15 @@ Two traps:
    `whitespace.bracketConfig.comprehensionBrackets` to `{"openingPolicy": "onlyAfter",
    "closingPolicy": "before"}` and pick the body policy you actually want — that is what this
    repository's own fixtures do.
+3. **`fitLine` also reflows an object-literal body.** A literal body ignores its source lines: its
+   `wrapping.objectLiteral` cascade alone decides them, so one that fits collapses
+   (`[ for (i in xs) {a: i} ]`). A comment inside the literal still forces its lines, and a literal
+   in parentheses keeps the lines the source gave it.
+4. **`forBody: fitLine` reaches an object-literal comprehension body.** It stays glued (`for (…) {`)
+   instead of taking the Allman placement, unless this key is an explicit `keep` or `next`, which
+   place the body themselves. A comment between the head and the `{` still sends the literal to the
+   next line. So here an absent key and an explicit `keep` differ. Other comprehension
+   bodies never read `forBody`.
 
 ## `sameLine.loopBodyIfElseNext` — the one loop body whose `else` has nothing to pair with
 

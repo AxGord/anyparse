@@ -820,6 +820,30 @@
 			"method": "casePatternClearsRules",
 			"force": "true",
 			"note": "`keep` and `ignore` drop the built-in rules, and the plain list then writes one flat line past the limit"
+		},
+		{
+			"name": "M-OBJLIT-GLUE-FORBODY-OFF",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyComprehensionForPadding",
+			"find": "opt.comprehensionObjectLitGlue = section.forBody == HxFormatBodyPolicy.FitLine",
+			"replace": "opt.comprehensionObjectLitGlue = section.forBody != HxFormatBodyPolicy.FitLine",
+			"note": "the glue stops answering forBody: fitLine, so a comprehension literal goes back to Allman under it"
+		},
+		{
+			"name": "M-OBJLIT-GLUE-ABSENT-KEY",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyComprehensionForPadding",
+			"find": "comprehensionFor == null || ",
+			"replace": "",
+			"note": "an absent comprehensionFor stops deferring to forBody, though it means the same default"
+		},
+		{
+			"name": "M-OBJLIT-GLUE-EVERY-VALUE",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyComprehensionForPadding",
+			"find": "comprehensionFor == null || ",
+			"replace": "true || ",
+			"note": "forBody overrides a comprehensionFor of keep or next, which place the body themselves"
 		}
 	]
 }

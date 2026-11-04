@@ -304,6 +304,7 @@ final class HaxeFormatConfigLoader {
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
 			indentObjectLiteral: base.indentObjectLiteral,
+			comprehensionObjectLitGlue: base.comprehensionObjectLitGlue,
 			indentComplexValueExpressions: base.indentComplexValueExpressions,
 			indentVarTypeHintAnon: base.indentVarTypeHintAnon,
 			functionTypeHaxe4: base.functionTypeHaxe4,
@@ -1377,6 +1378,11 @@ final class HaxeFormatConfigLoader {
 
 	private static function applyComprehensionForPadding(section: Null<HxFormatSameLineSection>, opt: HxModuleWriteOptions): Void {
 		if (section == null) return;
+		// `forBody: fitLine` keeps an object-literal comprehension body on the `for` line. An explicit `keep` or `next` says
+		// where the body goes on its own, so only an absent key, `same` and `fitLine` defer to `forBody`.
+		final comprehensionFor: Null<HxFormatBodyPolicy> = section.comprehensionFor;
+		opt.comprehensionObjectLitGlue = section.forBody == HxFormatBodyPolicy.FitLine
+			&& (comprehensionFor == null || comprehensionFor == HxFormatBodyPolicy.Same || comprehensionFor == HxFormatBodyPolicy.FitLine);
 		// `comprehensionFor: fitLine` is the fork's trigger for padded
 		// comprehension brackets; every other value (incl. the `same`
 		// default) leaves the `bracketConfig` / default policy in place.

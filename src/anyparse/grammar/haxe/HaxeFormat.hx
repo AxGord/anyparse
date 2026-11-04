@@ -356,6 +356,7 @@ final class HaxeFormat implements TextFormat {
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
 		indentObjectLiteral: true,
+		comprehensionObjectLitGlue: false,
 		indentComplexValueExpressions: false,
 		indentVarTypeHintAnon: true,
 		functionTypeHaxe4: WhitespacePolicy.Both,

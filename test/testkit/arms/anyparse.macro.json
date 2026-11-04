@@ -1458,6 +1458,45 @@
 			"find": "final texpr: Null<TypedExpr> = FormatReader.initializerExpr(f);",
 			"replace": "final texpr: Null<TypedExpr> = f.expr();",
 			"note": "a string enum reads as no values under --display, so a display query shapes its terminal as a regex the compile does not generate"
+		},
+		{
+			"name": "M-ALLMAN-GLUE-IGNORED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "wrapBodyAllman",
+			"find": "? $glueLayoutExpr : $allmanExpr",
+			"replace": "? $allmanExpr : $allmanExpr",
+			"note": "a literal under the glue knob falls back to the Allman override and leaves the for line"
+		},
+		{
+			"name": "M-ALLMAN-GLUE-ANY-CTOR",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "wrapBodyAllman",
+			"find": "$glueAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName} ?",
+			"replace": "$glueAccess ?",
+			"note": "the glue knob captures every body, not only the literal it names"
+		},
+		{
+			"name": "M-REFLOW-ANY-POLICY",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "reflowCtorOnFitLineOpt",
+			"find": "$knob == anyparse.format.BodyPolicy.FitLine && $isCtor",
+			"replace": "$isCtor",
+			"note": "the reflow frame stops reading the body policy, so every config collapses a source-multi-line comprehension literal"
+		},
+		{
+			"name": "M-REFLOW-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "reflowCtorOnFitLineOpt",
+			"force": "e",
+			"note": "no comprehension body enters the reflow frame, so source lines keep a literal that fits multi-line"
+		},
+		{
+			"name": "M-ALLMAN-GLUE-NO-COMMENT-WRAP",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "bodyPolicyWrap",
+			"find": "final glueLayoutExpr: Expr = wrapBodyAfterTrail(opts, sameLayoutExpr, writeCall, shared.isBlockBody);",
+			"replace": "final glueLayoutExpr: Expr = sameLayoutExpr;",
+			"note": "the glued placement stops yielding to a head-gap comment, so the writer drops it and fmt refuses the whole file"
 		}
 	]
 }
