@@ -354,11 +354,8 @@ final class UsingScan {
 	): Bool {
 		if (headerDeclaresType(header, module) || headerRebindsName(header, module)) return false;
 		final index: Null<SymbolIndex> = symbols();
-		if (index == null) return true;
-		for (fi in index.refs.declaringFiles(module))
-			for (t in fi.types)
-				if (t.name == module && !t.members.exists(m -> m.name == method && m.isStatic)) return false;
-		return true;
+		return index == null
+			|| index.refs.mayDenote(module, null).foreach(decl -> decl.type.members.exists(m -> m.name == method && m.isStatic));
 	}
 
 	/** The module paths of every `using` declaration the header binds — the read side of `hasUsingModule`. */

@@ -391,7 +391,7 @@
 			"name": "M-XRENAME-OLD-SHARED",
 			"type": "anyparse.check.common.naming.NamingCrossRename",
 			"method": "typeRefusal",
-			"find": "ctx.index.refs.declaringFiles(decl.name).length != 1",
+			"find": "ctx.index.refs.onlyDeclaration(decl.name) == null",
 			"replace": "false",
 			"note": "a second declaration of the old type name does not refuse"
 		},

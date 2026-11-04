@@ -449,10 +449,7 @@ final class ComparisonToBoolean extends RuleBase {
 	 * the refusal — the fail-closed direction.
 	 */
 	private static function typeNameIsPinned(recvType: String, index: SymbolIndex): Bool {
-		var independent: Int = 0;
-		for (fi in index.refs.declaringFiles(recvType))
-			for (t in fi.types)
-				if (t.name == recvType && t.aliasTargetNominal != recvType) independent++;
+		final independent: Int = index.refs.mayDenote(recvType, null).count(decl -> decl.type.aliasTargetNominal != recvType);
 		return independent <= 1;
 	}
 

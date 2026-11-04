@@ -19,7 +19,7 @@ class RedundantImportCheckTest extends Test {
 
 	// --- reported ---
 
-	@:pin('control') @:killer('M-DECLARINGFILES-EMPTY')
+	@:pin('control') @:killer('M-MAY-DENOTE-NO-WIDENING')
 	public function testSubTypeImportBesideItsModuleImportIsRedundant(): Void {
 		final src: String = 'package app;\n\nimport pkg.deep.Mod;\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tvar s:Sub;\n\n}\n';
 		final vs: Array<Violation> = violations(src);

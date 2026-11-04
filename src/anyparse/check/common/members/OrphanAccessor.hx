@@ -413,12 +413,8 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 
 	/** The single project-wide declaration of `raw`'s simple name, or nothing when it is absent or ambiguous. */
 	private static function uniqueDeclaration(scope: SymbolIndex, raw: String): Array<{ file: FileInfo, type: TypeDeclInfo }> {
-		final simple: String = SourceText.lastSegment(raw);
-		final declarers: Array<FileInfo> = scope.refs.declaringFiles(simple);
-		if (declarers.length != 1) return [];
-		final owner: FileInfo = declarers[0];
-		final type: Null<TypeDeclInfo> = owner.types.find(t -> t.name == simple);
-		return type == null ? [] : [{ file: owner, type: type }];
+		final decl: Null<ResolvedType> = scope.refs.onlyDeclaration(SourceText.lastSegment(raw));
+		return decl == null ? [] : [{ file: decl.file, type: decl.type }];
 	}
 
 	/**

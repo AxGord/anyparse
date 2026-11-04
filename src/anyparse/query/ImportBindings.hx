@@ -136,6 +136,32 @@ final class ImportBindings {
 	}
 
 	/**
+	 * The bare names a statement importing `file`'s module still binds once its type `moved` has left — the one answer to "what can
+	 * keep a module statement after a move": the module's fields and every other public type with its values, all its members when a
+	 * build macro may add more. An extra name only keeps a statement. A private type binds nothing, and its name would make a
+	 * text scan read an importer's own namesake as a reason to keep one.
+	 */
+	public function boundBesidesType(file: FileInfo, moved: String): Array<String> {
+		final out: Array<String> = moduleFieldsOf(file);
+		for (t in file.types) if (t.name != moved && !t.isPrivate) {
+			out.push(t.name);
+			for (name in typeValuesOf(t, file, [], true) ?? [for (m in t.members) m.name]) out.push(name);
+		}
+		return out;
+	}
+
+	/**
+	 * The bare names a statement importing `file`'s module loses with its type `type` — the one answer to "what can a file reach only
+	 * through a type a move takes away": its name, its constructors, the values of an enum abstract, guarded ones included. This set
+	 * WRITES a statement, so a plain abstract gives its name alone: its members bind nothing, and spelling one must not earn an import.
+	 */
+	public function boundByType(type: TypeDeclInfo, file: FileInfo): Array<String> {
+		final bare: Array<String> = _plugin.refShape().bareConstructorTypeKinds ?? [];
+		final values: Null<Array<String>> = bare.contains(type.kind) ? typeValuesOf(type, file, [], true) : null;
+		return [type.name].concat(values ?? [for (m in type.members) if (MemberKinds.isEnumConstructorKind(m.kind)) m.name]);
+	}
+
+	/**
 	 * What the explicit import `path` binds. A module path binds its module; a path one segment longer
 	 * than a module binds the secondary type it names, or — when it names a member — that member as a
 	 * field value; anything else is a module the index never saw (the residual reading), whose value sets
@@ -353,13 +379,13 @@ final class ImportBindings {
 	}
 
 	/**
-	 * The module-level FIELD names `file` declares — Haxe 4.2's module statics, which an explicit
-	 * import of the module brings in unqualified — each once, a declaration in every `#if` branch
-	 * included: the index's own reading of them (`FileInfo.moduleFields`).
+	 * The module-level FIELD names `file` declares — Haxe 4.2's module statics, which an explicit import of the module brings in
+	 * unqualified — each once, a declaration in every `#if` branch included and a private one left out, since no import brings it: the
+	 * index's own reading of them (`FileInfo.moduleFields`).
 	 */
 	private static function moduleFieldsOf(file: FileInfo): Array<String> {
 		final out: Array<String> = [];
-		for (field in file.moduleFields) if (!out.contains(field.name)) out.push(field.name);
+		for (field in file.moduleFields) if (!field.isPrivate && !out.contains(field.name)) out.push(field.name);
 		return out;
 	}
 

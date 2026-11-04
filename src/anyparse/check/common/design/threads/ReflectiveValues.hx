@@ -190,7 +190,7 @@ final class ReflectiveValues {
 	 */
 	private function enumType(type: String): Bool {
 		final index: Null<SymbolIndex> = _graph.index;
-		final decl: Null<ResolvedType> = index == null ? null : ReflectiveReach.onlyDeclaration(index, type);
+		final decl: Null<ResolvedType> = index?.refs.onlyDeclaration(type);
 		return decl != null && (_shape.runtimeTaggedTypeKinds ?? []).contains(decl.type.kind);
 	}
 

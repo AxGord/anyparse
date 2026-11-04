@@ -51,8 +51,8 @@ final class CatchTypes {
 			catchesAll(written, shape, index) || thrown != null && (
 				written == thrown
 				|| index != null
-				&& index.refs.declsNamed(thrown).length == 1
-				&& index.refs.declsNamed(written).length == 1
+				&& index.refs.onlyDeclaration(thrown) != null
+				&& index.refs.onlyDeclaration(written) != null
 				&& index.subtypes.isSubtype(thrown, written)
 			)
 		);
@@ -81,7 +81,7 @@ final class CatchTypes {
 		if (exception == null) return false;
 		if (written == exception) return true;
 		final simple: String = SourceText.lastSegment(exception);
-		return written == simple && (index == null || index.refs.declsNamed(simple).length == 0);
+		return written == simple && (index == null || !index.refs.declaresName(simple));
 	}
 
 }

@@ -80,7 +80,7 @@ final class ComposedValues {
 		final key: Null<TypeEnd> = node.children.length == 2
 			? coreEnd(TypingService.typeWalk(node.children[1], c.shape, NominalTypes.INDEX_HOST, c), c)
 			: null;
-		final decls: Array<ResolvedType> = index.refs.mayDenote(path, fi, node.span?.from);
+		final decls: Array<ResolvedType> = index.refs.mayAnswerFor(path, fi, node.span?.from);
 		var found: Null<String> = null;
 		for (decl in decls) {
 			final read: Null<MemberInfo> = index.typing.operators.indexRead(decl, key);
@@ -450,7 +450,7 @@ final class ComposedValues {
 			final source: Null<String> = receiverSource(receiver, typed, c);
 			final args: Array<String> = source == null ? [] : NominalTypes.typeArgumentSourcesOf(source, c.chain.typeSyntax) ?? [];
 			final start: Null<ResolvedType> = source == null ? null : index.refs.resolveStartCopy(typed, c.file, receiver.span?.from);
-			return CallReturns.selectedParameter(node, index.refs.resolvedDeclsNamed(typed), method, false, at, args, c) ?? (
+			return CallReturns.selectedParameter(node, index.refs.mayDenote(typed, null), method, false, at, args, c) ?? (
 				source == null || start == null ? null : CallReturns.extensionParameter(node, start, source, method, at, c)
 			);
 		}
@@ -574,7 +574,7 @@ final class ComposedValues {
 			case Nominal(path, args) if (args.length == 0): path;
 			case _: null;
 		};
-		final decls: Array<ResolvedType> = path == null ? [] : index.refs.mayDenote(path, index.fileInfo(c.file));
+		final decls: Array<ResolvedType> = path == null ? [] : index.refs.mayAnswerFor(path, index.fileInfo(c.file));
 		return decls.length == 1 ? index.typing.casts.declEnd(decls[0]) : null;
 	}
 

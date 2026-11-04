@@ -101,7 +101,7 @@ final class CallGraphImports {
 		if (known != null) return known;
 		final out: Array<String> = [];
 		for (index in _indexes)
-			for (decl in index.refs.resolvedDeclsNamed(name))
+			for (decl in index.refs.mayDenote(name, null))
 				for (path in TypeNameBinding.namingPaths(decl))
 					if (!out.contains(path)) out.push(path);
 		_paths[name] = out;

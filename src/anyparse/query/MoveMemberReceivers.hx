@@ -3,7 +3,7 @@ package anyparse.query;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.MoveMember.MovePrep;
 import anyparse.query.MoveMember.MovedMember;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -149,8 +149,8 @@ final class MoveMemberReceivers {
 	 */
 	private static function classOrInterface(prep: MovePrep, type: String): Bool {
 		final kinds: Array<String> = (prep.shape.classDeclKinds ?? []).concat(prep.shape.interfaceDeclKinds ?? []);
-		final decls: Array<TypeDeclInfo> = prep.index.refs.declsNamed(type);
-		return decls.length == 1 && kinds.contains(decls[0].kind);
+		final decl: Null<ResolvedType> = prep.index.refs.onlyDeclaration(type);
+		return decl != null && kinds.contains(decl.type.kind);
 	}
 
 }

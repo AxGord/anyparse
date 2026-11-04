@@ -520,7 +520,7 @@ final class ReachGraph {
 		final name: Null<String> = node.name;
 		if (type == null || name == null) return false;
 		final copies: Array<ResolvedType> = [
-			for (d in _scope.index.refs.resolvedDeclsNamed(type)) if (!CallGraphNames.selfAlias(d.type)) d
+			for (d in _scope.index.refs.mayDenote(type, null)) if (!CallGraphNames.selfAlias(d.type)) d
 		];
 		final paths: Array<String> = [];
 		for (d in copies) {

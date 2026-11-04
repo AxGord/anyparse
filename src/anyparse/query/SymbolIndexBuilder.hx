@@ -216,18 +216,26 @@ final class SymbolIndexBuilder {
 	 */
 	private static function moduleFieldsOf(tree: QueryNode, shape: RefShape): Array<ModuleField> {
 		final kinds: Array<String> = shape.moduleValueDeclKinds ?? [];
+		final privateKinds: Array<String> = privateVisibilityKinds(shape);
 		final out: Array<ModuleField> = [];
+		var pendingPrivate: Bool = false;
 		function walk(node: QueryNode): Void {
+			if (privateKinds.contains(node.kind)) {
+				pendingPrivate = true;
+				return;
+			}
 			final name: Null<String> = node.name;
 			final span: Null<Span> = node.span;
 			if (name == null) {
 				for (c in node.children) walk(c);
 				return;
 			}
+			final isPrivate: Bool = pendingPrivate;
+			pendingPrivate = false;
 			final declared: String = name;
 			if (!kinds.contains(node.kind) || span == null) return;
 			final at: Span = span;
-			out.push({ name: declared, span: at });
+			out.push({ name: declared, span: at, isPrivate: isPrivate });
 		}
 		for (c in tree.children) walk(c);
 		return out;

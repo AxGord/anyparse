@@ -13,6 +13,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.ds.Either;
@@ -1601,16 +1602,16 @@ final class MoveMember {
 		function interfacesResolve(names: Array<String>): Bool {
 			for (name in names) if (!interfacesSeen.contains(name)) {
 				interfacesSeen.push(name);
-				final decls: Array<TypeDeclInfo> = prep.index.refs.declsNamed(name);
-				if (decls.length != 1 || !interfacesResolve(decls[0].supertypes)) return false;
+				final decl: Null<ResolvedType> = prep.index.refs.onlyDeclaration(name);
+				if (decl == null || !interfacesResolve(decl.type.supertypes)) return false;
 			}
 			return true;
 		}
 		function chainInterfacesResolve(name: String, seen: Array<String>): Bool {
-			final decls: Array<TypeDeclInfo> = prep.index.refs.declsNamed(name);
-			if (decls.length != 1 || seen.contains(name)) return true;
+			final only: Null<ResolvedType> = prep.index.refs.onlyDeclaration(name);
+			if (only == null || seen.contains(name)) return true;
 			seen.push(name);
-			final decl: TypeDeclInfo = decls[0];
+			final decl: TypeDeclInfo = only.type;
 			return interfacesResolve(decl.interfaces)
 				&& decl.supertypes.foreach(sup -> decl.interfaces.contains(sup) || chainInterfacesResolve(sup, seen));
 		}

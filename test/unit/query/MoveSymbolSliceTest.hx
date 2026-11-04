@@ -2763,12 +2763,12 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
-	 * A statementless file can reach a moved ENUM through its CONSTRUCTORS and never spell the type at
-	 * all — the Pony case that motivated it was `pony/ServiceProvider.hx` reaching `pony.Or.OrState` only through
-	 * `case A(cb)`. The repoint walk was taught the constructor names then; the repair walk scans the
-	 * same set now, and a scan of the type name alone leaves this file unrepaired.
+	 * A statementless file reading a moved ENUM's constructor only through a case pattern gets no import:
+	 * the pattern resolves it from the subject's type, which the move leaves alone, and an import written
+	 * for it could re-resolve another statement's same-named constructor. The file naming the type is repaired.
 	 */
-	public function testAStatementlessFileNamingOnlyAMovedEnumsConstructorIsRepaired(): Void {
+	@:pin('control') @:killer('M-STATEMENTLESS-SCANS-BOUND-NAMES')
+	public function testAStatementlessFileReadingAMovedEnumsConstructorOnlyThroughACasePatternGetsNoImport(): Void {
 		final changes: Array<MoveChange> = okChanges('p/Colour.hx', 3, 6, 'p/Dest.hx', [
 			{ file: 'p/Colour.hx', source: 'package p;\n\nenum Colour {\n\tRed;\n\tGreen;\n}' },
 			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
@@ -2779,7 +2779,8 @@ class MoveSymbolSliceTest extends Test {
 				+ '\t\tcase _: 0;\n\t}\n}'
 			}
 		]);
-		Assert.isTrue(changeFor(changes, 'p/Reader.hx').newSource.contains('import p.Dest.Colour;'));
+		Assert.isTrue(changeFor(changes, 'p/Box.hx').newSource.contains('import p.Dest.Colour;'));
+		Assert.equals(0, changes.filter(c -> c.file == 'p/Reader.hx').length);
 	}
 
 	/**

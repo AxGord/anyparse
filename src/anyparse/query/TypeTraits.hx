@@ -174,7 +174,7 @@ final class TypeTraits {
 
 	/** Whether some indexed declaration named `module` lives in a source that spells a `FINALITY_READS` token. */
 	private function readsFinality(module: String): Bool {
-		return _refs.resolvedDeclsNamed(module).exists(decl -> {
+		return _refs.mayDenote(module, null).exists(decl -> {
 			final source: Null<String> = _sources[decl.file.file];
 			return source != null && FINALITY_READS.match(source);
 		});

@@ -656,6 +656,9 @@ typedef ModuleField = {
 
 	/** The declaring node's span — where a reference's binding to it starts, and where its `#if` branch is read. */
 	final span: Span;
+
+	/** Whether it is declared `private`: its module reads it, no import brings it. */
+	final isPrivate: Bool;
 }
 
 /**

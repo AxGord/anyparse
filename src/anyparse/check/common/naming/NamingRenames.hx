@@ -321,9 +321,8 @@ final class NamingRenames {
 		// `RefactorSupport.carriesAllowGrant` — the single reader, comment- and literal-masked — so
 		// the sentence is true when it is written; the order still stands on its own, since a
 		// duplicate type name is the more actionable of two real causes.
-		final declarers: Array<FileInfo> = index.refs.declaringFiles(ownerName);
-		if (declarers.length != 1)
-			return RenameRefusal.candidate(v, RenameRefusal.crossOwnerNotUnique(ownerName, declarers.map(f -> f.file)));
+		final declarers: Array<String> = index.refs.declaringPaths(ownerName);
+		if (declarers.length != 1) return RenameRefusal.candidate(v, RenameRefusal.crossOwnerNotUnique(ownerName, declarers));
 		// A PRIVATE member's `@:allow` grantees join its edit set: the grant is read off THIS member and
 		// its type (`AllowGrants.reaching`), never off the file, so a grant on a neighbour opens nothing
 		// here. Enumerated over the RESOLUTION index, the widest one; a grantee file outside this run's

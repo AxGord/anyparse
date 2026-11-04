@@ -142,7 +142,7 @@ final class ReflectiveReach {
 		final owner: Null<String> = subjectEnum(file, tree, pattern, ctor, subjectType);
 		if (owner == null) return null;
 		final index: Null<SymbolIndex> = _graph.index;
-		final enumDecl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, owner);
+		final enumDecl: Null<ResolvedType> = index?.refs.onlyDeclaration(owner);
 		final info: Null<MemberInfo> = enumDecl?.type.members.find(m -> m.name == ctor);
 		if (enumDecl == null || info == null) return null;
 		if (info.paramTypeSources.length != pattern.children.length - 1) return null;
@@ -231,7 +231,7 @@ final class ReflectiveReach {
 	 */
 	private function bindingsOf(type: String, name: String): Null<Array<String>> {
 		final index: Null<SymbolIndex> = _graph.index;
-		final decl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, type);
+		final decl: Null<ResolvedType> = index?.refs.onlyDeclaration(type);
 		final at: Int = decl == null ? -1 : decl.type.typeParamNames.indexOf(name);
 		if (index == null || at < 0 || !classLike(index, _shape, type)) return null;
 		final out: Array<String> = [];
@@ -362,7 +362,7 @@ final class ReflectiveReach {
 		if (init.kind != _shape.newExprKind) return null;
 		final index: Null<SymbolIndex> = _graph.index;
 		final made: String = aliased(CallGraphNames.lastSegments(init.name ?? '', 1));
-		final decl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, made);
+		final decl: Null<ResolvedType> = index?.refs.onlyDeclaration(made);
 		return index == null
 			|| decl == null
 			|| !(_shape.classDeclKinds ?? []).contains(decl.type.kind)
@@ -411,7 +411,7 @@ final class ReflectiveReach {
 		final named: Null<String> = keys.length == 1 ? aliased(keys[0]) : null;
 		final index: Null<SymbolIndex> = _graph.index;
 		// the ONE enum declaration of the name declares the constructor: two enums of one name type no capture
-		final decl: Null<ResolvedType> = index == null || named == null ? null : onlyDeclaration(index, named);
+		final decl: Null<ResolvedType> = index == null || named == null ? null : index.refs.onlyDeclaration(named);
 		final ctorKinds: Array<String> = _shape.execution?.enumConstructorKinds ?? [];
 		return decl != null && decl.type.members.exists(m -> m.name == ctor && ctorKinds.contains(m.kind)) ? named : null;
 	}
@@ -467,15 +467,9 @@ final class ReflectiveReach {
 	 * a type whose subtypes and chain the index lists, unlike an abstract, a structure or a library type.
 	 */
 	public static function classLike(index: SymbolIndex, shape: RefShape, name: String): Bool {
-		final decl: Null<ResolvedType> = onlyDeclaration(index, name);
+		final decl: Null<ResolvedType> = index.refs.onlyDeclaration(name);
 		return decl != null
 			&& ((shape.classDeclKinds ?? []).contains(decl.type.kind) || (shape.interfaceDeclKinds ?? []).contains(decl.type.kind));
-	}
-
-	/** The ONE declaration `index` holds of the name `name`, null for none or several. */
-	public static function onlyDeclaration(index: SymbolIndex, name: String): Null<ResolvedType> {
-		final decls: Array<ResolvedType> = index.refs.resolvedDeclsNamed(name);
-		return decls.length == 1 ? decls[0] : null;
 	}
 
 	/** `from` and every type `next` reaches from it, step by step: the closure of `next` over `from`. */

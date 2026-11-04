@@ -377,10 +377,7 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 
 	/** Whether `name` resolves, in `index`, to a declaration of an exhaustiveness-checked kind. */
 	private static function declaresExhaustive(scan: Scan, index: SymbolIndex, name: String): Bool {
-		for (file in index.refs.declaringFiles(name))
-			for (type in file.types)
-				if (type.name == name && scan.seams.exhaustiveDeclKinds.contains(type.kind)) return true;
-		return false;
+		return index.refs.mayDenote(name, null).exists(decl -> scan.seams.exhaustiveDeclKinds.contains(decl.type.kind));
 	}
 
 	/**
@@ -392,8 +389,8 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 	 */
 	private static function aliasTargetsOf(index: SymbolIndex, name: String): Array<String> {
 		final out: Array<String> = [];
-		for (file in index.refs.declaringFiles(name)) for (type in file.types) if (type.name == name) {
-			final alias: Null<String> = type.aliasTargetNominal;
+		for (decl in index.refs.mayDenote(name, null)) {
+			final alias: Null<String> = decl.type.aliasTargetNominal;
 			if (alias != null) out.push(alias);
 		}
 		return out;

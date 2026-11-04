@@ -104,7 +104,7 @@ final class AbstractReach {
 		while (true) {
 			if (_ti >= _types.length && _mi >= _memberQueue.length) {
 				// a member a build macro generated on a type in reach is described by nothing indexed: every abstract
-				if (_undeclared && !_grown && [for (t in found.keys()) t].exists(t -> _index.refs.declsNamed(t).length > 0 && _built(t))) {
+				if (_undeclared && !_grown && [for (t in found.keys()) t].exists(t -> _index.refs.declaresName(t) && _built(t))) {
 					_undeclared = false;
 					for (t in _everything()) add(t);
 				}

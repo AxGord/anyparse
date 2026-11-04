@@ -210,7 +210,7 @@ final class NamingCrossRename {
 			|| ReflectionScan.runtimeTypePathFragment(ctx.surface.fragments, decl.name)
 		)
 			STRING_LITERAL
-		else if (ctx.index.refs.declaringFiles(decl.name).length != 1)
+		else if (ctx.index.refs.onlyDeclaration(decl.name) == null)
 			OLD_NAME_SHARED
 		else if (ctx.index.refs.declaresName(newName) || spelledInProject(newName, ctx))
 			NEW_NAME_TAKEN

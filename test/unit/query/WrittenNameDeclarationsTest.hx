@@ -41,6 +41,9 @@ class WrittenNameDeclarationsTest extends Test {
 
 	private static final ABSTRACT: String = 'package b;\n\nabstract U(Int) from Int to Int {\n'
 		+ '\t@:op(A + B) static function add(a: U, b: U): U return a;\n\n\t@:arrayAccess function get(i: Int): String return "";\n}\n';
+	private static final TWINS: Array<{ file: String, source: String }> = [
+		{ file: 't/T.hx', source: 'package t;\n\n#if a\nclass T {}\n#else\nclass T {}\n#end\n' }
+	];
 
 	@:pin('control') @:killer('M-MAY-DENOTE-NEVER-BOUND')
 	public function testANameItsFileBindsMeansThatDeclarationAlone(): Void {
@@ -145,6 +148,39 @@ class WrittenNameDeclarationsTest extends Test {
 		Assert.isNull(TypeRefIndex.memberImportOf(user, 'Other', ['make']), 'another type');
 	}
 
+	@:pin('control') @:killer('M-MAY-ANSWER-WIDENS-A-PATH')
+	public function testAnElementReadOfAPathNothingHoldsAnswersNothing(): Void {
+		Assert.isNull(typedAs('x.U', 'IndexAccess', 'u[0]'));
+	}
+
+	@:pin('control') @:killer('M-MAY-ANSWER-WIDENS-A-PATH')
+	public function testAnOperandOfAPathNothingHoldsAnswersNothing(): Void {
+		Assert.isNull(typedAs('x.U', 'Add', 'u + u'));
+	}
+
+	@:pin('control') @:killer('M-MAY-ANSWER-NEVER-BOUND')
+	public function testAPathTheIndexHoldsStillAnswers(): Void {
+		Assert.equals('String', typedAs('b.U', 'IndexAccess', 'u[0]'));
+		Assert.equals('U', typedAs('b.U', 'Add', 'u + u'));
+	}
+
+	@:pin('control') @:killer('M-ONLY-DECLARATION-FIRST', 'M-ONLY-DECLARATION-NONE')
+	public function testAnOnlyDeclarationIsTheOneOfItsName(): Void {
+		final index: SymbolIndex = indexOf(BASES);
+		Assert.equals('r/Free.hx', index.refs.onlyDeclaration('Free')?.file.file);
+		Assert.isNull(index.refs.onlyDeclaration('Base'));
+		Assert.isNull(index.refs.onlyDeclaration('Missing'));
+		Assert.equals('t/T.hx', indexOf(TWINS).refs.onlyDeclaration('T')?.file.file);
+	}
+
+	@:pin('control') @:killer('M-DECLARING-PATHS-EMPTY', 'M-DECLARINGFILES-EMPTY')
+	public function testARefusalNamesEveryDeclaringFile(): Void {
+		final found: Array<String> = indexOf(BASES).refs.declaringPaths('Base');
+		found.sort(Reflect.compare);
+		Assert.equals(BOTH, found.join(','));
+		Assert.equals('t/T.hx', indexOf(TWINS).refs.declaringPaths('T').join(','));
+	}
+
 	private static function denoted(raw: String, file: Null<String>): String {
 		final index: SymbolIndex = indexOf(BASES);
 		return filesOf(index.refs.mayDenote(raw, file == null ? null : index.fileInfo(file)));
@@ -167,6 +203,11 @@ class WrittenNameDeclarationsTest extends Test {
 
 	private static function indexOf(files: Array<{ file: String, source: String }>): SymbolIndex {
 		return CheckFixture.index(files, new HaxeQueryPlugin());
+	}
+
+	private static function typedAs(written: String, kind: String, at: String): Null<String> {
+		final reader: String = 'package a;\n\nclass C {\n\tfunction f(u: $written) {\n\t\tu[0];\n\t\tu + u;\n\t}\n}\n';
+		return ValueDoorsTest.typedIn(reader, 'a/C.hx', [{ file: 'b/U.hx', source: ABSTRACT }], kind, at).source;
 	}
 
 }

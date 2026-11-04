@@ -237,7 +237,8 @@ final class MoveSymbol {
 		//     a MODULE import of the source keeps that statement or gains one.
 		//     Computed BEFORE the move via the index.
 		buildImporterEdits(
-			editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName, plugin.lexicalRegions
+			editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName, target.bindings,
+			plugin.lexicalRegions
 		);
 		if (oldImportPath != null)
 			statementlessRepairEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, target, destFile, plugin);
@@ -249,7 +250,7 @@ final class MoveSymbol {
 		//     is now redundant (the type is local) and is removed — unless it
 		//     is an ALIAS, whose binding the destination still needs.
 		if (oldImportPath != null) {
-			final moved: Array<String> = movedBoundNames(cursorInfo, typeName);
+			final moved: Array<String> = movedBoundNames(target.bindings, cursorInfo, typeName);
 			if (target.declPrivate) {
 				// A module-`private` type is invisible outside its own module, so the import that would
 				// repair the remaining references cannot be written at all — refuse instead of emitting one
@@ -865,7 +866,7 @@ final class MoveSymbol {
 	): Void {
 		final destInfo: FileInfo = target.destInfo;
 		final typeName: String = target.typeName;
-		final remaining: Array<String> = remainingBoundNames(target.cursorInfo, typeName);
+		final remaining: Array<String> = target.bindings.boundBesidesType(target.cursorInfo, typeName);
 		final destExcluded: Array<Span> = [for (imp in destInfo.imports) imp.span];
 		for (imp in destInfo.imports) if (SymbolIndex.pathImportedBy(imp) == oldImportPath) {
 			// A MODULE statement here binds the source module's OTHER types too, so removing it as
@@ -1002,60 +1003,12 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * The names the source module still binds for another module — every type it still declares
-	 * plus their enum constructors — the binding set a MODULE statement keeps after the move, and the
-	 * reason such a statement cannot simply be repointed away or dropped.
-	 *
-	 * `!isPrivate` is load-bearing and cheap to get wrong, because the consumer is a TEXT scan: what
-	 * reaches it is a name COLLISION, not a reference. An importer that declares its own `Helper` while
-	 * the source module holds a `private class Helper` is a program Haxe accepts, and without the flag
-	 * the scan reads that file's own `Helper` as a reason to keep an import for a binding the language
-	 * never granted.
-	 */
-	private static function remainingBoundNames(cursorInfo: FileInfo, typeName: String): Array<String> {
-		return boundNamesOf([for (t in cursorInfo.types) if (t.name != typeName && !t.isPrivate) t]);
-	}
-
-	/**
-	 * Every name the given declarations bind into a scope that reaches them: each type's own name,
-	 * plus the ENUM CONSTRUCTORS an enum binds along with itself.
-	 *
-	 * A constructor is reachable as a bare `A` wherever its enum is — `case A(cb)` names it with the
-	 * enum nowhere in the line — so a file can depend entirely on an enum it never spells, and the
-	 * scan that decides whether a MODULE statement still has work to do reads only names. That is one
-	 * defect in each direction, and both are compile-proved on `pony.Or`: the module statement of a
-	 * file that only pattern-matches is dropped (`Unknown identifier : A` on
-	 * `Pony/pony/ServiceProvider.hx`), and the statement of a file that reaches a REMAINING enum the
-	 * same way would be repointed away from under it.
-	 *
-	 * Enum-ABSTRACT values bind the same way and are deliberately NOT collected: once the `enum`
-	 * keyword is the legacy `@:enum` — or, in this corpus, a `#if (haxe_ver >= 4.2) enum #else @:enum
-	 * #end` region — the index sees a plain `AbstractDecl`, so the values cannot be told from an
-	 * ordinary abstract's static constants, whose names (`Red`, `Default`, `White`) would spray
-	 * imports across every file that happens to spell one.
-	 *
-	 * `MemberInfo.guarded` is deliberately NOT filtered: a constructor declared inside a `#if`
-	 * region still binds its name under that flag, and every consumer of this set answers in the
-	 * direction where an extra name KEEPS or WRITES a statement. That is the opposite stance from
-	 * `addImportEdit`, which refuses to let a guarded import satisfy `already` — for the same
-	 * reason, since there the conservative answer is to write one anyway.
-	 */
-	private static function boundNamesOf(types: Array<TypeDeclInfo>): Array<String> {
-		final out: Array<String> = [];
-		for (t in types) {
-			out.push(t.name);
-			for (m in t.members) if (MemberKinds.isEnumConstructorKind(m.kind)) out.push(m.name);
-		}
-		return out;
-	}
-
-	/**
 	 * The names the MOVED declaration takes with it — its own plus its enum constructors, and just its
 	 * own when the index carries no record of it, which is the answer the scan had before.
 	 */
-	private static function movedBoundNames(cursorInfo: FileInfo, typeName: String): Array<String> {
+	private static function movedBoundNames(bindings: ImportBindings, cursorInfo: FileInfo, typeName: String): Array<String> {
 		final moved: Null<TypeDeclInfo> = cursorInfo.types.find(t -> t.name == typeName);
-		return moved == null ? [typeName] : boundNamesOf([moved]);
+		return moved == null ? [typeName] : bindings.boundByType(moved, cursorInfo);
 	}
 
 	/**
@@ -1092,17 +1045,18 @@ final class MoveSymbol {
 		// one holding `import s.*;`) already sees it. The import written there is then redundant rather
 		// than wrong, which is the direction this whole walk answers in.
 		final files: Array<FileInfo> = index.allFiles();
-		final moved: Array<String> = movedBoundNames(cursorInfo, target.typeName);
 		for (info in files) {
 			if (info.file == cursorInfo.file || info.file == destFile) continue;
 			if (editsByFile.exists(info.file)) continue;
 			final src: Null<String> = sourceOf[info.file];
 			if (src == null) continue;
 			if (DependencyCarry.bindingOf(target.typeName, info, index.refs.names)?.path != oldImportPath) continue;
-			// The same scan the repoint walk runs, over the same names — the moved type's own plus the
-			// enum constructors an importer may be the only thing to spell. No cut: nothing of this
-			// file moves.
-			if (!NameMentionScan.sourceNamesAny(src, moved, NameMentionScan.referenceExclusions(info), plugin.lexicalRegions(src)))
+			// The moved type's name alone, never what it binds: no statement of a file this walk reaches
+			// binds a value of it, so a bare value there is another statement's and an import written for
+			// it would rebind that read. No cut: nothing of this file moves.
+			if (!NameMentionScan.sourceNamesAny(
+				src, [target.typeName], NameMentionScan.referenceExclusions(info), plugin.lexicalRegions(src)
+			))
 				continue;
 			final insert: Null<{ span: Span, text: String }> = addImportEdit(src, info, plugin, newImportPath);
 			if (insert != null) ScopeFiles.editsFor(editsByFile, info.file).push(insert);
@@ -1202,12 +1156,11 @@ final class MoveSymbol {
 		final typeName: String = declMatch.name;
 
 		// 3. Guards.
-		final declarers: Array<FileInfo> = index.refs.declaringFiles(typeName);
+		final declarers: Array<String> = index.refs.declaringPaths(typeName);
 		if (declarers.length == 0) return PErr('no type "$typeName" declared under scope');
 		if (declarers.length > 1)
 			return PErr('type "$typeName" is declared in ${declarers.length} files under scope — ambiguous, refusing');
-		if (declarers[0].file != cursorFile)
-			return PErr('the type "$typeName" at the cursor is not the one declared under scope — refusing');
+		if (declarers[0] != cursorFile) return PErr('the type "$typeName" at the cursor is not the one declared under scope — refusing');
 		if (cursorFile == destFile) return PErr('source and destination are the same file — nothing to move');
 
 		final cursorInfo: Null<FileInfo> = index.fileInfo(cursorFile);
@@ -1242,7 +1195,8 @@ final class MoveSymbol {
 			cursorSource: cursorSourceNN,
 			cursorInfo: cursorInfoNN,
 			destInfo: destInfoNN,
-			sourceOf: sourceOf
+			sourceOf: sourceOf,
+			bindings: new ImportBindings(() -> index, plugin)
 		});
 	}
 
@@ -1259,7 +1213,7 @@ final class MoveSymbol {
 	private static function buildImporterEdits(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, index: SymbolIndex, sourceOf: Map<String, String>,
 		oldImportPath: Null<String>, newImportPath: String, destFile: String, cursorInfo: FileInfo, typeName: String,
-		lexicalRegions: (String) -> Array<LexRegion>
+		bindings: ImportBindings, lexicalRegions: (String) -> Array<LexRegion>
 	): Void {
 		if (oldImportPath == null || oldImportPath == newImportPath) return;
 		// `moduleOf` reads the path's SHAPE (up to its first upper-initial segment) while
@@ -1280,10 +1234,10 @@ final class MoveSymbol {
 			mainMoved: oldImportPath == cursorInfo.module,
 			// The names the source module still declares and another module can name. A MODULE import
 			// binds EVERY one of them, not the single name it looks like it names.
-			remaining: remainingBoundNames(cursorInfo, typeName),
+			remaining: bindings.boundBesidesType(cursorInfo, typeName),
 			// The names the moved declaration takes away — its own plus its enum constructors, which
 			// may be the only thing an importer ever spells.
-			moved: movedBoundNames(cursorInfo, typeName)
+			moved: movedBoundNames(bindings, cursorInfo, typeName)
 		};
 		for (importer in index.filesImportingModule(oldModule)) if (importer.file != destFile) { // dest handled separately.
 			final importerSource: Null<String> = sourceOf[importer.file];
@@ -1538,6 +1492,7 @@ private typedef MoveTarget = {
 	final cursorInfo: FileInfo;
 	final destInfo: FileInfo;
 	final sourceOf: Map<String, String>;
+	final bindings: ImportBindings;
 };
 
 /**

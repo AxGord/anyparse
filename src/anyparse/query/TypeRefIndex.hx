@@ -88,6 +88,21 @@ final class TypeRefIndex {
 		return named(typeName).length > 0;
 	}
 
+	/**
+	 * The ONE declaration the index holds of the simple name `name`, null for none or several — the one answer to "is this name
+	 * declared exactly once, and by what" where nothing is written in a file to read (`TypingService.resolve` when it is). Copies of
+	 * one std module count as several here, `oneDeclaration` reads them as one.
+	 */
+	public function onlyDeclaration(name: String): Null<ResolvedType> {
+		final decls: Array<ResolvedType> = named(name);
+		return decls.length == 1 ? decls[0] : null;
+	}
+
+	/** The path of every file declaring a type of the simple name `typeName` — what a refusal names and counts, no file's content. */
+	public function declaringPaths(typeName: String): Array<String> {
+		return declaringFiles(typeName).map(f -> f.file);
+	}
+
 	/** Whether a file outside the auto-discovered std declares a type of the simple name `typeName`, which a written name may then mean. */
 	public function declaredOutsideStd(typeName: String): Bool {
 		return named(typeName).exists(r -> !StdResolver.isStdFile(r.file.file));
@@ -171,6 +186,17 @@ final class TypeRefIndex {
 	public function mayDenote(raw: String, fromFile: Null<FileInfo>, ?at: Int): Array<ResolvedType> {
 		final bound: Array<ResolvedType> = fromFile == null ? [] : resolveTypeRefAll(raw, fromFile, at);
 		return bound.length > 0 ? bound : resolvedDeclsNamed(SourceText.lastSegment(raw));
+	}
+
+	/**
+	 * The declarations whose text may ANSWER for the type name `raw`, written at offset `at` of `fromFile` — the one answer to
+	 * "which declarations may a result be read from where one need not be pinned": `mayDenote`, except that a dotted path no tier
+	 * holds names a type the index does not, so a namesake of its last segment says nothing about it. A veto keeps `mayDenote`:
+	 * there the namesake is a reason to refuse.
+	 */
+	public function mayAnswerFor(raw: String, fromFile: Null<FileInfo>, ?at: Int): Array<ResolvedType> {
+		final bound: Array<ResolvedType> = fromFile == null ? [] : resolveTypeRefAll(raw, fromFile, at);
+		return bound.length > 0 || raw.indexOf('.') >= 0 ? bound : resolvedDeclsNamed(raw);
 	}
 
 	/**

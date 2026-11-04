@@ -817,8 +817,9 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	private static function retargetsByName(name: String, owner: String, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
 		// A module-PRIVATE rival is not a rival: it is visible by simple name only inside its own
 		// module, so no band this statement outranks can carry it to another file.
-		final rivals: Array<FileInfo> = resolve.refs.declaringFiles(name)
-			.filter(found -> found.file != owner && found.types.exists(t -> t.name == name && !t.isPrivate));
+		final rivals: Array<FileInfo> = [
+			for (decl in resolve.refs.mayDenote(name, null)) if (decl.file.file != owner && !decl.type.isPrivate) decl.file
+		];
 		if (rivals.length == 0) return false;
 		for (file in ctx.governedAt[site] ?? []) {
 			final info: Null<FileInfo> = ctx.infoOf[file];

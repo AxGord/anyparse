@@ -235,8 +235,7 @@ final class ParamAscription {
 	 * collides with some other file's is still a type here.
 	 */
 	private static function typeParameterOf(host: TypeDeclMatch, written: String, symbols: SymbolIndex): Bool {
-		final decls: Array<TypeDeclInfo> = symbols.refs.declsNamed(host.name);
-		return decls.length == 1 && decls[0].typeParamNames.contains(written);
+		return symbols.refs.onlyDeclaration(host.name)?.type.typeParamNames.contains(written) == true;
 	}
 
 	/**

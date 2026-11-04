@@ -747,7 +747,9 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 			// A generic declaring type states its members with its OWN type parameters, which the
 			// implementation may bind to anything -- copying `T` verbatim never compiles. Refusing the
 			// whole lookup (not just this candidate) keeps the answer conservative.
-			for (fi in s.idx.refs.declaringFiles(name)) for (t in fi.types) if (t.name == name) {
+			for (decl in s.idx.refs.mayDenote(name, null)) {
+				final t: TypeDeclInfo = decl.type;
+				final fi: FileInfo = decl.file;
 				for (sup in t.supertypes.concat(t.interfaces)) queue.push(sup);
 				if (!t.members.exists(m -> m.name == method)) continue;
 				if (t.typeParamArity != 0) return null;

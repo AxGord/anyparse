@@ -68,7 +68,7 @@
 			"type": "anyparse.query.TypeRefIndex",
 			"method": "declaringFiles",
 			"force": "[]",
-			"note": "no type is declared anywhere, so a check that resolves a simple name to its declaring file stops seeing it"
+			"note": "no type is declared anywhere, so a refusal names no file and a move reads every type as undeclared"
 		},
 		{
 			"name": "M-DECLSITE-SCOPEWIDE",
@@ -10908,8 +10908,8 @@
 			"name": "M-MOVE-UNRESOLVED-INTERFACE",
 			"type": "anyparse.query.MoveMember",
 			"method": "inheritanceRefusal",
-			"find": "if (decls.length != 1 || !interfacesResolve(decls[0].supertypes)) return false;",
-			"replace": "if (decls.length == 1 && !interfacesResolve(decls[0].supertypes)) return false;",
+			"find": "if (decl == null || !interfacesResolve(decl.type.supertypes)) return false;",
+			"replace": "if (decl != null && !interfacesResolve(decl.type.supertypes)) return false;",
 			"note": "an `implements` target outside the scope is read as declaring nothing, so a member it may declare moves"
 		},
 		{
@@ -15236,7 +15236,7 @@
 			"name": "M-INDEX-ELEMENT-NO-WIDENING",
 			"type": "anyparse.query.ComposedValues",
 			"method": "indexElement",
-			"find": "index.refs.mayDenote(path, fi, node.span?.from)",
+			"find": "index.refs.mayAnswerFor(path, fi, node.span?.from)",
 			"replace": "index.refs.resolveTypeRefAll(path, fi, node.span?.from)",
 			"note": "an element read of a type the file does not bind types nothing"
 		},
@@ -15244,7 +15244,7 @@
 			"name": "M-OPERAND-END-NO-WIDENING",
 			"type": "anyparse.query.ComposedValues",
 			"method": "operandEnd",
-			"find": "path == null ? [] : index.refs.mayDenote(path, index.fileInfo(c.file))",
+			"find": "path == null ? [] : index.refs.mayAnswerFor(path, index.fileInfo(c.file))",
 			"replace": "[]",
 			"note": "an operand of a type the file does not bind ends nowhere, so its overload is never selected"
 		},
@@ -15290,6 +15290,124 @@
 			"method": "declaredOutsideStd",
 			"force": "true",
 			"note": "every name reads as shadowed, the std filter gone, so no std type is ever answered"
+		},
+		{
+			"name": "M-MAY-ANSWER-WIDENS-A-PATH",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "mayAnswerFor",
+			"find": "bound.length > 0 || raw.indexOf('.') >= 0 ? bound : resolvedDeclsNamed(raw)",
+			"replace": "mayDenote(raw, fromFile, at)",
+			"note": "a dotted path nothing holds reads as a namesake of its last segment, so a read on a type outside the index answers with an unrelated type"
+		},
+		{
+			"name": "M-MAY-ANSWER-NEVER-BOUND",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "mayAnswerFor",
+			"find": "fromFile == null ? [] : resolveTypeRefAll(raw, fromFile, at)",
+			"replace": "[]",
+			"note": "a path the index holds stops answering, so a read through a qualified type is untyped"
+		},
+		{
+			"name": "M-ONLY-DECLARATION-FIRST",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "onlyDeclaration",
+			"find": "decls.length == 1 ?",
+			"replace": "decls.length > 0 ?",
+			"note": "the first of several namesakes reads as the one declaration, so a uniqueness proof holds of a name it should refuse"
+		},
+		{
+			"name": "M-ONLY-DECLARATION-NONE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "onlyDeclaration",
+			"force": "null",
+			"note": "no name is ever declared once, so every uniqueness proof fails closed"
+		},
+		{
+			"name": "M-DECLARING-PATHS-EMPTY",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "declaringPaths",
+			"force": "[]",
+			"note": "no file declares anything, so a move refuses every type as undeclared and a refusal names no file"
+		},
+		{
+			"name": "M-BOUND-BESIDES-NO-FIELDS",
+			"type": "anyparse.query.ImportBindings",
+			"method": "boundBesidesType",
+			"find": "final out: Array<String> = moduleFieldsOf(file);",
+			"replace": "final out: Array<String> = [];",
+			"note": "a module field stops keeping a statement, so a move strands a file on `Unknown identifier` for the function it read through it"
+		},
+		{
+			"name": "M-BOUND-BESIDES-NO-VALUES",
+			"type": "anyparse.query.ImportBindings",
+			"method": "boundBesidesType",
+			"find": "for (name in typeValuesOf(t, file, [], true) ?? [for (m in t.members) m.name]) out.push(name);",
+			"replace": "",
+			"note": "a remaining type keeps a statement only by its own name, so a file reading just a value of it loses the value"
+		},
+		{
+			"name": "M-BOUND-BESIDES-THE-MOVED",
+			"type": "anyparse.query.ImportBindings",
+			"method": "boundBesidesType",
+			"find": "t.name != moved && !t.isPrivate",
+			"replace": "!t.isPrivate",
+			"note": "the moved type counts as left behind, so every importer keeps a statement for a name the module no longer binds"
+		},
+		{
+			"name": "M-BOUND-BESIDES-PRIVATE",
+			"type": "anyparse.query.ImportBindings",
+			"method": "boundBesidesType",
+			"find": "t.name != moved && !t.isPrivate",
+			"replace": "t.name != moved",
+			"note": "a private type counts as bound, so a file naming its own namesake keeps a statement the language never bound it through"
+		},
+		{
+			"name": "M-BOUND-BY-TYPE-NO-VALUES",
+			"type": "anyparse.query.ImportBindings",
+			"method": "boundByType",
+			"find": "bare.contains(type.kind) ? typeValuesOf(type, file, [], true) : null",
+			"replace": "null",
+			"note": "a moved enum abstract takes only its name, so a file reading a value of it through a module statement loses the value"
+		},
+		{
+			"name": "M-BOUND-BY-TYPE-EVERY-ABSTRACT",
+			"type": "anyparse.query.ImportBindings",
+			"method": "boundByType",
+			"find": "bare.contains(type.kind) ?",
+			"replace": "true ?",
+			"note": "a plain abstract reads as binding its vars, so a file spelling a word that is one of them gets an import of the moved type"
+		},
+		{
+			"name": "M-MODULE-FIELD-PRIVATE-BOUND",
+			"type": "anyparse.query.ImportBindings",
+			"method": "moduleFieldsOf",
+			"find": "!field.isPrivate && ",
+			"replace": "",
+			"note": "a private module field reads as bound by an import, so a file with its own local of that name keeps a statement it does not need"
+		},
+		{
+			"name": "M-MODULE-FIELD-NEVER-PRIVATE",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "moduleFieldsOf",
+			"find": "final isPrivate: Bool = pendingPrivate;",
+			"replace": "final isPrivate: Bool = false;",
+			"note": "the index loses a module field's privacy, so an import reads as bringing it"
+		},
+		{
+			"name": "M-MODULE-FIELD-PRIVATE-STICKS",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "moduleFieldsOf",
+			"find": "pendingPrivate = false;",
+			"replace": "",
+			"note": "the modifier carries past its own declaration, so a public field after a private one reads as private and its statement goes"
+		},
+		{
+			"name": "M-STATEMENTLESS-SCANS-BOUND-NAMES",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "statementlessRepairEdits",
+			"find": "[target.typeName]",
+			"replace": "movedBoundNames(target.bindings, cursorInfo, target.typeName)",
+			"note": "the walk also scans what the type binds, so a bare name another statement binds earns an import of the moved type and rebinds that read"
 		}
 	]
 }

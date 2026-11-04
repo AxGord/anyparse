@@ -37,7 +37,7 @@ final class SupertypeWalk {
 			final own: Null<ResolvedType> = refs.findDeclaredType(fromFile, typeName);
 			if (own != null) return [own];
 		}
-		return refs.resolvedDeclsNamed(typeName);
+		return refs.mayDenote(typeName, null);
 	}
 
 	/**
@@ -123,8 +123,8 @@ final class SupertypeWalk {
 		final simple: String = SourceText.lastSegment(raw);
 		for (n in [simple].concat(TypeRefIndex.importAliasEdges(cur.file, false)[simple] ?? [])) {
 			if (n == name) return true;
-			final decls: Array<ResolvedType> = refs.resolvedDeclsNamed(n);
-			if (decls.length == 1 && closureReaches(refs, decls[0], target, name, false, seen) != false) return true;
+			final decl: Null<ResolvedType> = refs.onlyDeclaration(n);
+			if (decl != null && closureReaches(refs, decl, target, name, false, seen) != false) return true;
 		}
 		return false;
 	}

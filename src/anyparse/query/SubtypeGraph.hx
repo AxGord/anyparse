@@ -547,8 +547,9 @@ final class SubtypeGraph {
 		var level: Array<ResolvedType> = [start];
 		while (level.length > 0) {
 			final next: Array<ResolvedType> = [];
-			for (cur in level) if (_refs.markSeen(cur, seen)) for (i in 0...cur.type.supertypesRaw.length) {
-				if (i < cur.type.supertypes.length && cur.type.interfaces.contains(cur.type.supertypes[i])) continue;
+			for (cur in level) if (_refs.markSeen(cur, seen)) for (i in 0...cur.type.supertypesRaw.length) if (
+				i >= cur.type.supertypes.length || !cur.type.interfaces.contains(cur.type.supertypes[i])
+			) {
 				final anc: Null<ResolvedType> = _refs.resolveTypeRef(cur.type.supertypesRaw[i], cur.file, cur.type.span.from);
 				if (anc == null) continue;
 				if (!anc.type.members.exists(m -> names.contains(m.name)))
@@ -637,8 +638,7 @@ final class SubtypeGraph {
 
 	/** The SIMPLE-name lookup of a type's declaration kind, or null when the scope declares it zero or ambiguously many times. */
 	private function ownerDeclKind(owner: String): Null<String> {
-		final ds: Array<TypeDeclInfo> = _refs.declsNamed(owner);
-		return ds.length == 1 ? ds[0].kind : null;
+		return _refs.onlyDeclaration(owner)?.type.kind;
 	}
 
 	/**
@@ -655,12 +655,12 @@ final class SubtypeGraph {
 			if (sup == target) return true;
 			if (seen.contains(sup)) continue;
 			seen.push(sup);
-			final ds: Array<TypeDeclInfo> = _refs.declsNamed(sup);
+			final ds: Array<ResolvedType> = _refs.mayDenote(sup, null);
 			if (ds.length != 1) {
 				if (ds.length > 1) return true;
 				continue;
 			}
-			if (declMayBeSubtype(ds[0], target, seen)) return true;
+			if (declMayBeSubtype(ds[0].type, target, seen)) return true;
 		}
 		return false;
 	}
@@ -872,8 +872,7 @@ final class SubtypeGraph {
 
 	/** Exactly one indexed decl is named `name`, and it is a class. */
 	private function isUniqueClass(name: String): Bool {
-		final ds: Array<TypeDeclInfo> = _refs.declsNamed(name);
-		return ds.length == 1 && ds[0].kind == SymbolIndex.CLASS_DECL_KIND;
+		return _refs.onlyDeclaration(name)?.type.kind == SymbolIndex.CLASS_DECL_KIND;
 	}
 
 	/**
@@ -887,8 +886,8 @@ final class SubtypeGraph {
 	 * `seen` guards cycles. Read only as a NEGATIVE proof: every doubt yields false.
 	 */
 	private function closureExcludes(name: String, target: String): Bool {
-		final ds: Array<ResolvedType> = _refs.resolvedDeclsNamed(name);
-		return ds.length == 1 && closureExcludesFrom(ds[0], target, []);
+		final decl: Null<ResolvedType> = _refs.onlyDeclaration(name);
+		return decl != null && closureExcludesFrom(decl, target, []);
 	}
 
 	/**
@@ -945,9 +944,8 @@ final class SubtypeGraph {
 	private function supertypeChainWalk(typeName: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return true;
 		seen.push(typeName);
-		final decls: Array<TypeDeclInfo> = _refs.declsNamed(typeName);
-		if (decls.length == 0) return false;
-		for (t in decls) for (sup in t.supertypes) if (!supertypeChainWalk(sup, seen)) return false;
+		if (!_refs.declaresName(typeName)) return false;
+		for (decl in _refs.mayDenote(typeName, null)) for (sup in decl.type.supertypes) if (!supertypeChainWalk(sup, seen)) return false;
 		return true;
 	}
 
