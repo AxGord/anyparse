@@ -606,8 +606,8 @@ final class MoveMember {
 					return '${entry.file} has "using $path" — moving a member into a type under `using` could '
 						+ 'hijack extension calls, refusing';
 			}
-			for (path in TypeRefIndex.plainImports(info)) if (memberNames.exists(name -> path.endsWith('.$srcTypeName.$name')))
-				return '${entry.file} has a static import "$path" — refusing';
+			final imported: Null<String> = TypeRefIndex.memberImportOf(info, srcTypeName, memberNames);
+			if (imported != null) return '${entry.file} has a static import "$imported" — refusing';
 		}
 		return null;
 	}

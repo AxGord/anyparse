@@ -80,8 +80,7 @@ final class ComposedValues {
 		final key: Null<TypeEnd> = node.children.length == 2
 			? coreEnd(TypingService.typeWalk(node.children[1], c.shape, NominalTypes.INDEX_HOST, c), c)
 			: null;
-		final meant: Array<ResolvedType> = index.refs.resolveTypeRefAll(path, fi, node.span?.from);
-		final decls: Array<ResolvedType> = meant.length == 0 ? index.refs.resolvedDeclsNamed(head) : meant;
+		final decls: Array<ResolvedType> = index.refs.mayDenote(path, fi, node.span?.from);
 		var found: Null<String> = null;
 		for (decl in decls) {
 			final read: Null<MemberInfo> = index.typing.operators.indexRead(decl, key);
@@ -575,11 +574,7 @@ final class ComposedValues {
 			case Nominal(path, args) if (args.length == 0): path;
 			case _: null;
 		};
-		final fi: Null<FileInfo> = index.fileInfo(c.file);
-		final meant: Array<ResolvedType> = path == null || fi == null ? [] : index.refs.resolveTypeRefAll(path, fi);
-		final decls: Array<ResolvedType> = meant.length > 0 || path == null
-			? meant
-			: index.refs.resolvedDeclsNamed(SourceText.lastSegment(path));
+		final decls: Array<ResolvedType> = path == null ? [] : index.refs.mayDenote(path, index.fileInfo(c.file));
 		return decls.length == 1 ? index.typing.casts.declEnd(decls[0]) : null;
 	}
 

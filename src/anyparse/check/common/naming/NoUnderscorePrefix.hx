@@ -397,7 +397,7 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 	): Bool {
 		if (index == null) return false;
 		final idx: SymbolIndex = index;
-		if (idx.refs.declaringFiles(target).length > 0) return true;
+		if (idx.refs.declaresName(target)) return true;
 		// A local / parameter / catch variable LEGALLY shadows an inherited member, so this veto
 		// is a STYLE stance, not a correctness gate — the correctness gate is `collidesInScope`,
 		// which refuses when the enclosing function already reads that member through a bare

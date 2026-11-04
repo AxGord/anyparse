@@ -162,11 +162,7 @@ final class StdlibPurity {
 		final method: String = callee.name ?? '';
 		final receiver: QueryNode = callee.children[0];
 		final typeName: Null<String> = receiver.name;
-		if (
-			typeName != null
-			&& TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)
-			&& index.refs.declaringFiles(typeName).length == 0
-		) {
+		if (typeName != null && TypeResolver.receiverRootIsUnboundType(receiver, tree, shape) && !index.refs.declaresName(typeName)) {
 			final qualified: String = '$typeName.$method';
 			if (TRANSPARENT_STATICS.contains(qualified)) return StdCallPurity.Transparent;
 			if (EFFECT_FREE_STATICS.contains(qualified)) return StdCallPurity.EffectFree;

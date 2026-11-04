@@ -399,7 +399,7 @@
 			"name": "M-XRENAME-NEW-DECLARED",
 			"type": "anyparse.check.common.naming.NamingCrossRename",
 			"method": "typeRefusal",
-			"find": "ctx.index.refs.declaringFiles(newName).length > 0",
+			"find": "ctx.index.refs.declaresName(newName)",
 			"replace": "false",
 			"note": "a library type of the new name does not refuse"
 		},

@@ -127,14 +127,12 @@ final class CallReturns {
 	}
 
 	/**
-	 * The declaration the type name `name`, written at `at` in the file `file`, resolves to there, alone — else, where the
-	 * file resolves no one declaration of it (a std type a target's `_std` copy re-declares, every one read), each
-	 * declaration of the name, the walk then asking every one of them to agree.
+	 * The declarations the type name `name`, written at `at` in the file `file`, may denote there (`TypeRefIndex.mayDenote`):
+	 * the one the file binds, or the copies it binds (a std type a target's `_std` copy re-declares), else each declaration of
+	 * the name, the walk then asking every one of them to agree.
 	 */
 	public static function writtenDeclaration(name: String, at: QueryNode, index: SymbolIndex, file: String): Array<ResolvedType> {
-		final fi: Null<FileInfo> = index.fileInfo(file);
-		final found: Null<ResolvedType> = fi == null ? null : index.refs.resolveTypeRef(name, fi, at.span?.from);
-		return found == null ? index.refs.resolvedDeclsNamed(name) : [found];
+		return index.refs.mayDenote(name, index.fileInfo(file), at.span?.from);
 	}
 
 	/**

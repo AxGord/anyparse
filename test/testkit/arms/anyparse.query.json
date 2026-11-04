@@ -11306,7 +11306,7 @@
 			"name": "M-STD-SHADOW-IGNORED",
 			"type": "anyparse.query.StdlibPurity",
 			"method": "calleePurity",
-			"find": "&& index.refs.declaringFiles(typeName).length == 0",
+			"find": "&& !index.refs.declaresName(typeName)",
 			"replace": "",
 			"note": "a project type named `Std` passes for the std one, so its arbitrary `Std.int` is hoisted and a dead store of it deleted"
 		},
@@ -15167,6 +15167,129 @@
 			"method": "valueNameOf",
 			"force": "'renamed'",
 			"note": "any written type names a replacement, `Null<Array<Item>>` and `String` included, so a parameter is renamed to a name no type gave it"
+		},
+		{
+			"name": "M-MAY-DENOTE-NEVER-BOUND",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "mayDenote",
+			"find": "fromFile == null ? [] : resolveTypeRefAll(raw, fromFile, at)",
+			"replace": "[]",
+			"note": "what a file binds a name to stops counting, so every written name reads as every namesake and a veto fires on the other package's type"
+		},
+		{
+			"name": "M-MAY-DENOTE-NO-WIDENING",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "mayDenote",
+			"find": "bound.length > 0 ? bound : resolvedDeclsNamed(SourceText.lastSegment(raw))",
+			"replace": "bound",
+			"note": "a name the file binds to nothing denotes nothing, so a veto reading an unresolved link passes where it must refuse"
+		},
+		{
+			"name": "M-MAY-DENOTE-WHOLE-SPELLING",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "mayDenote",
+			"find": "resolvedDeclsNamed(SourceText.lastSegment(raw))",
+			"replace": "resolvedDeclsNamed(raw)",
+			"note": "a qualified spelling widens by its whole path, which names no declaration, so a qualified link nothing resolves stops widening"
+		},
+		{
+			"name": "M-MAY-DENOTE-ONE-BOUND-ONLY",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "mayDenote",
+			"find": "bound.length > 0 ?",
+			"replace": "bound.length == 1 ?",
+			"note": "copies a file binds fall through to every namesake, so another package's type disagrees with the copies the file means"
+		},
+		{
+			"name": "M-HOPS-NO-WIDENING",
+			"type": "anyparse.query.SupertypeWalk",
+			"method": "hops",
+			"find": "refs.mayDenote(",
+			"replace": "refs.resolveTypeRefAll(",
+			"note": "a supertype link nothing resolves adds no declaration, so a closure veto never sees what it may reach"
+		},
+		{
+			"name": "M-VERDICT-UNDECLARED-MAYBE",
+			"type": "anyparse.query.SupertypeWalk",
+			"method": "verdict",
+			"find": "refs.declaresName(SourceText.lastSegment(sub)) ? null : false",
+			"replace": "null",
+			"note": "a start no declaration carries reads maybe, so a type outside the index is never proved no subtype"
+		},
+		{
+			"name": "M-VERDICT-DECLARED-FALSE",
+			"type": "anyparse.query.SupertypeWalk",
+			"method": "verdict",
+			"find": "refs.declaresName(SourceText.lastSegment(sub)) ? null : false",
+			"replace": "false",
+			"note": "a start several declarations carry reads false, so an autofix acts on what any of them may be a subtype of"
+		},
+		{
+			"name": "M-WRITTEN-DECL-NO-WIDENING",
+			"type": "anyparse.query.CallReturns",
+			"method": "writtenDeclaration",
+			"find": "index.refs.mayDenote(name, index.fileInfo(file), at.span?.from)",
+			"replace": "index.refs.mayDenote(name, index.fileInfo(file), at.span?.from).slice(0, 1)",
+			"note": "an unbound static receiver reads one namesake alone, so the walk stops asking every declaration to agree"
+		},
+		{
+			"name": "M-INDEX-ELEMENT-NO-WIDENING",
+			"type": "anyparse.query.ComposedValues",
+			"method": "indexElement",
+			"find": "index.refs.mayDenote(path, fi, node.span?.from)",
+			"replace": "index.refs.resolveTypeRefAll(path, fi, node.span?.from)",
+			"note": "an element read of a type the file does not bind types nothing"
+		},
+		{
+			"name": "M-OPERAND-END-NO-WIDENING",
+			"type": "anyparse.query.ComposedValues",
+			"method": "operandEnd",
+			"find": "path == null ? [] : index.refs.mayDenote(path, index.fileInfo(c.file))",
+			"replace": "[]",
+			"note": "an operand of a type the file does not bind ends nowhere, so its overload is never selected"
+		},
+		{
+			"name": "M-DECLARES-NAME-FALSE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "declaresName",
+			"force": "false",
+			"note": "no name is taken, so a rename collides with nothing and a fail-closed veto stops firing"
+		},
+		{
+			"name": "M-DECLARES-NAME-TRUE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "declaresName",
+			"force": "true",
+			"note": "every name is taken, so a rename always collides and a table of std statics is never read"
+		},
+		{
+			"name": "M-MEMBER-IMPORT-NONE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "memberImportOf",
+			"force": "null",
+			"note": "a static import of the moved member is not seen, so move-member leaves it dangling"
+		},
+		{
+			"name": "M-WRITTEN-DECL-TWO-COPIES-WIDEN",
+			"type": "anyparse.query.CallReturns",
+			"method": "writtenDeclaration",
+			"find": "index.refs.mayDenote(name, index.fileInfo(file), at.span?.from)",
+			"replace": "index.refs.mayDenote(name, index.fileInfo(file), at.span?.from).length == 1 ? index.refs.mayDenote(name, index.fileInfo(file), at.span?.from) : index.refs.resolvedDeclsNamed(name)",
+			"note": "copies a file binds fall through to every namesake again, so another package's type disagrees with the copies the static receiver means and the walk answers nothing"
+		},
+		{
+			"name": "M-DECLARED-OUTSIDE-STD-FALSE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "declaredOutsideStd",
+			"force": "false",
+			"note": "no project type shadows a std name, so a project namesake of a std type reads as the std one"
+		},
+		{
+			"name": "M-DECLARED-OUTSIDE-STD-TRUE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "declaredOutsideStd",
+			"force": "true",
+			"note": "every name reads as shadowed, the std filter gone, so no std type is ever answered"
 		}
 	]
 }

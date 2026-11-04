@@ -10,7 +10,6 @@ import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax;
-import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService.TypingHost;
 import anyparse.runtime.Span;
 
@@ -512,7 +511,7 @@ final class NominalTypes {
 
 	/** Whether any indexed file OUTSIDE the auto-discovered Haxe std declares a top-level type named `typeName`. */
 	public static function shadowedByNonStdType(index: Null<SymbolIndex>, typeName: String): Bool {
-		return index != null && index.refs.declaringFiles(typeName).exists(fi -> !StdResolver.isStdFile(fi.file));
+		return index != null && index.refs.declaredOutsideStd(typeName);
 	}
 
 	/**
@@ -637,10 +636,10 @@ final class NominalTypes {
 			null
 		else if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null)
 			null
-		else if (index.refs.declaringFiles(name).length == 0)
-			null
+		else if (index.refs.declaresName(name))
+			name
 		else
-			name;
+			null;
 	}
 
 	/**

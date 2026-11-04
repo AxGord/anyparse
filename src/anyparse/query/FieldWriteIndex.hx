@@ -453,6 +453,11 @@ final class FieldWriteIndex {
 		return index.refs.declsNamed(name);
 	}
 
+	/** Whether the symbol index has a type declaration named `name`. */
+	private static inline function declaresType(index: SymbolIndex, name: String): Bool {
+		return index.refs.declaresName(name);
+	}
+
 	/**
 	 * Walk `node`, threading the enclosing type context and collecting each type
 	 * header's type-parameter names; on a write-parent node, classify its target. A
@@ -684,11 +689,6 @@ final class FieldWriteIndex {
 			found = ts;
 		}
 		return found;
-	}
-
-	/** Whether the symbol index has a type declaration named `name`. */
-	private static function declaresType(index: SymbolIndex, name: String): Bool {
-		return index.refs.declaringFiles(name).length > 0;
 	}
 
 	/**

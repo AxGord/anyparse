@@ -634,9 +634,9 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 	 */
 	private static function declaringIndex(index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, simple: String): Null<SymbolIndex> {
 		final report: Null<SymbolIndex> = index;
-		if (report != null && report.refs.declaringFiles(simple).length > 0) return report;
+		if (report != null && report.refs.declaresName(simple)) return report;
 		final wide: Null<SymbolIndex> = resolution;
-		return wide != null && wide.refs.declaringFiles(simple).length > 0 ? wide : null;
+		return wide != null && wide.refs.declaresName(simple) ? wide : null;
 	}
 
 	/**
@@ -816,7 +816,7 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 		// file, where an oracle-named type is always the better answer.
 		return if (hit == null)
 			null
-		else if (index != null && index.refs.declaringFiles(hit.typeName).length > 0)
+		else if (index != null && index.refs.declaresName(hit.typeName))
 			null
 		else
 			hit.returnSource;

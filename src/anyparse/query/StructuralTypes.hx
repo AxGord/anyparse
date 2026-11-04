@@ -295,6 +295,11 @@ final class StructuralTypes {
 		};
 	}
 
+	/** Whether a project file outside the standard library declares a type named `name`, which a written `name` may then mean. */
+	private inline function shadowed(name: String): Bool {
+		return _refs.declaredOutsideStd(name);
+	}
+
 	/**
 	 * The `member` declaration `typeName`'s own body or its supertype closure carries, together
 	 * with the file that declared it — null when the closure declares none, or when any link in it
@@ -523,11 +528,6 @@ final class StructuralTypes {
 		final path: String = NominalTypes.outerPathOf(written, [], _typeSyntax) ?? nominal;
 		final decl: Null<ResolvedType> = _refs.resolveTypeRef(path, host.file, m.declFrom);
 		return decl == null ? MayFit : _unification.unifies(receiver, decl);
-	}
-
-	/** Whether a project file outside the standard library declares a type named `name`, which a written `name` may then mean. */
-	private function shadowed(name: String): Bool {
-		return _refs.declaringFiles(name).exists(fi -> !StdResolver.isStdFile(fi.file));
 	}
 
 	/** Whether the type name `path`, written in `file` at `at`, resolves there to declarations of the standard library only. */

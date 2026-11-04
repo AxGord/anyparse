@@ -212,7 +212,7 @@ final class NamingCrossRename {
 			STRING_LITERAL
 		else if (ctx.index.refs.declaringFiles(decl.name).length != 1)
 			OLD_NAME_SHARED
-		else if (ctx.index.refs.declaringFiles(newName).length > 0 || spelledInProject(newName, ctx))
+		else if (ctx.index.refs.declaresName(newName) || spelledInProject(newName, ctx))
 			NEW_NAME_TAKEN
 		else
 			null;

@@ -26,7 +26,7 @@ final class SupertypeWalk {
 		// A start whose name no declaration carries is outside the index, `false`; one that names an indexed type the file or the
 		// name cannot pin to one declaration may be any of them, or the unindexed type the file means.
 		final start: Null<ResolvedType> = refs.resolveStartType(sub, subFile, subAt);
-		if (start == null) return refs.resolvedDeclsNamed(SourceText.lastSegment(sub)).length == 0 ? false : null;
+		if (start == null) return refs.declaresName(SourceText.lastSegment(sub)) ? null : false;
 		final target: Null<ResolvedType> = refs.resolveStartType(sup, supFile, supAt);
 		return closureReaches(refs, start, target, target == null ? SourceText.lastSegment(sup) : target.type.name, true, []);
 	}
@@ -45,17 +45,11 @@ final class SupertypeWalk {
 	 * its simple name when that resolves nothing — a veto's direction, where an unresolved link may only add declarations.
 	 */
 	public static function hops(refs: TypeRefIndex, cur: ResolvedType): Array<ResolvedType> {
-		final out: Array<ResolvedType> = [];
 		final raws: Array<String> = cur.type.supertypesRaw;
 		final simples: Array<String> = cur.type.supertypes;
-		for (i in 0...simples.length) {
-			final resolved: Array<ResolvedType> = refs.resolveTypeRefAll(
-				i < raws.length ? raws[i] : simples[i], cur.file, cur.type.span.from
-			);
-			final denoted: Array<ResolvedType> = resolved.length > 0 ? resolved : refs.resolvedDeclsNamed(simples[i]);
-			for (r in denoted) out.push(r);
-		}
-		return out;
+		return [
+			for (i in 0...simples.length) for (r in refs.mayDenote(i < raws.length ? raws[i] : simples[i], cur.file, cur.type.span.from)) r
+		];
 	}
 
 	/**

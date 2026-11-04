@@ -79,6 +79,20 @@ final class TypeRefIndex {
 		return (_filesByName[typeName] ?? []).copy();
 	}
 
+	/**
+	 * Whether the index holds a type of the simple name `typeName` in any package — the one answer to "is this name taken
+	 * anywhere in the index", what a rename's collision and a fail-closed veto ask. It reads no file, so it says nothing of
+	 * what a written name denotes (`mayDenote`, `resolveTypeRefAll`).
+	 */
+	public function declaresName(typeName: String): Bool {
+		return named(typeName).length > 0;
+	}
+
+	/** Whether a file outside the auto-discovered std declares a type of the simple name `typeName`, which a written name may then mean. */
+	public function declaredOutsideStd(typeName: String): Bool {
+		return named(typeName).exists(r -> !StdResolver.isStdFile(r.file.file));
+	}
+
 	/** Every indexed type decl whose simple name is `name`, across all files. */
 	public function declsNamed(name: String): Array<TypeDeclInfo> {
 		return [for (r in resolvedDeclsNamed(name)) r.type];
@@ -146,6 +160,17 @@ final class TypeRefIndex {
 			case Bound(decls): decls;
 			case Unknown, Free: [];
 		};
+	}
+
+	/**
+	 * The declarations the type name `raw`, written at offset `at` of `fromFile`, may denote — the one answer to "which
+	 * declarations may this written name mean where one need not be pinned": what the file binds it to (`resolveTypeRefAll`),
+	 * else every declaration of its simple name, the file unknown included. A veto or an every-copy-agrees walk reads this; a
+	 * name that must mean ONE declaration asks `TypingService.resolve`, which reads the widened case as `Unknown`.
+	 */
+	public function mayDenote(raw: String, fromFile: Null<FileInfo>, ?at: Int): Array<ResolvedType> {
+		final bound: Array<ResolvedType> = fromFile == null ? [] : resolveTypeRefAll(raw, fromFile, at);
+		return bound.length > 0 ? bound : resolvedDeclsNamed(SourceText.lastSegment(raw));
 	}
 
 	/**
@@ -411,6 +436,15 @@ final class TypeRefIndex {
 	 */
 	public static function plainImports(fi: FileInfo): Array<String> {
 		return [for (imp in fi.imports) if (imp.kind == ImportKind.Import) imp.raw];
+	}
+
+	/**
+	 * The path of a plain `import` statement of `fi` naming one of `members` of a type of the simple name `typeName`
+	 * (`import pkg.Type.member;`), null for none. A read of the statements, not of what a name denotes: by simple name, so a
+	 * namesake in another package answers too, the safe side for the op refusing on it.
+	 */
+	public static function memberImportOf(fi: FileInfo, typeName: String, members: Array<String>): Null<String> {
+		return plainImports(fi).find(path -> members.exists(name -> path.endsWith('.$typeName.$name')));
 	}
 
 	/**
