@@ -4,6 +4,10 @@ import anyparse.core.PhaseTimings;
 import anyparse.core.PoolLease;
 #if nodejs
 import anyparse.core.TempScratch;
+import anyparse.grammar.json.JEntry;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JsonFormat;
 import haxe.DynamicAccess;
 import haxe.io.Path;
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
@@ -299,8 +303,7 @@ final class HaxeSpawn {
 		final options: Dynamic = { env: childEnv() };
 		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
 		// over the inherited environment, which `options.env` already holds
-		final env: Null<DynamicAccess<String>> = job.env;
-		if (env != null) for (key in Reflect.fields(env)) Reflect.setField(options.env, key, Reflect.field(env, key));
+		for (key => value in variables(job.env)) Reflect.setField(options.env, key, value);
 		final timeout: Int = job.timeout ?? 0;
 		if (timeout > 0) {
 			Reflect.setField(options, 'timeout', timeout);
@@ -640,12 +643,40 @@ final class HaxeSpawn {
 		if (dir == null) return null;
 		final file: String = Path.join([dir, 'jobs.json']);
 		try {
-			sys.io.File.saveContent(file, haxe.Json.stringify(jobs));
+			// a schema cannot root on an array, and the driver reads a bare one
+			final written: Array<String> = [
+				for (job in jobs) SpawnJobWriter.write(job, JsonFormat.instance.compactWriteOptions)
+			];
+			sys.io.File.saveContent(file, '[${written.join(',')}]');
 		} catch (exception: haxe.Exception) {
 			dropBatch(dir);
 			return null;
 		}
 		return { dir: dir, jobs: file };
+	}
+
+	/** The variables the `env` of a `SpawnJob` sets. */
+	private static function variables(env: Null<JValue>): Map<String, Null<String>> {
+		final out: Map<String, Null<String>> = [];
+		switch env {
+			case JObject(entries):
+				for (entry in entries) switch entry.value {
+					case JString(value): out[entry.key] = value;
+					case _: out[entry.key] = null;
+				}
+			case _:
+		}
+		return out;
+	}
+
+	/** `env` as the `env` of a `SpawnJob`. A variable held as null stays null: that is how a command takes one away. */
+	public static function environment(env: DynamicAccess<String>): JValue {
+		final entries: Array<JEntry> = [];
+		for (key in env.keys()) {
+			final value: Null<String> = env[key];
+			entries.push(JValueTools.entry(key, value == null ? JNull : JString(value)));
+		}
+		return JObject(entries);
 	}
 
 	/** Remove the batch directory `dir` (`writeJobs`) and everything left in it. */
@@ -848,57 +879,6 @@ final class HaxeSpawn {
 		return job.shell != null || job.tethered == true || job.reap == true || (job.idle ?? 0) > 0;
 	}
 
-}
-
-/**
- * One process `HaxeSpawn.runAll` runs: `haxe <args>`, or the `shell` command line when set, in `cwd` (the process cwd
- * when null), killed after `timeout` ms when that is positive.
- */
-typedef SpawnJob = {
-	var args: Array<String>;
-	var cwd: Null<String>;
-
-	/** The program `args` are handed to, as an argument vector with no shell in between; `haxe` when absent. */
-	var ?cmd: String;
-
-	/** Variables set over this process's environment for the job alone. */
-	var ?env: haxe.DynamicAccess<String>;
-
-	/**
-	 * A file whose bytes are the job's standard input — a file, never a pipe (`docs/decisions.md`, "F1"); none when absent,
-	 * and none for a `tethered` job, whose standard input is its tether.
-	 */
-	var ?stdin: String;
-
-	var ?shell: String;
-	var ?timeout: Int;
-
-	/** Where the driver writes the job's process group leader (pid, then its start time) once it started. */
-	var ?groupFile: String;
-
-	/**
-	 * The job never outlives the driver that started it, however the driver ends (`HaxeSpawn.TETHER`) — for a job that
-	 * never ends by itself, a compilation server.
-	 */
-	var ?tethered: Bool;
-
-	/**
-	 * What the job's process group still runs when the job exits is named in the job's stderr and killed (`PARALLEL_DRIVER`),
-	 * so nothing a job started outlives its run.
-	 */
-	var ?reap: Bool;
-
-	/** Milliseconds without a byte on either stream or a change of `progress` after which the job is killed; 0 or absent is no limit. */
-	var ?idle: Int;
-
-	/** A file the job rewrites as it moves on: its modification counts as progress, and its text names where a stalled job stood. */
-	var ?progress: String;
-
-	/**
-	 * The `idle` clock starts when `progress` first changes, not when the job starts: a job that queues for a lease before it
-	 * runs is not silent, it has not begun.
-	 */
-	var ?awaitProgress: Bool;
 }
 
 /** A batch directory `HaxeSpawn.writeJobs` made, and the jobs file in it the process driver reads. */

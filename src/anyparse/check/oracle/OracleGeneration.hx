@@ -3,6 +3,7 @@ package anyparse.check.oracle;
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.oracle.OracleCache.HxmlRefs;
 import anyparse.check.oracle.OracleGenerationLock.Holder;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.ConfigFinder;
 import anyparse.query.FileIdentity;
 import haxe.Exception;
@@ -256,7 +257,7 @@ final class OracleGeneration {
 		};
 		try {
 			sys.FileSystem.createDirectory(stateDir(group));
-			sys.io.File.saveContent(recordFile(group), haxe.Json.stringify(record));
+			sys.io.File.saveContent(recordFile(group), GenerationRecordWriter.write(record, JsonFormat.instance.compactWriteOptions));
 		} catch (exception: haxe.Exception) { // noqa: swallowed-exception
 			// an unwritable record costs the next run a regeneration, never a wrong answer
 		}
@@ -279,10 +280,10 @@ final class OracleGeneration {
 	}
 
 	#if (sys || nodejs)
-	/** The record at `path`, or null when there is none or it is not JSON. */
+	/** The record at `path`, or null when there is none or it does not have a record's shape. */
 	private static function readRecord(path: String): Null<GenerationRecord> {
 		if (!sys.FileSystem.exists(path)) return null;
-		return try haxe.Json.parse(sys.io.File.getContent(path)) catch (exception: haxe.Exception) null;
+		return try GenerationRecordParser.parse(sys.io.File.getContent(path)) catch (exception: haxe.Exception) null;
 	}
 
 	/**
@@ -690,7 +691,7 @@ final class OracleGeneration {
 	private static function observe(group: GenerationGroup, memo: Map<String, String>): String {
 		#if (sys || nodejs)
 		final written: String = try sys.io.File.getContent(recordFile(group)) catch (exception: haxe.Exception) MISSING;
-		final record: Null<GenerationRecord> = try haxe.Json.parse(written) catch (exception: haxe.Exception) null;
+		final record: Null<GenerationRecord> = try GenerationRecordParser.parse(written) catch (exception: haxe.Exception) null;
 		final paths: Array<String> = group.hxmls.concat(group.inputs ?? []).concat([for (held in record?.implicit ?? []) held.path]);
 		final epoch: String = try sys.io.File.getContent(epochFile(group)) catch (exception: haxe.Exception) MISSING;
 		return [epoch, written].concat([for (hash in hashAll(paths, memo)) '${hash.path} ${hash.hash}']).join('\n');
@@ -773,25 +774,4 @@ typedef GenerationGroup = {
 	var hxmls: Array<String>;
 	var dirs: Array<String>;
 	var inputs: Null<Array<String>>;
-}
-
-/** One file's content hash in a generation record. */
-typedef FileHash = {
-	var path: String;
-	var hash: String;
-}
-
-/**
- * The persisted record of a successful generation. Every field is optional because it comes off disk through
- * `haxe.Json.parse`, which will produce a structure missing any of them.
- */
-typedef GenerationRecord = {
-	/** The record scheme it was written under (`FORMAT_TAG`): a record of another scheme is never current. */
-	var ?format: String;
-	var ?command: String;
-	var ?inputs: Array<FileHash>;
-	var ?outputs: Array<FileHash>;
-
-	/** The files the generated hxml depends on without declaring them — see `implicitInputs`. */
-	var ?implicit: Array<FileHash>;
 }

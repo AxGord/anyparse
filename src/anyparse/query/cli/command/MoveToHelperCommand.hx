@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.MoveSymbol;
+import anyparse.runtime.ParseError;
 
 using Lambda;
 
@@ -109,21 +110,7 @@ final class MoveToHelperCommand implements CliCommand {
 					else if (!write)
 						CliIo.sysPrint('${c.file}: $tag\n');
 				}
-				if (armsFile != null) {
-					final armsFiles: Array<String> = RegistryFiles.of(armsFile);
-					if (armsFiles.length == 0) {
-						CliIo.stderr('apq move-to-helper: cannot read the arm registry $armsFile\n');
-						return EXIT_RUNTIME;
-					}
-					for (file in armsFiles) {
-						final armsText: Null<String> = try CliIo.readFile(file) catch (exception: Exception) null;
-						if (armsText == null) {
-							CliIo.stderr('apq move-to-helper: cannot read the arm registry $file\n');
-							return EXIT_RUNTIME;
-						}
-						for (line in MoveToHelperArms.hints(armsText, changes, srcTypeName, helper, plugin)) CliIo.sysPrint('$line\n');
-					}
-				}
+				if (armsFile != null && !printArmHints(armsFile, changes, srcTypeName, helper, plugin)) return EXIT_RUNTIME;
 				if (write) {
 					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
 					CliIo.stderr('apq move-to-helper: wrote ${changes.length} file(s)\n');
@@ -134,6 +121,35 @@ final class MoveToHelperCommand implements CliCommand {
 				if (advisory != null) CliIo.stderr('apq move-to-helper: $advisory\n');
 				return EXIT_OK;
 		}
+	}
+
+	/**
+	 * Print the retarget hints of the registry `armsFile` names; false,
+	 * after saying why on stderr, when a document does not read as one.
+	 */
+	private static function printArmHints(
+		armsFile: String, changes: Array<MoveChange>, srcTypeName: String, helper: String, plugin: GrammarPlugin
+	): Bool {
+		final armsFiles: Array<String> = RegistryFiles.of(armsFile);
+		if (armsFiles.length == 0) {
+			CliIo.stderr('apq move-to-helper: cannot read the arm registry $armsFile\n');
+			return false;
+		}
+		for (file in armsFiles) {
+			final armsText: Null<String> = try CliIo.readFile(file) catch (exception: Exception) null;
+			if (armsText == null) {
+				CliIo.stderr('apq move-to-helper: cannot read the arm registry $file\n');
+				return false;
+			}
+			final hints: Array<String> = try {
+				MoveToHelperArms.hints(armsText, changes, srcTypeName, helper, plugin);
+			} catch (exception: ParseError) {
+				CliIo.stderr('apq move-to-helper: $file: ${exception.message}\n');
+				return false;
+			};
+			for (line in hints) CliIo.sysPrint('$line\n');
+		}
+		return true;
 	}
 
 	private static function exists(path: String): Bool {

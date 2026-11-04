@@ -2,6 +2,7 @@ package anyparse.check.oracle;
 
 import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.core.TempScratch;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.FileIdentity;
 import haxe.crypto.Md5;
 import haxe.io.Path;
@@ -17,18 +18,6 @@ import js.node.Buffer;
 typedef ConnectResult = {
 	var status: Null<Int>;
 	var output: String;
-}
-
-/**
- * What `apq` remembers about the warm server it started for one project: the port it
- * listens on, the pid of the `haxe --wait` process (the liveness probe), and the
- * wall-clock SECOND at which the last typecheck through it began — the watermark the
- * staleness rule is written against.
- */
-typedef ServerState = {
-	var port: Int;
-	var pid: Int;
-	var compiledAt: Int;
 }
 
 /**
@@ -489,20 +478,20 @@ final class CompilerServer {
 
 	/**
 	 * The recorded server for `hxml`/`cwd`, or null when nothing is recorded or the record is
-	 * unreadable / incomplete. Every field is checked, `compiledAt` included: a record missing
-	 * it reads back as `undefined`, every `mtime >= undefined` comparison is false, and the
-	 * staleness guard would silently pass over every file instead of failing loudly.
+	 * unreadable / incomplete. Every field is checked, `compiledAt` included: with no watermark
+	 * the staleness guard would silently pass over every file instead of failing loudly.
 	 */
 	private static function readState(hxml: String, cwd: Null<String>, ?defines: Array<String>): Null<ServerState> {
 		final path: String = stateFile(hxml, cwd, defines);
 		if (!sys.FileSystem.exists(path)) return null;
-		final state: Null<ServerState> = try haxe.Json.parse(sys.io.File.getContent(path)) catch (exception: haxe.Exception) null;
+		final state: Null<ServerState> = try ServerStateParser.parse(sys.io.File.getContent(path)) catch (exception: haxe.Exception) null;
 		return state != null && state.port > 0 && state.pid > 0 && state.compiledAt > 0 ? state : null;
 	}
 
 	/** Record `state` as the shared server for `hxml`/`cwd`. */
 	private static function writeState(hxml: String, cwd: Null<String>, state: ServerState, ?defines: Array<String>): Void {
-		try sys.io.File.saveContent(stateFile(hxml, cwd, defines), haxe.Json.stringify(state)) catch (_exception: haxe.Exception) {
+		final text: String = ServerStateWriter.write(state, JsonFormat.instance.compactWriteOptions);
+		try sys.io.File.saveContent(stateFile(hxml, cwd, defines), text) catch (_exception: haxe.Exception) {
 			// A temp dir we cannot write to only costs the next run a fresh server, never a verdict.
 		}
 	}

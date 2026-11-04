@@ -1660,6 +1660,62 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "N1",
+			"note": "a move section that is an array is a malformed declaration: refused naming the section, nothing moved",
+			"argv": [
+				"hxq",
+				"move",
+				"src/a/B.hx",
+				"--to",
+				"src/a/c",
+				"--scope",
+				"src"
+			],
+			"files": {
+				"apq.json": "{\"move\":[\"x\"]}\n",
+				"src/a/B.hx": "package a;\n\nclass B {}\n",
+				"main/Main.hx": "class Main { static function main() { trace(a.B); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "9e041b81fcc9c9ea",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "N2",
+			"note": "a move section that is a string is a malformed declaration: refused naming the section, nothing moved",
+			"argv": [
+				"hxq",
+				"move",
+				"src/a/B.hx",
+				"--to",
+				"src/a/c",
+				"--scope",
+				"src"
+			],
+			"files": {
+				"apq.json": "{\"move\":\"x\"}\n",
+				"src/a/B.hx": "package a;\n\nclass B {}\n",
+				"main/Main.hx": "class Main { static function main() { trace(a.B); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "9e041b81fcc9c9ea",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

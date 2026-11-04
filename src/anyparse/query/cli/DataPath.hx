@@ -1,8 +1,8 @@
 package anyparse.query.cli;
 
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
-import haxe.Json;
 
 /**
  * A dotted key path into a DATA document (`apq get`), walked over the grammar's projected tree with no
@@ -104,10 +104,10 @@ final class DataPath {
 
 	/** `value` as compact JSON: strings quoted and escaped, scalars as written, keys in source order. */
 	public static function json(value: QueryNode, source: String, shape: RefShape): String {
-		if (isString(value, shape)) return Json.stringify(value.name ?? '');
+		if (isString(value, shape)) return JsonFormat.instance.quote(value.name ?? '');
 		if (value.kind == shape.objectLiteralKind) return '{'
 			+ [
-				for (entry in value.children) Json.stringify(entry.name ?? '') + ':${json(valueOf(entry, shape), source, shape)}'
+				for (entry in value.children) JsonFormat.instance.quote(entry.name ?? '') + ':${json(valueOf(entry, shape), source, shape)}'
 			].join(',')
 			+ '}';
 		if (value.kind == shape.arrayLiteralKind)

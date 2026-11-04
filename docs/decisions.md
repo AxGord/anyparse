@@ -5560,3 +5560,4 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - hops, writtenDeclaration, indexElement, operandEnd onto typing.resolveUnscoped → it reads several declarations as Unknown, losing the veto's widening and the every-copy-agrees walk, and SupertypeWalk has no TypingService: one door refs.mayDenote → RESOLVE-5
 - ImportGraph's import-table reads onto TypingService.resolve → it draws a file's import statements, not what a written name denotes: an owner in apq.json; MoveMember's static-import refusal reads statements too: refs.memberImportOf → RESOLVE-5
 - shadowedByNonStdType and StructuralTypes.shadowed onto bareBinding → a veto on any project namesake, their callers hold no file, narrowing it is a behaviour change: one door refs.declaredOutsideStd → RESOLVE-5
+- lint --format json through a generated writer: no, JValueWriter prints 1 as 1.0, breaks by width and writes no space after a colon, which moves every reader's bytes → JSON-OWN-SRC

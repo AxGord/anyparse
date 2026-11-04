@@ -1,7 +1,10 @@
 package anyparse.query.cli.command;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.grammar.json.JValue;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.format.json.FormatterDriverKeys;
+import anyparse.query.format.json.FormatterDriverKeysParser;
 import anyparse.runtime.ParseError;
 #if (sys || nodejs)
 import sys.io.File;
@@ -148,12 +151,19 @@ final class SweepCorpus {
 	 */
 	private static function formatterDisabled(config: String, relPath: String): Bool {
 		try {
-			final obj: Dynamic = haxe.Json.parse(config);
-			if (Reflect.field(obj, 'disableFormatting') == true) return true;
-			final raw: Dynamic = Reflect.field(obj, 'excludes');
-			if (Std.isOfType(raw, Array)) {
-				final list: Array<Dynamic> = raw;
-				for (item in list) if (Std.isOfType(item, String) && (item: String) == relPath) return true;
+			final keys: FormatterDriverKeys = FormatterDriverKeysParser.parse(config);
+			switch keys.disableFormatting {
+				case JBool(true):
+					return true;
+				case _:
+			}
+			switch keys.excludes {
+				case JArray(list):
+					for (item in list) switch item {
+						case JString(path) if (path == relPath): return true;
+						case _:
+					}
+				case _:
 			}
 		} catch (_: Exception) {/* malformed config JSON — the SKIP_CONFIG probe reports it */}
 		return false;

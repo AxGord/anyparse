@@ -1,6 +1,7 @@
 package unit.check.oracle;
 
 import anyparse.check.oracle.HaxeSpawn;
+import anyparse.check.oracle.SpawnJob;
 
 using StringTools;
 
@@ -102,11 +103,9 @@ final class OracleGcTest extends Test {
 				args, dir, BUFFER
 			)].concat(HaxeSpawn.runAll(jobs, BUFFER, 2)).concat(HaxeSpawn.startAll(jobs, BUFFER, 2).await());
 		});
-		if (runs[0].status != 0) {
-			Assert.pass('haxe unavailable — skipped (${runs[0].failure}${runs[0].err})');
-			return null;
-		}
-		return [for (r in runs) r.out.trim()];
+		if (runs[0].status == 0) return [for (r in runs) r.out.trim()];
+		Assert.pass('haxe unavailable — skipped (${runs[0].failure}${runs[0].err})');
+		return null;
 	}
 	#end
 

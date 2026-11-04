@@ -1,6 +1,7 @@
 package devkit;
 
 import anyparse.check.oracle.HaxeSpawn;
+import anyparse.check.oracle.SpawnJob;
 import haxe.Exception;
 
 using Lambda;

@@ -2,7 +2,6 @@ package anyparse.check.oracle;
 
 import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerServer.ConnectResult;
-import anyparse.check.oracle.HaxeSpawn.SpawnJob;
 import anyparse.core.EnvFlag;
 import anyparse.core.PhaseTimings;
 

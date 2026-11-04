@@ -372,6 +372,24 @@ class ModuleMoveTest extends Test {
 		Assert.isTrue(reasons[0].contains('src/other/User.hx:4 composes a path from "p"'), reasons[0]);
 	}
 
+	public function testASectionThatIsNoObjectIsRefused(): Void {
+		for (section in ['["x"]', '"x"', '5', '[]', 'true']) switch MoveDeclaration.read('{"move": $section}', '/project') {
+			case Left(message):
+				Assert.equals('"move" is not an object', message);
+			case Right(_):
+				Assert.fail('a move section of $section must not read as an empty declaration');
+		}
+	}
+
+	public function testANullSectionIsNoSection(): Void {
+		switch MoveDeclaration.read('{"move": null}', '/project') {
+			case Right(data):
+				Assert.isNull(data);
+			case Left(message):
+				Assert.fail(message);
+		}
+	}
+
 	@:pin('control')
 	@:killer('M-MODMOVE-DECL-UNKNOWN-KEY')
 	public function testADeclarationWithAnUnknownKeyIsRefused(): Void {

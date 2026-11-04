@@ -1,7 +1,6 @@
 package anyparse.check.oracle;
 
 import anyparse.check.oracle.HaxeSpawn.DriverBatch;
-import anyparse.check.oracle.HaxeSpawn.SpawnJob;
 import anyparse.core.PhaseTimings;
 import haxe.Exception;
 #if nodejs

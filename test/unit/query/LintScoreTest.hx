@@ -240,6 +240,16 @@ class LintScoreTest extends Test {
 		Assert.stringContains('"function": "A.e"', json);
 		Assert.stringContains('"severity": "warning"', json);
 		Assert.stringContains('"excluded": 0', json);
+		Assert.stringContains(
+			'"overall": {\n    "family": "all",\n    "findings": 4,\n    "keys": 4,\n    "duplicates": 0,\n    "matched": {\n'
+			+ '      "real-long": 1,\n',
+			json
+		);
+		Assert.stringContains(
+			'"lost": [],\n  "unlabelled": [\n    {\n      "family": "A",\n      "function": "A.e",\n      "subject": "S.f",\n'
+			+ '      "count": 1,\n      "file": "src/A.hx"\n    }\n  ]\n}',
+			json
+		);
 	}
 
 	/** The command exits 1 when a recall entry is lost, 0 when none is, 2 when the truth is refused or nothing is scored. */

@@ -1,8 +1,9 @@
 package anyparse.check.oracle;
 
-import anyparse.check.oracle.HaxeSpawn.SpawnJob;
 import anyparse.core.PhaseTimings;
 import anyparse.core.TempScratch;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import haxe.io.Path;
@@ -314,10 +315,11 @@ final class ReachDefinesProbe {
 
 	/** The define and value one value line carries — a JSON array of two strings — or null for anything else. */
 	private static function valuePair(json: String): Null<{ name: String, value: String }> {
-		final read: Null<Dynamic> = try haxe.Json.parse(json) catch (exception: haxe.Exception) null;
-		if (read == null || !(read is Array)) return null;
-		final pair: Array<Dynamic> = read;
-		return pair.length != 2 || !(pair[0] is String) || !(pair[1] is String) ? null : { name: '${pair[0]}', value: '${pair[1]}' };
+		final read: Null<JValue> = try JValueParser.parse(json) catch (exception: haxe.Exception) null;
+		return switch read {
+			case JArray([JString(name), JString(value)]): { name: name, value: value };
+			case _: null;
+		};
 	}
 
 	private static function defines(list: String): Array<String> {

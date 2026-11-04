@@ -1,20 +1,13 @@
 package anyparse.query;
 
+import anyparse.grammar.json.JValue;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.query.format.json.MutationArmJson;
+import anyparse.query.format.json.MutationArmRegistryJsonParser;
 import anyparse.runtime.Span;
-import haxe.Json;
 
 using Lambda;
-
-/** The fields of one mutation-arm record the retarget hint reads (the registry's own schema is the test kit's). */
-private typedef ArmAddress = {
-	final name: String;
-	final type: String;
-	final method: String;
-	final ?kind: String;
-	final ?find: Any;
-}
 
 /**
  * The mutation-arm RETARGET HINT of `move-to-helper --arms <registry.json>`: which arms address a member the move took
@@ -40,9 +33,10 @@ final class MoveToHelperArms {
 		final members: Map<String, Map<String, Array<String>>> = membersByType(changes, plugin);
 		final srcFqn: Null<String> = [for (fqn in members.keys()) fqn].find(fqn -> lastSegment(fqn) == srcTypeName);
 		final helperFqn: Null<String> = [for (fqn in members.keys()) fqn].find(fqn -> lastSegment(fqn) == helperName);
-		final arms: Array<ArmAddress> = (Json.parse(armsJson).arms: Array<ArmAddress>);
 		final out: Array<String> = [];
-		for (arm in arms) if ((arm.kind ?? 'FnMember') == 'FnMember' && members.exists(arm.type)) {
+		for (arm in MutationArmRegistryJsonParser.parse(armsJson).arms) if (
+			(arm.kind ?? 'FnMember') == 'FnMember' && members.exists(arm.type)
+		) {
 			var type: String = arm.type;
 			final srcMembers: Map<String, Array<String>> = members[arm.type] ?? [];
 			final helperMembers: Map<String, Array<String>> = helperFqn == null ? [] : members[helperFqn] ?? [];
@@ -89,17 +83,17 @@ final class MoveToHelperArms {
 		return out;
 	}
 
-	/** An arm's `find` fragments: none for a forced-return arm, one for the scalar spelling, N for the list. */
-	private static function findsOf(arm: ArmAddress): Array<String> {
-		final find: Null<Any> = arm.find;
-		return if (find == null)
-			[]
-		else if (Std.isOfType(find, String))
-			[(find: String)]
-		else if (Std.isOfType(find, Array))
-			[for (f in (find: Array<Any>)) '$f']
-		else
-			[];
+	private static function findsOf(arm: MutationArmJson): Array<String> {
+		return switch arm.find {
+			case JString(find): [find];
+			case JArray(items): [
+				for (item in items) switch item {
+					case JString(find): find;
+					case _: continue;
+				}
+			];
+			case _: [];
+		};
 	}
 
 	/**

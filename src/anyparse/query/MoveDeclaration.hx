@@ -1,10 +1,12 @@
 package anyparse.query;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.query.DeclaredSortedLists.SortedListPart;
 import anyparse.query.ModuleMove.TestMirror;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import haxe.Exception;
-import haxe.Json;
 import haxe.ds.Either;
 import haxe.io.Path;
 
@@ -59,9 +61,14 @@ final class MoveDeclaration {
 	 * `Left` names the first malformed entry.
 	 */
 	public static function read(json: String, baseDir: String): Either<String, Null<MoveDeclarationData>> {
-		final root: Dynamic = try Json.parse(json) catch (exception: Exception) return Left('not JSON: ${exception.message}');
-		final section: Dynamic = Reflect.field(root, KEY);
+		final root: JValue = try JValueParser.parse(json) catch (exception: Exception) return Left('not JSON: ${exception.message}');
+		final section: Null<JValue> = JValueTools.field(root, KEY);
 		if (section == null) return Right(null);
+		switch section {
+			case JObject(_):
+			case _:
+				return Left('"$KEY" is not an object');
+		}
 		final at: (String) -> String = p -> Path.isAbsolute(p) ? Path.normalize(p) : Path.normalize(Path.join([baseDir, p]));
 		final unknown: Null<String> = unknownKey(section, KEY, [
 			'scope',
@@ -102,52 +109,69 @@ final class MoveDeclaration {
 	}
 
 	/** The string array at `key` of `node` (empty when absent); throws naming the key when it is anything else. */
-	private static function strings(node: Dynamic, key: String): Array<String> {
-		final value: Dynamic = Reflect.field(node, key);
-		if (value == null) return [];
-		if (!(value is Array)) throw new Exception('"$KEY.$key" is not an array of strings');
-		final items: Array<Dynamic> = value;
-		return [
-			for (item in items) item is String ? (item: String) : throw new Exception('"$KEY.$key" holds a non-string')
-		];
+	private static function strings(node: Null<JValue>, key: String): Array<String> {
+		return switch JValueTools.field(node, key) {
+			case null:
+				[];
+			case JArray(items):
+				[
+					for (item in items) switch item {
+						case JString(text): text;
+						case _: throw new Exception('"$KEY.$key" holds a non-string');
+					}
+				];
+			case _:
+				throw new Exception('"$KEY.$key" is not an array of strings');
+		};
 	}
 
 	/**
 	 * The object array at `key` of `node` (empty when absent), each object carrying only `allowed` keys; throws naming the
 	 * key when it is anything else.
 	 */
-	private static function objects(node: Dynamic, key: String, allowed: Array<String>): Array<Dynamic> {
-		final value: Dynamic = Reflect.field(node, key);
-		if (value == null) return [];
-		if (!(value is Array)) throw new Exception('"$KEY.$key" is not an array of objects');
-		final items: Array<Dynamic> = value;
-		for (item in items) {
-			if (item == null || !Reflect.isObject(item) || item is String || item is Array)
+	private static function objects(node: Null<JValue>, key: String, allowed: Array<String>): Array<JValue> {
+		final items: Array<JValue> = switch JValueTools.field(node, key) {
+			case null: [];
+			case JArray(held): held;
+			case _: throw new Exception('"$KEY.$key" is not an array of objects');
+		};
+		for (item in items) switch item {
+			case JObject(_):
+				final unknown: Null<String> = unknownKey(item, '$KEY.$key', allowed);
+				if (unknown != null) throw new Exception(unknown);
+			case _:
 				throw new Exception('"$KEY.$key" holds a non-object');
-			final unknown: Null<String> = unknownKey(item, '$KEY.$key', allowed);
-			if (unknown != null) throw new Exception(unknown);
 		}
 		return items;
 	}
 
 	/** The required string `key` of an entry of `owner`; throws naming both when it is missing or not a string. */
-	private static function string(node: Dynamic, owner: String, key: String): String {
-		final value: Dynamic = Reflect.field(node, key);
-		if (!(value is String)) throw new Exception('an entry of "$KEY.$owner" has no string "$key"');
-		return value;
+	private static function string(node: JValue, owner: String, key: String): String {
+		return switch JValueTools.field(node, key) {
+			case JString(text): text;
+			case _: throw new Exception('an entry of "$KEY.$owner" has no string "$key"');
+		};
 	}
 
 	/** The diagnostic for the first key of `node` outside `allowed` (`label` naming where it sits), or null when there is none. */
-	private static function unknownKey(node: Dynamic, label: String, allowed: Array<String>): Null<String> {
-		for (field in Reflect.fields(node)) if (!allowed.contains(field))
-			return '"$label" declares unknown key "$field" (known: ${allowed.join(', ')})';
-		return null;
+	private static function unknownKey(node: JValue, label: String, allowed: Array<String>): Null<String> {
+		return switch node {
+			case JObject(entries):
+				for (entry in entries) if (!allowed.contains(entry.key))
+					return '"$label" declares unknown key "${entry.key}" (known: ${allowed.join(', ')})';
+				null;
+			case _:
+				null;
+		};
 	}
 
 	/** One `registries` entry; a `byPackage` one names the array and the type field of its records by a two-segment key. */
-	private static function registry(entry: Any, at: (String) -> String): TypePathRegistry {
+	private static function registry(entry: JValue, at: (String) -> String): TypePathRegistry {
 		final keys: Array<String> = strings(entry, 'keys');
-		final byPackage: Bool = Reflect.field(entry, 'byPackage') == true;
+		final byPackage: Bool = switch JValueTools.field(entry, 'byPackage') {
+			case JBool(true): true;
+			case _: false;
+		};
 		if (byPackage && !keys.exists(k -> k.split('.').length == 2))
 			throw new Exception('"$KEY.registries" marks "byPackage" a registry with no key of the form "<array>.<field>"');
 		return { file: at(string(entry, 'registries', 'file')), keys: keys, byPackage: byPackage };

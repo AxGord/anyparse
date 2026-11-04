@@ -57,7 +57,8 @@ class SweepRunCensusCliTest extends Test {
 		Assert.stringContains('0 fixtures changed', same);
 		// A flipped baseline must be REPORTED, not absorbed — otherwise the
 		// `0 fixtures changed` above would be a gate that cannot fail.
-		final raw: String = File.getContent(snapshot);
+		// Respelled the way an earlier engine wrote it, no space after a comma: that document still reads.
+		final raw: String = File.getContent(snapshot).split(', "').join(',"');
 		File.saveContent(snapshot, raw.split('{"path":"b_fail.hxtest","status":"FAIL"}').join('{"path":"b_fail.hxtest","status":"PASS"}'));
 		final flipped: String = CliFixture.captureStdout(() -> Cli.run(['sweep', '--run', '--corpus', dir, '--diff', snapshot]));
 		Assert.stringContains('PASS -> FAIL: b_fail.hxtest', flipped);

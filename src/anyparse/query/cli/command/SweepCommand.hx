@@ -1,10 +1,12 @@
 package anyparse.query.cli.command;
 
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.command.SweepCorpus.SweepCorpusResult;
 import anyparse.query.format.json.SweepFixture;
 import anyparse.query.format.json.SweepSnapshot;
 import anyparse.query.format.json.SweepSnapshotParser;
+import anyparse.query.format.json.SweepSnapshotWriter;
 
 using Lambda;
 
@@ -422,17 +424,16 @@ final class SweepCommand implements CliCommand {
 		}
 		if (savePath != null) {
 			try {
-				sys.io.File.saveContent(
-					(savePath: String), haxe.Json.stringify({
-						pass: census.pass,
-						fail: census.fail,
-						skipParse: census.skipParse,
-						skipWrite: census.skipWrite,
-						skipConfig: census.skipConfig,
-						skipMalformed: census.skipMalformed,
-						fixtures: census.entries
-					})
-				);
+				final snapshot: SweepSnapshot = {
+					pass: census.pass,
+					fail: census.fail,
+					skipParse: census.skipParse,
+					skipWrite: census.skipWrite,
+					skipConfig: census.skipConfig,
+					skipMalformed: census.skipMalformed,
+					fixtures: [for (entry in census.entries) { path: entry.path, status: entry.status }]
+				};
+				sys.io.File.saveContent((savePath: String), SweepSnapshotWriter.write(snapshot, JsonFormat.instance.compactWriteOptions));
 				CliIo.sysPrint('apq sweep: saved census of $root -> $savePath\n');
 			} catch (e: Exception) {
 				CliIo.stderr('apq sweep: --save failed: ${e.message}\n');

@@ -1,9 +1,9 @@
 package anyparse.query.cli;
 
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.DeclarationDelta;
 import anyparse.query.merge.RecordTree;
-import haxe.Json;
 
 using Lambda;
 
@@ -232,7 +232,7 @@ final class DataDelta {
 	private static function shown(value: QueryNode, source: String, shape: RefShape): String {
 		final name: Null<String> = DataPath.isString(value, shape) ? value.name : null;
 		final text: String = name != null && isDigest(name)
-			? Json.stringify(name.substr(0, DIGEST_KEPT) + CUT)
+			? JsonFormat.instance.quote(name.substr(0, DIGEST_KEPT) + CUT)
 			: DataPath.json(value, source, shape);
 		return text.length > MAX_SHOWN ? text.substr(0, MAX_SHOWN) + CUT : text;
 	}

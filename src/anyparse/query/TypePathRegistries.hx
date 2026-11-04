@@ -1,7 +1,9 @@
 package anyparse.query;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import haxe.Exception;
-import haxe.Json;
 
 /**
  * A data file a project declares to hold TYPE PATHS at some of its keys — a mutation-arm registry's `type`, a lint
@@ -36,8 +38,8 @@ final class TypePathRegistries {
 	 * other, or the reason the file cannot be read as JSON. Empty when the relocation keeps every glob's reach.
 	 */
 	public static function globRefusals(registry: TypePathRegistry, json: String, moved: Array<TypePathMove>): Array<String> {
-		final root: Dynamic = try {
-			Json.parse(json);
+		final root: JValue = try {
+			JValueParser.parse(json);
 		} catch (exception: Exception) {
 			return ['declared type-path registry ${registry.file} is not JSON: ${exception.message}'];
 		};
@@ -60,14 +62,17 @@ final class TypePathRegistries {
 	}
 
 	/** Every string at `path[i..]` under `node`, arrays transparent. */
-	private static function valuesAt(node: Dynamic, path: Array<String>, i: Int): Array<String> {
-		if (node is Array) {
-			final items: Array<Dynamic> = node;
-			return [for (item in items) for (v in valuesAt(item, path, i)) v];
-		}
-		if (i == path.length) return node is String ? [(node: String)] : [];
-		if (node == null || !Reflect.isObject(node) || node is String) return [];
-		return valuesAt(Reflect.field(node, path[i]), path, i + 1);
+	private static function valuesAt(node: Null<JValue>, path: Array<String>, i: Int): Array<String> {
+		return switch node {
+			case JArray(items):
+				[for (item in items) for (v in valuesAt(item, path, i)) v];
+			case JString(text):
+				i == path.length ? [text] : [];
+			case JObject(_) if (i < path.length):
+				valuesAt(JValueTools.field(node, path[i]), path, i + 1);
+			case _:
+				[];
+		};
 	}
 
 }

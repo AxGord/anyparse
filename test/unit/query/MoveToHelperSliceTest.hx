@@ -5,6 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
+import anyparse.query.ExitCode;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.MoveToHelper;
@@ -25,12 +26,11 @@ class MoveToHelperSliceTest extends Test {
 	/** The headline source: instance state, a private constant, a private typedef, a staying static, an interpolation. */
 	private static final SRC: String = 'package a;\n\nclass Src {\n\tprivate static inline final SCALE: Int = 10;\n'
 		+ '\tpublic static final OPEN: Int = 3;\n\n\tprivate var count: Int = 1;\n\tprivate var hits: Int = 0;\n'
-		+ '\tpublic var label: String = \'x\';\n\n\tpublic function new() {}\n\n\tpublic function go(): Int {\n'
-		+ '\t\treturn total(2) + this.total(3);\n\t}\n\n\tprivate function total(k: Int): Int {\n\t\tcount++;\n\t\thits++;\n'
-		+ '\t\tfinal e: Entry = { n: k };\n\t\treturn twice(e.n) * SCALE + count + OPEN + \'$$label\'.length + helperOf(this);\n'
-		+ '\t}\n\n\tprivate function twice(v: Int): Int {\n\t\treturn v * 2 + count;\n\t}\n\n'
-		+ '\tprivate static function helperOf(s: Src): Int {\n\t\treturn s.count;\n\t}\n}\n\nprivate typedef Entry = {\n'
-		+ '\tvar n: Int;\n}\n';
+		+ '\tpublic var label: String = \'x\';\n\n\tpublic function new() {}\n\n\tpublic function go(): Int {\n\t\treturn '
+		+ 'total(2) + this.total(3);\n\t}\n\n\tprivate function total(k: Int): Int {\n\t\tcount++;\n\t\thits++;\n\t\tfinal '
+		+ 'e: Entry = { n: k };\n\t\treturn twice(e.n) * SCALE + count + OPEN + \'$$label\'.length + helperOf(this);\n'
+		+ '\t}\n\n\tprivate function twice(v: Int): Int {\n\t\treturn v * 2 + count;\n\t}\n\n\tprivate static function '
+		+ 'helperOf(s: Src): Int {\n\t\treturn s.count;\n\t}\n}\n\nprivate typedef Entry = {\n\tvar n: Int;\n}\n';
 
 	/** A caller in another file, reaching a moved member through a receiver typed as the source. */
 	private static final USER: String = 'package a;\n\nclass User {\n\tpublic static function use(s: Src): Int {\n'
@@ -56,23 +56,24 @@ class MoveToHelperSliceTest extends Test {
 		capture(result, [
 			{
 				file: 'a/Src.hx',
-				source: 'package a;\n\nclass Src {\n\tpublic static final OPEN: Int = 3;\n\n\tprivate var count: Int = 1;\n\tprivate var hits: Int = 0;\n'
-				+ '\tpublic var label: String = \'x\';\n\n\tpublic function new() {}\n\n\tpublic function go(): Int {\n'
-				+ '\t\treturn SrcMath.total(this, 2) + SrcMath.total(this, 3);\n\t}\n\n\tprivate static function helperOf(s: Src): Int {\n'
-				+ '\t\treturn s.count;\n\t}\n}\n'
+				source: 'package a;\n\nclass Src {\n\tpublic static final OPEN: Int = 3;\n\n\tprivate var count: Int = 1;\n'
+				+ '\tprivate var hits: Int = 0;\n\tpublic var label: String = \'x\';\n\n\tpublic function new() {}\n\n'
+				+ '\tpublic function go(): Int {\n\t\treturn SrcMath.total(this, 2) + SrcMath.total(this, 3);\n\t}\n\n'
+				+ '\tprivate static function helperOf(s: Src): Int {\n\t\treturn s.count;\n\t}\n}\n'
 			},
 			{
 				file: 'a/User.hx',
-				source: 'package a;\n\nclass User {\n\tpublic static function use(s: Src): Int {\n\t\treturn s.go() + @:privateAccess SrcMath.total(s, 1);\n'
-				+ '\t}\n}\n'
+				source: 'package a;\n\nclass User {\n\tpublic static function use(s: Src): Int {\n'
+				+ '\t\treturn s.go() + @:privateAccess SrcMath.total(s, 1);\n\t}\n}\n'
 			},
 			{
 				file: 'a/SrcMath.hx',
-				source: 'package a;\n\n/**\n * Static helpers taken out of `Src`: each reads the `Src` it is handed as its first parameter.\n'
-				+ ' */\n@:access(a.Src)\nfinal class SrcMath {\n\n\tprivate static inline final SCALE: Int = 10;\n\n\tpublic static function total(g: '
-				+ 'Src, k: Int): Int {\n\t\tg.count++;\n\t\tg.hits++;\n\t\tfinal e: Entry = { n: k };\n\t\treturn twice(g, e.n) * SCALE + g.count + Src.OPEN '
-				+ '+ \'$${g.label}\'.length + Src.helperOf(g);\n\t}\n\n\tprivate static function twice(g: Src, v: Int): Int {\n'
-				+ '\t\treturn v * 2 + g.count;\n\t}\n\n}\n\nprivate typedef Entry = {\n\tvar n: Int;\n}\n'
+				source: 'package a;\n\n/**\n * Static helpers taken out of `Src`: each reads the `Src` it is handed as its first '
+				+ 'parameter.\n */\n@:access(a.Src)\nfinal class SrcMath {\n\n\tprivate static inline final SCALE: Int = 10;\n\n'
+				+ '\tpublic static function total(g: Src, k: Int): Int {\n\t\tg.count++;\n\t\tg.hits++;\n'
+				+ '\t\tfinal e: Entry = { n: k };\n\t\treturn twice(g, e.n) * SCALE + g.count + Src.OPEN + \'$${g.label}\'.length '
+				+ '+ Src.helperOf(g);\n\t}\n\n\tprivate static function twice(g: Src, v: Int): Int {\n\t\treturn v * 2 + g.count;\n'
+				+ '\t}\n\n}\n\nprivate typedef Entry = {\n\tvar n: Int;\n}\n'
 			}
 		]);
 	}
@@ -105,9 +106,9 @@ class MoveToHelperSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-HELPER-CALL-ORDER')
 	public function testNestedCallsKeepTheOuterCallFirst(): Void {
-		final src: String = 'package a;\n\nclass Src {\n\tvar n: Int = 2;\n\n\tpublic function new() {}\n\n\tpublic function self(): Src {\n'
-			+ '\t\treturn this;\n\t}\n\n\tpublic function add(k: Int): Int {\n\t\treturn n + k;\n\t}\n\n\tpublic function chain(): Int {\n'
-			+ '\t\treturn add(add(1)) + self().add(3) + this.self().self().add(4);\n\t}\n}\n';
+		final src: String = 'package a;\n\nclass Src {\n\tvar n: Int = 2;\n\n\tpublic function new() {}\n\n\tpublic function self(): Src '
+			+ '{\n\t\treturn this;\n\t}\n\n\tpublic function add(k: Int): Int {\n\t\treturn n + k;\n\t}\n\n\tpublic '
+			+ 'function chain(): Int {\n\t\treturn add(add(1)) + self().add(3) + this.self().self().add(4);\n\t}\n}\n';
 		final helper: String = okSource(move('add,self,chain', 'Ops', [{ file: 'a/Src.hx', source: src }]), 'a/Ops.hx');
 		Assert.isTrue(helper.contains('return add(src, add(src, 1)) + add(self(src), 3) + add(self(self(src)), 4);'), helper);
 		Assert.isTrue(helper.contains('public static function self(src: Src): Src {\n\t\treturn src;'), helper);
@@ -120,8 +121,8 @@ class MoveToHelperSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-HELPER-SUBTYPE-CALLERS-SKIPPED')
 	public function testASubtypesBareCallIsRewritten(): Void {
-		final src: String = 'package a;\n\nclass Src {\n\tvar n: Int = 2;\n\n\tpublic function new() {}\n\n\tpublic function self(): Src {\n'
-			+ '\t\treturn this;\n\t}\n\n\tpublic function add(k: Int): Int {\n\t\treturn n + k;\n\t}\n}\n';
+		final src: String = 'package a;\n\nclass Src {\n\tvar n: Int = 2;\n\n\tpublic function new() {}\n\n\tpublic function self(): Src '
+			+ '{\n\t\treturn this;\n\t}\n\n\tpublic function add(k: Int): Int {\n\t\treturn n + k;\n\t}\n}\n';
 		final sub: String =
 			'package a;\n\nclass Sub extends Src {\n\tpublic function more(): Int {\n\t\treturn add(5) + self().add(6);\n\t}\n}\n';
 		final out: String = okSource(
@@ -154,9 +155,8 @@ class MoveToHelperSliceTest extends Test {
 	 * `Ops.twice(…)`, and the moved instance member's call of it stays bare in the helper.
 	 */
 	public function testAMovedStaticMovesAsMoveMemberMovesOne(): Void {
-		final src: String = 'package a;\n\nclass Src {\n\tpublic var n: Int = 2;\n\n\tpublic function new() {}\n\n'
-			+ '\tpublic static function twice(v: Int): Int {\n\t\treturn v * 2;\n\t}\n\n\tpublic function add(): Int {\n'
-			+ '\t\treturn twice(n);\n\t}\n}\n';
+		final src: String = 'package a;\n\nclass Src {\n\tpublic var n: Int = 2;\n\n\tpublic function new() {}\n\n\tpublic static function '
+			+ 'twice(v: Int): Int {\n\t\treturn v * 2;\n\t}\n\n\tpublic function add(): Int {\n\t\treturn twice(n);\n\t}\n}\n';
 		final user: String = 'package a;\n\nclass User {\n\tpublic static function run(): Int {\n\t\treturn Src.twice(3);\n\t}\n}\n';
 		final result: MoveResult = move('twice,add', 'Ops', [{ file: 'a/Src.hx', source: src }, { file: 'a/User.hx', source: user }]);
 		Assert.isTrue(okSource(result, 'a/User.hx').contains('return Ops.twice(3);'));
@@ -186,6 +186,50 @@ class MoveToHelperSliceTest extends Test {
 		], hints);
 	}
 
+	/** An arm with no string name, type or method refuses the registry rather than being skipped. */
+	public function testAWrongShapedArmRefusesTheRegistry(): Void {
+		for (arm in ['{"name": "M-A"}', '{"name": "M-A", "type": "a.Src", "method": 1}'])
+			Assert.raises(() -> MoveToHelperArms.hints('{"arms": [$arm]}', [], 'Src', 'SrcMath', new HaxeQueryPlugin()));
+	}
+
+	/** The command answers a wrong-shaped registry with one line naming the document and an exit code, before anything is written. */
+	public function testAWrongShapedRegistryIsACleanRefusal(): Void {
+		#if (sys || nodejs)
+		for (document in [
+			'{"arms":[{"name":"M-A"}]}',
+			'{"arms":[{"name":"M-A","type":"a.Src"}]}',
+			'{"arms":[{"name":"M-A","type":"a.Src","method":1}]}',
+			'not json'
+		]) {
+			final dir: String = CliFixture.writeTree(
+				'movetohelper', [{ name: 'a/Src.hx', source: SRC }, { name: 'arms.json', source: document }]
+			);
+			CliFixture.always(CliFixture.removeDir.bind(dir), () -> {
+				final args: Array<String> = [
+					'move-to-helper',
+					'$dir/a/Src.hx',
+					'total',
+					'--to',
+					'SrcMath',
+					'--scope',
+					'$dir/a',
+					'--param',
+					'g',
+					'--arms',
+					'$dir/arms.json',
+					'--write'
+				];
+				final stderr: String = CliFixture.captureStderr(() -> Assert.equals(ExitCode.EXIT_RUNTIME, Cli.run(args)));
+				Assert.isTrue(stderr.startsWith('apq move-to-helper: $dir/arms.json: '), stderr);
+				Assert.equals(1, stderr.trim().split('\n').length, 'no stack: $stderr');
+				Assert.isFalse(FileSystem.exists('$dir/a/SrcMath.hx'), 'nothing is written');
+			});
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	// ---- refusals ----
 
 	/**
@@ -196,7 +240,7 @@ class MoveToHelperSliceTest extends Test {
 	public function testTheDryRunWritesNothingAndTheWriteCreatesTheHelper(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeTree('movetohelper', [{ name: 'a/Src.hx', source: SRC }]);
-		CliFixture.always(() -> CliFixture.removeDir(dir), () -> {
+		CliFixture.always(CliFixture.removeDir.bind(dir), () -> {
 			final args: Array<String> = [
 				'move-to-helper',
 				'$dir/a/Src.hx',
@@ -284,16 +328,16 @@ class MoveToHelperSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-HELPER-VALUE-USE-ALLOWED')
 	public function testAMemberPassedAsAFunctionValueIsRefused(): Void {
-		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(x: Int): Int {\n\t\treturn x;\n\t}\n\n'
-			+ '\tpublic function g(): Array<Int> {\n\t\treturn [1].map(f);\n\t}\n}\n';
+		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(x: Int): Int {\n\t\treturn x;\n'
+			+ '\t}\n\n\tpublic function g(): Array<Int> {\n\t\treturn [1].map(f);\n\t}\n}\n';
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), '"f" is used as a function value at a/Src.hx:11:18');
 	}
 
 	@:pin('control')
 	@:killer('M-HELPER-RECEIVER-VALUE-ALLOWED')
 	public function testABoundMemberIsRefused(): Void {
-		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(x: Int): Int {\n\t\treturn x;\n\t}\n\n'
-			+ '\tpublic function g(): () -> Int {\n\t\treturn this.f.bind(1);\n\t}\n}\n';
+		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(x: Int): Int {\n\t\treturn x;\n'
+			+ '\t}\n\n\tpublic function g(): () -> Int {\n\t\treturn this.f.bind(1);\n\t}\n}\n';
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), '"f" is used as a function value');
 	}
 
@@ -317,32 +361,33 @@ class MoveToHelperSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-HELPER-MODULE-VALUE-ALLOWED')
 	public function testAModuleLevelValueIsRefused(): Void {
-		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(): Int {\n\t\treturn helper();\n\t}\n}\n\n'
-			+ 'function helper(): Int {\n\treturn 1;\n}\n';
+		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(): Int {\n'
+			+ '\t\treturn helper();\n\t}\n}\n\nfunction helper(): Int {\n\treturn 1;\n}\n';
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), 'a module-level declaration of a/Src.hx');
 	}
 
 	@:pin('control')
 	@:killer('M-HELPER-SHARED-TYPE-ALLOWED')
 	public function testAPrivateTypeTheStayingCodeNamesIsRefused(): Void {
-		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(e: Entry): Int {\n\t\treturn e.n;\n\t}\n\n'
-			+ '\tpublic function g(): Entry {\n\t\treturn { n: 1 };\n\t}\n}\n\nprivate typedef Entry = {\n\tvar n: Int;\n}\n';
+		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(e: Entry): Int {\n'
+			+ '\t\treturn e.n;\n\t}\n\n\tpublic function g(): Entry {\n\t\treturn { n: 1 };\n\t}\n}\n\n'
+			+ 'private typedef Entry = {\n\tvar n: Int;\n}\n';
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), 'the private type "Entry" is named both');
 	}
 
 	@:pin('control')
 	@:killer('M-HELPER-PARAM-CLASH-UNCHECKED')
 	public function testAParameterNameTheMovedCodeSpellsIsRefused(): Void {
-		final src: String = 'package a;\n\nclass Src {\n\tvar n: Int = 1;\n\n\tpublic function new() {}\n\n\tpublic function f(g: Int): Int {\n'
-			+ '\t\treturn g + n;\n\t}\n}\n';
+		final src: String = 'package a;\n\nclass Src {\n\tvar n: Int = 1;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function f(g: Int): Int {\n\t\treturn g + n;\n\t}\n}\n';
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }], 'g'), 'the moved code already spells "g" at a/Src.hx:8:20');
 	}
 
 	@:pin('control')
 	@:killer('M-HELPER-GENERIC-ALLOWED')
 	public function testAGenericSourceIsRefused(): Void {
-		final src: String = 'package a;\n\nclass Src<T> {\n\tvar v: Null<T> = null;\n\n\tpublic function new() {}\n\n\tpublic function f(): Null<T> {\n'
-			+ '\t\treturn v;\n\t}\n}\n';
+		final src: String = 'package a;\n\nclass Src<T> {\n\tvar v: Null<T> = null;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function f(): Null<T> {\n\t\treturn v;\n\t}\n}\n';
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), '"Src" is generic');
 	}
 
@@ -351,45 +396,6 @@ class MoveToHelperSliceTest extends Test {
 	public function testANonClassSourceIsRefused(): Void {
 		final src: String = 'package a;\n\nabstract Src(Int) {\n\tpublic function f(): Int {\n\t\treturn this + 1;\n\t}\n}\n';
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), '"Src" is not a class');
-	}
-
-	private static function move(
-		names: String, helper: String, files: Array<{ file: String, source: String }>, ?param: String
-	): MoveResult {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return MoveToHelper.move('a/Src.hx', 'Src', names.split(','), helper, null, param, files, plugin, plugin.typeRefShape());
-	}
-
-	private static function okSource(result: MoveResult, file: String): String {
-		return switch result {
-			case Ok(changes, _): changes.find(c -> c.file == file)?.newSource ?? 'NO CHANGE FOR $file';
-			case Err(message): 'Err: $message';
-		};
-	}
-
-	private static function refused(result: MoveResult, reason: String): Void {
-		switch result {
-			case Ok(changes, _):
-				Assert.fail('expected a refusal naming "$reason", got Ok over ${[for (c in changes) c.file].join(', ')}');
-			case Err(message):
-				Assert.isTrue(message.contains(reason), message);
-		}
-	}
-
-	private function capture(result: MoveResult, expected: Array<{ file: String, source: String }>): Void {
-		switch result {
-			case Ok(changes, _):
-				Assert.equals(expected.length, changes.length, 'changed-file count, got ${[for (c in changes) c.file].join(', ')}');
-				for (e in expected) {
-					final change: Null<MoveChange> = changes.find(c -> c.file == e.file);
-					if (change == null)
-						Assert.fail('no change for ${e.file}');
-					else
-						Assert.equals(e.source, change.newSource, 'byte capture for ${e.file}');
-				}
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
 	}
 
 	/**
@@ -409,7 +415,8 @@ class MoveToHelperSliceTest extends Test {
 			{ file: 'a/Mid.hx', source: 'package a;\n\nclass Mid extends haxe.io.Output {}\n' },
 			{
 				file: 'io/Output.hx',
-				source: 'package io;\n\nclass Output {\n\tpublic function new() {}\n\n\tpublic function helperFn(): Int {\n\t\treturn 1;\n\t}\n}\n'
+				source: 'package io;\n\nclass Output {\n\tpublic function new() {}\n\n\tpublic function helperFn(): Int {\n\t\treturn 1;\n'
+					+ '\t}\n}\n'
 			},
 			{
 				file: 'a/Util.hx',
@@ -437,7 +444,8 @@ class MoveToHelperSliceTest extends Test {
 			},
 			{
 				file: 'a/Mid.hx',
-				source: 'package a;\n\nclass Mid {\n\tpublic function new() {}\n\n\tpublic static function helperFn(): Int {\n\t\treturn 7;\n\t}\n}\n'
+				source: 'package a;\n\nclass Mid {\n\tpublic function new() {}\n\n\tpublic static function helperFn(): Int {\n'
+					+ '\t\treturn 7;\n\t}\n}\n'
 			},
 			{
 				file: 'a/Util.hx',
@@ -445,6 +453,45 @@ class MoveToHelperSliceTest extends Test {
 			}
 		];
 		refused(move('work', 'SrcTools', files), 'reached through an import of the field itself');
+	}
+
+	private function capture(result: MoveResult, expected: Array<{ file: String, source: String }>): Void {
+		switch result {
+			case Ok(changes, _):
+				Assert.equals(expected.length, changes.length, 'changed-file count, got ${[for (c in changes) c.file].join(', ')}');
+				for (e in expected) {
+					final change: Null<MoveChange> = changes.find(c -> c.file == e.file);
+					if (change == null)
+						Assert.fail('no change for ${e.file}');
+					else
+						Assert.equals(e.source, change.newSource, 'byte capture for ${e.file}');
+				}
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private static function move(
+		names: String, helper: String, files: Array<{ file: String, source: String }>, ?param: String
+	): MoveResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return MoveToHelper.move('a/Src.hx', 'Src', names.split(','), helper, null, param, files, plugin, plugin.typeRefShape());
+	}
+
+	private static function okSource(result: MoveResult, file: String): String {
+		return switch result {
+			case Ok(changes, _): changes.find(c -> c.file == file)?.newSource ?? 'NO CHANGE FOR $file';
+			case Err(message): 'Err: $message';
+		};
+	}
+
+	private static function refused(result: MoveResult, reason: String): Void {
+		switch result {
+			case Ok(changes, _):
+				Assert.fail('expected a refusal naming "$reason", got Ok over ${[for (c in changes) c.file].join(', ')}');
+			case Err(message):
+				Assert.isTrue(message.contains(reason), message);
+		}
 	}
 
 }

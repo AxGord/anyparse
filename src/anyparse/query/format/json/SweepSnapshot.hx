@@ -6,8 +6,8 @@ package anyparse.query.format.json;
  * `Cli.loadSweepJson` / `Cli.loadSweepFixtureStatus`. Parsed by the
  * macro-generated `SweepSnapshotParser` (ByName struct lowering).
  *
- * The writer always emits all seven keys below in one `haxe.Json.stringify`
- * call, but the two readers each need only part of the shape:
+ * The writer always emits all seven keys below, but the two readers each need
+ * only part of the shape:
  * `loadSweepJson` reads the six int totals and ignores `fixtures`;
  * `loadSweepFixtureStatus` reads only `fixtures` and ignores the totals.
  * Every field is `@:optional` so either reader can parse the same root

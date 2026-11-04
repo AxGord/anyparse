@@ -39,6 +39,18 @@ final class JsonFormat implements TextFormat {
 	/** JSON string-escape char code for form feed (`\f`). */
 	private static inline final FORM_FEED: Int = 0x0C;
 
+	/** The line width of `defaultWriteOptions`. */
+	private static inline final DEFAULT_LINE_WIDTH: Int = 120;
+
+	/** A line width no document reaches. */
+	private static inline final UNBOUNDED_LINE_WIDTH: Int = 0x3FFFFFFF;
+
+	/** The first high surrogate; the low ones start where the high ones end. */
+	private static inline final HIGH_SURROGATE: Int = 0xD800;
+
+	private static inline final LOW_SURROGATE: Int = 0xDC00;
+	private static inline final LAST_SURROGATE: Int = 0xDFFF;
+
 	public var name(default, null): String = 'JSON';
 	public var version(default, null): String = '1.0';
 	public var encoding(default, null): Encoding = Encoding.UTF8;
@@ -105,30 +117,30 @@ final class JsonFormat implements TextFormat {
 	 * newline. Generated JSON writers use this struct when the caller
 	 * omits the `options` argument to `write()`.
 	 */
-	public var defaultWriteOptions(default, null): WriteOptions = {
-		indentChar: Space,
-		indentSize: 4,
-		tabWidth: 4,
-		lineWidth: 120,
-		lineEnd: '\n',
-		finalNewline: false,
-		trailingWhitespace: false,
-		maxConsecutiveBlanks: -1,
-		commentStyle: Verbatim,
-		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
-		trailingComma: TrailingCommaPolicy.Keep,
-		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
-		alignInlineSwitchCaseBody: false,
-		comprehensionCuddledOpen: false,
-		soleItemCuddledBrackets: false,
-		methodChainCuddledLinks: false,
-		ternaryCuddledBraces: false,
-		addLineCommentSpace: true,
-		normalizeLineCommentIndent: false,
-		compressSuccessiveParenthesis: true
-	};
+	public var defaultWriteOptions(default, null): WriteOptions = writeOptions(DEFAULT_LINE_WIDTH);
+
+	/**
+	 * `WriteOptions` for a document no one reads by eye: nothing is wide enough to break, so the whole document is one
+	 * line and carries no indentation.
+	 */
+	public var compactWriteOptions(default, null): WriteOptions = writeOptions(UNBOUNDED_LINE_WIDTH);
 
 	private function new() {}
+
+	/**
+	 * `text` as one JSON string, quotes included. A lone surrogate keeps its escape: output is UTF-8, which cannot carry
+	 * one, and written bare it would come back as a different character.
+	 */
+	public function quote(text: String): String {
+		final out: StringBuf = new StringBuf();
+		out.add('"');
+		for (i in 0...text.length) {
+			final c: Int = text.fastCodeAt(i);
+			out.add(isLoneSurrogate(text, i, c) ? unicodeEscape(c) : escapeChar(c));
+		}
+		out.add('"');
+		return out.toString();
+	}
 
 	public function escapeChar(c: Int): String {
 		return switch c {
@@ -140,10 +152,7 @@ final class JsonFormat implements TextFormat {
 			case BACKSPACE: '\\b';
 			case FORM_FEED: '\\f';
 			case _:
-				if (c < ' '.code)
-					'\\u${c.hex(4)}';
-				else
-					String.fromCharCode(c);
+				c < ' '.code ? unicodeEscape(c) : String.fromCharCode(c);
 		};
 	}
 
@@ -168,6 +177,48 @@ final class JsonFormat implements TextFormat {
 			case _:
 				throw new Exception('invalid escape: \\${String.fromCharCode(esc)}');
 		};
+	}
+
+	private static inline function isLow(c: Int): Bool {
+		return c >= LOW_SURROGATE && c <= LAST_SURROGATE;
+	}
+
+	/** The `\uXXXX` escape of `c`, in the lower case every native JSON writer spells it in. */
+	private static inline function unicodeEscape(c: Int): String {
+		return '\\u${c.hex(4).toLowerCase()}';
+	}
+
+	/** The write options of JSON output at `lineWidth`. */
+	private static function writeOptions(lineWidth: Int): WriteOptions {
+		return {
+			indentChar: Space,
+			indentSize: 4,
+			tabWidth: 4,
+			lineWidth: lineWidth,
+			lineEnd: '\n',
+			finalNewline: false,
+			trailingWhitespace: false,
+			maxConsecutiveBlanks: -1,
+			commentStyle: Verbatim,
+			arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
+			trailingComma: TrailingCommaPolicy.Keep,
+			conditionalPolicy: ConditionalIndentationPolicy.Aligned,
+			alignInlineSwitchCaseBody: false,
+			comprehensionCuddledOpen: false,
+			soleItemCuddledBrackets: false,
+			methodChainCuddledLinks: false,
+			ternaryCuddledBraces: false,
+			addLineCommentSpace: true,
+			normalizeLineCommentIndent: false,
+			compressSuccessiveParenthesis: true
+		};
+	}
+
+	/** Whether the code unit `c` at `i` of `text` is half of a surrogate pair with no other half beside it. */
+	private static function isLoneSurrogate(text: String, i: Int, c: Int): Bool {
+		return c >= HIGH_SURROGATE && c < LOW_SURROGATE
+			? i + 1 >= text.length || !isLow(text.fastCodeAt(i + 1))
+			: isLow(c) && (i == 0 || text.fastCodeAt(i - 1) < HIGH_SURROGATE || text.fastCodeAt(i - 1) >= LOW_SURROGATE);
 	}
 
 }

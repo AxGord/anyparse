@@ -9,6 +9,30 @@ package anyparse.grammar.json;
 **/
 class JValueTools {
 
+	/** One entry of an object. */
+	public static inline function entry(key: String, value: JValue): JEntry {
+		return { key: key, value: value };
+	}
+
+	/**
+	 * The value at `key` of `value`: null for anything but an object, for a key it does not hold and for a key holding
+	 * `null`, which reads as an absent one everywhere a document is read (`docs/formats.md`). A key given twice reads as
+	 * its last.
+	 */
+	public static function field(value: Null<JValue>, key: String): Null<JValue> {
+		return switch value {
+			case JObject(entries):
+				var found: Null<JValue> = null;
+				for (entry in entries) if (entry.key == key) found = switch entry.value {
+					case JNull: null;
+					case held: held;
+				};
+				found;
+			case _:
+				null;
+		}
+	}
+
 	/** Deep structural equality of two `JValue`s. **/
 	public static function equals(a: JValue, b: JValue): Bool {
 		return switch [a, b] {

@@ -34,7 +34,9 @@ import sys.io.File;
  * against the directory of each `apq.json` of the file's chain, nearest first, and read once
  * per run. A test reaches an arm when its body names both the arm's `method` and the last segment
  * of its `type` (an identifier, a field or a constructed type) — a spelling match, which is why
- * the rule is `Info`, default-off and report-only. Grammar-agnostic over `MetaShape` and `RefShape`.
+ * the rule is `Info`, default-off and report-only. A record or document the registry cannot use is
+ * a finding without a coordinate, once per run on the first file whose config names that registry;
+ * the rest of the registry still applies. Grammar-agnostic over `MetaShape` and `RefShape`.
  */
 @:nullSafety(Strict)
 final class GuardPinArmReach extends RuleBase implements ConfigAware implements FileGated implements DefaultOff implements NoAutofix {
@@ -76,7 +78,11 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 		final registries: Map<String, Map<String, ArmTarget>> = [];
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			final options: Null<PinOptions> = declared(LintConfig.resolveWith(_resolveConfig, entry.file));
-			final arms: Null<Map<String, ArmTarget>> = options == null ? null : registryFor(entry.file, options.registry, registries);
+			final problems: Array<String> = [];
+			final arms: Null<Map<String, ArmTarget>> = options == null
+				? null
+				: registryFor(entry.file, options.registry, registries, problems);
+			for (problem in problems) out.push(registryProblem(entry.file, problem));
 			if (options == null || arms == null || fold == null) return;
 			final declaredOptions: PinOptions = options;
 			final declaredArms: Map<String, ArmTarget> = arms;
@@ -97,6 +103,20 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		return [];
+	}
+
+	/**
+	 * The finding for one line of `RuleDeclaration.armRegistry`'s problems, on the file whose config named the registry and
+	 * with no coordinate: a file-less finding would be read under no config and a default-off rule would lose it.
+	 */
+	private static function registryProblem(file: String, problem: String): Violation {
+		return {
+			file: file,
+			span: null,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: problem
+		};
 	}
 
 	/** The four options of `config`, or null while any is absent or empty. */
@@ -175,10 +195,10 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 
 	/**
 	 * The arms of the registry `registry` names for `file` — the first existing path it resolves to against the
-	 * directories of `file`'s config chain — read once per run into `cache`; null when none exists or it does not read.
+	 * directories of `file`'s config chain — read once per run into `cache`, so its `problems` are added once; null when none exists.
 	 */
 	private static function registryFor(
-		file: String, registry: String, cache: Map<String, Map<String, ArmTarget>>
+		file: String, registry: String, cache: Map<String, Map<String, ArmTarget>>, problems: Array<String>
 	): Null<Map<String, ArmTarget>> {
 		#if (sys || nodejs)
 		final candidates: Array<String> = Path.isAbsolute(registry) ? [registry] : [
@@ -188,8 +208,8 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 			final known: Null<Map<String, ArmTarget>> = cache[path];
 			if (known != null) return known;
 			if (!FileSystem.exists(path)) continue;
-			final read: Null<Map<String, ArmTarget>> = readArms(path);
-			if (read != null) cache[path] = read;
+			final read: Map<String, ArmTarget> = readArms(path, problems);
+			cache[path] = read;
 			return read;
 		}
 		#end
@@ -198,16 +218,20 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 
 	#if (sys || nodejs)
 	/**
-	 * The `arms` records of the registry at `path` (a document, or a directory
-	 * of them) by name; null when one cannot be read or holds no `arms` array.
+	 * The `arms` records of the registry at `path` (a document, or a directory of them) by name: what a
+	 * document cannot give goes to `problems`, and the rest of it and every other document still apply.
 	 */
-	private static function readArms(path: String): Null<Map<String, ArmTarget>> {
+	private static function readArms(path: String, problems: Array<String>): Map<String, ArmTarget> {
 		final out: Map<String, ArmTarget> = [];
 		for (file in RegistryFiles.of(path)) {
-			final content: Null<String> = try File.getContent(file) catch (_: Exception) null;
-			final read: Null<Map<String, ArmTarget>> = content == null ? null : RuleDeclaration.armRegistry(content);
-			if (read == null) return null;
-			for (name => arm in read) out[name] = arm;
+			final label: String = 'arm registry $file';
+			final content: Null<String> = try {
+				File.getContent(file);
+			} catch (exception: Exception) {
+				problems.push('$label cannot be read: ${exception.message}');
+				null;
+			};
+			if (content != null) for (name => arm in RuleDeclaration.armRegistry(content, label, problems)) out[name] = arm;
 		}
 		return out;
 	}

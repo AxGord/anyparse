@@ -2,6 +2,7 @@ package anyparse.check.common.design;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import haxe.Exception;
 
 /**
@@ -13,8 +14,8 @@ import haxe.Exception;
  *
  * Per-entry lenient like `frameworks`: an entry or key this reader cannot use is dropped or ignored, and every such
  * decision appends one line to `problems` — a dropped declaration that says nothing is indistinguishable from one that
- * works. The caller decides where the lines go; the rules print each once per process. The arm-registry reader is the
- * exception: it drops a malformed record, or a document that is no JSON, without a line, since its one rule is report-only.
+ * works. The caller decides where the lines go; the rules print each once per process, except `guard-pin-arm-reach`, which
+ * reports each as a finding.
  */
 @:nullSafety(Strict)
 final class RuleDeclaration {
@@ -26,8 +27,14 @@ final class RuleDeclaration {
 	private static inline final TYPE_ABSTRACT_KEY: String = 'typeAbstract';
 	private static inline final LISTENER_METHODS_KEY: String = 'listenerMethods';
 
+	/** The key of a mutation-arm registry's records. */
+	private static inline final ARMS_KEY: String = 'arms';
+
 	/** The keys an idiom entry may carry. */
 	private static final ENTRY_KEYS: Array<String> = ['type', 'fields', 'method', 'copy', 'subtypes'];
+
+	/** The keys an arm must hold as strings; `MutationArmJson` requires the same for the op that refuses a whole registry. */
+	private static final ARM_KEYS: Array<String> = ['name', 'type', 'method'];
 
 	/**
 	 * The idiom entries rule `ruleId` declares under `idioms` in `config`, each a well-formed `IdiomSpec`, in declared
@@ -82,24 +89,46 @@ final class RuleDeclaration {
 
 	/**
 	 * The `arms` records of a mutation-arm registry document `content` by name — each a `{name, type, method}` object, any
-	 * other key ignored — for `guard-pin-arm-reach`; null when the text is no JSON object holding an `arms` array.
+	 * other key ignored — for `guard-pin-arm-reach`. A record it cannot use is dropped alone and a text that holds no `arms`
+	 * array reads as none, each with lines in `problems` under `label`, so a bad record costs only itself.
 	 */
-	public static function armRegistry(content: String): Null<Map<String, ArmTarget>> {
-		final document: Null<JValue> = try JValueParser.parse(content) catch (_: Exception) null;
-		final records: Null<Array<JValue>> = switch document {
-			case JObject(entries): switch entries.find(e -> e.key == 'arms')?.value {
-				case JArray(items): items;
-				case _: null;
-			}
-			case _: null;
-		};
-		if (records == null) return null;
+	public static function armRegistry(content: String, label: String, problems: Array<String>): Map<String, ArmTarget> {
 		final out: Map<String, ArmTarget> = [];
-		for (record in records) {
-			final arm: Null<ArmTarget> = armOf(record);
-			if (arm != null) out[arm.name] = arm;
+		final document: JValue = try {
+			JValueParser.parse(content);
+		} catch (exception: Exception) {
+			problems.push('$label is not JSON: ${exception.message}');
+			return out;
+		};
+		switch JValueTools.field(document, ARMS_KEY) {
+			case JArray(records):
+				for (index => record in records) {
+					final arm: Null<ArmTarget> = armOf(record, '$label arm #${index + 1}', problems);
+					if (arm != null) out[arm.name] = arm;
+				}
+			case _:
+				problems.push('$label holds no "$ARMS_KEY" array');
 		}
 		return out;
+	}
+
+	/** The record's target, or null when one of its fields is no string; one line per such field goes to `problems`. */
+	private static function armOf(record: JValue, position: String, problems: Array<String>): Null<ArmTarget> {
+		final name: Null<String> = stringField(record, 'name');
+		final type: Null<String> = stringField(record, 'type');
+		final method: Null<String> = stringField(record, 'method');
+		if (name != null && type != null && method != null) return { name: name, type: type, method: method };
+		final shown: String = name == null ? position : '$position "$name"';
+		for (key in ARM_KEYS) if (stringField(record, key) == null) problems.push('$shown: "$key" is not a string — dropped');
+		return null;
+	}
+
+	/** The string at `key` of `record`, or null when it holds anything else. */
+	private static function stringField(record: JValue, key: String): Null<String> {
+		return switch JValueTools.field(record, key) {
+			case JString(value): value;
+			case _: null;
+		};
 	}
 
 	/** A type-path key of rule `ruleId`'s options, or null when absent; a value that is no non-empty string is named. */
@@ -170,27 +199,6 @@ final class RuleDeclaration {
 		};
 		problems.push('$label ("$declaredType") must declare exactly one of "method" and "copy" — dropped');
 		return null;
-	}
-
-	/** One registry record as a target, or null when it lacks a string `name`, `type` or `method`. */
-	private static function armOf(record: JValue): Null<ArmTarget> {
-		var name: Null<String> = null;
-		var type: Null<String> = null;
-		var method: Null<String> = null;
-		switch record {
-			case JObject(entries):
-				for (e in entries) switch [(e.key: String), e.value] {
-					case ['name', JString(v)]:
-						name = v;
-					case ['type', JString(v)]:
-						type = v;
-					case ['method', JString(v)]:
-						method = v;
-					case _:
-				}
-			case _:
-		}
-		return name == null || type == null || method == null ? null : { name: name, type: type, method: method };
 	}
 
 }

@@ -1,6 +1,7 @@
 package devkit;
 
 import anyparse.check.oracle.HaxeSpawn;
+import anyparse.check.oracle.SpawnJob;
 import haxe.DynamicAccess;
 import haxe.Exception;
 
@@ -166,7 +167,7 @@ final class Command {
 			cmd: argv[0],
 			args: argv.slice(1),
 			cwd: _cwd,
-			env: _env,
+			env: HaxeSpawn.environment(_env),
 			timeout: _timeout,
 			reap: true
 		};

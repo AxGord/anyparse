@@ -2,6 +2,7 @@ package anyparse.check.oracle;
 
 import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.core.TempScratch;
+import anyparse.grammar.json.JsonFormat;
 import haxe.io.Path;
 
 /**
@@ -15,21 +16,6 @@ typedef HxmlRefs = {
 	var classPaths: Array<String>;
 	var libs: Array<String>;
 	var includes: Array<String>;
-}
-
-/**
- * One persisted oracle verdict: the fingerprint it was observed under, the verdict
- * itself (`confirmed` / `rejected`) and the compiler's error text for a rejection.
- *
- * Every field is OPTIONAL so that `@:nullSafety(Strict)` types it `Null<String>`
- * honestly — the record comes off disk through `haxe.Json.parse`, which will happily
- * produce a structure missing any of them, and a reader that trusted the declared
- * types would dereference null on the first hand-edited or truncated file.
- */
-typedef OracleVerdictRecord = {
-	var ?fingerprint: String;
-	var ?verdict: String;
-	var ?errors: String;
 }
 
 /**
@@ -249,7 +235,8 @@ final class OracleCache {
 		if (record == null) return;
 		final path: String = cacheFile(hxml, cwd, defines);
 		if (path == '') return;
-		try sys.io.File.saveContent(path, haxe.Json.stringify(record)) catch (_exception: haxe.Exception) {
+		final text: String = OracleVerdictRecordWriter.write(record, JsonFormat.instance.compactWriteOptions);
+		try sys.io.File.saveContent(path, text) catch (_exception: haxe.Exception) {
 			// Swallowed on purpose: see the doc comment above.
 		}
 		#end
@@ -424,9 +411,9 @@ final class OracleCache {
 		return text == null ? null : parseRecord(text);
 	}
 
-	/** `haxe.Json.parse` narrowed to the record shape, null for bytes that do not parse. */
+	/** The record `text` holds, null for bytes that do not parse or do not have its shape. */
 	private static function parseRecord(text: String): Null<OracleVerdictRecord> {
-		return try haxe.Json.parse(text) catch (_exception: haxe.Exception) null;
+		return try OracleVerdictRecordParser.parse(text) catch (_exception: haxe.Exception) null;
 	}
 
 	/**

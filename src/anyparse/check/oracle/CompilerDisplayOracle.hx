@@ -1,12 +1,10 @@
 package anyparse.check.oracle;
 
-import anyparse.check.oracle.HaxeSpawn.SpawnJob;
 import anyparse.core.TempScratch;
 import anyparse.query.FileIdentity;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService;
-import anyparse.query.TypingService.Resolution;
 import haxe.io.Path;
 
 /**

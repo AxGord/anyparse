@@ -1,6 +1,7 @@
 package unit.check.oracle;
 
 import anyparse.check.oracle.HaxeSpawn;
+import anyparse.check.oracle.SpawnJob;
 
 /**
  * `HaxeSpawn` — the one `haxe` child process the compiler-oracle package starts, and the
