@@ -309,7 +309,7 @@ final class LintCommand implements CliCommand {
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
-		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle, !o.fix, files);
+		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin);
 		final early: Null<FactsProbe> = earlyFacts(unconfigured != null, oracles, o);
 		final ahead: AheadBuilds = { probe: null };
 		final reflective: Null<Array<String>> = declaredBound(
@@ -324,7 +324,7 @@ final class LintCommand implements CliCommand {
 				unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), ahead, reflective, holders,
 				paths.exists(path -> resolveConfig(path).reachConfigurationsComplete())
 			),
-			oracles, o.noOracle, early, reflective, holders
+			oracles, early, reflective, holders, ahead, o
 		);
 
 		if (o.fix) {
@@ -425,14 +425,15 @@ final class LintCommand implements CliCommand {
 	 * from it; `persisted` says the run is a report, which answers its verdict from `OracleCache` when it can.
 	 */
 	private static function oraclesOf(
-		config: Null<LintConfig>, noOracle: Bool, persisted: Bool, files: Array<{ file: String, source: String }>
+		config: Null<LintConfig>, noOracle: Bool, persisted: Bool, files: Array<{ file: String, source: String }>, grammar: GrammarPlugin
 	): Array<OracleConfig> {
 		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles();
 		if (noOracle) return declared;
 		final prepared: PreparedOracles = OracleGeneration.prepare(declared);
 		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
 		// `files` is the run's own list, which a created file joins: the memo hashes whatever it holds at each question
-		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file]));
+		// the run's grammar reads the compilers' sources, so each facts compile carries the baseline and the builds' probe
+		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file], grammar));
 	}
 
 	/**
@@ -470,6 +471,9 @@ final class LintCommand implements CliCommand {
 				probed = true;
 				final pending: Null<DefinesProbe> = ahead.probe;
 				ahead.probe = null;
+				// the facts compiles carry the builds' probe: their read files the builds, which the probe then holds
+				final facts: Null<() -> Void> = ahead.facts;
+				if (pending == null && facts != null) facts();
 				final key: Null<ReachBuildsKey> = pending == null ? ReachBuildsCache.fingerprint(oracles) : aheadKey;
 				final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);
 				ReachBuildsCache.store(oracles, key, found);
@@ -478,7 +482,7 @@ final class LintCommand implements CliCommand {
 			return builds;
 		}
 		function start(): Void {
-			if (probed || writing || ahead.probe != null) return;
+			if (probed || writing || ahead.probe != null || ahead.facts != null) return;
 			aheadKey = ReachBuildsCache.fingerprint(oracles);
 			ahead.probe = ReachDefinesProbe.start(oracles);
 		}
@@ -608,10 +612,10 @@ final class LintCommand implements CliCommand {
 	 * (`factsEdited`). Unchanged with no oracle, or under `--no-oracle`.
 	 */
 	private static function withCompilerFacts(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, early: Null<FactsProbe>,
-		reflective: Null<Array<String>>, holders: Null<Array<String>>
+		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, early: Null<FactsProbe>, reflective: Null<Array<String>>,
+		holders: Null<Array<String>>, ahead: AheadBuilds, o: LintOpts
 	): Null<ResolutionScope> {
-		if (resolution == null || oracles.length == 0 || noOracle) return resolution;
+		if (resolution == null || oracles.length == 0 || o.noOracle) return resolution;
 		var probed: Bool = false;
 		var facts: Null<CompilerFacts> = null;
 		final edited: Array<{ file: String, original: Null<String> }> = [];
@@ -635,6 +639,9 @@ final class LintCommand implements CliCommand {
 			}
 			return facts;
 		}
+		// a run given every rule reads the builds off the facts compiles, which carry their probe (`TypedFactsProbe.start`);
+		// one narrowed by `--rule` or `--category` may ask the builds and never the facts, so its builds take the probe alone
+		if (o.ruleFilters.length == 0 && o.categoryFilters.length == 0) ahead.facts = read.bind(false);
 		function touched(file: String, original: Null<String>): Void {
 			final built: Null<CompilerFacts> = facts;
 			if (built != null)

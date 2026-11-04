@@ -599,6 +599,13 @@ final class OracleCoverage {
 		final joined: String = Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path]));
 		return FileIdentity.realPath(joined);
 	}
+	/**
+	 * `dir` with exactly one trailing separator, so a `startsWith` test of a path against it
+	 * cannot match a sibling directory that shares its name as a prefix.
+	 */
+	public static function directoryPrefix(dir: String): String {
+		return dir.endsWith('/') ? dir : '$dir/';
+	}
 
 	/**
 	 * One `haxe` spawn for the probe through the shared `HaxeSpawn` seam, refusing up front

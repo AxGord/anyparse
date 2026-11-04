@@ -95,7 +95,7 @@
 			"name": "M-FACTS-INLINE-POSITIONS",
 			"type": "anyparse.check.facts.TypedFactsProbe",
 			"method": "compileArgs",
-			"find": "defines.concat(['keep-inline-positions'])",
+			"find": "defines.concat(HOOK_DEFINES)",
 			"replace": "defines",
 			"note": "an inlined body takes the call site's range, so its facts read as the type of the call"
 		},
@@ -530,7 +530,7 @@
 			"name": "M-FACTS-EARLY-DIRS-LEFT",
 			"type": "anyparse.check.facts.TypedFactsProbe",
 			"method": "abandon",
-			"find": "for (a in probe.asked) discard(a.dir);",
+			"find": "for (a in probe.asked) discardAll(a);",
 			"replace": "",
 			"note": "facts compiles no check asked for leave their probe directories behind"
 		},
@@ -1108,6 +1108,22 @@
 			"find": ",${q(localType(v))},${q(v.name)}]');",
 			"replace": ",${q(localType(v))},\"\"]');",
 			"note": "a local read records no name, so no read is the text's own"
+		},
+		{
+			"name": "M-RIDDEN-NO-RERUN",
+			"type": "anyparse.check.facts.TypedFactsProbe",
+			"method": "fileRidden",
+			"find": "if (reading.arms > 1) again.push(i);",
+			"replace": "",
+			"note": "the facts of a build of several arms are read off the shared compile, which gives the command-line defines to every arm where the plain facts compile gives them to the first"
+		},
+		{
+			"name": "M-RIDDEN-NO-HOOK-DEFINES",
+			"type": "anyparse.check.facts.TypedFactsProbe",
+			"method": "prepare",
+			"find": "defines: HOOK_DEFINES,",
+			"replace": "defines: [],",
+			"note": "the shared compile types without keep-inline-positions, so an inlined body's facts take the call site's range where the plain facts compile keeps the callee's"
 		}
 	]
 }

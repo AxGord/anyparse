@@ -9,9 +9,11 @@ import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleDeclaration;
 import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.PendingRuns;
+import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.core.TempScratch;
 import anyparse.macro.EmbeddedSource;
 import anyparse.query.CompilerFacts;
+import anyparse.query.ReachLiveness.ReachConfiguration;
 import haxe.io.Path;
 
 using Lambda;
@@ -159,6 +161,12 @@ final class TypedFactsProbe {
 	/** Spawn buffer, in bytes: the facts go to a file, the compile prints only its warnings. */
 	private static inline final BUFFER: Int = 64 * 1024 * 1024;
 
+	/** The hook's initialization macro. */
+	private static inline final HOOK: String = 'anyparse.check.facts.TypedFactsMacro.run';
+
+	/** The defines the hook's compile needs (`compileArgs`). */
+	private static final HOOK_DEFINES: Array<String> = ['keep-inline-positions'];
+
 	/** The hook's modules, by class-path-relative path, written into each compile's probe directory. */
 	private static final MACRO_FILES: Array<{ path: String, text: String }> = [
 		{ path: 'anyparse/check/facts/TypedFactsMacro.hx', text: EmbeddedSource.text('anyparse/check/facts/TypedFactsMacro.hx') },
@@ -184,14 +192,18 @@ final class TypedFactsProbe {
 	 * `probeAll` started in the BACKGROUND: the compiles — and in a run that remembers, the baseline of the same tree
 	 * beside each (`wanted`) — run while the caller goes on; `finish` answers the table, `abandon` ends them unread. A lint
 	 * run that expects to be asked starts them before its first pass, so they overlap the checks instead of following the
-	 * first check that asks.
+	 * first check that asks. A run whose memo reads sources (`OracleRunMemo.grammar`) hands each hook to the define probe's
+	 * compile instead (`ReachDefinesProbe.ProbeRider`): one compile per configuration then answers the facts, the baseline
+	 * and the builds.
 	 */
 	public static function start(oracles: Array<OracleConfig>): FactsProbe {
 		final dropped: Array<{ name: String, reason: String }> = [];
 		final asked: Array<FactsCompile> = [];
 		#if (sys || nodejs)
+		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
+		final carried: Bool = memo?.grammar != null;
 		for (i in 0...oracles.length) {
-			final prepared: Null<FactsCompile> = prepare(oracles[i], i);
+			final prepared: Null<FactsCompile> = prepare(oracles[i], i, carried);
 			if (prepared != null)
 				asked.push(prepared)
 			else
@@ -200,25 +212,28 @@ final class TypedFactsProbe {
 					reason: oracles[i].unavailable ?? 'its probe directory could not be written'
 				});
 		}
-		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
-		final baselines: Array<OracleConfig> = memo == null ? [] : [for (a in asked) a.oracle];
-		final before: Array<Null<String>> = memo == null ? [] : memo.fingerprints(baselines);
-		final ahead: Array<Int> = memo == null ? [] : [for (k in 0...baselines.length) if (wanted(memo, baselines[k], before[k])) k];
+		final inputs: Array<Null<String>> = memo == null ? [] : memo.fingerprints([for (a in asked) a.oracle]);
+		final ahead: Array<Int> = memo == null ? [] : [
+			for (k in 0...asked.length) if (asked[k].rider == null && wanted(memo, asked[k].oracle, inputs[k])) k
+		];
+		final baselines: Array<OracleConfig> = [for (k in ahead) asked[k].oracle];
 		final runs: PendingRuns = HaxeSpawn.startAll([for (a in asked) { args: a.args, cwd: a.oracle.dir }].concat([
-			for (k in ahead) { args: OracleCoverage.probeArgs(baselines[k].hxml, baselines[k].defines), cwd: baselines[k].dir }
-		]), BUFFER, HaxeSpawn.parallelism());
+			for (b in baselines) { args: OracleCoverage.probeArgs(b.hxml, b.defines), cwd: b.dir }
+		]), carried ? ReachDefinesProbe.BUFFER : BUFFER, HaxeSpawn.parallelism());
 		return {
 			dropped: dropped,
 			asked: asked,
+			inputs: inputs,
 			memo: memo,
-			baselines: [for (k in ahead) baselines[k]],
-			before: [for (k in ahead) before[k]],
+			baselines: baselines,
+			before: [for (k in ahead) inputs[k]],
 			runs: runs
 		};
 		#else
 		return {
 			dropped: dropped,
 			asked: asked,
+			inputs: [],
 			memo: null,
 			baselines: [],
 			before: [],
@@ -232,7 +247,8 @@ final class TypedFactsProbe {
 	 * its `dropped` and why; null only on a target that cannot spawn a compile. A compile that reported an error is dropped
 	 * even when it wrote a complete file: typing goes on past an error, and what it recovers with — an unbound monomorph, a
 	 * branch left out — reads exactly like a fact, so the table could not tell the two apart. The files are read and added
-	 * one at a time, so no two dumps are held at once. The baselines compiled beside are filed in the run's memo.
+	 * one at a time, so no two dumps are held at once. The baselines compiled beside, and what the define probe's compiles
+	 * answered (`fileRidden`), are filed in the run's memo.
 	 */
 	public static function finish(probe: FactsProbe): Null<CompilerFacts> {
 		#if (sys || nodejs)
@@ -245,6 +261,9 @@ final class TypedFactsProbe {
 			final after: Array<Null<String>> = memo.fingerprints(probe.baselines);
 			for (j in 0...probe.baselines.length) memo.file(probe.baselines[j], true, probe.before[j], after[j], runs[asked.length + j]);
 		}
+		final again: Array<Int> = memo == null ? [] : fileRidden(memo, probe, runs);
+		final redone: Array<HaxeRun> = compiledAgain(asked, again);
+		for (k => i in again) runs[i] = redone[k];
 		final facts: CompilerFacts = CompilerFacts.create(
 			file -> try sys.io.File.getContent(file) catch (exception: haxe.Exception) null, memoised(Sys.getCwd())
 		);
@@ -255,7 +274,7 @@ final class TypedFactsProbe {
 				facts.add(dump)
 			else
 				facts.dropped.push({ name: OracleDeclaration.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });
-			discard(asked[i].dir);
+			discardAll(asked[i]);
 		}
 		return facts;
 		#else
@@ -267,23 +286,23 @@ final class TypedFactsProbe {
 	public static function abandon(probe: FactsProbe): Void {
 		probe.runs?.cancel();
 		#if (sys || nodejs)
-		for (a in probe.asked) discard(a.dir);
+		for (a in probe.asked) discardAll(a);
 		#end
 	}
 
 	/** The arguments of the facts compile of `hxml` under `defines`, writing to `out` with the hook found under `dir`. */
 	public static function compileArgs(hxml: String, defines: Array<String>, dir: String, out: String): Array<String> {
-		// the hook's class path goes AFTER the hxml: a later class path wins, so a project holding its own copy — anyparse —
-		// still runs the one written here. `keep-inline-positions` leaves an inlined body at the callee's positions: without
-		// it every fact of the body lands on the call site's range and reads as the type of the call itself
-		return CompilerOracle.defineFlags(defines.concat(['keep-inline-positions'])).concat([
-			hxml,
-			'--no-output',
-			'-cp',
-			dir,
-			'--macro',
-			'anyparse.check.facts.TypedFactsMacro.run(${haxe.Json.stringify(out)})'
-		]);
+		// `keep-inline-positions` leaves an inlined body at the callee's positions: without it every fact of the body lands
+		// on the call site's range and reads as the type of the call itself
+		return CompilerOracle.defineFlags(defines.concat(HOOK_DEFINES)).concat([hxml, '--no-output']).concat(hookArgs(dir, out));
+	}
+
+	/**
+	 * The hook's arguments, after the build's own: a later class path wins, so a project holding its own copy of the
+	 * hook — anyparse — still runs the one written under `dir`, which writes to `out`.
+	 */
+	private static function hookArgs(dir: String, out: String): Array<String> {
+		return ['-cp', dir, '--macro', '$HOOK(${haxe.Json.stringify(out)})'];
 	}
 
 	/**
@@ -299,6 +318,49 @@ final class TypedFactsProbe {
 		return persisted == null || OracleCache.lookup(oracle.hxml, oracle.dir, persisted, oracle.defines) == null;
 	}
 
+	/**
+	 * File in the run's `memo` what each compile of `probe` the define probe's compile carried answers besides the facts
+	 * (`ReachDefinesProbe.readRidden`) — its `-v` typecheck and its build — and name the ones of several arms, whose facts
+	 * a plain compile answers again: the hook joins the last arm only, under defines the plain compile gives the first.
+	 */
+	private static function fileRidden(memo: OracleRunMemo, probe: FactsProbe, runs: Array<HaxeRun>): Array<Int> {
+		final grammar: Null<GrammarPlugin> = memo.grammar;
+		final ridden: Array<Int> = [for (i in 0...probe.asked.length) if (probe.asked[i].rider != null) i];
+		if (grammar == null || ridden.length == 0) return [];
+		final after: Array<Null<String>> = memo.fingerprints([for (i in ridden) probe.asked[i].oracle]);
+		final known: Map<String, Bool> = [];
+		final again: Array<Int> = [];
+		for (k => i in ridden) {
+			final compile: FactsCompile = probe.asked[i];
+			final rider: Null<ProbeRider> = compile.rider;
+			if (rider == null) continue;
+			final reading: RiddenReading = ReachDefinesProbe.readRidden(compile.oracle, runs[i], rider, grammar, known);
+			if (reading.arms > 1) again.push(i);
+			final verbose: Null<HaxeRun> = reading.verbose;
+			final configuration: Null<ReachConfiguration> = reading.configuration;
+			if (verbose == null || configuration == null) continue;
+			memo.file(compile.oracle, true, probe.inputs[i], after[k], verbose);
+			memo.fileBuild(compile.oracle, probe.inputs[i], after[k], configuration);
+		}
+		return again;
+	}
+
+	/**
+	 * The plain facts compiles of the compiles of `asked` that `again` numbers: each hook's first round rewrites the facts
+	 * file whole, so nothing the shared compile left there survives.
+	 */
+	private static function compiledAgain(asked: Array<FactsCompile>, again: Array<Int>): Array<HaxeRun> {
+		return again.length == 0
+			? []
+			: HaxeSpawn.runAll([
+				for (i in again)
+					{
+						args: compileArgs(asked[i].oracle.hxml, asked[i].oracle.defines, asked[i].dir, asked[i].out),
+						cwd: asked[i].oracle.dir
+					}
+			], BUFFER, HaxeSpawn.parallelism());
+	}
+
 	/** Why the compile `run` left no facts, in one line. */
 	private static function failureOf(run: HaxeRun): String {
 		if (run.failure != '') return run.failure;
@@ -308,7 +370,11 @@ final class TypedFactsProbe {
 	}
 
 	#if (sys || nodejs)
-	private static function prepare(oracle: OracleConfig, index: Int): Null<FactsCompile> {
+	/**
+	 * The facts compile of `oracle` (numbered `index` among the run's), its hook handed to the define probe's compile when
+	 * the run `carried` it and that compile could be prepared; null when the probe directory cannot be written.
+	 */
+	private static function prepare(oracle: OracleConfig, index: Int, carried: Bool): Null<FactsCompile> {
 		if (oracle.unavailable != null) return null;
 		final dir: String = Path.join([
 			TempScratch.root(),
@@ -323,11 +389,21 @@ final class TypedFactsProbe {
 		} catch (exception: haxe.Exception) {
 			return null;
 		}
+		final rider: Null<ProbeRider> = carried ? {
+			defines: HOOK_DEFINES,
+			dir: dir,
+			files: MACRO_FILES,
+			tail: hookArgs(dir, out),
+			hook: HOOK
+		} : null;
+		final reach: Null<{ dir: String, args: Array<String> }> = rider == null ? null : ReachDefinesProbe.prepare(oracle, index, rider);
 		return {
 			oracle: oracle,
 			dir: dir,
 			out: out,
-			args: compileArgs(oracle.hxml, oracle.defines, dir, out)
+			args: reach?.args ?? compileArgs(oracle.hxml, oracle.defines, dir, out),
+			reach: reach?.dir,
+			rider: reach == null ? null : rider
 		};
 	}
 
@@ -352,6 +428,13 @@ final class TypedFactsProbe {
 		};
 	}
 
+	/** Delete the probe directories of `compile`: the hook's, and the define probe's that carried it. */
+	private static function discardAll(compile: FactsCompile): Void {
+		discard(compile.dir);
+		final reach: Null<String> = compile.reach;
+		if (reach != null) ReachDefinesProbe.discard(reach);
+	}
+
 	/** Delete the probe directory `dir`. */
 	private static function discard(dir: String): Void {
 		function wipe(path: String): Void {
@@ -370,23 +453,30 @@ final class TypedFactsProbe {
 
 }
 
-/** One configuration's facts compile: its probe directory, the file the hook writes, and the compile's arguments. */
+/**
+ * One configuration's facts compile: its probe directory, the file the hook writes, and the compile's arguments — and,
+ * when the define probe's compile carries the hook (`ReachDefinesProbe.ProbeRider`), that probe's directory and the
+ * rider it was given.
+ */
 typedef FactsCompile = {
 	var oracle: OracleConfig;
 	var dir: String;
 	var out: String;
 	var args: Array<String>;
+	var reach: Null<String>;
+	var rider: Null<ProbeRider>;
 }
 
 /**
  * The facts compiles `TypedFactsProbe.start` left running, and what `finish` needs to read them: the configurations
- * dropped before any compile, the compiles in job order, and — in a run that remembers — the baselines compiled after
- * them in the same batch with the fingerprint each input had when it started. `runs` is null on a target that cannot
- * spawn a compile.
+ * dropped before any compile, the compiles in job order with the fingerprint each input had when it started (`inputs`,
+ * in a run that remembers), and the baselines compiled after them in the same batch with theirs. `runs` is null on a
+ * target that cannot spawn a compile.
  */
 typedef FactsProbe = {
 	var dropped: Array<{ name: String, reason: String }>;
 	var asked: Array<FactsCompile>;
+	var inputs: Array<Null<String>>;
 	var memo: Null<OracleRunMemo>;
 	var baselines: Array<OracleConfig>;
 	var before: Array<Null<String>>;

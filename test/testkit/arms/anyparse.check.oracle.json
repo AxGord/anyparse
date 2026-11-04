@@ -1151,6 +1151,53 @@
 			"find": "Rejected(diagnostics)",
 			"replace": "Rejected((run.err + run.out).trim())",
 			"note": "a rejection that skips the plain run quotes the whole -v stream, thousands of lines of parsed files beside the errors"
+		},
+		{
+			"name": "M-DEFINE-READS-NONE",
+			"type": "anyparse.check.oracle.DefineReads",
+			"method": "reads",
+			"force": "false",
+			"note": "no source reads a define, so a build whose #if names the facts hook's define is answered from the compile that set it"
+		},
+		{
+			"name": "M-DEFINE-READS-LITERAL-ANYWHERE",
+			"type": "anyparse.check.oracle.DefineReads",
+			"method": "readAt",
+			"find": "? word != ALL_DEFINES && wholeLiteral(source, literal, at, word.length) && readerBefore(source, at)",
+			"replace": "? word != ALL_DEFINES",
+			"note": "(precision) a literal spelling the name anywhere reads it, so a list of the defines a compile is given refuses the shared compile"
+		},
+		{
+			"name": "M-DEFINE-READS-ALL-DEFINES-DECLARED",
+			"type": "anyparse.check.oracle.DefineReads",
+			"method": "readAt",
+			"find": ": word != ALL_DEFINES || precedingWord(source, at) != DECLARATION;",
+			"replace": ": true;",
+			"note": "(precision) the standard library declaring getDefines reads every define, so no build that parses it shares a compile"
+		},
+		{
+			"name": "M-RIDDEN-KEEPS-HOOK-LOADS",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "cleared",
+			"find": "riding = line.startsWith(ownEnd);",
+			"replace": "riding = false;",
+			"note": "the facts hook's own loads are read as the build's, so a module only the hook holds makes every shared compile answer nothing"
+		},
+		{
+			"name": "M-RIDDEN-SHADOW-UNCHECKED",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
+			"method": "homeOf",
+			"find": "return held != null && held == text ? candidate : null;",
+			"replace": "return candidate;",
+			"note": "a project module the hook shadows is taken for the hook's copy whatever its text, so the build the shared compile typed is not the project's"
+		},
+		{
+			"name": "M-RUNMEMO-BUILD-UNGUARDED",
+			"type": "anyparse.check.oracle.OracleRunMemo",
+			"method": "fileBuild",
+			"find": "if (before == null || before != after) return;",
+			"replace": "if (before == null) return;",
+			"note": "a build compiled while the tree changed is filed under the fingerprint taken before, so once the tree is back at that content it answers for a tree it may never have read"
 		}
 	]
 }

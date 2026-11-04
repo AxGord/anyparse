@@ -1,5 +1,7 @@
 package anyparse.check.oracle;
 
+import anyparse.query.ReachLiveness.ReachConfiguration;
+
 /**
  * What the compiler already answered in THIS run, so a compile of a tree the run has already compiled is not paid twice.
  *
@@ -10,7 +12,8 @@ package anyparse.check.oracle;
  * one (`CompilerOracle.oracleArgs`, whose streams a rejection quotes), and under a CONTENT fingerprint of what it reads
  * (`fingerprints`), which hashes every path the run may write afresh. A configuration is answered only once a `-v`
  * compile showed it reads nothing outside the directories that fingerprint walks. A run is filed only when its input
- * hashed the same before and after the compile, and the memo never outlives the run: it hangs off the configurations the
+ * hashed the same before and after the compile — the build a `-v` compile carrying the define probe reported is filed
+ * beside it (`fileBuild`) — and the memo never outlives the run: it hangs off the configurations the
  * lint command prepared for one run (`OracleConfig.runs`), since a verdict kept across runs is not sound for `--fix`
  * (`docs/decisions.md`).
  */
@@ -26,7 +29,16 @@ final class OracleRunMemo {
 	/** The run's own warm servers, for its plain typechecks (`OracleServerPool`); none until a `--fix` run starts them. */
 	public final servers: OracleServerPool;
 
+	/**
+	 * The grammar of the sources the configurations compile, which reads whether a source reads a define
+	 * (`DefineReads`); null for a run whose facts compiles carry neither the `-v` typecheck nor the builds' probe.
+	 */
+	public final grammar: Null<GrammarPlugin>;
+
 	private final _runs: Map<String, HaxeRun> = [];
+
+	/** The build each `-v` compile of `_runs` reported (`ReachDefinesProbe.readRidden`), under that compile's key. */
+	private final _builds: Map<String, ReachConfiguration> = [];
 
 	/** The directories each configuration's fingerprint walked (`OracleCache.scanned`), by `OracleDeclaration.oracleKey`. */
 	private final _roots: Map<String, Array<String>> = [];
@@ -40,10 +52,11 @@ final class OracleRunMemo {
 	/** Every path this run may write — its lint scope and every file it created — read afresh at each fingerprint. */
 	private final _written: () -> Array<String>;
 
-	public function new(persisted: Bool, written: () -> Array<String>) {
+	public function new(persisted: Bool, written: () -> Array<String>, ?grammar: GrammarPlugin) {
 		this.persisted = persisted;
 		_written = written;
 		servers = new OracleServerPool(written);
+		this.grammar = grammar;
 	}
 
 	/**
@@ -73,6 +86,30 @@ final class OracleRunMemo {
 		if (before == null || before != after || run.failure != '' || run.status == null || run.cancelled == true) return;
 		if (verbose) judgeReads(oracle, run);
 		_runs[key(oracle, verbose, before)] = run;
+	}
+
+	/**
+	 * File `configuration`, the build the `-v` compile of `oracle` filed beside it reported, under the same conditions
+	 * as that compile (`file`): it is answered exactly when that compile is (`builds`).
+	 */
+	public function fileBuild(oracle: OracleConfig, before: Null<String>, after: Null<String>, configuration: ReachConfiguration): Void {
+		if (before == null || before != after) return;
+		_builds[key(oracle, true, before)] = configuration;
+	}
+
+	/**
+	 * The build each configuration of `oracles` reported for the input it reads now, or null for one this run has not
+	 * compiled that input of with the builds' probe, or cannot answer from here (`run`).
+	 */
+	public function builds(oracles: Array<OracleConfig>): Array<Null<ReachConfiguration>> {
+		if (!_builds.keys().hasNext()) return [for (_ in oracles) null];
+		final now: Array<Null<String>> = fingerprints(oracles);
+		return [
+			for (i in 0...oracles.length) {
+				final fingerprint: Null<String> = now[i];
+				fingerprint == null || run(oracles[i], true, fingerprint) == null ? null : _builds[key(oracles[i], true, fingerprint)];
+			}
+		];
 	}
 
 	/**
@@ -111,7 +148,7 @@ final class OracleRunMemo {
 		if (run.status != 0 || _blind.contains(config)) return;
 		final base: String = oracle.dir ?? Sys.getCwd();
 		final roots: Array<String> = [
-			for (dir in _roots[config] ?? []) directoryPrefix(OracleCoverage.canonical(base, dir))
+			for (dir in _roots[config] ?? []) OracleCoverage.directoryPrefix(OracleCoverage.canonical(base, dir))
 		];
 		final read: Array<String> = OracleCoverage.parsedPaths(run.out);
 		final inside: Bool = read.length > 0 && read.foreach(path -> {
@@ -148,11 +185,6 @@ final class OracleRunMemo {
 
 	private static function key(oracle: OracleConfig, verbose: Bool, fingerprint: String): String {
 		return '${verbose ? 'v' : 'p'}\n${OracleDeclaration.oracleKey(oracle)}\n$fingerprint';
-	}
-
-	/** `dir` with exactly one trailing separator, so a prefix test cannot match a sibling that merely shares its name's start. */
-	private static function directoryPrefix(dir: String): String {
-		return dir.endsWith('/') ? dir : '$dir/';
 	}
 
 	/** One hash over every path of `paths` and its content now — `absent` for one that does not exist. */

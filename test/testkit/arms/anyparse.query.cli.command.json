@@ -214,7 +214,7 @@
 			"name": "M-RUNMEMO-NOT-ATTACHED",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "oraclesOf",
-			"find": "return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file]));",
+			"find": "return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file], grammar));",
 			"replace": "return prepared.oracles;",
 			"note": "a lint run's configurations carry no memo, so every phase compiles the tree it asks about again"
 		},
@@ -780,6 +780,14 @@
 			"find": "return flow == null ? drawScope(request, ctx) : GraphFlow.run(COMMAND, flow, request.inputSpecs, request.lang, request.output, ctx);",
 			"replace": "return drawScope(request, ctx);",
 			"note": "graph --flow draws the graph of the whole scope instead of the chart of the function named"
+		},
+		{
+			"name": "M-FACTS-CARRY-CATEGORY",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "o.ruleFilters.length == 0 && o.categoryFilters.length == 0",
+			"replace": "o.ruleFilters.length == 0",
+			"note": "a --category run reads its builds off the facts compiles, so a run that asks the builds and never the facts pays the facts hook's walk for them"
 		}
 	]
 }

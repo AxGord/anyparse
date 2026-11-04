@@ -2,7 +2,10 @@ package unit.check.oracle;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.facts.TypedFactsProbe;
+import anyparse.check.oracle.ReachDefinesProbe.AheadBuilds;
 import anyparse.core.TempScratch;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
+import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.Cli;
 import anyparse.query.cli.command.LintCommand;
 import haxe.Exception;
@@ -97,6 +100,31 @@ final class OracleRunWiringTest extends Test {
 		Assert.isFalse(LintCommand.startsFactsEarly(true, 1, true, false, true), 'a --no-oracle run');
 		Assert.isFalse(LintCommand.startsFactsEarly(true, 0, false, false, true), 'no configuration');
 		Assert.isFalse(LintCommand.startsFactsEarly(false, 1, false, false, true), 'no resolution scope');
+	}
+
+	/**
+	 * Only a run given every rule reads its builds off the facts compiles, which carry their probe: a run narrowed by
+	 * `--rule` or `--category` may ask the builds and never the facts, so its builds take the define probe alone.
+	 */
+	@:pin('control')
+	@:killer('M-FACTS-CARRY-CATEGORY')
+	@:access(anyparse.query.cli.command.LintCommand)
+	public function testOnlyARunGivenEveryRuleReadsTheBuildsOffTheFacts(): Void {
+		final oracles: Array<OracleConfig> = [{ hxml: 'check.hxml', dir: '.', defines: [] }];
+		final resolution: ResolutionScope = {
+			declared: true,
+			sources: () -> {report: [], projectRoots: [], library: new LibrarySources([]) }
+		};
+		function carried(args: Array<String>): Bool {
+			final ahead: AheadBuilds = { probe: null };
+			final scope: Null<ResolutionScope> = LintCommand.withCompilerFacts(
+				resolution, oracles, null, null, null, ahead, LintCommand.parseLintArgs(args.concat(['Main.hx']))
+			);
+			return scope?.facts != null && ahead.facts != null;
+		}
+		Assert.isTrue(carried([]), 'a run given every rule');
+		Assert.isFalse(carried(['--category', 'types']), 'a --category run');
+		Assert.isFalse(carried(['--rule', 'avoid-dynamic']), 'a --rule run');
 	}
 
 	/**
