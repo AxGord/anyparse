@@ -421,6 +421,14 @@
 			"find": "if (mode != null && sys.FileSystem.exists(entry.path)) js.node.Fs.chmodSync(entry.path, mode);",
 			"replace": "",
 			"note": "a rolled-back deletion restores the file with the default mode, so an executable script comes back 0644"
+		},
+		{
+			"name": "M-FLOW-CLI-BRANCHES-IGNORED",
+			"type": "anyparse.query.cli.GraphFlow",
+			"method": "run",
+			"find": "if (declared.length > 1) {",
+			"replace": "if (false) {",
+			"note": "a member declared once per conditional-compilation branch is drawn from its first declaration alone, the others unmentioned"
 		}
 	]
 }

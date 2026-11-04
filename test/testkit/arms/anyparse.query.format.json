@@ -73,6 +73,14 @@
 			"find": "if (e.change == null && mutual[i])",
 			"replace": "if (mutual[i])",
 			"note": "a changed edge closing a cycle is drawn red after its change colour, so a comparison hides the change on every edge of a cycle"
+		},
+		{
+			"name": "M-FLOW-MERMAID-SHAPES",
+			"type": "anyparse.query.format.FlowMermaid",
+			"method": "vertex",
+			"find": "case Decision, Switch: Diamond(id, label);",
+			"replace": "case Decision, Switch: Rect(id, label);",
+			"note": "a decision is drawn as a box like a statement, so a branch no longer reads as a question in the chart"
 		}
 	]
 }

@@ -53,6 +53,9 @@ typedef GraphRequest = {
 
 	/** The two revisions `--diff` compares, the earlier first; null for the graph of the working tree. */
 	final diff: Null<Array<String>>;
+
+	/** The function `--flow` draws the body of; null for the graph of a whole scope. */
+	final flow: Null<String>;
 	final inputSpecs: Array<String>;
 }
 
@@ -89,6 +92,7 @@ final class GraphCommand implements CliCommand {
 	public function flags(): CliFlags {
 		return new CliFlags(['--external', '--mutual'], [
 			'--edges',
+			'--flow',
 			'--focus',
 			'--format',
 			'--html',
@@ -107,6 +111,12 @@ final class GraphCommand implements CliCommand {
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		final request: Null<GraphRequest> = parseRequest(args);
 		if (request == null) return EXIT_OK;
+		final flow: Null<String> = request.flow;
+		return flow == null ? drawScope(request, ctx) : GraphFlow.run(COMMAND, flow, request.inputSpecs, request.lang, request.output, ctx);
+	}
+
+	/** The graph of the whole scope `request` asks for, or its comparison of two revisions, as a report or a page. */
+	private static function drawScope(request: GraphRequest, ctx: CliContext): Int {
 		final kindsSpec: Null<String> = request.kinds;
 		final kinds: Null<Array<EdgeKind>> = kindsSpec == null ? null : CliCallGraph.parseEdgeKinds(COMMAND, kindsSpec);
 		if (kindsSpec != null && kinds == null) return EXIT_USAGE;
@@ -164,6 +174,9 @@ final class GraphCommand implements CliCommand {
 		// the options that prune one graph, which a comparison of two does not take
 		final pruning: Array<String> = [];
 		var source: Null<GraphEdgeSource> = null;
+		var flow: Null<String> = null;
+		// the options that draw a whole scope, which one function's body does not take
+		final scoping: Array<String> = [];
 		var kinds: Null<String> = null;
 		var minWeight: Int = 1;
 		var packageDepth: Int = 0;
@@ -182,12 +195,17 @@ final class GraphCommand implements CliCommand {
 			switch arg.flag {
 				case '--lang':
 					lang = arg.value();
+				case '--flow':
+					flow = arg.value();
 				case '--level':
 					level = levelOf(arg.value());
+					scoping.push(a);
 				case '--edges':
 					source = sourceOf(arg.value());
+					scoping.push(a);
 				case '--kinds':
 					kinds = arg.value();
+					scoping.push(a);
 				case '--min-weight':
 					minWeight = count(arg.value(), a, 1);
 					pruning.push(a);
@@ -207,13 +225,16 @@ final class GraphCommand implements CliCommand {
 					pruning.push(a);
 				case '--diff':
 					diff = [arg.valueAt(0), arg.valueAt(1)];
+					scoping.push(a);
 				case '--external':
 					external = true;
+					scoping.push(a);
 				case '--format':
 					output = CliCallGraph.parseGraphOutput(arg.value());
 					formatted = true;
 				case '--html':
 					html = arg.value();
+					scoping.push(a);
 				case '-h', '--help':
 					printGraphUsage();
 					return null;
@@ -222,6 +243,8 @@ final class GraphCommand implements CliCommand {
 			}
 		}
 		if (inputSpecs.length == 0) throw new UsageFailure('missing <file-or-dir-or-glob> argument');
+		if (flow != null && scoping.length + pruning.length > 0)
+			throw new UsageFailure('${scoping.concat(pruning)[0]} draws a whole scope: --flow draws the body of one function');
 		if (html != null) {
 			if (centring.length > 0) throw new UsageFailure('${centring[0]} centres one view: --html draws a view of each node it opens');
 			if (formatted) throw new UsageFailure('--format chooses the report on stdout: --html writes a page instead');
@@ -249,6 +272,7 @@ final class GraphCommand implements CliCommand {
 			output: output,
 			html: html,
 			inputSpecs: inputSpecs,
+			flow: flow,
 			diff: diff
 		};
 	}
@@ -422,6 +446,9 @@ final class GraphCommand implements CliCommand {
 		CliIo.sysPrint('                    what that touches, light and dark, a legend; the Mermaid library inlined; with\n');
 		CliIo.sysPrint('                    --diff every view colours what changed. Takes --kinds, --package-depth,\n');
 		CliIo.sysPrint('                    --min-weight, --mutual, --external; refuses --focus, --radius and --format\n');
+		CliIo.sysPrint('  --flow <Type.member>  The control-flow chart of one function body instead of a graph of the scope: its\n');
+		CliIo.sysPrint('                    decisions, loops, switches, try / catch and exits, consecutive declarations folded;\n');
+		CliIo.sysPrint('                    takes --format and --lang, refuses every option that draws a whole scope\n');
 		CliIo.sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
 	}
 

@@ -807,6 +807,8 @@ final class HaxeRefShape {
 		table.blockStmtKind = 'BlockStmt';
 		table.breakStatementKind = 'BreakStmt';
 		table.continueStatementKind = 'ContinueStmt';
+		table.breakExpressionKind = 'BreakExpr';
+		table.continueExpressionKind = 'ContinueExpr';
 		table.loopStatementKinds = ['ForStmt', 'WhileStmt'];
 		table.doWhileLoopKinds = ['DoWhileStmt', 'DoWhileExpr'];
 		table.intervalKind = 'Interval';

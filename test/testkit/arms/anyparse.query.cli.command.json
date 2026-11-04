@@ -772,6 +772,14 @@
 			"find": "earlier.sources[renamed[f.file] ?? f.file]",
 			"replace": "earlier.sources[f.file]",
 			"note": "a file renamed between the revisions is paired by path, finds no earlier text, and every edit inside it goes unseen"
+		},
+		{
+			"name": "M-FLOW-CLI-NOT-WIRED",
+			"type": "anyparse.query.cli.command.GraphCommand",
+			"method": "run",
+			"find": "return flow == null ? drawScope(request, ctx) : GraphFlow.run(COMMAND, flow, request.inputSpecs, request.lang, request.output, ctx);",
+			"replace": "return drawScope(request, ctx);",
+			"note": "graph --flow draws the graph of the whole scope instead of the chart of the function named"
 		}
 	]
 }

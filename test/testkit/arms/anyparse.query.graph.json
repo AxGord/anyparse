@@ -153,6 +153,102 @@
 			"find": "if (current.change == null) current.change = Changed;",
 			"replace": "",
 			"note": "a changed edge between two unchanged nodes folding into one is dropped unmarked, so the package or type holding the change reads unchanged"
+		},
+		{
+			"name": "M-FLOW-RUN-UNFOLDED",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "plain",
+			"find": "tails.length == 1 &&",
+			"replace": "tails.length == 7 &&",
+			"note": "a statement never joins the run it follows, so every declaration and every plain statement is a node of its own"
+		},
+		{
+			"name": "M-FLOW-NO-EDGE-LOST",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "branch",
+			"find": "final otherwise: Array<FlowTail> = [tail(decision, 'no')];",
+			"replace": "final otherwise: Array<FlowTail> = [];",
+			"note": "the way out of an if that is not taken is not drawn, so a decision with no else leaves by one edge and its join with the next statement is lost"
+		},
+		{
+			"name": "M-FLOW-LOOP-JUMPS-LOST",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "cut",
+			"find": "_loops[_loops.length - 1].exits.push(",
+			"replace": "([] : Array<FlowTail>).push(",
+			"note": "a break node reaches nothing, so control does not go on past the loop by it"
+		},
+		{
+			"name": "M-FLOW-SWITCH-ARM-LABEL",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "armLabel",
+			"find": "return limit(trimmed(spanText(span.from, first == null ? span.to : first.from), ':'));",
+			"replace": "return arm.kind;",
+			"note": "an arm edge is labelled by the arm kind instead of the arm text, so its patterns and guard are not shown"
+		},
+		{
+			"name": "M-FLOW-THROW-SKIPS-CATCH",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "leave",
+			"find": "final handlers: Array<FlowNode> = kind == Throw && _handlers.length > 0 ? _handlers[_handlers.length - 1] : [];",
+			"replace": "final handlers: Array<FlowNode> = [];",
+			"note": "a throw inside a try goes to the end of the function instead of the catch around it"
+		},
+		{
+			"name": "M-FLOW-SWITCH-NO-MATCH-LOST",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "select",
+			"find": "if (!covered) left.push(tail(node, 'no match'));",
+			"replace": "",
+			"note": "a switch with no catch-all arm leaves by its arms alone, so the code after it hangs off the last arm or is not drawn at all"
+		},
+		{
+			"name": "M-FLOW-BODY-CHILDREN",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "draw",
+			"find": "holdsAlternatives(body) ? [body] : body.children",
+			"replace": "[body]",
+			"note": "only a block body is walked, so a body written as one expression or after untyped is a single plain statement and its return and if are not drawn"
+		},
+		{
+			"name": "M-FLOW-COND-ARM-DROPPED",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "select",
+			"find": "left = left.concat(statements([arm], [tail(node, limit(textOf(arm)))]));",
+			"replace": "",
+			"note": "a switch child that is no arm node, an arm under conditional compilation, leaves no edge and no node"
+		},
+		{
+			"name": "M-FLOW-EXPR-EXIT-UNWRAPPED",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "classify",
+			"find": "if (cls != Other || s.kind != _shape.exprStatementKind || s.children.length != 1) return cls;",
+			"replace": "return cls;",
+			"note": "a throw, break or continue written without its semicolon stays a plain statement, so the path falls through it and a break loops back to the loop head"
+		},
+		{
+			"name": "M-FLOW-DO-TEST-DEAD",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "doLoop",
+			"find": "if (looped.length == 0 && loop.continues.length == 0) return loop.exits;",
+			"replace": "",
+			"note": "the test of a do-while whose body always leaves is drawn with no way in, and the statements after it appear reachable"
+		},
+		{
+			"name": "M-FLOW-COMMENT-IN-LABEL",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "spanText",
+			"find": "for (c in _comments) if (c.to > at) {",
+			"replace": "for (c in ([] : Array<Span>)) {",
+			"note": "a comment inside an arm, a loop header or a statement is copied into the label of its node and edge"
+		},
+		{
+			"name": "M-FLOW-COND-BODY-SEQUENCED",
+			"type": "anyparse.query.graph.FlowBuilder",
+			"method": "draw",
+			"find": "holdsAlternatives(body) ? [body] : body.children",
+			"replace": "body.children",
+			"note": "the bodies of a conditional-compilation body are run one after the other, so the #else body is drawn after the #if one or dropped as dead code"
 		}
 	]
 }

@@ -2933,6 +2933,16 @@ final class RefShape {
 	public var continueStatementKind: Null<String>;
 
 	/**
+	 * The `break` node kind in EXPRESSION position (Haxe `BreakExpr`) — what a statement written without its
+	 * semicolon projects (`if (c) break else continue;` holds `ExprStmt(BreakExpr)`), so a flow reader finds
+	 * the jump behind the statement wrapper. Optional; unset leaves such a jump a plain statement.
+	 */
+	public var breakExpressionKind: Null<String>;
+
+	/** The `continue` node kind in EXPRESSION position (Haxe `ContinueExpr`), as `breakExpressionKind` says. Optional. */
+	public var continueExpressionKind: Null<String>;
+
+	/**
 	 * Loop-statement kinds whose LAST child is the loop body (Haxe `ForStmt` /
 	 * `WhileStmt`) — `loop-guard` reads the body off the last child to flag a leading
 	 * `if`-continue guard liftable to the loop header. A `do … while` is excluded (its
