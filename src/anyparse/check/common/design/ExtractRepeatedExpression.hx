@@ -7,8 +7,10 @@ import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.SpanRender;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
+import anyparse.query.SameValueRuns;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TreePath;
 import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
 
@@ -201,15 +203,9 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 		return span != null && span.from <= offset && offset < span.to;
 	}
 
-	/** Whether `node`'s span covers `span`. */
-	private static inline function covers(node: QueryNode, span: Null<Span>): Bool {
-		final outer: Null<Span> = node.span;
-		return outer != null && span != null && outer.from <= span.from && span.to <= outer.to;
-	}
-
 	/** Whether `inner` is a node other than `outer` inside `outer`'s span. */
 	private static inline function strictlyWithin(inner: QueryNode, outer: QueryNode): Bool {
-		return inner != outer && covers(outer, inner.span);
+		return inner != outer && TreePath.covers(outer, inner.span);
 	}
 
 	/** Every function / lambda node in `node`'s subtree — each is an independent body unit. */
@@ -340,8 +336,9 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 		for (bucket in bindingBuckets(occ, ctx)) if (bucket.occ.length >= MIN_OCCURRENCES) {
 			final writes: Null<Array<WriteSite>> = ownWrites(bucket, unit, ctx);
 			if (writes != null)
-				for (run in splitAtWrites(bucket.occ, writes))
-					if (run.length >= MIN_OCCURRENCES && !carriedRound(run, writes, unit, ctx)) out.push(run);
+				for (run in SameValueRuns.splitAtWrites(bucket.occ, writes))
+					if (run.length >= MIN_OCCURRENCES && !SameValueRuns.carriedRound(run, writes, unit, ctx.blockKinds, ctx.loopKinds))
+						out.push(run);
 		}
 		return out;
 	}
@@ -393,61 +390,6 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 				out.push(w);
 			else if (body != null && (strictlyWithin(body, unit) || locals.writesCaptured(w)))
 				return null;
-		}
-		return out;
-	}
-
-	/** `sorted` cut before every occurrence some write in `writes` takes effect ahead of, since the previous one. */
-	private static function splitAtWrites(sorted: Array<Candidate>, writes: Array<WriteSite>): Array<Array<Candidate>> {
-		final runs: Array<Array<Candidate>> = [[sorted[0]]];
-		for (k in 1...sorted.length) {
-			final prev: Int = sorted[k - 1].span.from;
-			final cur: Int = sorted[k].span.from;
-			if (writes.exists(w -> prev < w.effect && w.effect <= cur))
-				runs.push([sorted[k]]);
-			else
-				runs[runs.length - 1].push(sorted[k]);
-		}
-		return runs;
-	}
-
-	/**
-	 * Whether a loop's back edge carries one of `writes` into `run`: the loop holds the write and an occurrence, and
-	 * the statement list a shared `final` would go into (`hoistBlock`) is not inside that loop — so no iteration
-	 * recomputes the value before the occurrence reads it again. Positive: with no such list, every such loop carries.
-	 */
-	private static function carriedRound(run: Array<Candidate>, writes: Array<WriteSite>, unit: QueryNode, ctx: Ctx): Bool {
-		final home: Null<QueryNode> = hoistBlock(run, unit, ctx);
-		inline function recomputed(loop: QueryNode): Bool {
-			return home != null && home != loop && covers(loop, home.span);
-		}
-		for (w in writes)
-			for (loop in ancestorsOf(unit, w.effect - 1))
-				if (ctx.loopKinds.contains(loop.kind) && !recomputed(loop) && run.exists(c -> covers(loop, c.span))) return true;
-		return false;
-	}
-
-	/** The innermost `blockKinds` node holding every occurrence of `run` — the statement list a shared `final` goes into. */
-	private static function hoistBlock(run: Array<Candidate>, unit: QueryNode, ctx: Ctx): Null<QueryNode> {
-		var common: Array<QueryNode> = ancestorsOf(unit, run[0].span.from);
-		for (c in run) {
-			final chain: Array<QueryNode> = ancestorsOf(unit, c.span.from);
-			var n: Int = 0;
-			while (n < common.length && n < chain.length && common[n] == chain[n]) n++;
-			common = common.slice(0, n);
-		}
-		var i: Int = common.length - 1;
-		while (i >= 0 && !ctx.blockKinds.contains(common[i].kind)) i--;
-		return i >= 0 ? common[i] : null;
-	}
-
-	/** The nodes from `root` down whose span holds `offset`, outermost first. */
-	private static function ancestorsOf(root: QueryNode, offset: Int): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
-		var node: Null<QueryNode> = root;
-		while (node != null) {
-			out.push(node);
-			node = node.children.find(c -> holds(c.span, offset));
 		}
 		return out;
 	}
@@ -546,7 +488,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 /** A collected candidate expression: its node, span, normalized text, and enclosing branch path. */
 private typedef Candidate = {
 	var node: QueryNode;
-	var span: Span;
+	final span: Span;
 	var norm: String;
 	var path: Array<BranchStep>;
 }

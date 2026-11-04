@@ -212,6 +212,23 @@ final class StdTypes {
 	}
 
 	/**
+	 * The value name a written type suggests: the lower-camel simple name of a dotted type path
+	 * (`events.SidebarTabEvent` -> `sidebarTabEvent`), the one answer to "what is a local holding this type called". Null for anything
+	 * else: a type argument, a function or structure type, a name not starting upper-case, and a std toplevel type (`int` / `string`
+	 * would name a type, not the value).
+	 */
+	public static function valueNameOf(written: String): Null<String> {
+		final path: String = written.trim();
+		final simple: String = path.substr(path.lastIndexOf('.') + 1);
+		return SourceText.isIdentifier(path.replace('.', ''))
+			&& simple.length > 0
+			&& simple.charAt(0) != simple.charAt(0).toLowerCase()
+			&& StdTypes.toplevelPath(simple) == null
+			? SourceText.lowerCamel(simple)
+			: null;
+	}
+
+	/**
 	 * Push into `found` what `member` of the type at `path` is, or, when it declares none, what its supertypes and typedef
 	 * targets do. `viaGuard`: the walk reached `path` through a type under `#if`, which marks everything found from it
 	 * `guarded`.

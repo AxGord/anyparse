@@ -173,6 +173,7 @@
 	"redundant-upcast",
 	"redundant-void-return",
 	"refusal-assert-ignores-message",
+	"repeated-cast",
 	"return-reassign-ternary",
 	"scratch-field",
 	"self-assignment",

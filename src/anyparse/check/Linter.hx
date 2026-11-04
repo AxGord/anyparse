@@ -66,6 +66,7 @@ import anyparse.check.common.design.OversizedType;
 import anyparse.check.common.design.OwnedTypes;
 import anyparse.check.common.design.PreferApiIdiom;
 import anyparse.check.common.design.RefusalAssertIgnoresMessage;
+import anyparse.check.common.design.RepeatedCast;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.TypedEventConstant;
 import anyparse.check.common.design.ZeroCountUnparsedFixture;
@@ -617,6 +618,7 @@ final class Linter {
 			// slot, so registry order is free.
 			new HoistEmbeddedAssignment(),
 			new ExtractRepeatedExpression(),
+			new RepeatedCast(),
 			new TailMerge(),
 			new NoUnderscorePrefix(),
 			new ShortenTypeRef(),

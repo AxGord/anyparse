@@ -15146,6 +15146,27 @@
 			"find": " && !aliases.contains(decl.type.kind)",
 			"replace": "",
 			"note": "an enum abstract counts as covered by naming its declared values, though it holds others"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-WRITE-SPLIT",
+			"type": "anyparse.query.SameValueRuns",
+			"method": "splitAtWrites",
+			"force": "[sorted]",
+			"note": "a write of an operand between two occurrences no longer cuts the group, so `k(Std.int(i)); i++; k(Std.int(i)); k(Std.int(i));` is reported as one value"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-BACK-EDGE",
+			"type": "anyparse.query.SameValueRuns",
+			"method": "carriedRound",
+			"force": "false",
+			"note": "a write later in a loop than an occurrence is not carried round the back edge, so the occurrences after the loop and the next iteration's read are one value"
+		},
+		{
+			"name": "M-SHADOWING-PARAM-ANY-TYPE",
+			"type": "anyparse.query.StdTypes",
+			"method": "valueNameOf",
+			"force": "'renamed'",
+			"note": "any written type names a replacement, `Null<Array<Item>>` and `String` included, so a parameter is renamed to a name no type gave it"
 		}
 	]
 }

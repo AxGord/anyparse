@@ -610,7 +610,7 @@ final class ShadowingLocal extends RuleBase {
 	private static function renameEdits(site: FixFile, decl: QueryNode, name: String, span: Span, frame: QueryNode): ShadowFix {
 		final shape: RefShape = site.seams.shape;
 		final written: Null<String> = site.typeSources[span.from];
-		final candidate: Null<String> = written == null ? null : typeNamedLocal(written);
+		final candidate: Null<String> = written == null ? null : StdTypes.valueNameOf(written);
 		if (candidate == null || candidate == name || (shape.reservedWords ?? []).contains(candidate))
 			return Declined('no written nominal type names a replacement for "$name"');
 		final newName: String = candidate;
@@ -653,23 +653,6 @@ final class ShadowingLocal extends RuleBase {
 			if (nestedFunctionRebinds(child, name, seams)) return true;
 		}
 		return false;
-	}
-
-	/**
-	 * The local name a declaration written with type `written` takes: the lower-camel of its simple nominal
-	 * (`events.SidebarTabEvent` → `sidebarTabEvent`), or null for anything else — a type argument, a function or
-	 * structure type, a name not starting upper-case, and a std toplevel type (`StdTypes.toplevelPath`:
-	 * `int` / `string` would name a type, not the value).
-	 */
-	private static function typeNamedLocal(written: String): Null<String> {
-		final path: String = written.trim();
-		final simple: String = path.substr(path.lastIndexOf('.') + 1);
-		return SourceText.isIdentifier(path.replace('.', ''))
-			&& simple.length > 0
-			&& simple.charAt(0) != simple.charAt(0).toLowerCase()
-			&& StdTypes.toplevelPath(simple) == null
-			? SourceText.lowerCamel(simple)
-			: null;
 	}
 
 }

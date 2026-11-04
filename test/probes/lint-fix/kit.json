@@ -512,6 +512,66 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "RC1",
+			"note": "repeated-cast over each form its review refuted or held: unbraced guard, write in a right side, loop back edge, write and call ahead of the first cast, two runs in one statement; the fix must keep what the program prints",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"repeated-cast",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class B {\n\tpublic var n:Int;\n\tpublic var next:Dynamic;\n\n\tpublic function new(n:Int, ?next:Dynamic) {\n\t\tthis.n = n;\n\t\tthis.next = next;\n\t}\n\n\tpublic function a():Int {\n\t\tMain.out.push('a' + n);\n\t\treturn n;\n\t}\n\n\tpublic function more():Bool {\n\t\treturn next != null;\n\t}\n}\n\nclass D {\n\tpublic var n:Int = 7;\n\n\tpublic function new() {}\n}\n\nclass Host {\n\tpublic var bubble:Int = 42;\n\n\tpublic function new() {}\n\n\tpublic function p8(o:Dynamic):Void {\n\t\tcast(o, Bubble).a();\n\t\tMain.out.push('$bubble');\n\t\tcast(o, Bubble).a();\n\t}\n}\n\nclass Bubble extends B {}\n\nclass Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function sink(x:Dynamic, y:Dynamic):Void {\n\t\tout.push('sink');\n\t}\n\n\tstatic function log(s:String):Int {\n\t\tout.push(s);\n\t\treturn 0;\n\t}\n\n\tstatic function p1(o:Dynamic):Void {\n\t\tif (o is B) cast(o, B).a();\n\t\tif (o is B) cast(o, B).a();\n\t}\n\n\tstatic function p1e(o:Dynamic):Void {\n\t\tif (o is B) cast(o, D).n;\n\t\telse log('else');\n\t\tlog('mid');\n\t\tcast(o, D).n;\n\t}\n\n\tstatic function p1f(o:Dynamic, k:Int):Void {\n\t\tfor (i in 0...k) cast(o, B).a();\n\t\t{\n\t\t\tif (k > 0) cast(o, B).a();\n\t\t}\n\t}\n\n\tstatic function p2(o:Dynamic):Void {\n\t\to = cast(o, B).next;\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p3(o:Dynamic, n:Dynamic):Void {\n\t\tcast(o, B).a();\n\t\tfor (i in 0...2) {\n\t\t\tcast(o, B).a();\n\t\t\to = n;\n\t\t}\n\t}\n\n\tstatic function p4(o:Dynamic, n:Dynamic):Void {\n\t\tsink(o = n, cast(o, B).a());\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p5(o:Dynamic):Void {\n\t\twhile (cast(o, B).more()) {\n\t\t\tcast(o, B).a();\n\t\t\to = cast(o, B).next;\n\t\t}\n\t}\n\n\tstatic function p7(o:Dynamic, p:Dynamic):Void {\n\t\tsink(cast(o, B).n, cast(p, D).n);\n\t\tsink(cast(o, B).n, cast(p, D).n);\n\t}\n\n\tstatic function p9(o:Dynamic, n:Dynamic):Void {\n\t\tfinal f = () -> o = n;\n\t\tcast(o, B).a();\n\t\tf();\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p9b(o:Dynamic, n:Dynamic):Void {\n\t\tvar f:() -> Void = null;\n\t\tf = function() {\n\t\t\to = n;\n\t\t};\n\t\tcast(o, B).a();\n\t\tf();\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p12(o:Dynamic):Void {\n\t\tsink(log('before'), cast(o, B).n);\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p14(list:Array<Dynamic>):Void {\n\t\tfor (o in list) {\n\t\t\tcast(o, B).a();\n\t\t\tcast(o, B).a();\n\t\t}\n\t}\n\n\tstatic function p10(o:Dynamic, k:Int):Void {\n\t\tswitch (k) {\n\t\t\tcase 1:\n\t\t\t\tcast(o, B).a();\n\t\t\tcase 2:\n\t\t\t\tcast(o, B).a();\n\t\t\tdefault:\n\t\t}\n\t}\n\n\tstatic function p11(o:Dynamic, k:Bool):Void {\n\t\tk && cast(o, B).more();\n\t\tk ? cast(o, B).a() : cast(o, B).a();\n\t}\n\n\tstatic function p15(o:Dynamic, k:Bool):Void {\n\t\ttry\n\t\t\tcast(o, B).a()\n\t\tcatch (e:Dynamic)\n\t\t\tlog('caught');\n\t\ttry\n\t\t\tcast(o, B).a()\n\t\tcatch (e:Dynamic)\n\t\t\tlog('caught2');\n\t}\n\n\tstatic function p16(o:Dynamic, k:Bool):Void {\n\t\tdo cast(o, B).a() while (false);\n\t\tif (k) cast(o, B).a();\n\t}\n\n\tstatic function p6(f:Dynamic):Void {\n\t\t(cast f : Void->Void)();\n\t\t(cast f : Void->Void)();\n\t\t(cast f : Void->Void)();\n\t}\n\n\tstatic function p17(o:Dynamic):Void {\n\t\t(cast o : Null<B>).a();\n\t\t(cast o : Null<B>).a();\n\t\t(cast o : Null<B>).a();\n\t}\n\n\tstatic function p18(o:Dynamic):Void {\n\t\tcast(o, B).a();\n\t\tcast(o, B).a();\n\t\to = null;\n\t\tcast(o, B);\n\t\tcast(o, B);\n\t}\n\n\tstatic function run(name:String, f:() -> Void):Void {\n\t\tout = [];\n\t\ttry\n\t\t\tf()\n\t\tcatch (e:Dynamic)\n\t\t\tout.push('THROW');\n\t\tSys.println(name + \": \" + out.join(\",\"));\n\t}\n\n\tstatic function main():Void {\n\t\tfinal c:B = new B(2);\n\t\tfinal l:B = new B(1, c);\n\t\trun('p1', () -> p1('str'));\n\t\trun('p1e', () -> p1e(new D()));\n\t\trun('p1f', () -> p1f('str', 0));\n\t\trun('p2', () -> p2(l));\n\t\trun('p3', () -> p3(l, c));\n\t\trun('p4', () -> p4(l, c));\n\t\trun('p5', () -> p5(l));\n\t\trun('p7', () -> p7(l, new D()));\n\t\trun('p8', () -> new Host().p8(new Bubble(5)));\n\t\trun('p9', () -> p9(l, c));\n\t\trun('p9b', () -> p9b(l, c));\n\t\trun('p12', () -> p12('str'));\n\t\trun('p14', () -> p14([l, c]));\n\t\trun('p10', () -> p10(l, 1));\n\t\trun('p11', () -> p11('str', false));\n\t\trun('p15', () -> p15('str', false));\n\t\trun('p16', () -> p16(l, false));\n\t\trun('p18', () -> p18(l));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "90276f3c4ff22001",
+				"files": "c42a85c98e892328",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "RC2",
+			"note": "repeated-cast must not put its local ahead of the statement declaring the operand: with an outer binding of that name it would compile and cast the wrong value",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"repeated-cast",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class B {\n\tpublic var n:Int;\n\n\tpublic function new(n:Int) {\n\t\tthis.n = n;\n\t}\n\n\tpublic function a():Int {\n\t\tMain.out.push('a' + n);\n\t\treturn n;\n\t}\n}\n\nclass Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function s1(o:Dynamic, other:Dynamic):Void {\n\t\tvar o:Dynamic = other, y:Int = cast(o, B).n;\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function main():Void {\n\t\ts1(new B(1), new B(2));\n\t\tSys.println(out.join(\",\"));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

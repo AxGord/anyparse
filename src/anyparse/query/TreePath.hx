@@ -2,6 +2,8 @@ package anyparse.query;
 
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Navigation over a parsed tree: ancestors by reference IDENTITY, and the node at a range by SPAN.
  *
@@ -70,6 +72,29 @@ final class TreePath {
 			if (found != null) return found;
 		}
 		return null;
+	}
+
+	/**
+	 * The nodes from `root` down whose span holds the byte at `offset`, outermost first: at each level the first child
+	 * holding it. A position lookup, so it stops above a node carrying no span.
+	 */
+	public static function ancestorsAt(root: QueryNode, offset: Int): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		var node: Null<QueryNode> = root;
+		while (node != null) {
+			out.push(node);
+			node = node.children.find(c -> {
+				final at: Null<Span> = c.span;
+				return at != null && at.from <= offset && offset < at.to;
+			});
+		}
+		return out;
+	}
+
+	/** Whether `node`'s span covers `span`. */
+	public static function covers(node: QueryNode, span: Null<Span>): Bool {
+		final outer: Null<Span> = node.span;
+		return outer != null && span != null && outer.from <= span.from && span.to <= outer.to;
 	}
 
 	/** Whether `node` carries exactly the range `span`. */

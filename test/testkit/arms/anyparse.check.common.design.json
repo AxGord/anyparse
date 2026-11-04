@@ -33,13 +33,6 @@
 			"note": "every norm bucket stays one group, so occurrences whose literals differ are still counted as one repeated expression and the message quotes a spelling the reported span does not carry"
 		},
 		{
-			"name": "M-EXTRACT-REPEAT-WRITE-SPLIT",
-			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
-			"method": "splitAtWrites",
-			"force": "[sorted]",
-			"note": "a write of an operand between two occurrences no longer cuts the group, so `k(Std.int(i)); i++; k(Std.int(i)); k(Std.int(i));` is reported as one value"
-		},
-		{
 			"name": "M-EXTRACT-REPEAT-UNKNOWN-WRITE",
 			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
 			"method": "ownWrites",
@@ -54,13 +47,6 @@
 			"find": "return null;",
 			"replace": "continue;",
 			"note": "a write inside a nested or sibling closure, which runs whenever that closure is called, no longer kills the group"
-		},
-		{
-			"name": "M-EXTRACT-REPEAT-BACK-EDGE",
-			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
-			"method": "carriedRound",
-			"force": "false",
-			"note": "a write later in a loop than an occurrence is not carried round the back edge, so the occurrences after the loop and the next iteration's read are one value"
 		},
 		{
 			"name": "M-EXTRACT-REPEAT-REBIND",
@@ -1149,6 +1135,60 @@
 			"find": "&& names(scan, guarded, SourceText.lastSegment(k.arm.type))",
 			"replace": "",
 			"note": "a member name alone reaches an arm, so a guard calling a same-named member of another type is reported"
+		},
+		{
+			"name": "M-RCAST-MERGE-FAMILIES",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "report",
+			"find": "c.checked ? 'C' : 'U'",
+			"replace": "'C'",
+			"note": "checked and unchecked casts of one operand and type share a bucket again, so two unchecked casts and a checked one are reported together although the checked one carries a runtime check"
+		},
+		{
+			"name": "M-RCAST-WRITE-NOT-SPLIT",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "runsOf",
+			"force": "[group]",
+			"note": "a write of the operand between two casts no longer ends the run, so the later cast is bound to the earlier value, and one whose right side holds the first cast reads the old one"
+		},
+		{
+			"name": "M-RCAST-BACK-EDGE",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "runsOf",
+			"find": "!SameValueRuns.carriedRound(",
+			"replace": "true || !SameValueRuns.carriedRound(",
+			"note": "a write a loop carries round to an earlier cast no longer drops the run, so a loop that advances the operand is bound to its first value and never ends"
+		},
+		{
+			"name": "M-RCAST-HOIST-ABOVE-GUARD",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "runsFirst",
+			"force": "true",
+			"note": "the path from the hoist statement to the first cast is no longer required to run it first and always, so the local is placed above the guard that makes the checked cast valid"
+		},
+		{
+			"name": "M-RCAST-CONDITION-SLOT",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "runsFirst",
+			"find": "parent.children[0] == child",
+			"replace": "true",
+			"note": "a branching statement counts through any child, so a cast in an unbraced then or else body is hoisted above the guard"
+		},
+		{
+			"name": "M-RCAST-PURE-PREFIX",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "runsFirst",
+			"find": "if (!PurityScan.isPure(sibling, purity)) return false;",
+			"replace": "",
+			"note": "code ahead of the first cast in its statement is ignored, so the bind runs before a write or a call it used to run after, and two runs in one statement lose an insertion"
+		},
+		{
+			"name": "M-RCAST-OWN-DECLARATION",
+			"type": "anyparse.check.common.design.RepeatedCast",
+			"method": "hoistStatement",
+			"find": "if (declaresOperand(statement, run[0])) return null;",
+			"replace": "",
+			"note": "the local goes ahead of the statement declaring its operand, so it casts an outer binding of that name, or fails to compile with none"
 		}
 	]
 }

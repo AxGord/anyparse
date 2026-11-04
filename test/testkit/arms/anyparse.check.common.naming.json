@@ -490,13 +490,6 @@
 			"note": "no shadowing parameter is renamed, so `(item:DiskSystemItemData) -> …` over a local `item` stays a finding although the rename is binder-proven"
 		},
 		{
-			"name": "M-SHADOWING-PARAM-ANY-TYPE",
-			"type": "anyparse.check.common.naming.ShadowingLocal",
-			"method": "typeNamedLocal",
-			"force": "'renamed'",
-			"note": "any written type names a replacement, `Null<Array<Item>>` and `String` included, so a parameter is renamed to a name no type gave it"
-		},
-		{
 			"name": "M-NAMING-HANDLER-OVERRIDE",
 			"type": "anyparse.check.common.naming.NamingOptions",
 			"method": "handlerRule",
