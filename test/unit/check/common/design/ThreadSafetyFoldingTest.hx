@@ -1,5 +1,6 @@
 package unit.check.common.design;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -11,12 +12,11 @@ class ThreadSafetyFoldingTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep","Net.fetch","Lock.wait"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
-
 	private static inline final NET: String = 'class Lock { public function new() {} public function wait():Void {} }'
 		+ ' class Net { final _done:Lock = new Lock(); public function new() {} public function fetch():Void { _done.wait(); }'
 		+ ' public function fetchDeep():Void deep(); function deep():Void _done.wait(); }';
 
-	/** the client's `GateMutex.lock` / `BlockingNativeURLReader.go`: the wait a sink's own body makes is the sink's finding. */
+	/** the client's `GateLock.lock` / `BlockingUrlReader.go`: the wait a sink's own body makes is the sink's finding. */
 	@:pin('control') @:killer('M-TS-INSIDE-SINK-OFF')
 	public function testAWaitInsideASinksBodyIsTheSinks(): Void {
 		#if (sys || nodejs)
@@ -53,7 +53,7 @@ class ThreadSafetyFoldingTest extends Test {
 	}
 
 	/**
-	 * the client's `_batchMutex`: every main-thread take of one long lock waits for the same holders — one warning, at the take
+	 * the client's `_batchLock`: every main-thread take of one long lock waits for the same holders — one warning, at the take
 	 * inside the lock's wrapper when there is one, else the first by member.
 	 */
 	@:pin('control') @:killer('M-TS-ONE-TAKE-OFF') @:killer('M-TS-ONE-TAKE-NO-WRAPPER')
@@ -66,7 +66,7 @@ class ThreadSafetyFoldingTest extends Test {
 		Assert.same(['info A S.b | Mutex.acquire', 'warning A S.a | Mutex.acquire'], takes(run([
 			ThreadSafetyCheckTest.MUTEX,
 			RUNNER,
-			StringTools.replace(StringTools.replace(source, 'MEMBERS', ''), 'CALLS', '')
+			source.replace('MEMBERS', '').replace('CALLS', '')
 		])), 'the first by member');
 		Assert.same(
 			[
@@ -77,12 +77,8 @@ class ThreadSafetyFoldingTest extends Test {
 			takes(run([
 				ThreadSafetyCheckTest.MUTEX,
 				RUNNER,
-				StringTools.replace(
-					StringTools.replace(
-						source, 'MEMBERS', 'public function zLock():Void _m.acquire(); public function zUnlock():Void _m.release();'
-					),
-					'CALLS', 's.zLock(); s.zUnlock();'
-				)
+				source.replace('MEMBERS', 'public function zLock():Void _m.acquire(); public function zUnlock():Void _m.release();')
+					.replace('CALLS', 's.zLock(); s.zUnlock();')
 			])),
 			'the wrapper'
 		);
@@ -91,7 +87,7 @@ class ThreadSafetyFoldingTest extends Test {
 		#end
 	}
 
-	/** the client's `getText`: the tree lock taken inside the hold of `_mutationMutex` is that hold's finding. */
+	/** the client's `getText`: the tree lock taken inside the hold of `_stateLock` is that hold's finding. */
 	@:pin('control') @:killer('M-TS-NEST-OFF')
 	public function testAHoldInsideAnotherIsItsFinding(): Void {
 		#if (sys || nodejs)
@@ -114,7 +110,7 @@ class ThreadSafetyFoldingTest extends Test {
 	#if (sys || nodejs)
 	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
-	private static function run(sources: Array<String>, ?config: String): Array<Violation> {
+	private static function run(sources: Array<String>, ?config: String): Array<Violation> { // noqa: optional-param-shorthand
 		return ThreadSafetyCheckTest.violations(config ?? CONFIG, sources);
 	}
 

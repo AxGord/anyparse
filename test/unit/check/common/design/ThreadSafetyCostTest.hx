@@ -17,7 +17,7 @@ class ThreadSafetyCostTest extends Test {
 
 	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
-	/** the client's `ShardDatabase.getFilePathRequest`: one indexed SQL lookup on the main thread waits well under a frame. */
+	/** the client's `ShardStore.getFilePathCall`: one indexed SQL lookup on the main thread waits well under a frame. */
 	@:pin('control') @:killer('M-TS-SHORT-SINKS-IGNORED')
 	public function testAShortSinkCalledOnceIsInfo(): Void {
 		#if (sys || nodejs)
@@ -40,7 +40,7 @@ class ThreadSafetyCostTest extends Test {
 		#end
 	}
 
-	/** the client's `moveCloudFolderSubItemsAction2`: a short call once per row is as long as the folder is big. */
+	/** the client's `moveRemoteFolderSubItems2`: a short call once per row is as long as the folder is big. */
 	@:pin('control') @:killer('M-TS-REPEAT-NO-LOOPS')
 	public function testAShortSinkInALoopWarns(): Void {
 		#if (sys || nodejs)
@@ -79,7 +79,7 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/**
-	 * the client's folder icon: `getCloudIcon` asks the database once, but the file list builds an icon per visible item — a
+	 * the client's folder icon: `getRemoteIcon` asks the database once, but the file list builds an icon per visible item — a
 	 * caller anywhere up the main thread's way repeats the short call.
 	 */
 	@:pin('control') @:killer('M-TS-REPEAT-UPWARD-NONE') @:killer('M-TS-OWNER-OFF')
@@ -97,7 +97,7 @@ class ThreadSafetyCostTest extends Test {
 		#end
 	}
 
-	/** the client's `PathIO.deleteRecursive`: a function calling itself runs its short call once per level. */
+	/** the client's `PathTools.deleteRecursive`: a function calling itself runs its short call once per level. */
 	@:pin('control') @:killer('M-TS-REPEAT-NO-RECURSION') @:killer('M-TS-OWNER-SELF-MOVED')
 	public function testRecursionRepeatsAShortSink(): Void {
 		#if (sys || nodejs)
@@ -117,9 +117,8 @@ class ThreadSafetyCostTest extends Test {
 		Assert.same(['info A A.once | FileSystem.stat', 'warning A A.each | FileSystem.stat'], graded(run([
 			'class Each { public static function all(xs:Array<String>, fn:String->Void):Void {} }',
 			'class Once { public static function run(fn:String->Void):Void {} }',
-			'class A { public static function each(ps:Array<String>):Void Each.all(ps, p -> FileSystem.stat(p));'
-			+ ' public static function once():Void Once.run(p -> FileSystem.stat(p));'
-			+ ' public static function main():Void { each(["a"]); once(); } }'
+			'class A { public static function each(ps:Array<String>):Void Each.all(ps, p -> FileSystem.stat(p)); public static function '
+			+ 'once():Void Once.run(p -> FileSystem.stat(p)); public static function main():Void { each(["a"]); once(); } }'
 		])));
 		#else
 		Assert.pass('non-sys target');
@@ -134,9 +133,8 @@ class ThreadSafetyCostTest extends Test {
 	public function testAFunctionAroundTheSiteStartsTheCountAfresh(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A A.setup | FileSystem.stat'], graded(run([
-			'class A { public function new() {} public dynamic function onDone():Void {}'
-			+ ' function setup():Void for (i in 0...3) onDone = () -> FileSystem.stat("a");'
-			+ ' public static function main():Void { final a:A = new A(); a.setup(); a.onDone(); } }'
+			'class A { public function new() {} public dynamic function onDone():Void {} function setup():Void for (i in 0...3) '
+			+ 'onDone = () -> FileSystem.stat("a"); public static function main():Void { final a:A = new A(); a.setup(); a.onDone(); } }'
 		])));
 		#else
 		Assert.pass('non-sys target');
@@ -144,7 +142,7 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/**
-	 * the client's `ShardDatabase._mutex` as a single lookup holds it: a background hold over one short call, and the main
+	 * the client's `ShardStore._mutex` as a single lookup holds it: a background hold over one short call, and the main
 	 * thread's take of that lock, both brief.
 	 */
 	@:pin('control') @:killer('M-TS-LONG-BY-ANY-SPAN')
@@ -174,10 +172,9 @@ class ThreadSafetyCostTest extends Test {
 	public function testALoopAroundTheWholeHoldIsShort(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A S.read | Mutex.acquire', 'info B S.scan | S._m'], graded(run([
-			'class S { final _m:Mutex = new Mutex(); public function new() {}'
-			+ ' public function read():Int { _m.acquire(); _m.release(); return 1; }'
-			+ ' public function scan(ps:Array<String>):Void { for (p in ps) { _m.acquire(); FileSystem.stat(p); _m.release(); } }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.scan(["a"])); s.read(); } }'
+			'class S { final _m:Mutex = new Mutex(); public function new() {} public function read():Int { _m.acquire(); _m.release(); '
+			+ 'return 1; } public function scan(ps:Array<String>):Void { for (p in ps) { _m.acquire(); FileSystem.stat(p); _m.release(); } '
+			+ '} public static function main():Void { final s:S = new S(); Runner.create(() -> s.scan(["a"])); s.read(); } }'
 		])));
 		#else
 		Assert.pass('non-sys target');
@@ -197,9 +194,8 @@ class ThreadSafetyCostTest extends Test {
 		#end
 	}
 
-
 	/**
-	 * the client's `ItemListMoveItems.moveItems`: one repeated call reaches four short sinks, which made four warnings at one
+	 * the client's `ListMoveItems.moveItems`: one repeated call reaches four short sinks, which made four warnings at one
 	 * line. The site owns ONE warning, keyed by the call it repeats, naming every short sink below it.
 	 */
 	@:pin('control') @:killer('M-TS-SITE-PER-SINK') @:killer('M-TS-SITE-GROW') @:killer('M-TS-SITE-SUBJECT')
@@ -241,6 +237,20 @@ class ThreadSafetyCostTest extends Test {
 		#end
 	}
 
+	/** Of several loops above a short call on different ways to it, the nearest owns the warning: one per call site, never one per loop. */
+	@:pin('control') @:killer('M-TS-OWNER-FARTHEST')
+	public function testTheNearestRepeatingCallerOwnsTheWarning(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | for (j in 0...10)'], graded(run([
+			'class A { public static function main():Void { row(); page(); } static function row():Void for (j in 0...10) icon(j);'
+			+ ' static function page():Void for (j in 0...10) cell(j); static function cell(i:Int):Void icon(i);'
+			+ ' static function icon(i:Int):Void FileSystem.stat("a"); }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `S.scan` holds `_m` on a spawned thread across `body`, and the main thread takes `_m` in `S.read`, holding it across
@@ -248,9 +258,8 @@ class ThreadSafetyCostTest extends Test {
 	 */
 	private static function holdFixture(body: String): Array<String> {
 		return [
-			'class S { final _m:Mutex = new Mutex(); public function new() {}'
-				+ ' public function read():Int { _m.acquire(); _m.release(); return 1; }'
-				+ ' public function scan(ps:Array<String>):Void { _m.acquire(); $body _m.release(); }'
+			'class S { final _m:Mutex = new Mutex(); public function new() {} public function read():Int { _m.acquire(); '
+				+ '_m.release(); return 1; } public function scan(ps:Array<String>):Void { _m.acquire(); $body _m.release(); }'
 				+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.scan(["a"])); s.read(); } }'
 		];
 	}
@@ -271,20 +280,5 @@ class ThreadSafetyCostTest extends Test {
 		return ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER].concat(sources));
 	}
 	#end
-
-	/** Of several loops above a short call on different ways to it, the nearest owns the warning: one per call site, never one per loop. */
-	@:pin('control') @:killer('M-TS-OWNER-FARTHEST')
-	public function testTheNearestRepeatingCallerOwnsTheWarning(): Void {
-		#if (sys || nodejs)
-		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | for (j in 0...10)'], graded(run([
-			'class A { public static function main():Void { row(); page(); }'
-			+ ' static function row():Void for (j in 0...10) icon(j);'
-			+ ' static function page():Void for (j in 0...10) cell(j); static function cell(i:Int):Void icon(i);'
-			+ ' static function icon(i:Int):Void FileSystem.stat("a"); }'
-		])));
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
 
 }

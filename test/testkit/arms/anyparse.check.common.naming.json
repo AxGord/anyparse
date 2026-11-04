@@ -218,7 +218,7 @@
 			"type": "anyparse.check.common.naming.ShadowingLocal",
 			"method": "assignmentEdit",
 			"force": "null",
-			"note": "a same-block `var` redeclaration of the same type is never turned into an assignment (client DatePicker dayIdx stays a finding)"
+			"note": "a same-block `var` redeclaration of the same type is never turned into an assignment (client DayPicker dayPos stays a finding)"
 		},
 		{
 			"name": "M-SHADOWING-LOCAL-CAPTURE-IGNORED",
@@ -487,7 +487,7 @@
 			"method": "shadowFix",
 			"find": "if (site.seams.reportParameters) return renameEdits(site, decl, name, span, path[path.length - 2]);",
 			"replace": "if (site.seams.reportParameters) return Declined('mutated');",
-			"note": "no shadowing parameter is renamed, so `(item:DiskSystemItemData) -> …` over a local `item` stays a finding although the rename is binder-proven"
+			"note": "no shadowing parameter is renamed, so `(item:StoreItemData) -> …` over a local `item` stays a finding although the rename is binder-proven"
 		},
 		{
 			"name": "M-NAMING-HANDLER-OVERRIDE",

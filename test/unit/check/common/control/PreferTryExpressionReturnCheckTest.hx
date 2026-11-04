@@ -202,7 +202,7 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		);
 	}
 
-	/** The client shape this check was written for (`ScrollAxis.maxScroll`, anonymized). */
+	/** The client shape this check was written for (`ScrollRail.maxScroll`, anonymized). */
 	public function testFixTmFixture(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			'class C {\n\tfunction f(node:Node, size:Float):Float {\n\t\ttry {\n\t\t\treturn Math.max(0, measure(node) - size);\n'

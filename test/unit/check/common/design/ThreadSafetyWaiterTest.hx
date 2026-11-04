@@ -14,7 +14,7 @@ class ThreadSafetyWaiterTest extends Test {
 		+ '"shortSinks":["FileSystem.stat"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
 	/**
-	 * the client's `getFolderLastCloudActionAction2`: only the main thread holds `_a`, across a take of `_b` that a background
+	 * the client's `getFolderLastRemoteAction2`: only the main thread holds `_a`, across a take of `_b` that a background
 	 * hold makes long, once per item — the main thread waits for `_b` (finding (a) at the take), and no thread it
 	 * stalls waits for `_a`: however often it is repeated, a wait for another lock is no work of the holder's own.
 	 */
@@ -30,7 +30,7 @@ class ThreadSafetyWaiterTest extends Test {
 		#end
 	}
 
-	/** the client's `ItemListMoveItems.moveItems`: the main thread's own per-item loop under the lock is the stall, and stays reported. */
+	/** the client's `ListMoveItems.moveItems`: the main thread's own per-item loop under the lock is the stall, and stays reported. */
 	@:pin('control') @:killer('M-TS-OWN-WORK-DROPPED')
 	public function testAMainOnlyHoldOverItsOwnLongWorkStays(): Void {
 		#if (sys || nodejs)
@@ -67,9 +67,8 @@ class ThreadSafetyWaiterTest extends Test {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
-			'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
-			+ ' public function work():Void { _b.acquire(); Sys.sleep(1); _b.release(); }'
-			+ ' public function peek():Void { _a.acquire(); _a.release(); } $member'
+			'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {} public function work():Void {'
+			+ ' _b.acquire(); Sys.sleep(1); _b.release(); } public function peek():Void { _a.acquire(); _a.release(); } $member'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s.peek(); $start } }'
 		]);
 	}

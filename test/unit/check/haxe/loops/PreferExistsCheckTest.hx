@@ -125,7 +125,7 @@ class PreferExistsCheckTest extends Test {
 		// ★ The receiver is `Null<M>`, and Haxe's `Null` is member-TRANSPARENT: `m.exists(…)` looks
 		// `exists` up on `M` all the same. Asking the VALUE nominal answers `Null`, which declares
 		// nothing — which is why the gate asks `CheckScan.receiverNominalResolver`. This is the
-		// second of the two measured client sites (`baseData:Null<Map<Int, ObjectFrameInfo>>`), and the
+		// second of the two measured client sites (`baseData:Null<Map<Int, ShapeFrameInfo>>`), and the
 		// guarded merge rides on the qualified call unchanged.
 		final vs: Array<Violation> = violations(nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;'));
 		Assert.equals(1, vs.length);

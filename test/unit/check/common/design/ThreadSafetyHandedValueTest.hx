@@ -89,19 +89,16 @@ class ThreadSafetyHandedValueTest extends Test {
 		#if (sys || nodejs)
 		Assert.same(
 			['S.slow | S._m', 'S.work | S._m'],
-			holds(ThreadSafetyCheckTest.violations(
-				StringTools.replace(CONFIG, '"lockPairs"', '"reentrantLocks":["Mutex.acquire"],"lockPairs"'), [
-					ThreadSafetyCheckTest.MUTEX,
-					'class Runner { public static function create(fn:()->Void):Void {} }',
-					'class Disk { public static function stat(p:String):Void {} }',
-					'class S { final _m:Mutex = new Mutex(); final paths:Array<String> = ["a", "b"]; public function new() {}'
-					+ ' function locked(p:String):Void { _m.acquire(); _m.release(); }'
-					+ ' function slow():Void { _m.acquire(); Disk.stat("x"); _m.release(); }'
-					+ ' public function work():Void { _m.acquire(); final o:S = new S(); Lambda.iter(paths, o.locked); _m.release(); }'
-					+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); Runner.create(() -> s.slow());'
-					+ ' s._m.acquire(); s._m.release(); } }'
-				]
-			))
+			holds(ThreadSafetyCheckTest.violations(CONFIG.replace('"lockPairs"', '"reentrantLocks":["Mutex.acquire"],"lockPairs"'), [
+				ThreadSafetyCheckTest.MUTEX,
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'class Disk { public static function stat(p:String):Void {} }',
+				'class S { final _m:Mutex = new Mutex(); final paths:Array<String> = ["a", "b"]; public function new() {}'
+				+ ' function locked(p:String):Void { _m.acquire(); _m.release(); }'
+				+ ' function slow():Void { _m.acquire(); Disk.stat("x"); _m.release(); } public function work():Void { _m.acquire(); '
+				+ 'final o:S = new S(); Lambda.iter(paths, o.locked); _m.release(); } public static function main():Void { final s:S = '
+				+ 'new S(); Runner.create(() -> s.work()); Runner.create(() -> s.slow()); s._m.acquire(); s._m.release(); } }'
+			]))
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -150,8 +147,8 @@ class ThreadSafetyHandedValueTest extends Test {
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class Later { var _job:Null<String->Void> = null; public function new(job:String->Void) { _job = job; }'
 			+ ' public function run():Void { final j:Null<String->Void> = _job; if (j != null) j("x"); } }',
-			'class C { static var later:Null<Later> = null; static function f():Void { later = new Later(Disk.stat); Sys.sleep(1); }'
-			+ ' public static function main():Void { f(); Runner.create(() -> { final l:Null<Later> = later; if (l != null) l.run(); }); } }'
+			'class C { static var later:Null<Later> = null; static function f():Void { later = new Later(Disk.stat); Sys.sleep(1); } '
+			+ 'public static function main():Void { f(); Runner.create(() -> { final l:Null<Later> = later; if (l != null) l.run(); }); } }'
 		])));
 		final owned: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
 			disk,
@@ -168,7 +165,7 @@ class ThreadSafetyHandedValueTest extends Test {
 
 	/**
 	 * A value a constructor only stores into a `final` field runs where the field is called, not at the `new` (the client's
-	 * `ItemList.reload` handing `_source.getThumbnail` to `new ItemListTile(...)` under the tree lock, round 7 L1b): the
+	 * `RowList.reload` handing `_source.getThumbnail` to `new ListTile(...)` under the tree lock, round 7 L1b): the
 	 * hold around the `new` stays silent, and turns long again when the hold itself calls the field — directly, or through
 	 * a field another constructor stores it into. Any other shape keeps the value running where it is handed: the
 	 * parameter used otherwise or in a nested function, the field read otherwise (in any `#if` branch), a `var` field, a
@@ -240,7 +237,8 @@ class ThreadSafetyHandedValueTest extends Test {
 
 	#if (sys || nodejs)
 	/**
-	 * `S.work` runs on a spawned thread and holds `_m` across `held`; the main thread takes `_m` too. `load` blocks, `caught` blocks only in its `catch`, `scan` hands `load` to `Lambda.iter`.
+	 * `S.work` runs on a spawned thread and holds `_m` across `held`; the main thread takes `_m`
+	 * too. `load` blocks, `caught` blocks only in its `catch`, `scan` hands `load` to `Lambda.iter`.
 	 */
 	private static function run(held: String): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
@@ -252,11 +250,10 @@ class ThreadSafetyHandedValueTest extends Test {
 			'extern class D { public function new(); public function addEventListener(type:String, fn:String->Void):Void; }',
 			'class Disk { public static function stat(p:String):Void {} public static function peek(p:String):Void {}'
 			+ ' public static function parse(p:String):Int { if (p.length > 0) throw "bad"; return 0; } }',
-			'class S { final _m:Mutex = new Mutex(); final paths:Array<String> = ["a", "b"]; public function new() {}'
-			+ ' function load(p:String):Void Disk.stat(p); function scan():Void Lambda.iter(paths, load);'
-			+ ' function caught(p:String):Void { try { Disk.parse(p); } catch (e:Dynamic) { Disk.stat(p); } }'
-			+ ' public function work():Void { _m.acquire(); $held _m.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
+			'class S { final _m:Mutex = new Mutex(); final paths:Array<String> = ["a", "b"]; public function new() {} function '
+			+ 'load(p:String):Void Disk.stat(p); function scan():Void Lambda.iter(paths, load); function caught(p:String):Void { try {'
+			+ ' Disk.parse(p); } catch (e:Dynamic) { Disk.stat(p); } } public function work():Void { _m.acquire(); $held _m.release(); } '
+			+ 'public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		]);
 	}
 	/**
@@ -266,8 +263,9 @@ class ThreadSafetyHandedValueTest extends Test {
 	 */
 	private static function stored(held: String, find: String = '', put: String = ''): Array<Violation> {
 		final config: String = '{"reflectiveClasses":["nothing.*"],"reflectiveMethodHolders":["nothing.*"],"rules":{"thread-safety":{'
-			+ '"sinks":["Mutex.acquire","Disk.stat"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
-		return ThreadSafetyCheckTest.violations(find == '' ? config : StringTools.replace(config, find, put), [
+			+ '"sinks":["Mutex.acquire","Disk.stat"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],'
+			+ '"closedWorld":true}}}';
+		return ThreadSafetyCheckTest.violations(find == '' ? config : config.replace(find, put), [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class Disk { public static function stat(p:String):Void {} }',
@@ -290,8 +288,8 @@ class ThreadSafetyHandedValueTest extends Test {
 			'class Shadowed { final _sh:String->Void; public function new(job:String->Void) { var _sh:Null<String->Void> = null;'
 			+ ' _sh = job; this._sh = Disk.stat; } }',
 			'class S { final _m:Mutex = new Mutex(); public function new() {} function load(p:String):Void Disk.stat(p);'
-			+ ' public function work():Void { _m.acquire(); $held _m.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
+			+ ' public function work():Void { _m.acquire(); $held _m.release(); } public static function main():Void {'
+			+ ' final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		]);
 	}
 
@@ -309,7 +307,8 @@ class ThreadSafetyHandedValueTest extends Test {
 				ThreadSafetyCheckTest.MUTEX,
 				'class Runner { public static function create(fn:()->Void):Void {} }',
 				'class Disk { public static function stat(p:String):Void {} }',
-				'class Ib { public final iterator:() -> Iterator<String>; public function new(i:() -> Iterator<String>) { iterator = i; } }',
+				'class Ib { public final iterator:() -> Iterator<String>; public function new(i:() -> Iterator<String>) {'
+				+ ' iterator = i; } }',
 				'class Kv { public final keyValueIterator:() -> KeyValueIterator<Int, String>;'
 				+ ' public function new(k:() -> KeyValueIterator<Int, String>) { keyValueIterator = k; } }',
 				'class Ts { public final toString:() -> String; public function new(t:() -> String) { toString = t; } }',
@@ -322,10 +321,9 @@ class ThreadSafetyHandedValueTest extends Test {
 				'class PrivCond {\n#if !nothing\nfinal _job:String->Void; public function new(j:String->Void) { _job = j; }\n#end\n}',
 				'class S { final _m:Mutex = new Mutex(); public function new() {} function load(p:String):Void Disk.stat(p);'
 				+ ' function it():Iterator<String> { Disk.stat("p"); return null; }'
-				+ ' function kv():KeyValueIterator<Int, String> { Disk.stat("p"); return null; }'
-				+ ' function ts():String { Disk.stat("p"); return ""; }'
-				+ ' public function work():Void { _m.acquire(); $held _m.release(); }'
-				+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
+				+ ' function kv():KeyValueIterator<Int, String> { Disk.stat("p"); return null; } function ts():String {'
+				+ ' Disk.stat("p"); return ""; } public function work():Void { _m.acquire(); $held _m.release(); } public static function '
+				+ 'main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 			]
 		);
 	}

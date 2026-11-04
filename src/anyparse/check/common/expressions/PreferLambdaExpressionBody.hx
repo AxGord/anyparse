@@ -672,7 +672,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	 * (`isTrailingCallArg`) — a USER decision. The braces are not noise in the non-trailing
 	 * slot: they delimit a construct that already has more than one arm, and the collapsed shape
 	 * puts that construct's own branch keywords into the lambda argument position —
-	 * `success -> if (success) API.login(…); else WaitView.hideAsyncMask(),`, where a `;`, an
+	 * `success -> if (success) API.login(…); else BusyView.hideAsyncMask(),`, where a `;`, an
 	 * `else` and the argument comma end up on one line and the reader has to separate the
 	 * lambda body from the call argument list by eye. In the TRAILING slot nothing follows the
 	 * body but `)`, so that run of punctuation cannot form and the same code reads fine — the

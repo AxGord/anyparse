@@ -1,8 +1,10 @@
 package unit.check.common.design;
 
+using StringTools;
+
 /**
  * A `catch` whose `try` runs only `nonThrowing` calls is no path (`DeadCatches`): the client's
- * `DiskSystemNativeExtensions.getMTime` wraps hxcpp's `FileSystem.stat` — which builds a zeroed record for a missing
+ * `StoreNativeExtensions.getMTime` wraps hxcpp's `FileSystem.stat` — which builds a zeroed record for a missing
  * path and never throws — in a `catch` reporting the error by a blocking request.
  */
 class ThreadSafetyDeadCatchTest extends Test {
@@ -17,7 +19,7 @@ class ThreadSafetyDeadCatchTest extends Test {
 		Assert.same([], holds(run('Disk.stat(p).mtime')));
 		Assert.same(
 			['info B S.work | S._m'],
-			holds(run('Disk.stat(p).mtime', StringTools.replace(CONFIG, '"nonThrowing":["Disk.stat"]', '"nonThrowing":[]'))), 'unlisted'
+			holds(run('Disk.stat(p).mtime', CONFIG.replace('"nonThrowing":["Disk.stat"]', '"nonThrowing":[]'))), 'unlisted'
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -50,8 +52,7 @@ class ThreadSafetyDeadCatchTest extends Test {
 	public function testTheTryBodyStillRuns(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['warning B S.work | S._m'],
-			holds(run('Disk.stat(p).mtime', StringTools.replace(CONFIG, '"Sys.sleep"]', '"Sys.sleep","Disk.stat"]'), true))
+			['warning B S.work | S._m'], holds(run('Disk.stat(p).mtime', CONFIG.replace('"Sys.sleep"]', '"Sys.sleep","Disk.stat"]'), true))
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -77,7 +78,7 @@ class ThreadSafetyDeadCatchTest extends Test {
 	@:pin('control') @:killer('M-TS-DEADCATCH-RECEIVER')
 	public function testACallOffAValueMayThrow(): Void {
 		#if (sys || nodejs)
-		final config: String = StringTools.replace(CONFIG, '"nonThrowing":["Disk.stat"]', '"nonThrowing":["Disk.stat","Disk.istat"]');
+		final config: String = CONFIG.replace('"nonThrowing":["Disk.stat"]', '"nonThrowing":["Disk.stat","Disk.istat"]');
 		Assert.same(['info B S.work | S._m'], holds(run('disk().istat(p)', config)), 'a call receiver');
 		Assert.same(['info B S.work | S._m'], holds(run('d.istat(p)', config)), 'a field receiver');
 		Assert.same([], holds(run('Disk.stat(p)', config)), 'a type name');
@@ -118,19 +119,23 @@ class ThreadSafetyDeadCatchTest extends Test {
 	 * `S.work` holds `_m` across `mtime()`, which runs `before`, then a `try` evaluating `value` whose `catch` sleeps (or,
 	 * `quiet`, does not).
 	 */
-	private static function run(value: String, ?config: String, quiet: Bool = false, before: String = ''): Array<Violation> {
+	private static function run(
+		value: String,
+		?config: String, // noqa: optional-param-shorthand
+		quiet: Bool = false,
+		before: String = ''
+	): Array<Violation> {
 		final reported: String = quiet ? 'null;' : 'Sys.sleep(1); null;';
 		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class Disk { public function new() {} public static function stat(p:String):Dynamic return null;'
 			+ ' public function istat(p:String):Dynamic return null; }',
-			'class S { final _m:Mutex = new Mutex(); var last:Dynamic = null; var d:Disk = null; public function new() {} function other():Void {}'
-			+ ' function risky():String { throw "boom"; } function disk():Disk { throw "boom"; }'
-			+ ' var limit(get, never):Int; function get_limit():Int { throw "boom"; }'
-			+ ' function mtime(p:String):Dynamic { $before return try { $value; } catch (e:Dynamic) { $reported }; }'
-			+ ' public function work():Void { _m.acquire(); mtime("x"); _m.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
+			'class S { final _m:Mutex = new Mutex(); var last:Dynamic = null; var d:Disk = null; public function new() {} '
+			+ 'function other():Void {} function risky():String { throw "boom"; } function disk():Disk { throw "boom"; }'
+			+ ' var limit(get, never):Int; function get_limit():Int { throw "boom"; } function mtime(p:String):Dynamic { $before return '
+			+ 'try { $value; } catch (e:Dynamic) { $reported }; } public function work():Void { _m.acquire(); mtime("x"); _m.release(); } '
+			+ 'public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		]);
 	}
 

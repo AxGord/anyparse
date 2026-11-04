@@ -133,7 +133,7 @@
 			"method": "calledPath",
 			"find": "node.kind == cfg.newExprKind",
 			"replace": "false",
-			"note": "a constructor never matches an ignoreCallArguments entry, so `SpriteDescriptor.new` exempts nothing"
+			"note": "a constructor never matches an ignoreCallArguments entry, so `ShapeDescriptor.new` exempts nothing"
 		},
 		{
 			"name": "M-MAGIC-CALLARG-NESTED-NEW",
@@ -141,7 +141,7 @@
 			"method": "walk",
 			"find": " || keyCtx && node.kind == cfg.newExprKind",
 			"replace": "",
-			"note": "a value object built in place as a listed argument (`new SpriteDescriptor(id, new Point(-18, -83))`) no longer carries the callee's context, so its literals are flagged"
+			"note": "a value object built in place as a listed argument (`new ShapeDescriptor(id, new Point(-18, -83))`) no longer carries the callee's context, so its literals are flagged"
 		},
 		{
 			"name": "M-MAGIC-TABLE-SWITCH-BLIND",

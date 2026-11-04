@@ -2,8 +2,8 @@ package unit.check.common.design;
 
 /**
  * Repetition on the main thread read over its STATES (`MainRepeats`): a call a condition rules out under the value a
- * caller hands down carries no repetition from that caller — the client's `ModelVOModel.loadModelData` loops over models calling
- * `loadXML(path, false, …)`, whose `if (checkLimits)` SQL count never runs on that way.
+ * caller hands down carries no repetition from that caller — the client's `ModelVoStore.loadSchemaData` loops over models calling
+ * `loadDoc(path, false, …)`, whose `if (checkLimits)` SQL count never runs on that way.
  */
 class ThreadSafetyMainStatesTest extends Test {
 
@@ -38,7 +38,7 @@ class ThreadSafetyMainStatesTest extends Test {
 	}
 
 	/**
-	 * the client's `Token.blockedPost` → `blockedRequestInternal`: an object literal handed down is never null, and a `final`
+	 * the client's `Token.blockedPost` → `heldRequestInternal`: an object literal handed down is never null, and a `final`
 	 * local bound to `data == null` is that test — the cache read under it never runs from the loop.
 	 */
 	@:pin('control') @:killer('M-TS-COND-FINAL-LOCAL') @:killer('M-TS-ARG-LITERAL-NONNULL') @:killer('M-TS-ARG-FINAL-LOCAL-READ')
@@ -56,12 +56,12 @@ class ThreadSafetyMainStatesTest extends Test {
 
 	#if (sys || nodejs)
 	/** `L.all` loops calling `body`; `load` counts under `check`; `main` also calls `load` once with an unknown flag. */
-	private static function run(body: String, ?more: String): Array<Violation> {
+	private static function run(body: String, more: String = ''): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
 			'class Db { public static function count():Int return 0; }',
 			'class L { static function load(p:String, check:Bool):Void { if (check) Db.count(); }'
 			+ ' static function all(ps:Array<String>):Void for (p in ps) $body'
-			+ ' public static function main():Void { all(["a"]); load("b", Math.random() > 0.5); ${more ?? ''} } }'
+			+ ' public static function main():Void { all(["a"]); load("b", Math.random() > 0.5); ${more} } }'
 		]);
 	}
 

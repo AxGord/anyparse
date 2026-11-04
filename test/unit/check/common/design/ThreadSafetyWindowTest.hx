@@ -3,7 +3,7 @@ package unit.check.common.design;
 /**
  * The window of a hold walks a local declaration's initializer and an array literal's elements in place, and takes a
  * `break` / `continue` for a jump inside its loop: none of them is a path out of the function, so none leaves the lock
- * held — which would make it long, and every main-thread take of it a warning (the client's `StandardDiskSystem.getXML`, whose
+ * held — which would make it long, and every main-thread take of it a warning (the client's `LocalStore.getDoc`, whose
  * `final xml = try … catch` releases before it rethrows; `listFolder`'s comprehension).
  */
 class ThreadSafetyWindowTest extends Test {
@@ -83,7 +83,8 @@ class ThreadSafetyWindowTest extends Test {
 			'class Oops extends Fault { public function new() { super(); } }',
 			'class W { public final _m:Mutex = new Mutex(); public function new() {} function f():Int return 1;'
 			+ ' public function work():Void { _m.acquire(); $body _m.release(); } }',
-			'class M { public static function main():Void { final w:W = new W(); Runner.create(() -> w.work()); w._m.acquire(); w._m.release(); } }'
+			'class M { public static function main():Void { final w:W = new W(); Runner.create(() '
+			+ '-> w.work()); w._m.acquire(); w._m.release(); } }'
 		]);
 	}
 

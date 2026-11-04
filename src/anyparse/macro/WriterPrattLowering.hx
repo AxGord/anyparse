@@ -375,7 +375,7 @@ final class WriterPrattLowering {
 		// unconditional glue below (open/close-delim operand carries the wrap)
 		// is stale for Eq/NotEq: a bracketed operand whose own Group fits flat
 		// leaves the trailing `== CONST` invisible to any probe and the line
-		// lands >max (client DiskSystemBase.hx 170-col `|| call(...) == CONST)`).
+		// lands >max (client StoreBase.hx 170-col `|| call(...) == CONST)`).
 		// Gate with IfLineExceeds(lineWidth + 1) -- same probe + `+1` strict-`>`
 		// restoration as WrapList.emitCondition -- byte-inert unless the
 		// rendered line overflows. The probe sits AFTER `_left` in the Concat

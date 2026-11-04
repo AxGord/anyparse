@@ -3,8 +3,8 @@ package unit.check.common.design;
 /**
  * A hold only the main thread runs stalls no other thread; what it reports is the main thread's own long work under
  * the lock — finding (a)'s. Where (a) already warns of that work at another member (the sink's own call, or the
- * repeating call that owns it), the hold adds no second warning (the client's `StandardDiskSystem.deleteItem` over
- * `deleteItemInternal`'s per-child unlinks), or at the holder itself (the client's `ItemListMoveItems.moveItems` loop), the hold
+ * repeating call that owns it), the hold adds no second warning (the client's `LocalStore.deleteItem` over
+ * `dropItemInternal`'s per-child unlinks), or at the holder itself (the client's `ListMoveItems.moveItems` loop), the hold
  * adds no second warning.
  */
 class ThreadSafetyMainOnlyTest extends Test {
@@ -60,9 +60,8 @@ class ThreadSafetyMainOnlyTest extends Test {
 			ThreadSafetyCheckTest.MUTEX,
 			'class Disk { public static function stat(p:String):Void {} }',
 			'class M { final _m:Mutex = new Mutex(); public function new() {} function work():Void Sys.sleep(1);'
-			+ ' function many():Void for (i in 0...3) one(); function one():Void Disk.stat("x");'
-			+ ' public function ui():Void { _m.acquire(); $held _m.release(); }'
-			+ ' public static function main():Void { final m:M = new M(); m.ui(); } }'
+			+ ' function many():Void for (i in 0...3) one(); function one():Void Disk.stat("x"); public function ui():Void { _m.acquire(); '
+			+ '$held _m.release(); } public static function main():Void { final m:M = new M(); m.ui(); } }'
 		]);
 	}
 

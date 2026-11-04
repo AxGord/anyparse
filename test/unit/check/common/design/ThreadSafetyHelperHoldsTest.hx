@@ -3,7 +3,7 @@ package unit.check.common.design;
 using Lambda;
 
 /**
- * A multi-lock helper (the client's `StandardDiskSystem.acquireMutationLocks`: `_batchMutex`, then `_mutationMutex`) takes its
+ * A multi-lock helper (the client's `LocalStore.acquireBothLocks`: `_batchLock`, then `_stateLock`) takes its
  * locks for its caller: each call of it opens a hold of every lock it takes, judged where it is called, exactly as a
  * single-lock wrapper's take is. The helper's own takes, and the gives of its releasing twin, are its callers'.
  */
@@ -52,8 +52,7 @@ class ThreadSafetyHelperHoldsTest extends Test {
 		Assert.same([true], [
 			for (v in run(
 				'takeBoth(); Sys.sleep(1); giveBoth();',
-				'public function useA():Void { b.acquire(); takeA(); b.release(); }'
-				+ ' function takeA():Void { a.acquire(); a.release(); }',
+				'public function useA():Void { b.acquire(); takeA(); b.release(); } function takeA():Void { a.acquire(); a.release(); }',
 				'h.useA();', null, CLOSED
 			)) if (v.data?.member == 'H.takeA') v.message.indexOf(' — short: ') >= 0
 		]);
@@ -168,12 +167,10 @@ class ThreadSafetyHelperHoldsTest extends Test {
 			holds(source(
 				'class Base { public final _a:Mutex = new Mutex(); public final _b:Mutex = new Mutex(); public function new() {}'
 				+ ' public function lockBoth():Void {} public function unlockBoth():Void {} }'
-				+ ' class S extends Base { public function new() { super(); }'
-				+ ' override public function lockBoth():Void { _a.acquire(); _b.acquire(); }'
-				+ ' override public function unlockBoth():Void { _b.release(); _a.release(); }'
-				+ ' public static function work(x:Base):Void { x.lockBoth(); Sys.sleep(1); x.unlockBoth(); }'
-				+ ' public function peek():Void { _a.acquire(); _a.release(); }'
-				+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> work(s)); s.peek(); } }'
+				+ ' class S extends Base { public function new() { super(); } override public function lockBoth():Void {'
+				+ ' _a.acquire(); _b.acquire(); } override public function unlockBoth():Void { _b.release(); _a.release(); } public static '
+				+ 'function work(x:Base):Void { x.lockBoth(); Sys.sleep(1); x.unlockBoth(); } public function peek():Void { _a.acquire(); '
+				+ '_a.release(); } public static function main():Void { final s:S = new S(); Runner.create(() -> work(s)); s.peek(); } }'
 			))
 		);
 		#else
@@ -212,9 +209,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 			holds(source(
 				'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
 				+ ' public function begin():Void { _a.acquire(); _b.acquire(); note(); _a.release(); }'
-				+ ' public function end():Void { _b.release(); } function note():Void {}'
-				+ ' public function work():Void { begin(); Sys.sleep(1); end(); }'
-				+ ' public function peek():Void { _a.acquire(); _a.release(); _b.acquire(); _b.release(); }'
+				+ ' public function end():Void { _b.release(); } function note():Void {} public function work():Void {'
+				+ ' begin(); Sys.sleep(1); end(); } public function peek():Void { _a.acquire(); _a.release(); _b.acquire(); _b.release(); }'
 				+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s.peek(); } }'
 			))
 		);
@@ -224,8 +220,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	}
 
 	/**
-	 * the client's `StandardDiskSystem.createFolderItem`: one call of `acquireMutationLocks` opens a hold of `_batchMutex` and one
-	 * of `_mutationMutex`, across the same calls — here a wait for a lock given back elsewhere, which nothing folds. One
+	 * the client's `LocalStore.makeFolderItem`: one call of `acquireBothLocks` opens a hold of `_batchLock` and one
+	 * of `_stateLock`, across the same calls — here a wait for a lock given back elsewhere, which nothing folds. One
 	 * warning, on the lock the helper takes first; the other names it, taken after it by the same call.
 	 */
 	@:pin('control') @:killer('M-TS-PAIR-OFF') @:killer('M-TS-PAIR-ORDER')
@@ -247,7 +243,7 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	}
 
 	/**
-	 * the client's `StandardDiskSystem.acquireMutationLocks`: the helper holds its first lock across its take of the second, long
+	 * the client's `LocalStore.acquireBothLocks`: the helper holds its first lock across its take of the second, long
 	 * exactly when a hold of the second is — the twin's gives are its callers' releases, no crossing that leaves the lock
 	 * long by nothing a hold names. A hold of the second lock waiting for a lock no finding reports (`slowA`, for `k`)
 	 * stays a warning from the start, so the helper's wait folds onto it rather than staying in its place when the two
@@ -282,14 +278,20 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * `H` with the two-lock helper pair, `viaBoth` running `body` on a worker (with `background` after it), `members`,
 	 * and the main thread taking `a` and `b` (and running `main`).
 	 */
-	private static function run(body: String, members: String, ?main: String, ?background: String, ?config: String): Array<Violation> {
+	private static function run(
+		body: String,
+		members: String,
+		?main: String,
+		background: String = '',
+		?config: String // noqa: optional-param-shorthand
+	): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class H { public final a:Mutex = new Mutex(); public final b:Mutex = new Mutex(); public final c:Mutex = new Mutex();'
 			+ ' public function new() {} function takeBoth():Void { b.acquire(); a.acquire(); }'
 			+ ' function giveBoth():Void { a.release(); b.release(); } public function viaBoth():Void { $body } $members'
-			+ ' public static function main():Void { final h:H = new H(); Runner.create(() -> { h.viaBoth(); ${background ?? ''} });'
+			+ ' public static function main():Void { final h:H = new H(); Runner.create(() -> { h.viaBoth(); ${background} });'
 			+ ' h.a.acquire(); h.a.release(); h.b.acquire(); h.b.release(); ${main ?? ''} } }'
 		]);
 	}
@@ -322,12 +324,11 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	private static function crossed(take: String, members: String = '', background: String = ''): Array<Violation> {
 		return source(
 			'class H { public final a:Mutex = new Mutex(); public final b:Mutex = new Mutex(); public final c:Mutex = new Mutex();'
-			+ ' public final k:Mutex = new Mutex(); public function new() {} function takeBoth():Void { $take }'
-			+ ' function giveBoth():Void { a.release(); b.release(); } public function viaBoth():Void { takeBoth(); waitC(); giveBoth(); }'
-			+ ' function waitC():Void { c.acquire(); c.release(); } public function holdC():Void { c.acquire(); }'
-			+ ' public function freeC():Void { c.release(); } $members public static function main():Void { final h:H = new H();'
-			+ ' Runner.create(() -> h.viaBoth()); Runner.create(() -> { h.holdC(); Sys.sleep(1); h.freeC(); }); $background'
-			+ ' h.a.acquire(); h.a.release(); h.b.acquire(); h.b.release(); } }'
+			+ ' public final k:Mutex = new Mutex(); public function new() {} function takeBoth():Void { $take } function giveBoth():Void {'
+			+ ' a.release(); b.release(); } public function viaBoth():Void { takeBoth(); waitC(); giveBoth(); } function waitC():Void {'
+			+ ' c.acquire(); c.release(); } public function holdC():Void { c.acquire(); } public function freeC():Void { c.release(); } '
+			+ '$members public static function main():Void { final h:H = new H(); Runner.create(() -> h.viaBoth()); Runner.create(() -> {'
+			+ ' h.holdC(); Sys.sleep(1); h.freeC(); }); $background h.a.acquire(); h.a.release(); h.b.acquire(); h.b.release(); } }'
 		);
 	}
 

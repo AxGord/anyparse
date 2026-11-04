@@ -212,7 +212,7 @@ class ApqTestSummaryTinkTest extends Test {
 		final transcript: String = '${suiteHeader('SampleFinalTest', 'src/tests/unit/SampleFinalTest.hx', 1)}\n'
 			+ '${caseHeader('trivial', 'src/tests/unit/SampleFinalTest.hx', 2)}\n'
 			+ '${assertRow(true, 'src/tests/unit/SampleFinalTest.hx', 3, 'ok')}\n$real\nTests completed - watchdog thread will exit '
-			+ 'gracefully\nStopping FileSystem background threads...\nDiskSystem stopped\nEXIT=0\n';
+			+ 'gracefully\nStopping FileSystem background threads...\nStore stopped\nEXIT=0\n';
 		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(1111, r.assertions);
 		Assert.equals(1111, r.assertions); // Success mirrors assertions in an all-green run

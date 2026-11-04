@@ -118,7 +118,7 @@ class InvertNegatedIfElseCheckTest extends Test {
 		Assert.equals(fn('final v = a ? 2 : 1;'), fixed(fn('final v = !a ? 1 : 2;')));
 	}
 
-	/** The client shape the task came from (`ThumbnailLoader`, anonymized): a call and a `null` swap places. */
+	/** The client shape the task came from (`PreviewLoader`, anonymized): a call and a `null` swap places. */
 	public function testNegatedTernaryReturnFixed(): Void {
 		Assert.equals(fn('return d.has.t ? decode(d.node.t.data) : null;'), fixed(fn('return !d.has.t ? null : decode(d.node.t.data);')));
 	}

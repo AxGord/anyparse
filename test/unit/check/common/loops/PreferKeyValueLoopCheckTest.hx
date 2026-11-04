@@ -543,7 +543,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		return { check: check, vs: vs };
 	}
 
-	/** The shape `MeshScale.set_basePoints` carries in the client corpus: two field arrays, one bound, no opener. */
+	/** The shape `ScalerView.set_basePoints` carries in the client corpus: two field arrays, one bound, no opener. */
 	private function fieldSource(): String {
 		return 'class C {\n\tfinal _points:Array<Item> = [];\n\tfinal _pointsScale:Array<Item> = [];\n\n'
 			+ '\tfunction set(value:Array<Pos>):Void {\n\t\tfor (i in 0..._points.length) {\n\t\t\t_points[i].pos = value[i].clone();\n'

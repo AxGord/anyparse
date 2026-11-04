@@ -544,7 +544,7 @@ class PreferTernaryReturnCheckTest extends Test {
 		}
 	}
 
-	/** The client shape the task came from (`ThumbnailLoader`, anonymized): a negated guard collapses to the POSITIVE ternary. */
+	/** The client shape the task came from (`PreviewLoader`, anonymized): a negated guard collapses to the POSITIVE ternary. */
 	@:pin('control') @:killer('M-PTR-NO-ORIENT')
 	public function testNegatedGuardEmitsPositiveTernary(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(

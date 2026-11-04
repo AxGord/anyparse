@@ -1,8 +1,10 @@
 package unit.check.common.design;
 
+using StringTools;
+
 /**
  * The catch-all of a `switch` over a closed `enum abstract` whose every value an earlier case names is no path
- * (`ExhaustiveSwitches`): the client's `ItemList.reload` throws in the `case _` of a switch over `ItemListViewType` (LIST, GRID),
+ * (`ExhaustiveSwitches`): the client's `RowList.reload` throws in the `case _` of a switch over `ListViewType` (LIST, GRID),
  * built only by its constants and a `@:from` mapping every string onto them.
  */
 class ThreadSafetyExhaustiveTest extends Test {
@@ -140,7 +142,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 	/**
 	 * The member must hold only values: an assignment of a `Dynamic` does not, nor does a String abstract's member nothing
 	 * initializes (null); a counting abstract's uninitialized member is `0`, a value only when one is `0` (review r4 `e6`,
-	 * `e7`; the client's `ItemListPicker.viewType`).
+	 * `e7`; the client's `ListPicker.viewType`).
 	 */
 	@:pin('control') @:killer('M-TS-EXH-WRITES') @:killer('M-TS-EXH-UNINIT') @:killer('M-TS-EXH-ZERO') @:killer('M-TS-EXH-OPTIONAL')
 	public function testTheMemberHoldsOnlyValues(): Void {
@@ -165,7 +167,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 	}
 
 	/**
-	 * the client's `ItemList.reload` over `ItemListPicker.viewType`: a getter reading another object's member, an optional
+	 * the client's `RowList.reload` over `ListPicker.viewType`: a getter reading another object's member, an optional
 	 * parameter defaulted through a getter whose call returns a type a `@:from` function takes, a setter's parameter.
 	 */
 	@:pin('control') @:killer('M-TS-EXH-CONVERT-OFF') @:killer('M-TS-EXH-CONVERT-ANY')
@@ -175,18 +177,17 @@ class ThreadSafetyExhaustiveTest extends Test {
 			+ ' return switch abstract { case A: "a"; case B: "b"; }; } @:from public static inline function fromString(v:Null<String>):V {'
 			+ ' return switch v { case "a": A; case "b", null, _: B; }; } }';
 		final sel: String = 'class Sel { public static var defaultMode(get, set):V; public var mode(default, set):V;'
-			+ ' public function new(?mode:V) { @:bypassAccessor this.mode = mode ?? defaultMode; }'
-			+ ' private static inline function get_defaultMode():V { return Store.read("k"); }'
-			+ ' private static inline function set_defaultMode(value:V):V { return value; }'
+			+ ' public function new(?mode:V) { @:bypassAccessor this.mode = mode ?? defaultMode; } private static inline function '
+			+ 'get_defaultMode():V { return Store.read("k"); } private static inline function set_defaultMode(value:V):V { return value; }'
 			+ ' private function set_mode(mode:V):V { trace(\'$$mode\'); this.mode = mode; return mode; } }';
 		final store: String = 'class Store { public static function read(key:String):Null<String> return null; }';
 		final dead: String = 'switch view { case A: step(); case B: step(); case _: throw "x"; }';
-		final members: String = 'var view(get, set):V; final _sel:Sel = new Sel(); private inline function get_view():V { return _sel.mode; }'
-			+ ' private inline function set_view(value:V):V { _sel.mode = value; return value; }';
+		final members: String = 'var view(get, set):V; final _sel:Sel = new Sel(); private inline function get_view():V {'
+			+ ' return _sel.mode; } private inline function set_view(value:V):V { _sel.mode = value; return value; }';
 		Assert.same([], leaks(run(abstractDecl, 'V', dead, '', ' = A', members, [sel, store])));
 		Assert.same(
 			['S.work'],
-			leaks(run(abstractDecl, 'V', dead, '', ' = A', members, [sel, StringTools.replace(store, 'Null<String>', 'Dynamic')])),
+			leaks(run(abstractDecl, 'V', dead, '', ' = A', members, [sel, store.replace('Null<String>', 'Dynamic')])),
 			'a call returning another type'
 		);
 		#else
@@ -279,7 +280,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * A write of the member's name writes the member only where it may (`FieldWrites.mayWrite`): a reflective write of a
 	 * computed name on a fresh structure reaches no object of the member's type, nor does an own write of a field another
 	 * type declares; one on a `Dynamic` may be any object's (the client's `Form.get_data`, `result.setField(formGroup.field, …)` on a
-	 * fresh `{}`, kept `ItemList.reload`'s catch-all over `ItemListPicker.viewType` a path).
+	 * fresh `{}`, kept `RowList.reload`'s catch-all over `ListPicker.viewType` a path).
 	 */
 	@:pin('control') @:killer('M-TS-EXH-WRITES-ANY')
 	public function testAWriteElsewhereWritesTheMemberOnlyWhereItMay(): Void {
@@ -304,9 +305,9 @@ class ThreadSafetyExhaustiveTest extends Test {
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			CLOSED,
-			'class S { final _m:Mutex = new Mutex(); @:isVar var mode(get, default):V = A; public function new() {} function step():Void {}'
-			+ ' $members public function work():Void { _m.acquire(); $held _m.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
+			'class S { final _m:Mutex = new Mutex(); @:isVar var mode(get, default):V = A; public function new() {} '
+			+ 'function step():Void {} $members public function work():Void { _m.acquire(); $held _m.release(); } '
+			+ 'public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		]);
 	}
 
@@ -319,14 +320,14 @@ class ThreadSafetyExhaustiveTest extends Test {
 		abstractDecl: String, modeType: String, held: String, params: String = '', init: String = ' = A', members: String = '',
 		?more: Array<String>, ?beside: Array<{ name: String, source: String }>, closed: Bool = true
 	): Array<Violation> {
-		return ThreadSafetyCheckTest.violations(closed ? CONFIG : StringTools.replace(CONFIG, ',"closedWorld":true', ''), [
+		return ThreadSafetyCheckTest.violations(closed ? CONFIG : CONFIG.replace(',"closedWorld":true', ''), [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			abstractDecl,
 			'class S { final _m:Mutex = new Mutex(); var mode:$modeType$init; public function new() {} function step():Void {}'
-			+ ' function use(n:Int):Void {} var flag:Bool = false; function pick():Null<V> return null; $members'
-			+ ' public function work($params):Void { _m.acquire(); $held _m.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
+			+ ' function use(n:Int):Void {} var flag:Bool = false; function pick():Null<V> return null; $members public function work('
+			+ '$params):Void { _m.acquire(); $held _m.release(); } public static function main():Void {'
+			+ ' final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		].concat(more ?? []), beside);
 	}
 

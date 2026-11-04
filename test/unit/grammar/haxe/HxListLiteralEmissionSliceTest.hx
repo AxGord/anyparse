@@ -82,7 +82,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	/**
 	 * --- item (a): array-literal uniform element blanks ---
-	 * client `TextAreaFormBlock.createCustomLabel` shape: two elements, one gap, blank.
+	 * client `TextAreaBlock.createCustomLabel` shape: two elements, one gap, blank.
 	 */
 	private static final ARR_TWO: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
 
@@ -136,7 +136,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	/**
 	 * --- item (c): matrix rows ---
-	 * client `StageArea.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
+	 * client `StageZone.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
 	 */
 	private static final MATRIX: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
 		+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';

@@ -218,19 +218,18 @@ class RedundantImportCheckTest extends Test {
 	 * fresh run below the file's `using`.
 	 */
 	public function testTwoRunFileWithBothSubTypeImportsRedundant(): Void {
-		final src: String = 'package tests.unit;\n\nimport fs.DiskSystemInterface;\nimport fs.cloud.ShardDatabase;\n\n'
-			+ 'using tink.CoreApi;\n\nimport fs.DiskSystemInterface.DiskSystemCloudAction;\n'
-			+ 'import fs.cloud.ShardDatabase.ShardDatabaseFilePath;\n\nclass T {\n\n\tvar a:DiskSystemCloudAction;\n\n'
-			+ '\tvar b:ShardDatabaseFilePath;\n\n}\n';
+		final src: String = 'package tests.unit;\n\nimport fs.StoreInterface;\nimport fs.cloud.ShardStore;\n\nusing tink.CoreApi;\n\n'
+			+ 'import fs.StoreInterface.StoreRemoteAction;\nimport fs.cloud.ShardStore.ShardStoreFilePath;\n\nclass T {\n\n'
+			+ '\tvar a:StoreRemoteAction;\n\n\tvar b:ShardStoreFilePath;\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'tests/unit/T.hx', source: src },
 			{
-				file: 'fs/DiskSystemInterface.hx',
-				source: 'package fs;\n\ninterface DiskSystemInterface {}\n\ntypedef DiskSystemCloudAction = Int;\n'
+				file: 'fs/StoreInterface.hx',
+				source: 'package fs;\n\ninterface StoreInterface {}\n\ntypedef StoreRemoteAction = Int;\n'
 			},
 			{
-				file: 'fs/cloud/ShardDatabase.hx',
-				source: 'package fs.cloud;\n\nclass ShardDatabase {}\n\ntypedef ShardDatabaseFilePath = String;\n'
+				file: 'fs/cloud/ShardStore.hx',
+				source: 'package fs.cloud;\n\nclass ShardStore {}\n\ntypedef ShardStoreFilePath = String;\n'
 			}
 		];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -238,10 +237,10 @@ class RedundantImportCheckTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(2, vs.length);
 		final fixed: String = CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin, CheckFixture.index(files, plugin)));
-		Assert.isFalse(fixed.contains('import fs.DiskSystemInterface.DiskSystemCloudAction;'));
-		Assert.isFalse(fixed.contains('import fs.cloud.ShardDatabase.ShardDatabaseFilePath;'));
-		Assert.isTrue(fixed.contains('import fs.DiskSystemInterface;'));
-		Assert.isTrue(fixed.contains('import fs.cloud.ShardDatabase;'));
+		Assert.isFalse(fixed.contains('import fs.StoreInterface.StoreRemoteAction;'));
+		Assert.isFalse(fixed.contains('import fs.cloud.ShardStore.ShardStoreFilePath;'));
+		Assert.isTrue(fixed.contains('import fs.StoreInterface;'));
+		Assert.isTrue(fixed.contains('import fs.cloud.ShardStore;'));
 	}
 
 	// --- registration ---

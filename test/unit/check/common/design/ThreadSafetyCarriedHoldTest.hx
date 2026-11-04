@@ -39,7 +39,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		+ ' public function nested():Void { batchLock(); mutex.acquire(); mutex.release(); batchUnlock(); }'
 		+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
 
-	/** the client's `RemoteDiskSystemBase.removeFileBlocked`: `_batchMutex` held, `_cloudDatabase.getFileByCloudId` takes `_mutex`. */
+	/** the client's `RemoteStoreBase.dropFileBlocked`: `_batchLock` held, `_remoteDb.getFileByRemoteId` takes `_mutex`. */
 	@:pin('control') @:killer('M-TS-CARRY-OFF')
 	public function testADominatedTakeInACalleeOnTheHeldObjectIsBrief(): Void {
 		#if (sys || nodejs)
@@ -90,8 +90,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/**
-	 * the client's `DiskSystemBase`: `fileSystem.cloudDatabase.batchLock()` — a `var` assigned only in the constructor, and a
-	 * `final` field of it, name one object for good, carried into `fileSystem.cloudDatabase.lookup()`.
+	 * the client's `StoreBase`: `fileSystem.remoteDb.batchLock()` — a `var` assigned only in the constructor, and a
+	 * `final` field of it, name one object for good, carried into `fileSystem.remoteDb.lookup()`.
 	 */
 	@:pin('control') @:killer('M-TS-PATH-TWO-LINK') @:killer('M-TS-PATH-CTOR')
 	public function testAPathOfStableFieldsNamesTheHeldObject(): Void {

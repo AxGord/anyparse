@@ -138,7 +138,7 @@ final class MainSinkReport {
 
 	/**
 	 * Of the warnings at sink calls in one function the main thread reaches by one way (`ThreadStates.mainPath`) — the client's
-	 * `PathIO.deleteRecursive`, whose `readDirectory`, `deleteDirectory` and `deleteFile` run on every run of it — one
+	 * `PathTools.deleteRecursive`, whose `readDirectory`, `deleteDirectory` and `deleteFile` run on every run of it — one
 	 * stays, naming the others, and they turn info naming it: one trigger, one warning. The one that stays is the first
 	 * by offset of the calls the function makes itself, before a sink it only hands on as a value — which may be stored,
 	 * not run (`new Later(File.getContent)`) — and never one a directive silences (`suppressed`) while another can stay.
@@ -456,8 +456,8 @@ final class MainSinkReport {
 	/**
 	 * Finding (a) owned by the repeating call `owner` (`MainRepeats.climb`) of short `sinks`: the warning a short
 	 * call below it is spared, at the loop, recursion or `iterates` call that repeats it — ONE per call site, or per
-	 * loop for the calls one loop repeats (the client's `repairShareAttr`, whose session loop runs
-	 * `getXML` and `setXML`), about what `repeatSubject` names — the loop, never its first
+	 * loop for the calls one loop repeats (the client's `repairShareFlag`, whose session loop runs
+	 * `getDoc` and `setXML`), about what `repeatSubject` names — the loop, never its first
 	 * call, so a call added to the loop moves no key — every short sink below it named in it;
 	 * `owned` keeps them by site or loop. Returns that finding.
 	 */

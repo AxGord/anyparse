@@ -62,9 +62,9 @@ final class ChainLineLengthRuleTest extends Test {
 	@:killer('M-CHAIN-THRESHOLD-WRAPS-PIVOT')
 	public function testAnUnreachedLineLengthRuleKeepsTheInnerAddChainCollapse(): Void {
 		final src: String = 'class Main {\n\tfunction test():Void {\n\t\tfinal h:Float = Dimensions.HEADER_HEIGHT * scale '
-			+ '+ Dimensions.CELL_HEIGHT * scale * (rowIdx + 1 - (dayIdx == 0 ? 1 : 0));\n\t}\n}';
+			+ '+ Dimensions.CELL_HEIGHT * scale * (rowIdx + 1 - (dayPos == 0 ? 1 : 0));\n\t}\n}';
 		final plain: String = HxWriteFixture.triviaWrite(src, config(80, false));
-		Assert.isTrue(plain.contains('(rowIdx + 1 - (dayIdx == 0'), plain);
+		Assert.isTrue(plain.contains('(rowIdx + 1 - (dayPos == 0'), plain);
 		Assert.equals(plain, HxWriteFixture.triviaWrite(src, config(80, true)));
 	}
 

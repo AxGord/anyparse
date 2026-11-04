@@ -4,7 +4,7 @@ package anyparse.check.common.design.threads;
  * The parameters of a function that decide two or more of its `if`s, that nothing in it writes and whose name
  * nothing else in it declares (`BareNames.stable`: a local, a loop binder, a `catch` variable or a nested
  * function's parameter would make a bare read of the name mean that binding instead) — a flag fixed for the whole
- * run (the client's `VolumeWatcher.rename(…, flush)`: `if (flush) lock(); … if (flush) unlock();`). A hold's window is
+ * run (the client's `TreeWatcher.rename(…, flush)`: `if (flush) lock(); … if (flush) unlock();`). A hold's window is
  * traced once per value of each such flag (`LockWindow.trace`), each `if` on one taking the branch its value picks:
  * every run fixes each flag to one value, so the union of the traces covers every run, and a take and a give guarded by
  * the same flag no longer leave a path that takes without giving back.

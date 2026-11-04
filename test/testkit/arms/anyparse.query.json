@@ -4040,7 +4040,7 @@
 			"method": "collectGuardedDecls",
 			"find": "if (next < children.length && typeDeclAt(children[next]) != null) out.push({ node: child, guarded: true });",
 			"replace": "if (false) out.push({ node: child, guarded: true });",
-			"note": "a module-private type in a conditional region is indexed public: its id drops its module (the client's `utils._RwSyncMutex.StdUniquePointer_RwSyncMutex`, openfl's `IVector`)"
+			"note": "a module-private type in a conditional region is indexed public: its id drops its module (the client's `utils._RwLockSync.StdPointer_RwLockSync`, openfl's `IVector`)"
 		},
 		{
 			"name": "M-INDEX-GUARDED-PRIVATE-SPLIT",
@@ -5103,7 +5103,7 @@
 			"type": "anyparse.query.FactsProvenance",
 			"method": "convertsJoined",
 			"force": "false",
-			"note": "a conversion the compiler writes of a field read it placed across an inlined body and the text is no text's (the client's `model.Node.parse`)"
+			"note": "a conversion the compiler writes of a field read it placed across an inlined body and the text is no text's (the client's `domain.Node.parse`)"
 		},
 		{
 			"name": "M-FACTS-TEXT-JOINED-PLACED",
@@ -5111,7 +5111,7 @@
 			"method": "factsOnText",
 			"find": "own(p, body.holds(p) || readJoined(n, p, body))",
 			"replace": "own(p, body.holds(p))",
-			"note": "the value a field read the compiler placed across an inlined body and the text flows as is no text's (the client's `model.Node.parse`)"
+			"note": "the value a field read the compiler placed across an inlined body and the text flows as is no text's (the client's `domain.Node.parse`)"
 		},
 		{
 			"name": "M-REACH-CALLEE-WALK",
@@ -6336,7 +6336,7 @@
 			"method": "underTruth",
 			"find": "receivers: receiversAt(r.at.span)",
 			"replace": "receivers: []",
-			"note": "(precision) a reflective access only the facts see keeps no fact of the object it acts on (the client's `using Reflect` in `model.Node`)"
+			"note": "(precision) a reflective access only the facts see keeps no fact of the object it acts on (the client's `using Reflect` in `domain.Node`)"
 		},
 		{
 			"name": "M-REACH-REFLECT-BOUND-NONE",

@@ -1,5 +1,7 @@
 package unit.check.common.design;
 
+using StringTools;
+
 /**
  * A callback handed to a `registers` call (`addEventListener`) runs later, as a run of its own, once per event however
  * often it was registered: a loop around the registration repeats nothing, nor does anything up the way to it.
@@ -16,7 +18,7 @@ class ThreadSafetyRegistersTest extends Test {
 		+ ' public function addEventListener(type:String, fn:String->Void):Void; }';
 
 	/**
-	 * the client's `ItemListOperations.listenContent`: one rename handler registered on every list item renames once per event,
+	 * the client's `ListOperations.listenRows`: one rename handler registered on every list item renames once per event,
 	 * not once per item.
 	 */
 	@:pin('control') @:killer('M-TS-REGISTER-OWNER')
@@ -25,7 +27,8 @@ class ThreadSafetyRegistersTest extends Test {
 		Assert.same(
 			['info A A.handler | FileSystem.stat'],
 			graded(run(
-				'public static function main():Void { final ds:Array<D> = [new D(), new D()]; for (d in ds) d.addEventListener("x", handler); }'
+				'public static function main():Void { final ds:Array<D> = [new D(), new D()]; for (d in ds) '
+				+ 'd.addEventListener("x", handler); }'
 			))
 		);
 		#else
@@ -39,8 +42,9 @@ class ThreadSafetyRegistersTest extends Test {
 		Assert.same(
 			['info A A.handler | FileSystem.stat', 'warning A A.main | for (d in ds)'],
 			graded(run(
-				'public static function main():Void { final ds:Array<D> = [new D(), new D()]; for (d in ds) d.addEventListener("x", handler); }',
-				StringTools.replace(CONFIG, '"addEventListener"', '"other"')
+				'public static function main():Void { final ds:Array<D> = [new D(), new D()]; for (d in ds) '
+				+ 'd.addEventListener("x", handler); }',
+				CONFIG.replace('"addEventListener"', '"other"')
 			))
 		);
 		#else
@@ -82,7 +86,7 @@ class ThreadSafetyRegistersTest extends Test {
 	}
 
 	/**
-	 * A `registers` entry naming a project member (`Req.success`, the client's `NetRequest2.success`) is the project's word on that
+	 * A `registers` entry naming a project member (`Req.success`, the client's `HttpCall.success`) is the project's word on that
 	 * member, as a `runsOnce` one is: a loop around the registration repeats nothing (N46 E1). A bare name speaks for the
 	 * runtime's registrations only, and a project member it names stays a call that may run its value per item.
 	 */
@@ -93,11 +97,11 @@ class ThreadSafetyRegistersTest extends Test {
 			'public static function main():Void { final rs:Array<Req> = [new Req(), new Req()]; for (r in rs) r.success(handler); }';
 		Assert.same(
 			['info A A.handler | FileSystem.stat'],
-			graded(run(members, StringTools.replace(CONFIG, '"registers":["addEventListener"]', '"registers":["Req.success"]')))
+			graded(run(members, CONFIG.replace('"registers":["addEventListener"]', '"registers":["Req.success"]')))
 		);
 		Assert.same(
 			['info A A.handler | FileSystem.stat', 'warning A A.main | for (r in rs)'],
-			graded(run(members, StringTools.replace(CONFIG, '"registers":["addEventListener"]', '"registers":["success"]'))), 'a bare name'
+			graded(run(members, CONFIG.replace('"registers":["addEventListener"]', '"registers":["success"]'))), 'a bare name'
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -118,7 +122,7 @@ class ThreadSafetyRegistersTest extends Test {
 	}
 
 	/** A class `A` whose `handler` calls a short sink once, with `members`, beside a dispatcher `D`. */
-	private static function run(members: String, ?config: String): Array<Violation> {
+	private static function run(members: String, ?config: String): Array<Violation> { // noqa: optional-param-shorthand
 		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',

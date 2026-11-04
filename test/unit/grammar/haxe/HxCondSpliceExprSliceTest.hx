@@ -149,8 +149,8 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 		// reach the output, so this spelling and the canonical one below both
 		// land on the same bytes. Under the default config the whole chain
 		// fits on one line, so that is where it goes.
-		Assert.equals(canonical, HxWriteFixture.triviaWrite(src, '{}'), 'HostReport.toString reflows');
-		Assert.equals(canonical, HxWriteFixture.triviaWrite(canonical, '{}'), 'HostReport.toString canonical is a fixed point');
+		Assert.equals(canonical, HxWriteFixture.triviaWrite(src, '{}'), 'NodeReport.toString reflows');
+		Assert.equals(canonical, HxWriteFixture.triviaWrite(canonical, '{}'), 'NodeReport.toString canonical is a fixed point');
 	}
 
 	/**

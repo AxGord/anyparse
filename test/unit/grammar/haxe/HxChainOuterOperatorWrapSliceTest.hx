@@ -13,7 +13,7 @@ import utest.Test;
  * INSIDE the parens.
  *
  * The fixtures are anonymised, LENGTH-PRESERVING renames of the reported
- * `ShardDatabase` family and its shape-siblings — every decision here is a
+ * `ShardStore` family and its shape-siblings — every decision here is a
  * width decision, so a shorter identifier would silently move the boundary.
  * Config mirrors `HxCallParamOuterFirstWrapSliceTest`: the same three cascades
  * (`callParameter`, `expressionWrapping`, `opAddSubChain`) at

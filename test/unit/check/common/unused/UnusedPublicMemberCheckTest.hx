@@ -29,10 +29,10 @@ import anyparse.check.common.unused.UnusedPublicMember;
 		Assert.equals('unused public orphaned: no reference to it anywhere in scope', vs[0].message);
 	}
 
-	public function testCanaryHostReportReplaceWordShapeFlagged(): Void {
-		// The shape of the client's crashreport/HostReport.hx `replaceWord`: a `public static function` in
+	public function testCanaryNodeReportReplaceWordShapeFlagged(): Void {
+		// The shape of the client's crashreport/NodeReport.hx `replaceWord`: a `public static function` in
 		// a plain, meta-free, supertype-free class, referenced nowhere.
-		final src: String = 'class HostReport {\n\tpublic static function replaceWord(line:String, word:String, replace:String):String {\n'
+		final src: String = 'class NodeReport {\n\tpublic static function replaceWord(line:String, word:String, replace:String):String {\n'
 			+ '\t\tif (word == replace) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n'
 			+ '\t\treturn line;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
@@ -476,8 +476,7 @@ import anyparse.check.common.unused.UnusedPublicMember;
 	private function fixEditCount(files: Array<{ file: String, source: String }>): Int {
 		final check: Null<Check> = Linter.byId(RULE);
 		Assert.notNull(check);
-		if (check == null) return -1;
-		return CheckFixture.fixRun(check, files).edits.length;
+		return check == null ? -1 : CheckFixture.fixRun(check, files).edits.length;
 	}
 
 	private function applyFix(src: String): String {

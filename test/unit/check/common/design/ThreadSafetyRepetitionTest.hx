@@ -1,5 +1,6 @@
 package unit.check.common.design;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -65,8 +66,8 @@ class ThreadSafetyRepetitionTest extends Test {
 		Assert.same(
 			['info A M.main | Db.request'],
 			graded(run(
-				'static function later(f:String->Void):Void f("x");' + ' public static function main():Void later(x -> Db.request(x));',
-				'', '"runsOnce":["M.later"],'
+				'static function later(f:String->Void):Void f("x"); public static function main():Void later(x -> Db.request(x));', '',
+				'"runsOnce":["M.later"],'
 			))
 		);
 		#else
@@ -107,12 +108,10 @@ class ThreadSafetyRepetitionTest extends Test {
 		Assert.same(
 			['info A M.onItem | Db.request', 'warning A M.main | Hub.addEventListener'],
 			graded(run(
-				'static function onItem(e:String):Void Db.request(e);'
-				+ ' public static function main():Void { final d:Hub = new Hub(); d.addEventListener("item", onItem);'
-				+ ' final xs:Array<String> = ["a"]; for (x in xs) d.dispatchEvent(x); }',
-				'class Hub { final _ls:Array<String->Void> = []; public function new() {}'
-				+ ' public function addEventListener(t:String, l:String->Void):Void _ls.push(l);'
-				+ ' public function dispatchEvent(e:String):Void { for (l in _ls) l(e); } }'
+				'static function onItem(e:String):Void Db.request(e); public static function main():Void { final d:Hub = new Hub(); '
+				+ 'd.addEventListener("item", onItem); final xs:Array<String> = ["a"]; for (x in xs) d.dispatchEvent(x); }',
+				'class Hub { final _ls:Array<String->Void> = []; public function new() {} public function addEventListener(t:String, '
+				+ 'l:String->Void):Void _ls.push(l); public function dispatchEvent(e:String):Void { for (l in _ls) l(e); } }'
 			))
 		);
 		#else
@@ -149,7 +148,7 @@ class ThreadSafetyRepetitionTest extends Test {
 		#end
 	}
 
-	/** the client's `ThreadUtils`: a background loop posts a task per item, and the main thread runs every pending task in one frame. */
+	/** the client's `TaskPool`: a background loop posts a task per item, and the main thread runs every pending task in one frame. */
 	@:pin('control') @:killer('M-TS-MARSHAL-OWNER-OFF')
 	public function testAMarshalledValueRepeats(): Void {
 		#if (sys || nodejs)
@@ -157,8 +156,8 @@ class ThreadSafetyRepetitionTest extends Test {
 			['warning A M.main | Db.request'],
 			graded(run(
 				'static final _q:Array<()->Void> = []; public static function runInMainThread(f:()->Void):Void _q.push(f);'
-				+ ' public static function pump():Void { for (f in _q) f(); }'
-				+ ' public static function main():Void { Runner.create(() -> { for (i in 0...1000) runInMainThread(() -> Db.request("x")); }); pump(); }',
+				+ ' public static function pump():Void { for (f in _q) f(); } public static function main():Void { Runner.create(() -> {'
+				+ ' for (i in 0...1000) runInMainThread(() -> Db.request("x")); }); pump(); }',
 				'', '"marshals":["M.runInMainThread"],'
 			))
 		);
@@ -189,9 +188,8 @@ class ThreadSafetyRepetitionTest extends Test {
 			['warning A Walker.next | Disk.stat'],
 			graded(run(
 				'public static function main():Void { for (p in new Walker(["a", "b"])) trace(p); }',
-				'class Walker { var _i:Int = 0; final _ps:Array<String>; public function new(ps:Array<String>) _ps = ps;'
-				+ ' public function hasNext():Bool return _i < _ps.length;'
-				+ ' public function next():String { Disk.stat(_ps[_i]); return _ps[_i++]; } }'
+				'class Walker { var _i:Int = 0; final _ps:Array<String>; public function new(ps:Array<String>) _ps = ps; public function '
+				+ 'hasNext():Bool return _i < _ps.length; public function next():String { Disk.stat(_ps[_i]); return _ps[_i++]; } }'
 			))
 		);
 		#else
@@ -236,7 +234,7 @@ class ThreadSafetyRepetitionTest extends Test {
 	@:pin('control') @:killer('M-TS-OWNER-OFFSET-TEXT')
 	public function testOwnersAreOrderedByOffsetAsANumber(): Void {
 		#if (sys || nodejs)
-		final found: Array<Violation> = run(owners(' // ' + StringTools.lpad('', 'x', 1000) + '\n'));
+		final found: Array<Violation> = run(owners(' // ' + ''.lpad('x', 1000) + '\n'));
 		Assert.isTrue(found.exists(v -> v.message.indexOf('long only as repeated by M.p, M.q') >= 0));
 		#else
 		Assert.pass('non-sys target');
@@ -257,7 +255,7 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/**
-	 * the client's `StandardDiskSystem.deleteItemInternal#6`: a warning owned by a value handed to an iterating call is keyed by
+	 * the client's `LocalStore.dropItemInternal#6`: a warning owned by a value handed to an iterating call is keyed by
 	 * that call, never by the lambda's number in its file, which an unrelated lambda shifts.
 	 */
 	@:pin('control') @:killer('M-TS-HAND-SUBJECT')
@@ -294,9 +292,8 @@ class ThreadSafetyRepetitionTest extends Test {
 
 	/** `p` and `q` each loop over a call of `a`, a short call, `p` first in the file and `gap` between them. */
 	private static function owners(gap: String): String {
-		return 'static function p(xs:Array<String>):Void for (x in xs) a();\n$gap'
-			+ ' static function q(xs:Array<String>):Void for (x in xs) a(); static function a():Void Db.request("a");'
-			+ ' public static function main():Void { p(["x"]); q(["y"]); }';
+		return 'static function p(xs:Array<String>):Void for (x in xs) a();\n$gap static function q(xs:Array<String>):Void for (x in xs) '
+			+ 'a(); static function a():Void Db.request("a"); public static function main():Void { p(["x"]); q(["y"]); }';
 	}
 
 	/** `main` loops over `b`, a short call, with `first` before it in the loop. */

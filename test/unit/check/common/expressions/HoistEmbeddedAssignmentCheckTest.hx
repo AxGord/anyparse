@@ -111,7 +111,7 @@ class HoistEmbeddedAssignmentCheckTest extends Test {
 	/**
 	 * A local declaration is a host too: `final col = new Col([_p = …]);` binds `col` only after its
 	 * initializer is fully evaluated, so the hoisted write already ran ahead of that binding. This is
-	 * the shape the client `PremiumTier` / `TopTier` sites have.
+	 * the shape the client `PaidTier` / `TopTier` sites have.
 	 */
 	public function testLocalDeclarationInitializerHoisted(): Void {
 		Assert.equals(

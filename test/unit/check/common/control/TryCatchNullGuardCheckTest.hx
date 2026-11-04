@@ -14,7 +14,7 @@ import anyparse.check.common.control.TryCatchNullGuard;
  */
 class TryCatchNullGuardCheckTest extends Test {
 
-	/** The canary shape (`crashreport/HostReport.hx:158`, anonymized). */
+	/** The canary shape (`crashreport/NodeReport.hx:158`, anonymized). */
 	private static final BASIC: String = 'class C {\n\tfunction f():Void {\n\t\tfinal p:Process = try new Process(cmd, args) catch ('
 		+ 'msg:String) null;\n\t\tif (p == null) return;\n\t\tp.exitCode();\n\t}\n}';
 

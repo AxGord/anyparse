@@ -111,10 +111,10 @@ final class HxDeclHeaderEqBreakOverflowTest extends Test {
 	 */
 	public function testCallLedChainHeadBreaksAfterEq(): Void {
 		final src: String = 'class C {\n\n\tfunction f() {\n\t\tfinal request:String = '
-			+ 'buildIncrementalCloudUpdatesRequestForMovedFromPrefixWithQuotedSeparatorAndOrderedFilepathTailSegmentForCloudSync(\'SELECT '
+			+ 'buildIncrementalFetchUpdatesRequestForMovedFromPrefixWithQuotedSeparatorAndOrderedFilepathTailSegmentForFetchSync(\'SELECT '
 			+ 'filepath, folder, cloud_id, action, tstamp \')\n\t\t\t+ \'FROM files WHERE prefix ORDER by filepath\';\n\t}\n\n}';
 		final broken: String = 'class C {\n\n\tfunction f() {\n\t\tfinal request:String =\n'
-			+ '\t\t\tbuildIncrementalCloudUpdatesRequestForMovedFromPrefixWithQuotedSeparatorAndOrderedFilepathTailSegmentForCloudSync(\n'
+			+ '\t\t\tbuildIncrementalFetchUpdatesRequestForMovedFromPrefixWithQuotedSeparatorAndOrderedFilepathTailSegmentForFetchSync(\n'
 			+ '\t\t\t\t\t\'SELECT filepath, folder, cloud_id, action, tstamp \'\n'
 			+ '\t\t\t\t) + \'FROM files WHERE prefix ORDER by filepath\';\n\t}\n\n}';
 		Assert.equals(broken, triviaWrite(src));

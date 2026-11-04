@@ -270,7 +270,7 @@ class ShadowingLocalCheckTest extends Test {
 		Assert.isTrue(found[0].message.indexOf('shadowing declaration') == 0, 'expected the block, got: ${found[0].message}');
 	}
 
-	/** client `SpriteOptionsGroup`: an event parameter nothing reads after the shadow — the inner takes its type's name. */
+	/** client `ShapeOptionsGroup`: an event parameter nothing reads after the shadow — the inner takes its type's name. */
 	@:pin('control')
 	@:killer('M-SHADOWING-LOCAL-NO-RENAME')
 	public function testFixRenamesTheInnerAfterItsWrittenType(): Void {
@@ -293,14 +293,14 @@ class ShadowingLocalCheckTest extends Test {
 		Assert.isTrue((declineOf(src) ?? '').indexOf('read after this declaration') != -1, 'got: ${declineOf(src)}');
 	}
 
-	/** client `DatePicker`: a same-block `var` redeclared with the same written type becomes an assignment. */
+	/** client `DayPicker`: a same-block `var` redeclared with the same written type becomes an assignment. */
 	@:pin('control')
 	@:killer('M-SHADOWING-LOCAL-NO-ASSIGNMENT')
 	public function testFixTurnsASameBlockRedeclarationIntoAnAssignment(): Void {
 		final src: String =
-			'class C {\n\tfunction h():Void {\n\t\tvar dayIdx:Int = 0;\n\t\tdayIdx++;\n\t\tvar dayIdx:Int = g();\n\t\tf(dayIdx);\n\t}\n}';
+			'class C {\n\tfunction h():Void {\n\t\tvar dayPos:Int = 0;\n\t\tdayPos++;\n\t\tvar dayPos:Int = g();\n\t\tf(dayPos);\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tfunction h():Void {\n\t\tvar dayIdx:Int = 0;\n\t\tdayIdx++;\n\t\tdayIdx = g();\n\t\tf(dayIdx);\n\t}\n}',
+			'class C {\n\tfunction h():Void {\n\t\tvar dayPos:Int = 0;\n\t\tdayPos++;\n\t\tdayPos = g();\n\t\tf(dayPos);\n\t}\n}',
 			CheckFixture.fixedSource(new ShadowingLocal(), src)
 		);
 	}

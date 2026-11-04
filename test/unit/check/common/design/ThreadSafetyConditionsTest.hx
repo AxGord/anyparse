@@ -106,7 +106,7 @@ class ThreadSafetyConditionsTest extends Test {
 		#end
 	}
 
-	/** The branch a `mainThreadChecks` call says runs off the main thread reaches nothing on it (`NetEntity2.get`'s shape). */
+	/** The branch a `mainThreadChecks` call says runs off the main thread reaches nothing on it (`HttpEntity.get`'s shape). */
 	@:pin('control') @:killer('M-TS-MAIN-CHECK-IGNORED', 'M-TS-SITE-MEMO-BY-CALLER')
 	public function testTheOffMainBranchOfAMainThreadCheckIsNoMainStall(): Void {
 		#if (sys || nodejs)
@@ -208,7 +208,7 @@ class ThreadSafetyConditionsTest extends Test {
 		#end
 	}
 
-	/** A `?fs` left out is null, so `if (fs != null) fs.save()` never runs (`ProjectModel.checkSharedCloudId`). */
+	/** A `?fs` left out is null, so `if (fs != null) fs.save()` never runs (`ProjectDoc.checkSharedRemoteId`). */
 	@:pin('control') @:killer('M-TS-NULL-PARAM-UNREAD')
 	public function testAnOmittedOptionalParameterIsNull(): Void {
 		#if (sys || nodejs)

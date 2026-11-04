@@ -286,7 +286,7 @@
 			"method": "scopeChainDecline",
 			"find": "case Absent: null;",
 			"replace": "case Absent: DECLINE_UNRESOLVED_CHAIN;",
-			"note": "a resolution-scope proof that no supertype declares the name is not taken, so every private method of a subclass stays undeletable without compiler facts (client Form / SpriteBase / AccountButton …)"
+			"note": "a resolution-scope proof that no supertype declares the name is not taken, so every private method of a subclass stays undeletable without compiler facts (three client classes)"
 		},
 		{
 			"name": "M-DEADSTORE-OWN-PURITY",

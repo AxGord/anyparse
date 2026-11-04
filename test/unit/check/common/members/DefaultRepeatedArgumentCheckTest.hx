@@ -235,7 +235,7 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	}
 
 	/**
-	 * the client's `MirrorSyncLoopTest`: three sites pass `GHOST_ID` and a fourth passes `null`. In Haxe an explicit `null` handed
+	 * the client's `MirrorLoopTest`: three sites pass `GHOST_ID` and a fourth passes `null`. In Haxe an explicit `null` handed
 	 * to a parameter with a default takes the DEFAULT (4.3.7, `--interp` and js: `f(null)` with `x:Null<Int> = 7` is 7), so
 	 * defaulting the parameter turned `seedGhost(null)` into `seedGhost(GHOST_ID)` and the test it drove failed. It
 	 * compiles, so no typecheck can catch it: the finding is refused.

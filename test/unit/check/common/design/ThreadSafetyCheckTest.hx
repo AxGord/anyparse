@@ -1293,7 +1293,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** the client's `addCloudAction2`: a `throw` in a `switch` between the take and the release leaves the lock held. */
+	/** the client's `addRemoteAction2`: a `throw` in a `switch` between the take and the release leaves the lock held. */
 	@:pin('control') @:killer('M-TS-THROW-UNRAISED')
 	public function testAThrowBetweenTakeAndReleaseLeavesTheLockHeld(): Void {
 		#if (sys || nodejs)
@@ -1391,7 +1391,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** the client's `VolumeWatcher.createDirectory`: a hold across a call that reaches a `throwers` entry with no `catch` on the way. */
+	/** the client's `TreeWatcher.createDirectory`: a hold across a call that reaches a `throwers` entry with no `catch` on the way. */
 	@:pin('control') @:killer('M-TS-THROW-NO-PROPAGATION')
 	public function testAHoldAcrossACallReachingAThrowerEscapes(): Void {
 		#if (sys || nodejs)

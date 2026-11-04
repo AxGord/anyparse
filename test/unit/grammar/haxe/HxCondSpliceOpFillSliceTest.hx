@@ -13,7 +13,7 @@ import utest.Test;
  * `opBeforeNewline`, and the gaps before `#end` and before the tail read their
  * own `BeforeNewline` slots. Every one of those is a hardline when the source
  * had a newline there and a space when it did not, so the SAME tree laid out
- * as many different ways as the source could spell it. On the client site (`src/crashreport/HostReport.hx`),
+ * as many different ways as the source could spell it. On the client site (`src/crashreport/NodeReport.hx`),
  * over every legal whitespace spelling of one expression, the pre-slice writer produced almost as many
  * distinct outputs, including a line far past the limit from a source written flat — the width limit
  * was not enforced inside the region at all, because there was no decision to
@@ -48,7 +48,7 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
 
 	/** A client file, canonical. */
-	private static final SYSTEM_DATA: String = 'class C {\n\tpublic function toString():String {\n\t\treturn \'HostReport\\n{$${endl()}  '
+	private static final SYSTEM_DATA: String = 'class C {\n\tpublic function toString():String {\n\t\treturn \'NodeReport\\n{$${endl()}  '
 		+ 'os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\'\n\t\t\t+ #if flash \'  playerType: \' + '
 		+ 'playerType + \'\\n\' + \'  playerVersion: \' + playerVersion + \'\\n\' + #end\n\t\t\t\'  totalMemory: '
 		+ '$${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}';
@@ -68,21 +68,21 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 		final spellings: Array<String> = [
 			SYSTEM_DATA,
 			// the client's source form: the run split mid-term at `+ '\n' + #end`.
-			'class C {\n\tpublic function toString():String {\n\t\treturn \'HostReport\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  '
+			'class C {\n\tpublic function toString():String {\n\t\treturn \'NodeReport\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  '
 				+ 'osName: $$osName\\n  osVersion: $$osVersion\\n\'\n\t\t\t+ #if flash \'  playerType: \' + playerType + \'\\n\' + \'  '
 				+ 'playerVersion: \' + playerVersion\n\t\t\t+ \'\\n\' + #end\n\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: '
 				+ '$$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}',
 			// The operator on its own line, the condition alone on the next,
 			// and the run's trailing operator left dangling before `#end`.
 			'class C {\n\tpublic function toString():String {\n'
-				+ '\t\treturn \'HostReport\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: '
+				+ '\t\treturn \'NodeReport\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: '
 				+ '$$osVersion\\n\'\n\t\t\t+\n\t\t\t#if flash\n\t\t\t\'  playerType: \' + playerType + \'\\n\' + \'  playerVersion: \' + '
 				+ 'playerVersion + \'\\n\' +\n\t\t\t#end\n\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  '
 				+ 'gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}',
 			// The whole statement on ONE source line. Pre-slice this produced
 			// a 238-column output line: no break point existed inside the
 			// region, so the width limit had nothing to act on.
-			'class C {\n\tpublic function toString():String {\n\t\treturn \'HostReport\\n{$${endl()}  os: $$os\\n  osRaw: '
+			'class C {\n\tpublic function toString():String {\n\t\treturn \'NodeReport\\n{$${endl()}  os: $$os\\n  osRaw: '
 				+ '$$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\' + #if flash \'  playerType: \' + playerType + \'\\n\' + '
 				+ '\'  playerVersion: \' + playerVersion + \'\\n\' + #end \'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: '
 				+ '$$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}'

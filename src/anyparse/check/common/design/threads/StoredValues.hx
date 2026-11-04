@@ -31,7 +31,7 @@ private typedef Placed = {
  * declares runs nowhere at the `new` — it runs where such a field is called. So the `Ref` the graph records where the
  * value is handed runs nothing (`stored`), and every call of the field gets a derived `Call` edge to the value: the walk
  * under a hold around the `new` reaches the value only through a call of the field the hold itself makes (the client's
- * `ItemList.reload` hands `_source.getThumbnail` to `new ItemListTile(...)` under the tree lock; `ItemListItemTile`
+ * `RowList.reload` hands `_source.getThumbnail` to `new ListTile(...)` under the tree lock; `ListItemTile`
  * calls it later, from `requestThumbnail`).
  *
  * A positive whitelist; any other shape keeps the `Ref` running where it is handed, as before:

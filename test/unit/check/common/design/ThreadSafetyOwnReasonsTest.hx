@@ -13,7 +13,7 @@ class ThreadSafetyOwnReasonsTest extends Test {
 		+ '"shortSinks":["trace"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
 	/**
-	 * the client's `BinFile._mutex`: its only reason to be long was a `trace` under the hold — client routes `trace` to its log
+	 * the client's `BlobFile._mutex`: its only reason to be long was a `trace` under the hold — client routes `trace` to its log
 	 * writer, and the call resolves to nothing. A bare `shortSinks` name run once under the hold is brief.
 	 */
 	@:pin('control') @:killer('M-TS-BLIND-BRIEF-OFF') @:killer('M-TS-DOM-BRIEF-NAMES-IGNORED')
@@ -49,7 +49,7 @@ class ThreadSafetyOwnReasonsTest extends Test {
 	}
 
 	/**
-	 * the client's `VolumeWatcher.reset`: it takes the tree lock and never gives it back — the next `update()` does — so the hold
+	 * the client's `TreeWatcher.reset`: it takes the tree lock and never gives it back — the next `update()` does — so the hold
 	 * lasts past its end, however brief the calls its own window spans. (The second lock keeps it from being a lock
 	 * wrapper, whose take is its caller's hold.)
 	 */
@@ -97,14 +97,14 @@ class ThreadSafetyOwnReasonsTest extends Test {
 	 * A background hold of `S._m` spanning `held`, a main-thread take of it, and `members` with `background` run on a
 	 * worker beside them.
 	 */
-	private static function run(held: String, ?members: String, ?background: String): Array<Violation> {
+	private static function run(held: String, members: String = '', background: String = ''): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class S { final _m:Mutex = new Mutex(); final _o:Mutex = new Mutex(); public function new() {} function step():Void {}'
-			+ ' public function work():Void { _m.acquire(); $held _m.release(); } ${members ?? ''}'
+			+ ' public function work():Void { _m.acquire(); $held _m.release(); } ${members}'
 			+ ' public function ui():Void { _m.acquire(); _m.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); ${background ?? ''} s.ui(); } }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); ${background} s.ui(); } }'
 		]);
 	}
 

@@ -688,7 +688,7 @@
 			"method": "runsNothing",
 			"find": "|| stored.stored(edge)\n\t\t\t||",
 			"replace": "|| ",
-			"note": "a value a constructor only stores runs where it is handed, under the hold around the `new` (R7 L1b, client ItemList.reload)"
+			"note": "a value a constructor only stores runs where it is handed, under the hold around the `new` (R7 L1b, client RowList.reload)"
 		},
 		{
 			"name": "M-OWNED-OWNERS-IGNORED",

@@ -7,7 +7,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 /**
  * The object a call is made on, named relative to the object the calling function runs on, for the locks a hold
  * carries into its callees (`MustHeld`): a PATH of fields read off it — a bare field or one read off `this`, and at most
- * one field of that (`fileSystem.cloudDatabase`) — each STABLE: `final`, or an instance `var` that nothing
+ * one field of that (`fileSystem.remoteDb`) — each STABLE: `final`, or an instance `var` that nothing
  * writes outside its type's constructor — and no reflective write may reach (`FieldWrites.reflective`), which
  * no `final` stops. A link is named by its member name, joined by `SEPARATOR`: one object holds one field of a
  * name, whichever type declares it. Positive: any other receiver names no object, and a `var` is stable only when the

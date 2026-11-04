@@ -444,7 +444,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	/**
 	 * A run of FOUR values whose LAST three carry two merges those three alone: the guard in front
 	 * keeps its statement and the merged return replaces only the tail. the client's
-	 * `DiskSystemBase.localPathBeforeMove` is the shape - an early return, a guard returning `null` and
+	 * `StoreBase.pathBeforeMove` is the shape - an early return, a guard returning `null` and
 	 * a ternary whose else repeats it. The finding sits on the first statement the edit replaces. The
 	 * conditions still run in their written order (`f(h)` first, `g(h)` only when it was false), so a
 	 * call in either is no obstacle.

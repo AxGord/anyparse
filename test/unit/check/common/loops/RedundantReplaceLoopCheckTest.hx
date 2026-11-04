@@ -5,6 +5,8 @@ import anyparse.check.Severity;
 import anyparse.check.common.loops.RedundantReplaceLoop;
 import anyparse.query.CanonicalEdit;
 
+using StringTools;
+
 /**
  * The `redundant-replace-loop` check: `while (x.indexOf(S) != -1) x = x.replace(S, B);`
  * (plus its reversed-comparison and `.contains()` spellings) is redundant BY
@@ -238,7 +240,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testCanaryReplaceWordFlagged(): Void {
-		// crashreport/HostReport.hx:310 — the equality guard reads like protection but covers only
+		// crashreport/NodeReport.hx:310 — the equality guard reads like protection but covers only
 		// the degenerate `word == replace`; a `replace` that merely CONTAINS `word` still loops.
 		final src: String = 'class C {\n\tpublic static function replaceWord(line:String, word:String, replace:String):String {\n'
 			+ '\t\tif (word == replace) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n'
@@ -252,7 +254,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testCanaryStripWordFlagged(): Void {
-		// crashreport/HostReport.hx:314 — S is the parameter `word`, B the literal `''`. Exactly
+		// crashreport/NodeReport.hx:314 — S is the parameter `word`, B the literal `''`. Exactly
 		// why arm C must admit a literal / parameter MIX rather than demand two parameters.
 		final vs: Array<Violation> = violations(stripWordSource());
 		Assert.equals(1, vs.length);
@@ -685,7 +687,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	public function testNestedFunctionParameterOperandFlagged(): Void {
 		final loop: String = '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n';
 		for (open in ['final g = function named(', 'inline function inl(']) {
-			final close: String = StringTools.startsWith(open, 'final') ? '};' : '}';
+			final close: String = open.startsWith('final') ? '};' : '}';
 			final src: String =
 				'class C {\n\tfunction f():Void {\n\t\t${open}line:String, word:String, replace:String):String {\n$loop\t\t$close\n\t}\n}';
 			final vs: Array<Violation> = violations(src);

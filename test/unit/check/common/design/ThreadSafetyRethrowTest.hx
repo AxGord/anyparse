@@ -1,5 +1,7 @@
 package unit.check.common.design;
 
+using StringTools;
+
 /**
  * A `catch` that throws its own variable again lets what its `try` raised go on (`ThrowReach`): the function raises,
  * and a lock its caller holds across it is left held by that throw (finding (c)). So does one throwing anything
@@ -10,7 +12,7 @@ class ThreadSafetyRethrowTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Disk.make"],'
 		+ '"throwers":["Disk.make"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
-	/** The probe of the brief (`recall/probe-rethrow`): the client's `VolumeWatcher.update`, `catch (e) { release; throw e; }`. */
+	/** The probe of the brief (`recall/probe-rethrow`): the client's `TreeWatcher.update`, `catch (e) { release; throw e; }`. */
 	@:pin('control') @:killer('M-TS-RETHROW-OFF')
 	public function testACatchThatRethrowsRaises(): Void {
 		#if (sys || nodejs)
@@ -58,7 +60,7 @@ class ThreadSafetyRethrowTest extends Test {
 	public function testAProjectFunctionNamedInThrowersRaises(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
-			StringTools.replace(CONFIG, '"throwers":["Disk.make"]', '"throwers":["Disk.make","W.guard"]'),
+			CONFIG.replace('"throwers":["Disk.make"]', '"throwers":["Disk.make","W.guard"]'),
 			sources('catch (exception:Dynamic) { inner.release(); }', 'guard();')
 		);
 		Assert.same(['W.holdsAcross'], leaks(found));
@@ -83,16 +85,16 @@ class ThreadSafetyRethrowTest extends Test {
 
 	#if (sys || nodejs)
 	/** `W.rethrows` takes `inner` around a `try` of `Disk.make` closed by `clause`; `holdsAcross` holds `outer` across it. */
-	private static function sources(clause: String, ?extra: String): Array<String> {
+	private static function sources(clause: String, extra: String = ''): Array<String> {
 		return [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class Disk { public static function make():Void {} }',
-			'class W { final outer:Mutex = new Mutex(); final inner:Mutex = new Mutex(); final other:Dynamic = null; public function new() {}'
-				+ ' function later(fn:()->Void):Void {} function guard():Void {}'
-				+ ' public function rethrows():Void { inner.acquire(); try { Disk.make(); } $clause inner.release(); }'
-				+ ' public function holdsAcross():Void { outer.acquire(); rethrows(); ${extra ?? ''} outer.release(); }'
-				+ ' public static function main():Void { final w:W = new W(); Runner.create(() -> w.holdsAcross()); w.outer.acquire(); w.outer.release(); } }'
+			'class W { final outer:Mutex = new Mutex(); final inner:Mutex = new Mutex(); final other:Dynamic = null; public function '
+				+ 'new() {} function later(fn:()->Void):Void {} function guard():Void {} public function rethrows():Void {'
+				+ ' inner.acquire(); try { Disk.make(); } $clause inner.release(); } public function holdsAcross():Void {'
+				+ ' outer.acquire(); rethrows(); ${extra} outer.release(); } public static function main():Void {'
+				+ ' final w:W = new W(); Runner.create(() -> w.holdsAcross()); w.outer.acquire(); w.outer.release(); } }'
 		];
 	}
 

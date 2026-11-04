@@ -38,7 +38,7 @@ class PreferTernaryExpressionCheckTest extends Test {
 		Assert.equals('c ? 1 : 2', es[0].text);
 	}
 
-	/** The multi-line client shape this check was written for (`ReadyMadeDiskSystem.getFileName`, anonymized). */
+	/** The multi-line client shape this check was written for (`ReadyStore.getFileName`, anonymized). */
 	public function testFixMultiLineFixture(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			'class C {\n\tfunction f(pathText:String):Int {\n\t\tfinal start:Int = if (lastSepIndex > 1 || !pathText.startsWith(\':\'))\n'

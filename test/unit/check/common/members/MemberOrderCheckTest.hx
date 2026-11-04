@@ -605,7 +605,7 @@ class MemberOrderCheckTest extends Test {
 
 	/**
 	 * Option OFF (the default) keeps today's tight rank group: the blank between an `inline` constant and the
-	 * initialized constant of the same rank is reported and the fix removes it - the client `ItemListItemTile` shape.
+	 * initialized constant of the same rank is reported and the fix removes it - the client `ListItemTile` shape.
 	 */
 	@:killer('M-MO-INLINE-OPTION-IGNORED')
 	@:pin('control')
@@ -729,7 +729,7 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * The `NetRequest2` shape: one `#else` mid-class must not degrade the whole container to
+	 * The `HttpCall` shape: one `#else` mid-class must not degrade the whole container to
 	 * spraying rank-group blank lines over the ORIGINAL order. With alternating ranks
 	 * (var, readonly-prop, var) that fallback separates every neighbour and shreds the class.
 	 */
@@ -745,7 +745,7 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(parses(fixed), 'parses: $fixed');
 	}
 
-	/** Three branches (`#if` / `#elseif` / `#else`, the IAPStore shape) all survive the move, each directive regenerated in order. */
+	/** Three branches (`#if` / `#elseif` / `#else`, the PurchaseStore shape) all survive the move, each directive regenerated in order. */
 	public function testElseIfBranchesReorder(): Void {
 		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t#if ios\n\tstatic final K:String = "a";\n'
 			+ '\t#elseif android\n\tstatic final K:String = "b";\n\t#else\n\tstatic final K:String = "c";\n\t#end\n}';
@@ -1313,7 +1313,7 @@ class MemberOrderCheckTest extends Test {
 	 *
 	 * RED before the budget measured the genuinely-moved SET: counting the slots whose occupant
 	 * changed charged this reorder with the whole class and declined it - the shape a long UI type
-	 * like `DatePicker` reports, where one `TEXT_GUTTER` constant sat below `dispose()` for ever.
+	 * like `DayPicker` reports, where one `TEXT_GUTTER` constant sat below `dispose()` for ever.
 	 */
 	public function testALoneConstantCrossingAWholeClassReorders(): Void {
 		final src: String = trailingConstant(250);

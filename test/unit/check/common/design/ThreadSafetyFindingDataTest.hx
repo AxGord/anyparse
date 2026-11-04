@@ -66,7 +66,7 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/**
-	 * the client's `ItemListMoveItems.moveItems` loop over a long sink (`File.getContent` per moved model): the call warns at itself,
+	 * the client's `ListMoveItems.moveItems` loop over a long sink (`File.getContent` per moved model): the call warns at itself,
 	 * no key of its own added, and its message and data say what repeats it — a loop up the main thread's way, or one
 	 * around the call itself — which ranks a per-item stall above a one-off one.
 	 */
@@ -74,8 +74,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	public function testALongCallALoopRepeatsSaysWhichLoop(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', [
-			'class A { static function one():Void Sys.sleep(1); static function each(n:Int):Void for (i in 0...n) Sys.sleep(1);'
-			+ ' static function once():Void Sys.sleep(2); public static function main():Void { for (p in [1, 2]) one(); each(3); once(); } }'
+			'class A { static function one():Void Sys.sleep(1); static function each(n:Int):Void for (i in 0...n) Sys.sleep(1); static '
+			+ 'function once():Void Sys.sleep(2); public static function main():Void { for (p in [1, 2]) one(); each(3); once(); } }'
 		]);
 		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning') v];
 		warned.sort((a, b) -> Reflect.compare(a.data?.member, b.data?.member));
@@ -158,9 +158,9 @@ class ThreadSafetyFindingDataTest extends Test {
 				[
 					ThreadSafetyCheckTest.MUTEX,
 					'class Runner { public static function create(fn:()->Void):Void {} }',
-					'class S { static final _m:Mutex = new Mutex(); static function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
-					+ ' static function get():Void { _m.acquire(); _m.release(); } static function put():Void { _m.acquire(); _m.release(); }'
-					+ ' static function reboot():Void for (i in 0...3) put();'
+					'class S { static final _m:Mutex = new Mutex(); static function work():Void {'
+					+ ' _m.acquire(); Sys.sleep(1); _m.release(); } static function get():Void { _m.acquire(); _m.release(); } '
+					+ 'static function put():Void { _m.acquire(); _m.release(); } static function reboot():Void for (i in 0...3) put();'
 					+ ' public static function main():Void { Runner.create(work); get(); reboot(); } }'
 				]
 			);
@@ -272,7 +272,8 @@ class ThreadSafetyFindingDataTest extends Test {
 					for (source in ThreadSafetyCheckTest.storeFixture('acquireMutation(); db.add(false); releaseMutation();', start))
 						source.replace(
 							'public function save():Void',
-							'public function store():Void { acquireMutation(); db.add(false); releaseMutation(); } public function save():Void'
+							'public function store():Void { acquireMutation(); db.add(false); releaseMutation(); } '
+							+ 'public function save():Void'
 						)
 				])) '${v.data?.member} ${v.data?.subject} @${v.span?.from}'
 			]
@@ -312,17 +313,17 @@ class ThreadSafetyFindingDataTest extends Test {
 
 	/**
 	 * Two main-thread holders reach ONE downstream state that takes the second lock: the holder the finding names is the
-	 * least over every way into that state, so renaming a function outside the key (`p0` to `q0`), or swapping the two calls, does not move it.
+	 * least over every way into that state, so renaming a function outside
+	 * the key (`p0` to `q0`), or swapping the two calls, does not move it.
 	 */
 	@:pin('control') @:killer('M-TS-ORDER-CLIMB-FIRST', 'M-TS-ORDER-ONE-ARRIVAL')
 	public function testLockOrderKeySurvivesARenameOutsideIt(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class Fs { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
 			+ ' public static function main():Void { final fs:Fs = new Fs(); Runner.create(fs.bg); fs.p1(); fs.p0(); }'
-			+ ' public function p1():Void alpha(); public function p0():Void zeta();'
-			+ ' public function alpha():Void { _a.acquire(); t(); _a.release(); } public function zeta():Void { _a.acquire(); t(); _a.release(); }'
-			+ ' public function t():Void { _b.acquire(); _b.release(); }'
-			+ ' public function bg():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); } }';
+			+ ' public function p1():Void alpha(); public function p0():Void zeta(); public function alpha():Void { _a.acquire(); t(); '
+			+ '_a.release(); } public function zeta():Void { _a.acquire(); t(); _a.release(); } public function t():Void {'
+			+ ' _b.acquire(); _b.release(); } public function bg():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); } }';
 		final keys: Array<Array<String>> = [
 			for (renamed in [
 				source,
@@ -345,7 +346,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	public function testThrowHeldDataFollowsTheRaiser(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
-			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"throwers":["FileSystem.createDirectory"]}}}',
+			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],'
+			+ '"throwers":["FileSystem.createDirectory"]}}}',
 			[ThreadSafetyCheckTest.MUTEX, ThreadSafetyCheckTest.watcherFixture('ensure(p);')]
 		)
 			.filter(v -> v.data?.family == 'C');

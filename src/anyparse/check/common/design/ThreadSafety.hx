@@ -974,8 +974,8 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	/**
 	 * Whether one call of a multi-lock helper opens both holds (`LockAcquire.inner`), the helper's take of `outer`'s lock
 	 * written before its take of `inner`'s: the caller holds both from that call on, and of two holds across the same calls
-	 * the one the helper takes first — the outer lock of its order (the client's `StandardDiskSystem.acquireMutationLocks`:
-	 * `_batchMutex`, then `_mutationMutex`) — keeps the warning. Whether the outer window spans the inner hold's long calls
+	 * the one the helper takes first — the outer lock of its order (the client's `LocalStore.acquireBothLocks`:
+	 * `_batchLock`, then `_stateLock`) — keeps the warning. Whether the outer window spans the inner hold's long calls
 	 * is `nestHolds`' question.
 	 */
 	private static function takenFirst(outer: LockAcquire, inner: LockAcquire): Bool {

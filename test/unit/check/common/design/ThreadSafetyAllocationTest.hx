@@ -3,13 +3,12 @@ package unit.check.common.design;
 /**
  * Receiver flow from `new` (`AllocationSets`): a dispatch on a field every value of which is a `new` the project writes,
  * on the object a `new` builds, or on the running object handed down such a call, runs only the overrides those classes
- * resolve to — the client's `NetRequest2.doRequest` builds its `urlLoader` as a thread or simple loader, never the blocking one.
+ * resolve to — the client's `HttpCall.doRequest` builds its `urlLoader` as a thread or simple loader, never the blocking one.
  */
 class ThreadSafetyAllocationTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
-
 	private static inline final LOADERS: String = 'class Base { public function new(?now:Bool) { if (now == true) load(); }'
 		+ ' public function load():Void go(); function go():Void {} }'
 		+ ' class Blocking extends Base { override function go():Void Sys.sleep(1); }'
@@ -87,9 +86,8 @@ class ThreadSafetyAllocationTest extends Test {
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			LOADERS,
-			'@:generic class C<T:Base> { public final _m:Mutex = new Mutex(); var loader:Base;'
-			+ ' public function new() {} public function prepare():Void { loader = new T(); }'
-			+ ' public function work():Void { _m.acquire(); loader.load(); _m.release(); } }',
+			'@:generic class C<T:Base> { public final _m:Mutex = new Mutex(); var loader:Base; public function new() {} public function '
+			+ 'prepare():Void { loader = new T(); } public function work():Void { _m.acquire(); loader.load(); _m.release(); } }',
 			'class M { public static function main():Void { final c:C<Blocking> = new C<Blocking>(); c.prepare();'
 			+ ' Runner.create(() -> c.work()); c._m.acquire(); c._m.release(); } }'
 		]);
@@ -179,7 +177,7 @@ class ThreadSafetyAllocationTest extends Test {
 		final unknown: Array<String> = ['warning B C.work | Mutex.acquire'];
 		Assert.same(
 			['warning B C.work | C._m'],
-			poked('public static function poke(o:C, k:String):Void { final d:haxe.DynamicAccess<Dynamic> = cast o;' + ' d.set(k, null); }'),
+			poked('public static function poke(o:C, k:String):Void { final d:haxe.DynamicAccess<Dynamic> = cast o; d.set(k, null); }'),
 			'DynamicAccess.set'
 		);
 		Assert.same(
@@ -221,9 +219,8 @@ class ThreadSafetyAllocationTest extends Test {
 			LOADERS,
 			'$imports class C { final _m:Mutex = new Mutex(); var flag:Bool = false; $field public function new() {}'
 			+ ' public function prepare():Void { $assign } public function work():Void { _m.acquire(); $held _m.release(); }'
-			+ ' public function blocked():Void { final b:Blocking = new Blocking(); b.load(); }'
-			+ ' public static function main():Void { final c:C = new C(); c.prepare(); Runner.create(() -> { c.work(); c.blocked(); });'
-			+ ' c._m.acquire(); c._m.release(); } }'
+			+ ' public function blocked():Void { final b:Blocking = new Blocking(); b.load(); } public static function main():Void {'
+			+ ' final c:C = new C(); c.prepare(); Runner.create(() -> { c.work(); c.blocked(); }); c._m.acquire(); c._m.release(); } }'
 		], beside);
 	}
 

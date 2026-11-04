@@ -48,8 +48,8 @@ class MemberOrderWriterGapTest extends Test {
 	 * writes there - one of the client findings whose fix the canonical round-trip dropped every time.
 	 */
 	private static final HELP: String = 'class Help {\n\tpublic final faqs:GetDocs = new GetDocs();\n\n'
-		+ '\tpublic final sendSupportEmail:NetEntity2<ResponseRoot2, ErrorResponse> =\n'
-		+ '\t\tnew NetEntity2<ResponseRoot2, ErrorResponse>(\'help/SendSupportEmail\');\n\n\tpublic function new() {}\n}\n';
+		+ '\tpublic final sendSupportEmail:HttpEntity<ResponseRoot2, ErrorResponse> =\n'
+		+ '\t\tnew HttpEntity<ResponseRoot2, ErrorResponse>(\'help/SendSupportEmail\');\n\n\tpublic function new() {}\n}\n';
 
 	/** A hand-written doc-commented field between two plain ones, no blank anywhere. */
 	private static final DOC_TIGHT: String =

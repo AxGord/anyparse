@@ -80,7 +80,7 @@ class UnusedPrivateCheckTest extends Test {
 	/**
 	 * Occurrence-based confinement: a subtype EXISTS but never names the private member, so
 	 * the name has zero occurrences project-wide — provably dead, reported AND deleted (the
-	 * lifted `hasSubtype` arm; the four dead SpriteBase fields motivating this change).
+	 * lifted `hasSubtype` arm; the four dead ShapeBase fields motivating this change).
 	 */
 	public function testSubtypeDeadMemberDeletes(): Void {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}';
@@ -444,7 +444,7 @@ class UnusedPrivateCheckTest extends Test {
 	 * Refined #if gate (member arm): a dead private FIELD in a `#if`-carrying file whose
 	 * name occurs NOWHERE in scope outside its declaration is deleted — the raw
 	 * report-UNION-resolution scan sees inside every `#if` branch, so zero hits proves it
-	 * unreferenced and lifts the whole-file veto (the four provably-dead SpriteBase fields).
+	 * unreferenced and lifts the whole-file veto (the four provably-dead ShapeBase fields).
 	 */
 	public function testFixDeletesDeadMemberInConditionalFileWhenUnreferenced(): Void {
 		final src: String = 'class C {\n\tprivate var _x:Int = 5;\n\t#if debug\n\tpublic function d() { trace(1); }\n\t#end\n}';
@@ -458,7 +458,7 @@ class UnusedPrivateCheckTest extends Test {
 	 * Refined #if gate (member arm, member INSIDE the region): a dead private member
 	 * declared inside a `#if … #end` region with zero scope occurrences is deleted — the
 	 * raw scan proves it unreferenced in every branch, so removing it is safe in every
-	 * configuration (a SpriteBase field may itself sit inside a platform `#if`).
+	 * configuration (a ShapeBase field may itself sit inside a platform `#if`).
 	 *
 	 * The region carries a SECOND member on purpose: with `_dead` as its only one the deletion
 	 * would empty the region, and `MemberBranchScan.survivingDeletions` declines that set — a
@@ -531,14 +531,14 @@ class UnusedPrivateCheckTest extends Test {
 	/**
 	 * Empty-ctor arm (positive): a `private function new() {}` in a never-instantiated
 	 * all-static utility class is pure instantiation-prevention boilerplate — reported
-	 * and deleted. Reconstructs the pre-edit shape of the client's DashPathUtil (ctor since
+	 * and deleted. Reconstructs the pre-edit shape of the client's StrokePathUtil (ctor since
 	 * hand-removed) and asserts the rule deletes exactly that constructor.
 	 */
 	public function testEmptyCtorOfUtilityClassDeleted(): Void {
-		final src: String = 'class DashPathUtil {\n\tpublic static var gap:Float = 4;\n\tprivate static var thickness:Float = 2;\n'
+		final src: String = 'class StrokePathUtil {\n\tpublic static var gap:Float = 4;\n\tprivate static var thickness:Float = 2;\n'
 			+ '\tpublic static function draw() { thickness += gap; }\n\tprivate function new() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final files: Array<{ file: String, source: String }> = [{ file: 'DashPathUtil.hx', source: src }];
+		final files: Array<{ file: String, source: String }> = [{ file: 'StrokePathUtil.hx', source: src }];
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'new'"));

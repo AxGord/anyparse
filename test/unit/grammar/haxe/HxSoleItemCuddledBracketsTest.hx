@@ -107,7 +107,7 @@ final class HxSoleItemCuddledBracketsTest extends Test {
 	/** An element whose last token is an OPERAND, not a close delimiter, would strand the `]` at body indent — refused. */
 	public function testOperandTailElementNotCuddled(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n'
-			+ '\t\t\tfor (actionEntry in incrementalCloudActionCollection) if (actionEntry.actionKind == DELETED\n'
+			+ '\t\t\tfor (actionEntry in incrementalFetchActionCollection) if (actionEntry.actionKind == DELETED\n'
 			+ '\t\t\t\t&& actionEntry.filePathValue.startsWith(SharedConstants.SHARED_PREFIX_VALUE))\n'
 			+ '\t\t\t\tactionEntry.filePathValue\n\t\t];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, ON));

@@ -184,7 +184,7 @@ facts cannot read the name it was made from: a name computed at run time and
 handed to `Type.resolveClass`, a producer read as a value (`var f = Type.resolveClass`)
 and a class declaring one read as a value — the project's code and the libraries'
 alike, in every build it ships. A glob matches the class actually made, by its own
-name: declaring `model.Node` declares none of its subtypes. A literal handed to a
+name: declaring `domain.Node` declares none of its subtypes. A literal handed to a
 producer directly still names its one class whatever the list says, and a
 producer's body the compiler splices in (`Type.resolveClass` on js by default)
 lost its name — which may have been such a literal — so it still leaves the
@@ -200,7 +200,7 @@ different lists, or some none, takes such a name to name any class.
 
 ```json
 { "reachConfigurationsComplete": true,
-  "reflectiveClasses": ["model.nodes.*", "swf.exporters.animate.AnimateLibrary", "__ASSET__fonts_*"] }
+  "reflectiveClasses": ["domain.nodes.*", "swf.exporters.animate.AnimateLibrary", "__ASSET__fonts_*"] }
 ```
 
 **`reflectiveMethodHolders`** is the same kind of declaration for the other half of

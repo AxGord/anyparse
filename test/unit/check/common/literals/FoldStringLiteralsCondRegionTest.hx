@@ -20,7 +20,7 @@ package unit.check.common.literals;
  */
 class FoldStringLiteralsCondRegionTest extends FoldStringLiteralsCheckTestBase {
 
-	/** The client `crashreport/HostReport.hx:137` shape, reduced: two literals and an operand inside the branch. */
+	/** The client `crashreport/NodeReport.hx:137` shape, reduced: two literals and an operand inside the branch. */
 	private static inline final LIVE: String =
 		"class C { function f(p:String) { final a = 'head\\n' + #if flash 'b: ' + p + '\\n' + #end 'tail\\n'; } }";
 

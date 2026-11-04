@@ -9,12 +9,11 @@ class ThreadSafetyQuietLocksTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Shared.lock","Shared.lockShared","Mutex.acquire",'
 		+ '"Sys.sleep"],"spawns":["Runner.create"],"lockPairs":["Shared.lock/unlock","Shared.lockShared/unlockShared","Mutex.acquire/release"],'
 		+ '"sharedLocks":["Shared.lockShared"]}}}';
-
 	private static inline final SHARED: String = 'class Shared { public function new() {} public function lock():Void {}'
 		+ ' public function unlock():Void {} public function lockShared():Void {} public function unlockShared():Void {} }';
 
 	/**
-	 * the client's `NetToken._refreshReadWriteLock`: taken only with `lockShared`, so no take of it waits — neither the main
+	 * the client's `HttpToken._refreshRwLock`: taken only with `lockShared`, so no take of it waits — neither the main
 	 * thread's take nor anyone behind the worker's hold.
 	 */
 	@:pin('control') @:killer('M-TS-SHARED-OFF') @:killer('M-TS-SHARED-HOLD')
@@ -41,7 +40,7 @@ class ThreadSafetyQuietLocksTest extends Test {
 		#end
 	}
 
-	/** the client's `ShardDatabase.new`: a take of the instance's own lock in its constructor, before the object escapes, waits for no one. */
+	/** the client's `ShardStore.new`: a take of the instance's own lock in its constructor, before the object escapes, waits for no one. */
 	@:pin('control') @:killer('M-TS-CTOR-TAKE')
 	public function testAConstructorsOwnTakeNeverWaits(): Void {
 		#if (sys || nodejs)
@@ -64,10 +63,11 @@ class ThreadSafetyQuietLocksTest extends Test {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
 			SHARED,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
-			'class T { final _l:Shared = new Shared(); public function new() {} $members'
-			+ ' public function slow():Void { _l.lockShared(); Sys.sleep(1); _l.unlockShared(); }'
-			+ ' public function ui():Void { _l.lockShared(); _l.unlockShared(); }'
-			+ ' public static function main():Void { final t:T = new T(); Runner.create(() -> t.slow()); t.ui(); ${members == '' ? '' : 't.ex();'} } }'
+			'class T { final _l:Shared = new Shared(); public function new() {} $members public function slow():Void {'
+			+ ' _l.lockShared(); Sys.sleep(1); _l.unlockShared(); } public function ui():Void { _l.lockShared(); _l.unlockShared(); }'
+			+ ' public static function main():Void { final t:T = new T(); Runner.create(() -> t.slow()); t.ui(); '
+			+ (members == '' ? '' : 't.ex();')
+			+ ' } }'
 		]);
 	}
 

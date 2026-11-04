@@ -77,7 +77,7 @@ class SwallowedExceptionCheckTest extends Test {
 	}
 
 	/**
-	 * client `ApplicationSettingsStoragePathTest`: a catch that only records the outcome in a local the code after the try
+	 * client `SettingsPathTest`: a catch that only records the outcome in a local the code after the try
 	 * reads has handled the exception — the failure is now a value the function acts on.
 	 */
 	public function testOutcomeFlagReadAfterTheTryNotFlagged(): Void {

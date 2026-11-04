@@ -5,7 +5,7 @@ using Lambda;
 /**
  * `boundedRepeats` / `repeatBudgetMs` (`BoundedRepeats`): a repetition an entry bounds — `max` turns, `costMs` each,
  * `max × costMs` under the budget — runs as once, so the short sinks it repeats stay short; anything else repeats (the client's
- * `StandardDiskSystem.listFolder`: 414 children at most, two indexed SELECTs each).
+ * `LocalStore.listFolder`: 414 children at most, two indexed SELECTs each).
  */
 class ThreadSafetyBoundedRepeatsTest extends Test {
 
@@ -60,8 +60,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 			DISK,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class H { public final _m:Mutex = new Mutex(); public function new() {}'
-			+ ' public function work():Void { _m.acquire(); for (i in 0...3) Disk.stat("a"); _m.release(); }'
-			+ ' public static function main():Void { final h:H = new H(); Runner.create(() -> h.work()); h._m.acquire(); h._m.release(); } }'
+			+ ' public function work():Void { _m.acquire(); for (i in 0...3) Disk.stat("a"); _m.release(); } '
+			+ 'public static function main():Void { final h:H = new H(); Runner.create(() -> h.work()); h._m.acquire(); h._m.release(); } }'
 		]);
 		Assert.same(['info B H.work | H._m'], graded(found, 'B'));
 		#else
@@ -232,9 +232,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config('{"site": "Z.none", "max": 1, "costMs": 1}', true), [
 			DISK,
-			'class K { static function a():Void Disk.stat("a");'
-			+ ' static function p(xs:Array<String>):Void { var n:Int = 0; for (x in xs) n++; for (x in xs) a(); }'
-			+ ' public static function main():Void p(["x"]); }'
+			'class K { static function a():Void Disk.stat("a"); static function p(xs:Array<String>):Void { var n:Int = 0; for (x in xs) '
+			+ 'n++; for (x in xs) a(); } public static function main():Void p(["x"]); }'
 		]);
 		Assert.same(['info A K.a | Disk.stat', 'warning A K.p | for (x in xs)'], mains(found));
 		#else
@@ -253,9 +252,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		final entries: String = '{"site": "N.run", "max": 40, "costMs": 1}, {"site": "N.each", "max": 40, "costMs": 1}';
 		final across: Array<Violation> = ThreadSafetyCheckTest.violations(config(entries, true), [
 			DISK,
-			'class N { static function each(ys:Array<String>):Void for (y in ys) Disk.stat(y);'
-			+ ' public static function run(xs:Array<Array<String>>):Void for (x in xs) each(x);'
-			+ ' public static function main():Void run([["x"]]); }'
+			'class N { static function each(ys:Array<String>):Void for (y in ys) Disk.stat(y); public static function '
+			+ 'run(xs:Array<Array<String>>):Void for (x in xs) each(x); public static function main():Void run([["x"]]); }'
 		]);
 		Assert.same(['info A N.each | Disk.stat', 'warning A N.run | for (x in xs)'], mains(across), 'main thread');
 		final held: Array<Violation> = ThreadSafetyCheckTest.violations(
@@ -263,10 +261,9 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 				ThreadSafetyCheckTest.MUTEX,
 				DISK,
 				'class Runner { public static function create(fn:()->Void):Void {} }',
-				'class H { public final _m:Mutex = new Mutex(); public function new() {}'
-				+ ' function each():Void for (i in 0...10) Disk.stat("a");'
-				+ ' public function work():Void { _m.acquire(); for (i in 0...10) each(); _m.release(); }'
-				+ ' public static function main():Void { final h:H = new H(); Runner.create(() -> h.work()); h._m.acquire(); h._m.release(); } }'
+				'class H { public final _m:Mutex = new Mutex(); public function new() {} function each():Void for (i in 0...10) '
+				+ 'Disk.stat("a"); public function work():Void { _m.acquire(); for (i in 0...10) each(); _m.release(); } public static '
+				+ 'function main():Void { final h:H = new H(); Runner.create(() -> h.work()); h._m.acquire(); h._m.release(); } }'
 			]
 		);
 		Assert.same(['warning B H.work | H._m'], graded(held, 'B'), 'under a lock');
@@ -285,8 +282,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		return ThreadSafetyCheckTest.violations(config(entry, true), [
 			DISK,
 			'class N { static function a():Void Disk.stat("a"); static function b():Void Disk.stat("b");'
-			+ ' public static function run(xs:Array<String>):Void { var n:Int = xs.length; for (i in 0...n) a(); n = 3; for (i in 0...n) b(); }'
-			+ ' public static function main():Void run(["x"]); }'
+			+ ' public static function run(xs:Array<String>):Void { var n:Int = xs.length; for (i in 0...n) a(); n = 3; for (i in 0...n) '
+			+ 'b(); } public static function main():Void run(["x"]); }'
 		]);
 	}
 
@@ -324,8 +321,7 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		return ThreadSafetyCheckTest.violations(config(entry, true), [
 			DISK,
 			'class N { static function pending():Bool return true; static function a():Void Disk.stat("a");'
-			+ ' static function b():Void Disk.stat("b");'
-			+ ' public static function run():Void { for (i in 0...3) a(); while (pending()) b(); }'
+			+ ' static function b():Void Disk.stat("b"); public static function run():Void { for (i in 0...3) a(); while (pending()) b(); }'
 			+ ' public static function main():Void run(); }'
 		]);
 	}
@@ -334,9 +330,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	private static function twoLoops(entry: String): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(config(entry, true), [
 			DISK,
-			'class N { static function a():Void Disk.stat("a"); static function b():Void Disk.stat("b");'
-			+ ' public static function run(xs:Array<String>):Void { for (i in 0...3) a(); for (x in xs) b(); }'
-			+ ' public static function main():Void run(["x"]); }'
+			'class N { static function a():Void Disk.stat("a"); static function b():Void Disk.stat("b"); public static function '
+			+ 'run(xs:Array<String>):Void { for (i in 0...3) a(); for (x in xs) b(); } public static function main():Void run(["x"]); }'
 		]);
 	}
 

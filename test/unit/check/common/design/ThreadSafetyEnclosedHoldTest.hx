@@ -2,7 +2,7 @@ package unit.check.common.design;
 
 /**
  * A hold taken inside a hold of the same lock that every caller keeps is the enclosing hold's (`LockDominance.enclosed`):
- * the client's `StandardDiskSystem.cloudLocalRenameAndMoveItem` takes `_batchMutex` inside the sync's own batch hold. Every
+ * the client's `LocalStore.syncLocalRenameAndMove` takes `_batchLock` inside the sync's own batch hold. Every
  * caller is known only under `closedWorld`; the enclosing hold's warning must reach the enclosed one's function.
  */
 class ThreadSafetyEnclosedHoldTest extends Test {
@@ -41,8 +41,8 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
-			'class D { final _l:Mutex = new Mutex(); public function new() {} public function outer():Void { _l.acquire(); inner(); _l.release(); }'
-			+ ' function inner():Void { _l.acquire(); Sys.sleep(1); _l.release(); }'
+			'class D { final _l:Mutex = new Mutex(); public function new() {} public function outer():Void {'
+			+ ' _l.acquire(); inner(); _l.release(); } function inner():Void { _l.acquire(); Sys.sleep(1); _l.release(); }'
 			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.outer()); d.outer(); } }'
 		]);
 		Assert.same(
@@ -90,8 +90,8 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class S { final _m:Mutex = new Mutex(); public function new() {}\n'
 			+ ' function inner(flag:Bool):Void { _m.acquire(); if (flag) Sys.sleep(2); Sys.sleep(1); _m.release(); }\n'
-			+ ' public function outer():Void { _m.acquire(); inner(false); _m.release(); } // noqa: thread-safety\n'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.outer()); s._m.acquire(); s._m.release(); } }'
+			+ ' public function outer():Void { _m.acquire(); inner(false); _m.release(); } // noqa: thread-safety\n public static function '
+			+ 'main():Void { final s:S = new S(); Runner.create(() -> s.outer()); s._m.acquire(); s._m.release(); } }'
 		])));
 		#else
 		Assert.pass('non-sys target');
@@ -117,10 +117,10 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			'class U { public static function now(f:Dynamic):Void f(); }',
-			'class D { final _l:Mutex = new Mutex(); public function new() {} $members'
-			+ ' public function outer():Void { _l.acquire(); $way inner(); _l.release(); }'
-			+ ' function inner():Void { _l.acquire(); Sys.sleep(1); _l.release(); } public function peek():Void { _l.acquire(); _l.release(); }'
-			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.outer()); d.peek(); } }'
+			'class D { final _l:Mutex = new Mutex(); public function new() {} $members public function outer():Void { _l.acquire(); $way'
+			+ ' inner(); _l.release(); }'
+			+ ' function inner():Void { _l.acquire(); Sys.sleep(1); _l.release(); } public function peek():Void { _l.acquire(); '
+			+ '_l.release(); } public static function main():Void { final d:D = new D(); Runner.create(() -> d.outer()); d.peek(); } }'
 		]);
 	}
 	private static function holds(found: Array<Violation>): Array<String> {

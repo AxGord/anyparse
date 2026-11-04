@@ -131,7 +131,7 @@ class ShadowingParameterCheckTest extends Test {
 	}
 
 	/**
-	 * client `RemoteDiskSystemCache`: a typed lambda parameter over a local of its name takes its written
+	 * client `RemoteStoreCache`: a typed lambda parameter over a local of its name takes its written
 	 * type's lower-camel name - `shadowing-local`'s rename, through the same `Rename.rename`. The
 	 * hidden local is read after the lambda, and that does not keep the finding: a parameter is bound
 	 * by the call, so no write meant for the outer binding can land on it, and every read inside the
@@ -140,18 +140,18 @@ class ShadowingParameterCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-SHADOWING-PARAM-NO-RENAME')
 	public function testFixRenamesATypedParameterAfterItsWrittenType(): Void {
-		final src: String = 'class C {\n\tfunction f(xs:Array<DiskSystemItemData>):Void {\n\t\tvar item:DiskSystemItemData = xs[0];\n'
-			+ '\t\tfinal e = xs.find((item:DiskSystemItemData) -> item.fileName == "a");\n\t\ttrace(item);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(xs:Array<StoreItemData>):Void {\n\t\tvar item:StoreItemData = xs[0];\n'
+			+ '\t\tfinal e = xs.find((item:StoreItemData) -> item.fileName == "a");\n\t\ttrace(item);\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tfunction f(xs:Array<DiskSystemItemData>):Void {\n\t\tvar item:DiskSystemItemData = xs[0];\n\t\tfinal e = '
-			+ 'xs.find((diskSystemItemData:DiskSystemItemData) -> diskSystemItemData.fileName == "a");\n\t\ttrace(item);\n\t}\n}',
+			'class C {\n\tfunction f(xs:Array<StoreItemData>):Void {\n\t\tvar item:StoreItemData = xs[0];\n\t\tfinal e = '
+			+ 'xs.find((storeItemData:StoreItemData) -> storeItemData.fileName == "a");\n\t\ttrace(item);\n\t}\n}',
 			CheckFixture.fixedSource(new ShadowingParameter(), src)
 		);
 	}
 
 	/**
 	 * No written nominal type names a replacement: an untyped arrow parameter (client `errorMessage ->`), a
-	 * type with arguments (client `cloudItems:Null<Array<DiskSystemItemData>>`), a std root type.
+	 * type with arguments (client `remoteItems:Null<Array<StoreItemData>>`), a std root type.
 	 */
 	@:pin('control')
 	@:killer('M-SHADOWING-PARAM-ANY-TYPE')
@@ -172,9 +172,8 @@ class ShadowingParameterCheckTest extends Test {
 	 * the parameter to it would re-bind that read.
 	 */
 	public function testFixRefusesARenameThatCaptures(): Void {
-		final src: String = 'class C {\n\tfunction f(xs:Array<DiskSystemItemData>, diskSystemItemData:Int):Void {\n'
-			+ '\t\tvar item:DiskSystemItemData = xs[0];\n'
-			+ '\t\tfinal e = xs.find((item:DiskSystemItemData) -> item.size > diskSystemItemData);\n\t\ttrace(item);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(xs:Array<StoreItemData>, storeItemData:Int):Void {\n\t\tvar item:StoreItemData = '
+			+ 'xs[0];\n\t\tfinal e = xs.find((item:StoreItemData) -> item.size > storeItemData);\n\t\ttrace(item);\n\t}\n}';
 		Assert.equals(src, CheckFixture.fixedSource(new ShadowingParameter(), src));
 		Assert.notNull(declineOf(src));
 	}

@@ -60,8 +60,8 @@ final class ShadowingParameter extends RuleBase implements DefaultOff {
 	}
 
 	/**
-	 * The parameter takes its written type's lower-camel name — `(item:DiskSystemItemData) -> …` becomes
-	 * `(diskSystemItemData:DiskSystemItemData) -> …` — through `Rename.rename`, refusing whatever it refuses; a
+	 * The parameter takes its written type's lower-camel name — `(item:StoreItemData) -> …` becomes
+	 * `(storeItemData:StoreItemData) -> …` — through `Rename.rename`, refusing whatever it refuses; a
 	 * parameter no written nominal type names (an untyped arrow parameter, `Null<Array<T>>`, `String`) stays reported.
 	 */
 	public function fix(

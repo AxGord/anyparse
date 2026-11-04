@@ -33,10 +33,10 @@ final class HxCompareOperandBreakSliceTest extends Test {
 		// Opened-cond compare line = 147 columns at tab=4 — the glued
 		// `left == right` must break before `==` at operand indent +1.
 		final glued: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tif (_dataSystem.cloudStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true) '
+			+ '\t\tif (_dataSystem.fetchStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true) '
 			+ '== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		final broken: String = 'class C {\n\tfunction f() {\n\t\tif (\n'
-			+ '\t\t\t_dataSystem.cloudStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true)\n'
+			+ '\t\t\t_dataSystem.fetchStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true)\n'
 			+ '\t\t\t\t== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED\n\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		Assert.equals(broken, triviaWrite(glued));
 		Assert.equals(broken, triviaWrite(broken));
@@ -46,34 +46,34 @@ final class HxCompareOperandBreakSliceTest extends Test {
 		// Full header line = exactly 140 columns — fork parity is a strict
 		// `>`, so everything stays flat on the limit.
 		final src: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tif (_dataSystem.cloudStorage.getRemoteKind2(incrementalRemoteAction.filePath, true) '
+			+ '\t\tif (_dataSystem.fetchStorage.getRemoteKind2(incrementalRemoteAction.filePath, true) '
 			+ '== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 		// One column past the limit (141) — the compare breaks before `==`
 		// while the header stays glued (its natural first line fits at the
 		// open paren), matching the fork's `call(args)\n\t== X` shape.
 		final glued141: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tif (_dataSystem.cloudStorage.getRemoteKindX2(incrementalRemoteAction.filePath, true) '
+			+ '\t\tif (_dataSystem.fetchStorage.getRemoteKindX2(incrementalRemoteAction.filePath, true) '
 			+ '== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		final broken141: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tif (_dataSystem.cloudStorage.getRemoteKindX2(incrementalRemoteAction.filePath, true)\n'
+			+ '\t\tif (_dataSystem.fetchStorage.getRemoteKindX2(incrementalRemoteAction.filePath, true)\n'
 			+ '\t\t\t== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		Assert.equals(broken141, triviaWrite(glued141));
 		Assert.equals(broken141, triviaWrite(broken141));
 	}
 
 	public function testCompareOperandInBoolChainBreaksBeforeOp(): Void {
-		// The client DiskSystemBase shape: a `||` operand `call(...) == CONST`
+		// The client StoreBase shape: a `||` operand `call(...) == CONST`
 		// inside a nested-paren bool chain overflows at 151 columns — it
 		// must break before `==` instead of staying glued. The paren group
 		// whose content breaks opens as a container on the outer chain's line.
 		final glued: String = 'class C {\n\tfunction f() {\n\t\tif (\n'
 			+ '\t\t\t!incrementalRemoteAction.folder && fileTimestamp > incrementalRemoteAction.cloudTimestamp\n\t\t\t&& (fileTimestamp != '
-			+ 'cloudTimestamp\n\t\t\t|| _dataSystem.cloudStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true) '
+			+ 'cloudTimestamp\n\t\t\t|| _dataSystem.fetchStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true) '
 			+ '== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED)\n\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		final broken: String = 'class C {\n\tfunction f() {\n\t\tif (\n'
 			+ '\t\t\t!incrementalRemoteAction.folder && fileTimestamp > incrementalRemoteAction.cloudTimestamp && (\n\t\t\t\tfileTimestamp '
-			+ '!= cloudTimestamp\n\t\t\t\t|| _dataSystem.cloudStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true)\n'
+			+ '!= cloudTimestamp\n\t\t\t\t|| _dataSystem.fetchStorage.getLastRemoteActionKind2(incrementalRemoteAction.filePath, true)\n'
 			+ '\t\t\t\t\t== RemoteActionKind.ACTION_KIND_LOCAL_UPDATED\n\t\t\t)\n\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		Assert.equals(broken, triviaWrite(glued));
 		Assert.equals(broken, triviaWrite(broken));
@@ -85,10 +85,10 @@ final class HxCompareOperandBreakSliceTest extends Test {
 		// the operator break is the only way to fit (fork parity: the fork
 		// breaks such compares regardless of statement context).
 		final glued: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tfinal locallyModified:Bool = _dataSystem.cloudStorage.getLastRemoteActionKind2(remoteAction.filePath, true) '
+			+ '\t\tfinal locallyModified:Bool = _dataSystem.fetchStorage.getLastRemoteActionKind2(remoteAction.filePath, true) '
 			+ '== RemoteActionKind.ACTION_KIND_LOCAL_UPD;\n\t}\n}';
 		final broken: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tfinal locallyModified:Bool = _dataSystem.cloudStorage.getLastRemoteActionKind2(remoteAction.filePath, true)\n'
+			+ '\t\tfinal locallyModified:Bool = _dataSystem.fetchStorage.getLastRemoteActionKind2(remoteAction.filePath, true)\n'
 			+ '\t\t\t== RemoteActionKind.ACTION_KIND_LOCAL_UPD;\n\t}\n}';
 		Assert.equals(broken, triviaWrite(glued));
 		Assert.equals(broken, triviaWrite(broken));

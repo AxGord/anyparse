@@ -21,7 +21,7 @@ class ThreadSafetyDominanceTest extends Test {
 	private static final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
-	/** the client's `_mutex` under `_batchMutex`: the long hold of `_inner` holds `_outer`, so `quick` waits for no long hold. */
+	/** the client's `_mutex` under `_batchLock`: the long hold of `_inner` holds `_outer`, so `quick` waits for no long hold. */
 	public function testATakeUnderTheOuterLockIsBrief(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -269,7 +269,7 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/**
-	 * the client's `if (!batch) _batchMutex.acquire()`: taken where the caller hands `batch = false`, held by the caller where it
+	 * the client's `if (!batch) _batchLock.acquire()`: taken where the caller hands `batch = false`, held by the caller where it
 	 * hands `true` — under every valuation the long hold of `_inner` holds `_outer` — the caller's part known only under `closedWorld`.
 	 */
 	@:pin('control') @:killer('M-TS-DOM-UNDECIDED') @:killer('M-TS-DOM-ENTRY-NONE')

@@ -343,7 +343,7 @@ final class CheckScan {
 	 * own nominal is what a consumer reads to decide what is legal to DO with the value, and
 	 * `Null<Int>` is not `Int` there. The receiver answer may be used for ONE thing — deciding which
 	 * member a name resolves to on that receiver — which is what a rule splicing `<recv>.<member>(…)`
-	 * has to know, and why the measured `baseData:Null<Map<Int, ObjectFrameInfo>>` site needs it
+	 * has to know, and why the measured `baseData:Null<Map<Int, ShapeFrameInfo>>` site needs it
 	 * while the `Iterable`-shape proof next to it must keep asking the value question.
 	 *
 	 * `resolution` false resolves through `index` alone and builds no resolution index: for a caller whose question the

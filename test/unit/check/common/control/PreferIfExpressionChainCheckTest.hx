@@ -16,22 +16,22 @@ import anyparse.query.CanonicalEdit;
  */
 class PreferIfExpressionChainCheckTest extends Test {
 
-	/** The client `DiskSystemBase` move comparator after `prefer-lambda-expression-body` collapsed its block (anonymized). */
+	/** The client `StoreBase` move comparator after `prefer-lambda-expression-body` collapsed its block (anonymized). */
 	private static inline final RW_TERNARY_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\titems.sort((a:SortedPairEntryDetail, b:SortedPairEntryDetail) -> a.nodeName < b.nodeName ? -1 : a.nodeName > b.nodeName ? 1 : 0);\n\t}\n}';
 
-	/** client `MirrorRelink.decide` after `prefer-ternary-return` folded its guard ladder (anonymized) — the carry flagship. */
+	/** client `MirrorRebind.decide` after `prefer-ternary-return` folded its guard ladder (anonymized) — the carry flagship. */
 	private static inline final RW_RELINK_DECISION: String =
 		'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag < 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
 
 	/** A ternary nested in the THEN arm — the shape inversion reaches, silent before it. */
 	private static inline final THEN_NESTED: String = 'class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : 3;\n\t}\n}';
 
-	/** client `TimeInput.get_hrs` (anonymized) — a null guard duplicated into the conjunction, held by short-circuiting. */
+	/** client `ClockInput.get_hours` (anonymized) — a null guard duplicated into the conjunction, held by short-circuiting. */
 	private static inline final RW_NULL_GUARDED_ACCESSOR: String =
 		"class C {\n\tfunction f():String {\n\t\treturn sel != null ? sel.data.data == -1 ? 'N/A' : sel.data.text : '';\n\t}\n}";
 
-	/** A ternary chain as the value of a `case` arm — the shape the client's `getColorPickerType` writes five times over. */
+	/** A ternary chain as the value of a `case` arm — the shape the client's `getPickerKind` writes five times over. */
 	private static inline final CASE_ARM_CHAIN: String =
 		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 
@@ -59,7 +59,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	private static inline final CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE: String =
 		'class C {\n\tfunction f(a:Entry, b:Entry):Int {\n\t\treturn if (a.sticky != b.sticky)\n\t\t\ta.sticky ? -1 : 1\n\t\telse if (a.weight != b.weight)\n\t\t\ta.weight > b.weight ? -1 : 1\n\t\telse\n\t\t\tcompareNames(a.cls, b.cls);\n\t}\n}';
 
-	/** The client `DiskSystemBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
+	/** The client `StoreBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
 	private static inline final RW_IF_CHAIN_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\tstack.sort((a:StoredEntryRecord, b:StoredEntryRecord) ->\n\t\t\tif (a.nested && !b.nested)\n\t\t\t\t-1\n\t\t\telse if (!a.nested && b.nested)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\tSortHelper.orderTextValuesForKey(a.nodeName, b.nodeName)\n\t\t);\n\t}\n}';
 
@@ -278,7 +278,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	/**
-	 * The flagship: client `MirrorRelink.decide` as `prefer-ternary-return` leaves it (anonymized) —
+	 * The flagship: client `MirrorRebind.decide` as `prefer-ternary-return` leaves it (anonymized) —
 	 * a guard ladder already folded into a nested ternary, one arm still carrying the trailing
 	 * comment that used to sit after its `return`. Before the carry that comment refused the whole
 	 * chain, so the fixed point of the pipeline was the ternary form; now it converges to the
@@ -315,7 +315,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	/**
 	 * The VALUE POSITION OF A `case` ARM is a host: the arm's `:` and the statement's `;`
 	 * delimit it exactly as a `return` does, and the formatter renders the ladder there under
-	 * `expressionIf: "next"`. The five `getColorPickerType` arms in the client corpus are the shape.
+	 * `expressionIf: "next"`. The five `getPickerKind` arms in the client corpus are the shape.
 	 */
 	public function testCaseArmValueFlagged(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(CASE_ARM_CHAIN);
@@ -438,7 +438,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	/**
-	 * The client `TimeInput` accessor (anonymized): the null guard inverts to `if (sel == null) …`,
+	 * The client `ClockInput` accessor (anonymized): the null guard inverts to `if (sel == null) …`,
 	 * and `sel` still narrows to non-null in every branch behind it.
 	 */
 	public function testInvertedNullGuardStillNarrows(): Void {

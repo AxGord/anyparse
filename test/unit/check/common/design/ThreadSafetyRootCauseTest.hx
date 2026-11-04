@@ -15,7 +15,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		+ '"Disk.stat","Disk.list"],"shortSinks":["Disk.stat","Disk.list"],"spawns":["Runner.create"],'
 		+ '"lockPairs":["Mutex.acquire/release"]}}}';
 
-	/** the client's `StandardDiskSystem.saveXML`: under the mutation lock it waits for the tree lock `updateInternal` holds long. */
+	/** the client's `LocalStore.saveDoc`: under the mutation lock it waits for the tree lock `refreshInternal` holds long. */
 	@:pin('control') @:killer('M-TS-FOLD-OFF')
 	public function testAHoldLongOnlyByWaitingForAWarnedHolderIsInfo(): Void {
 		#if (sys || nodejs)
@@ -25,7 +25,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
-	/** the client's `saveXML`, whose `catch` reports over HTTP: a call only a `catch` runs is no reason the warning warns. */
+	/** the client's `saveDoc`, whose `catch` reports over HTTP: a call only a `catch` runs is no reason the warning warns. */
 	@:pin('control') @:killer('M-TS-FOLD-NORMAL')
 	public function testACallOnlyACatchRunsLeavesTheFoldStanding(): Void {
 		#if (sys || nodejs)
@@ -52,7 +52,7 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/**
-	 * the client's `renameCloudFolderBlocked` over the loop `moveCloudFolderSubItemsAction2` runs under its own lock: a hold whose
+	 * the client's `renameRemoteFolderBlocked` over the loop `moveRemoteFolderSubItems2` runs under its own lock: a hold whose
 	 * every way to a sink call passes a function holding a lock across it is that hold's work, one warning — the hold nearest
 	 * the call's. Two holds in one function covering each other keep the one nearest the work. A hold elsewhere across its
 	 * own call to the same sink, of the same lock or another, is a stall of its own.
@@ -77,8 +77,8 @@ class ThreadSafetyRootCauseTest extends Test {
 
 	/**
 	 * Two holds of one lock in two functions, each across its own call to the same sink, are two stalls on ONE thread as on
-	 * two (the client's `RemoteDiskSystemBase.moveCloudFileBlocked` holding the batch lock across its own `getTimestamp` stat, beside
-	 * `addCloudActionValidated` reaching that stat through `addCloudAction2`; `StandardDiskSystem.loadModelContent` on the
+	 * two (the client's `RemoteStoreBase.moveRemoteFileBlocked` holding the batch lock across its own `getTimestamp` stat, beside
+	 * `addRemoteActionChecked` reaching that stat through `addRemoteAction2`; `LocalStore.loadDocContent` on the
 	 * I/O worker against `getText` on the sync worker): narrowing one hold frees nothing of the other, so neither covers.
 	 */
 	@:pin('control') @:killer('M-TS-FOLD-SITE-LOCK')
@@ -105,8 +105,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		final s: String = 'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
 			+ ' function io():Void Sys.sleep(1); function getA():Mutex return _a; function getB():Mutex return _b;'
 			+ ' function g():Void { final m:Mutex = getA(); m.acquire(); io(); m.release();'
-			+ ' final n:Mutex = getB(); n.acquire(); io(); n.release(); }'
-			+ ' public function peekB():Void { _b.acquire(); _b.release(); }'
+			+ ' final n:Mutex = getB(); n.acquire(); io(); n.release(); } public function peekB():Void { _b.acquire(); _b.release(); }'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.g()); s.peekB(); } }';
 		Assert.same(
 			['warning B S.g | Mutex.acquire', 'warning B S.g | Mutex.acquire'],
@@ -127,9 +126,8 @@ class ThreadSafetyRootCauseTest extends Test {
 		#if (sys || nodejs)
 		final walk: String = 'class S { final _m:Mutex = new Mutex(); public function new() {} function io():Void Sys.sleep(1);'
 			+ ' function f(root:Node):Void { _m.acquire(); walk(root); _m.release(); _m.acquire(); io(); _m.release(); }'
-			+ ' public function peek():Void { _m.acquire(); _m.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); final r:Node = new Node();'
-			+ ' Runner.create(() -> s.f(r)); s.peek(); }';
+			+ ' public function peek():Void { _m.acquire(); _m.release(); } public static function main():Void {'
+			+ ' final s:S = new S(); final r:Node = new Node(); Runner.create(() -> s.f(r)); s.peek(); }';
 		final node: String = 'class Node { public var kids:Array<Node> = []; public function new() {}'
 			+ ' public function each(f:Node->Void):Void for (k in kids) f(k); }';
 		final runs: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
@@ -143,7 +141,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		final hub: String = 'interface IHub { function addEventListener(f:Node->Void):Void; }'
 			+ ' class Node { public var hub:IHub = null; public function new() {} }';
 		final registered: Array<Violation> = ThreadSafetyCheckTest.violations(
-			StringTools.replace(CONFIG, '"spawns"', '"registers":["addEventListener"],"spawns"'), [
+			CONFIG.replace('"spawns"', '"registers":["addEventListener"],"spawns"'), [
 				ThreadSafetyCheckTest.MUTEX,
 				RUNNER,
 				hub,
@@ -178,7 +176,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
-	/** the client's `PathIO.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
+	/** the client's `PathTools.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
 	@:pin('control') @:killer('M-TS-WAY-OFF')
 	public function testSinkCallsOfOneWayMakeOneWarning(): Void {
 		#if (sys || nodejs)
@@ -191,7 +189,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
-	/** the client's `repairShareAttr`: the calls one loop repeats make one warning, keyed by the first. */
+	/** the client's `repairShareFlag`: the calls one loop repeats make one warning, keyed by the first. */
 	@:pin('control') @:killer('M-TS-LOOP-KEY')
 	public function testTheCallsOfOneLoopMakeOneWarning(): Void {
 		#if (sys || nodejs)
@@ -240,8 +238,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/**
-	 * A hold reaching a sink call once covers no hold repeating that call under its lock (the client's `VolumeWatcher.rename`'s
-	 * one stat against `updateInternal`'s walk over the tree): the repeating hold keeps the warning, and the one-call
+	 * A hold reaching a sink call once covers no hold repeating that call under its lock (the client's `TreeWatcher.rename`'s
+	 * one stat against `refreshInternal`'s walk over the tree): the repeating hold keeps the warning, and the one-call
 	 * hold folds onto it.
 	 */
 	@:pin('control') @:killer('M-TS-FOLD-SITE-ONCE')
@@ -261,7 +259,7 @@ class ThreadSafetyRootCauseTest extends Test {
 
 	/**
 	 * A call reached through a function a cycle of calls re-enters repeats however the trail found it (the client's
-	 * `VolumeWatcher.updateInternal`, whose `checkNode` walks the tree recursively): no hold reaching it once covers it.
+	 * `TreeWatcher.refreshInternal`, whose `checkNode` walks the tree recursively): no hold reaching it once covers it.
 	 */
 	@:pin('control') @:killer('M-TS-FOLD-SITE-CYCLE') @:killer('M-TS-CYCLE-REF')
 	public function testACallUnderARecursiveWalkRepeats(): Void {
@@ -320,11 +318,9 @@ class ThreadSafetyRootCauseTest extends Test {
 		// covers nothing, and the third, long by that sleep alone, keeps its warning
 		final named: String = 'class A { final _x:Mutex = new Mutex(); public function new() {}'
 			+ ' public function f():Void { _x.acquire(); shared(); _x.release(); _x.acquire(); both(); _x.release();'
-			+ ' _x.acquire(); far(); _x.release(); } function both():Void { shared(); deep(); }'
-			+ ' function far():Void farther(); function farther():Void deep();'
-			+ ' function deep():Void Sys.sleep(1); function shared():Void Disk.read("x");'
-			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> s.f());'
-			+ ' s._x.acquire(); s._x.release(); } }';
+			+ ' _x.acquire(); far(); _x.release(); } function both():Void { shared(); deep(); } function far():Void farther(); function '
+			+ 'farther():Void deep(); function deep():Void Sys.sleep(1); function shared():Void Disk.read("x");'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> s.f()); s._x.acquire(); s._x.release(); } }';
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER, DISK, named]);
 		Assert.same(['info B A.f | A._x', 'warning B A.f | A._x', 'warning B A.f | A._x'], holds(found), 'named work only');
 		Assert.same(['A.far -> A.farther -> A.deep -> Sys.sleep', 'A.shared -> Disk.read'], warnedWays(found), 'named work only: kept');
@@ -370,8 +366,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		final s: String = 'class A { final _x:Mutex = new Mutex(); public function new() {} function io():Void Sys.sleep(1);\n'
 			+ ' function pad():Void io();\n public function f():Void {\n _x.acquire(); io(); _x.release(); // noqa: thread-safety\n'
 			+ ' _x.acquire(); pad(); _x.release(); }\n'
-			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> s.f());'
-			+ ' s._x.acquire(); s._x.release(); } }';
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> s.f()); s._x.acquire(); s._x.release(); } }';
 		final silenced: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER, s]);
 		Assert.same(['warning B A.f | A._x'], holds(silenced));
 		Assert.same(['A.pad -> A.io -> Sys.sleep'], warnedWays(silenced));
@@ -381,10 +376,9 @@ class ThreadSafetyRootCauseTest extends Test {
 		Assert.same(['A.io -> Sys.sleep'], warnedWays(open), 'not suppressed: the hold nearest the sleep stays');
 		// a hold waiting for a lock whose long hold is silenced
 		final waiting: String = 'class S { final _t:Mutex = new Mutex(); final _x:Mutex = new Mutex(); public function new() {}\n'
-			+ ' public function scan():Void { _t.acquire(); Sys.sleep(1); _t.release(); } // noqa: thread-safety\n'
-			+ ' public function save():Void { _x.acquire(); _t.acquire(); _t.release(); _x.release(); }\n'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.scan(); s.save(); });'
-			+ ' s._x.acquire(); s._x.release(); s._t.acquire(); s._t.release(); } }';
+			+ ' public function scan():Void { _t.acquire(); Sys.sleep(1); _t.release(); } // noqa: thread-safety\n public function '
+			+ 'save():Void { _x.acquire(); _t.acquire(); _t.release(); _x.release(); }\n public static function main():Void { final s:S = '
+			+ 'new S(); Runner.create(() -> { s.scan(); s.save(); }); s._x.acquire(); s._x.release(); s._t.acquire(); s._t.release(); } }';
 		Assert.same(
 			['warning B S.save | S._x'],
 			holds(ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER, waiting])), 'a wait'
@@ -392,9 +386,8 @@ class ThreadSafetyRootCauseTest extends Test {
 		// a hold taken inside a hold whose warning is silenced
 		final nested: String = 'class N { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}\n'
 			+ ' function io():Void Sys.sleep(1); public function f():Void { _x.acquire(); io(); // noqa: thread-safety\n'
-			+ ' _y.acquire(); io(); _y.release(); _x.release(); }\n'
-			+ ' public static function main():Void { final s:N = new N(); Runner.create(() -> s.f());'
-			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }';
+			+ ' _y.acquire(); io(); _y.release(); _x.release(); }\n public static function main():Void {'
+			+ ' final s:N = new N(); Runner.create(() -> s.f()); s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }';
 		Assert.same(
 			['warning B N.f | N._y'],
 			holds(ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER, nested])), 'nested'
@@ -410,9 +403,8 @@ class ThreadSafetyRootCauseTest extends Test {
 			ThreadSafetyCheckTest.MUTEX,
 			RUNNER,
 			'class S { static final _m:Mutex = new Mutex(); static function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }\n'
-			+ ' static function get():Void { _m.acquire(); // noqa: thread-safety\n _m.release(); }\n'
-			+ ' static function put():Void { _m.acquire(); _m.release(); }\n'
-			+ ' public static function main():Void { Runner.create(work); get(); put(); } }'
+			+ ' static function get():Void { _m.acquire(); // noqa: thread-safety\n _m.release(); }\n static function put():Void {'
+			+ ' _m.acquire(); _m.release(); }\n public static function main():Void { Runner.create(work); get(); put(); } }'
 		])), 'one lock');
 		#else
 		Assert.pass('non-sys target');
@@ -452,20 +444,18 @@ class ThreadSafetyRootCauseTest extends Test {
 	private static inline final NAMED_INFO: String = ' — that finding is itself info and says where its work is reported';
 
 	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
-
 	private static inline final DISK: String = 'class Disk { public static function read(p:String):Void {}'
 		+ ' public static function stat(p:String):Void {} public static function list(p:String):Void {} }';
 
 	/** `S.save` holds `_x` while it takes `_t`, which `S.scan` holds across a sleep, both on a worker; `more` adds members. */
-	private static function waits(more: String, ?worker: String, ?saving: String): Array<Violation> {
+	private static function waits(more: String, worker: String = '', saving: String = ''): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			RUNNER,
-			'class S { final _t:Mutex = new Mutex(); final _x:Mutex = new Mutex(); public function new() {}'
-			+ ' public function scan():Void { _t.acquire(); Sys.sleep(1); _t.release(); }'
-			+ ' function step():Void {} public function save():Void { _x.acquire(); _t.acquire(); _t.release(); ${saving ?? ''} _x.release(); }$more'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.scan(); s.save(); ${worker ?? ''} });'
-			+ ' s._x.acquire(); s._x.release(); s._t.acquire(); s._t.release(); } }'
+			'class S { final _t:Mutex = new Mutex(); final _x:Mutex = new Mutex(); public function new() {} public function scan():Void {'
+			+ ' _t.acquire(); Sys.sleep(1); _t.release(); } function step():Void {} public function save():Void { _x.acquire(); '
+			+ '_t.acquire(); _t.release(); $saving _x.release(); }$more public static function main():Void { final s:S = new S(); '
+			+ 'Runner.create(() -> { s.scan(); s.save(); $worker }); s._x.acquire(); s._x.release(); s._t.acquire(); s._t.release(); } }'
 		]);
 	}
 
@@ -476,9 +466,8 @@ class ThreadSafetyRootCauseTest extends Test {
 			RUNNER,
 			'class A { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
 			+ ' public function a():Void { _x.acquire(); v(); _x.release(); } function v():Void $vCalls; function w():Void Sys.sleep(1);'
-			+ ' public function z():Void { $zLock.acquire(); w(); $zLock.release(); }'
-			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
-			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+			+ ' public function z():Void { $zLock.acquire(); w(); $zLock.release(); } public static function main():Void { final s:A = new '
+			+ 'A(); Runner.create(() -> { s.a(); s.z(); }); s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
 		]);
 	}
 	/** `A.a` holding `_x` across a read, `A.b` holding it across `both()`, which runs `body`; `deep()` sleeps. */
@@ -489,10 +478,8 @@ class ThreadSafetyRootCauseTest extends Test {
 			DISK,
 			'class A { final _x:Mutex = new Mutex(); public function new() {}'
 			+ ' public function f():Void { _x.acquire(); shared(); _x.release(); _x.acquire(); both(); _x.release(); }'
-			+ ' function both():Void { $body }'
-			+ ' function deep():Void Sys.sleep(1); function shared():Void Disk.read("x");'
-			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> s.f());'
-			+ ' s._x.acquire(); s._x.release(); } }'
+			+ ' function both():Void { $body } function deep():Void Sys.sleep(1); function shared():Void Disk.read("x");'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> s.f()); s._x.acquire(); s._x.release(); } }'
 		]);
 	}
 
@@ -504,9 +491,8 @@ class ThreadSafetyRootCauseTest extends Test {
 			'class S { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
 			+ ' function io():Void Sys.sleep(1); function p():Void { _y.acquire(); io(); _y.release(); }'
 			+ ' function pad():Void io(); function slow():Void pad(); function both():Void { $body }'
-			+ ' public function x():Void { _x.acquire(); both(); _x.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.x(); s.p(); });'
-			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+			+ ' public function x():Void { _x.acquire(); both(); _x.release(); } public static function main():Void { final s:S = new S(); '
+			+ 'Runner.create(() -> { s.x(); s.p(); }); s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
 		]);
 	}
 	/**
@@ -519,9 +505,8 @@ class ThreadSafetyRootCauseTest extends Test {
 			RUNNER,
 			'class S { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
 			+ ' function io():Void Sys.sleep(1); function p():Void { _y.acquire(); io(); _y.release(); } function q():Void p();'
-			+ ' public function x():Void { _x.acquire(); $body _x.release(); }'
-			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.x(); s.p(); });'
-			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+			+ ' public function x():Void { _x.acquire(); $body _x.release(); } public static function main():Void { final s:S = new S(); '
+			+ 'Runner.create(() -> { s.x(); s.p(); }); s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
 		]);
 	}
 
@@ -531,11 +516,9 @@ class ThreadSafetyRootCauseTest extends Test {
 			ThreadSafetyCheckTest.MUTEX,
 			RUNNER,
 			'class Pool { public static function create(fn:()->Void):Void {} }',
-			'class A { final _x:Mutex = new Mutex(); public function new() {}'
-			+ ' public function a():Void { _x.acquire(); v(); _x.release(); } function v():Void w(); function w():Void Sys.sleep(1);'
-			+ ' public function z():Void { _x.acquire(); w(); _x.release(); }'
-			+ ' public static function main():Void { final s:A = new A(); $running'
-			+ ' s._x.acquire(); s._x.release(); } }'
+			'class A { final _x:Mutex = new Mutex(); public function new() {} public function a():Void { _x.acquire(); v(); '
+			+ '_x.release(); } function v():Void w(); function w():Void Sys.sleep(1); public function z():Void { _x.acquire(); w(); '
+			+ '_x.release(); } public static function main():Void { final s:A = new A(); $running s._x.acquire(); s._x.release(); } }'
 		]);
 	}
 	/** `S` with locks `_a` and `_b`, `work` and `more` declared, a worker running `background`, and the main thread taking both. */
@@ -575,9 +558,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	 */
 	private static function inOne(body: String): String {
 		return 'class A { final _x:Mutex = new Mutex(); public function new() {} function v():Void w(); function w():Void Sys.sleep(1);'
-			+ ' function walk(n:Int):Void { w(); if (n > 0) walk(n - 1); }'
-			+ ' public function f():Void { $body } public static function main():Void { final s:A = new A();'
-			+ ' Runner.create(() -> s.f()); s._x.acquire(); s._x.release(); } }';
+			+ ' function walk(n:Int):Void { w(); if (n > 0) walk(n - 1); } public function f():Void { $body } '
+			+ 'public static function main():Void { final s:A = new A(); Runner.create(() -> s.f()); s._x.acquire(); s._x.release(); } }';
 	}
 
 	/** The calls each warned hold (b) of `found` names, after "can block: ", sorted. */

@@ -82,8 +82,8 @@ spacing):
 
 ```sh
 hxq add-element apq.json --append --select 'Member:thread-safety > JObject > Member:registers > JArray' \
-    '"api.NetRequest2.success"' --write
-hxq remove-element apq.json --select 'Member:spawns > JArray > JString:api.NetRequest2.success' --write
+    '"api.HttpCall.success"' --write
+hxq remove-element apq.json --select 'Member:spawns > JArray > JString:api.HttpCall.success' --write
 hxq add-element test/testkit/arms/anyparse.query.json --append --select 'Member:arms > JArray' - --write <<'EOF'
 {"name": "M-X", "type": "anyparse.query.Foo", "method": "bar", "force": "null", "note": "…"}
 EOF

@@ -1089,7 +1089,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 * parameter, so the cross-file rename leaves them alone. The class-attributed half of the subtype scan
 	 * claims every bare read in a subtype for the owner; once the parameter's own occurrences were accounted
 	 * for, that half renamed `super.setup(accountScreen)` into `super.setup(_accountScreen)` - which compiles,
-	 * and passes the field where the argument was meant (client `AccountKind` and its four plans).
+	 * and passes the field where the argument was meant (client `ProfileKind` and its four plans).
 	 */
 	@:pin('control')
 	@:killer('M-NAMING-FOREIGN-LOSES-TO-BARE')
@@ -1100,7 +1100,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			+ '\t\tsuper.setup(accountScreen);\n\t}\n}';
 		final rename: Array<CrossFileEdits> = crossFileRename([{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }]);
 		assertRenameSlice(rename, 'pkg/C.hx', cSrc, 'this._accountScreen = accountScreen', 'var accountScreen');
-		Assert.isFalse(Lambda.exists(rename, slice -> slice.file == 'pkg/D.hx'), 'the override\'s parameter is not the field');
+		Assert.isFalse(rename.exists(slice -> slice.file == 'pkg/D.hx'), 'the override\'s parameter is not the field');
 	}
 
 	/** The cross-file renames `report` yields under a resolution scope split into `roots` and `library`. */
