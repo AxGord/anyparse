@@ -38,6 +38,7 @@ package anyparse.grammar.haxe;
  *
  * `@:fmt(reflowCtorOnFitLine('expressionForBody', 'ObjectLit'))` on `body` — under `sameLine.comprehensionFor: fitLine`
  * a literal body ignores its source lines: the literal's wrap cascade alone decides them, so one that fits collapses.
+ * The frame crosses the wrapper named by its third argument only from this field; a parenthesised value-if branch keeps its lines.
  */
 @:peg
 typedef HxForExpr = {
@@ -46,7 +47,6 @@ typedef HxForExpr = {
 	@:kw('in') @:trail(')') var iterable: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('expressionForBody'),
 		bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),
-		reflowCtorOnFitLine('expressionForBody', 'ObjectLit'), strictFitLineBody(
-			'IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'
-		)) var body: HxExpr;
+		reflowCtorOnFitLine('expressionForBody', 'ObjectLit', 'ParenExpr'),
+		strictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr')) var body: HxExpr;
 };

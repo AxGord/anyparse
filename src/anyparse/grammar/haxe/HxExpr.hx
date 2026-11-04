@@ -91,7 +91,8 @@ enum HxExpr {
 
 	ECheckTypeExpr(info: HxECheckType);
 
-	@:wrap('(', ')') @:fmt(captureWrapOpenNewline, propagateExprPosition, expressionParenHardFlatten, switchWrapSpace)
+	@:wrap('(', ')') @:fmt(captureWrapOpenNewline, propagateExprPosition, expressionParenHardFlatten, switchWrapSpace,
+		reflowFrameThroughWrap('ObjectLit', 'ParenExpr'))
 	ParenExpr(inner: HxExpr);
 
 	ParenLambdaExpr(lambda: HxParenLambda);

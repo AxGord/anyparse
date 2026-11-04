@@ -228,7 +228,7 @@ final class WriterTriviaStarDispatch {
 			// ω-expressionif-collapse (mechanism B read-site):
 			// `@:fmt(reflowInExprPosition)` (HxObjectLit.fields) opts
 			// the Star into source-newline ignore — but only at runtime
-			// when `opt._inValueIfBranch` is set (the immediate value of
+			// when `opt._literalReflow` is set (the immediate value of
 			// a value-if branch). Default false → byte-inert.
 			final reflowInExprBranchStar: Bool = starNode.fmtHasFlag('reflowInExprPosition');
 			// ω-multiline-trailing-comma-remove / ω-uniform-element-blanks:

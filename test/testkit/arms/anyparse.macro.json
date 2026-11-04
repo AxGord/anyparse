@@ -1497,6 +1497,70 @@
 			"find": "final glueLayoutExpr: Expr = wrapBodyAfterTrail(opts, sameLayoutExpr, writeCall, shared.isBlockBody);",
 			"replace": "final glueLayoutExpr: Expr = sameLayoutExpr;",
 			"note": "the glued placement stops yielding to a head-gap comment, so the writer drops it and fmt refuses the whole file"
+		},
+		{
+			"name": "M-REFLOW-ANY-CTOR",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "reflowCtorOnFitLineOpt",
+			"find": "$knob == anyparse.format.BodyPolicy.FitLine && $isCtor",
+			"replace": "$knob == anyparse.format.BodyPolicy.FitLine",
+			"note": "every comprehension body enters the reflow frame, so a literal that is only the body's leftmost operand reads it and collapses"
+		},
+		{
+			"name": "M-PAREN-FRAME-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "reflowCtorOnFitLineOpt",
+			"find": "_setReflowThroughWrap($e, opt)",
+			"replace": "$e",
+			"note": "a parenthesised body gets no state, so the paren clears the frame and the literal keeps its source lines"
+		},
+		{
+			"name": "M-PAREN-FRAME-ANY-BODY",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "reflowCtorOnFitLineOpt",
+			"find": "$knob == anyparse.format.BodyPolicy.FitLine && $isWrapper",
+			"replace": "$knob == anyparse.format.BodyPolicy.FitLine",
+			"note": "every comprehension body under the knob gets the wrapper state, so a bare literal body is no longer framed and keeps its source lines"
+		},
+		{
+			"name": "M-PAREN-FRAME-ANY-POLICY",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "reflowCtorOnFitLineOpt",
+			"find": "$knob == anyparse.format.BodyPolicy.FitLine && $isWrapper",
+			"replace": "$isWrapper",
+			"note": "the state stops reading the body policy, so every config collapses a parenthesised literal"
+		},
+		{
+			"name": "M-PAREN-FRAME-ANY-WRAPPED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "reflowFrameThroughWrapOpt",
+			"find": "$isWrapper ? _setReflowThroughWrap($optExpr, opt) : $optExpr",
+			"replace": "_setReflowThroughWrap($optExpr, opt)",
+			"note": "the paren hands the state to whatever it wraps, so a parenthesised receiver inside it collapses"
+		},
+		{
+			"name": "M-PAREN-FRAME-STOPS-AT-NESTED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "reflowFrameThroughWrapOpt",
+			"find": "$isWrapper ? _setReflowThroughWrap($optExpr, opt) : $optExpr",
+			"replace": "$optExpr",
+			"note": "the outer paren of a redundant pair ends the state, so the literal in the inner one keeps its lines"
+		},
+		{
+			"name": "M-PAREN-FRAME-ANY-INNER",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "reflowFrameThroughWrapOpt",
+			"find": "$isLiteral ? _setValueIfBranch($optExpr, opt) : $through",
+			"replace": "_setValueIfBranch($optExpr, opt)",
+			"note": "the paren frames whatever it wraps, so a literal that is only a leftmost operand in it collapses"
+		},
+		{
+			"name": "M-PAREN-FRAME-ANY-STATE",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "reflowFrameThroughWrapOpt",
+			"find": "opt._literalReflow == anyparse.format.LiteralReflow.ThroughWrap",
+			"replace": "opt._literalReflow != anyparse.format.LiteralReflow.Off",
+			"note": "the paren passes on any frame, so a parenthesised value-if branch collapses"
 		}
 	]
 }

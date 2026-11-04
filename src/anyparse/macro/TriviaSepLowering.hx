@@ -103,7 +103,7 @@ final class TriviaSepLowering {
 		// ω-expressionif-collapse (mechanism B): when the sep-Star ctor
 		// carries `@:fmt(reflowInExprPosition)` (HxObjectLit.fields), the
 		// Ignore-mode runtime check (`ignoreCheckExpr`) additionally fires
-		// when `opt._inValueIfBranch` is set, so a source-multiline object
+		// when `opt._literalReflow` is set, so a source-multiline object
 		// literal that is the direct value of a value-if branch drops its
 		// element `newlineBefore` signals and the wrap cascade collapses it
 		// to single-line. Default false → every other sep-Star caller is
@@ -718,7 +718,7 @@ final class TriviaSepLowering {
 		//
 		// ω-expressionif-collapse (mechanism B): `@:fmt(reflowInExprPosition)`
 		// adds a THIRD, runtime-gated disjunct — Ignore fires when
-		// `opt._inValueIfBranch` is set, i.e. the object literal is the direct
+		// `opt._literalReflow` is `Here`, i.e. the object literal is the direct
 		// value of a value-if branch. Combined with mechanism A's `{ x }`
 		// padding this collapses `{\n width: …\n}` to `{ width: … }` only in
 		// that one context (var-init / call-arg object literals keep their
@@ -746,7 +746,9 @@ final class TriviaSepLowering {
 		// enclosing-chain BodyGroup under-measure that exploded the arrow
 		// (`u ->` newline `{…}`) non-idempotently.
 		final ignoreResolved: Expr = reflowInExprPosition
-			? macro ($ignoreBase) || opt._inValueIfBranch || (opt._inArrowLambdaBody && opt.objectLiteralArrowBodyReflow)
+			? macro ($ignoreBase)
+				|| opt._literalReflow == anyparse.format.LiteralReflow.Here
+				|| (opt._inArrowLambdaBody && opt.objectLiteralArrowBodyReflow)
 			: ignoreBase;
 		// ω-anontype-reflow-typedef-guard: a typedef RHS anon is NOT governed by
 		// `wrapping.anonType` in the fork at all — its brace classifies as

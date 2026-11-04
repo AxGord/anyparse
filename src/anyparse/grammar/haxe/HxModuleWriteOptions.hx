@@ -6,6 +6,7 @@ import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.EmptyCurly;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.LiteralReflow;
 import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
@@ -735,7 +736,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 */
 	_inExprPosition: Bool,
 
-	// ω-expressionif-collapse — narrow companion to `_inExprPosition`, set
+	// ω-expressionif-collapse — narrow companion to `_inExprPosition`, `Here`
 	// ONLY on the immediate value of a value-yielded `if`/`else` branch
 	// (`HxIfExpr.thenBranch` / `elseBranch` carrying
 	// `@:fmt(propagateValueIfBranch)`). Read by `HxObjectLit.fields`
@@ -748,9 +749,10 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// frame (call-arg / array-element / operand / arrow-body) so the flag
 	// never leaks into an object literal nested deeper than the immediate
 	// branch value. `HxForExpr.body`'s `@:fmt(reflowCtorOnFitLine)` sets it on a
-	// literal comprehension body too. Default `false`.
-	_inValueIfBranch: Bool,
-	// ω-arrow-body-objlit-pad — sister to `_inValueIfBranch`, set ONLY on the
+	// literal comprehension body too, and `ThroughWrap` on a parenthesised one, which only that
+	// paren's descent reads: the paren clears the frame, so a parenthesised value-if branch keeps its lines.
+	_literalReflow: LiteralReflow,
+	// ω-arrow-body-objlit-pad — sister to `_literalReflow`, set ONLY on the
 	// immediate body of an arrow lambda (`HxExpr.ThinArrow` right operand /
 	// `HxThinParenLambda.body` carrying `@:fmt(propagateArrowLambdaBody)`).
 	// Read by `HxObjectLit.fields` (`@:fmt(arrowBodyOpenPadSuppress)`) to drop

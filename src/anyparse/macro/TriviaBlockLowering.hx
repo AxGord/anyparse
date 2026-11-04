@@ -661,7 +661,7 @@ final class TriviaBlockLowering {
 		// this composes with the existing tail-keeps-expr-position rule.
 		// `clearExprPositionNonTail` is carried only by Haxe block constructs
 		// (BlockExpr / BlockStmt / HxFnBlock.stmts), whose shared
-		// `HxModuleWriteOptions` always declares `_inValueIfBranch` — so the
+		// `HxModuleWriteOptions` always declares `_literalReflow` — so the
 		// helper reference is safe inside this branch.
 		// ω-arrow-body-objlit-pad: a block-shaped arrow body (`u -> { … }`) is
 		// the same opaque barrier for the open-pad suppression — the `{` that

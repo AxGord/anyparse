@@ -147,6 +147,7 @@
 		"propagateExprPosition",
 		"propagateFieldLevelVar",
 		"propagateNestedType",
+		"reflowFrameThroughWrap",
 		"sharpCondParensGap",
 		"spaceAfterLead",
 		"spaceBeforeLead",

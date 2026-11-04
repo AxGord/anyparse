@@ -233,7 +233,7 @@ final class WriterOptFanout {
 	 * declared on `HxModuleWriteOptions` only (Haxe grammar).
 	 *
 	 * ω-expressionif-collapse: when the opt typedef ALSO carries
-	 * `_inValueIfBranch:Bool` (`clearsValueIfBranch == true`), entering a
+	 * `_literalReflow` (`clearsValueIfBranch == true`), entering a
 	 * fresh expression-position frame CLEARS that narrow flag — a call
 	 * argument / array element / operand / arrow body is a new value
 	 * context, never the immediate value of a value-if branch. This is
@@ -247,11 +247,11 @@ final class WriterOptFanout {
 		optionsCT: ComplexType, clearsValueIfBranch: Bool, clearsArrowLambdaBody: Bool, clearsArrowValueIfBlocked: Bool
 	): Field {
 		var guard: Expr = macro o._inExprPosition;
-		if (clearsValueIfBranch) guard = macro $guard && !o._inValueIfBranch;
+		if (clearsValueIfBranch) guard = macro $guard && o._literalReflow == anyparse.format.LiteralReflow.Off;
 		if (clearsArrowLambdaBody) guard = macro $guard && !o._inArrowLambdaBody;
 		if (clearsArrowValueIfBlocked) guard = macro $guard && !o._arrowValueIfBlocked;
 		final clears: Array<Expr> = [];
-		if (clearsValueIfBranch) clears.push(macro _c._inValueIfBranch = false);
+		if (clearsValueIfBranch) clears.push(macro _c._literalReflow = anyparse.format.LiteralReflow.Off);
 		if (clearsArrowLambdaBody) clears.push(macro _c._inArrowLambdaBody = false);
 		if (clearsArrowValueIfBlocked) clears.push(macro _c._arrowValueIfBlocked = false);
 		final body: Expr = macro {
@@ -273,17 +273,17 @@ final class WriterOptFanout {
 		};
 	}
 
-	private static function setValueIfBranchField(optionsCT: ComplexType): Field {
+	private static function setLiteralReflowField(optionsCT: ComplexType, name: String, state: Expr): Field {
 		return {
-			name: '_setValueIfBranch',
+			name: name,
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
-					if (!o._inExprPosition || o._inValueIfBranch) return o;
+					if (!o._inExprPosition || o._literalReflow == $state) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._inValueIfBranch = true;
+					_c._literalReflow = $state;
 					return _c;
 				}
 			}),
@@ -293,7 +293,7 @@ final class WriterOptFanout {
 
 	/**
 	 * ω-expressionif-collapse — sister reset to `_setValueIfBranch`.
-	 * Returns `o` unchanged when `_inValueIfBranch` is already `false`;
+	 * Returns `o` unchanged when `_literalReflow` is already `false`;
 	 * otherwise returns a `_copyOpt(o)` with the flag cleared. Consumed by
 	 * `triviaBlockStarExpr`'s per-element call when the parent Star carries
 	 * `@:fmt(clearExprPositionNonTail)` (BlockExpr): an object literal
@@ -312,9 +312,9 @@ final class WriterOptFanout {
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
-					if (!o._inValueIfBranch) return o;
+					if (o._literalReflow == anyparse.format.LiteralReflow.Off) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._inValueIfBranch = false;
+					_c._literalReflow = anyparse.format.LiteralReflow.Off;
 					return _c;
 				}
 			}),
@@ -1234,10 +1234,10 @@ final class WriterOptFanout {
 
 	private static function pushOptFanoutHelpers(fields: Array<Field>, optionsTypePath: String, optionsCT: ComplexType): Void {
 		// noqa: complexity
-		final hasValueIfBranch: Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
+		final hasValueIfBranch: Bool = optionsHasField(optionsTypePath, '_literalReflow');
 		final hasArrowLambdaBody: Bool = optionsHasField(optionsTypePath, '_inArrowLambdaBody');
 		// omega-arrow-value-if-reflow: the chain-refusal descent signal shares
-		// the consumed-once discipline of `_inValueIfBranch` - a fresh
+		// the consumed-once discipline of `_literalReflow` - a fresh
 		// expression-position frame (call arg, operand, a NESTED arrow body) is
 		// a new chain, so `_setExprPosition` clears it. The chain's own
 		// `else`-descent carries no `propagateExprPosition` and therefore keeps
@@ -1248,6 +1248,7 @@ final class WriterOptFanout {
 			fields.push(clearExprPositionField(optionsCT));
 		}
 		if (hasArrowValueIfBlocked) fields.push(setArrowValueIfBlockedField(optionsCT));
+
 		if (optionsHasField(optionsTypePath, '_arrowValueIfElemTrailComment')) fields.push(setArrowValueIfElemTrailCommentField(optionsCT));
 		// ω-elseif-body-break: opt-fanout helper pair for `propagateElseIfBranch`
 		// (HxIfStmt.elseBody set-site) and `clearElseIfBranch` (inner if's
@@ -1258,7 +1259,8 @@ final class WriterOptFanout {
 		}
 
 		if (hasValueIfBranch) {
-			fields.push(setValueIfBranchField(optionsCT));
+			fields.push(setLiteralReflowField(optionsCT, '_setValueIfBranch', macro anyparse.format.LiteralReflow.Here));
+			fields.push(setLiteralReflowField(optionsCT, '_setReflowThroughWrap', macro anyparse.format.LiteralReflow.ThroughWrap));
 			fields.push(clearValueIfBranchField(optionsCT));
 		}
 		// ω-arrow-body-objlit-pad: opt-fanout helper pair for

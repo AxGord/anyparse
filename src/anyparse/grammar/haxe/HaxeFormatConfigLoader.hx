@@ -329,7 +329,7 @@ final class HaxeFormatConfigLoader {
 			metadataFunctionLineEnd: base.metadataFunctionLineEnd,
 			_inExprPosition: base._inExprPosition,
 			_inElseIfBranch: base._inElseIfBranch,
-			_inValueIfBranch: base._inValueIfBranch,
+			_literalReflow: base._literalReflow,
 			_inArrowLambdaBody: base._inArrowLambdaBody,
 			_arrowValueIfBlocked: base._arrowValueIfBlocked,
 			_arrowValueIfElemTrailComment: base._arrowValueIfElemTrailComment,

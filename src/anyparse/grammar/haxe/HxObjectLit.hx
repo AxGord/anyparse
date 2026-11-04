@@ -32,7 +32,7 @@ package anyparse.grammar.haxe;
  * trailing-comma-on-break knob (default `false`); `@:fmt(trailingCommaRemovable)` opts the
  * list into `wrapping.trailingComma` — under `remove` a broken literal never ends with a
  * `,`, while a FLAT `{a: 1,}` keeps its source comma. `@:fmt(reflowInExprPosition)` — when
- * `opt._inValueIfBranch` is set (the literal is the immediate value of a value-yielded
+ * `opt._literalReflow` is set (the literal is the immediate value of a value-yielded
  * `if`/`else` branch), the sep-Star's Ignore-mode check drops element `newlineBefore`
  * signals so a source-multiline literal collapses to one line; the flag is cleared on each
  * expression-position descent. `@:fmt(arrowBodyOpenPadSuppress)` — when

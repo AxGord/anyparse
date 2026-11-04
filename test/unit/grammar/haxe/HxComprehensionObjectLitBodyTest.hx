@@ -115,6 +115,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** Both knobs: a literal that fits collapses, a wide one glues. */
+	@:pin('control') @:killer('M-PAREN-FRAME-ANY-BODY')
 	public function testBothKnobs(): Void {
 		Assert.equals(wrap('var x = [ for (i in xs) {a: i, b: i} ];'), write(allmanSource(), CFG_BOTH));
 		final wide: String = wrap('var x = [\n\t\t\tfor (i in xs) {\n\t\t\t\t$NAME_A: i,\n\t\t\t\t$NAME_B: i\n\t\t\t}\n\t\t];');
@@ -180,6 +181,111 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 		}
 	}
 
+	/** A parenthesised literal body takes the frame a bare one takes: its source lines count for nothing. */
+	@:pin('control') @:killer('M-PAREN-FRAME-OFF')
+	public function testParenthesisedLiteralCollapses(): Void {
+		final expected: String = wrap('var x = [ for (i in xs) ({a: i, b: i}) ];');
+		assertLandsOn(expected, multiLine('({', '})'), CFG_COMPREHENSION);
+	}
+
+	/** A parenthesised literal too wide to collapse takes one shape whichever way the source wrote it. */
+	public function testParenthesisedWideLiteralIgnoresItsSourceLines(): Void {
+		final expected: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({\n\t\t\t\t\t$NAME_A: i,\n\t\t\t\t\t$NAME_B: i\n\t\t\t\t})\n\t\t];'
+		);
+		assertLandsOn(expected, wrap('var x = [for (i in xs) ({$NAME_A: i, $NAME_B: i})];'), CFG_COMPREHENSION);
+	}
+
+	/** The frame crosses a nested paren too, so a redundant pair changes nothing. */
+	@:pin('control') @:killer('M-PAREN-FRAME-STOPS-AT-NESTED')
+	public function testDoubleParenthesisedLiteralCollapses(): Void {
+		final expected: String = wrap('var x = [ for (i in xs) (({a: i, b: i})) ];');
+		assertLandsOn(expected, multiLine('(({', '}))'), CFG_COMPREHENSION);
+	}
+
+	/**
+	 * A paren around anything but a literal consumes the frame: a literal deeper in that expression is not the body.
+	 */
+	public function testALiteralInAParenthesisedCallKeepsItsLines(): Void {
+		final source: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t(foo(({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t})))\n\t\t];'
+		);
+		Assert.equals(source, write(source, CFG_COMPREHENSION));
+	}
+
+	/** The literal must be the paren's whole content: as a receiver in it, the literal is not the body. */
+	@:pin('control') @:killer('M-PAREN-FRAME-ANY-INNER')
+	public function testAReceiverLiteralInAParenKeepsItsLines(): Void {
+		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}.a)\n\t\t];');
+		Assert.equals(source, write(source, CFG_COMPREHENSION));
+	}
+
+	/**
+	 * Only a literal that IS the body enters the frame: a leftmost operand inherits its parent's opt.
+	 */
+	@:pin('control') @:killer('M-REFLOW-ANY-CTOR')
+	public function testAReceiverLiteralBodyKeepsItsLines(): Void {
+		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t{\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}.a\n\t\t];');
+		Assert.equals(source, write(source, CFG_COMPREHENSION));
+	}
+
+	/**
+	 * The frame crosses a paren only from the comprehension body: a parenthesised value-if branch inside it keeps its lines.
+	 */
+	@:pin('control') @:killer('M-PAREN-FRAME-ANY-STATE')
+	public function testAParenthesisedValueIfBranchKeepsItsLines(): Void {
+		final source: String = wrap('var x = [\n\t\t\tfor (i in xs) if (c) ({\n\t\t\t\ta: i,\n\t\t\t\tb: i\n\t\t\t}) else 2\n\t\t];');
+		Assert.equals(source, write(source, CFG_COMPREHENSION));
+	}
+
+	/** Without `comprehensionFor: fitLine` a parenthesised literal keeps the lines the source gave it. */
+	@:pin('control') @:killer('M-PAREN-FRAME-ANY-POLICY')
+	public function testDefaultConfigKeepsAParenthesisedLiteralsLines(): Void {
+		final source: String = wrap('var x = [\n\t\t\tfor (i in xs) ({\n\t\t\t\ta: i,\n\t\t\t\tb: i\n\t\t\t})\n\t\t];');
+		Assert.equals(source, write(source, CFG_DEFAULT));
+	}
+
+	/** A comment inside a parenthesised literal keeps its lines, as in a bare one. */
+	public function testACommentInAParenthesisedLiteralKeepsItsLines(): Void {
+		final source: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({\n\t\t\t\t\t// note\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t})\n\t\t];'
+		);
+		Assert.equals(source, write(source, CFG_COMPREHENSION));
+	}
+
+	/** The frame crosses only a paren directly around the next one: a paren below a receiver is not the body. */
+	@:pin('control') @:killer('M-PAREN-FRAME-ANY-WRAPPED')
+	public function testAParenthesisedReceiverInAParenKeepsItsLines(): Void {
+		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t(({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}).a)\n\t\t];');
+		Assert.equals(source, write(source, CFG_COMPREHENSION));
+	}
+
+	/** A source newline inside the paren counts for nothing: the literal's width alone decides its lines. */
+	public function testASourceNewlineInsideTheParenCountsForNothing(): Void {
+		assertLandsOn(wrap('var x = [ for (i in xs) ({a: i, b: i}) ];'), multiLine('(\n\t\t\t{', '}\n\t\t)'), CFG_COMPREHENSION);
+		final wide: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({\n\t\t\t\t\t$NAME_A: i,\n\t\t\t\t\t$NAME_B: i\n\t\t\t\t})\n\t\t];'
+		);
+		assertLandsOn(wide, wrap('var x = [for (i in xs) (\n\t\t\t{$NAME_A: i, $NAME_B: i}\n\t\t)];'), CFG_COMPREHENSION);
+		assertLandsOn(
+			wide, wrap('var x = [for (i in xs) (\n\t\t\t{\n\t\t\t\t$NAME_A: i,\n\t\t\t\t$NAME_B: i\n\t\t\t}\n\t\t)];'), CFG_COMPREHENSION
+		);
+	}
+
+	/** A comment beside the literal inside the paren survives, the literal still collapses, and the result is a fixed point. */
+	public function testACommentBesideAParenthesisedLiteralSurvivesTheCollapse(): Void {
+		assertLandsOn(wrap('var x = [ for (i in xs) (/* o */ {a: i, b: i}) ];'), multiLine('(/* o */ {', '})'), CFG_COMPREHENSION);
+		assertLandsOn(wrap('var x = [ for (i in xs) ({a: i, b: i} /* c */) ];'), multiLine('({', '} /* c */)'), CFG_COMPREHENSION);
+		assertLandsOn(
+			wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t( // note\n\t\t\t\t\t{a: i, b: i}\n\t\t\t\t)\n\t\t];'),
+			multiLine('( // note\n\t\t\t{', '})'), CFG_COMPREHENSION
+		);
+		assertLandsOn(
+			wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({a: i, b: i} // note\n\t\t\t\t)\n\t\t];'), multiLine('({', '} // note\n\t\t)'),
+			CFG_COMPREHENSION
+		);
+	}
+
 	private static function write(source: String, config: String): String {
 		return HxWriteFixture.triviaWrite(source, config);
 	}
@@ -220,6 +326,10 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	private static function assertLandsOn(expected: String, source: String, config: String): Void {
 		Assert.equals(expected, write(source, config));
 		Assert.equals(expected, write(expected, config));
+	}
+
+	private static function multiLine(open: String, close: String): String {
+		return wrap('var x = [for (i in xs) $open\n\t\t\ta: i,\n\t\t\tb: i\n\t\t$close];');
 	}
 
 }

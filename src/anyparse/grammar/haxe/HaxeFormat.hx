@@ -10,6 +10,7 @@ import anyparse.format.EmptyCurly;
 import anyparse.format.Encoding;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.LiteralReflow;
 import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
@@ -381,7 +382,7 @@ final class HaxeFormat implements TextFormat {
 		metadataFunctionLineEnd: MetadataLineEndPolicy.None,
 		_inExprPosition: false,
 		_inElseIfBranch: false,
-		_inValueIfBranch: false,
+		_literalReflow: LiteralReflow.Off,
 		_inArrowLambdaBody: false,
 		_arrowValueIfBlocked: false,
 		_arrowValueIfElemTrailComment: false,

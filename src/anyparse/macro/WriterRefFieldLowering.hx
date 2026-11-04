@@ -1997,16 +1997,20 @@ final class WriterRefFieldLowering {
 	}
 
 	/**
-	 * `@:fmt(reflowCtorOnFitLine('<policyKnob>', '<ctor>'))`: under `FitLine` on the named body-policy knob, a body of that
-	 * ctor is written in the value-if-branch frame, the one that drops a literal's source newlines, so its wrap cascade
-	 * decides by width alone. Other placements keep their source-driven shape. Without the meta `e` is unchanged.
+	 * `@:fmt(reflowCtorOnFitLine('<policyKnob>', '<ctor>'[, '<wrapperCtor>']))`: under `FitLine` on the named body-policy knob,
+	 * a body of that ctor is written in the value-if-branch frame, the one that drops a literal's source newlines, so its wrap
+	 * cascade decides by width alone. A body of the wrapper ctor gets `LiteralReflow.ThroughWrap` instead, read by that ctor's
+	 * `@:fmt(reflowFrameThroughWrap)`.
 	 */
 	private static function reflowCtorOnFitLineOpt(child: ShapeNode, fieldAccess: Expr, e: Expr): Expr {
 		final args: Null<Array<String>> = child.fmtReadStringArgs('reflowCtorOnFitLine');
 		if (args == null) return e;
 		final knob: Expr = optFieldAccess(args[0]);
 		final isCtor: Expr = macro Type.enumConstructor($fieldAccess) == $v{args[1]};
-		return macro ($knob == anyparse.format.BodyPolicy.FitLine && $isCtor ? _setValueIfBranch($e, opt) : $e);
+		final framed: Expr = macro ($knob == anyparse.format.BodyPolicy.FitLine && $isCtor ? _setValueIfBranch($e, opt) : $e);
+		if (args.length < 3) return framed; // noqa: magic-number
+		final isWrapper: Expr = macro Type.enumConstructor($fieldAccess) == $v{args[2]};
+		return macro ($knob == anyparse.format.BodyPolicy.FitLine && $isWrapper ? _setReflowThroughWrap($e, opt) : $framed);
 	}
 
 }

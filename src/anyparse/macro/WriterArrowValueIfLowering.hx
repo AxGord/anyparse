@@ -68,7 +68,7 @@ final class WriterArrowValueIfLowering {
 	 *  - a `Group` around the whole node, which turns the soft `Line` before
 	 *    each `else` into the chain's single flat-vs-broken decision.
 	 *
-	 * The Group is gated on `!opt._inValueIfBranch`, which is what
+	 * The Group is gated on `!opt._literalReflow`, which is what
 	 * distinguishes the OUTERMOST chain member from the nested `else if (...)`
 	 * ones: the arrow body's opt has the flag cleared (`_setExprPosition` runs
 	 * on the way in), while every `else`-branch descent sets it via
@@ -132,7 +132,7 @@ final class WriterArrowValueIfLowering {
 			// with the knob ON, so the OFF path is byte-inert.
 			final _aifBlocked: Bool = _anyGate && !_aifReflow && !_vifFit;
 			final _aifDoc: anyparse.core.Doc = $dcExpr;
-			(_aifReflow || _vifFit) && !opt._inValueIfBranch ? _dg(_aifDoc) : _aifDoc;
+			(_aifReflow || _vifFit) && opt._literalReflow != anyparse.format.LiteralReflow.Here ? _dg(_aifDoc) : _aifDoc;
 		};
 	}
 

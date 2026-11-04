@@ -614,6 +614,7 @@ final class WriterKwRefLowering {
 		final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
 		var optExpr: Expr = macro opt;
 		if (propagateExpr) optExpr = macro _setExprPosition($optExpr, opt);
+		optExpr = reflowFrameThroughWrapOpt(branch, macro $i{argNames[0]}, optExpr);
 		if (propagateEnumAbstract) optExpr = macro _setEnumAbstract($optExpr, opt);
 		// `@:fmt(propagateNestedType)` on `HxType.Parens` / `ConditionalType` marks the inner type as nested.
 		if (branch.fmtHasFlag('propagateNestedType')) optExpr = macro _setNestedType($optExpr, opt);
@@ -1128,6 +1129,21 @@ final class WriterKwRefLowering {
 			return whitespacePolicyLead(branch, leadText, spaceKnob(branch, 'lead'), branch.fmtHasFlag('spaceBeforeLead'));
 		final leadEmit: String = leadIsWord || branch.fmtHasFlag('spaceAfterLead') ? '$leadText ' : leadText;
 		return macro _dt($v{leadEmit});
+	}
+
+	/**
+	 * `@:fmt(reflowFrameThroughWrap('<literalCtor>', '<wrapperCtor>'))` on a wrapping ctor: `LiteralReflow.ThroughWrap` on the incoming opt
+	 * becomes `Here` for the literal directly inside and stays on only through a nested wrapper. `optExpr` must already have run the
+	 * ctor's `propagateExprPosition`, whose clear is what ends the state for anything else.
+	 */
+	private static function reflowFrameThroughWrapOpt(branch: ShapeNode, inner: Expr, optExpr: Expr): Expr {
+		final args: Null<Array<String>> = branch.fmtReadStringArgs('reflowFrameThroughWrap');
+		if (args == null) return optExpr;
+		final isLiteral: Expr = macro Type.enumConstructor($inner) == $v{args[0]};
+		final isWrapper: Expr = macro Type.enumConstructor($inner) == $v{args[1]};
+		final through: Expr = macro ($isWrapper ? _setReflowThroughWrap($optExpr, opt) : $optExpr);
+		final framed: Expr = macro ($isLiteral ? _setValueIfBranch($optExpr, opt) : $through);
+		return macro (opt._literalReflow == anyparse.format.LiteralReflow.ThroughWrap ? $framed : $optExpr);
 	}
 
 }

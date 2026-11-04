@@ -44,7 +44,7 @@ package anyparse.grammar.haxe;
  * its own line keeps `else` on the next one. `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
  * 'objectLiteralLeftCurly'))` on `thenBranch` drops the Next-layout's outer Nest for a multi-line object
  * literal under `indentObjectLiteral=false`; `elseBranch` does not carry it because its optional-kw path is
- * excluded from the gate. `@:fmt(propagateValueIfBranch)` on both branches sets `opt._inValueIfBranch` on the
+ * excluded from the gate. `@:fmt(propagateValueIfBranch)` on both branches sets `opt._literalReflow` on the
  * direct value write, read by `HxObjectLit`'s `reflowInExprPosition`.
  *
  * `@:fmt(arrowValueIfReflowSite)` on both branches, paired with the TYPE-level
@@ -52,7 +52,7 @@ package anyparse.grammar.haxe;
  * the `expressionIf` cascade cannot canonicalise: a value-if chain in an arrow-lambda body. The type-level
  * meta wraps the node in a `Group`, the field flags make both branch policies read `Same` and the pre-`else`
  * gap a soft `Line`, so the chain has ONE break axis decided for every arm at once; only the OUTERMOST chain
- * member opens the group (`!opt._inValueIfBranch`). The reflow is REFUSED for the chain as a whole when any
+ * member opens the group (`!opt._literalReflow`). The reflow is REFUSED for the chain as a whole when any
  * member carries a captured comment, in both directions (an `else`-spine walk sees comments BELOW,
  * `opt._arrowValueIfBlocked` stamps a refusal for members ABOVE). `_inArrowLambdaBody` also reaches a
  * `cast(<if>, T)` operand, a prefix keyword and an enclosing value-`if`'s CONDITION, which re-flow under the
