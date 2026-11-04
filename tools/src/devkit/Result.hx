@@ -58,4 +58,15 @@ final class Result {
 		return error ?? lines[0] ?? 'exited $status';
 	}
 
+	/** This result with its standard output dropped: a compile run with `-v` chatters there, its errors are on the other stream. */
+	public function errorsOnly(): Result {
+		return new Result(command, {
+			status: status,
+			out: '',
+			err: err,
+			failure: failure,
+			overflowed: false
+		});
+	}
+
 }

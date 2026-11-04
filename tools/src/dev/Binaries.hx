@@ -1,10 +1,14 @@
 package dev;
 
+import anyparse.check.LintConfig;
+import anyparse.check.oracle.OracleCache;
+import anyparse.check.oracle.OracleCoverage;
 import devkit.Cmd.cmd;
 import devkit.Lease;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary.Outcome;
+import haxe.io.Path;
 import sys.io.File;
 
 using Lambda;
@@ -26,12 +30,57 @@ final class Binaries {
 	 * of a file no binary reaches —, each compile on a thread `mode` leases for it alone.
 	 */
 	public static function compileWith(tree: String, log: String, typechecks: Array<String>, mode: LeaseMode): Outcome {
-		final builds: Array<Array<String>> = [for (hxml in HXMLS) [hxml]].concat([for (hxml in typechecks) [hxml, '--no-output']]);
-		final runs: Array<Result> = Pool.of(builds.length)
-			.map(builds, words -> Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${words.join(' ')}'));
-		File.saveContent(log, [for (run in runs) run.out + run.err].join('\n'));
-		final failed: Null<Result> = runs.find(run -> !run.ok);
+		return compileBuilds(tree, log, [for (hxml in HXMLS) [hxml]].concat([for (hxml in typechecks) [hxml, '--no-output']]), mode);
+	}
+
+	/**
+	 * Run each of `builds` (a haxe command line) in `tree`, every transcript written to `log`. A build the project declares as a
+	 * plain `compilerOracle` configuration runs with `-v`, and its green is kept as that configuration's verdict
+	 * (`OracleCache.storeIfUnchanged`), so a lint or a battery over the same content does not compile it again.
+	 */
+	public static function compileBuilds(tree: String, log: String, builds: Array<Array<String>>, mode: LeaseMode): Outcome {
+		final declared: Array<OracleConfig> = plainOracles(tree);
+		final oracles: Array<Null<OracleConfig>> = [
+			for (words in builds) declared.find(oracle -> Path.normalize(oracle.hxml) == Path.normalize(Path.join([tree, words[0]])))
+		];
+		final read: Map<String, String> = [];
+		final fingerprints: Array<Null<String>> = [
+			for (oracle in oracles) oracle == null ? null : OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, read)
+		];
+		final runs: Array<Result> = Pool.of(builds.length).map([for (i in 0...builds.length) i], i -> {
+			final words: Array<String> = oracles[i] == null ? builds[i] : ['-v'].concat(builds[i]);
+			return Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${builds[i].join(' ')}');
+		});
+		// a -v compile prints a line per parsed file and per macro on stdout: it stays out of the log and of the error a failure quotes
+		final quiet: Array<Result> = [for (i => run in runs) oracles[i] == null ? run : run.errorsOnly()];
+		File.saveContent(log, [for (run in quiet) run.out + run.err].join('\n'));
+		final after: Map<String, String> = [];
+		for (i => oracle in oracles) {
+			final fingerprint: Null<String> = fingerprints[i];
+			if (oracle != null && fingerprint != null && runs[i].ok)
+				OracleCache.storeIfUnchanged(
+					oracle.hxml, oracle.dir, fingerprint, Confirmed, oracle.defines, after, OracleCoverage.parsedPaths(runs[i].out)
+				);
+		}
+		final failed: Null<Result> = quiet.find(run -> !run.ok);
 		return failed == null ? Passed : Failed('${failed.command}: ${failed.firstError()}');
+	}
+
+	/**
+	 * The `compilerOracle` builds `tree`'s project declares whose verdict is that of `haxe <hxml> --no-output` alone: no
+	 * defines, no module list, no generating command — anything else is a different compile than the one a build answers.
+	 */
+	private static function plainOracles(tree: String): Array<OracleConfig> {
+		return [
+			for (oracle in LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles())
+				if (
+					oracle.unavailable == null
+					&& oracle.defines.length == 0
+					&& (oracle.modules ?? []).length == 0
+					&& oracle.generate == null
+				)
+					oracle
+		];
 	}
 
 }
