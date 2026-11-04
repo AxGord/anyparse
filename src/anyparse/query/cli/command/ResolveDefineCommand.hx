@@ -257,8 +257,8 @@ final class ResolveDefineCommand implements CliCommand {
 						if (isChanged) try {
 							CliIo.writeFile(path, text);
 							changed++;
-						} catch (failure: WriteFailure) {
-							CliIo.stderr('apq resolve-define: ${failure.message}\n');
+						} catch (exception: WriteFailure) {
+							CliIo.stderr('apq resolve-define: ${exception.message}\n');
 							failed++;
 						}
 					} else if (listMode) {

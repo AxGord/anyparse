@@ -240,9 +240,7 @@ final class MacroGate {
 	private function blocksCall(call: CallRef): Bool {
 		if (whitelisted(call.name)) return false;
 		final declarations: Null<Array<String>> = _macros.macroPathsOf(call.name);
-		if (declarations != null) {
-			return declarations.exists(path -> !whitelisted(path));
-		}
+		if (declarations != null) return declarations.exists(path -> !whitelisted(path));
 		final receiver: Null<String> = call.receiver;
 		if (receiver != null && (_macros.declaresType(receiver) || whitelisted('$receiver.${call.name}'))) return false;
 		final binding: Null<String> = _macros.unresolvedBinding(_file, receiver ?? call.name, receiver != null);

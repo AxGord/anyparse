@@ -317,12 +317,10 @@ final class DataDelta {
 
 	/** Pairs each unpaired new element with the first untaken old one under the same key, marking both. */
 	private static function pairEqual(oldKeys: Array<String>, newKeys: Array<String>, partner: Array<Int>, taken: Array<Bool>): Void {
-		for (i => newKey in newKeys) if (partner[i] < 0) {
-			for (j => oldKey in oldKeys) if (!taken[j] && oldKey == newKey) {
-				partner[i] = j;
-				taken[j] = true;
-				break;
-			}
+		for (i => newKey in newKeys) if (partner[i] < 0) for (j => oldKey in oldKeys) if (!taken[j] && oldKey == newKey) {
+			partner[i] = j;
+			taken[j] = true;
+			break;
 		}
 	}
 

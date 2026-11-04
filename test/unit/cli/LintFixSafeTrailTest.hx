@@ -41,8 +41,8 @@ class LintFixSafeTrailTest extends Test {
 					case other:
 						why = 'expected WholeWave, got $other';
 				}
-			catch (failure: WriteFailure)
-				why = 'the write failure escaped the isolation: ${failure.message}';
+			catch (exception: WriteFailure)
+				why = 'the write failure escaped the isolation: ${exception.message}';
 			Assert.stringContains('a probe could not run (its candidate could not be put on disk: cannot write $root/blocker/', why);
 		});
 		#else
@@ -94,10 +94,10 @@ class LintFixSafeTrailTest extends Test {
 						kept: null
 					}
 				], [file], files, [file => 'original'], [file => 'fixed'], [], _ -> {})
-			catch (failure: WriteFailure)
-				message = 'WriteFailure: ${failure.message}'
-			catch (other: Exception)
-				message = 'other: ${other.message}';
+			catch (exception: WriteFailure)
+				message = 'WriteFailure: ${exception.message}'
+			catch (exception: Exception)
+				message = 'other: ${exception.message}';
 			Assert.stringContains('WriteFailure: cannot write $file: ', message);
 			Assert.stringContains('the disk holds other bytes', message);
 			Assert.equals('candidate', File.getContent(file), 'the check reads the disk, it does not repair it');

@@ -143,12 +143,11 @@ final class TokenAudit {
 		lines.push('rewrites cost over a cache read: ${usd(rewrites.extraCost)}');
 		lines.push('rewrite gap: median ${Math.round(rewrites.gapMedianSeconds)}s, max ${Math.round(rewrites.gapMaxSeconds)}s');
 		lines.push('rewrite gap buckets: <=5m ${rewrites.within5m}, <=1h ${rewrites.to1h}, over 1h ${rewrites.over1h}');
-		if (rewrites.worst.length > 0) {
+		if (rewrites.worst.length > 0)
 			lines.push(Table.render(
 				['rewrite', 'slice', 'context', 'gap s', 'extra usd'],
 				[for (r in rewrites.worst.slice(0, top)) rewriteCells(r)]
 			));
-		}
 		lines.push('');
 		lines.push('write payloads ${thousands(bypass.writePayloadTok)}, leading blanks ${thousands(bypass.indentTok)}');
 		lines.push('executed: shell reads of repo .hx ${bypass.shellHxReads}; writes outside hxq ${bypass.hxWrites}');
@@ -197,10 +196,9 @@ final class TokenAudit {
 	 * agents generated, summed over their turns: a count that does not grow with the context each round re-reads.
 	 */
 	public static function sliceLine(report: AuditReport, slice: String): Null<String> {
-		for (row in report.slices) if (row.slice == slice) {
+		for (row in report.slices) if (row.slice == slice)
 			return 'slice ${row.slice}: agents ${row.agents}; turns ${row.turns}; output ${row.output} tok; cost ${usd(row.cost)}; '
 				+ 'landed ${row.landed ? 'yes' : 'no'}';
-		}
 		return null;
 	}
 

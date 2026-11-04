@@ -96,7 +96,7 @@ final class WriterOptFanout {
 	 * internal flag skip the helper.
 	 */
 	private static function optionsHasField(optionsTypePath: String, fieldName: String): Bool {
-		final t: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e: haxe.Exception) null;
+		final t: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (exception: haxe.Exception) null;
 		return t != null && anonHasField(t, fieldName);
 	}
 
@@ -192,7 +192,7 @@ final class WriterOptFanout {
 	 */
 	private static function copyOptField(optionsTypePath: String, optionsCT: ComplexType): Field {
 		final pos: Position = Context.currentPos();
-		final optionsType: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e: haxe.Exception) null;
+		final optionsType: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (exception: haxe.Exception) null;
 		final isRecordClass: Bool = optionsType != null && optionsType.match(TInst(_, _));
 		final fields: Array<haxe.macro.Type.ClassField> = optionsType == null || isRecordClass ? [] : optionsStructFields(optionsType);
 		final fallback: Bool = !isRecordClass && fields.length == 0;
@@ -1394,25 +1394,17 @@ final class WriterOptFanout {
 		// ω-compare-operand-linewrap: gate `_setInTernaryCond` on the field it
 		// touches (its own block, matching the one-field-per-block precedent) so
 		// it is emitted iff the grammar declares `_inTernaryCond`.
-		if (optionsHasField(optionsTypePath, '_inTernaryCond')) {
-			fields.push(setInTernaryCondField(optionsCT));
-		}
+		if (optionsHasField(optionsTypePath, '_inTernaryCond')) fields.push(setInTernaryCondField(optionsCT));
 		// omega-call-grouprestprobe-subposition: gate `_setSuppressCallRestProbe`
 		// on the field it touches (one-field-per-block precedent) so it is emitted
 		// iff the grammar declares `_suppressCallRestProbe`.
-		if (optionsHasField(optionsTypePath, '_suppressCallRestProbe')) {
-			fields.push(setSuppressCallRestProbeField(optionsCT));
-		}
+		if (optionsHasField(optionsTypePath, '_suppressCallRestProbe')) fields.push(setSuppressCallRestProbeField(optionsCT));
 		// ω-complex-item-count: same one-field-per-block gate for
 		// `_setSuppressComplexItems`.
-		if (optionsHasField(optionsTypePath, '_suppressComplexItems')) {
-			fields.push(setSuppressComplexItemsField(optionsCT));
-		}
+		if (optionsHasField(optionsTypePath, '_suppressComplexItems')) fields.push(setSuppressComplexItemsField(optionsCT));
 		// ω-pattern-rest-probe: same one-field-per-block gate for
 		// `_setSuppressPatternRestProbe`.
-		if (optionsHasField(optionsTypePath, '_suppressPatternRestProbe')) {
-			fields.push(setSuppressPatternRestProbeField(optionsCT));
-		}
+		if (optionsHasField(optionsTypePath, '_suppressPatternRestProbe')) fields.push(setSuppressPatternRestProbeField(optionsCT));
 		// ω-keep-kw-newline (increment 1b): opt-fanout helper pair for the
 		// VarStmt-family `@:fmt(captureKwNewline)` ctors. `_setVarKwNewline`
 		// records the source `var`→head newline so the `HxVarDecl` multiVar

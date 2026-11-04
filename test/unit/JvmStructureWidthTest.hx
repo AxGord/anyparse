@@ -50,8 +50,8 @@ final class JvmStructureWidthTest extends Test {
 			try {
 				trees[path] = plugin.parseFile(source);
 				sources[path] = source;
-			} catch (e: haxe.Exception) {
-				unread.push('$path: ${e.message}');
+			} catch (exception: haxe.Exception) {
+				unread.push('$path: ${exception.message}');
 			}
 		}
 		final named: Map<String, Int> = [];

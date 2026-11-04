@@ -300,7 +300,11 @@
 		"import-order": true,
 		"join-override-chain": true,
 		"join-string-append": true,
+		"map-as-set": true,
 		"misplaced-type-doc": true,
+		"naming": {
+			"catchVarName": "exception"
+		},
 		"no-underscore-prefix": true,
 		"orphan-accessor": true,
 		"oversized-type": {
@@ -321,6 +325,7 @@
 				"HxModuleWriteOptions <= 300 members: a record of one writer's knobs with no behaviour of its own, so its size is the option count; a split would turn every generated read into a chain and every clone into several."
 			]
 		},
+		"prefer-access-meta": true,
 		"prefer-count": true,
 		"prefer-doc-comment": true,
 		"prefer-exists": true,
@@ -333,6 +338,7 @@
 		"prefer-typed-throw": true,
 		"prefer-value-loop": true,
 		"redundant-ascription": true,
+		"redundant-braces": true,
 		"redundant-cast-type": true,
 		"redundant-isvar": true,
 		"redundant-lambda-wrapper": true,

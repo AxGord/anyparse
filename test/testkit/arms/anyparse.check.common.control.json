@@ -285,16 +285,16 @@
 			"name": "M-INVERT-VALUE-NO-DESCEND",
 			"type": "anyparse.check.common.control.InvertNegatedIfElse",
 			"method": "walk",
-			"find": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));\n",
-			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));\n\t\t\t\t\t\treturn;\n",
+			"find": "valueMessage(node, swap, seams) + COMMENT_BLOCKS));",
+			"replace": "valueMessage(node, swap, seams) + COMMENT_BLOCKS)); return;",
 			"note": "a report-only value form stops the walk, so an invertible conditional inside it is never fixed"
 		},
 		{
 			"name": "M-INVERT-VALUE-DESCEND-FIXED",
 			"type": "anyparse.check.common.control.InvertNegatedIfElse",
 			"method": "walk",
-			"find": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams)));\n\t\t\t\t\t\treturn;\n",
-			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams)));\n",
+			"find": "valueMessage(node, swap, seams)));\n\t\t\t\t\treturn;",
+			"replace": "valueMessage(node, swap, seams)));",
 			"note": "a fixable value form does not stop the walk, so a nested one is rewritten in the same pass (overlapping edits)"
 		},
 		{

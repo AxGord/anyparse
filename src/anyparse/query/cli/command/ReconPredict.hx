@@ -471,27 +471,25 @@ final class ReconPredict {
 				newCol: 0,
 				message: 'source already parses (no relaxation needed)'
 			};
-		} catch (pe: ParseError) {
-			final pos: Position = pe.span.lineCol(source);
+		} catch (exception: ParseError) {
+			final pos: Position = exception.span.lineCol(source);
 			origLine = pos.line;
 			origCol = pos.col;
-			final expected: Null<String> = pe.expected;
-			if (expected == null) {
-				return {
-					kind: NoTarget,
-					original: source,
-					patched: source,
-					injected: '',
-					origLine: origLine,
-					origCol: origCol,
-					newLine: 0,
-					newCol: 0,
-					message: pe.message
-				};
-			}
+			final expected: Null<String> = exception.expected;
+			if (expected == null) return {
+				kind: NoTarget,
+				original: source,
+				patched: source,
+				injected: '',
+				origLine: origLine,
+				origCol: origCol,
+				newLine: 0,
+				newCol: 0,
+				message: exception.message
+			};
 			injected = stripExpectedHint((expected: String));
-			insertAt = pe.span.from;
-		} catch (e: Exception) {
+			insertAt = exception.span.from;
+		} catch (exception: Exception) {
 			return {
 				kind: NoTarget,
 				original: source,
@@ -501,22 +499,20 @@ final class ReconPredict {
 				origCol: 0,
 				newLine: 0,
 				newCol: 0,
-				message: e.message
+				message: exception.message
 			};
 		}
-		if (injected == null || injected.length == 0 || insertAt < 0) {
-			return {
-				kind: NoTarget,
-				original: source,
-				patched: source,
-				injected: '',
-				origLine: origLine,
-				origCol: origCol,
-				newLine: 0,
-				newCol: 0,
-				message: 'expected hint is empty after quote-strip'
-			};
-		}
+		if (injected == null || injected.length == 0 || insertAt < 0) return {
+			kind: NoTarget,
+			original: source,
+			patched: source,
+			injected: '',
+			origLine: origLine,
+			origCol: origCol,
+			newLine: 0,
+			newCol: 0,
+			message: 'expected hint is empty after quote-strip'
+		};
 		final injectedFinal: String = injected;
 		final patched: String = source.substr(0, insertAt) + injectedFinal + source.substr(insertAt);
 		try {
@@ -532,8 +528,8 @@ final class ReconPredict {
 				newCol: 0,
 				message: ''
 			};
-		} catch (pe2: ParseError) {
-			final pos2: Position = pe2.span.lineCol(patched);
+		} catch (exception: ParseError) {
+			final pos2: Position = exception.span.lineCol(patched);
 			return {
 				kind: StillFail,
 				original: source,
@@ -543,9 +539,9 @@ final class ReconPredict {
 				origCol: origCol,
 				newLine: pos2.line,
 				newCol: pos2.col,
-				message: pe2.message
+				message: exception.message
 			};
-		} catch (e: Exception) {
+		} catch (exception: Exception) {
 			return {
 				kind: StillFail,
 				original: source,
@@ -555,7 +551,7 @@ final class ReconPredict {
 				origCol: origCol,
 				newLine: 0,
 				newCol: 0,
-				message: e.message
+				message: exception.message
 			};
 		}
 	}
@@ -645,8 +641,8 @@ final class ReconPredict {
 	public static function runReconCandidates(plugin: GrammarPlugin, root: String, pattern: String): Int {
 		final re: EReg = try {
 			new EReg(pattern, 'g');
-		} catch (e: Exception) {
-			CliIo.stderr('apq recon: --candidates: pattern "$pattern" is not a valid EReg: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq recon: --candidates: pattern "$pattern" is not a valid EReg: ${exception.message}\n');
 			return EXIT_USAGE;
 		}
 		final walk: ReconWalkResult = ReconCommand.collectReconSkipRecords(plugin, root);
@@ -1006,8 +1002,8 @@ final class ReconPredict {
 		var origCol: Int = 0;
 		try {
 			plugin.reconParse(original);
-		} catch (pe: ParseError) {
-			final pos: Position = pe.span.lineCol(original);
+		} catch (exception: ParseError) {
+			final pos: Position = exception.span.lineCol(original);
 			origLine = pos.line;
 			origCol = pos.col;
 		} catch (_: Exception) {
@@ -1027,26 +1023,25 @@ final class ReconPredict {
 			stripped = regexMode ? regexes[idx].replace(stripped, replacements[idx]) : stripped.replace(patterns[idx], replacements[idx]);
 		}
 		var exitCode: Int = EXIT_OK;
-		if (fileHits == 0) {
+		if (fileHits == 0)
 			CliIo.sysPrint('PREDICT NO MATCH  $path\n');
-		} else {
+		else
 			try {
 				if (!plugin.reconParse(stripped)) {
 					CliIo.stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 					return EXIT_RUNTIME;
 				}
 				CliIo.sysPrint('PREDICT UNBLOCK   $path\n');
-			} catch (pe: ParseError) {
-				final pos: Position = pe.span.lineCol(stripped);
+			} catch (exception: ParseError) {
+				final pos: Position = exception.span.lineCol(stripped);
 				final movedHint: String = ReconCommand.movedLocusHint(origLine, origCol, pos.line, pos.col);
-				CliIo.sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				CliIo.sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${exception.message}\n');
 				if (showSource) ReconCommand.printReconSourceWindow(stripped, pos.line);
 				exitCode = EXIT_RUNTIME;
-			} catch (e: Exception) {
-				CliIo.sysPrint('PREDICT STILL FAIL $path :: <no locus> ${e.message}\n');
+			} catch (exception: Exception) {
+				CliIo.sysPrint('PREDICT STILL FAIL $path :: <no locus> ${exception.message}\n');
 				exitCode = EXIT_RUNTIME;
 			}
-		}
 		// Per-pattern totals — same typo guard contract as sweep mode.
 		for (idx => pat in patterns) {
 			final total: Int = patternHits[idx];
@@ -1113,7 +1108,7 @@ final class ReconPredict {
 				}
 				CliIo.sysPrint('PREDICT UNBLOCK   ${r.path}\n');
 				unblockCount++;
-			} catch (pe: ParseError) {
+			} catch (exception: ParseError) {
 				// New locus after substitution. When it differs from the
 				// pre-strip locus the strip likely moved the problem (e.g.
 				// pattern matched a decl AND a use position), which is the
@@ -1124,13 +1119,13 @@ final class ReconPredict {
 				// src slice around the new locus — replaces the manual
 				// Read of the stripped source when the moved-locus hint
 				// alone is ambiguous.
-				final pos: Position = pe.span.lineCol(stripped);
+				final pos: Position = exception.span.lineCol(stripped);
 				final movedHint: String = ReconCommand.movedLocusHint(r.line, r.col, pos.line, pos.col);
-				CliIo.sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				CliIo.sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${exception.message}\n');
 				if (showSource) ReconCommand.printReconSourceWindow(stripped, pos.line);
 				stillFailCount++;
-			} catch (e: Exception) {
-				CliIo.sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${e.message}\n');
+			} catch (exception: Exception) {
+				CliIo.sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${exception.message}\n');
 				stillFailCount++;
 			}
 		}

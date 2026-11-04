@@ -257,11 +257,10 @@ final class Metavar {
 		final newType: Null<QueryNode> = slot == null ? null : reclassify(slot, identKind);
 		if (n != null) {
 			final bare: Null<String> = decodePlaceholderName(n);
-			if (bare != null) {
+			if (bare != null)
 				return tree.kind == identKind && newChildren.length == 0
 					? new QueryNode(KIND, bare, [], tree.span)
 					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span, newType, tree.typeArgCount);
-			}
 		}
 		return new QueryNode(tree.kind, n, newChildren, tree.span, newType, tree.typeArgCount);
 	}

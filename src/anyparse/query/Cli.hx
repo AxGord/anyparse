@@ -237,22 +237,22 @@ final class Cli {
 	public static function run(args: Array<String>, chooseLanguage: Bool = false): Int {
 		try {
 			return dispatch(args, chooseLanguage);
-		} catch (failure: WriteFailure) {
+		} catch (exception: WriteFailure) {
 			// Named with the subcommand, like every other line the CLI prints: a bare `apq:` costs
 			// a script the identity of the op that failed, and `args[0]` is the op by construction
 			// (the empty / `--help` argv returned above).
-			CliIo.stderr('apq ${args[0]}: ${failure.message}\n');
+			CliIo.stderr('apq ${args[0]}: ${exception.message}\n');
 			return EXIT_RUNTIME;
-		} catch (failure: ConfigConflict) {
+		} catch (exception: ConfigConflict) {
 			// The project's own config files disagree: a fact about the tree, not a bug.
-			CliIo.stderr('apq ${args[0]}: ${failure.message}\n');
+			CliIo.stderr('apq ${args[0]}: ${exception.message}\n');
 			return EXIT_RUNTIME;
-		} catch (failure: UsageFailure) {
+		} catch (exception: UsageFailure) {
 			// A bad flag (missing value, unparseable `--limit`, unknown `--lang`) is a fact about
 			// the argv, not a bug — same shape as the WriteFailure catch above, EXIT_USAGE instead
 			// of EXIT_RUNTIME. Everything else (a plain String / Dynamic throw, a real exception)
 			// still reaches `main` as a raw stack — what an internal bug wants.
-			CliIo.stderr('apq ${args[0]}: ${failure.message}\n');
+			CliIo.stderr('apq ${args[0]}: ${exception.message}\n');
 			return EXIT_USAGE;
 		}
 	}

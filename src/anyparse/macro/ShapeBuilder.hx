@@ -214,12 +214,10 @@ class ShapeBuilder {
 		// enforces bidirectional agreement.
 		final hasOptMeta: Bool = meta != null && meta.exists(e -> e.name == ':optional');
 		final hasOptShape: Bool = child.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
-		if (hasOptShape && !hasOptMeta) {
+		if (hasOptShape && !hasOptMeta)
 			Context.fatalError('ShapeBuilder: field "$fieldName" has type Null<T> but is missing @:optional meta', Context.currentPos());
-		}
-		if (hasOptMeta && !hasOptShape) {
+		if (hasOptMeta && !hasOptShape)
 			Context.fatalError('ShapeBuilder: field "$fieldName" has @:optional but type is not Null<T>', Context.currentPos());
-		}
 		return child;
 	}
 

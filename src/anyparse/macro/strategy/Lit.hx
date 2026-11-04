@@ -132,9 +132,7 @@ class Lit implements Strategy {
 	}
 
 	private static function annotateWrap(node: ShapeNode, entry: MetadataEntry): Void {
-		if (entry.params.length != 2) {
-			Context.fatalError('@:wrap expects exactly two string arguments', entry.pos);
-		}
+		if (entry.params.length != 2) Context.fatalError('@:wrap expects exactly two string arguments', entry.pos);
 		node.annotations[AnnotationKeys.LIT_LEAD_TEXT] = stringOrFail(entry.params[0], ':wrap');
 		node.annotations[AnnotationKeys.LIT_TRAIL_TEXT] = stringOrFail(entry.params[1], ':wrap');
 	}

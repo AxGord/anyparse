@@ -42,8 +42,8 @@ final class ArmRegistryTest extends Test {
 			final broken: Null<String> = try {
 				ArmRegistry.verify(dir.path);
 				null;
-			} catch (refusal: ArmRegistryError) {
-				refusal.message;
+			} catch (exception: ArmRegistryError) {
+				exception.message;
 			};
 			Assert.isTrue((broken ?? '').startsWith('a.json: '), broken);
 			File.saveContent(dir.file('a.json'), file([arm('A', '1')]));
@@ -51,8 +51,8 @@ final class ArmRegistryTest extends Test {
 			final twice: Null<String> = try {
 				ArmRegistry.verify(dir.path);
 				null;
-			} catch (refusal: ArmRegistryError) {
-				refusal.message;
+			} catch (exception: ArmRegistryError) {
+				exception.message;
 			};
 			Assert.stringContains('a.json and b.json', twice ?? '');
 		});

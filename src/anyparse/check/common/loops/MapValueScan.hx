@@ -303,9 +303,7 @@ final class MapValueScan {
 	 */
 	private static function provenMapExpr(expr: QueryNode, seams: ValueSeams, claim: MapClaim): Bool {
 		final node: QueryNode = BoolExprShape.unwrapParens(expr, seams.parenKind);
-		if (node.kind == seams.newExprKind) {
-			return node.children.foreach(c -> seams.typeAnnotationKinds.contains(c.kind));
-		}
+		if (node.kind == seams.newExprKind) return node.children.foreach(c -> seams.typeAnnotationKinds.contains(c.kind));
 		if (node.kind != seams.arrayLiteralKind) return false;
 		final entryKind: Null<String> = seams.mapLiteralEntryKind;
 		for (c in node.children) {

@@ -78,12 +78,10 @@ final class CommentRewrite {
 		if (unparsed != null) return Err(unparsed);
 
 		var ereg: Null<EReg> = null;
-		if (regex) {
-			try
-				ereg = new EReg(find, 'g')
-			catch (exception: Exception)
-				return Err('invalid regex: ${exception.message}');
-		}
+		if (regex) try
+			ereg = new EReg(find, 'g')
+		catch (exception: Exception)
+			return Err('invalid regex: ${exception.message}');
 		final compiled: Null<EReg> = ereg;
 		// The reflow reads the same two numbers the width gate does, and `--allow-wide` is the caller
 		// saying they own this block's layout — then neither runs.

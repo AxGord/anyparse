@@ -152,9 +152,7 @@ final class TokenTranscript {
 	/** `command` without the `cd`, `export`, `VAR=value` and `rtk` prefixes that precede the program it runs. */
 	public static function normalize(command: String): String {
 		var line: String = command.trim();
-		for (_ in 0...PREFIX_ROUNDS) {
-			line = ENV.replace(RTK.replace(LEADING.replace(line, ''), ''), '');
-		}
+		for (_ in 0...PREFIX_ROUNDS) line = ENV.replace(RTK.replace(LEADING.replace(line, ''), ''), '');
 		return line;
 	}
 

@@ -233,11 +233,10 @@ final class Parity {
 		for (name in FileSystem.readDirectory(Path.join([dir, prefix]))) {
 			final path: String = prefix == '' ? name : '$prefix/$name';
 			final full: String = Path.join([dir, path]);
-			if (FileSystem.isDirectory(full)) {
+			if (FileSystem.isDirectory(full))
 				for (inner => text in snapshot(dir, path)) files[inner] = text;
-			} else {
+			else
 				files[path] = File.getContent(full);
-			}
 		}
 		return files;
 	}

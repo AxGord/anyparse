@@ -59,12 +59,10 @@ class TriviaAnalysis {
 		var changed: Bool = true;
 		while (changed) {
 			changed = false;
-			for (name => node in result.rules) if (!bearing.exists(name)) {
-				for (ref in collectRefs(node)) if (bearing.exists(ref)) {
-					bearing[name] = true;
-					changed = true;
-					break;
-				}
+			for (name => node in result.rules) if (!bearing.exists(name)) for (ref in collectRefs(node)) if (bearing.exists(ref)) {
+				bearing[name] = true;
+				changed = true;
+				break;
 			}
 		}
 		for (name => node in result.rules) node.annotations.set(AnnotationKeys.TRIVIA_BEARING, bearing.exists(name));
@@ -75,9 +73,8 @@ class TriviaAnalysis {
 		// `shapeField` attaches the field-level meta directly to the Star
 		// node (the `Array<T>` result of `shapeFieldType`), so detection
 		// is a direct meta read on the Star itself.
-		if (node.kind == Star && hasTrivia(node.annotations[AnnotationKeys.BASE_META])) {
+		if (node.kind == Star && hasTrivia(node.annotations[AnnotationKeys.BASE_META]))
 			node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] = true;
-		}
 		// Enum-branch case: `@:trivia BlockStmt(stmts:Array<HxStatement>)`.
 		// `shapeEnum` attaches the ctor-level meta to the Seq branch and
 		// passes `null` for per-arg meta, so the @:trivia is NOT on the
@@ -102,9 +99,8 @@ class TriviaAnalysis {
 			&& node.children.length == 2
 			&& node.children[0].kind == Ref
 			&& node.children[1].kind == Star
-		) {
+		)
 			node.children[1].annotations.set(AnnotationKeys.TRIVIA_STAR_COLLECTS, true);
-		}
 		for (child in node.children) markPostfixStarSuffix(child);
 	}
 

@@ -70,9 +70,7 @@ final class StructSeqLowering {
 		if (magic != null) parseSteps.push(macro expectLit(ctx, $v{magic}));
 		for (child in node.children) {
 			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
-			if (fieldName == null) {
-				Context.fatalError('Lowering: struct field missing base.fieldName', Context.currentPos());
-			}
+			if (fieldName == null) Context.fatalError('Lowering: struct field missing base.fieldName', Context.currentPos());
 			// Per-field prefix: @:kw (word-boundary checked) and/or @:lead.
 			// When both are present, both are emitted sequentially — @:kw
 			// first, then @:lead (D50). First consumers:
@@ -237,12 +235,11 @@ final class StructSeqLowering {
 			// hasOptionalRefAfterTrailSlot / hasStructFieldTrailOptSlot and the two
 			// _afterTrail_/_trailPresent_ accumulator decls + captureTrailPresentExpr
 			// splice are computed/emitted by emitTrailSidecarDecls; see there.
-			if (hasKwTriviaSlots) {
+			if (hasKwTriviaSlots)
 				emitKwTriviaSlotDecls(
 					afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal,
 					parseSteps
 				);
-			}
 			emitFieldValueByKind(
 				sc, child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits, absentOnEof,
 				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
@@ -322,12 +319,10 @@ final class StructSeqLowering {
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
 		final align: Null<Int> = node.annotations['bin.align'];
-		if (align != null) {
-			parseSteps.push(macro {
-				final _rem: Int = ctx.pos % $v{align};
-				if (_rem != 0 && ctx.pos < ctx.input.length) ctx.pos += $v{align} - _rem;
-			});
-		}
+		if (align != null) parseSteps.push(macro {
+			final _rem: Int = ctx.pos % $v{align};
+			if (_rem != 0 && ctx.pos < ctx.input.length) ctx.pos += $v{align} - _rem;
+		});
 		// ω-spanned-struct: a Seq typedef tagged `@:spanned('<Kind>')` opts
 		// out of QueryNode transparency. Its paired `*S` struct carries
 		// `_span` + `_kind` (synthesised by SpanTypeSynth); inject the
@@ -725,11 +720,10 @@ final class StructSeqLowering {
 		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
 		beforeKwTrailingLocal: String, hasBeforeSlots: Bool, beforeLeadLocal: Null<String>
 	): Void {
-		if (kwLead == null && leadText == null && absentOnLits == null && !absentOnEof) {
+		if (kwLead == null && leadText == null && absentOnLits == null && !absentOnEof)
 			Context.fatalError(
 				'Lowering: @:optional struct field "$fieldName" requires @:lead, @:kw, @:absentOn or @:absentOnEof', Context.currentPos()
 			);
-		}
 		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 		final subCallRaw: Expr = {
 			expr: ECall(macro $i{sc.parseFnName(refName)}, [macro ctx]),
@@ -1054,9 +1048,8 @@ final class StructSeqLowering {
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, expr: macro $i{beforeKwLeadingLocal} });
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, expr: macro $i{beforeKwTrailingLocal} });
 		}
-		if (sc.ctx.trivia && child.kind == Star && child.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true) {
+		if (sc.ctx.trivia && child.kind == Star && child.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true)
 			pushTrailingStarSlots(child, localName, fieldName, structFields);
-		}
 		// ω-condcomp-body-leading-sep: @:fmt(sepBeforeOpt)
 		// on a Star field grows a `<field>SepBefore:Bool` slot fed by
 		// the local declared inside `emitStarFieldSteps`'s
@@ -1103,19 +1096,17 @@ final class StructSeqLowering {
 			&& trailText != null
 			&& sc.ctx.trivia
 			&& sc.isTriviaBearing(typePath);
-		if (hasOptionalRefAfterTrailSlot) {
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: '_afterTrail_$fieldName',
-						type: macro : Null<String>,
-						expr: macro null,
-						isFinal: false
-					}
-				]),
-				pos: Context.currentPos()
-			});
-		}
+		if (hasOptionalRefAfterTrailSlot) parseSteps.push({
+			expr: EVars([
+				{
+					name: '_afterTrail_$fieldName',
+					type: macro : Null<String>,
+					expr: macro null,
+					isFinal: false
+				}
+			]),
+			pos: Context.currentPos()
+		});
 		// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
 		// typedef Ref fields carrying `@:trailOpt(LIT)` capture matchLit
 		// presence into `_trailPresent_<field>:Bool`. Mirrors the
@@ -1135,19 +1126,17 @@ final class StructSeqLowering {
 			&& child.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true
 			&& sc.ctx.trivia
 			&& sc.isTriviaBearing(typePath);
-		if (hasStructFieldTrailOptSlot) {
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: trailPresentLocal,
-						type: macro : Bool,
-						expr: macro false,
-						isFinal: false
-					}
-				]),
-				pos: Context.currentPos()
-			});
-		}
+		if (hasStructFieldTrailOptSlot) parseSteps.push({
+			expr: EVars([
+				{
+					name: trailPresentLocal,
+					type: macro : Bool,
+					expr: macro false,
+					isFinal: false
+				}
+			]),
+			pos: Context.currentPos()
+		});
 		// Splicing the same `Expr` into two `macro` blocks is safe —
 		// macro Expr values are AST snapshots, not consumed on splice.
 		// Shared between the optional-Ref subCall arm and the mandatory-

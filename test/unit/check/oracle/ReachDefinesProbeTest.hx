@@ -103,11 +103,9 @@ class ReachDefinesProbeTest extends Test {
 		final read: Null<ReachConfiguration> =
 			ReachDefinesProbe.probeAll([{ hxml: 'build.hxml', dir: dir, defines: [] }])?.configurations[0];
 		Assert.notNull(read);
-		if (read != null) {
-			for (late in ['APQ_LATE', 'APQ_CB']) {
-				Assert.isFalse(read.defined.contains(late), '$late was read as defined for every file');
-				Assert.isTrue(read.everDefined.contains(late), '$late was read as never defined');
-			}
+		if (read != null) for (late in ['APQ_LATE', 'APQ_CB']) {
+			Assert.isFalse(read.defined.contains(late), '$late was read as defined for every file');
+			Assert.isTrue(read.everDefined.contains(late), '$late was read as never defined');
 		}
 		remove(dir);
 	}

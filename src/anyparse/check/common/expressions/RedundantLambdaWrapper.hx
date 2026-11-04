@@ -566,20 +566,18 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	private static function collectBindings(node: QueryNode, scope: FileScope, seams: Seams): Void {
 		final name: Null<String> = node.name;
 		if (name != null && seams.binderKinds.contains(node.kind)) bind(scope, name, node, seams);
-		if (name != null && (seams.localFunctionKinds.contains(node.kind) || seams.inlineFunctionKinds.contains(node.kind))) {
-			scope.localFns.set(name, {
-				arity: countParams(node, seams),
-				isStatic: false,
-				safe: !scope.localFns.exists(name) && !seams.inlineFunctionKinds.contains(node.kind) && plainParams(node, seams)
-			});
-		}
+		if (
+			name != null && (seams.localFunctionKinds.contains(node.kind) || seams.inlineFunctionKinds.contains(node.kind))
+		) scope.localFns.set(name, {
+			arity: countParams(node, seams),
+			isStatic: false,
+			safe: !scope.localFns.exists(name) && !seams.inlineFunctionKinds.contains(node.kind) && plainParams(node, seams)
+		});
 		// A bare-arrow lambda binds its parameter as a plain identifier node, not a declared one.
-		if (seams.lambdaKinds.contains(node.kind)) {
-			for (i in 0...node.children.length - 1) {
-				final param: QueryNode = node.children[i];
-				final paramName: Null<String> = param.name;
-				if (param.kind == seams.identKind && paramName != null) bind(scope, paramName, param, seams);
-			}
+		if (seams.lambdaKinds.contains(node.kind)) for (i in 0...node.children.length - 1) {
+			final param: QueryNode = node.children[i];
+			final paramName: Null<String> = param.name;
+			if (param.kind == seams.identKind && paramName != null) bind(scope, paramName, param, seams);
 		}
 		for (c in node.children) collectBindings(c, scope, seams);
 	}

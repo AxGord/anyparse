@@ -235,13 +235,11 @@ final class CliArgs {
 			CliIo.stderr('apq $opName: provide the code inline, via --from-file, or as - for stdin — not more than one\n');
 			return null;
 		}
-		if (fromFile != null) {
-			try {
-				return stripTrailing ? withoutTrailingNewline(CliIo.readFile(fromFile)) : CliIo.readFile(fromFile);
-			} catch (exception: Exception) {
-				CliIo.stderr('apq $opName: $fromFile: ${exception.message}\n');
-				return null;
-			}
+		if (fromFile != null) try {
+			return stripTrailing ? withoutTrailingNewline(CliIo.readFile(fromFile)) : CliIo.readFile(fromFile);
+		} catch (exception: Exception) {
+			CliIo.stderr('apq $opName: $fromFile: ${exception.message}\n');
+			return null;
 		}
 		// code == '-' → read the new code from stdin.
 		try {

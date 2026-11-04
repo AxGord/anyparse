@@ -1048,17 +1048,15 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			return classifyTrivGetOpaqueSetter(
 				cls, prop, getterNode, getterInline, getterOverride, trivGet, setter, privateFieldNodes, maxBypass, shape
 			);
-		if (trivGet != null && trivSet != null) {
-			return trivGet != trivSet ? null : {
-				field: trivGet,
-				clauseText: '',
-				deleted: [getterNode, setter.node],
-				ctorInit: null,
-				message: messageFor('setB', prop.name, trivGet),
-				bypassStmts: [],
-				inlineGetter: null
-			};
-		}
+		if (trivGet != null && trivSet != null) return trivGet != trivSet ? null : {
+			field: trivGet,
+			clauseText: '',
+			deleted: [getterNode, setter.node],
+			ctorInit: null,
+			message: messageFor('setB', prop.name, trivGet),
+			bypassStmts: [],
+			inlineGetter: null
+		};
 		if (trivGet != null || trivSet == null) return null;
 		// A self-backed setter assigns the property's OWN name; there is no private slot to find.
 		if (trivSet != prop.name && !privateFieldNodes.exists(trivSet)) return null;

@@ -76,8 +76,8 @@ final class Dev {
 		final rest: Array<String> = argv.slice(1);
 		if (!rest.contains('--help') && !rest.contains('-h')) return try {
 			command.main(rest);
-		} catch (error: UsageError) {
-			Sys.stderr().writeString('dev $name: ${error.message}\n${command.usage}\n');
+		} catch (exception: UsageError) {
+			Sys.stderr().writeString('dev $name: ${exception.message}\n${command.usage}\n');
 			2;
 		} catch (exception: Exception) {
 			// a tool it needed failed to run (`CommandFailed`), or an input it could not read

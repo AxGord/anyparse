@@ -35,8 +35,8 @@ final class Tally {
 	public static function remove(file: String): Void {
 		try {
 			Fs.unlinkSync(file);
-		} catch (error: Exception) {
-			if (Reflect.field(error.native, 'code') != ABSENT) throw error;
+		} catch (exception: Exception) {
+			if (Reflect.field(exception.native, 'code') != ABSENT) throw exception;
 		}
 	}
 
@@ -61,8 +61,8 @@ final class Tally {
 		try {
 			Fs.closeSync(Fs.openSync(file, 'wx'));
 			return true;
-		} catch (error: Exception) {
-			if (Reflect.field(error.native, 'code') != EXISTS) throw error;
+		} catch (exception: Exception) {
+			if (Reflect.field(exception.native, 'code') != EXISTS) throw exception;
 			return false;
 		}
 	}

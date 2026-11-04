@@ -264,9 +264,7 @@ final class HoistEmbeddedAssignment extends RuleBase implements DefaultOff imple
 	 */
 	private static function descend(node: QueryNode, spine: Spine, inContainer: Bool, statementRoot: Bool, found: Array<QueryNode>): Bool {
 		if (node.kind == spine.assign) {
-			if (statementRoot) {
-				return node.children.foreach(child -> descend(child, spine, inContainer, false, found));
-			}
+			if (statementRoot) return node.children.foreach(child -> descend(child, spine, inContainer, false, found));
 			if (!inContainer || node.children.length != 2) return false;
 			final target: QueryNode = node.children[0];
 			if (target.kind != spine.ident || target.name == null) return false;

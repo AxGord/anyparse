@@ -622,8 +622,8 @@
 			"name": "M-LOOPBOUND-UNSIZED",
 			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
 			"method": "fixedSource",
-			"find": "init.children.length == 0 || init.children.exists(c -> s.unsizedElementKinds.contains(c.kind)) ? null",
-			"replace": "init.children.length == 0 ? null",
+			"find": "init.children.exists(c -> s.unsizedElementKinds.contains(c.kind))",
+			"replace": "false",
 			"note": "a comprehension literal counts as a one-element literal"
 		},
 		{

@@ -591,8 +591,8 @@
 			"name": "M-NEWFILE-BARE-KEYWORD-WRAPPED",
 			"type": "anyparse.query.ImportSpelling",
 			"method": "split",
-			"find": "for (keyword in [IMPORT_WORD, USING_WORD]) if (line == keyword || line.startsWith('$keyword ')) {",
-			"replace": "for (keyword in [IMPORT_WORD, USING_WORD]) if (line.startsWith('$keyword ')) {",
+			"find": "if (line == keyword || line.startsWith('$keyword '))",
+			"replace": "if (line.startsWith('$keyword '))",
 			"note": "a bare `import` with no path falls through to the bare-path branch and becomes `import import;`, which parses and means nothing"
 		},
 		{

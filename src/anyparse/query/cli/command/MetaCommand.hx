@@ -149,11 +149,10 @@ final class MetaCommand implements CliCommand {
 			CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
 			paths.length
 		);
-		if (o.json) {
+		if (o.json)
 			CliIo.sysPrint(Json.renderMeta(shown));
-		} else {
+		else
 			for (entry in shown) CliIo.sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits, o.flat));
-		}
 		return ctx.emptyExit(allEntries.length == 0);
 	}
 
@@ -249,8 +248,8 @@ final class MetaCommand implements CliCommand {
 				case '--limit':
 					try {
 						limit = CliArgs.parseLimit(arg.value());
-					} catch (e: Exception) {
-						CliIo.stderr('${e.message}\n');
+					} catch (exception: Exception) {
+						CliIo.stderr('${exception.message}\n');
 						return metaParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':

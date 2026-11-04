@@ -75,11 +75,10 @@ final class KwBranchLowering {
 	private static function lowerMultiLitBranch(ctorRef: Expr, litList: Array<String>): Expr {
 		final wordLike: Bool = endsWithWordChar(litList[0]);
 		for (lit in litList) {
-			if (endsWithWordChar(lit) != wordLike) {
+			if (endsWithWordChar(lit) != wordLike)
 				Context.fatalError(
 					'Lowering: multi-@:lit set mixes word-like and symbolic literals: ${litList.join(', ')}', Context.currentPos()
 				);
-			}
 		}
 		final matchFnName: String = wordLike ? 'matchKw' : 'matchLit';
 		final attempts: Array<Expr> = [];

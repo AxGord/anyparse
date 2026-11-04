@@ -384,9 +384,8 @@ final class Rename {
 			if (boundFrom == binding) add(SourceText.identTokenOffset(source, h.span, targetName));
 		}
 
-		if (isFieldBinding) {
-			for (access in collectThisFieldAccesses(targetName, tree)) add(SourceText.identTokenOffset(source, access, targetName));
-		}
+		if (isFieldBinding) for (access in collectThisFieldAccesses(targetName, tree))
+			add(SourceText.identTokenOffset(source, access, targetName));
 		return out;
 	}
 

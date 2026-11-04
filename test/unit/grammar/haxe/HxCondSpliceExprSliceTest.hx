@@ -76,11 +76,10 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 				Assert.equals('!mobile', (inner.cond: String));
 				assertBoolLit(inner.expr, true, 'then-branch');
 				final elseClause: Null<anyparse.grammar.haxe.HxConditionalSemiExprElse> = inner.elseClause;
-				if (elseClause == null) {
+				if (elseClause == null)
 					Assert.fail('expected an #else clause');
-				} else {
+				else
 					assertBoolLit(elseClause.expr, false, 'else-branch');
-				}
 		}
 		Assert.equals('other', (expectVarMember(ast.members[1].member).name: String), 'the next member keeps its own name');
 		triviaEquals(src, 'Mouse.supportsCursor');
@@ -263,11 +262,10 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 				Assert.equals('flash', (inner.cond: String));
 				assertStringLeaf(inner.expr, '"b"', 'then-branch');
 				final elseExpr: Null<HxExpr> = inner.elseExpr;
-				if (elseExpr == null) {
+				if (elseExpr == null)
 					Assert.fail('expected an #else branch');
-				} else {
+				else
 					assertStringLeaf(elseExpr, '"c"', 'else-branch');
-				}
 			case other:
 				Assert.fail('expected Add(Add(_, ConditionalExpr), _), got $other');
 		}

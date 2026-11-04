@@ -1964,28 +1964,27 @@ class Renderer {
 		},
 		inner: Doc, width: Int, col: Int, restWidth: Int
 	): Void {
-		if (node.forceFlat) {
+		if (node.forceFlat)
 			stack.push({
 				doc: inner,
 				indent: node.indent,
 				mode: MFlat,
 				forceFlat: true
 			});
-		} else if (fitsFlat(width - col - restWidth, node.indent, inner)) {
+		else if (fitsFlat(width - col - restWidth, node.indent, inner))
 			stack.push({
 				doc: inner,
 				indent: node.indent,
 				mode: MFlat,
 				forceFlat: false
 			});
-		} else {
+		else
 			stack.push({
 				doc: inner,
 				indent: node.indent,
 				mode: MBreak,
 				forceFlat: false
 			});
-		}
 	}
 
 	/**
@@ -2608,13 +2607,12 @@ class Renderer {
 				// subtree at entry — local fit measurement is moot here.
 				// `hardFlat` rides along so an inner `WrapBoundary` keeps
 				// the force-flat region (HardFlatten semantic).
-				if (f.forceFlat) {
+				if (f.forceFlat)
 					stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
-				} else if (fitsFlat(width - col, f.indent, inner)) {
+				else if (fitsFlat(width - col, f.indent, inner))
 					stack.push(new Frame(f.indent, MFlat, inner));
-				} else {
+				else
 					stack.push(new Frame(f.indent, MBreak, inner));
-				}
 			case GroupWithRestProbe(inner):
 				// ω-group-rest-probe: Group variant whose fit decision
 				// subtracts `flatTokenWidthOfRestStack(stack)` from the
@@ -2673,11 +2671,10 @@ class Renderer {
 						exactCol: true,
 						groupAsker: true
 					});
-					if (fitsFlat(width - col - pendingSpace - restW, f.indent, inner)) {
+					if (fitsFlat(width - col - pendingSpace - restW, f.indent, inner))
 						stack.push(new Frame(f.indent, MFlat, inner));
-					} else {
+					else
 						stack.push(new Frame(f.indent, MBreak, inner));
-					}
 				}
 			case Flatten(inner):
 				// ω-force-flat-engine slice B: enter force-flat region.
@@ -3038,9 +3035,7 @@ class Renderer {
 	 */
 	private static function breakLine(ctx: RenderCtx, indent: Int, verbatim: Bool): Void {
 		ctx.pendingTrailBlank = null;
-		if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
-			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
-		}
+		if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 		if (verbatim) ctx.textLineEnds.push(ctx.buf.length);
 		ctx.buf.add(ctx.lineEnd);
 		ctx.lineCount++;
@@ -3083,9 +3078,7 @@ class Renderer {
 		// regardless of the frame indent. Body lines (any other
 		// first byte) keep their pending frame indent.
 		final freshLine: Bool = ctx.lastEmit == Hardline && ctx.pendingOptSpace == null && ctx.pendingHardline < 0;
-		if (ctx.markerZeroDepth > 0 && freshLine && ctx.pendingIndent > 0 && s.fastCodeAt(0) == '#'.code) {
-			ctx.pendingIndent = 0;
-		}
+		if (ctx.markerZeroDepth > 0 && freshLine && ctx.pendingIndent > 0 && s.fastCodeAt(0) == '#'.code) ctx.pendingIndent = 0;
 		// ω-cond-indent-policy AlignedDecrease: inside a
 		// `ConditionalMarkerDecrease` scope, EVERY fresh-line token —
 		// both `#`-markers and guarded body — is re-indented one
@@ -3165,9 +3158,7 @@ class Renderer {
 			if (verbatim) recordTextLineEnds(ctx, flat);
 			ctx.buf.add(flat);
 			ctx.col += flat.length;
-			if (flat.length > 0) {
-				ctx.lastEmit = lastEmitFromText(flat);
-			}
+			if (flat.length > 0) ctx.lastEmit = lastEmitFromText(flat);
 		} else {
 			// Break-mode hardline: drop pending OptSpace so the
 			// lead's optional trailing space disappears before
@@ -3284,9 +3275,7 @@ class Renderer {
 				// Defer; flushed by the next Text or in-flat Line, or
 				// dropped by the next break-mode Line. Multiple
 				// consecutive OptSpace nodes accumulate.
-				if (s.length > 0) {
-					ctx.pendingOptSpace = ctx.pendingOptSpace == null ? s : ctx.pendingOptSpace + s;
-				}
+				if (s.length > 0) ctx.pendingOptSpace = ctx.pendingOptSpace == null ? s : ctx.pendingOptSpace + s;
 			case OptSpaceSkipAfterHardline:
 				// Inline single space, dropped when the last emitted
 				// output ended with a hardline. Mirror of

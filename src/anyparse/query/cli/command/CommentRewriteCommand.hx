@@ -275,8 +275,8 @@ final class CommentRewriteCommand implements CliCommand {
 						if (isChanged) try {
 							CliIo.writeFile(path, text);
 							changed++;
-						} catch (failure: WriteFailure) {
-							CliIo.stderr('apq comment-rewrite: ${failure.message}\n');
+						} catch (exception: WriteFailure) {
+							CliIo.stderr('apq comment-rewrite: ${exception.message}\n');
 							failed++;
 						}
 					} else if (listMode) {

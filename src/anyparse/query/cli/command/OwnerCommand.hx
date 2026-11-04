@@ -50,20 +50,18 @@ final class OwnerCommand implements CliCommand {
 		var list: Bool = false;
 		var limit: Int = DEFAULT_LIMIT;
 		final positionals: Array<String> = [];
-		for (arg in new OwnerCommand().flags().walk(args)) {
-			switch arg.flag {
-				case '--lang':
-					lang = arg.value();
-				case '--list':
-					list = true;
-				case '--limit':
-					limit = CliArgs.parseLimit(arg.value());
-				case '-h', '--help':
-					printOwnerUsage();
-					return EXIT_OK;
-				case null:
-					positionals.push(arg.token);
-			}
+		for (arg in new OwnerCommand().flags().walk(args)) switch arg.flag {
+			case '--lang':
+				lang = arg.value();
+			case '--list':
+				list = true;
+			case '--limit':
+				limit = CliArgs.parseLimit(arg.value());
+			case '-h', '--help':
+				printOwnerUsage();
+				return EXIT_OK;
+			case null:
+				positionals.push(arg.token);
 		}
 		final question: Null<String> = list ? null : positionals.shift();
 		if ((!list && question == null) || positionals.length == 0) {

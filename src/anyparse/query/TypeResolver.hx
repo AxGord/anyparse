@@ -213,9 +213,8 @@ final class TypeResolver {
 	): Bool {
 		if (MemberKinds.isSideEffectFree(node, shape)) return true;
 		final arrayLiteralKind: Null<String> = shape.arrayLiteralKind;
-		if (arrayLiteralKind != null && node.kind == arrayLiteralKind) {
+		if (arrayLiteralKind != null && node.kind == arrayLiteralKind)
 			return node.children.foreach(c -> isDeletionPure(c, tree, shape, declaredTypes, index));
-		}
 		final parenKind: Null<String> = shape.parenKind;
 		if (parenKind != null && node.kind == parenKind && node.children.length == 1)
 			return isDeletionPure(node.children[0], tree, shape, declaredTypes, index);

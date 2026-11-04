@@ -134,15 +134,13 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 				out.push(finding(scan, span, swap.defaultLast ? MSG_DEFAULT_STATEMENT : MSG_STATEMENT));
 				return;
 			}
-			if (seams.valueKinds.contains(node.kind)) {
-				switch valueVerdict(node, scan) {
-					case Fixable(swap):
-						out.push(finding(scan, span, valueMessage(node, swap, seams)));
-						return;
-					case CommentBlocked(swap):
-						out.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));
-					case Skip:
-				}
+			if (seams.valueKinds.contains(node.kind)) switch valueVerdict(node, scan) {
+				case Fixable(swap):
+					out.push(finding(scan, span, valueMessage(node, swap, seams)));
+					return;
+				case CommentBlocked(swap):
+					out.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));
+				case Skip:
 			}
 		}
 		for (c in node.children) walk(out, scan, c);

@@ -47,14 +47,12 @@ final class MetaInspect {
 	public static function readMetaString(node: ShapeNode, tag: String): Null<String> {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return null;
-		for (entry in meta) if (entry.name == tag) {
-			return entry.params.length != 1
-				? null
-				: switch entry.params[0].expr {
-					case EConst(CString(s, _)): s;
-					case _: null;
-				};
-		}
+		for (entry in meta) if (entry.name == tag) return entry.params.length != 1
+			? null
+			: switch entry.params[0].expr {
+				case EConst(CString(s, _)): s;
+				case _: null;
+			};
 		return null;
 	}
 
@@ -135,14 +133,12 @@ final class MetaInspect {
 	public static function fmtHasFlag(node: ShapeNode, name: String): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case EConst(CIdent(id)) if (id == name):
-					return true;
-				case ECall({ expr: EConst(CIdent(id)) }, _) if (id == name):
-					return true;
-				case _:
-			}
+		for (entry in meta) if (entry.name == ':fmt') for (param in entry.params) switch param.expr {
+			case EConst(CIdent(id)) if (id == name):
+				return true;
+			case ECall({ expr: EConst(CIdent(id)) }, _) if (id == name):
+				return true;
+			case _:
 		}
 		return false;
 	}
@@ -156,12 +152,10 @@ final class MetaInspect {
 	public static function fmtReadString(node: ShapeNode, name: String): Null<String> {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({ expr: EConst(CIdent(id)) }, [{ expr: EConst(CString(s, _)) }]) if (id == name):
-					return s;
-				case _:
-			}
+		for (entry in meta) if (entry.name == ':fmt') for (param in entry.params) switch param.expr {
+			case ECall({ expr: EConst(CIdent(id)) }, [{ expr: EConst(CString(s, _)) }]) if (id == name):
+				return s;
+			case _:
 		}
 		return null;
 	}
@@ -175,19 +169,17 @@ final class MetaInspect {
 	public static function fmtReadStringArgs(node: ShapeNode, name: String): Null<Array<String>> {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({ expr: EConst(CIdent(id)) }, args) if (id == name):
-					final out: Array<String> = [];
-					for (arg in args) switch arg.expr {
-						case EConst(CString(s, _)):
-							out.push(s);
-						case _:
-							return null;
-					}
-					return out;
-				case _:
-			}
+		for (entry in meta) if (entry.name == ':fmt') for (param in entry.params) switch param.expr {
+			case ECall({ expr: EConst(CIdent(id)) }, args) if (id == name):
+				final out: Array<String> = [];
+				for (arg in args) switch arg.expr {
+					case EConst(CString(s, _)):
+						out.push(s);
+					case _:
+						return null;
+				}
+				return out;
+			case _:
 		}
 		return null;
 	}
@@ -203,20 +195,18 @@ final class MetaInspect {
 		final out: Array<Array<String>> = [];
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return out;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({ expr: EConst(CIdent(id)) }, args) if (id == name):
-					final group: Array<String> = [];
-					var ok: Bool = true;
-					for (arg in args) switch arg.expr {
-						case EConst(CString(s, _)):
-							group.push(s);
-						case _:
-							ok = false;
-					}
-					if (ok) out.push(group);
-				case _:
-			}
+		for (entry in meta) if (entry.name == ':fmt') for (param in entry.params) switch param.expr {
+			case ECall({ expr: EConst(CIdent(id)) }, args) if (id == name):
+				final group: Array<String> = [];
+				var ok: Bool = true;
+				for (arg in args) switch arg.expr {
+					case EConst(CString(s, _)):
+						group.push(s);
+					case _:
+						ok = false;
+				}
+				if (ok) out.push(group);
+			case _:
 		}
 		return out;
 	}
@@ -229,16 +219,12 @@ final class MetaInspect {
 	public static function fmtUnreadableForm(node: ShapeNode, name: String): Null<String> {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case EConst(CIdent(id)) if (id == name):
-					return name;
-				case ECall({ expr: EConst(CIdent(id)) }, args) if (
-					id == name && !args.foreach(arg -> arg.expr.match(EConst(CString(_, _))))
-				):
-					return ExprTools.toString(param);
-				case _:
-			}
+		for (entry in meta) if (entry.name == ':fmt') for (param in entry.params) switch param.expr {
+			case EConst(CIdent(id)) if (id == name):
+				return name;
+			case ECall({ expr: EConst(CIdent(id)) }, args) if (id == name && !args.foreach(arg -> arg.expr.match(EConst(CString(_, _))))):
+				return ExprTools.toString(param);
+			case _:
 		}
 		return null;
 	}

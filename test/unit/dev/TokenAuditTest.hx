@@ -74,9 +74,7 @@ final class TokenAuditTest extends Test {
 				'rewrite gap:',
 				'write payloads',
 				'* sizes are'
-			]) {
-				Assert.isTrue(text.contains(section), 'missing $section');
-			}
+			]) Assert.isTrue(text.contains(section), 'missing $section');
 			Assert.isTrue(text.contains('landed slices 0'));
 			final parsed: AuditReport = TokenReportParser.parse(TokenReportWriter.write(report, JsonFormat.instance.defaultWriteOptions));
 			Assert.equals(1, parsed.agents);

@@ -57,10 +57,10 @@ final class WriteVerification {
 		if (changed.length == 0 || !forced && !journal.createdOrDeleted()) return exit;
 		final oracles: Array<OracleConfig> = try {
 			oraclesOf(changed);
-		} catch (conflict: ConfigConflict) {
+		} catch (exception: ConfigConflict) {
 			journal.rollback();
 			CliIo.stderr('apq $op: the project config names two files — every file put back\n');
-			throw conflict;
+			throw exception;
 		} catch (exception: Exception) {
 			CliIo.stderr('apq $op: unverified — the apq.json naming the builds could not be read: ${exception.message}\n');
 			return exit;

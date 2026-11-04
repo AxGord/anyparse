@@ -358,15 +358,13 @@ class Build {
 			: switch options.expr {
 				case EConst(CIdent('null')): defaultValue;
 				case EObjectDecl(fields):
-					for (f in fields) if (f.field == fieldName) {
-						switch f.expr.expr {
-							case EConst(CIdent('true')):
-								return true;
-							case EConst(CIdent('false')):
-								return false;
-							case _:
-								Context.fatalError('Build: option "$fieldName" must be a literal `true` or `false`', f.expr.pos);
-						}
+					for (f in fields) if (f.field == fieldName) switch f.expr.expr {
+						case EConst(CIdent('true')):
+							return true;
+						case EConst(CIdent('false')):
+							return false;
+						case _:
+							Context.fatalError('Build: option "$fieldName" must be a literal `true` or `false`', f.expr.pos);
 					}
 					defaultValue;
 				case _:
@@ -377,9 +375,7 @@ class Build {
 
 	private static function readSchemaMeta(meta: Metadata, targetTypePath: String): String {
 		for (entry in meta) if (entry.name == ':schema') {
-			if (entry.params.length != 1) {
-				Context.fatalError('@:schema expects exactly one argument', entry.pos);
-			}
+			if (entry.params.length != 1) Context.fatalError('@:schema expects exactly one argument', entry.pos);
 			return ExprTools.toString(entry.params[0]);
 		}
 		Context.fatalError('@:peg grammar $targetTypePath is missing @:schema(Format)', Context.currentPos());

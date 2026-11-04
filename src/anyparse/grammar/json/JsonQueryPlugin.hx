@@ -209,9 +209,8 @@ final class JsonQueryPlugin implements GrammarPlugin {
 	private static function collectStrings(node: QueryNode, source: String, out: Array<LexRegion>): Void {
 		final span: Null<Span> = node.span;
 		if (span != null && node.kind == JsonProjection.STRING) out.push({ from: span.from, to: span.to, kind: LexRegionKind.StringLit });
-		if (span != null && node.kind == JsonProjection.MEMBER) {
+		if (span != null && node.kind == JsonProjection.MEMBER)
 			out.push({ from: span.from, to: JsonProjection.keyEndOf(node, source), kind: LexRegionKind.StringLit });
-		}
 		for (child in node.children) collectStrings(child, source, out);
 	}
 

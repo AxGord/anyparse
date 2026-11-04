@@ -23,8 +23,8 @@ final class Cmd {
 			case EConst(CString(s, _)): s;
 			case _: Context.error('cmd takes a string literal template', template.pos);
 		};
-		final words: Array<Array<TemplatePart>> = try CmdTemplate.parse(text) catch (error: TemplateError) Context.error(
-			'cmd: ${error.message}', at(template.pos, error.offset)
+		final words: Array<Array<TemplatePart>> = try CmdTemplate.parse(text) catch (exception: TemplateError) Context.error(
+			'cmd: ${exception.message}', at(template.pos, exception.offset)
 		);
 		if (words.length == 0) Context.error('cmd: the template names no program', template.pos);
 		final parts: Array<Expr> = [for (word in words) wordExpr(word, template.pos)];

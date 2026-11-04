@@ -822,19 +822,16 @@ class Lowering {
 	 */
 	private function lowerPrefixBranch(branch: ShapeNode, typePath: String, ctorRef: Expr, recurseFnName: String, prefixOp: String): Expr {
 		final children: Array<ShapeNode> = branch.children;
-		if (children.length != 1 || children[0].kind != Ref) {
+		if (children.length != 1 || children[0].kind != Ref)
 			Context.fatalError('Lowering: @:prefix branch must have exactly one Ref child (the operand)', Context.currentPos());
-		}
 		final refName: String = children[0].annotations.get(AnnotationKeys.BASE_REF);
 		final enumSimple: String = simpleName(typePath);
-		if (simpleName(refName) != enumSimple) {
+		if (simpleName(refName) != enumSimple)
 			Context.fatalError('Lowering: @:prefix operand must reference the same enum ($enumSimple)', Context.currentPos());
-		}
-		if (endsWithWordChar(prefixOp)) {
+		if (endsWithWordChar(prefixOp))
 			Context.fatalError(
 				'Lowering: @:prefix operator must be symbolic (word-like prefix ops not supported yet): "$prefixOp"', Context.currentPos()
 			);
-		}
 		final operandCT: ComplexType = ruleReturnCT(typePath);
 		final recurseCall: Expr = {
 			expr: ECall(macro $i{recurseFnName}, [macro ctx]),
@@ -933,9 +930,7 @@ class Lowering {
 			// `sepMatchExpr` below. Same `:sep` gate keeps the
 			// positional count in sync between parser-emit and synth-
 			// define for non-sep branches (BlockStmt, BlockExpr).
-			if (sepText != null) {
-				ctorArgsTrivia.push(macro _trailPresent);
-			}
+			if (sepText != null) ctorArgsTrivia.push(macro _trailPresent);
 		}
 		final ctorCallTrivia: Expr = {
 			expr: ECall(ctorRef, ctorArgsTrivia),
@@ -1279,9 +1274,7 @@ class Lowering {
 	): Expr {
 		final starNode: ShapeNode = branch.children[0];
 		final inner: ShapeNode = starNode.children[0];
-		if (inner.kind != Ref) {
-			Context.fatalError('Lowering: Star child must be a Ref in Phase 2', Context.currentPos());
-		}
+		if (inner.kind != Ref) Context.fatalError('Lowering: Star child must be a Ref in Phase 2', Context.currentPos());
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = parseFnName(elemRefName);
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);

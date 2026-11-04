@@ -131,11 +131,11 @@ final class WriterEqualsCommand implements CliCommand {
 
 		final emitted: Null<String> = try {
 			(plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
-		} catch (e: ParseError) {
-			CliIo.stderr('apq writer-equals: $inputPathFinal: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.stderr('apq writer-equals: $inputPathFinal: $exception\n');
 			return EXIT_RUNTIME;
-		} catch (e: Exception) {
-			CliIo.stderr('apq writer-equals: $inputPathFinal: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq writer-equals: $inputPathFinal: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
 		if (emitted == null) {

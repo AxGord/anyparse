@@ -244,8 +244,10 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		final span: Null<Span> = decl.span;
 		if (span == null) return null;
 		final line: Int = span.lineCol(ctx.source).line;
-		if (init.kind == s.arrayLiteralKind) {
-			return init.children.length == 0 || init.children.exists(c -> s.unsizedElementKinds.contains(c.kind)) ? null : {
+		if (init.kind == s.arrayLiteralKind) return init.children.length == 0
+			|| init.children.exists(c -> s.unsizedElementKinds.contains(c.kind))
+			? null
+			: {
 				name: name,
 				declFrom: span.from,
 				bound: init,
@@ -256,7 +258,6 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 				initAssign: null,
 				fixedLength: false
 			};
-		}
 		if (init.kind != s.newExprKind || !isFixedLengthType(init.name, ctx)) return null;
 		final args: Array<QueryNode> = [for (c in init.children) if (!s.typeArgKinds.contains(c.kind)) c];
 		return args.length != 1 ? null : {

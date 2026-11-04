@@ -423,9 +423,7 @@ final class ReachGraph {
 	public function refresh(changed: Array<{ file: String, source: String }>, infos: Array<FileInfo>): Void {
 		final built: Null<CallGraph> = _graph;
 		if (built == null) return;
-		for (f in changed) {
-			built.removeFile(f.file);
-		}
+		for (f in changed) built.removeFile(f.file);
 		built.addFiles(changed);
 		for (fi in infos) built.types.refreshFile(fi);
 		_unresolvedFrom = null;
@@ -1302,32 +1300,30 @@ final class ReachGraph {
 			eachWord(text, w -> if (!list.contains(w)) list.push(w));
 			into[key] = list;
 		}
-		for (fi in _scope.index.allFiles()) {
-			for (t in fi.types) {
-				words(out.byType, t.name, t.aliasTargetRaw);
-				for (sup in t.supertypesRaw) words(out.byType, t.name, sup);
-				for (m in t.members) {
-					final implicit: Bool = m.isImplicitCall || implicitNames.contains(m.name) || m.name == ctorName;
-					final key: String = implicit ? t.name : '${m.name}@${t.name}';
-					final into: Map<String, Array<String>> = implicit ? out.byType : out.byMember;
-					words(into, key, m.typeSource);
-					words(into, key, m.returnNominal);
-					for (p in m.paramTypeSources) words(into, key, p);
-					if (!implicit) {
-						final owners: Array<String> = out.owners[m.name] ?? [];
-						if (!owners.contains(t.name)) owners.push(t.name);
-						out.owners[m.name] = owners;
-					}
-					// a value of an enum constructor, or of an enum abstract's value, has the declaring type itself
-					words(into, key, t.name);
-					// a type the declaration does not write is inferred from the member's own code (`inferredFrom`)
-					final written: Null<String> = functionKinds.contains(m.kind) ? m.returnNominal : m.typeSource;
-					if (written != null || m.name == ctorName || ctorKinds.contains(m.kind)) continue;
-					final inferredInto: Map<String, Array<InferredRef>> = implicit ? out.inferredType : out.inferredMember;
-					final list: Array<InferredRef> = inferredInto[key] ?? [];
-					list.push({ file: fi.file, type: t.name, member: m.name });
-					inferredInto[key] = list;
+		for (fi in _scope.index.allFiles()) for (t in fi.types) {
+			words(out.byType, t.name, t.aliasTargetRaw);
+			for (sup in t.supertypesRaw) words(out.byType, t.name, sup);
+			for (m in t.members) {
+				final implicit: Bool = m.isImplicitCall || implicitNames.contains(m.name) || m.name == ctorName;
+				final key: String = implicit ? t.name : '${m.name}@${t.name}';
+				final into: Map<String, Array<String>> = implicit ? out.byType : out.byMember;
+				words(into, key, m.typeSource);
+				words(into, key, m.returnNominal);
+				for (p in m.paramTypeSources) words(into, key, p);
+				if (!implicit) {
+					final owners: Array<String> = out.owners[m.name] ?? [];
+					if (!owners.contains(t.name)) owners.push(t.name);
+					out.owners[m.name] = owners;
 				}
+				// a value of an enum constructor, or of an enum abstract's value, has the declaring type itself
+				words(into, key, t.name);
+				// a type the declaration does not write is inferred from the member's own code (`inferredFrom`)
+				final written: Null<String> = functionKinds.contains(m.kind) ? m.returnNominal : m.typeSource;
+				if (written != null || m.name == ctorName || ctorKinds.contains(m.kind)) continue;
+				final inferredInto: Map<String, Array<InferredRef>> = implicit ? out.inferredType : out.inferredMember;
+				final list: Array<InferredRef> = inferredInto[key] ?? [];
+				list.push({ file: fi.file, type: t.name, member: m.name });
+				inferredInto[key] = list;
 			}
 		}
 		_signatureWords = out;

@@ -124,11 +124,10 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
 				final child: QueryNode = kids[i];
-				if (functions.contains(child.kind) && !MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) {
+				if (functions.contains(child.kind) && !MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary))
 					for (edit in functionOracleEdits(seams, child)) edits.push(edit);
-				} else if (fields.contains(child.kind)) {
+				else if (fields.contains(child.kind))
 					pushEdit(edits, fieldOracleEdit(seams, child));
-				}
 				walk(child);
 			}
 		}

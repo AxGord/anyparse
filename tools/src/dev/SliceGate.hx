@@ -553,8 +553,8 @@ final class SliceGate {
 		return try {
 			ArmRegistry.verify(Path.join([_gate.tree, ArmRegistry.DIRECTORY]));
 			null;
-		} catch (refusal: ArmRegistryError) {
-			'arm registry unreadable: ${refusal.message}';
+		} catch (exception: ArmRegistryError) {
+			'arm registry unreadable: ${exception.message}';
 		};
 	}
 

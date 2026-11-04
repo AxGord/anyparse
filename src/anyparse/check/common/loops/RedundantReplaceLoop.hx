@@ -418,14 +418,12 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	): Null<Classification> {
 		final searchContent: Null<String> = search.literal;
 		final replacementContent: Null<String> = replacement.literal;
-		if (searchContent != null && replacementContent != null) {
-			return if (replacementContent.indexOf(searchContent) != -1)
-				{ arm: Arm.B, eqGuarded: false }
-			else if (replacementCanReformSearch(searchContent, replacementContent))
-				null
-			else
-				{ arm: Arm.A, eqGuarded: false };
-		}
+		if (searchContent != null && replacementContent != null) return if (replacementContent.indexOf(searchContent) != -1)
+			{ arm: Arm.B, eqGuarded: false }
+		else if (replacementCanReformSearch(searchContent, replacementContent))
+			null
+		else
+			{ arm: Arm.A, eqGuarded: false };
 		if (fns.length == 0)
 			throw new Exception('$RULE_ID: arm C reached with no enclosing function — operandOf refuses a parameter operand without one');
 		if (replacementContent == '') return { arm: Arm.CEmptyB, eqGuarded: false };

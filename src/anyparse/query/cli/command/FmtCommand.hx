@@ -645,8 +645,8 @@ final class FmtCommand implements CliCommand {
 				// files rewritten and left them at 0 bytes.
 				try {
 					CliIo.writeFile(path, formatted);
-				} catch (failure: WriteFailure) {
-					CliIo.stderr('apq fmt: ${failure.message}\n');
+				} catch (exception: WriteFailure) {
+					CliIo.stderr('apq fmt: ${exception.message}\n');
 					return {
 						changed: false,
 						failed: true,

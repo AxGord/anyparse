@@ -84,9 +84,8 @@ final class LintDiff {
 		final trimmed: String = raw.trim();
 		// the envelope a `--explain-long` run prints holds the same records under `findings`, beside keys this skips
 		final envelope: Bool = trimmed.startsWith('{');
-		if (!envelope && !trimmed.startsWith('[')) {
+		if (!envelope && !trimmed.startsWith('['))
 			throw new Exception('not an `apq lint --format json` report — expected a top-level JSON array or a {"findings": …} envelope');
-		}
 		final report: LintReportJson = try {
 			LintReportJsonParser.parse(envelope ? trimmed : '{"findings":$trimmed}');
 		} catch (exception: ParseError) {

@@ -371,11 +371,10 @@ final class Address {
 		tree: QueryNode, source: String, equiv: Null<KindEquivalence>, nodes: Array<QueryNode>, what: String, nth: Null<Int>
 	): AddressResult {
 		if (nodes.length == 0) return Err('$what matched no nodes');
-		if (nth != null) {
+		if (nth != null)
 			return nth < 1 || nth > nodes.length
 				? Err('--nth $nth out of range — $what matched ${nodes.length} node(s)')
 				: toResult(nodes[nth - 1], what);
-		}
 		if (nodes.length <= 1) return toResult(nodes[0], what);
 		final shown: Int = nodes.length < CANDIDATE_LIMIT ? nodes.length : CANDIDATE_LIMIT;
 		// The index is built HERE and not by the caller: an ambiguity is the rare path, and every

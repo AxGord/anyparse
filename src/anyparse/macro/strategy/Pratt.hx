@@ -90,13 +90,12 @@ class Pratt implements Strategy {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':infix') {
-			if (entry.params.length < 2 || entry.params.length > 4) {
+			if (entry.params.length < 2 || entry.params.length > 4)
 				Context.fatalError(
 					'@:infix expects two to four arguments: "op", precedence:Int, optional associativity ("Left"/"Right") '
 					+ 'and an optional right-operand precedence:Int',
 					entry.pos
 				);
-			}
 			final opText: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:

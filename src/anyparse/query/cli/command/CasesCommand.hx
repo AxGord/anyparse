@@ -58,8 +58,8 @@ final class CasesCommand implements CliCommand {
 				case '--limit':
 					try {
 						limit = CliArgs.parseLimit(arg.value());
-					} catch (e: Exception) {
-						CliIo.stderr('${e.message}\n');
+					} catch (exception: Exception) {
+						CliIo.stderr('${exception.message}\n');
 						return EXIT_USAGE;
 					}
 				case '-h', '--help':

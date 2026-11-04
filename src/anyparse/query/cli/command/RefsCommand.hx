@@ -203,14 +203,13 @@ final class RefsCommand implements CliCommand {
 					CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
 					paths.length
 				);
-			if (o.json) {
+			if (o.json)
 				CliIo.sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource, plugin.lexicalRegions));
-			} else {
+			else
 				for (entry in shown)
 					CliIo.sysPrint(Text.renderRefs(
 						entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, plugin.lexicalRegions(entry.source), o.flat
 					));
-			}
 		}
 		return ctx.emptyExit(!anyHits);
 	}
@@ -248,37 +247,35 @@ final class RefsCommand implements CliCommand {
 		// positional is the name, the rest are scope specs.
 		final scan: WalkerScan = CliArgs.beginWalkerScan(args);
 
-		for (arg in new RefsCommand().flags().walk(args)) {
-			switch arg.flag {
-				case '--lang':
-					lang = arg.value();
-				case '--json':
-					json = true;
-				case '--decls':
-					wantDecls = true;
-				case '--reads':
-					wantReads = true;
-				case '--writes':
-					wantWrites = true;
-				case '--doc':
-					wantDoc = true;
-				case '--source':
-					wantSource = true;
-				case '--flat':
-					scan.flat = true;
-				case '--limit':
-					try {
-						scan.limit = CliArgs.parseLimit(arg.value());
-					} catch (e: Exception) {
-						CliIo.stderr('${e.message}\n');
-						return refsParseExit(EXIT_USAGE);
-					}
-				case '-h', '--help':
-					printRefsUsage();
-					return refsParseExit(EXIT_OK);
-				case null:
-					CliArgs.routePositional(arg.token, arg.index, scan.separator, scan.names, scan.inputSpecs);
-			}
+		for (arg in new RefsCommand().flags().walk(args)) switch arg.flag {
+			case '--lang':
+				lang = arg.value();
+			case '--json':
+				json = true;
+			case '--decls':
+				wantDecls = true;
+			case '--reads':
+				wantReads = true;
+			case '--writes':
+				wantWrites = true;
+			case '--doc':
+				wantDoc = true;
+			case '--source':
+				wantSource = true;
+			case '--flat':
+				scan.flat = true;
+			case '--limit':
+				try {
+					scan.limit = CliArgs.parseLimit(arg.value());
+				} catch (exception: Exception) {
+					CliIo.stderr('${exception.message}\n');
+					return refsParseExit(EXIT_USAGE);
+				}
+			case '-h', '--help':
+				printRefsUsage();
+				return refsParseExit(EXIT_OK);
+			case null:
+				CliArgs.routePositional(arg.token, arg.index, scan.separator, scan.names, scan.inputSpecs);
 		}
 		return {
 			lang: lang,

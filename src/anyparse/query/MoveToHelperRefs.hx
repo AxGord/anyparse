@@ -292,11 +292,10 @@ final class MoveToHelperRefs {
 	): Null<String> {
 		final prep: MovePrep = edits.prep;
 		final moved: Null<MovedMember> = prep.moved.find(m -> m.span.from == group.member.span?.from);
-		if (moved != null) {
+		if (moved != null)
 			return moved.isStatic
 				? null
 				: callRewrite(edits, indexes, prep.srcFile, hit.span.from, moved, hit.interpolated, '', edits.param, true, calls);
-		}
 		final isStatic: Bool = group.modifiers.exists(mod -> mod.kind == 'Static');
 		if (!group.modifiers.exists(mod -> mod.kind == 'Public')) grantFor(edits, hit.span.from);
 		edits.movedTextEdits.push(qualifiedRef(hit, isStatic ? '${prep.srcTypeName}.' : '${edits.param}.'));

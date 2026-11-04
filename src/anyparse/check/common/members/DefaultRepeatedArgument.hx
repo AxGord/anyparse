@@ -284,14 +284,12 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 	): Null<String> {
 		final name: Null<String> = arg.name;
 		if (name == null) return null;
-		if (arg.kind == seams.identKind) {
-			return if (callerOwner != declOwner || entry.binders.exists(name))
-				null
-			else if (scope.constants['$declOwner.$name'] == true)
-				name
-			else
-				null;
-		}
+		if (arg.kind == seams.identKind) return if (callerOwner != declOwner || entry.binders.exists(name))
+			null
+		else if (scope.constants['$declOwner.$name'] == true)
+			name
+		else
+			null;
 		if (arg.kind != seams.fieldAccessKind || arg.children.length != 1) return null;
 		final receiver: QueryNode = arg.children[0];
 		final declared: Null<String> = receiver.name;

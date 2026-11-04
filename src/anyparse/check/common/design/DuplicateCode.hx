@@ -600,22 +600,20 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 	private static function buildGrams(blocks: Array<Array<DupStmt>>): Map<String, Array<DupPos>> {
 		final grams: Map<String, Array<DupPos>> = [];
 		final names: Array<String> = [];
-		for (b => stmts in blocks) {
-			for (i in 0...stmts.length - (MIN_STATEMENTS - 1)) {
-				// Numbering restarts at every window, so a name's index is a property of the window
-				// and not of where the block happens to declare it.
-				names.resize(0);
-				final key: String = renumbered(stmts[i], names)
-					+ GRAM_SEP
-					+ renumbered(stmts[i + 1], names)
-					+ GRAM_SEP
-					+ renumbered(stmts[i + 2], names);
-				final bucket: Null<Array<DupPos>> = grams[key];
-				if (bucket == null)
-					grams[key] = [{ b: b, i: i }];
-				else
-					bucket.push({ b: b, i: i });
-			}
+		for (b => stmts in blocks) for (i in 0...stmts.length - (MIN_STATEMENTS - 1)) {
+			// Numbering restarts at every window, so a name's index is a property of the window
+			// and not of where the block happens to declare it.
+			names.resize(0);
+			final key: String = renumbered(stmts[i], names)
+				+ GRAM_SEP
+				+ renumbered(stmts[i + 1], names)
+				+ GRAM_SEP
+				+ renumbered(stmts[i + 2], names);
+			final bucket: Null<Array<DupPos>> = grams[key];
+			if (bucket == null)
+				grams[key] = [{ b: b, i: i }];
+			else
+				bucket.push({ b: b, i: i });
 		}
 		return grams;
 	}

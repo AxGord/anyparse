@@ -212,9 +212,7 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 	 */
 	private static function literalValue(text: String): Null<Float> {
 		final clean: String = text.replace('_', '');
-		if (clean.startsWith('0x') || clean.startsWith('0X')) {
-			return (Std.parseInt(clean): Null<Int>);
-		}
+		if (clean.startsWith('0x') || clean.startsWith('0X')) return (Std.parseInt(clean): Null<Int>);
 		final f: Float = Std.parseFloat(clean);
 		return Math.isNaN(f) ? null : f;
 	}

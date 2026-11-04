@@ -148,9 +148,8 @@ final class GraphView {
 			view.markFocus(copy(graph, view, n, within));
 		}
 		final sums: Map<String, FoldedEdge> = [];
-		for (e in kept) if (reached == null || (reached.exists(e.from) && reached.exists(e.to))) {
+		for (e in kept) if (reached == null || (reached.exists(e.from) && reached.exists(e.to)))
 			fold(sums, copy(graph, view, nodeOf(graph, e.from), within), copy(graph, view, nodeOf(graph, e.to), within), e);
-		}
 		drawFolded(view, sums);
 		return view;
 	}

@@ -59,8 +59,8 @@ final class DiffCommand implements CliCommand {
 				case '--limit':
 					try {
 						limit = CliArgs.parseLimit(arg.value());
-					} catch (e: Exception) {
-						CliIo.stderr('${e.message}\n');
+					} catch (exception: Exception) {
+						CliIo.stderr('${exception.message}\n');
 						return EXIT_USAGE;
 					}
 				case '-h', '--help':
@@ -90,20 +90,20 @@ final class DiffCommand implements CliCommand {
 		final sourceB: String = CliIo.readSourceForParse(b);
 		final treeA: QueryNode = try {
 			plugin.parseFile(sourceA);
-		} catch (e: ParseError) {
-			CliIo.stderr('apq diff: $a: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.stderr('apq diff: $a: $exception\n');
 			return EXIT_RUNTIME;
-		} catch (e: Exception) {
-			CliIo.stderr('apq diff: $a: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq diff: $a: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final treeB: QueryNode = try {
 			plugin.parseFile(sourceB);
-		} catch (e: ParseError) {
-			CliIo.stderr('apq diff: $b: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.stderr('apq diff: $b: $exception\n');
 			return EXIT_RUNTIME;
-		} catch (e: Exception) {
-			CliIo.stderr('apq diff: $b: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq diff: $b: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
 

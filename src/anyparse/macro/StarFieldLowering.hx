@@ -94,9 +94,7 @@ final class StarFieldLowering {
 		parseSteps: Array<Expr>, isLastField: Bool
 	): Void {
 		final inner: ShapeNode = starNode.children[0];
-		if (inner.kind != Ref) {
-			Context.fatalError('Lowering: Star struct field must contain a Ref', Context.currentPos());
-		}
+		if (inner.kind != Ref) Context.fatalError('Lowering: Star struct field must contain a Ref', Context.currentPos());
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = sc.parseFnName(elemRefName);
 		final elemCT: ComplexType = sc.ruleReturnCT(elemRefName);
@@ -145,12 +143,11 @@ final class StarFieldLowering {
 			elem: elemRefName,
 			first: elemFirst
 		});
-		if (closeText == null && sepText != null && !starNode.hasMeta(':tryparse')) {
+		if (closeText == null && sepText != null && !starNode.hasMeta(':tryparse'))
 			Context.fatalError(
 				'Lowering: Star struct field with @:sep without @:trail requires @:tryparse for fail-rewind termination',
 				Context.currentPos()
 			);
-		}
 		// Trivia-mode branch — @:trivia-annotated Star accumulates
 		// `Trivial<T>` wrappers instead of plain element values. Supports
 		// close-peek mode (HxClassDecl.members / HxFnDecl.body) and EOF
@@ -238,9 +235,7 @@ final class StarFieldLowering {
 		sc: StructSeqCtx, starNode: ShapeNode, localName: String, parseSteps: Array<Expr>
 	): Void {
 		final inner: ShapeNode = starNode.children[0];
-		if (inner.kind != Ref) {
-			Context.fatalError('Lowering: @:optional Star struct field must contain a Ref', Context.currentPos());
-		}
+		if (inner.kind != Ref) Context.fatalError('Lowering: @:optional Star struct field must contain a Ref', Context.currentPos());
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = sc.parseFnName(elemRefName);
 		final elemCT: ComplexType = sc.ruleReturnCT(elemRefName);
@@ -371,13 +366,12 @@ final class StarFieldLowering {
 		// per-element `sepAfter` capture (the D4 loop below), writer-side
 		// re-emission keyed purely on that captured signal.
 		final kwStarSepFaithful: Bool = starNode.annotations['lit.sepFaithful'] == true;
-		if (sepText != null && !blockEndedFlag && !kwStarSepFaithful) {
+		if (sepText != null && !blockEndedFlag && !kwStarSepFaithful)
 			Context.fatalError(
 				'Lowering: @:optional @:kw Star + @:sep requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) '
 				+ 'or sepFaithful — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
-		}
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = sc.parseFnName(elemRefName);
 		final elemCT: ComplexType = sc.ruleReturnCT(elemRefName);
@@ -554,22 +548,20 @@ final class StarFieldLowering {
 		// the case/default-body Stars where per-
 		// statement `@:trailOpt(';')` consuming `;` and element-
 		// parse failure alone cannot terminate at next `case`/`default`/`}`.
-		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse')) {
+		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse'))
 			Context.fatalError('Lowering: @:trivia + @:sep requires @:trail (close-peek) or @:tryparse', Context.currentPos());
-		}
 		// ω-sep-faithful: `@:sep(text, sepFaithful)` supplies the same
 		// termination semantic as blockEnded for the tryparse loop
 		// (sep-absent exits via element-parse fail-rewind), so it is a
 		// valid alternative — the difference is writer-side only
 		// (source-faithful sep re-emission instead of `}`/`;` elision).
 		final sepFaithfulFlag: Bool = starNode.annotations['lit.sepFaithful'] == true;
-		if (sepText != null && starNode.hasMeta(':tryparse') && !blockEndedFlag && !sepFaithfulFlag) {
+		if (sepText != null && starNode.hasMeta(':tryparse') && !blockEndedFlag && !sepFaithfulFlag)
 			Context.fatalError(
 				'Lowering: @:trivia + @:sep + @:tryparse requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) '
 				+ 'or sepFaithful (@:sep(text, sepFaithful)) — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
-		}
 		if (closeText == null && !isLastField && !starNode.hasMeta(':tryparse')) {
 			// Defensive — the Star shape would reject on the plain path too.
 			Context.fatalError('Lowering: @:trivia Star without @:trail requires the field to be terminal', Context.currentPos());
@@ -701,19 +693,17 @@ final class StarFieldLowering {
 		// (the parse attempt that triggered trail capture); other tryparse
 		// shapes either rewind on failure or have no nestBody wrap so the
 		// signal is meaningless. Default `false` matches the no-blank case.
-		if (tryparse && nestBody) {
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: trailBALocal,
-						type: boolCT,
-						expr: macro false,
-						isFinal: false
-					}
-				]),
-				pos: Context.currentPos()
-			});
-		}
+		if (tryparse && nestBody) parseSteps.push({
+			expr: EVars([
+				{
+					name: trailBALocal,
+					type: boolCT,
+					expr: macro false,
+					isFinal: false
+				}
+			]),
+			pos: Context.currentPos()
+		});
 		// ω-objectlit-source-trail-comma: sep-Stars with a close literal
 		// declare an extra mutable Bool that records whether the LAST
 		// `matchLit(sepText)` call inside the loop succeeded. After the
@@ -722,19 +712,17 @@ final class StarFieldLowering {
 		// (i.e. source had a trailing comma). Default `false` covers the
 		// empty-list case and the no-trailing-sep case identically.
 		final trailPresentLocal: String = trailPresentLocalName(localName);
-		if (sepText != null) {
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: trailPresentLocal,
-						type: boolCT,
-						expr: macro false,
-						isFinal: false
-					}
-				]),
-				pos: Context.currentPos()
-			});
-		}
+		if (sepText != null) parseSteps.push({
+			expr: EVars([
+				{
+					name: trailPresentLocal,
+					type: boolCT,
+					expr: macro false,
+					isFinal: false
+				}
+			]),
+			pos: Context.currentPos()
+		});
 		final accumRef: Expr = macro $i{localName};
 		if (tryparse) {
 			// ω-blockended-trivia-tryparse (Session 3): `@:tryparse +

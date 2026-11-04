@@ -107,12 +107,10 @@ class BinaryWriterLowering {
 
 		// @:align padding
 		final align: Null<Int> = node.annotations['bin.align'];
-		if (align != null) {
-			steps.push(macro {
-				final _rem: Int = output.length % $v{align};
-				if (_rem != 0) output.writeByte('\n'.code);
-			});
-		}
+		if (align != null) steps.push(macro {
+			final _rem: Int = output.length % $v{align};
+			if (_rem != 0) output.writeByte('\n'.code);
+		});
 
 		return macro $b{steps};
 	}

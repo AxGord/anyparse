@@ -228,13 +228,13 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		}
 		function walk(node: QueryNode): Void {
 			final callee: Null<QueryNode> = node.children[0];
-			if (node.kind == seams.callKind && callee != null && callee.kind == seams.fieldAccessKind && callee.name == SORT) {
-				for (arg in node.children) {
-					if (isComparator(arg, seams))
-						fromCallback(arg, source, seams, typing, comments, named, out);
-					else if (!named.isEmpty() && isReflectCompare(arg, seams))
-						fromBareReference(callee, arg, typing, named, out);
-				}
+			if (
+				node.kind == seams.callKind && callee != null && callee.kind == seams.fieldAccessKind && callee.name == SORT
+			) for (arg in node.children) {
+				if (isComparator(arg, seams))
+					fromCallback(arg, source, seams, typing, comments, named, out);
+				else if (!named.isEmpty() && isReflectCompare(arg, seams))
+					fromBareReference(callee, arg, typing, named, out);
 			}
 			for (c in node.children) walk(c);
 		}

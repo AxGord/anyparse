@@ -628,11 +628,9 @@ final class SubtypeGraph {
 		final closure: Array<ResolvedType> = [start];
 		final seen: Array<String> = [_refs.seenKey(start)];
 		var i: Int = 0;
-		while (i < closure.length) {
-			for (sub in subtypesOfDecl(closure[i++])) {
-				if (_refs.markSeen(sub, seen)) closure.push(sub);
-				visit(sub);
-			}
+		while (i < closure.length) for (sub in subtypesOfDecl(closure[i++])) {
+			if (_refs.markSeen(sub, seen)) closure.push(sub);
+			visit(sub);
 		}
 	}
 

@@ -76,17 +76,15 @@ final class HxTypeSyntax {
 	private function curried(t: HxTypeS): TypeShape {
 		final params: Array<TypeParam> = [];
 		var at: HxTypeS = t;
-		while (true) {
-			switch at {
-				case Arrow(left, right, _):
-					params.push({ name: null, optional: false, type: type(left) });
-					at = right;
-				case OptionalArg(Arrow(left, right, _), _):
-					params.push({ name: null, optional: true, type: type(left) });
-					at = right;
-				case _:
-					return Function(params, type(at), true);
-			}
+		while (true) switch at {
+			case Arrow(left, right, _):
+				params.push({ name: null, optional: false, type: type(left) });
+				at = right;
+			case OptionalArg(Arrow(left, right, _), _):
+				params.push({ name: null, optional: true, type: type(left) });
+				at = right;
+			case _:
+				return Function(params, type(at), true);
 		}
 	}
 

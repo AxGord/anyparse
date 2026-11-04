@@ -453,9 +453,7 @@ final class TriviaPairAltCtor {
 				// `readMetaString` so `@:sep('text', tailRelax, blockEnded)`
 				// (3-arg form) gates the same as 1-arg `@:sep(',')`. Sister
 				// fix in `buildStarTrailingSlots`.
-				if (branch.hasMeta(':sep')) {
-					args.push({ name: TriviaTypeSynth.TRAIL_PRESENT_ARG_NAME, type: boolCT });
-				}
+				if (branch.hasMeta(':sep')) args.push({ name: TriviaTypeSynth.TRAIL_PRESENT_ARG_NAME, type: boolCT });
 			}
 		}
 		// ω-trailopt-source-track: `@:trailOpt(...)` Alt branches with a

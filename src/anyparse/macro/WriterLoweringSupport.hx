@@ -274,12 +274,10 @@ final class WriterLoweringSupport {
 	private static function fmtReadCall(node: ShapeNode, name: String): Null<Expr> {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({ expr: EConst(CIdent(id)) }, [arg]) if (id == name):
-					return arg;
-				case _:
-			}
+		for (entry in meta) if (entry.name == ':fmt') for (param in entry.params) switch param.expr {
+			case ECall({ expr: EConst(CIdent(id)) }, [arg]) if (id == name):
+				return arg;
+			case _:
 		}
 		return null;
 	}
@@ -310,12 +308,10 @@ final class WriterLoweringSupport {
 	private static function ctorBranchHasFlag(branch: ShapeNode, flag: String): Bool {
 		final meta: Null<Metadata> = branch.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case EConst(CIdent(id)) if (id == flag):
-					return true;
-				case _:
-			}
+		for (entry in meta) if (entry.name == ':fmt') for (param in entry.params) switch param.expr {
+			case EConst(CIdent(id)) if (id == flag):
+				return true;
+			case _:
 		}
 		return false;
 	}

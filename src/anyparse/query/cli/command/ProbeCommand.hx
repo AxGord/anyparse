@@ -54,11 +54,11 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 		CliIo.sysPrint('=== $label ===\n');
 		final emitted: Null<String> = try {
 			(plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
-		} catch (e: ParseError) {
-			CliIo.stderr('apq writer-probe: $label: $file: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.stderr('apq writer-probe: $label: $file: $exception\n');
 			return false;
-		} catch (e: Exception) {
-			CliIo.stderr('apq writer-probe: $label: $file: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq writer-probe: $label: $file: ${exception.message}\n');
 			return false;
 		}
 		if (emitted == null) {

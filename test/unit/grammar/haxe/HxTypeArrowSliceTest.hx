@@ -50,18 +50,16 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
 		var cur: HxType = v.type;
 		final names: Array<String> = [];
-		while (true) {
-			switch cur {
-				case Arrow(l, r):
-					names.push((expectNamedType(l).name: String));
-					cur = r;
-				case Named(ref):
-					names.push((ref.name: String));
-					break;
-				case _:
-					Assert.fail('unexpected variant');
-					return;
-			}
+		while (true) switch cur {
+			case Arrow(l, r):
+				names.push((expectNamedType(l).name: String));
+				cur = r;
+			case Named(ref):
+				names.push((ref.name: String));
+				break;
+			case _:
+				Assert.fail('unexpected variant');
+				return;
 		}
 		Assert.equals('Int,String,Bool,Void', names.join(','));
 	}

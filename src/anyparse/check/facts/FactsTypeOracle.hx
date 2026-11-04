@@ -254,8 +254,8 @@ final class FactsTypeOracle implements TypeOracle {
 		var seen: Bool = false;
 		for (id in facts.typeIds()) {
 			final t: Null<TypeFact> = facts.type(id);
-			if (t != null && t.kind == CompilerFacts.ENUM_TYPE_KIND) for (c in t.constructors) if (c.name == callee) {
-				switch FactsTypeTree.read(c.type) {
+			if (t != null && t.kind == CompilerFacts.ENUM_TYPE_KIND)
+				for (c in t.constructors) if (c.name == callee) switch FactsTypeTree.read(c.type) {
 					// one taking no argument, or fewer, is no constructor a pattern with this argument can be of
 					case Named(_, _):
 					case Function(args, _) if (index >= args.length):
@@ -264,7 +264,6 @@ final class FactsTypeOracle implements TypeOracle {
 					case _:
 						return false;
 				}
-			}
 		}
 		return seen;
 	}

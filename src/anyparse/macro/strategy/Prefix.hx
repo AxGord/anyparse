@@ -53,9 +53,7 @@ class Prefix implements Strategy {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':prefix') {
-			if (entry.params.length != 1) {
-				Context.fatalError('@:prefix expects exactly one string argument: "op"', entry.pos);
-			}
+			if (entry.params.length != 1) Context.fatalError('@:prefix expects exactly one string argument: "op"', entry.pos);
 			final opText: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:

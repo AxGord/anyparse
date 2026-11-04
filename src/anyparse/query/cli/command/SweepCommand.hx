@@ -288,15 +288,13 @@ final class SweepCommand implements CliCommand {
 			}
 			CliIo.sysPrint(sweepDeltaLine(cur, prev, prevPath));
 		}
-		if (savePath != null) {
-			try {
-				final raw: String = sys.io.File.getContent(filePath);
-				sys.io.File.saveContent((savePath: String), raw);
-				CliIo.sysPrint('apq sweep: saved snapshot $filePath -> $savePath\n');
-			} catch (e: Exception) {
-				CliIo.stderr('apq sweep: --save failed: ${e.message}\n');
-				return EXIT_RUNTIME;
-			}
+		if (savePath != null) try {
+			final raw: String = sys.io.File.getContent(filePath);
+			sys.io.File.saveContent((savePath: String), raw);
+			CliIo.sysPrint('apq sweep: saved snapshot $filePath -> $savePath\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq sweep: --save failed: ${exception.message}\n');
+			return EXIT_RUNTIME;
 		}
 		return diffPath != null ? runSweepDiff(filePath, diffPath, diffPath == autoRotatedBaseline) : EXIT_OK;
 	}
@@ -422,23 +420,21 @@ final class SweepCommand implements CliCommand {
 			}
 			CliIo.sysPrint(sweepDeltaLine(totals, prev, prevPath));
 		}
-		if (savePath != null) {
-			try {
-				final snapshot: SweepSnapshot = {
-					pass: census.pass,
-					fail: census.fail,
-					skipParse: census.skipParse,
-					skipWrite: census.skipWrite,
-					skipConfig: census.skipConfig,
-					skipMalformed: census.skipMalformed,
-					fixtures: [for (entry in census.entries) { path: entry.path, status: entry.status }]
-				};
-				sys.io.File.saveContent((savePath: String), SweepSnapshotWriter.write(snapshot, JsonFormat.instance.compactWriteOptions));
-				CliIo.sysPrint('apq sweep: saved census of $root -> $savePath\n');
-			} catch (e: Exception) {
-				CliIo.stderr('apq sweep: --save failed: ${e.message}\n');
-				return EXIT_RUNTIME;
-			}
+		if (savePath != null) try {
+			final snapshot: SweepSnapshot = {
+				pass: census.pass,
+				fail: census.fail,
+				skipParse: census.skipParse,
+				skipWrite: census.skipWrite,
+				skipConfig: census.skipConfig,
+				skipMalformed: census.skipMalformed,
+				fixtures: [for (entry in census.entries) { path: entry.path, status: entry.status }]
+			};
+			sys.io.File.saveContent((savePath: String), SweepSnapshotWriter.write(snapshot, JsonFormat.instance.compactWriteOptions));
+			CliIo.sysPrint('apq sweep: saved census of $root -> $savePath\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq sweep: --save failed: ${exception.message}\n');
+			return EXIT_RUNTIME;
 		}
 		if (diffPath == null) return EXIT_OK;
 		final cur: Map<String, String> = [];

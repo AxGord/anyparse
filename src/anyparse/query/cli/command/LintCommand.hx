@@ -327,7 +327,7 @@ final class LintCommand implements CliCommand {
 			oracles, early, reflective, holders, ahead, o
 		);
 
-		if (o.fix) {
+		if (o.fix)
 			return endingCompiles(
 				early, ahead, oracles,
 				() ->
@@ -336,7 +336,6 @@ final class LintCommand implements CliCommand {
 						o.noOracle, o.range, o.verbose, o.fixProbes
 					)
 			);
-		}
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
 		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report

@@ -81,12 +81,10 @@ final class RedundantVoidReturn extends RuleBase {
 	private static function walk(
 		out: Array<Span>, node: QueryNode, voidKind: String, fnKinds: Array<String>, bodyKinds: Array<String>
 	): Void {
-		if (fnKinds.contains(node.kind)) {
-			for (child in node.children) if (bodyKinds.contains(child.kind) && child.children.length > 0) {
-				final last: QueryNode = child.children[child.children.length - 1];
-				final span: Null<Span> = last.span;
-				if (last.kind == voidKind && span != null) out.push(span);
-			}
+		if (fnKinds.contains(node.kind)) for (child in node.children) if (bodyKinds.contains(child.kind) && child.children.length > 0) {
+			final last: QueryNode = child.children[child.children.length - 1];
+			final span: Null<Span> = last.span;
+			if (last.kind == voidKind && span != null) out.push(span);
 		}
 		for (c in node.children) walk(out, c, voidKind, fnKinds, bodyKinds);
 	}

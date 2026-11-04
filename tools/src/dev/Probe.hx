@@ -203,16 +203,15 @@ final class Probe {
 		if (expected.commentsKept != answer.commentsKept) lines.push('comments kept: ${expected.commentsKept} → ${answer.commentsKept}');
 		final want: Null<Array<Bool>> = expected.compiles;
 		final got: Null<Array<Bool>> = answer.compiles;
-		if (compiled && want != null && got != null) {
-			for (k in 0...Std.int(Math.max(want.length, got.length))) if (want[k] != got[k])
-				lines.push('compiles with define set #$k: ${want[k]} → ${got[k]}');
-		}
+		if (compiled && want != null && got != null)
+			for (k in 0...Std.int(Math.max(want.length, got.length)))
+				if (want[k] != got[k]) lines.push('compiles with define set #$k: ${want[k]} → ${got[k]}');
 		final wantSame: Null<Array<Bool>> = expected.sameRun;
 		final gotSame: Null<Array<Bool>> = answer.sameRun;
-		if (compiled && wantSame != null && gotSame != null) {
-			for (k in 0...Std.int(Math.max(wantSame.length, gotSame.length))) if (wantSame[k] != gotSame[k])
-				lines.push('runs print the same as the original with define set #$k: ${wantSame[k]} → ${gotSame[k]}');
-		}
+		if (compiled && wantSame != null && gotSame != null)
+			for (k in 0...Std.int(Math.max(wantSame.length, gotSame.length)))
+				if (wantSame[k] != gotSame[k])
+					lines.push('runs print the same as the original with define set #$k: ${wantSame[k]} → ${gotSame[k]}');
 		return lines;
 	}
 

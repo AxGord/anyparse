@@ -94,15 +94,14 @@ final class WriterTriviaStarEmitLowering {
 		// Stars forward null to preserve the post-loop emission
 		// shape without a dangling slot access.
 		final triviaCtx: TriviaStarCtx = buildTriviaStarCtx(args);
-		if (starNode.hasMeta(':tryparse')) {
+		if (starNode.hasMeta(':tryparse'))
 			emitTriviaTryparseStar(ctx, triviaCtx, parts);
-		} else if (closeText != null) {
+		else if (closeText != null)
 			WriterTriviaStarDispatch.emitTriviaCloseStar(ctx.triviaStar, triviaCtx, parts);
-		} else if (isLastField) {
+		else if (isLastField)
 			emitTriviaEofStar(ctx, triviaCtx, parts);
-		} else {
+		else
 			Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
-		}
 		wrapSiblingFlags(starNode, parts);
 	}
 

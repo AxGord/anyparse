@@ -169,11 +169,11 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		// comparable with a plain `ast` run of the same file.
 		final tree: QueryNode = try {
 			(o.typeRefs ? plugin.parseFileTypeRefs(source) : plugin.parseFile(source));
-		} catch (e: ParseError) {
-			CliIo.stderr('apq ast: $fileLabel: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.stderr('apq ast: $fileLabel: $exception\n');
 			return EXIT_RUNTIME;
-		} catch (e: Exception) {
-			CliIo.stderr('apq ast: $fileLabel: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq ast: $fileLabel: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -553,11 +553,11 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		final optsJson: Null<String> = file != null ? CliArgs.readWriteOptionsJsonOrNull((file: String)) : null;
 		final emitted: Null<String> = try {
 			(writerOutputPlain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
-		} catch (e: ParseError) {
-			CliIo.stderr('apq ast: $fileLabel: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.stderr('apq ast: $fileLabel: $exception\n');
 			return EXIT_RUNTIME;
-		} catch (e: Exception) {
-			CliIo.stderr('apq ast: $fileLabel: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq ast: $fileLabel: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
 		if (emitted == null) {
@@ -572,21 +572,21 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		final emittedSrc: String = emitted;
 		final treeIn: QueryNode = try {
 			plugin.parseFile(source);
-		} catch (e: ParseError) {
-			CliIo.stderr('apq ast: --writer-output --diff: input $fileLabel: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.stderr('apq ast: --writer-output --diff: input $fileLabel: $exception\n');
 			return EXIT_RUNTIME;
-		} catch (e: Exception) {
-			CliIo.stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq ast: --writer-output --diff: input $fileLabel: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final treeOut: QueryNode = try {
 			plugin.parseFile(emittedSrc);
-		} catch (e: ParseError) {
-			CliIo.stderr('apq ast: --writer-output --diff: writer output failed to re-parse: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.stderr('apq ast: --writer-output --diff: writer output failed to re-parse: $exception\n');
 			CliIo.stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
 			return EXIT_RUNTIME;
-		} catch (e: Exception) {
-			CliIo.stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${exception.message}\n');
 			CliIo.stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
 			return EXIT_RUNTIME;
 		}

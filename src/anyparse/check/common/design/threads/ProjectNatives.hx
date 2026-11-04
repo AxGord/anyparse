@@ -160,14 +160,12 @@ final class ProjectNatives {
 		var node: Null<QueryNode> = tree;
 		while (node != null) {
 			final at: Null<Span> = node.span;
-			if (at != null && at.from == span.from && at.to == span.to) {
-				return if (node.kind == _shape.callKind && node.children.length > 0)
-					node
-				else if (parent != null && parent.kind == _shape.callKind && parent.children[0] == node)
-					parent
-				else
-					null;
-			}
+			if (at != null && at.from == span.from && at.to == span.to) return if (node.kind == _shape.callKind && node.children.length > 0)
+				node
+			else if (parent != null && parent.kind == _shape.callKind && parent.children[0] == node)
+				parent
+			else
+				null;
 			parent = node;
 			node = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
 		}

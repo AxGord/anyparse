@@ -64,9 +64,8 @@ class Kw implements Strategy {
 					entry.pos
 				);
 			seen = true;
-			if (entry.params.length != 1) {
+			if (entry.params.length != 1)
 				Context.fatalError('@:kw expects exactly one string argument (multi-literal kw is not implemented yet)', entry.pos);
-			}
 			final text: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:

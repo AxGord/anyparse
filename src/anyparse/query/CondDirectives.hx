@@ -201,15 +201,13 @@ final class CondDirectives {
 	public static function isBalancedParenWrapped(condition: String): Bool {
 		if (!condition.startsWith('(') || !condition.endsWith(')')) return false;
 		var depth: Int = 0;
-		for (i in 0...condition.length) {
-			switch condition.charAt(i) {
-				case '(':
-					depth++;
-				case ')':
-					depth--;
-					if (depth == 0 && i < condition.length - 1) return false;
-				case _:
-			}
+		for (i in 0...condition.length) switch condition.charAt(i) {
+			case '(':
+				depth++;
+			case ')':
+				depth--;
+				if (depth == 0 && i < condition.length - 1) return false;
+			case _:
 		}
 		return depth == 0;
 	}

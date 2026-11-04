@@ -38,9 +38,8 @@ class StrategyRegistry {
 		// Conflict check — each owned meta tag can have only one owner.
 		final owners: Map<String, String> = [];
 		for (s in _strategies) for (tag in s.ownedMeta) {
-			if (owners.exists(tag)) {
+			if (owners.exists(tag))
 				Context.fatalError('metadata $tag is claimed by both ${owners[tag]} and ${s.name}', Context.currentPos());
-			}
 			owners[tag] = s.name;
 		}
 		_ordered = topoSort(_strategies);
@@ -68,9 +67,7 @@ class StrategyRegistry {
 	private static function topoSort(list: Array<Strategy>): Array<Strategy> {
 		final incoming: Map<String, Array<String>> = buildIncomingEdges(list);
 		final result: Array<Strategy> = drainReady(list, incoming);
-		if (result.length != list.length) {
-			Context.fatalError('strategy dependency graph has a cycle', Context.currentPos());
-		}
+		if (result.length != list.length) Context.fatalError('strategy dependency graph has a cycle', Context.currentPos());
 		return result;
 	}
 

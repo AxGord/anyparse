@@ -196,7 +196,8 @@ final class TyperConformance {
 		final refused: Array<String> = [];
 		for (name in names) {
 			Sys.setCwd(Path.join([root, name]));
-			final why: Null<String> = try probeRefusal(facts(null, report)) catch (e: Exception) 'the run threw: ${e.message}';
+			final why: Null<String> =
+				try probeRefusal(facts(null, report)) catch (exception: Exception) 'the run threw: ${exception.message}';
 			if (why == null) continue;
 			refused.push('$name: $why');
 			Sys.println('probes: $name is no reading — $why');

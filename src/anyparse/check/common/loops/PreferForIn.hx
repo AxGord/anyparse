@@ -227,9 +227,8 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		final body: QueryNode = loop.children[1];
 		final iterator: Null<String> = protocolReceiver(loop.children[0], HAS_NEXT_METHOD, s);
 		if (iterator == null) return null;
-		if (body.kind != s.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) {
+		if (body.kind != s.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS)
 			return tryUnbound(loop, body, iterator, scope, decl, ctx);
-		}
 		final binding: QueryNode = body.children[0];
 		final binder: Null<String> = binding.name;
 		if (loop.kind != s.whileStmtKind) return tryUnbound(loop, body, iterator, scope, decl, ctx);

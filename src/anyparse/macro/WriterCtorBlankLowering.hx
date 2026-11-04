@@ -1070,69 +1070,67 @@ final class WriterCtorBlankLowering {
 		// multi-line. Closes the `wrapping/issue_494_type_parameter`
 		// boundary between a flat typedef and a typeParam-wrapping typedef.
 		final preds: Array<Expr> = [];
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({ expr: EConst(CIdent('multilineWhenFieldNonEmpty')) }, [{ expr: EConst(CString(field, _)) }]):
-					final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
-					preds.push(macro $fieldExpr.length > 0);
-				case ECall({ expr: EConst(CIdent('multilineWhenFieldShape')) }, [{ expr: EConst(CString(field, _)) }]):
-					final fieldNode: Null<ShapeNode> = findFieldByName(node, field);
-					if (fieldNode == null)
-						Context.fatalError(
-							'WriterLowering: @:fmt(multilineWhenFieldShape) field "$field" not found on $typeName', Context.currentPos()
-						);
-					final targetType: Null<String> = fieldNode.annotations.get(AnnotationKeys.BASE_REF);
-					if (targetType == null) continue;
-					final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
-					final inner: Null<Expr> = buildMultilinePredicate(cb, targetType, fieldExpr);
-					if (inner != null) preds.push(inner);
-				// ω-typedef-between-blank: 4-arg runtime ctor match on a
-				// named field PLUS an opt-side runtime equality with a
-				// fully-qualified enum literal. Emits
-				// `Type.enumConstructor(<accessExpr>.<field>) == <ctorName>
-				// && opt.<optField> == <optEnumExpr>`.
-				// The opt-gate distinguishes layout modes that drive
-				// whether a structurally-bound type renders multi-line
-				// — e.g. `HxTypedefDecl` is "multi-line in output" only
-				// when the bound type is `Anon` AND `anonTypeLeftCurly`
-				// is `BracePlacement.Next` (issue_301 boundary). Avoids
-				// spurious blanks under Same / other placements where the
-				// same source emits single-line. The 4th arg is parsed
-				// as a Haxe expression so `enum abstract` knobs (which
-				// fail `Type.enumConstructor`) can be compared directly
-				// against their declared constructor.
-				case ECall({ expr: EConst(CIdent('multilineWhenFieldCtorAndOpt')) }, [
-					{ expr: EConst(CString(field, _)) },
-					{ expr: EConst(CString(ctorName, _)) },
-					{ expr: EConst(CString(optField, _)) },
-					{ expr: EConst(CString(optEnumExprStr, _)) }
-				]):
-					final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
-					final optAccess: Expr = optFieldAccess(optField);
-					final optEnumExpr: Expr = Context.parse(optEnumExprStr, pos);
-					preds.push(macro Type.enumConstructor($fieldExpr) == $v{ctorName} && $optAccess == $optEnumExpr);
-				// ω-typedef-typeparam-multiline: 3-arg cascade probe on a
-				// Star field. Mirror of `WrapList.decideWithLineLengthState`
-				// at predicate-eval time, approximating per-item width via
-				// `<itemNameField>.length` and the same `(n-1)*(sep+space)`
-				// inter-item correction `WrapList.emit` applies. Predicate
-				// fires when the cascade would resolve to any non-NoWrap
-				// mode, i.e. the typedef's declare-site type parameters
-				// would render multi-line. Hardcodes sep width to fork-
-				// standard `, ` (2 chars) — every Haxe wrap cascade uses
-				// comma separators, so this matches the runtime that
-				// `shapeNoWrap` / `shapeFillLine` produce.
-				case ECall({ expr: EConst(CIdent('multilineWhenStarFieldWrapsCascade')) }, [
-					{ expr: EConst(CString(field, _)) },
-					{ expr: EConst(CString(cascadeKnob, _)) },
-					{ expr: EConst(CString(itemNameField, _)) }
-				]):
-					final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
-					final cascadeAccess: Expr = optFieldAccess(cascadeKnob);
-					final itemFieldExpr: Expr = { expr: EField(macro _p, itemNameField), pos: pos };
-					preds.push(buildStarWrapsCascadePred(fieldExpr, cascadeAccess, itemFieldExpr));
-				case _:
-			}
+		for (entry in meta) if (entry.name == ':fmt') for (param in entry.params) switch param.expr {
+			case ECall({ expr: EConst(CIdent('multilineWhenFieldNonEmpty')) }, [{ expr: EConst(CString(field, _)) }]):
+				final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
+				preds.push(macro $fieldExpr.length > 0);
+			case ECall({ expr: EConst(CIdent('multilineWhenFieldShape')) }, [{ expr: EConst(CString(field, _)) }]):
+				final fieldNode: Null<ShapeNode> = findFieldByName(node, field);
+				if (fieldNode == null)
+					Context.fatalError(
+						'WriterLowering: @:fmt(multilineWhenFieldShape) field "$field" not found on $typeName', Context.currentPos()
+					);
+				final targetType: Null<String> = fieldNode.annotations.get(AnnotationKeys.BASE_REF);
+				if (targetType == null) continue;
+				final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
+				final inner: Null<Expr> = buildMultilinePredicate(cb, targetType, fieldExpr);
+				if (inner != null) preds.push(inner);
+			// ω-typedef-between-blank: 4-arg runtime ctor match on a
+			// named field PLUS an opt-side runtime equality with a
+			// fully-qualified enum literal. Emits
+			// `Type.enumConstructor(<accessExpr>.<field>) == <ctorName>
+			// && opt.<optField> == <optEnumExpr>`.
+			// The opt-gate distinguishes layout modes that drive
+			// whether a structurally-bound type renders multi-line
+			// — e.g. `HxTypedefDecl` is "multi-line in output" only
+			// when the bound type is `Anon` AND `anonTypeLeftCurly`
+			// is `BracePlacement.Next` (issue_301 boundary). Avoids
+			// spurious blanks under Same / other placements where the
+			// same source emits single-line. The 4th arg is parsed
+			// as a Haxe expression so `enum abstract` knobs (which
+			// fail `Type.enumConstructor`) can be compared directly
+			// against their declared constructor.
+			case ECall({ expr: EConst(CIdent('multilineWhenFieldCtorAndOpt')) }, [
+				{ expr: EConst(CString(field, _)) },
+				{ expr: EConst(CString(ctorName, _)) },
+				{ expr: EConst(CString(optField, _)) },
+				{ expr: EConst(CString(optEnumExprStr, _)) }
+			]):
+				final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
+				final optAccess: Expr = optFieldAccess(optField);
+				final optEnumExpr: Expr = Context.parse(optEnumExprStr, pos);
+				preds.push(macro Type.enumConstructor($fieldExpr) == $v{ctorName} && $optAccess == $optEnumExpr);
+			// ω-typedef-typeparam-multiline: 3-arg cascade probe on a
+			// Star field. Mirror of `WrapList.decideWithLineLengthState`
+			// at predicate-eval time, approximating per-item width via
+			// `<itemNameField>.length` and the same `(n-1)*(sep+space)`
+			// inter-item correction `WrapList.emit` applies. Predicate
+			// fires when the cascade would resolve to any non-NoWrap
+			// mode, i.e. the typedef's declare-site type parameters
+			// would render multi-line. Hardcodes sep width to fork-
+			// standard `, ` (2 chars) — every Haxe wrap cascade uses
+			// comma separators, so this matches the runtime that
+			// `shapeNoWrap` / `shapeFillLine` produce.
+			case ECall({ expr: EConst(CIdent('multilineWhenStarFieldWrapsCascade')) }, [
+				{ expr: EConst(CString(field, _)) },
+				{ expr: EConst(CString(cascadeKnob, _)) },
+				{ expr: EConst(CString(itemNameField, _)) }
+			]):
+				final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
+				final cascadeAccess: Expr = optFieldAccess(cascadeKnob);
+				final itemFieldExpr: Expr = { expr: EField(macro _p, itemNameField), pos: pos };
+				preds.push(buildStarWrapsCascadePred(fieldExpr, cascadeAccess, itemFieldExpr));
+			case _:
 		}
 		if (preds.length == 0) return null;
 		var folded: Expr = preds[0];

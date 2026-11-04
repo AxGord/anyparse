@@ -501,14 +501,12 @@ final class TriviaPairSlots {
 		// stash) or have no nestBody indent wrap. Reads `:fmt` directly from
 		// `base.meta` for the same TriviaTypeSynth/Lit-pass ordering reason
 		// as `:trail` / `:lead` above.
-		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) {
-			fields.push({
-				name: fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			});
-		}
+		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) fields.push({
+			name: fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX,
+			kind: FVar(boolCT),
+			pos: pos,
+			access: []
+		});
 		// ω-objectlit-source-trail-comma: sep-Stars with a close literal
 		// grow a `Bool` slot capturing whether the source had a trailing
 		// separator after the last element. The writer reads it via
@@ -522,14 +520,12 @@ final class TriviaPairSlots {
 		// counts the same as 1-arg `@:sep(',')`. Parser-side gate reads
 		// `lit.sepText` (set by Lit strategy after both 1- and 3-arg forms)
 		// — synth must match the parser to keep ctor / struct arity in sync.
-		if (child.hasMeta(':sep') && child.hasMeta(':trail')) {
-			fields.push({
-				name: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			});
-		}
+		if (child.hasMeta(':sep') && child.hasMeta(':trail')) fields.push({
+			name: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX,
+			kind: FVar(boolCT),
+			pos: pos,
+			access: []
+		});
 		return fields;
 	}
 

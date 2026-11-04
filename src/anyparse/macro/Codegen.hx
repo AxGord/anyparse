@@ -201,13 +201,11 @@ class Codegen {
 		// `_savedPos` rollback branch's `precValue < minPrec` comparison
 		// fail the null-safety binop check inside the generated parser.
 		final args: Array<FunctionArg> = [{ name: 'ctx', type: macro : anyparse.runtime.Parser }];
-		if (rule.hasMinPrec) {
-			args.push({
-				name: 'minPrec',
-				type: macro : Int,
-				value: macro 0
-			});
-		}
+		if (rule.hasMinPrec) args.push({
+			name: 'minPrec',
+			type: macro : Int,
+			value: macro 0
+		});
 		return {
 			name: rule.fnName,
 			access: [APrivate, AStatic],

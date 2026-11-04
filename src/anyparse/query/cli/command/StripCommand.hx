@@ -88,13 +88,11 @@ final class StripCommand implements CliCommand {
 	 */
 	public static function compileStripRegexes(tool: String, patterns: Array<String>): Null<Array<EReg>> {
 		final out: Array<EReg> = [];
-		for (idx => pat in patterns) {
-			try {
-				out.push(new EReg(pat, 'g'));
-			} catch (e: Exception) {
-				CliIo.stderr('apq $tool: --regex: pattern[$idx] "$pat" is not a valid EReg: ${e.message}\n');
-				return null;
-			}
+		for (idx => pat in patterns) try {
+			out.push(new EReg(pat, 'g'));
+		} catch (exception: Exception) {
+			CliIo.stderr('apq $tool: --regex: pattern[$idx] "$pat" is not a valid EReg: ${exception.message}\n');
+			return null;
 		}
 		return out;
 	}
@@ -543,9 +541,7 @@ final class StripCommand implements CliCommand {
 				'apq strip: WARNING: no substitution changed the source (patterns matched 0 occurrences${scope == '' ? '' : ' $scope'})\n'
 			);
 		}
-		if (multi) {
-			CliIo.sysPrint('--- $passCount PARSE OK, $failCount PARSE FAIL (total ${o.files.length}) ---\n');
-		}
+		if (multi) CliIo.sysPrint('--- $passCount PARSE OK, $failCount PARSE FAIL (total ${o.files.length}) ---\n');
 		return anyFailed ? EXIT_RUNTIME : EXIT_OK;
 	}
 
@@ -573,9 +569,7 @@ final class StripCommand implements CliCommand {
 				: stripped.replace(o.patterns[idx], o.replacements[idx]);
 		}
 		final changed: Bool = stripped != source;
-		if (o.showSource) {
-			CliIo.stderr('--- stripped source (${filePath}) ---\n$stripped\n--- end ---\n');
-		}
+		if (o.showSource) CliIo.stderr('--- stripped source (${filePath}) ---\n$stripped\n--- end ---\n');
 		final prefix: String = multi ? '$filePath: ' : '';
 		if (o.dryRun) {
 			final tag: String = fileHits > 0 ? 'WOULD CHANGE' : 'NO MATCH';
@@ -586,11 +580,11 @@ final class StripCommand implements CliCommand {
 			plugin.parseFile(stripped);
 			CliIo.sysPrint('${prefix}PARSE OK\n');
 			return { changed: changed, status: 0 };
-		} catch (e: ParseError) {
-			CliIo.sysPrint('${prefix}PARSE FAIL: $e\n');
+		} catch (exception: ParseError) {
+			CliIo.sysPrint('${prefix}PARSE FAIL: $exception\n');
 			return { changed: changed, status: 1 };
-		} catch (e: Exception) {
-			CliIo.sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.sysPrint('${prefix}PARSE FAIL: ${exception.message}\n');
 			return { changed: changed, status: 1 };
 		}
 	}
@@ -603,10 +597,10 @@ final class StripCommand implements CliCommand {
 		return try {
 			plugin.parseFile(s);
 			{ ok: true, msg: '' };
-		} catch (e: ParseError) {
-			{ ok: false, msg: e.toString() };
-		} catch (e: Exception) {
-			{ ok: false, msg: e.message };
+		} catch (exception: ParseError) {
+			{ ok: false, msg: exception.toString() };
+		} catch (exception: Exception) {
+			{ ok: false, msg: exception.message };
 		}
 	}
 

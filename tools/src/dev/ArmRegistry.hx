@@ -72,7 +72,7 @@ final class ArmRegistry {
 		if (FileSystem.isDirectory(path)) for (i => text in texts) {
 			final document: String = Path.withoutDirectory(files[i]);
 			final parsed: Array<ArmRecord> =
-				try parse(text) catch (refusal: ArmRegistryError) throw new ArmRegistryError('$document: ${refusal.message}');
+				try parse(text) catch (exception: ArmRegistryError) throw new ArmRegistryError('$document: ${exception.message}');
 			for (record in parsed) {
 				final type: Null<String> = typeOf(record.text);
 				final complaint: Null<String> = type == null ? null : PackageDocuments.misplacement(document, type);

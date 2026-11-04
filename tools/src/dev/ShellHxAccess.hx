@@ -130,11 +130,10 @@ final class ShellHxAccess {
 	private static function find(command: String, cwd: Null<String>, test: (String, Null<String>) -> Bool): Null<String> {
 		var dir: Null<String> = cwd;
 		for (segment in segments(command)) {
-			if (CD.match(segment)) {
+			if (CD.match(segment))
 				dir = enter(dir, CD.matched(1));
-			} else if (test(segment, dir)) {
+			else if (test(segment, dir))
 				return segment;
-			}
 		}
 		return null;
 	}

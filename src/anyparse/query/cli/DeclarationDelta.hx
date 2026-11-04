@@ -202,9 +202,11 @@ final class DeclarationDelta {
 	public static function hunk(before: Array<String>, after: Array<String>, ?context: Int): Array<String> {
 		final rows: Array<String> = editRows(before, after);
 		final near: Array<Bool> = [for (_ in rows) context == null];
-		if (context != null) for (i => row in rows) if (!row.startsWith(UNCHANGED_MARK)) {
-			for (k in (i < context ? 0 : i - context) ... (i + context + 1 > rows.length ? rows.length : i + context + 1)) near[k] = true;
-		}
+		if (context != null)
+			for (i => row in rows)
+				if (!row.startsWith(UNCHANGED_MARK))
+					for (k in (i < context ? 0 : i - context) ... (i + context + 1 > rows.length ? rows.length : i + context + 1))
+						near[k] = true;
 		final out: Array<String> = [];
 		for (i => row in rows) if (near[i])
 			out.push(row)
@@ -344,12 +346,12 @@ final class DeclarationDelta {
 			else
 				bucket.push(i);
 		}
-		for (identical in [true, false]) for (i => unit in after.units) if (partner[i] < 0) {
-			for (j in byKey[unit.key] ?? []) if (!taken[j] && (!identical || sameLines(before.owned[j], after.owned[i]))) {
-				partner[i] = j;
-				taken[j] = true;
-				break;
-			}
+		for (identical in [true, false]) for (i => unit in after.units) if (partner[i] < 0) for (j in byKey[unit.key] ?? []) if (
+			!taken[j] && (!identical || sameLines(before.owned[j], after.owned[i]))
+		) {
+			partner[i] = j;
+			taken[j] = true;
+			break;
 		}
 		return partner;
 	}

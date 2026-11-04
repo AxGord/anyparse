@@ -150,13 +150,12 @@ final class Engine {
 		// so the first segment can fire deeper in the tree (top-level any-depth match).
 		final matched: Bool = sel.segments[segIdx].matches(node, equiv);
 		if (matched) {
-			if (segIdx == sel.segments.length - 1) {
+			if (segIdx == sel.segments.length - 1)
 				pushUnique(out, node);
-			} else if (sel.segments[segIdx + 1].descendant) {
+			else if (sel.segments[segIdx + 1].descendant)
 				for (c in node.children) walkDescendant(c, sel, segIdx + 1, out, equiv);
-			} else {
+			else
 				for (c in node.children) walkSelect(c, sel, segIdx + 1, out, equiv);
-			}
 		}
 		if (segIdx == 0) for (c in node.children) walkSelect(c, sel, 0, out, equiv);
 	}
@@ -170,13 +169,12 @@ final class Engine {
 	): Void {
 		final matched: Bool = sel.segments[segIdx].matches(node, equiv);
 		if (matched) {
-			if (segIdx == sel.segments.length - 1) {
+			if (segIdx == sel.segments.length - 1)
 				pushUnique(out, node);
-			} else if (sel.segments[segIdx + 1].descendant) {
+			else if (sel.segments[segIdx + 1].descendant)
 				for (c in node.children) walkDescendant(c, sel, segIdx + 1, out, equiv);
-			} else {
+			else
 				for (c in node.children) walkSelect(c, sel, segIdx + 1, out, equiv);
-			}
 		}
 		for (c in node.children) walkDescendant(c, sel, segIdx, out, equiv);
 	}

@@ -96,9 +96,7 @@ final class CommandTest extends Test {
 				tethered.at(dir.path),
 				tethered.env('DEVKIT_PROBE', 'x'),
 				tethered.timeout(60000)
-			]) {
-				Assert.isTrue(isTether(derived.text()), derived.toString());
-			}
+			]) Assert.isTrue(isTether(derived.text()), derived.toString());
 			Assert.isTrue(isTether(tethered.pipe(cmd('$_node -e $UPPER')).text()), 'the upstream stage of a pipe');
 		});
 	}
@@ -134,8 +132,8 @@ final class CommandTest extends Test {
 		final thrown: Null<CommandFailed> = try {
 			Assert.fail('passed as ${result.check().status}');
 			null;
-		} catch (e: CommandFailed) {
-			e;
+		} catch (exception: CommandFailed) {
+			exception;
 		};
 		Assert.notNull(thrown);
 		if (thrown != null) Assert.isTrue(thrown.message.contains('exited 3') && thrown.message.endsWith(':\ne'), thrown.message);

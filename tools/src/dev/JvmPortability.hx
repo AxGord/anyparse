@@ -72,12 +72,10 @@ final class JvmPortability {
 		final readAt: Float = Sys.time();
 		var wrote: Int = 0;
 		final threw: Array<String> = [];
-		for (f in files) {
-			try {
-				if (plugin.writeRoundTrip(f.source, opts) != null) wrote++;
-			} catch (exception: Exception) {
-				threw.push('${f.file}: ${exception.message}');
-			}
+		for (f in files) try {
+			if (plugin.writeRoundTrip(f.source, opts) != null) wrote++;
+		} catch (exception: Exception) {
+			threw.push('${f.file}: ${exception.message}');
 		}
 		final wroteAt: Float = Sys.time();
 		// The config resolver is what makes the finding count MEAN something. Without it

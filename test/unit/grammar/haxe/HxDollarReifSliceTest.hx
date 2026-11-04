@@ -98,14 +98,12 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 
 	public function testDollarReifAllNames(): Void {
 		// Single-quoted: `$$` -> literal `$`, `$n` -> the loop variable.
-		for (n in ['i', 'v', 'p', 'a', 'b', 'e']) {
-			switch initOf('class C { var x = $$$n{body}; }') {
-				case DollarReifExpr({ name: name, expr: inner }):
-					Assert.equals(n, (name: String));
-					Assert.equals('body', identOf(inner));
-				case e:
-					Assert.fail('expected DollarReifExpr for $$$n{...}, got $e');
-			}
+		for (n in ['i', 'v', 'p', 'a', 'b', 'e']) switch initOf('class C { var x = $$$n{body}; }') {
+			case DollarReifExpr({ name: name, expr: inner }):
+				Assert.equals(n, (name: String));
+				Assert.equals('body', identOf(inner));
+			case e:
+				Assert.fail('expected DollarReifExpr for $$$n{...}, got $e');
 		}
 	}
 

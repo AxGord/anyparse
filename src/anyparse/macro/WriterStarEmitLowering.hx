@@ -346,15 +346,14 @@ final class WriterStarEmitLowering {
 			return;
 		}
 
-		if (closeText != null && sepText != null) {
+		if (closeText != null && sepText != null)
 			emitSepStar(ctx, plainCtx, parts);
-		} else if (closeText != null) {
+		else if (closeText != null)
 			emitClosePlainStar(ctx, plainCtx, parts);
-		} else if (!isLastField || starNode.hasMeta(':tryparse')) {
+		else if (!isLastField || starNode.hasMeta(':tryparse'))
 			emitTryparseOrPadStar(ctx, plainCtx, parts);
-		} else {
+		else
 			emitEofPlainStar(plainCtx, parts);
-		}
 	}
 
 	/**
@@ -677,11 +676,10 @@ final class WriterStarEmitLowering {
 		// Try-parse mode. Emit lead if present (e.g. ':' in default:).
 		if (openText != null) parts.push(macro _dt($v{openText}));
 		final sameLineName: Null<String> = starNode.fmtReadString('sameLine');
-		if (sameLineName != null) {
+		if (sameLineName != null)
 			emitTryparseSameLineStar(ctx, c, sameLineName, parts);
-		} else {
+		else
 			emitTryparsePadStar(ctx, c, parts);
-		}
 	}
 
 	/**
@@ -1383,20 +1381,18 @@ final class WriterStarEmitLowering {
 		};
 		// See `emitWriterStarField` — `@:sep('\n')` routes to a flat
 		// hardline-join emission (format-neutral).
-		if (sepText == '\n') {
-			return macro {
-				final _args = $argsAccess;
-				final _docs: Array<anyparse.core.Doc> = [_dt($v{leadText})];
-				var _i: Int = 0;
-				while (_i < _args.length) {
-					if (_i > 0) _docs.push(_dhl());
-					_docs.push($elemCall);
-					_i++;
-				}
-				_docs.push(_dt($v{trailText}));
-				_dc(_docs);
-			};
-		}
+		if (sepText == '\n') return macro {
+			final _args = $argsAccess;
+			final _docs: Array<anyparse.core.Doc> = [_dt($v{leadText})];
+			var _i: Int = 0;
+			while (_i < _args.length) {
+				if (_i > 0) _docs.push(_dhl());
+				_docs.push($elemCall);
+				_i++;
+			}
+			_docs.push(_dt($v{trailText}));
+			_dc(_docs);
+		};
 		final tcExpr: Expr = trailingCommaExpr(branch);
 		// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`,
 		// plain-mode `sepList` path) overrides the static anonTypeBraces

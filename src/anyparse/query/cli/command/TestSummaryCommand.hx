@@ -113,8 +113,8 @@ final class TestSummaryCommand implements CliCommand implements LanguageFree {
 		final src: String = resolved;
 		final raw: String = try {
 			src == '-' ? CliIo.readStdin() : sys.io.File.getContent(src);
-		} catch (e: Exception) {
-			CliIo.stderr('apq test-summary: read failed: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq test-summary: read failed: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final result: TestSummaryResult = TestTranscript.parseTestSummary(raw);

@@ -218,9 +218,8 @@ final class PrattPostfixLowering {
 		final postfixBranches: Array<ShapeNode> = [
 			for (b in node.children) if (b.annotations.get(AnnotationKeys.POSTFIX_OP) != null) b
 		];
-		if (postfixBranches.length == 0) {
+		if (postfixBranches.length == 0)
 			Context.fatalError('Lowering: lowerPostfixLoop called with no postfix branches', Context.currentPos());
-		}
 		// ω-keep-chain-receiver-comment: when this postfix enum has a method-chain
 		// `@:fmt(captureChainNewline)` branch (`HxExpr.FieldAccess`), capture the
 		// operand's trailing comment at the loop's pre-skipWs site so a bare chain
@@ -258,15 +257,13 @@ final class PrattPostfixLowering {
 			// `buildPostfixOpMatchExpr` — word-boundary-checked, so an
 			// identifier merely PREFIXED by the op text never commits.
 			final children: Array<ShapeNode> = branch.children;
-			if (children.length == 0 || children[0].kind != Ref) {
+			if (children.length == 0 || children[0].kind != Ref)
 				Context.fatalError(
 					'Lowering: @:postfix branch "$ctor" must have operand:$enumSimple as its first argument', Context.currentPos()
 				);
-			}
 			final operandRef: String = children[0].annotations.get(AnnotationKeys.BASE_REF);
-			if (simpleName(operandRef) != enumSimple) {
+			if (simpleName(operandRef) != enumSimple)
 				Context.fatalError('Lowering: @:postfix operand must reference the same enum ($enumSimple)', Context.currentPos());
-			}
 			final ctorPath: Array<String> = oc.ruleCtorPath(typePath, ctor);
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
 			final branchBody: Expr = if (children.length == 1) {
@@ -925,9 +922,7 @@ final class PrattPostfixLowering {
 			) && matchKw(ctx, $v{op})
 			: macro matchLit(ctx, $v{op});
 		for (other in allOps) {
-			if (other.length > op.length && other.startsWith(op)) {
-				matchExpr = macro !peekLit(ctx, $v{other}) && $matchExpr;
-			}
+			if (other.length > op.length && other.startsWith(op)) matchExpr = macro !peekLit(ctx, $v{other}) && $matchExpr;
 		}
 		return matchExpr;
 	}

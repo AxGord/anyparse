@@ -68,11 +68,11 @@ class ApqAstIntegrationTest extends Test {
 			final source: String = File.getContent(path);
 			final tree: Null<QueryNode> = try {
 				plugin.parseFile(source);
-			} catch (e: ParseError) {
+			} catch (exception: ParseError) {
 				parseFailed++;
 				null;
-			} catch (e: Exception) {
-				engineCrashes.push('$path: ${e.message}');
+			} catch (exception: Exception) {
+				engineCrashes.push('$path: ${exception.message}');
 				continue;
 			}
 			if (tree == null) continue;
@@ -90,8 +90,8 @@ class ApqAstIntegrationTest extends Test {
 					);
 				if (jsonSampled) jsonRendered++;
 				parsedOk++;
-			} catch (e: Exception) {
-				engineCrashes.push('$path (post-parse): ${e.message}');
+			} catch (exception: Exception) {
+				engineCrashes.push('$path (post-parse): ${exception.message}');
 			}
 		}
 

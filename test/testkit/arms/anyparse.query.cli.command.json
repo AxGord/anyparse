@@ -713,8 +713,8 @@
 			"name": "M-SAFE-PROBE-WRITE-ESCAPES",
 			"type": "anyparse.query.cli.command.LintFixSafeTrail",
 			"method": "seat",
-			"find": "catch (failure: WriteFailure)",
-			"replace": "catch (failure: UsageFailure)",
+			"find": "catch (exception: WriteFailure)",
+			"replace": "catch (exception: UsageFailure)",
 			"note": "a candidate the disk refuses escapes the isolation as a WriteFailure, so the settle never runs and the disk stays on a candidate the oracle may have rejected"
 		},
 		{

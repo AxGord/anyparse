@@ -117,8 +117,8 @@ final class SearchCommand implements CliCommand {
 		if (kindFilter != null && CliWalk.rejectUnknownKinds(CMD, plugin, [kindFilter], [])) return EXIT_USAGE;
 		final parsed: Pattern = try {
 			plugin.parsePattern(patternStr);
-		} catch (e: Exception) {
-			CliIo.stderr('apq search: pattern: ${e.message}\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq search: pattern: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
@@ -276,34 +276,32 @@ final class SearchCommand implements CliCommand {
 		final inputSpecs: Array<String> = [];
 
 		// `--` ends the options (the spec says so), so a pattern may start with `--` (`--$x` = prefix-decrement).
-		for (arg in new SearchCommand().flags().walk(args)) {
-			switch arg.flag {
-				case '--lang':
-					lang = arg.value();
-				case '--json':
-					json = true;
-				case '--kind':
-					kind = arg.value();
-				case '--explain':
-					explain = true;
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try {
-						limit = CliArgs.parseLimit(arg.value());
-					} catch (e: Exception) {
-						CliIo.stderr('${e.message}\n');
-						return searchParseExit(EXIT_USAGE);
-					}
-				case '-h', '--help':
-					printSearchUsage();
-					return searchParseExit(EXIT_OK);
-				case null:
-					if (pattern == null)
-						pattern = arg.token;
-					else
-						inputSpecs.push(arg.token);
-			}
+		for (arg in new SearchCommand().flags().walk(args)) switch arg.flag {
+			case '--lang':
+				lang = arg.value();
+			case '--json':
+				json = true;
+			case '--kind':
+				kind = arg.value();
+			case '--explain':
+				explain = true;
+			case '--flat':
+				flat = true;
+			case '--limit':
+				try {
+					limit = CliArgs.parseLimit(arg.value());
+				} catch (exception: Exception) {
+					CliIo.stderr('${exception.message}\n');
+					return searchParseExit(EXIT_USAGE);
+				}
+			case '-h', '--help':
+				printSearchUsage();
+				return searchParseExit(EXIT_OK);
+			case null:
+				if (pattern == null)
+					pattern = arg.token;
+				else
+					inputSpecs.push(arg.token);
 		}
 		return {
 			lang: lang,
@@ -362,12 +360,10 @@ final class SearchCommand implements CliCommand {
 			final combined: StringBuf = new StringBuf();
 			combined.add('{"matches":[');
 			var first: Bool = true;
-			for (entry in shown) {
-				for (m in entry.matches) {
-					if (!first) combined.add(',');
-					first = false;
-					combined.add(perMatchJson(entry.file, entry.source, m));
-				}
+			for (entry in shown) for (m in entry.matches) {
+				if (!first) combined.add(',');
+				first = false;
+				combined.add(perMatchJson(entry.file, entry.source, m));
 			}
 			combined.add(']}\n');
 			CliIo.sysPrint(combined.toString());

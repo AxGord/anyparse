@@ -49,7 +49,9 @@ class NamingOptionsTest extends Test {
 	}
 
 	public function testNoOptionsNoFindings(): Void {
-		Assert.equals(0, CheckFixture.violations(new Naming(), wrap('try {\n\t\t\tg();\n\t\t} catch (e: haxe.Exception) {}')).length);
+		final check: Naming = new Naming();
+		check.setConfigResolver(_ -> LintConfig.parse('{}'));
+		Assert.equals(0, CheckFixture.violations(check, wrap('try {\n\t\t\tg();\n\t\t} catch (e: haxe.Exception) {}')).length);
 	}
 
 	private function violationsUnder(src: String): Array<Violation> {

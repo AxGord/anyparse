@@ -43,11 +43,10 @@ final class StructFieldTrailLowering {
 		child: ShapeNode, fieldName: Null<String>, isOptional: Bool, isStar: Bool, kwLead: Null<String>, leadText: Null<String>,
 		trailText: Null<String>, absentOnLits: Null<Array<String>>, absentOnEof: Bool
 	): Void {
-		if (isOptional && child.kind != Ref && child.kind != Star) {
+		if (isOptional && child.kind != Ref && child.kind != Star)
 			Context.fatalError(
 				'Lowering: @:optional is only supported on Ref- or Star-shaped struct fields (field "$fieldName")', Context.currentPos()
 			);
-		}
 		if (isOptional && !isStar && trailText != null && kwLead != null) {
 			// `@:trail` on an optional kw-led Ref has no consumer yet
 			// (the kw-led trivia capture path threads `_afterKw_*` /
@@ -60,13 +59,12 @@ final class StructFieldTrailLowering {
 		}
 		if (absentOnLits != null || absentOnEof)
 			validateAbsenceDispatch(child, fieldName, isOptional, kwLead, leadText, trailText, absentOnLits, absentOnEof);
-		if (isStar && isOptional && kwLead == null && (leadText == null || trailText == null)) {
+		if (isStar && isOptional && kwLead == null && (leadText == null || trailText == null))
 			Context.fatalError(
 				'Lowering: @:optional Star field "$fieldName'
 				+ '" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
 				Context.currentPos()
 			);
-		}
 	}
 
 	/**
@@ -85,22 +83,18 @@ final class StructFieldTrailLowering {
 		child: ShapeNode, fieldName: Null<String>, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>,
 		absentOnLits: Null<Array<String>>, absentOnEof: Bool
 	): Void {
-		if (!isOptional || child.kind != Ref) {
+		if (!isOptional || child.kind != Ref)
 			Context.fatalError('Lowering: @:absentOn / @:absentOnEof requires @:optional Ref (field "$fieldName")', Context.currentPos());
-		}
-		if (kwLead != null || leadText != null) {
+		if (kwLead != null || leadText != null)
 			Context.fatalError(
 				'Lowering: @:absentOn / @:absentOnEof cannot combine with @:lead or @:kw (field "$fieldName")', Context.currentPos()
 			);
-		}
-		if (trailText != null) {
+		if (trailText != null)
 			Context.fatalError(
 				'Lowering: @:absentOn / @:absentOnEof cannot combine with @:trail (field "$fieldName")', Context.currentPos()
 			);
-		}
-		if (!absentOnEof && (absentOnLits == null || absentOnLits.length == 0)) {
+		if (!absentOnEof && (absentOnLits == null || absentOnLits.length == 0))
 			Context.fatalError('Lowering: @:absentOn requires at least one terminator literal (field "$fieldName")', Context.currentPos());
-		}
 	}
 
 	/**
@@ -152,19 +146,17 @@ final class StructFieldTrailLowering {
 		// trailing comment here into the same `<field>AfterTrail` slot the next
 		// sibling's writer reads. `collectTrailingFull` keeps the delimiters so
 		// block and line styles both round-trip verbatim.
-		if (isStar && !isOptional && trailText != null && hasAfterTrailSlot) {
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: afterTrailLocal,
-						type: macro : Null<String>,
-						expr: macro collectTrailingFull(ctx),
-						isFinal: true
-					}
-				]),
-				pos: Context.currentPos()
-			});
-		}
+		if (isStar && !isOptional && trailText != null && hasAfterTrailSlot) parseSteps.push({
+			expr: EVars([
+				{
+					name: afterTrailLocal,
+					type: macro : Null<String>,
+					expr: macro collectTrailingFull(ctx),
+					isFinal: true
+				}
+			]),
+			pos: Context.currentPos()
+		});
 		if (!isStar && !isOptional && trailText != null) {
 			// ω-before-trail: capture a BLOCK comment sitting between the field's
 			// last token and the trail literal, BEFORE `skipWs` swallows it as
@@ -172,19 +164,17 @@ final class StructFieldTrailLowering {
 			// line-terminated patterns, so a `// c` in that gap is left exactly
 			// where it was — re-emitting one before the close literal would
 			// comment the literal out.
-			if (hasBeforeTrailSlot) {
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeTrailLocal,
-							type: macro : Null<String>,
-							expr: macro collectTrailingBlock(ctx),
-							isFinal: true
-						}
-					]),
-					pos: Context.currentPos()
-				});
-			}
+			if (hasBeforeTrailSlot) parseSteps.push({
+				expr: EVars([
+					{
+						name: beforeTrailLocal,
+						type: macro : Null<String>,
+						expr: macro collectTrailingBlock(ctx),
+						isFinal: true
+					}
+				]),
+				pos: Context.currentPos()
+			});
 			parseSteps.push(macro skipWs(ctx));
 			parseSteps.push(macro expectLit(ctx, $v{trailText}));
 			// ω-trivia-after-trail: in trivia-bearing rules, capture a
@@ -195,19 +185,17 @@ final class StructFieldTrailLowering {
 			// `collectTrailing` returns null when no same-line comment
 			// is present and does not consume any whitespace beyond
 			// the optional space + `//<body>` match.
-			if (hasAfterTrailSlot) {
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: afterTrailLocal,
-							type: macro : Null<String>,
-							expr: macro collectTrailingFull(ctx),
-							isFinal: true
-						}
-					]),
-					pos: Context.currentPos()
-				});
-			}
+			if (hasAfterTrailSlot) parseSteps.push({
+				expr: EVars([
+					{
+						name: afterTrailLocal,
+						type: macro : Null<String>,
+						expr: macro collectTrailingFull(ctx),
+						isFinal: true
+					}
+				]),
+				pos: Context.currentPos()
+			});
 		}
 		if (!isStar && !isOptional && trailOptText != null) {
 			// ω-trailopt-rewind-on-miss-struct (BlockBody Star Session 5):

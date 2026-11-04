@@ -45,9 +45,7 @@ class Re implements Strategy {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':re') {
-			if (entry.params.length != 1) {
-				Context.fatalError('@:re expects exactly one string argument', entry.pos);
-			}
+			if (entry.params.length != 1) Context.fatalError('@:re expects exactly one string argument', entry.pos);
 			final pattern: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:
@@ -57,18 +55,14 @@ class Re implements Strategy {
 			node.annotations['re.pattern'] = pattern;
 		}
 		for (entry in meta) if (entry.name == ':captureGroup') {
-			if (entry.params.length != 1) {
-				Context.fatalError('@:captureGroup expects exactly one integer argument', entry.pos);
-			}
+			if (entry.params.length != 1) Context.fatalError('@:captureGroup expects exactly one integer argument', entry.pos);
 			final group: Int = switch entry.params[0].expr {
 				case EConst(CInt(s, _)): Std.parseInt(s);
 				case _:
 					Context.fatalError('@:captureGroup argument must be an integer literal', entry.params[0].pos);
 					throw 'unreachable';
 			};
-			if (group < 1) {
-				Context.fatalError('@:captureGroup must be >= 1 (group 0 is the default whole match)', entry.pos);
-			}
+			if (group < 1) Context.fatalError('@:captureGroup must be >= 1 (group 0 is the default whole match)', entry.pos);
 			node.annotations['re.captureGroup'] = group;
 		}
 	}

@@ -125,15 +125,11 @@ final class ParseProf {
 	private static function phaseParse(sources: Array<Src>, reps: Int): String {
 		var failed: Int = 0;
 		var ok: Int = 0;
-		for (_ in 0...reps) {
-			for (s in sources) {
-				try {
-					final tree: Any = HaxeModuleTriviaParser.parse(s.source);
-					if (tree != null) ok++;
-				} catch (exception: haxe.Exception) {
-					failed++;
-				}
-			}
+		for (_ in 0...reps) for (s in sources) try {
+			final tree: Any = HaxeModuleTriviaParser.parse(s.source);
+			if (tree != null) ok++;
+		} catch (exception: haxe.Exception) {
+			failed++;
 		}
 		return 'parsed=$ok parseFail=$failed';
 	}
@@ -142,15 +138,11 @@ final class ParseProf {
 	private static function phaseWalk(plugin: GrammarPlugin, sources: Array<Src>, reps: Int): String {
 		var failed: Int = 0;
 		var roots: Int = 0;
-		for (_ in 0...reps) {
-			for (s in sources) {
-				try {
-					final tree: QueryNode = plugin.parseFile(s.source);
-					roots += tree.children.length;
-				} catch (exception: haxe.Exception) {
-					failed++;
-				}
-			}
+		for (_ in 0...reps) for (s in sources) try {
+			final tree: QueryNode = plugin.parseFile(s.source);
+			roots += tree.children.length;
+		} catch (exception: haxe.Exception) {
+			failed++;
 		}
 		return 'rootChildren=$roots parseFail=$failed';
 	}
@@ -161,13 +153,11 @@ final class ParseProf {
 		final opts: HxModuleWriteOptions = writeOptionsOf(optsJson);
 		var written: Int = 0;
 		var outBytes: Int = 0;
-		for (_ in 0...reps) {
-			for (tree in trees) if (tree != null) {
-				final emitted: Null<String> = HaxeModuleTriviaWriter.write(tree, opts);
-				if (emitted != null) {
-					written++;
-					outBytes += emitted.length;
-				}
+		for (_ in 0...reps) for (tree in trees) if (tree != null) {
+			final emitted: Null<String> = HaxeModuleTriviaWriter.write(tree, opts);
+			if (emitted != null) {
+				written++;
+				outBytes += emitted.length;
 			}
 		}
 		return 'written=$written outBytes=$outBytes';
@@ -178,18 +168,14 @@ final class ParseProf {
 		var written: Int = 0;
 		var threw: Int = 0;
 		var equal: Int = 0;
-		for (_ in 0...reps) {
-			for (s in sources) {
-				try {
-					final out: Null<String> = plugin.writeRoundTrip(s.source, optsJson);
-					if (out != null) {
-						written++;
-						if (out == s.source) equal++;
-					}
-				} catch (exception: haxe.Exception) {
-					threw++;
-				}
+		for (_ in 0...reps) for (s in sources) try {
+			final out: Null<String> = plugin.writeRoundTrip(s.source, optsJson);
+			if (out != null) {
+				written++;
+				if (out == s.source) equal++;
 			}
+		} catch (exception: haxe.Exception) {
+			threw++;
 		}
 		return 'written=$written equal=$equal threw=$threw';
 	}

@@ -411,7 +411,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		final cached: Null<String> = _sources[file];
 		if (cached != null) return cached;
 		for (form in pathForms(file)) {
-			final text: Null<String> = try sys.io.File.getContent(form) catch (e: haxe.Exception) null;
+			final text: Null<String> = try sys.io.File.getContent(form) catch (exception: haxe.Exception) null;
 			if (text == null) continue;
 			_sources[file] = text;
 			return text;
@@ -466,7 +466,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 
 	/** `file` resolved against the process cwd (node-normalised, NOT symlink-followed), or `file` on failure. */
 	private static function absPath(file: String): String {
-		return try sys.FileSystem.absolutePath(file) catch (e: haxe.Exception) file;
+		return try sys.FileSystem.absolutePath(file) catch (exception: haxe.Exception) file;
 	}
 
 	/** `cwd`/`file` joined (single slash), or `file` when `cwd` is null. */

@@ -98,11 +98,10 @@ class Postfix implements Strategy {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':postfix') {
-			if (entry.params.length < 1 || entry.params.length > 2) {
+			if (entry.params.length < 1 || entry.params.length > 2)
 				Context.fatalError(
 					'@:postfix expects one string argument (single literal) or two string arguments (open, close)', entry.pos
 				);
-			}
 			final opText: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:

@@ -112,18 +112,16 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	 * NoWrap until the literal breaks, a call as the iterable, and a comprehension as the iterable.
 	 */
 	public function testOneWriteIsAFixedPointAcrossTheBoundary(): Void {
-		for (config in CONFIGS) for (k in 20...100) {
-			for (src in [
-				fieldShape(k),
-				nestedShape(k),
-				declShape(k),
-				callShape(k),
-				longIterableShape(k - 20),
-				assignShape(k),
-				callIterableShape(k),
-				comprehensionIterableShape(k)
-			]) assertOneWriteWithinLimit(src, config, k);
-		}
+		for (config in CONFIGS) for (k in 20...100) for (src in [
+			fieldShape(k),
+			nestedShape(k),
+			declShape(k),
+			callShape(k),
+			longIterableShape(k - 20),
+			assignShape(k),
+			callIterableShape(k),
+			comprehensionIterableShape(k)
+		]) assertOneWriteWithinLimit(src, config, k);
 	}
 
 	/**

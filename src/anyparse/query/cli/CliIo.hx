@@ -331,22 +331,22 @@ final class CliIo {
 		for (w in writes) WriteJournal.note(w.path);
 		try {
 			for (w in writes) staged.push(stageWrite(w.path, w.content, created));
-		} catch (failure: WriteFailure) {
+		} catch (exception: WriteFailure) {
 			for (pending in staged) discardStage(pending.staged);
 			removeCreatedDirectories(created);
-			throw failure;
+			throw exception;
 		}
 		WriteJournal.noteDirectories(created);
 		for (i in 0...staged.length) try {
 			commitStagedWrite(staged[i]);
-		} catch (failure: WriteFailure) {
+		} catch (exception: WriteFailure) {
 			// The renames already done cannot be undone — the originals are gone. What CAN be
 			// tidied is the tail nobody has moved yet, and it must be: an ordinary handled error
 			// would otherwise leave a `.apq-tmp` beside every remaining member of the set, which
 			// is the one thing the suffix's own doc treats as a killed-process artefact.
 			for (j in i + 1...staged.length) discardStage(staged[j].staged);
 			removeCreatedDirectories(created);
-			throw failure;
+			throw exception;
 		}
 		#else
 		throw 'apq: file IO requires a sys target';

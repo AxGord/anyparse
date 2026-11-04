@@ -159,9 +159,7 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 		for (src in [
 			'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}',
 			'class C {\n\tfunction f():Int;\n}'
-		]) {
-			triviaEquals(src, src);
-		}
+		]) triviaEquals(src, src);
 		// A bare expression body is re-laid-out by the `functionBody` policy
 		// (`Next`), so only idempotency is assertable byte-wise.
 		roundTrip('class C {\n\tfunction f():Int return 1;\n}', 'expression body');

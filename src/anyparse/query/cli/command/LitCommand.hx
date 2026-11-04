@@ -471,8 +471,8 @@ final class LitCommand implements CliCommand {
 				case '--limit':
 					try {
 						limit = CliArgs.parseLimit(arg.value());
-					} catch (e: Exception) {
-						CliIo.stderr('${e.message}\n');
+					} catch (exception: Exception) {
+						CliIo.stderr('${exception.message}\n');
 						return litParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':

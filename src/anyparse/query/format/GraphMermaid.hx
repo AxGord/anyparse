@@ -77,15 +77,13 @@ final class GraphMermaid {
 		for (change in changes) classed(statements, change, nodeStyle(change), leaves.filter(n -> n.change == change));
 		// a link's ordinal is its place among the chart's links, and every edge is one chain of one link
 		final mutual: Array<Bool> = [for (e in edges) graph.isMutual(e)];
-		for (change in changes) {
+		for (change in changes)
 			linkStyled(statements, [for (i => e in edges) if (e.change == change && !mutual[i]) '$i'], linkStyle(change));
-		}
 		// a changed link closing a cycle keeps its change's colour, which a comparison exists to show, and is drawn thick
-		for (change in changes) {
+		for (change in changes)
 			linkStyled(
 				statements, [for (i => e in edges) if (e.change == change && mutual[i]) '$i'], '${linkStyle(change)},$MUTUAL_CHANGED_WIDTH'
 			);
-		}
 		linkStyled(statements, [for (i => e in edges) if (e.change == null && mutual[i]) '$i'], MUTUAL_STYLE);
 		return { first: statements[0], rest: statements.slice(1) };
 	}

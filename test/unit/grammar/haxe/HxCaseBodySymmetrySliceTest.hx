@@ -658,11 +658,9 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	 * have fit beside its label leaves its sibling there, exactly as the same `if` without the comment does.
 	 */
 	public function testACommentHeldControlFlowBranchThatWouldFitDoesNotLead(): Void {
-		for (stmt in ['if (a) b();', 'if (a) b() else c();']) {
-			for (branch in ['case 1:\n\t\t\t\t// c\n\t\t\t\t$stmt', 'case 1: $stmt']) {
-				final out: String = write(commented(branch), COMMENT_CFG);
-				Assert.isTrue(out.indexOf('case 2: cc(dd);') != -1, 'a fitting sibling stays on its label: <$out>');
-			}
+		for (stmt in ['if (a) b();', 'if (a) b() else c();']) for (branch in ['case 1:\n\t\t\t\t// c\n\t\t\t\t$stmt', 'case 1: $stmt']) {
+			final out: String = write(commented(branch), COMMENT_CFG);
+			Assert.isTrue(out.indexOf('case 2: cc(dd);') != -1, 'a fitting sibling stays on its label: <$out>');
 		}
 	}
 

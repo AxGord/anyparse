@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.check.facts.FactsTypeTree;
-import anyparse.check.facts.FactsTypeTree.FactsType;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CallGraph.CallEdge;
