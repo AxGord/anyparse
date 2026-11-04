@@ -1215,9 +1215,10 @@ class Codegen {
 
 	/**
 	 * Generate `collectTrailingRunOn` — `collectTrailingFull` that also takes a block comment running on past its
-	 * first line when it ends its own last line, for the one slot whose writer keeps such a comment where the parse
-	 * found it: a binary operand's comment ahead of an operator on the next line (`"a" /*+ b` newline `c *\/` newline
-	 * `+ "d"`). Every other trailing slot is followed by a token its writer glues, so it keeps refusing.
+	 * first line when it ends its own last line, for the slots whose writer keeps such a comment where the parse
+	 * found it: an operand's comment ahead of an operator on the next line — a binary operator (`"a" /*+ b` newline
+	 * `c *\/` newline `+ "d"`), a ternary's `?` or `:`. Every other trailing slot is followed by a token its writer
+	 * glues, so it keeps refusing.
 	 */
 	private static function collectTrailingRunOnField(formatInfo: FormatReader.FormatInfo): Field {
 		return trailingFullField(

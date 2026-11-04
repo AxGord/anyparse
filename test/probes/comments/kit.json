@@ -102,7 +102,9 @@
 		"w2c/r1a.hx": "class A {\n\tfunction f() {\n\t\tvar t3 = foo(1, 2) /* m\n\t\t\tn */\n\t\t;\n\t}\n}\n",
 		"w2c/r1b.hx": "class A {\n\tfunction f() {\n\t\tfoo(1, 2) /* m\n\t\t\tn */\n\t\t;\n\t}\n}\n",
 		"w2c/r4a.hx": "class A {\n\tfunction f() {\n\t\treturn a /* m\n\t\t\tn */\n\t\t\t+ b;\n\t}\n}\n",
-		"w2c/r4b.hx": "class A {\n\tfunction f() {\n\t\tif (a /* m\n\t\t\tn */\n\t\t\t&& b) {}\n\t}\n}\n"
+		"w2c/r4b.hx": "class A {\n\tfunction f() {\n\t\tif (a /* m\n\t\t\tn */\n\t\t\t&& b) {}\n\t}\n}\n",
+		"w2d/q1.hx": "class A {\n\tfunction f() {\n\t\treturn a /* m\n\t\t\tn */\n\t\t\t? b : c;\n\t}\n}\n",
+		"w2d/q2.hx": "class A {\n\tfunction f() {\n\t\treturn a ? b /* m\n\t\t\tn */\n\t\t\t: c;\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -1815,6 +1817,40 @@
 			"expect": {
 				"exit": 0,
 				"out": "c67a7fa2aa12cc65",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2d/q1.hx",
+			"fixpoint": "w2d/q1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2d/q1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "642d6d217d84751a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2d/q2.hx",
+			"fixpoint": "w2d/q2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2d/q2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "305e1e6dbad6e801",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

@@ -30,6 +30,18 @@ class HxCommentBreakWriteTest extends Test {
 		Assert.equals(once, roundTrip(once ?? ''));
 	}
 
+	public function testMultilineBlockCommentBeforeTernaryQuestionStaysAfterTheCondition(): Void {
+		final canonical: String = 'class A {\n\tfunction f() {\n\t\treturn a /* m\n\t\t\tn */\n\t\t\t? b\n\t\t\t: c;\n\t}\n}\n';
+		Assert.equals(canonical, roundTrip(canonical));
+		Assert.equals(canonical, roundTrip('class A {\n\tfunction f() {\n\t\treturn a /* m\n\t\t\tn */\n\t\t\t? b : c;\n\t}\n}\n'));
+	}
+
+	public function testMultilineBlockCommentBeforeTernaryColonStaysAfterTheThenBranch(): Void {
+		final canonical: String = 'class A {\n\tfunction f() {\n\t\treturn a\n\t\t\t? b /* m\n\t\t\tn */\n\t\t\t: c;\n\t}\n}\n';
+		Assert.equals(canonical, roundTrip(canonical));
+		Assert.equals(canonical, roundTrip('class A {\n\tfunction f() {\n\t\treturn a ? b /* m\n\t\t\tn */\n\t\t\t: c;\n\t}\n}\n'));
+	}
+
 	public function testChainBreaksAheadOfAnOperandOpeningOnANote(): Void {
 		final cond: String = 'aaaaaaaaaaa && bbbbbbbbbbbbbbbbbbb > ccccccccccccc && ( // note\n\t\t\tddddddddddddddddd != '
 			+ 'eeeeeeeeeeeeeeeeeeeeeeeee || fffffffffffffffffffffffffffffffffff.gggggggggggggggggggggggg(hhhhhhhhhh, '

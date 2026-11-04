@@ -1246,9 +1246,11 @@ final class WriterPrattLowering {
 		// comment travels with the operand under EVERY shape the cascade can pick.
 		// A LINE comment additionally forces the source-faithful `Keep` shape with
 		// every gap broken — a `//` runs to the newline, so leaving `? then` or
-		// `: else` glued after it would comment the rest of the ternary out. A
-		// BLOCK comment is inline-safe: it rides along and the cascade still
-		// decides the layout (`a /* c */ ? b : c` stays flat when it fits).
+		// `: else` glued after it would comment the rest of the ternary out. So
+		// does a BLOCK comment running on past its first line: the parse takes it
+		// only when it ends that line, so the token after it must start the next.
+		// A one-line block comment is inline-safe: it rides along and the cascade
+		// still decides the layout (`a /* c */ ? b : c` stays flat when it fits).
 		final condTrailAccess: Null<Expr> =
 			pc.ctx.trivia ? altSlotAccess(branch, branch.children.length, argNames, TernaryCondTrail) : null;
 		final thenTrailAccess: Null<Expr> =
@@ -1259,11 +1261,11 @@ final class WriterPrattLowering {
 				final _thenTrail: Null<String> = ${thenTrailAccess};
 				if (_condTrail != null) {
 					_items[0] = _dc([_items[0], trailingCommentDocVerbatim(_condTrail, opt)]);
-					if (StringTools.startsWith(_condTrail, '//')) _forceKeep = true;
+					if (StringTools.startsWith(_condTrail, '//') || _condTrail.indexOf('\n') >= 0) _forceKeep = true;
 				}
 				if (_thenTrail != null) {
 					_items[1] = _dc([_items[1], trailingCommentDocVerbatim(_thenTrail, opt)]);
-					if (StringTools.startsWith(_thenTrail, '//')) _forceKeep = true;
+					if (StringTools.startsWith(_thenTrail, '//') || _thenTrail.indexOf('\n') >= 0) _forceKeep = true;
 				}
 			}
 			: macro {};
