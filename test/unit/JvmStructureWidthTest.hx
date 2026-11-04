@@ -18,8 +18,9 @@ import sys.io.File;
  * past the limit; the class is rejected only when it is LOADED, so the jar dies at run time with
  * `ClassFormatError: Too many arguments in method signature`, and the js runner never meets it.
  *
- * The sweep reads the slots off the source. What it cannot see is a structure a macro assembles,
- * which only the portability probe reaches (docs/testing.md § "The core stays target-independent").
+ * The sweep reads the slots off the source, so it cannot see a structure a macro assembles. A
+ * writer options struct is guarded by `OptionsRecord.refuseOverSlotLimit` at build time; any other
+ * only the portability probe reaches (docs/testing.md § "The core stays target-independent").
  */
 @:nullSafety(Strict)
 final class JvmStructureWidthTest extends Test {

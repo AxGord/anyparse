@@ -24,7 +24,7 @@ class ProbeIssue344Test extends Test {
 	public function testIssue344(): Void {
 		final src: String = '#if js\nclass JS {\n\tvar foo:Int;\n}\n#else\nclass NotJS {\n\tvar foo:Int;\n}\n#end // js\n';
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
-		final opt: HxModuleWriteOptions = Reflect.copy(HaxeFormat.instance.defaultWriteOptions);
+		final opt: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);
 		final out: String = HaxeModuleTriviaWriter.write(m, opt);
 		Assert.equals(src, out);
 	}

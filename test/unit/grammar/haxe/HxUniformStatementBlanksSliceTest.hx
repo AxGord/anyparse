@@ -134,7 +134,7 @@ class HxUniformStatementBlanksSliceTest extends Test {
 
 	private static function collapse(source: String): String {
 		final base: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		final opts: HxModuleWriteOptions = cast Reflect.copy(base);
+		final opts: HxModuleWriteOptions = new HxModuleWriteOptions(base);
 		opts.uniformStatementBlanks = UniformStatementBlanksPolicy.Collapse;
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		return HaxeModuleTriviaWriter.write(ast, opts);

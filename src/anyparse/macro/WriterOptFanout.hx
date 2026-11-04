@@ -4,6 +4,8 @@ package anyparse.macro;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+using Lambda;
+
 /**
  * Which `WriteOptions` context flag a generated shim sets or clears.
  *
@@ -39,8 +41,7 @@ final class WriterOptFanout {
 	 * doesn't declare the field (Json, Bin, etc.) skip the helper to
 	 * avoid a compile-time field-resolution error inside its body.
 	 *
-	 * Walks `TType`/`TAnon` so it sees the intersection-typedef form
-	 * (`HxModuleWriteOptions = WriteOptions & {...}`) — `getType`
+	 * Walks `TType`/`TAnon` so it sees the intersection-typedef form (`MyWriteOptions = WriteOptions & {...}`) — `getType`
 	 * resolves to the alias before unification. `TLazy` is followed
 	 * eagerly to handle forward-referenced typedefs.
 	 */
@@ -109,16 +110,19 @@ final class WriterOptFanout {
 				final fields: Array<haxe.macro.Type.ClassField> = aRef.get().fields;
 				for (cf in fields) if (cf.name == name) return true;
 				return false;
+			case TInst(cRef, _):
+				final fields: Array<haxe.macro.Type.ClassField> = cRef.get().fields.get();
+				for (cf in fields) if (cf.name == name) return true;
+				return false;
 			case _:
 				return false;
 		}
 	}
 
 	/**
-	 * Every field name of the writer options struct, base-first.
+	 * Every field of the writer options struct, base-first.
 	 *
-	 * The options typedef is an intersection (`HxModuleWriteOptions =
-	 * WriteOptions & {...}`), and the compiler already merges both halves
+	 * The options typedef is an intersection (`MyWriteOptions = WriteOptions & {...}`), and the compiler already merges both halves
 	 * into the resolved anon's own `fields`. The `AExtend` walk is
 	 * therefore not what makes the list complete; it only groups the base's
 	 * fields first, and it is insurance against a future compiler
@@ -131,32 +135,30 @@ final class WriterOptFanout {
 	 * whole clone traffic — but the macro API exposes no declaration order, so
 	 * matching it is not a cheap change.
 	 *
-	 * An empty result means the path did not resolve to an anon; the caller
-	 * falls back to `Reflect.copy` rather than emitting a literal that would
+	 * An empty result means the type is not an anon; the caller falls back to `Reflect.copy` rather than emitting a literal that would
 	 * drop fields.
 	 */
-	private static function optionsFieldNames(optionsTypePath: String): Array<String> {
-		final t: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e: haxe.Exception) null;
-		final names: Array<String> = [];
-		if (t != null) collectAnonFieldNames(t, names);
-		return names;
+	private static function optionsStructFields(optionsType: haxe.macro.Type): Array<haxe.macro.Type.ClassField> {
+		final fields: Array<haxe.macro.Type.ClassField> = [];
+		collectAnonFields(optionsType, fields);
+		return fields;
 	}
 
-	private static function collectAnonFieldNames(t: haxe.macro.Type, out: Array<String>): Void {
+	private static function collectAnonFields(t: haxe.macro.Type, out: Array<haxe.macro.Type.ClassField>): Void {
 		switch (t) {
 			case TLazy(f):
-				collectAnonFieldNames(f(), out);
+				collectAnonFields(f(), out);
 			case TType(_, _):
-				collectAnonFieldNames(Context.follow(t, true), out);
+				collectAnonFields(Context.follow(t, true), out);
 			case TAnonymous(aRef):
 				final anon: haxe.macro.Type.AnonType = aRef.get();
 				switch (anon.status) {
 					case AExtend(tl):
-						for (base in tl.get()) collectAnonFieldNames(base, out);
+						for (base in tl.get()) collectAnonFields(base, out);
 					case _:
 				}
-				for (cf in anon.fields) if (!out.contains(cf.name))
-					out.push(cf.name);
+				for (cf in anon.fields) if (!out.exists(seen -> seen.name == cf.name))
+					out.push(cf);
 			case _:
 		}
 	}
@@ -176,8 +178,8 @@ final class WriterOptFanout {
 	 * blow the JVM method-body limit. One out-of-line function keeps a
 	 * single literal site, so every clone shares one hidden class.
 	 *
-	 * Falls back to `Reflect.copy` when the options type does not resolve
-	 * to an anon (no field list to enumerate), and warns at compile time so
+	 * An options class clones through its generated constructor instead, a struct literal past the JVM slots is refused (`OptionsRecord`).
+	 * Falls back to `Reflect.copy` when the options type resolves to neither (no field list to enumerate), and warns at compile time so
 	 * a grammar silently losing the fast path is visible. Only that branch
 	 * returns `Null<T>` — which strict null safety refuses to narrow at the
 	 * call site — so `@:nullSafety(Off)` is attached to it alone; the
@@ -189,22 +191,32 @@ final class WriterOptFanout {
 	 * touching the shared `opt` singleton.
 	 */
 	private static function copyOptField(optionsTypePath: String, optionsCT: ComplexType): Field {
-		final names: Array<String> = optionsFieldNames(optionsTypePath);
 		final pos: Position = Context.currentPos();
-		final fallback: Bool = names.length == 0;
+		final optionsType: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e: haxe.Exception) null;
+		final isRecordClass: Bool = optionsType != null && optionsType.match(TInst(_, _));
+		final fields: Array<haxe.macro.Type.ClassField> = optionsType == null || isRecordClass ? [] : optionsStructFields(optionsType);
+		final fallback: Bool = !isRecordClass && fields.length == 0;
 		if (fallback)
 			Context.warning(
 				'WriterCodegen: options type $optionsTypePath did not resolve to an anon — _copyOpt falls back to Reflect.copy', pos
 			);
-		final body: Expr = if (fallback) {
+		final body: Expr = if (isRecordClass) {
+			final typePath: TypePath = {
+				pack: MacroNames.packOf(optionsTypePath),
+				name: MacroNames.simpleName(optionsTypePath),
+				params: []
+			};
+			macro return new $typePath(o);
+		} else if (fallback) {
 			macro {
 				final _c: $optionsCT = cast Reflect.copy(o);
 				if (_c == null) throw 'WriterCodegen._copyOpt: Reflect.copy returned null';
 				return _c;
 			};
 		} else {
+			OptionsRecord.refuseOverSlotLimit(optionsTypePath, fields, pos);
 			final objFields: Array<ObjectField> = [
-				for (n in names) { field: n, expr: { expr: EField(macro o, n), pos: pos } }
+				for (f in fields) { field: f.name, expr: { expr: EField(macro o, f.name), pos: pos } }
 			];
 			final literal: Expr = { expr: EObjectDecl(objFields), pos: pos };
 			macro return $literal;

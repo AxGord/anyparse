@@ -844,6 +844,14 @@
 			"find": "comprehensionFor == null || ",
 			"replace": "true || ",
 			"note": "forBody overrides a comprehensionFor of keep or next, which place the body themselves"
+		},
+		{
+			"name": "M-LOADER-WRITES-THE-DEFAULT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "loadHxFormatJson",
+			"find": "new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions)",
+			"replace": "HaxeFormat.instance.defaultWriteOptions",
+			"note": "a config load re-baselines the shared default record"
 		}
 	]
 }

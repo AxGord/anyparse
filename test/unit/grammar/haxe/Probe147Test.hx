@@ -31,7 +31,7 @@ class Probe147Test extends Test {
 			+ '\tfunction main():Void;\n\t/**\n\t * D.\n\t */\n\t// foo\n\t// foo\n\n\t/**\n\t * E.\n\t */\n'
 			+ '\tfunction main2():Void;\n}\n';
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
-		final opt: HxModuleWriteOptions = Reflect.copy(HaxeFormat.instance.defaultWriteOptions);
+		final opt: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);
 		opt.afterFieldsWithDocComments = CommentEmptyLinesPolicy.Ignore;
 		opt.externExistingBetweenFields = KeepEmptyLinesPolicy.Remove;
 		final out: String = HaxeModuleTriviaWriter.write(m, opt);

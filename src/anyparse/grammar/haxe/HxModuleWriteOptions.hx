@@ -1,9 +1,14 @@
 package anyparse.grammar.haxe;
 
+import anyparse.core.Doc;
+import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.CommentStyle;
+import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.EmptyCurly;
+import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.LiteralReflow;
@@ -13,6 +18,7 @@ import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.SiblingPolicy;
+import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
@@ -21,12 +27,13 @@ import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 
 /**
- * Write options specific to the Haxe module grammar (`HxModule`), mixed into the base `WriteOptions` shape via
- * struct intersection so the macro-generated writer sees one fully populated struct at runtime. Defaults live
- * in `HaxeFormat.defaultWriteOptions`; `hxformat.json` ingest lives in `HaxeFormatConfigLoader`; the JSON path
+ * Write options of the Haxe module grammar (`HxModule`): the base `WriteOptions` knobs plus its own. A class and not
+ * a struct intersection for the reason on `OptionsRecord`; it unifies with `WriteOptions` structurally, a knob's
+ * initializer is its default, `new HxModuleWriteOptions(from)` is the one clone. `HaxeFormat.defaultWriteOptions` is
+ * the default instance; `hxformat.json` ingest lives in `HaxeFormatConfigLoader`; the JSON path
  * each knob answers to is the schema field in `format/HxFormat*Section.hx` / `HxFormatConfig.hx`, tabulated in
  * `docs/haxe-format-config.md`. A knob's SEMANTICS — what each value does at the site — is the contract of the
- * grammar field that carries the matching `@:fmt(...)` meta, and lives in that field's doc; this typedef only
+ * grammar field that carries the matching `@:fmt(...)` meta, and lives in that field's doc; this class only
  * names the knob families:
  *
  * - Same-line policies (`SameLinePolicy`: `sameLineElse`, `sameLineCatch`, `sameLineDoWhile`,
@@ -59,55 +66,83 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  * descending field and propagate through the standard opt-fanout copy; each field's own doc names its setter
  * and its readers.
  */
-typedef HxModuleWriteOptions = WriteOptions & {
-	sameLineElse: SameLinePolicy,
-	sameLineCatch: SameLinePolicy,
-	sameLineDoWhile: SameLinePolicy,
-	sameLineExpressionElse: SameLinePolicy,
-	trailingCommaArrays: Bool,
-	trailingCommaArgs: Bool,
-	trailingCommaParams: Bool,
-	trailingCommaObjectLits: Bool,
-	trailingCommaAnonTypes: Bool,
-	ifBody: BodyPolicy,
-	elseBody: BodyPolicy,
-	forBody: BodyPolicy,
-	whileBody: BodyPolicy,
-	doBody: BodyPolicy,
-	returnBody: BodyPolicy,
-	returnBodySingleLine: BodyPolicy,
-	throwBody: BodyPolicy,
-	catchBody: BodyPolicy,
-	tryBody: BodyPolicy,
-	caseBody: BodyPolicy,
-	caseSiblings: SiblingPolicy,
-	expressionCase: BodyPolicy,
-	functionBody: BodyPolicy,
-	anonFunctionBody: BodyPolicy,
-	untypedBody: BodyPolicy,
-	expressionIfBody: BodyPolicy,
-	expressionElseBody: BodyPolicy,
-	expressionForBody: BodyPolicy,
-	expressionIfWithBlocks: Bool,
-	expressionIfWithBrackets: Bool,
-	leftCurly: BracePlacement,
-	emptyCurly: EmptyCurly,
-	objectLiteralLeftCurly: BracePlacement,
-	anonTypeLeftCurly: BracePlacement,
-	anonFunctionLeftCurly: BracePlacement,
-	anonFunctionEmptyCurly: EmptyCurly,
-	blockLeftCurly: BracePlacement,
-	blockEmptyCurly: EmptyCurly,
-	blockRightCurly: RightCurlyPlacement,
-	anonFunctionRightCurly: RightCurlyPlacement,
-	anonTypeRightCurly: RightCurlyPlacement,
-	objectLiteralRightCurly: RightCurlyPlacement,
-	objectFieldColon: WhitespacePolicy,
-	typeHintColon: WhitespacePolicy,
-	typeCheckColon: WhitespacePolicy,
-	funcParamParens: WhitespacePolicy,
-	callParens: WhitespacePolicy,
-	anonFuncParens: WhitespacePolicy,
+@:build(anyparse.macro.Build.buildOptionsRecord())
+final class HxModuleWriteOptions {
+
+	// The base `WriteOptions` knobs, whose contract is that typedef's field docs.
+	public var indentChar: IndentChar = IndentChar.Tab;
+	public var indentSize: Int = 1;
+	public var tabWidth: Int = 4;
+	public var lineWidth: Int = 160;
+	public var lineEnd: String = '\n';
+	public var finalNewline: Bool = true;
+	public var trailingWhitespace: Bool = false;
+	public var commentStyle: CommentStyle = CommentStyle.Verbatim;
+	public var addLineCommentSpace: Bool = true;
+	public var normalizeLineCommentIndent: Bool = false;
+	public var compressSuccessiveParenthesis: Bool = true;
+	public var arrayMatrixWrap: ArrayMatrixWrap = ArrayMatrixWrap.MatrixWrapWithAlign;
+	public var trailingComma: TrailingCommaPolicy = TrailingCommaPolicy.Keep;
+	public var conditionalPolicy: ConditionalIndentationPolicy = ConditionalIndentationPolicy.Aligned;
+	public var alignInlineSwitchCaseBody: Bool = false;
+	public var comprehensionCuddledOpen: Bool = false;
+	public var soleItemCuddledBrackets: Bool = false;
+	public var methodChainCuddledLinks: Bool = false;
+	public var ternaryCuddledBraces: Bool = false;
+	public var maxConsecutiveBlanks: Int = 1;
+	public var blockCommentAdapter: Null<(String, WriteOptions) -> Doc> =
+		anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment;
+	public var lineCommentAdapter: Null<(Array<String>, Int, WriteOptions) -> String> =
+		anyparse.format.comment.LineCommentNormalizer.normalizeLineComment;
+	public var betweenImportsPathDiffers: Null<(String, String, Int) -> Bool> = HxBetweenImportsLevel.pathDiffers;
+	public var sameLineElse: SameLinePolicy = SameLinePolicy.Same;
+	public var sameLineCatch: SameLinePolicy = SameLinePolicy.Same;
+	public var sameLineDoWhile: SameLinePolicy = SameLinePolicy.Same;
+	public var sameLineExpressionElse: SameLinePolicy = SameLinePolicy.Same;
+	public var trailingCommaArrays: Bool = false;
+	public var trailingCommaArgs: Bool = false;
+	public var trailingCommaParams: Bool = false;
+	public var trailingCommaObjectLits: Bool = false;
+	public var trailingCommaAnonTypes: Bool = false;
+	public var ifBody: BodyPolicy = BodyPolicy.Keep;
+	public var elseBody: BodyPolicy = BodyPolicy.Keep;
+	public var forBody: BodyPolicy = BodyPolicy.Keep;
+	public var whileBody: BodyPolicy = BodyPolicy.Keep;
+	public var doBody: BodyPolicy = BodyPolicy.Keep;
+	public var returnBody: BodyPolicy = BodyPolicy.FitLine;
+	public var returnBodySingleLine: BodyPolicy = BodyPolicy.FitLine;
+	public var throwBody: BodyPolicy = BodyPolicy.Same;
+	public var catchBody: BodyPolicy = BodyPolicy.Next;
+	public var tryBody: BodyPolicy = BodyPolicy.Next;
+	public var caseBody: BodyPolicy = BodyPolicy.Keep;
+	public var caseSiblings: SiblingPolicy = SiblingPolicy.Off;
+	public var expressionCase: BodyPolicy = BodyPolicy.Keep;
+	public var functionBody: BodyPolicy = BodyPolicy.Next;
+	public var anonFunctionBody: BodyPolicy = BodyPolicy.Same;
+	public var untypedBody: BodyPolicy = BodyPolicy.Same;
+	public var expressionIfBody: BodyPolicy = BodyPolicy.Same;
+	public var expressionElseBody: BodyPolicy = BodyPolicy.Same;
+	public var expressionForBody: BodyPolicy = BodyPolicy.Keep;
+	public var expressionIfWithBlocks: Bool = false;
+	public var expressionIfWithBrackets: Bool = false;
+	public var leftCurly: BracePlacement = BracePlacement.Same;
+	public var emptyCurly: EmptyCurly = EmptyCurly.Same;
+	public var objectLiteralLeftCurly: BracePlacement = BracePlacement.Same;
+	public var anonTypeLeftCurly: BracePlacement = BracePlacement.Same;
+	public var anonFunctionLeftCurly: BracePlacement = BracePlacement.Same;
+	public var anonFunctionEmptyCurly: EmptyCurly = EmptyCurly.Same;
+	public var blockLeftCurly: BracePlacement = BracePlacement.Same;
+	public var blockEmptyCurly: EmptyCurly = EmptyCurly.Same;
+	public var blockRightCurly: RightCurlyPlacement = RightCurlyPlacement.Same;
+	public var anonFunctionRightCurly: RightCurlyPlacement = RightCurlyPlacement.Same;
+	public var anonTypeRightCurly: RightCurlyPlacement = RightCurlyPlacement.Same;
+	public var objectLiteralRightCurly: RightCurlyPlacement = RightCurlyPlacement.Same;
+	public var objectFieldColon: WhitespacePolicy = WhitespacePolicy.After;
+	public var typeHintColon: WhitespacePolicy = WhitespacePolicy.None;
+	public var typeCheckColon: WhitespacePolicy = WhitespacePolicy.Both;
+	public var funcParamParens: WhitespacePolicy = WhitespacePolicy.None;
+	public var callParens: WhitespacePolicy = WhitespacePolicy.None;
+	public var anonFuncParens: WhitespacePolicy = WhitespacePolicy.None;
 
 	/**
 	 * When `true`, an empty anonymous-function parameter list emits a single inside space
@@ -115,17 +150,18 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * Read by `HxFnExpr.params` through `sepList`'s `keepInnerWhenEmpty` arg — orthogonal to
 	 * `anonFuncParens`.
 	 */
-	anonFuncParamParensKeepInnerWhenEmpty: Bool,
-	ifPolicy: WhitespacePolicy,
-	forPolicy: WhitespacePolicy,
-	whilePolicy: WhitespacePolicy,
+	public var anonFuncParamParensKeepInnerWhenEmpty: Bool = false;
+
+	public var ifPolicy: WhitespacePolicy = WhitespacePolicy.After;
+	public var forPolicy: WhitespacePolicy = WhitespacePolicy.After;
+	public var whilePolicy: WhitespacePolicy = WhitespacePolicy.After;
 
 	/**
 	 * Trailing space after `switch`, for all four switch ctors. Caller trap: for the bare form
 	 * (`switch cond { … }`) `Before` / `None` produce `switchcond` — a syntax error; keep the default
 	 * there.
 	 */
-	switchPolicy: WhitespacePolicy,
+	public var switchPolicy: WhitespacePolicy = WhitespacePolicy.After;
 
 	/**
 	 * Leading space before the `switch` keyword — the `before` / `around`
@@ -134,9 +170,10 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * does not erase it. Visible only when the keyword follows a tight `(`
 	 * (a call argument `f( switch …)` or an expression paren `( switch …)`).
 	 */
-	switchKwLeadingSpace: Bool,
-	tryPolicy: WhitespacePolicy,
-	elseIf: KeywordPlacement,
+	public var switchKwLeadingSpace: Bool = false;
+
+	public var tryPolicy: WhitespacePolicy = WhitespacePolicy.After;
+	public var elseIf: KeywordPlacement = KeywordPlacement.Same;
 
 	/**
 	 * omega-else-switch: keyword placement for a `switch` BRANCH of an `if`, the
@@ -154,8 +191,9 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * the head's own column, so the following `else` cuddles that `}` exactly as
 	 * it cuddles a block's (`PrevBodyInfo.headGlue`).
 	 */
-	elseSwitch: KeywordPlacement,
-	fitLineIfWithElse: Bool,
+	public var elseSwitch: KeywordPlacement = KeywordPlacement.Keep;
+
+	public var fitLineIfWithElse: Bool = false;
 
 	/**
 	 * omega-arrow-value-if-reflow: when `true`, a value-`if`/`else` chain in
@@ -179,7 +217,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * idempotently; `HxIfExpr`'s own doc lists them. Fed by
 	 * `sameLine.expressionIfArrowBodyReflow`.
 	 */
-	expressionIfArrowBodyReflow: Bool,
+	public var expressionIfArrowBodyReflow: Bool = false;
 
 	/**
 	 * omega-value-if-fit: when `true`, a value-position `if` / `else if` chain is decided by FIT
@@ -200,7 +238,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * shape: that gate is checked first. Default `false` keeps every value-`if` exploding (fork
 	 * parity). Fed by `sameLine.expressionIfFit`.
 	 */
-	expressionIfFit: Bool,
+	public var expressionIfFit: Bool = false;
 
 	/**
 	 * omega-value-if-fit branch cap: the largest number of VALUE BRANCHES an `expressionIfFit` chain
@@ -214,7 +252,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * what the knob measures. Refusing a chain leaves it on the exact `expressionIf` policy layout,
 	 * the same answer the knob-off path gives. Fed by `sameLine.expressionIfFitMaxBranches`.
 	 */
-	expressionIfFitMaxBranches: Int,
+	public var expressionIfFitMaxBranches: Int = 0;
 
 	/**
 	 * omega-elseif-comment-reflow: when `true`, an `else if` whose nested `if`
@@ -248,7 +286,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * there would cost idempotence. Statement position only - the value-position
 	 * twin `HxIfExpr` is out of scope. Fed by `sameLine.elseIfCommentReflow`.
 	 */
-	elseIfCommentReflow: Bool,
+	public var elseIfCommentReflow: Bool = false;
 
 	/**
 	 * ω-fitline-body-glue: when a `FitLine` construct body (`if` / `for` /
@@ -286,7 +324,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * it reaches exactly the bodies whose placement those own — a `Keep` / `Same` /
 	 * `Next` body policy never sees it.
 	 */
-	fitLineBodyGlue: Bool,
+	public var fitLineBodyGlue: Bool = false;
 
 	/**
 	 * ω-loop-body-if-else-next: break a `for` / `while` / `do … while` header
@@ -316,7 +354,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * and `FitLine` all obey it; gating the `FitLine` LAYOUT alone left a config
 	 * on `same` / `keep` unable to decline the defect the key names.
 	 */
-	loopBodyIfElseNext: Bool,
+	public var loopBodyIfElseNext: Bool = false;
 
 	/**
 	 * ω-cond-expr-fit: break an expression-scope `#if … #end` region at its
@@ -332,7 +370,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * `@:fmt(condExprFitBreak)` arm, `nestBodyOnSourceNewlineWrap`'s flat arm,
 	 * and the `elseifs` Star's inter-element / trailing-pad separators.
 	 */
-	conditionalExprFit: Bool,
+	public var conditionalExprFit: Bool = false;
 
 	/**
 	 * When the statement-`if` then-branch is a bare statement ending in `;` and the branch
@@ -344,36 +382,39 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * `@:fmt(semicolonNextLineElse)` flag on `HxIfStmt.elseBody`. Default `true`, unlike the
 	 * other bare-`Bool` `sameLine` knobs.
 	 */
-	ifElseSemicolonNextLine: Bool,
-	afterFieldsWithDocComments: CommentEmptyLinesPolicy,
+	public var ifElseSemicolonNextLine: Bool = true;
+
+	public var afterFieldsWithDocComments: CommentEmptyLinesPolicy = CommentEmptyLinesPolicy.One;
 
 	/**
 	 * `Keep` honours the source blank between class members, `Remove` strips it. A strip policy removes only the SOURCE
 	 * blank: an add policy on the same slot (`afterFieldsWithDocComments = One`, the inter-member counts) still inserts
 	 * one, so `Remove` + `One` yields a blank after a doc-commented member.
 	 */
-	existingBetweenFields: KeepEmptyLinesPolicy,
+	public var existingBetweenFields: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
 
 	/**
 	 * `Keep` / `Remove` that takes over from `existingBetweenFields` on a class body while
 	 * `_classExtern` is true (`emptyLines.externClassEmptyLines.existingBetweenFields`).
 	 */
-	externExistingBetweenFields: KeepEmptyLinesPolicy,
-	beforeDocCommentEmptyLines: CommentEmptyLinesPolicy,
-	betweenVars: Int,
-	betweenFunctions: Int,
-	afterVars: Int,
+	public var externExistingBetweenFields: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
+
+	public var beforeDocCommentEmptyLines: CommentEmptyLinesPolicy = CommentEmptyLinesPolicy.One;
+	public var betweenVars: Int = 0;
+	public var betweenFunctions: Int = 1;
+	public var afterVars: Int = 1;
 
 	/**
 	 * Blanks between an instance var and a static var (either order); with `betweenStaticFunctions`,
 	 * fires only where the member Star ALSO carries `@:fmt(staticVarSubdivision)` — class and abstract members opt in,
 	 * interface members do not; an `extern class` and an `enum abstract` read their own between-counts there instead.
 	 */
-	afterStaticVars: Int,
-	betweenStaticFunctions: Int,
-	interfaceBetweenVars: Int,
-	interfaceBetweenFunctions: Int,
-	interfaceAfterVars: Int,
+	public var afterStaticVars: Int = 1;
+
+	public var betweenStaticFunctions: Int = 1;
+	public var interfaceBetweenVars: Int = 0;
+	public var interfaceBetweenFunctions: Int = 0;
+	public var interfaceAfterVars: Int = 0;
 
 	/**
 	 * The between-member counts and the source-blank policy of a type body with its own `<kind>EmptyLines` section:
@@ -381,27 +422,28 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * `macro class` reification; the `…AfterStaticVars` / `…BetweenStaticFunctions` of `abstract` and `macro class` subdivide
 	 * like the class pair. Each is named by its grammar field's `@:fmt(...)`, so no kind's config moves another kind's body.
 	 */
-	interfaceExistingBetweenFields: KeepEmptyLinesPolicy,
-	externClassBetweenVars: Int,
-	externClassBetweenFunctions: Int,
-	externClassAfterVars: Int,
-	abstractExistingBetweenFields: KeepEmptyLinesPolicy,
-	abstractBetweenVars: Int,
-	abstractBetweenFunctions: Int,
-	abstractAfterVars: Int,
-	abstractAfterStaticVars: Int,
-	abstractBetweenStaticFunctions: Int,
-	enumAbstractExistingBetweenFields: KeepEmptyLinesPolicy,
-	enumAbstractBetweenVars: Int,
-	enumAbstractBetweenFunctions: Int,
-	enumAbstractAfterVars: Int,
-	macroClassExistingBetweenFields: KeepEmptyLinesPolicy,
-	macroClassBetweenVars: Int,
-	macroClassBetweenFunctions: Int,
-	macroClassAfterVars: Int,
-	macroClassAfterStaticVars: Int,
-	macroClassBetweenStaticFunctions: Int,
-	betweenEnumCtors: Int,
+	public var interfaceExistingBetweenFields: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
+
+	public var externClassBetweenVars: Int = 0;
+	public var externClassBetweenFunctions: Int = 0;
+	public var externClassAfterVars: Int = 0;
+	public var abstractExistingBetweenFields: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
+	public var abstractBetweenVars: Int = 0;
+	public var abstractBetweenFunctions: Int = 1;
+	public var abstractAfterVars: Int = 1;
+	public var abstractAfterStaticVars: Int = 1;
+	public var abstractBetweenStaticFunctions: Int = 1;
+	public var enumAbstractExistingBetweenFields: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
+	public var enumAbstractBetweenVars: Int = 0;
+	public var enumAbstractBetweenFunctions: Int = 1;
+	public var enumAbstractAfterVars: Int = 1;
+	public var macroClassExistingBetweenFields: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
+	public var macroClassBetweenVars: Int = 0;
+	public var macroClassBetweenFunctions: Int = 1;
+	public var macroClassAfterVars: Int = 1;
+	public var macroClassAfterStaticVars: Int = 1;
+	public var macroClassBetweenStaticFunctions: Int = 1;
+	public var betweenEnumCtors: Int = 0;
 
 	/**
 	 * Blank lines between a type body's `{` and its first member (`…EndType`: between its last member and `}`), one
@@ -411,20 +453,21 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * included, is exact and wins over the source. Each pair is named by its grammar field's
 	 * `@:fmt(beginEndType(...))`.
 	 */
-	beginType: Null<Int>,
-	endType: Null<Int>,
-	abstractBeginType: Null<Int>,
-	abstractEndType: Null<Int>,
-	interfaceBeginType: Null<Int>,
-	interfaceEndType: Null<Int>,
-	externClassBeginType: Null<Int>,
-	externClassEndType: Null<Int>,
-	macroClassBeginType: Null<Int>,
-	macroClassEndType: Null<Int>,
-	enumBeginType: Null<Int>,
-	enumEndType: Null<Int>,
-	enumAbstractBeginType: Null<Int>,
-	enumAbstractEndType: Null<Int>,
+	public var beginType: Null<Int> = null;
+
+	public var endType: Null<Int> = null;
+	public var abstractBeginType: Null<Int> = null;
+	public var abstractEndType: Null<Int> = null;
+	public var interfaceBeginType: Null<Int> = null;
+	public var interfaceEndType: Null<Int> = null;
+	public var externClassBeginType: Null<Int> = null;
+	public var externClassEndType: Null<Int> = null;
+	public var macroClassBeginType: Null<Int> = null;
+	public var macroClassEndType: Null<Int> = null;
+	public var enumBeginType: Null<Int> = null;
+	public var enumEndType: Null<Int> = null;
+	public var enumAbstractBeginType: Null<Int> = null;
+	public var enumAbstractEndType: Null<Int> = null;
 	// ω-typedef-between-fields: dedicated typedef-RHS anon-body blank-line
 	// knobs (fork's `TypedefFieldsEmptyLinesConfig`), read only by the
 	// `@:sep`-Star force-multi branch under `_inTypedefBody`. Kept distinct
@@ -435,10 +478,10 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// that exact count regardless of the policy. `typedefBeginType` /
 	// `typedefEndType` follow the type-body contract above: `null` defers to
 	// the source, a count is exact.
-	typedefBeginType: Null<Int>,
-	typedefBetweenFields: Int,
-	typedefExistingBetweenFields: KeepEmptyLinesPolicy,
-	typedefEndType: Null<Int>,
+	public var typedefBeginType: Null<Int> = null;
+	public var typedefBetweenFields: Int = 0;
+	public var typedefExistingBetweenFields: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
+	public var typedefEndType: Null<Int> = null;
 
 	/**
 	 * `Keep` / `Remove` for the source blank between a `{` and its first item — a type body, a block body that opts in
@@ -446,13 +489,13 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * body it is consulted only while that kind's `…BeginType` / `…EndType` is `null` — a stated count wins.
 	 * Compiled default `Keep`; `HaxeFormatConfigLoader` re-baselines both to the fork's `Remove` on any JSON load.
 	 */
-	afterLeftCurly: KeepEmptyLinesPolicy,
+	public var afterLeftCurly: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
 
 	/**
 	 * `Keep` / `Remove` for the source blank between a body's last item and its `}` — the mirror of `afterLeftCurly`,
 	 * same sites, same `endType` precedence, same `Remove` re-baseline on JSON load.
 	 */
-	beforeRightCurly: KeepEmptyLinesPolicy,
+	public var beforeRightCurly: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
 
 	/**
 	 * `Keep` / `Collapse` over the blank-line gaps BETWEEN adjacent statements of one block
@@ -462,7 +505,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * mix (or any comment between statements) is left byte-exact. The head/tail `{` / `}` blanks are
 	 * resolved by `afterLeftCurly` / `beforeRightCurly` instead. See `UniformStatementBlanksPolicy`.
 	 */
-	uniformStatementBlanks: UniformStatementBlanksPolicy,
+	public var uniformStatementBlanks: UniformStatementBlanksPolicy = UniformStatementBlanksPolicy.Keep;
 
 	/**
 	 * FU12 `comments.trailingCommentOverflow: "above"`. True moves a same-line `//` comment that alone carries
@@ -472,16 +515,17 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * renders as one line that fits, never for a directive (`CommentDirective`) and never for an element that
 	 * already carries a leading comment. False (default) keeps every trailing comment where it was.
 	 */
-	trailingCommentAbove: Bool,
-	typedefAssign: WhitespacePolicy,
-	typedefIntersection: WhitespacePolicy,
-	typeParamDefaultEquals: WhitespacePolicy,
-	typeParamOpen: WhitespacePolicy,
-	typeParamClose: WhitespacePolicy,
-	anonTypeBracesOpen: WhitespacePolicy,
-	anonTypeBracesClose: WhitespacePolicy,
-	objectLiteralBracesOpen: WhitespacePolicy,
-	objectLiteralBracesClose: WhitespacePolicy,
+	public var trailingCommentAbove: Bool = false;
+
+	public var typedefAssign: WhitespacePolicy = WhitespacePolicy.Both;
+	public var typedefIntersection: WhitespacePolicy = WhitespacePolicy.After; // noqa: prefer-final-public-field
+	public var typeParamDefaultEquals: WhitespacePolicy = WhitespacePolicy.Both;
+	public var typeParamOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var typeParamClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var anonTypeBracesOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var anonTypeBracesClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var objectLiteralBracesOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var objectLiteralBracesClose: WhitespacePolicy = WhitespacePolicy.None;
 	// ω-arrow-body-objlit-pad-keep: when `true`, the open-side
 	// `objectLiteralBracesOpen` inner pad is applied EVEN when the literal
 	// is an arrow-lambda body (`u -> { email: v }`). Default `false`
@@ -489,14 +533,14 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// compress-mode `case Arrow: return;` which drops the opening-brace
 	// pad after a `->` token (`u -> {email: v }`). Fed by
 	// `whitespace.bracesConfig.objectLiteralBraces.arrowBodyOpenPad`.
-	objectLiteralArrowBodyOpenPad: Bool,
+	public var objectLiteralArrowBodyOpenPad: Bool = false;
 	// ω-arrow-body-objlit-reflow: when `true`, a source-multiline object
 	// literal that is an arrow-lambda body drops its source newlines and
 	// the wrap cascade re-flows it by width (`u -> { a: 1 }` when it
 	// fits). Default `false` keeps the source-multiline force-multi
 	// shape (fork parity). Fed by `whitespace.bracesConfig.
 	// objectLiteralBraces.arrowBodyReflow`.
-	objectLiteralArrowBodyReflow: Bool,
+	public var objectLiteralArrowBodyReflow: Bool = false;
 	// ω-single-stmt-braces: when `true`, the writer drops the curly braces
 	// around an `if` / `else` / `for` / `while` body whose block holds
 	// exactly one safe single statement (`if (c) { return x; }` →
@@ -506,7 +550,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// closed (keeps braces). Trivia-mode writer only; the plain writer
 	// ignores the knob. Default `false` (keep braces — byte-inert). Fed by
 	// `whitespace.bracesConfig.singleStatementBraces` (`"remove"` → true).
-	dropSingleStmtBraces: Bool,
+	public var dropSingleStmtBraces: Bool = false;
 	// omega-brace-symmetry: the OTHER direction of the same policy - when `true`, a
 	// branch that arrives BARE opposite a brace-keeping sibling GAINS braces
 	// (`if (a) { p(); q(); } else r();` -> a fully braced if/else). It is what
@@ -518,7 +562,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// (`@:fmt(valueBraceSymmetry)`) and the try/catch group
 	// (`@:fmt(tryBraceSymmetry)`). Trivia-mode writer only. Default `false` -
 	// byte-inert. Fed by `whitespace.bracesConfig.singleStatementBraces`.
-	singleStmtBraceSymmetry: Bool,
+	public var singleStmtBraceSymmetry: Bool = false;
 	// omega-cond-directive-binop: spacing for the `&&` / `||` inside a `#if` /
 	// `#elseif` CONDITION, which the grammar captures as one verbatim text terminal
 	// rather than as an expression tree - so `whitespace.binopPolicy`, which acts on
@@ -528,14 +572,14 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// direction from the config's own `binopPolicy` so the two cannot drift.
 	// Applied in `anyparse.format.DirectiveCondition.spaceOperators` through the
 	// `@:writeNormalize('condOperatorSpacing')` terminal transform.
-	condDirectiveOpSpacing: OperatorSpacing,
+	public var condDirectiveOpSpacing: OperatorSpacing = OperatorSpacing.Keep;
 	// ω-switch-subject-parens: `true` drops the redundant parens around a
 	// `switch (subject) { … }` subject (`switch v { … }`); the leading-brace
 	// subject carve-out (object literal / block) still keeps them. Covers both
 	// statement- and expression-position switch (shared `HxSwitchStmt`
 	// grammar). Default `false` (keep parens — byte-inert). Fed by
 	// `whitespace.parenConfig.switchSubjectParens` (`"remove"` → true).
-	dropSwitchSubjectParens: Bool,
+	public var dropSwitchSubjectParens: Bool = false;
 	// ω-optional-semicolon (E11): three-way policy for the `@:trailOpt(';')`
 	// statement terminator Haxe lets a `}`-terminated statement omit.
 	// `Preserve` (default) re-emits source presence — byte-inert, fork
@@ -544,7 +588,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// flag's shape gate proves it optional. Trivia-mode writer only; the
 	// plain writer keeps its `trailOptShapeGate` AST-shape gate. Fed by
 	// `whitespace.optionalSemicolon`.
-	optionalSemicolon: OptionalSemicolon,
+	public var optionalSemicolon: OptionalSemicolon = OptionalSemicolon.Preserve;
 	// omega-semi-before-else: the SEPARATE three-way policy for the optional
 	// `;` Haxe accepts between a value-`if`'s then-branch and its `else`
 	// (`final x = if (c) a; else b;`). A distinct key from `optionalSemicolon`
@@ -557,17 +601,17 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// HAS an `else`: with none, that `;` can be the ENCLOSING statement's own
 	// terminator, so source presence always wins there. Fed by
 	// `whitespace.semicolonBeforeElse`.
-	semicolonBeforeElse: OptionalSemicolon,
-	accessBracketsOpen: WhitespacePolicy,
-	accessBracketsClose: WhitespacePolicy,
-	arrayLiteralBracketsOpen: WhitespacePolicy,
-	arrayLiteralBracketsClose: WhitespacePolicy,
-	mapLiteralBracketsOpen: WhitespacePolicy,
-	mapLiteralBracketsClose: WhitespacePolicy,
-	comprehensionBracketsOpen: WhitespacePolicy,
-	comprehensionBracketsClose: WhitespacePolicy,
-	callParensInsideOpen: WhitespacePolicy,
-	callParensInsideClose: WhitespacePolicy,
+	public var semicolonBeforeElse: OptionalSemicolon = OptionalSemicolon.Preserve;
+	public var accessBracketsOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var accessBracketsClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var arrayLiteralBracketsOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var arrayLiteralBracketsClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var mapLiteralBracketsOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var mapLiteralBracketsClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var comprehensionBracketsOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var comprehensionBracketsClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var callParensInsideOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var callParensInsideClose: WhitespacePolicy = WhitespacePolicy.None;
 	// ω-condition-parens: per-condition-paren INNER pad, fed by
 	// `whitespace.parenConfig.{if|while|switch}ConditionParens` /
 	// `catchParens` / `sharpConditionParens` / `conditionParens`
@@ -579,30 +623,35 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// `catchParensGap` / `sharpCondParensGap` are dedicated because catch
 	// (`@:kw('catch')`) and `#if` (`HxConditionalStmt`) have no pre-
 	// existing gap knob. Default None → tight `if (a)` / `catch (e)`.
-	ifCondParensInsideOpen: WhitespacePolicy,
-	ifCondParensInsideClose: WhitespacePolicy,
-	whileCondParensInsideOpen: WhitespacePolicy,
-	whileCondParensInsideClose: WhitespacePolicy,
-	switchCondParensInsideOpen: WhitespacePolicy,
-	switchCondParensInsideClose: WhitespacePolicy,
-	catchParensGap: WhitespacePolicy,
-	catchParensInsideOpen: WhitespacePolicy,
-	catchParensInsideClose: WhitespacePolicy,
-	sharpCondParensGap: WhitespacePolicy,
-	sharpCondParensInsideOpen: WhitespacePolicy,
-	sharpCondParensInsideClose: WhitespacePolicy,
-	objectLiteralWrap: WrapRules,
-	callParameterWrap: WrapRules,
-	arrayLiteralWrap: WrapRules,
-	mapLiteralWrap: WrapRules,
-	multiVarWrap: WrapRules,
-	casePatternWrap: WrapRules,
-	anonTypeWrap: WrapRules,
-	methodChainWrap: WrapRules,
-	opBoolChainWrap: WrapRules,
-	opAddSubChainWrap: WrapRules,
-	conditionWrap: WrapRules,
-	ternaryWrap: WrapRules,
+	public var ifCondParensInsideOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var ifCondParensInsideClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var whileCondParensInsideOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var whileCondParensInsideClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var switchCondParensInsideOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var switchCondParensInsideClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var catchParensGap: WhitespacePolicy = WhitespacePolicy.After;
+	public var catchParensInsideOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var catchParensInsideClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var sharpCondParensGap: WhitespacePolicy = WhitespacePolicy.After;
+	public var sharpCondParensInsideOpen: WhitespacePolicy = WhitespacePolicy.None;
+	public var sharpCondParensInsideClose: WhitespacePolicy = WhitespacePolicy.None;
+	public var objectLiteralWrap: WrapRules = HaxeFormat.defaultObjectLiteralWrap();
+	public var callParameterWrap: WrapRules = HaxeFormat.defaultCallParameterWrap();
+	public var arrayLiteralWrap: WrapRules = HaxeFormat.defaultArrayLiteralWrap();
+	// A MAP literal (`[k => v, …]`) reads its own cascade, the way the fork
+	// splits `mapLiteralWrapping` off `arrayLiteralWrapping`. The fork's
+	// `wrapping.mapWrap` DEFAULT is character-for-character its `arrayWrap`
+	// default, so there is nothing to restate here — and the builder returns
+	// a fresh struct per call, so the two never share mutable state.
+	public var mapLiteralWrap: WrapRules = HaxeFormat.defaultArrayLiteralWrap();
+	public var multiVarWrap: WrapRules = HaxeFormat.defaultMultiVarWrap();
+	public var casePatternWrap: WrapRules = HaxeFormat.defaultCasePatternWrap();
+	public var anonTypeWrap: WrapRules = HaxeFormat.defaultAnonTypeWrap();
+	public var methodChainWrap: WrapRules = HaxeFormat.defaultMethodChainWrap();
+	public var opBoolChainWrap: WrapRules = HaxeFormat.defaultOpBoolChainWrap();
+	public var opAddSubChainWrap: WrapRules = HaxeFormat.defaultOpAddSubChainWrap();
+	public var conditionWrap: WrapRules = HaxeFormat.defaultConditionWrap();
+	public var ternaryWrap: WrapRules = HaxeFormat.defaultTernaryWrap();
 	// The layout of a ternary whose branch holds a multi-line block (`cond ? macro {…} : …`): `false`
 	// (the default) lets that hardline commit the ternary to its break shape, `?` and `:` on lines of their
 	// own; `true` keeps `cond ? macro {` on the condition's line while it fits and leaves the wrap to
@@ -610,40 +659,41 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// opens with is skipped (`HxTernaryBranchBlocks`). Fed by
 	// `wrapping.ternaryMultilineBranch` (`"inline"` → true, `"break"` → false); read through the Ternary
 	// ctor's `@:fmt(multilineBranchInline)`.
-	ternaryMultilineBranchInline: Bool,
-	functionSignatureWrap: WrapRules,
-	anonFunctionSignatureWrap: WrapRules,
-	metadataCallParameterWrap: WrapRules,
-	typeParameterWrap: WrapRules,
-	expressionWrappingWrap: WrapRules,
-	implementsExtendsWrap: WrapRules,
-	expressionTry: SameLinePolicy,
-	indentCaseLabels: Bool,
-	indentObjectLiteral: Bool,
+	public var ternaryMultilineBranchInline: Bool = false;
+	public var functionSignatureWrap: WrapRules = HaxeFormat.defaultFunctionSignatureWrap();
+	public var anonFunctionSignatureWrap: WrapRules = HaxeFormat.defaultAnonFunctionSignatureWrap();
+	public var metadataCallParameterWrap: WrapRules = HaxeFormat.defaultMetadataCallParameterWrap();
+	public var typeParameterWrap: WrapRules = HaxeFormat.defaultTypeParameterWrap();
+	public var expressionWrappingWrap: WrapRules = HaxeFormat.defaultExpressionWrappingWrap();
+	public var implementsExtendsWrap: WrapRules = HaxeFormat.defaultImplementsExtendsWrap();
+	public var expressionTry: SameLinePolicy = SameLinePolicy.Same;
+	public var indentCaseLabels: Bool = true;
+	public var indentObjectLiteral: Bool = true;
 	// An object-literal body of a comprehension `for` stays glued to the header instead of taking the Allman placement.
 	// Derived by the config loader from `sameLine.forBody` and `sameLine.comprehensionFor`; no config key of its own.
-	comprehensionObjectLitGlue: Bool,
-	indentComplexValueExpressions: Bool,
-	indentVarTypeHintAnon: Bool,
-	functionTypeHaxe4: WhitespacePolicy,
-	functionTypeHaxe3: WhitespacePolicy,
-	intervalPolicy: WhitespacePolicy,
-	arrowFunctions: WhitespacePolicy,
+	public var comprehensionObjectLitGlue: Bool = false;
+	public var indentComplexValueExpressions: Bool = false;
+	public var indentVarTypeHintAnon: Bool = true;
+	public var functionTypeHaxe4: WhitespacePolicy = WhitespacePolicy.Both;
+	public var functionTypeHaxe3: WhitespacePolicy = WhitespacePolicy.None;
+	public var intervalPolicy: WhitespacePolicy = WhitespacePolicy.None;
+	public var arrowFunctions: WhitespacePolicy = WhitespacePolicy.Both;
 
 	/**
 	 * Blank lines forced AFTER a `package` directive by the `blankLinesAfterCtor` cascade on `HxModule.decls` — an
 	 * override of the source count, like every count in that cascade (the fork's `emptyLines.afterPackage`).
 	 */
-	afterPackage: Int,
+	public var afterPackage: Int = 1;
 
 	/**
 	 * Blank lines forced BEFORE a leading `package` directive, read once at file head by the `blankLinesAtHeadIfCtor`
 	 * cascade on `HxModule.decls` — an override of the source count. Default `0` keeps the file's leading edge tight
 	 * against `package …;`, `1` starts the file with a blank line (the fork's `emptyLines.beforePackage`).
 	 */
-	beforePackage: Int,
-	beforeUsing: Int,
-	betweenImports: Int,
+	public var beforePackage: Int = 0;
+
+	public var beforeUsing: Int = 1;
+	public var betweenImports: Int = 0;
 
 	/**
 	 * Granularity of the `betweenImports` level test: `All` (default; every same-kind boundary is a
@@ -651,11 +701,12 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * `FullPackage` (the whole path). Read by the `blankLinesBetweenSameCtorByLevel` cascade on
 	 * `HxModule.decls` through the grammar-wired `betweenImportsPathDiffers` adapter.
 	 */
-	betweenImportsLevel: HxBetweenImportsLevel,
-	keepSourceBlankAcrossConditional: Bool,
-	beforeType: Int,
-	afterMultilineDecl: Int,
-	beforeMultilineDecl: Int,
+	public var betweenImportsLevel: HxBetweenImportsLevel = HxBetweenImportsLevel.All;
+
+	public var keepSourceBlankAcrossConditional: Bool = false;
+	public var beforeType: Int = 1;
+	public var afterMultilineDecl: Int = 1;
+	public var beforeMultilineDecl: Int = 1;
 	// ω-after-conditional-block — number of blank lines forced after a
 	// module-level `#if … #end` (`HxDecl.Conditional`) whose tail leaf is
 	// NEITHER an import / using NOR a type-level decl. Mirrors fork's
@@ -670,7 +721,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// other-tailed conditionals; the import- / type-tailed cases fall
 	// through to the source-driven count (kept). See
 	// the generated `tailLeafKeepsBlankAfterConditional` for the gate walker.
-	afterConditionalBlock: Int,
+	public var afterConditionalBlock: Int = 0; // noqa: prefer-final-public-field
 
 	/**
 	 * Exact blanks AFTER the first top-level block-style comment of a module when fileheader semantics
@@ -679,14 +730,14 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * keeps a doc comment glued to the type it documents in a module whose `import` sits below that
 	 * type. Site: `@:fmt(afterFileHeaderCommentBlanks)` on `HxModule.decls`.
 	 */
-	afterFileHeaderComment: Int,
+	public var afterFileHeaderComment: Int = 1;
 
 	/**
 	 * Exact blanks BETWEEN two consecutive block-style comments wherever block–block boundaries occur in a
 	 * `leadingComments` array or a trailing-orphan array, except the slot `afterFileHeaderComment` already claims.
 	 * Site: `@:fmt(betweenMultilineCommentsBlanks)` on `HxModule.decls` and the class / interface / abstract member Stars.
 	 */
-	betweenMultilineComments: Int,
+	public var betweenMultilineComments: Int = 0;
 
 	/**
 	 * Blanks between two consecutive single-line top-level type decls (neither matches the `multiline`
@@ -694,17 +745,20 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * source-driven — this axis never strips blanks. `afterMultilineDecl` / `beforeMultilineDecl` win
 	 * when either side is multi-line.
 	 */
-	betweenSingleLineTypes: Int,
-	// ω-blank-around-multiline-members — blank lines forced into the gap
-	// between two adjacent TYPE MEMBERS when either of them renders across
-	// more than one line. `betweenSingleLineTypes` above is its module-level
-	// sibling, but that one resolves multi-line-ness STRUCTURALLY at macro
-	// time (a class is multi-line iff it declares members). A field cannot be
-	// classified that way — `final a = ['x'];` fits and `final a = [… 20 …];`
-	// does not, from the same shape — so this knob is answered by measuring
-	// the built Doc instead. `0` (the default) leaves every gap to the
-	// source-driven `existingBetweenFields` path.
-	aroundMultilineFields: Int,
+	public var betweenSingleLineTypes: Int = 0;
+
+	/**
+	 * ω-blank-around-multiline-members — blank lines forced into the gap
+	 * between two adjacent TYPE MEMBERS when either of them renders across
+	 * more than one line. `betweenSingleLineTypes` above is its module-level
+	 * sibling, but that one resolves multi-line-ness STRUCTURALLY at macro
+	 * time (a class is multi-line iff it declares members). A field cannot be
+	 * classified that way — `final a = ['x'];` fits and `final a = [… 20 …];`
+	 * does not, from the same shape — so this knob is answered by measuring
+	 * the built Doc instead. `0` (the default) leaves every gap to the
+	 * source-driven `existingBetweenFields` path.
+	 */
+	public var aroundMultilineFields: Int = 0;
 
 	/**
 	 * When `true` (default) the writer re-emits each `${expr}` segment by recursing into the parsed
@@ -713,7 +767,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * `sourceText` arg (populated under `@:fmt(captureSource)`); plain mode does not capture, so the
 	 * knob has no effect there.
 	 */
-	formatStringInterpolation: Bool,
+	public var formatStringInterpolation: Bool = true;
 
 	/**
 	 * Line-end policy for the metadata Star on `HxMemberDecl.meta` (upstream
@@ -725,7 +779,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * (source newlines between metas collapse) AND a hardline after the last. Per-construct sisters
 	 * (`metadataType` / `metadataVar` / `metadataOther`) do not exist yet.
 	 */
-	metadataFunctionLineEnd: MetadataLineEndPolicy,
+	public var metadataFunctionLineEnd: MetadataLineEndPolicy = MetadataLineEndPolicy.None;
 
 	/**
 	 * Set when descending through an expression-position parent (`HxCaseBranch.body` /
@@ -734,7 +788,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * another case's body inherits the flag and flattens per `expressionCase`, an outer
 	 * statement-position `case X:` breaks per `caseBody`.
 	 */
-	_inExprPosition: Bool,
+	public var _inExprPosition: Bool = false; // noqa: naming
 
 	// ω-expressionif-collapse — narrow companion to `_inExprPosition`, `Here`
 	// ONLY on the immediate value of a value-yielded `if`/`else` branch
@@ -751,7 +805,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// branch value. `HxForExpr.body`'s `@:fmt(reflowCtorOnFitLine)` sets it on a
 	// literal comprehension body too, and `ThroughWrap` on a parenthesised one, which only that
 	// paren's descent reads: the paren clears the frame, so a parenthesised value-if branch keeps its lines.
-	_literalReflow: LiteralReflow,
+	public var _literalReflow: LiteralReflow = LiteralReflow.Off; // noqa: naming
 	// ω-arrow-body-objlit-pad — sister to `_literalReflow`, set ONLY on the
 	// immediate body of an arrow lambda (`HxExpr.ThinArrow` right operand /
 	// `HxThinParenLambda.body` carrying `@:fmt(propagateArrowLambdaBody)`).
@@ -765,7 +819,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// (call-arg / array-element / operand / paren inner), so only the
 	// LEFTMOST-LEAF object literal of the body — the one whose `{` sits right
 	// after the `->` token — sees the flag. Default `false`.
-	_inArrowLambdaBody: Bool,
+	public var _inArrowLambdaBody: Bool = false; // noqa: naming
 	// omega-arrow-value-if-reflow - set on the branch writes of an `HxIfExpr`
 	// that REFUSED the arrow-body reflow (a comment anywhere on its
 	// `else`-spine), so every deeper member of the same chain refuses too and
@@ -776,7 +830,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// `_setExprPosition` on any fresh expression-position frame (call arg,
 	// operand, nested arrow body), so it never leaves its own chain. Default
 	// `false`.
-	_arrowValueIfBlocked: Bool,
+	public var _arrowValueIfBlocked: Bool = false; // noqa: naming
 	// omega-arrow-value-if-reflow - set on the write of a list ELEMENT that
 	// carries a captured trailing comment (`@:fmt(arrowValueIfElemTrail)` on
 	// the element's Star), so an arrow-body value-`if` chain inside that
@@ -787,7 +841,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// cleared by `_setExprPosition`: the signal has to cross the call-arg
 	// frame AND the arrow-lambda body frame to reach the chain, and it is set
 	// per element, so it never spans a sibling. Default `false`.
-	_arrowValueIfElemTrailComment: Bool,
+	public var _arrowValueIfElemTrailComment: Bool = false; // noqa: naming
 
 	/**
 	 * Set by `HxTopLevelDecl.decl` via `@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers',
@@ -795,7 +849,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * read only where a grammar field names it: `HxClassDecl.members` switches to the `externClass*` knobs
 	 * (`extern abstract` and `extern interface` keep the abstract and interface ones).
 	 */
-	_classExtern: Bool,
+	public var _classExtern: Bool = false; // noqa: naming, prefer-final-public-field
 
 	/**
 	 * Set on descent into an anonymous function body (`HxFnExpr.body`, `HxParenLambda.body`,
@@ -805,7 +859,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * runtime-gated hardline before `{` when the knob is `Next`, then clears the flag so nested
 	 * blocks fall back to `blockLeftCurly`.
 	 */
-	_inAnonFnBody: Bool,
+	public var _inAnonFnBody: Bool = false; // noqa: naming
 
 	/**
 	 * Set on descent into a typedef RHS type via `@:fmt(propagateTypedefContext)` on
@@ -814,7 +868,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * `WrapList.emit`, bypassing the cascade and laying the anon body out `OnePerLine` even when its
 	 * fields fit flat. Cleared per element so nested anons revert to the layout-driven wrap.
 	 */
-	_inTypedefBody: Bool,
+	public var _inTypedefBody: Bool = false; // noqa: naming
 
 	/**
 	 * Set on descent into a type nested in a type argument, parentheses or `#if` arm
@@ -822,13 +876,16 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * their own. Read by `@:fmt(compactUnlessNested)`: a wrapped function-type signature continues
 	 * one unit past its line, two while nested.
 	 */
-	_inNestedType: Bool,
-	// ω-enumabstract-begin-end: set on the inner `HxAbstractDecl` opt when it is
-	// written as the body of an `enum abstract` (via `EnumAbstractDecl(decl)`'s
-	// `@:fmt(propagateEnumAbstractContext)`), so its `beginEndType` blank count
-	// reads `enumAbstractBeginType` / `enumAbstractEndType` instead of the
-	// `abstract` pair. Default `false`.
-	_inEnumAbstract: Bool,
+	public var _inNestedType: Bool = false; // noqa: naming
+
+	/**
+	 * ω-enumabstract-begin-end: set on the inner `HxAbstractDecl` opt when it is
+	 * written as the body of an `enum abstract` (via `EnumAbstractDecl(decl)`'s
+	 * `@:fmt(propagateEnumAbstractContext)`), so its `beginEndType` blank count
+	 * reads `enumAbstractBeginType` / `enumAbstractEndType` instead of the
+	 * `abstract` pair. Default `false`.
+	 */
+	public var _inEnumAbstract: Bool = false; // noqa: naming
 
 	/**
 	 * The chain mode the enclosing site set, `null` when none did. `_setChainModeOverride(opt, mode)` FORCES it — both
@@ -837,17 +894,18 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * a condition wrap's non-`NoWrap` mode, which a chain inside reads as "the condition supplies my continuation indent"
 	 * while its own cascade still decides its layout.
 	 */
-	_chainModeOverride: Null<WrapMode>,
-	_callArgChainNest: Bool,
-	_suppressMore: Bool,
-	_parenInCondition: Bool,
+	public var _chainModeOverride: Null<WrapMode> = null; // noqa: naming
+
+	public var _callArgChainNest: Bool = false; // noqa: naming
+	public var _suppressMore: Bool = false; // noqa: naming
+	public var _parenInCondition: Bool = false; // noqa: naming
 	// ω-compare-operand-linewrap: set on the ternary CONDITION's opt (via
 	// `_setInTernaryCond`) so `lowerInfixBranch` suppresses the `==`/`!=`
 	// operand-overflow break for a compare that IS a ternary condition -- the
 	// fork breaks the ternary `?`/`:`, not the compare. Default false → every
 	// non-ternary compare (assignment / chain operand / statement condition)
 	// still breaks on a genuine line overflow.
-	_inTernaryCond: Bool,
+	public var _inTernaryCond: Bool = false; // noqa: naming
 	// omega-call-grouprestprobe-subposition: set on a `Call` subtree that is NOT
 	// in statement/expression position, so the `Call` ctor skips the
 	// `groupRestProbe` rest-of-line fit bias. Set-sites, all via
@@ -871,7 +929,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// Not cleared on descent, so nested `Call`s inherit it. Default false -> every
 	// statement/expression-position call keeps the rest-probe (wraps at limit+1,
 	// counting the trailing `;`).
-	_suppressCallRestProbe: Bool,
+	public var _suppressCallRestProbe: Bool = false; // noqa: naming
 	// ω-complex-item-count: the subtree is a case PATTERN or a switch SUBJECT,
 	// so an array literal inside it must not classify its elements for the
 	// `complexItemCount >= n` cascade condition. Both positions can hold a shape
@@ -881,7 +939,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// `@:fmt(suppressComplexItems)` on `HxCasePattern.expr` /
 	// `HxSwitchStmt(Bare).expr`; not cleared on descent, so a nested pattern
 	// inherits it. Default false → every value-position array classifies.
-	_suppressComplexItems: Bool,
+	public var _suppressComplexItems: Bool = false; // noqa: naming
 	// ω-pattern-rest-probe: the subtree is a case PATTERN body, so NOTHING inside
 	// it rest-probes the line. Distinct from `_suppressCallRestProbe`, which the
 	// object-literal / array-literal element arm deliberately CLEARS so a nested
@@ -895,8 +953,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// `HxCasePattern.expr`; not cleared on descent, so a collection literal and
 	// the calls inside it inherit it. Default false → every value-position
 	// construct keeps its rest probe.
-	_suppressPatternRestProbe: Bool,
-	_varKwNewline: Bool,
+	public var _suppressPatternRestProbe: Bool = false; // noqa: naming
+	public var _varKwNewline: Bool = false; // noqa: naming
 
 	/**
 	 * Set on descent into a class-member `var` / `final` initializer (NOT a local statement) via
@@ -904,7 +962,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * `indentValueIfCtor('IfExpr', 'indentComplexValueExpressions')` entry on `HxVarDecl.init`: when
 	 * set, the knob gate is bypassed (the fork's `Indenter.isFieldLevelVar`).
 	 */
-	_inFieldLevelVar: Bool,
+	public var _inFieldLevelVar: Bool = false; // noqa: naming
+
 	// ω-single-stmt-braces: dangling-else suppress frame. Set (via
 	// `_setSsbSuppress`) on the opt of an `if`-statement's then-body write
 	// when the `if` carries an `else`, so every `dropSingleStmtBraces`
@@ -913,7 +972,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// braces — unwrapping would rebind the outer `else` to `if (b)`.
 	// Never cleared on descent (over-suppression inside nested braced
 	// regions is safe, merely conservative). Default `false`.
-	_ssbSuppress: Bool,
+	public var _ssbSuppress: Bool = false; // noqa: naming
 	// ω-single-stmt-braces CHAIN symmetry: set (via `_setSsbChainSuppress`)
 	// on the opt of an else-if continuation write when the CHAIN ROOT found
 	// that some branch keeps its braces (`SingleStmtBraces.chainForcesBraces`).
@@ -923,7 +982,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// CLEARED when descending into a branch's own content (then-body /
 	// terminal-else writeCall), so an independent if-chain nested inside a
 	// branch still de-braces on its own merits. Default `false`.
-	_ssbChainSuppress: Bool,
+	public var _ssbChainSuppress: Bool = false; // noqa: naming
 	// ω-keep-chain — set on the leaf-operand opt
 	// when an opAddSub / opBool chain resolves to `WrapMode.Keep`. Read by the
 	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) emit to take the GLUED
@@ -932,7 +991,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// NOT re-open via the width-driven `IfFullLineExceeds` probe — mirror fork's
 	// `keep2` `noLineEndBefore` lock on operand boundaries with no source break.
 	// Default false → non-keep / Plain are byte-inert.
-	_keepFlatInner: Bool,
+	public var _keepFlatInner: Bool = false; // noqa: naming
 	// ω-keep-chain — set by an enclosing
 	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) on its inner opt. A
 	// `WrapMode.Keep` opAddSub / opBool chain reads it to suppress BOTH its own
@@ -945,7 +1004,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// expression paren" signal: a rest-aware ternary is EXCLUDED when this is set
 	// (the paren owns the wrap). Keep the setter firing for ANY expression paren,
 	// not only Keep chains, or that ternary gate silently breaks.
-	_keepChainInParen: Bool,
+	public var _keepChainInParen: Bool = false; // noqa: naming
 	// ω-typedef-intersection-operand-break — set per-element by
 	// `HxTypedefDecl.intersections`'s trivia-Star loop on the opt passed to a
 	// `& Type` clause whose PRECEDING clause rendered multi-line and ended with
@@ -956,7 +1015,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// After space (`} & B`), mirroring fork's `MarkLineEnds` `lineEndAfter` on
 	// the `&` that follows a `BrClose`. Default false → single-line
 	// intersections (`A & B`, `A & {x:Int} & B`) stay glued byte-identically.
-	_intersectionOperandBreak: Bool,
+	public var _intersectionOperandBreak: Bool = false; // noqa: naming
 	// ω-elseif-body-break: write-time-only signal flagging that the current
 	// statement is being rendered as the direct `else` branch of an enclosing
 	// `if` (i.e. an `else if`). Set by `HxIfStmt.elseBody`'s
@@ -968,5 +1027,6 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// `MarkSameLine.isPartOfIfElse` "if inside else" clause, so a fitting
 	// single-statement `else if (c) stmt;` degrades to `Next` under
 	// `sameLine.ifBody:fitLine` + `fitLineIfWithElse:false`. Default false.
-	_inElseIfBranch: Bool
-};
+	public var _inElseIfBranch: Bool = false; // noqa: naming
+
+}

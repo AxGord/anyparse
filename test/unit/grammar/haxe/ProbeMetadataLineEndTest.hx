@@ -45,7 +45,7 @@ class ProbeMetadataLineEndTest extends Test {
 
 	private static function render(policy: MetadataLineEndPolicy): String {
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(SRC);
-		final opt: HxModuleWriteOptions = Reflect.copy(HaxeFormat.instance.defaultWriteOptions);
+		final opt: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);
 		opt.metadataFunctionLineEnd = policy;
 		return HaxeModuleTriviaWriter.write(m, opt);
 	}

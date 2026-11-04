@@ -1561,6 +1561,62 @@
 			"find": "opt._literalReflow == anyparse.format.LiteralReflow.ThroughWrap",
 			"replace": "opt._literalReflow != anyparse.format.LiteralReflow.Off",
 			"note": "the paren passes on any frame, so a parenthesised value-if branch collapses"
+		},
+		{
+			"name": "M-OPTIONS-SLOT-GUARD-OFF",
+			"type": "anyparse.macro.OptionsRecord",
+			"method": "refuseOverSlotLimit",
+			"find": "if (slots > JVM_ARG_SLOTS)",
+			"replace": "if (false)",
+			"note": "an over-full options struct builds and the JVM jar refuses it at load"
+		},
+		{
+			"name": "M-OPTIONS-SLOTS-ARE-FIELDS",
+			"type": "anyparse.macro.OptionsRecord",
+			"method": "argSlots",
+			"find": "'Float', _)) ? 2 : 1;",
+			"replace": "'Float', _)) ? 1 : 1;",
+			"note": "a struct of doubles passes the count and is past the limit in slots"
+		},
+		{
+			"name": "M-OPTIONS-LONG-IS-ONE-SLOT",
+			"type": "anyparse.macro.OptionsRecord",
+			"method": "argSlots",
+			"find": "'haxe.Int64', _): 2;",
+			"replace": "'haxe.Int64', _): 1;",
+			"note": "a struct of Int64 knobs passes the count and dies at load"
+		},
+		{
+			"name": "M-OPTIONS-CLASS-KEEPS-INITIALIZERS",
+			"type": "anyparse.macro.OptionsRecord",
+			"method": "build",
+			"find": "f.kind = FVar(t, null);",
+			"replace": "",
+			"note": "the initializers stay on the fields, so every clone runs each default first"
+		},
+		{
+			"name": "M-OPTIONS-CLONE-TAKES-DEFAULTS",
+			"type": "anyparse.macro.OptionsRecord",
+			"method": "build",
+			"find": "copies.push(macro this.$name = from.$name);",
+			"replace": "copies.push(macro this.$name = $init);",
+			"note": "a clone holds the defaults, not its source's values"
+		},
+		{
+			"name": "M-COPYOPT-RETURNS-ITS-SOURCE",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "copyOptField",
+			"find": "macro return new $typePath(o);",
+			"replace": "macro return o;",
+			"note": "a shim's context flag lands on the caller's record and leaks to what is written next"
+		},
+		{
+			"name": "M-COPYOPT-CLASS-AS-STRUCT",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "copyOptField",
+			"find": "optionsType.match(TInst(_, _))",
+			"replace": "false",
+			"note": "a record class clones through Reflect.copy, into a plain object of another shape"
 		}
 	]
 }

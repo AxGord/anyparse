@@ -56,8 +56,7 @@ class WriterCodegen {
 			for (rule in rules) fields.push(ruleField(rule, optionsCT));
 			// Doc wrapper helpers
 			for (f in docHelperFields()) fields.push(f);
-			// ω-expression-case-flat-fanout: typed `Reflect.copy(opt)` shim,
-			// emitted unconditionally so triviaTryparseStarExpr's flat-fanout
+			// ω-expression-case-flat-fanout: the `_copyOpt` clone, emitted unconditionally so triviaTryparseStarExpr's flat-fanout
 			// path can call it without per-grammar gating.
 			fields.push(copyOptField(optionsTypePath, optionsCT));
 			// Per-grammar opt-fanout context helpers — each set/clear pair is

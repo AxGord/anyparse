@@ -216,6 +216,11 @@ class Build {
 		return fields;
 	}
 
+	/** `@:build` entry of a write-options class: `OptionsRecord.build`. */
+	public static macro function buildOptionsRecord(): Array<Field> {
+		return OptionsRecord.build();
+	}
+
 	/**
 	 * `@:build` entry point for the query walker - the translation from the
 	 * span-paired typed AST into the engine's `QueryNode` tree. Applied to a

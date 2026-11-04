@@ -5,8 +5,8 @@ import anyparse.core.Doc;
 /**
  * Base write options shared by all text writers.
  *
- * Per-grammar option typedefs extend this shape via struct intersection:
- * `typedef JValueWriteOptions = WriteOptions & { ... };`.
+ * Per-grammar option typedefs extend this shape via struct intersection: `typedef JValueWriteOptions = WriteOptions & { ... };`.
+ * A grammar past what a struct holds on the JVM target declares a class of the same knobs (`OptionsRecord`).
  * Resolution happens once in the generated `write()` entry point — the
  * internal `writeXxx` helpers see a fully populated, non-nullable struct.
  *

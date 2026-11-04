@@ -203,7 +203,7 @@ final class WriterTriviaStarEmitLowering {
 		final caseBodyFlagNames: Array<String> = starNode.fmtReadStringArgs('bodyPolicy') ?? [];
 		// ω-expression-case-flat-fanout: when `@:fmt(flatChildOpt('A=B', …))`
 		// is present, parse each `'from=to'` arg into a [from, to] pair so
-		// `triviaTryparseStarExpr` can emit a `Reflect.copy(opt)` + per-pair
+		// `triviaTryparseStarExpr` can emit the `_copyOpt` clone + per-pair
 		// override block in the runtime flat-case branch.
 		final flatChildOptRaw: Null<Array<String>> = starNode.fmtReadStringArgs('flatChildOpt');
 		final flatChildOptPairs: Array<Array<String>> = if (flatChildOptRaw == null) {
