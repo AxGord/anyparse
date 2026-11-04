@@ -35,9 +35,10 @@ final class FactText {
 	 * body was generated; null for a line that is not one.
 	 */
 	public static function nodeHead(line: String): Null<NodeHead> {
+		// std Json: native code, several times faster than the generated parser/writer on this hot path
 		return NODE_HEAD.match(line) ? {
-			id: Json.parse(NODE_HEAD.matched(1)),
-			file: Json.parse(NODE_HEAD.matched(2)),
+			id: Json.parse(NODE_HEAD.matched(1)), // noqa: avoid-haxe-json
+			file: Json.parse(NODE_HEAD.matched(2)), // noqa: avoid-haxe-json
 			min: Std.parseInt(NODE_HEAD.matched(HEAD_MIN)) ?? 0,
 			max: Std.parseInt(NODE_HEAD.matched(HEAD_MAX)) ?? 0,
 			foreign: FOREIGN_POSITION.match(line),

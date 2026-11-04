@@ -270,7 +270,8 @@ final class FactNodeRecords {
 		if (known.length != added.length) return null;
 		for (i in 0...known.length) {
 			final into: Array<ParamUse> = known[i];
-			for (u in added[i]) if (!into.exists(k -> Json.stringify(k) == Json.stringify(u))) into.push(u);
+			// std Json: native code, several times faster than the generated parser/writer on this hot path
+			for (u in added[i]) if (!into.exists(k -> Json.stringify(k) == Json.stringify(u))) into.push(u); // noqa: avoid-haxe-json
 		}
 		return known;
 	}

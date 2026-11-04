@@ -861,19 +861,20 @@ final class CompilerFacts {
 		configurations.push(dump.name);
 		targets.push(null);
 
+		// std Json: native code, several times faster than the generated parser on this hot path
 		for (raw in lines) {
 			final line: String = FactText.detached(raw);
 			if (line.startsWith('{"k":"node"')) {
 				addNode(line, index, dump);
 			} else if (line.startsWith('{"k":"type"')) {
-				addType(Json.parse(line), dump, index);
+				addType(Json.parse(line), dump, index); // noqa: avoid-haxe-json
 			} else if (line.startsWith('{"k":"src"')) {
-				addSource(Json.parse(line), dump);
+				addSource(Json.parse(line), dump); // noqa: avoid-haxe-json
 			} else if (line.startsWith('{"k":"target"')) {
-				final record: TargetRecord = Json.parse(line);
+				final record: TargetRecord = Json.parse(line); // noqa: avoid-haxe-json
 				targets[index] = record.n;
 			} else if (line.startsWith('{"k":"file"')) {
-				final record: FileRecord = Json.parse(line);
+				final record: FileRecord = Json.parse(line); // noqa: avoid-haxe-json
 				files.paths[record.i] = dump.file(record.path);
 			}
 		}
@@ -1141,7 +1142,8 @@ final class CompilerFacts {
 		var made: Null<FactNode> = null;
 		final seen: Map<String, Bool> = [];
 		for (line in lines) {
-			final record: NodeRecord = Json.parse(line.text);
+			// std Json: native code, several times faster than the generated parser on this hot path
+			final record: NodeRecord = Json.parse(line.text); // noqa: avoid-haxe-json
 			final files: DumpFiles = _dumps[line.dump];
 			final home: String = files.file(record.f);
 			final at: Null<FactPos> = position(home, record.p, files.paths);
@@ -1175,7 +1177,9 @@ final class CompilerFacts {
 		}
 		// a fact is identified by its resolved text, so the same site from two configurations is one fact
 		function fresh(category: String, fact: Any, where: FactPos): Bool {
-			final identity: String = '$category ${where.file} ${where.span.from} ${where.span.to} ${Json.stringify(fact)}';
+			// std Json: native code, several times faster than the generated writer on this hot path
+			final text: String = Json.stringify(fact); // noqa: avoid-haxe-json
+			final identity: String = '$category ${where.file} ${where.span.from} ${where.span.to} $text';
 			if (seen.exists(identity)) return false;
 			seen[identity] = true;
 			return true;
