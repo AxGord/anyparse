@@ -442,13 +442,17 @@ typedef NameSite = {
 /**
  * The compiler's answer to whether a rewrite keeps what a written name means: for each of `sites`, the name at its
  * `before` offset of `before` and the one at its `after` offset of `after`, both read as the text of `file`, name the same
- * declaration under every configuration that compiles the site. False on any disagreement and wherever no configuration
- * answers — never a guess. Every site of one rewrite of a file is asked at once, so the compiler is asked in one round.
+ * declaration under every configuration that compiles the site. `edits` is the rewrite itself, `after` being `before` with
+ * them applied, so a declaration in `file` that the rewrite pushed down is still the same one. False on any
+ * disagreement and wherever no configuration answers — never a guess. Every site of one rewrite of a file is asked at once,
+ * so the compiler is asked in one round.
  */
 @:nullSafety(Strict)
 interface NameOracle {
 
-	public function sameDeclarations(file: String, before: String, after: String, sites: Array<NameSite>): Array<Bool>;
+	public function sameDeclarations(
+		file: String, before: String, after: String, sites: Array<NameSite>, edits: Array<{ span: Span, text: String }>
+	): Array<Bool>;
 
 }
 

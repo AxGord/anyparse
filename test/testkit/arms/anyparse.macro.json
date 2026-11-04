@@ -1435,6 +1435,29 @@
 			"find": "|| starNode.fmtHasFlag('objectLiteralBracesClose')",
 			"replace": "|| false",
 			"note": "close-side inside spacing builds, and ElemChainEmit drops it on a label holding the operator"
+		},
+		{
+			"name": "M-FORMAT-READ-COMPILE-ONLY",
+			"type": "anyparse.macro.FormatReader",
+			"method": "initializerExpr",
+			"find": "final parsed: Array<MetadataEntry> = field.meta.extract(':value');",
+			"replace": "final parsed: Array<MetadataEntry> = [];",
+			"note": "the read answers only what a compile typed, so under --display every format field reads as absent and the macro fails the whole build: this project's builds give no display answer"
+		},
+		{
+			"name": "M-FORMAT-ENUM-VALUE-BY-SPELLING",
+			"type": "anyparse.macro.FormatReader",
+			"method": "enumAbstractConstructor",
+			"force": "null",
+			"note": "an enum abstract initializer is typed as spelled, through imports only the format class has, so under --display it does not resolve"
+		},
+		{
+			"name": "M-SHAPE-STRING-ENUM-COMPILE-ONLY",
+			"type": "anyparse.macro.ShapeBuilder",
+			"method": "extractStringEnumValues",
+			"find": "final texpr: Null<TypedExpr> = FormatReader.initializerExpr(f);",
+			"replace": "final texpr: Null<TypedExpr> = f.expr();",
+			"note": "a string enum reads as no values under --display, so a display query shapes its terminal as a regex the compile does not generate"
 		}
 	]
 }

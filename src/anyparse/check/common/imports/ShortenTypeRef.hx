@@ -431,7 +431,8 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		if (rewrites.length == 0) return [];
 		final oracle: Null<NameOracle> = _nameOracle;
 		if (oracle == null) return [for (r in rewrites) spanKey(r.site)];
-		final after: String = CanonicalEdit.applyEdits(source, [for (e in edits) { span: e.span, text: e.text }]);
+		final spliced: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
+		final after: String = CanonicalEdit.applyEdits(source, spliced);
 		final sites: Array<NameSite> = [];
 		for (r in rewrites) {
 			final from: Int = r.site.from;
@@ -440,7 +441,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 				after: shiftedStart(from, edits) + r.text.lastIndexOf('.') + 1
 			});
 		}
-		final same: Array<Bool> = oracle.sameDeclarations(file, source, after, sites);
+		final same: Array<Bool> = oracle.sameDeclarations(file, source, after, sites, spliced);
 		return [for (k => r in rewrites) if (!same[k]) spanKey(r.site)];
 	}
 

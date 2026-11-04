@@ -6,7 +6,10 @@ import anyparse.format.text.KeySyntax;
 import anyparse.format.text.MissingPolicy;
 import anyparse.format.text.UnknownPolicy;
 import haxe.macro.Context;
+import haxe.macro.Expr;
 import haxe.macro.Type;
+
+using Lambda;
 
 /**
  * Compile-time constants extracted from a resolved format class.
@@ -171,6 +174,49 @@ class FormatReader {
 	}
 
 	/**
+	 * The one answer to "what does this class field initialize to" for a macro reading a
+	 * constant. Display mode (`--display`) leaves the initializer of every field away from the
+	 * display point untyped, so `expr()` answers null there; the parser's expression stays on
+	 * the field's `@:value`, and typing it here gives the same constant.
+	 */
+	public static function initializerExpr(field: ClassField): Null<TypedExpr> {
+		final typed: Null<TypedExpr> = field.expr();
+		if (typed != null) return typed;
+		final parsed: Array<MetadataEntry> = field.meta.extract(':value');
+		if (parsed.length == 0) return null;
+		final value: Expr = parsed[0].params[0];
+		final constructor: Null<ClassField> = enumAbstractConstructor(field.type, value);
+		return constructor != null ? initializerExpr(constructor) : Context.typeExpr(value);
+	}
+
+	/**
+	 * The initializer of a format class field by name, the read every `read*` here goes through.
+	 * Null when the class declares no such field or no initializer.
+	 */
+	private static function initializerOf(cl: ClassType, fieldName: String): Null<TypedExpr> {
+		for (f in cl.fields.get()) if (f.name == fieldName) return initializerExpr(f);
+		return null;
+	}
+
+	/**
+	 * The enum abstract constructor a parsed initializer names, read off the declared type: the
+	 * spelling (`Lk.B`) is resolved by the format class's imports, which are not in scope of the
+	 * macro that reads it. Null when the type is no enum abstract or declares no such name.
+	 */
+	private static function enumAbstractConstructor(declared: Type, value: Expr): Null<ClassField> {
+		final name: Null<String> = switch value.expr {
+			case EField(_, last): last;
+			case EConst(CIdent(id)): id;
+			case _: null;
+		};
+		return switch Context.follow(declared) {
+			case TAbstract(_.get() => { impl: impl }, _) if (name != null && impl != null):
+				impl.get().statics.get().find(f -> f.name == name);
+			case _: null;
+		};
+	}
+
+	/**
 	 * Build `commentPatterns` by reading the format class's `lineComment`
 	 * (`Null<String>`) and `blockComment` (`Null<{open:String, close:String}>`)
 	 * fields. Missing or `null` fields contribute nothing — a format with
@@ -205,12 +251,8 @@ class FormatReader {
 	private static function readBlockCommentFieldOpt(
 		cl: ClassType, fieldName: String
 	): Null<{ open: String, close: String, doc: Null<String> }> {
-		final fields: Array<ClassField> = cl.fields.get();
-		for (f in fields) if (f.name == fieldName) {
-			final texpr: Null<TypedExpr> = f.expr();
-			if (texpr != null) return extractBlockComment(texpr);
-		}
-		return null;
+		final texpr: Null<TypedExpr> = initializerOf(cl, fieldName);
+		return texpr == null ? null : extractBlockComment(texpr);
 	}
 
 	private static function extractBlockComment(texpr: TypedExpr): Null<{ open: String, close: String, doc: Null<String> }> {
@@ -238,13 +280,9 @@ class FormatReader {
 	}
 
 	private static function detectBinary(cl: ClassType): Bool {
-		final fields: Array<ClassField> = cl.fields.get();
-		for (f in fields) if (f.name == 'encoding') {
-			final texpr: Null<TypedExpr> = f.expr();
-			// Encoding.Binary = 4
-			if (texpr != null) return extractInt(texpr) == 4; // noqa: magic-number
-		}
-		return false;
+		final texpr: Null<TypedExpr> = initializerOf(cl, 'encoding');
+		// Encoding.Binary = 4
+		return texpr != null && extractInt(texpr) == 4; // noqa: magic-number
 	}
 
 	private static function extractInt(texpr: TypedExpr): Int {
@@ -257,24 +295,16 @@ class FormatReader {
 	}
 
 	private static function readStringField(cl: ClassType, fieldName: String): String {
-		final fields: Array<ClassField> = cl.fields.get();
-		for (f in fields) if (f.name == fieldName) {
-			final texpr: Null<TypedExpr> = f.expr();
-			if (texpr != null) {
-				final s: Null<String> = extractString(texpr);
-				if (s != null) return s;
-			}
-		}
+		final texpr: Null<TypedExpr> = initializerOf(cl, fieldName);
+		final s: Null<String> = texpr == null ? null : extractString(texpr);
+		if (s != null) return s;
 		Context.fatalError('format class ${cl.name} has no readable String field "$fieldName"', Context.currentPos());
 		throw 'unreachable';
 	}
 
 	private static function readIntField(cl: ClassType, fieldName: String): Int {
-		final fields: Array<ClassField> = cl.fields.get();
-		for (f in fields) if (f.name == fieldName) {
-			final texpr: Null<TypedExpr> = f.expr();
-			if (texpr != null) return extractInt(texpr);
-		}
+		final texpr: Null<TypedExpr> = initializerOf(cl, fieldName);
+		if (texpr != null) return extractInt(texpr);
 		Context.fatalError('format class ${cl.name} has no readable Int field "$fieldName"', Context.currentPos());
 		throw 'unreachable';
 	}
@@ -299,12 +329,8 @@ class FormatReader {
 	 * isn't declared or its initializer isn't a `String` literal.
 	 */
 	private static function readStringFieldOpt(cl: ClassType, fieldName: String): Null<String> {
-		final fields: Array<ClassField> = cl.fields.get();
-		for (f in fields) if (f.name == fieldName) {
-			final texpr: Null<TypedExpr> = f.expr();
-			if (texpr != null) return extractString(texpr);
-		}
-		return null;
+		final texpr: Null<TypedExpr> = initializerOf(cl, fieldName);
+		return texpr == null ? null : extractString(texpr);
 	}
 
 	/**
@@ -314,12 +340,8 @@ class FormatReader {
 	 * `astPreds`.
 	 */
 	private static function readBoolField(cl: ClassType, fieldName: String): Bool {
-		final fields: Array<ClassField> = cl.fields.get();
-		for (f in fields) if (f.name == fieldName) {
-			final texpr: Null<TypedExpr> = f.expr();
-			if (texpr != null) return extractBool(texpr);
-		}
-		return false;
+		final texpr: Null<TypedExpr> = initializerOf(cl, fieldName);
+		return texpr != null && extractBool(texpr);
 	}
 
 	private static function extractBool(texpr: TypedExpr): Bool {
@@ -348,12 +370,8 @@ class FormatReader {
 	 * to the empty-policy default (everything tight, no leading space).
 	 */
 	private static function readStringArrayField(cl: ClassType, fieldName: String): Array<String> {
-		final fields: Array<ClassField> = cl.fields.get();
-		for (f in fields) if (f.name == fieldName) {
-			final texpr: Null<TypedExpr> = f.expr();
-			if (texpr != null) return extractStringArray(texpr);
-		}
-		return [];
+		final texpr: Null<TypedExpr> = initializerOf(cl, fieldName);
+		return texpr == null ? [] : extractStringArray(texpr);
 	}
 
 	private static function extractStringArray(texpr: TypedExpr): Array<String> {

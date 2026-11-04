@@ -982,8 +982,8 @@
 			"name": "M-NAME-PROOF-NO-ANSWER-AGREES",
 			"type": "anyparse.check.oracle.CompilerNameProof",
 			"method": "agreed",
-			"find": "if (was == null || !samePosition(",
-			"replace": "if (was != null && !samePosition(",
+			"find": "if (was == null || !same(",
+			"replace": "if (was != null && !same(",
 			"note": "a configuration naming no declaration for the original reads as agreement, so a broken display answer confirms any rewrite"
 		},
 		{
@@ -1103,6 +1103,22 @@
 			"find": "if (!server.running()) return false;",
 			"replace": "",
 			"note": "a server that exited is polled to the end of the budget, so each port it lost costs the whole readiness poll before the next is tried"
+		},
+		{
+			"name": "M-NAME-PROOF-RAW-POSITIONS",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "namesOnePlace",
+			"find": "if (was.byLine || now.byLine || was.file != now.file || !FileIdentity.same(was.file, file)) return samePosition(was, now);",
+			"replace": "if (true) return samePosition(was, now);",
+			"note": "the two answers are compared raw, so a target declared in the edited file is declined whenever an import is inserted above it"
+		},
+		{
+			"name": "M-NAME-PROOF-EVERY-ANSWER-CARRIED",
+			"type": "anyparse.check.oracle.CompilerNameProof",
+			"method": "namesOnePlace",
+			"find": "if (was.byLine || now.byLine || was.file != now.file || !FileIdentity.same(was.file, file)) return samePosition(was, now);",
+			"replace": "if (false) return samePosition(was, now);",
+			"note": "an answer in another file, or by whole lines, is carried through the edited file's rewrite as if it stood there, so a target elsewhere reads as moved and the rewrite is declined"
 		}
 	]
 }

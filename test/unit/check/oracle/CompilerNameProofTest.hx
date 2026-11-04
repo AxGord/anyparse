@@ -6,6 +6,8 @@ import anyparse.check.oracle.CompilerNameProof;
 import anyparse.check.oracle.OracleCoverage.UsableCoverage;
 import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.OracleServerPool;
+import anyparse.query.EditJournal;
+import anyparse.runtime.Span;
 
 using StringTools;
 
@@ -24,6 +26,12 @@ final class CompilerNameProofTest extends Test {
 
 	/** The consumer as the rewrite would leave it: `F` alone, which only the handed-in text spells. */
 	private static final SHORT_SOURCE: String = 'package a.b;\n\nclass Main {\n\tstatic function main() {\n\t\ttrace(F.make());\n\t}\n}\n';
+	/** A consumer declaring its own `F` below the name that reads it. */
+	private static final OWN_SOURCE: String = 'package a.b;\n\nclass Main {\n\tstatic function main() {\n\t\ttrace(F.make());\n\t}\n}\n\n'
+		+ 'class F {\n\tpublic static function make():String {\n\t\treturn \'own\';\n\t}\n}\n';
+
+	/** What a rewrite puts above `OWN_SOURCE`, here before the package line so every offset moves by its length. */
+	private static final OWN_ABOVE: String = '// moved\n// down\n';
 	#end
 
 	@:pin('control')
@@ -73,16 +81,16 @@ final class CompilerNameProofTest extends Test {
 	}
 
 	/**
-	 * A display request over a text that does not compile leaves the next warm compile reading the valid bytes on disk. A
-	 * guard: the compiler keeps no module it typed from display-stdin, so `positionIn` marking the file moved is a second
-	 * line of defence this fixture cannot tell apart from the first.
+	 * A display request handing in a text of `a.F` with no `make` leaves the next warm compile of `a.b.Main`, which calls
+	 * `make`, reading the valid bytes on disk. A guard: the compiler keeps no module it typed from display-stdin, so
+	 * `positionIn` marking the file moved is a second line of defence this fixture cannot tell apart from the first.
 	 */
 	@:pin('guard')
 	public function testTheNextCompileReadsTheDiskNotTheTextHandedIn(): Void {
 		#if (sys || nodejs)
-		final broken: String = MAIN_SOURCE.replace('\t\ttrace(', '\t\tvar x:Int = \'s\';\n\t\ttrace(');
+		final broken: String = F_SOURCE.replace('make', 'gone');
 		Assert.isTrue(pooled((pool, config, root) -> {
-			final asked: Null<TypeReplyPosition> = pool.positionIn(config, '$root/a/b/Main.hx', broken, broken.indexOf('F.make'));
+			final asked: Null<TypeReplyPosition> = pool.positionIn(config, '$root/a/F.hx', broken, broken.indexOf('gone'));
 			asked != null && pool.compile([config])[0]?.status == 0;
 		}));
 		#else
@@ -97,7 +105,7 @@ final class CompilerNameProofTest extends Test {
 		Assert.isFalse(pooled((pool, config, root) -> {
 			final proof: CompilerNameProof = new CompilerNameProof();
 			proof.answerFor(() -> judgedBy([], [config]), new HaxeQueryPlugin());
-			proof.sameDeclarations('$root/a/b/Main.hx', MAIN_SOURCE, MAIN_SOURCE, [{ before: 0, after: 0 }])[0];
+			proof.sameDeclarations('$root/a/b/Main.hx', MAIN_SOURCE, MAIN_SOURCE, [{ before: 0, after: 0 }], [])[0];
 		}));
 		#else
 		Assert.pass('non-sys target');
@@ -108,9 +116,97 @@ final class CompilerNameProofTest extends Test {
 	@:killer('M-NAME-PROOF-NO-ASK-AGREES')
 	public function testNoConfigurationCompilingTheSiteIsNoAgreement(): Void {
 		final proof: CompilerNameProof = new CompilerNameProof();
-		Assert.same([false], proof.sameDeclarations('a/b/Main.hx', 'x', 'x', [{ before: 0, after: 0 }]), 'no judges installed');
+		Assert.same([false], proof.sameDeclarations('a/b/Main.hx', 'x', 'x', [{ before: 0, after: 0 }], []), 'no judges installed');
 		proof.answerFor(() -> judgedBy([], []), new HaxeQueryPlugin());
-		Assert.same([false], proof.sameDeclarations('a/b/Main.hx', 'x', 'x', [{ before: 0, after: 0 }]), 'judges, none compiling the site');
+		Assert.same(
+			[false], proof.sameDeclarations('a/b/Main.hx', 'x', 'x', [{ before: 0, after: 0 }], []), 'judges, none compiling the site'
+		);
+	}
+
+	/** An import above the rewritten site: the local `F` it names moves down with the text and is still that `F`. */
+	@:pin('control')
+	@:killer('M-NAME-PROOF-RAW-POSITIONS')
+	public function testADeclarationInTheEditedFileMovesWithTheRewrite(): Void {
+		#if (sys || nodejs)
+		final inserted: Int = OWN_ABOVE.length;
+		final at: Int = OWN_SOURCE.indexOf('F.make');
+		final above: String = OWN_ABOVE + OWN_SOURCE;
+		final verdicts: Array<Bool> = [];
+		Assert.isTrue(pooledOver(OWN_SOURCE, (pool, config, root) -> {
+			final proof: CompilerNameProof = new CompilerNameProof();
+			proof.answerFor(() -> judgedBy([], [config]), new HaxeQueryPlugin());
+			for (verdict in proof.sameDeclarations('$root/a/b/Main.hx', OWN_SOURCE, above, [
+				{ before: at, after: at + inserted },
+				{ before: at, after: above.indexOf('trace') }
+			], [{ span: new Span(0, 0), text: OWN_ABOVE }])) verdicts.push(verdict);
+			true;
+		}));
+		Assert.same([true, false], verdicts);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** `F` of `class F {}`, at one place in both texts, and the rewrite replaced it: nothing says it is the same declaration. */
+	@:pin('control')
+	@:killer('M-NAME-PROOF-RAW-POSITIONS')
+	public function testAnAnswerWhoseSpanMeetsAnEditDeclines(): Void {
+		final was: TypeReplyPosition = {
+			file: 'a/b/Main.hx',
+			line: 1,
+			first: 7,
+			last: 8,
+			byLine: false
+		};
+		final journal: EditJournal = new EditJournal();
+		journal.record('class F {}\n', [{ span: new Span(6, 7), text: 'G' }], 'class G {}\n');
+		Assert.isFalse(CompilerNameProof.namesOnePlace(was, Reflect.copy(was), 'a/b/Main.hx', 'class F {}\n', 'class G {}\n', journal));
+	}
+
+	/** A declaration in another file does not move with the rewrite, so only the raw place counts. */
+	@:pin('control')
+	@:killer('M-NAME-PROOF-EVERY-ANSWER-CARRIED')
+	public function testAnAnswerInAnotherFileComparesRaw(): Void {
+		final there: TypeReplyPosition = {
+			file: 'elsewhere/F.hx',
+			line: 3,
+			first: 7,
+			last: 8,
+			byLine: false
+		};
+		final moved: TypeReplyPosition = {
+			file: 'elsewhere/F.hx',
+			line: 4,
+			first: 7,
+			last: 8,
+			byLine: false
+		};
+		final before: String = 'x\n\n\n';
+		final after: String = 'y\nx\n\n\n';
+		final journal: EditJournal = new EditJournal();
+		journal.record(before, [{ span: new Span(0, 0), text: 'y\n' }], after);
+		Assert.same([true, false], [
+			CompilerNameProof.namesOnePlace(there, Reflect.copy(there), 'a/b/Main.hx', before, after, journal),
+			CompilerNameProof.namesOnePlace(there, moved, 'a/b/Main.hx', before, after, journal)
+		]);
+	}
+
+	/** A reply by whole lines names no span to carry back, so only the raw place counts. */
+	@:pin('control')
+	@:killer('M-NAME-PROOF-EVERY-ANSWER-CARRIED')
+	public function testAReplyByLinesComparesRaw(): Void {
+		final lines: TypeReplyPosition = {
+			file: 'a/b/Main.hx',
+			line: 3,
+			first: 3,
+			last: 5,
+			byLine: true
+		};
+		final before: String = 'x\n\n\n';
+		final after: String = 'y\nx\n\n\n';
+		final journal: EditJournal = new EditJournal();
+		journal.record(before, [{ span: new Span(0, 0), text: 'y\n' }], after);
+		Assert.isTrue(CompilerNameProof.namesOnePlace(lines, Reflect.copy(lines), 'a/b/Main.hx', before, after, journal));
 	}
 
 	@:pin('guard')
@@ -149,7 +245,7 @@ final class CompilerNameProofTest extends Test {
 			for (verdict in proof.sameDeclarations('$root/a/b/Main.hx', MAIN_SOURCE, SHORT_SOURCE, [
 				{ before: at, after: SHORT_SOURCE.indexOf('F.make') },
 				{ before: at, after: SHORT_SOURCE.indexOf('trace') }
-			])) verdicts.push(verdict);
+			], [])) verdicts.push(verdict);
 			true;
 		}));
 		Assert.same([true, false], verdicts);
@@ -242,9 +338,14 @@ final class CompilerNameProofTest extends Test {
 	 * the paths the run may write; the pool is stopped and the tree removed after.
 	 */
 	private function pooled(ask: (OracleServerPool, OracleConfig, String) -> Bool): Bool {
+		return pooledOver(MAIN_SOURCE, ask);
+	}
+
+	/** `pooled`, over a tree whose `a.b.Main` is `main`. */
+	private function pooledOver(main: String, ask: (OracleServerPool, OracleConfig, String) -> Bool): Bool {
 		final root: String = CliFixture.writeTree('apq_name_proof', [
 			{ name: 'a/F.hx', source: F_SOURCE },
-			{ name: 'a/b/Main.hx', source: MAIN_SOURCE },
+			{ name: 'a/b/Main.hx', source: main },
 			{ name: 'build.hxml', source: '-cp .\n-main a.b.Main\n--no-output\n' }
 		]);
 		final memo: OracleRunMemo = new OracleRunMemo(false, () -> ['$root/a/F.hx', '$root/a/b/Main.hx']);

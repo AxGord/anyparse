@@ -6,6 +6,8 @@ import anyparse.check.oracle.CompilerDisplayOracle.TypeReplyPosition;
 import anyparse.check.oracle.OracleCoverage.UsableCoverage;
 import anyparse.check.oracle.OracleServerPool.PositionAsk;
 import anyparse.core.PhaseTimings;
+import anyparse.query.EditJournal;
+import anyparse.query.FileIdentity;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
@@ -34,12 +36,16 @@ final class CompilerNameProof implements NameOracle {
 		_plugin = plugin;
 	}
 
-	public function sameDeclarations(file: String, before: String, after: String, sites: Array<NameSite>): Array<Bool> {
-		return PhaseTimings.measure('oracle name proof', sameDeclarationsTimed.bind(file, before, after, sites));
+	public function sameDeclarations(
+		file: String, before: String, after: String, sites: Array<NameSite>, edits: Array<{ span: Span, text: String }>
+	): Array<Bool> {
+		return PhaseTimings.measure('oracle name proof', sameDeclarationsTimed.bind(file, before, after, sites, edits));
 	}
 
 	/** `sameDeclarations`, untimed: every configuration asked about every site it compiles, all in one round. */
-	private function sameDeclarationsTimed(file: String, before: String, after: String, sites: Array<NameSite>): Array<Bool> {
+	private function sameDeclarationsTimed(
+		file: String, before: String, after: String, sites: Array<NameSite>, edits: Array<{ span: Span, text: String }>
+	): Array<Bool> {
 		final judges: Null<() -> UsableCoverage> = _judges;
 		final plugin: Null<GrammarPlugin> = _plugin;
 		if (judges == null || plugin == null) return [for (_ in sites) false];
@@ -55,9 +61,12 @@ final class CompilerNameProof implements NameOracle {
 			[for (c in sitesOf) asksAbout([for (j in c) sites[j]], before, after)],
 			file, usable
 		);
+		final journal: EditJournal = new EditJournal();
+		journal.record(before, edits, after);
 		return [
 			for (j => row in asked) agreed(
-				row, config -> pairAt(answers[configs.indexOf(config)], sitesOf[configs.indexOf(config)].indexOf(j))
+				row, config -> pairAt(answers[configs.indexOf(config)], sitesOf[configs.indexOf(config)].indexOf(j)),
+				(was, now) -> namesOnePlace(was, now, file, before, after, journal)
 			)
 		];
 	}
@@ -70,6 +79,35 @@ final class CompilerNameProof implements NameOracle {
 			&& was.first == now.first
 			&& was.last == now.last
 			&& was.byLine == now.byLine;
+	}
+
+	/**
+	 * Whether the compiler's answer `was`, read in `before`, and `now`, read in `after`, name one declaration. A rewrite moves
+	 * a declaration in `file` itself with the text above it, so there `journal` carries `now` back to `before`, and an answer
+	 * whose span no longer has a counterpart is no agreement. Any other file, or a reply by whole lines, compares raw. PURE on the
+	 * texts; `file` is compared through `FileIdentity`.
+	 */
+	public static function namesOnePlace(
+		was: TypeReplyPosition, now: Null<TypeReplyPosition>, file: String, before: String, after: String, journal: EditJournal
+	): Bool {
+		if (now == null) return false;
+		if (was.byLine || now.byLine || was.file != now.file || !FileIdentity.same(was.file, file)) return samePosition(was, now);
+		final then: Null<Span> = spanIn(before, was);
+		final moved: Null<Span> = spanIn(after, now);
+		if (then == null || moved == null) return false;
+		return switch journal.back(before, after, moved) {
+			case Mapped(span):
+				span.from == then.from && span.to == then.to;
+			case Unmapped(_): false;
+		};
+	}
+
+	/** The span of `source` a reply by characters names, or null for a line the text does not have. PURE. */
+	private static function spanIn(source: String, pos: TypeReplyPosition): Null<Span> {
+		final starts: Array<Int> = CompilerDisplayOracle.lineStarts(source);
+		if (pos.line < 1 || pos.line > starts.length) return null;
+		final head: Int = starts[pos.line - 1] - 1;
+		return new Span(head + pos.first, head + pos.last);
 	}
 
 	/**
@@ -89,14 +127,18 @@ final class CompilerNameProof implements NameOracle {
 
 	/**
 	 * Whether every one of `asked` named one declaration for both readings of a site, `answer` giving a configuration's
-	 * pair, before then after — null when it holds none. No configuration asked is no agreement.
+	 * pair, before then after — null when it holds none, `same` whether the two name one place. No configuration asked is no
+	 * agreement.
 	 */
-	private static function agreed(asked: Array<OracleConfig>, answer: OracleConfig -> Null<Array<Null<TypeReplyPosition>>>): Bool {
+	private static function agreed(
+		asked: Array<OracleConfig>, answer: OracleConfig -> Null<Array<Null<TypeReplyPosition>>>,
+		same: (TypeReplyPosition, Null<TypeReplyPosition>) -> Bool
+	): Bool {
 		for (config in asked) {
 			final pair: Null<Array<Null<TypeReplyPosition>>> = answer(config);
 			if (pair == null) return false;
 			final was: Null<TypeReplyPosition> = pair[0];
-			if (was == null || !samePosition(was, pair[1])) return false;
+			if (was == null || !same(was, pair[1])) return false;
 		}
 		return asked.length > 0;
 	}
