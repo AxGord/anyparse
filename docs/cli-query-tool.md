@@ -25,6 +25,14 @@ A build writes three files side by side: the engine `apq.js`, the launcher `apq-
 - **Writes are a whole temporary file renamed over the cache**, so concurrent calls read the old cache or the new one, never a part.
 - **Warming.** `haxe bin/apq-js.hxml` ends with `apq --warm-code-cache`: one child process runs `ast`, `fmt`, `source --range`, `lint --no-oracle` over a bundled fixture (V8 caches only what a run compiled) and saves the cache. It goes through `bin/apq` so the warm run has the node flags a call has — V8 refuses a cache made under other flags. The step is a `--cmd`, never a `--next` block: a typecheck (`haxe <hxml> --no-output`, the lint oracle) runs no `--cmd`, but WRITES the output of every `--next` block except the last. It exits 0 whatever happens (a warm that could not save its cache says `not warmed`), so a failed warm leaves a whole engine whose first call writes the cache. `dev worker-build` builds the launcher beside the private `apq.js` and warm it the same way.
 
+## The parse cache of the resolution library
+
+A `lint` run that reads a resolution scope (`resolutionRoots`, `resolutionLibs`, the Haxe std) needs the tree and the type-info bundle of every library source, and parsing them was most of a one-file lint. `anyparse.query.ParseDiskCache` keeps both on disk under the temp root, in `apq-parse-cache-<digest>/`: `SharedParseTier.promote` reads an entry before it parses and stores one after.
+
+- **The key is content.** The directory name is a digest, taken when the engine compiles (`ParseProjectionEngine`), of the grammars, parser runtime, macros and formats a tree is built from — an engine built from other code reads none of it. An entry is one file per path holding the hash of the text it was made from; a changed source misses and replaces its own entry.
+- **Every doubt is a miss.** A torn, foreign or unreadable entry, or a store that cannot write, costs a parse and nothing else; writes are a temporary file renamed over the entry. The process keeps no state of it (`docs/design-principles.md` § 2).
+- **Upkeep.** A new engine's first run removes the directories of other engines that sat unused for an hour. `APQ_PARSE_CACHE=0` turns the cache off for a run.
+
 ## Exit codes
 
 `anyparse.query.ExitCode`: **0** success, **2** usage error (`EXIT_USAGE`), **1** runtime error or refusal (`EXIT_RUNTIME`). The conventions every command follows:

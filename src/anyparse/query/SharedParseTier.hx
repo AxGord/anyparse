@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
+import anyparse.query.ParseDiskCache.StoredProjections;
 import anyparse.query.SpanTypeInfoProvider;
 
 /**
@@ -57,6 +58,9 @@ final class SharedParseTier {
 	/** Wrapped-plugin `spanTypeInfo` (or the five-accessor fallback) invocations — the span-parse twin of `innerParses`. */
 	public static var innerSpanParses(default, null): Int = 0;
 
+	/** Library sources whose projections came off the disk level instead of a parse — the persistent twin of `libraryParses`. */
+	public static var diskHits(default, null): Int = 0;
+
 	private static final PARSE_TIERS: Map<String, Map<String, QueryNode>> = [];
 	private static final SPAN_TIERS: Map<String, Map<String, SpanTypeInfo>> = [];
 
@@ -64,6 +68,9 @@ final class SharedParseTier {
 	// constructor so a lookup is one map read against the caller's own source string.
 	private final _parses: Map<String, QueryNode>;
 	private final _spans: Map<String, SpanTypeInfo>;
+
+	/** The level under the process one: what an earlier process stored for these sources. */
+	private final _disk: ParseDiskCache;
 
 	/**
 	 * The library array instance `promote` has already walked. The scope thunk memoises its
@@ -73,9 +80,10 @@ final class SharedParseTier {
 	 */
 	private var _promotedLibrary: Null<Array<{ file: String, source: String }>> = null;
 
-	public function new(lang: String) {
+	public function new(lang: String, ?disk: ParseDiskCache) {
 		_parses = tier(PARSE_TIERS, lang);
 		_spans = tier(SPAN_TIERS, lang);
+		_disk = disk ?? new ParseDiskCache(lang);
 	}
 
 	/** The tier's parse of `source` — counting the serve — or null when it holds none. */
@@ -111,12 +119,24 @@ final class SharedParseTier {
 			// so an already-promoted entry goes through the SERVE branch, the one thing this tier
 			// exists for. Short-circuiting here is what made the serve path deletable with a green
 			// suite: the counters then measured this loop, never the lookup.
+			if (!_parses.exists(entry.source)) adoptStored(entry);
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null || _parses.exists(entry.source)) continue;
+			final spans: SpanTypeInfo = plugin.spanTypeInfo(entry.source);
 			_parses[entry.source] = tree;
-			_spans[entry.source] = plugin.spanTypeInfo(entry.source);
+			_spans[entry.source] = spans;
+			_disk.store(entry.file, entry.source, tree, spans);
 			libraryParses++;
 		}
+	}
+
+	/** Enter the projections an earlier process stored for `entry` into the process level, counting the hit. */
+	private function adoptStored(entry: { file: String, source: String }): Void {
+		final stored: Null<StoredProjections> = _disk.lookup(entry.file, entry.source);
+		if (stored == null) return;
+		_parses[entry.source] = stored.tree;
+		_spans[entry.source] = stored.spans;
+		diskHits++;
 	}
 
 	/** Record one wrapped-plugin parse — the miss `servedParse` did not cover. */
