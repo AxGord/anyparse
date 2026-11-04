@@ -487,6 +487,14 @@
 			"note": "a gate run that never starts the arms phase reports no arms row, so an arm that no longer kills its pin passes"
 		},
 		{
+			"name": "M-GATE-ARMS-RUN-ON-RED-ROW",
+			"type": "dev.SliceGate",
+			"method": "armsPhase",
+			"find": "if (red.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a gate whose first fan-out already has a red row still starts the arms kill run, spending its minutes on a verdict the gate has already given"
+		},
+		{
 			"name": "M-GATE-ARMS-LEASE-BEFORE-PLAN",
 			"type": "dev.SliceGate",
 			"method": "armsPhase",

@@ -259,7 +259,8 @@ final class SliceGate {
 	/**
 	 * The arms row, once every other branch has ended: a branch of its own that takes `armsThreads` of the caller's lease, or
 	 * under no lease a pool lease of its own for the phase alone (`armsCommand`). A row the plan settles without a run
-	 * (`--no-arms`, no arm selected) is read in this process and takes no lease.
+	 * (`--no-arms`, no arm selected) is read in this process and takes no lease. When a row of the
+	 * first fan-out is already red the row is not run: the gate is red whatever the kill run says.
 	 */
 	private function armsPhase(self: String): Void {
 		final plan: Null<ArmPlan> = armsPlan();
@@ -270,11 +271,18 @@ final class SliceGate {
 			case Runs(picked, _): picked.fast.length;
 			case null: ARMS_THREADS;
 		};
-		final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode, tracks));
-		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)} arms';
-		final leased: Array<String> -> Command = rows -> armsCommand(_mode, command(rows), label, tracks);
-		for (name => value in Branches.run(_gate.options.run, ARMS_BRANCHES, [ARMS_ROW], leased, branchReport, _gate.summary))
-			_readings[name] = value;
+		final red: Array<String> = _gate.summary.unfit();
+		if (red.length > 0) {
+			gate(
+				ARMS_ROW, () -> NotRun(GateTree.clip('not run: ${red.join(', ')} did not pass, so the gate is red whatever the arms say'))
+			);
+		} else {
+			final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode, tracks));
+			final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)} arms';
+			final leased: Array<String> -> Command = rows -> armsCommand(_mode, command(rows), label, tracks);
+			for (name => value in Branches.run(_gate.options.run, ARMS_BRANCHES, [ARMS_ROW], leased, branchReport, _gate.summary))
+				_readings[name] = value;
+		}
 	}
 
 	/** The `--rows` process of a branch running `rows`, over the logs' copy `self` of this script, handed `threads`. */

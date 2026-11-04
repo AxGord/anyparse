@@ -69,6 +69,18 @@ final class SliceGateTest extends Test {
 		+ "fs.writeFileSync(logs+'/rows/'+rows[0]+'.json.progress',rows[0]);setInterval(()=>{},1000);";
 
 	/**
+	 * `FAKE_SELF` for every branch but the arms one, which stops moving
+	 * as `STALLED_SELF` does: the arms phase follows a green fan-out only.
+	 */
+	private static final ARMS_STALLED_SELF: String = [
+		"const rows0=process.argv[process.argv.indexOf('--rows')+1];if(rows0!=='arms'){",
+		FAKE_SELF,
+		'}else{',
+		STALLED_SELF,
+		'}'
+	].join('');
+
+	/**
 	 * A `--rows` branch runs inside the lease its gate took for it and never asks the pool itself, even inside a workflow
 	 * whose pool it could reach: a branch queued for threads its gate already holds waits behind its own gate.
 	 */
@@ -196,6 +208,36 @@ final class SliceGateTest extends Test {
 		Assert.isTrue(ran.leases.contains(' arms -- '), 'leases: ${ran.leases}');
 	}
 
+	/**
+	 * A row of the first fan-out that ended red leaves the arms row not run, naming that row, and starts no arms branch and asks
+	 * for no lease: the gate is red whatever the kill run says.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-RUN-ON-RED-ROW')
+	public function testARedRowOfTheFirstFanOutStartsNoArmsRun(): Void {
+		final ran: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, FAILING_CORPUS_SELF);
+		Assert.equals(1, ran.status, ran.table);
+		Assert.isTrue(ran.branches.contains('suite'), 'the first fan-out still ran: ${ran.branches}');
+		Assert.isFalse(ran.branches.contains('arms'), 'branches: ${ran.branches}\n${ran.table}');
+		Assert.isFalse(ran.leases.contains(' arms -- '), 'leases: ${ran.leases}');
+		Assert.isTrue(~/(^|\n)arms +not run +[0-9.]+s +not run: corpus did not pass/.match(ran.table), ran.table);
+	}
+
+	/**
+	 * A plan the gate settles itself (`--no-arms`, a mistyped `--arm`) keeps its own row beside a red fan-out, so a typo on a red
+	 * gate is named instead of read as not run.
+	 */
+	@:pin('guard')
+	public function testASettledArmsPlanKeepsItsRowBesideARedRow(): Void {
+		final skipped: GateRan = gateRun(GROWN_REGISTRY, ['--no-arms'], GRAPH_HXQ, FAILING_CORPUS_SELF);
+		Assert.equals(1, skipped.status, skipped.table);
+		Assert.isTrue(~/(^|\n)arms +skipped +[0-9.]+s +--no-arms/.match(skipped.table), skipped.table);
+		final typo: GateRan = gateRun(GROWN_REGISTRY, ['--arm', 'M-NOPE'], GRAPH_HXQ, FAILING_CORPUS_SELF);
+		Assert.equals(1, typo.status, typo.table);
+		Assert.isTrue(~/(^|\n)arms +FAILED/.match(typo.table), typo.table);
+		Assert.stringContains('--arm M-NOPE names no arm', typo.table);
+	}
+
 	/** A selection that is empty settles the arms row in the gate's own process, so no lease is asked for it. */
 	@:pin('control')
 	@:killer('M-GATE-ARMS-LEASE-BEFORE-PLAN')
@@ -290,9 +332,10 @@ final class SliceGateTest extends Test {
 	 */
 	@:pin('guard')
 	public function testABranchThatStopsMovingIsCutAndNamesItsRow(): Void {
-		final ran: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, STALLED_SELF, 1000);
+		final armsOnly: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, ARMS_STALLED_SELF, 1000);
+		final all: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, STALLED_SELF, 1000);
 		for (first in ['suite', 'lists', 'lint', 'jvm', 'infra4', 'kits', 'arms']) {
-			final log: String = ran.rowLogs[first] ?? '';
+			final log: String = (first == 'arms' ? armsOnly : all).rowLogs[first] ?? '';
 			Assert.stringContains('made no progress for 1 s', log, first);
 			Assert.stringContains('last started: $first', log, first);
 		}
