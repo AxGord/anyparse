@@ -215,7 +215,7 @@ final class OracleRunMemoTest extends Test {
 		if (dir == null) return;
 		final main: String = '$dir/Main.hx';
 		final save: (String, String) -> Void = sys.io.File.saveContent;
-		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.txt'];
+		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx'];
 		for (pad in pads) save(pad, 'a');
 		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
 			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main].concat(pads))
@@ -303,7 +303,7 @@ final class OracleRunMemoTest extends Test {
 		if (dir == null) return;
 		final main: String = '$dir/Main.hx';
 		final save: (String, String) -> Void = sys.io.File.saveContent;
-		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.txt'];
+		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx'];
 		for (pad in pads) save(pad, 'a');
 		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
 			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main].concat(pads))
@@ -458,6 +458,44 @@ final class OracleRunMemoTest extends Test {
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The module a position request dropped from the server's record is read again by the next compile, which invalidates it
+	 * on the server it has: the compile after a position round does not replace the server.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-REREAD-COUNTS-AS-APPEARED')
+	@:access(anyparse.check.oracle.OracleServerPool)
+	@:access(unit.check.ProcessProbe)
+	public function testACompileAfterAPositionRoundKeepsTheServer(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final main: String = '$dir/Main.hx';
+		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
+			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main])
+		);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first compile is green');
+		final first: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final running: Array<Int> = [
+			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
+		];
+		Assert.equals(1, first.length, 'a server came up');
+		pool?.positionIn(oracles[0], main, GOOD, GOOD.indexOf('trace'));
+		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the compile after the position round is green');
+		final second: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		Assert.same(first, second, 'the module the position round dropped is invalidated, not a reason to replace the server');
+		Assert.isTrue(
+			running.length > 0 && running.filter(ProcessProbe.alive).length == running.length, 'the first server is still running'
+		);
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
 		#end
 	}
 

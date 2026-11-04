@@ -6,12 +6,14 @@ import anyparse.core.EnvFlag;
 import anyparse.core.PhaseTimings;
 
 /**
- * One configuration's server in the pool: the port it listens on, and the text every path the run may write had when
- * the last compile through it started (`null` for a path that could not be read).
+ * One configuration's server in the pool: the port it listens on, the text every path the run may write had when the last
+ * compile through it started (`null` for a path that could not be read), and the paths whose entry in `seen` was dropped
+ * only so the next compile re-reads a module the server already holds (`positionsIn`).
  */
 typedef PoolServer = {
 	var port: Int;
 	var seen: Map<String, Null<String>>;
+	var reread: Array<String>;
 }
 
 /** One question of `OracleServerPool.positionsIn`: the name at offset `at` of `content`. */
@@ -43,7 +45,9 @@ typedef PositionAsk = {
  * acceptance is believed because every path the run may write and whose text moved since the server's last compile is
  * `server/invalidate`d before the compile — by CONTENT, never by modification time, which the server compares in whole
  * seconds while a `--fix` run writes and verifies inside one. A server whose tree moved by more paths than invalidating
- * them is worth is replaced by a fresh one instead (`renew`), which holds nothing to invalidate.
+ * them is worth is replaced by a fresh one instead (`renew`), which holds nothing to invalidate. So is a server whose tree
+ * moved by a path no invalidation reaches: a file that appeared or vanished (an ambient import file) or one that is no
+ * module (a file a macro reads).
  *
  * Declined with the report-mode warm path by `APQ_NO_ORACLE_SERVER`. A server holds its compiled project while it waits,
  * so the machine's memory (`HaxeSpawn.resident`) bounds how many start, the first configurations first; the compile
@@ -64,6 +68,9 @@ final class OracleServerPool {
 	 * compile costs less than bringing the old one up to date.
 	 */
 	private static inline final RESTART_AT: Int = 32;
+
+	/** The ending of a path the compiler loads as a module: the only files a `server/invalidate` of the path itself reaches. */
+	private static inline final MODULE_EXTENSION: String = '.hx';
 
 	private final _servers: Map<String, PoolServer> = [];
 
@@ -153,6 +160,7 @@ final class OracleServerPool {
 			if (server == null) continue;
 			// every ask about `file` is answered from the text handed in, so the next compile re-reads its disk bytes
 			server.seen = [for (path => text in now) if (path != file) path => text];
+			server.reread = [file];
 			requests.push(requestOf(server.port, oracles[owner.oracle], asks[owner.oracle][owner.ask]));
 			owners.push(owner);
 			out[owner.oracle] ??= [for (_ in asks[owner.oracle]) null];
@@ -191,7 +199,7 @@ final class OracleServerPool {
 		final warm: Array<SpawnJob> = [];
 		for (i => o in serving) {
 			if (ready(ports[i], o, servers[i]))
-				_servers[keyOf(o)] = { port: ports[i], seen: snapshot };
+				_servers[keyOf(o)] = { port: ports[i], seen: snapshot, reread: [] };
 			else if (servers[i].running())
 				end(o);
 			else
@@ -225,7 +233,10 @@ final class OracleServerPool {
 		for (k in 0...compiled.length) {
 			final i: Int = compiled[k];
 			final server: Null<PoolServer> = _servers[keyOf(oracles[i])];
-			if (server != null) server.seen = now;
+			if (server != null) {
+				server.seen = now;
+				server.reread = [];
+			}
 			final run: HaxeRun = runs[k];
 			if (refused(run))
 				end(oracles[i])
@@ -244,12 +255,15 @@ final class OracleServerPool {
 	}
 
 	/**
-	 * Replace `oracle`'s server by a fresh one when more paths moved since its last compile than `RESTART_AT`. A fresh
-	 * server holds no module yet, so it has nothing to invalidate: its first compile reads the tree as it is `now`.
+	 * Replace `oracle`'s server by a fresh one when more paths moved since its last compile than `RESTART_AT`, or when a
+	 * moved path is one an invalidation cannot reach (`unreachable`). A fresh server holds no module yet, so it has nothing
+	 * to invalidate: its first compile reads the tree as it is `now`.
 	 */
 	private function renew(oracle: OracleConfig, now: Map<String, Null<String>>): Void {
 		final server: Null<PoolServer> = _servers[keyOf(oracle)];
-		if (server == null || moved(server.seen, now).length <= RESTART_AT) return;
+		if (server == null) return;
+		final changed: Array<String> = moved(server.seen, now);
+		if (changed.length <= RESTART_AT && !changed.exists(path -> unreachable(server, now, path))) return;
 		PhaseTimings.time('oracle server restart', restart.bind(oracle, now));
 	}
 
@@ -272,7 +286,7 @@ final class OracleServerPool {
 			final server: PendingRuns = serve(port, oracle);
 			_batches[keyOf(oracle)] = server;
 			if (ready(port, oracle, server)) {
-				_servers[keyOf(oracle)] = { port: port, seen: seen };
+				_servers[keyOf(oracle)] = { port: port, seen: seen, reread: [] };
 				return;
 			}
 			if (server.running()) break;
@@ -404,6 +418,16 @@ final class OracleServerPool {
 		}
 		#end
 		return false;
+	}
+
+	/**
+	 * Whether the move of `path` since the server's last compile is one `server/invalidate` cannot deliver: a file that
+	 * appeared or vanished, which no module the server holds depends on and so none is dropped for (an ambient import file, a
+	 * module in front of the one a name resolved to), or a file that is no module, which a macro may have read behind the
+	 * compiler's back. A module the server holds and only re-reads is neither.
+	 */
+	private static function unreachable(server: PoolServer, now: Map<String, Null<String>>, path: String): Bool {
+		return !server.reread.contains(path) && ((server.seen[path] == null) != (now[path] == null) || !path.endsWith(MODULE_EXTENSION));
 	}
 
 }

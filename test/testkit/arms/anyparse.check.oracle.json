@@ -737,9 +737,25 @@
 			"name": "M-POOL-NEVER-RESTARTS",
 			"type": "anyparse.check.oracle.OracleServerPool",
 			"method": "renew",
-			"find": "moved(server.seen, now).length <= RESTART_AT",
-			"replace": "true",
+			"find": "changed.length <= RESTART_AT &&",
+			"replace": "true &&",
 			"note": "a server whose tree moved by more paths than invalidating them is worth is invalidated path by path, one walk of its whole cache each, instead of being replaced by a fresh server"
+		},
+		{
+			"name": "M-POOL-INVALIDATION-REACHES-EVERYTHING",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "renew",
+			"find": "!changed.exists(path -> unreachable(server, now, path))",
+			"replace": "true",
+			"note": "a file that appeared or vanished, or one that is no module, is only invalidated by its own path, which reaches no module that depends on it, so a server keeps answering green over an ambient import file or a macro-read file it never saw change"
+		},
+		{
+			"name": "M-POOL-REREAD-COUNTS-AS-APPEARED",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "unreachable",
+			"find": "!server.reread.contains(path) && ",
+			"replace": "",
+			"note": "the module a position request dropped from the server's record counts as a file that appeared, so every compile after a position round replaces the server by a fresh one that compiles cold"
 		},
 		{
 			"name": "M-POOL-END-CANCELS-ALL",
