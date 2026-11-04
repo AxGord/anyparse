@@ -3698,6 +3698,13 @@ final class RefShape {
 	 */
 	public var dataDocument: Null<Bool>;
 
+	/**
+	 * The grammar's safe top type (Haxe `Any`) — the `avoid-any` check flags a whole-word occurrence of it in a
+	 * declared type position, through the walk `avoid-dynamic` runs for `rawDynamicTypeName`. Optional; unset makes
+	 * `avoid-any` a no-op.
+	 */
+	public var topTypeName: Null<String>;
+
 	public function new(
 		identKind: String, declHostKinds: Array<String>, moduleValueDeclKinds: Array<String>, scopeKinds: Array<String>,
 		writeParentKinds: Array<String>, selfScopeDeclKinds: Array<String>

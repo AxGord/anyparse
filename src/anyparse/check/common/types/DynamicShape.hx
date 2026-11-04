@@ -26,7 +26,25 @@ typedef DynCtx = {
 
 	/** `GrammarPlugin.typeSyntax` — how a declared type is read for the raw dynamic name. */
 	final typeSyntax: TypeSyntaxReader;
+
+	/** The rule identity and wording a finding of this walk carries. */
+	final report: DynReport;
 };
+
+/** What one walk calls its findings: the rule id, and the message for a position (`boundary` marks a Reflect/Json transit local). */
+typedef DynReport = {
+	final rule: String;
+	final message: (DynPos, Bool) -> String;
+};
+
+/** The declared-type position a raw top type was found in — drives the report taxonomy and message. */
+enum DynPos {
+	Field;
+	Param;
+	Return;
+	Local;
+	TypeArg;
+}
 
 /**
  * The grammar-shape vocabulary the three parts of `avoid-dynamic` share: the resolved kind sets
@@ -39,6 +57,22 @@ typedef DynCtx = {
  */
 @:nullSafety(Strict)
 final class DynamicShape {
+
+	/** The identity and wording of `avoid-dynamic`, the walk's default report. */
+	public static final DYNAMIC_REPORT: DynReport = {
+		rule: 'avoid-dynamic',
+		message: (position, boundary) -> {
+			switch position {
+				case Field: 'raw Dynamic field type — narrow it or use Any';
+				case Param: 'raw Dynamic parameter type — narrow it or use Any';
+				case Return: 'raw Dynamic return type — narrow it or use Any';
+				case TypeArg: 'raw Dynamic type argument — narrow it or use Any';
+				case Local: boundary
+					? 'raw Dynamic boundary local (Reflect/Json result) — narrow the type where it is consumed'
+					: 'raw Dynamic local variable type — narrow it or use Any';
+			}
+		}
+	};
 
 	/**
 	 * Whether `c` is an identifier character - the class both nominal-name proofs and the whole-word scan cut on.
@@ -96,7 +130,7 @@ final class DynamicShape {
 	}
 
 	/** The resolved kind sets threaded through the walk, built once per run. */
-	public static function buildCtx(shape: RefShape, dynName: String, typeSyntax: TypeSyntaxReader): DynCtx {
+	public static function buildCtx(shape: RefShape, dynName: String, typeSyntax: TypeSyntaxReader, ?report: DynReport): DynCtx {
 		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final localKinds: Array<String> = shape.localDeclKinds ?? [];
@@ -124,7 +158,8 @@ final class DynamicShape {
 			identKind: shape.identKind,
 			selfText: shape.selfReferenceText,
 			typeDeclKinds: shape.visibilityContainerKinds ?? [],
-			typeSyntax: typeSyntax
+			typeSyntax: typeSyntax,
+			report: report ?? DYNAMIC_REPORT
 		};
 	}
 

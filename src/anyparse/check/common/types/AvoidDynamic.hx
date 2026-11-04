@@ -9,6 +9,8 @@ import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.common.types.DynamicShape.DynCtx;
+import anyparse.check.common.types.DynamicShape.DynPos;
+import anyparse.check.common.types.DynamicShape.DynReport;
 import anyparse.check.common.types.ParamAscription.ParamVerdict;
 import anyparse.query.IndexScope;
 import anyparse.query.NodeShape;
@@ -176,10 +178,8 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 			if (tree == null) continue;
 			final excludeMeta: Array<String> = cfg.stringListOption(RULE_ID, 'excludeMeta') ?? [];
 			final boundaryCalls: Array<String> = cfg.stringListOption(RULE_ID, 'boundaryCalls') ?? DEFAULT_BOUNDARY_CALLS;
-			final found: Array<Violation> = [];
+			final found: Array<Violation> = scanDeclared(entry, tree, plugin, ctx, excludeMeta, boundaryCalls);
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
-			walk(found, entry.file, entry.source, typeSources, tree, null, false, ctx, excludeMeta, boundaryCalls);
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
 			final imports: Map<String, String> = provider != null ? provider.importMap(entry.source, entry.file) : [];
 			DynamicBag.annotateBags(
@@ -289,6 +289,29 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 	/** `config-excluded` for a file whose path contains an `excludePaths` entry. */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
 		return pathExcluded(file, config.stringListOption(RULE_ID, 'excludePaths') ?? []) ? 'config-excluded' : null;
+	}
+
+	/**
+	 * Every declared type position of `entry` that writes the context's top-type name, as findings under the
+	 * context's report — the walk `avoid-dynamic` and `avoid-any` share, so the two can never disagree on what a
+	 * declared position is.
+	 */
+	public static function scanDeclared(
+		entry: { file: String, source: String }, tree: QueryNode, plugin: GrammarPlugin, ctx: DynCtx, excludeMeta: Array<String>,
+		boundaryCalls: Array<String>
+	): Array<Violation> {
+		final found: Array<Violation> = [];
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
+		walk(found, entry.file, entry.source, typeSources, tree, null, false, ctx, excludeMeta, boundaryCalls);
+		final unique: Array<Violation> = [];
+		dedupInto(unique, found);
+		return unique;
+	}
+
+	/** Whether `file`'s path contains any of the configured exclusion substrings. */
+	public static function pathExcluded(file: String, patterns: Array<String>): Bool {
+		return patterns.exists(p -> p.length > 0 && file.indexOf(p) >= 0);
 	}
 
 	/**
@@ -651,7 +674,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 				case Nominal(path, args):
 					if (path == dyn) {
 						final pos: DynPos = inArgs ? TypeArg : position;
-						push(out, file, from + t.span.from, from + t.span.from + dyn.length, pos, boundary && pos == Local);
+						push(out, file, from + t.span.from, from + t.span.from + dyn.length, pos, boundary && pos == Local, ctx.report);
 					}
 					for (a in args) visit(a, true);
 				case Function(params, ret, _):
@@ -678,11 +701,6 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 			&& NodeShape.calleePath(last.children[0], ctx.fieldAccessKind, ctx.identKind).exists(seg -> boundaryCalls.contains(seg));
 	}
 
-	/** Whether `file`'s path contains any of the configured exclusion substrings. */
-	private static function pathExcluded(file: String, patterns: Array<String>): Bool {
-		return patterns.exists(p -> p.length > 0 && file.indexOf(p) >= 0);
-	}
-
 	/** Append findings from `found` into `into`, dropping duplicates at the same span (overlapping walk paths hit one token twice). */
 	private static function dedupInto(into: Array<Violation>, found: Array<Violation>): Void {
 		final seen: Map<String, Bool> = [];
@@ -695,37 +713,18 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 		}
 	}
 
-	private static function push(out: Array<Violation>, file: String, from: Int, to: Int, position: DynPos, boundary: Bool): Void {
+	private static function push(
+		out: Array<Violation>, file: String, from: Int, to: Int, position: DynPos, boundary: Bool, report: DynReport
+	): Void {
 		out.push({
 			file: file,
 			span: new Span(from, to),
-			rule: RULE_ID,
+			rule: report.rule,
 			severity: Severity.Info,
-			message: messageFor(position, boundary)
+			message: report.message(position, boundary)
 		});
 	}
 
-	private static function messageFor(position: DynPos, boundary: Bool): String {
-		return switch position {
-			case Field: 'raw Dynamic field type — narrow it or use Any';
-			case Param: 'raw Dynamic parameter type — narrow it or use Any';
-			case Return: 'raw Dynamic return type — narrow it or use Any';
-			case TypeArg: 'raw Dynamic type argument — narrow it or use Any';
-			case Local: boundary
-				? 'raw Dynamic boundary local (Reflect/Json result) — narrow the type where it is consumed'
-				: 'raw Dynamic local variable type — narrow it or use Any';
-		};
-	}
-
-}
-
-/** The declared-type position a raw `Dynamic` was found in — drives the report taxonomy and message. */
-private enum DynPos {
-	Field;
-	Param;
-	Return;
-	Local;
-	TypeArg;
 }
 
 /** Mutable accumulator threaded through the local-narrowing use classifier. */

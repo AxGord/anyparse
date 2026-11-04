@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check;
+import haxe.DynamicAccess;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
@@ -135,6 +136,7 @@ class BuiltinFixClassCensusTest extends Test {
 		Assert.same([
 			'anon-type-dup',
 			'assignment-in-condition',
+			'avoid-any',
 			'avoid-haxe-json',
 			'complexity',
 			'doc-coverage',
@@ -308,8 +310,8 @@ class BuiltinFixClassCensusTest extends Test {
 	}
 
 	private static function readRecorded(): Array<String> {
-		final root: Any = Json.parse(File.getContent(CENSUS_FILE));
-		return Reflect.field(root, 'builtins');
+		final root: DynamicAccess<Array<String>> = Json.parse(File.getContent(CENSUS_FILE));
+		return root['builtins'];
 	}
 
 	private static function render(names: Array<String>): String {

@@ -989,6 +989,7 @@ final class HaxeRefShape {
 			'@:callable'
 		];
 		table.rawDynamicTypeName = 'Dynamic';
+		table.topTypeName = 'Any';
 		table.bareConstructorTypeKinds = ['EnumDecl', 'EnumAbstractDecl'];
 		// `trace` and the modules of the std root, `StdTypes` among them
 		table.implicitValueNames = [

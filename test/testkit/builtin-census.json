@@ -4,6 +4,7 @@
 	"anon-type-dup",
 	"assignment-in-condition",
 	"asymmetric-branch-braces",
+	"avoid-any",
 	"avoid-dynamic",
 	"avoid-haxe-json",
 	"c-precedence-trap",

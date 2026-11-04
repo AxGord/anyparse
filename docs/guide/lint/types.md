@@ -2,12 +2,22 @@
 
 Type positions, casts, is-checks, Dynamic, exception types. One section per rule, by id; each rule's language, default and fix marker are in the [rule index](../../lint-rules.md#types), and a suite test fails when a registered rule has no section here or a section names no rule of this category.
 
+## `avoid-any`
+
+`Any` in a declared type position — a field, parameter or return type, a type argument (`Array<Any>`), or an annotated local — read through the walk `avoid-dynamic` runs, so a position, the exact-token span, the extern skip and the options mean the same in both. `Info`, report-only, DEFAULT OFF, enabled in this project's `apq.json`. `Any` is safe where `Dynamic` is not, so a finding is not an error: it says a narrower type exists. The message names the way for a value read from a JSON document: a `@:schema(JsonFormat)` typedef and its generated parser. Options: `excludePaths`, `excludeMeta`.
+
+A true top type is a seam that must accept any value: the root a grammar plugin hands across the `GrammarPlugin` seam (each grammar's generated AST is its own type), a generated-AST element held by a format helper, a callback of a JS host API, a function that only throws. The rule does not tell those from a lazy `Any` by reading code; a project lists such files under `excludePaths` (or marks a declaration with a meta named in `excludeMeta`), and what is left reports. What still reports in `src` and `tools/src` is a value of a JSON document held as `Any`: a `Json.parse` or `Reflect.field` result, a hand-walked `DynamicAccess<Any>`, or a field that is a string in one record and a list in another. Those have a narrower type, the schema the JSON grammar describes.
+
+```haxe
+final root: Any = Json.parse(text);  // avoid-any: read it through a @:schema(JsonFormat) typedef
+```
+
 ## `avoid-dynamic`
 
 A raw `Dynamic` in a declared type position — a field, parameter or return type, a type argument
 (`Map<String, Dynamic>`), or an annotated local. `Dynamic` switches static checking off at that seam;
-each one is a candidate for a narrower type or for `Any`, the sanctioned top type that requires an
-explicit cast to use. `Info`. `haxe.DynamicAccess<T>` and `Any` are not flagged; extern types are
+each one is a candidate for a narrower type or for `Any`, the safe top type that requires an
+explicit cast to use (`avoid-any` asks the next question of the `Any`). `Info`. `haxe.DynamicAccess<T>` and `Any` are not flagged here; extern types are
 skipped, since interop legitimately needs `Dynamic`.
 
 The fix is a `RiskyFix`, applied only under a configured `compilerOracle` that typechecks each edit

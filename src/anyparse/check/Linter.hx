@@ -180,6 +180,7 @@ import anyparse.check.common.nullsafety.UncheckedNullable;
 import anyparse.check.common.nullsafety.UnguardedNullableDeref;
 import anyparse.check.common.nullsafety.UnnecessaryNullCheck;
 import anyparse.check.common.nullsafety.UnnecessarySafeNav;
+import anyparse.check.common.types.AvoidAny;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.check.common.types.CatchDynamic;
 import anyparse.check.common.types.ExplicitLocalType;
@@ -581,6 +582,7 @@ final class Linter {
 			// an edit and registry order carries no meaning between them.
 			new AnonTypeDup(),
 			new AvoidDynamic(),
+			new AvoidAny(),
 			new UnusedReturnValue(),
 			new DocCoverage(),
 			new ExplicitLocalType(),
