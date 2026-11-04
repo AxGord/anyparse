@@ -152,11 +152,12 @@ final class CompilerOracle {
 	/**
 	 * `typecheckEach` with `-v`, each verdict with every file its compile parsed, for a caller that may keep a verdict only
 	 * while each of them is a file it hashed (`OracleCache.storeIfUnchanged`). A failing `-v` compile is asked again plainly,
-	 * whose streams are what a rejection quotes; the files are the `-v` compile's. `parallel` bounds how many compile at once
+	 * whose streams are what a rejection quotes, unless `decisive` accepts the diagnostics of the failing run (they blame a file the
+	 * caller just created), which stand as they are; the files are the `-v` compile's. `parallel` bounds how many compile at once
 	 * (default `HaxeSpawn.parallelism`).
 	 */
 	public static function typecheckEachReading(
-		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int
+		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int, ?decisive: String -> Bool
 	): Array<OracleReading> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
 		if (memo != null) return remembered(memo, oracles, stopAfterFailure, true);
@@ -165,7 +166,7 @@ final class CompilerOracle {
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (oracle in asked) { args: argsOf(oracle, true), cwd: oracle.dir }
 		], ORACLE_BUFFER, bound, stopAfterFailure);
-		final plain: Map<Int, HaxeRun> = plainRetries(asked, runs, bound);
+		final plain: Map<Int, HaxeRun> = plainRetries(asked, runs, bound, decisive);
 		for (run in runs) if (run.unstarted != true) invocations++;
 		final out: Array<OracleReading> = [];
 		var next: Int = 0;
@@ -183,7 +184,7 @@ final class CompilerOracle {
 			else if (again != null)
 				retriedOutcome(again)
 			else
-				outcomeOf(run);
+				decided(run, decisive) ?? outcomeOf(run);
 			out.push({ outcome: outcome, parsed: answered(run) ? OracleCoverage.parsedPaths(run.out) : null });
 		}
 		return out;
@@ -347,8 +348,12 @@ final class CompilerOracle {
 	 * The plain compile of each `asked[k]` whose `-v` compile `runs[k]` answered and failed, by `k`: its streams are what a
 	 * rejection quotes, and they carry no `-v` lines.
 	 */
-	private static function plainRetries(asked: Array<OracleConfig>, runs: Array<HaxeRun>, ?parallel: Int): Map<Int, HaxeRun> {
-		final retried: Array<Int> = [for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0) k];
+	private static function plainRetries(
+		asked: Array<OracleConfig>, runs: Array<HaxeRun>, ?parallel: Int, ?decisive: String -> Bool
+	): Map<Int, HaxeRun> {
+		final retried: Array<Int> = [
+			for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0 && decided(runs[k], decisive) == null) k
+		];
 		final plain: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (k in retried) { args: argsOf(asked[k], false), cwd: asked[k].dir }
 		], ORACLE_BUFFER, parallel ?? HaxeSpawn.parallelism(), false);
@@ -526,6 +531,16 @@ final class CompilerOracle {
 			if (trimmed != '') return trimmed;
 		}
 		return text.trim();
+	}
+
+	/**
+	 * The rejection a failing `-v` run makes when `decisive` accepts its diagnostics, which are its stderr (the `-v` stream
+	 * is stdout): they already blame what the caller wrote, so a plain run adds nothing, and only the diagnostics are quoted.
+	 */
+	private static function decided(run: HaxeRun, decisive: Null<String -> Bool>): Null<OracleOutcome> {
+		if (decisive == null || !answered(run) || run.status == 0 || run.overflowed) return null;
+		final diagnostics: String = run.err.trim();
+		return diagnostics != '' && decisive(diagnostics) ? Rejected(diagnostics) : null;
 	}
 
 }

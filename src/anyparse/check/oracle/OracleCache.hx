@@ -193,7 +193,7 @@ final class OracleCache {
 		final hashed: Map<String, String> = [];
 		return probe.ok ? {
 			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo, walks, hashed).join('\n')),
-			roots: [root].concat(chain.classPaths).concat([for (dir in probe.dirs) absolute(root, dir)]),
+			roots: [root].concat(rootsOf(root, chain, probe)),
 			hashed: hashed
 		} : null;
 		#else
@@ -373,6 +373,23 @@ final class OracleCache {
 		return #if (sys || nodejs) scanHxmlChain(cwd ?? Sys.getCwd(), hxml)?.classPaths ?? [] #else [] #end;
 	}
 
+	/**
+	 * The one answer to "which directories does the build `hxml` read a module from besides its compile directory": its explicit `-cp`
+	 * roots (as the hxml spells them) and the compiler's own (the standard library and the libraries it names, absolute). Null when the
+	 * compiler could not be asked, which no caller may read as "none".
+	 */
+	public static function classRoots(hxml: String, cwd: Null<String>): Null<Array<String>> {
+		#if (sys || nodejs)
+		final root: String = cwd ?? Sys.getCwd();
+		final chain: Null<HxmlChain> = scanHxmlChain(root, hxml);
+		if (chain == null) return null;
+		final probe: CompilerProbe = compilerProbe(root, chain.libs);
+		return probe.ok ? rootsOf(root, chain, probe) : null;
+		#else
+		return null;
+		#end
+	}
+
 	/** The library name of a `-lib` token, with any `:version` suffix stripped. */
 	private static function libName(token: String): String {
 		final colon: Int = token.indexOf(':');
@@ -401,6 +418,10 @@ final class OracleCache {
 			1
 		else
 			0;
+	}
+
+	private static function rootsOf(root: String, chain: HxmlChain, probe: CompilerProbe): Array<String> {
+		return chain.classPaths.concat([for (dir in probe.dirs) absolute(root, dir)]);
 	}
 
 	#if (sys || nodejs)

@@ -6,6 +6,7 @@ import sys.io.File;
 #end
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli;
+import anyparse.query.cli.CliIo;
 
 using StringTools;
 
@@ -137,11 +138,12 @@ class WriteVerificationCliTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = sourceProject();
 		if (!compiles(dir)) return;
+		FileSystem.createDirectory('$dir/src/pkg');
+		File.saveContent('$dir/src/pkg/Other.hx', 'class Other {\n\t// Bad is created beside this\n}\n');
 		var rc: Int = 0;
 		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Bad.hx', 'return "x";'));
 		Assert.equals(1, rc, printed);
 		Assert.isFalse(FileSystem.exists('$dir/src/pkg/Bad.hx'), 'the created module is removed');
-		Assert.isFalse(FileSystem.exists('$dir/src/pkg'), 'and the directory made for it');
 		#if nodejs
 		Assert.isTrue(printed.contains('String should be Int'), printed);
 		#end
@@ -170,6 +172,294 @@ class WriteVerificationCliTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-HOLDERS-COMPILE')
+	public function testACreatedModuleNoBuildParsesIsNamedToTheBuildAfterItsConfiguredCompile(): Void {
+		#if (sys || nodejs)
+		final dir: String = sourceProject();
+		if (!compiles(dir)) return;
+		final spawned: Int = CompilerOracle.invocations;
+		var rc: Int = 1;
+		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Fine.hx', 'return 1;'));
+		Assert.equals(0, rc, printed);
+		Assert.equals(2, CompilerOracle.invocations - spawned, 'the configured compile of the holder, then the module named to it');
+		Assert.isTrue(FileSystem.exists('$dir/src/pkg/Fine.hx'));
+		#if nodejs
+		Assert.isTrue(printed.contains('verified by 1 configured build'), printed);
+		#end
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-NO-PLAIN-RETRY')
+	public function testARejectionBlamingACreatedModuleIsFinalWithoutAPlainRetry(): Void {
+		#if (sys || nodejs)
+		final dir: String = sourceProject();
+		if (!compiles(dir)) return;
+		final spawned: Int = CompilerOracle.invocations;
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Bad.hx', 'return "x";'));
+		Assert.equals(1, rc, printed);
+		Assert.equals(
+			2, CompilerOracle.invocations - spawned, 'the configured compile and the module named: no plain run of the rejected one'
+		);
+		Assert.isFalse(FileSystem.exists('$dir/src/pkg/Bad.hx'), 'the created module is removed');
+		Assert.isFalse(FileSystem.exists('$dir/src/pkg'), 'and the directory made for it');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-BLAMED-CREATED-NO-ROLLBACK-COMPILE')
+	public function testARedBuildBlamingACreatedModuleIsPutBackWithoutACompileOfTheOldTree(): Void {
+		#if (sys || nodejs)
+		if (!compiles(sourceProject())) return;
+		final dir: String = sourceProject();
+		FileSystem.createDirectory('$dir/src/pkg');
+		File.saveContent('$dir/src/Good.hx', 'import pkg.Bad;\n\nclass Good {\n\tstatic function main() {\n\t\ttrace(Bad.f());\n\t}\n}\n');
+		File.saveContent('$dir/src/pkg/Other.hx', 'class Other {\n\t// Bad is created beside this\n}\n');
+
+		final spawned: Int = CompilerOracle.invocations;
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Bad.hx', 'return "x";'));
+		Assert.equals(1, rc, printed);
+		Assert.equals(
+			1, CompilerOracle.invocations - spawned, 'the build reds on the new module: no plain run, no compile of the tree without it'
+		);
+		Assert.isFalse(FileSystem.exists('$dir/src/pkg/Bad.hx'), 'the created module is removed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-ONE-HOLDER-NOT-FINAL')
+	public function testACheapBuildMissingTheModulesDependencyDoesNotDecideAGreenerHolderDoes(): Void {
+		#if (sys || nodejs)
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {}\n}\n', [
+			{ name: 'more/Util.hx', source: 'class Util {\n\tpublic static function one(): Int {\n\t\treturn 1;\n\t}\n}\n' }
+		]);
+		if (!compilesBoth(dir)) return;
+		final spawned: Int = CompilerOracle.invocations;
+		var rc: Int = 1;
+		final printed: String = CliFixture.captureStderr(() -> rc = Cli.run([
+			'new',
+			'$dir/src/pkg/UsesUtil.hx',
+			'--kind',
+			'class',
+			'--field',
+			'public static function f(): Int { return Util.one(); }',
+			'--write'
+		]));
+		Assert.equals(0, rc, printed);
+		Assert.isTrue(FileSystem.exists('$dir/src/pkg/UsesUtil.hx'), 'the module stays: a build holding its dependency typechecks it');
+		Assert.equals(
+			4, CompilerOracle.invocations - spawned,
+			'both configured, then the cheap build rejected the module named to it and the larger one vouched'
+		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-DECISIVE-DIAGNOSTICS-ONLY')
+	public function testADecisiveRejectionQuotesOnlyTheDiagnostics(): Void {
+		#if (sys || nodejs)
+		final dir: String = sourceProject();
+		if (!compiles(dir)) return;
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Bad.hx', 'return "x";'));
+		Assert.equals(1, rc, printed);
+		Assert.isTrue(printed.contains('Bad.hx'), printed);
+		Assert.isFalse(printed.contains('Parsed '), 'the -v stream is no part of the quoted errors');
+		Assert.isFalse(printed.contains('Typing macro'), 'nor is any other -v line');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-HOLDERS-COMPILE')
+	public function testACreatedModuleShadowingAStandardLibraryOneTakesTheFullPass(): Void {
+		#if (sys || nodejs)
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {\n\t\ttrace(Xml.parse(\'<a/>\'));\n\t}\n}\n', []);
+		if (!compilesBoth(dir)) return;
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() -> rc = Cli.run([
+			'new',
+			'$dir/src/haxe/xml/Parser.hx',
+			'--kind',
+			'class',
+			'--field',
+			'public static function other(): Int { return 1; }',
+			'--write'
+		]));
+		Assert.equals(1, rc, printed);
+		Assert.isFalse(FileSystem.exists('$dir/src/haxe/xml/Parser.hx'), 'the shadow is put back');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-HOLDERS-COMPILE')
+	public function testACreatedModuleAWildcardImportBindsTakesTheFullPass(): Void {
+		#if (sys || nodejs)
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {\n\t\ttrace(other.X.f());\n\t}\n}\n', [
+			{
+				name: 'more/other/X.hx',
+				source: 'package other;\n\nimport app.*;\n\nclass X {\n\tpublic static function f(): Float {\n'
+				+ '\t\treturn Date.now().getTime();\n\t}\n}\n'
+			},
+			{ name: 'more/app/Keep.hx', source: 'package app;\n\nclass Keep {}\n' }
+		]);
+		if (!compilesBoth(dir)) return;
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() -> rc = Cli.run([
+			'new',
+			'$dir/src/app/Date.hx',
+			'--kind',
+			'class',
+			'--field',
+			'public static function other(): Int { return 1; }',
+			'--write'
+		]));
+		Assert.equals(1, rc, printed);
+		Assert.isFalse(FileSystem.exists('$dir/src/app/Date.hx'), 'the module the wildcard now binds is put back');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-HOLDERS-COMPILE')
+	public function testACreatedModuleASubPackageFileBindsByParentLookupTakesTheFullPass(): Void {
+		#if (sys || nodejs)
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {\n\t\ttrace(app.sub.User.f());\n\t}\n}\n', [
+			{
+				name: 'more/app/sub/User.hx',
+				source: 'package app.sub;\n\nclass User {\n\tpublic static function f(): Float {\n\t\treturn Date.now().getTime();\n\t}\n'
+				+ '}\n'
+			},
+			{ name: 'more/app/Keep.hx', source: 'package app;\n\nclass Keep {}\n' }
+		]);
+		if (!compilesBoth(dir)) return;
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() -> rc = Cli.run([
+			'new',
+			'$dir/src/app/Date.hx',
+			'--kind',
+			'class',
+			'--field',
+			'public static function other(): Int { return 1; }',
+			'--write'
+		]));
+		Assert.equals(1, rc, printed);
+		Assert.isFalse(FileSystem.exists('$dir/src/app/Date.hx'), 'the module the sub-package now binds is put back');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-HOLDERS-COMPILE')
+	public function testABuildThatWalksTheFolderOfACreatedModuleReadsItInItsConfiguredCompile(): Void {
+		#if (sys || nodejs)
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {}\n}\n', [
+			{
+				name: 'more/Walk.hx',
+				source: 'class Walk {\n\tpublic static function run(): Void {\n'
+				+ '\t\tif (sys.FileSystem.exists(\'src/pkg\')) for (name in sys.FileSystem.readDirectory(\'src/pkg\')) if (name == '
+				+ '\'Refused.hx\') haxe.macro.Context.error(\'the walk refuses \' + name, haxe.macro.Context.currentPos());\n\t}\n}\n'
+			}
+		]);
+		File.saveContent('$dir/big.hxml', '-cp src\n-cp more\n--macro Walk.run()\n-main Big\n');
+		if (!compilesBoth(dir)) return;
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Refused.hx', 'return 1;'));
+		Assert.equals(1, rc, printed);
+		Assert.isFalse(FileSystem.exists('$dir/src/pkg/Refused.hx'), 'the module the walk refuses is put back');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-ONLY-HOLDERS')
+	public function testABuildHoldingNoCreatedModuleIsNotCompiled(): Void {
+		#if (sys || nodejs)
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {}\n}\n', [], true);
+		if (!compilesBoth(dir)) return;
+		var rc: Int = 1;
+		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Fine.hx', 'return 1;'));
+		Assert.equals(0, rc, printed);
+		Assert.isFalse(printed.contains('alien.hxml'), 'the build whose class paths hold none of it is not asked: $printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-STOPS-AT-FIRST-GREEN')
+	public function testACreatedModuleIsNamedToTheCheapestHolderAndNoFurther(): Void {
+		#if (sys || nodejs)
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {}\n}\n', []);
+		if (!compilesBoth(dir)) return;
+		final spawned: Int = CompilerOracle.invocations;
+		var rc: Int = 1;
+		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Fine.hx', 'return 1;'));
+		Assert.equals(0, rc, printed);
+		Assert.equals(3, CompilerOracle.invocations - spawned, 'both holders as configured, the module named to the cheaper one only');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A project of two builds over `src/`, the cheap one `Good` alone and the larger one `Big` (in `more/`, also a class path
+	 * of it), with `extras` written beside them (paths relative to the project) and an `apq.json` naming both.
+	 */
+	private static function twoBuilds(big: String, extras: Array<{ name: String, source: String }>, alien: Bool = false): String {
+		final builds: String = alien ? ', {"hxml": "alien.hxml"}' : '';
+		final dir: String = CliFixture.writeDir('writeverify', [
+			{ name: 'cheap.hxml', source: '-cp src\n-main Good\n' },
+			{ name: 'big.hxml', source: '-cp src\n-cp more\n-main Big\n' },
+			{ name: 'alien.hxml', source: '-cp alien\n-main Alien\n' },
+			{ name: 'apq.json', source: '{"compilerOracle": [{"hxml": "cheap.hxml"}, {"hxml": "big.hxml"}$builds]}' }
+		]);
+		final files: Array<{ name: String, source: String }> = extras.concat([
+			{ name: 'alien/Alien.hx', source: 'class Alien {\n\tstatic var red: Int = \'no\';\n\n\tstatic function main() {}\n}\n' },
+			{ name: 'src/Good.hx', source: GOOD },
+			{ name: 'more/Big.hx', source: big }
+		]);
+		CliIo.writeFiles([for (f in files) { path: '$dir/${f.name}', content: f.source }]);
+		return dir;
+	}
+
+	/** Whether both builds of `twoBuilds` typecheck — false, with the test passed and `dir` removed, on a host with no compiler. */
+	private static function compilesBoth(dir: String): Bool {
+		if (CompilerOracle.typecheck('cheap.hxml', dir).match(Confirmed) && CompilerOracle.typecheck('big.hxml', dir).match(Confirmed))
+			return true;
+		Assert.pass('haxe unavailable — skipped');
+		CliFixture.removeDir(dir);
+		return false;
 	}
 
 	#if (sys || nodejs)

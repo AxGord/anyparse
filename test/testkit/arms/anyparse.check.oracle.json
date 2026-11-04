@@ -624,8 +624,8 @@
 			"name": "M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS",
 			"type": "anyparse.check.oracle.CompilerOracle",
 			"method": "plainRetries",
-			"find": "final retried: Array<Int> = [for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0) k];",
-			"replace": "final retried: Array<Int> = [];",
+			"find": "for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0 && decided(runs[k], decisive) == null) k",
+			"replace": "for (k in 0...0) k",
 			"note": "a failing -v baseline is quoted with its -v lines, so a rejection's text names every parsed file"
 		},
 		{
@@ -1135,6 +1135,22 @@
 			"find": "if (was.byLine || now.byLine || was.file != now.file || !FileIdentity.same(was.file, file)) return samePosition(was, now);",
 			"replace": "if (false) return samePosition(was, now);",
 			"note": "an answer in another file, or by whole lines, is carried through the edited file's rewrite as if it stood there, so a target elsewhere reads as moved and the rewrite is declined"
+		},
+		{
+			"name": "M-WRITE-VERIFY-NO-PLAIN-RETRY",
+			"type": "anyparse.check.oracle.CompilerOracle",
+			"method": "decided",
+			"find": "decisive(diagnostics) ?",
+			"replace": "false ?",
+			"note": "a rejection that blames a created module is compiled again without -v before it is believed"
+		},
+		{
+			"name": "M-WRITE-VERIFY-DECISIVE-DIAGNOSTICS-ONLY",
+			"type": "anyparse.check.oracle.CompilerOracle",
+			"method": "decided",
+			"find": "Rejected(diagnostics)",
+			"replace": "Rejected((run.err + run.out).trim())",
+			"note": "a rejection that skips the plain run quotes the whole -v stream, thousands of lines of parsed files beside the errors"
 		}
 	]
 }
