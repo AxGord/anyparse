@@ -50,6 +50,11 @@ final class ShellHxAccess {
 		return writeSegment(command, cwd, slice) != null;
 	}
 
+	/** Whether some segment of `command` is itself an hxq or apq call: a program name quoted by `grep` or `echo` is not one. */
+	public static function runsHxq(command: String): Bool {
+		return segments(command).exists(viaHxq);
+	}
+
 	/**
 	 * The segment of `command` that writes a repo `.hx` outside hxq, or null: `sed -i` / `perl -i`, a redirect, `tee`, `cp` and
 	 * `install` onto it, `mv` / `git mv` of it. An hxq or apq call is never one.

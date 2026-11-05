@@ -110,4 +110,24 @@ final class ShellHxAccessTest extends Test {
 		Assert.isNull(ShellHxAccess.readSegment('hxq show src/A.hx', TREE, null));
 	}
 
+	public function testOnlyACommandThatItselfRunsTheEngineRunsHxq(): Void {
+		for (command in [
+			'hxq patch a.hx --write',
+			'cd x && apq fmt src --write',
+			'HXQ_BIN=/t/bin/apq.js hxq fmt a.hx',
+			'node /t/bin/apq.js patch a.hx',
+			'/t/bin/hxq fmt a.hx',
+			'rtk hxq fmt a.hx',
+			'export X=1; hxq lint a.hx'
+		]) Assert.isTrue(ShellHxAccess.runsHxq(command), command);
+		for (command in [
+			'cat /t/gate.log',
+			'tail -30 /t/probe.log',
+			'HXQ_BIN=/t/bin/apq.js cat /t/gate.log',
+			'grep wrote /t/hxq-run.log',
+			'cat /t/gate.log | grep hxq',
+			'echo apq; tail /t/log'
+		]) Assert.isFalse(ShellHxAccess.runsHxq(command), command);
+	}
+
 }

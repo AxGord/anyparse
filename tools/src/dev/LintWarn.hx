@@ -80,7 +80,10 @@ final class LintWarn {
 		];
 		final project: Null<String> = mainTree(own);
 		if (wrote.length == 0 || project == null) return null;
-		final tokens: Array<String> = words(payload.toolInput?.command ?? '');
+		final command: String = payload.toolInput?.command ?? '';
+		// a `wrote` line printed by `cat`/`tail` of a gate log is a quotation, not a write
+		if (!ShellHxAccess.runsHxq(command)) return null;
+		final tokens: Array<String> = words(command);
 		final into: Null<Target> = target(tokens, payload.cwd ?? '', project);
 		if (into == null) return null;
 		final files: Array<String> = written(wrote, tokens, into.root);
