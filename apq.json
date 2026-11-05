@@ -201,7 +201,20 @@
 				"keys": [
 					"arms.type"
 				],
-				"byPackage": true
+				"byPackage": true,
+				"members": {
+					"records": "arms",
+					"name": "name",
+					"type": "type",
+					"member": "method",
+					"kind": "kind",
+					"defaultKind": "FnMember",
+					"find": "find",
+					"replace": "replace",
+					"opaque": [
+						"force"
+					]
+				}
 			},
 			{
 				"file": "apq.json",

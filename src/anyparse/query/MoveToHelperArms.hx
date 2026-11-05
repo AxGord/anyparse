@@ -13,9 +13,10 @@ using Lambda;
  * The mutation-arm RETARGET HINT of `move-to-helper --arms <registry.json>`: which arms address a member the move took
  * out of its type, and which arms' cut no longer occurs in the member it addresses.
  *
- * A hint, not an edit: no op of hxq writes the arm registry, and an arm's `find` text is the author's — a moved body
- * whose `x` became `g.x` may need a different cut, not a mechanically patched one. Read off the CANONICAL
- * rewritten sources (the bytes `--write` lands), because the writer may re-wrap a line a `find` spans.
+ * A hint, not an edit: `rename` follows a cut because its edits prove which tokens changed (`MemberRegistryRename`), while
+ * an arm's `find` over a moved body is the author's — one whose `x` became `g.x` may need a different cut, not a mechanically
+ * patched one. Read off the CANONICAL rewritten sources (the bytes `--write` lands), because the writer may re-wrap a line
+ * a `find` spans.
  */
 @:nullSafety(Strict)
 @:access(anyparse.query.MoveMember)

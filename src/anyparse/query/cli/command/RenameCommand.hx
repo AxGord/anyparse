@@ -3,10 +3,23 @@ package anyparse.query.cli.command;
 import anyparse.query.CrossRename;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.MoveDeclaration.MoveDeclarationData;
 import anyparse.query.Rename;
+import anyparse.query.TypePathRegistries.MemberKeys;
 import anyparse.query.cli.CliArgs;
 import anyparse.runtime.Span;
+import haxe.ds.Either;
 import anyparse.query.ExitCode.*;
+import anyparse.query.MemberRegistryRename.MemberRename;
+import anyparse.query.MemberRegistryRename.RegistryFollow;
+
+using Lambda;
+
+/** What a member rename does to the declared registries: the documents it rewrites and the records it names as not followed. */
+private typedef RegistryChanges = {
+	final changes: Array<FileChange>;
+	final notes: Array<String>;
+}
 
 /**
  * `apq rename` — scope-correct, format-preserving symbol rename.
@@ -191,11 +204,22 @@ final class RenameCommand implements CliCommand {
 		final refShape: RefShape = plugin.refShape();
 		// Dispatch on what the cursor lands on: a TYPE declaration renames
 		// through CrossRename, a MEMBER declaration through CrossRenameMember.
-		final result: CrossRenameResult = cursorOnTypeDecl(source, line, col, plugin)
+		final onType: Bool = cursorOnTypeDecl(source, line, col, plugin);
+		final result: CrossRenameResult = onType
 			? CrossRename.crossRenameType(filePath, source, line, col, newName, scopeFiles, plugin, typeRefShape, refShape)
 			: CrossRenameMember.crossRenameMember(filePath, source, line, col, newName, scopeFiles, plugin, refShape);
 		switch result {
-			case Ok(changes, advisory):
+			case Ok(opChanges, advisory):
+				final registries: RegistryChanges = switch onType
+					? Right({ changes: [], notes: [] })
+					: registryChanges(result, filePath, scopeFiles, newName, plugin) {
+					case Left(message):
+						CliIo.stderr('apq rename: $message — nothing written\n');
+						return EXIT_RUNTIME;
+					case Right(found):
+						found;
+				};
+				final changes: Array<FileChange> = opChanges.concat(registries.changes);
 				var totalOccurrences: Int = 0;
 				for (c in changes) totalOccurrences += c.count;
 				if (write) {
@@ -206,6 +230,7 @@ final class RenameCommand implements CliCommand {
 					CliIo.sysPrint('total: ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
 					CliIo.stderr('apq rename: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
+				for (note in registries.notes) CliIo.stderr('apq rename: $note\n');
 				if (advisory != null) CliIo.stderr('apq rename: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
@@ -243,6 +268,50 @@ final class RenameCommand implements CliCommand {
 	}
 
 	/**
+	 * The documents of the project's declared member registries (`move.registries[].members`) that follow the rename
+	 * `result` performed over `sources`, and the records it names as not followed; `Left` when a declaration or a document
+	 * cannot be read, which refuses the whole rename: a write over a registry the op could not read would leave it behind.
+	 */
+	private static function registryChanges(
+		result: CrossRenameResult, filePath: String, sources: Array<{ file: String, source: String }>, newName: String,
+		plugin: GrammarPlugin
+	): Either<String, RegistryChanges> {
+		final none: RegistryChanges = { changes: [], notes: [] };
+		final opChanges: Array<FileChange> = switch result {
+			case Ok(changes, _): changes;
+			case Err(_): return Right(none);
+		};
+		final declaration: MoveDeclarationData = switch ModuleMoveCli.declarationFor(filePath) {
+			case Left(message): return Left(message);
+			case Right(found): found;
+		};
+		if (!declaration.registries.exists(r -> r.members != null)) return Right(none);
+		final rename: Null<MemberRename> = MemberRegistryRename.of(opChanges, sources, newName, plugin);
+		if (rename == null) return Right(none);
+		final out: RegistryChanges = { changes: [], notes: [] };
+		for (registry in declaration.registries) {
+			final members: Null<MemberKeys> = registry.members;
+			if (members != null) for (path in RegistryFiles.of(registry.file)) {
+				final followed: RegistryFollow = try {
+					MemberRegistryRename.follow(members, CliIo.readFile(path), rename, plugin);
+				} catch (exception: Exception) {
+					return Left('$path: ${exception.message}');
+				};
+				for (note in followed.notes) out.notes.push(note);
+				if (followed.text == null) continue;
+				final text: String = followed.text;
+				out.changes.push({
+					file: path,
+					newSource: text,
+					count: followed.count,
+					edits: []
+				});
+			}
+		}
+		return Right(out);
+	}
+
+	/**
 	 * `apq rename <file> <addr> <newName>` with the cursor on a TYPE declaration and no
 	 * `--scope` - the type-namespace rename confined to the cursor file.
 	 *
@@ -264,7 +333,7 @@ final class RenameCommand implements CliCommand {
 				filePath, source, line, col, newName, [{ file: filePath, source: source }],
 				plugin, plugin.typeRefShape(), plugin.refShape()
 			),
-			write
+			write, { changes: [], notes: [] }
 		);
 	}
 
@@ -276,34 +345,42 @@ final class RenameCommand implements CliCommand {
 	private static function runRenameMemberInFile(
 		filePath: String, source: String, line: Int, col: Int, newName: String, write: Bool, plugin: GrammarPlugin
 	): Int {
-		return emitInFileRename(
-			CrossRenameMember.crossRenameMember(
-				filePath, source, line, col, newName, [{ file: filePath, source: source }], plugin, plugin.refShape()
-			),
-			write
+		final sources: Array<{ file: String, source: String }> = [{ file: filePath, source: source }];
+		final result: CrossRenameResult = CrossRenameMember.crossRenameMember(
+			filePath, source, line, col, newName, sources, plugin, plugin.refShape()
 		);
+		return switch registryChanges(result, filePath, sources, newName, plugin) {
+			case Left(message):
+				CliIo.stderr('apq rename: $message — nothing written\n');
+				EXIT_RUNTIME;
+			case Right(registries):
+				emitInFileRename(result, write, registries);
+		};
 	}
 
 	/**
 	 * Emit the ONE file change an in-file cross-rename produces, type or member: write it or print
 	 * it, then the file-scope advisory and whatever the op itself reported.
 	 */
-	private static function emitInFileRename(result: CrossRenameResult, write: Bool): Int {
+	private static function emitInFileRename(result: CrossRenameResult, write: Bool, registries: RegistryChanges): Int {
 		switch result {
 			case Ok(changes, advisory):
 				// The scope is one file and an empty change set is `Err`, so there is exactly one.
 				if (changes.length != 1) throw new Exception('in-file rename produced ${changes.length} file change(s)');
 				final change: FileChange = changes[0];
 				if (write) {
-					CliIo.writeFile(change.file, change.newSource);
+					CliIo.writeFiles([change].concat(registries.changes).map(c -> {path: c.file, content: c.newSource }));
 					CliIo.stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)\n');
+					for (r in registries.changes) CliIo.stderr('apq rename: wrote ${r.file}, registry record(s) followed\n');
 				} else {
 					// The one preview tail that spells the notice itself: this op's name already
 					// occurs twice as a bare literal, and a third would read as an extractable
 					// constant rather than as the CLI vocabulary it is.
 					CliIo.sysPrint(change.newSource);
 					CliIo.stderr('apq rename: ${change.file} NOT written — this is a preview on stdout; re-run with --write to apply\n');
+					for (r in registries.changes) CliIo.stderr('apq rename: ${r.file} would follow the rename\n');
 				}
+				for (note in registries.notes) CliIo.stderr('apq rename: $note\n');
 				CliIo.stderr(
 					'apq rename: in-file rename - references in OTHER files keep the old name; pass --scope <dir> to cover them\n'
 				);
@@ -406,6 +483,11 @@ final class RenameCommand implements CliCommand {
 		CliIo.sysPrint('abstract or interface method carries no override modifier, so the\n');
 		CliIo.sysPrint('keyword alone never saw it), a name already declared on the type, or a\n');
 		CliIo.sysPrint('type declared more than once under scope.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A member rename also follows the registries the project declares in\n');
+		CliIo.sysPrint('apq.json (move.registries[].members): a record value moves only where\n');
+		CliIo.sysPrint('the edits above proved it. A record that cannot be mapped stays and is\n');
+		CliIo.sysPrint('named on stderr; a registry that cannot be read refuses the rename.\n');
 	}
 
 }

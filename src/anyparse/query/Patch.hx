@@ -88,9 +88,7 @@ final class Patch {
 				return Err(discarded('${label}the old fragment is empty — copy it verbatim from `apq source --select`', multi));
 			if (oldText == pairs[i].newText)
 				return Err(discarded('${label}the old and new fragments are identical — nothing to change', multi));
-			final found: { located: LocateResult, base: Int } = locateWithOwnDoc(
-				source, slice, groupSpan, oldText, node.kind, label, all, plugin
-			);
+			final found: LocatedFrom = locateWithOwnDoc(source, slice, groupSpan, oldText, node.kind, label, all, plugin);
 			final located: LocateResult = found.located;
 			final base: Int = found.base;
 			final refusal: Null<String> = located.error;
@@ -117,6 +115,21 @@ final class Patch {
 			case Ok(text, rewrites): verbatimSpliceIntact(source, synthesised, text, rewrites, plugin);
 			case failed: failed;
 		}
+	}
+
+	/**
+	 * The span of `source` the fragment `oldText` cuts in the node `node` of `tree`, found as `patchNodeMany` finds it (the
+	 * declaration's slice, then its own doc; exact, then dedented; exactly once); null where that op would refuse the fragment.
+	 */
+	public static function cutSpan(source: String, tree: QueryNode, node: QueryNode, oldText: String, plugin: GrammarPlugin): Null<Span> {
+		final span: Null<Span> = node.span;
+		if (span == null || oldText.length == 0) return null;
+		final group: Span = ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
+		final slice: String = source.substring(group.from, group.to);
+		final found: LocatedFrom = locateWithOwnDoc(source, slice, group, oldText, node.kind, '', false, plugin);
+		if (found.located.error != null) return null;
+		final range: Located = found.located.ranges[0];
+		return new Span(found.base + range.from, found.base + range.to);
 	}
 
 	/**
@@ -169,7 +182,7 @@ final class Patch {
 	 */
 	private static function locateWithOwnDoc(
 		source: String, slice: String, groupSpan: Span, oldText: String, kind: String, label: String, all: Bool, plugin: GrammarPlugin
-	): { located: LocateResult, base: Int } {
+	): LocatedFrom {
 		final located: LocateResult = locate(slice, oldText, kind, label, all);
 		if (located.error == null || occurrences(slice, oldText, kind) > 0) return { located: located, base: groupSpan.from };
 		final docFrom: Int = ElementSpan.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source), true).from;
@@ -942,4 +955,10 @@ private typedef Located = {
 private typedef LocateResult = {
 	ranges: Array<Located>,
 	error: Null<String>
+};
+
+/** A locate over a slice that starts at `base` of the source. */
+private typedef LocatedFrom = {
+	located: LocateResult,
+	base: Int
 };

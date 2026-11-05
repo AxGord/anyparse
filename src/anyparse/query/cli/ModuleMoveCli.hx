@@ -127,7 +127,7 @@ final class ModuleMoveCli {
 	}
 
 	/** The move declaration of the nearest `apq.json` above `file` that carries one, or an empty one. */
-	private static function declarationFor(file: String): Either<String, MoveDeclarationData> {
+	public static function declarationFor(file: String): Either<String, MoveDeclarationData> {
 		final chain: ConfigChain = ConfigFinder.findUpProject(file, ConfigFinder.PROJECT_ROOT_MARKERS);
 		for (doc in chain.documents) switch MoveDeclaration.read(doc.content, Path.directory(doc.path)) {
 			case Left(message):

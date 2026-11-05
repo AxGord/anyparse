@@ -7806,6 +7806,64 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "apq rename src/p/Base.hx --select FnMember:walk step --scope src --write (member registry)",
+			"note": "the arm records follow the edits: a foreign call and an override move, a same-named local and a secondary type stay, a force value is named",
+			"argv": [
+				"apq",
+				"rename",
+				"src/p/Base.hx",
+				"--select",
+				"FnMember:walk",
+				"step",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Base.hx": "package p;\n\nclass Base {\n\tpublic function new() {}\n\n\tpublic function walk(): Int {\n\t\treturn 1;\n\t}\n\n\tpublic function other(): Int {\n\t\tfinal a: Int = 2;\n\t\tif (a > 1)\n\t\t\treturn walk();\n\t\treturn a;\n\t}\n}\n",
+				"src/p/Sub.hx": "package p;\n\nclass Sub extends Base {\n\toverride public function walk(): Int {\n\t\treturn 2;\n\t}\n}\n",
+				"src/p/Caller.hx": "package p;\n\nclass Caller {\n\tpublic static function run(b: Base): Int {\n\t\treturn b.walk();\n\t}\n}\n",
+				"src/p/Shadow.hx": "package p;\n\nclass Shadow {\n\tpublic function walk(): Int {\n\t\treturn 1;\n\t}\n\n\tpublic function local(o: Other): Int {\n\t\tfinal walk: Int = o.walk;\n\t\treturn walk;\n\t}\n}\n\nclass Other {\n\tpublic var walk: Int = 0;\n\n\tpublic function helper(): Int {\n\t\treturn walk;\n\t}\n}\n",
+				"reg/p.json": "{\n\t\"arms\": [\n\t\t{\"name\":\"M-OWNER\",\"type\":\"p.Base\",\"method\":\"walk\",\"force\":\"walk()\"},\n\t\t{\"name\":\"M-ESCAPED\",\"type\":\"p.Base\",\"method\":\"other\",\"find\":\"if (a > 1)\\n\\t\\t\\treturn walk();\",\"replace\":\"if (a > 1)\\n\\t\\t\\treturn walk() + 1;\"},\n\t\t{\"name\":\"M-TABBED\",\"type\":\"p.Base\",\"method\":\"other\",\"find\":\"\\treturn walk();\",\"replace\":\"\\treturn walk() + 1;\"},\n\t\t{\"name\":\"M-OVERRIDE\",\"type\":\"p.Sub\",\"method\":\"walk\",\"find\":\"return 2;\",\"replace\":\"return 3;\"},\n\t\t{\"name\":\"M-FOREIGN\",\"type\":\"p.Caller\",\"method\":\"run\",\"find\":\"b.walk()\",\"replace\":\"b.walk() + 1\"},\n\t\t{\"name\":\"M-SHADOW\",\"type\":\"p.Shadow\",\"method\":\"local\",\"find\":\"final walk: Int = o.walk;\",\"replace\":\"final walk: Int = o.walk + 1;\"},\n\t\t{\"name\":\"M-SECONDARY-MAIN\",\"type\":\"p.Shadow\",\"method\":\"helper\",\"find\":\"return walk;\",\"replace\":\"return walk + 1;\"}\n\t]\n}\n",
+				"apq.json": "{\"move\": {\"scope\": [\"src\"], \"registries\": [{\"file\": \"reg\", \"keys\": [\"arms.type\"], \"byPackage\": true, \"members\": {\"records\": \"arms\", \"name\": \"name\", \"type\": \"type\", \"member\": \"method\", \"kind\": \"kind\", \"defaultKind\": \"FnMember\", \"find\": \"find\", \"replace\": \"replace\", \"opaque\": [\"force\"]}}]}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "7e70dd6c90a3a8fa",
+				"files": "937ba3d8abae6006"
+			}
+		},
+		{
+			"name": "hxq rename src/p/Base.hx --select FnMember:walk step --scope src --write (member registry)",
+			"note": "the arm records follow the edits: a foreign call and an override move, a same-named local and a secondary type stay, a force value is named",
+			"argv": [
+				"hxq",
+				"rename",
+				"src/p/Base.hx",
+				"--select",
+				"FnMember:walk",
+				"step",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Base.hx": "package p;\n\nclass Base {\n\tpublic function new() {}\n\n\tpublic function walk(): Int {\n\t\treturn 1;\n\t}\n\n\tpublic function other(): Int {\n\t\tfinal a: Int = 2;\n\t\tif (a > 1)\n\t\t\treturn walk();\n\t\treturn a;\n\t}\n}\n",
+				"src/p/Sub.hx": "package p;\n\nclass Sub extends Base {\n\toverride public function walk(): Int {\n\t\treturn 2;\n\t}\n}\n",
+				"src/p/Caller.hx": "package p;\n\nclass Caller {\n\tpublic static function run(b: Base): Int {\n\t\treturn b.walk();\n\t}\n}\n",
+				"src/p/Shadow.hx": "package p;\n\nclass Shadow {\n\tpublic function walk(): Int {\n\t\treturn 1;\n\t}\n\n\tpublic function local(o: Other): Int {\n\t\tfinal walk: Int = o.walk;\n\t\treturn walk;\n\t}\n}\n\nclass Other {\n\tpublic var walk: Int = 0;\n\n\tpublic function helper(): Int {\n\t\treturn walk;\n\t}\n}\n",
+				"reg/p.json": "{\n\t\"arms\": [\n\t\t{\"name\":\"M-OWNER\",\"type\":\"p.Base\",\"method\":\"walk\",\"force\":\"walk()\"},\n\t\t{\"name\":\"M-ESCAPED\",\"type\":\"p.Base\",\"method\":\"other\",\"find\":\"if (a > 1)\\n\\t\\t\\treturn walk();\",\"replace\":\"if (a > 1)\\n\\t\\t\\treturn walk() + 1;\"},\n\t\t{\"name\":\"M-TABBED\",\"type\":\"p.Base\",\"method\":\"other\",\"find\":\"\\treturn walk();\",\"replace\":\"\\treturn walk() + 1;\"},\n\t\t{\"name\":\"M-OVERRIDE\",\"type\":\"p.Sub\",\"method\":\"walk\",\"find\":\"return 2;\",\"replace\":\"return 3;\"},\n\t\t{\"name\":\"M-FOREIGN\",\"type\":\"p.Caller\",\"method\":\"run\",\"find\":\"b.walk()\",\"replace\":\"b.walk() + 1\"},\n\t\t{\"name\":\"M-SHADOW\",\"type\":\"p.Shadow\",\"method\":\"local\",\"find\":\"final walk: Int = o.walk;\",\"replace\":\"final walk: Int = o.walk + 1;\"},\n\t\t{\"name\":\"M-SECONDARY-MAIN\",\"type\":\"p.Shadow\",\"method\":\"helper\",\"find\":\"return walk;\",\"replace\":\"return walk + 1;\"}\n\t]\n}\n",
+				"apq.json": "{\"move\": {\"scope\": [\"src\"], \"registries\": [{\"file\": \"reg\", \"keys\": [\"arms.type\"], \"byPackage\": true, \"members\": {\"records\": \"arms\", \"name\": \"name\", \"type\": \"type\", \"member\": \"method\", \"kind\": \"kind\", \"defaultKind\": \"FnMember\", \"find\": \"find\", \"replace\": \"replace\", \"opaque\": [\"force\"]}}]}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "7e70dd6c90a3a8fa",
+				"files": "937ba3d8abae6006"
+			}
 		}
 	]
 }

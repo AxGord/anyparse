@@ -5,6 +5,7 @@ import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import anyparse.query.DeclaredSortedLists.SortedListPart;
 import anyparse.query.ModuleMove.TestMirror;
+import anyparse.query.TypePathRegistries.MemberKeys;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import haxe.Exception;
 import haxe.ds.Either;
@@ -86,7 +87,7 @@ final class MoveDeclaration {
 			textExclude: strings(section, 'textExclude').map(at),
 			textExtensions: strings(section, 'textExtensions'),
 			registries: [
-				for (r in objects(section, 'registries', ['file', 'keys', 'byPackage'])) registry(r, at)
+				for (r in objects(section, 'registries', ['file', 'keys', 'byPackage', 'members'])) registry(r, at)
 			],
 			sortedLists: [
 				for (list in objects(section, 'sortedLists', ['parts'])) [
@@ -174,7 +175,41 @@ final class MoveDeclaration {
 		};
 		if (byPackage && !keys.exists(k -> k.split('.').length == 2))
 			throw new Exception('"$KEY.registries" marks "byPackage" a registry with no key of the form "<array>.<field>"');
-		return { file: at(string(entry, 'registries', 'file')), keys: keys, byPackage: byPackage };
+		final members: Null<JValue> = JValueTools.field(entry, 'members');
+		return {
+			file: at(string(entry, 'registries', 'file')),
+			keys: keys,
+			byPackage: byPackage,
+			members: members == null ? null : memberKeys(members)
+		};
+	}
+
+	/** The `members` layout of a registry entry. */
+	private static function memberKeys(node: JValue): MemberKeys {
+		final label: String = '$KEY.registries.members';
+		final unknown: Null<String> = unknownKey(node, label, [
+			'records',
+			'name',
+			'type',
+			'member',
+			'kind',
+			'defaultKind',
+			'find',
+			'replace',
+			'opaque'
+		]);
+		if (unknown != null) throw new Exception(unknown);
+		return {
+			records: string(node, label, 'records'),
+			name: string(node, label, 'name'),
+			type: string(node, label, 'type'),
+			member: string(node, label, 'member'),
+			kind: string(node, label, 'kind'),
+			defaultKind: string(node, label, 'defaultKind'),
+			find: string(node, label, 'find'),
+			replace: string(node, label, 'replace'),
+			opaque: strings(node, 'opaque')
+		};
 	}
 
 }
