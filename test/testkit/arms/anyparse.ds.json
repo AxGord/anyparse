@@ -10,6 +10,38 @@
 			"find": "toJsObjectSet<K:{}>(store: Store<K>): js.lib.Set<K>",
 			"replace": "toJsObjectSet<K>(store: Store<K>): js.lib.Set<K>",
 			"note": "an enum-value key is accepted on the js arm, where a native set compares it by identity while Map compares it structurally"
+		},
+		{
+			"name": "M-DS-BITS-WIDTH",
+			"type": "anyparse.ds.BitsBuilder",
+			"method": "build",
+			"find": "width <= WORD",
+			"replace": "width < WORD",
+			"note": "a domain whose top bit is 31 gets a word vector instead of the one Int that holds it"
+		},
+		{
+			"name": "M-DS-BITS-COMPLEMENT",
+			"type": "anyparse.ds.BitsBuilder",
+			"method": "narrow",
+			"find": "~this & $v{full}",
+			"replace": "~this",
+			"note": "the complement of a one-Int set holds bits no value of the domain stands for"
+		},
+		{
+			"name": "M-DS-BITS-ARGUMENTS",
+			"type": "anyparse.ds.BitsBuilder",
+			"method": "enumDomain",
+			"find": "Context.fatalError('Bits<$shown>: the constructor $name takes arguments, so the domain is not fixed', pos);",
+			"replace": "",
+			"note": "an enum whose constructor takes arguments is lowered as if its domain were fixed"
+		},
+		{
+			"name": "M-DS-BITS-RANK",
+			"type": "anyparse.ds.BitsBuilder",
+			"method": "abstractDomain",
+			"find": "values.length == 0 || values[values.length - 1] == values.length - 1",
+			"replace": "true",
+			"note": "a sparse Int enum abstract takes its value as its bit, so values a word apart share one"
 		}
 	]
 }
