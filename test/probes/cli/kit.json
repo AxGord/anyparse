@@ -7630,6 +7630,33 @@
 				"err": "da0b42f768a2e4b7",
 				"files": "0c456ff64af44d6d"
 			}
+		},
+		{
+			"name": "hxq lint . --rule unresolved-type-name --no-oracle (type-name scopes)",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"unresolved-type-name",
+				"--no-oracle"
+			],
+			"files": {
+				"Top.hx": "class Top {}\n",
+				"a/Neg.hx": "package a;\nclass Neg {\n\tvar z: Missing;\n\tvar h: Helper;\n\tvar fs: FooSub;\n\tvar ts: ToolSub;\n\tvar t: Tools;\n}\n",
+				"a/Uses.hx": "package a;\nimport b.M;\nimport b.Foo as Bar;\nimport b.Foo.FooSub;\nusing b.Tools;\nimport haxe.macro.Expr;\nimport haxe.ds.Option;\nimport js.html.*;\n#if js\nimport js.Browser;\n#end\nclass Uses<T: Top> {\n\tvar h: Helper;\n\tvar al: Alias;\n\tvar br: Bar;\n\tvar fs: FooSub;\n\tvar t: Tools;\n\tvar ts: ToolSub;\n\tvar ed: ExprDef;\n\tvar op: Option<Int>;\n\tvar el: Element;\n\tvar top: Top;\n\tvar c: Class<Dynamic>;\n\tvar en: Enum<Dynamic>;\n\tvar ev: EnumValue;\n\tvar an: Any;\n\tvar u: UInt;\n\tvar x: Xml;\n\tvar r: EReg;\n\tvar n: Null<Int>;\n\tvar it: Iterator<Int>;\n\tvar kv: KeyValueIterator<Int, Int>;\n\tvar ii: IntIterator;\n\tvar sb: StringBuf;\n\tvar f: Int -> Void;\n\tvar g: (a: Int) -> Void;\n\tvar sg: Single;\n\tvar ia: ArrayAccess<Int>;\n\tvar ib: Iterable<Int>;\n\t#if js\n\tvar w: Browser;\n\t#end\n\tfunction m<U>(u: U): T return null;\n\tmacro static function mac() { return macro : Unknown1; }\n}\ntypedef TT<X> = Array<X>;\nenum EE<Y> { A(y: Y); }\nabstract AA<Z>(Array<Z>) {}\n",
+				"b/Foo.hx": "package b;\nclass Foo {}\nclass FooSub {}\n",
+				"b/M.hx": "package b;\nclass M {}\nclass Helper {}\ntypedef Alias = Int;\n",
+				"b/Tools.hx": "package b;\nclass Tools { public static function twice(s: String): String return s + s; }\nclass ToolSub {}\n",
+				"c/d/Amb.hx": "package c.d;\nclass Amb {\n\tvar h: Helper;\n\tvar fs: FooSub;\n\tvar top: Top;\n\t#if js\n\tvar g: OnlyJs;\n\t#end\n}\n#if js\nclass OnlyJs {}\n#end\n",
+				"c/import.hx": "import b.M;\nimport b.Foo.FooSub;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "4f159923b9af4e95",
+				"err": "922156930589b6ab",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

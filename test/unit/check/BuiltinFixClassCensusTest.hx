@@ -166,6 +166,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'thread-safety',
 			'unchecked-nullable',
 			'unguarded-nullable-deref',
+			'unresolved-type-name',
 			'unused-return-value',
 			'zero-count-unparsed-fixture'
 		], idsImplementing(c -> c is NoAutofix));

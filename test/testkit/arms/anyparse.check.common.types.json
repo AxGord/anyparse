@@ -211,6 +211,22 @@
 			"method": "catchName",
 			"force": "DEFAULT_CATCH_NAME",
 			"note": "catch-dynamic recommends and arm (b) writes exception whatever naming.catchVarName says"
+		},
+		{
+			"name": "M-UNRESOLVED-TYPEPARAM-FLAGGED",
+			"type": "anyparse.check.common.types.UnresolvedTypeName",
+			"method": "run",
+			"find": "&& !declared.contains(name)",
+			"replace": "",
+			"note": "a generic parameter's name is read as a type no import binds"
+		},
+		{
+			"name": "M-UNRESOLVED-DOTTED-FLAGGED",
+			"type": "anyparse.check.common.types.UnresolvedTypeName",
+			"method": "isTypeName",
+			"find": "name.indexOf('.') < 0 && ",
+			"replace": "",
+			"note": "a qualified path is read as a simple name, though only the compiler's package lookup can decide it"
 		}
 	]
 }

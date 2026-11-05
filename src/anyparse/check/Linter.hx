@@ -199,6 +199,7 @@ import anyparse.check.common.types.RedundantUncheckedCast;
 import anyparse.check.common.types.RedundantUpcast;
 import anyparse.check.common.types.SwallowedException;
 import anyparse.check.common.types.UnreachableCatch;
+import anyparse.check.common.types.UnresolvedTypeName;
 import anyparse.check.common.unused.DeadCode;
 import anyparse.check.common.unused.DeadStore;
 import anyparse.check.common.unused.SelfAssignment;
@@ -465,6 +466,7 @@ final class Linter {
 			// null comparison, this one an `exists` call.
 			new RedundantMapExists(),
 			new MapAsSet(),
+			new UnresolvedTypeName(),
 			new PreferAccessMeta(),
 			new CatchDynamic(),
 			new PreferCaseWildcard(),

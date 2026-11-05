@@ -196,6 +196,29 @@ final class TypeNameBinding {
 	}
 
 	/**
+	 * Whether the simple type name `name`, written in `fi` at offset `at`, provably binds NOTHING — the one answer to "is this
+	 * written type name declared nowhere it can see": no tier of the order binds a declaration of the index or a path outside it
+	 * (`bindingsOf`), the std declares no module or `StdTypes` type of the name at the toplevel or in
+	 * the file's package chain, and no module of the name sits on disk in the file's package or a parent
+	 * one. An `Unknown` order and a machine whose std cannot be found answer false: the first may bind
+	 * what the index cannot read, the second would make every std name read as bound to nothing.
+	 */
+	public function bindsNothing(name: String, fi: FileInfo, at: Int): Bool {
+		if (StdResolver.stdDir() == null || !tierOf(name, fi, at).match(Free)) return false;
+		if (StdTypes.toplevelPath(name) != null || StdTypes.declaresToplevel(_plugin, name)) return false;
+		final found: NameTargets = bindingsOf(name, fi, at);
+		if (found.bound != null || found.guarded.length > 0 || found.unlisted.length > 0) return false;
+		// `bindingsOf` lists only the std packages the index globs (`StdResolver.resolutionSpecs`); the file's own package chain may
+		// sit in any other std package (`js.html`, `hl.uv`) and bind a module of the name from there.
+		var scope: String = fi.pkg;
+		while (scope != '') {
+			if (StdTypes.moduleTypes(_plugin, '$scope.$name')?.exists(t -> t.name == name) == true) return false;
+			scope = SourceText.parentPath(scope);
+		}
+		return !shadowedOnDisk(name, fi.pkg, fi.file);
+	}
+
+	/**
 	 * The types the file's own `statement` brings into simple-name scope, when deleting it changes what none of them binds in
 	 * `fi`: the order read with and `without` it binds each name to the same declarations, and where the binding comes from
 	 * the file's package or a parent one, no nearer package holds a same-named module on disk the index did not read. Null

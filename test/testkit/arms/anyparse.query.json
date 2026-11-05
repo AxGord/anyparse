@@ -15438,6 +15438,37 @@
 			"find": "memberRead(host, name, [], reader)",
 			"replace": "memberRead(host, name, [], host.file)",
 			"note": "a link's type is spelled as the declaring file sees it and resolved in the reading file, so a same-named type of the reading file stands for it"
+		},
+		{
+			"name": "M-UNRESOLVED-NEVER-NOTHING",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsNothing",
+			"force": "false",
+			"note": "no written type name is ever reported as bound to nothing"
+		},
+		{
+			"name": "M-UNRESOLVED-TOPLEVEL-STD-UNBOUND",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsNothing",
+			"find": "if (StdTypes.toplevelPath(name) != null || StdTypes.declaresToplevel(_plugin, name)) return false;",
+			"replace": "",
+			"note": "the std toplevel (String, Array, Map) reads as bound to nothing"
+		},
+		{
+			"name": "M-UNRESOLVED-IMPORTED-STD-UNBOUND",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsNothing",
+			"find": "found.bound != null || ",
+			"replace": "",
+			"note": "a type an import brings from outside the index reads as bound to nothing"
+		},
+		{
+			"name": "M-UNRESOLVED-STD-PACKAGE-UNBOUND",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsNothing",
+			"find": "if (StdTypes.moduleTypes(_plugin, '$scope.$name')?.exists(t -> t.name == name) == true) return false;",
+			"replace": "",
+			"note": "a module of the file's own package that sits in an unglobbed std package reads as bound to nothing"
 		}
 	]
 }

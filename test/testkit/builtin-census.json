@@ -204,6 +204,7 @@
 	"unnecessary-safe-nav",
 	"unnecessary-switch",
 	"unreachable-catch",
+	"unresolved-type-name",
 	"unstored-property",
 	"unused-case-binder",
 	"unused-import",
