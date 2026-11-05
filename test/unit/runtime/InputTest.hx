@@ -1,5 +1,7 @@
 package unit.runtime;
 
+import anyparse.runtime.AnchoredRegex;
+import anyparse.runtime.BytesInput;
 import anyparse.runtime.Input;
 import anyparse.runtime.StringInput;
 
@@ -56,6 +58,26 @@ class InputTest extends Test {
 	private function testSubstringEmpty(): Void {
 		final inp: Input = new StringInput('abc');
 		Assert.equals('', inp.substring(1, 1));
+	}
+
+	/** A pattern built by `AnchoredRegex.of` matches only where it is tried, every alternative included. */
+	private function testMatchAtAnchorsEveryAlternative(): Void {
+		final re: EReg = AnchoredRegex.of('b|c');
+		final inp: Input = new StringInput('abc');
+		Assert.isFalse(inp.matchAt(re, 0));
+		Assert.isTrue(inp.matchAt(re, 1));
+		Assert.equals('b', re.matched(0));
+		Assert.isTrue(inp.matchAt(re, 2));
+		Assert.equals('c', re.matched(0));
+		Assert.isFalse(inp.matchAt(re, 3));
+	}
+
+	private function testBytesInputMatchesAtAnOffset(): Void {
+		final re: EReg = AnchoredRegex.of('[0-9]+');
+		final inp: Input = new BytesInput(haxe.io.Bytes.ofString('ab12c'));
+		Assert.isFalse(inp.matchAt(re, 1));
+		Assert.isTrue(inp.matchAt(re, 2));
+		Assert.equals('12', re.matched(0));
 	}
 
 }

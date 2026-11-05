@@ -11,6 +11,21 @@
 			"note": "no branch ctor reads as a CURLY block, so the shape-aware separator sends every value-`if` branch to the hardline arm and the `} else` join stops firing"
 		},
 		{
+			"name": "M-SCAN-LOOP-FOLLOW-IGNORED",
+			"type": "anyparse.macro.RegexScanPlan",
+			"method": "holds",
+			"find": "!nullable(body) && (follow.infallible || !first.intersects(follow.first)) && holds(body, inside);",
+			"replace": "!nullable(body) && holds(body, inside);",
+			"note": "a loop overlapping what follows it compiles to a scan that never gives an iteration back, so `[a-z]*[a-z0-9]` misses `ab`"
+		},
+		{
+			"name": "M-SCAN-ALT-OVERLAP-IGNORED",
+			"type": "anyparse.macro.RegexScanPlan",
+			"method": "overlaps",
+			"force": "false",
+			"note": "an alternation whose branches begin alike compiles to a scan that commits to the first branch holding, so `a|ab` ends `ab` after `a`"
+		},
+		{
 			"name": "M-SBE-UNGATED",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "semicolonBeforeSiblingWrap",

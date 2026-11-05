@@ -33,6 +33,10 @@ final class BytesInput implements Input {
 		return _source.getString(from, to - from);
 	}
 
+	public inline function matchAt(re: EReg, pos: Int): Bool {
+		return AnchoredRegex.matchIn(re, substring(pos, _source.length), 0);
+	}
+
 	public inline function bytes(from: Int, to: Int): Bytes {
 		return _source.sub(from, to - from);
 	}

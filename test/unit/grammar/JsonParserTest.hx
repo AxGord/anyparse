@@ -191,6 +191,13 @@ class JsonParserTest extends Test {
 		Assert.raises(JValueParser.parse.bind('{,}'));
 	}
 
+	/** The text between escapes is kept whole, before, between and after them. */
+	public function testTextAroundEscapes(): Void {
+		parseEq('"ab\\u0041cd\\\\\\nef"', JString('abAcd\\\nef'));
+		parseEq('"\\t\\t"', JString('\t\t'));
+		parseEq('"x\\""', JString('x"'));
+	}
+
 	private function parseEq(input: String, expected: JValue): Void {
 		final actual: JValue = JValueParser.parse(input);
 		Assert.isTrue(JValueTools.equals(expected, actual), 'parse of <$input> gave $actual, expected $expected');

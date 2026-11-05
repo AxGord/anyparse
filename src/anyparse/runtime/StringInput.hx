@@ -2,6 +2,8 @@ package anyparse.runtime;
 
 import haxe.io.Bytes;
 
+using StringTools;
+
 /**
  * `Input` implementation backed by a Haxe `String`.
  *
@@ -24,13 +26,17 @@ final class StringInput implements Input {
 	}
 
 	public inline function charCodeAt(pos: Int): Int {
-		if (pos < 0 || pos >= _source.length) return -1;
-		final c: Null<Int> = _source.charCodeAt(pos);
-		return c ?? -1;
+		// The bounds test makes the unchecked read safe; `String.charCodeAt` answers `Null<Int>`, a boxed value on
+		// static targets, on every call.
+		return pos < 0 || pos >= _source.length ? -1 : _source.fastCodeAt(pos);
 	}
 
 	public inline function substring(from: Int, to: Int): String {
 		return _source.substring(from, to);
+	}
+
+	public inline function matchAt(re: EReg, pos: Int): Bool {
+		return AnchoredRegex.matchIn(re, _source, pos);
 	}
 
 	public inline function bytes(from: Int, to: Int): Bytes {

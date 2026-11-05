@@ -16,15 +16,11 @@ using StringTools;
  * cannot pin down answers `null` on purpose: `.`, a negated class, `\s`, a
  * backreference, a `{n,m}` quantifier, a named group.
  *
- * The anchoring the answer is read against is `Codegen.eregField`'s: the EReg
- * is built as `^${pattern}`, and `|` binds looser than concatenation, so
- * `^A|B` parses as `(^A)|B` and anchors only the first alternative. What makes
- * a UNION over ALL top-level alternatives sound anyway is
- * `TerminalParseLowering.lowerTerminal`'s `matchedPos().pos != 0` reject: the terminal
- * accepts exactly the matches that begin AT the cursor, whichever alternative
- * produced them, so a first byte outside the union cannot start any accepted
- * match. That reject is why this answers a union where the previous
- * `headIsMandatory` scan refused a top-level `|` outright.
+ * The anchoring the answer is read against is the terminal's: `AnchoredRegex.of`
+ * holds the whole pattern under the anchor and a compiled scan starts at the
+ * cursor, so a terminal accepts exactly the matches that begin AT the cursor,
+ * whichever alternative produced them, and a first byte outside the union over
+ * ALL top-level alternatives cannot start any accepted match.
  *
  * The answer is a claim about a BYTE, and `MAX_BYTE` is what keeps it one. The
  * pattern is a Haxe `String`, so this reads CODE UNITS, while the guard it feeds

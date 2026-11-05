@@ -220,11 +220,10 @@ class Codegen {
 	}
 
 	private static function eregField(spec: GeneratedRule.EregSpec): Field {
-		final anchored: String = '^${spec.pattern}';
 		return {
 			name: spec.varName,
 			access: [APrivate, AStatic, AFinal],
-			kind: FVar(macro : EReg, { expr: EConst(CRegexp(anchored, '')), pos: Context.currentPos() }),
+			kind: FVar(macro : EReg, macro anyparse.runtime.AnchoredRegex.of($v{spec.pattern})),
 			pos: Context.currentPos()
 		};
 	}

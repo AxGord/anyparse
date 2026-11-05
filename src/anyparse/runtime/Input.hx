@@ -25,6 +25,9 @@ interface Input {
 
 	function substring(from: Int, to: Int): String;
 
+	/** Whether `re`, built by `AnchoredRegex.of`, matches at `pos`; a hit holds its groups in `re`. */
+	function matchAt(re: EReg, pos: Int): Bool;
+
 	function bytes(from: Int, to: Int): haxe.io.Bytes;
 
 }

@@ -10,7 +10,6 @@ import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
 
 using Lambda;
-using StringTools;
 using anyparse.macro.MetaInspect;
 
 /**
@@ -18,7 +17,8 @@ using anyparse.macro.MetaInspect;
  *
  * One of the four shapes `Lowering.lowerRule` dispatches on: a rule whose
  * body is a regular expression, and whose generated parser runs that
- * `EReg` and decodes the matched slice into the declared underlying type.
+ * `EReg`, or the scan `TerminalScanLowering` compiles from it, and decodes
+ * the matched slice into the declared underlying type.
  * The family is `lowerTerminal` (the emit), `lowerTerminalDecodeExpr`
  * (what the matched string becomes - `Int`, `Float`, `Bool`, a
  * `@:raw` slice or a schema call), `lowerStringEnumTerminal` (the
@@ -54,7 +54,10 @@ final class TerminalParseLowering {
 		}
 		final underlying: String = node.annotations['base.underlying'];
 		final eregVar: String = '_re_$simple';
-		tc.eregByRule[typePath] = { varName: eregVar, pattern: pattern };
+		final plan: Null<ScanNode> = node.annotations['re.captureGroup'] == null && !Context.defined('js')
+			? RegexScanPlan.of(pattern)
+			: null;
+		if (plan == null) tc.eregByRule[typePath] = { varName: eregVar, pattern: pattern };
 
 		// `@:rawString` on a String-underlying Terminal means "the regex
 		// match is already the raw value" — skip decoding entirely. Used
@@ -74,33 +77,35 @@ final class TerminalParseLowering {
 		final captureGroup: Null<Int> = node.annotations['re.captureGroup'];
 		final matchedValueExpr: Expr = captureGroup == null ? macro $i{eregVar}.matched(0) : macro $i{eregVar}.matched($v{captureGroup});
 		final advanceLenExpr: Expr = captureGroup == null ? macro _matched.length : macro $i{eregVar}.matched(0).length;
-		// ω-terminal-anchor-guard: `EReg.match` returns true even when the
-		// regex matches mid-string (the `^` anchor binds only to the FIRST
-		// alternative without an explicit non-capturing group — `^A|B` ≡
-		// `(^A)|B`, so the second alt silently scans the rest of input for
-		// an arbitrary match). Caught by the `HxFloatLit` regex
-		// extension: `^[0-9]+\.[0-9]+|[0-9]+\.(?![\w.])` matched `1.` mid-
-		// buffer when the parser was sitting at an ident, overwriting the
-		// ident's position with the float slice. Defensive runtime check
-		// rejects any match that did not start at position 0 of `_rest` —
-		// `matchedPos().pos != 0` ⇒ same `ParseError` as `!match`. Cheap
-		// (one extra accessor call per terminal hit), universal (every
-		// `@:re`-driven terminal gets it), and catches the bug class
-		// instead of patching individual regexes after they leak into a
-		// slice's sweep delta.
-		final body: Expr = macro {
-			final _rest: String = ctx.input.substring(ctx.pos, ctx.input.length);
-			if (!$i{eregVar}.match(_rest) || $i{eregVar}.matchedPos().pos != 0) {
-				ctx.recordFail(ctx.pos, $v{simple});
-				throw anyparse.runtime.ParseError.backtrack;
+		// A pattern `RegexScanPlan` proves needs no backtracking compiles to a scan over the input, except on js, whose
+		// regex engine compiles it to native code. Either way a hit starts at `ctx.pos` and a miss never searches the rest
+		// of the input: `AnchoredRegex.of` holds every alternative under the anchor.
+		final body: Expr = if (plan != null) {
+			TerminalScanLowering.scan(
+				plan, macro ctx.input, macro ctx.pos, macro {
+					if (!_hit) {
+						ctx.recordFail(ctx.pos, $v{simple});
+						throw anyparse.runtime.ParseError.backtrack;
+					}
+					final _matched: String = _in.substring(ctx.pos, _p);
+					ctx.pos = _p;
+					return $decodeExpr;
+				}
+			);
+		} else {
+			macro {
+				if (!ctx.input.matchAt($i{eregVar}, ctx.pos)) {
+					ctx.recordFail(ctx.pos, $v{simple});
+					throw anyparse.runtime.ParseError.backtrack;
+				}
+				final _matched: String = $matchedValueExpr;
+				ctx.pos += $advanceLenExpr;
+				return $decodeExpr;
 			}
-			final _matched: String = $matchedValueExpr;
-			ctx.pos += $advanceLenExpr;
-			return $decodeExpr;
 		};
 		// ω-terminal-first-byte: when `terminalFirstToken` reads a literal
 		// head off the regex source, reject a wrong first byte BEFORE the
-		// `substring` + `EReg.match` above.
+		// scan or the regex above.
 		//
 		// This is what makes the terminal's first-token CLAIM self-enforcing
 		// rather than merely checked: the same fact that produces the claim
@@ -232,20 +237,23 @@ final class TerminalParseLowering {
 				macro _matched.substring(1, _matched.length - 1);
 			return macro {
 				final _body: String = $e{bodyExpr};
-				final _buf: StringBuf = new StringBuf();
-				var _i: Int = 0;
-				while (_i < _body.length) {
-					final _c: Int = StringTools.fastCodeAt(_body, _i);
-					if (_c == '\\'.code) {
-						final _res: anyparse.format.text.TextFormat.UnescapeResult = $p{fmtParts}.instance.unescapeChar(_body, _i + 1);
+				// The text between escapes is copied a run at a time, and a body with no escape is the value itself.
+				var _at: Int = _body.indexOf('\\');
+				if (_at < 0) {
+					_body;
+				} else {
+					final _buf: StringBuf = new StringBuf();
+					var _from: Int = 0;
+					while (_at >= 0) {
+						_buf.addSub(_body, _from, _at - _from);
+						final _res: anyparse.format.text.TextFormat.UnescapeResult = $p{fmtParts}.instance.unescapeChar(_body, _at + 1);
 						_buf.addChar(_res.char);
-						_i += 1 + _res.consumed;
-					} else {
-						_buf.addChar(_c);
-						_i++;
+						_from = _at + 1 + _res.consumed;
+						_at = _from < _body.length ? _body.indexOf('\\', _from) : -1;
 					}
+					if (_from < _body.length) _buf.addSub(_body, _from, _body.length - _from);
+					_buf.toString();
 				}
-				_buf.toString();
 			};
 		}
 		if (decodePath == null) return switch underlying {
