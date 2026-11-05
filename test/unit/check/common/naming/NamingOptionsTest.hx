@@ -22,6 +22,35 @@ class NamingOptionsTest extends Test {
 		);
 	}
 
+	public function testSiblingCatchVariablesRenamedInOneRun(): Void {
+		final src: String = wrap(
+			'try {\n\t\t\tg();\n\t\t} catch (e: haxe.Exception) {\n\t\t\ttrace(e);\n\t\t} catch (e: String) {\n\t\t\ttrace(e);\n\t\t}'
+		);
+		Assert.equals(2, violationsUnder(src).length);
+		Assert.equals(
+			wrap(
+				'try {\n\t\t\tg();\n\t\t} catch (exception: haxe.Exception) {\n\t\t\ttrace(exception);\n'
+				+ '\t\t} catch (exception: String) {\n\t\t\ttrace(exception);\n\t\t}'
+			),
+			CheckFixture.fixedUnder(new Naming(), src, OPTIONS)
+		);
+	}
+
+	public function testNestedCatchVariableDefersToItsEnclosingClause(): Void {
+		final src: String = wrap(
+			'try {\n\t\t\tg();\n\t\t} catch (e: haxe.Exception) {\n\t\t\ttrace(e);\n\t\t\ttry {\n\t\t\t\tg();\n'
+			+ '\t\t\t} catch (e: String) {\n\t\t\t\ttrace(e);\n\t\t\t}\n\t\t}'
+		);
+		Assert.equals(2, violationsUnder(src).length);
+		Assert.equals(
+			wrap(
+				'try {\n\t\t\tg();\n\t\t} catch (exception: haxe.Exception) {\n\t\t\ttrace(exception);\n\t\t\ttry {\n\t\t\t\tg();\n'
+				+ '\t\t\t} catch (e: String) {\n\t\t\t\ttrace(e);\n\t\t\t}\n\t\t}'
+			),
+			CheckFixture.fixedUnder(new Naming(), src, OPTIONS)
+		);
+	}
+
 	public function testDiscardCatchVariableKept(): Void {
 		Assert.equals(0, violationsUnder(wrap('try {\n\t\t\tg();\n\t\t} catch (_e: haxe.Exception) {}')).length);
 	}

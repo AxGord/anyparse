@@ -136,6 +136,39 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		assertFixCanonicalWithIndex(src, 'var adjust', '_adjust');
 	}
 
+	public function testFixRenamesSiblingLoopVariablesInOneRun(): Void {
+		// Two loops of one function each bind `__i`; a loop variable lives only in its own loop, so both renames land together.
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f() {\n\t\tfor (__i in [1]) trace(__i);\n\t\tfor (__i in [2]) trace(__i);\n\t}\n}';
+		assertFixCanonical(src, 'for (i in [2]) trace(i)', '__i', 2);
+	}
+
+	public function testFixRenamesSiblingKeyValueLoopKeyAndKeepsItsValue(): Void {
+		// The key binder takes the loop's own claim; the value binder still claims the whole function, so the
+		// second loop's value stays unrenamed - a later run refuses it too, `collidesInScope` reads the first
+		// loop's `v` as taken. Held so a change to either half shows.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(m:Map<Int, Int>) {\n\t\tfor (__k => __v in m) trace(__k + __v);\n'
+			+ '\t\tfor (__k => __v in m) trace(__k + __v);\n\t}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		Assert.equals(4, vs.length);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
+		assertCanonicalized(src, edits, 'for (k => v in m) trace(k + v)', '__k');
+		assertCanonicalized(src, edits, 'for (k => __v in m) trace(k + __v)', '__k');
+	}
+
+	public function testFixRenamesSiblingLoopExpressionVariablesInOneRun(): Void {
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f() {\n\t\treturn [for (__i in [1]) __i].concat([for (__i in [2]) __i]);\n\t}\n}';
+		assertFixCanonical(src, '[for (i in [1]) i].concat([for (i in [2]) i])', '__i', 2);
+	}
+
+	public function testFixDefersNestedLoopExpressionVariableToItsEnclosingLoop(): Void {
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f() {\n\t\treturn [for (__j in [1]) [for (__j in [2]) __j]];\n\t}\n}';
+		assertFixCanonical(src, '[for (j in [1]) [for (__j in [2]) __j]]', '(__j in [1]', 2);
+	}
+
 	public function testFixSkipsLocalCollidingWithSiblingLocal(): Void {
 		// De-prefixing `_adjust` to `adjust` collides with a sibling local `adjust` - skip.
 		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar adjust = 2;\n'
@@ -556,10 +589,10 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		Assert.isFalse(param.indexOf('confinement proof') >= 0, 'a parameter needs no confinement proof, got: $param');
 	}
 
-	private function assertFixCanonical(src: String, present: String, absent: String): Void {
+	private function assertFixCanonical(src: String, present: String, absent: String, findings: Int = 1): Void {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(1, vs.length);
+		Assert.equals(findings, vs.length);
 		assertCanonicalized(src, CheckFixture.fixOf(check, src, vs), present, absent);
 	}
 

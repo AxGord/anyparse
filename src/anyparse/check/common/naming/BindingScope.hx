@@ -37,6 +37,15 @@ import anyparse.query.SourceText;
 final class BindingScope {
 
 	/**
+	 * The span of the node a SELF-SCOPED binding declared at `declFrom` opens - a catch clause, a loop -
+	 * or null when the declaration there binds into an enclosing scope instead. Its name is visible
+	 * nowhere else, so two sibling nodes of this kind share no region.
+	 */
+	public static inline function selfScopeSpanAt(tree: QueryNode, declFrom: Int, shape: RefShape): Null<Span> {
+		return spanAt(tree, declFrom, shape.selfScopeDeclKinds);
+	}
+
+	/**
 	 * The tightest enclosing scope span (whose kind is in `kinds`) containing `pos`, with the local
 	 * FUNCTION declared AT `pos` excluded from the answer - the form every lookup made FROM a
 	 * declaration position needs, and the reason `innermostSpanOfKinds` should not be called with one
@@ -162,8 +171,11 @@ final class BindingScope {
 	 * name lives in.
 	 */
 	private static function localFunctionDeclSpan(tree: QueryNode, declFrom: Int, shape: RefShape): Null<Span> {
-		final kinds: Array<String> = ShapeVocab.localFunctionScopeKinds(shape);
-		if (kinds.length == 0) return null;
+		return spanAt(tree, declFrom, ShapeVocab.localFunctionScopeKinds(shape));
+	}
+
+	/** The span of the node of one of `kinds` that starts at `declFrom` (the last in walk order), or null when none does. */
+	private static function spanAt(tree: QueryNode, declFrom: Int, kinds: Array<String>): Null<Span> {
 		var found: Null<Span> = null;
 		function walk(n: QueryNode): Void {
 			final s: Null<Span> = n.span;

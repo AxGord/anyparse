@@ -134,15 +134,17 @@ final class NamingRenames {
 	}
 
 	/**
-	 * The region a rename's new name occupies for same-pass claim purposes, mirroring
-	 * `collidesInScope`'s own scope notion: a local / param / catch var binds only through its
-	 * innermost enclosing function, everything else (member, constant, enum value) file-wide. A
-	 * body-scoped declaration with no resolvable enclosing function falls back to file-wide, the
-	 * same defensive direction `collidesInScope` takes.
+	 * The region a rename's new name occupies for same-pass claim purposes: a self-scoped binding (a
+	 * catch variable or a loop variable) occupies only the node it opens, so two sibling clauses or loops may take one name; any
+	 * other local / param binds through its innermost enclosing function, everything else (member,
+	 * constant, enum value) file-wide. A body-scoped declaration with no resolvable enclosing function
+	 * falls back to file-wide, the defensive direction `collidesInScope` takes.
 	 */
 	private static function claimScope(tree: QueryNode, shape: RefShape, from: Int, bodyScoped: Bool, sourceLength: Int): Span {
 		final whole: Span = new Span(0, sourceLength);
 		if (!bodyScoped) return whole;
+		final own: Null<Span> = BindingScope.selfScopeSpanAt(tree, from, shape);
+		if (own != null) return own;
 		final funcKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		return BindingScope.enclosingScopeSpan(tree, funcKinds, from, shape) ?? whole;
 	}

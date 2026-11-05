@@ -783,6 +783,37 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "S1",
+			"note": "naming catchVarName: two sibling catch clauses both take the configured name in one run; the program still compiles and prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"naming",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\ttry {\n\t\t\tthrow \"x\";\n\t\t} catch (e:haxe.Exception) {\n\t\t\ttrace(e);\n\t\t} catch (e:String) {\n\t\t\ttrace(e);\n\t\t}\n\t}\n}\n",
+				"apq.json": "{\"rules\":{\"naming\":{\"catchVarName\":\"exception\"}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "2e09bc5848eaa97d",
+				"files": "6d4adb1ddd3ae875",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }
