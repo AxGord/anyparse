@@ -4,6 +4,7 @@ import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerServer.ConnectResult;
 import anyparse.core.EnvFlag;
 import anyparse.core.PhaseTimings;
+import anyparse.query.LintFixSafePass;
 
 /**
  * One configuration's server in the pool: the port it listens on, the text every path the run may write had when the last
@@ -76,6 +77,9 @@ final class OracleServerPool {
 
 	/** Each server's own batch, its one job the server, by configuration: ended by `stop`, or alone by `end`. */
 	private final _batches: Map<String, PendingRuns> = [];
+
+	/** The configurations whose warm compile was red only in files the run cannot write: they are compiled cold from then on. */
+	private final _skipped: Array<String> = [];
 
 	/** Every path the run may write, read afresh at each compile (`OracleRunMemo`'s list). */
 	private final _written: () -> Array<String>;
@@ -218,8 +222,11 @@ final class OracleServerPool {
 		if (!_servers.keys().hasNext()) return out;
 		_warming?.await();
 		final now: Map<String, Null<String>> = texts();
-		for (oracle in oracles) renew(oracle, now);
-		final asked: Array<Int> = [for (i in 0...oracles.length) if (_servers.exists(keyOf(oracles[i]))) i];
+		// a skipped server is never compiled through, so its drift from `now` is no reason to replace it
+		for (oracle in oracles) if (!_skipped.contains(keyOf(oracle))) renew(oracle, now);
+		final asked: Array<Int> = [
+			for (i in 0...oracles.length) if (_servers.exists(keyOf(oracles[i])) && !_skipped.contains(keyOf(oracles[i]))) i
+		];
 		final unheard: Array<Int> = invalidate(oracles, asked, now, []);
 		// a server that did not take every invalidation may hold a text that is gone: it answers nothing from here on
 		for (i in unheard) end(oracles[i]);
@@ -238,10 +245,12 @@ final class OracleServerPool {
 				server.reread = [];
 			}
 			final run: HaxeRun = runs[k];
-			if (refused(run))
-				end(oracles[i])
-			else
+			if (refused(run)) {
+				end(oracles[i]);
+			} else {
 				out[i] = run;
+				if (redOutside(run, now)) _skipped.push(keyOf(oracles[i]));
+			}
 		}
 		#end
 		return out;
@@ -379,6 +388,17 @@ final class OracleServerPool {
 			),
 			cwd: oracle.dir
 		};
+	}
+
+	/**
+	 * Whether `run` failed with diagnostics that blame files and none of them a path the run may write (`now`): a server's
+	 * stale view of the rest of the project, which the next warm compile repeats and no edit of the run mends.
+	 */
+	private static function redOutside(run: HaxeRun, now: Map<String, Null<String>>): Bool {
+		if (run.status == null || run.status == 0) return false;
+		final errors: String = run.out + run.err;
+		return LintFixSafePass.errorFiles(errors).length > 0
+			&& ![for (path in now.keys()) path].exists(path -> LintFixSafePass.blames(errors, path));
 	}
 
 	/** Whether `run` never reached a server: the client's own refusal, which is no verdict. */

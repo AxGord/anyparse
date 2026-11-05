@@ -717,6 +717,38 @@
 			"note": "a warm rejection is the verdict, so a server re-emitting a stale diagnostic reverts a sound fix"
 		},
 		{
+			"name": "M-POOL-KEEPS-WARM-AFTER-RED-OUTSIDE",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "redOutside",
+			"find": "return LintFixSafePass.errorFiles(errors).length > 0",
+			"replace": "return false && LintFixSafePass.errorFiles(errors).length > 0",
+			"note": "a configuration whose warm compile was red only outside the write set is compiled warm again, so an editing run pays warm and then cold on every check"
+		},
+		{
+			"name": "M-POOL-SKIPS-WARM-AFTER-ANY-RED",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "redOutside",
+			"find": "&& ![for (path in now.keys()) path].exists(path -> LintFixSafePass.blames(errors, path));",
+			"replace": ";",
+			"note": "a warm compile red in a file the run writes also ends the configuration's warm compiles, so a mended edit is never typechecked warm again"
+		},
+		{
+			"name": "M-POOL-RENEWS-SKIPPED",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "compileTimed",
+			"find": "if (!_skipped.contains(keyOf(oracle))) renew(oracle, now);",
+			"replace": "renew(oracle, now);",
+			"note": "a skipped configuration's server is replaced for the drift of a tree it no longer compiles, a server spawn nothing asks for"
+		},
+		{
+			"name": "M-POOL-SKIP-ENDS-SERVER",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "compileTimed",
+			"find": "if (redOutside(run, now)) _skipped.push(keyOf(oracles[i]));",
+			"replace": "if (redOutside(run, now)) { _skipped.push(keyOf(oracles[i])); end(oracles[i]); }",
+			"note": "skipping a configuration's warm compiles ends its server, so its position queries are answered by nothing"
+		},
+		{
 			"name": "M-TETHER-IGNORES-EOF",
 			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "TETHER",

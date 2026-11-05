@@ -22,6 +22,10 @@ import anyparse.query.cli.command.LintFixSafeTrail;
 @:nullSafety(Strict)
 final class OracleRunMemoTest extends Test {
 
+	private static final USES_OTHER: String = 'class Main {\n\tstatic function main() {\n\t\ttrace(Other.v);\n\t}\n}\n';
+	private static final OTHER_GOOD: String = 'class Other {\n\tpublic static final v: Int = 1;\n}\n';
+	private static final OTHER_BAD: String = 'class Other {\n\tpublic static final v: Int = nope();\n}\n';
+
 	#if (sys || nodejs)
 	private static final GOOD: String = 'class Main {\n\tstatic function main() {\n\t\ttrace(1);\n\t}\n}\n';
 	private static final OTHER: String = 'class Main {\n\tstatic function main() {\n\t\ttrace(2);\n\t}\n}\n';
@@ -499,11 +503,141 @@ final class OracleRunMemoTest extends Test {
 		#end
 	}
 
+	/**
+	 * A configuration whose warm compile was red only in a file the run cannot write is compiled cold from then on: a server
+	 * that holds a stale view of the rest of the project repeats the same red, so every later check would pay warm and then cold.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-KEEPS-WARM-AFTER-RED-OUTSIDE')
+	public function testARedOutsideTheWriteSetEndsTheWarmCompiles(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(USES_OTHER, BUILD);
+		if (dir == null) return;
+		final other: String = '$dir/Other.hx';
+		rewrite(other, OTHER_GOOD, null);
+		final stamp: Float = js.node.Fs.statSync(other).mtime.getTime();
+		final oracles: Array<OracleConfig> = remembering(dir);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first warm compile is green');
+		rewrite(other, OTHER_BAD, Date.fromTime(stamp + 10000));
+		final red: Null<Int> = pool?.compile(oracles)[0]?.status;
+		Assert.isTrue(red != null && red != 0, 'the warm compile reads the file outside the write set and is red');
+		rewrite(other, OTHER_GOOD, Date.fromTime(stamp + 20000));
+		Assert.isNull(pool?.compile(oracles)[0], 'a configuration red only outside the write set is not asked warm again');
+		Assert.isTrue(CompilerOracle.typecheckAll(oracles).match(Confirmed), 'the cold compile answers the mended tree');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/** A warm compile red in a file the run writes does not end the warm compiles: the mended text is typechecked warm again. */
+	@:pin('control')
+	@:killer('M-POOL-SKIPS-WARM-AFTER-ANY-RED')
+	public function testARedInsideTheWriteSetKeepsTheWarmCompiles(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = remembering(dir);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first warm compile is green');
+		final main: String = '$dir/Main.hx';
+		final stamp: Date = js.node.Fs.statSync(main).mtime;
+		rewrite(main, BAD, stamp);
+		final red: Null<Int> = pool?.compile(oracles)[0]?.status;
+		Assert.isTrue(red != null && red != 0, 'the warm compile of the rejected text is red');
+		rewrite(main, GOOD, stamp);
+		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the mended text is typechecked warm again');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/**
+	 * A skipped configuration is not replaced by a fresh server for the drift of the tree it no longer compiles: its text
+	 * moving past `RESTART_AT` paths leaves the server it has.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-RENEWS-SKIPPED')
+	@:access(anyparse.check.oracle.OracleServerPool)
+	public function testASkippedConfigurationIsNotRenewed(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(USES_OTHER, BUILD);
+		if (dir == null) return;
+		final main: String = '$dir/Main.hx';
+		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx'];
+		for (pad in pads) rewrite(pad, 'a', null);
+		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
+			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main].concat(pads))
+		);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		if (pool != null) skipAfterRedOutside(dir, oracles, pool);
+		final before: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		for (pad in pads) rewrite(pad, 'b', null);
+		Assert.isNull(pool?.compile(oracles)[0], 'a skipped configuration is not compiled warm');
+		Assert.same(before, pool == null ? [] : [for (server in pool._servers) server.port], 'the skipped server was replaced');
+		Assert.equals(1, before.length, 'the skipped configuration keeps a server');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/** A skipped configuration still answers position queries: skipping its warm compiles does not end its server. */
+	@:pin('control')
+	@:killer('M-POOL-SKIP-ENDS-SERVER')
+	public function testASkippedConfigurationStillAnswersPositions(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(USES_OTHER, BUILD);
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = remembering(dir);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		if (pool != null) skipAfterRedOutside(dir, oracles, pool);
+		Assert.isNull(pool?.compile(oracles)[0], 'the configuration is skipped');
+		Assert.notNull(
+			pool?.positionIn(oracles[0], '$dir/Main.hx', USES_OTHER, USES_OTHER.indexOf('Other')),
+			'the skipped configuration answered no position'
+		);
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
 	private static function errorsOf(outcome: OracleOutcome): String {
 		return switch outcome {
 			case Rejected(errors): errors;
 			case _: '';
 		};
+	}
+
+	/** `path` rewritten with `text` and, when `mtime` is given, stamped with it: the server compares modification times. */
+	private static function rewrite(path: String, text: String, mtime: Null<Date>): Void {
+		sys.io.File.saveContent(path, text);
+		if (mtime != null) js.node.Fs.utimesSync(path, mtime, mtime);
+	}
+
+	/**
+	 * Brings `pool` up over `dir`, compiles green, breaks the file outside the write set so the warm compile is red there, and
+	 * mends it: the configuration is skipped from then on.
+	 */
+	private static function skipAfterRedOutside(dir: String, oracles: Array<OracleConfig>, pool: OracleServerPool): Void {
+		final other: String = '$dir/Other.hx';
+		rewrite(other, OTHER_GOOD, null);
+		final stamp: Float = js.node.Fs.statSync(other).mtime.getTime();
+		pool.start(oracles);
+		Assert.equals(0, pool.compile(oracles)[0]?.status, 'the first warm compile is green');
+		rewrite(other, OTHER_BAD, Date.fromTime(stamp + 10000));
+		final red: Null<Int> = pool.compile(oracles)[0]?.status;
+		Assert.isTrue(red != null && red != 0, 'the warm compile reads the file outside the write set and is red');
+		rewrite(other, OTHER_GOOD, Date.fromTime(stamp + 20000));
 	}
 
 	#if (sys || nodejs)
