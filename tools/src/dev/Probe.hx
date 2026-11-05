@@ -31,12 +31,15 @@ using StringTools;
  * started from, and records whether both print the same. Only the
  * invocations that deviate are printed, then one count line; exits 1 when one
  * does (`--strict`: or when a known-defect row moved). `--record` writes what the engine answers into the kit instead.
+ * The invocations run in `--threads` engine processes (`apq --batch`) when the engine has that entry,
+ * else one process each; `--per-process` runs each in a process of its own whatever the engine, and
+ * `--process-parity` runs the kit both ways and prints only the invocations whose answers differ.
  */
 @:nullSafety(Strict)
 final class Probe {
 
 	public static inline final USAGE: String =
-		'usage: dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--strict] [--threads <n>] [--repo <tree>]';
+		'usage: dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--strict] [--threads <n>] [--per-process] [--process-parity] [--repo <tree>]';
 
 	/** Where a kit named by its area lives, from the tree's root: `<KITS>/<area>/kit.json`. */
 	public static inline final KITS: String = 'test/probes';
@@ -77,6 +80,8 @@ final class Probe {
 		final record: Bool = args.flag('--record');
 		final compileGiven: Bool = args.flag('--compile');
 		final strict: Bool = args.flag('--strict');
+		final perProcess: Bool = args.flag('--per-process');
+		final parity: Bool = args.flag('--process-parity');
 		final compile: Bool = record || compileGiven;
 		final engineGiven: String = args.option('--engine') ?? Path.join([repo, 'bin', 'apq.js']);
 		final given: Array<String> = args.positionals(['<area|kit.json>']);
@@ -84,9 +89,17 @@ final class Probe {
 		if (!FileSystem.exists(engineGiven) || FileSystem.isDirectory(engineGiven))
 			throw new UsageError('engine $engineGiven is not a file');
 		final engine: String = FileSystem.fullPath(engineGiven);
+		final oneProcess: Bool = Parity.oneProcessFor(engine, !perProcess);
 		final kitFile: String = kitPath(repo, given[0]);
 		final kit: Kit = load(kitFile);
-		final seen: Array<Seen> = observe(repo, engine, kit, compile, threads);
+		if (parity) {
+			final lines: Array<String> = processParity(repo, engine, kit, threads);
+			for (line in lines) Sys.println(line);
+			final differing: Int = lines.filter(line -> line.startsWith('DIFF ')).length;
+			Sys.println('probe: $differing of ${kit.invocations.length} invocations answer differently in one process — kit $kitFile');
+			return differing == 0 ? 0 : 1;
+		}
+		final seen: Array<Seen> = observe(repo, engine, kit, compile, threads, oneProcess);
 		if (record) {
 			write(kitFile, seen);
 			Sys.println('probe: recorded ${seen.length} invocations into $kitFile — engine $engine');
@@ -134,22 +147,26 @@ final class Probe {
 		};
 	}
 
-	/** Every invocation of `kit` run on `engine` through the shims of `shimTree`, each answer digested; compiled when `compile`. */
-	public static function observe(shimTree: String, engine: String, kit: Kit, compile: Bool, threads: Int): Array<Seen> {
+	/**
+	 * Every invocation of `kit` run on `engine`, each answer digested; compiled when `compile`. With `oneProcess` the invocations
+	 * run in `threads` engine processes (`apq --batch`), else each through the shims of `shimTree` in a process of its own.
+	 */
+	public static function observe(shimTree: String, engine: String, kit: Kit, compile: Bool, threads: Int, oneProcess: Bool): Array<Seen> {
 		return TempDir.with(work -> {
-			final outcomes: Array<Outcome> = Parity.side(shimTree, engine, kit.invocations, work, threads);
+			final outcomes: Array<Outcome> = Parity.side(shimTree, engine, kit.invocations, work, threads, oneProcess);
 			final seen: Array<Seen> = [
 				for (i => outcome in outcomes) {
 					final dir: String = work.file('$i');
 					{
 						answer: answerOf(kit.invocations[i].files, outcome, dir, kit.cases[i].outShape, kit.cases[i].outMinLines),
 						out: normalize(outcome.out, dir),
-						err: normalize(outcome.err, dir)
+						err: normalize(outcome.err, dir),
+						failure: outcome.failure
 					};
 				}
 			];
 			if (compile) compileAll(kit, outcomes, seen, work, threads);
-			rerun(shimTree, engine, kit, outcomes, seen, threads);
+			rerun(shimTree, engine, kit, outcomes, seen, threads, oneProcess);
 			seen;
 		});
 	}
@@ -222,6 +239,7 @@ final class Probe {
 			for (k in 0...Std.int(Math.max(wantSame.length, gotSame.length)))
 				if (wantSame[k] != gotSame[k])
 					lines.push('runs print the same as the original with define set #$k: ${wantSame[k]} → ${gotSame[k]}');
+		if (lines.length > 0 && seen.failure != '') lines.unshift('failure: ${seen.failure}');
 		return lines;
 	}
 
@@ -266,12 +284,13 @@ final class Probe {
 	}
 
 	/**
-	 * Every area of `repo` run with its compile checks on the tree's own engine: the one answer to "does every probe kit still
-	 * answer as recorded" for the slice gate and the battery. A row that deviates and a known-defect row that moved both fail
-	 * (the slice that fixed a defect re-records the row and drops the field).
+	 * Every area of `repo` run with its compile checks on the tree's own engine, its invocations in `threads` engine processes:
+	 * the one answer to "does every probe kit still answer as recorded" for the slice gate and the battery. A row that deviates
+	 * and a known-defect row that moved both fail (the slice that fixed a defect re-records the row and drops the field).
 	 */
 	public static function checkAll(repo: String, threads: Int): KitsReport {
 		final engine: String = FileSystem.fullPath(Path.join([repo, 'bin', 'apq.js']));
+		final oneProcess: Bool = Parity.oneProcessFor(engine, true);
 		final report: KitsReport = {
 			areas: 0,
 			invocations: 0,
@@ -281,7 +300,7 @@ final class Probe {
 		};
 		for (area in areas(repo)) {
 			final kit: Kit = load(kitPath(repo, area));
-			final seen: Array<Seen> = observe(repo, engine, kit, true, threads);
+			final seen: Array<Seen> = observe(repo, engine, kit, true, threads, oneProcess);
 			final verdict: Verdict = judge(kit, seen, true);
 			report.areas++;
 			report.invocations += seen.length;
@@ -314,6 +333,28 @@ final class Probe {
 		final lines: Array<String> = text.split('\n').filter(l -> l != '');
 		if (lines.length < minLines) return 'too few lines';
 		return lines.exists(l -> !line.match(l)) ? 'a line off the shape' : 'every line fits';
+	}
+
+	/**
+	 * The invocations of `kit` whose one-process answer (`apq --batch`) differs from the answer of a process of their own — exit
+	 * status, either stream with the fixture path and the probe pid normalized, or a written file — each as a `DIFF` line and its
+	 * differences; empty when all agree. A difference is a process-scoped state one call leaked into the next.
+	 */
+	public static function processParity(shimTree: String, engine: String, kit: Kit, threads: Int): Array<String> {
+		final apart: Array<Outcome> = TempDir.with(work ->
+			normalized(Parity.side(shimTree, engine, kit.invocations, work, threads, false), work)
+		);
+		final together: Array<Outcome> = TempDir.with(work ->
+			normalized(Parity.side(shimTree, engine, kit.invocations, work, threads, true), work)
+		);
+		final lines: Array<String> = [];
+		for (i => invocation in kit.invocations) {
+			final differences: Array<String> = Parity.differences(apart[i], together[i]);
+			if (differences.length == 0) continue;
+			lines.push('DIFF #$i ${invocation.name}: ${invocation.argv.join(' ')}');
+			for (line in differences) lines.push('  $line');
+		}
+		return lines;
 	}
 
 	/** Each case's fixture as its invocation left it, compiled by haxe under each of its define sets; fills `seen[i].answer.compiles`. */
@@ -364,7 +405,7 @@ final class Probe {
 	 * the same, `commentsKept` when the output carries the file's comments as a multiset.
 	 */
 	private static function rerun(
-		shimTree: String, engine: String, kit: Kit, outcomes: Array<Outcome>, seen: Array<Seen>, threads: Int
+		shimTree: String, engine: String, kit: Kit, outcomes: Array<Outcome>, seen: Array<Seen>, threads: Int, oneProcess: Bool
 	): Void {
 		final rows: Array<Int> = [
 			for (i => probeCase in kit.cases) if (probeCase.fixpoint != null && outcomes[i].status == 0) i
@@ -384,7 +425,7 @@ final class Probe {
 			}
 		];
 		TempDir.with(work -> {
-			final second: Array<Outcome> = Parity.side(shimTree, engine, again, work, threads);
+			final second: Array<Outcome> = Parity.side(shimTree, engine, again, work, threads, oneProcess);
 			for (j => i in rows) {
 				final source: String = kit.invocations[i].files[kit.cases[i].fixpoint ?? ''] ?? '';
 				seen[i].answer.onePass = second[j].status == outcomes[i].status && second[j].out == outcomes[i].out;
@@ -430,6 +471,20 @@ final class Probe {
 		return JValueParser.parse(ExpectationWriter.write(answer, JsonFormat.instance.compactWriteOptions));
 	}
 
+	/** `outcomes` with both streams normalized against the fixture directory each ran in under `work`. */
+	private static function normalized(outcomes: Array<Outcome>, work: TempDir): Array<Outcome> {
+		return [
+			for (i => outcome in outcomes)
+				{
+					status: outcome.status,
+					out: normalize(outcome.out, work.file('$i')),
+					err: normalize(outcome.err, work.file('$i')),
+					failure: outcome.failure,
+					files: outcome.files
+				}
+		];
+	}
+
 }
 
 /** A kit: its invocations as `dev parity` runs them, and the case beside each. */
@@ -460,6 +515,9 @@ typedef Seen = {
 	var answer: Expectation;
 	var out: String;
 	var err: String;
+
+	/** Why the engine gave no answer, empty when it answered. */
+	var failure: String;
 }
 
 /** A run's report lines, the invocations that deviate, and the known-defect rows that moved. */

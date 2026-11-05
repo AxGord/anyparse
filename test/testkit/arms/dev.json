@@ -737,6 +737,21 @@
 			"find": "if (name != null && MEMBER_KINDS.contains(kind)) {",
 			"replace": "if (name != null) {",
 			"note": "a named row of a non-member kind (a type's header, a parameter) is read as a member, so a file whose change cannot be told member by member names members and the arms of the others are dropped"
+		},
+		{
+			"name": "M-PARITY-ONE-PROCESS-UNASKED",
+			"type": "dev.Parity",
+			"method": "oneProcessFor",
+			"force": "wanted",
+			"note": "one process is chosen whenever it is wanted, so an engine built before the batch entry fails every invocation of a probe or parity run instead of running each in its own process"
+		},
+		{
+			"name": "M-PROBE-FAILURE-DROPPED",
+			"type": "dev.Probe",
+			"method": "deviations",
+			"find": "if (lines.length > 0 && seen.failure != '') lines.unshift('failure: ${seen.failure}');",
+			"replace": "",
+			"note": "a deviating row no longer names why the engine gave no answer, so a failed batch share reads as empty streams"
 		}
 	]
 }

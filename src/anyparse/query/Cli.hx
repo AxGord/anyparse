@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.Severity;
 import anyparse.query.CanonicalEdit.CarriedEdit;
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.BatchRun;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliIo;
@@ -213,7 +214,8 @@ final class Cli {
 		// a large share of all parsing. A microtask
 		// runs under a non-verbose catcher, so the throw is a plain unwind. Same exit code, same
 		// raw stack for a crash that escapes `run`.
-		js.Node.queueMicrotask(() -> proc.exitCode = run(Sys.args(), true));
+		final args: Array<String> = Sys.args();
+		js.Node.queueMicrotask(() -> proc.exitCode = entry(args));
 		#elseif sys
 		Sys.exit(run(Sys.args(), true));
 		#else
@@ -255,6 +257,11 @@ final class Cli {
 			CliIo.stderr('apq ${args[0]}: ${exception.message}\n');
 			return EXIT_USAGE;
 		}
+	}
+
+	/** The process entry's dispatch: `apq --batch` runs the calls it names, any other argv is one command. */
+	public static function entry(args: Array<String>): Int {
+		return args[0] == BatchRun.FLAG ? BatchRun.main(args) : run(args, true);
 	}
 
 	/**

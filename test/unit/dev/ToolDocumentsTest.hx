@@ -208,12 +208,26 @@ final class ToolDocumentsTest extends Test {
 		TempDir.with(dir -> {
 			final file: String = dir.file('kit.json');
 			File.saveContent(file, '$top$argv,\n$old$close');
-			Probe.write(file, [{ answer: answer, out: '', err: '' }]);
+			Probe.write(file, [
+				{
+					answer: answer,
+					out: '',
+					err: '',
+					failure: ''
+				}
+			]);
 			Assert.equals(
 				'$top$argv,\n$fresh$close', File.getContent(file), 'the expectation is replaced where it stood, the rest byte for byte'
 			);
 			File.saveContent(file, '$top$argv$close');
-			Probe.write(file, [{ answer: answer, out: '', err: '' }]);
+			Probe.write(file, [
+				{
+					answer: answer,
+					out: '',
+					err: '',
+					failure: ''
+				}
+			]);
 			Assert.equals('$top$argv,\n$fresh$close', File.getContent(file), 'a row with none takes it last');
 		});
 	}

@@ -1,6 +1,13 @@
 package dev;
 
+import anyparse.check.oracle.HaxeRun;
 import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JsonFormat;
+import anyparse.query.cli.BatchAnswer;
+import anyparse.query.cli.BatchAnswersParser;
+import anyparse.query.cli.BatchCalls;
+import anyparse.query.cli.BatchCallsWriter;
+import anyparse.query.cli.BatchRun;
 import dev.SuiteFile;
 import devkit.Args;
 import devkit.Command;
@@ -15,17 +22,19 @@ import sys.io.File;
 using StringTools;
 
 /**
- * `dev parity <base-commit|engine> <tip-engine> [--suite <file>] [--out <dir>] [--threads <n>] [--verbose] [--repo <tree>]` — a
- * declared list of CLI invocations run on two engines, and only the invocations whose exit status, standard output, standard
- * error or written files differ printed, then one count line. Each invocation runs in a fresh copy of its fixture files at the
+ * `dev parity <base-commit|engine> <tip-engine> [--suite <file>] [--out <dir>] [--threads <n>] [--verbose] [--one-process]
+ * [--repo <tree>]` — a declared list of CLI invocations run on two engines, and only the invocations whose exit status,
+ * standard output, standard error or written files differ printed, then one
+ * count line. Each invocation runs in a fresh copy of its fixture files at the
  * same path on both sides, through the `bin/apq` / `bin/hxq` shim of the tree this tool sits in, so the engine is the only
- * thing that differs. A base given as a commit is built by `dev base-engine`. Exits 1 when an invocation differs.
+ * thing that differs. A base given as a commit is built by `dev base-engine`. `--one-process` runs each side's invocations in
+ * `--threads` engine processes (`apq --batch`) when its engine has that entry, else one process each. Exits 1 when an invocation differs.
  */
 @:nullSafety(Strict)
 final class Parity {
 
 	public static inline final USAGE: String =
-		'usage: dev parity <base-commit|engine> <tip-engine> [--suite <file>] [--out <dir>] [--threads <n>] [--verbose] [--repo <tree>]';
+		'usage: dev parity <base-commit|engine> <tip-engine> [--suite <file>] [--out <dir>] [--threads <n>] [--verbose] [--one-process] [--repo <tree>]';
 
 	/** The suite run when the caller names none, from the tree's root. */
 	public static inline final DEFAULT_SUITE: String = 'tools/parity/default-suite.json';
@@ -38,6 +47,9 @@ final class Parity {
 	/** How much of a differing line a report row quotes. */
 	private static inline final QUOTE_WIDTH: Int = 120;
 
+	/** The node flag the `bin/apq` shim runs the engine with, kept for a batch process so the two modes run alike. */
+	private static inline final NODE_FLAGS: String = '--max-semi-space-size=64';
+
 	/** The shims an invocation may name as its program: both run the engine `HXQ_BIN` pins. */
 	private static final SHIMS: Array<String> = ['apq', 'hxq'];
 
@@ -49,6 +61,7 @@ final class Parity {
 		final threadsGiven: Null<String> = args.option('--threads');
 		final threads: Null<Int> = threadsGiven == null ? DEFAULT_THREADS : Std.parseInt(threadsGiven);
 		final verbose: Bool = args.flag('--verbose');
+		final oneProcess: Bool = args.flag('--one-process');
 		final given: Array<String> = args.positionals(['<base-commit|engine>', '<tip-engine>']);
 		if (threads == null || threads < 1) throw new UsageError('--threads is a positive count, not $threadsGiven');
 		if (!isFile(given[1])) throw new UsageError('tip engine ${given[1]} is not a file');
@@ -60,7 +73,7 @@ final class Parity {
 		final invocations: Array<Invocation> = suite.commandHelp
 			? suite.invocations.concat(helpInvocations(repo, tip, suite.files))
 			: suite.invocations;
-		final runs: Array<Comparison> = compare(repo, base, tip, invocations, threads);
+		final runs: Array<Comparison> = compare(repo, base, tip, invocations, threads, oneProcess);
 		var differing: Int = 0;
 		for (i => run in runs) {
 			if (verbose)
@@ -79,11 +92,11 @@ final class Parity {
 
 	/** Every invocation run on the engine `base` and on `tip` through the shims of `shimTree`, at most `threads` at once. */
 	public static function compare(
-		shimTree: String, base: String, tip: String, invocations: Array<Invocation>, threads: Int
+		shimTree: String, base: String, tip: String, invocations: Array<Invocation>, threads: Int, oneProcess: Bool
 	): Array<Comparison> {
 		return TempDir.with(work -> {
-			final before: Array<Outcome> = side(shimTree, base, invocations, work, threads);
-			final after: Array<Outcome> = side(shimTree, tip, invocations, work, threads);
+			final before: Array<Outcome> = side(shimTree, base, invocations, work, threads, oneProcessFor(base, oneProcess));
+			final after: Array<Outcome> = side(shimTree, tip, invocations, work, threads, oneProcessFor(tip, oneProcess));
 			[
 				for (i => invocation in invocations)
 					{
@@ -168,19 +181,27 @@ final class Parity {
 		return { files: files, invocations: invocations, commandHelp: parsed.commandHelp == true };
 	}
 
-	/** Every invocation run on `engine`, each in the directory `<work>/<index>` holding a fresh copy of its files. */
+	/**
+	 * Every invocation of `invocations` run by `engine` from a fresh copy of its fixture in `work`, `threads` at a time: each in a
+	 * process of its own through the tree's shim, or with `oneProcess` all in `threads` engine processes (`apq --batch`), which
+	 * answer as the separate processes would.
+	 */
 	public static function side(
-		shimTree: String, engine: String, invocations: Array<Invocation>, work: TempDir, threads: Int
+		shimTree: String, engine: String, invocations: Array<Invocation>, work: TempDir, threads: Int, oneProcess: Bool
 	): Array<Outcome> {
 		final dirs: Array<String> = [for (i => invocation in invocations) fixture(work.file('$i'), invocation.files)];
-		final commands: Array<Command> = [
-			for (i => invocation in invocations) {
-				final command: Command = shim(shimTree, engine, invocation.argv).at(dirs[i]).timeout(TIMEOUT_MS);
-				final stdin: Null<String> = invocation.stdin;
-				stdin == null ? command : command.input(stdin);
-			}
-		];
-		final results: Array<Result> = Pool.of(threads).run(commands);
+		final results: Array<Result> = if (oneProcess) {
+			batched(engine, invocations, dirs, work, threads);
+		} else {
+			final commands: Array<Command> = [
+				for (i => invocation in invocations) {
+					final command: Command = shim(shimTree, engine, invocation.argv).at(dirs[i]).timeout(TIMEOUT_MS);
+					final stdin: Null<String> = invocation.stdin;
+					stdin == null ? command : command.input(stdin);
+				}
+			];
+			Pool.of(threads).run(commands);
+		};
 		return [
 			for (i => result in results)
 				{
@@ -203,6 +224,25 @@ final class Parity {
 			File.saveContent(path, text);
 		}
 		return dir;
+	}
+
+	/** The engine argv a shim invocation `argv` runs — what `bin/hxq` and `bin/apq` pass on: `hxq` names the Haxe default grammar. */
+	public static function engineArgv(argv: Array<String>): Array<String> {
+		final rest: Array<String> = argv.slice(1);
+		return argv[0] == 'hxq' && rest.length > 0 ? [rest[0], '--lang-default', 'haxe'].concat(rest.slice(1)) : rest;
+	}
+
+	/**
+	 * Whether `engine` runs its invocations in one process when that is `wanted`: only an engine that has the `apq --batch`
+	 * entry, which a bare `--batch` tells apart (its usage line, where an older engine answers `unknown subcommand`).
+	 */
+	public static function oneProcessFor(engine: String, wanted: Bool): Bool {
+		if (!wanted) return false;
+		final probe: Result = Command.of(['node', NODE_FLAGS, engine, BatchRun.FLAG])
+			.at(Path.directory(engine))
+			.timeout(TIMEOUT_MS)
+			.run();
+		return probe.err.startsWith('usage: apq ${BatchRun.FLAG} ');
 	}
 
 	/** `apq <command> --help` for every command the engine `engine` lists, each over `files`. */
@@ -267,6 +307,71 @@ final class Parity {
 
 	private static function clip(text: String): String {
 		return text.length <= QUOTE_WIDTH ? text : '${text.substr(0, QUOTE_WIDTH - 1)}…';
+	}
+
+	/**
+	 * `invocations` split into at most `threads` runs of `apq --batch`, each over a contiguous share, answered per invocation in
+	 * order. A share whose engine process gave no answer fails each of its invocations with that process's first error.
+	 */
+	private static function batched(
+		engine: String, invocations: Array<Invocation>, dirs: Array<String>, work: TempDir, threads: Int
+	): Array<Result> {
+		final size: Int = Math.ceil(invocations.length / threads);
+		final shares: Array<Array<Int>> = [];
+		var from: Int = 0;
+		while (from < invocations.length) {
+			shares.push([for (i in from ... Std.int(Math.min(from + size, invocations.length))) i]);
+			from += size;
+		}
+		final commands: Array<Command> = [
+			for (s => share in shares) {
+				final calls: BatchCalls = {
+					calls: [
+						for (i in share) { argv: engineArgv(invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin }
+					]
+				};
+				final callsFile: String = work.file('batch-$s.json');
+				File.saveContent(callsFile, BatchCallsWriter.write(calls, JsonFormat.instance.compactWriteOptions));
+				Command.of([
+					'node',
+					NODE_FLAGS,
+					engine,
+					BatchRun.FLAG,
+					callsFile,
+					work.file('batch-$s-answers.json')
+				])
+					.env('HXQ_BIN', engine)
+					.at(work.file(''))
+					.timeout(TIMEOUT_MS * share.length);
+			}
+		];
+		final results: Array<Result> = [];
+		for (s => run in Pool.of(threads).run(commands)) {
+			final answersFile: String = work.file('batch-$s-answers.json');
+			final answers: Array<BatchAnswer> = run.ok && FileSystem.exists(answersFile)
+				? BatchAnswersParser.parse(File.getContent(answersFile)).answers
+				: [];
+			for (k => i in shares[s]) {
+				final failure: String = 'apq ${BatchRun.FLAG} gave no answer: ${run.firstError()}';
+				final answer: HaxeRun = k < answers.length
+					? {
+						status: answers[k].status,
+						out: answers[k].out,
+						err: answers[k].err,
+						failure: '',
+						overflowed: false
+					}
+					: {
+						status: null,
+						out: '',
+						err: '',
+						failure: failure,
+						overflowed: false
+					};
+				results.push(new Result('batch #$i', answer));
+			}
+		}
+		return results;
 	}
 
 }

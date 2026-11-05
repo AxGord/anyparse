@@ -52,6 +52,7 @@ final class HaxeFormatConfigDiagnostics {
 	 * like `FormatConfigDiscovery.CACHE`, which is what feeds it, and
 	 * carries no parse state — only "this path has been examined".
 	 */
+	@:allow(anyparse.query.FormatConfigDiscovery)
 	private static final reported: Array<String> = [];
 
 	/**

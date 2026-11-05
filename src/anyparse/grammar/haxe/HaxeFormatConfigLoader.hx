@@ -91,6 +91,7 @@ import haxe.Exception;
 final class HaxeFormatConfigLoader {
 
 	/** `indentation.character` values already reported — one line per value per process. */
+	@:allow(anyparse.query.FormatConfigDiscovery)
 	private static final warnedIndentCharacters: Array<String> = [];
 
 	/**

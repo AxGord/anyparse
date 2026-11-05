@@ -34,6 +34,37 @@ final class ProbeTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-PROBE-FAILURE-DROPPED')
+	public function testAnInvocationWithNoAnswerNamesItsCause(): Void {
+		final recorded: Expectation = answer(0, 'a', []);
+		final failure: String = 'apq --batch gave no answer: boom';
+		Assert.same([], Probe.deviations(recorded, seen(recorded, '', failure), false), 'a cause alone deviates nothing');
+		final kit: Kit = {
+			invocations: [
+				{
+					name: 'lost',
+					argv: ['apq', 'echo'],
+					stdin: null,
+					files: []
+				}
+			],
+			cases: [
+				{
+					compile: null,
+					expect: recorded,
+					knownDefect: null,
+					fixpoint: null
+				}
+			]
+		};
+		Assert.same([
+			'DEVIATES #0 lost: apq echo',
+			'  failure: $failure',
+			'  exit: 0 → 1'
+		], Probe.judge(kit, [seen(answer(1, 'a', []), '', failure)], false).lines);
+	}
+
+	@:pin('control')
 	@:killer('M-PROBE-SAME-RUN-BLIND')
 	public function testARunSpecComparesWhatTheFixedAndTheOriginalProgramPrint(): Void {
 		final tree: Null<String> = Repo.ofScript();
@@ -56,7 +87,7 @@ final class ProbeTest extends Test {
 				"const fs = require('fs');",
 				"if (process.argv[2] === 'change') fs.writeFileSync('Main.hx', fs.readFileSync('Main.hx', 'utf8').replace('one', 'two'));"
 			].join('\n'));
-			final seen: Array<Seen> = Probe.observe(tree, Path.normalize(engineFile), Probe.load(kitFile), true, 2);
+			final seen: Array<Seen> = Probe.observe(tree, Path.normalize(engineFile), Probe.load(kitFile), true, 2, false);
 			Assert.same([true], seen[0].answer.compiles);
 			Assert.same([true], seen[0].answer.sameRun);
 			Assert.same([true], seen[1].answer.compiles, 'the changed program still compiles');
@@ -100,13 +131,13 @@ final class ProbeTest extends Test {
 			);
 			final a: String = engine(dir.file('a.js'), 'A');
 			final b: String = engine(dir.file('b.js'), 'B');
-			Probe.write(kitFile, Probe.observe(tree, a, Probe.load(kitFile), true, 2));
+			Probe.write(kitFile, Probe.observe(tree, a, Probe.load(kitFile), true, 2, false));
 			final kit: Kit = Probe.load(kitFile);
 			Assert.same([true, false], kit.cases[0].expect?.compiles, 'haxe ran once per define set on the written fixture');
-			final again: Array<Seen> = Probe.observe(tree, a, kit, true, 2);
+			final again: Array<Seen> = Probe.observe(tree, a, kit, true, 2, false);
 			Assert.same([[], [], []], [for (i => row in again) Probe.deviations(kit.cases[i].expect, row, true)]);
 			Assert.isTrue(kit.cases[2].expect?.onePass == true && kit.cases[2].expect?.commentsKept == true, 'A formats to a fixed point');
-			final other: Array<Seen> = Probe.observe(tree, b, kit, true, 2);
+			final other: Array<Seen> = Probe.observe(tree, b, kit, true, 2, false);
 			Assert.equals(1, Probe.deviations(kit.cases[0].expect, other[0], true).length, 'only what B writes differs');
 			Assert.same([], Probe.deviations(kit.cases[1].expect, other[1], true));
 			Assert.same([
@@ -244,6 +275,24 @@ final class ProbeTest extends Test {
 		});
 	}
 
+	public function testOneProcessAnswersEachInvocationAsItsOwnProcessDoes(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final kitFile: String = dir.file('kit.json');
+			File.saveContent(
+				kitFile,
+				'{"files":{"A.hx":"class A {\\n  var x:Int;\\n}\\n","hxformat.json":"{\\"noSuchKnobAtAll\\": 1}"},"invocations":['
+				+ '{"name":"formats","argv":["hxq","fmt","A.hx"]},{"name":"writes","argv":["hxq","fmt","--write","A.hx"]},'
+				+ '{"name":"probes","argv":["hxq","probe","-"],"stdin":"var x = 1;"},{"name":"unknown","argv":["apq","no-such-command"]}]}'
+			);
+			Assert.same([], Probe.processParity(tree, Path.join([tree, 'bin', 'apq.js']), Probe.load(kitFile), 2));
+		});
+	}
+
 	/** A stand-in engine at `file`: echoes its arguments, standard input and run directory, and writes `mark` on `write`. */
 	private static function engine(file: String, mark: String): String {
 		File.saveContent(file, [
@@ -271,8 +320,13 @@ final class ProbeTest extends Test {
 		};
 	}
 
-	private static function seen(answer: Expectation, out: String): Seen {
-		return { answer: answer, out: out, err: '' };
+	private static function seen(answer: Expectation, out: String, failure: String = ''): Seen {
+		return {
+			answer: answer,
+			out: out,
+			err: '',
+			failure: failure
+		};
 	}
 
 }

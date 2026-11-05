@@ -64,12 +64,75 @@ final class ParityTest extends Test {
 					stdin: null,
 					files: files
 				}
-			], 2);
+			], 2, false);
 			Assert.same([], runs[0].differences, 'each side appends to a fresh log');
 			Assert.equals('echo x in\n', runs[0].tip.out);
 			Assert.equals('start\necho x in\n', runs[0].tip.files['log']);
 			Assert.equals('write --lang-default haxe \n', runs[1].base.out, 'the hxq shim adds its language');
 			Assert.same(['files differ: out.txt'], runs[1].differences);
+		});
+	}
+
+	public function testTheEngineArgvIsWhatTheShimPassesOn(): Void {
+		Assert.same(['fmt', '--lang-default', 'haxe', 'A.hx'], Parity.engineArgv(['hxq', 'fmt', 'A.hx']));
+		Assert.same(['get', 'a.json', 'x'], Parity.engineArgv(['apq', 'get', 'a.json', 'x']));
+		Assert.same([], Parity.engineArgv(['hxq']));
+	}
+
+	public function testAnEngineWithNoBatchEntryFailsEveryInvocationOfItsShare(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final stand: String = engine(dir.file('a.js'), 'A');
+			final invocations: Array<Invocation> = [
+				for (name in ['one', 'two'])
+					{
+						name: name,
+						argv: ['apq', 'echo', name],
+						stdin: null,
+						files: []
+					}
+			];
+			final outcomes: Array<Outcome> = TempDir.with(work -> Parity.side(tree, stand, invocations, work, 1, true));
+			Assert.same([null, null], [for (outcome in outcomes) outcome.status]);
+			for (outcome in outcomes) Assert.stringContains('apq --batch gave no answer', outcome.failure);
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-PARITY-ONE-PROCESS-UNASKED')
+	public function testOneProcessIsChosenOnlyForAnEngineThatAnswersTheBatchEntry(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final base: String = engine(dir.file('base.js'), 'A');
+			final tip: String = engine(dir.file('tip.js'), 'B');
+			final real: String = Path.join([tree, 'bin', 'apq.js']);
+			Assert.isFalse(Parity.oneProcessFor(base, true), 'a stand-in engine has no batch entry');
+			Assert.isTrue(Parity.oneProcessFor(real, true), 'this tree\'s engine has it');
+			Assert.isFalse(Parity.oneProcessFor(real, false), 'per process when one process is not wanted');
+			final invocations: Array<Invocation> = [
+				for (name in ['one', 'two', 'three'])
+					{
+						name: name,
+						argv: ['apq', 'echo', name],
+						stdin: 'in',
+						files: ['log' => '']
+					}
+			];
+			final apart: Array<Comparison> = Parity.compare(tree, base, tip, invocations, 2, false);
+			final wanted: Array<Comparison> = Parity.compare(tree, base, tip, invocations, 2, true);
+			for (i => run in wanted) {
+				Assert.equals(0, run.tip.status, 'answered, not failed: ${run.tip.failure}');
+				Assert.equals(apart[i].tip.out, run.tip.out);
+				Assert.same(apart[i].differences, run.differences);
+			}
 		});
 	}
 

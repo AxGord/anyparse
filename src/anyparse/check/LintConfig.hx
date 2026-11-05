@@ -140,6 +140,7 @@ final class LintConfig {
 	 * `scope-disagreement:<setting>` or `scope-gap:<label>` key for a warning about the SCOPE rather than
 	 * about one document. Each reports at most once per process, whatever it reported.
 	 */
+	@:allow(anyparse.query.cli.BatchRun)
 	private static final warnedConfigs: Array<String> = [];
 
 	private final _rules: Map<String, RuleConfig>;

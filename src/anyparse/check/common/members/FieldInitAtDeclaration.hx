@@ -305,6 +305,7 @@ final class FieldInitAtDeclaration extends RuleBase {
 	 * field per process. `lint --fix` re-runs the rule until it reaches a fixpoint, so
 	 * an undeduplicated line would repeat once per pass.
 	 */
+	@:allow(anyparse.query.cli.BatchRun)
 	private static final skipsReported: Array<String> = [];
 
 	public function new() {

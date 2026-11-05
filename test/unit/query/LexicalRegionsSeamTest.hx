@@ -172,6 +172,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/query/PackageDocuments.hx',
 			'src/anyparse/query/ParseDiskCache.hx',
 			'src/anyparse/query/TypePathRegistries.hx',
+			'src/anyparse/query/cli/BatchRun.hx',
 			'src/anyparse/query/cli/CliArgs.hx',
 			'src/anyparse/query/cli/DataDelta.hx',
 			'src/anyparse/query/cli/DataPath.hx',

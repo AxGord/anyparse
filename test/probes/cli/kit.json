@@ -7930,6 +7930,19 @@
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "apq --batch",
+			"argv": [
+				"apq",
+				"--batch"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "b73d6c16783c83b6",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }
