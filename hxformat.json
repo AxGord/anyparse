@@ -5,6 +5,9 @@
 		"trailingWhitespace": false,
 		"alignInlineSwitchCaseBody": true
 	},
+	"comments": {
+		"blockCommentBodyIndent": "verbatim"
+	},
 	"emptyLines": {
 		"maxAnywhereInFile": 2,
 		"afterLeftCurly": "keep",
@@ -24,6 +27,10 @@
 		"externClassEmptyLines": {
 			"beginType": 1,
 			"endType": 1
+		},
+		"macroClassEmptyLines": {
+			"beginType": 0,
+			"endType": 0
 		}
 	},
 	"wrapping": {
@@ -39,6 +46,18 @@
 					"conditions": [{"cond": "itemCount <= n", "value": 1}],
 					"type": "noWrap"
 				}
+			]
+		},
+		"methodChain": {
+			"defaultWrap": "noWrap",
+			"itemsAfterCloseParenOnly": true,
+			"rules": [
+				{"conditions": [{"cond": "lineLength >= n", "value": 160}], "type": "onePerLine"},
+				{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},
+				{"conditions": [{"cond": "totalItemLength <= n", "value": 80}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},
+				{"conditions": [{"cond": "anyItemLength >= n", "value": 30}, {"cond": "itemCount >= n", "value": 4}], "type": "onePerLine"},
+				{"conditions": [{"cond": "itemCount >= n", "value": 7}], "type": "onePerLine"},
+				{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}
 			]
 		},
 		"callParameter": {
@@ -75,6 +94,7 @@
 	},
 	"whitespace": {
 		"addLineCommentSpace": true,
+		"colonPolicy": "after",
 		"typeHintColonPolicy": "after",
 		"typeCheckColonPolicy": "after",
 		"functionTypeHaxe3Policy": "around",
@@ -124,6 +144,8 @@
 		"forBody": "fitLine",
 		"whileBody": "fitLine",
 		"functionBody": "fitLine",
+		"returnBody": "fitLine",
+		"returnBodySingleLine": "fitLine",
 		"expressionIf": "next",
 		"comprehensionFor": "keep"
 	}

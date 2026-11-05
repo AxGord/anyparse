@@ -44,6 +44,34 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 		Assert.equals(0, issues.wrapValues.length);
 	}
 
+	public function testForkOnlyColonPolicyAndBlockCommentBodyIndentAreAccepted(): Void {
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
+			'{"whitespace": {"colonPolicy": "after", "typeHintColonPolicy": "after"}, "comments": {"blockCommentBodyIndent": "reindent"}}'
+		);
+		Assert.equals(0, issues.keys.length, 'reported: ${issues.keys.join(', ')}');
+	}
+
+	public function testColonPolicyDifferingFromTypeHintColonPolicyIsReported(): Void {
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
+			'{"whitespace": {"colonPolicy": "none", "typeHintColonPolicy": "after"}}'
+		);
+		Assert.equals(1, issues.keys.length);
+		Assert.equals('whitespace.colonPolicy "none" (hxq spaces it by typeHintColonPolicy "after")', issues.keys[0]);
+	}
+
+	public function testColonPolicyEqualToTypeHintColonPolicyIsSilent(): Void {
+		Assert.equals(
+			0, HaxeFormatConfigDiagnostics.diagnose('{"whitespace": {"colonPolicy": "after", "typeHintColonPolicy": "after"}}').keys.length
+		);
+		Assert.equals(0, HaxeFormatConfigDiagnostics.diagnose('{"whitespace": {"colonPolicy": "none"}}').keys.length);
+	}
+
+	public function testColonPolicyAgainstAbsentTypeHintColonPolicyUsesItsDefault(): Void {
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose('{"whitespace": {"colonPolicy": "after"}}');
+		Assert.equals(1, issues.keys.length);
+		Assert.equals('whitespace.colonPolicy "after" (hxq spaces it by typeHintColonPolicy "none")', issues.keys[0]);
+	}
+
 	public function testUnknownTopLevelSectionIsReported(): Void {
 		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose('{"bogusSection": {"a": 1}}');
 		Assert.equals(1, issues.keys.length);

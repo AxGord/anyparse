@@ -2,7 +2,8 @@ package anyparse.grammar.haxe.format;
 
 /**
  * `whitespace` section of a haxe-formatter `hxformat.json` config. Only keys whose runtime knob exists on
- * `HxModuleWriteOptions` are modelled; missing keys (`catchPolicy`, `ternaryPolicy`, …) are silently dropped
+ * `HxModuleWriteOptions` are modelled (`colonPolicy` is the exception: accepted with no knob, see its field doc);
+ * missing keys (`catchPolicy`, `ternaryPolicy`, …) are silently dropped
  * by the ByName struct parser's `UnknownPolicy.Skip` and land with their writer knob. Each policy key feeds
  * the knob of the same name (`objectFieldColonPolicy` → `objectFieldColon`, `typeHintColonPolicy` →
  * `typeHintColon`, `typeCheckColonPolicy` → `typeCheckColon`, `typeParamOpenPolicy` / `typeParamClosePolicy`,
@@ -39,6 +40,14 @@ package anyparse.grammar.haxe.format;
 	@:optional var objectFieldColonPolicy: HxFormatWhitespacePolicy;
 
 	@:optional var typeHintColonPolicy: HxFormatWhitespacePolicy;
+
+	/**
+	 * Accepted so a config shared with haxe-formatter loads without an unknown-key report; hxq reads no knob from it.
+	 * The fork uses it as the fallback for every colon its token-tree classifier leaves unclassified (a `catch`
+	 * parameter is the known case), while hxq spaces every type-hint colon, that one included, by `typeHintColonPolicy`.
+	 * `HaxeFormatConfigDiagnostics` reports a config whose two differ; state both to the same value for one output.
+	 */
+	@:optional var colonPolicy: HxFormatWhitespacePolicy;
 
 	@:optional var typeCheckColonPolicy: HxFormatWhitespacePolicy;
 

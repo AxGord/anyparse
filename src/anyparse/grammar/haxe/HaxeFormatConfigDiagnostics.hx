@@ -3,6 +3,8 @@ package anyparse.grammar.haxe;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
+import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
+import anyparse.grammar.haxe.format.HxFormatWhitespaceSection;
 import anyparse.grammar.haxe.format.HxFormatWrapCondition;
 import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
@@ -73,10 +75,10 @@ final class HaxeFormatConfigDiagnostics {
 		final wrapValues: Array<String> = [];
 		final wrapping: Null<HxFormatWrappingSection> = cfg.wrapping;
 		if (wrapping != null) collectWrappingIssues(wrapping, wrapValues);
-		return {
-			keys: [for (field in ctx.unknownFields) unknownKeyIssue(field, index)],
-			wrapValues: wrapValues
-		};
+		final keys: Array<String> = [for (field in ctx.unknownFields) unknownKeyIssue(field, index)];
+		final whitespace: Null<HxFormatWhitespaceSection> = cfg.whitespace;
+		if (whitespace != null) collectColonIssue(whitespace, keys);
+		return { keys: keys, wrapValues: wrapValues };
 	}
 
 	/**
@@ -132,6 +134,17 @@ final class HaxeFormatConfigDiagnostics {
 
 	private static inline function add(into: Array<String>, issue: String): Void {
 		if (!into.contains(issue)) into.push(issue);
+	}
+
+	/**
+	 * `whitespace.colonPolicy` loads but no knob reads it: hxq spaces every type-hint colon by `typeHintColonPolicy`
+	 * (default `none`). A stated `colonPolicy` that differs from that is a setting the fork acts on and hxq does not.
+	 */
+	private static function collectColonIssue(section: HxFormatWhitespaceSection, into: Array<String>): Void {
+		final stated: Null<HxFormatWhitespacePolicy> = section.colonPolicy;
+		if (stated == null) return;
+		final used: HxFormatWhitespacePolicy = section.typeHintColonPolicy ?? HxFormatWhitespacePolicy.None;
+		if (stated != used) add(into, 'whitespace.colonPolicy "$stated" (hxq spaces it by typeHintColonPolicy "$used")');
 	}
 
 	private static function unknownKeyIssue(field: UnknownField, index: LineIndex): String {

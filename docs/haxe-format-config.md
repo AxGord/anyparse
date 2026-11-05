@@ -582,14 +582,15 @@ bracket branch answers the fit question like any other value (only a CURLY previ
 the soft pre-`else` seam, for the `} else` glue it owns), so `if (a) [] else [2]` stays on one line
 when it fits whichever way it was typed (`unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest`).
 
-## `comments.*` — anyparse-only keys
+## `comments.*`
 
-The fork has no `comments` section; both keys are additive.
+The fork has a `comments` section holding only `blockCommentBodyIndent`, which hxq accepts and does not read. `blockCommentStyle` and `trailingCommentOverflow` are anyparse-only and additive.
 
 | key | type | default | effect |
 |---|---|---|---|
 | `blockCommentStyle` | `"verbatim"` / `"javadoc"` / `"javadocNoStars"` | `"verbatim"` | reshapes MULTI-LINE `/**` docs (`CommentStyle`); a doc with one content line collapses to `/** text */` when it fits |
 | `trailingCommentOverflow` | `"keep"` / `"above"` | `"keep"` | `"above"` (FU12) moves a same-line `//` comment that ALONE carries its line past `wrapping.maxLineLength` onto its own line above the statement or member it trails, at that element's indent, and lays the code out as if the comment were not there. Only in a list that opts in (`@:fmt(relocateTrailingComments)`: a statement block, a type's member list, an object literal's fields, a call's or a `new`'s arguments once a comment has put them one per line, the operands of a `||` / `&&` / `+` / `-` / `??` chain), only for an element that starts its own line, only when the code alone renders as ONE line that fits, never for a directive (`noqa`, `CHECKSTYLE:`, `@formatter:`, `#region` — `CommentDirective`), a block comment, or an element that already has a leading comment. In a chain the comment after an operator (`b || // c`) moves above the operand it trails (`// c`, then `b ||`) when that operand opens its own line after an operator; never above the head operand, and at `beforeLast` not above the operand after one that moved (that gap then breaks before its operator). A comment in a case body, and a statement's trailing comment on the last line of a multi-line statement, stay. |
+| `blockCommentBodyIndent` | `"reindent"` / `"verbatim"` | no effect | accepted so one `hxformat.json` serves hxq and the fork without an unknown-key report. The fork's `"reindent"` shifts the body of a non-star `/* */` comment by one indent; hxq always keeps the body, so `"verbatim"` is the value that gives both tools one output |
 
 The fork's answer to an overflowing trailing comment is the other one: it counts the comment into the line
 (`TokenList.calcLineLength`) and wraps the CODE to make room, so `x = f(a, b); // note` becomes a broken call
@@ -597,6 +598,10 @@ with the comment on its `)` line. `"above"` is deliberately not that: the code i
 comment's width should not decide its layout. The default `"keep"` keeps hxq where it was: the comment rides the element's measured body where
 there is one (`foldTrailingIntoBodyGroup`), so some code wraps for it (a glued `if` body drops to its own line,
 some calls break) and the rest stays on one over-width line.
+
+## `whitespace.colonPolicy` — accepted, not read
+
+The fork's `MarkWhitespace.markColon` uses `colonPolicy` as the fallback for every colon its token-tree classifier leaves unclassified (a `catch` parameter is the known case); hxq spaces every type-hint colon, that one included, by `typeHintColonPolicy` (default `none`). The key loads and changes nothing in hxq. `HaxeFormatConfigDiagnostics` reports a config whose `colonPolicy` differs from `typeHintColonPolicy` (`whitespace.colonPolicy "none" (hxq spaces it by typeHintColonPolicy "after")`); state both with one value to get one output from both tools.
 
 ## Where to look when a key still does nothing
 

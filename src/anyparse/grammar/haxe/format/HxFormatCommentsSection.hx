@@ -3,8 +3,9 @@ package anyparse.grammar.haxe.format;
 /**
  * `comments` section of a haxe-formatter `hxformat.json` config.
  *
- * Anyparse-only: the fork has no `comments` block, so the key is an
- * additive extension rather than a modelled subset. It exists because
+ * `blockCommentStyle` and `trailingCommentOverflow` are anyparse-only: the fork has no such keys, so they are
+ * additive extensions rather than a modelled subset. `blockCommentBodyIndent` is the fork's own key, accepted
+ * but not read. `blockCommentStyle` exists because
  * `WriteOptions.commentStyle` — the block-comment canonicalization knob
  * `BlockCommentNormalizer` reads — had no config surface at all: the
  * enum shipped with the engine and only a hand-built `WriteOptions`
@@ -32,6 +33,13 @@ package anyparse.grammar.haxe.format;
 @:peg typedef HxFormatCommentsSection = {
 
 	@:optional var blockCommentStyle: String;
+
+	/**
+	 * Accepted so a config shared with haxe-formatter loads without an unknown-key report; hxq reads no knob from it.
+	 * The fork's `"reindent"` (its default) shifts the body of a non-star `/* *\/` comment by one indent, `"verbatim"`
+	 * keeps it; hxq always keeps the body, so `"verbatim"` is the value that gives one output from both tools.
+	 */
+	@:optional var blockCommentBodyIndent: String;
 
 	/**
 	 * FU12: `"above"` moves a same-line `//` comment that alone carries its line past `wrapping.maxLineLength`
