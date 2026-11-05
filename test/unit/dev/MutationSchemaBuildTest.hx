@@ -17,6 +17,12 @@ final class MutationSchemaBuildTest extends Test {
 		+ '3\tok\tsrc/a/C.hx\t5\t30\t40\tCHelper\n'
 		+ '4\tskip\tsrc/a/D.hx\tnot composed\n';
 
+	@:pin('control')
+	@:killer('M-SCHEMA-BUILD-EMBEDDED-ROOT-KEPT')
+	public function testAnEmbeddedModuleOfToolCodeIsNamedWithoutItsClassPath(): Void {
+		Assert.same(['--macro', 'dev.E.__mutOn(0)'], MutationSchemaBuild.embeddedMacros('5\tok\ttools/src/dev/E.hx\t5\t30\t40\tE\n', [5]));
+	}
+
 	public function testAnErrorInACopyOrOnItsDispatchNamesThatArm(): Void {
 		Assert.same([2], MutationSchemaBuild.culprits(PLACEMENTS, 'src/a/B.hx:65: characters 1-2 : Unknown identifier : x\n'));
 		Assert.same([1], MutationSchemaBuild.culprits(PLACEMENTS, './src/a/B.hx:10: characters 1-2 : Type not found\n'));

@@ -29,6 +29,28 @@ final class MutationArmTest extends Test {
 		+ '{"name": "M-FORCE", "type": "a.C", "method": "k", "force": "true"}'
 		+ ']}';
 
+	/** A tool's own code rides the composed build: the suite build compiles `tools/src` beside `src`. */
+	@:pin('control')
+	@:killer('M-ARM-COMPOSABLE-TOOLS-REFUSED')
+	public function testAToolFileMayRideTheComposedBuild(): Void {
+		Assert.isTrue(MutationArm.composable('src/a/B.hx', []));
+		Assert.isTrue(MutationArm.composable('tools/src/dev/Gate.hx', []));
+		Assert.isFalse(MutationArm.composable('test/unit/dev/GateTest.hx', []), 'the suite registers what it finds in test/');
+	}
+
+	@:pin('control')
+	@:killer('M-ARM-COMPOSABLE-MACRO-ALLOWED')
+	public function testCompileTimeCodeIsBuiltPerArm(): Void {
+		Assert.isFalse(MutationArm.composable('src/anyparse/macro/Build.hx', []));
+	}
+
+	@:pin('control')
+	@:killer('M-ARM-COMPOSABLE-BUILT-FILE-ALLOWED')
+	public function testAFileABuildMacroReadsIsBuiltPerArm(): Void {
+		Assert.isFalse(MutationArm.composable('tools/src/dev/GateRecordParser.hx', ['tools/src/dev/GateRecordParser.hx']));
+		Assert.isTrue(MutationArm.composable('tools/src/dev/Gate.hx', ['tools/src/dev/GateRecordParser.hx']));
+	}
+
 	public function testEveryArmIsReadInRegistryOrder(): Void {
 		Assert.same(['M-ONE', 'M-PAIRS', 'M-CUT', 'M-ODD', 'M-FORCE'], MutationArm.armNames(REGISTRY));
 	}

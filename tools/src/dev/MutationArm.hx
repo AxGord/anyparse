@@ -267,6 +267,17 @@ final class MutationArm {
 		return dealt.filter(b -> b.length > 0);
 	}
 
+	/**
+	 * Whether a composed build may stand for an arm cut in `file`: library or tool code (`src/`, `tools/src/`) that is not
+	 * compile-time code (`anyparse.macro`) and not one of the `built` files a `@:build` macro reads. Both roots are
+	 * compiled into the one suite build the copies ride in.
+	 */
+	public static function composable(file: String, built: Array<String>): Bool {
+		return (file.startsWith('src/') || file.startsWith('tools/src/'))
+			&& !file.startsWith('src/anyparse/macro/')
+			&& !built.contains(file);
+	}
+
 	/** Render every arm of `job`, write the manifest, and run it through `dev mutation-check`; answers the exit status. */
 	private static function run(job: ArmJob): Int {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
@@ -414,8 +425,7 @@ final class MutationArm {
 	}
 
 	/**
-	 * Plan the arms of `rendered` a composed build may stand for — under `src/`, outside `anyparse.macro` (compile-time
-	 * code) and outside every file a `@:build` macro reads — and start that build in the background
+	 * Plan the arms of `rendered` a composed build may stand for (`composable`) and start that build in the background
 	 * (`MutationSchemaBuild`). Null when no arm qualifies.
 	 */
 	private static function schema(
@@ -423,16 +433,16 @@ final class MutationArm {
 	): Null<SchemaRun> {
 		final dir: String = Path.join([workroot, 'schema']);
 		FileSystem.createDirectory(dir);
-		final meta: Result = cmd('sh ${Path.join([job.repo, 'bin/hxq'])} meta @:build src --flat --limit 100000').at(gen).run();
+		final meta: Result = cmd('sh ${Path.join([job.repo, 'bin/hxq'])} meta @:build src tools/src --flat --limit 100000').at(gen).run();
 		final built: Array<String> = [];
-		final file: EReg = ~/^(src\/[^:]*\.hx):/;
+		final file: EReg = ~/^((?:src|tools\/src)\/[^:]*\.hx):/;
 		for (line in meta.out.split('\n')) if (file.match(line) && !built.contains(file.matched(1))) built.push(file.matched(1));
 		final plan: Array<String> = [];
 		final names: Array<String> = [];
 		final candidates: Array<String> = [];
 		for (name in rendered) {
 			final t: Null<ArmTarget> = targets[name];
-			if (t == null || !t.file.startsWith('src/') || t.file.startsWith('src/anyparse/macro/') || built.contains(t.file)) continue;
+			if (t == null || !composable(t.file, built)) continue;
 			final id: Int = plan.length + 1;
 			plan.push(['$id', t.file, t.selector, Path.join([workroot, '$name.new'])].join('\t'));
 			names.push('$id $name');

@@ -791,6 +791,38 @@
 			"find": "if (record.node != facts.node) return",
 			"replace": "if (false) return",
 			"note": "a gate record stands for a land under another node, or for an older record that names none, so a node upgrade between the gate and the land takes rows measured by the old runtime"
+		},
+		{
+			"name": "M-ARM-COMPOSABLE-TOOLS-REFUSED",
+			"type": "dev.MutationArm",
+			"method": "composable",
+			"find": "(file.startsWith('src/') || file.startsWith('tools/src/'))",
+			"replace": "file.startsWith('src/')",
+			"note": "a tool's arm is built on its own again, one test.js per arm the schema could have carried"
+		},
+		{
+			"name": "M-ARM-COMPOSABLE-MACRO-ALLOWED",
+			"type": "dev.MutationArm",
+			"method": "composable",
+			"find": "&& !file.startsWith('src/anyparse/macro/')",
+			"replace": "&& true",
+			"note": "a compile-time arm is composed, so its switch is reached while the composed build compiles and the arm waits minutes for a build it cannot use"
+		},
+		{
+			"name": "M-ARM-COMPOSABLE-BUILT-FILE-ALLOWED",
+			"type": "dev.MutationArm",
+			"method": "composable",
+			"find": "&& !built.contains(file)",
+			"replace": "",
+			"note": "a file a @:build macro reads is composed, so the macro sees the copies as fields of the type it reads"
+		},
+		{
+			"name": "M-SCHEMA-BUILD-EMBEDDED-ROOT-KEPT",
+			"type": "dev.MutationSchemaBuild",
+			"method": "embeddedMacros",
+			"find": "root == null ? p.file : p.file.substr(root.length + 1)",
+			"replace": "p.file",
+			"note": "an embedded module of tool code is typed under the name tools.src.dev.E, which names no module, so its copy is never checked in the macro context"
 		}
 	]
 }

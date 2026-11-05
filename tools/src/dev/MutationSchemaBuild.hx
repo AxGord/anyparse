@@ -36,6 +36,9 @@ final class MutationSchemaBuild {
 
 	private static inline final PLAN: String = 'plan';
 
+	/** The class paths a composed arm's file lives under, the suite build's own (`test-js-common.hxml`). */
+	private static final CLASS_PATHS: Array<String> = ['src', 'tools/src'];
+
 	/** Compose and build in a worktree of `base`, the answer left in `dir`; always answers 0 (the state file is the answer). */
 	public static function run(repo: String, dir: String, base: String): Int {
 		final tree: String = Path.join([dir, 'tree']);
@@ -98,7 +101,8 @@ final class MutationSchemaBuild {
 	public static function embeddedMacros(placements: String, ids: Array<Int>): Array<String> {
 		final modules: Array<String> = [];
 		for (p in parsePlacements(placements)) if (ids.contains(p.id)) {
-			final relative: String = p.file.startsWith('src/') ? p.file.substr('src/'.length) : p.file;
+			final root: Null<String> = CLASS_PATHS.find(r -> p.file.startsWith('$r/'));
+			final relative: String = root == null ? p.file : p.file.substr(root.length + 1);
 			final path: String = relative.endsWith('.hx') ? relative.substr(0, relative.length - '.hx'.length) : relative;
 			final module: String = path.split('/').join('.');
 			final typed: String = Path.withoutDirectory(path) == p.owner ? module : '$module.${p.owner}';
@@ -175,7 +179,9 @@ final class MutationSchemaBuild {
 		if (!FileSystem.exists(probe)) FileSystem.createDirectory(probe);
 		File.saveContent(Path.join([probe, 'AnyparseSchemaCheck.hx']), PROBE);
 		final macros: Array<String> = embeddedMacros(read(dir, PLACEMENTS), ids);
-		final checked: Result = cmd('haxe -cp src -cp $probe -main AnyparseSchemaCheck --interp --no-output $macros').at(tree).run();
+		final checked: Result = cmd('haxe -cp src -cp tools/src -cp $probe -main AnyparseSchemaCheck --interp --no-output $macros')
+			.at(tree)
+			.run();
 		File.saveContent(Path.join([dir, 'embedded-$round.log']), checked.out + checked.err + checked.failure);
 		return checked.ok;
 	}
