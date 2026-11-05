@@ -79,4 +79,92 @@ final class ChangedMembersTest extends Test {
 		Assert.isFalse(ChangedMembers.of('').keys().hasNext());
 	}
 
+	public function testAHeaderWhoseCommentsAloneChangedNamesNoMemberAndKeepsTheOthers(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/a/Doc.hx  declarations  +1 -1',
+			'    ~ ClassForm:Doc  +1 -1',
+			'          ',
+			'        - /** old doc */',
+			'        + /** new doc */',
+			'          @:keep',
+			'          final class Doc {',
+			'        ...',
+			'M src/a/Mid.hx  declarations  +2 -2',
+			'    ~ ClassForm:Mid  +1 -1',
+			'        ...',
+			'           * l1',
+			'        -  * l3 old',
+			'        +  * l3 new',
+			'           * l4',
+			'        ...',
+			'    ~ FnMember:run  +1 -1',
+			'        - 	trace(1);',
+			'        + 	trace(2);',
+			'M src/a/Gone.hx  declarations  +0 -2',
+			'    ~ TypedefDecl:Gone  +0 -2',
+			'        - // a note',
+			'        - /** gone */',
+			'          typedef Gone = {',
+			''
+		].join('\n'));
+		Assert.same([], said['src/a/Doc.hx']);
+		Assert.same(['run'], said['src/a/Mid.hx']);
+		Assert.same([], said['src/a/Gone.hx']);
+	}
+
+	public function testAHeaderWhoseCodeChangedLeavesTheFileUnnamedWhateverItsComments(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/a/Extends.hx  declarations  +1 -1',
+			'    ~ ClassForm:Extends  +1 -1',
+			'        ...',
+			'          /** doc */',
+			'        - final class Extends extends B {',
+			'        + final class Extends extends C {',
+			'        ...',
+			'M src/a/Meta.hx  declarations  +2 -2',
+			'    ~ ClassForm:Meta  +2 -2',
+			'          ',
+			'        - /** old doc */',
+			'        - @:keep',
+			'        + /** new doc */',
+			'        + @:keep @:x',
+			'          final class Meta {',
+			'        ...',
+			'M src/a/Shared.hx  declarations  +1 -1',
+			'    ~ ClassForm:Shared  +1 -1',
+			'        - /* old */ @:keep',
+			'        + /* new */ @:keep',
+			'          final class Shared {',
+			''
+		].join('\n'));
+		for (file in ['Extends', 'Meta', 'Shared']) {
+			Assert.isTrue(said.exists('src/a/$file.hx'), file);
+			Assert.isNull(said['src/a/$file.hx'], file);
+		}
+	}
+
+	public function testACodeChangeInALaterHunkIsNotHiddenByABlockCommentOpenedInAnEarlierOne(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/L.hx  declarations  +2 -2',
+			'    ~ ClassDecl:L  +2 -2',
+			'        ...',
+			'          ',
+			'          /**',
+			'        -  * l1',
+			'        +  * L1',
+			'           * l2',
+			'           * l3',
+			'        ...',
+			'          @:c',
+			'          @:d',
+			'        - class L extends B {',
+			'        + class L extends C {',
+			'          ',
+			'          }',
+			''
+		].join('\n'));
+		Assert.isTrue(said.exists('src/L.hx'));
+		Assert.isNull(said['src/L.hx']);
+	}
+
 }

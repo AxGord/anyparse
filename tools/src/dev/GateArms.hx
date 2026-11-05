@@ -178,13 +178,15 @@ final class GateArms {
 	}
 
 	/**
-	 * The `hxq changed` report of the touched files of `gate` that are tracked `.hx` files, empty when it has none or the
+	 * The `hxq changed --diff` report of the touched files of `gate` that are tracked `.hx` files (the diff lines let
+	 * `ChangedMembers` tell a header whose comments alone changed), empty when it has none or the
 	 * tool fails: it is read for what is layout only, so an empty report widens the selection and never narrows it.
 	 */
 	private static function changedReport(gate: GateTree): String {
 		final files: Array<String> = gate.touched.filter(f -> f.endsWith('.hx'));
 		if (files.length == 0) return '';
-		final report: Result = gate.hxq(gate.tree, ['changed', gate.base].concat(files)).timeout(PLAN_TIMEOUT_MS).run();
+		final shown: Array<String> = [for (file in files) for (arg in ['--diff', file]) arg];
+		final report: Result = gate.hxq(gate.tree, ['changed', gate.base].concat(shown)).timeout(PLAN_TIMEOUT_MS).run();
 		return report.ok ? report.out : '';
 	}
 
