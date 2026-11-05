@@ -255,7 +255,7 @@ final class MemberTouchScan {
 	}
 
 	/** Whether the text at `span` of `file` spells the member `name` on its own `this`: the bare name, or `this.name`. */
-	public function onSelf(g: CallGraph, file: String, span: Span, name: String): Bool {
+	public function selfHandler(g: CallGraph, file: String, span: Span, name: String): Bool {
 		final shape: RefShape = _scope.shape;
 		var found: Bool = false;
 		function walk(node: QueryNode): Void {
@@ -558,7 +558,7 @@ final class MemberTouchScan {
 				span: span
 			};
 			out.touchers[id] = { file: file, span: span };
-			if ((made || !onSelf(g, file, span, name)) && !out.notOnSelf.exists(id)) out.notOnSelf[id] = { file: file, span: span };
+			if ((made || !selfHandler(g, file, span, name)) && !out.notOnSelf.exists(id)) out.notOnSelf[id] = { file: file, span: span };
 		}
 	}
 

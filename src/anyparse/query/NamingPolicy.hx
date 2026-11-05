@@ -148,7 +148,8 @@ typedef NamedDecl = {
 	 * The EFFECTIVE neutral modifiers of the declaration — not only the ones it spells. A grammar adds
 	 * what the enclosing declaration confers: a Haxe interface member is `public` without writing it,
 	 * and a member of an `extern` type is `extern` without writing it. That is what lets a rule select
-	 * on either through `requireMods` / `forbidMods` instead of growing a flag per question.
+	 * on either through `requireMods` / `forbidMods` instead of growing a flag per question. A method that is a callback
+	 * - it returns no value, or the file reads it as a function value - carries `callback` the same way.
 	 */
 	var mods: Array<String>;
 

@@ -302,7 +302,8 @@
 		"map-as-set": true,
 		"misplaced-type-doc": true,
 		"naming": {
-			"catchVarName": "exception"
+			"catchVarName": "exception",
+			"handlerSuffix": "Handler"
 		},
 		"no-underscore-prefix": true,
 		"orphan-accessor": true,

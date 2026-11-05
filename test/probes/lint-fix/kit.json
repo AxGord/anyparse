@@ -752,6 +752,37 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "N1",
+			"note": "naming handlerSuffix: only a callback is a listener - a value-returning onX called directly stays whatever else shares its name (a parameter, another type field, a macro template, a nested function return)",
+			"argv": [
+				"hxq",
+				"lint",
+				"Shapes.hx",
+				"--rule",
+				"naming",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"Shapes.hx": "package;\n\nfinal class Other {\n\tpublic var onShared: Bool = false;\n\tpublic function new() {}\n}\n\nfinal class Shapes {\n\tpublic function new() {}\n\n\t// A value-returning, called only; a same-named PARAM read in another method.\n\tfunction onParam(): Bool {\n\t\treturn true;\n\t}\n\n\tfunction g1(onParam: Bool): Bool {\n\t\treturn onParam;\n\t}\n\n\tfunction g1b(): Bool {\n\t\treturn onParam();\n\t}\n\n\t// A value-returning, called only; a LOCAL of the same name.\n\tfunction onLocal(): Int {\n\t\treturn 1;\n\t}\n\n\tfunction g2(): Int {\n\t\tfinal onLocal2: Int = onLocal();\n\t\tvar x = onLocal();\n\t\treturn x + onLocal2;\n\t}\n\n\t// A value-returning, called only; another type's FIELD of the same name.\n\tfunction onShared(): Bool {\n\t\treturn true;\n\t}\n\n\tfunction g3(o: Other): Bool {\n\t\treturn o.onShared || onShared();\n\t}\n\n\t// Type parameter with constraint, no args, no result: returns nothing.\n\tfunction onGeneric<T:Other>() {\n\t\ttrace(1);\n\t}\n\n\t// Type parameter without constraint, no args.\n\tfunction onGeneric2<T>() {\n\t\ttrace(1);\n\t}\n\n\t// unannotated with a value-returning lambda inside: returns nothing itself.\n\tfunction onLambda() {\n\t\tfinal f = function(): Int {\n\t\t\treturn 1;\n\t\t};\n\t\tfinal h = (a: Int) -> {\n\t\t\treturn a;\n\t\t};\n\t\ttrace(f() + h(1));\n\t}\n\n\t// unannotated bare return\n\tfunction onBare() {\n\t\tif (Math.random() > 0.5) return;\n\t\ttrace(1);\n\t}\n\n\t// Expression body, unannotated, returns nothing.\n\tfunction onExpr() trace(1);\n\n\t// Parameter with a default before the body.\n\tfunction onDefault(a: Int = 1): Bool {\n\t\treturn a > 0;\n\t}\n\n\tfunction onDefault2(a: Int = 1) {\n\t\ttrace(a);\n\t}\n\n\tfunction onOptional(?a: Int) {\n\t\ttrace(a);\n\t}\n\n\tfunction onRest(...a: Int) {\n\t\ttrace(a);\n\t}\n\n\tfunction onVoidTyped(): Void trace(1);\n\n\t// macro-reified read\n\tfunction onReified(): Bool {\n\t\treturn true;\n\t}\n\n\tstatic macro function m() {\n\t\treturn macro onReified;\n\t}\n\n\t// string interpolation read\n\tfunction onInterp(): String {\n\t\treturn 'x';\n\t}\n\n\tfunction g4(): String {\n\t\treturn '$onInterp ${onInterp()}';\n\t}\n\n\t// bind\n\tfunction onBound(a: Int): Bool {\n\t\treturn a > 0;\n\t}\n\n\tfunction g5() {\n\t\treturn onBound.bind(1);\n\t}\n\n\tfunction g6(): Bool {\n\t\treturn this.onBound(1) || onBound(2);\n\t}\n}\n\ninterface I {\n\tfunction onIface(): Bool;\n\tfunction onIfaceVoid(): Void;\n\tfunction onIfaceNo();\n}\n\nabstract class A {\n\tabstract function onAbs(): Bool;\n\tabstract function onAbsVoid(): Void;\n}\n\nfinal class B extends A {\n\tpublic function new() {}\n\n\toverride function onAbs(): Bool {\n\t\treturn true;\n\t}\n\n\toverride function onAbsVoid() {}\n}\n",
+				"apq.json": "{\"rules\":{\"naming\":{\"handlerSuffix\":\"Handler\"}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "be125b04b1ffd8c0",
+				"err": "4ecfcd5947728063",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

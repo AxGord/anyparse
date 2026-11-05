@@ -35,6 +35,9 @@ final class NamingOptions implements NamingSupport {
 	/** The listener spelling the handler option rewrites away: `on` before an upper-case letter. */
 	private static final LISTENER_NAME: EReg = ~/^on[A-Z]/;
 
+	/** The neutral modifier a grammar's projection puts on a callback method: one that returns no value or is read as a function value. */
+	private static final HANDLER_REQUIRED_MODS: Array<String> = ['callback'];
+
 	/** Neutral modifiers a handler rule leaves to the general one: an override's name is its supertype's. */
 	private static final HANDLER_EXEMPT_MODS: Array<String> = ['override', 'extern'];
 
@@ -103,11 +106,11 @@ final class NamingOptions implements NamingSupport {
 		};
 	}
 
-	/** A method named `on<Event>` is a listener spelled the other way: `<event><suffix>`. */
+	/** A callback method named `on<Event>` is a listener spelled the other way: `<event><suffix>`; a query only called is not. */
 	private static function handlerRule(suffix: String): NamingRule {
 		return {
 			category: NamingCategory.Method,
-			requireMods: [],
+			requireMods: HANDLER_REQUIRED_MODS.copy(),
 			forbidMods: HANDLER_EXEMPT_MODS.copy(),
 			format: ~/^(?!on[A-Z])/,
 			label: 'listener method named <event>$suffix, not on<Event>',

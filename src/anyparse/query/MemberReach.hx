@@ -1712,7 +1712,7 @@ final class MemberReach {
 		if (view == null) return false;
 		final files: Array<String> = [node.file].concat([for (d in g.declarationsOf(node.id)) d.file]).concat(g.initializerFiles(node.id));
 		final file: Null<String> = files.find(path -> view.keyOf(path) == key);
-		return file != null && _touches.onSelf(g, file, f.at.span, f.field);
+		return file != null && _touches.selfHandler(g, file, f.at.span, f.field);
 	}
 
 	/**

@@ -404,7 +404,7 @@ final class LockTaint {
 				case Skip:
 			}
 		}
-		return ways.ends(onCycle, (path, end, edges) -> trailOf(path, end, held, edges));
+		return ways.ends(cycleHandler, (path, end, edges) -> trailOf(path, end, held, edges));
 	}
 
 	/** The calls of the hold `a`'s window that block under a hold of `held` (`blockingTrail`), each with its path, in source order. */
@@ -699,7 +699,7 @@ final class LockTaint {
 	}
 
 	/** Whether calls from `id` may lead back to it; a walk longer than `CYCLE_WALK` functions says they may. */
-	private function onCycle(id: String): Bool {
+	private function cycleHandler(id: String): Bool {
 		final known: Null<Bool> = _cyclic[id];
 		if (known != null) return known;
 		final seen: Map<String, Bool> = [id => true];

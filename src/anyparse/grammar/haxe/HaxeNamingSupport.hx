@@ -191,11 +191,13 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	public function project(tree: QueryNode, ?properties: () -> Map<Int, PropertyClause>): Array<NamedDecl> {
 		final out: Array<NamedDecl> = [];
+		final callbacks: HaxeCallbackMods = new HaxeCallbackMods(tree);
 		walk(tree, [], {
 			typeName: null,
 			rtti: false,
 			isExtern: false,
-			properties: properties
+			properties: properties,
+			callbacks: callbacks
 		}, null, out);
 		return out;
 	}
@@ -387,6 +389,28 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
+	 * The naming category of a declaration node, or null if its kind is not name-checked. A local
+	 * `function` / `inline function` statement is a Local: its name is a binding scoped to one body,
+	 * exactly like a `var`, so the same rules govern it. Both forms are decl hosts of the reference
+	 * walker and open their own parameter scope, so a rename derived from either resolves its
+	 * occurrence set like any other local's.
+	 */
+	public static function categoryOf(node: QueryNode, mods: Array<String>): Null<NamingCategory> {
+		return switch node.kind {
+			case 'ClassDecl', 'ClassForm', 'AbstractClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'EnumAbstractDecl',
+				'TypedefDecl': NamingCategory.Type;
+			case 'FnMember', 'FinalModifiedMember': NamingCategory.Method;
+			case 'VarMember': mods.contains('static') && mods.contains('inline') ? NamingCategory.Constant : NamingCategory.Field;
+			case 'FinalMember': mods.contains('static') ? NamingCategory.Constant : NamingCategory.Field;
+			case 'SimpleCtor', 'ParamCtor': NamingCategory.EnumValue;
+			case 'VarStmt', 'FinalStmt', 'ForStmt', 'ForExpr', 'KeyValueBinder', 'LocalFnStmt', 'LocalInlineFnStmt': NamingCategory.Local;
+			case 'Required', 'Optional', 'Rest': NamingCategory.Param;
+			case 'CatchClause': NamingCategory.CatchVar;
+			case _: null;
+		}
+	}
+
+	/**
 	 * Whether a projected declaration is a structural / serialization field - a
 	 * typedef or inline anon-structure member (a `Required` / `Optional` node
 	 * whose parent is `Anon`). Its name is a wire contract (a server JSON key, a
@@ -491,7 +515,8 @@ final class HaxeNamingSupport implements NamingSupport {
 			final kind: NamingCategory = category;
 			final declMods: Array<String> = mods.concat(HaxePropertyStorage.modsOf(
 				node, kind, inherited == null, enclosing.properties, () -> leadingRun(node, ancestors, NamingCategory.Field)
-			));
+			))
+				.concat(enclosing.callbacks.modsOf(node, kind, name, enclosing.typeName));
 			out.push(namedDeclOf(node, parent, ancestors, kind, name, declMods, structural, enclosing.typeName, enclosing.rtti));
 		}
 		// A type decl becomes the enclosing type of its descendants — its name is
@@ -516,7 +541,8 @@ final class HaxeNamingSupport implements NamingSupport {
 			typeName: childEnclosing,
 			rtti: childEnclosingRtti,
 			isExtern: childEnclosingExtern,
-			properties: enclosing.properties
+			properties: enclosing.properties,
+			callbacks: enclosing.callbacks
 		};
 		for (child in node.children) walk(child, ancestors, inner, childHost, out);
 		ancestors.pop();
@@ -541,28 +567,6 @@ final class HaxeNamingSupport implements NamingSupport {
 			i--;
 		}
 		return mods;
-	}
-
-	/**
-	 * The naming category of a declaration node, or null if its kind is not name-checked. A local
-	 * `function` / `inline function` statement is a Local: its name is a binding scoped to one body,
-	 * exactly like a `var`, so the same rules govern it. Both forms are decl hosts of the reference
-	 * walker and open their own parameter scope, so a rename derived from either resolves its
-	 * occurrence set like any other local's.
-	 */
-	private static function categoryOf(node: QueryNode, mods: Array<String>): Null<NamingCategory> {
-		return switch node.kind {
-			case 'ClassDecl', 'ClassForm', 'AbstractClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'EnumAbstractDecl',
-				'TypedefDecl': NamingCategory.Type;
-			case 'FnMember', 'FinalModifiedMember': NamingCategory.Method;
-			case 'VarMember': mods.contains('static') && mods.contains('inline') ? NamingCategory.Constant : NamingCategory.Field;
-			case 'FinalMember': mods.contains('static') ? NamingCategory.Constant : NamingCategory.Field;
-			case 'SimpleCtor', 'ParamCtor': NamingCategory.EnumValue;
-			case 'VarStmt', 'FinalStmt', 'ForStmt', 'ForExpr', 'KeyValueBinder', 'LocalFnStmt', 'LocalInlineFnStmt': NamingCategory.Local;
-			case 'Required', 'Optional', 'Rest': NamingCategory.Param;
-			case 'CatchClause': NamingCategory.CatchVar;
-			case _: null;
-		}
 	}
 
 	/**
@@ -963,11 +967,13 @@ private typedef VarHost = {
 
 /**
  * What the walk carries down from the declarations enclosing a node: the nearest type's name, whether
- * it (or an outer one) is `@:rtti` or `extern`, and the caller's property facts (`NamingSupport.project`).
+ * it (or an outer one) is `@:rtti` or `extern`, the caller's property facts (`NamingSupport.project`), and the
+ * methods that are callbacks (`HaxeCallbackMods`).
  */
 private typedef Enclosing = {
 	final typeName: Null<String>;
 	final rtti: Bool;
 	final isExtern: Bool;
 	final properties: Null<() -> Map<Int, PropertyClause>>;
+	final callbacks: HaxeCallbackMods;
 };

@@ -3613,7 +3613,7 @@
 		{
 			"name": "M-TOUCH-TYPED-SELF",
 			"type": "anyparse.query.MemberTouchScan",
-			"method": "onSelf",
+			"method": "selfHandler",
 			"find": "if (tree != null) walk(tree);",
 			"replace": "",
 			"note": "(precision) no typed touch is on the function's own `this`, so a constructor building another object is never excused"
