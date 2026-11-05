@@ -35,4 +35,10 @@ typedef BatteryPlan = {
 
 	/** Whether each branch takes its own lease of the pool: the suite then runs as many shards as its lease granted. */
 	var ownLease: Bool;
+
+	/** The gate record the run was offered (`--reuse`), or null. */
+	@:optional var gate: Null<GateRecord>;
+
+	/** The battery rows that record stands for (`GateReuse.rows`), each run as a reading of the gate instead of measured. */
+	@:optional var reused: Null<Array<String>>;
 };

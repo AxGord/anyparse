@@ -653,6 +653,59 @@
 			"find": "if (own != null) out[probe.file]",
 			"replace": "if (own != null && !out.exists(probe.file)) out[probe.file]",
 			"note": "a trap's file wins over the probe's own text"
+		},
+		{
+			"name": "M-GATE-REUSE-NOTHING-TAKEN",
+			"type": "dev.GateReuse",
+			"method": "rows",
+			"force": "[]",
+			"note": "no gate record stands for any battery row, so a land of the very tree its gate passed runs the whole battery again"
+		},
+		{
+			"name": "M-GATE-REUSE-TREE-BLIND",
+			"type": "dev.GateReuse",
+			"method": "refusal",
+			"find": "if (record.tree != facts.tree) return",
+			"replace": "if (false) return",
+			"note": "a gate record stands for a land whatever tree it merged, so a slice landed onto a main that moved since its gate skips the rows that never saw main's new commit"
+		},
+		{
+			"name": "M-GATE-REUSE-SKIPPED-COVERS",
+			"type": "dev.GateReuse",
+			"method": "passedRows",
+			"force": "[for (step in steps) step.name]",
+			"note": "every gate row counts as passed, so a row the gate skipped or could not run is taken over by the land as if it had been measured"
+		},
+		{
+			"name": "M-GATE-REUSE-FAIL-TRUSTED",
+			"type": "dev.GateReuse",
+			"method": "refusal",
+			"find": "if (!record.passed) return",
+			"replace": "if (false) return",
+			"note": "the record of a red gate stands for the land's rows, so a slice whose gate failed lands with the rows that passed read off it"
+		},
+		{
+			"name": "M-GATE-REUSE-LOCATE-ANY",
+			"type": "dev.GateReuse",
+			"method": "locate",
+			"find": "line != 'branch refs/heads/$branch'",
+			"replace": "!line.startsWith('branch ')",
+			"note": "the first worktree holding any branch answers, so a land reads the record of another worktree's gate or none at all"
+		},
+		{
+			"name": "M-BATTERY-REUSED-SWEEP-IGNORED",
+			"type": "dev.Battery",
+			"method": "sweepRead",
+			"force": "['sweep']",
+			"note": "a battery that took the suite over from the gate still reads its own tree's corpus snapshot, which no suite of this run wrote, so the corpus row fails and the snapshot of the next base loses its sweep"
+		},
+		{
+			"name": "M-GATE-REUSE-MOVED-TREE-PASSES",
+			"type": "dev.GateReuse",
+			"method": "heldTree",
+			"find": "return passed && started == ended;",
+			"replace": "return passed;",
+			"note": "a check whose worktree got a commit or an amend while its rows ran still records a pass, for a tree no row measured, and a land of that tree skips the rows"
 		}
 	]
 }

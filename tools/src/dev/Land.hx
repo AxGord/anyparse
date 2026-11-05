@@ -306,9 +306,12 @@ final class Land {
 		if (request == null) return Skipped(NO_BATTERY);
 		final landing: Int = Tally.next(Path.join([request.cache, TALLY_DIR]));
 		final why: Null<String> = fullReason(_merged(_repo), landing, request.full, request.every);
+		final record: Null<String> = GateReuse.locate(_repo, _branch);
 		final mode: String = why == null ? 'battery quick' : 'battery full: $why';
-		_summary.detail(mode);
-		final flags: Array<String> = batteryFlags(request.allowBlast, request.snapshot, why != null, request.leased, request.allow, _base);
+		_summary.detail(record == null ? mode : '$mode, offered the gate record of the branch\'s worktree');
+		final flags: Array<String> = batteryFlags(
+			request.allowBlast, request.snapshot, why != null, request.leased, request.allow, _base, record
+		);
 		return switch _exec(flags, _repo, Path.join([_logs, 'battery.log'])) {
 			case Failed(failure): Failed('$mode — $failure');
 			case other: other;
@@ -462,10 +465,11 @@ final class Land {
 	 * What `dev battery` is given. The monolith cross-check of the suite is not run at every landing, so `--quick`
 	 * is the default (`fullReason` says when it is not); under a pool lease (`leased` threads) the suite takes the shards the
 	 * lease leaves beside the battery's light branches; otherwise the battery
-	 * sizes it, from its own count or from the lease its suite's branch takes.
+	 * sizes it, from its own count or from the lease its suite's branch takes. `reuse` is the gate record
+	 * of the branch's worktree; the battery itself judges which rows it may take over (`GateReuse`).
 	 */
 	public static function batteryFlags(
-		allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>, allow: Array<String>, ?base: String
+		allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>, allow: Array<String>, ?base: String, ?reuse: String
 	): Array<String> {
 		final flags: Array<String> = [];
 		if (allowBlast) flags.push('--allow-blast');
@@ -478,6 +482,10 @@ final class Land {
 		if (base != null) {
 			flags.push('--base');
 			flags.push(base);
+		}
+		if (reuse != null) {
+			flags.push('--reuse');
+			flags.push(reuse);
 		}
 		final shards: Null<Int> = Branches.share(leased, Battery.lightThreads());
 		if (shards != null) {

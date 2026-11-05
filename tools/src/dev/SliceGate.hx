@@ -173,9 +173,11 @@ final class SliceGate {
 	/** The gate run: every gate against the baseline, one row each. */
 	private function check(): Int {
 		final head: String = GateTree.short(_gate.git(['rev-parse', 'HEAD']));
+		final started: String = GateReuse.treeOf(_gate.tree);
 		final title: String =
 			'slice-gate ${_gate.tree} @ $head base ${GateTree.short(_gate.base)}: ${_gate.touched.length} file(s) touched';
 		final self: String = keepSelf();
+		GateReuse.retire(_gate);
 		final refusal: Null<String> = registryRefusal();
 		if (refusal != null) {
 			final why: String = GateTree.clip(refusal);
@@ -192,6 +194,7 @@ final class SliceGate {
 			_gate.summary.excerpt(dirty);
 			return dirty.length == 0 ? Passed : Failed('${dirty.length} entr(ies), first `${dirty[0]}`');
 		});
+		GateReuse.keep(_gate, _readings, started);
 		return finish(title);
 	}
 
@@ -385,10 +388,9 @@ final class SliceGate {
 			_gate.summary.excerpt(GateExcerpt.suite(lines));
 			return Failed(GateTree.clip('no suite totals: ${lines[0] ?? ''} — ${_gate.log('suite.log')}'));
 		}
-		if (recording) {
-			_readings['tests'] = sum.tests;
-			_readings['assertions'] = sum.assertions;
-		}
+		// a check reads them too: its gate record hands them to a land of the same tree
+		_readings['tests'] = sum.tests;
+		_readings['assertions'] = sum.assertions;
 		final baseline: Null<Baseline> = _gate.baseline;
 		final delta: String = baseline == null
 			? ''
@@ -447,6 +449,7 @@ final class SliceGate {
 		final problem: Null<String> = _gate.corpusProblem();
 		if (problem != null) return Failed(problem);
 		if (!FileSystem.exists(sweep)) return NotRun('the baseline snapshot $sweep is gone — take the baseline again');
+		_gate.inTree(cmd('node bin/apq.js sweep --lang haxe --save ${_gate.log(GateReuse.SWEEP)}'));
 		final diff: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --diff $sweep'));
 		if (!diff.ok) {
 			_gate.summary.excerpt(Excerpt.errors(diff.out + diff.err));

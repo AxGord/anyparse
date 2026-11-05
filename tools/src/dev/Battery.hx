@@ -4,6 +4,7 @@ import anyparse.core.PoolLease;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JsonFormat;
 import dev.BatteryPlan;
+import dev.GateReuse.GateOffer;
 import dev.Shard.Tally;
 import dev.XconfigFmt.XconfigFailure;
 import dev.XconfigFmt.XconfigRun;
@@ -36,7 +37,7 @@ using StringTools;
 final class Battery {
 
 	public static inline final USAGE: String = 'usage: dev battery [-n <N>] [--quick] [--snapshot] [--allow <row>]... [--base <key> | --no-base] [--cache <dir>] [--allow-blast] [--keep] '
-		+ '[--client <tree> | --no-client] [--jvm | --no-jvm] [--repo <tree>]';
+		+ '[--client <tree> | --no-client] [--jvm | --no-jvm] [--reuse <gate-record.json>] [--repo <tree>]';
 
 	/** The characters of HEAD a snapshot is keyed by. */
 	public static inline final KEY_LENGTH: Int = 8;
@@ -69,9 +70,12 @@ final class Battery {
 	/** The environment variable that pins which `apq.js` the `hxq` shim runs. */
 	private static inline final ENGINE_VAR: String = 'HXQ_BIN';
 
+	private static final CORPUS_ROW: String = 'corpus';
+	private static final SUITE_ROW: String = 'suite';
+
 	/** The branches, all at once, each running its steps in order: a step reads what the one before it wrote. */
 	private static final BRANCHES: Array<Array<String>> = [
-		['suite', 'corpus'],
+		[SUITE_ROW, CORPUS_ROW],
 		['fmt', 'fmt xconfig'],
 		['typer probes', 'jvm probe'],
 		['oracle', 'lint', 'blast', 'kit probes']
@@ -167,9 +171,11 @@ final class Battery {
 
 	/** The step named `name`. */
 	private function step(name: String): () -> Outcome {
-		return switch name {
-			case 'suite': suite;
-			case 'corpus': corpus;
+		final gate: Null<GateRecord> = _plan.gate;
+		// the corpus row still judges the gate's snapshot against this run's base; every other row the gate stands for is its reading
+		if (gate == null || name == CORPUS_ROW || !(_plan.reused ?? []).contains(name)) return switch name {
+			case SUITE_ROW: suite;
+			case CORPUS_ROW: corpus;
 			case 'fmt': fmt;
 			case 'fmt xconfig': fmtXconfig;
 			case 'typer probes': typerProbes;
@@ -180,6 +186,7 @@ final class Battery {
 			case 'kit probes': () -> KitsRow.outcome(_plan.repo, _summary, lines -> Sys.println(lines.join('\n')));
 			case _: () -> NotRun('no step named $name');
 		};
+		return reusedRow.bind(name, gate);
 	}
 
 	/**
@@ -221,7 +228,7 @@ final class Battery {
 	 */
 	private function snapshot(): Null<String> {
 		final refused: Null<String> = keepSnapshot(
-			_plan.cache, _plan.head, _plan.work, _readings, file -> hxq(['sweep', '--save', file]).run()
+			_plan.cache, _plan.head, _plan.work, _readings, file -> hxq(sweepRead().concat(['--save', file])).run()
 		);
 		if (refused == null) Sys.println('battery: snapshot written for ${_plan.head} in ${_plan.cache}');
 		return refused;
@@ -262,7 +269,7 @@ final class Battery {
 	private function corpus(): Outcome {
 		if (!_suiteGreen) return NotRun('the suite was red — the sweep snapshot it writes proves nothing');
 		final base: Null<String> = baseFile('sweep.json');
-		final sweep: Result = hxq(base == null ? ['sweep'] : ['sweep', '--prev', base]).run();
+		final sweep: Result = hxq(sweepRead().concat(base == null ? [] : ['--prev', base])).run();
 		final text: String = sweep.out + sweep.err;
 		Sys.print(text);
 		if (!sweep.ok) return Failed('could not read the corpus sweep snapshot — did the corpus layer run?');
@@ -426,6 +433,22 @@ final class Battery {
 		return workFile('branch-${rows[0].replace(' ', '-')}.json');
 	}
 
+	/** A row the gate of the same tree already passed: the suite's counts are the gate's, so the snapshot keeps them. */
+	private function reusedRow(name: String, gate: GateRecord): Outcome {
+		final judged: String = 'reused gate ${GateTree.short(gate.tree)}';
+		if (name != SUITE_ROW) return Skipped(judged);
+		_readings[TESTS] = gate.tests;
+		_readings[ASSERTIONS] = gate.assertions;
+		_suiteGreen = true;
+		return Skipped('$judged: ${gate.tests} tests / ${gate.assertions} assertions');
+	}
+
+	/** The `sweep` words that read this run's corpus snapshot: the gate's copy when the gate stands for the corpus row. */
+	private function sweepRead(): Array<String> {
+		final recorded: Null<String> = _plan.gate?.sweep;
+		return recorded != null && (_plan.reused ?? []).contains(CORPUS_ROW) ? ['sweep', '--file', recorded] : ['sweep'];
+	}
+
 	/** The threads every branch but the suite's holds while the battery runs — what a held lease's suite leaves them. */
 	public static inline function lightThreads(): Int {
 		return Branches.light(BRANCHES, branchThreads);
@@ -459,6 +482,7 @@ final class Battery {
 		final keep: Bool = args.flag('--keep');
 		final jvm: Bool = args.flag('--jvm');
 		final noJvm: Bool = args.flag('--no-jvm');
+		final reuse: Null<String> = args.option('--reuse');
 		final repo: String = Repo.resolve(args.option('--repo'));
 		args.done();
 		for (name in allow) if (!rowNames().contains(name))
@@ -478,6 +502,7 @@ final class Battery {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		final work: String = dirs.claimAfterSweep(WORK_PREFIX, repo);
 		final mode: LeaseMode = Lease.ofEnvironment();
+		final offer: GateOffer = GateReuse.offer(reuse, repo, quick, Sys.println);
 		final plan: BatteryPlan = {
 			repo: repo,
 			work: work,
@@ -493,7 +518,9 @@ final class Battery {
 			client: noClient ? null : clientOf(clientOption ?? Sys.getEnv('ANYPARSE_CLIENT_TREE')),
 			jvmSkip: jvmSkip(repo, base, jvm ? true : noJvm ? false : null),
 			run: Branches.newRunId(),
-			ownLease: mode.match(Own(_, _))
+			ownLease: mode.match(Own(_, _)),
+			gate: offer.gate,
+			reused: offer.rows
 		};
 		final status: Int = try {
 			new Battery(plan, mode).drive();
@@ -659,7 +686,7 @@ final class Battery {
 	 */
 	private static function branchThreads(rows: Array<String>): Null<Int> {
 		return switch rows[0] {
-			case 'suite': null;
+			case SUITE_ROW: null;
 			case 'oracle': 2;
 
 			case _: 1;

@@ -5,6 +5,7 @@ import dev.Battery;
 import dev.BatteryPlan;
 import dev.BatteryPlanWriter;
 import devkit.Args.UsageError;
+import devkit.BranchReportJson;
 import devkit.BranchReportJsonParser;
 import devkit.Cmd.cmd;
 import devkit.Result;
@@ -222,6 +223,60 @@ final class BatteryTest extends Test {
 			Assert.isNull(Battery.keepSnapshot(dir.path, 'abc', work, readings, file -> throw 'no sweep to save'));
 			Assert.equals('{"kept":1}', File.getContent(dir.file('abc-anyparse.json')), 'an unread lint does not replace the kept one');
 			Assert.isFalse(FileSystem.exists(dir.file('abc-client.json')));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-BATTERY-REUSED-SWEEP-IGNORED')
+	public function testASuiteTheGateStandsForIsItsReadingAndTheCorpusJudgesTheGatesSnapshot(): Void {
+		TempDir.with(dir -> {
+			final tree: String = dir.file('tree');
+			final work: String = dir.file('work');
+			FileSystem.createDirectory(dir.file('tree/bin'));
+			FileSystem.createDirectory(work);
+			// no bin/test.js: a suite that ran would fail
+			final engine: String = Sys.getEnv('HXQ_BIN') ?? FileSystem.fullPath('bin/apq.js');
+			File.saveContent(dir.file('tree/bin/hxq'), 'cmd="$$1"; shift; exec node "$engine" "$$cmd" --lang haxe "$$@"\n');
+			File.saveContent(dir.file('gate-sweep.json'), '{"pass":3,"fail":1,"skipParse":0,"fixtures":[]}');
+			final plan: BatteryPlan = {
+				repo: tree,
+				work: work,
+				cache: dir.file('cache'),
+				head: 'h1',
+				base: null,
+				baseSuite: null,
+				shards: 1,
+				quick: true,
+				snapshot: false,
+				allowBlast: false,
+				allow: [],
+				client: null,
+				jvmSkip: '--no-jvm',
+				run: 'r',
+				ownLease: false,
+				gate: {
+					tree: 't1',
+					passed: true,
+					toolchain: 'Haxe 4',
+					fork: '',
+					allow: [],
+					rows: ['suite', 'corpus'],
+					tests: 7,
+					assertions: 9,
+					sweep: dir.file('gate-sweep.json')
+				},
+				reused: ['suite', 'corpus']
+			};
+			File.saveContent(dir.file('work/plan.json'), BatteryPlanWriter.write(plan, JsonFormat.instance.compactWriteOptions));
+			Assert.equals(0, Battery.main(['--rows', 'suite,corpus', '--plan', dir.file('work/plan.json')]));
+			final report: BranchReportJson = BranchReportJsonParser.parse(File.getContent(dir.file('work/branch-suite.json')));
+			Assert.same(
+				[{ name: 'suite', outcome: 'skipped' }, { name: 'corpus', outcome: 'passed' }],
+				report.steps.map(s -> {name: s.name, outcome: s.outcome })
+			);
+			final readings: Map<String, Int> = [for (r in report.readings) r.name => r.value];
+			Assert.equals(7, readings['tests'], 'the next base\'s suite counts are the gate\'s');
+			Assert.equals(3, readings['sweep-pass'], 'and its corpus counts are read off the gate\'s snapshot');
 		});
 	}
 

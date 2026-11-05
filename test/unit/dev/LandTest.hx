@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.GateReuse;
 import dev.Land;
 import dev.LandFormat;
 import devkit.Args.UsageError;
@@ -605,6 +606,15 @@ final class LandTest extends Test {
 		Assert.notNull(Land.fullReason(['src/anyparse/runtime/record.json'], 1, false, Land.FULL_EVERY));
 	}
 
+	public function testTheGateRecordBesideTheBranchsWorktreeIsOfferedToTheBattery(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { gated: true });
+		Assert.equals(0, run.status, run.output);
+		final flags: Array<String> = run.flags[0];
+		final at: Int = flags.indexOf('--reuse');
+		Assert.isTrue(at >= 0 && flags[at + 1].endsWith('-wt${GateReuse.LOGS_SUFFIX}/${GateReuse.FILE}'), flags.join(' '));
+		Assert.stringContains('offered the gate record', run.output);
+	}
+
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
@@ -752,6 +762,11 @@ final class LandTest extends Test {
 			git(repo, ['commit', '-q', '-m', 'more']);
 		}
 		git(repo, ['checkout', '-q', 'main']);
+		if (shape.gated == true) {
+			git(repo, ['worktree', 'add', '-q', '$repo-wt', BRANCH]);
+			makeDirectories('$repo-wt${GateReuse.LOGS_SUFFIX}');
+			File.saveContent('$repo-wt${GateReuse.LOGS_SUFFIX}/${GateReuse.FILE}', '{}');
+		}
 		if (shape.preLanded == true) git(repo, ['merge', '-q', '--ff-only', BRANCH]);
 		if (shape.handPicked == true) {
 			git(repo, ['commit', '-q', '--allow-empty', '-m', 'main moved']);
@@ -926,6 +941,9 @@ private typedef Setup = {
 
 	/** Whether `main` already holds the branch's commit. */
 	@:optional var preLanded: Bool;
+
+	/** Whether a worktree holds the branch, its gate's logs beside it holding a record. */
+	@:optional var gated: Bool;
 
 	/** The message of the branch's commit, and the `-m` of the landing. */
 	@:optional var sideMessage: String;
