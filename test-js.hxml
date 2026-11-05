@@ -6,4 +6,6 @@
 #   haxe test-js.hxml                       # compile only
 #   ANYPARSE_HXFORMAT_FORK=… node bin/test.js   # run (env not via --cmd)
 test-js-common.hxml
+# Mirrors bin/apq-js.hxml so the suite runs the shipped codegen — see there.
+-D analyzer-optimize
 -js bin/test.js

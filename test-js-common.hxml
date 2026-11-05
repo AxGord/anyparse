@@ -11,7 +11,5 @@
 -lib utest
 -lib hxnodejs
 -main RunTests
-# Mirrors bin/apq-js-common.hxml so the suite runs the shipped codegen — see there.
--D analyzer-optimize
 # The suite drives `--writer-output-plain` / `writer-equals --plain`; the shipped engine (bin/apq-js-common.hxml) omits the plain pipeline.
 -D anyparse_plain_pipeline

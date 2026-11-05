@@ -16,6 +16,6 @@
 -cp src
 -cp tools/src
 -main dev.JvmPortability
-# Mirrors bin/apq-js-common.hxml so the probe exercises the shipped codegen.
+# Mirrors bin/apq-js.hxml so the probe exercises the shipped codegen.
 -D analyzer-optimize
 --jvm bin/jvm-portability.jar

@@ -3,10 +3,6 @@
 #
 #   haxe tools/dev.hxml
 #   node bin/dev.js --help
--cp src
--cp tools/src
--main dev.Dev
--lib hxnodejs
--D js-es=6
+tools/dev-common.hxml
 -D analyzer-optimize
 -js bin/dev.js

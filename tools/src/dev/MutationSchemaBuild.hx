@@ -122,7 +122,7 @@ final class MutationSchemaBuild {
 			round++;
 			if (!compose(repo, dir, tree)) return FAILED;
 			if (FileSystem.exists(macroLog)) FileSystem.deleteFile(macroLog);
-			final build: Result = cmd('haxe test-js-common.hxml -js ${Path.join([dir, 'test.js'])}')
+			final build: Result = cmd('haxe test-js-common.hxml ${Binaries.CODEGEN} -js ${Path.join([dir, 'test.js'])}')
 				.at(tree)
 				.env('APQ_MUTANT_MACRO_LOG', macroLog)
 				.run();

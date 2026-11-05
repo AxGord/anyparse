@@ -1,0 +1,7 @@
+# Shared flags for the developer CLI (`tools/dev.hxml`) and the typecheck the compiler oracle declares for it
+# (`tools/dev-check.hxml`); the output line and `-D analyzer-optimize` live in the leaves.
+-cp src
+-cp tools/src
+-main dev.Dev
+-lib hxnodejs
+-D js-es=6

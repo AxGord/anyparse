@@ -28,13 +28,13 @@ using StringTools;
 @:nullSafety(Strict)
 final class GateLint {
 
-	/** The engine's build flags, which with `src` make it what it is. */
-	private static inline final ENGINE_FLAGS: String = 'bin/apq-js-common.hxml';
-
 	/** The report of the lint row's touched files in the tree, and of the same files at the base, in the logs. */
 	private static inline final TOUCHED_REPORT: String = 'lint-touched.json';
 
 	private static inline final TOUCHED_BASE_REPORT: String = 'lint-touched-base.json';
+
+	/** The engine's build flags, which with `src` make it what it is: the shared file and the leaf that adds the codegen flag. */
+	private static final ENGINE_FLAGS: Array<String> = ['bin/apq-js-common.hxml', 'bin/apq-js.hxml'];
 
 	private final _gate: GateTree;
 
@@ -276,8 +276,8 @@ final class GateLint {
 	 * has uncommitted changes. The sources, not the binary: two builds of one source differ in their bytes.
 	 */
 	private static function engineSources(gate: GateTree): Null<String> {
-		return gate.git(['status', '--porcelain', '--', 'src', ENGINE_FLAGS]).trim() == ''
-			? gate.git(['rev-parse', 'HEAD:src', 'HEAD:$ENGINE_FLAGS'])
+		return gate.git(['status', '--porcelain', '--', 'src'].concat(ENGINE_FLAGS)).trim() == ''
+			? gate.git(['rev-parse', 'HEAD:src'].concat([for (flags in ENGINE_FLAGS) 'HEAD:$flags']))
 				.split('\n')
 				.join(' ')
 				.trim()

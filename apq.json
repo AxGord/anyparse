@@ -1,15 +1,15 @@
 {
 	"compilerOracle": [
 		{
-			"hxml": "test-js.hxml",
+			"hxml": "test-js-check.hxml",
 			"dir": "."
 		},
 		{
-			"hxml": "bin/apq-js.hxml",
+			"hxml": "bin/apq-js-check.hxml",
 			"dir": "."
 		},
 		{
-			"hxml": "tools/dev.hxml",
+			"hxml": "tools/dev-check.hxml",
 			"dir": "."
 		},
 		{
@@ -179,6 +179,7 @@
 			"bin",
 			"test-js.hxml",
 			"test-js-common.hxml",
+			"test-js-check.hxml",
 			"recon.hxml",
 			"haxelib.json"
 		],

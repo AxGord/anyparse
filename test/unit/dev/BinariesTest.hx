@@ -85,6 +85,23 @@ final class BinariesTest extends Test {
 		});
 	}
 
+	/** A build leaf stands for the typecheck leaf the project declares (`checkOf`): its green is that configuration's verdict. */
+	public function testABuildLeafsGreenIsTheVerdictOfItsDeclaredTypecheckLeaf(): Void {
+		TempDir.with(dir -> {
+			final tree: String = project(dir, GOOD, '{"compilerOracle":"leaf-check.hxml"}');
+			File.saveContent(Path.join([tree, 'leaf.hxml']), '-cp .\n-main Good\n-D codegen\n');
+			File.saveContent(Path.join([tree, 'leaf-check.hxml']), '-cp .\n-main Good\n');
+			final fingerprint: Null<String> = fingerprintOf(tree);
+			if (fingerprint == null) {
+				Assert.pass('no compiler probe on this host');
+				return;
+			}
+			Assert.isNull(held(tree, fingerprint), 'nothing is known before the build');
+			Assert.isTrue(Binaries.compileBuilds(tree, dir.file('leaf.log'), [['leaf.hxml', '--no-output']], Unpooled).match(Passed));
+			Assert.isTrue(held(tree, fingerprint)?.match(Confirmed) == true, 'the leaf\'s build is the typecheck leaf\'s Confirmed');
+		});
+	}
+
 	/** A project of `source` as `Good.hx`, its `check.hxml`, and the `apq.json` that declares that build. */
 	private static function project(dir: TempDir, source: String, config: String = '{"compilerOracle":"check.hxml"}'): String {
 		final tree: String = dir.file('tree');

@@ -272,7 +272,7 @@ final class MutationSlot {
 		if (server != null) for (attempt in ['warm', 'restarted']) {
 			final port: Null<Int> = server.port(ctx.wt);
 			if (port == null) break;
-			final warm: Result = cmd('haxe --connect 127.0.0.1:$port test-js-common.hxml -js $out')
+			final warm: Result = cmd('haxe --connect 127.0.0.1:$port test-js-common.hxml ${Binaries.CODEGEN} -js $out')
 				.at(ctx.wt)
 				.timeout(envInt('APQ_MUTATION_BUILD_TIMEOUT', BUILD_TIMEOUT_S) * MS_PER_SECOND)
 				.run();
@@ -284,7 +284,7 @@ final class MutationSlot {
 			server.stop();
 			FileSystem.rename(log, '$log.$attempt');
 		}
-		final cold: Result = cmd('haxe test-js-common.hxml -js $out').at(ctx.wt).run();
+		final cold: Result = cmd('haxe test-js-common.hxml ${Binaries.CODEGEN} -js $out').at(ctx.wt).run();
 		saveLog(log, cold);
 		return cold.ok ? 'cold' : null;
 	}

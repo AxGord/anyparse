@@ -5,10 +5,10 @@
 # leaf supplies its own: `bin/apq-js.hxml` writes the shared
 # `bin/apq.js`, while `dev worker-build` passes a per-worker
 # `-js <workdir>/apq.js` so parallel agents never race over one artifact.
+# The flags shared with the oracle's typecheck leaf live here; the codegen flag lives in the build leaves.
 -cp src
 -main anyparse.query.Cli
 -lib hxnodejs
 -D js-es=6
-# Shootout part B: -14.5% fmt work, -3.2% lint, -9.9% bundle, byte-identical
-# output, for +4-7% compile. No `-dce full` — it gives part of the win back.
--D analyzer-optimize
+# `-D analyzer-optimize` is NOT here: a real build adds it itself (the leaf, `dev worker-build`'s argv,
+# `dev base-engine`) and the typecheck leaf the compiler oracle declares does not — see `bin/apq-js-check.hxml`.

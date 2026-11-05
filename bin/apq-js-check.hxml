@@ -1,0 +1,6 @@
+# The typecheck the compiler oracle declares for `bin/apq-js.hxml`: the same flags without `-D analyzer-optimize`, which
+# costs a typecheck about as much again and decides none of its verdicts. `--no-output` keeps it from ever overwriting the
+# build's artifact when run by hand. The code-cache `--cmd` of the build leaf is a build step a typecheck skips.
+bin/apq-js-common.hxml
+-js bin/apq.js
+--no-output

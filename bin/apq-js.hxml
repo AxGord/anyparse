@@ -1,6 +1,9 @@
-# Shared `bin/apq.js`. All flags live in bin/apq-js-common.hxml — the
+# Shared `bin/apq.js`. The shared flags live in bin/apq-js-common.hxml, the codegen flag below — the
 # include path is resolved against the CWD, so build from the repo root.
 bin/apq-js-common.hxml
+# Shootout part B: -14.5% fmt work, -3.2% lint, -9.9% bundle, byte-identical
+# output, for +4-7% compile. No `-dce full` — it gives part of the win back.
+-D analyzer-optimize
 -js bin/apq.js
 # Then the code-cache launcher beside it (bin/apq-launch-common.hxml) and its
 # cache, warmed through the shim so the warm run has the node flags a call

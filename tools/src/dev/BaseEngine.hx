@@ -116,7 +116,7 @@ final class BaseEngine {
 			cmd('git -C $repo archive --format=tar -o $archive $commit').check();
 			cmd('tar -xf $archive -C $copy').check();
 			if (!FileSystem.exists(Path.join([copy, HXML]))) throw new Exception('$commit has no $HXML to build its engine with');
-			final run: Result = cmd('haxe $HXML -js ${Path.join([out, ENGINE])}').at(copy).run();
+			final run: Result = cmd('haxe $HXML ${Binaries.CODEGEN} -js ${Path.join([out, ENGINE])}').at(copy).run();
 			if (!run.ok) throw new Exception('the engine of $commit does not build: ${run.firstError()}');
 		});
 	}

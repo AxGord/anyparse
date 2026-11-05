@@ -20,6 +20,17 @@ final class Binaries {
 	/** The build files of the three, from the tree's root. */
 	public static final HXMLS: Array<String> = ['bin/apq-js.hxml', 'test-js.hxml', 'tools/dev.hxml'];
 
+	/** The codegen flag every real build of the tree carries and no typecheck leaf does: what turns a typecheck into the shipped build. */
+	public static final CODEGEN: Array<String> = ['-D', 'analyzer-optimize'];
+
+	/**
+	 * The typecheck leaf the compiler oracle declares for a build leaf `hxml` (`x.hxml` is `x-check.hxml`): the same flags
+	 * without the codegen flag `-D analyzer-optimize`, which only a real build carries.
+	 */
+	public static function checkOf(hxml: String): String {
+		return '${Path.withoutExtension(hxml)}-check.hxml';
+	}
+
 	/** Build the three binaries of `tree`, every transcript written to `log`; a failure quotes the first one's error. */
 	public static function compile(tree: String, log: String): Outcome {
 		return compileWith(tree, log, [], Unpooled);
@@ -36,12 +47,15 @@ final class Binaries {
 	/**
 	 * Run each of `builds` (a haxe command line) in `tree`, every transcript written to `log`. A build the project declares as a
 	 * plain `compilerOracle` configuration runs with `-v`, and its green is kept as that configuration's verdict
-	 * (`OracleCache.storeIfUnchanged`), so a lint or a battery over the same content does not compile it again.
+	 * (`OracleCache.storeIfUnchanged`), so a lint or a battery over the same content does not compile it again. The
+	 * configuration a build leaf stands for may be the leaf itself or its `checkOf` typecheck leaf.
 	 */
 	public static function compileBuilds(tree: String, log: String, builds: Array<Array<String>>, mode: LeaseMode): Outcome {
 		final declared: Array<OracleConfig> = plainOracles(tree);
 		final oracles: Array<Null<OracleConfig>> = [
-			for (words in builds) declared.find(oracle -> Path.normalize(oracle.hxml) == Path.normalize(Path.join([tree, words[0]])))
+			for (words in builds) declared.find(oracle ->
+				[words[0], checkOf(words[0])].exists(hxml -> Path.normalize(oracle.hxml) == Path.normalize(Path.join([tree, hxml])))
+			)
 		];
 		final read: Map<String, String> = [];
 		final fingerprints: Array<Null<String>> = [

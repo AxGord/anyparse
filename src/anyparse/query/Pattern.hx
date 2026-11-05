@@ -463,7 +463,7 @@ final class PatternStar {
 		// dropped the type slot dropped the pattern's own annotation.
 		final slot: Null<QueryNode> = tree.type;
 		// The recursion is bound to a LOCAL rather than written inline as the constructor's
-		// last argument. Inline, `-D analyzer-optimize` (set in `bin/apq-js-common.hxml`)
+		// last argument. Inline, `-D analyzer-optimize` (set in `bin/apq-js.hxml`)
 		// mis-lowers this self-call as a TAIL call — it emits `tree = slot; continue;` and
 		// discards the pending `new QueryNode(...)`, so the function returns the type slot
 		// INSTEAD of the rebuilt node. Reduced to a standalone repro at

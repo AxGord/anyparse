@@ -1,0 +1,6 @@
+# The typecheck the compiler oracle declares for `test-js.hxml`: the same flags without `-D analyzer-optimize`, which
+# costs a typecheck about as much again and decides none of its verdicts. `--no-output` keeps it from ever overwriting the
+# build's artifact when run by hand.
+test-js-common.hxml
+-js bin/test.js
+--no-output

@@ -528,6 +528,7 @@ final class SliceGateTest extends Test {
 		File.saveContent(Path.join([tree, 'tools/dev.hxml']), '');
 		File.saveContent(Path.join([tree, 'bin/test.js']), '');
 		File.saveContent(Path.join([tree, 'bin/apq-js-common.hxml']), '');
+		File.saveContent(Path.join([tree, 'bin/apq-js.hxml']), '');
 		FileSystem.createDirectory(Path.join([tree, 'src']));
 		File.saveContent(Path.join([tree, 'src/keep']), '');
 		File.saveContent(Path.join([tree, 'bin/hxq']), hxq);

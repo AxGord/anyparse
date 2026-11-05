@@ -49,7 +49,9 @@ final class WorkerBuild {
 		final connect: Array<String> = server == null || server == '' ? [] : ['--connect', server];
 		final jobs: Array<{ name: String, hxml: String, artifact: String }> = JOBS.filter(j -> target == 'both' || target == j.name);
 		final results: Array<Result> = Pool.of(jobs.length)
-			.map(jobs, j -> cmd('haxe $connect ${j.hxml} -js $out/${j.artifact} ${launcherBuild(j.name, out)}').at(repo));
+			.map(
+				jobs, j -> cmd('haxe $connect ${j.hxml} ${Binaries.CODEGEN} -js $out/${j.artifact} ${launcherBuild(j.name, out)}').at(repo)
+			);
 		var failed: Bool = false;
 		for (i => job in jobs) {
 			final result: Result = results[i];
