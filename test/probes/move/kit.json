@@ -1716,6 +1716,596 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "R1",
+			"note": "a module function a user reads through `import p.Mod;` keeps the statement beside the repointed one",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nfunction helper(): Int {\n\treturn 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn helper();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "7ada1f056731c10f",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R2",
+			"note": "a module `final` a user reads through `import p.Mod;` keeps the statement",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nfinal limit: Int = 3;\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn limit;\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "10ed60f14f077732",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R3",
+			"note": "a value of a sibling enum abstract a user reads through `import p.Mod;` keeps the statement",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nenum abstract Kind(Int) {\n\tvar First = 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\ttrace(First);\n\t\treturn 0;\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "ec55e0b374440c0b",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R4",
+			"note": "`using p.Mod;` whose module function is an extension keeps the statement",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nfunction twice(i: Int): Int {\n\treturn i * 2;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nusing p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn 3.twice();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "49f873f60dba731b",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R5",
+			"note": "the destination holds `import p.Mod;` and calls a module function: the statement stays",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nfunction helper(): Int {\n\treturn 1;\n}\n",
+				"src/q/Dest.hx": "package q;\n\nimport p.Mod;\n\nclass Dest {\n\tpublic static function g(): Int {\n\t\treturn helper();\n\t}\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\treturn q.Dest.g();\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "3d21a36a7893abb6",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R6",
+			"note": "a value of the moved enum abstract read through `import p.Mod;` earns an import of its new module",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"EnumAbstractDecl:Kind",
+				"src/q/Kind.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nenum abstract Kind(Int) {\n\tvar First = 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\ttrace(First);\n\t\treturn 0;\n\t}\n}\n",
+				"src/q/Kind.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "e58ec97ab58d4d63",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R7",
+			"note": "a value of the moved legacy `@:enum abstract` read through `import p.Mod;` earns an import of its new module",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"AbstractDecl:Kind",
+				"src/q/Kind.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n@:enum abstract Kind(Int) {\n\tvar First = 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\ttrace(First);\n\t\treturn 0;\n\t}\n}\n",
+				"src/q/Kind.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "a602d9c8d248a332",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R8",
+			"note": "a bare `First` another statement binds earns no import of the moved enum abstract",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Kind.hx",
+				"--select",
+				"EnumAbstractDecl:Kind",
+				"src/q/Kind.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(p.Reader.f()); } }\n",
+				"src/p/Kind.hx": "package p;\n\nenum abstract Kind(Int) {\n\tvar First = 1;\n}\n",
+				"src/p/Reader.hx": "package p;\n\nimport a.Other;\n\nclass Reader {\n\tpublic static function f(): Int {\n\t\ttrace(First);\n\t\treturn 0;\n\t}\n}\n",
+				"src/a/Other.hx": "package a;\n\nenum Other {\n\tFirst;\n}\n",
+				"src/q/Kind.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "5a9353a08ca18be8",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R9a",
+			"note": "a public module function after `private var hidden: Int = 1;` keeps the statement a user reading it needs",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nprivate var hidden: Int = 1;\n\nfunction after(): Int {\n\treturn 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn after();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "14b9678ef78b1e9b",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R9b",
+			"note": "a public module function after `final hidden: Int = 1;` keeps the statement a user reading it needs",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nfinal hidden: Int = 1;\n\nfunction after(): Int {\n\treturn 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn after();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "a2c8ca53fc59ab1a",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R9c",
+			"note": "a public module function after `private class Hidden {}` keeps the statement a user reading it needs",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nprivate class Hidden {}\n\nfunction after(): Int {\n\treturn 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn after();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "bb0f8583fbc16147",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R9d",
+			"note": "a public module function after `private final hidden: Int = 1;` keeps the statement a user reading it needs",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nprivate final hidden: Int = 1;\n\nfunction after(): Int {\n\treturn 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn after();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "e2e9bd6936ea30d2",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R9e",
+			"note": "a public module function after `@:keep private function hidden(): Int {` keeps the statement a user reading it needs",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n@:keep private function hidden(): Int {\n\treturn 1;\n}\n\nfunction after(): Int {\n\treturn 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn after();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "686469db702b9506",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R9f",
+			"note": "a public module function after `private inline function hidden(): Int {` keeps the statement a user reading it needs",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nprivate inline function hidden(): Int {\n\treturn 1;\n}\n\nfunction after(): Int {\n\treturn 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn after();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "8887eaf1908e0092",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R10",
+			"note": "a same-package file with no statement reading a moved enum constructor through an expected type gets an import",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Colour.hx",
+				"--select",
+				"EnumDecl:Colour",
+				"src/p/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(p.Reader.f()); } }\n",
+				"src/p/Colour.hx": "package p;\n\nenum Colour {\n\tRed;\n\tGreen;\n}\n",
+				"src/p/Dest.hx": "package p;\n\nclass Dest {}\n",
+				"src/p/Reader.hx": "package p;\n\nclass Reader {\n\tpublic static function f(): Int {\n\t\tfinal c: Colour = Red;\n\t\treturn c == Green ? 1 : 0;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "fb3e77d7c316130f",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R11",
+			"note": "a public module function behind `#if never private #end` is not private: the user keeps the statement",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n#if never private #end function helper(): Int {\n\treturn 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\treturn helper();\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "558aeb1235f748b5",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R12",
+			"note": "an instance var of a plain abstract binds no bare name: a user with a local of that name drops the statement",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\nabstract Box(Int) {\n\tpublic var width(get, never): Int;\n\n\tfunction get_width(): Int {\n\t\treturn this;\n\t}\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tfinal width = 3;\n\t\tnew Mod();\n\t\treturn width;\n\t}\n}\n",
+				"src/q/Mod.hx": "package q;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "4c6a7099ff28ef04",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R13",
+			"note": "a value of an abstract led by a guarded `enum` keyword, read through `import p.Mod;`, keeps the statement",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/q/Mod.hx": "package q;\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n#if !nope enum #end abstract Kind(Int) {\n\tvar First = 1;\n}\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tnew Mod();\n\t\ttrace(First);\n\t\treturn 0;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "d7cfe448d927df07",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "R14",
+			"note": "a `private` and its function in one conditional region: private, so a user with a local of that name drops the statement",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mod.hx",
+				"--select",
+				"ClassDecl:Mod",
+				"src/q/Mod.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"main/Main.hx": "class Main { static function main() { trace(u.User.f()); } }\n",
+				"src/q/Mod.hx": "package q;\n",
+				"src/p/Mod.hx": "package p;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n#if foo\nprivate function inner(): Int {\n\treturn 1;\n}\n#end\n",
+				"src/u/User.hx": "package u;\n\nimport p.Mod;\n\nclass User {\n\tpublic static function f(): Int {\n\t\tfinal inner = 3;\n\t\tnew Mod();\n\t\treturn inner;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b36904e68b88f995",
+				"files": "86348c3fbd5142f1",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

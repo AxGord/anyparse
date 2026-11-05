@@ -484,6 +484,12 @@ typedef TypeDeclInfo = {
 	var hasKeep: Bool;
 
 	/**
+	 * True when the declaration is an enum abstract however it is spelled: the grammar's own kind, or a plain abstract kind
+	 * carrying the legacy annotation (`RefShape.enumAbstractMetaName`). Only such a type's values are bare names.
+	 */
+	var isEnumAbstract: Bool;
+
+	/**
 	 * True when the declaration carries a metadata under which the language constructs an instance from a
 	 * literal (`ExecutionShape.implicitConstructionTypeMetaNames`, Haxe `@:structInit`) — a constructor run no `new`
 	 * names, which a call graph must find without loading the declaring file.

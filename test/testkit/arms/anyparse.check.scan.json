@@ -1134,6 +1134,22 @@
 			"find": "if (!MemberKinds.structurallyEqual(a, b)) return false;",
 			"replace": "",
 			"note": "statement identity is decided by whitespace-normalized source alone, so two calls differing only INSIDE a string literal read as the same statement and a tail that is not duplicated is reported"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-LEGACY-META",
+			"type": "anyparse.check.scan.EnumAbstractForms",
+			"method": "isEnumAbstract",
+			"find": " || metaName != null && annotations.contains(metaName)",
+			"replace": "",
+			"note": "a legacy `@:enum abstract` reads as a plain abstract, so a move takes its values away from a file that read them through a module statement"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-PREFIX-KEYWORD",
+			"type": "anyparse.check.scan.EnumAbstractForms",
+			"method": "isEnumAbstract",
+			"find": "prefixed || ",
+			"replace": "",
+			"note": "an abstract led by a guarded `enum` keyword reads as a plain abstract, so a move takes its values away from a file that read them through a module statement"
 		}
 	]
 }

@@ -5999,8 +5999,8 @@
 			"name": "M-INDEX-ALTERNATE-DROPPED",
 			"type": "anyparse.query.SymbolIndexBuilder",
 			"method": "pushGuardedDecl",
-			"find": "out.push({ node: node, guarded: true, alternate: alternate });",
-			"replace": "if (!alternate) out.push({ node: node, guarded: true, alternate: alternate });",
+			"find": "out.push({\n\tnode: node,\n\tguarded: true,\n\talternate: alternate,\n\tenumPrefixed: prefixed\n});",
+			"replace": "if (!alternate) out.push({\n\tnode: node,\n\tguarded: true,\n\talternate: alternate,\n\tenumPrefixed: prefixed\n});",
 			"note": "another branch's declaration of a type a conditional region already declared is dropped from the index, so a property, a supertype or a member only it declares is no part of the type"
 		},
 		{
@@ -15365,16 +15365,16 @@
 			"name": "M-BOUND-BY-TYPE-NO-VALUES",
 			"type": "anyparse.query.ImportBindings",
 			"method": "boundByType",
-			"find": "bare.contains(type.kind) ? typeValuesOf(type, file, [], true) : null",
+			"find": "bare.contains(type.kind) || type.isEnumAbstract ? typeValuesOf(type, file, [], true) : null",
 			"replace": "null",
 			"note": "a moved enum abstract takes only its name, so a file reading a value of it through a module statement loses the value"
 		},
 		{
 			"name": "M-BOUND-BY-TYPE-EVERY-ABSTRACT",
 			"type": "anyparse.query.ImportBindings",
-			"method": "boundByType",
-			"find": "bare.contains(type.kind) ?",
-			"replace": "true ?",
+			"method": "typeValuesOf",
+			"find": "if (!type.isEnumAbstract) return [];",
+			"replace": "",
 			"note": "a plain abstract reads as binding its vars, so a file spelling a word that is one of them gets an import of the moved type"
 		},
 		{
@@ -15400,6 +15400,22 @@
 			"find": "pendingPrivate = false;",
 			"replace": "",
 			"note": "the modifier carries past its own declaration, so a public field after a private one reads as private and its statement goes"
+		},
+		{
+			"name": "M-MODULE-FIELD-WRAPPED-PRIVATE",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "moduleFieldsOf",
+			"find": "pendingPrivate = outer && pendingPrivate;",
+			"replace": "",
+			"note": "a modifier left pending at the end of its conditional region reaches a field outside it, so a public field after an inactive private reads as private and its statement goes"
+		},
+		{
+			"name": "M-ENUM-PREFIX-NOT-CARRIED",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "declNodes",
+			"find": ", enumPrefixed: prefixed",
+			"replace": "",
+			"note": "a prefix keyword a conditional region holds is not carried to the declaration after it, so a guarded enum abstract reads as plain and a move takes its values away from a file that read them through a module statement"
 		},
 		{
 			"name": "M-STATEMENTLESS-SCANS-BOUND-NAMES",

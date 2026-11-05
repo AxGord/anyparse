@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.scan.EnumAbstractForms;
 import anyparse.query.GrammarPlugin.AmbientImportSource;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -36,6 +37,12 @@ private typedef GuardedNode = {
 	 * declaration of the same type, which `extractFileInfo` folds into the one listed (`withAlternate`).
 	 */
 	var ?alternate: Bool;
+
+	/**
+	 * True for a type declaration led by a declaration-prefix keyword a conditional region holds (`#if v enum #end abstract A(Int)`).
+	 * Which keyword it was is not asked: only an abstract reads it, and over-reading one keeps a statement.
+	 */
+	var ?enumPrefixed: Bool;
 };
 
 /**
@@ -227,7 +234,11 @@ final class SymbolIndexBuilder {
 			final name: Null<String> = node.name;
 			final span: Null<Span> = node.span;
 			if (name == null) {
+				// a modifier reaches only the fields of its own region: one left pending at its end may be inactive, and carrying it
+				// onto a field outside would hide a name an import binds
+				final outer: Bool = pendingPrivate;
 				for (c in node.children) walk(c);
+				pendingPrivate = outer && pendingPrivate;
 				return;
 			}
 			final isPrivate: Bool = pendingPrivate;
@@ -295,7 +306,7 @@ final class SymbolIndexBuilder {
 			pendingPrivate = false;
 		}
 
-		for (gn in declNodes(tree, source, externModifierKind, privateModifierKinds)) {
+		for (gn in declNodes(tree, source, externModifierKind, privateModifierKinds, prefixKeywordKinds(shape))) {
 			final node: QueryNode = gn.node;
 			if (externModifierKind != null && node.kind == externModifierKind) {
 				pendingExtern = true;
@@ -305,6 +316,7 @@ final class SymbolIndexBuilder {
 				pendingPrivate = true;
 				continue;
 			}
+
 			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
 			if (typeDecl != null) {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
@@ -335,6 +347,7 @@ final class SymbolIndexBuilder {
 					hasBuild: carriesOwnBuildMacro(pendingMeta, shape),
 					hasAutoBuild: carriesAnyMeta(pendingMeta, shape.descendantBuildMacroMetaNames),
 					hasKeep: carriesMeta(pendingMeta, shape.retainedDeclMetaName),
+					isEnumAbstract: EnumAbstractForms.isEnumAbstract(shape, typeDecl.kind, gn.enumPrefixed == true, pendingMeta),
 					constructsFromLiteral: carriesAnyMeta(pendingMeta, shape.execution?.implicitConstructionTypeMetaNames),
 					bringsExtensions: carriesAnyMeta(pendingMeta, shape.execution?.extensionTypeMetaNames),
 					extensionTypesRaw: pendingUsings,
@@ -695,6 +708,13 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
+	 * The declaration-prefix keyword kinds a conditional region may hold ahead of its declaration.
+	 */
+	private static function prefixKeywordKinds(shape: RefShape): Array<String> {
+		return shape.condDeclPrefixKeywordKinds ?? [];
+	}
+
+	/**
 	 * `tree`'s top-level children with every conditional-compilation region
 	 * REPLACED, in document order, by the type declarations it guards - the
 	 * input `extractFileInfo` walks, so a type declared inside `#if ... #end`
@@ -725,7 +745,7 @@ final class SymbolIndexBuilder {
 	 * dropped: a type public in any build keeps the binding a public one has.
 	 */
 	private static function declNodes(
-		tree: QueryNode, source: String, externModifierKind: Null<String>, privateKinds: Array<String>
+		tree: QueryNode, source: String, externModifierKind: Null<String>, privateKinds: Array<String>, prefixKinds: Array<String>
 	): Array<GuardedNode> {
 		final out: Array<GuardedNode> = [];
 		final guardedNames: Array<String> = [];
@@ -737,13 +757,19 @@ final class SymbolIndexBuilder {
 			final key: Null<String> = importDedupKey(node, source);
 			if (key != null && !seenImports.contains(key)) seenImports.push(key);
 		}
+		// a prefix keyword a region holds leads the next declaration, which may sit outside the region
+		var prefixed: Bool = false;
 		for (node in tree.children) switch node.kind {
 			case 'Conditional':
-				collectGuardedDecls(node, source, out, guardedNames, seenImports, externModifierKind, privateKinds);
+				prefixed = collectGuardedDecls(
+					node, source, out, guardedNames, seenImports, externModifierKind, privateKinds, prefixKinds, prefixed
+				);
 			case 'CondSharedBodyDecl':
-				pushGuardedDecl(node, source, out, guardedNames, seenImports, externModifierKind);
+				pushGuardedDecl(node, source, out, guardedNames, seenImports, externModifierKind, false);
+				prefixed = false;
 			case _:
-				out.push({ node: node, guarded: false });
+				out.push({ node: node, guarded: false, enumPrefixed: prefixed });
+				prefixed = prefixed && typeDeclAt(node) == null;
 		}
 		return out;
 	}
@@ -768,13 +794,18 @@ final class SymbolIndexBuilder {
 	 */
 	private static function collectGuardedDecls(
 		node: QueryNode, source: String, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>,
-		externModifierKind: Null<String>, privateKinds: Array<String>
-	): Void {
+		externModifierKind: Null<String>, privateKinds: Array<String>, prefixKinds: Array<String>, prefixedIn: Bool
+	): Bool {
 		final children: Array<QueryNode> = node.children;
+		var prefixed: Bool = prefixedIn;
 		for (i in 0...children.length) {
 			final child: QueryNode = children[i];
 			if (child.kind == 'Conditional') {
-				collectGuardedDecls(child, source, out, guardedNames, seenImports, externModifierKind, privateKinds);
+				prefixed = collectGuardedDecls(
+					child, source, out, guardedNames, seenImports, externModifierKind, privateKinds, prefixKinds, prefixed
+				);
+			} else if (prefixKinds.contains(child.kind)) {
+				prefixed = true;
 			} else if (privateKinds.contains(child.kind)) {
 				// lifted only onto a declaration the region holds, past the other modifiers marking it (`declNodes`)
 				var next: Int = i + 1;
@@ -782,9 +813,11 @@ final class SymbolIndexBuilder {
 					next++;
 				if (next < children.length && typeDeclAt(children[next]) != null) out.push({ node: child, guarded: true });
 			} else {
-				pushGuardedDecl(child, source, out, guardedNames, seenImports, externModifierKind);
+				pushGuardedDecl(child, source, out, guardedNames, seenImports, externModifierKind, prefixed);
+				prefixed = prefixed && typeDeclAt(child) == null;
 			}
 		}
+		return prefixed;
 	}
 
 	/**
@@ -799,13 +832,18 @@ final class SymbolIndexBuilder {
 	 */
 	private static function pushGuardedDecl(
 		node: QueryNode, source: String, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>,
-		externModifierKind: Null<String>
+		externModifierKind: Null<String>, prefixed: Bool
 	): Void {
 		final decl: Null<TypeDeclMatch> = typeDeclAt(node);
 		if (decl != null) {
 			final alternate: Bool = guardedNames.contains(decl.name);
 			if (!alternate) guardedNames.push(decl.name);
-			out.push({ node: node, guarded: true, alternate: alternate });
+			out.push({
+				node: node,
+				guarded: true,
+				alternate: alternate,
+				enumPrefixed: prefixed
+			});
 			return;
 		}
 		// A guarded leading meta: lift it so it reaches `extractFileInfo`'s meta run and attaches to
@@ -885,15 +923,14 @@ final class SymbolIndexBuilder {
 			hasBuild: first.hasBuild || alternate.hasBuild,
 			hasAutoBuild: first.hasAutoBuild || alternate.hasAutoBuild,
 			hasKeep: first.hasKeep || alternate.hasKeep,
+			isEnumAbstract: first.isEnumAbstract || alternate.isEnumAbstract,
 			constructsFromLiteral: first.constructsFromLiteral || alternate.constructsFromLiteral,
 			bringsExtensions: first.bringsExtensions || alternate.bringsExtensions,
 			extensionTypesRaw: agreedPaths(first.extensionTypesRaw, alternate.extensionTypesRaw),
 			members: first.members.concat(alternate.members),
 			abstractSelfRebind: first.abstractSelfRebind || alternate.abstractSelfRebind,
-			abstractForwardUnderlying: first.abstractForwardUnderlying == alternate.abstractForwardUnderlying
-				? first.abstractForwardUnderlying
-				: null,
-			underlyingRaw: first.underlyingRaw == alternate.underlyingRaw ? first.underlyingRaw : null,
+			abstractForwardUnderlying: agreed(first.abstractForwardUnderlying, alternate.abstractForwardUnderlying),
+			underlyingRaw: agreed(first.underlyingRaw, alternate.underlyingRaw),
 			branches: first.branches.concat(alternate.branches),
 			guarded: true,
 			forwardedMembers: forwarded == null || alsoForwarded == null ? null : union(forwarded, alsoForwarded)
@@ -911,6 +948,11 @@ final class SymbolIndexBuilder {
 				? first.typeParamDefaults[i]
 				: null
 		];
+	}
+
+	/** `a` when both branches write the same text, else null: a build of the other branch would read another. */
+	private static function agreed(a: Null<String>, b: Null<String>): Null<String> {
+		return a == b ? a : null;
 	}
 
 	/** Every entry of `a`, then each of `b` it lacks. */

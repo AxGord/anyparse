@@ -49,6 +49,17 @@ final class EnumAbstractForms {
 		return out;
 	}
 
+	/**
+	 * Whether a type of `kind` is an enum abstract however it is spelled: the grammar's own kind, or an abstract kind led by the
+	 * enum marker — a guarded declaration-prefix keyword (`prefixed`) or the legacy annotation among `annotations`.
+	 */
+	public static function isEnumAbstract(shape: RefShape, kind: String, prefixed: Bool, annotations: Array<String>): Bool {
+		final metaName: Null<String> = shape.enumAbstractMetaName;
+		return kind == shape.enumAbstractDeclKind
+			|| (shape.underlyingThisTypeKinds ?? []).contains(kind)
+			&& (prefixed || metaName != null && annotations.contains(metaName));
+	}
+
 	/** The unprojected enum-abstract declarations of `tree`, in document order. */
 	private static function hosts(plugin: GrammarPlugin, tree: QueryNode): Array<QueryNode> {
 		final shape: RefShape = plugin.refShape();

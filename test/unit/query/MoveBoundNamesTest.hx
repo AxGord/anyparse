@@ -12,7 +12,11 @@ class MoveBoundNamesTest extends Test {
 	private static final MODULE: String = 'package p;\n\nfunction helper(): Int {\n\treturn 1;\n}\n\nclass Mod {\n\tpublic function '
 		+ 'new() {}\n}\n\nenum abstract Kind(Int) {\n\tvar First = 1;\n}\n\nprivate class Hidden {}\n\n'
 		+ 'abstract Plain(Int) {\n\tpublic var span(get, never): Int;\n\n\tfunction get_span(): Int {\n\t\treturn 1;\n\t}\n}\n\n'
-		+ 'private function secret(): Int {\n\treturn 1;\n}\n\nfunction after(): Int {\n\treturn 1;\n}\n';
+		+ 'private function secret(): Int {\n\treturn 1;\n}\n\nfunction after(): Int {\n\treturn 1;\n}\n\n'
+		+ '@:enum abstract Legacy(Int) {\n\tvar Old = 1;\n}\n\n'
+		+ '#if never private #end function conditional(): Int {\n\treturn 1;\n}\n\n'
+		+ '#if !nope enum #end abstract Guarded(Int) {\n\tvar Gv = 1;\n}\n\n'
+		+ '#if foo\nprivate function inner(): Int {\n\treturn 1;\n}\n#end\n';
 	private static final KEPT: String = 'import p.Mod;';
 	private static final REPOINTED: String = 'import q.Mod;';
 
@@ -56,7 +60,7 @@ class MoveBoundNamesTest extends Test {
 		Assert.isTrue(user.contains('import q.Kind;'), user);
 	}
 
-	@:pin('control') @:killer('M-BOUND-BY-TYPE-EVERY-ABSTRACT')
+	@:pin('guard')
 	public function testAVarOfTheMovedPlainAbstractEarnsNoStatement(): Void {
 		final user: String = movedSecondary(17, 10, 'q/Plain.hx', 'trace(span);');
 		Assert.isFalse(user.contains('import q.Plain;'), user);
@@ -84,6 +88,36 @@ class MoveBoundNamesTest extends Test {
 	public function testAConstructorNameAnotherStatementBindsEarnsNoImportOfTheMovedEnum(): Void {
 		final reader: String = movedOutOfP('package p;\n\nenum Kind {\n\tFirst;\n}\n');
 		Assert.isFalse(reader.contains('import q.Kind;'), reader);
+	}
+
+	@:pin('control') @:killer('M-ENUM-ABSTRACT-LEGACY-META')
+	public function testAValueOfTheMovedLegacyEnumAbstractEarnsAStatement(): Void {
+		final user: String = movedSecondary(33, 17, 'q/Legacy.hx', 'trace(Old);');
+		Assert.isTrue(user.contains('import q.Legacy;'), user);
+	}
+
+	@:pin('control') @:killer('M-MODULE-FIELD-WRAPPED-PRIVATE')
+	public function testAFieldAfterAnInactivePrivateKeepsItsStatement(): Void {
+		final user: String = movedUser('trace(conditional());');
+		Assert.isTrue(user.contains(KEPT), user);
+	}
+
+	@:pin('control') @:killer('M-BOUND-BY-TYPE-EVERY-ABSTRACT')
+	public function testAVarOfARemainingPlainAbstractKeepsNoStatement(): Void {
+		final user: String = movedUser('final span: Int = 1;\n\t\ttrace(new Mod(), span);');
+		Assert.isFalse(user.contains(KEPT), user);
+	}
+
+	@:pin('control') @:killer('M-ENUM-ABSTRACT-PREFIX-KEYWORD', 'M-ENUM-PREFIX-NOT-CARRIED')
+	public function testAValueOfAGuardedPrefixEnumAbstractKeepsItsStatement(): Void {
+		final user: String = movedUser('trace(Gv);');
+		Assert.isTrue(user.contains(KEPT), user);
+	}
+
+	@:pin('control') @:killer('M-MODULE-FIELD-NEVER-PRIVATE')
+	public function testAPrivateFieldInItsOwnRegionKeepsNoStatement(): Void {
+		final user: String = movedUser('final inner: Int = 1;\n\t\ttrace(inner);');
+		Assert.isFalse(user.contains(KEPT), user);
 	}
 
 	/** Moves `Kind` out of `p` past a same-package file whose bare `First` is bound by its own `import a.Other;`, and answers that file. */

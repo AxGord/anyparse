@@ -157,7 +157,7 @@ final class ImportBindings {
 	 */
 	public function boundByType(type: TypeDeclInfo, file: FileInfo): Array<String> {
 		final bare: Array<String> = _plugin.refShape().bareConstructorTypeKinds ?? [];
-		final values: Null<Array<String>> = bare.contains(type.kind) ? typeValuesOf(type, file, [], true) : null;
+		final values: Null<Array<String>> = bare.contains(type.kind) || type.isEnumAbstract ? typeValuesOf(type, file, [], true) : null;
 		return [type.name].concat(values ?? [for (m in type.members) if (MemberKinds.isEnumConstructorKind(m.kind)) m.name]);
 	}
 
@@ -256,10 +256,9 @@ final class ImportBindings {
 
 	/**
 	 * The constructors / enum-abstract values importing `type` (declared in `file`) brings in, or null
-	 * when they cannot be listed. An enum binds every constructor; an abstract binds its non-static FIELD
-	 * members — the values of an `enum abstract`, and of a legacy `@:enum abstract`, which projects as a
-	 * plain abstract and so cannot be told apart (a plain abstract's instance properties are the price,
-	 * paid in refusals, never in a wrong rewrite); either kind carrying a build macro is unlisted. A
+	 * when they cannot be listed. An enum binds every constructor; an enum abstract (`TypeDeclInfo.isEnumAbstract`, the
+	 * legacy `@:enum abstract` included) binds its non-static FIELD members as values and a plain abstract binds none, its
+	 * instance properties being reachable only through an instance; either abstract kind carrying a build macro is unlisted. A
 	 * typedef binds what its target binds — an anonymous structure nothing, a nullable wrapper what its
 	 * argument binds (the compiler follows `Null<Col>` to `Col`'s constructors) — and is followed through
 	 * the index (`aliasValuesOf`). Every other kind binds none.
@@ -272,6 +271,7 @@ final class ImportBindings {
 		if (!abstracts.contains(type.kind) && !enums.contains(type.kind)) return [];
 		if (type.hasBuild || type.hasAutoBuild) return null;
 		if (!abstracts.contains(type.kind)) return [for (m in type.members) m.name];
+		if (!type.isEnumAbstract) return [];
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		return [for (m in type.members) if (!m.isStatic && fields.contains(m.kind)) m.name];
 	}
