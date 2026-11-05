@@ -1,13 +1,16 @@
 package unit.dev;
 
+import anyparse.grammar.json.JsonFormat;
 import dev.Battery;
 import dev.BatteryPlan;
+import dev.BatteryPlanWriter;
 import devkit.Args.UsageError;
+import devkit.BranchReportJsonParser;
 import devkit.Cmd.cmd;
 import devkit.Result;
+import devkit.StepRecord;
 import devkit.Summary.Outcome;
 import devkit.TempDir;
-import haxe.Json;
 import js.node.Fs.Fs;
 import sys.FileSystem;
 import sys.io.File;
@@ -158,7 +161,9 @@ final class BatteryTest extends Test {
 			FileSystem.createDirectory(dir.file('tree/bin'));
 			FileSystem.createDirectory(work);
 			File.saveContent(dir.file('tree/bin/test.js'), GREEN_RUNNER);
-			final engine: String = Sys.getEnv('HXQ_BIN') ?? FileSystem.fullPath('bin/apq.js');
+			// a test that pins HXQ_BIN for itself puts back an EMPTY value when none was set, which names no engine
+			final pinned: String = Sys.getEnv('HXQ_BIN') ?? '';
+			final engine: String = pinned == '' ? FileSystem.fullPath('bin/apq.js') : pinned;
 			File.saveContent(dir.file('tree/bin/hxq'), 'cmd="$$1"; shift; exec node "$engine" "$$cmd" --lang haxe "$$@"\n');
 			File.saveContent(dir.file('tree/bin/.last-sweep.json'), '{"stale":1}');
 			final plan: BatteryPlan = {
@@ -178,13 +183,13 @@ final class BatteryTest extends Test {
 				run: 'r',
 				ownLease: false
 			};
-			File.saveContent(dir.file('work/plan.json'), Json.stringify(plan));
+			File.saveContent(dir.file('work/plan.json'), BatteryPlanWriter.write(plan, JsonFormat.instance.compactWriteOptions));
 			Assert.equals(0, Battery.main(['--rows', 'suite,corpus', '--plan', dir.file('work/plan.json')]));
 			Assert.isFalse(FileSystem.exists(dir.file('tree/bin/.last-sweep.json')), 'the previous run\'s sweep is not there to be read');
 			Assert.equals(
 				'{"stale":1}', File.getContent(dir.file('tree/bin/.prev-sweep.json')), 'it is moved to where the corpus class rotates it'
 			);
-			final steps: Array<{ name: String, outcome: String }> = Json.parse(File.getContent(dir.file('work/branch-suite.json'))).steps;
+			final steps: Array<StepRecord> = BranchReportJsonParser.parse(File.getContent(dir.file('work/branch-suite.json'))).steps;
 			Assert.same(
 				[{ name: 'suite', outcome: 'passed' }, { name: 'corpus', outcome: 'failed' }],
 				steps.map(s -> {name: s.name, outcome: s.outcome })

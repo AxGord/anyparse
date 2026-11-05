@@ -7,6 +7,8 @@ import anyparse.check.oracle.CompilerServer;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.OracleServerPool;
 import anyparse.check.oracle.PendingRuns;
+import anyparse.check.oracle.ServerState;
+import anyparse.check.oracle.ServerStateParser;
 import unit.check.oracle.PortHolder.holding;
 import unit.check.oracle.PortHolder.unusedPort;
 import unit.check.oracle.PortHolder.watching;
@@ -122,7 +124,7 @@ final class OracleServerPortTest extends Test {
 			final outcome: Null<OracleOutcome> = CompilerServer.typecheck('build.hxml', root, [], [], () -> candidates.shift() ?? next);
 			Assert.equals(0, connections(), 'nothing ever connected to the held port');
 			Assert.equals('Confirmed', Std.string(outcome), 'a warm typecheck through the free port');
-			final recorded: { port: Int } = haxe.Json.parse(sys.io.File.getContent(CompilerServer.stateFile('build.hxml', root, [])));
+			final recorded: ServerState = ServerStateParser.parse(sys.io.File.getContent(CompilerServer.stateFile('build.hxml', root, [])));
 			Assert.equals(next, recorded.port, 'recorded on the free port, not the held one');
 		}));
 		#else

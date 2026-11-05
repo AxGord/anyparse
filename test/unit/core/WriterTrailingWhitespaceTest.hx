@@ -4,6 +4,7 @@ import anyparse.core.Doc;
 import anyparse.core.Renderer;
 import anyparse.format.IndentChar;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.json.JsonText;
 import haxe.Exception;
 
 using StringTools;
@@ -250,7 +251,7 @@ class WriterTrailingWhitespaceTest extends Test {
 	private function assertNoStrandedBlank(source: String, leaf: String): Void {
 		final written: String = write(source);
 		final stranded: Array<String> = strandedLines(written);
-		Assert.equals(0, stranded.length, '$leaf reached a line end: ${haxe.Json.stringify(stranded)}\nin:\n<$written>');
+		Assert.equals(0, stranded.length, '$leaf reached a line end: [${stranded.map(JsonText.quote).join(',')}]\nin:\n<$written>');
 	}
 
 	/** Every line of `written`, in order, that ends in a space or a tab. */

@@ -1,7 +1,7 @@
 package unit.dev;
 
+import anyparse.grammar.json.JsonText;
 import dev.TokenTranscript;
-import haxe.Json;
 import utest.Assert;
 import utest.Test;
 
@@ -34,9 +34,9 @@ final class TokenTranscriptTest extends Test {
 		final big: String = ''.lpad('x', 8004 * TokenTranscript.CHARS_PER_TOKEN - 32);
 		final agent: AgentReading = TokenTranscript.read('a', transcript([
 			user('slice S1 go'),
-			call('t1', 'Bash', { command: 'hxq show f.hx' }),
+			call('t1', 'Bash', ['command' => 'hxq show f.hx']),
 			result('t1', big),
-			call('t2', 'Bash', { command: 'hxq show g.hx' }),
+			call('t2', 'Bash', ['command' => 'hxq show g.hx']),
 			result('t2', 'ok')
 		]), null);
 		final stat: Null<ToolStat> = agent.tools['hxq show'];
@@ -49,13 +49,13 @@ final class TokenTranscriptTest extends Test {
 	public function testReadsOfAnHxFileAreSplitFromOtherReads(): Void {
 		final agent: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Read', { file_path: '/w/src/A.hx' }),
+			call('t1', 'Read', ['file_path' => '/w/src/A.hx']),
 			result('t1', 'a'),
-			call('t2', 'Read', { file_path: '/w/log.txt' }),
+			call('t2', 'Read', ['file_path' => '/w/log.txt']),
 			result('t2', 'b'),
-			call('t3', 'mcp__plugin_workflow_wf__status', {}),
+			call('t3', 'mcp__plugin_workflow_wf__status', []),
 			result('t3', 'c'),
-			call('t4', 'mcp__other__ping', {}),
+			call('t4', 'mcp__other__ping', []),
 			result('t4', 'd')
 		]), null);
 		Assert.equals(1, agent.tools['Read .hx']?.calls);
@@ -67,24 +67,17 @@ final class TokenTranscriptTest extends Test {
 	public function testAMessageWrittenPerContentBlockIsOneTurnWithItsLastUsage(): Void {
 		final agent: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			assistant('m1', 1000, {
-				input_tokens: 2,
-				output_tokens: 5,
-				cache_read_input_tokens: 10,
-				cache_creation: { ephemeral_5m_input_tokens: 7, ephemeral_1h_input_tokens: 3 }
-			}),
-			assistant('m1', 4000, {
-				input_tokens: 2,
-				output_tokens: 150,
-				cache_read_input_tokens: 10,
-				cache_creation: { ephemeral_5m_input_tokens: 7, ephemeral_1h_input_tokens: 3 }
-			}),
-			assistant('m2', 9000, {
-				input_tokens: 1,
-				output_tokens: 1,
-				cache_read_input_tokens: 0,
-				cache_creation_input_tokens: 40
-			})
+			assistant(
+				'm1', 1000,
+				'{"input_tokens":2,"output_tokens":5,"cache_read_input_tokens":10,'
+				+ '"cache_creation":{"ephemeral_5m_input_tokens":7,"ephemeral_1h_input_tokens":3}}'
+			),
+			assistant(
+				'm1', 4000,
+				'{"input_tokens":2,"output_tokens":150,"cache_read_input_tokens":10,'
+				+ '"cache_creation":{"ephemeral_5m_input_tokens":7,"ephemeral_1h_input_tokens":3}}'
+			),
+			assistant('m2', 9000, '{"input_tokens":1,"output_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":40}')
 		]), null);
 		Assert.equals(2, agent.turns.length);
 		Assert.equals(150, agent.turns[0].output);
@@ -146,9 +139,9 @@ final class TokenTranscriptTest extends Test {
 	public function testACommandBehindAnExportAndASemicolonIsKeyedByTheProgram(): Void {
 		final agent: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Bash', { command: 'cd /w && export HXQ_BIN=/w/bin/apq.js; hxq show f.hx' }),
+			call('t1', 'Bash', ['command' => 'cd /w && export HXQ_BIN=/w/bin/apq.js; hxq show f.hx']),
 			result('t1', 'ok'),
-			call('t2', 'Bash', { command: 'HXQ_BIN=/w/bin/apq.js hxq show g.hx' }),
+			call('t2', 'Bash', ['command' => 'HXQ_BIN=/w/bin/apq.js hxq show g.hx']),
 			result('t2', 'ok')
 		]), null);
 		Assert.equals(2, agent.tools['hxq show']?.calls);
@@ -166,15 +159,15 @@ final class TokenTranscriptTest extends Test {
 		final long: String = ''.lpad('y', 300);
 		final agent: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Bash', { command: 'git log one' }),
+			call('t1', 'Bash', ['command' => 'git log one']),
 			result('t1', 'a'),
-			call('t2', 'Bash', { command: 'git log two' }),
+			call('t2', 'Bash', ['command' => 'git log two']),
 			result('t2', 'aaaaaa'),
-			call('t3', 'Bash', { command: 'git log\n  three $long' }),
+			call('t3', 'Bash', ['command' => 'git log\n  three $long']),
 			result('t3', 'aaaa'),
-			call('t4', 'Bash', { command: 'git log four' }),
+			call('t4', 'Bash', ['command' => 'git log four']),
 			result('t4', 'aa'),
-			call('t5', 'Read', { file_path: '/w/notes.txt' }),
+			call('t5', 'Read', ['file_path' => '/w/notes.txt']),
 			result('t5', 'a')
 		]), null);
 		final biggest: Array<BigCall> = agent.tools['git log']?.biggest ?? [];
@@ -190,17 +183,17 @@ final class TokenTranscriptTest extends Test {
 	public function testBypassesAndWritePayloadsAreCollectedPerAgent(): Void {
 		final agent: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Bash', { command: 'sed -n 1,9p src/A.hx' }),
+			call('t1', 'Bash', ['command' => 'sed -n 1,9p src/A.hx']),
 			result('t1', 'r'),
-			call('t2', 'Edit', { file_path: '/w/anyparse/src/A.hx', new_string: '\tx\n\t\ty' }),
+			call('t2', 'Edit', ['file_path' => '/w/anyparse/src/A.hx', 'new_string' => '\tx\n\t\ty']),
 			result('t2', 'r'),
-			call('t3', 'Write', { file_path: '/tmp/scratch/src/B.hx', content: 'z' }),
+			call('t3', 'Write', ['file_path' => '/tmp/scratch/src/B.hx', 'content' => 'z']),
 			result('t3', 'r'),
-			call('t4', 'Bash', { command: "hxq patch f.hx --write 'a\n====\n  b'" }),
+			call('t4', 'Bash', ['command' => "hxq patch f.hx --write 'a\n====\n  b'"]),
 			result('t4', 'r'),
-			call('t5', 'Bash', { command: "sed -i '' 's/a/b/' src/A.hx" }),
+			call('t5', 'Bash', ['command' => "sed -i '' 's/a/b/' src/A.hx"]),
 			result('t5', 'r'),
-			call('t6', 'Bash', { command: 'cd /tmp/fx && cat > src/F.hx' }),
+			call('t6', 'Bash', ['command' => 'cd /tmp/fx && cat > src/F.hx']),
 			result('t6', 'r')
 		]), null);
 		Assert.equals(1, agent.hxReads.length);
@@ -224,14 +217,14 @@ final class TokenTranscriptTest extends Test {
 	public function testAHookDeniedCallIsADeniedAttemptNotABypass(): Void {
 		final denied: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Bash', { command: 'sed -n 1p src/A.hx' }),
+			call('t1', 'Bash', ['command' => 'sed -n 1p src/A.hx']),
 			failure('t1', 'PreToolUse:Bash hook error: hxq gate: viewing a parseable .hx via sed')
 		]), null);
 		Assert.equals(0, denied.hxReads.length);
 		Assert.equals(1, denied.deniedReads.length);
 		final ran: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Bash', { command: 'sed -n 1p src/A.hx' }),
+			call('t1', 'Bash', ['command' => 'sed -n 1p src/A.hx']),
 			result('t1', 'class A {}')
 		]), null);
 		Assert.equals(1, ran.hxReads.length);
@@ -242,7 +235,7 @@ final class TokenTranscriptTest extends Test {
 	public function testACallThatFailedByItselfStillRan(): Void {
 		final agent: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Bash', { command: 'cp /tmp/x.bak src/A.hx' }),
+			call('t1', 'Bash', ['command' => 'cp /tmp/x.bak src/A.hx']),
 			failure('t1', 'cp: /tmp/x.bak: No such file')
 		]), null);
 		Assert.equals(1, agent.hxWrites.length);
@@ -253,82 +246,52 @@ final class TokenTranscriptTest extends Test {
 		final script: String = "python3 - <<'EOF'\nopen('src/A.hx', 'w').write('x')\nEOF";
 		final ran: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Bash', { command: script }),
+			call('t1', 'Bash', ['command' => script]),
 			result('t1', '')
 		]), null);
 		Assert.equals(1, ran.scriptWrites.length);
 		Assert.equals(0, ran.hxWrites.length);
 		final denied: AgentReading = TokenTranscript.read('a', transcript([
 			user('x'),
-			call('t1', 'Bash', { command: script }),
+			call('t1', 'Bash', ['command' => script]),
 			failure('t1', 'PreToolUse:Bash hook error: nope')
 		]), null);
 		Assert.equals(0, denied.scriptWrites.length);
 		Assert.equals(1, denied.deniedWrites.length);
 	}
 
-	/** The JSONL text of `events`. */
-	private static function transcript(events: Array<Any>): String {
-		return [for (event in events) Json.stringify(event)].join('\n');
+	/** The JSONL text of `events`, each a line of JSON. */
+	private static function transcript(events: Array<String>): String {
+		return events.join('\n');
 	}
 
-	private static function user(prompt: String): Any {
-		return { type: 'user', message: { role: 'user', content: prompt } };
+	private static function user(prompt: String): String {
+		return '{"type":"user","message":{"role":"user","content":${JsonText.quote(prompt)}}}';
 	}
 
-	private static function call(id: String, name: String, input: Any): Any {
-		return {
-			type: 'assistant',
-			timestamp: '2026-01-01T00:00:00Z',
-			cwd: '/w/anyparse',
-			message: {
-				id: 'm$id',
-				model: 'claude-opus-5-5',
-				content: [
-					{
-						type: 'tool_use',
-						id: id,
-						name: name,
-						input: input
-					}
-				]
-			}
-		};
+	private static function call(id: String, name: String, input: Map<String, String>): String {
+		final fields: Array<String> = [for (key => value in input) '${JsonText.quote(key)}:${JsonText.quote(value)}'];
+		return '{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","cwd":"/w/anyparse","message":{"id":${JsonText.quote('m$id')},'
+			+ '"model":"claude-opus-5-5","content":[{"type":"tool_use","id":${JsonText.quote(id)},"name":${JsonText.quote(name)},'
+			+ '"input":{${fields.join(',')}}}]}}';
 	}
 
-	private static function result(id: String, text: String): Any {
-		return { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: text }] } };
+	private static function result(id: String, text: String): String {
+		return '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":${JsonText.quote(id)},'
+			+ '"content":${JsonText.quote(text)}}]}}';
 	}
 
-	/** An assistant entry of the message `id` stamped `at` milliseconds after the epoch. */
-	private static function assistant(id: String, at: Float, usage: Any): Any {
-		return {
-			type: 'assistant',
-			timestamp: new js.lib.Date(at).toISOString(),
-			message: {
-				id: id,
-				model: 'claude-opus-5-5',
-				content: [],
-				usage: usage
-			}
-		};
+	/** An assistant entry of the message `id` stamped `at` milliseconds after the epoch, `usage` its usage as JSON. */
+	private static function assistant(id: String, at: Float, usage: String): String {
+		return
+			'{"type":"assistant","timestamp":${JsonText.quote(new js.lib.Date(at).toISOString())},"message":{"id":${JsonText.quote(id)},'
+				+ '"model":"claude-opus-5-5","content":[],"usage":$usage}}';
 	}
 
-	private static function failure(id: String, text: String): Any {
-		return {
-			type: 'user',
-			message: {
-				role: 'user',
-				content: [
-					{
-						type: 'tool_result',
-						tool_use_id: id,
-						is_error: true,
-						content: text
-					}
-				]
-			}
-		};
+	private static function failure(id: String, text: String): String {
+		return
+			'{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":${JsonText.quote(id)},"is_error":true,'
+				+ '"content":${JsonText.quote(text)}}]}}';
 	}
 
 }

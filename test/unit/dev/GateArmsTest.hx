@@ -1,12 +1,14 @@
 package unit.dev;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JsonFormat;
 import dev.ArmRegistry;
+import dev.BaselineWriter;
 import dev.GateArms;
 import dev.GateTree;
 import devkit.Cmd.cmd;
 import devkit.Summary.Outcome;
 import devkit.TempDir;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -393,15 +395,15 @@ final class GateArmsTest extends Test {
 			cmd('git add -A').at(tree).check();
 			cmd('git $git commit -q -m slice').at(tree).check();
 			File.saveContent(
-				'$tree-logs/baseline.json', Json.stringify({
+				'$tree-logs/baseline.json', BaselineWriter.write({
 					base: base,
 					tests: 0,
 					assertions: 0,
-					lists: {},
+					lists: JObject([]),
 					lint: '',
 					infra: [],
 					frozen: []
-				})
+				}, JsonFormat.instance.compactWriteOptions)
 			);
 			body(tree);
 		});

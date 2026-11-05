@@ -6,12 +6,14 @@ import anyparse.check.common.imports.UnusedImport;
 import anyparse.check.common.unused.DeadCode;
 import anyparse.check.common.unused.SelfAssignment;
 import anyparse.check.common.unused.UnusedLocal;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JsonText;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
-import haxe.DynamicAccess;
-import haxe.Json;
+import devkit.RawJson;
 
 using StringTools;
 
@@ -535,15 +537,15 @@ class LintSliceTest extends Test {
 		), plugin());
 		Assert.equals(1, vs.length);
 		final sourceOf: Map<String, String> = [file => src];
-		final parsed: Array<Dynamic> = Json.parse(LintFormat.json(vs, sourceOf));
+		final parsed: Array<JValue> = RawJson.items(JValueParser.parse(LintFormat.json(vs, sourceOf)));
 		Assert.equals(1, parsed.length);
-		final rec: Dynamic = parsed[0];
-		Assert.equals(file, rec.file);
-		Assert.equals(2, Std.int(rec.line));
-		Assert.equals('warning', rec.severity);
-		Assert.equals('unused-import', rec.rule);
-		Assert.equals(2, Std.int(rec.endLine));
-		Assert.equals('import a.b.Unused;'.length + 1, Std.int(rec.endCol), 'the end is exclusive: one past the statement');
+		final rec: JValue = parsed[0];
+		Assert.equals(JsonText.quote(file), written(rec, 'file'));
+		Assert.equals('2', written(rec, 'line'));
+		Assert.equals('"warning"', written(rec, 'severity'));
+		Assert.equals('"unused-import"', written(rec, 'rule'));
+		Assert.equals('2', written(rec, 'endLine'));
+		Assert.equals('${'import a.b.Unused;'.length + 1}', written(rec, 'endCol'), 'the end is exclusive: one past the statement');
 	}
 
 	/** A finding with no span leaves all four coordinates null rather than absent. */
@@ -555,12 +557,10 @@ class LintSliceTest extends Test {
 			severity: Severity.Warning,
 			message: 'no position'
 		};
-		final records: Array<DynamicAccess<Null<Any>>> = Json.parse(LintFormat.json([spanless], ['F.hx' => '']));
-		final bare: DynamicAccess<Null<Any>> = records[0];
-		Assert.isTrue(bare.exists('endLine'), 'the key is present on a spanless record');
-		Assert.isNull(bare['line']);
-		Assert.isNull(bare['endLine']);
-		Assert.isNull(bare['endCol']);
+		final bare: JValue = RawJson.items(JValueParser.parse(LintFormat.json([spanless], ['F.hx' => ''])))[0] ?? JNull;
+		Assert.equals('null', written(bare, 'endLine'), 'the key is present on a spanless record');
+		Assert.equals('null', written(bare, 'line'));
+		Assert.equals('null', written(bare, 'endCol'));
 	}
 
 	/**
@@ -913,6 +913,18 @@ class LintSliceTest extends Test {
 			{ file: 'a/b/Bar.hx', source: 'package a.b;\nclass Bar {}' },
 			{ file: 'a/b/Gone.hx', source: 'package a.b;\nclass Gone {}' }
 		];
+	}
+
+	/** The value `record` holds at `key` as JSON spells it, `null` included; `absent` for a key it does not hold. */
+	private static function written(record: JValue, key: String): String {
+		var found: String = 'absent';
+		switch record {
+			case JObject(entries):
+				for (entry in entries) if (entry.key == key)
+					found = RawJson.print(entry.value);
+			case _:
+		}
+		return found;
 	}
 
 }

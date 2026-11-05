@@ -33,6 +33,32 @@ class JValueTools {
 		}
 	}
 
+	/**
+	 * The value at the dotted `path` of `value`: each segment a key of an object, read as `field` reads it, or the decimal
+	 * index of an array element; null where a step finds nothing, and for a `null` element as for a `null` key. An empty path
+	 * names `value` itself; a key holding a dot is read with `field`.
+	 */
+	public static function at(value: Null<JValue>, path: String): Null<JValue> {
+		if (path == '') return value;
+		var here: Null<JValue> = value;
+		for (segment in path.split('.')) {
+			here = switch here {
+				case JArray(items):
+					final index: Null<Int> = Std.parseInt(segment);
+					index == null || '$index' != segment || index < 0 || index >= items.length
+						? null
+						: switch items[index] {
+							case JNull: null;
+							case held: held;
+						};
+				case _:
+					field(here, segment);
+			}
+			if (here == null) return null;
+		}
+		return here;
+	}
+
 	/** Deep structural equality of two `JValue`s. **/
 	public static function equals(a: JValue, b: JValue): Bool {
 		return switch [a, b] {

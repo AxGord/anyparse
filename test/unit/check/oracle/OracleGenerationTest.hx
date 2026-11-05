@@ -6,9 +6,13 @@ import sys.io.File;
 #end
 import anyparse.check.LintConfig;
 import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.GenerationRecord;
+import anyparse.check.oracle.GenerationRecordParser;
+import anyparse.check.oracle.GenerationRecordWriter;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.OracleGeneration;
 import anyparse.check.oracle.OracleGenerationLock;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.Cli;
 import anyparse.query.FileIdentity;
 import anyparse.query.cli.command.LintFixVerify;
@@ -602,7 +606,7 @@ final class OracleGenerationTest extends Test {
 		OracleGeneration.prepare(configs);
 		OracleGeneration.release(configs);
 		for (name in ['g1', 'g2']) js.Syntax.code("require('fs').appendFileSync({0}, 'x')", '$dir/$name.input');
-		File.saveContent('$dir/configs.json', haxe.Json.stringify(configs));
+		File.saveContent('$dir/configs.json', testkit.TestChild.configsText(configs));
 		// a deadlocked run gives up only at its deadline, so finishing inside it is the proof; generous, so load cannot reach it
 		final lockWait: Int = 60000;
 		final child: String = 'APQ_TEST_CHILD=prepare APQ_TEST_CHILD_INPUT=$dir/configs.json APQ_ORACLE_LOCK_WAIT=$lockWait '
@@ -697,9 +701,9 @@ final class OracleGenerationTest extends Test {
 		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
 		OracleGeneration.prepare([config]);
 		final record: String = OracleGeneration.recordFile(OracleGeneration.groupsOf([config])[0]);
-		final held: Dynamic = haxe.Json.parse(File.getContent(record));
+		final held: GenerationRecord = GenerationRecordParser.parse(File.getContent(record));
 		held.format = 'apq-oracle-generate v1';
-		File.saveContent(record, haxe.Json.stringify(held));
+		File.saveContent(record, GenerationRecordWriter.write(held, JsonFormat.instance.compactWriteOptions));
 		OracleGeneration.prepare([config]);
 		Assert.equals(2, runs(dir), 'the v1 record was not trusted');
 		CliFixture.removeDir(dir);
@@ -996,9 +1000,9 @@ final class OracleGenerationTest extends Test {
 		OracleGeneration.prepare([current]);
 		OracleGeneration.release([current]);
 		final record: String = OracleGeneration.recordFile(OracleGeneration.groupsOf([current])[0]);
-		final rival: Dynamic = haxe.Json.parse(File.getContent(record));
+		final rival: GenerationRecord = GenerationRecordParser.parse(File.getContent(record));
 		rival.command = 'the rival command';
-		File.saveContent('$dir/rival.json', haxe.Json.stringify(rival));
+		File.saveContent('$dir/rival.json', GenerationRecordWriter.write(rival, JsonFormat.instance.compactWriteOptions));
 		final other: OracleConfig = declared(
 			dir, 'printf \'%s\\n\' \'-cp .\' \'-main Main\' > o.hxml && echo \'# rival\' >> gen.hxml && cp rival.json \'$record\'',
 			'o.hxml'

@@ -1,9 +1,12 @@
 package unit.dev;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.query.Cli;
 import dev.ArmRegistry;
+import devkit.RawJson;
 import devkit.TempDir;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -34,23 +37,26 @@ final class ArmMoveTest extends Test {
 				Assert.fail('the real registry no longer holds $ARM');
 				return;
 			}
-			final arm: { type: String, method: String, find: String } = Json.parse(record.text);
-			final simple: String = arm.type.substr(arm.type.lastIndexOf('.') + 1);
-			final oldPackage: String = arm.type.substr(0, arm.type.length - simple.length - 1);
+			final arm: JValue = JValueParser.parse(record.text);
+			final type: String = RawJson.stringAt(arm, 'type') ?? '';
+			final simple: String = type.substr(type.lastIndexOf('.') + 1);
+			final oldPackage: String = type.substr(0, type.length - simple.length - 1);
 			final from: String = Path.join([repo, 'src', oldPackage.split('.').join('/'), '$simple.hx']);
 			final to: String = Path.join([repo, 'src/zz/moved', '$simple.hx']);
 			FileSystem.createDirectory(Path.directory(from));
 			final head: String = 'package $oldPackage;\n\nclass $simple {\n\n';
-			final body: String = '\tpublic static function ${arm.method}():Int {\n\t\t${arm.find}\n\t\treturn 1;\n\t}\n\n}\n';
+			final method: Null<String> = RawJson.stringAt(arm, 'method');
+			final find: Null<String> = RawJson.stringAt(arm, 'find');
+			final body: String = '\tpublic static function $method():Int {\n\t\t$find\n\t\treturn 1;\n\t}\n\n}\n';
 			final source: String = head + body;
 			File.saveContent(from, source);
-			final entry: Null<Any> = (cast Json.parse(File.getContent('apq.json'))
-				.move.registries: Array<Any>).find(r -> Reflect.field(r, 'file') == ArmRegistry.DIRECTORY);
+			final entry: Null<JValue> = RawJson.items(JValueTools.at(JValueParser.parse(File.getContent('apq.json')), 'move.registries'))
+				.find(r -> RawJson.stringAt(r, 'file') == ArmRegistry.DIRECTORY);
 			if (entry == null) {
 				Assert.fail('apq.json declares no move registry for ${ArmRegistry.DIRECTORY}');
 				return;
 			}
-			File.saveContent(Path.join([repo, 'apq.json']), Json.stringify({ move: { scope: ['src'], registries: [entry] } }));
+			File.saveContent(Path.join([repo, 'apq.json']), '{"move":{"scope":["src"],"registries":[${RawJson.print(entry)}]}}');
 			final printed: String = CliFixture.captureStderr(() ->
 				Assert.equals(0, Cli.run(['move', from, '--to', Path.directory(to), '--write']))
 			);
@@ -60,7 +66,9 @@ final class ArmMoveTest extends Test {
 			final newDocument: String = File.getContent(Path.join([arms, 'zz.moved.json']));
 			Assert.isTrue(newDocument.indexOf('"$ARM"') > 0, 'the record sits in the document of the new package');
 			final moved: Null<ArmRecord> = ArmRegistry.read(arms).find(r -> r.key == ARM);
-			Assert.equals('zz.moved.$simple', Reflect.field(Json.parse(moved?.text ?? '{}'), 'type'), 'the record names the moved type');
+			Assert.equals(
+				'zz.moved.$simple', RawJson.stringAt(JValueParser.parse(moved?.text ?? '{}'), 'type'), 'the record names the moved type'
+			);
 			Assert.isTrue(FileSystem.exists(to) && !FileSystem.exists(from));
 			final status: Int = ArmApply.applyOnly(repo, [ARM]);
 			Assert.equals(0, status, 'the arm still finds its member in the relocated module');

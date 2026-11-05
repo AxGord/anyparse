@@ -1,12 +1,13 @@
 package unit.devkit;
 
+import anyparse.grammar.json.JValueParser;
 import devkit.Cmd.cmd;
 import devkit.CommandFailed;
 import devkit.Pool;
+import devkit.RawJson;
 import devkit.Result;
 import devkit.TempDir;
 import haxe.Exception;
-import haxe.Json;
 import haxe.Timer;
 import utest.Assert;
 import utest.Test;
@@ -118,7 +119,7 @@ final class CommandTest extends Test {
 
 	public function testArgumentsReachTheProgramVerbatim(): Void {
 		final weird: Array<String> = ['--foo', 'a b', '', '$$HOME', 'it\'s', 'x;y|z', '"q"', '*', '`id`'];
-		final echoed: Array<String> = Json.parse(cmd('$_node -e $ECHO_ARGS -- $weird').text());
+		final echoed: Null<Array<String>> = RawJson.strings(JValueParser.parse(cmd('$_node -e $ECHO_ARGS -- $weird').text()));
 		Assert.same(weird, echoed);
 	}
 

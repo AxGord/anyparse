@@ -1,6 +1,7 @@
 package unit.dev;
 
 import anyparse.grammar.json.JsonFormat;
+import anyparse.grammar.json.JsonText;
 import dev.AuditReport;
 import dev.SliceStats.Landing;
 import dev.TokenAudit;
@@ -11,7 +12,6 @@ import dev.TokenTranscript;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.TempDir;
-import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
@@ -89,7 +89,7 @@ final class TokenAuditTest extends Test {
 			for (i => command in ['hxq show two.hx', '**\nfoo bar', 'date']) {
 				final size: Int = [400, 200, 40][i];
 				'{"type":"assistant","message":{"id":"m$i","content":[{"type":"tool_use","id":"t$i","name":"Bash","input":'
-					+ Json.stringify({ command: command })
+					+ '{"command":${JsonText.quote(command)}}'
 					+ '}]}}\n{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t$i","content":"'
 					+ ''.lpad('x', size)
 					+ '"}]}}';

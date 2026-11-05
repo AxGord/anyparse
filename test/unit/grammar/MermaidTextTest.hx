@@ -1,7 +1,7 @@
 package unit.grammar;
 
+import anyparse.grammar.json.JsonText;
 import anyparse.grammar.mermaid.MermaidText;
-import haxe.Json;
 import utest.Assert;
 import utest.Test;
 
@@ -154,7 +154,7 @@ class MermaidTextTest extends Test {
 	/** Every value of each kind decodes back to itself through every encoder of that kind. */
 	public function testEveryLabelRoundTrips(): Void {
 		for (text in PLAIN) {
-			final shown: String = Json.stringify(text);
+			final shown: String = JsonText.quote(text);
 			Assert.equals(text, MermaidText.decodePlain(MermaidText.encodePlain(text)), 'plain: $shown');
 			Assert.equals(text, MermaidText.decodePlain(MermaidText.encodePlainSolid(text)), 'solid: $shown');
 			Assert.equals(text, MermaidText.decodePlain(MermaidText.encodePlainThick(text)), 'thick: $shown');
@@ -162,7 +162,7 @@ class MermaidTextTest extends Test {
 			Assert.equals(text, MermaidText.decodeMarkdown(MermaidText.encodeMarkdown(text)), 'markdown: $shown');
 		}
 		for (html in MARKUP)
-			Assert.equals(html, MermaidText.decodeMarkup(MermaidText.encodeMarkup(html)), 'markup: ${Json.stringify(html)}');
+			Assert.equals(html, MermaidText.decodeMarkup(MermaidText.encodeMarkup(html)), 'markup: ${JsonText.quote(html)}');
 	}
 
 }

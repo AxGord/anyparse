@@ -1,8 +1,11 @@
 package unit.dev;
 
 import anyparse.core.TempScratch;
+import anyparse.grammar.json.JsonText;
+import dev.SweepCatalog;
+import dev.SweepCatalogParser;
+import dev.SweepTrap;
 import dev.TrapFixSweep;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -81,7 +84,8 @@ final class TrapFixSweepTest extends Test {
 			'}'
 		];
 		File.saveContent(
-			catalog, '{"traps": [{"name": "map", "files": {"Main.hx": ${Json.stringify(main)}}, "probes": [{"file": "Main.hx"}]}]}'
+			catalog,
+			'{"traps": [{"name": "map", "files": {"Main.hx": [${main.map(JsonText.quote).join(',')}]}, "probes": [{"file": "Main.hx"}]}]}'
 		);
 		final swept: Array<SweptProbe> = TrapFixSweep.sweep(catalog, FileSystem.absolutePath(engine), ['--all']);
 		FileSystem.deleteFile(catalog);
@@ -90,6 +94,19 @@ final class TrapFixSweepTest extends Test {
 		Assert.isTrue(swept.length == 1 && swept[0].exercised.contains('prefer-map-type'), [for (s in swept) s.exercised.join(', ')].join(
 			' | '
 		));
+	}
+
+	/** Both the sweep and the resolution traps read a project through this, so a probe's own text must reach them over the trap's file. */
+	@:pin('control')
+	@:killer('M-SWEEP-FILES-OWN-TEXT-LOST')
+	public function testAProbesOwnTextReplacesTheTrapsFileOfThatName(): Void {
+		final document: String = '{"traps": [{"name": "t", "files": {"A.hx": ["trap", "a"], "B.hx": ["trap b"]},'
+			+ ' "probes": [{"file": "A.hx", "text": ["own", "a"]}]}]}';
+		final catalog: SweepCatalog = SweepCatalogParser.parse(document);
+		final trap: SweepTrap = catalog.traps[0];
+		final files: Map<String, String> = TrapFixSweep.filesOf(trap, trap.probes[0]);
+		Assert.equals('own\na\n', files['A.hx'], 'the probe names A.hx and gives its text');
+		Assert.equals('trap b\n', files['B.hx'], 'the file the probe does not name stays the trap\'s');
 	}
 
 }

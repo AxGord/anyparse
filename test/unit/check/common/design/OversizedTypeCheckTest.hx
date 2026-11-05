@@ -3,8 +3,8 @@ package unit.check.common.design;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.design.OversizedType;
+import anyparse.grammar.json.JsonText;
 import anyparse.query.CachingGrammarPlugin;
-import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -652,7 +652,7 @@ class OversizedTypeCheckTest extends Test {
 
 	/** The `apq.json` text granting `entries`, with `options` (each followed by a comma) ahead of the list. */
 	private static function grantConfig(entries: Array<String>, options: String): String {
-		return '{"rules": {"oversized-type": {$options"grants": ${Json.stringify(entries)}}}}';
+		return '{"rules": {"oversized-type": {$options"grants": [${entries.map(JsonText.quote).join(',')}]}}}';
 	}
 
 	/** An interface named `I` declaring `n` methods `m0`… — the contract a fixture's members are dictated by. */

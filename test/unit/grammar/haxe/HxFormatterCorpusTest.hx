@@ -11,6 +11,11 @@ import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.json.JsonFormat;
+import anyparse.query.cli.command.SweepCorpus;
+import anyparse.query.format.json.SweepSnapshot;
+import anyparse.query.format.json.SweepSnapshotParser;
+import anyparse.query.format.json.SweepSnapshotWriter;
 import anyparse.runtime.ByteOrderMark;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
@@ -198,7 +203,7 @@ class HxFormatterCorpusTest extends Test {
 			// section is empty. Compare actual='' against `tc.expected`
 			// directly (PASS when the fixture expects empty too); no
 			// parse/write call runs.
-			if (isDisabledOrExcluded(tc.config, relPath)) {
+			if (SweepCorpus.formatterDisabled(tc.config, relPath)) {
 				if (tc.expected == '') {
 					pass++;
 					sweepFixtures.push({ path: relPath, status: 'PASS' });
@@ -312,12 +317,10 @@ class HxFormatterCorpusTest extends Test {
 		var prevFail: Null<Int> = null;
 		var prevSkipParse: Null<Int> = null;
 		if (FileSystem.exists(SWEEP_JSON_PATH)) try {
-			final raw: String = sys.io.File.getContent(SWEEP_JSON_PATH);
-			final obj: Dynamic = haxe.Json.parse(raw);
-			if (Reflect.hasField(obj, 'pass') && Std.isOfType(Reflect.field(obj, 'pass'), Int)) prevPass = Reflect.field(obj, 'pass');
-			if (Reflect.hasField(obj, 'fail') && Std.isOfType(Reflect.field(obj, 'fail'), Int)) prevFail = Reflect.field(obj, 'fail');
-			if (Reflect.hasField(obj, 'skipParse') && Std.isOfType(Reflect.field(obj, 'skipParse'), Int))
-				prevSkipParse = Reflect.field(obj, 'skipParse');
+			final prior: SweepSnapshot = SweepSnapshotParser.parse(sys.io.File.getContent(SWEEP_JSON_PATH));
+			prevPass = prior.pass;
+			prevFail = prior.fail;
+			prevSkipParse = prior.skipParse;
 		} catch (_: Exception) {/* prior snapshot unreadable/malformed — no baseline delta */}
 		final deltaStr: String = if (prevPass != null && prevFail != null && prevSkipParse != null) {
 			final dPass: Int = sweepPass - (prevPass: Int);
@@ -339,15 +342,15 @@ class HxFormatterCorpusTest extends Test {
 			// `apq recon --regression-probe` reads to diff status FLIPS
 			// between sweeps. Backwards-compatible — older sweep readers
 			// (the in-process Δ-printer above) ignore the field.
-			final json: String = haxe.Json.stringify({
+			final json: String = SweepSnapshotWriter.write({
 				pass: sweepPass,
 				fail: sweepFail,
 				skipParse: sweepSkipParse,
 				skipWrite: sweepSkipWrite,
 				skipConfig: sweepSkipConfig,
 				skipMalformed: sweepSkipMalformed,
-				fixtures: sweepFixtures
-			});
+				fixtures: [for (f in sweepFixtures) { path: f.path, status: f.status }]
+			}, JsonFormat.instance.compactWriteOptions);
 			// Auto-rotate: before overwriting the current snapshot, copy
 			// the previous one to `bin/.prev-sweep.json` so the next
 			// `apq sweep --diff` / `apq sweep --prev` has a stable
@@ -371,30 +374,7 @@ class HxFormatterCorpusTest extends Test {
 	 * level Pratt fan always reports `expected HxDecl`), so we pair it
 	 * with a short snippet of the input at the failure offset. Cases
 	 * that choke on the same feature cluster under the same key.
-	 * Writer Slice 3 — detect meta-config flags `disableFormatting:true`
-	 * and `excludes:[…]` directly from the raw JSON. Neither maps to a
-	 * runtime `HxModuleWriteOptions` field; both gate the formatter
-	 * pipeline AT THE DRIVER. The fork's two fixtures
-	 * (`other/disabled_formatting`, `other/disabled_excluded`) expect an
-	 * empty section-3, which is the on-disk encoding of "formatter did
-	 * not run". Fail-soft: a malformed JSON config returns false so the
-	 * existing skipConfig branch handles the parse error.
 	 */
-	private static function isDisabledOrExcluded(config: String, relPath: String): Bool {
-		try {
-			final obj: Dynamic = haxe.Json.parse(config);
-			if (Reflect.hasField(obj, 'disableFormatting') && Reflect.field(obj, 'disableFormatting') == true) return true;
-			if (Reflect.hasField(obj, 'excludes')) {
-				final raw: Dynamic = Reflect.field(obj, 'excludes');
-				if (Std.isOfType(raw, Array)) {
-					final arr: Array<Dynamic> = raw;
-					for (item in arr) if (Std.isOfType(item, String) && (item: String) == relPath) return true;
-				}
-			}
-		} catch (_: Exception) {/* malformed config JSON — treat as not-excluded */}
-		return false;
-	}
-
 	private static function classifyParseFailure(exception: Exception, input: String): String {
 		final message: String = truncate(exception.message);
 		if (!(exception is ParseError)) return message;

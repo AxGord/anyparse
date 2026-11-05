@@ -1,7 +1,9 @@
 package unit.dev;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
 import dev.GateLint;
-import haxe.Json;
+import devkit.RawJson;
 import utest.Assert;
 import utest.Test;
 
@@ -13,10 +15,8 @@ final class GateLintTest extends Test {
 	@:killer('M-GATE-REBASE-NONE')
 	public function testAMovedFilesBaseFindingsTakeItsNewPath(): Void {
 		final report: String = '[{"file":"old/C.hx","rule":"r"},{"file":"a/B.hx","rule":"r"}]';
-		final records: Array<{ file: String, rule: String }> = Json.parse(
-			GateLint.rebased(report, ['old/C.hx' => 'new/C.hx', 'a/B.hx' => 'a/B.hx'])
-		);
-		Assert.same(['new/C.hx', 'a/B.hx'], [for (r in records) r.file]);
+		final records: JValue = JValueParser.parse(GateLint.rebased(report, ['old/C.hx' => 'new/C.hx', 'a/B.hx' => 'a/B.hx']));
+		Assert.same(['new/C.hx', 'a/B.hx'], [for (r in RawJson.items(records)) RawJson.stringAt(r, 'file')]);
 	}
 
 	public function testAReportWithNothingMovedIsAnsweredAsItIs(): Void {

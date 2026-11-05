@@ -2,6 +2,7 @@ package unit.grammar;
 
 import anyparse.grammar.json.JsonLayoutWriter;
 import anyparse.grammar.json.JsonQueryPlugin;
+import anyparse.grammar.json.JsonText;
 import anyparse.query.RegistryFiles;
 import anyparse.runtime.Span;
 #if (sys || nodejs)
@@ -47,7 +48,7 @@ class JsonLayoutWriterTest extends Test {
 			'[1, 2,]',
 			'  "lone string"  ',
 			'[ ]'
-		]) Assert.equals(source, JsonLayoutWriter.layout(source, []), 'round trip of ${haxe.Json.stringify(source)}');
+		]) Assert.equals(source, JsonLayoutWriter.layout(source, []), 'round trip of ${JsonText.quote(source)}');
 	}
 
 	/** The repository's own JSON — the arm registry's documents, the lint and formatter configs — comes back byte for byte. */

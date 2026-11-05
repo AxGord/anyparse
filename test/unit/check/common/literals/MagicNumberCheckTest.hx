@@ -3,7 +3,7 @@ package unit.check.common.literals;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.literals.MagicNumber;
-import haxe.Json;
+import anyparse.grammar.json.JsonText;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -388,7 +388,7 @@ class MagicNumberCheckTest extends Test {
 
 	/** The findings on `src` under a config whose `ignoreCallArguments` lists `calls`. */
 	private function withCalls(src: String, calls: Array<String>): Array<Violation> {
-		return withConfig(src, '{"rules":{"magic-number":{"ignoreCallArguments":${Json.stringify(calls)}}}}');
+		return withConfig(src, '{"rules":{"magic-number":{"ignoreCallArguments":[${calls.map(JsonText.quote).join(',')}]}}}');
 	}
 
 	/** The findings on `src` with `literalTables` on. */

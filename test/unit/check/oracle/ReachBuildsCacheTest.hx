@@ -7,8 +7,12 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.ReachBuildsCache;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.query.Cli;
 import anyparse.query.ReachLiveness.ReachBuilds;
+import devkit.RawJson;
 
 /**
  * The builds an oracle run probed, read back by a run that compiles nothing (`--no-oracle`) only while the compile input
@@ -192,13 +196,14 @@ class ReachBuildsCacheTest extends Test {
 		ReachBuildsCache.store(oracles, ReachBuildsCache.fingerprint(oracles), builds(main, main));
 		Assert.notNull(ReachBuildsCache.load(oracles), 'the record as written');
 		final path: String = ReachBuildsCache.cacheFile(oracles);
-		final record: Dynamic = haxe.Json.parse(File.getContent(path)); // noqa: avoid-dynamic
-		record.configurations[0].values = [null];
-		File.saveContent(path, haxe.Json.stringify(record));
+		final record: JValue = JValueParser.parse(File.getContent(path));
+		final configuration: Null<JValue> = JValueTools.at(record, 'configurations.0');
+		put(configuration, 'values', JArray([JNull]));
+		File.saveContent(path, RawJson.print(record));
 		Assert.isNull(ReachBuildsCache.load(oracles), 'a value pair that is null');
-		record.configurations[0].values = [];
-		record.configurations[0].defined = [1];
-		File.saveContent(path, haxe.Json.stringify(record));
+		put(configuration, 'values', JArray([]));
+		put(configuration, 'defined', JArray([JNumber(1)]));
+		File.saveContent(path, RawJson.print(record));
 		Assert.isNull(ReachBuildsCache.load(oracles), 'a define that is no string');
 		CliFixture.removeDir(dir);
 		#else
@@ -213,6 +218,16 @@ class ReachBuildsCacheTest extends Test {
 		var err: String = '';
 		CliFixture.captureStdout(() -> err = CliFixture.captureStderr(Cli.run.bind(args)));
 		return err.indexOf('verdict reused') >= 0;
+	}
+
+	/** Set the key `key` of the object `value` holds to `held`, in place. */
+	private static function put(value: Null<JValue>, key: String, held: JValue): Void {
+		switch value {
+			case JObject(entries):
+				for (entry in entries) if (entry.key == key)
+					entry.value = held;
+			case _:
+		}
 	}
 
 	#if (sys || nodejs)

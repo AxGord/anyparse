@@ -3,23 +3,9 @@ package unit.query;
 import anyparse.query.IndexScope;
 import anyparse.query.OwnerIndex;
 import anyparse.query.cli.CliArgs;
-import haxe.Json;
 import unit.cli.CliFixture;
 
 using Lambda;
-
-/** One held-out question of a benchmark file and the types whose answer it is. */
-typedef ParaphrasedQuestion = {
-	final question: String;
-	final owners: Array<String>;
-};
-
-/** A benchmark file under `test/probes`: its questions, how far down an owner may rank, and how many must find one. */
-typedef ParaphraseBenchmark = {
-	final top: Int;
-	final atLeast: Int;
-	final questions: Array<ParaphrasedQuestion>;
-};
 
 /**
  * `hxq owner` on paraphrased questions, worded from review records and by a
@@ -56,7 +42,7 @@ class OwnerParaphraseTest extends Test {
 		];
 		final owners: OwnerIndex = OwnerIndex.build(IndexScope.over(files, io.plugin), io.plugin);
 		for (name in BENCHMARKS) {
-			final benchmark: ParaphraseBenchmark = Json.parse(sys.io.File.getContent('$root/$name'));
+			final benchmark: ParaphraseBenchmark = ParaphraseBenchmarkParser.parse(sys.io.File.getContent('$root/$name'));
 			final missed: Array<String> = [];
 			for (asked in benchmark.questions) {
 				final top: Array<String> = [for (hit in owners.rank(asked.question, benchmark.top)) hit.entry.type];

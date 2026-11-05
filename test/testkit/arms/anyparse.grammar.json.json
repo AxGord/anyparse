@@ -136,6 +136,14 @@
 			"find": "return options == JsonFormat.instance.compactWriteOptions;",
 			"replace": "return false;",
 			"note": "the compact options go to the Doc writer, which spells a space after every comma"
+		},
+		{
+			"name": "M-JVALUE-AT-LOOSE-INDEX",
+			"type": "anyparse.grammar.json.JValueTools",
+			"method": "at",
+			"find": "index == null || '$index' != segment || index < 0 || index >= items.length",
+			"replace": "index == null || index < 0 || index >= items.length",
+			"note": "an index is whatever number a segment starts with, so `1x` and `01` both read element 1 instead of nothing"
 		}
 	]
 }

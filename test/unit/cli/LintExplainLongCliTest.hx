@@ -1,10 +1,13 @@
 package unit.cli;
 
 import anyparse.check.common.design.threads.PositiveSinks;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.query.Cli;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
-import haxe.Json;
+import devkit.RawJson;
 import unit.check.common.design.ThreadSafetyCheckTest;
 import unit.check.common.design.ThreadSafetyLongLocksTest;
 
@@ -43,15 +46,11 @@ class LintExplainLongCliTest extends Test {
 		final families: Array<String> = [for (f in findings) if (f.file != '') f.data?.family ?? '-'];
 		families.sort(Reflect.compare);
 		Assert.same(['A', 'A', 'B'], families, 'the two main-thread blocking calls and the hold, each with its data');
-		final reason: Dynamic = Json.parse(out).longLocks.long[0].reasons[0];
-		Assert.same(['spans-blocking', 'A.work', 'Sys.sleep', 3, 2], [
-			reason.kind,
-			Reflect.field(reason, 'function'),
-			reason.call,
-			reason.line,
-			reason.col
-		]);
-		Assert.same(['A.work', 'Sys.sleep'], reason.chain);
+		final reason: Null<JValue> = JValueTools.at(JValueParser.parse(out), 'longLocks.long.0.reasons.0');
+		Assert.same(
+			['"spans-blocking"', '"A.work"', '"Sys.sleep"', '3', '2'], printed(reason, ['kind', 'function', 'call', 'line', 'col'])
+		);
+		Assert.same(['["A.work","Sys.sleep"]'], printed(reason, ['chain']));
 		#else
 		Assert.pass('node only: stdout capture');
 		#end
@@ -61,12 +60,11 @@ class LintExplainLongCliTest extends Test {
 	public function testJsonPinsAsideViaAndMainShort(): Void {
 		#if nodejs
 		final out: String = lint(CASCADE, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out;
-		final longLocks: Dynamic = Json.parse(out).longLocks;
-		final l: Dynamic = (longLocks.long: Array<Dynamic>).filter(x -> x.lock == 'A._l')[0];
-		final aside: Dynamic = l.aside[0];
-		Assert.same(['spans-blocking', 'Mutex.acquire', 'A._m', 3, 39], [aside.kind, aside.call, aside.via, aside.line, aside.col]);
-		final short: Array<Dynamic> = longLocks.mainShort;
-		Assert.same([['A._s', 4, 25, false]], [for (t in short) [t.lock, t.line, t.col, t.quiet]]);
+		final longLocks: Null<JValue> = JValueTools.at(JValueParser.parse(out), 'longLocks');
+		final aside: Null<JValue> = JValueTools.at(lock(longLocks, 'A._l'), 'aside.0');
+		Assert.same(['"spans-blocking"', '"Mutex.acquire"', '"A._m"', '3', '39'], printed(aside, ['kind', 'call', 'via', 'line', 'col']));
+		final short: Array<JValue> = RawJson.items(JValueTools.at(longLocks, 'mainShort'));
+		Assert.same([['"A._s"', '4', '25', 'false']], [for (t in short) printed(t, ['lock', 'line', 'col', 'quiet'])]);
 		#else
 		Assert.pass('node only: stdout capture');
 		#end
@@ -80,14 +78,11 @@ class LintExplainLongCliTest extends Test {
 			+ ' function shutdown():Void { _s.acquire(); tick(); _s.release(); } function tick():Void {} }';
 		final config: String =
 			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"quietRoots":["A.shutdown"]}}}';
-		final json: Dynamic = Json.parse(lint(source, config, ['--format', 'json', '--explain-long']).out).longLocks;
-		final blind: Dynamic = (json.long: Array<Dynamic>).filter(l -> l.lock == 'A._m')[0].reasons[0];
-		Assert.same(['blind', 'f', 3, 2], [
-			blind.kind,
-			blind.unresolved[0].name,
-			blind.unresolved[0].line,
-			blind.unresolved[0].col
-		]);
+		final json: Null<JValue> = JValueTools.at(
+			JValueParser.parse(lint(source, config, ['--format', 'json', '--explain-long']).out), 'longLocks'
+		);
+		final blind: Null<JValue> = JValueTools.at(lock(json, 'A._m'), 'reasons.0');
+		Assert.same(['"blind"', '"f"', '3', '2'], printed(blind, ['kind', 'unresolved.0.name', 'unresolved.0.line', 'unresolved.0.col']));
 		final text: String = lint(source, config, ['--explain-long']).out;
 		Assert.stringContains('unresolved: f at 3:2', text);
 		Assert.stringContains('A.shutdown  (quiet)', text);
@@ -104,9 +99,12 @@ class LintExplainLongCliTest extends Test {
 			+ ' class A { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {}'
 			+ ' public function slow():Void { _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release(); }'
 			+ ' public static function main():Void { final d:A = new A(); Runner.create(() -> d.slow()); } }';
-		final json: Dynamic = Json.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out)
-			.longLocks;
-		Assert.same([['A._inner', ['A._outer']], ['A._outer', ['A._inner']]], [for (d in (json.dominated: Array<Dynamic>)) [d.lock, d.by]]);
+		final json: Null<JValue> = JValueTools.at(
+			JValueParser.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out), 'longLocks'
+		);
+		Assert.same([['"A._inner"', '["A._outer"]'], ['"A._outer"', '["A._inner"]']], [
+			for (d in RawJson.items(JValueTools.at(json, 'dominated'))) printed(d, ['lock', 'by'])
+		]);
 		Assert.stringContains(
 			'dominated A._inner by A._outer: a take of it under one of those is brief',
 			lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--explain-long']).out
@@ -125,11 +123,13 @@ class LintExplainLongCliTest extends Test {
 			+ 'function new() {} static function step():Void {}\n function save():Void { try { step(); } catch (e:Dynamic) {'
 			+ ' Report.send(); } }\n public function work():Void { _m.acquire(); save(); _m.release(); } public static function '
 			+ 'main():Void { final a:A = new A(); Runner.create(() -> a.work()); a._m.acquire(); a._m.release(); } }';
-		final json: Dynamic = Json.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out)
-			.longLocks;
-		final reasons: Array<Dynamic> = (json.long: Array<Dynamic>).filter(l -> l.lock == 'A._m')[0].reasons;
-		final paths: Array<String> = [
-			for (r in reasons) if (Reflect.hasField(r, 'errorPath')) (r.errorPath: String).split('/').pop()
+		final json: Null<JValue> = JValueTools.at(
+			JValueParser.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out), 'longLocks'
+		);
+		final reasons: Array<JValue> = RawJson.items(JValueTools.at(lock(json, 'A._m'), 'reasons'));
+		final paths: Array<Null<String>> = [
+			for (r in reasons) if (JValueTools.field(r, 'errorPath') != null)
+				(RawJson.string(JValueTools.field(r, 'errorPath')) ?? 'errorPath is not a string').split('/').pop()
 		];
 		Assert.same(['A.hx:3'], paths);
 		Assert.stringContains('only on an error path (catch at ', lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--explain-long']).out);
@@ -145,7 +145,7 @@ class LintExplainLongCliTest extends Test {
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"lockPairs":["Mutex.acquire/release"],'
 			+ '"shortSink":["Sys.sleep"]}}}';
 		final unknown: String = 'unknown option "shortSink" — ignored (did you mean "shortSinks"?)';
-		final records: Array<Dynamic> = Json.parse(lint(SOURCE, config, ['--format', 'json']).out);
+		final records: Array<LintFindingJson> = LintDiff.parseReport(lint(SOURCE, config, ['--format', 'json']).out);
 		// beside the notice every reporting run gives of the builtin sinks it applied
 		Assert.same([['', 'info', unknown]], [
 			for (r in records) if (r.file == '' && !(r.message: String).startsWith(PositiveSinks.NOTICE)) [r.file, r.severity, r.message]
@@ -213,6 +213,19 @@ class LintExplainLongCliTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/**
+	 * The value at each of `paths` of `value`, printed as JSON so a number, a string and a flag stay told apart; `null`
+	 * where it holds none.
+	 */
+	private static function printed(value: Null<JValue>, paths: Array<String>): Array<String> {
+		return [for (path in paths) RawJson.print(JValueTools.at(value, path) ?? JNull)];
+	}
+
+	/** The record of `lock` among the long locks of an `--explain-long` section. */
+	private static function lock(longLocks: Null<JValue>, lock: String): Null<JValue> {
+		return RawJson.items(JValueTools.at(longLocks, 'long')).filter(l -> RawJson.stringAt(l, 'lock') == lock)[0];
 	}
 
 	#if (sys || nodejs)

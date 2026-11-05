@@ -645,6 +645,14 @@
 			"find": "picked.fast.length",
 			"replace": "ARMS_THREADS",
 			"note": "the arms lease asks for the top of its range whatever the plan selected, so a one-arm selection waits for a whole share it cannot use and closes the pool to the waiters behind it"
+		},
+		{
+			"name": "M-SWEEP-FILES-OWN-TEXT-LOST",
+			"type": "dev.TrapFixSweep",
+			"method": "filesOf",
+			"find": "if (own != null) out[probe.file]",
+			"replace": "if (own != null && !out.exists(probe.file)) out[probe.file]",
+			"note": "a trap's file wins over the probe's own text"
 		}
 	]
 }

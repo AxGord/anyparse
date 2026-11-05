@@ -3,9 +3,13 @@ package unit.check;
 import anyparse.check.RuleIndex;
 import anyparse.check.common.literals.MagicNumber;
 import anyparse.check.haxe.literals.PreferLpad;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.ExitCode;
+import devkit.RawJson;
 import unit.cli.CliFixture;
 
 using StringTools;
@@ -80,9 +84,12 @@ class LanguageBoundTest extends Test {
 		final markdown: String = RuleIndex.markdown([new PreferLpad(), new MagicNumber()]);
 		Assert.stringContains('| ${RuleIndex.guideLink(new PreferLpad())} | haxe | off |', markdown);
 		Assert.stringContains('| ${RuleIndex.guideLink(new MagicNumber())} | any | on |', markdown);
-		final records: Array<{ id: String, languages: Array<String> }> =
-			haxe.Json.parse(RuleIndex.json([new PreferLpad(), new MagicNumber()]));
-		Assert.same([['haxe'], []], [for (r in records) r.languages], 'an unbound rule lists no grammar');
+		final records: Array<JValue> = RawJson.items(JValueParser.parse(RuleIndex.json([new PreferLpad(), new MagicNumber()])));
+		Assert.same(
+			['["haxe"]', '[]'],
+			[for (r in records) RawJson.print(JValueTools.field(r, 'languages') ?? JNull)],
+			'an unbound rule lists no grammar'
+		);
 	}
 
 }

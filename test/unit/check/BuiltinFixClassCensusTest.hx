@@ -1,8 +1,9 @@
 package unit.check;
 
 import anyparse.check.Check;
-import haxe.DynamicAccess;
-import haxe.Json;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
+import devkit.RawJson;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -311,8 +312,7 @@ class BuiltinFixClassCensusTest extends Test {
 	}
 
 	private static function readRecorded(): Array<String> {
-		final root: DynamicAccess<Array<String>> = Json.parse(File.getContent(CENSUS_FILE));
-		return root['builtins'];
+		return RawJson.strings(JValueTools.field(JValueParser.parse(File.getContent(CENSUS_FILE)), 'builtins')) ?? [];
 	}
 
 	private static function render(names: Array<String>): String {

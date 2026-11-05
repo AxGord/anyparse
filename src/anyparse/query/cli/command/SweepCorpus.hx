@@ -111,6 +111,32 @@ final class SweepCorpus {
 		return fork != null && fork.length > 0 && root.startsWith('$fork/') ? fork : root;
 	}
 
+	/**
+	 * The fork's two driver-level meta-config keys: `disableFormatting`
+	 * turns the formatter off for the fixture, `excludes` lists fork-rooted
+	 * paths it must not touch. Neither maps to a write option — both mean
+	 * the expected section is empty because nothing ran.
+	 */
+	public static function formatterDisabled(config: String, relPath: String): Bool {
+		try {
+			final keys: FormatterDriverKeys = FormatterDriverKeysParser.parse(config);
+			switch keys.disableFormatting {
+				case JBool(true):
+					return true;
+				case _:
+			}
+			switch keys.excludes {
+				case JArray(list):
+					for (item in list) switch item {
+						case JString(path) if (path == relPath): return true;
+						case _:
+					}
+				case _:
+			}
+		} catch (_: Exception) {/* malformed config JSON — the SKIP_CONFIG probe reports it */}
+		return false;
+	}
+
 	/** One fixture's row: its key relative to `keyRoot`, and the verdict `classify` reaches. */
 	private static function censusRow(plugin: GrammarPlugin, path: String, keyRoot: String): SweepCorpusEntry {
 		final relPath: String = ReconCommand.stripRootPrefix(path, keyRoot);
@@ -120,7 +146,6 @@ final class SweepCorpus {
 	private static function countOf(entries: Array<SweepCorpusEntry>, status: String): Int {
 		return entries.count(entry -> entry.status == status);
 	}
-
 
 	private static function classify(plugin: GrammarPlugin, path: String, relPath: String): String {
 		final content: String = File.getContent(path);
@@ -141,32 +166,6 @@ final class SweepCorpus {
 		final text: String = (emitted: String);
 		final actual: String = text.length > 0 && text.fastCodeAt(text.length - 1) == '\n'.code ? text.substr(0, text.length - 1) : text;
 		return actual == expected ? STATUS_PASS : STATUS_FAIL;
-	}
-
-	/**
-	 * The fork's two driver-level meta-config keys: `disableFormatting`
-	 * turns the formatter off for the fixture, `excludes` lists fork-rooted
-	 * paths it must not touch. Neither maps to a write option — both mean
-	 * the expected section is empty because nothing ran.
-	 */
-	private static function formatterDisabled(config: String, relPath: String): Bool {
-		try {
-			final keys: FormatterDriverKeys = FormatterDriverKeysParser.parse(config);
-			switch keys.disableFormatting {
-				case JBool(true):
-					return true;
-				case _:
-			}
-			switch keys.excludes {
-				case JArray(list):
-					for (item in list) switch item {
-						case JString(path) if (path == relPath): return true;
-						case _:
-					}
-				case _:
-			}
-		} catch (_: Exception) {/* malformed config JSON — the SKIP_CONFIG probe reports it */}
-		return false;
 	}
 
 	/** Drops the one leading and one trailing `\n` each `.hxtest` section is padded with. */

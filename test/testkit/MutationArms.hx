@@ -147,7 +147,8 @@ final class MutationArms {
 		final errors: Array<String> = [];
 		var root: Null<Any> = null;
 		try {
-			root = Json.parse(source);
+			// read by the test build's macro (`TestDiscovery`), and macro code cannot call a generated parser
+			root = Json.parse(source); // noqa: avoid-haxe-json
 		} catch (exception: Exception) {
 			errors.push('the arm table is not valid JSON: ${exception.message}');
 			return { arms: arms, errors: errors };

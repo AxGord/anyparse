@@ -169,7 +169,8 @@ final class FixtureCompileCache {
 		final callerLog: Null<String> = Sys.getEnv('APQ_MUTANT_MACRO_LOG');
 		final stored: Null<String> = readEntry(entry);
 		if (stored != null) {
-			final hit: CompileEntry = Json.parse(stored);
+			// haxe.Json: this program is built from test/testkit alone (tools/fixture-cache-common.hxml), with no engine to read through
+			final hit: CompileEntry = Json.parse(stored); // noqa: avoid-haxe-json
 			if (hit.reached.contains(active)) {
 				note(dir, 'armed');
 				return spawn(real, cwd, args);
@@ -186,7 +187,7 @@ final class FixtureCompileCache {
 		final lock: String = '$entry.lock';
 		if (!claim(lock)) {
 			final shared: Null<String> = awaited(entry, lock);
-			final sharedEntry: Null<CompileEntry> = shared == null ? null : Json.parse(shared);
+			final sharedEntry: Null<CompileEntry> = shared == null ? null : Json.parse(shared); // noqa: avoid-haxe-json
 			if (sharedEntry != null && !sharedEntry.reached.contains(active)) {
 				note(dir, 'shared');
 				forward(callerLog, sharedEntry.reached);
@@ -209,7 +210,7 @@ final class FixtureCompileCache {
 		if (recorded != null) {
 			final temporary: String = '$entry.${Node.process.pid}.tmp';
 			// gzipped: a probe's `-v` names every std module it parsed, ~240 KB of JSON a cache kept across runs pays per entry
-			Fs.writeFileSync(temporary, Zlib.gzipSync(Json.stringify(recorded)));
+			Fs.writeFileSync(temporary, Zlib.gzipSync(Json.stringify(recorded))); // noqa: avoid-haxe-json
 			Fs.renameSync(temporary, entry);
 		}
 		release(lock);
@@ -415,7 +416,7 @@ final class FixtureCompileCache {
 			}
 		];
 		final env: Array<String> = [for (name in HAXE_ENV) '$name=${Sys.getEnv(name) ?? ''}'];
-		return hash(Buffer.from(Json.stringify({
+		return hash(Buffer.from(Json.stringify({ // noqa: avoid-haxe-json
 			layout: LAYOUT,
 			stamp: stamp,
 			env: env,

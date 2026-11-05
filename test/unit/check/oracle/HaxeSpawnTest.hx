@@ -135,7 +135,7 @@ final class HaxeSpawnTest extends Test {
 		final dir: String = CliFixture.writeDir('spawnsignal', []);
 		// the jobs go in through a FILE: this test blocks its own event loop while it polls, so a piped write would never flush
 		sys.io.File.saveContent(
-			'$dir/jobs.json', haxe.Json.stringify([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
+			'$dir/jobs.json', HaxeSpawn.jobsText([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
 		);
 		final driver: Dynamic = js.node.ChildProcess.spawn(
 			js.Node.process.execPath, HaxeSpawn.driverArgs(1, ROOMY, false, { result: '', jobs: '$dir/jobs.json' }), { stdio: 'ignore' }
@@ -170,7 +170,7 @@ final class HaxeSpawnTest extends Test {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('spawnparent', []);
 		sys.io.File.saveContent(
-			'$dir/jobs.json', haxe.Json.stringify([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
+			'$dir/jobs.json', testkit.TestChild.jobsText([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
 		);
 		final env: Dynamic = js.Syntax.code('Object.assign({}, process.env)');
 		env.APQ_TEST_CHILD = 'spawn';
@@ -339,7 +339,7 @@ final class HaxeSpawnTest extends Test {
 	): Null<Float> {
 		#if nodejs
 		final dir: String = CliFixture.writeDir(prefix, files);
-		sys.io.File.saveContent('$dir/jobs.json', haxe.Json.stringify([{ args: [], cwd: dir, shell: shell }]));
+		sys.io.File.saveContent('$dir/jobs.json', HaxeSpawn.jobsText([{ args: [], cwd: dir, shell: shell }]));
 		final driver: js.node.child_process.ChildProcess = js.node.ChildProcess.spawn(
 			js.Node.process.execPath, HaxeSpawn.driverArgs(1, ROOMY, false, { result: '', jobs: '$dir/jobs.json' }), { stdio: 'ignore' }
 		);

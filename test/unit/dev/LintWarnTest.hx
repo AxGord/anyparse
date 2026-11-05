@@ -1,8 +1,9 @@
 package unit.dev;
 
+import anyparse.grammar.json.JsonFormat;
+import dev.HookPayloadWriter;
 import dev.LintWarn;
 import devkit.TempDir;
-import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
@@ -16,8 +17,8 @@ import utest.Test;
 @:nullSafety(Strict)
 final class LintWarnTest extends Test {
 
-	/** An existing `.hx` of the tree that reports a finding on its first lint: this file, whose payload helper writes JSON by hand. */
-	private static inline final FIXTURE: String = 'test/unit/dev/LintWarnTest.hx';
+	/** An existing `.hx` of the tree that reports a finding on its first lint: `MutationArms`, which reads its arm tables as `Any`. */
+	private static inline final FIXTURE: String = 'test/testkit/MutationArms.hx';
 
 	public function testAResponseThatWroteNothingIsSilent(): Void {
 		Assert.isNull(LintWarn.nudge(payload('hxq refs foo src/', 'src/a.hx:1:1: foo'), null), 'no write in the text at all');
@@ -75,12 +76,12 @@ final class LintWarnTest extends Test {
 	}
 
 	private static function payload(command: String, output: String): String {
-		return Json.stringify({
-			session_id: 's',
+		return HookPayloadWriter.write({
+			sessionId: 's',
 			cwd: '/',
-			tool_input: { command: command },
-			tool_response: { stdout: output, stderr: '' }
-		});
+			toolInput: { command: command },
+			toolResponse: { stdout: output, stderr: '' }
+		}, JsonFormat.instance.compactWriteOptions);
 	}
 
 }

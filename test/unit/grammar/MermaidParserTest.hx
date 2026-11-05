@@ -1,5 +1,6 @@
 package unit.grammar;
 
+import anyparse.grammar.json.JsonText;
 import anyparse.grammar.mermaid.MermaidParser;
 import anyparse.grammar.mermaid.MermaidSpanParser;
 import anyparse.grammar.mermaid.MermaidWriter;
@@ -21,7 +22,6 @@ import anyparse.grammar.mermaid.MmdSubgraphHead;
 import anyparse.grammar.mermaid.MmdThickLabel;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
-import haxe.Json;
 import utest.Assert;
 import utest.Test;
 
@@ -214,8 +214,8 @@ class MermaidParserTest extends Test {
 		for (text in ['a&>b', 'm_&b"o', 'a &lt b']) {
 			final doc: MmdFlowchart = { first: Header(Flowchart(TD)), rest: [node(Rect(Id('A'), Plain(text)))] };
 			final written: String = MermaidWriter.write(doc);
-			same(doc, MermaidParser.parse(written), Json.stringify(text));
-			Assert.equals(written, MermaidWriter.write(MermaidParser.parse(written)), Json.stringify(text));
+			same(doc, MermaidParser.parse(written), JsonText.quote(text));
+			Assert.equals(written, MermaidWriter.write(MermaidParser.parse(written)), JsonText.quote(text));
 		}
 	}
 
@@ -259,7 +259,7 @@ class MermaidParserTest extends Test {
 					Subgraph({ head: Titled({ name: 'g', title: Plain(text) }), body: [] })
 				]
 			};
-			same(doc, MermaidParser.parse(MermaidWriter.write(doc)), Json.stringify(text));
+			same(doc, MermaidParser.parse(MermaidWriter.write(doc)), JsonText.quote(text));
 		}
 	}
 
@@ -301,7 +301,7 @@ class MermaidParserTest extends Test {
 		} catch (_: Exception) {
 			true;
 		};
-		Assert.isTrue(failed, 'refuses ${Json.stringify(source)}');
+		Assert.isTrue(failed, 'refuses ${JsonText.quote(source)}');
 	}
 
 }

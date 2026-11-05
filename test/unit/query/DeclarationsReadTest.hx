@@ -8,7 +8,6 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndexBuilder;
 import anyparse.runtime.BodySkip;
 import anyparse.runtime.StringInput;
-import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -84,8 +83,8 @@ class DeclarationsReadTest extends Test {
 			{
 				file: 'p/Cond.hx',
 				source: 'package p;\n\n#if a\nimport x.Y;\n#end\n\nclass Cond {\n\tvar v = function() { return { a: 1 }; };\n\n'
-					+ '\tfunction f(): Int {\n\t\t#if a\n\t\tif (b) { g(); }\n\t\t#else\n\t\th();\n\t\t#end\n\t\treturn \'}\'.length;\n\t}\n'
-					+ '\n\t#if b\n\tfunction k() {}\n\t#end\n}\n\nprivate typedef T = { x: Int };\n'
+					+ '\tfunction f(): Int {\n\t\t#if a\n\t\tif (b) { g(); }\n\t\t#else\n\t\th();\n\t\t#end\n\t\treturn \'}\'.length;\n'
+					+ '\t}\n\n\t#if b\n\tfunction k() {}\n\t#end\n}\n\nprivate typedef T = { x: Int };\n'
 			}
 		];
 		for (name in FileSystem.readDirectory(AGREEMENT_DIR)) if (name.endsWith('.hx'))
@@ -97,10 +96,15 @@ class DeclarationsReadTest extends Test {
 			final read: Null<FileInfo> = SymbolIndexBuilder.declarationsFromRoot(
 				entry.file, entry.source, plugin.parseDeclarationsRoot(entry.source), plugin, plugin
 			);
-			Assert.equals(Json.stringify(full), read == null ? 'null' : Json.stringify(read), entry.file);
+			Assert.same(full, read, entry.file);
 			compared++;
 		}
 		Assert.isTrue(compared > 100, 'the directory was read ($compared sources)');
+	}
+
+	/** The position just inside the first `{` of `source`. */
+	private static inline function openOf(source: String): Int {
+		return source.indexOf('{') + 1;
 	}
 
 	/** Where `BodySkip` closes the run opened by the first `{` of `source`. */
@@ -111,11 +115,6 @@ class DeclarationsReadTest extends Test {
 			SourceComments.collectNonCodeRegions(regions), CondDirectives.skipMarks(source, plugin.refShape(), regions)
 		);
 		return skip.closeAt(new StringInput(source), openOf(source), '{'.code, '}'.code);
-	}
-
-	/** The position just inside the first `{` of `source`. */
-	private static inline function openOf(source: String): Int {
-		return source.indexOf('{') + 1;
 	}
 
 }

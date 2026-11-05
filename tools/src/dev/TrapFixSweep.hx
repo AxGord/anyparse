@@ -120,19 +120,29 @@ final class TrapFixSweep {
 	}
 
 	/**
+	 * Each file of `trap`'s project with its text, `probe`'s file written as the probe gives it: a file's lines joined by
+	 * newlines, each line ended. The one reading of a catalog's files, for the sweep and for the resolution traps' test.
+	 */
+	public static function filesOf(trap: SweepTrap, probe: SweepProbe): Map<String, String> {
+		final out: Map<String, String> = [];
+		switch trap.files {
+			case JObject(entries):
+				for (entry in entries) out[entry.key] = (RawJson.strings(entry.value) ?? []).join('\n') + '\n';
+			case _:
+		}
+		final own: Null<Array<String>> = probe.text;
+		if (own != null) out[probe.file] = own.join('\n') + '\n';
+		return out;
+	}
+
+	/**
 	 * The verdict of one probe: its project run as written, after the formatter, and after the fix, in a scratch directory of
 	 * its own whose `build.hxml` typechecks it — the `compilerOracle` its `apq.json` declares, so the risky and
 	 * oracle-assisted fixes run where a typecheck verifies them.
 	 */
 	private static function sweepProbe(trap: SweepTrap, probe: SweepProbe, engine: String, ruleArgs: Array<String>): SweptProbe {
 		final dir: TempDir = TempDir.create();
-		switch trap.files {
-			case JObject(entries):
-				for (entry in entries) write(dir, entry.key, RawJson.strings(entry.value) ?? []);
-			case _:
-		}
-		final own: Null<Array<String>> = probe.text;
-		if (own != null) write(dir, probe.file, own);
+		for (file => text in filesOf(trap, probe)) write(dir, file, text);
 		final main: String = Path.withoutExtension(probe.file).split('/').join('.');
 		File.saveContent(dir.file(ORACLE_HXML), '-cp .\n-main $main\n--no-output\n');
 		File.saveContent(dir.file('apq.json'), '{\n\t"compilerOracle": "$ORACLE_HXML"\n}\n');
@@ -158,10 +168,10 @@ final class TrapFixSweep {
 		};
 	}
 
-	private static function write(dir: TempDir, file: String, lines: Array<String>): Void {
+	private static function write(dir: TempDir, file: String, text: String): Void {
 		final path: String = dir.file(file);
 		FileSystem.createDirectory(Path.directory(path));
-		File.saveContent(path, lines.join('\n') + '\n');
+		File.saveContent(path, text);
 	}
 
 }

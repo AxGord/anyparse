@@ -1,5 +1,6 @@
 package unit.macro;
 
+import anyparse.grammar.json.JsonText;
 #if nodejs
 import sys.FileSystem;
 import sys.io.File;
@@ -62,7 +63,7 @@ class TriviaTypeSynthTest extends Test {
 	 */
 	private static function roundTrips(packs: Array<String>): String {
 		final calls: Array<String> = [for (pack in packs) '$pack.W.write($pack.P.parse(src))'];
-		final main: String = 'class Main { static function main() { final src = ${haxe.Json.stringify(SOURCE)}; '
+		final main: String = 'class Main { static function main() { final src = ${JsonText.quote(SOURCE)}; '
 			+ 'js.Syntax.code("process.stdout.write({0})", [${calls.join(', ')}].join("|")); } }\n';
 		final dir: String = CliFixture.writeDir('trivia2', [{ name: 'Main.hx', source: main }]);
 		for (pack in packs) {

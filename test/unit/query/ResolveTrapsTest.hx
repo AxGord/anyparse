@@ -4,9 +4,11 @@ import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.core.TempScratch;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypingService;
-import anyparse.query.TypingService.Resolution;
-import haxe.DynamicAccess;
-import haxe.Json;
+import dev.SweepCatalog;
+import dev.SweepCatalogParser;
+import dev.SweepProbe;
+import dev.SweepTrap;
+import dev.TrapFixSweep;
 import haxe.io.Path;
 import js.node.ChildProcess;
 import sys.FileSystem;
@@ -64,8 +66,8 @@ class ResolveTrapsTest extends Test {
 	}
 
 	/** What the resolver answers at `probe`, as `<file>#<Type>`, null for `Unknown`. */
-	private static function resolved(trap: Trap, probe: TrapProbe): Null<String> {
-		final source: String = textOf(trap, probe).get(probe.file) ?? '';
+	private static function resolved(trap: SweepTrap, probe: SweepProbe): Null<String> {
+		final source: String = TrapFixSweep.filesOf(trap, probe).get(probe.file) ?? '';
 		return named(TypingService.resolveAt(indexOf(trap, probe), new HaxeQueryPlugin(), probe.file, offsetOf(source, probe)));
 	}
 
@@ -77,29 +79,23 @@ class ResolveTrapsTest extends Test {
 	}
 
 	/** The index over the trap's files and the probe's own. */
-	private static function indexOf(trap: Trap, probe: TrapProbe): SymbolIndex {
-		return CheckFixture.index([for (file => source in textOf(trap, probe)) { file: file, source: source }], new HaxeQueryPlugin());
-	}
-
-	/** Each file of the trap with its text, the probe's file written as the probe gives it. */
-	private static function textOf(trap: Trap, probe: TrapProbe): Map<String, String> {
-		final out: Map<String, String> = [
-			for (file in trap.files.keys()) file => (trap.files.get(file) ?? []).join('\n') + '\n'
-		];
-		final own: Null<Array<String>> = probe.text;
-		if (own != null) out[probe.file] = own.join('\n') + '\n';
-		return out;
+	private static function indexOf(trap: SweepTrap, probe: SweepProbe): SymbolIndex {
+		return CheckFixture.index([
+			for (file => source in TrapFixSweep.filesOf(trap, probe)) { file: file, source: source }
+		], new HaxeQueryPlugin());
 	}
 
 	/** The offset the probe asks at: its marker's first occurrence in its file, moved by its `offset`. */
-	private static function offsetOf(source: String, probe: TrapProbe): Int {
-		return source.indexOf(probe.at) + (probe.offset ?? 0);
+	private static function offsetOf(source: String, probe: SweepProbe): Int {
+		final at: Null<String> = probe.at;
+		if (at == null) throw 'a resolution trap probe names its position: ${probe.file} has no `at`';
+		return source.indexOf(at) + (probe.offset ?? 0);
 	}
 
 	/** A fresh directory holding the trap's files and the probe's own. */
-	private static function written(trap: Trap, probe: TrapProbe): String {
+	private static function written(trap: SweepTrap, probe: SweepProbe): String {
 		final dir: String = Path.join([TempScratch.root(), 'apq-resolve-traps-${Std.random(0x7fffffff)}']);
-		for (file => text in textOf(trap, probe)) {
+		for (file => text in TrapFixSweep.filesOf(trap, probe)) {
 			final path: String = Path.join([dir, file]);
 			FileSystem.createDirectory(Path.directory(path));
 			File.saveContent(path, text);
@@ -114,15 +110,17 @@ class ResolveTrapsTest extends Test {
 		return '${run.stdout ?? ''}${run.stderr ?? ''}';
 	}
 
-	private static function catalog(): Array<Trap> {
-		final read: TrapCatalog = Json.parse(File.getContent(CATALOG));
+	private static function catalog(): Array<SweepTrap> {
+		final read: SweepCatalog = SweepCatalogParser.parse(File.getContent(CATALOG));
 		return read.traps;
 	}
 
 	/** The compiler version the catalog's expectations were asked of. */
 	private static function recordedWith(): String {
-		final read: TrapCatalog = Json.parse(File.getContent(CATALOG));
-		return read.haxe;
+		final read: SweepCatalog = SweepCatalogParser.parse(File.getContent(CATALOG));
+		final haxe: Null<String> = read.haxe;
+		if (haxe == null) throw '$CATALOG names no compiler version under `haxe`';
+		return haxe;
 	}
 
 	/** What `haxe --version` on PATH prints, trimmed. */
@@ -131,30 +129,4 @@ class ResolveTrapsTest extends Test {
 		return '${run.stdout ?? ''}${run.stderr ?? ''}'.trim();
 	}
 
-}
-
-/** `test/traps/resolve.json`: the traps, and the compiler version their expectations were recorded with. */
-private typedef TrapCatalog = {
-	final haxe: String;
-	final traps: Array<Trap>;
-}
-
-/** One mini project and the positions a name is asked at in it. */
-private typedef Trap = {
-	final name: String;
-	final files: DynamicAccess<Array<String>>;
-	final probes: Array<TrapProbe>;
-}
-
-/**
- * One position: in `file` (written as `text` when given), at the first `at` moved by `offset`; `expect` the declaration
- * 4.3.7 names there as `<file>#<Type>`, null for none; `answered` when the resolver must name it.
- */
-private typedef TrapProbe = {
-	final file: String;
-	final ?text: Array<String>;
-	final at: String;
-	final ?offset: Int;
-	final expect: Null<String>;
-	final ?answered: Bool;
 }

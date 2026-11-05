@@ -1,5 +1,11 @@
 package unit.dev;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JsonFormat;
+import anyparse.grammar.json.JsonText;
+import dev.Baseline;
+import dev.BaselineParser;
+import dev.BaselineWriter;
 import dev.BranchWatch;
 import dev.Probe;
 import dev.SliceGate;
@@ -9,7 +15,6 @@ import devkit.Command;
 import devkit.Lease.LeaseMode;
 import devkit.Summary.Step;
 import devkit.TempDir;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -363,8 +368,8 @@ final class SliceGateTest extends Test {
 			final marker: String = dir.file('marker');
 			final probe: Array<String> = [
 				"const fs = require('fs');",
-				'fs.writeFileSync(${Json.stringify(marker)}, fs.existsSync(${Json.stringify(report)}) + "|"',
-				'	+ fs.readFileSync(${Json.stringify(progress)}, "utf8"));'
+				'fs.writeFileSync(${JsonText.quote(marker)}, fs.existsSync(${JsonText.quote(report)}) + "|"',
+				'	+ fs.readFileSync(${JsonText.quote(progress)}, "utf8"));'
 			];
 			File.saveContent(Path.join([tree, 'bin/apq.js']), 'built');
 			File.saveContent(Path.join([tree, 'bin/test.js']), probe.join('\n'));
@@ -539,15 +544,15 @@ final class SliceGateTest extends Test {
 		cmd('git $git commit -q -m slice').at(tree).check();
 		FileSystem.createDirectory('$tree-logs');
 		File.saveContent(
-			'$tree-logs/baseline.json', Json.stringify({
+			'$tree-logs/baseline.json', BaselineWriter.write({
 				base: base,
 				tests: 0,
 				assertions: 0,
-				lists: {},
+				lists: JObject([]),
 				lint: '',
 				infra: [],
 				frozen: []
-			})
+			}, JsonFormat.instance.compactWriteOptions)
 		);
 		File.saveContent('$tree-logs/sweep-base.json', '{}');
 
@@ -640,9 +645,9 @@ final class SliceGateTest extends Test {
 			FileSystem.createDirectory(Path.join([logs, 'rows']));
 			File.saveContent(Path.join([tree, 'bin/apq.js']), 'built');
 			if (facts.snapshot) File.saveContent(Path.join([tree, 'bin/.last-sweep.json']), '{}');
-			final record: {} = Json.parse(File.getContent(Path.join([logs, 'baseline.json'])));
-			Reflect.setField(record, 'sweep', facts.recorded ? dir.file('sweep.json') : null);
-			File.saveContent(Path.join([logs, 'baseline.json']), Json.stringify(record));
+			final record: Baseline = BaselineParser.parse(File.getContent(Path.join([logs, 'baseline.json'])));
+			record.sweep = facts.recorded ? dir.file('sweep.json') : null;
+			File.saveContent(Path.join([logs, 'baseline.json']), BaselineWriter.write(record, JsonFormat.instance.compactWriteOptions));
 			final fork: String = dir.file('fork');
 			if (facts.fork) FileSystem.createDirectory(fork);
 			final saved: String = Sys.getEnv(FORK_VAR) ?? '';

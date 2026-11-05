@@ -3,6 +3,7 @@ package unit.check.common.unused;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.unused.UnusedReturnValue;
+import anyparse.grammar.json.JsonText;
 
 /**
  * The `unused-return-value` check: a call whose PROVABLY non-`Void` result is
@@ -144,7 +145,7 @@ class UnusedReturnValueTest extends Test {
 
 	private function violationsWithAllow(src: String, allow: Array<String>): Array<Violation> {
 		final check: UnusedReturnValue = new UnusedReturnValue();
-		final json: String = '{"rules":{"unused-return-value":{"allow":${haxe.Json.stringify(allow)}}}}';
+		final json: String = '{"rules":{"unused-return-value":{"allow":[${allow.map(JsonText.quote).join(',')}]}}}';
 		check.setConfigResolver(_ -> LintConfig.parse(json));
 		return CheckFixture.violations(check, src);
 	}

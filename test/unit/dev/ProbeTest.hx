@@ -1,11 +1,11 @@
 package unit.dev;
 
+import anyparse.grammar.json.JsonText;
 import dev.Expectation;
 import dev.Parity.Outcome;
 import dev.Probe;
 import dev.Repo;
 import devkit.TempDir;
-import haxe.Json;
 import haxe.io.Path;
 import sys.io.File;
 import utest.Assert;
@@ -45,13 +45,10 @@ final class ProbeTest extends Test {
 			final kitFile: String = dir.file('kit.json');
 			final program: String = 'class Main { static function main() { Sys.println("one"); } }\n';
 			File.saveContent(
-				kitFile, Json.stringify({
-					compile: { args: ['-cp', '.', '-main', 'Main', '--interp'], defines: [[]], run: true },
-					invocations: [
-						{ name: 'same', argv: ['hxq', 'keep'], files: { "Main.hx": program } },
-						{ name: 'changes', argv: ['hxq', 'change'], files: { "Main.hx": program } }
-					]
-				})
+				kitFile,
+				'{"compile":{"args":["-cp",".","-main","Main","--interp"],"defines":[[]],"run":true},"invocations":['
+				+ '{"name":"same","argv":["hxq","keep"],"files":{"Main.hx":${JsonText.quote(program)}}},'
+				+ '{"name":"changes","argv":["hxq","change"],"files":{"Main.hx":${JsonText.quote(program)}}}]}'
 			);
 			final engineFile: String = dir.file('e.js');
 			File.saveContent(engineFile, [
@@ -96,15 +93,10 @@ final class ProbeTest extends Test {
 		TempDir.with(dir -> {
 			final kitFile: String = dir.file('kit.json');
 			File.saveContent(
-				kitFile, Json.stringify({
-					files: { "in.txt": 'x\n' },
-					compile: { args: ['--version'], defines: [[], ['--no-such-haxe-flag']] },
-					invocations: [
-						{ name: 'writes', argv: ['hxq', 'write'] },
-						{ name: 'echoes', argv: ['apq', 'echo', 'y'], stdin: 'in' },
-						{ name: 'formats', argv: ['apq', 'fmt', 'in.txt'], fixpoint: 'in.txt' }
-					]
-				})
+				kitFile,
+				'{"files":{"in.txt":"x\\n"},"compile":{"args":["--version"],"defines":[[],["--no-such-haxe-flag"]]},"invocations":['
+				+ '{"name":"writes","argv":["hxq","write"]},{"name":"echoes","argv":["apq","echo","y"],"stdin":"in"},'
+				+ '{"name":"formats","argv":["apq","fmt","in.txt"],"fixpoint":"in.txt"}]}'
 			);
 			final a: String = engine(dir.file('a.js'), 'A');
 			final b: String = engine(dir.file('b.js'), 'B');
@@ -186,10 +178,9 @@ final class ProbeTest extends Test {
 		TempDir.with(dir -> {
 			final kitFile: String = dir.file('kit.json');
 			File.saveContent(
-				kitFile, Json.stringify({
-					compile: { args: ['--version'], defines: [[], ['--no-such-haxe-flag']] },
-					invocations: [{ name: 'echoes', argv: ['apq', 'echo', 'y'], stdin: 'in' }]
-				})
+				kitFile,
+				'{"compile":{"args":["--version"],"defines":[[],["--no-such-haxe-flag"]]},'
+				+ '"invocations":[{"name":"echoes","argv":["apq","echo","y"],"stdin":"in"}]}'
 			);
 			final status: Int = Probe.main([
 				kitFile,

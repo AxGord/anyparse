@@ -1,6 +1,6 @@
 package unit.grammar;
 
-import haxe.Json;
+import anyparse.grammar.json.JsonText;
 
 /**
  * A structural dump of a Mermaid AST value — enum ctors with their arguments, struct fields in name
@@ -21,7 +21,7 @@ final class MermaidAst {
 				final fields: Array<String> = Reflect.fields(value).filter(field -> Reflect.field(value, field) != null);
 				fields.sort(Reflect.compare);
 				'{' + fields.map(field -> '$field: ${dump(Reflect.field(value, field))}').join(', ') + '}';
-			case TClass(String): Json.stringify(value);
+			case TClass(String): JsonText.quote(value);
 			case TClass(Array): '[' + (value: Array<Any>).map(dump).join(', ') + ']';
 			case _: Std.string(value);
 		};
