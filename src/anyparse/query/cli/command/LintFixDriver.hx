@@ -67,7 +67,7 @@ final class LintFixDriver {
 		?resolution: ResolutionScope
 	): Int {
 		final oracleConfigured: Bool = oracles.length > 0;
-		final split: CheckPartition = LintCommand.partitionChecks(checks, oracleConfigured);
+		final split: CheckPartition = LintArgs.partitionChecks(checks, oracleConfigured);
 		for (c in split.risky) if (c is OracleRelaxable) (cast c: OracleRelaxable).setOracleRelaxed(true);
 		final maxPasses: Int = 10;
 		// Parse each file once and reuse the tree across the SymbolIndex build, every
@@ -326,14 +326,14 @@ final class LintFixDriver {
 		// the report and to the fixer. Re-measured every pass, because a pass rewrites the file
 		// it reads — see `LintRange` for the drift that buys and why it is bounded.
 		final sourceOf: (String) -> Null<String> = f -> fileSourceOf(files, f);
-		final found: Array<Violation> = LintCommand.withinRange(
+		final found: Array<Violation> = LintReport.withinRange(
 			PhaseTimings.measure('pass lint active', () -> Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement)),
 			sourceOf, range
 		);
 		final whole: Array<Violation> = PhaseTimings.measure(
 			'pass lint full-scope', () -> Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)
 		);
-		for (v in LintCommand.withinRange(whole, sourceOf, range)) found.push(v);
+		for (v in LintReport.withinRange(whole, sourceOf, range)) found.push(v);
 		// The two scopes lint in two runs, so the cross-rule supersession `Linter.collect` applies inside each
 		// one is asked again over their union: an underscore-prefixed local is `no-underscore-prefix`'s in
 		// the active set and `naming`'s in the full one, and the fixer should see it once, as the report does.

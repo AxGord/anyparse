@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Severity;
 import anyparse.query.Cli;
 import anyparse.query.cli.CliArgs;
-import anyparse.query.cli.command.LintCommand;
+import anyparse.query.cli.command.LintReport;
 import anyparse.query.format.LintFormat;
 import unit.cli.CliFixture;
 
@@ -44,14 +44,14 @@ class LintReportChannelSliceTest extends Test {
 	 * assertion goes red while the machine ones stay green.
 	 */
 	public function testMachineFormatsAreNotSubjectToTheInfoCap(): Void {
-		Assert.equals(2, LintCommand.reportedViolations(findings(), false, 'json').length, 'json is a machine reader — it gets everything');
+		Assert.equals(2, LintReport.reportedViolations(findings(), false, 'json').length, 'json is a machine reader — it gets everything');
 		Assert.equals(
-			2, LintCommand.reportedViolations(findings(), false, 'checkstyle').length, 'and so is checkstyle, by the same argument'
+			2, LintReport.reportedViolations(findings(), false, 'checkstyle').length, 'and so is checkstyle, by the same argument'
 		);
 		Assert.equals(
-			1, LintCommand.reportedViolations(findings(), false, 'text').length, 'the TEXT report still caps — that is what --all is for'
+			1, LintReport.reportedViolations(findings(), false, 'text').length, 'the TEXT report still caps — that is what --all is for'
 		);
-		Assert.equals(2, LintCommand.reportedViolations(findings(), true, 'text').length, 'and --all lifts it');
+		Assert.equals(2, LintReport.reportedViolations(findings(), true, 'text').length, 'and --all lifts it');
 	}
 
 	/**
@@ -169,13 +169,13 @@ class LintReportChannelSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-LINT-SUMMARY-NEVER')
 	public function testTheThresholdDecidesBetweenListAndSummary(): Void {
-		Assert.isTrue(LintCommand.summarises(201, 'text', null, 200), 'over the threshold is summarised');
-		Assert.isFalse(LintCommand.summarises(200, 'text', null, 200), 'AT the threshold still lists');
-		Assert.isFalse(LintCommand.summarises(5000, 'json', null, 200), 'json always lists');
-		Assert.isFalse(LintCommand.summarises(5000, 'checkstyle', true, 200), 'checkstyle too, whatever is forced');
-		Assert.isFalse(LintCommand.summarises(5000, 'text', null, 0), 'a threshold of zero never summarises');
-		Assert.isFalse(LintCommand.summarises(5000, 'text', false, 200), '--full lists over the threshold');
-		Assert.isTrue(LintCommand.summarises(1, 'text', true, 200), '--summary summarises under it');
+		Assert.isTrue(LintReport.summarises(201, 'text', null, 200), 'over the threshold is summarised');
+		Assert.isFalse(LintReport.summarises(200, 'text', null, 200), 'AT the threshold still lists');
+		Assert.isFalse(LintReport.summarises(5000, 'json', null, 200), 'json always lists');
+		Assert.isFalse(LintReport.summarises(5000, 'checkstyle', true, 200), 'checkstyle too, whatever is forced');
+		Assert.isFalse(LintReport.summarises(5000, 'text', null, 0), 'a threshold of zero never summarises');
+		Assert.isFalse(LintReport.summarises(5000, 'text', false, 200), '--full lists over the threshold');
+		Assert.isTrue(LintReport.summarises(1, 'text', true, 200), '--summary summarises under it');
 	}
 
 	/**

@@ -4,7 +4,7 @@ import anyparse.check.Severity;
 import anyparse.check.common.literals.FoldStringLiterals;
 import anyparse.check.common.literals.MacroGate;
 import anyparse.check.haxe.literals.PreferInterpolation;
-import anyparse.query.cli.command.LintCommand;
+import anyparse.query.cli.command.LintArgs;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -354,8 +354,8 @@ class PreferInterpolationCheckTest extends Test {
 			+ '\t\treturn s.length > 0;\n\n\tstatic function g(rows:ResultSet):Bool {\n\t\tfor (row in rows)\n'
 			+ '\t\t\tif (row.x != null && f(Std.string(row.x)))\n\t\t\t\treturn true;\n\t\treturn false;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
-		Assert.equals(0, LintCommand.partitionChecks([new PreferInterpolation()], true).risky.length);
-		Assert.equals(1, LintCommand.partitionChecks([new PreferInterpolation()], true).safe.length);
+		Assert.equals(0, LintArgs.partitionChecks([new PreferInterpolation()], true).risky.length);
+		Assert.equals(1, LintArgs.partitionChecks([new PreferInterpolation()], true).safe.length);
 	}
 
 	/** A call whose type no declaration proves plain is declined: `Dynamic` here, nullable to the null-safety checker. */

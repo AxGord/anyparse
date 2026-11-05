@@ -4,6 +4,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.UnusedImport;
 import anyparse.check.oracle.OracleDeclaration;
+import anyparse.query.cli.command.LintOracleRun;
 import unit.cli.CliFixture;
 
 /**
@@ -355,7 +356,6 @@ class LintConfigTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-REACH-CONFIGS-COMPLETE')
-	@:access(anyparse.query.cli.command.LintCommand)
 	public function testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList(): Void {
 		// A build the `compilerOracle` list cannot typecheck — another OS, an app-store variant — still ships the branches its
 		// defines take, so the reach analysis sees the list's builds only when the project declares the list complete.
@@ -374,16 +374,11 @@ class LintConfigTest extends Test {
 			}
 		};
 		final oracles: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: null, defines: [] }];
-		Assert.isNull(
-			anyparse.query.cli.command.LintCommand.withReachConfigurations(scope, oracles, false, false, { probe: null })?.builds
-		);
-		Assert.notNull(
-			anyparse.query.cli.command.LintCommand.withReachConfigurations(scope, oracles, false, true, { probe: null })?.builds
-		);
+		Assert.isNull(LintOracleRun.withReachConfigurations(scope, oracles, false, false, { probe: null })?.builds);
+		Assert.notNull(LintOracleRun.withReachConfigurations(scope, oracles, false, true, { probe: null })?.builds);
 	}
 
 	@:pin('control') @:killer('M-REFLECTIVE-AGREE') @:killer('M-HOLDERS-PARSE')
-	@:access(anyparse.query.cli.command.LintCommand)
 	public function testTheReflectiveClassesAreTheRunsOnlyWhenEveryPathDeclaresThemAlike(): Void {
 		// absent, a computed class name may name any class, and a computed member name obtain any method; a run whose paths
 		// declare different globs, or some none, may create a class — or obtain a method of one — one of them leaves out
@@ -399,9 +394,7 @@ class LintConfigTest extends Test {
 			final resolve: String -> LintConfig = path -> configs[path] ?? none;
 			final bound: Array<String> -> Null<Array<String>> = paths -> {
 				var out: Null<Array<String>> = null;
-				CliFixture.captureStderr(
-					() -> out = anyparse.query.cli.command.LintCommand.declaredBound(paths, resolve, read, key, 'unbounded')
-				);
+				CliFixture.captureStderr(() -> out = LintOracleRun.declaredBound(paths, resolve, read, key, 'unbounded'));
 				out;
 			};
 			Assert.same(['model.**', '__ASSET__*'], bound(['a', 'a']), key);
@@ -412,7 +405,6 @@ class LintConfigTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-REACH-CONFIGS-AGREE')
-	@:access(anyparse.query.cli.command.LintCommand)
 	public function testReachTakesTheBuildsAsCompleteOnlyWhenEveryPathAgrees(): Void {
 		// The run probes the first path's oracle list; a second path whose config names another list, or does not declare
 		// the flag, may ship a build that list does not name.
@@ -421,9 +413,9 @@ class LintConfigTest extends Test {
 		final undeclared: LintConfig = LintConfig.parse('{"compilerOracle": "a.hxml"}');
 		final configs: Map<String, LintConfig> = ['a' => complete, 'b' => otherList, 'c' => undeclared];
 		final resolve: String -> LintConfig = path -> configs[path] ?? undeclared;
-		Assert.isTrue(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'a'], resolve));
-		Assert.isFalse(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'b'], resolve));
-		Assert.isFalse(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'c'], resolve));
+		Assert.isTrue(LintOracleRun.reachComplete(['a', 'a'], resolve));
+		Assert.isFalse(LintOracleRun.reachComplete(['a', 'b'], resolve));
+		Assert.isFalse(LintOracleRun.reachComplete(['a', 'c'], resolve));
 	}
 
 	/** The one configuration `content` declares under `baseDir` — every oracle fixture here wants exactly this. */

@@ -7,7 +7,8 @@ import anyparse.core.TempScratch;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.Cli;
-import anyparse.query.cli.command.LintCommand;
+import anyparse.query.cli.command.LintArgs;
+import anyparse.query.cli.command.LintOracleRun;
 import haxe.Exception;
 
 /**
@@ -89,17 +90,17 @@ final class OracleRunWiringTest extends Test {
 	@:pin('control')
 	@:killer('M-FACTS-NEVER-EARLY')
 	public function testAFixRunGivenEveryRuleStartsTheFactsEarly(): Void {
-		Assert.isTrue(LintCommand.startsFactsEarly(true, 1, false, false, true));
+		Assert.isTrue(LintOracleRun.startsFactsEarly(true, 1, false, false, true));
 	}
 
 	/** M-FACTS-NEVER-EARLY answers false everywhere, which is what this case expects, so it stays green. */
 	@:pin('guard') // noqa: guard-pin-arm-reach
 	public function testAReportANarrowedOrAnOracleLessRunAsksOnDemand(): Void {
-		Assert.isFalse(LintCommand.startsFactsEarly(true, 1, false, false, false), 'a report, whose checks never ask');
-		Assert.isFalse(LintCommand.startsFactsEarly(true, 1, false, true, true), 'a --rule run');
-		Assert.isFalse(LintCommand.startsFactsEarly(true, 1, true, false, true), 'a --no-oracle run');
-		Assert.isFalse(LintCommand.startsFactsEarly(true, 0, false, false, true), 'no configuration');
-		Assert.isFalse(LintCommand.startsFactsEarly(false, 1, false, false, true), 'no resolution scope');
+		Assert.isFalse(LintOracleRun.startsFactsEarly(true, 1, false, false, false), 'a report, whose checks never ask');
+		Assert.isFalse(LintOracleRun.startsFactsEarly(true, 1, false, true, true), 'a --rule run');
+		Assert.isFalse(LintOracleRun.startsFactsEarly(true, 1, true, false, true), 'a --no-oracle run');
+		Assert.isFalse(LintOracleRun.startsFactsEarly(true, 0, false, false, true), 'no configuration');
+		Assert.isFalse(LintOracleRun.startsFactsEarly(false, 1, false, false, true), 'no resolution scope');
 	}
 
 	/**
@@ -108,7 +109,6 @@ final class OracleRunWiringTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-FACTS-CARRY-CATEGORY')
-	@:access(anyparse.query.cli.command.LintCommand)
 	public function testOnlyARunGivenEveryRuleReadsTheBuildsOffTheFacts(): Void {
 		final oracles: Array<OracleConfig> = [{ hxml: 'check.hxml', dir: '.', defines: [] }];
 		final resolution: ResolutionScope = {
@@ -117,8 +117,8 @@ final class OracleRunWiringTest extends Test {
 		};
 		function carried(args: Array<String>): Bool {
 			final ahead: AheadBuilds = { probe: null };
-			final scope: Null<ResolutionScope> = LintCommand.withCompilerFacts(
-				resolution, oracles, null, null, null, ahead, LintCommand.parseLintArgs(args.concat(['Main.hx']))
+			final scope: Null<ResolutionScope> = LintOracleRun.withCompilerFacts(
+				resolution, oracles, null, null, null, ahead, LintArgs.parseLintArgs(args.concat(['Main.hx']))
 			);
 			return scope?.facts != null && ahead.facts != null;
 		}
@@ -134,7 +134,6 @@ final class OracleRunWiringTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-FACTS-EARLY-DIRS-LEFT')
-	@:access(anyparse.query.cli.command.LintCommand)
 	public function testUnaskedEarlyFactsLeaveNothingBehind(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = project();
@@ -145,8 +144,28 @@ final class OracleRunWiringTest extends Test {
 		final oracles: Array<OracleConfig> = [{ hxml: 'check.hxml', dir: dir, defines: [] }];
 		final early: FactsProbe = TypedFactsProbe.start(oracles);
 		Assert.equals(before.length + 1, factsDirs().length, 'the early compile was given its probe directory');
-		Assert.raises(() -> LintCommand.endingCompiles(early, { probe: null }, oracles, () -> throw new Exception('a check failed')));
+		Assert.raises(() -> LintOracleRun.endingCompiles(early, { probe: null }, oracles, () -> throw new Exception('a check failed')));
 		Assert.same(before, factsDirs(), 'no probe directory outlives a run a failure ended');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `--category` run goes through the command as a `--rule` run does: the edit its rules make is verified by the compiler,
+	 * and no facts probe directory outlives the run.
+	 */
+	@:pin('guard')
+	public function testACategoryFixRunIsVerifiedByTheCompilerAndLeavesNoFactsCompileBehind(): Void {
+		#if (sys || nodejs)
+		final dir: Null<String> = project();
+		if (dir == null) return;
+		final before: Array<String> = factsDirs();
+		Cli.run(['lint', '$dir/Good.hx', '--fix', '--category', 'types']);
+		Assert.isTrue(sys.io.File.getContent('$dir/Good.hx').indexOf('var x:Good') >= 0, 'the category run applied the verified edit');
+		Assert.isTrue(CompileCounter.count(dir) > 0, 'the compiler verified it through the command');
+		Assert.same(before, factsDirs(), 'no facts probe directory outlives a category fix run');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

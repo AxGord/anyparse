@@ -28,7 +28,7 @@
 		},
 		{
 			"name": "M-LINT-RANGE-INERT",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintReport",
 			"method": "withinRange",
 			"find": "if (range == null) return all;",
 			"replace": "if (range == null) return all;\nif (all != null) return all;",
@@ -196,7 +196,7 @@
 		},
 		{
 			"name": "M-REACH-CONFIGS-COMPLETE",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withReachConfigurations",
 			"find": "if (!complete) return declared ?",
 			"replace": "if (false) return declared ?",
@@ -204,7 +204,7 @@
 		},
 		{
 			"name": "M-REACH-CONFIGS-AGREE",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "reachComplete",
 			"find": "return all;",
 			"replace": "return resolveConfig(paths[0]).reachConfigurationsComplete();",
@@ -212,7 +212,7 @@
 		},
 		{
 			"name": "M-RUNMEMO-NOT-ATTACHED",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "oraclesOf",
 			"find": "return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file], grammar));",
 			"replace": "return prepared.oracles;",
@@ -220,7 +220,7 @@
 		},
 		{
 			"name": "M-FACTS-NEVER-EARLY",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "startsFactsEarly",
 			"find": "return fix && scoped && oracles > 0 && !noOracle && !narrowed;",
 			"replace": "return false;",
@@ -250,15 +250,15 @@
 		},
 		{
 			"name": "M-LINT-SUMMARY-NEVER",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintReport",
 			"method": "summarises",
-			"find": "return format == FORMAT_TEXT && (forced ?? (threshold > 0 && shown > threshold));",
+			"find": "return format == LintArgs.FORMAT_TEXT && (forced ?? (threshold > 0 && shown > threshold));",
 			"replace": "return false;",
 			"note": "a text report over its threshold, or asked for --summary, still lists every finding"
 		},
 		{
 			"name": "M-REFLECTIVE-BUILDS",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "bounded",
 			"find": "if (builds != null && reflective != null) builds.reflectiveClasses = reflective;",
 			"replace": "",
@@ -266,7 +266,7 @@
 		},
 		{
 			"name": "M-REFLECTIVE-WARN",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withCompilerFacts",
 			"find": "for (glob in FactsEscapes.unmatchedGlobs(built, reflective ?? []))",
 			"replace": "for (glob in ([] : Array<String>))",
@@ -274,7 +274,7 @@
 		},
 		{
 			"name": "M-REFLECTIVE-AGREE",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "declaredBound",
 			"find": "return alike ? first : null;",
 			"replace": "return first;",
@@ -282,7 +282,7 @@
 		},
 		{
 			"name": "M-HOLDERS-BUILDS",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "bounded",
 			"find": "if (builds != null && holders != null) builds.reflectiveMethodHolders = holders;",
 			"replace": "",
@@ -290,7 +290,7 @@
 		},
 		{
 			"name": "M-HOLDERS-WARN",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withCompilerFacts",
 			"find": "for (glob in FactsEscapes.unmatchedGlobs(built, holders ?? []))",
 			"replace": "for (glob in ([] : Array<String>))",
@@ -378,7 +378,7 @@
 		},
 		{
 			"name": "M-AHEAD-NEVER-READ",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withReachConfigurations",
 			"find": "final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);",
 			"replace": "final found: Null<ReachBuilds> = ReachDefinesProbe.probeAll(oracles);",
@@ -386,7 +386,7 @@
 		},
 		{
 			"name": "M-AHEAD-READ-AFTER-WRITE",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withReachConfigurations",
 			"find": "\t\tdropAhead(ahead);\n",
 			"replace": "",
@@ -394,7 +394,7 @@
 		},
 		{
 			"name": "M-BUILDS-WITH-FACTS",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "startBuildsWithFacts",
 			"find": "if (factsEarly && start != null) start();",
 			"replace": "",
@@ -418,7 +418,7 @@
 		},
 		{
 			"name": "M-LINT-NOFILE-DROPPED",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintReport",
 			"method": "reportFindings",
 			"find": "paths.concat([''])",
 			"replace": "paths",
@@ -450,7 +450,7 @@
 		},
 		{
 			"name": "M-RISKYARM-NOT-VERIFIED",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintArgs",
 			"method": "partitionChecks",
 			"find": " || (oracleConfigured && c is RiskyArm)",
 			"replace": "",
@@ -648,7 +648,7 @@
 		},
 		{
 			"name": "M-REACH-STORED-UNREAD",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withReachConfigurations",
 			"find": "if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);",
 			"replace": "if (noOracle) return resolution;",
@@ -656,7 +656,7 @@
 		},
 		{
 			"name": "M-HOIST-MIXED-LISTS-GUESSED",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withReachConfigurations",
 			"find": "return declared ?",
 			"replace": "return false ?",
@@ -664,7 +664,7 @@
 		},
 		{
 			"name": "M-HELD-NOTE-LOST-WITH-FACTS",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withCompilerFacts",
 			"find": "buildsHeld: resolution.buildsHeld,",
 			"replace": "",
@@ -672,7 +672,7 @@
 		},
 		{
 			"name": "M-CATEGORY-FILTER-IGNORED",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintArgs",
 			"method": "resolveLintChecks",
 			"find": "if (categoryFilters.length == 0 || categoryFilters.contains(check.category()))",
 			"replace": "if (categoryFilters.length == 0 || categoryFilters.length > 0)",
@@ -735,7 +735,7 @@
 		},
 		{
 			"name": "M-FOREIGN-RULE-ANSWERED",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintArgs",
 			"method": "foreignRuleError",
 			"find": "if (o.ruleFilters.length == 0) return null;",
 			"replace": "return null;",
@@ -743,7 +743,7 @@
 		},
 		{
 			"name": "M-FOREIGN-RULE-ALWAYS",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintArgs",
 			"method": "foreignRuleError",
 			"find": "if (o.ruleFilters.length == 0) return null;",
 			"replace": "",
@@ -751,7 +751,7 @@
 		},
 		{
 			"name": "M-SCOPED-LISTING-UNFILTERED",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintArgs",
 			"method": "printEffectiveRules",
 			"find": "checks.filter(c -> Linter.runsOn(c, io.plugin.langName()))",
 			"replace": "checks",
@@ -783,7 +783,7 @@
 		},
 		{
 			"name": "M-FACTS-CARRY-CATEGORY",
-			"type": "anyparse.query.cli.command.LintCommand",
+			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withCompilerFacts",
 			"find": "o.ruleFilters.length == 0 && o.categoryFilters.length == 0",
 			"replace": "o.ruleFilters.length == 0",

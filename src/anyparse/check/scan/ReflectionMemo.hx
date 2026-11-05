@@ -9,7 +9,7 @@ import anyparse.check.scan.ReflectionScan.ScopeFile;
  *
  * The surface is one walk of every file in the name-keyed reflection scope — report files UNION
  * the resolution sources — and most of the registered checks that reach it demand it per run
- * (`ReflectionScan.scopeFiles` documents the scope; `LintCommand.partitionChecks` lists the
+ * (`ReflectionScan.scopeFiles` documents the scope; `LintArgs.partitionChecks` lists the
  * checks). The FIRST demand pays the library parses; every later one would pay the whole re-walk
  * again, which is what the memo removes.
  *

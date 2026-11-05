@@ -2,41 +2,21 @@ package anyparse.query.cli.command;
 
 import anyparse.check.Check;
 import anyparse.check.ConfigDisagreement;
-import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
 import anyparse.check.LintDocuments;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.ThreadSafety;
-import anyparse.check.common.design.threads.LongLockExplain.LongLockReport;
 import anyparse.check.facts.TypedFactsProbe;
-import anyparse.check.oracle.OracleDeclaration;
-import anyparse.check.oracle.OracleGeneration;
-import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.core.PhaseTimings;
-import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
-import anyparse.query.CompilerFacts;
-import anyparse.query.LintDiff.LintDiffTally;
-import anyparse.query.LintDiff.LintMessageIdentities;
-import anyparse.query.ReachLiveness.ReachBuilds;
-import anyparse.query.format.LintFormat;
-import anyparse.query.format.Text;
-import anyparse.runtime.Span;
-import haxe.io.Path;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
-import anyparse.check.oracle.ReachBuildsCache;
-import anyparse.check.RuleCategory;
-import anyparse.check.RuleIndex;
+import haxe.io.Path;
 
 using Lambda;
-
-#if (sys || nodejs)
-import sys.FileSystem;
-#end
 
 /**
  * The `lint --fix` check sets, split by how each is applied: `risky` is verified against the compiler oracle,
@@ -124,7 +104,7 @@ typedef LintOpts = {
 
 	/**
 	 * How the TEXT report is laid out: `true` = `--summary` (per-rule summary), `false` = `--full`
-	 * (every finding), null = the `reportSummaryThreshold` decides. See `LintCommand.summarises`.
+	 * (every finding), null = the `reportSummaryThreshold` decides. See `LintReport.summarises`.
 	 */
 	var summary: Null<Bool>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag/value -> EXIT_USAGE);
@@ -141,19 +121,6 @@ typedef LintOpts = {
  */
 @:nullSafety(Strict)
 final class LintCommand implements CliCommand {
-
-	private static inline final FORMAT_JSON: String = 'json';
-	private static inline final FORMAT_CHECKSTYLE: String = 'checkstyle';
-	private static inline final FORMAT_TEXT: String = 'text';
-
-	/** The `--list-rules` rendering as the markdown rule index (`RuleIndex`); no lint run has this format. */
-	private static inline final FORMAT_MARKDOWN: String = 'markdown';
-
-	/** The config key declaring the classes a class value made from an unreadable name may be of. */
-	private static inline final REFLECTIVE_CLASSES: String = 'reflectiveClasses';
-
-	/** The config key declaring the classes a read by an unreadable name may obtain a method of. */
-	private static inline final REFLECTIVE_METHOD_HOLDERS: String = 'reflectiveMethodHolders';
 
 	public function new() {}
 
@@ -198,7 +165,7 @@ final class LintCommand implements CliCommand {
 	}
 
 	public function usage(): Void {
-		printLintUsage();
+		LintArgs.printLintUsage();
 	}
 
 	/**
@@ -221,16 +188,16 @@ final class LintCommand implements CliCommand {
 	 * second copy of it that would drift.
 	 */
 	public static function runLint(args: Array<String>): Int {
-		final o: LintOpts = parseLintArgs(args);
+		final o: LintOpts = LintArgs.parseLintArgs(args);
 		if (o.errExit != null) return o.errExit;
 
 		if (o.inputSpecs.length == 0) {
 			CliIo.stderr('apq lint: expected <scope> (one or more file/dir/glob specs)\n');
-			printLintUsage();
+			LintArgs.printLintUsage();
 			return EXIT_USAGE;
 		}
 
-		final checks: Null<Array<Check>> = resolveLintChecks(o.ruleFilters, o.categoryFilters);
+		final checks: Null<Array<Check>> = LintArgs.resolveLintChecks(o.ruleFilters, o.categoryFilters);
 		if (checks == null) return EXIT_USAGE;
 
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
@@ -240,7 +207,7 @@ final class LintCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
-		final optionError: Null<Int> = optionScopeError(o, paths, checks, plugin.langName());
+		final optionError: Null<Int> = LintArgs.optionScopeError(o, paths, checks, plugin.langName());
 		if (optionError != null) return optionError;
 
 		final files: Array<{ file: String, source: String }> = [];
@@ -309,26 +276,26 @@ final class LintCommand implements CliCommand {
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
-		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin);
-		final early: Null<FactsProbe> = earlyFacts(unconfigured != null, oracles, o);
+		final oracles: Array<OracleConfig> = LintOracleRun.oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin);
+		final early: Null<FactsProbe> = LintOracleRun.earlyFacts(unconfigured != null, oracles, o);
 		final ahead: AheadBuilds = { probe: null };
-		final reflective: Null<Array<String>> = declaredBound(
-			paths, resolveConfig, c -> c.reflectiveClasses(), REFLECTIVE_CLASSES, 'a computed class name may name any class'
+		final reflective: Null<Array<String>> = LintOracleRun.declaredBound(
+			paths, resolveConfig, c -> c.reflectiveClasses(), LintOracleRun.REFLECTIVE_CLASSES, 'a computed class name may name any class'
 		);
-		final holders: Null<Array<String>> = declaredBound(
-			paths, resolveConfig, c -> c.reflectiveMethodHolders(), REFLECTIVE_METHOD_HOLDERS,
+		final holders: Null<Array<String>> = LintOracleRun.declaredBound(
+			paths, resolveConfig, c -> c.reflectiveMethodHolders(), LintOracleRun.REFLECTIVE_METHOD_HOLDERS,
 			'a computed member name may obtain any method'
 		);
-		final resolution: Null<ResolutionScope> = withCompilerFacts(
-			withReachConfigurations(
-				unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), ahead, reflective, holders,
+		final resolution: Null<ResolutionScope> = LintOracleRun.withCompilerFacts(
+			LintOracleRun.withReachConfigurations(
+				unconfigured, oracles, o.noOracle, LintOracleRun.reachComplete(paths, resolveConfig), ahead, reflective, holders,
 				paths.exists(path -> resolveConfig(path).reachConfigurationsComplete())
 			),
 			oracles, early, reflective, holders, ahead, o
 		);
 
 		if (o.fix)
-			return endingCompiles(
+			return LintOracleRun.endingCompiles(
 				early, ahead, oracles,
 				() ->
 					LintFixDriver.runLintFix(
@@ -343,17 +310,19 @@ final class LintCommand implements CliCommand {
 		// reads the trees the checks just parsed out of its cache instead of parsing them again.
 		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
 		final explainer: Null<ThreadSafety> = LintExplainLong.explainer(activeChecks, o.explainLong);
-		final found: Array<Violation> = withinRange(
+		final found: Array<Violation> = LintReport.withinRange(
 			Linter.run(files, cached, activeChecks, resolveConfig, applyEnablement), f -> sourceOf[f], o.range
 		);
 		// One narrowing, applied before everything downstream: the report, the severity summary and
 		// `--fail-on` all speak about the SAME set, so a caller can gate on "my edit introduced
 		// something" without the exit code and the printed lines disagreeing. The refreshed
 		// snapshot is the full set (`found`), not this one — see `baselineDelta`.
-		final all: Array<Violation> = baselineDelta(found, o.baseline, sourceOf);
+		final all: Array<Violation> = LintReport.baselineDelta(found, o.baseline, sourceOf);
 
-		final shown: Array<Violation> = reportedViolations(all, o.includeInfo, o.format);
-		reportFindings(o, paths, all, shown, sourceOf, cached, oracleConfig, LintFixVerify.unparseableFiles(files, cached), explainer);
+		final shown: Array<Violation> = LintReport.reportedViolations(all, o.includeInfo, o.format);
+		LintReport.reportFindings(
+			o, paths, all, shown, sourceOf, cached, oracleConfig, LintFixVerify.unparseableFiles(files, cached), explainer
+		);
 
 		// `--no-oracle` skips the typecheck entirely rather than faking its verdict:
 		// the note below says the compiler was not asked, so nothing downstream can
@@ -363,7 +332,7 @@ final class LintCommand implements CliCommand {
 		final oracleExit: Null<Int> = o.noOracle
 			? LintFixVerify.oracleSkippedNote(oracles)
 			: LintFixVerify.reportModeOracle(oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
-		endCompiles(early, ahead, oracles);
+		LintOracleRun.endCompiles(early, ahead, oracles);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;
@@ -372,356 +341,6 @@ final class LintCommand implements CliCommand {
 			for (v in all) if ((cast v.severity: Int) <= threshold) return EXIT_RUNTIME;
 		}
 		return EXIT_OK;
-	}
-
-	/**
-	 * Whether a run starts its compiler-facts compiles before its first pass rather than when a check first asks: only a
-	 * `--fix` run (`fix`) that could be asked at all (a resolution scope, `oracles` configurations, no `--no-oracle`) and
-	 * is given every rule (`narrowed` is a `--rule` filter). The facts are asked for by the gates of the fixes, so such a
-	 * run nearly always asks and then the compiles overlap the checks; a report or a narrowed run keeps asking on demand,
-	 * where an early start would compile every configuration for nothing.
-	 */
-	public static inline function startsFactsEarly(scoped: Bool, oracles: Int, noOracle: Bool, narrowed: Bool, fix: Bool): Bool {
-		return fix && scoped && oracles > 0 && !noOracle && !narrowed;
-	}
-
-	/** Source-offset sort key for a violation span; null spans sort last. */
-	private static inline function spanStart(span: Null<Span>): Int {
-		return span != null ? span.from : CliArgs.MAX_INT;
-	}
-
-	private static inline function lintParseExit(code: Int): LintOpts {
-		return {
-			lang: '',
-			flat: false,
-			includeInfo: false,
-			fix: false,
-			noOracle: false,
-			fixProbes: LintFixSafePass.PROBE_CAP,
-			failOn: null,
-			format: FORMAT_TEXT,
-			ruleFilters: [],
-			categoryFilters: [],
-			inputSpecs: [],
-			range: null,
-			baseline: null,
-			verbose: false,
-			explainLong: false,
-			summary: null,
-
-			errExit: code
-		};
-	}
-
-	/**
-	 * Every compiler-oracle configuration `config` declares, made ready to use (`OracleGeneration.prepare`:
-	 * every stale `generate` entry regenerated, a failed one marked unavailable, each command that ran
-	 * named on stderr), or none when this run resolved no config at all (an empty scope).
-	 *
-	 * Under `--no-oracle` nothing is generated: the run compiles nothing, so it owes no hxml.
-	 *
-	 * The configurations carry this run's `OracleRunMemo`, so a compile of a tree the run already compiled is answered
-	 * from it; `persisted` says the run is a report, which answers its verdict from `OracleCache` when it can.
-	 */
-	private static function oraclesOf(
-		config: Null<LintConfig>, noOracle: Bool, persisted: Bool, files: Array<{ file: String, source: String }>, grammar: GrammarPlugin
-	): Array<OracleConfig> {
-		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles();
-		if (noOracle) return declared;
-		final prepared: PreparedOracles = OracleGeneration.prepare(declared);
-		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
-		// `files` is the run's own list, which a created file joins: the memo hashes whatever it holds at each question
-		// the run's grammar reads the compilers' sources, so each facts compile carries the baseline and the builds' probe
-		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file], grammar));
-	}
-
-	/**
-	 * `resolution` carrying the builds the configured compiler oracles describe (`ReachDefinesProbe`), probed once per run: on
-	 * first demand, or from compiles `buildsAhead` started when a question was about to wait on the facts anyway
-	 * (`MemberReach.forRun`) — read only if no write came first (`buildsSettled`), so the tree they read is the one an
-	 * on-demand probe would have read — only when the project declares the oracle list complete (`reachConfigurationsComplete`):
-	 * a `MemberReach` answer may then hold under their conditional compilation and read exactly the code they compile.
-	 * An oracle list not declared complete vouches for nothing, since a build it leaves out may compile code no listed
-	 * one does. The builds probed are stored under the fingerprint of the input they read (`ReachBuildsCache`), which
-	 * a run under `--no-oracle` — compiling nothing — reads instead (`withStoredBuilds`). A run whose paths name different
-	 * lists reads no builds, and when one of them `declared` its list complete still carries the hold (`buildsHeld`).
-	 * Unchanged with no oracle.
-	 */
-	private static function withReachConfigurations(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool, ahead: AheadBuilds,
-		?reflective: Array<String>, ?holders: Array<String>, declared: Bool = false
-	): Null<ResolutionScope> {
-		if (resolution == null || oracles.length == 0) return resolution;
-		// a path declared its list complete, so no proof may fall back on what a run with no declared list would read
-		if (!complete) return declared ? {
-			declared: resolution.declared,
-			sources: resolution.sources,
-			buildsHeld: heldNote('the linted paths name different compilerOracle lists, so the run reads none as complete')
-		} : resolution;
-		if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);
-		var probed: Bool = false;
-		var builds: Null<ReachBuilds> = null;
-		// the fingerprint of the input the compiles started ahead read, taken before they started
-		var aheadKey: Null<ReachBuildsKey> = null;
-		// once the run writes, the builds are compiled on demand, as they read the tree then: none starts ahead of a write
-		var writing: Bool = false;
-		function probe(): Null<ReachBuilds> {
-			if (!probed) {
-				probed = true;
-				final pending: Null<DefinesProbe> = ahead.probe;
-				ahead.probe = null;
-				// the facts compiles carry the builds' probe: their read files the builds, which the probe then holds
-				final facts: Null<() -> Void> = ahead.facts;
-				if (pending == null && facts != null) facts();
-				final key: Null<ReachBuildsKey> = pending == null ? ReachBuildsCache.fingerprint(oracles) : aheadKey;
-				final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);
-				ReachBuildsCache.store(oracles, key, found);
-				builds = bounded(found, reflective, holders);
-			}
-			return builds;
-		}
-		function start(): Void {
-			if (probed || writing || ahead.probe != null || ahead.facts != null) return;
-			aheadKey = ReachBuildsCache.fingerprint(oracles);
-			ahead.probe = ReachDefinesProbe.start(oracles);
-		}
-		function settled(): Void {
-			writing = true;
-			dropAhead(ahead);
-		}
-		return {
-			declared: resolution.declared,
-			sources: resolution.sources,
-			builds: probe,
-			buildsAhead: start,
-			buildsSettled: settled,
-			buildsHeld: heldNote('no build this run compiled said which files it parses')
-		};
-	}
-
-	/**
-	 * `resolution` carrying the builds an oracle run stored for exactly the compile input the run reads now
-	 * (`ReachBuildsCache`), read on first demand: a run that compiles nothing knows the compilers' builds only from there,
-	 * and otherwise knows none.
-	 */
-	private static function withStoredBuilds(
-		resolution: ResolutionScope, oracles: Array<OracleConfig>, reflective: Null<Array<String>>, holders: Null<Array<String>>
-	): ResolutionScope {
-		var read: Bool = false;
-		var builds: Null<ReachBuilds> = null;
-		function load(): Null<ReachBuilds> {
-			if (!read) {
-				read = true;
-				builds = bounded(ReachBuildsCache.load(oracles), reflective, holders);
-			}
-			return builds;
-		}
-		return {
-			declared: resolution.declared,
-			sources: resolution.sources,
-			builds: load,
-			buildsHeld: heldNote('this --no-oracle run found no builds stored for its exact input — a run with the oracle stores them')
-		};
-	}
-
-	/**
-	 * The run's `ResolutionScope.buildsHeld`: says once per consumer that it held for want of the builds, and `why` the run
-	 * knows none.
-	 */
-	private static function heldNote(why: String): (String) -> Void {
-		final told: Array<String> = [];
-		return consumer -> {
-			if (told.contains(consumer)) return;
-			told.push(consumer);
-			CliIo.stderr(
-				'apq lint: $consumer held what only the builds can vouch for — reachConfigurationsComplete is declared, but $why\n'
-			);
-		};
-	}
-
-	/** `builds` carrying the bounds the project declares on what a computed name may make or obtain, where it declares them. */
-	private static function bounded(
-		builds: Null<ReachBuilds>, reflective: Null<Array<String>>, holders: Null<Array<String>>
-	): Null<ReachBuilds> {
-		if (builds != null && reflective != null) builds.reflectiveClasses = reflective;
-		if (builds != null && holders != null) builds.reflectiveMethodHolders = holders;
-		return builds;
-	}
-
-	/**
-	 * Start the builds' probe compiles (`ResolutionScope.buildsAhead`) when a check first waits on the facts, in a run that
-	 * started the facts compiles early (`factsEarly`, `startsFactsEarly`). Such a run nearly always asks a reach question, and
-	 * its first one escalates to the builds (`MemberReach.escalation`): started only when that question came, mid-way through
-	 * the first pass, the probes were waited on alone. Started with the facts at the run's start instead, they took
-	 * the cores the first pass and the facts needed and bought nothing; started here they compile while the run waits anyway.
-	 * A write before the question still drops them unread (`buildsSettled`).
-	 */
-	public static function startBuildsWithFacts(factsEarly: Bool, resolution: Null<ResolutionScope>): Void {
-		final start: Null<() -> Void> = resolution?.buildsAhead;
-		if (factsEarly && start != null) start();
-	}
-
-	/** The facts compiles a run starts before its first pass (`startsFactsEarly`), or null for a run that asks on demand. */
-	private static function earlyFacts(scoped: Bool, oracles: Array<OracleConfig>, o: LintOpts): Null<FactsProbe> {
-		return startsFactsEarly(scoped, oracles.length, o.noOracle, o.ruleFilters.length > 0, o.fix)
-			? TypedFactsProbe.start(oracles)
-			: null;
-	}
-
-	/**
-	 * `body`'s answer, with the run's compiles ended (`endCompiles`) on every way out, a throw included: an early facts
-	 * batch must not run on after a failed run.
-	 */
-	private static function endingCompiles(
-		early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>, body: () -> Int
-	): Int {
-		final answer: Int = try {
-			body();
-		} catch (exception: Exception) {
-			endCompiles(early, ahead, oracles);
-			throw exception;
-		};
-		endCompiles(early, ahead, oracles);
-		return answer;
-	}
-
-	/**
-	 * Every compile of the run is done: end the facts compiles no check asked for (`early`), then release the builds, so
-	 * another run may regenerate them.
-	 */
-	private static function endCompiles(early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>): Void {
-		if (early != null) TypedFactsProbe.abandon(early);
-		OracleRunMemo.of(oracles)?.servers.stop();
-		dropAhead(ahead);
-		OracleGeneration.release(oracles);
-	}
-
-	/** End the builds' compiles `ahead` holds, started and never read (`withReachConfigurations`). */
-	private static function dropAhead(ahead: AheadBuilds): Void {
-		final pending: Null<DefinesProbe> = ahead.probe;
-		ahead.probe = null;
-		if (pending != null) ReachDefinesProbe.abandon(pending);
-	}
-
-	/**
-	 * `resolution` carrying what the configured compiler oracles typed (`TypedFactsProbe`), compiled once per
-	 * run — from `early` when the caller started the compiles ahead, else on first demand — and read on first
-	 * demand, each configuration that contributed nothing named on stderr. Unlike the builds it needs no complete
-	 * oracle list: code no configuration compiled simply has no facts. A file the run rewrites is dropped from the table
-	 * (`factsEdited`). Unchanged with no oracle, or under `--no-oracle`.
-	 */
-	private static function withCompilerFacts(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, early: Null<FactsProbe>, reflective: Null<Array<String>>,
-		holders: Null<Array<String>>, ahead: AheadBuilds, o: LintOpts
-	): Null<ResolutionScope> {
-		if (resolution == null || oracles.length == 0 || o.noOracle) return resolution;
-		var probed: Bool = false;
-		var facts: Null<CompilerFacts> = null;
-		final edited: Array<{ file: String, original: Null<String> }> = [];
-		function read(settling: Bool): Null<CompilerFacts> {
-			if (!probed) {
-				probed = true;
-				// a check waits on the facts here, and a question it asks may escalate to the builds: they compile meanwhile
-				if (!settling) startBuildsWithFacts(early != null, resolution);
-				final built: Null<CompilerFacts> = TypedFactsProbe.finish(early ?? TypedFactsProbe.start(oracles));
-				// the facts compiles are done and their cores free: the run's warm servers start, and compile, now
-				if (early != null) OracleRunMemo.of(oracles)?.servers.start(oracles);
-				facts = built;
-				if (built != null) {
-					for (d in built.dropped) CliIo.stderr('apq lint: compilerOracle ${d.name}: no compiler facts — ${d.reason}\n');
-					for (glob in FactsEscapes.unmatchedGlobs(built, reflective ?? []))
-						CliIo.stderr('apq lint: $REFLECTIVE_CLASSES "$glob" matches no class the builds typed\n');
-					for (glob in FactsEscapes.unmatchedGlobs(built, holders ?? []))
-						CliIo.stderr('apq lint: $REFLECTIVE_METHOD_HOLDERS "$glob" matches no class the builds typed\n');
-					for (e in edited) built.invalidate(e.file, e.original);
-				}
-			}
-			return facts;
-		}
-		// a run given every rule reads the builds off the facts compiles, which carry their probe (`TypedFactsProbe.start`);
-		// one narrowed by `--rule` or `--category` may ask the builds and never the facts, so its builds take the probe alone
-		if (o.ruleFilters.length == 0 && o.categoryFilters.length == 0) ahead.facts = read.bind(false);
-		function touched(file: String, original: Null<String>): Void {
-			final built: Null<CompilerFacts> = facts;
-			if (built != null)
-				built.invalidate(file, original)
-			else if (!edited.exists(e -> e.file == file))
-				edited.push({ file: file, original: original });
-		}
-		return {
-			declared: resolution.declared,
-			sources: resolution.sources,
-			builds: resolution.builds,
-			facts: read.bind(false),
-			factsEdited: touched,
-			factsSettled: () -> if (early != null) read(true),
-			buildsHeld: resolution.buildsHeld,
-			buildsAhead: resolution.buildsAhead,
-			buildsSettled: resolution.buildsSettled
-		};
-	}
-
-	/**
-	 * The three scope-level `apq.json` diagnostics, once per run, from the one place that can
-	 * afford them and can tell whether the run consults each setting.
-	 *
-	 * All three ask their question of EVERY path where the answer they serve costs one resolve, and
-	 * `resolveConfig` is the only resolver in the codebase memoised per directory. The roster half
-	 * used to be asked from `LintConfig.frameworksFor`, which runs once per framework-aware rule and
-	 * re-ran the whole scan each time (its argument is evaluated whatever the once-per-process
-	 * ledger later decides) — and for the `RiskyFix` half of those rules, `prefer-inline` under a
-	 * configured oracle and `unused-public-member` when enabled, `FixVerifier` installs no resolver
-	 * at all, so each scan was an uncached `LintConfig.discover` walk per file. The three `resolveConfig`
-	 * sweeps in `runLint` leave the directory cache warm, so here none of them costs anything.
-	 *
-	 * The first two are GATED on whether this run consults their setting, because each sentence claims
-	 * the first root's answer "applies to all N file(s)": `--no-oracle` takes no oracle verdict, and a
-	 * run holding no `FrameworkAware` rule (`--rule prefer-single-quotes`, or a config disabling all
-	 * four) applies no roster. An ungated line would be the same defect as the silence it replaced,
-	 * pointing the other way.
-	 *
-	 * The third is NOT gated, and that is the same reasoning rather than an exception: the missing project
-	 * roots are a property of the resolution scope EVERY check shares, not of one setting one family reads,
-	 * and the report half of that scope is what a `--range`-narrowed `--fix` behind a write op runs on. The
-	 * gate its two neighbours use is a marker interface (`c is FrameworkAware`), which works because a
-	 * framework-aware rule cannot read the roster without declaring itself; nothing similar guards the wide
-	 * index — a check reaches it by calling `IndexScope.widestScopeIndex`, so any marker here would be
-	 * a hand-kept roster of the five that do, failing open the day a sixth joins them.
-	 */
-	private static function warnScopeNotices(
-		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool
-	): Void {
-		if (activeChecks.exists(c -> c is FrameworkAware)) ConfigDisagreement.warnRoster(resolveConfig, paths);
-		if (!noOracle) ConfigDisagreement.warnOracle(resolveConfig, paths);
-		ConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths);
-	}
-
-	/**
-	 * Apply each active check's autofix across the file set in `--fix` mode,
-	 * iterating to a FIXED POINT. A fix can expose a new finding — deleting a
-	 * dead-code run leaves a local unused; de-nesting a `redundant-else`
-	 * `else if` chain surfaces the inner `else` — so a single pass is not
-	 * enough. Each pass re-lints the in-memory (already-fixed) sources and
-	 * re-applies; only files a prior pass changed are revisited (a fix exposes
-	 * new findings only in a file it edited). Per file, a pass batches the
-	 * fixable edits from every check into ONE `RefactorSupport.canonicalize`
-	 * (so several deletions apply end-to-start without span-shift). Sources are
-	 * mutated in memory and flushed to disk once at the end. A non-canonical
-	 * first-pass file is refused by the canonical gate and skipped with a note;
-	 * a later-pass refusal (a writer-idempotency wrinkle on our own output)
-	 * just stops that file quietly. The pass count is capped as a runaway guard.
-	 * Exit is always success — `--fix` is best-effort.
-	 * The UNION of `resolutionRoots` across the configs discovered for `paths` — the library dirs whose sources join the resolution scope.
-	 * The deduped union of a per-config string list across every linted path — the
-	 * shared shape of the `resolutionRoots` / `resolutionLibs` gathering, differing
-	 * only in which `LintConfig` accessor supplies each config's values.
-	 */
-	private static function unionConfigStrings(
-		paths: Array<String>, resolveConfig: (String) -> LintConfig, select: (LintConfig) -> Array<String>
-	): Array<String> {
-		final out: Array<String> = [];
-		for (p in paths) for (s in select(resolveConfig(p))) if (!out.contains(s)) out.push(s);
-		return out;
 	}
 
 	/**
@@ -809,6 +428,84 @@ final class LintCommand implements CliCommand {
 				};
 			}
 		};
+	}
+
+	/**
+	 * Wrap `plugin` in a `CachingGrammarPlugin`, carrying `resolution` when a scope reached this run.
+	 * A scope is absent only when the project declares neither resolution key and no Haxe std is
+	 * discoverable (no Haxe on the machine, or the std declined via `APQ_NO_STD` /
+	 * `"resolutionStd": false`) — not merely when none is configured. The WRAPPER is unconditional
+	 * either way: `resolutionIndexOf` gates on `hasAnyResolutionScope`, so a scopeless wrapper answers
+	 * exactly what the bare plugin did, and the memoized parses serve the checks and the report's
+	 * address annotation regardless of whether anything cross-file resolves.
+	 */
+	public static function wrapResolution(plugin: GrammarPlugin, resolution: Null<ResolutionScope>): CachingGrammarPlugin {
+		final host: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
+		if (resolution != null) host.setResolutionScope(resolution);
+		return host;
+	}
+
+	/**
+	 * The three scope-level `apq.json` diagnostics, once per run, from the one place that can
+	 * afford them and can tell whether the run consults each setting.
+	 *
+	 * All three ask their question of EVERY path where the answer they serve costs one resolve, and
+	 * `resolveConfig` is the only resolver in the codebase memoised per directory. The roster half
+	 * used to be asked from `LintConfig.frameworksFor`, which runs once per framework-aware rule and
+	 * re-ran the whole scan each time (its argument is evaluated whatever the once-per-process
+	 * ledger later decides) — and for the `RiskyFix` half of those rules, `prefer-inline` under a
+	 * configured oracle and `unused-public-member` when enabled, `FixVerifier` installs no resolver
+	 * at all, so each scan was an uncached `LintConfig.discover` walk per file. The three `resolveConfig`
+	 * sweeps in `runLint` leave the directory cache warm, so here none of them costs anything.
+	 *
+	 * The first two are GATED on whether this run consults their setting, because each sentence claims
+	 * the first root's answer "applies to all N file(s)": `--no-oracle` takes no oracle verdict, and a
+	 * run holding no `FrameworkAware` rule (`--rule prefer-single-quotes`, or a config disabling all
+	 * four) applies no roster. An ungated line would be the same defect as the silence it replaced,
+	 * pointing the other way.
+	 *
+	 * The third is NOT gated, and that is the same reasoning rather than an exception: the missing project
+	 * roots are a property of the resolution scope EVERY check shares, not of one setting one family reads,
+	 * and the report half of that scope is what a `--range`-narrowed `--fix` behind a write op runs on. The
+	 * gate its two neighbours use is a marker interface (`c is FrameworkAware`), which works because a
+	 * framework-aware rule cannot read the roster without declaring itself; nothing similar guards the wide
+	 * index — a check reaches it by calling `IndexScope.widestScopeIndex`, so any marker here would be
+	 * a hand-kept roster of the five that do, failing open the day a sixth joins them.
+	 */
+	private static function warnScopeNotices(
+		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool
+	): Void {
+		if (activeChecks.exists(c -> c is FrameworkAware)) ConfigDisagreement.warnRoster(resolveConfig, paths);
+		if (!noOracle) ConfigDisagreement.warnOracle(resolveConfig, paths);
+		ConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths);
+	}
+
+	/**
+	 * Apply each active check's autofix across the file set in `--fix` mode,
+	 * iterating to a FIXED POINT. A fix can expose a new finding — deleting a
+	 * dead-code run leaves a local unused; de-nesting a `redundant-else`
+	 * `else if` chain surfaces the inner `else` — so a single pass is not
+	 * enough. Each pass re-lints the in-memory (already-fixed) sources and
+	 * re-applies; only files a prior pass changed are revisited (a fix exposes
+	 * new findings only in a file it edited). Per file, a pass batches the
+	 * fixable edits from every check into ONE `RefactorSupport.canonicalize`
+	 * (so several deletions apply end-to-start without span-shift). Sources are
+	 * mutated in memory and flushed to disk once at the end. A non-canonical
+	 * first-pass file is refused by the canonical gate and skipped with a note;
+	 * a later-pass refusal (a writer-idempotency wrinkle on our own output)
+	 * just stops that file quietly. The pass count is capped as a runaway guard.
+	 * Exit is always success — `--fix` is best-effort.
+	 * The UNION of `resolutionRoots` across the configs discovered for `paths` — the library dirs whose sources join the resolution scope.
+	 * The deduped union of a per-config string list across every linted path — the
+	 * shared shape of the `resolutionRoots` / `resolutionLibs` gathering, differing
+	 * only in which `LintConfig` accessor supplies each config's values.
+	 */
+	private static function unionConfigStrings(
+		paths: Array<String>, resolveConfig: (String) -> LintConfig, select: (LintConfig) -> Array<String>
+	): Array<String> {
+		final out: Array<String> = [];
+		for (p in paths) for (s in select(resolveConfig(p))) if (!out.contains(s)) out.push(s);
+		return out;
 	}
 
 	/**
@@ -921,869 +618,6 @@ final class LintCommand implements CliCommand {
 			if (src != null) out.push({ file: path, source: src });
 		}
 		return out;
-	}
-
-	/**
-	 * Wrap `plugin` in a `CachingGrammarPlugin`, carrying `resolution` when a scope reached this run.
-	 * A scope is absent only when the project declares neither resolution key and no Haxe std is
-	 * discoverable (no Haxe on the machine, or the std declined via `APQ_NO_STD` /
-	 * `"resolutionStd": false`) — not merely when none is configured. The WRAPPER is unconditional
-	 * either way: `resolutionIndexOf` gates on `hasAnyResolutionScope`, so a scopeless wrapper answers
-	 * exactly what the bare plugin did, and the memoized parses serve the checks and the report's
-	 * address annotation regardless of whether anything cross-file resolves.
-	 */
-	public static function wrapResolution(plugin: GrammarPlugin, resolution: Null<ResolutionScope>): CachingGrammarPlugin {
-		final host: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
-		if (resolution != null) host.setResolutionScope(resolution);
-		return host;
-	}
-
-	/**
-	 * Split `checks` into the sets `lint --fix` applies differently.
-	 *
-	 * A RiskyFix check is verified against the compiler oracle and is EXCLUDED from the
-	 * unverified safe loop. The `OracleRelaxable` checks (prefer-inline among them) are
-	 * the exception: each has a byte-identical safe subset, so WITHOUT an oracle it runs in
-	 * the safe loop (null-safety gate on) instead of being left report-only, and WITH an oracle
-	 * it joins the verified risky set with its candidate set widened (`setOracleRelaxed`,
-	 * applied by the caller). Every OTHER RiskyFix check (avoid-dynamic) keeps the contract: verified when an
-	 * oracle is configured, report-only via `verifyRiskyFixes` otherwise — its risky fix is
-	 * NEVER applied unverified. So a RiskyFix check only leaves the risky set for the safe loop
-	 * when it is OracleRelaxable AND no oracle is configured.
-	 *
-	 * A `RiskyArm` check is in BOTH sets when an oracle is configured: the safe loop runs its safe
-	 * arms, and the verifier its `riskyFix`.
-	 *
-	 * The safe set then splits by lint SCOPE: a per-file check decides a file's findings from
-	 * that file alone, so later passes re-lint only the files a prior pass changed. A cross-file
-	 * check must see every file or it mis-resolves on the active subset — those run over the
-	 * full set each pass.
-	 */
-	public static function partitionChecks(checks: Array<Check>, oracleConfigured: Bool): CheckPartition {
-		final relaxableNoOracle: (Check) -> Bool = c -> !oracleConfigured && c is OracleRelaxable;
-		final safeChecks: Array<Check> = [for (c in checks) if (!(c is RiskyFix) || relaxableNoOracle(c)) c];
-		final fullScopeIds: Array<String> = [
-			'unused-private',
-			'prefer-final-field',
-			'unused-parameter',
-			'prefer-final-public-field',
-			'prefer-read-only-field',
-			'field-init-at-declaration',
-			// Resolves a path receiver's member types through a SymbolIndex over the set it is
-			// given — on the active SUBSET a type declared elsewhere reads as unresolvable, which
-			// re-flags the very loops the type gate is meant to skip.
-			'map-keys-lookup',
-			// Same cross-file path-receiver resolution as map-keys-lookup: on the active SUBSET a
-			// declaring type reads as unresolvable and a Map get/set finding re-exposed by an earlier
-			// pass (a nested lookup) is re-skipped, so the fixed-point loop never converges on it.
-			'prefer-index-access',
-			// Its no-null-value census is OWNER-scoped, not name-scoped — the
-			// name-scoped form refused realistic map names on std collisions alone, and
-			// `MapValueScan` documents the replacement. What a narrow set costs it is therefore the
-			// three cross-file doors, not an occurrence count. Two of them — an `@:access` grant
-			// and a subtype that could store a null through the map — are asked of
-			// `IndexScope.resolutionIndexOf(plugin) ?? report`; the third,
-			// `privateMemberScanIsSound`, is asked of the REPORT index alone and so narrows with
-			// it. On the active SUBSET of a
-			// project that declares no resolution scope a subtype in an untouched file reads as
-			// absent, which turns an unprovable site into a wrongly PROVEN one — the unsound
-			// direction, unlike the misses the other ids here guard against. Pinned by
-			// `CrossScopeSoundnessTest`'s `subtype-map-write` cell (arm
-			// `M-MAPVALUE-SUBTYPE-REPORT-INDEX`).
-			'redundant-map-exists',
-			// prefer-static-extension's shadow gate resolves the receiver type — and its whole
-			// supertype / alias closure — through the index. On the active SUBSET a declaring type
-			// or a `typedef` target declared elsewhere reads as unresolvable, so a site an earlier
-			// pass exposed degrades to report-only and the loop never converges on it.
-			'prefer-static-extension',
-			// redundant-tostring's fix gates resolve the receiver's TYPE through the index — is it
-			// declared, extern, a class. On the active SUBSET a type declared elsewhere reads as
-			// unresolvable, so a site an earlier pass exposed degrades to report-only and the loop
-			// never converges on it; worse, run() and fix() would then disagree, since
-			// computeFileLintEdits hands fix() the whole-report index either way.
-			'redundant-tostring',
-			// prefer-inline's soundness gates are ALL whole-project: the subtype-override gate
-			// (SubtypeGraph.hasSubtype + a strict-subtype member lookup), the value-reference name scan, and
-			// the interface gate. On the active SUBSET a subtype / value-use / interface declared elsewhere
-			// reads as absent, so an overridden or value-referenced method is wrongly inlined ("Field X is
-			// inlined and cannot be overridden").
-			'prefer-inline',
-			// trivial-getter's collapse gates are whole-project too: subtypeBlocks /
-			// subtypeFieldBlocks resolve the owner's subtypes through the index. On the
-			// active SUBSET a subtype declared elsewhere reads as absent, so a later
-			// pass can collapse a property whose backing field a subtype still uses.
-			'trivial-getter',
-			// naming's cross-file field rename (crossFileFix) resolves an owner's subtype /
-			// @:access-grant files through the whole-project index; on the active SUBSET a subtype
-			// declared elsewhere reads as absent. Full-scope also re-reports the declaring file's
-			// violation every pass, so a rename deferred by a same-file conflict re-fires until it lands.
-			'naming',
-			// prefer-typed-throw's verdict is whole-scope: a `catch (e:String)` ANYWHERE degrades the
-			// rule to report-only. When no resolution scope exists the gate falls back to the file set
-			// it is handed, so on the active SUBSET a catch declared elsewhere reads as absent and a
-			// throw a first pass correctly refused would be boxed by a later one. Pinned by
-			// `CrossScopeSoundnessTest`'s `string-catch` cell (arm
-			// `M-TYPEDTHROW-CATCH-REPORT-ONLY`) — the one entry on this list whose gate degrades the
-			// RULE rather than a candidate, so its cell carries no in-cell control.
-			'prefer-typed-throw',
-			// orphan-accessor's every deletion gate is whole-project: the property is resolved through
-			// the supertype chain, and the zero-direct-call proof scans every file in report scope. On
-			// the active SUBSET a supertype declared elsewhere reads as unresolvable and a call site in
-			// an unchanged file reads as absent — the first would silence a real finding, the second
-			// would delete a method something still calls.
-			'orphan-accessor',
-			// unused-public-member's every gate is whole-project: the supertype chain resolution
-			// and the reference scan over the whole token map. On the active SUBSET a call site
-			// in an unchanged file reads as absent, so `--fix` would delete a method the rest of
-			// the project still calls. Its DELETIONS reach the tree through the RiskyFix verifier
-			// (which runs the whole set too) rather than this loop. `fullScopeIds` is read ONLY to
-			// partition `safeChecks`, which a RiskyFix check never joins (it is not
-			// `OracleRelaxable`), so the entry is INERT today — it is kept because it would carry
-			// the fixes again if the rule ever stopped being risky.
-			'unused-public-member',
-			// redundant-isvar's accessor-body, bypass and reflection scans read every file in scope.
-			// On the active SUBSET a subclass override in an unchanged file that writes the field
-			// reads as absent, and `--fix` would strip the metadata that override needs to compile.
-			// The entry acts only WITHOUT an oracle: the rule is `OracleRelaxable`, so that is when it
-			// joins the safe loop; with one it is verified as a `RiskyFix` over the whole set.
-			'redundant-isvar',
-			// inline-constant's reflection gate is the same whole-project string scan its three
-			// siblings on this list share (`orphan-accessor` and `unused-public-member` above,
-			// `static-constant` below), and it gates the FINDING rather than the fix. On the
-			// active SUBSET a `Reflect.field(o, "NAME")` in an unchanged file reads as absent, so a
-			// constant pass 1 correctly refused is marked `inline` by pass 2 — on a two-file
-			// fixture the whole-set REPORT names one finding and the same command's `--fix` fixes
-			// two.
-			'inline-constant',
-			// static-constant's reachability gates are all whole-project: the subtype MENTION gate
-			// (a subtype's unqualified read of a private static does not resolve) and the
-			// reflection-name scan over every string literal in scope. On the active SUBSET a
-			// subtype or a `Reflect.field(o, "NAME")` in an unchanged file reads as absent, so a
-			// later pass would promote a field whose read then fails to compile.
-			'static-constant',
-			// hoist-common-import weighs the SHARE of a directory's modules that spell a statement. On
-			// the active SUBSET the denominator is whatever the last pass rewrote, so the same directory
-			// answers a different share each pass and the decision flips under the fixed-point loop.
-			'hoist-common-import',
-			// scratch-field's reference gates are whole-project like unused-private's: a subtype or an
-			// `@:access` grantee MENTIONING the field, and the reflection-name scan over every string literal.
-			// On the active subset an unchanged file that spells the name reads as absent.
-			'scratch-field'
-		];
-		return {
-			// A `RiskyArm` check keeps its place in the safe loop below (its safe arm declines the
-			// findings the risky arm owns) and joins the verified set only when there is an oracle to
-			// verify with - without one its risky arm is report-only and the run never mentions it.
-			risky: [
-				for (c in checks) if ((c is RiskyFix && !relaxableNoOracle(c)) || (oracleConfigured && c is RiskyArm)) c
-			],
-			safe: safeChecks,
-			activeScope: [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c],
-			fullScope: [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c]
-		};
-	}
-
-	private static function printLintUsage(): Void {
-		CliIo.sysPrint('Usage: apq lint <scope...> [options]\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Run the analysis checks over the scope (one or more file/dir/glob specs) and\n');
-		CliIo.sysPrint('report violations grouped by file as <line>:<col>: [severity] message (rule).\n');
-		CliIo.sysPrint('Info advisories are hidden from the TEXT report unless --all; json and\n');
-		CliIo.sysPrint('checkstyle always carry every finding, since their stdout is the answer a\n');
-		CliIo.sysPrint('machine consumer gets. The exit code is success unless\n');
-		CliIo.sysPrint('--fail-on selects a severity present in the findings. Run --list-rules for\n');
-		CliIo.sysPrint('the full check list (id + description, one per line).\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Inline suppression: a trailing "// noqa" (or "// noqa: <rule>,<rule>") clears\n');
-		CliIo.sysPrint('findings on its line; "// CHECKSTYLE:OFF" ... "// CHECKSTYLE:ON" clears a region.\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Project config: an "apq.json" discovered by walking up from a linted file\n');
-		CliIo.sysPrint('enables/disables rules and overrides their severity or options, e.g.\n');
-		CliIo.sysPrint('{ "rules": { "naming": { "severity": "error" }, "complexity": { "max": 15 },\n');
-		CliIo.sysPrint('"fold-adjacent-string-literals": false } }. A rule entry is true / false or an\n');
-		CliIo.sysPrint('object of options, which enables the rule unless it says "enabled". A\n');
-		CliIo.sysPrint('"categories": { "docs": true } entry switches a whole category, default-off\n');
-		CliIo.sysPrint('rules included; a rule entry outranks its category entry.\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('A top-level "compilerOracle" key (path to an .hxml, relative to the config)\n');
-		CliIo.sysPrint('runs "haxe <hxml> --no-output" as a ground-truth typecheck: a compile error\n');
-		CliIo.sysPrint('fails the run, a RiskyFix rule fix is reverted under --fix if it breaks the\n');
-		CliIo.sysPrint('build, and an OracleAssisted rule (explicit-local-type, explicit-type) asks a\n');
-		CliIo.sysPrint('warm display server for the type of each finding it cannot resolve structurally,\n');
-		CliIo.sysPrint('reverting any annotated file that fails to typecheck. Without the key no\n');
-		CliIo.sysPrint('compiler is ever spawned.\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
-		CliIo.sysPrint('  --category <id>   Run only the rules of this category the config enables\n');
-		CliIo.sysPrint('                    (repeatable; not with --rule, which force-runs what it\n');
-		CliIo.sysPrint('                    names). With --list-rules, list only that category\n');
-		CliIo.sysPrint('  --list-rules      List every registered check and exit. Given a scope, list\n');
-		CliIo.sysPrint('                    each rule as on/off for those files instead, one block per\n');
-		CliIo.sysPrint('                    distinct apq.json chain (config, default-off and\n');
-		CliIo.sysPrint('                    languageVersion resolved); nothing is linted\n');
-		CliIo.sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
-		CliIo.sysPrint('  --fix-probes <n>  With --fix: the typechecks the safe-pass net may spend in one\n');
-		CliIo.sysPrint('                    run isolating the edits that broke the build (default 32);\n');
-		CliIo.sysPrint('                    past it the safe pass is reverted whole\n');
-		CliIo.sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
-		CliIo.sysPrint('                    (error|warning|info)\n');
-		CliIo.sysPrint('  --no-oracle       Skip the compiler-oracle typecheck (a PROJECT-WIDE build\n');
-		CliIo.sysPrint('                    regardless of scope: 16s of an 18.7s single-file run).\n');
-		CliIo.sysPrint('                    Report mode: findings are unchanged, the run just cannot\n');
-		CliIo.sysPrint('                    claim compiler-confirmed nullSafety trust. With --fix it\n');
-		CliIo.sysPrint('                    ALSO turns off every oracle-backed net, as if no\n');
-		CliIo.sysPrint('                    compilerOracle were configured: a fix that breaks the build\n');
-		CliIo.sysPrint('                    is NOT reverted, RiskyFix rules stay report-only and\n');
-		CliIo.sysPrint('                    OracleAssisted rules are inert. Use it in an iteration loop\n');
-		CliIo.sysPrint('                    (the only way to see the fixer raw), NEVER in a gate\n');
-		CliIo.sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle; with an\n');
-		CliIo.sysPrint('                    unscoped --list-rules, markdown prints the rule index by\n');
-		CliIo.sysPrint('                    category and json one {id, category, description,\n');
-		CliIo.sysPrint('                    defaultOn} record per rule\n');
-		CliIo.sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
-		CliIo.sysPrint('                   json and checkstyle are never capped)\n');
-		CliIo.sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
-		CliIo.sysPrint('  --full           Always list every finding (text format only)\n');
-		CliIo.sysPrint('  --summary        Always print the per-rule summary instead (text format only)\n');
-		CliIo.sysPrint('                   Without either, a text report listing more findings than the\n');
-		CliIo.sysPrint('                   apq.json reportSummaryThreshold (default 200; 0 = never)\n');
-		CliIo.sysPrint('                   prints the summary instead: one line per rule (count, severity,\n');
-		CliIo.sysPrint('                   files) sorted by count, each with its top 3 files — a single\n');
-		CliIo.sysPrint('                   rule gets its top 10 files one per line. --rule follows the\n');
-		CliIo.sysPrint('                   same threshold; json and checkstyle always list everything\n');
-		CliIo.sysPrint('  --range <a>:<b>  Only findings whose span STARTS on a line in [a, b], 1-based\n');
-		CliIo.sysPrint('                   and inclusive; several windows join with commas (1:4,9:9).\n');
-		CliIo.sysPrint('                   The scope must be exactly one file. Narrows\n');
-		CliIo.sysPrint('                   the report AND --fix. It narrows FINDINGS, not EDITS: an\n');
-		CliIo.sysPrint('                   atomic fix off a finding inside the window still writes\n');
-		CliIo.sysPrint('                   wherever its own fix says\n');
-		CliIo.sysPrint('  --baseline <p>   Report only the findings the snapshot at <p> does not already\n');
-		CliIo.sysPrint('                   carry, then refresh <p> with EVERY finding of this run. The\n');
-		CliIo.sysPrint('                   comparison is lint-diff\'s multiset over (file, rule, severity,\n');
-		CliIo.sysPrint('                   message) — family/function/subject for a finding carrying\n');
-		CliIo.sysPrint('                   data — so an edit that shifts line numbers does not\n');
-		CliIo.sysPrint('                   manufacture a delta. It narrows the report, the summary and\n');
-		CliIo.sysPrint('                   --fail-on alike; a missing or unreadable <p> reports\n');
-		CliIo.sysPrint('                   everything and says so. Refused with --fix\n');
-		CliIo.sysPrint('  --explain-long   After the findings, say why thread-safety holds each lock long:\n');
-		CliIo.sysPrint('                   per lock every reason (crossing, leak, blind, untraced,\n');
-		CliIo.sysPrint('                   unnamed, spans-blocking with the long lock it waits for) at\n');
-		CliIo.sysPrint('                   every site, what it is long by once its own\n');
-		CliIo.sysPrint('                   reasons are set aside, and the main-thread takes of locks that\n');
-		CliIo.sysPrint('                   are not long. With --format json the report becomes the\n');
-		CliIo.sysPrint('                   {"findings": [...], "longLocks": {...} | null} envelope (null,\n');
-		CliIo.sysPrint('                   with a note, when thread-safety explained nothing). Adds\n');
-		CliIo.sysPrint('                   output, never a finding; refused with --fix and checkstyle\n');
-		CliIo.sysPrint('  --verbose        Bring back the accounting a quiet run withholds: the --fix\n');
-		CliIo.sysPrint('                   rule census (silent on a run that wrote nothing) and the\n');
-		CliIo.sysPrint('                   --no-oracle net notice. Adds output, never behaviour\n');
-		CliIo.sysPrint('  --lang <name>    Grammar plugin (default: haxe)\n');
-		CliIo.sysPrint('  -h, --help       Show this help\n');
-	}
-
-	private static function parseLintArgs(args: Array<String>): LintOpts {
-		var lang: String = 'haxe';
-		var flat: Bool = false;
-		var includeInfo: Bool = false;
-		var fix: Bool = false;
-		var noOracle: Bool = false;
-		var fixProbes: Int = LintFixSafePass.PROBE_CAP;
-		var failOn: Null<Severity> = null;
-		var format: String = FORMAT_TEXT;
-		final ruleFilters: Array<String> = [];
-		final categoryFilters: Array<String> = [];
-		final inputSpecs: Array<String> = [];
-		var range: Null<LintRange> = null;
-		var baseline: Null<String> = null;
-		var verbose: Bool = false;
-		var explainLong: Bool = false;
-		var listRules: Bool = false;
-		var summary: Null<Bool> = null;
-
-		for (arg in new LintCommand().flags().walk(args)) {
-			final a: String = arg.token;
-			switch arg.flag {
-				case '--lang':
-					lang = arg.value();
-				case '--rule':
-					ruleFilters.push(arg.value());
-				case '--category':
-					categoryFilters.push(arg.value());
-				case '--all', '-a':
-					includeInfo = true;
-				case '--flat':
-					flat = true;
-				case '--fix':
-					fix = true;
-				case '--no-oracle':
-					noOracle = true;
-				case '--fix-probes':
-					final count: Null<Int> = Std.parseInt(arg.value());
-					if (count == null || count < 0) {
-						CliIo.stderr('apq lint: --fix-probes expects a count of typechecks, 0 or more\n');
-						return lintParseExit(EXIT_USAGE);
-					}
-					fixProbes = count;
-				case '--verbose':
-					verbose = true;
-				case '--explain-long':
-					explainLong = true;
-				case '--full', '--summary':
-					final wanted: Bool = a == '--summary';
-					if (summary == !wanted) {
-						CliIo.stderr('apq lint: --full and --summary contradict each other — pass one\n');
-						return lintParseExit(EXIT_USAGE);
-					}
-					summary = wanted;
-				case '--baseline':
-					baseline = arg.value();
-				case '--range':
-					final spec: String = arg.value();
-					range = parseLintRange(spec);
-					if (range == null) {
-						CliIo.stderr(
-							'apq lint: --range expects <from>:<to>[,<from>:<to>…], 1-based inclusive line numbers with from <= to — got "'
-							+ '$spec"\n'
-						);
-						return lintParseExit(EXIT_USAGE);
-					}
-				case '--fail-on':
-					final level: String = arg.value();
-					failOn = Severity.fromName(level);
-					if (failOn == null) {
-						CliIo.stderr('apq lint: unknown --fail-on value "$level" (expected error|warning|info)\n');
-						return lintParseExit(EXIT_USAGE);
-					}
-				case '--format':
-					format = arg.value();
-					if (![FORMAT_TEXT, FORMAT_JSON, FORMAT_CHECKSTYLE, FORMAT_MARKDOWN].contains(format)) {
-						CliIo.stderr(
-							'apq lint: unknown --format value "$format'
-							+ '" (expected text|json|checkstyle, or markdown with an unscoped --list-rules)\n'
-						);
-						return lintParseExit(EXIT_USAGE);
-					}
-				case '-h', '--help':
-					printLintUsage();
-					return lintParseExit(EXIT_OK);
-				case '--list-rules':
-					listRules = true;
-				case null:
-					inputSpecs.push(a);
-			}
-		}
-		// Listing rules is terminal like `--help`, but only once the whole argv is read: the scope
-		// that narrows it to effective state may follow the flag.
-		final opts: LintOpts = {
-			lang: lang,
-			flat: flat,
-			includeInfo: includeInfo,
-			fix: fix,
-			noOracle: noOracle,
-			fixProbes: fixProbes,
-			failOn: failOn,
-			format: format,
-			ruleFilters: ruleFilters,
-			categoryFilters: categoryFilters,
-			inputSpecs: inputSpecs,
-			range: range,
-			baseline: baseline,
-			verbose: verbose,
-			explainLong: explainLong,
-			summary: summary,
-			errExit: null
-		};
-		final selection: Null<String> = selectionError(opts, listRules);
-		if (selection != null) {
-			CliIo.stderr('apq lint: $selection\n');
-			return lintParseExit(EXIT_USAGE);
-		}
-		// A machine format is never summarised, so asking for a summary of one is a mistake the run
-		// could only honour by ignoring it. `--full` is what such a format does anyway and passes.
-		if (explainLong && format == FORMAT_CHECKSTYLE) {
-			CliIo.stderr('apq lint: --explain-long has no checkstyle form — use --format text or json\n');
-			return lintParseExit(EXIT_USAGE);
-		}
-		if (summary != true || format == FORMAT_TEXT) return listRules ? lintParseExit(runListRules(opts)) : opts;
-		CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
-		return lintParseExit(EXIT_USAGE);
-	}
-
-	/**
-	 * Why the argv's rule selection cannot be honoured, or null when it can: a `--category` naming no `RuleCategory`,
-	 * `--category` beside `--rule` (one narrows to what the config enables, the other force-runs what it names), or the
-	 * markdown rule index asked of a lint run.
-	 */
-	private static function selectionError(o: LintOpts, listRules: Bool): Null<String> {
-		final unknown: Null<String> = o.categoryFilters.find(id -> RuleCategory.fromId(id) == null);
-		return if (unknown != null)
-			'unknown category "$unknown" (expected ${RuleCategory.ALL.join('|')})'
-		else if (o.ruleFilters.length > 0 && o.categoryFilters.length > 0)
-			'--rule runs the rules it names whatever the config says, --category the enabled rules of a category — pass one'
-		else if (o.format == FORMAT_MARKDOWN && !listRules)
-			'--format markdown renders the rule index — pass it with --list-rules'
-		else
-			null;
-	}
-
-	/**
-	 * `<from>:<to>`, or several of them joined by commas — both ends required, 1-based,
-	 * `from <= to`. Null on anything else, and the caller turns that into a usage error
-	 * naming the spec it was given.
-	 *
-	 * Deliberately stricter than `apq source --range`, which clamps to the file and lets
-	 * either end be omitted: this one is a FILTER, and a silently clamped window would
-	 * narrow a fix run to a region the caller never asked for.
-	 *
-	 * A raw `Std.parseInt` on each bound parses a leading digit PREFIX and silently drops
-	 * trailing garbage, so `--range 1x:2` / `--range 1:2x` would pass while `--range 1,2` (no
-	 * colon at all) is caught by the `colon <= 0` guard below. `SourceText.parseStrictInt`
-	 * is the shared whole-token digit check `apq source --range` already uses.
-	 */
-	private static function parseLintRange(spec: String): Null<LintRange> {
-		final windows: LintRange = [];
-		for (part in spec.split(',')) {
-			final colon: Int = part.indexOf(':');
-			if (colon <= 0 || colon == part.length - 1) return null;
-			final lo: Null<Int> = SourceText.parseStrictInt(part.substring(0, colon));
-			if (lo == null) return null;
-			final hi: Null<Int> = SourceText.parseStrictInt(part.substring(colon + 1));
-			if (hi == null) return null;
-			final from: Int = lo;
-			final to: Int = hi;
-			if (from < 1 || to < from) return null;
-			windows.push({ from: from, to: to });
-		}
-		return windows;
-	}
-
-	/**
-	 * `EXIT_USAGE`, said on stderr, when `--rule` names a rule the grammar `lang` never runs — answering it with an empty
-	 * report would read as a clean file; null otherwise. A `--category` or default selection drops such a rule silently.
-	 */
-	private static function foreignRuleError(o: LintOpts, checks: Array<Check>, lang: String): Null<Int> {
-		if (o.ruleFilters.length == 0) return null;
-		for (check in checks) if (check is LanguageBound && !Linter.runsOn(check, lang)) {
-			final bound: Array<String> = (cast check: LanguageBound).languages();
-			CliIo.stderr('apq lint: rule "${check.id()}" runs on ${bound.join(', ')} only, and this run reads $lang\n');
-			return EXIT_USAGE;
-		}
-		return null;
-	}
-
-	/**
-	 * The usage error this argv earns for an option it cannot honour, or null when it can.
-	 *
-	 * Two refusals, both about NARROWING. A `--range` window is a claim about ONE file's lines:
-	 * applied to a directory it would narrow every file in it to the same line numbers, which
-	 * is not a narrower version of anything the caller asked for. A `--baseline` narrows the
-	 * REPORT only, so pairing it with `--fix` would hand the fixer a set the snapshot had already thinned. A `--rule` naming
-	 * a rule the scope's grammar never runs is refused too (`foreignRuleError`): its empty report would read as a clean file.
-	 *
-	 * One function rather than two branches in `runLint` because that function sits AT its
-	 * complexity budget — either refusal written inline takes it past the limit — and because
-	 * a refusal that reads the whole argv belongs beside its sibling rather than in the middle
-	 * of the run.
-	 */
-	private static function optionScopeError(o: LintOpts, paths: Array<String>, checks: Array<Check>, lang: String): Null<Int> {
-		final foreign: Null<Int> = foreignRuleError(o, checks, lang);
-		if (foreign != null) return foreign;
-		// REFUSED rather than ignored. `--baseline` narrows what the run REPORTS; `--fix` acts on
-		// what it FINDS, and a fixer handed a narrowed set would leave every finding the snapshot
-		// happens to carry standing while reporting a converged run.
-		if (o.baseline != null && o.fix) {
-			CliIo.stderr('apq lint: --baseline narrows the REPORT and cannot be combined with --fix (--range narrows both)\n');
-			return EXIT_USAGE;
-		}
-		if (o.explainLong && o.fix) {
-			CliIo.stderr('apq lint: --explain-long explains a REPORT and cannot be combined with --fix\n');
-			return EXIT_USAGE;
-		}
-		if (o.range == null || paths.length == 1) return null;
-		CliIo.stderr(
-			'apq lint: --range needs a scope of exactly one file — ${CliArgs.quotedSpecs(o.inputSpecs)} matched ${paths.length}\n'
-		);
-		return EXIT_USAGE;
-	}
-
-	private static function resolveLintChecks(ruleFilters: Array<String>, categoryFilters: Array<String>): Null<Array<Check>> {
-		final checks: Array<Check> = [];
-		if (ruleFilters.length == 0) {
-			for (check in Linter.builtins()) if (categoryFilters.length == 0 || categoryFilters.contains(check.category()))
-				checks.push(check);
-		} else {
-			for (id in ruleFilters) {
-				final check: Null<Check> = Linter.byId(id);
-				if (check == null) {
-					CliIo.stderr('apq lint: unknown rule "$id"\n');
-					return null;
-				}
-				checks.push(check);
-			}
-		}
-		return checks;
-	}
-
-	/**
-	 * The findings the REPORT carries, out of everything the run produced.
-	 *
-	 * `--all` off hides `Info` advisories — a READABILITY affordance for the text report, where a
-	 * terminal reader gets the errors and warnings and is TOLD on stderr what was withheld. A machine
-	 * format has no such reader: its stdout IS the answer, and a consumer redirecting it keeps nothing
-	 * of the stderr note. Capping there returned a truncated record set with nothing in band to say
-	 * so — `[]` for a run holding findings, while `--fail-on info` (which counts every finding, capped
-	 * or not) exits 1 on that same run. The payload and the exit code disagreed, and the payload was
-	 * the one that was wrong; `--all` now governs the human report alone.
-	 */
-	public static function reportedViolations(all: Array<Violation>, includeInfo: Bool, format: String): Array<Violation> {
-		return includeInfo || format == FORMAT_JSON || format == FORMAT_CHECKSTYLE ? all : all.filter(v -> v.severity != Severity.Info);
-	}
-
-	/**
-	 * Whether the TEXT report prints `LintFormat.summary` instead of one line per finding.
-	 *
-	 * `shown` is what the report would list — after the `--all` cap, so hidden advisories never tip a
-	 * run into a summary. `forced` is `--summary` (true) / `--full` (false) and wins outright; with
-	 * neither, a run listing more than `threshold` findings is summarised, and a `threshold` of zero or
-	 * less never is. json and checkstyle are never summarised: their stdout is the answer a tool reads.
-	 *
-	 * `--rule` is deliberately NOT a second switch. A narrowed run is small in the common case and so
-	 * keeps its list by the same threshold; one that is still over it (a single rule across a whole
-	 * tree) gets the summary, which for one rule is a by-file breakdown.
-	 */
-	public static inline function summarises(shown: Int, format: String, forced: Null<Bool>, threshold: Int): Bool {
-		return format == FORMAT_TEXT && (forced ?? (threshold > 0 && shown > threshold));
-	}
-
-	/** The stderr line that closes a summarised report: why it is a summary, and the ways to the full list. */
-	private static function summaryHint(shown: Int, forced: Null<Bool>, threshold: Int): String {
-		final why: String = forced == true ? '--summary' : '$shown finding(s), over the reportSummaryThreshold of $threshold';
-		return 'apq lint: summarised ($why) — the full list: --full, or narrow with --rule <id> / a smaller scope, or --format json\n';
-	}
-
-	/**
-	 * The findings a `--range` window keeps: those whose span STARTS on a line inside it.
-	 *
-	 * A null window keeps everything, so both lint paths — the report and every pass of
-	 * the fix loop — call this unconditionally and the flag cannot come to mean two
-	 * different things in the two of them. `sourceOf` answers the file's CURRENT bytes,
-	 * which is what makes the window re-measurable per pass; see `LintRange`.
-	 */
-	public static function withinRange(
-		all: Array<Violation>, sourceOf: (String) -> Null<String>, range: Null<LintRange>
-	): Array<Violation> {
-		if (range == null) return all;
-		final windows: LintRange = range;
-		return all.filter(v -> {
-			final span: Null<Span> = v.span;
-			final source: Null<String> = sourceOf(v.file);
-			if (span == null || source == null) return false;
-			final line: Int = span.lineCol(source).line;
-			return windows.exists(window -> line >= window.from && line <= window.to);
-		});
-	}
-
-	/**
-	 * The report half of a report-mode run: the findings on stdout — listed, or summarised when
-	 * `summarises` says so under the threshold `config` declares — then the stderr breakdown, closed by
-	 * the way to the full list when the stdout was a summary. `config` is the run's first path's, the
-	 * one every project-level key is read off.
-	 */
-	private static function reportFindings(
-		o: LintOpts, paths: Array<String>, all: Array<Violation>, shown: Array<Violation>, sourceOf: Map<String, String>,
-		cached: CachingGrammarPlugin, config: Null<LintConfig>, skipped: Array<String>, explainer: Null<ThreadSafety>
-	): Void {
-		final threshold: Int = config?.reportSummaryThreshold() ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
-		final summarised: Bool = summarises(shown.length, o.format, o.summary, threshold);
-		// a finding naming no file (a rule's own option it could not read) closes the report under the path `''`, in every
-		// format, rather than only counting in the summary line
-		renderLintReport(
-			paths.concat(['']), shown, sourceOf, o.format, o.flat, cached, summarised, LintExplainLong.outcome(o.explainLong, explainer)
-		);
-		lintSummary(all, paths, shown.length == all.length, summarised ? summaryHint(shown.length, o.summary, threshold) : null, skipped);
-	}
-
-	private static function renderLintReport(
-		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool,
-		plugin: CachingGrammarPlugin, summarised: Bool, explain: Null<ExplainedLocks>
-	): Void {
-		// Group findings per file, each group sorted by source position so the report
-		// reads top-to-bottom. ONE pass rather than a filter per path: that scan was
-		// O(paths x findings) and the text branch below ran a second one. `paths` is
-		// deduplicated and order-preserving (`expandInputs`), and a file's findings enter
-		// a group in `shown` order exactly as the filter yielded them, so every format's
-		// emitted sequence is unchanged.
-		final byFile: Map<String, Array<Violation>> = [];
-		for (v in shown) {
-			final group: Null<Array<Violation>> = byFile[v.file];
-			if (group == null)
-				byFile[v.file] = [v];
-			else
-				group.push(v);
-		}
-		for (group in byFile) group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
-		// The two record formats want the groups concatenated in input-file order; the text
-		// branch prints them one group at a time and needs no such array.
-		inline function orderedByPath(): Array<Violation> {
-			final flatten: Array<Violation> = [];
-			for (path in paths) {
-				final group: Null<Array<Violation>> = byFile[path];
-				if (group != null) for (v in group) flatten.push(v);
-			}
-			return flatten;
-		}
-
-		switch format {
-			case FORMAT_JSON:
-				// Each record carries the finding's canonical edit-stable selector
-				// (`address`) — directly usable as a mutation-op --select argument.
-				// The plugin is the one the CHECKS just ran through, so its parse cache
-				// already holds every reported file; a fresh wrapper here would parse each
-				// of them a second time, which dominated the whole annotation.
-				final ordered: Array<Violation> = orderedByPath();
-				// Addressing a node probes its tree several times, so an index per FINDING
-				// makes the annotation cost far more than the analysis it annotates.
-				// `ordered` groups a file's findings together, so the addresser's ONE slot
-				// serves a whole file and retains nothing past it — it is a local of this
-				// call, which is the run-scoped place for the memo. The slot keys on the
-				// TREE, not the path: the parse cache is keyed by CONTENT, and an index
-				// handed a node it never saw degrades every address to `<line>:<col>` in
-				// silence.
-				final addresser: TreeAddresser = new TreeAddresser(plugin.selectKindEquivalence());
-				CliIo.sysPrint(LintFormat.json(ordered, sourceOf, v -> {
-					final span: Null<Span> = v.span;
-					final source: Null<String> = sourceOf[v.file];
-					if (span == null || source == null) return null;
-					final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
-					return tree == null ? null : addresser.addressAt(tree, source, span.from);
-				}, explain));
-			case FORMAT_CHECKSTYLE:
-				CliIo.sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
-			case _ if (summarised):
-				CliIo.sysPrint(LintFormat.summary(shown));
-			case _:
-				for (path in paths) {
-					final group: Null<Array<Violation>> = byFile[path];
-					if (group != null) CliIo.sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
-				}
-		}
-		final longLocks: Null<LongLockReport> = explain?.report;
-		if (format == FORMAT_TEXT && longLocks != null)
-			CliIo.sysPrint((shown.length > 0 ? '\n' : '') + LintFormat.longLocksText(longLocks, sourceOf));
-	}
-
-	/**
-	 * The stderr breakdown under a lint report: the files the grammar could not read, the severity
-	 * counts, when the report was CAPPED how much it withheld, and — when it was summarised — `hint`, the way to
-	 * the full list (null otherwise).
-	 *
-	 * `reportedAll` is what the report actually carried, not the `--all` flag: a machine format is
-	 * never capped, so telling its reader that advisories were hidden would be a lie the run has no
-	 * way to make true.
-	 */
-	private static function lintSummary(
-		all: Array<Violation>, paths: Array<String>, reportedAll: Bool, hint: Null<String>, ?skipped: Array<String>
-	): Void {
-		// A file the grammar cannot read is a hole in the analysis, and one that stays SILENT
-		// otherwise: the per-member confinement gates decline for anything such a file mentions,
-		// and nothing in the report says so. Naming the files is what lets a reader tell "no
-		// findings" from "could not look".
-		if (skipped != null && skipped.length > 0) {
-			CliIo.stderr('apq lint: ${skipped.length} file(s) could not be parsed and are invisible to cross-file proofs:\n');
-			for (path in skipped.slice(0, CliWalk.SKIP_PATHS_SHOWN)) CliIo.stderr('  $path\n');
-			if (skipped.length > CliWalk.SKIP_PATHS_SHOWN) CliIo.stderr('  ... +${skipped.length - CliWalk.SKIP_PATHS_SHOWN} more\n');
-		}
-		var errors: Int = 0;
-		var warnings: Int = 0;
-		var infos: Int = 0;
-		for (v in all) switch v.severity {
-			case Severity.Error:
-				errors++;
-			case Severity.Warning:
-				warnings++;
-			case Severity.Info:
-				infos++;
-		}
-		if (all.length == 0) {
-			CliIo.stderr('apq lint: no issues in ${paths.length} file(s)\n');
-		} else {
-			CliIo.stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
-			if (!reportedAll && infos > 0) CliIo.stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
-		}
-		if (hint != null) CliIo.stderr(hint);
-	}
-
-	/**
-	 * `--list-rules`: with no scope, the bare registry, one `<id>  <description>` line per rule, exactly
-	 * as before a scope was accepted; with one, `printEffectiveRules`. A flag that only means something
-	 * to a lint run is a usage error rather than silently ignored — a listing is not narrowed by `--rule`.
-	 */
-	private static function runListRules(o: LintOpts): Int {
-		final ignored: Null<String> = lintOnlyFlag(o);
-		if (ignored != null) {
-			CliIo.stderr('apq lint: --list-rules takes only a scope, --category and --lang — $ignored applies to a lint run\n');
-			return EXIT_USAGE;
-		}
-		final checks: Array<Check> = resolveLintChecks([], o.categoryFilters) ?? [];
-		if (o.inputSpecs.length > 0) return printEffectiveRules(o.lang, o.inputSpecs, checks);
-		if (o.format != FORMAT_TEXT) {
-			CliIo.sysPrint(o.format == FORMAT_MARKDOWN ? RuleIndex.markdown(checks) : RuleIndex.json(checks));
-			return EXIT_OK;
-		}
-		var width: Int = 0;
-		for (c in checks) if (c.id().length > width) width = c.id().length;
-
-		// The minimum language version a rule's FIX needs is printed with the rule, not
-		// discovered after a run that silently dropped it: a project whose `languageVersion`
-		// is below it never sees the finding, and this is where that becomes visible.
-		for (c in checks) {
-			final requires: String = c is VersionGated ? ' [needs ${(cast c: VersionGated).minLanguageVersion()}]' : '';
-			final bound: String = c is LanguageBound ? ' [${RuleIndex.languageOf(c)} only]' : '';
-			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires$bound\n');
-		}
-		return EXIT_OK;
-	}
-
-	/**
-	 * `--list-rules <scope>`: every registered rule with the state a lint of the scope's files would run
-	 * it in, as `EffectiveRules.render` lays it out. The registry alone is an upper bound; configs are
-	 * resolved exactly as a lint run resolves them, and nothing is parsed or linted.
-	 */
-	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>, checks: Array<Check>): Int {
-		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
-		final paths: Array<String> = io.paths;
-		if (paths.length == 0) {
-			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
-			return EXIT_RUNTIME;
-		}
-		// A rule the scope's grammar never runs is no state of this scope's lint: it is left out, as a run leaves it out.
-		final runs: Array<Check> = checks.filter(c -> Linter.runsOn(c, io.plugin.langName()));
-		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, runs)));
-		return EXIT_OK;
-	}
-
-	/** The first lint-run flag `o` carries, as the user spelled it, or null when there is none. */
-	private static function lintOnlyFlag(o: LintOpts): Null<String> {
-		final given: Array<{ flag: String, set: Bool }> = [
-			{ flag: '--rule', set: o.ruleFilters.length > 0 },
-			{ flag: '--fix', set: o.fix },
-			{ flag: '--all', set: o.includeInfo },
-			{ flag: '--flat', set: o.flat },
-			{ flag: '--no-oracle', set: o.noOracle },
-			{ flag: '--fail-on', set: o.failOn != null },
-			{
-				flag: '--format',
-				set: o.format != FORMAT_TEXT && (![FORMAT_MARKDOWN, FORMAT_JSON].contains(o.format) || o.inputSpecs.length != 0)
-			},
-			{ flag: '--range', set: o.range != null },
-			{ flag: '--baseline', set: o.baseline != null },
-			{ flag: '--verbose', set: o.verbose },
-			{ flag: '--explain-long', set: o.explainLong },
-			{ flag: o.summary == true ? '--summary' : '--full', set: o.summary != null }
-		];
-		return given.find(g -> g.set)?.flag;
-	}
-
-	/**
-	 * `found` narrowed to what the `--baseline` snapshot does not already carry, and the
-	 * snapshot refreshed with `found` itself.
-	 *
-	 * The IO half of `LintBaseline` — the one place that reads the file, catches what a
-	 * missing or malformed snapshot throws, and writes the new one. `LintBaseline.added` is
-	 * pure and knows none of it.
-	 *
-	 * THE SNAPSHOT IS THE FULL SET, never the delta. Writing the delta would make each run's
-	 * baseline the previous run's surplus, so a finding reported once would be reported again
-	 * on the next edit and the second answer would be wrong in the direction that matters —
-	 * the reader would stop believing the first.
-	 *
-	 * A snapshot that cannot be READ is not fatal and not silent: every finding is reported
-	 * (the fail-open direction for a nudge — say too much rather than nothing) and the reason
-	 * is named, because "0 new" and "could not compare" look identical otherwise. A snapshot
-	 * that cannot be WRITTEN is the same shape: the run's own answer stands, and the next run
-	 * will simply have no baseline again.
-	 */
-	private static function baselineDelta(found: Array<Violation>, path: Null<String>, sourceOf: Map<String, String>): Array<Violation> {
-		#if (sys || nodejs)
-		if (path == null) return found;
-		final snapshot: String = path;
-		// The rule -> `messageIdentity` map, asked of the check registry exactly as `lint-diff`
-		// asks it, so a rule that masks a coordinate in its message masks it on both sides.
-		final identities: LintMessageIdentities = Linter.messageIdentities();
-		var delta: Array<Violation> = found;
-		// A path that exists and is not a lint report is not a stale snapshot — it is a file the caller
-		// named by mistake, and the refresh below would atomically REPLACE its content. `--baseline`
-		// carries no `--write` and no `--fix`, so a mistyped path must not be able to destroy a file.
-		var refresh: Bool = true;
-		if (FileSystem.exists(snapshot)) try {
-			final before: LintDiffTally = LintDiff.tally(LintDiff.parseReport(CliIo.readFile(snapshot)), '', identities);
-			delta = LintBaseline.added(found, before, '', identities);
-			CliIo.stderr('apq lint: baseline $snapshot: ${delta.length} new of ${found.length} finding(s)\n');
-		} catch (exception: Exception) {
-			refresh = false;
-			CliIo.stderr(
-				'apq lint: baseline $snapshot is unreadable (${exception.message}) — reporting every finding'
-				+ ' and leaving the file alone; delete it to start a fresh snapshot\n'
-			);
-		}
-		if (refresh) try
-			CliIo.writeFile(snapshot, LintFormat.json(found, sourceOf))
-		catch (exception: Exception)
-			CliIo.stderr('apq lint: baseline $snapshot could not be refreshed (${exception.message})\n');
-		return delta;
-		#else
-		return found;
-		#end
-	}
-
-	/**
-	 * The globs a reflective bound of the run's reach analysis declares (`read`, the config key `name`):
-	 * `LintConfig.reflectiveClasses`, the classes a class value made from an unreadable name may be of, or
-	 * `LintConfig.reflectiveMethodHolders`, the classes a read by such a name may obtain a method of — the declaration every
-	 * linted path's config makes alike. A run whose paths declare different ones, or some none, is unbounded there
-	 * (`unbounded` says how), and says so once when any of them declared one.
-	 */
-	private static function declaredBound(
-		paths: Array<String>, resolveConfig: String -> LintConfig, read: LintConfig -> Null<Array<String>>, name: String, unbounded: String
-	): Null<Array<String>> {
-		if (paths.length == 0) return null;
-		final first: Null<Array<String>> = read(resolveConfig(paths[0]));
-		final key: Null<Array<String>> -> Null<String> = globs -> globs?.join('\n');
-		var declared: Bool = false;
-		var alike: Bool = true;
-		for (path in paths) {
-			final globs: Null<Array<String>> = read(resolveConfig(path));
-			if (globs != null) declared = true;
-			if (key(globs) != key(first)) alike = false;
-		}
-		if (declared && !alike) CliIo.stderr('apq lint: $name ignored — the linted paths declare different ones, so $unbounded\n');
-		return alike ? first : null;
-	}
-
-	/**
-	 * Whether the reach analysis may read the run's oracle builds as every build the project ships: EVERY linted path's
-	 * config declares `reachConfigurationsComplete` over the same `compilerOracle` list as the first path's — the list the
-	 * run probes. A path whose config says otherwise may ship a build that list does not name, so a run whose paths
-	 * disagree walks every branch, and says so once when any of them declared the flag.
-	 */
-	private static function reachComplete(paths: Array<String>, resolveConfig: String -> LintConfig): Bool {
-		if (paths.length == 0) return false;
-		final list: LintConfig -> String = c -> [for (o in c.compilerOracles()) OracleDeclaration.oracleKey(o)].join('|');
-		final first: String = list(resolveConfig(paths[0]));
-		var declared: Bool = false;
-		var all: Bool = true;
-		for (path in paths) {
-			final config: LintConfig = resolveConfig(path);
-			if (config.reachConfigurationsComplete()) declared = true;
-			if (!config.reachConfigurationsComplete() || list(config) != first) all = false;
-		}
-		if (declared && !all)
-			CliIo.stderr(
-				'apq lint: reachConfigurationsComplete ignored — the linted paths resolve to different compilerOracle lists or'
-				+ ' flags, so the reach analysis walks every conditional branch\n'
-			);
-		return all;
 	}
 
 }

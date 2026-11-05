@@ -4,7 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.Severity;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.cli.command.LintCommand;
+import anyparse.query.cli.command.LintArgs;
 
 /**
  * The `redundant-isvar` check: an `@:isVar` on a property whose physical field no accessor body,
@@ -227,8 +227,8 @@ import anyparse.query.cli.command.LintCommand;
 			return;
 		}
 		Assert.isTrue(check is RiskyFix);
-		Assert.equals(1, LintCommand.partitionChecks([check], true).risky.length);
-		Assert.equals(1, LintCommand.partitionChecks([check], false).fullScope.length);
+		Assert.equals(1, LintArgs.partitionChecks([check], true).risky.length);
+		Assert.equals(1, LintArgs.partitionChecks([check], false).fullScope.length);
 	}
 
 	private function violations(src: String): Array<Violation> {

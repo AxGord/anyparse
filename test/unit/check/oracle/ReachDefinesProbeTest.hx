@@ -4,6 +4,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.core.TempScratch;
 import anyparse.query.ReachLiveness.ReachConfiguration;
+import anyparse.query.cli.command.LintOracleRun;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -187,7 +188,6 @@ class ReachDefinesProbeTest extends Test {
 	 * the write: a macro defines a name when it exists.
 	 */
 	@:pin('control') @:killer('M-AHEAD-NEVER-READ') @:killer('M-AHEAD-READ-AFTER-WRITE')
-	@:access(anyparse.query.cli.command.LintCommand)
 	public function testBuildsStartedAheadAnswerOnlyAQuestionBeforeTheFirstWrite(): Void {
 		final dir: String = scratchDir();
 		final flag: String = Path.join([dir, 'flag.txt']);
@@ -210,8 +210,9 @@ class ReachDefinesProbeTest extends Test {
 			}
 		};
 		function scopeOf(ahead: AheadBuilds): anyparse.query.CachingGrammarPlugin.ResolutionScope {
-			final scope: Null<anyparse.query.CachingGrammarPlugin.ResolutionScope> =
-				anyparse.query.cli.command.LintCommand.withReachConfigurations(base, oracles, false, true, ahead);
+			final scope: Null<anyparse.query.CachingGrammarPlugin.ResolutionScope> = LintOracleRun.withReachConfigurations(
+				base, oracles, false, true, ahead
+			);
 			if (scope == null) throw 'no scope';
 			return scope;
 		}
@@ -247,7 +248,6 @@ class ReachDefinesProbeTest extends Test {
 	 * the builds to that question.
 	 */
 	@:pin('control') @:killer('M-BUILDS-WITH-FACTS')
-	@:access(anyparse.query.cli.command.LintCommand)
 	public function testTheBuildsStartBesideFactsStartedEarly(): Void {
 		final dir: String = scratchDir();
 		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');
@@ -264,16 +264,12 @@ class ReachDefinesProbeTest extends Test {
 			}
 		};
 		final early: AheadBuilds = { probe: null };
-		anyparse.query.cli.command.LintCommand.startBuildsWithFacts(
-			true, anyparse.query.cli.command.LintCommand.withReachConfigurations(base, oracles, false, true, early)
-		);
+		LintOracleRun.startBuildsWithFacts(true, LintOracleRun.withReachConfigurations(base, oracles, false, true, early));
 		final started: Null<anyparse.check.oracle.ReachDefinesProbe.DefinesProbe> = early.probe;
 		Assert.notNull(started, 'the builds did not start beside the facts');
 		if (started != null) ReachDefinesProbe.abandon(started);
 		final onDemand: AheadBuilds = { probe: null };
-		anyparse.query.cli.command.LintCommand.startBuildsWithFacts(
-			false, anyparse.query.cli.command.LintCommand.withReachConfigurations(base, oracles, false, true, onDemand)
-		);
+		LintOracleRun.startBuildsWithFacts(false, LintOracleRun.withReachConfigurations(base, oracles, false, true, onDemand));
 		Assert.isNull(onDemand.probe, 'the builds started ahead of a run that asks for the facts on demand');
 		remove(dir);
 	}

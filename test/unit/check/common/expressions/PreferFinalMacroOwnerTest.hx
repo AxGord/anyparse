@@ -1,7 +1,7 @@
 package unit.check.common.expressions;
 
 import anyparse.check.Check;
-import anyparse.query.cli.command.LintCommand;
+import anyparse.query.cli.command.LintArgs;
 
 using StringTools;
 
@@ -123,8 +123,8 @@ using StringTools;
 				continue;
 			}
 			Assert.isTrue(check is RiskyFix);
-			Assert.equals(1, LintCommand.partitionChecks([check], true).risky.length);
-			Assert.equals(1, LintCommand.partitionChecks([check], false).fullScope.length);
+			Assert.equals(1, LintArgs.partitionChecks([check], true).risky.length);
+			Assert.equals(1, LintArgs.partitionChecks([check], false).fullScope.length);
 		}
 	}
 
