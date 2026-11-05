@@ -1,7 +1,9 @@
 package dev;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueTools;
+import devkit.RawJson;
 import haxe.Exception;
-import haxe.Json;
 
 using StringTools;
 
@@ -112,8 +114,8 @@ final class TokenTranscript {
 		final byMessage: Map<String, Int> = [];
 		var promptSeen: Bool = false;
 		for (line in text.split('\n')) {
-			final entry: Null<Entry> = line == '' ? null : parse(line);
-			final message: Null<Message> = entry?.message;
+			final entry: Null<TranscriptEntry> = line == '' ? null : parse(line);
+			final message: Null<TranscriptMessage> = entry?.message;
 			if (entry == null || message == null) continue;
 			switch entry.type {
 				case 'assistant':
@@ -206,24 +208,25 @@ final class TokenTranscript {
 	}
 
 	private static function readAssistant(
-		agent: AgentReading, entry: Entry, message: Message, pending: Map<String, PendingCall>, byMessage: Map<String, Int>
+		agent: AgentReading, entry: TranscriptEntry, message: TranscriptMessage, pending: Map<String, PendingCall>,
+		byMessage: Map<String, Int>
 	): Void {
 		for (block in blocksOf(message.content)) if (block.type == 'tool_use') readCall(agent, block, pending, entry.cwd);
-		final usage: Null<Usage> = message.usage;
+		final usage: Null<TranscriptUsage> = message.usage;
 		final id: Null<String> = message.id;
 		final model: String = message.model ?? '';
 		if (usage == null || id == null || model.startsWith('<')) return;
 		final at: Float = js.lib.Date.parse(entry.timestamp ?? '');
-		final created: Null<CacheCreation> = usage.cache_creation;
+		final created: Null<TranscriptCacheCreation> = usage.cacheCreation;
 		final turn: TurnReading = {
 			model: model,
 			start: at,
 			end: at,
-			input: usage.input_tokens ?? 0,
-			output: usage.output_tokens ?? 0,
-			cacheRead: usage.cache_read_input_tokens ?? 0,
-			write5m: created == null ? usage.cache_creation_input_tokens ?? 0 : created.ephemeral_5m_input_tokens ?? 0,
-			write1h: created?.ephemeral_1h_input_tokens ?? 0
+			input: usage.inputTokens ?? 0,
+			output: usage.outputTokens ?? 0,
+			cacheRead: usage.cacheReadInputTokens ?? 0,
+			write5m: created == null ? usage.cacheCreationInputTokens ?? 0 : created.ephemeral5mInputTokens ?? 0,
+			write1h: created?.ephemeral1hInputTokens ?? 0
 		};
 		final seen: Null<Int> = byMessage[id];
 		if (seen == null) {
@@ -237,19 +240,19 @@ final class TokenTranscript {
 	}
 
 	private static function readCall(agent: AgentReading, block: Block, pending: Map<String, PendingCall>, cwd: Null<String>): Void {
-		final input: Input = block.input ?? {};
+		final input: Input = block.input ?? { json: '{}' };
 		final name: String = block.name ?? '';
 		final command: String = input.command ?? '';
 		final line: String = normalize(command);
 		final key: String = switch name {
 			case BASH: bashKey(line);
-			case 'Read': (input.file_path ?? '').endsWith('.hx') ? 'Read .hx' : 'Read other';
+			case 'Read': (input.filePath ?? '').endsWith('.hx') ? 'Read .hx' : 'Read other';
 			case _: pluginKey(name);
 		};
-		final what: String = name == BASH ? line : input.file_path ?? Json.stringify(input);
+		final what: String = name == BASH ? line : input.filePath ?? input.json;
 		pending[block.id ?? ''] = {
 			key: key,
-			inChars: Json.stringify(input).length,
+			inChars: input.json.length,
 			call: BLANKS.replace(what, ' ').trim().substr(0, CALL_LENGTH),
 			access: accessOf(name, input, cwd, agent.slice)
 		};
@@ -257,7 +260,7 @@ final class TokenTranscript {
 			case BASH:
 				WRITE_OP.match(line) ? command : '';
 			case 'Edit', 'Write':
-				(input.new_string ?? '') + (input.content ?? '');
+				(input.newString ?? '') + (input.content ?? '');
 			case _:
 				'';
 		};
@@ -265,9 +268,9 @@ final class TokenTranscript {
 		agent.indentChars += indentation(payload);
 	}
 
-	private static function readResults(agent: AgentReading, content: Null<Any>, pending: Map<String, PendingCall>): Void {
+	private static function readResults(agent: AgentReading, content: Null<JValue>, pending: Map<String, PendingCall>): Void {
 		for (block in blocksOf(content)) {
-			final call: Null<PendingCall> = block.type == 'tool_result' ? pending[block.tool_use_id ?? ''] : null;
+			final call: Null<PendingCall> = block.type == 'tool_result' ? pending[block.toolUseId ?? ''] : null;
 			if (call == null) continue;
 			final stat: ToolStat = agent.tools[call.key] ?? emptyStat();
 			final answer: String = textOf(block.content);
@@ -279,22 +282,22 @@ final class TokenTranscript {
 			if (size > OVER_LARGE * CHARS_PER_TOKEN) stat.over5k++;
 			keepBiggest(stat.biggest, { outChars: size, call: call.call });
 			agent.tools[call.key] = stat;
-			record(agent, call.access, block.is_error == true && answer.startsWith(HOOK_DENIAL));
+			record(agent, call.access, block.isError == true && answer.startsWith(HOOK_DENIAL));
 		}
 	}
 
 	/** The text of a message content: the string itself, or the `text` parts of a block list joined. */
-	private static function textOf(content: Null<Any>): String {
-		return content is String ? cast content : [for (block in blocksOf(content)) block.text ?? ''].join('');
+	private static function textOf(content: Null<JValue>): String {
+		return RawJson.string(content) ?? [for (block in blocksOf(content)) block.text ?? ''].join('');
 	}
 
-	private static function parse(line: String): Null<Entry> {
-		return try Json.parse(line) catch (_: Exception) null;
+	private static function parse(line: String): Null<TranscriptEntry> {
+		return try TranscriptEntryParser.parse(line) catch (_: Exception) null;
 	}
 
 	/** The content blocks of a message content, none when the content is a plain string. */
-	private static function blocksOf(content: Null<Any>): Array<Block> {
-		return content is Array ? cast content : [];
+	private static function blocksOf(content: Null<JValue>): Array<Block> {
+		return [for (item in RawJson.items(content)) blockOf(item)];
 	}
 
 	/** The row key of a call to a tool that is not the shell or a file read: a workflow or other MCP call, else the tool's name. */
@@ -306,7 +309,7 @@ final class TokenTranscript {
 	/** What a call would be as a way round hxq: the matching shell segment, or the tool and path of an `Edit` / `Write`. */
 	private static function accessOf(name: String, input: Input, cwd: Null<String>, slice: Null<String>): Access {
 		final command: String = input.command ?? '';
-		final path: String = input.file_path ?? '';
+		final path: String = input.filePath ?? '';
 		return switch name {
 			case BASH:
 				{
@@ -329,6 +332,32 @@ final class TokenTranscript {
 		if (read != null) (denied ? agent.deniedReads : agent.hxReads).push(read);
 		if (write != null) (denied ? agent.deniedWrites : agent.hxWrites).push(write);
 		if (script != null) (denied ? agent.deniedWrites : agent.scriptWrites).push(script);
+	}
+
+	/** The block `value` holds, as far as the audit reads it. */
+	private static function blockOf(value: JValue): Block {
+		final input: Null<JValue> = JValueTools.field(value, 'input');
+		return {
+			type: RawJson.stringAt(value, 'type'),
+			id: RawJson.stringAt(value, 'id'),
+			name: RawJson.stringAt(value, 'name'),
+			input: input == null ? null : inputOf(input),
+			toolUseId: RawJson.stringAt(value, 'tool_use_id'),
+			isError: RawJson.isTrue(JValueTools.field(value, 'is_error')),
+			text: RawJson.stringAt(value, 'text'),
+			content: JValueTools.field(value, 'content')
+		};
+	}
+
+	/** The tool call input `value`, as far as the audit reads it. */
+	private static function inputOf(value: JValue): Input {
+		return {
+			command: RawJson.stringAt(value, 'command'),
+			filePath: RawJson.stringAt(value, 'file_path'),
+			newString: RawJson.stringAt(value, 'new_string'),
+			content: RawJson.stringAt(value, 'content'),
+			json: RawJson.print(value)
+		};
 	}
 
 }
@@ -425,54 +454,23 @@ private typedef Access = {
 	var script: Null<String>;
 }
 
-/** One line of a transcript, as far as the audit reads it. */
-private typedef Entry = {
-	var ?type: String;
-	var ?timestamp: String;
-
-	/** The directory the agent's shell was in. */
-	var ?cwd: String;
-	var ?message: Message;
-}
-
-private typedef Message = {
-	var ?id: String;
-	var ?model: String;
-
-	/** A string (the prompt) or a list of blocks. */
-	var ?content: Any;
-
-	var ?usage: Usage;
-}
-
+/** One content block of a transcript message, as far as the audit reads it. */
 private typedef Block = {
 	var ?type: String;
 	var ?id: String;
 	var ?name: String;
 	var ?input: Input;
-	var ?tool_use_id: String; // noqa: naming
-	var ?is_error: Bool; // noqa: naming
+	var ?toolUseId: String;
+	var ?isError: Bool;
 	var ?text: String;
-	var ?content: Any;
+	var ?content: JValue;
 }
 
-/** The fields of a tool call's input the audit looks at, whichever the tool. */
+/** The fields of a tool call's input the audit looks at, whichever the tool, and the whole input as JSON text. */
 private typedef Input = {
 	var ?command: String;
-	var ?file_path: String; // noqa: naming
-	var ?new_string: String; // noqa: naming
+	var ?filePath: String;
+	var ?newString: String;
 	var ?content: String;
-}
-
-private typedef Usage = {
-	var ?input_tokens: Int; // noqa: naming
-	var ?output_tokens: Int; // noqa: naming
-	var ?cache_read_input_tokens: Int; // noqa: naming
-	var ?cache_creation_input_tokens: Int; // noqa: naming
-	var ?cache_creation: CacheCreation; // noqa: naming
-}
-
-private typedef CacheCreation = {
-	var ?ephemeral_5m_input_tokens: Int; // noqa: naming
-	var ?ephemeral_1h_input_tokens: Int; // noqa: naming
+	var json: String;
 }

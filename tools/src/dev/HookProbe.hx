@@ -1,11 +1,11 @@
 package dev;
 
+import anyparse.grammar.json.JsonFormat;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Result;
 import haxe.Exception;
-import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -58,7 +58,11 @@ final class HookProbe {
 		final cli: String = 'src/anyparse/query/Cli$X';
 		final matrix: Matrix = new Matrix(GATE_WIDTH);
 		function probe(want: String, command: String): Void {
-			final run: Result = Command.of([hook]).input(Json.stringify({ tool_name: 'Bash', tool_input: { command: command } })).run();
+			final run: Result = Command.of([hook])
+				.input(
+					HookPayloadWriter.write({ toolName: 'Bash', toolInput: { command: command } }, JsonFormat.instance.compactWriteOptions)
+				)
+				.run();
 			final out: String = run.out + run.err;
 			matrix.check(want, out == '' ? ALLOW : decision(out), command);
 		}
@@ -102,13 +106,13 @@ final class HookProbe {
 		final matrix: Matrix = new Matrix(LINT_WARN_WIDTH);
 		// one payload shaped like the Bash PostToolUse event: the merged capture lands under `stdout`
 		function nudge(command: String, output: String): String {
-			final payload: String = Json.stringify({
-				session_id: SESSION,
+			final payload: String = HookPayloadWriter.write({
+				sessionId: SESSION,
 				cwd: repo,
-				tool_name: 'Bash',
-				tool_input: { command: command },
-				tool_response: { stdout: output, stderr: '' }
-			});
+				toolName: 'Bash',
+				toolInput: { command: command },
+				toolResponse: { stdout: output, stderr: '' }
+			}, JsonFormat.instance.compactWriteOptions);
 			return additionalContext(cmd('sh $hook').input(payload).run().out);
 		}
 		function probe(want: String, label: String, command: String, output: String): Void {
@@ -186,7 +190,7 @@ final class HookProbe {
 	/** The verdict a gate hook's output gives: its `permissionDecision`, `warn` for anything else it said, `` for no JSON. */
 	private static function decision(out: String): String {
 		return try {
-			final said: HookAnswer = Json.parse(out);
+			final said: HookAnswer = HookAnswerParser.parse(out);
 			said.hookSpecificOutput?.permissionDecision ?? WARN;
 		} catch (exception: Exception) {
 			'';
@@ -196,7 +200,7 @@ final class HookProbe {
 	/** The `additionalContext` a nudge hook answered, or `` when it said nothing a harness would show. */
 	private static function additionalContext(out: String): String {
 		return try {
-			final said: HookAnswer = Json.parse(out);
+			final said: HookAnswer = HookAnswerParser.parse(out);
 			said.hookSpecificOutput?.additionalContext ?? '';
 		} catch (exception: Exception) {
 			'';
@@ -238,9 +242,4 @@ private final class Matrix {
 		return _fails;
 	}
 
-}
-
-/** What a hook prints on stdout, the fields a probe reads. */
-typedef HookAnswer = {
-	var ?hookSpecificOutput: { var ?permissionDecision: String; var ?additionalContext: String; };
 }

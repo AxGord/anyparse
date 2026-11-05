@@ -1,6 +1,9 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JsonFormat;
+import dev.BatteryPlan;
 import dev.Shard.Tally;
 import dev.XconfigFmt.XconfigFailure;
 import dev.XconfigFmt.XconfigRun;
@@ -15,7 +18,6 @@ import devkit.Result;
 import devkit.Summary;
 import devkit.TmpLifecycle;
 import haxe.Exception;
-import haxe.Json;
 import haxe.Timer;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -118,7 +120,7 @@ final class Battery {
 			Sys.println('battery: stopping — nothing below can be trusted against a failed build');
 			return finish(started, null);
 		}
-		File.saveContent(workFile('plan.json'), Json.stringify(_plan, null, '\t'));
+		File.saveContent(workFile('plan.json'), BatteryPlanWriter.write(_plan, JsonFormat.instance.compactWriteOptions));
 		Sys.println(
 			'battery: running suite→corpus ∥ fmt ∥ jvm ∥ oracle→lint concurrently — output replays in a fixed order once they join'
 		);
@@ -441,7 +443,7 @@ final class Battery {
 		if (rows != null) {
 			args.done();
 			if (planFile == null) throw new UsageError('--rows needs --plan');
-			final plan: BatteryPlan = Json.parse(File.getContent(planFile));
+			final plan: BatteryPlan = BatteryPlanParser.parse(File.getContent(planFile));
 			return new Battery(plan, Unpooled).runBranch(rows.split(','));
 		}
 		final shards: Int = shardCount(args.option('-n') ?? args.option('--shards') ?? '${Shard.DEFAULT_SHARDS}');
@@ -698,49 +700,13 @@ final class Battery {
 	/** Whether `text` is a parseable JSON document: the lint prints one only when it ran to its end. */
 	private static function isJson(text: String): Bool {
 		try {
-			Json.parse(text);
+			JValueParser.parse(text);
 			return true;
 		} catch (_: Exception) {
 			return false;
 		}
 	}
 
-}
-
-/** What every process of one battery run reads: the run's options and what the driver decided before the branches forked. */
-typedef BatteryPlan = {
-	var repo: String;
-	var work: String;
-	var cache: String;
-
-	/** The commit this run's snapshot is keyed by. */
-	var head: String;
-
-	/** The snapshot compared against, or null on a first run. */
-	var base: Null<String>;
-
-	/** The base snapshot's suite counts (tests, assertions), or null. */
-	var baseSuite: Null<Array<Int>>;
-
-	var shards: Int;
-	var quick: Bool;
-	var snapshot: Bool;
-	var allowBlast: Bool;
-
-	/** The rows whose failure the verdict waives (`--allow`), each saying so. */
-	var allow: Array<String>;
-
-	/** The second, private tree linted (and blasted) beside this one, or null. */
-	var client: Null<String>;
-
-	/** Why the jvm probe does not apply, or null when it runs. */
-	var jvmSkip: Null<String>;
-
-	/** The id the branches' reports carry (`Branches.newRunId`). */
-	var run: String;
-
-	/** Whether each branch takes its own lease of the pool: the suite then runs as many shards as its lease granted. */
-	var ownLease: Bool;
 }
 
 /** One lint the blast step compares with its base snapshot: the snapshot's label and the tree its paths are under. */

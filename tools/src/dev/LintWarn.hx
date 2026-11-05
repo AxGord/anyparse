@@ -1,9 +1,9 @@
 package dev;
 
+import anyparse.grammar.json.JsonFormat;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import haxe.Exception;
-import haxe.Json;
 import haxe.crypto.Sha1;
 import haxe.io.Bytes;
 import haxe.io.Path;
@@ -64,27 +64,27 @@ final class LintWarn {
 			Sys.stderr().writeString('dev lint-warn: ${exception.message}\n');
 			null;
 		};
-		if (body != null) Sys.println(Json.stringify({
+		if (body != null) Sys.println(HookAnswerWriter.write({
 			hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: 'hxq lint-warn (nudge — nothing was fixed):\n$body' }
-		}));
+		}, JsonFormat.instance.compactWriteOptions));
 		return 0;
 	}
 
 	/** The nudge for the hook payload `input`, or null when there is nothing to say; `own` is the tree this tool sits in. */
 	public static function nudge(input: String, own: Null<String>): Null<String> {
 		if (input.indexOf(': wrote ') < 0 && input.indexOf(': rewrote ') < 0) return null;
-		final payload: HookPayload = Json.parse(input);
-		final said: String = (payload.tool_response?.stdout ?? '') + '\n' + (payload.tool_response?.stderr ?? '');
+		final payload: HookPayload = HookPayloadParser.parse(input);
+		final said: String = (payload.toolResponse?.stdout ?? '') + '\n' + (payload.toolResponse?.stderr ?? '');
 		final wrote: Array<String> = [
 			for (line in said.split('\n')) if (WROTE.match(line) && !WROTE_NOTHING.match(line)) line
 		];
 		final project: Null<String> = mainTree(own);
 		if (wrote.length == 0 || project == null) return null;
-		final tokens: Array<String> = words(payload.tool_input?.command ?? '');
+		final tokens: Array<String> = words(payload.toolInput?.command ?? '');
 		final into: Null<Target> = target(tokens, payload.cwd ?? '', project);
 		if (into == null) return null;
 		final files: Array<String> = written(wrote, tokens, into.root);
-		return files.length == 0 ? null : lint(into.engine, into.root, files, payload.session_id ?? 'default');
+		return files.length == 0 ? null : lint(into.engine, into.root, files, payload.sessionId ?? 'default');
 	}
 
 	/** The `.hx` files of `root` the op wrote: the paths it printed, then the `.hx` words of its command line, deduplicated. */
@@ -268,14 +268,6 @@ final class LintWarn {
 		return word.endsWith('.hx') || ~/\.hx[^A-Za-z]/.match(word);
 	}
 
-}
-
-/** The fields of a PostToolUse hook payload this hook reads. */
-typedef HookPayload = {
-	var ?session_id: String; // noqa: naming
-	var ?cwd: String;
-	var ?tool_input: { var ?command: String; }; // noqa: naming
-	var ?tool_response: { var ?stdout: String; var ?stderr: String; }; // noqa: naming
 }
 
 /** The tree an op wrote into and the engine that lints it. */

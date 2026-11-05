@@ -1,12 +1,13 @@
 package dev;
 
+import anyparse.grammar.json.JValue;
+import dev.SuiteFile;
 import devkit.Args;
 import devkit.Command;
 import devkit.Pool;
+import devkit.RawJson;
 import devkit.Result;
 import devkit.TempDir;
-import haxe.DynamicAccess;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -151,7 +152,7 @@ final class Parity {
 	/** The suite in the JSON file `file`: its fixture files, its invocations, and whether every command's `--help` joins them. */
 	public static function load(file: String): Suite {
 		if (!FileSystem.exists(file)) throw new UsageError('suite $file not found');
-		final parsed: SuiteFile = Json.parse(File.getContent(file));
+		final parsed: SuiteFile = SuiteFileParser.parse(File.getContent(file));
 		final files: Map<String, String> = filesOf(parsed.files);
 		final invocations: Array<Invocation> = [];
 		for (given in parsed.invocations ?? []) {
@@ -250,10 +251,13 @@ final class Parity {
 		File.saveContent(Path.join([dir, '$i.tip.err']), run.tip.err);
 	}
 
-	private static function filesOf(given: Null<DynamicAccess<String>>): Map<String, String> {
+	private static function filesOf(given: Null<JValue>): Map<String, String> {
 		final files: Map<String, String> = [];
-		// by field, not by `DynamicAccess` iteration, whose value strict null safety reads as nullable
-		if (given != null) for (name in Reflect.fields(given)) files[name] = Std.string(Reflect.field(given, name));
+		switch given {
+			case JObject(entries):
+				for (entry in entries) files[entry.key] = RawJson.text(entry.value) ?? '';
+			case _:
+		}
 		return files;
 	}
 
@@ -299,16 +303,4 @@ typedef Comparison = {
 	var base: Outcome;
 	var tip: Outcome;
 	var differences: Array<String>;
-}
-
-/** A suite file as JSON spells it. */
-typedef SuiteFile = {
-	var ?files: DynamicAccess<String>;
-	var ?invocations: Array<{
-		name: String,
-		argv: Array<String>,
-		?stdin: String,
-		?files: DynamicAccess<String>
-	}>;
-	var ?commandHelp: Bool;
 }

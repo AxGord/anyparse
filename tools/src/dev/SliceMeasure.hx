@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.ConfigFinder;
@@ -8,7 +9,6 @@ import anyparse.query.graph.MemberGraphBuilder;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.TempDir;
-import haxe.Json;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -159,11 +159,13 @@ final class SliceMeasure {
 	}
 
 	private static function encodeEdges(reading: EdgeReading): String {
-		return Json.stringify({ files: reading.files, edges: [for (key => target in reading.edges) [key, target]] });
+		return EdgeReadingJsonWriter.write(
+			{ files: reading.files, edges: [for (key => target in reading.edges) [key, target]] }, JsonFormat.instance.compactWriteOptions
+		);
 	}
 
 	private static function decodeEdges(text: String): EdgeReading {
-		final parsed: { files: Array<String>, edges: Array<Array<String>> } = Json.parse(text);
+		final parsed: EdgeReadingJson = EdgeReadingJsonParser.parse(text);
 		return { files: parsed.files, edges: [for (pair in parsed.edges) pair[0] => pair[1]] };
 	}
 

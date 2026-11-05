@@ -1,12 +1,15 @@
 package dev;
 
+import anyparse.query.format.json.AstDumpJson;
+import anyparse.query.format.json.AstNodeJson;
+import anyparse.query.format.json.AstSearchSpan;
+import dev.ReportRecord;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Pool;
 import devkit.Result;
 import haxe.Exception;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -78,7 +81,7 @@ final class CloneCensus {
 		final out: Array<Finding> = [];
 		final message: EReg = ~/^(\d+) statements duplicated from (?:(\S+?):)?(?:line )?(\d+)/;
 		if (pyStrip(text, true, false).startsWith('[')) {
-			final records: Array<ReportRecord> = Json.parse(text);
+			final records: Array<ReportRecord> = ReportRecordsParser.parse('{"findings":$text}').findings;
 			for (rec in records) if (message.match(rec.message)) out.push(finding(rec.file, rec.line, rec.col, message));
 			return out;
 		}
@@ -292,7 +295,7 @@ final class Runs {
 	/** How many `hxq ast` processes run at once: the knee of the project's process fan-out. */
 	private static inline final AST_PARALLEL: Int = 4;
 
-	private final _trees: Map<String, AstFile> = [];
+	private final _trees: Map<String, AstDumpJson> = [];
 	private final _index: Map<String, Map<String, Array<Candidate>>> = [];
 	private final _lines: Map<String, Array<String>> = [];
 	private final _bareDecl: EReg = ~/^(var|final)\s+[A-Za-z_]\w*\s*(:\s*[^=]+?)?\s*(=\s*(-?[A-Za-z_][\w.]*|-?\d[\w.]*|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\[\]|\{\}))?\s*;?\s*$/s;
@@ -317,7 +320,7 @@ final class Runs {
 		for (file in files) if (!_trees.exists(file) && !missing.contains(file)) {
 			final cached: Null<String> = cachePath(file);
 			if (cached != null && FileSystem.exists(cached))
-				_trees[file] = Json.parse(File.getContent(cached));
+				_trees[file] = AstDumpJsonParser.parse(File.getContent(cached));
 			else
 				missing.push(file);
 		}
@@ -329,7 +332,7 @@ final class Runs {
 
 	/** The kind of `f`'s statement run by the regex reading: `bare-decl`, `bare-assign`, `bare-mixed`, `logic` or `unresolved`. */
 	public function classify(f: Finding): String {
-		final statements: Null<Array<AstNode>> = runOf(f);
+		final statements: Null<Array<AstNodeJson>> = runOf(f);
 		if (statements == null) return 'unresolved';
 		final texts: Array<String> = [for (s in statements) CloneCensus.pyStrip(text(f.file, s.span))];
 		if (texts.foreach(t -> _bareDecl.match(t))) return 'bare-decl';
@@ -339,7 +342,7 @@ final class Runs {
 	}
 
 	/** The `n` statement nodes of finding `f`, or null when its position resolves to no run. */
-	private function runOf(f: Finding): Null<Array<AstNode>> {
+	private function runOf(f: Finding): Null<Array<AstNodeJson>> {
 		final candidates: Null<Array<Candidate>> = nodesAt(f.file)['${f.line}:${f.col}'];
 		if (candidates == null) return null;
 		for (c in candidates) if (c.index + f.n <= c.siblings.length) return c.siblings.slice(c.index, c.index + f.n);
@@ -351,10 +354,10 @@ final class Runs {
 		final known: Null<Map<String, Array<Candidate>>> = _index[file];
 		if (known != null) return known;
 		final by: Map<String, Array<Candidate>> = [];
-		function walk(node: AstNode): Void {
-			final kids: Array<AstNode> = node.children ?? [];
+		function walk(node: AstNodeJson): Void {
+			final kids: Array<AstNodeJson> = node.children ?? [];
 			for (i => child in kids) {
-				final span: Null<AstSpan> = child.span;
+				final span: Null<AstSearchSpan> = child.span;
 				if (span != null) {
 					final key: String = '${span.start[0]}:${span.start[1]}';
 					final list: Array<Candidate> = by[key] ?? [];
@@ -370,7 +373,7 @@ final class Runs {
 	}
 
 	/** The source text `span` covers in `file`, its columns 1-based and its end exclusive; none for no span. */
-	private function text(file: String, span: Null<AstSpan>): String {
+	private function text(file: String, span: Null<AstSearchSpan>): String {
 		if (span == null) return '';
 		final ls: Array<String> = sourceLines(file);
 		final l1: Int = span.start[0];
@@ -390,9 +393,9 @@ final class Runs {
 		return lines;
 	}
 
-	private function tree(file: String): AstFile {
+	private function tree(file: String): AstDumpJson {
 		if (!_trees.exists(file)) prefetch([file]);
-		final known: Null<AstFile> = _trees[file];
+		final known: Null<AstDumpJson> = _trees[file];
 		if (known == null) throw new Exception('clone-census: no AST of $file');
 		return known;
 	}
@@ -403,7 +406,7 @@ final class Runs {
 
 	/** Keep the `hxq ast --json` output `result` of `file`, and cache it when a cache is kept. */
 	private function store(file: String, result: Result): Void {
-		final parsed: Null<AstFile> = try Json.parse(result.out) catch (exception: Exception) null;
+		final parsed: Null<AstDumpJson> = try AstDumpJsonParser.parse(result.out) catch (exception: Exception) null;
 		if (parsed == null)
 			throw new Exception(
 				'clone-census: `${result.command}` printed no AST (${result.failure != '' ? result.failure : result.err.trim()})'
@@ -457,31 +460,6 @@ typedef Keyed = {
 
 /** A node starting at some position: its siblings and its index among them. */
 typedef Candidate = {
-	var siblings: Array<AstNode>;
+	var siblings: Array<AstNodeJson>;
 	var index: Int;
-}
-
-/** What `hxq ast --json` prints of one file. */
-typedef AstFile = {
-	var tree: AstNode;
-}
-
-/** One node of an `hxq ast --json` tree, as far as a census reads it. */
-typedef AstNode = {
-	var ?children: Array<AstNode>;
-	var ?span: AstSpan;
-}
-
-/** A node's extent: `start` and `end`, each `[line, column]`, 1-based. */
-typedef AstSpan = {
-	var start: Array<Int>;
-	var end: Array<Int>;
-}
-
-/** One record of a `--format json` lint report, as far as a census reads it. */
-typedef ReportRecord = {
-	var file: String;
-	var line: Int;
-	var col: Int;
-	var message: String;
 }

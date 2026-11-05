@@ -4,6 +4,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.facts.TypedFactsProbe;
 import anyparse.check.oracle.OracleGeneration;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
@@ -13,7 +14,6 @@ import anyparse.query.HaxelibResolver;
 import anyparse.query.ReachProject;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -56,12 +56,12 @@ final class EdgeDiff {
 		for (n in typed.nodes) if (!n.isExternal && n.span != null) functions++;
 		for (id => _ in typed.facts?.faceted ?? []) {
 			final node: Null<FnNode> = typed.node(id);
-			out.push(Json.stringify({
+			out.push(EdgeDiffRecordWriter.write({
 				id: id,
 				file: node?.file,
 				syntax: records(plain, id),
 				facts: records(typed, id)
-			}));
+			}, JsonFormat.instance.compactWriteOptions));
 		}
 		File.saveContent(args[0], out.join('\n') + '\n');
 		Sys.println('functions ${functions}, faceted ${out.length}');

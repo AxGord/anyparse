@@ -46,7 +46,7 @@ final class SliceGateTest extends Test {
 		'{"arms": [{"name": "M-BAD", "type": "b.Other", "method": "f", "force": "1"}]}';
 
 	/** A `bin/hxq` that answers every graph call with an empty graph. */
-	private static inline final GRAPH_HXQ: String = 'echo \'{"nodes": []}\'\n';
+	private static inline final GRAPH_HXQ: String = 'echo \'{"nodes": [], "edges": []}\'\n';
 
 	/** The environment variable that names the corpus the suite's harness reads. */
 	private static inline final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';

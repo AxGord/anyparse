@@ -1,6 +1,7 @@
 package unit.dev;
 
 import dev.Battery;
+import dev.BatteryPlan;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Result;

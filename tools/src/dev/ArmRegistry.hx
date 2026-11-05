@@ -3,7 +3,6 @@ package dev;
 import anyparse.query.PackageDocuments;
 import anyparse.query.RegistryFiles;
 import haxe.Exception;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -94,18 +93,13 @@ final class ArmRegistry {
 
 	/** The `type` of the record `body`, null when it carries none. */
 	private static function typeOf(body: String): Null<String> {
-		final type: Null<Any> = Reflect.field(Json.parse(body), 'type');
-		return type is String ? Std.string(type) : null;
+		return ArmHeadParser.parse(body).type;
 	}
 
 	/** The `name` of the record `body`. */
 	private static function keyOf(body: String): String {
-		final parsed: Any = try Json.parse(body) catch (exception: Exception) throw new ArmRegistryError(
-			'a record does not parse: ${exception.message}'
-		);
-		final name: Null<Any> = Reflect.field(parsed, 'name');
-		if (!(name is String)) throw new ArmRegistryError('a record carries no string `name`');
-		return Std.string(name);
+		return try ArmHeadParser.parse(body)
+			.name catch (exception: Exception) throw new ArmRegistryError('a record carries no string `name`: ${exception.message}');
 	}
 
 }

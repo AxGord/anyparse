@@ -1,15 +1,17 @@
 package dev;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import dev.Baseline;
 import dev.InfraSnapshot;
 import devkit.Command;
 import devkit.Excerpt;
 import devkit.Pool;
+import devkit.RawJson;
 import devkit.Result;
 import devkit.Summary;
-import haxe.DynamicAccess;
 import haxe.Exception;
-import haxe.Json;
 import haxe.crypto.Sha1;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -251,12 +253,12 @@ final class GateLint {
 	 */
 	public static function rebased(report: String, pathsNow: Map<String, String>): String {
 		if ([for (base => now in pathsNow) if (base != now) now].length == 0) return report;
-		final records: Array<DynamicAccess<Any>> = Json.parse(report);
-		for (record in records) {
-			final file: Null<String> = pathsNow[Std.string(record['file'])];
-			if (file != null) record['file'] = file;
+		return switch JValueParser.parse(report) {
+			case JArray(records):
+				RawJson.print(JArray([for (record in records) rebasedRecord(record, pathsNow)]), '  ');
+			case _:
+				report;
 		}
-		return Json.stringify(records, null, '  ');
 	}
 
 	/** The arguments of a `lint --all --format json` of `scope`, with the compiler oracle unless `oracle` is false. */
@@ -280,6 +282,24 @@ final class GateLint {
 				.join(' ')
 				.trim()
 			: null;
+	}
+
+	/** The lint record `record` filed under the path `pathsNow` maps its `file` to, every other key kept. */
+	private static function rebasedRecord(record: JValue, pathsNow: Map<String, String>): JValue {
+		return switch record {
+			case JObject(entries):
+				JObject([
+					for (entry in entries) entry.key == 'file' ? JValueTools.entry('file', rebasedFile(entry.value, pathsNow)) : entry
+				]);
+			case _:
+				record;
+		}
+	}
+
+	/** The path `pathsNow` maps the file `value` names to, `value` itself when it maps none. */
+	private static function rebasedFile(value: JValue, pathsNow: Map<String, String>): JValue {
+		final file: Null<String> = RawJson.string(value);
+		return file == null ? value : JString(pathsNow[file] ?? file);
 	}
 
 }

@@ -49,7 +49,7 @@ final class GateArmsTest extends Test {
 	 */
 	private static final FAKE_HXQ: String = 'echo "$$*" >> hxq.log\n[ "$$1" = changed ] && { cat knobs/changed 2>/dev/null; exit 0; }\n'
 		+ '[ "$$1" = graph ] || exit 0\nif [ "$$2" = --diff ]; then k=diff; else k=focus; fi\n'
-		+ '[ -e knobs/fail-$$k ] && exit 1\ncat knobs/$$k 2>/dev/null || echo \'{"nodes": []}\'\n';
+		+ '[ -e knobs/fail-$$k ] && exit 1\ncat knobs/$$k 2>/dev/null || echo \'{"nodes": [], "edges": []}\'\n';
 
 	/** The report of a slice that only reflowed the one file it touched. */
 	private static final REFLOWED: String = 'M src/pkg/A.hx  layout\n';
@@ -142,12 +142,12 @@ final class GateArmsTest extends Test {
 				member('pkg.A.edited', 'changed'),
 				member('pkg.A.added', 'added'),
 				member('pkg.A.gone', 'removed'),
-				'{"level": "type", "name": "pkg.A", "change": "changed"}'
+				node('type', 'pkg.A', 'changed')
 			]));
 			knob(tree, 'focus', graph([
 				member('pkg.A.edited'),
 				member('pkg.Other.near'),
-				'{"level": "type", "name": "pkg.Far.near"}'
+				node('type', 'pkg.Far.near')
 			]));
 			knob(tree, 'all-killed');
 			Assert.isTrue(outcomeOf(tree, []).match(Passed), 'every selected arm killed');
@@ -425,7 +425,7 @@ final class GateArmsTest extends Test {
 	}
 
 	private static function member(name: String, ?change: String): String {
-		return change == null ? '{"level": "member", "name": "$name"}' : '{"level": "member", "name": "$name", "change": "$change"}';
+		return node('member', name, change);
 	}
 
 	/** The excerpt lines of the failed arms row of `tree` under the lease `held`. */
@@ -433,6 +433,11 @@ final class GateArmsTest extends Test {
 		final gate: GateTree = gateOf(tree, []);
 		withLease(held, () -> gate.summary.time('arms', () -> GateArms.outcome(gate)));
 		return gate.summary.steps()[0].excerpt;
+	}
+
+	private static function node(level: String, name: String, ?change: String): String {
+		final shape: String = '"id": "$name", "level": "$level", "name": "$name", "label": "$name", "external": false, "focus": false';
+		return change == null ? '{$shape}' : '{$shape, "change": "$change"}';
 	}
 
 }

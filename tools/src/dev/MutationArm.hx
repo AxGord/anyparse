@@ -3,14 +3,16 @@ package dev;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.PendingRuns;
 import anyparse.core.PoolLease;
+import dev.ArmRecordJson;
+import dev.ArmTable;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Pool;
+import devkit.RawJson;
 import devkit.Result;
 import devkit.TmpLifecycle;
 import haxe.Exception;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -130,7 +132,7 @@ final class MutationArm {
 
 	/** Every arm name the registry `text` declares, in registry order. */
 	public static function armNames(text: String): Array<String> {
-		final table: ArmTable = Json.parse(text);
+		final table: ArmTable = ArmTableParser.parse(text);
 		return [for (arm in table.arms ?? []) arm.name];
 	}
 
@@ -140,7 +142,7 @@ final class MutationArm {
 	 * the ORIGINAL member text — or a `force` arm's forced value, or why the arm cannot be rendered.
 	 */
 	public static function cuts(text: String, names: Array<String>, registry: String): Map<String, ArmCut> {
-		final table: ArmTable = Json.parse(text);
+		final table: ArmTable = ArmTableParser.parse(text);
 		final byName: Map<String, ArmRecordJson> = [];
 		for (arm in table.arms ?? []) if (!byName.exists(arm.name)) byName[arm.name] = arm;
 		final out: Map<String, ArmCut> = [];
@@ -151,13 +153,13 @@ final class MutationArm {
 				continue;
 			}
 			final kind: String = arm.kind == null || arm.kind == '' ? DEFAULT_KIND : arm.kind;
-			final force: String = arm.force == null ? '' : Std.string(arm.force);
+			final force: String = RawJson.text(arm.force) ?? '';
 			if (force != '') {
 				out[name] = Force(arm.type, arm.method, kind, force);
 				continue;
 			}
-			final finds: Array<String> = strings(arm.find) ?? [];
-			final replaces: Array<String> = strings(arm.replace) ?? [for (_ in finds) ''];
+			final finds: Array<String> = RawJson.strings(arm.find) ?? [];
+			final replaces: Array<String> = RawJson.strings(arm.replace) ?? [for (_ in finds) ''];
 			if (finds.length == 0 || finds.length != replaces.length) {
 				out[name] = Unrenderable(
 					'"$name" declares ${finds.length} find fragment(s) against ${replaces.length} replace(s)'
@@ -549,14 +551,6 @@ final class MutationArm {
 		return bins;
 	}
 
-	/** `value` as a list of strings — a string is a list of one — or null when absent. */
-	private static function strings(value: Null<Any>): Null<Array<String>> {
-		if (value == null) return null;
-		if (!Std.isOfType(value, Array)) return [Std.string(value)];
-		final list: Array<Any> = value;
-		return [for (item in list) Std.string(item)];
-	}
-
 	private static function add(table: Map<String, Array<String>>, key: String, value: String): Void {
 		final list: Array<String> = table[key] ?? [];
 		if (!list.contains(value)) list.push(value);
@@ -693,22 +687,6 @@ enum ArmCut {
 
 	/** An arm the registry does not hold, or whose pairs do not pair up. */
 	Unrenderable(why: String);
-}
-
-/** One record of the arm registry as its JSON holds it: `find`/`replace` are one string or a list, `force` a scalar. */
-typedef ArmRecordJson = {
-	var name: String;
-	var type: String;
-	var method: String;
-	var ?kind: String;
-	var ?force: Any;
-	var ?find: Any;
-	var ?replace: Any;
-}
-
-/** The arm registry as its JSON holds it. */
-typedef ArmTable = {
-	var ?arms: Array<ArmRecordJson>;
 }
 
 /** Where one arm cuts, and why it could not be rendered once that is known. */

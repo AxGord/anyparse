@@ -1,12 +1,13 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import anyparse.query.format.json.CodeGraphJson;
+import anyparse.query.format.json.CodeGraphJsonParser;
 import dev.ArmRegistry.ArmRecord;
 import dev.GateExcerpt.ArmRow;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.Summary;
-import haxe.Json;
 import haxe.io.Path;
 import sys.io.File;
 
@@ -249,10 +250,8 @@ final class GateArms {
 
 	/** Whether the arm `record` cuts a member of one of `modules` (a module or one of its sub-types). */
 	private static function onModule(record: ArmRecord, modules: Array<String>): Bool {
-		final field: Null<Any> = Reflect.field(Json.parse(record.text), 'type');
-		if (!(field is String)) return false;
-		final type: String = Std.string(field);
-		return modules.exists(m -> type == m || type.startsWith('$m.'));
+		final type: Null<String> = ArmHeadParser.parse(record.text).type;
+		return type != null && modules.exists(m -> type == m || type.startsWith('$m.'));
 	}
 
 	/** The module path of the source file `file` under a module root, or empty for any other file. */
@@ -327,7 +326,7 @@ final class GateArms {
 	 * that cannot be read throws and the row does not run, because no neighbours would quietly narrow the selection.
 	 */
 	private static function callNeighbours(gate: GateTree, layout: Array<String>): Array<String> {
-		final diff: MemberGraph = Json.parse(
+		final diff: CodeGraphJson = CodeGraphJsonParser.parse(
 			gate.hxq(gate.tree, ['graph', '--diff', gate.base, 'HEAD'].concat(GRAPH_SCOPE))
 				.timeout(PLAN_TIMEOUT_MS)
 				.check()
@@ -341,7 +340,7 @@ final class GateArms {
 		];
 		if (seeds.length == 0) return [];
 		final focus: Array<String> = [for (seed in seeds) for (arg in ['--focus', seed]) arg];
-		final around: MemberGraph = Json.parse(
+		final around: CodeGraphJson = CodeGraphJsonParser.parse(
 			gate.hxq(gate.tree, ['graph', '--level', 'member', '--edges', 'calls', '--radius', '1'].concat(focus).concat(GRAPH_SCOPE))
 				.timeout(PLAN_TIMEOUT_MS)
 				.check()
@@ -354,10 +353,8 @@ final class GateArms {
 
 	/** Whether `record` cuts one of `members` (`<type>.<method>`). */
 	private static function cutsMember(record: ArmRecord, members: Array<String>): Bool {
-		final parsed: Any = Json.parse(record.text);
-		final type: Null<Any> = Reflect.field(parsed, 'type');
-		final method: Null<Any> = Reflect.field(parsed, 'method');
-		return type is String && method is String && members.contains('$type.$method');
+		final head: ArmHead = ArmHeadParser.parse(record.text);
+		return head.type != null && head.method != null && members.contains('${head.type}.${head.method}');
 	}
 
 }
@@ -386,9 +383,4 @@ typedef RotReading = {
 private typedef ArmReading = {
 	var notes: Array<String>;
 	var rows: Array<ArmRow>;
-}
-
-/** The fields of `hxq graph --format json` the arms row reads. */
-private typedef MemberGraph = {
-	var nodes: Array<{ level: String, name: String, ?change: String }>;
 }

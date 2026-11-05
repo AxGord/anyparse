@@ -1,0 +1,38 @@
+package dev;
+
+/** What every process of one battery run reads: the run's options and what the driver decided before the branches forked. */
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+typedef BatteryPlan = {
+	var repo: String;
+	var work: String;
+	var cache: String;
+
+	/** The commit this run's snapshot is keyed by. */
+	var head: String;
+
+	/** The snapshot compared against, or null on a first run. */
+	@:optional var base: Null<String>;
+
+	/** The base snapshot's suite counts (tests, assertions), or null. */
+	@:optional var baseSuite: Null<Array<Int>>;
+
+	var shards: Int;
+	var quick: Bool;
+	var snapshot: Bool;
+	var allowBlast: Bool;
+
+	/** The rows whose failure the verdict waives (`--allow`), each saying so. */
+	var allow: Array<String>;
+
+	/** The second, private tree linted (and blasted) beside this one, or null. */
+	@:optional var client: Null<String>;
+
+	/** Why the jvm probe does not apply, or null when it runs. */
+	@:optional var jvmSkip: Null<String>;
+
+	/** The id the branches' reports carry (`Branches.newRunId`). */
+	var run: String;
+
+	/** Whether each branch takes its own lease of the pool: the suite then runs as many shards as its lease granted. */
+	var ownLease: Bool;
+};

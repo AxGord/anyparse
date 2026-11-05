@@ -1,11 +1,14 @@
 package dev;
 
+import anyparse.grammar.json.JValue;
+import dev.SweepCatalog;
+import dev.SweepProbe;
+import dev.SweepTrap;
 import devkit.Args;
 import devkit.Cmd.cmd;
+import devkit.RawJson;
 import devkit.Result;
 import devkit.TempDir;
-import haxe.DynamicAccess;
-import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -69,7 +72,7 @@ final class TrapFixSweep {
 	 * `ruleArgs`, in catalog order.
 	 */
 	public static function sweep(catalog: String, engine: String, ruleArgs: Array<String>): Array<SweptProbe> {
-		final read: SweepCatalog = Json.parse(File.getContent(catalog));
+		final read: SweepCatalog = SweepCatalogParser.parse(File.getContent(catalog));
 		return [
 			for (trap in read.traps) for (probe in trap.probes) sweepProbe(trap, probe, engine, ruleArgs)
 		];
@@ -123,7 +126,11 @@ final class TrapFixSweep {
 	 */
 	private static function sweepProbe(trap: SweepTrap, probe: SweepProbe, engine: String, ruleArgs: Array<String>): SweptProbe {
 		final dir: TempDir = TempDir.create();
-		for (file in trap.files.keys()) write(dir, file, trap.files.get(file) ?? []);
+		switch trap.files {
+			case JObject(entries):
+				for (entry in entries) write(dir, entry.key, RawJson.strings(entry.value) ?? []);
+			case _:
+		}
 		final own: Null<Array<String>> = probe.text;
 		if (own != null) write(dir, probe.file, own);
 		final main: String = Path.withoutExtension(probe.file).split('/').join('.');
@@ -157,24 +164,6 @@ final class TrapFixSweep {
 		File.saveContent(path, lines.join('\n') + '\n');
 	}
 
-}
-
-/** A trap catalog, as `test/traps/resolve.json` spells one. */
-private typedef SweepCatalog = {
-	final traps: Array<SweepTrap>;
-}
-
-/** One mini project of a catalog. */
-private typedef SweepTrap = {
-	final name: String;
-	final files: DynamicAccess<Array<String>>;
-	final probes: Array<SweepProbe>;
-}
-
-/** One probe of a trap: the file it asks in, written as `text` when given. */
-private typedef SweepProbe = {
-	final file: String;
-	final ?text: Array<String>;
 }
 
 /**

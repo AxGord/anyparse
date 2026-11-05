@@ -1,13 +1,20 @@
 package dev;
 
+import anyparse.grammar.json.JEntry;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JsonFormat;
+import dev.CompileSpec;
+import dev.Expectation;
 import dev.Parity.Invocation;
 import dev.Parity.Outcome;
 import devkit.Args;
 import devkit.Command;
 import devkit.Pool;
+import devkit.RawJson;
 import devkit.Result;
 import devkit.TempDir;
-import haxe.Json;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -53,6 +60,9 @@ final class Probe {
 
 	/** How much of a deviating stream's first line a report row quotes. */
 	private static inline final QUOTE_WIDTH: Int = 120;
+
+	/** The key of an invocation's expectation in a kit. */
+	private static inline final EXPECT_KEY: String = 'expect';
 
 	/** Whether `verdict` passes: nothing deviates and, when `strict`, no known-defect row has moved either. */
 	public static inline function holds(verdict: Verdict, strict: Bool): Bool {
@@ -106,8 +116,8 @@ final class Probe {
 	/** The kit in `file`: its invocations as `dev parity` reads them, and beside each its compile check and its expectation. */
 	public static function load(file: String): Kit {
 		final invocations: Array<Invocation> = Parity.load(file).invocations;
-		final raw: KitFile = Json.parse(File.getContent(file));
-		final rows: Array<KitRow> = raw.invocations ?? [];
+		final raw: SuiteFile = SuiteFileParser.parse(File.getContent(file));
+		final rows: Array<SuiteInvocation> = raw.invocations ?? [];
 		return {
 			invocations: invocations,
 			cases: [
@@ -234,9 +244,9 @@ final class Probe {
 
 	/** The kit file `kitFile` with each invocation's expectation replaced by the answer `seen` holds for it, every other field kept. */
 	public static function write(kitFile: String, seen: Array<Seen>): Void {
-		final raw: KitFile = Json.parse(File.getContent(kitFile));
-		for (i => row in raw.invocations ?? []) row.expect = seen[i].answer;
-		File.saveContent(kitFile, Json.stringify(raw, null, '\t') + '\n');
+		final kit: JValue = JValueParser.parse(File.getContent(kitFile));
+		final text: String = RawJson.print(recorded(kit, seen), '\t');
+		File.saveContent(kitFile, '$text\n');
 	}
 
 	/**
@@ -383,6 +393,43 @@ final class Probe {
 		});
 	}
 
+	/** The kit `kit` with the `expect` of each invocation replaced by the answer `seen` holds for it, every other key kept as it stands. */
+	private static function recorded(kit: JValue, seen: Array<Seen>): JValue {
+		return switch kit {
+			case JObject(entries):
+				JObject([
+					for (entry in entries)
+						entry.key == 'invocations' ? JValueTools.entry('invocations', withExpectations(entry.value, seen)) : entry
+				]);
+			case _:
+				kit;
+		}
+	}
+
+	private static function withExpectations(rows: JValue, seen: Array<Seen>): JValue {
+		return JArray([for (i => row in RawJson.items(rows)) withExpectation(row, seen[i].answer)]);
+	}
+
+	/** The invocation `row` with its `expect` set to `answer`: in place when it holds one, last otherwise. */
+	private static function withExpectation(row: JValue, answer: Expectation): JValue {
+		return switch row {
+			case JObject(entries):
+				final value: JEntry = JValueTools.entry(EXPECT_KEY, expectationValue(answer));
+				final held: Bool = entries.exists(entry -> entry.key == EXPECT_KEY);
+				final replaced: Array<JEntry> = [for (entry in entries) entry.key == EXPECT_KEY ? value : entry];
+				JObject(held ? replaced : replaced.concat([value]));
+			case _:
+				row;
+		}
+	}
+
+	/**
+	 * The answer `answer` as the object a kit holds: the generated writer fixes the keys and their order and leaves an unset optional out.
+	 */
+	private static function expectationValue(answer: Expectation): JValue {
+		return JValueParser.parse(ExpectationWriter.write(answer, JsonFormat.instance.compactWriteOptions));
+	}
+
 }
 
 /** A kit: its invocations as `dev parity` runs them, and the case beside each. */
@@ -408,53 +455,11 @@ typedef ProbeCase = {
 	var ?outMinLines: Int;
 }
 
-/** A haxe compile of an invocation's fixture: the arguments, run in `dir` of it, once per define set (one empty set by default). */
-typedef CompileSpec = {
-	var args: Array<String>;
-	var ?dir: String;
-	var ?defines: Array<Array<String>>;
-
-	/** Whether the compile runs the program (`--interp`), and the files the invocation started from run too, to compare what both print. */
-	var ?run: Bool;
-}
-
-/** An engine's answer to one invocation: exit status and digests of stdout, stderr and the files it wrote, and each compile's verdict. */
-typedef Expectation = {
-	var exit: Null<Int>;
-	var out: String;
-	var err: String;
-	var files: String;
-	var ?compiles: Array<Bool>;
-
-	/** Per define set: both programs ran and printed the same. */
-	var ?sameRun: Array<Bool>;
-	var ?onePass: Bool;
-	var ?commentsKept: Bool;
-}
-
 /** One invocation's answer with both of its streams, normalized, for quoting a deviation. */
 typedef Seen = {
 	var answer: Expectation;
 	var out: String;
 	var err: String;
-}
-
-/** A kit file as JSON spells it: a parity suite plus a default compile check and each invocation's own and its expectation. */
-typedef KitFile = {
-	var ?compile: CompileSpec;
-	var ?invocations: Array<KitRow>;
-}
-
-/**
- * One invocation of a kit file beyond its parity fields: its own compile check and its recorded expectation.
- */
-typedef KitRow = {
-	var ?compile: CompileSpec;
-	var ?expect: Expectation;
-	var ?knownDefect: String;
-	var ?fixpoint: String;
-	var ?outShape: String;
-	var ?outMinLines: Int;
 }
 
 /** A run's report lines, the invocations that deviate, and the known-defect rows that moved. */

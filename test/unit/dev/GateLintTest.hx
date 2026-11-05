@@ -29,4 +29,13 @@ final class GateLintTest extends Test {
 		Assert.same(['lint', '.', '--all', '--format', 'json', '--no-oracle'], GateLint.lintArgs(['.'], false));
 	}
 
+	public function testARebasedRecordKeepsEveryOtherKeyAndSpellsAWholeNumberWithoutAFraction(): Void {
+		final report: String = '[{"file":"old/C.hx","line":12,"data":{"a":[1,2.5]},"rule":"r"}]';
+		Assert.equals(
+			'[\n  {\n    "file": "new/C.hx",\n    "line": 12,\n    "data": {\n      "a": [\n        1,\n        2.5\n      ]\n    },\n'
+			+ '    "rule": "r"\n  }\n]',
+			GateLint.rebased(report, ['old/C.hx' => 'new/C.hx'])
+		);
+	}
+
 }

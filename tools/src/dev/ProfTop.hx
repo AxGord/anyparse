@@ -1,30 +1,5 @@
 package dev;
 
-/** One `callFrame` of a V8 `--cpu-prof` capture. */
-typedef ProfileFrame = {
-	var functionName: Null<String>;
-	var url: Null<String>;
-	var lineNumber: Null<Int>;
-};
-
-/** One node of the capture's call tree. */
-typedef ProfileNode = {
-	var id: Int;
-	var callFrame: ProfileFrame;
-	var children: Null<Array<Int>>;
-};
-
-/**
- * The subset of a `.cpuprofile` this tool reads. `haxe.Json.parse` answers
- * `Dynamic`, which unifies with this — so the boundary is typed at the one
- * place it enters, and nothing downstream is `Dynamic`.
- */
-typedef Profile = {
-	var nodes: Array<ProfileNode>;
-	var samples: Array<Int>;
-	var timeDeltas: Array<Float>;
-};
-
 /**
  * Roll a V8 `--cpu-prof` capture up by SELF time per function.
  *
@@ -105,7 +80,7 @@ class ProfTop {
 
 	/** Parse one capture, roll it up, print the top `top` rows by self time. */
 	private static function report(path: String, top: Int, under: String, notUnder: String): Void {
-		final profile: Profile = haxe.Json.parse(sys.io.File.getContent(path));
+		final profile: Profile = ProfileParser.parse(sys.io.File.getContent(path));
 		final labelOf: Map<Int, String> = [];
 		final parentOf: Map<Int, Int> = [];
 		for (node in profile.nodes) {
@@ -128,7 +103,12 @@ class ProfTop {
 		}
 		final rows: Array<{ label: String, us: Float }> = [for (key => us in self) { label: key, us: us }];
 		// a tie is broken by label: the rows come out of a map, whose order is the target's
-		rows.sort((a, b) -> b.us > a.us ? 1 : (b.us < a.us ? -1 : Reflect.compare(a.label, b.label)));
+		rows.sort((a, b) -> if (b.us > a.us)
+			1
+		else if (b.us < a.us)
+			-1
+		else
+			Reflect.compare(a.label, b.label));
 		final scope: String = (under == '' ? '' : ' (under $under)') + (notUnder == '' ? '' : ' (not under $notUnder)');
 		Sys.println('total ${round(total / US_PER_MS)} ms across ${samples.length} samples$scope');
 		final shown: Int = rows.length < top ? rows.length : top;

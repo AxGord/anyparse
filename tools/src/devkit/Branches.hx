@@ -1,9 +1,11 @@
 package devkit;
 
+import anyparse.grammar.json.JsonFormat;
 import devkit.Lease.Ask;
 import devkit.Lease.LeaseMode;
+import devkit.Reading;
+import devkit.StepRecord;
 import devkit.Summary;
-import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -109,12 +111,12 @@ final class Branches {
 			}
 		];
 		final counts: Array<Reading> = [for (name => value in readings) { name: name, value: value }];
-		return Json.stringify({ run: id, steps: rows, readings: counts }, null, '\t');
+		return BranchReportJsonWriter.write({ run: id, steps: rows, readings: counts }, JsonFormat.instance.defaultWriteOptions);
 	}
 
 	/** The steps and readings of the branch report `text`, as `encode` wrote them. */
 	public static function decode(text: String): BranchReport {
-		final parsed: { ?run: String, steps: Array<StepRecord>, readings: Array<Reading> } = Json.parse(text);
+		final parsed: BranchReportJson = BranchReportJsonParser.parse(text);
 		return {
 			run: parsed.run ?? '',
 			steps: [
@@ -187,22 +189,4 @@ typedef BranchReport = {
 
 	var steps: Array<Step>;
 	var readings: Map<String, Int>;
-}
-
-/** One step of a branch report, its outcome spelled as a label and a reason. */
-typedef StepRecord = {
-	var name: String;
-	var outcome: String;
-	var why: String;
-	var ms: Float;
-	var note: String;
-
-	/** The lines that decide the step; absent in a report an older tool left. */
-	var ?excerpt: Array<String>;
-}
-
-/** One count a branch read, by its name. */
-typedef Reading = {
-	var name: String;
-	var value: Int;
 }
