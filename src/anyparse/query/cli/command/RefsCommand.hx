@@ -65,7 +65,7 @@ typedef RefsBatch = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class RefsCommand implements CliCommand {
+final class RefsCommand implements CliCommand implements LeadingQuery {
 
 	private static final CMD: String = 'refs';
 

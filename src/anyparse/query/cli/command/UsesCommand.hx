@@ -35,7 +35,7 @@ typedef UsesOpts = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class UsesCommand implements CliCommand {
+final class UsesCommand implements CliCommand implements LeadingQuery {
 
 	public function new() {}
 

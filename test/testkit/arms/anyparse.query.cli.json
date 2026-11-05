@@ -469,6 +469,13 @@
 			"find": "pending = pending.filter(file -> !vouched.contains(file));",
 			"replace": "pending = pending.slice(0);",
 			"note": "a created module a cheap holder typechecks is named to the other holders as well, one compile each"
+		},
+		{
+			"name": "M-LANG-QUERY-COUNTED-AS-FILE",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "fileArguments",
+			"force": "[for (i in command.flags().positionals(args)) args[i]]",
+			"note": "the text a walker searches for is read as a file, so `hxq lit '.last-sweep.json' src` parses every file that holds the text as JSON and reports it skip-parse"
 		}
 	]
 }

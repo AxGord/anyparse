@@ -20,7 +20,7 @@ import anyparse.query.cli.CliWalk.SkipEntry;
  * node. This module is the argument surface over it.
  */
 @:nullSafety(Strict)
-final class CondCommand implements CliCommand {
+final class CondCommand implements CliCommand implements LeadingQuery {
 
 	public function new() {}
 

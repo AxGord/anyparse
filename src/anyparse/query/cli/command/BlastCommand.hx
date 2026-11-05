@@ -37,7 +37,7 @@ typedef BlastOpts = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class BlastCommand implements CliCommand {
+final class BlastCommand implements CliCommand implements LeadingQuery {
 
 	private static inline final HEUR_DEFAULT_CAP: Int = 20;
 

@@ -5,12 +5,25 @@ import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.LanguageChoice;
 import anyparse.query.cli.UsageFailure;
+import anyparse.query.cli.command.BlastCommand;
+import anyparse.query.cli.command.CalleesCommand;
+import anyparse.query.cli.command.CallersCommand;
+import anyparse.query.cli.command.CasesCommand;
 import anyparse.query.cli.command.ChangedCommand;
+import anyparse.query.cli.command.CondCommand;
+import anyparse.query.cli.command.DeclaresCommand;
 import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.GetCommand;
+import anyparse.query.cli.command.ImportersCommand;
 import anyparse.query.cli.command.LintCommand;
+import anyparse.query.cli.command.LitCommand;
+import anyparse.query.cli.command.MentionsCommand;
+import anyparse.query.cli.command.RefsCommand;
+import anyparse.query.cli.command.ResolveDefineCommand;
+import anyparse.query.cli.command.SearchCommand;
 import anyparse.query.cli.command.SweepCommand;
 import anyparse.query.cli.command.TestSummaryCommand;
+import anyparse.query.cli.command.UsesCommand;
 import sys.FileSystem;
 
 /**
@@ -172,6 +185,47 @@ class LanguageChoiceTest extends Test {
 		Assert.same(['HEAD', '--diff', 'A.hx'], choose(new ChangedCommand(), ['HEAD', '--diff', 'A.hx']).args);
 		Assert.same(['HEAD'], choose(new ChangedCommand(), ['HEAD']).args);
 		Assert.same(['--lang', 'haxe', 'HEAD'], choose(new ChangedCommand(), ['--lang-default', 'haxe', 'HEAD']).args);
+	}
+
+	/**
+	 * The text a walker searches for is no file: `lit '.last-sweep.json' src` names Haxe, not JSON, however its query is
+	 * spelled — one query, a batch before `--`, or a scope that is itself a JSON file.
+	 */
+	@:killer('M-LANG-QUERY-COUNTED-AS-FILE')
+	@:pin('control')
+	public function testTheQueryOfAWalkerIsNoFile(): Void {
+		Assert.same(['--lang', 'haxe', '.last-sweep.json', 'A.hx'], choose(new LitCommand(), ['.last-sweep.json', 'A.hx']).args);
+		Assert.same(
+			['--lang', 'haxe', '.last-sweep.json', 'src'],
+			choose(new LitCommand(), ['--lang-default', 'haxe', '.last-sweep.json', 'src']).args
+		);
+		Assert.same(
+			['--lang', 'haxe', 'a.json', 'b.json', '--', 'A.hx'], choose(new LitCommand(), ['a.json', 'b.json', '--', 'A.hx']).args
+		);
+		Assert.same(['--lang', 'json', 'k', 'a.json'], choose(new LitCommand(), ['k', 'a.json']).args);
+		Assert.raises(() -> choose(new LitCommand(), ['a.json']), UsageFailure);
+		Assert.same(['--lang', 'haxe', 'haxe.Json', 'A.hx'], choose(new ImportersCommand(), ['haxe.Json', 'A.hx']).args);
+	}
+
+	/** Every command whose first positional is the text it searches for carries the marker, so none reads that text as a file. */
+	public function testEveryTextFirstCommandIsMarked(): Void {
+		final commands: Array<CliCommand> = [
+			new SearchCommand(),
+			new RefsCommand(),
+			new UsesCommand(),
+			new BlastCommand(),
+			new LitCommand(),
+			new MentionsCommand(),
+			new DeclaresCommand(),
+			new CasesCommand(),
+			new CondCommand(),
+			new CallersCommand(),
+			new CalleesCommand(),
+			new ResolveDefineCommand(),
+			new ImportersCommand()
+		];
+		for (command in commands)
+			Assert.same(['--lang', 'haxe', 'q.json', 'A.hx'], choose(command, ['q.json', 'A.hx']).args, command.name());
 	}
 
 	private static function choose(command: CliCommand, args: Array<String>): LanguageChoiceResult {

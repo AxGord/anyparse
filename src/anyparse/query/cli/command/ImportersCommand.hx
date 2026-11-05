@@ -9,7 +9,7 @@ import anyparse.query.cli.CliArgs.ResolvedInputs;
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class ImportersCommand implements CliCommand {
+final class ImportersCommand implements CliCommand implements LeadingQuery {
 
 	public function new() {}
 

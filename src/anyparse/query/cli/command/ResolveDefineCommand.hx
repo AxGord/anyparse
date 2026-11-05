@@ -42,7 +42,7 @@ typedef ResolveDefineOpts = {
  * place with per-file failures counted).
  */
 @:nullSafety(Strict)
-final class ResolveDefineCommand implements CliCommand {
+final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 
 	public function new() {}
 

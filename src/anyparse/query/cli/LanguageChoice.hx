@@ -38,9 +38,9 @@ final class LanguageChoice {
 		if (command is LanguageFree || args.contains('--help') || args.contains('-h'))
 			return preset == null ? { args: args, stdin: null } : named(preset, args);
 		final ofFiles: Array<String> = [];
-		// A positional by the command's own flag spec, so never a flag's value; a `-`-led one is stdin or a short option.
-		for (i in command.flags().positionals(args)) if (!args[i].startsWith(STDIN_POSITIONAL)) {
-			final lang: Null<String> = CliArgs.langOfFile(args[i]);
+		// A `-`-led positional is stdin or a short option.
+		for (file in fileArguments(args, command)) if (!file.startsWith(STDIN_POSITIONAL)) {
+			final lang: Null<String> = CliArgs.langOfFile(file);
 			if (lang != null && !ofFiles.contains(lang)) ofFiles.push(lang);
 		}
 		// Under a preset a mixed set reads as the preset's grammar, as it did before the preset yielded to extensions.
@@ -57,6 +57,20 @@ final class LanguageChoice {
 			return { args: [LANG_FLAG, lang].concat(args), stdin: text };
 		}
 		throw new UsageFailure('no argument names a file of a known language — pass --lang <name> (${known()})');
+	}
+
+	/**
+	 * The positionals of `args` that can name a file: by the command's own flag spec, so never a flag's value, and for a
+	 * `LeadingQuery` command only the scope side of `CliArgs.routePositional`, so never the text it searches for.
+	 */
+	private static function fileArguments(args: Array<String>, command: CliCommand): Array<String> {
+		final positionals: Array<Int> = command.flags().positionals(args);
+		if (!(command is LeadingQuery)) return [for (i in positionals) args[i]];
+		final separator: Int = CliArgs.nameSeparatorIndex(args);
+		final queries: Array<String> = [];
+		final scope: Array<String> = [];
+		for (i in positionals) CliArgs.routePositional(args[i], i, separator, queries, scope);
+		return scope;
 	}
 
 	/** `args` led by `--lang <lang>`, with no stdin read. */

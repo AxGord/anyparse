@@ -6,7 +6,7 @@ package anyparse.query.cli.command;
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class CallersCommand implements CliCommand {
+final class CallersCommand implements CliCommand implements LeadingQuery {
 
 	public function new() {}
 

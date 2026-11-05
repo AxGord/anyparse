@@ -13,7 +13,7 @@ import anyparse.query.graph.MemberGraphBuilder;
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class CalleesCommand implements CliCommand {
+final class CalleesCommand implements CliCommand implements LeadingQuery {
 
 	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
 

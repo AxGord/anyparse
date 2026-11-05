@@ -35,7 +35,7 @@ typedef SearchOpts = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class SearchCommand implements CliCommand {
+final class SearchCommand implements CliCommand implements LeadingQuery {
 
 	private static final CMD: String = 'search';
 

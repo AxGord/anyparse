@@ -15,7 +15,7 @@ import anyparse.query.cli.CliWalk.SkipEntry;
  * something about the RUN rather than about its own arguments.
  */
 @:nullSafety(Strict)
-final class CasesCommand implements CliCommand {
+final class CasesCommand implements CliCommand implements LeadingQuery {
 
 	public function new() {}
 

@@ -38,7 +38,7 @@ typedef MentionsOpts = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class MentionsCommand implements CliCommand {
+final class MentionsCommand implements CliCommand implements LeadingQuery {
 
 	private static final CMD: String = 'mentions';
 

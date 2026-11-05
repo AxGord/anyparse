@@ -44,7 +44,7 @@ typedef LitOpts = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class LitCommand implements CliCommand {
+final class LitCommand implements CliCommand implements LeadingQuery {
 
 	private static final CMD: String = 'lit';
 
