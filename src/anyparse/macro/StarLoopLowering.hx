@@ -342,25 +342,7 @@ final class StarLoopLowering {
 	}
 
 	private static function buildPrattBlankNlAfterSepScan(): Expr {
-		// Skip the contiguous non-whitespace separator punctuation, then
-		// OR-in any newline in the immediately-following whitespace run.
-		return macro {
-			var _nlScan: Int = _leadStart;
-			while (_nlScan < ctx.input.length) {
-				final _sc: Int = ctx.input.charCodeAt(_nlScan);
-				if (_sc == ' '.code || _sc == '\t'.code || _sc == '\r'.code || _sc == '\n'.code) break;
-				_nlScan++;
-			}
-			while (_nlScan < ctx.input.length) {
-				final _wc: Int = ctx.input.charCodeAt(_nlScan);
-				if (_wc == '\n'.code) {
-					_nlAfterSep = true;
-					break;
-				}
-				if (_wc != ' '.code && _wc != '\t'.code && _wc != '\r'.code) break;
-				_nlScan++;
-			}
-		};
+		return macro _nlAfterSep = ctx.newlineAfterSeparator(_leadStart);
 	}
 
 	private static function buildPrattBlankRestoreStash(): Expr {
@@ -369,19 +351,7 @@ final class StarLoopLowering {
 		// trailing whitespace to the last content byte. Brace-terminated →
 		// preserve the source blank to the next sibling (issue_644 /
 		// typedef_fields); otherwise keep the baseline drop (issue_216).
-		return macro {
-			if (_savedPending != null) {
-				var _bpRew: Int = _savedPos - 1;
-				while (_bpRew > 0) {
-					final _bpc: Int = ctx.input.charCodeAt(_bpRew);
-					if (_bpc == ' '.code || _bpc == '\t'.code || _bpc == '\n'.code || _bpc == '\r'.code)
-						_bpRew--;
-					else
-						break;
-				}
-				if (_bpRew >= 0 && ctx.input.charCodeAt(_bpRew) == '}'.code) ctx.pendingTrivia = _savedPending;
-			}
-		};
+		return macro ctx.restorePendingAfterBrace(_savedPos, _savedPending);
 	}
 
 	private static function buildTriviaCloseTerminationCheck(closeText: Null<String>): Expr {

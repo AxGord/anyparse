@@ -118,7 +118,20 @@ final class WriterBodyPolicyLowering {
 	 * macro-time enum resolution against the `BodyPolicy` abstract.
 	 */
 	private static function bodyPolicyWrap(bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts): Expr {
-		final writeCall: Expr = buildBodyWriteCall(bp, opts);
+		// The body's value and its rendering are each computed ONCE, into `_bpVal` and `_bpBody`, ahead
+		// of the policy dispatch, and every arm reads the locals: a layout spliced into several arms then
+		// carries a name instead of another copy of the value's de-brace or the body's write. The wrap owns
+		// `opts` (each caller passes a fresh literal), so it retargets the value access in place — also
+		// inside the caller-built write and head-gap reads that splice the same value expression.
+		final bodyValue: Expr = opts.bodyValueExpr;
+		opts.bodyValueExpr = macro _bpVal;
+		opts.writeCall = readBodyValueLocal(opts.writeCall, bodyValue);
+		final afterTrail: Null<Expr> = opts.afterTrailExpr;
+		if (afterTrail != null) opts.afterTrailExpr = readBodyValueLocal(afterTrail, bodyValue);
+		final beforeLeading: Null<Expr> = opts.beforeLeadingExpr;
+		if (beforeLeading != null) opts.beforeLeadingExpr = readBodyValueLocal(beforeLeading, bodyValue);
+		final bodyDoc: Expr = buildBodyWriteCall(bp, opts);
+		final writeCall: Expr = macro _bpBody;
 		final optFlag: Expr = resolveBodyOptFlag(bp, opts);
 		final hasKwSlots: Bool = opts.afterKwExpr != null && opts.kwLeadingExpr != null;
 		final kwSep: { kwPolicyInlineSep: Null<Expr>, sameSepNb: Expr } = buildBodyKwSep(opts, hasKwSlots);
@@ -153,6 +166,8 @@ final class WriterBodyPolicyLowering {
 		final mbgWrapExpr: Expr = wrapBodyMetaBlockGlue(opts, finalWrapExpr, sameLayoutExpr);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _bpVal = $bodyValue;
+			final _bpBody: anyparse.core.Doc = $bodyDoc;
 			$mbgWrapExpr;
 		};
 	}
@@ -575,9 +590,8 @@ final class WriterBodyPolicyLowering {
 		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
 		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
 		if (opts.elseIfCommentReflow != true || !bp.ctx.trivia || afterKwExpr == null || kwLeadingExpr == null) return sameLayoutExpr;
-		// The refusal arm RE-STATES the `Same` layout over the hoisted body local
-		// instead of re-splicing `sameLayoutExpr` (whose own copy of the writeCall
-		// made a refused else-if chain rebuild its body once per link — 2^n). That
+		// The refusal arm RE-STATES the `Same` layout over the body local rather
+		// than re-splicing `sameLayoutExpr`. That
 		// re-statement is only equivalent for the plain shape, so a field pairing
 		// this knob with either opt that makes `buildBodySameLayout` emit something
 		// else is a COMPILE error rather than a silently inert knob. No grammar
@@ -912,9 +926,9 @@ final class WriterBodyPolicyLowering {
 			);
 		final ctorName: String = bodyAllmanIndentArgs[0];
 		final optAccess: Expr = optFieldAccess(bodyAllmanIndentArgs[1]);
-		// The probe write happens only for the ctor it can apply to: `wrapExpr` writes the
-		// body again, so an unconditional probe writes every body twice, and a body that
-		// nests the same construct (`[for (…) [for (…) …]]`) is written `2^depth` times.
+		// The probe reads the body `bodyPolicyWrap` already bound, so it costs no second write;
+		// it is taken only for the ctor it applies to, since a non-null probe is what routes
+		// the layout through `BodyAllman.gluedLayout`.
 		// A matching body with no forced hardline may still break by width where the policy
 		// glued it; `BodyAllman.gluedLayout` makes that break and the Allman move one verdict.
 		final allmanExpr: Expr = macro {
@@ -1111,6 +1125,16 @@ final class WriterBodyPolicyLowering {
 				untagged.push(pattern);
 		}
 		return { tagged: tagged, untagged: untagged };
+	}
+
+	/**
+	 * `e` with every occurrence of the body value's expression OBJECT replaced by a read of `_bpVal`.
+	 * A caller splices the one value expression it built into the write and the head-gap reads, so
+	 * identity finds exactly those splices; each reads the same `value` and `opt` the hoisted local
+	 * was computed from.
+	 */
+	private static function readBodyValueLocal(e: Expr, bodyValue: Expr): Expr {
+		return e == bodyValue ? macro _bpVal : haxe.macro.ExprTools.map(e, sub -> readBodyValueLocal(sub, bodyValue));
 	}
 
 }

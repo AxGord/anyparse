@@ -455,10 +455,10 @@
 		{
 			"name": "M-FOR-BODY-PROBE-EAGER",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
-			"method": "wrapBodyAllman",
-			"find": "final _bodyForAllman: Null<anyparse.core.Doc> =",
-			"replace": "final _eagerProbe: anyparse.core.Doc = $writeCall;\n\t\t\tfinal _bodyForAllman: Null<anyparse.core.Doc> =",
-			"note": "the Allman probe writes every body whatever its ctor and the layout writes it again, so a comprehension nest writes its innermost body 2^depth times"
+			"method": "bodyPolicyWrap",
+			"find": "final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall, glueLayoutExpr);",
+			"replace": "final finalWrapExpr: Expr = wrapBodyAllman(opts, macro { final _eagerProbe: anyparse.core.Doc = $bodyDoc; $wrapExpr; }, writeCall, glueLayoutExpr);",
+			"note": "an Allman-bearing body is written again by an eager probe beside the bound `_bpBody`, so a comprehension nest writes its innermost body 2^depth times"
 		},
 		{
 			"name": "M-CHAIN-WALK-EAGER",
@@ -1657,6 +1657,36 @@
 			"find": "_dbg(_fgInner)",
 			"replace": "_dbg($grpInner)",
 			"note": "the no-else arm re-splices the cond-fit body instead of wrapping the bound local"
+		},
+		{
+			"name": "M-BODYPOLICY-BODY-RESPLICE",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "bodyPolicyWrap",
+			"find": "final writeCall: Expr = macro _bpBody;",
+			"replace": "final writeCall: Expr = bodyDoc;",
+			"note": "every policy arm splices its own copy of the body write instead of reading the bound `_bpBody`"
+		},
+		{
+			"name": "M-BODYPOLICY-VALUE-RESPLICE",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "bodyPolicyWrap",
+			"find": "opts.writeCall = readBodyValueLocal(opts.writeCall, bodyValue);",
+			"replace": "",
+			"note": "the body write keeps its own de-brace of the value instead of reading the bound `_bpVal`"
+		},
+		{
+			"name": "M-PRATT-RESTORE-INLINE",
+			"type": "anyparse.macro.StarLoopLowering",
+			"method": "buildPrattBlankRestoreStash",
+			"force": "macro {}",
+			"note": "a rolled-back Star element no longer hands its stash back through `Parser.restorePendingAfterBrace`"
+		},
+		{
+			"name": "M-PRATT-NLSCAN-INLINE",
+			"type": "anyparse.macro.StarLoopLowering",
+			"method": "buildPrattBlankNlAfterSepScan",
+			"force": "macro {}",
+			"note": "a Star element no longer probes the newline after its separator through `Parser.newlineAfterSeparator`"
 		}
 	]
 }

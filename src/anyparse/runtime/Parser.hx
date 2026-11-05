@@ -228,6 +228,38 @@ final class Parser {
 		return false;
 	}
 
+	/**
+	 * Hand `saved` back to the stash when the value that ends at `end` closed with a `}`: the last non-whitespace byte
+	 * before `end` is a close brace. A brace-terminated value keeps the source blank line to its next sibling, which a
+	 * rewind past `collectTrivia` would otherwise lose.
+	 */
+	public function restorePendingAfterBrace(end: Int, saved: Null<PendingTrivia>): Void {
+		if (saved == null) return;
+		var i: Int = end - 1;
+		while (i > 0) {
+			final c: Int = input.charCodeAt(i);
+			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) break;
+			i--;
+		}
+		if (i >= 0 && input.charCodeAt(i) == '}'.code) pendingTrivia = saved;
+	}
+
+	/** The separator starting at `from` (its run of non-whitespace bytes) is followed by whitespace holding a line break. */
+	public function newlineAfterSeparator(from: Int): Bool {
+		var i: Int = from;
+		while (i < input.length) {
+			final c: Int = input.charCodeAt(i);
+			if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == '\n'.code) break;
+			i++;
+		}
+		while (i < input.length) {
+			final c: Int = input.charCodeAt(i);
+			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return c == '\n'.code;
+			i++;
+		}
+		return false;
+	}
+
 	private static function alwaysFalse(): Bool {
 		return false;
 	}
