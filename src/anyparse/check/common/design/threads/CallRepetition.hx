@@ -3,6 +3,7 @@ package anyparse.check.common.design.threads;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.BoundedRepeats.BoundedRepeat;
 import anyparse.check.common.design.threads.LockTaint.ChainLists;
+import anyparse.ds.Set;
 import anyparse.query.CallGraph;
 
 using StringTools;
@@ -174,9 +175,9 @@ final class CallRepetition {
 
 	/** Why each `boundedRepeats` entry of a chain the run's files sit under bounds nothing, one line each, deduplicated. */
 	public function notices(): Array<String> {
-		final seen: Map<String, Bool> = [];
-		for (edge in _graph.edges) if (!seen.exists(edge.file)) {
-			seen[edge.file] = true;
+		final seen: Set<String> = new Set<String>();
+		for (edge in _graph.edges) if (!seen.has(edge.file)) {
+			seen.add(edge.file);
 			final lists: ChainLists = _listsOf(edge.file);
 			if (lists.reports) boundSources(lists);
 		}
@@ -316,7 +317,7 @@ final class CallRepetition {
 	private function components(): Void {
 		final index: Map<String, Int> = [];
 		final low: Map<String, Int> = [];
-		final onStack: Map<String, Bool> = [];
+		final onStack: Set<String> = new Set<String>();
 		final stack: Array<String> = [];
 		var counter: Int = 0;
 		for (root in _graph.nodes.keys()) if (!index.exists(root)) {
@@ -326,7 +327,7 @@ final class CallRepetition {
 				low[id] = counter;
 				counter++;
 				stack.push(id);
-				onStack[id] = true;
+				onStack.add(id);
 				frames.push({ id: id, edges: [for (e in _graph.outEdges(id)) if (e.kind.isInvocation()) e], next: 0 });
 			}
 			open(root);
@@ -336,7 +337,7 @@ final class CallRepetition {
 					final to: String = frame.edges[frame.next++].to;
 					if (!index.exists(to))
 						open(to)
-					else if (onStack.exists(to))
+					else if (onStack.has(to))
 						low[frame.id] = Std.int(Math.min(low[frame.id] ?? 0, index[to] ?? 0));
 					continue;
 				}

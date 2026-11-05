@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.facts.FactsTypeTree;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.core.PhaseTimings;
+import anyparse.ds.Set;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnDeclaration;
@@ -1771,7 +1772,7 @@ final class MemberReach {
 		// that queued it then — such a node is queued once per owner, apart from its queueing by name
 		final queueTyped: Array<Null<String>> = [];
 		final queueSteps: Array<Null<ReachStep>> = [];
-		final queued: Map<String, Bool> = [];
+		final queued: Set<String> = new Set<String>();
 		// under the truth, a node queued so far only by inlined calls whose bodies' facts their callers hold (`CallEdge.inlined`)
 		// runs nowhere as itself: each caller's splice runs its body at the types that call instantiated it at, so its own
 		// implicit-call sites — read at its declared, generic types — wait here until something else runs it (`pending`)
@@ -1787,7 +1788,7 @@ final class MemberReach {
 		final callers: Map<String, Array<ReachStep>> = [];
 		// the callers already noted, by node and what tells two of them apart: a set beside the lists — a conversion standing at
 		// every flow of a body admits each `toString` in play once per site, and a scan of the list made that quadratic
-		final callerKeys: Map<String, Bool> = [];
+		final callerKeys: Set<String> = new Set<String>();
 		final externs: Map<String, { type: String, name: String }> = [];
 		final externRevisits: Array<{ id: String, step: ReachStep }> = [];
 		final waitingExterns: Map<String, Array<{ id: String, step: ReachStep }>> = [];
@@ -1821,14 +1822,14 @@ final class MemberReach {
 			final key: String = owner == null ? id : '$id@$owner';
 			final known: Array<ReachStep> = callers[id] ?? [];
 			final callerKey: String = truth ? '$id\n${step.from}' : '$id\n${step.from}\n${step.file}\n${step.span?.from}\n${step.span?.to}';
-			if (step.from != id && !callerKeys.exists(callerKey)) {
-				callerKeys[callerKey] = true;
+			if (step.from != id && !callerKeys.has(callerKey)) {
+				callerKeys.add(callerKey);
 				known.push(step);
 				callers[id] = known;
 				if (externs.exists(id)) externRevisits.push({ id: id, step: step });
 			}
-			if (queued.exists(key)) return;
-			queued[key] = true;
+			if (queued.has(key)) return;
+			queued.add(key);
 			if (!reach.exists(id)) reach[id] = step;
 			queue.push(id);
 			queueTyped.push(owner);

@@ -1207,7 +1207,7 @@
 			"name": "M-TS-COVER-WALK",
 			"type": "anyparse.check.common.design.threads.ProjectCoverage",
 			"method": "holdsProject",
-			"find": "if (path.endsWith('.hx') && !_run.exists(canonical)) return false;",
+			"find": "if (path.endsWith('.hx') && !_run.has(canonical)) return false;",
 			"replace": "",
 			"note": "a run over part of a closed project counts as covering it"
 		},

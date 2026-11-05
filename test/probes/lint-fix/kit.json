@@ -845,6 +845,72 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "MS1",
+			"note": "map-as-set --fix declines a growing local set whose name another receiver (other.seen) shares: nothing is respelled, the files stay as written, the program still compiles and prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"map-as-set",
+				"--fix",
+				"--no-oracle"
+			],
+			"files": {
+				"apq.json": "{\"rules\": {\"map-as-set\": {\"enabled\": true, \"set\": \"anyparse.ds.Set\"}}}\n",
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tSys.println(f(\"a\", new Other()));\n\t}\n\n\tstatic function f(k:String, other:Other):Bool {\n\t\tfinal seen:Map<String, Bool> = [];\n\t\tfor (i in 0...3) seen[k + i] = true;\n\t\treturn seen.exists(k + 1) && other.seen.exists(k);\n\t}\n}\n",
+				"Other.hx": "class Other {\n\tpublic final seen:Map<String, Bool> = [\"a\" => true];\n\n\tpublic function new() {}\n}\n",
+				"anyparse/ds/Set.hx": "package anyparse.ds;\n\nclass Set<K> {\n\tfinal items:Array<K> = [];\n\n\tpublic function new() {}\n\n\tpublic function add(key:K):Void {\n\t\tif (!items.contains(key)) items.push(key);\n\t}\n\n\tpublic function has(key:K):Bool {\n\t\treturn items.contains(key);\n\t}\n\n\tpublic function remove(key:K):Bool {\n\t\treturn items.remove(key);\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MS2",
+			"note": "map-as-set --fix declines the whole set when a local shares its name with an inherited member read as this.seen: nothing is respelled, the program still compiles and prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"map-as-set",
+				"--fix",
+				"--no-oracle"
+			],
+			"files": {
+				"apq.json": "{\"rules\": {\"map-as-set\": {\"enabled\": true, \"set\": \"anyparse.ds.Set\"}}}\n",
+				"Base.hx": "class Base {\n\tprivate final seen:Map<String, Bool> = [];\n\n\tpublic function new() {}\n}\n",
+				"Main.hx": "class Main extends Base {\n\tstatic function main() {\n\t\tSys.println(new Main().f(\"a\"));\n\t}\n\n\tfunction f(k:String):Bool {\n\t\tfinal seen:Map<String, Bool> = [];\n\t\tfor (i in 0...3) seen[k + i] = true;\n\t\treturn seen.exists(k) && this.seen.exists(k);\n\t}\n}\n",
+				"anyparse/ds/Set.hx": "package anyparse.ds;\n\nclass Set<K> {\n\tfinal items:Array<K> = [];\n\n\tpublic function new() {}\n\n\tpublic function add(key:K):Void {\n\t\tif (!items.contains(key)) items.push(key);\n\t}\n\n\tpublic function has(key:K):Bool {\n\t\treturn items.contains(key);\n\t}\n\n\tpublic function remove(key:K):Bool {\n\t\treturn items.remove(key);\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

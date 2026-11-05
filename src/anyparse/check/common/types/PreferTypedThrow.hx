@@ -1,6 +1,7 @@
 package anyparse.check.common.types;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.ds.Set;
 import anyparse.query.BoolExprShape;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
@@ -166,12 +167,12 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
-			final wanted: Map<String, Bool> = [];
+			final wanted: Set<String> = new Set<String>();
 			var anyFixable: Bool = false;
 			for (v in violations) {
 				final span: Null<Span> = v.span;
 				if (span == null || v.message != MSG_FIXABLE) continue;
-				wanted['${span.from}:${span.to}'] = true;
+				wanted.add('${span.from}:${span.to}');
 				anyFixable = true;
 			}
 			if (!anyFixable) return [];
@@ -183,7 +184,7 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 			final edits: Array<{ span: Span, text: String }> = [];
 			walkThrows(tree, seams, false, (literal, insideConditional) -> {
 				final span: Null<Span> = literal.span;
-				if (span == null || !wanted.exists('${span.from}:${span.to}')) return;
+				if (span == null || !wanted.has('${span.from}:${span.to}')) return;
 				// A conditional region gets the qualified path and no import: a top-level import
 				// would be unused in a build where the branch is compiled out.
 				final typeText: String = insideConditional ? seams.exceptionPath : printer.print(seams.exceptionPath).text;

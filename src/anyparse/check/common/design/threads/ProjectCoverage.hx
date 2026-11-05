@@ -2,6 +2,7 @@ package anyparse.check.common.design.threads;
 
 import anyparse.check.LintDocuments.DocumentMemo;
 import anyparse.check.oracle.OracleCoverage;
+import anyparse.ds.Set;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -29,7 +30,7 @@ import sys.io.File;
 final class ProjectCoverage {
 
 	/** The run's files, each by its canonical path (`OracleCoverage.canonical`). */
-	private final _run: Map<String, Bool> = [];
+	private final _run: Set<String> = new Set<String>();
 
 	/** Each directory of a run file -> the document declaring `closedWorld` for it, `''` for none. */
 	private final _documentOf: Map<String, String> = [];
@@ -47,7 +48,7 @@ final class ProjectCoverage {
 	public function new(files: Array<String>) {
 		#if (sys || nodejs)
 		final cwd: String = Sys.getCwd();
-		for (f in files) _run[OracleCoverage.canonical(cwd, f)] = true;
+		for (f in files) _run.add(OracleCoverage.canonical(cwd, f));
 		#end
 	}
 
@@ -92,17 +93,17 @@ final class ProjectCoverage {
 		final roots: Array<String> = LintConfig.parse(content, base).resolutionRoots();
 		final cwd: String = Sys.getCwd();
 		final stack: Array<String> = roots.length > 0 ? [for (r in roots) Path.isAbsolute(r) ? r : Path.join([base, r])] : [base];
-		final walked: Map<String, Bool> = [];
+		final walked: Set<String> = new Set<String>();
 		while (stack.length > 0) {
 			final path: String = stack.pop() ?? '';
 			if (skip(path.startsWith(base) ? path.substring(base.length) : path) || !FileSystem.exists(path)) continue;
 			final canonical: String = OracleCoverage.canonical(cwd, path);
 			if (!FileSystem.isDirectory(path)) {
-				if (path.endsWith('.hx') && !_run.exists(canonical)) return false;
+				if (path.endsWith('.hx') && !_run.has(canonical)) return false;
 				continue;
 			}
-			if (walked.exists(canonical)) continue;
-			walked[canonical] = true;
+			if (walked.has(canonical)) continue;
+			walked.add(canonical);
 			final names: Null<Array<String>> = try FileSystem.readDirectory(path) catch (_: Exception) null;
 			if (names == null) return false;
 			for (name in names) stack.push(Path.join([path, name]));

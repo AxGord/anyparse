@@ -5,6 +5,7 @@ import anyparse.check.common.design.threads.CallRepetition.BoundedWay;
 import anyparse.check.common.design.threads.LockSites.BlindCall;
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.check.common.design.threads.LockSites.LockPair;
+import anyparse.ds.Set;
 import anyparse.query.CallGraph;
 import haxe.Exception;
 
@@ -220,7 +221,7 @@ final class LockTaint {
 	private final _reaching: Map<String, TaintStep> = [];
 
 	/** The state keys of `_reaching`'s form known to reach no blocking call. */
-	private final _clean: Map<String, Bool> = [];
+	private final _clean: Set<String> = new Set<String>();
 
 	/** Per held instance lock: the functions that take it on the object they run on, directly or by calls on that object. */
 	private final _selfTakers: Map<String, Array<String>> = [];
@@ -501,7 +502,7 @@ final class LockTaint {
 	private function reach(start: WalkState, held: Null<String>): Null<String> {
 		final root: String = start.key;
 		if (_reaching.exists(root)) return root;
-		if (_clean.exists(root)) return null;
+		if (_clean.has(root)) return null;
 		final queue: Array<WalkState> = [start];
 		final parents: Map<String, { key: String, edge: CallEdge }> = [];
 		final seen: Map<String, Bool> = [root => true];
@@ -516,7 +517,7 @@ final class LockTaint {
 					return root;
 				case Enter(nextState):
 					final next: String = nextState.key;
-					if (_clean.exists(next) || seen.exists(next)) continue;
+					if (_clean.has(next) || seen.exists(next)) continue;
 					seen[next] = true;
 					parents[next] = { key: state.key, edge: edge };
 					if (_reaching.exists(next)) {
@@ -527,7 +528,7 @@ final class LockTaint {
 				case Skip:
 			}
 		}
-		for (key in seen.keys()) _clean[key] = true;
+		for (key in seen.keys()) _clean.add(key);
 		return null;
 	}
 

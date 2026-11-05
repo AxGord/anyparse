@@ -313,7 +313,10 @@
 		"import-order": true,
 		"join-override-chain": true,
 		"join-string-append": true,
-		"map-as-set": true,
+		"map-as-set": {
+			"enabled": true,
+			"set": "anyparse.ds.Set"
+		},
 		"misplaced-type-doc": true,
 		"naming": {
 			"catchVarName": "exception",

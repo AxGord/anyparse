@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.ds.Set;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -700,12 +701,12 @@ final class CallGraph {
 		// display list), and this runs per call site
 		final found: Map<String, Bool> = [];
 		final queue: Array<String> = [typeName];
-		final visited: Map<String, Bool> = [];
+		final visited: Set<String> = new Set<String>();
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final t: String = queue[qi++];
-			if (visited.exists(t)) continue;
-			visited[t] = true;
+			if (visited.has(t)) continue;
+			visited.add(t);
 			for (sub in types.subtypesOf(t)) {
 				queue.push(sub);
 				final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);

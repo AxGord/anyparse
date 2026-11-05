@@ -1,5 +1,6 @@
 package anyparse.check.scan;
 
+import anyparse.ds.Set;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 import anyparse.query.RawSourceScan;
@@ -277,10 +278,10 @@ final class ReflectionScan {
 	private static function unionByPath(files: Array<ScopeFile>, extra: Null<Array<ScopeFile>>): Array<ScopeFile> {
 		// `Bool` values are the flag a Haxe set has to carry.
 		final out: Array<ScopeFile> = [];
-		final seen: Map<String, Bool> = [];
+		final seen: Set<String> = new Set<String>();
 		inline function take(entry: ScopeFile): Void {
-			if (!seen.exists(entry.file)) {
-				seen[entry.file] = true;
+			if (!seen.has(entry.file)) {
+				seen.add(entry.file);
 				out.push(entry);
 			}
 		}

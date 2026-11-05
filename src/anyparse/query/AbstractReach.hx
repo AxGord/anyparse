@@ -2,6 +2,8 @@ package anyparse.query;
 
 using Lambda;
 
+import anyparse.ds.Set;
+
 /**
  * The abstract types one question's walk may meet as a STATIC type — `ReachGraph.visibleAbstracts`, kept as a
  * closure that only grows: the words the entered code spells (`add`), the members it reads (`read`), and, settled on
@@ -14,17 +16,17 @@ final class AbstractReach {
 	public final found: Map<String, Bool> = [];
 
 	private final _types: Array<String> = [];
-	private final _members: Map<String, Bool> = [];
+	private final _members: Set<String> = new Set<String>();
 	private final _memberQueue: Array<String> = [];
 
 	/** The supertypes of every type found: a read through a value of a found type may reach their declarations. */
-	private final _supers: Map<String, Bool> = [];
+	private final _supers: Set<String> = new Set<String>();
 
 	/** The reads of an unknown receiver waiting for a type declaring their name to be found. */
 	private final _pending: Array<MemberRead> = [];
 
 	/** The reads taken (`read`), by name and receiver types. */
-	private final _reads: Map<String, Bool> = [];
+	private final _reads: Set<String> = new Set<String>();
 
 	private final _sig: SignatureWords;
 
@@ -69,8 +71,8 @@ final class AbstractReach {
 		_grown = true;
 		final queue: Array<String> = [word];
 		var qi: Int = 0;
-		while (qi < queue.length) for (s in _supertypes[queue[qi++]] ?? []) if (!_supers.exists(s)) {
-			_supers[s] = true;
+		while (qi < queue.length) for (s in _supertypes[queue[qi++]] ?? []) if (!_supers.has(s)) {
+			_supers.add(s);
 			queue.push(s);
 		}
 		return true;
@@ -85,8 +87,8 @@ final class AbstractReach {
 	public function read(read: MemberRead): Bool {
 		final owners: Null<Array<String>> = read.owners;
 		final key: String = owners == null ? read.name : '${read.name}@${owners.join(',')}';
-		if (_reads.exists(key)) return false;
-		_reads[key] = true;
+		if (_reads.has(key)) return false;
+		_reads.add(key);
 		final declaring: Array<String> = _sig.owners[read.name] ?? [];
 		final receiver: Null<Array<String>> = read.owners;
 		final r: MemberRead = if (receiver != null && !declaring.exists(o -> receiver.contains(o))) {
@@ -134,14 +136,14 @@ final class AbstractReach {
 		if (declaring.length == 0 && r.owners == null) _undeclared = true;
 		var open: Bool = false;
 		for (owner in declaring) {
-			final reach: Bool = r.owners == null ? found.exists(owner) || _supers.exists(owner) : r.owners.contains(owner);
+			final reach: Bool = r.owners == null ? found.exists(owner) || _supers.has(owner) : r.owners.contains(owner);
 			if (!reach) {
 				open = open || r.owners == null;
 				continue;
 			}
 			final key: String = '${r.name}@$owner';
-			if (_members.exists(key)) continue;
-			_members[key] = true;
+			if (_members.has(key)) continue;
+			_members.add(key);
 			_memberQueue.push(key);
 		}
 		if (open) _pending.push(r);

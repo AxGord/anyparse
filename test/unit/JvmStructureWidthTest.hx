@@ -1,5 +1,6 @@
 package unit;
 
+import anyparse.ds.Set;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
@@ -125,12 +126,12 @@ final class JvmStructureWidthTest extends Test {
 	private static function overflows(tree: QueryNode, source: String, named: Map<String, Int>): Array<String> {
 		final out: Array<String> = [];
 		// A typedef carries its structure twice, as its child and as its `type` slot.
-		final counted: Map<Int, Bool> = [];
+		final counted: Set<Int> = new Set<Int>();
 		function visit(node: QueryNode, owner: String): Void {
 			if (node.kind == 'Anon' || node.kind == 'ObjectLit') {
 				final at: Int = node.span?.from ?? -1;
-				if (counted.exists(at)) return;
-				counted[at] = true;
+				if (counted.has(at)) return;
+				counted.add(at);
 			}
 			final slots: Int = switch node.kind {
 				case 'Anon': 1 + fieldSlots(node, source, named);

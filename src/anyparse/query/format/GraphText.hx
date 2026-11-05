@@ -1,5 +1,6 @@
 package anyparse.query.format;
 
+import anyparse.ds.Set;
 import anyparse.query.graph.CodeGraph;
 import haxe.ds.ArraySort;
 
@@ -18,9 +19,9 @@ final class GraphText {
 	public static function write(graph: CodeGraph): String {
 		final edges: Array<GraphEdge> = graph.edges();
 		final pairs: Array<{ a: String, b: String }> = [];
-		final seen: Map<String, Bool> = [];
-		for (e in edges) if (e.from < e.to && graph.isMutual(e) && !seen.exists('${e.from} ${e.to}')) {
-			seen['${e.from} ${e.to}'] = true;
+		final seen: Set<String> = new Set<String>();
+		for (e in edges) if (e.from < e.to && graph.isMutual(e) && !seen.has('${e.from} ${e.to}')) {
+			seen.add('${e.from} ${e.to}');
 			pairs.push({ a: e.from, b: e.to });
 		}
 		pairs.sort((x, y) -> {

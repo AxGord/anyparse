@@ -1,5 +1,6 @@
 package anyparse.check.common.design.threads;
 
+import anyparse.ds.Set;
 import anyparse.query.CallGraph;
 import anyparse.query.MemberKinds;
 import anyparse.query.TypeResolver;
@@ -61,10 +62,10 @@ final class StoredValues {
 	private static inline final THIS: String = 'this';
 
 	/** The `Ref` edges whose value only a constructor's stores keep, by `keyOf`. */
-	private final _stored: Map<String, Bool> = [];
+	private final _stored: Set<String> = new Set<String>();
 
 	/** The constructors some stored value is handed to: what `stored` checks before it builds a key. */
-	private final _constructors: Map<String, Bool> = [];
+	private final _constructors: Set<String> = new Set<String>();
 
 	/** By `<constructor>|<position>|<arguments>`, the fields that constructor stores that parameter into; null when it does more. */
 	private final _stores: Map<String, Null<Array<StoredField>>> = [];
@@ -104,7 +105,7 @@ final class StoredValues {
 
 	/** Whether the value of the `Ref` edge `edge` only a constructor's stores keep, its runs derived where they call it. */
 	public function stored(edge: CallEdge): Bool {
-		return _constructors.exists(edge.via ?? '') && _stored.exists(keyOf(edge));
+		return _constructors.has(edge.via ?? '') && _stored.has(keyOf(edge));
 	}
 
 	/** Whether a read of a name may obtain `field` as a value (`ReflectiveValues.obtainableMember`). */
@@ -133,8 +134,8 @@ final class StoredValues {
 				dispatchType: null,
 				receiverField: null
 			});
-			_stored[keyOf(h.edge)] = true;
-			_constructors[h.edge.via ?? ''] = true;
+			_stored.add(keyOf(h.edge));
+			_constructors.add(h.edge.via ?? '');
 		}
 	}
 

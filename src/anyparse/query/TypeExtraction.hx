@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.ds.Set;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -83,18 +84,18 @@ final class TypeExtraction {
 		decl: TypeDeclMatch, excluded: Array<String>, roots: Array<QueryNode>, source: String, shape: RefShape,
 		regions: () -> Array<LexRegion>
 	): Array<String> {
-		final memberNames: Map<String, Bool> = [];
+		final memberNames: Set<String> = new Set<String>();
 		MemberBranchScan.eachTypeMember(
 			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind), (child, _) -> {
 				final nm: Null<String> = child.name;
-				if (nm != null && !excluded.contains(nm)) memberNames[nm] = true;
+				if (nm != null && !excluded.contains(nm)) memberNames.add(nm);
 			},
 			regions
 		);
 		final found: Map<String, Bool> = [];
 		function walk(node: QueryNode): Void {
 			final nm: Null<String> = node.name;
-			if (nm != null && memberNames.exists(nm) && (node.kind == 'IdentExpr' || node.kind == 'FieldAccess' || node.kind == 'Call'))
+			if (nm != null && memberNames.has(nm) && (node.kind == 'IdentExpr' || node.kind == 'FieldAccess' || node.kind == 'Call'))
 				found[nm] = true;
 			for (c in node.children) walk(c);
 		}

@@ -1,0 +1,15 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.ds. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-DS-SET-ENUM-KEY",
+			"type": "anyparse.ds.Set",
+			"method": "toJsObjectSet",
+			"find": "toJsObjectSet<K:{}>(store: Store<K>): js.lib.Set<K>",
+			"replace": "toJsObjectSet<K>(store: Store<K>): js.lib.Set<K>",
+			"note": "an enum-value key is accepted on the js arm, where a native set compares it by identity while Map compares it structurally"
+		}
+	]
+}

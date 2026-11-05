@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.facts.FactsTypeTree;
+import anyparse.ds.Set;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FlowFact;
@@ -109,13 +110,13 @@ final class FactsEscapes {
 	private final _functions: Array<FactsType> = [];
 
 	/** The keys of `_functions`, by their structure. */
-	private final _functionKeys: Map<String, Bool> = [];
+	private final _functionKeys: Set<String> = new Set<String>();
 
 	/** The closed types already escaped (`escapeType`), by their structure. */
-	private final _done: Map<String, Bool> = [];
+	private final _done: Set<String> = new Set<String>();
 
 	/** The type strings already escaped (`escape`). */
-	private final _escaped: Map<String, Bool> = [];
+	private final _escaped: Set<String> = new Set<String>();
 
 	private final _view: FactsView;
 	private final _table: CompilerFacts;
@@ -352,8 +353,8 @@ final class FactsEscapes {
 
 	/** `escapeType` of the type string `text`, read once. */
 	private function escape(text: String): Bool {
-		if (_escaped.exists(text)) return true;
-		_escaped[text] = true;
+		if (_escaped.has(text)) return true;
+		_escaped.add(text);
 		final read: Null<FactsType> = FactsTypeTree.read(text);
 		return read == null ? refuse('the type `$text` does not read') : escapeType(read);
 	}
@@ -370,8 +371,8 @@ final class FactsEscapes {
 				return true;
 			case Parameter(path):
 				final key: String = '$t';
-				if (_done.exists(key)) return true;
-				_done[key] = true;
+				if (_done.has(key)) return true;
+				_done.add(key);
 				// a value of a type parameter has a type some instantiation binds it to
 				final bound: Null<Map<String, FactsType>> = _instances.boundTo(path);
 				if (_instances.unread)
@@ -383,8 +384,8 @@ final class FactsEscapes {
 			case Function(_, _):
 				// a function value holds no object a name reaches, but it is itself a value of no known place now
 				final key: String = '$t';
-				if (!_functionKeys.exists(key)) {
-					_functionKeys[key] = true;
+				if (!_functionKeys.has(key)) {
+					_functionKeys.add(key);
 					_functions.push(t);
 				}
 				return true;
@@ -402,8 +403,8 @@ final class FactsEscapes {
 			case Named(id, args):
 				if (inert(id)) return true;
 				final key: String = '$t';
-				if (_done.exists(key)) return true;
-				_done[key] = true;
+				if (_done.has(key)) return true;
+				_done.add(key);
 				final fact: Null<TypeFact> = _table.type(id);
 				if (fact == null) return refuse('a value of `$id` escapes, which no build typed');
 				// what a container holds an extern's target code keeps, which no variable declares

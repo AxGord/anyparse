@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.ds.Set;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
@@ -50,7 +51,7 @@ final class CallGraphTypes {
 	private final _kinds: Map<String, Array<String>> = [];
 
 	/** The typedefs that name an anonymous structure type. */
-	private final _anonStructs: Map<String, Bool> = [];
+	private final _anonStructs: Set<String> = new Set<String>();
 
 	/**
 	 * Typedef name -> the simple nominal it aliases, and the path each declaration of it aliases (`aliasTargetRaw`) with the
@@ -59,10 +60,10 @@ final class CallGraphTypes {
 	private final _aliases: Map<String, { simple: String, written: Array<{ path: String, file: String }> }> = [];
 
 	/** Every member name an indexed type declares as a STATIC function. */
-	private final _staticFunctionNames: Map<String, Bool> = [];
+	private final _staticFunctionNames: Set<String> = new Set<String>();
 
 	/** Every member name an indexed type declares as a FUNCTION. */
-	private final _functionNames: Map<String, Bool> = [];
+	private final _functionNames: Set<String> = new Set<String>();
 
 	/** The files whose declarations the tables hold, each with the index entry it was read from. */
 	private final _files: Map<String, HeldFile> = [];
@@ -122,12 +123,12 @@ final class CallGraphTypes {
 
 	/** Whether any indexed type declares a STATIC function named `name`. */
 	public inline function hasStaticFunctionNamed(name: String): Bool {
-		return _staticFunctionNames.exists(name);
+		return _staticFunctionNames.has(name);
 	}
 
 	/** Whether any indexed type declares a function named `name`. */
 	public inline function hasFunctionNamed(name: String): Bool {
-		return _functionNames.exists(name);
+		return _functionNames.has(name);
 	}
 
 	/** Whether `typeName` declares `member` static. */
@@ -159,7 +160,7 @@ final class CallGraphTypes {
 	 * indexed declaration of which is a class, enum or interface (never one that may alias a function type).
 	 */
 	public function holdsNoFunction(typeName: String): Bool {
-		if (_valueTypeNames.contains(typeName) || _anonStructs.exists(typeName)) return true;
+		if (_valueTypeNames.contains(typeName) || _anonStructs.has(typeName)) return true;
 		final kinds: Array<String> = _kinds[typeName] ?? [];
 		return kinds.length > 0 && !kinds.exists(k -> _aliasingKinds.contains(k));
 	}
@@ -229,12 +230,12 @@ final class CallGraphTypes {
 	/** The first type on `typeName`'s supertype chain, breadth first from itself, that `test` accepts, or null (cycle-safe). */
 	public function firstOnChain(typeName: String, test: String -> Bool): Null<String> {
 		final queue: Array<String> = [typeName];
-		final visited: Map<String, Bool> = [];
+		final visited: Set<String> = new Set<String>();
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final t: String = queue[qi++];
-			if (visited.exists(t)) continue;
-			visited[t] = true;
+			if (visited.has(t)) continue;
+			visited.add(t);
 			if (test(t)) return t;
 			for (s in supertypesOf(t)) queue.push(s);
 		}
@@ -276,7 +277,7 @@ final class CallGraphTypes {
 		// a typedef re-exporting a type of its own name is not a second declaration of it
 		if (!CallGraphNames.selfAlias(t)) _declarations[t.name] = (_declarations[t.name] ?? 0) + 1;
 		meta.record(t, file);
-		if (t.isAnonStruct) _anonStructs[t.name] = true;
+		if (t.isAnonStruct) _anonStructs.add(t.name);
 		unionInto(_kinds, t.name, [t.kind]);
 		// each supertype as the declaration's own file binds the name it writes (`CallGraphImports.typeOf`): a library type a
 		// project type's simple name bears is another type, never the project's
@@ -309,8 +310,8 @@ final class CallGraphTypes {
 			if (record.isStatic && !statics.contains(m.name)) statics.push(m.name);
 			if (!record.isStatic) statics.remove(m.name);
 			if (m.hasGetter || m.hasSetter) unionInto(_propertyOwners, m.name, [t.name]);
-			if (_functionKinds.contains(m.kind)) _functionNames[m.name] = true;
-			if (_functionKinds.contains(m.kind) && m.isStatic) _staticFunctionNames[m.name] = true;
+			if (_functionKinds.contains(m.kind)) _functionNames.add(m.name);
+			if (_functionKinds.contains(m.kind) && m.isStatic) _staticFunctionNames.add(m.name);
 		}
 		_staticMembers[t.name] = statics;
 		_members[t.name] = table;

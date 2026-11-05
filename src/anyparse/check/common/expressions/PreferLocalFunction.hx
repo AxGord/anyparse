@@ -1,5 +1,6 @@
 package anyparse.check.common.expressions;
 
+import anyparse.ds.Set;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
@@ -117,15 +118,15 @@ final class PreferLocalFunction extends RuleBase {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, s) -> {
-			final wanted: Map<String, Bool> = [];
+			final wanted: Set<String> = new Set<String>();
 			for (v in violations) {
 				final span: Null<Span> = v.span;
-				if (span != null) wanted['${span.from}:${span.to}'] = true;
+				if (span != null) wanted.add('${span.from}:${span.to}');
 			}
 			return [
 				for (m in collectMatches(
 					tree, source, s, plugin.lexicalRegions(source)
-				)) if (wanted.exists('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e
+				)) if (wanted.has('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e
 			];
 		});
 	}

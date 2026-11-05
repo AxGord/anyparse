@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.ds.Set;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
@@ -25,7 +26,7 @@ final class ImplicitSites {
 	private final _declared: Map<String, Map<Int, String>> = [];
 
 	/** The operator kinds some indexed member overloads: only these can run a member. */
-	private final _overloaded: Map<String, Bool> = [];
+	private final _overloaded: Set<String> = new Set<String>();
 
 	private final _plugin: GrammarPlugin;
 	private final _shape: RefShape;
@@ -35,7 +36,7 @@ final class ImplicitSites {
 		_plugin = plugin;
 		_shape = plugin.refShape();
 		_index = index;
-		for (fi in index.allFiles()) for (t in fi.types) for (m in t.members) for (k in m.operatorOverloads) _overloaded[k] = true;
+		for (fi in index.allFiles()) for (t in fi.types) for (m in t.members) for (k in m.operatorOverloads) _overloaded.add(k);
 	}
 
 	/** Drop what was computed for `file`, whose text changed. */
@@ -109,10 +110,10 @@ final class ImplicitSites {
 				if (iterable != null && iterable.kind != _shape.intervalKind) add(Iteration, node, [iterable]);
 			}
 			if (kind == _shape.indexAccessKind && node.children.length > 0) add(Index, node, [node.children[0]]);
-			if (_overloaded.exists(kind)) add(Operator(kind), node, node.children);
+			if (_overloaded.has(kind)) add(Operator(kind), node, node.children);
 			// a compound assignment runs an overload of the operator it applies as well as its own
 			final applied: Null<String> = (_shape.execution?.compoundAssignOperators ?? [])[kind];
-			if (applied != null && _overloaded.exists(applied)) add(Operator(applied), node, node.children);
+			if (applied != null && _overloaded.has(applied)) add(Operator(applied), node, node.children);
 			if (kind == _shape.objectLiteralKind) add(Literal, node, []);
 			// the exception wrapping the compiler adds after typing converts a thrown value to a string (`haxe.ValueException`)
 			if (throws.contains(kind) && node.children.length > 0) add(Text, node, [node.children[0]]);

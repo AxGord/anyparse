@@ -1,5 +1,6 @@
 package anyparse.query.format;
 
+import anyparse.ds.Set;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.format.json.GraphPageJson;
 import anyparse.query.format.json.GraphPageJsonWriter;
@@ -175,12 +176,12 @@ final class GraphHtml {
 		for (n in graph.nodes()) if (n.level == level) openHolders(graph, n, above);
 		final first: CodeGraph = GraphView.filter(GraphView.opened(graph, above), viewFilter(prune, []));
 		final views: Array<GraphPageViewJson> = [{ id: '', title: title, mermaid: GraphMermaid.write(first) }];
-		final seen: Map<String, Bool> = [];
+		final seen: Set<String> = new Set<String>();
 		final pending: Array<CodeGraph> = [first];
 		while (pending.length > 0) {
 			final shown: CodeGraph = pending.shift() ?? throw new Exception('graph page: no view pending');
-			for (id in openable(shown, graph)) if (!seen.exists(id)) {
-				seen[id] = true;
+			for (id in openable(shown, graph)) if (!seen.has(id)) {
+				seen.add(id);
 				final n: GraphNode = graph.node(id) ?? throw new Exception('graph page: no node $id');
 				final open: Map<String, Bool> = above.copy();
 				open[id] = true;
@@ -192,7 +193,7 @@ final class GraphHtml {
 				views.push({
 					id: id,
 					title: '${n.level} ${n.name}',
-					up: parent != null && seen.exists(parent) ? parent : '',
+					up: parent != null && seen.has(parent) ? parent : '',
 					mermaid: GraphMermaid.write(drawn)
 				});
 				pending.push(drawn);

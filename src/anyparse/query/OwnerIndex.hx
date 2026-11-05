@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.ds.Set;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.LineIndex;
@@ -376,7 +377,7 @@ final class OwnerIndex {
 
 	/** The distinct words of `source` outside its comments and literals, each once. */
 	private static function codeWords(source: String, regions: Array<LexRegion>): Array<String> {
-		final seen: Map<String, Bool> = [];
+		final seen: Set<String> = new Set<String>();
 		final out: Array<String> = [];
 		var region: Int = 0;
 		var i: Int = 0;
@@ -393,8 +394,8 @@ final class OwnerIndex {
 			var end: Int = i;
 			while (end < source.length && (isWordCode(source.fastCodeAt(end)) || source.fastCodeAt(end) == '_'.code)) end++;
 			final word: String = source.substring(i, end);
-			if (!seen.exists(word)) {
-				seen[word] = true;
+			if (!seen.has(word)) {
+				seen.add(word);
 				out.push(word);
 			}
 			i = end;

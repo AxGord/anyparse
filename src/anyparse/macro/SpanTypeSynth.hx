@@ -2,6 +2,7 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.ds.Set;
 import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -64,7 +65,7 @@ class SpanTypeSynth {
 	private static inline final KIND_FIELD_NAME: String = '_kind';
 	private static inline final SPANNED_META: String = ':spanned';
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
-	private static final defined: Map<String, Bool> = [];
+	private static final defined: Set<String> = new Set<String>();
 
 	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
 		if (shapes.indexOf(shape) == -1) shapes.push(shape);
@@ -74,8 +75,8 @@ class SpanTypeSynth {
 		final paired: Array<TypeDefinition> = [];
 		for (origName => node in shape.rules) if (node.kind != Terminal) {
 			final pairedFqn: String = origName + PAIRED_SUFFIX;
-			if (defined.exists(pairedFqn)) continue;
-			defined[pairedFqn] = true;
+			if (defined.has(pairedFqn)) continue;
+			defined.add(pairedFqn);
 			paired.push(buildTypeDefinition(origName, node, synthPack));
 		}
 		if (paired.length == 0) return;

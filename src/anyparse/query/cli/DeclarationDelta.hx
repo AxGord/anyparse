@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.ds.Set;
 import anyparse.query.Address.AddressIndex;
 import anyparse.query.DeclarationLines;
 import anyparse.query.LineDiff;
@@ -275,14 +276,14 @@ final class DeclarationDelta {
 	 * comment, a string) may name something the rename did not touch, so the substitution is no rename.
 	 */
 	private static function boundEverywhere(plugin: GrammarPlugin, version: FileVersion, body: Array<BodyToken>, name: String): Bool {
-		final bound: Map<Int, Bool> = [];
+		final bound: Set<Int> = new Set<Int>();
 		for (hit in Refs.find(name, version.tree, plugin.refShape())) if (hit.bindingSpan != null)
-			bound[SourceText.identTokenOffset(version.source, hit.span, name)] = true;
+			bound.add(SourceText.identTokenOffset(version.source, hit.span, name));
 		for (unit in version.units) {
 			final span: Null<Span> = unit.node.span;
-			if (unit.node.name == name && span != null) bound[SourceText.identTokenOffset(version.source, span, name)] = true;
+			if (unit.node.name == name && span != null) bound.add(SourceText.identTokenOffset(version.source, span, name));
 		}
-		return body.foreach(token -> !(token.text == name && !bound.exists(token.at)));
+		return body.foreach(token -> token.text != name || bound.has(token.at));
 	}
 
 	private static function canonical(plugin: GrammarPlugin, source: String, optsJson: Null<String>): Null<String> {

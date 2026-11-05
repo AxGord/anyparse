@@ -3155,7 +3155,7 @@
 			"name": "M-REACH-COMPOUND-OPERATOR",
 			"type": "anyparse.query.ImplicitSites",
 			"method": "sitesOfFile",
-			"find": "\t\t\tif (applied != null && _overloaded.exists(applied)) add(Operator(applied), node, node.children);\n",
+			"find": "\t\t\tif (applied != null && _overloaded.has(applied)) add(Operator(applied), node, node.children);\n",
 			"replace": "",
 			"note": "`acc += 1` runs no `@:op(A + B)` overload"
 		},

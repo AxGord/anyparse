@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.ds.Set;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FactSignature;
 import anyparse.query.CompilerFacts.FieldDeclFact;
@@ -55,12 +56,12 @@ final class FactMerge {
 	public static function closure(edges: Map<String, Array<String>>, from: String): Array<String> {
 		final out: Array<String> = [];
 		// beside `out`, whose order is the answer: an `out.contains` per edge was quadratic over openfl's display-list subtypes
-		final reached: Map<String, Bool> = [];
+		final reached: Set<String> = new Set<String>();
 		final work: Array<String> = [from];
 		while (work.length > 0) {
 			final next: String = work.pop() ?? '';
-			for (to in edges[next] ?? []) if (to != from && !reached.exists(to)) {
-				reached[to] = true;
+			for (to in edges[next] ?? []) if (to != from && !reached.has(to)) {
+				reached.add(to);
 				out.push(to);
 				work.push(to);
 			}

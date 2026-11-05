@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.ds.Set;
 import anyparse.grammar.json.JsonFormat;
 import dev.AuditReport;
 import dev.BypassSummary;
@@ -92,15 +93,15 @@ final class TokenAudit {
 	 * (links to one transcript) counts once, a dangling link is skipped.
 	 */
 	public static function readDirectories(dirs: Array<String>): Array<AgentReading> {
-		final seen: Map<String, Bool> = [];
+		final seen: Set<String> = new Set<String>();
 		final agents: Array<AgentReading> = [];
 		for (dir in dirs) {
 			final names: Array<String> = FileSystem.readDirectory(dir);
 			names.sort(Reflect.compare);
 			for (name in names) if (TRANSCRIPT.match(name)) {
 				final real: Null<String> = try FileSystem.fullPath(Path.join([dir, name])) catch (_: Exception) null;
-				if (real == null || seen.exists(real) || !FileSystem.exists(real)) continue;
-				seen[real] = true;
+				if (real == null || seen.has(real) || !FileSystem.exists(real)) continue;
+				seen.add(real);
 				agents.push(
 					TokenTranscript.read(Path.withoutExtension(Path.withoutDirectory(real)), File.getContent(real), describe(real))
 				);

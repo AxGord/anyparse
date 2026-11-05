@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.ds.Set;
 import anyparse.query.Cli.TestSummaryHeader;
 import anyparse.query.Cli.TestSummaryResult;
 
@@ -182,10 +183,10 @@ class MutationVerdict {
 	 * method), which would otherwise inflate the number the report prints.
 	 */
 	private static function dedupeSorted(names: Array<String>): Array<String> {
-		final seen: Map<String, Bool> = [];
+		final seen: Set<String> = new Set<String>();
 		final out: Array<String> = [];
-		for (name in names) if (!seen.exists(name)) {
-			seen[name] = true;
+		for (name in names) if (!seen.has(name)) {
+			seen.add(name);
 			out.push(name);
 		}
 		out.sort((a, b) -> if (a < b)

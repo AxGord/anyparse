@@ -12,6 +12,7 @@ import anyparse.check.common.types.DynamicShape.DynCtx;
 import anyparse.check.common.types.DynamicShape.DynPos;
 import anyparse.check.common.types.DynamicShape.DynReport;
 import anyparse.check.common.types.ParamAscription.ParamVerdict;
+import anyparse.ds.Set;
 import anyparse.query.IndexScope;
 import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
@@ -703,12 +704,12 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 
 	/** Append findings from `found` into `into`, dropping duplicates at the same span (overlapping walk paths hit one token twice). */
 	private static function dedupInto(into: Array<Violation>, found: Array<Violation>): Void {
-		final seen: Map<String, Bool> = [];
+		final seen: Set<String> = new Set<String>();
 		for (v in found) {
 			final span: Null<Span> = v.span;
 			final key: String = span == null ? '' : '${span.from}:${span.to}';
-			if (span != null && seen.exists(key)) continue;
-			seen[key] = true;
+			if (span != null && seen.has(key)) continue;
+			seen.add(key);
 			into.push(v);
 		}
 	}

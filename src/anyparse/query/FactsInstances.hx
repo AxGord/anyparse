@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.facts.FactsTypeTree;
+import anyparse.ds.Set;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.InstantiationFact;
 import anyparse.query.CompilerFacts.TypeFact;
@@ -30,7 +31,7 @@ final class FactsInstances {
 	 * The type parameters a generic method's declared type holds where the type the compiler instantiated it at has no part
 	 * that matches: what they stand for there is not known.
 	 */
-	private final _unresolved: Map<String, Bool> = [];
+	private final _unresolved: Set<String> = new Set<String>();
 
 	private final _table: CompilerFacts;
 
@@ -43,7 +44,7 @@ final class FactsInstances {
 
 	/** Whether an instantiation leaves `path` unknown (`_unresolved`); settled by the first `boundTo`. */
 	public inline function unresolved(path: String): Bool {
-		return _unresolved.exists(path);
+		return _unresolved.has(path);
 	}
 
 	/** The types a value of the type parameter `path` may have, by their text; null when no instantiation binds it. */
@@ -144,7 +145,7 @@ final class FactsInstances {
 	private function unresolveParameters(declared: FactsType): Void {
 		switch declared {
 			case Parameter(path):
-				_unresolved[path] = true;
+				_unresolved.add(path);
 			case Named(_, args):
 				for (a in args) unresolveParameters(a);
 			case Function(args, result):

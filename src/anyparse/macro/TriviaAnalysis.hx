@@ -2,6 +2,7 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.ds.Set;
 import haxe.macro.Expr;
 
 using Lambda;
@@ -54,18 +55,18 @@ class TriviaAnalysis {
 		for (_ => node in result.rules) markPostfixStarSuffix(node);
 		final directlyBearing: Map<String, Bool> = [];
 		for (name => node in result.rules) directlyBearing[name] = hasAnyTriviaStar(node);
-		final bearing: Map<String, Bool> = [];
-		for (name => flag in directlyBearing) if (flag) bearing[name] = true;
+		final bearing: Set<String> = new Set<String>();
+		for (name => flag in directlyBearing) if (flag) bearing.add(name);
 		var changed: Bool = true;
 		while (changed) {
 			changed = false;
-			for (name => node in result.rules) if (!bearing.exists(name)) for (ref in collectRefs(node)) if (bearing.exists(ref)) {
-				bearing[name] = true;
+			for (name => node in result.rules) if (!bearing.has(name)) for (ref in collectRefs(node)) if (bearing.has(ref)) {
+				bearing.add(name);
 				changed = true;
 				break;
 			}
 		}
-		for (name => node in result.rules) node.annotations.set(AnnotationKeys.TRIVIA_BEARING, bearing.exists(name));
+		for (name => node in result.rules) node.annotations.set(AnnotationKeys.TRIVIA_BEARING, bearing.has(name));
 	}
 
 	private static function markStarsWithTrivia(node: ShapeNode): Void {

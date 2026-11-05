@@ -1,5 +1,6 @@
 package anyparse.check.common.expressions;
 
+import anyparse.ds.Set;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
@@ -138,16 +139,16 @@ final class PreferArrowCallback extends RuleBase {
 			? []
 			: RunScan.edits(plugin, source, tree -> {
 				final getIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([], plugin, index);
-				final wanted: Map<String, Bool> = [];
+				final wanted: Set<String> = new Set<String>();
 				for (v in violations) {
 					final s: Null<Span> = v.span;
-					if (s != null) wanted['${s.from}:${s.to}'] = true;
+					if (s != null) wanted.add('${s.from}:${s.to}');
 				}
 				final file: String = violations.length > 0 ? violations[0].file : '';
 				final ctx: Ctx = makeCtx(file, source, tree, plugin, shape, fnKind, callKind, getIndex, []);
 				final edits: Array<{ span: Span, text: String }> = [];
 				walkArgHosts(ctx, tree, (call, arg, span) -> {
-					if (!wanted.exists('${span.from}:${span.to}')) return false;
+					if (!wanted.has('${span.from}:${span.to}')) return false;
 					if (verdictOf(ctx, call, arg) == Fixable) {
 						final text: Null<String> = rewrite(ctx, arg);
 						if (text != null) edits.push({ span: span, text: text });

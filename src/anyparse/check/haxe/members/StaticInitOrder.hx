@@ -5,6 +5,7 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.common.members.MemberInitDeps;
 import anyparse.check.common.members.MemberSlots;
 import anyparse.check.scan.RunScan;
+import anyparse.ds.Set;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex;
 
@@ -37,7 +38,7 @@ final class StaticInitOrder extends HaxeRule implements NoAutofix {
 		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
 		final deferred: Array<String> = (shape.lambdaKinds ?? []).concat([for (k in [shape.namedFnExprKind]) if (k != null) k]);
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
-			final reported: Map<Int, Bool> = [];
+			final reported: Set<Int> = new Set<Int>();
 			final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
 			function walk(node: QueryNode, typeName: Null<String>): Void {
 				final container: Bool = containers.contains(node.kind);
@@ -45,10 +46,10 @@ final class StaticInitOrder extends HaxeRule implements NoAutofix {
 				final members: Array<OrderedMember> = container ? MemberSlots.collectMembers(node, entry.source, shape, [], regions) : [];
 				for (m in members) {
 					final span: Null<Span> = m.initNode?.span;
-					if (span == null || !m.isStatic || reported.exists(span.from)) continue;
+					if (span == null || !m.isStatic || reported.has(span.from)) continue;
 					final read: Null<OrderedMember> = MemberInitDeps.firstEarlyRead(m, members, owner, tree, shape, deferred);
 					if (read == null) continue;
-					reported[span.from] = true;
+					reported.add(span.from);
 					out.push({
 						file: entry.file,
 						span: span,

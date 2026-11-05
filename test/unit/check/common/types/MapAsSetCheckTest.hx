@@ -1,6 +1,7 @@
 package unit.check.common.types;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.types.MapAsSet;
 
@@ -130,7 +131,7 @@ class MapAsSetCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return CheckFixture.violations(new MapAsSet(), src);
+		return CheckFixture.violationsIn(new MapAsSet(), [{ file: 'C.hx', source: src }], null, _ -> LintConfig.parse('{}'));
 	}
 
 	private static function wrap(body: String): String {

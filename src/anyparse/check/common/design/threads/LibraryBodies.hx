@@ -3,6 +3,7 @@ package anyparse.check.common.design.threads;
 import anyparse.check.Check.FindingData;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.core.PhaseTimings;
+import anyparse.ds.Set;
 import anyparse.query.CallGraph;
 import anyparse.query.Glob;
 import anyparse.query.ReachLiveness;
@@ -194,12 +195,12 @@ final class LibraryBodies {
 		final next: Map<String, String> = hopsTo(graph, sinkIds, options);
 		// a type the run declares is the project's, whatever library type shares its name: one with a function of its own,
 		// or one extending another
-		final functions: Map<String, Bool> = [];
+		final functions: Set<String> = new Set<String>();
 		for (node in project.graph.nodes) {
 			final type: Null<String> = node.typeName;
-			if (!node.isExternal && type != null) functions[type] = true;
+			if (!node.isExternal && type != null) functions.add(type);
 		}
-		final declared: (String) -> Bool = t -> functions.exists(t) || project.graph.types.superclassOf(t) != null;
+		final declared: (String) -> Bool = t -> functions.has(t) || project.graph.types.superclassOf(t) != null;
 		// a builtin sink or a project native is a sink already, read as the runtime's or the project's own
 		for (id => node in project.graph.nodes) if (node.isExternal && !project.known.contains(id)) {
 			final type: Null<String> = node.typeName;

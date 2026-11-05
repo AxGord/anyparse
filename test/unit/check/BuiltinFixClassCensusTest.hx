@@ -152,7 +152,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'impossible-cast',
 			'loop-bound-length-mismatch',
 			'magic-number',
-			'map-as-set',
+
 			'null-dereference',
 			'nullable-switch-missing-null',
 			'oversized-type',

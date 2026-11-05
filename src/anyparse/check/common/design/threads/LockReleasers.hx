@@ -2,6 +2,7 @@ package anyparse.check.common.design.threads;
 
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.check.common.design.threads.LockSites.LockGive;
+import anyparse.ds.Set;
 import anyparse.query.CallGraph;
 import anyparse.query.ShapeVocab;
 
@@ -40,7 +41,7 @@ final class LockReleasers {
 	private final _hazard: Map<String, Bool> = [];
 
 	/** The functions an unresolved call, or a callback registration, may run — and every function they call. */
-	private final _unknownRun: Map<String, Bool> = [];
+	private final _unknownRun: Set<String> = new Set<String>();
 
 	/** Each function -> the starts of the calls of its body the graph resolves to nothing; null for a body the tree cannot place. */
 	private final _blindIn: Map<String, Null<Array<Int>>> = [];
@@ -114,7 +115,7 @@ final class LockReleasers {
 		final known: Null<Bool> = _hazard[lock];
 		if (known != null) return known;
 		var found: Bool = false;
-		for (id => _ in releasersOf(lock)) if (_unknownRun.exists(id)) found = true;
+		for (id => _ in releasersOf(lock)) if (_unknownRun.has(id)) found = true;
 		_hazard[lock] = found;
 		return found;
 	}
@@ -181,12 +182,12 @@ final class LockReleasers {
 		for (id => node in _graph.nodes) if (
 			unresolvedNames.contains(node.name ?? '') || _graph.inEdges(id).exists(e -> e.kind == Ref && !inertRef(e))
 		) {
-			_unknownRun[id] = true;
+			_unknownRun.add(id);
 			queue.push(id);
 		}
 		var qi: Int = 0;
-		while (qi < queue.length) for (e in _graph.outEdges(queue[qi++])) if (e.kind.isInvocation() && !_unknownRun.exists(e.to)) {
-			_unknownRun[e.to] = true;
+		while (qi < queue.length) for (e in _graph.outEdges(queue[qi++])) if (e.kind.isInvocation() && !_unknownRun.has(e.to)) {
+			_unknownRun.add(e.to);
 			queue.push(e.to);
 		}
 	}

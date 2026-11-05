@@ -3,6 +3,7 @@ package anyparse.macro;
 #if macro
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
+import anyparse.ds.Set;
 import anyparse.macro.KwBranchLowering.*;
 import anyparse.macro.MacroNames.*;
 import anyparse.macro.ParseDispatchLowering.*;
@@ -243,7 +244,7 @@ class Lowering {
 		// the convention) compile uniformly. Terminal rules return raw
 		// primitives and have no ctor builds — skip them so their bodies
 		// stay untouched.
-		final spanRuleNames: Map<String, Bool> = [];
+		final spanRuleNames: Set<String> = new Set<String>();
 		for (node in _shape.rules) if (node.kind == Seq) node.annotations[BY_NAME_KEY] = shouldLowerByName(_struct, node);
 		// `parseFnName` is an INSTANCE method (it consults `isSpanBearing`
 		// / `isTriviaBearing`), so the inverse map the emitted-body check
@@ -254,14 +255,14 @@ class Lowering {
 			final entryFn: String = parseFnName(typePath);
 			for (rule in lowerRule(typePath, node)) {
 				rules.push(rule);
-				if (_ctx.spans && node.kind != Terminal) spanRuleNames[rule.fnName] = true;
+				if (_ctx.spans && node.kind != Terminal) spanRuleNames.add(rule.fnName);
 				if (rule.fnName == entryFn) checkRuleFirstToken(_shape.rules, fnToRule, typePath, rule);
 			}
 		}
 		#if anyparse_dispatch_dump
 		dumpDispatch(_shape.rules, _starGates);
 		#end
-		if (_ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
+		if (_ctx.spans) for (rule in rules) if (spanRuleNames.has(rule.fnName)) rule.body = instrumentSpans(rule.body);
 		// After span instrumentation, so a helper's body already carries the span
 		// argument its trial builds and receives the rule's `_start` as a copy.
 		final outlined: Array<GeneratedRule> = BranchOutlining.outline(rules);

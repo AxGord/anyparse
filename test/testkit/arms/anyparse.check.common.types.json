@@ -258,6 +258,54 @@
 			"find": " && node.name != ask.constructor",
 			"replace": "",
 			"note": "the constructor counts as a repeating member, so a field set filled once there goes unreported"
+		},
+		{
+			"name": "M-MAS-SET-UNCONFIGURED",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "run",
+			"find": "(setType == null || rewriteSet(entry.source, root, from, census, plugin, written[from], setType, []) != null)",
+			"replace": "(rewriteSet(entry.source, root, from, census, plugin, written[from], setType ?? \"Set\", []) != null)",
+			"note": "a project without the set key is advised a Set on growing maps it never asked about"
+		},
+		{
+			"name": "M-MAS-SET-KEY",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "rewriteSet",
+			"find": "!SET_KEY_TYPES.contains(key)",
+			"replace": "false",
+			"note": "a map keyed by an enum value is respelled to a native set that compares it by identity"
+		},
+		{
+			"name": "M-MAS-SET-USES",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "respellCall",
+			"find": "if (method == 'remove' || method == 'clear') return null;",
+			"replace": "if (method != 'exists' && method != MapValueScan.SET_METHOD) return null;",
+			"note": "a call the set type has no equal for is left unrespelled while the declaration around it becomes a set"
+		},
+		{
+			"name": "M-MAS-SET-SHARED-NAME",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "rewriteSet",
+			"find": "declarationsOf(root, name, seams.declKinds) != 1",
+			"replace": "false",
+			"note": "two declarations of one name share the census, and respelling both breaks the one that is not a growing set"
+		},
+		{
+			"name": "M-MAS-SET-OTHER-RECEIVER",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "foreignAccess",
+			"find": "!isOwnMember(access, site.seams)",
+			"replace": "false",
+			"note": "a field access through another receiver that shares the set name is respelled to the set type, which breaks the build"
+		},
+		{
+			"name": "M-MAS-SET-LOCAL-THIS",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "foreignAccess",
+			"find": "return site.member ? null : 'a member of this type that shares the name of the local set';",
+			"replace": "return null;",
+			"note": "a `this.name` of an inherited member is respelled with the local set of the same name, which breaks the build"
 		}
 	]
 }
