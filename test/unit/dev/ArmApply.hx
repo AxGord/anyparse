@@ -26,7 +26,8 @@ final class ArmApply {
 			cmd('git -C $repo -c user.name=t -c user.email=t@t commit --quiet -m fixture').check();
 		}
 		final engine: String = Path.join([Path.directory(FileSystem.fullPath(js.Node.__filename)), 'apq.js']);
-		final pinned: String = Sys.getEnv('HXQ_BIN') ?? '';
+		// null puts the variable back UNSET: an empty value would name no engine for a later test in the same process
+		final pinned: Null<String> = Sys.getEnv('HXQ_BIN');
 		Sys.putEnv('HXQ_BIN', engine);
 		try {
 			final status: Int = MutationArm.main(args.concat(['--repo', repo]));

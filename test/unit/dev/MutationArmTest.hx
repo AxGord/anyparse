@@ -130,9 +130,16 @@ final class MutationArmTest extends Test {
 				Path.join([repo, 'test/testkit/arms/b.json']),
 				'{"arms": [{"name": "M-X", "type": "a.B", "method": "f", "find": "return 1;", "replace": "return 2;"}]}'
 			);
-			final before: String = Sys.getEnv('HXQ_BIN') ?? '';
+			final before: Null<String> = Sys.getEnv('HXQ_BIN');
+			Sys.putEnv('HXQ_BIN', null);
 			Assert.raises(() -> ArmApply.applyOnly(repo, ['M-X']), ArmRegistryError);
-			Assert.equals(before, Sys.getEnv('HXQ_BIN') ?? '', 'the engine variable is restored when the run throws');
+			final afterUnset: Null<String> = Sys.getEnv('HXQ_BIN');
+			Sys.putEnv('HXQ_BIN', '/fixture/engine.js');
+			Assert.raises(() -> ArmApply.applyOnly(repo, ['M-X']), ArmRegistryError);
+			final afterSet: Null<String> = Sys.getEnv('HXQ_BIN');
+			Sys.putEnv('HXQ_BIN', before);
+			Assert.isNull(afterUnset, 'a variable that was unset is unset again when the run throws, not left empty');
+			Assert.equals('/fixture/engine.js', afterSet, 'a variable that was set keeps its own value when the run throws');
 		});
 	}
 

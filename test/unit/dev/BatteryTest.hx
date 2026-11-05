@@ -161,9 +161,7 @@ final class BatteryTest extends Test {
 			FileSystem.createDirectory(dir.file('tree/bin'));
 			FileSystem.createDirectory(work);
 			File.saveContent(dir.file('tree/bin/test.js'), GREEN_RUNNER);
-			// a test that pins HXQ_BIN for itself puts back an EMPTY value when none was set, which names no engine
-			final pinned: String = Sys.getEnv('HXQ_BIN') ?? '';
-			final engine: String = pinned == '' ? FileSystem.fullPath('bin/apq.js') : pinned;
+			final engine: String = Sys.getEnv('HXQ_BIN') ?? FileSystem.fullPath('bin/apq.js');
 			File.saveContent(dir.file('tree/bin/hxq'), 'cmd="$$1"; shift; exec node "$engine" "$$cmd" --lang haxe "$$@"\n');
 			File.saveContent(dir.file('tree/bin/.last-sweep.json'), '{"stale":1}');
 			final plan: BatteryPlan = {
