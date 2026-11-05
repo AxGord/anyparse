@@ -1,5 +1,5 @@
 {
-	"about": "hxq fmt of comments in the trivia slots (each row also checked: a second fmt over the output is a fixed point, the comment multiset is kept) of case-pattern lists, guards, separators, typedef right-hand sides and call arguments. Seeded from the W2 and W2b reviews.",
+	"about": "hxq fmt of comments in the trivia slots (each row also checked: a second fmt over the output is a fixed point, the comment multiset is kept) of case-pattern lists, guards, separators, typedef right-hand sides, call arguments and ternary operands. Seeded from the W2, W2b and W2d reviews.",
 	"files": {
 		"w2/p01.hx": "class C { function f() { switch x { case A, /* B, */ C: 1; case _: 2; } } }\n",
 		"w2/p02.hx": "class C { function f() { switch x { case /* a */ A, B: 1; case _: 2; } } }\n",
@@ -104,7 +104,20 @@
 		"w2c/r4a.hx": "class A {\n\tfunction f() {\n\t\treturn a /* m\n\t\t\tn */\n\t\t\t+ b;\n\t}\n}\n",
 		"w2c/r4b.hx": "class A {\n\tfunction f() {\n\t\tif (a /* m\n\t\t\tn */\n\t\t\t&& b) {}\n\t}\n}\n",
 		"w2d/q1.hx": "class A {\n\tfunction f() {\n\t\treturn a /* m\n\t\t\tn */\n\t\t\t? b : c;\n\t}\n}\n",
-		"w2d/q2.hx": "class A {\n\tfunction f() {\n\t\treturn a ? b /* m\n\t\t\tn */\n\t\t\t: c;\n\t}\n}\n"
+		"w2d/q2.hx": "class A {\n\tfunction f() {\n\t\treturn a ? b /* m\n\t\t\tn */\n\t\t\t: c;\n\t}\n}\n",
+		"w2e/n2.hx": "class A {\n\tfunction f() {\n\t\treturn a ? x ? y : z /* m\n\t\t\tn */\n\t\t\t: c;\n\t}\n}\n",
+		"w2e/n3.hx": "class A {\n\tfunction f() {\n\t\tf(a /* m\n\t\t\tn */\n\t\t\t? b : c, 1);\n\t}\n}\n",
+		"w2e/n4.hx": "class A {\n\tfunction f() {\n\t\tif (a /* m\n\t\t\tn */\n\t\t\t? b : c) x();\n\t}\n}\n",
+		"w2e/n6.hx": "class A {\n\tfunction f() {\n\t\treturn a /* m\n\t\t\tn */\n\t\t\t? b /* p\n\t\t\tq */\n\t\t\t: c;\n\t}\n}\n",
+		"w2e/n8.hx": "class A {\n\tfunction f() {\n\t\ts = \"x\" + (a /* m\n\t\t\tn */\n\t\t\t? b : c) + \"y\";\n\t}\n}\n",
+		"w2e/t1.hx": "class A {\n\tfunction f() {\n\t\tvar x = a ? b /* m\n\t\t\tn */ : c;\n\t}\n}\n",
+		"w2e/t2.hx": "class A {\n\tfunction f() {\n\t\tvar x = a ? b /** m\n\t\t\tn */\n\t\t\t: c;\n\t}\n}\n",
+		"w2e/t3.hx": "class A {\n\tfunction f() {\n\t\tvar x = a ? x ? y : z /* m\n\t\t\tn */ : c;\n\t}\n}\n",
+		"w2e/t4.hx": "class A {\n\tfunction f() {\n\t\tif (p) x(); else if (a ? b /* m\n\t\t\tn */ : c) y();\n\t}\n}\n",
+		"w2e/t5.hx": "class A {\n\tfunction f() {\n\t\treturn a ? b : c /* m\n\t\t\tn */;\n\t}\n}\n",
+		"w2e/t6.hx": "class A {\n\tfunction f() {\n\t\tvar x = a ? b /** m */\n\t\t\t: c;\n\t}\n}\n",
+		"w2e/p3.hx": "class A {\n\tfunction f() {\n\t\tvar x = [a ? b /* m\n\t\tn */ : c, 2];\n\t}\n}\n",
+		"w2e/p8.hx": "class A {\n\tfunction f() {\n\t\tvar x = {k: a ? b /* m\n\t\tn */ : c};\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -1851,6 +1864,228 @@
 			"expect": {
 				"exit": 0,
 				"out": "305e1e6dbad6e801",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/n2.hx",
+			"fixpoint": "w2e/n2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/n2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "9dd97ecf9c68188d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/n3.hx",
+			"fixpoint": "w2e/n3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/n3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "9e3127890a9cced4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/n4.hx",
+			"fixpoint": "w2e/n4.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/n4.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "a7b1a4641099885a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/n6.hx",
+			"fixpoint": "w2e/n6.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/n6.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "77c94571f542e3f4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/n8.hx",
+			"fixpoint": "w2e/n8.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/n8.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "855ad8baa75e3a81",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/t1.hx",
+			"fixpoint": "w2e/t1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/t1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "2bcddeb581c30093",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/t2.hx",
+			"fixpoint": "w2e/t2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/t2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "4282d2b3e3230b4f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/t3.hx",
+			"fixpoint": "w2e/t3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/t3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "103f0bf9a60193e2",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/t4.hx",
+			"fixpoint": "w2e/t4.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/t4.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "b76ae26e1fdcdd53",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/t5.hx",
+			"knownDefect": "a block comment between a statement's last operand and its `;` has no slot: it is moved below the statement",
+			"fixpoint": "w2e/t5.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/t5.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ea83d527a9551546",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/t6.hx",
+			"fixpoint": "w2e/t6.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/t6.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "54a69579c5ce4da6",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/p3.hx",
+			"fixpoint": "w2e/p3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/p3.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7c3eecb5c5d94a31",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2e/p8.hx",
+			"fixpoint": "w2e/p8.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2e/p8.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "541744ad2b702282",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

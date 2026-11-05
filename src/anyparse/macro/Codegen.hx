@@ -64,6 +64,7 @@ class Codegen {
 			fields.push(collectTrailingFullField(formatInfo));
 			fields.push(collectTrailingRunOnField(formatInfo));
 			fields.push(collectTrailingAfterOpenField(formatInfo));
+			fields.push(collectTrailingBeforeSepField(formatInfo));
 			fields.push(collectTrailingBlockField(formatInfo));
 			if (formatInfo.commentPatterns.length > 0) fields.push(skipWsAndStashField(formatInfo));
 		}
@@ -1235,6 +1236,18 @@ class Codegen {
 	}
 
 	/**
+	 * Generate `collectTrailingBeforeSep` — `collectTrailingFull` for an operand slot that a mandatory separator literal
+	 * closes, a ternary's THEN operand before its `:`: any block comment there is the operand's, whether it runs on past
+	 * its first line with the separator after its closer, or documents (`/**`) and ends its line. Its writer breaks
+	 * before the separator when the comment runs on, so the next parse reads it in this slot again.
+	 */
+	private static function collectTrailingBeforeSepField(formatInfo: FormatReader.FormatInfo): Field {
+		return trailingFullField('collectTrailingBeforeSep', [
+			for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, BeforeSeparator)
+		]);
+	}
+
+	/**
 	 * Generate `collectTrailingBlock` — `collectTrailingFull` restricted to the
 	 * format's NON-line-terminated comment patterns.
 	 *
@@ -1302,7 +1315,7 @@ class Codegen {
 			return ctx.input.substring(_start, ctx.pos);
 		}
 		final close: String = p.close;
-		final docRefusal: Expr = docEndsLineRefusal(p, macro _start);
+		final docRefusal: Expr = runOn == BeforeSeparator ? macro {} : docEndsLineRefusal(p, macro _start);
 		final runOnRefusal: Expr = switch runOn {
 			case Refused: macro if (_comment.indexOf('\n') >= 0) {
 				ctx.pos = _savedPos;
@@ -1320,7 +1333,7 @@ class Codegen {
 					return (null: Null<String>);
 				}
 			};
-			case Always: macro {};
+			case Always, BeforeSeparator: macro {};
 		};
 		return macro if (matchLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
@@ -1356,5 +1369,11 @@ private enum abstract TrailingRunOn(Int) {
 
 	/** Taken whatever follows it (a comment right after an open delimiter). */
 	var Always;
+
+	/**
+	 * Taken whatever follows it, a documentation comment included: the slot is closed by a mandatory separator
+	 * literal, which a comment can neither lead nor document, so nothing after the closer could own it instead.
+	 */
+	var BeforeSeparator;
 }
 #end

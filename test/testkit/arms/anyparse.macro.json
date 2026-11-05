@@ -1687,6 +1687,22 @@
 			"method": "buildPrattBlankNlAfterSepScan",
 			"force": "macro {}",
 			"note": "a Star element no longer probes the newline after its separator through `Parser.newlineAfterSeparator`"
+		},
+		{
+			"name": "M-TERNARY-THEN-SEP-RUNON",
+			"type": "anyparse.macro.PrattPostfixLowering",
+			"method": "buildPrattBranchBody",
+			"find": "? macro final _thenTrailComment: Null<String> = collectTrailingBeforeSep(ctx)",
+			"replace": "? macro final _thenTrailComment: Null<String> = collectTrailingRunOn(ctx)",
+			"note": "the ternary THEN slot captures like the condition's slot, so a multi-line block comment with the `:` after its closer is left out and the writer round trip refuses the file"
+		},
+		{
+			"name": "M-BEFORE-SEP-DOC-REFUSED",
+			"type": "anyparse.macro.Codegen",
+			"method": "trailingFullAttemptBlock",
+			"find": "final docRefusal: Expr = runOn == BeforeSeparator ? macro {} : docEndsLineRefusal(p, macro _start);",
+			"replace": "final docRefusal: Expr = docEndsLineRefusal(p, macro _start);",
+			"note": "the THEN slot of a ternary refuses a doc comment ending its line, as if the `:` after it were a declaration it documents, so the comment is left out and the writer round trip refuses the file"
 		}
 	]
 }

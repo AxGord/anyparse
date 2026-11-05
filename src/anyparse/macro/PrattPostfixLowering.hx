@@ -349,9 +349,11 @@ final class PrattPostfixLowering {
 			// would leak out and be re-emitted below the whole statement.
 			// Both styles are accepted: unlike the infix RHS slot there is no
 			// enclosing chain that could own the comment — the mandatory `:` /
-			// the ternary's own end bound it. A block running on past its first
-			// line is taken when it ends that line, as at the condition's slot:
-			// the writer then breaks before `:`, so the comment keeps its place.
+			// the ternary's own end bound it. At the condition's slot a block
+			// running on past its first line is taken when it ends that line; the
+			// THEN slot, closed by the mandatory `:`, takes any block, a doc comment
+			// included. Either way the writer then breaks before the next operator,
+			// so the comment keeps its place.
 			final captureTernaryTrail: Bool = oc.ctx.trivia && branch.fmtHasFlag('captureTernaryTrail');
 			final ctorArgs: Array<Expr> = [macro left, macro _middle, macro _right];
 			if (captureTernaryTrail) {
@@ -363,7 +365,7 @@ final class PrattPostfixLowering {
 				pos: Context.currentPos()
 			};
 			final thenTrailCapture: Expr = captureTernaryTrail
-				? macro final _thenTrailComment: Null<String> = collectTrailingRunOn(ctx)
+				? macro final _thenTrailComment: Null<String> = collectTrailingBeforeSep(ctx)
 				: macro {};
 			final clearStashNl: Expr = oc.stashNewlineClearExpr();
 			macro {

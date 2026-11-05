@@ -1247,8 +1247,9 @@ final class WriterPrattLowering {
 		// A LINE comment additionally forces the source-faithful `Keep` shape with
 		// every gap broken — a `//` runs to the newline, so leaving `? then` or
 		// `: else` glued after it would comment the rest of the ternary out. So
-		// does a BLOCK comment running on past its first line: the parse takes it
-		// only when it ends that line, so the token after it must start the next.
+		// does a BLOCK comment running on past its first line: the token after it
+		// must start the next line, which is where the condition's slot requires it
+		// and where the THEN slot, closed by the mandatory `:`, keeps it on reparse.
 		// A one-line block comment is inline-safe: it rides along and the cascade
 		// still decides the layout (`a /* c */ ? b : c` stays flat when it fits).
 		final condTrailAccess: Null<Expr> =
