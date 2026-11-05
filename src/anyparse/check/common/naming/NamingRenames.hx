@@ -136,17 +136,17 @@ final class NamingRenames {
 	/**
 	 * The region a rename's new name occupies for same-pass claim purposes: a self-scoped binding (a
 	 * catch variable or a loop variable) occupies only the node it opens, so two sibling clauses or loops may take one name; any
-	 * other local / param binds through its innermost enclosing function, everything else (member,
+	 * other local / param binds through its innermost enclosing lexical scope (block, loop, lambda or function), everything else (member,
 	 * constant, enum value) file-wide. A body-scoped declaration with no resolvable enclosing function
 	 * falls back to file-wide, the defensive direction `collidesInScope` takes.
 	 */
 	private static function claimScope(tree: QueryNode, shape: RefShape, from: Int, bodyScoped: Bool, sourceLength: Int): Span {
 		final whole: Span = new Span(0, sourceLength);
-		if (!bodyScoped) return whole;
-		final own: Null<Span> = BindingScope.selfScopeSpanAt(tree, from, shape);
-		if (own != null) return own;
-		final funcKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
-		return BindingScope.enclosingScopeSpan(tree, funcKinds, from, shape) ?? whole;
+		return bodyScoped
+			? BindingScope.selfScopeSpanAt(tree, from, shape) ?? BindingScope.enclosingScopeSpan(
+				tree, shape.positionScopedKinds ?? [], from, shape
+			) ?? whole
+			: whole;
 	}
 
 	/**
@@ -1207,7 +1207,8 @@ final class NamingRenames {
 	 * when it occurs anywhere in `decl`'s innermost enclosing FUNCTION (its whole body, INCLUDING the
 	 * nested closures / local functions that capture `decl`), or at class / file level (an own member,
 	 * static, or import). Only a function DISJOINT from that enclosing one (a sibling / unrelated body)
-	 * is out of scope. An inherited member in another file never appears in-file, so a local legally
+	 * is out of scope, and so is a lexical scope inside it that is disjoint from the one the binding itself declares into (a sibling
+	 * catch clause, an earlier or later loop or block). An inherited member in another file never appears in-file, so a local legally
 	 * shadowing one still renames.
 	 *
 	 * The Local / Param / CatchVar arm also subtracts every STRUCTURE-FIELD name
@@ -1279,6 +1280,12 @@ final class NamingRenames {
 		final enclosing: Null<Span> = BindingScope.enclosingScopeSpan(tree, funcKinds, span.from, shape);
 		final excluded: Array<Span> = OccurrenceScan.structureFieldNameSpans(tree, source, shape);
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
+		// Inside that function the binding reaches only its own innermost lexical scope - the catch clause, loop or
+		// block that declares it - so a scope DISJOINT from that one (a sibling catch, a later loop) binds the
+		// name for itself. A scope nested in, or enclosing, the binding's own stays scanned: it can shadow a read.
+		final scopeKinds: Array<String> = shape.positionScopedKinds ?? [];
+		final own: Null<Span> = BindingScope.enclosingScopeSpan(tree, scopeKinds, span.from, shape);
+		if (own != null) collectDisjointFunctionSpans(tree, scopeKinds, own, excluded);
 		return OccurrenceScan.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
 	}
 
@@ -1307,7 +1314,8 @@ final class NamingRenames {
 	}
 
 	/**
-	 * Collect the span of every function node DISJOINT from `enclosing` (no overlap) - a sibling /
+	 * Collect the span of every node of `functionKinds` (functions, or any
+	 * scope kinds) DISJOINT from `enclosing` (no overlap) - a sibling /
 	 * unrelated body whose locals & parameters are unreachable from the binding's scope, so a same-named
 	 * binding there is not a collision. A function nested INSIDE `enclosing` (a capturing closure) or one
 	 * that contains it is kept. Recursive.

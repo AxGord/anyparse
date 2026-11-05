@@ -159,6 +159,39 @@ class NamingOptionsTest extends Test {
 		Assert.equals(1, violationsUnder('interface I {\n\tfunction onTick();\n}').length);
 	}
 
+	/** A clause already spelled `exception` is a sibling scope: it reaches nothing of the clause being renamed, so the pair converges. */
+	public function testHalfRenamedSiblingCatchVariablesConverge(): Void {
+		final src: String = wrap(
+			'try {\n\t\t\tg();\n\t\t} catch (exception: haxe.Exception) {\n\t\t\ttrace(exception);\n\t\t} catch (e: String) {\n'
+			+ '\t\t\ttrace(e);\n\t\t}'
+		);
+		Assert.equals(1, violationsUnder(src).length);
+		Assert.equals(
+			wrap(
+				'try {\n\t\t\tg();\n\t\t} catch (exception: haxe.Exception) {\n\t\t\ttrace(exception);\n'
+				+ '\t\t} catch (exception: String) {\n\t\t\ttrace(exception);\n\t\t}'
+			),
+			CheckFixture.fixedUnder(new Naming(), src, OPTIONS)
+		);
+	}
+
+	/** A lambda parameter inside the clause already holds the target name and would capture the renamed read: refused. */
+	public function testCatchVariableRefusedWhenInnerLambdaHoldsTheName(): Void {
+		final src: String = wrap('try {\n\t\t\tg();\n\t\t} catch (e: String) {\n\t\t\th(exception -> trace(exception, e));\n\t\t}');
+		Assert.equals(1, violationsUnder(src).length);
+		Assert.equals(src, CheckFixture.fixedUnder(new Naming(), src, OPTIONS));
+	}
+
+	/** A block inside the clause already binds the target name: refused. */
+	public function testCatchVariableRefusedWhenInnerBlockHoldsTheName(): Void {
+		final src: String = wrap(
+			'try {\n\t\t\tg();\n\t\t} catch (e: String) {\n\t\t\t{\n\t\t\t\tfinal exception = 1;\n\t\t\t\ttrace(exception, e);\n\t\t\t}\n'
+			+ '\t\t}'
+		);
+		Assert.equals(1, violationsUnder(src).length);
+		Assert.equals(src, CheckFixture.fixedUnder(new Naming(), src, OPTIONS));
+	}
+
 	private function violationsUnder(src: String): Array<Violation> {
 		final check: Naming = new Naming();
 		check.setConfigResolver(_ -> LintConfig.parse(OPTIONS));

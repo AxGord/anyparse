@@ -143,18 +143,36 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		assertFixCanonical(src, 'for (i in [2]) trace(i)', '__i', 2);
 	}
 
-	public function testFixRenamesSiblingKeyValueLoopKeyAndKeepsItsValue(): Void {
-		// The key binder takes the loop's own claim; the value binder still claims the whole function, so the
-		// second loop's value stays unrenamed - a later run refuses it too, `collidesInScope` reads the first
-		// loop's `v` as taken. Held so a change to either half shows.
+	public function testFixRenamesSiblingKeyValueLoopsInOneRun(): Void {
+		// Each loop's key and value live only in that loop, so the other loop's binders - taken or not - reach nothing here.
 		final src: String = 'package pkg;\nclass C {\n\tpublic function f(m:Map<Int, Int>) {\n\t\tfor (__k => __v in m) trace(__k + __v);\n'
 			+ '\t\tfor (__k => __v in m) trace(__k + __v);\n\t}\n}';
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(4, vs.length);
 		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
-		assertCanonicalized(src, edits, 'for (k => v in m) trace(k + v)', '__k');
-		assertCanonicalized(src, edits, 'for (k => __v in m) trace(k + __v)', '__k');
+		assertCanonicalized(src, edits, 'for (k => v in m) trace(k + v);\n\t\tfor (k => v in m) trace(k + v)', '__');
+	}
+
+	public function testFixRenamesLocalWhoseNameSiblingBlockBinds(): Void {
+		// A block that closed before the local's own scope opens cannot collide with it.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\t{\n\t\t\tfinal adjust = 1;\n\t\t\ttrace(adjust);\n'
+			+ '\t\t}\n\t\t{\n\t\t\tfinal _adjust = 2;\n\t\t\ttrace(_adjust);\n\t\t}\n\t}\n}';
+		assertFixCanonicalWithIndex(src, 'final adjust = 2;\n\t\t\ttrace(adjust)', '_adjust');
+	}
+
+	public function testFixSkipsLocalWhoseNameNestedBlockBinds(): Void {
+		// A block INSIDE the local's scope that rebinds the name would shadow the renamed local.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tfinal _adjust = 1;\n\t\t{\n\t\t\tfinal adjust = 2;\n'
+			+ '\t\t\ttrace(adjust + _adjust);\n\t\t}\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	public function testFixSkipsLocalWhoseNameNestedLambdaBinds(): Void {
+		// A lambda parameter inside the local's scope that already has the target name would capture the renamed read.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(xs:Array<Int>) {\n\t\tfinal _adjust = 1;\n'
+			+ '\t\txs.map(adjust -> adjust + _adjust);\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	public function testFixRenamesSiblingLoopExpressionVariablesInOneRun(): Void {
@@ -587,6 +605,23 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		], 'pkg/C.hx', true);
 		Assert.stringContains("'modelButtons' is already bound", param);
 		Assert.isFalse(param.indexOf('confinement proof') >= 0, 'a parameter needs no confinement proof, got: $param');
+	}
+
+	public function testFixRenamesFlaggedLocalsOfSiblingBlocksInOneRun(): Void {
+		// Two blocks each declare `_adjust`: their scopes are disjoint, so both take `adjust` in one run. The body-level
+		// `_adjust` declared after them reaches both blocks, so the name is already claimed there and it stays.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\t{\n\t\t\tfinal _adjust = 1;\n\t\t\ttrace(_adjust);\n'
+			+ '\t\t}\n'
+			+ '\t\t{\n\t\t\tfinal _adjust = 2;\n\t\t\ttrace(_adjust);\n\t\t}\n\t\tfinal _adjust = 3;\n\t\ttrace(_adjust);\n\t}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		Assert.equals(3, vs.length);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
+		assertCanonicalized(
+			src, edits, 'final adjust = 1;\n\t\t\ttrace(adjust);\n\t\t}\n\t\t{\n\t\t\tfinal adjust = 2;\n\t\t\ttrace(adjust);\n\t\t}',
+			'final _adjust = 1'
+		);
+		assertCanonicalized(src, edits, 'final _adjust = 3;\n\t\ttrace(_adjust);', 'final _adjust = 2');
 	}
 
 	private function assertFixCanonical(src: String, present: String, absent: String, findings: Int = 1): Void {

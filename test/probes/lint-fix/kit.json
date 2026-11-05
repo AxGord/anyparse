@@ -814,6 +814,37 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "S2",
+			"note": "naming catchVarName: a sibling clause already named exception is a disjoint scope, so the half-renamed pair converges to one spelling; the program still compiles and prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"naming",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\ttry {\n\t\t\tthrow \"x\";\n\t\t} catch (exception:haxe.Exception) {\n\t\t\ttrace(exception);\n\t\t} catch (e:String) {\n\t\t\ttrace(e);\n\t\t}\n\t}\n}\n",
+				"apq.json": "{\"rules\":{\"naming\":{\"catchVarName\":\"exception\"}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "094189d90c37bda4",
+				"files": "6d4adb1ddd3ae875",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }
