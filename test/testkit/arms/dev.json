@@ -706,6 +706,37 @@
 			"find": "return passed && started == ended;",
 			"replace": "return passed;",
 			"note": "a check whose worktree got a commit or an amend while its rows ran still records a pass, for a tree no row measured, and a land of that tree skips the rows"
+		},
+		{
+			"name": "M-GATE-ARMS-MEMBER-BLIND",
+			"type": "dev.GateArms",
+			"method": "changes",
+			"force": "true",
+			"note": "the arms row selects every arm of a touched type again, so a change to one member of a macro file costs every arm on it"
+		},
+		{
+			"name": "M-GATE-ARMS-UNNAMED-MEMBERS-NARROWED",
+			"type": "dev.GateArms",
+			"method": "changes",
+			"find": "return members == null || (method == null || members.contains(method));",
+			"replace": "return members != null && (method == null || members.contains(method));",
+			"note": "a module whose changed members the report cannot name selects none of its arms, so a type-header or whole-type change lands with no arm run"
+		},
+		{
+			"name": "M-GATE-ARMS-PIN-HELPER-BLIND",
+			"type": "dev.GateArms",
+			"method": "reaches",
+			"find": "!TEST_PREFIXES.exists(p -> m.startsWith(p))",
+			"replace": "false",
+			"note": "a changed helper of a test class no longer reaches the pins of the class, so a fixture weakened through its helper meets no killer"
+		},
+		{
+			"name": "M-CHANGED-MEMBERS-NONMEMBER-NAMED",
+			"type": "dev.ChangedMembers",
+			"method": "of",
+			"find": "if (name != null && MEMBER_KINDS.contains(kind)) {",
+			"replace": "if (name != null) {",
+			"note": "a named row of a non-member kind (a type's header, a parameter) is read as a member, so a file whose change cannot be told member by member names members and the arms of the others are dropped"
 		}
 	]
 }

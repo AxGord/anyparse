@@ -15,9 +15,10 @@ using Lambda;
 using StringTools;
 
 /**
- * The arms row of a slice gate: `dev mutation-arm --fast` over the arms the slice added or re-encoded, every arm on
- * a type it touched, every arm a pin of a touched test class names, every arm on a direct call neighbour of a member it
- * changed, and each `--arm`. An arm whose only claim is a touched file that `hxq changed` classes as layout only runs
+ * The arms row of a slice gate: `dev mutation-arm --fast` over the arms the slice added or re-encoded, every arm that cuts a
+ * member the slice changed (every arm of a touched type whose changed members `hxq changed` cannot name), every arm a pin of a
+ * changed test names, every arm on a direct call neighbour of a member it changed, and each
+ * `--arm`. An arm whose only claim is a touched file that `hxq changed` classes as layout only runs
  * `--apply-only` instead: its cut must still apply, and no test can see a change of layout. An arm that does not kill its
  * pin is run again at the base, and the row names it `rot on base` when it fails there too. The row says how many threads the
  * kill run and the base run held, since a pin of parallel work cannot kill its arm on one. The registry's whole `--all` is
@@ -38,6 +39,9 @@ final class GateArms {
 	/** The scope and the format of every `hxq graph` call of the row: the sources an arm can cut, as json. */
 	private static final GRAPH_SCOPE: Array<String> = ['src', 'tools/src', '--format', 'json'];
 
+	/** The name prefixes `testkit.TestDiscovery` registers a test method by. */
+	private static final TEST_PREFIXES: Array<String> = ['test', 'spec'];
+
 	/**
 	 * What the arms row of `gate` has to do: the outcome it settles without a run (`--no-arms`, a bad name, no arm selected), or
 	 * the selection to run. It spends no kill run, so a caller can ask before it takes a lease for the run.
@@ -46,10 +50,18 @@ final class GateArms {
 		if (gate.options.noArms) return Settled(Skipped('--no-arms'));
 		final now: Array<ArmRecord> = ArmRegistry.read(Path.join([gate.tree, ArmRegistry.DIRECTORY]));
 		final old: Null<Array<ArmRecord>> = baseRecords(gate);
-		final layout: Array<String> = [for (file in layoutOf(changedReport(gate))) moduleOf(file)].filter(m -> m != '');
-		final modules: Array<String> = [for (file in gate.touched) moduleOf(file)].filter(m -> m != '' && !layout.contains(m));
+		final report: String = changedReport(gate);
+		final layout: Array<String> = [for (file in layoutOf(report)) moduleOf(file)].filter(m -> m != '');
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of(report);
+		final touches: Array<ModuleTouch> = [
+			for (file in gate.touched)
+				{
+					module: moduleOf(file),
+					members: said[file]
+				}
+		].filter(t -> t.module != '' && !layout.contains(t.module));
 		final near: Array<String> = callNeighbours(gate, layout);
-		final picked: ArmSelection = select(now, old, modules, layout, pinnedKillers(gate, modules), gate.options.arms, near);
+		final picked: ArmSelection = select(now, old, touches, layout, pinnedKillers(gate, touches), gate.options.arms, near);
 		for (name in gate.options.arms) if (!picked.fast.contains(name))
 			return Settled(Failed('--arm $name names no arm in ${ArmRegistry.DIRECTORY}'));
 		for (name in gate.options.allowArms) if (!now.exists(r -> r.key == name))
@@ -67,14 +79,14 @@ final class GateArms {
 
 	/**
 	 * The arms to run for the records `now` (`old` is the base's): `fast` get the kill run — every arm added or re-encoded,
-	 * on a `modules` file whose behaviour may have moved, pinned by a touched test (`killers`), asked for (`extra`), or cutting
+	 * cutting a member of a `touches` module that the slice changed, pinned by a touched test (`killers`), asked for (`extra`), or cutting
 	 * a member in `near`, a direct call neighbour of a member the slice changed: such a change can make the arm's own pin stop
 	 * telling the cut from the original while no file of the arm's or its pin's is touched.
 	 * `applyOnly` are the other arms on a `layout` file, whose cut only has to still apply: the writer emits the same text
 	 * for both versions of that file, so no test can see it.
 	 */
 	public static function select(
-		now: Array<ArmRecord>, old: Null<Array<ArmRecord>>, modules: Array<String>, layout: Array<String>, killers: Array<String>,
+		now: Array<ArmRecord>, old: Null<Array<ArmRecord>>, touches: Array<ModuleTouch>, layout: Array<String>, killers: Array<String>,
 		extra: Array<String>, near: Array<String>
 	): ArmSelection {
 		final fast: Array<String> = [];
@@ -82,13 +94,13 @@ final class GateArms {
 		for (record in now) {
 			if (
 				changed(record, old)
-				|| onModule(record, modules)
+				|| onTouched(record, touches)
 				|| killers.contains(record.key)
 				|| extra.contains(record.key)
 				|| cutsMember(record, near)
 			)
 				fast.push(record.key);
-			else if (onModule(record, layout))
+			else if (inModules(record, layout))
 				applyOnly.push(record.key);
 		}
 		return { fast: fast, applyOnly: applyOnly };
@@ -122,6 +134,22 @@ final class GateArms {
 	 */
 	public static function armsAsk(tracks: Int): Int {
 		return Std.int(Math.min(SliceGate.ARMS_THREADS, Math.max(1, tracks)));
+	}
+
+	/**
+	 * The arms the pins of `listing` (`--list-pins` lines) name, for the pins a touch reaches: the pin's own test method changed, or a
+	 * member of its class that is no test did (a helper or a fixture every
+	 * test of the class reads), or the class's members cannot be named.
+	 */
+	public static function killersOf(listing: Array<String>, touches: Array<ModuleTouch>): Array<String> {
+		final killers: Array<String> = [];
+		for (line in listing) {
+			final fields: Array<String> = line.split(' :: ');
+			final pin: Array<String> = fields[0].split('#');
+			if (fields.length < 3 || !touches.exists(t -> t.module == pin[0] && reaches(t, pin[1]))) continue;
+			for (arm in fields[2].split(',').map(StringTools.trim)) if (arm != '' && !killers.contains(arm)) killers.push(arm);
+		}
+		return killers;
 	}
 
 	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
@@ -232,14 +260,8 @@ final class GateArms {
 	 * The arms every pin of a touched test class names (`--list-pins`: `Class#method :: role :: ARM,ARM`): a fixture
 	 * weakened in a touched test file must meet its killer even when the arm's own type is untouched.
 	 */
-	private static function pinnedKillers(gate: GateTree, modules: Array<String>): Array<String> {
-		final killers: Array<String> = [];
-		for (line in gate.inTree(cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS)).check().lines()) {
-			final fields: Array<String> = line.split(' :: ');
-			if (fields.length < 3 || !modules.contains(fields[0].split('#')[0])) continue;
-			for (arm in fields[2].split(',').map(StringTools.trim)) if (arm != '' && !killers.contains(arm)) killers.push(arm);
-		}
-		return killers;
+	private static function pinnedKillers(gate: GateTree, touches: Array<ModuleTouch>): Array<String> {
+		return killersOf(gate.inTree(cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS)).check().lines(), touches);
 	}
 
 	/** Whether `record` is new or re-encoded since `old`. */
@@ -249,9 +271,9 @@ final class GateArms {
 	}
 
 	/** Whether the arm `record` cuts a member of one of `modules` (a module or one of its sub-types). */
-	private static function onModule(record: ArmRecord, modules: Array<String>): Bool {
+	private static function inModules(record: ArmRecord, modules: Array<String>): Bool {
 		final type: Null<String> = ArmHeadParser.parse(record.text).type;
-		return type != null && modules.exists(m -> type == m || type.startsWith('$m.'));
+		return type != null && modules.exists(m -> belongs(type, m));
 	}
 
 	/** The module path of the source file `file` under a module root, or empty for any other file. */
@@ -357,6 +379,36 @@ final class GateArms {
 		return head.type != null && head.method != null && members.contains('${head.type}.${head.method}');
 	}
 
+	/**
+	 * Whether the arm `record` cuts a member the slice changed: the member a `touches` entry names, or any member of a module whose
+	 * changed members the report could not name. A module's change that reads no member at all (only its imports) selects nothing.
+	 */
+	private static function onTouched(record: ArmRecord, touches: Array<ModuleTouch>): Bool {
+		final head: ArmHead = ArmHeadParser.parse(record.text);
+		final type: Null<String> = head.type;
+		return type != null && touches.exists(t -> belongs(type, t.module) && changes(t, head.method));
+	}
+
+	/** Whether `type` is the module `module` or a sub-type of it. */
+	private static function belongs(type: String, module: String): Bool {
+		return type == module || type.startsWith('$module.');
+	}
+
+	/**
+	 * Whether `touch` changes the member `method`: an arm that names none,
+	 * or a module whose members cannot be named, is taken for changed.
+	 */
+	private static function changes(touch: ModuleTouch, method: Null<String>): Bool {
+		final members: Null<Array<String>> = touch.members;
+		return members == null || (method == null || members.contains(method));
+	}
+
+	/** Whether `touch` reaches the pin whose test method is `test`: that method changed, or a member that is no test did. */
+	private static function reaches(touch: ModuleTouch, test: Null<String>): Bool {
+		final members: Null<Array<String>> = touch.members;
+		return members == null || test == null || members.exists(m -> m == test || !TEST_PREFIXES.exists(p -> m.startsWith(p)));
+	}
+
 }
 
 /** What the arms row has to do: an outcome already settled, or the `picked` selection to run against the base's registry `old`. */
@@ -371,6 +423,15 @@ enum ArmPlan {
 typedef ArmSelection = {
 	var fast: Array<String>;
 	var applyOnly: Array<String>;
+}
+
+/**
+ * A source module the slice changed and the members of it that it did:
+ * null when its report cannot name them, and then every member counts.
+ */
+typedef ModuleTouch = {
+	var module: String;
+	var members: Null<Array<String>>;
 }
 
 /** What the re-run at the base read: the arms that do not kill their pin there, or why it could not read them. */

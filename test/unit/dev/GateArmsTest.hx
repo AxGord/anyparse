@@ -321,11 +321,76 @@ final class GateArmsTest extends Test {
 		}, ['M-NEW']);
 	}
 
+	/** An arm on a touched type runs only when the member it cuts is one the slice changed. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-MEMBER-BLIND')
+	public function testAnArmOnATouchedTypeRunsOnlyWhenItsMemberChanged(): Void {
+		final same: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
+		final picked: ArmSelection = GateArms.select(same, same, [{ module: 'a.Reflowed', members: ['f'] }], [], [], [], []);
+		Assert.same(
+			['M-LAYOUT', 'M-LAYOUT-SUB'], picked.fast, 'a sub-type of the module counts; the arm of the unchanged member g does not'
+		);
+		Assert.same([], picked.applyOnly);
+	}
+
+	/**
+	 * A module whose members the report cannot name gives every arm of
+	 * it the kill run; a module that changed only its imports gives none.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-UNNAMED-MEMBERS-NARROWED')
+	public function testAModuleWhoseMembersCannotBeNamedGivesEveryArmOfItTheKillRun(): Void {
+		final same: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
+		final unnamed: ArmSelection = GateArms.select(same, same, [whole('a.Reflowed')], [], [], [], []);
+		Assert.same(['M-LAYOUT', 'M-LAYOUT-SUB', 'M-PINNED'], unnamed.fast);
+		final imports: ArmSelection = GateArms.select(same, same, [{ module: 'a.Reflowed', members: [] }], [], [], [], []);
+		Assert.same([], imports.fast);
+	}
+
+	/** A pin runs its arms when its own test changed or a member that is no test did, and when its class's members cannot be named. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-PIN-HELPER-BLIND')
+	public function testAPinIsReachedByItsOwnTestOrByAHelperOfItsClass(): Void {
+		final listing: Array<String> = [
+			'unit.dev.XTest#testA :: control :: M-A',
+			'unit.dev.XTest#testB :: control :: M-B,M-C',
+			'unit.dev.YTest#testC :: guard :: M-D',
+			'noise'
+		];
+		Assert.same(['M-A'], GateArms.killersOf(listing, [{ module: 'unit.dev.XTest', members: ['testA'] }]), 'the pin\'s own test');
+		Assert.same(
+			['M-A', 'M-B', 'M-C'],
+			GateArms.killersOf(listing, [{ module: 'unit.dev.XTest', members: ['helper'] }]), 'a helper every test reads'
+		);
+		Assert.same([], GateArms.killersOf(listing, [{ module: 'unit.dev.XTest', members: ['testZ', 'specY'] }]), 'other tests only');
+		Assert.same(['M-D'], GateArms.killersOf(listing, [whole('unit.dev.YTest')]), 'members that cannot be named');
+		Assert.same([], GateArms.killersOf(listing, [{ module: 'unit.dev.Z', members: ['testA'] }]), 'another class');
+	}
+
+	public function testTheRowRunsOnlyTheArmsOfTheMembersAChangedReportNames(): Void {
+		withTree(tree -> {
+			knob(tree, 'changed', 'M src/pkg/A.hx  declarations  +1 -1\n    ~ FnMember:other  +1 -1\n');
+			knob(tree, 'all-killed');
+			Assert.isTrue(outcomeOf(tree, []).match(Passed));
+			Assert.isTrue(
+				File.getContent(Path.join([tree, 'runs.log'])).indexOf('at-slice mutation-arm M-NEW --fast') != -1, 'only the new arm'
+			);
+		});
+		withTree(tree -> {
+			knob(tree, 'changed', 'M src/pkg/A.hx  declarations  +1 -1\n    ~ FnMember:f  +1 -1\n');
+			knob(tree, 'all-killed');
+			Assert.isTrue(outcomeOf(tree, []).match(Passed));
+			Assert.isTrue(
+				File.getContent(Path.join([tree, 'runs.log'])).indexOf('at-slice mutation-arm M-ROT M-OWN M-NEW M-OK --fast') != -1
+			);
+		});
+	}
+
 	private static function select(
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>, ?near: Array<String>
 	): ArmSelection {
 		final same: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
-		return GateArms.select(same, same, touched, layout, killers, extra, near ?? []);
+		return GateArms.select(same, same, [for (module in touched) whole(module)], layout, killers, extra, near ?? []);
 	}
 
 	/** The row's outcome with the lease `held` (`WF_THREADS` text; empty is no lease) around both its runs. */
@@ -440,6 +505,11 @@ final class GateArmsTest extends Test {
 	private static function node(level: String, name: String, ?change: String): String {
 		final shape: String = '"id": "$name", "level": "$level", "name": "$name", "label": "$name", "external": false, "focus": false';
 		return change == null ? '{$shape}' : '{$shape, "change": "$change"}';
+	}
+
+	/** A touched module whose changed members the report could not name. */
+	private static function whole(module: String): ModuleTouch {
+		return { module: module, members: null };
 	}
 
 }
