@@ -12,7 +12,7 @@
 # the anyparse-only half, which is still stratified but no longer calibrated.
 #
 # HOW IT WAS CHOSEN (reproduce with `perfile` + the recipe in
-# /Users/axg/anyparse-o1-parse-profile.md):
+# the O1 parse-profile note, kept outside the repository):
 #   1. `node bin/dev.js parse-prof perfile <tree> 3 hxformat.json` on both trees -
 #      per-file bytes, lines, parse us, round-trip us, node count and a
 #      node-kind census.

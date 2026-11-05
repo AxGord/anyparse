@@ -14,7 +14,9 @@ class HaxelibResolverTest extends Test {
 
 	/** The openfl shape: a trailing-newline root plus `classPath: "src"` joins to `<root>/src`. */
 	public function testClassPathSrcJoinsRoot(): Void {
-		Assert.equals('/Users/x/openfl/src', HaxelibResolver.sourceDirFrom('/Users/x/openfl/\n', '{"classPath":"src","version":"9.0.0"}'));
+		Assert.equals(
+			'/Users/me/openfl/src', HaxelibResolver.sourceDirFrom('/Users/me/openfl/\n', '{"classPath":"src","version":"9.0.0"}')
+		);
 	}
 
 	/** Leading/trailing whitespace on the libpath output is trimmed before joining. */

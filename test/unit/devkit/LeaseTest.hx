@@ -18,7 +18,7 @@ import utest.Test;
 final class LeaseTest extends Test {
 
 	/** The first two lines of `wf-run --status`, as the workflow engine prints them. */
-	private static inline final STATUS: String = 'pool /Users/u/.claude/workflow-pool: budget 10, held 7, load 5.23 (external 4.6, threshold 2)\n'
+	private static inline final STATUS: String = 'pool /Users/me/.claude/workflow-pool: budget 10, held 7, load 5.23 (external 4.6, threshold 2)\n'
 		+ 'locks held: none\n';
 
 	/** Prints `DEVKIT_PROBE` and the threads its lease granted. */

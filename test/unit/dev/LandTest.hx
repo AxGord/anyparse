@@ -174,7 +174,7 @@ final class LandTest extends Test {
 
 	public function testTheSnapshotDirectoryDefaultsUnderHome(): Void {
 		Assert.equals('/x/cache', Land.cacheDir(name -> name == 'ANYPARSE_BLAST_CACHE' ? '/x/cache' : '/home/u'));
-		Assert.equals('/home/u/anyparse-blast-cache', Land.cacheDir(name -> name == 'HOME' ? '/home/u' : null));
+		Assert.equals('/home/me/anyparse-blast-cache', Land.cacheDir(name -> name == 'HOME' ? '/home/me' : null));
 	}
 
 	@:pin('control')

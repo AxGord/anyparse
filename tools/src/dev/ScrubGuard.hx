@@ -30,6 +30,9 @@ using StringTools;
  * files or directories and none of the scanned tree's is a match too, printed as
  * `<where>:<line>: private root <k>` — the structural half, for the path no list entry spells (`privatePaths`).
  *
+ * A range also refuses an added line that spells a home path with a name other than the placeholder (`localPaths`),
+ * printed as `<where>:<line>: local path`; that rule needs no list, so a range runs without one.
+ *
  * Exit 0 = clean, or nothing configured (said on stderr, so a clone without the private list is not blocked); 1 = a
  * match; 2 = a usage error, or a scan that could not run.
  */
@@ -45,26 +48,35 @@ final class ScrubGuard {
 	/** How many segments a path must have to name a directory: fewer are too common a phrase to be one project's. */
 	private static inline final DIRECTORY_SEGMENTS: Int = 3;
 
+	/** The name a home path may carry in published text: the placeholder the docs and fixtures use for "a user". */
+	private static inline final PLACEHOLDER_HOME: String = 'me';
+
+	/** The group of `HOME_PATH` that holds the name. */
+	private static inline final HOME_NAME: Int = 2;
+
 	/** Directory names a project keeps its modules under, which say nothing about the project. */
 	private static final SOURCE_ROOT_NAMES: Array<String> = ['src', 'source', 'lib', 'test', 'tests'];
 
+	/** A `/Users/<name>/` or `/home/<name>/` path, not the tail of a longer name (`example.com/home/x/`). */
+	private static final HOME_PATH: EReg = ~/(^|[^A-Za-z0-9_.-])\/(?:Users|home)\/([A-Za-z0-9_.-]+)\//;
+
 	/**
-	 * Run the subcommand over `argv`; answers the exit status. `--pre-push` reads git's pre-push
-	 * lines on stdin and scans what each pushed ref publishes (`tools/hooks/pre-push-scrub.sh`).
+	 * Run the subcommand over `argv` on the work tree `tree`, reading the environment through `env`; answers the exit status.
+	 * `--pre-push` reads git's pre-push lines on stdin and scans what each pushed ref publishes (`tools/hooks/pre-push-scrub.sh`).
 	 */
-	public static function main(argv: Array<String>): Int {
+	public static function run(argv: Array<String>, tree: String, env: String -> Null<String>): Int {
 		final args: Args = new Args(argv);
 		final quiet: Bool = args.flag('--quiet');
-		final list: Null<String> = args.option('--list') ?? Sys.getEnv('ANYPARSE_SCRUB_LIST');
+		final list: Null<String> = args.option('--list') ?? env('ANYPARSE_SCRUB_LIST');
 		final given: Array<String> = args.options('--private-root');
 		final roots: Array<String> = given.length > 0
 			? given
-			: (Sys.getEnv('ANYPARSE_SCRUB_PRIVATE_ROOTS') ?? '').split(':').filter(root -> root != '');
+			: (env('ANYPARSE_SCRUB_PRIVATE_ROOTS') ?? '').split(':').filter(root -> root != '');
 		final range: Null<String> = args.option('--range');
 		final prePush: Bool = args.flag('--pre-push');
 		args.done();
 		if (prePush && range != null) throw new UsageError('pass --range or --pre-push, not both');
-		if ((list == null || list == '') && roots.length == 0) {
+		if (unconfigured(list, roots, range != null || prePush)) {
 			Sys.stderr().writeString(
 				'scrub-guard: no token list (--list / ANYPARSE_SCRUB_LIST) and no private root '
 				+ '(--private-root / ANYPARSE_SCRUB_PRIVATE_ROOTS), nothing checked\n'
@@ -85,9 +97,7 @@ final class ScrubGuard {
 		}
 		final privates: Array<PathIndex> = [for (root in roots) new PathIndex(privateFiles(root))];
 		if (prePush) return pushed(js.Syntax.code("require('fs').readFileSync(0, 'utf8')"), rules, privates, quiet);
-		final rows: Array<String> = range == null
-			? scanTree(rules, Sys.getCwd(), privates)
-			: scanRange(range, rules, Sys.getCwd(), privates);
+		final rows: Array<String> = range == null ? scanTree(rules, tree, privates) : scanRange(range, rules, tree, privates);
 		report(rows, rules, privates, quiet);
 		return rows.length > 0 ? 1 : 0;
 	}
@@ -200,7 +210,7 @@ final class ScrubGuard {
 		final diff: String = 'diff $span';
 		final log: String = 'messages $span';
 		final lines: String = added.join('\n');
-		final rows: Array<String> = scan(diff, lines, rules).concat(privatePaths(diff, lines, own, trees));
+		final rows: Array<String> = scan(diff, lines, rules).concat(privatePaths(diff, lines, own, trees)).concat(localPaths(diff, lines));
 		return rows.concat(scan(log, messages, rules)).concat(privatePaths(log, messages, own, trees));
 	}
 
@@ -273,6 +283,39 @@ final class ScrubGuard {
 			size--;
 		}
 		return out;
+	}
+
+	/**
+	 * One `<where>:<line>: local path` row per line of `data` that spells a person's home directory (`/Users/<name>/`,
+	 * `/home/<name>/`) with a name other than the documented placeholder `PLACEHOLDER_HOME`: a published path names its owner.
+	 * Needs no list, so it guards a clone that has none.
+	 */
+	public static function localPaths(where: String, data: String): Array<String> {
+		final rows: Array<String> = [];
+		for (n => text in data.split('\n')) {
+			var from: Int = 0;
+			while (from <= text.length && HOME_PATH.matchSub(text, from)) {
+				if (HOME_PATH.matched(HOME_NAME) != PLACEHOLDER_HOME) {
+					rows.push('$where:${n + 1}: local path');
+					break;
+				}
+				from = text.length - HOME_PATH.matchedRight().length;
+			}
+		}
+		return rows;
+	}
+
+	/**
+	 * Whether there is nothing to check: no token list, no private root, and no range (whose added lines `localPaths` reads
+	 * without either).
+	 */
+	public static function unconfigured(list: Null<String>, roots: Array<String>, ranged: Bool): Bool {
+		return (list == null || list == '') && roots.length == 0 && !ranged;
+	}
+
+	/** Run the subcommand over `argv` in the working directory and the process environment; answers the exit status. */
+	public static function main(argv: Array<String>): Int {
+		return run(argv, Sys.getCwd(), Sys.getEnv);
 	}
 
 	/**

@@ -53,7 +53,10 @@ final class TokenTranscript {
 	private static inline final HOOK_DENIAL: String = 'PreToolUse:';
 	private static inline final BASH: String = 'Bash';
 
-	/** The role of each known prompt opening; the first prefix that opens the prompt wins, no prefix means `ROLE_OTHER`. */
+	/**
+	 * The role of each known prompt opening; the first prefix that opens the prompt wins, no prefix means `ROLE_OTHER`.
+	 * The Russian openings stay: transcripts of prompts that used them are still read from the audit roots.
+	 */
 	private static final ROLE_PREFIXES: Array<RolePrefix> = [
 		{ prefix: 'You are the slice driver', role: ROLE_DRIVER },
 		{ prefix: 'You are the task driver', role: ROLE_DRIVER },

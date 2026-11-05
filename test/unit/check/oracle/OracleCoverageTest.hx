@@ -72,9 +72,8 @@ final class OracleCoverageTest extends Test {
 
 	/** One arm per `Defines:` line, each owning the files parsed after it and the defines it declares. */
 	public function testParseArmsSplitsOnDefinesLines(): Void {
-		final transcript: String = 'Classpath: /a\nDefines: js;target.name=js\nParsed src/A.hx\n'
-			+ 'Calling macro haxe.macro.Compiler.define (--macro define(\'nodejs\'):1)\nParsed src/B.hx\n'
-			+ 'Classpath: /a\nDefines: neko;sys\nParsed src/C.hx\n';
+		final transcript: String = 'Classpath: /a\nDefines: js;target.name=js\nParsed src/A.hx\nCalling macro haxe.macro.Compiler.define ('
+			+ '--macro define(\'nodejs\'):1)\nParsed src/B.hx\nClasspath: /a\nDefines: neko;sys\nParsed src/C.hx\n';
 		final arms: Array<CompiledArm> = OracleCoverage.parseArms(transcript);
 		Assert.equals(2, arms.length);
 		Assert.same(['src/A.hx', 'src/B.hx'], arms[0].files);
@@ -94,7 +93,7 @@ final class OracleCoverageTest extends Test {
 		Assert.equals('KEY', OracleCoverage.macroDefineName('Calling macro haxe.macro.Compiler.define (--macro define("KEY", "v"):1)'));
 		Assert.isNull(
 			OracleCoverage.macroDefineName(
-				'Calling macro haxe.macro.Compiler.define (/Users/x/project/src/pkg/Build.hx:12: characters 3-40)'
+				'Calling macro haxe.macro.Compiler.define (/Users/me/project/src/pkg/Build.hx:12: characters 3-40)'
 			),
 			'a define called from inside a build macro names its call site, not its argument - unknown, never assumed'
 		);

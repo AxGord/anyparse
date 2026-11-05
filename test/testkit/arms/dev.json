@@ -66,6 +66,37 @@
 			"note": "a backslash never opens a string escape, so a private dotted path glued to a `\\t` in a quoted fixture passes the guard"
 		},
 		{
+			"name": "M-SCRUB-LOCAL-PATH-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "localPaths",
+			"force": "[]",
+			"note": "scrub-guard stops reading home paths, so an added line spelling a person's home directory passes the guard"
+		},
+		{
+			"name": "M-SCRUB-LOCAL-PLACEHOLDER-REFUSED",
+			"type": "dev.ScrubGuard",
+			"method": "localPaths",
+			"find": "if (HOME_PATH.matched(HOME_NAME) != PLACEHOLDER_HOME) {",
+			"replace": "if (true) {",
+			"note": "the documented placeholder name is refused like a real one, so a fixture or a doc that follows the convention is rejected"
+		},
+		{
+			"name": "M-SCRUB-RANGE-UNCONFIGURED-SKIPPED",
+			"type": "dev.ScrubGuard",
+			"method": "run",
+			"find": "if (unconfigured(list, roots, range != null || prePush)) {",
+			"replace": "if (unconfigured(list, roots, false)) {",
+			"note": "a range with no token list and no private root counts as unconfigured, so a pushed home path passes the guard on a clone that has no list"
+		},
+		{
+			"name": "M-SCRUB-ROW-UNCONFIGURED-FIRST",
+			"type": "dev.ScrubRow",
+			"method": "verdict",
+			"find": "if (!tree.ok || !range.ok) return Failed(GateTree.quote(tree.ok ? range : tree));",
+			"replace": "if (tree.err.indexOf(UNCONFIGURED) >= 0) return NotRun('unconfigured'); if (!tree.ok || !range.ok) return Failed(GateTree.quote(tree.ok ? range : tree));",
+			"note": "an unconfigured tree scan is read before the exit statuses, so a range that refused an added home path shows as not run"
+		},
+		{
 			"name": "M-DECISION-APPEND-GLUED",
 			"type": "dev.Decision",
 			"method": "append",

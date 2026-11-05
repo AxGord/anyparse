@@ -23,7 +23,7 @@ using StringTools;
  *
  * Build/run:
  *   haxe recon.hxml
- *   ANYPARSE_HXFORMAT_FORK=/Users/axg/dev/libs/haxe-formatter node bin/recon.js
+ *   ANYPARSE_HXFORMAT_FORK=<haxe-formatter checkout> node bin/recon.js
  */
 typedef ReconCluster = {
 	var count: Int;

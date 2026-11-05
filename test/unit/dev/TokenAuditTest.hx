@@ -120,8 +120,8 @@ final class TokenAuditTest extends Test {
 	}
 
 	public function testTheProjectDirectoryNamesATreeByItsPathWithEveryOddCharacterDashed(): Void {
-		final project: String = TokenAudit.projectOf('/Users/a.b/dev/x_y');
-		Assert.isTrue(project.endsWith('/projects/-Users-a-b-dev-x-y'));
+		final project: String = TokenAudit.projectOf('/work/a.b/dev/x_y');
+		Assert.isTrue(project.endsWith('/projects/-work-a-b-dev-x-y'));
 	}
 
 	public function testAWindowKeepsTheAgentsThatBeganInsideItAndThoseOfASliceThatLandedInIt(): Void {

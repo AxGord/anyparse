@@ -4874,7 +4874,7 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   (`move.folder` / `&& heldAt.startsWith(…)` / …) where anyparse fills (`move.folder && heldAt.startsWith(…)`); the
   same chain outside a lambda fills identically in both. The fork's fill seam reads like a decision taken before the
   arrow break moved the body (evaluate-before / apply-after). Evidence:
-  `/Users/axg/dev/lab/ts-truth/infra-audit/FU27-fork-vs-anyparse.log` — branch `feat/fu-FU27`
+  `<infra-audit log>` — branch `feat/fu-FU27`
 
 ## FU19 (2026-10-20) — writer one-pass drift residue: a chain cuddles after a region break; a committed collapse is a `BodyGroup`
 

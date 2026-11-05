@@ -85,7 +85,7 @@ final class HookProbe {
 		probe(DENY, '$g -n \'foo\' $cli');
 		probe(DENY, 'awk \'NR<5\' $cli');
 		probe(DENY, '$g -rn \'foo\' src/');
-		probe(DENY, '$s -n \'141,148p\' /Users/axg/dev/libs/Pony/src/pony/text/ParseBoy$X');
+		probe(DENY, '$s -n \'141,148p\' /Users/me/dev/libs/Pony/src/pony/text/ParseBoy$X');
 		probe(DENY, 'find src -name \'*$X\' -exec cat {} +');
 		Sys.println('-- hxq output truncation must stay a warning --');
 		probe(WARN, 'hxq source $cli --range 1:20 | $h -3');

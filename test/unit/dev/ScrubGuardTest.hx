@@ -24,6 +24,11 @@ final class ScrubGuardTest extends Test {
 	 */
 	private static inline final LIST: String = 'alpha==>X\nliteral:be.ta\r\nregex:(?<=x)y+==>c\n\nregex:(?i)gam\nend';
 
+	/** The home directories a published path must not spell, split so this file does not spell one itself. */
+	private static inline final USERS: String = '/Users';
+
+	private static inline final HOMES: String = '/home';
+
 	public function testEveryLineShapeOfTheListIsARule(): Void {
 		final rules: Array<Rule> = ScrubGuard.loadRules(LIST);
 		Assert.equals(5, rules.length, 'the blank line is no rule, and the rules after it are numbered without it');
@@ -253,6 +258,75 @@ final class ScrubGuardTest extends Test {
 	@:killer('M-SCRUB-PRIVATE-ESCAPE-BLIND')
 	public function testADottedPathAfterAStringEscapeIsAMatch(): Void {
 		Assert.same(['f:1: private root 1'], privateRows('\'class C {\\n\\t\\tapp.view.Secret.reveal();\'', []));
+	}
+
+	@:pin('control')
+	@:killer('M-SCRUB-LOCAL-PATH-BLIND')
+	public function testAHomePathNamingAPersonIsALocalPath(): Void {
+		Assert.same(
+			['f:2: local path', 'f:3: local path', 'f:4: local path'],
+			ScrubGuard.localPaths('f', 'ok\ncd $USERS/alice/dev\n(see $HOMES/bob/x.txt)\n$USERS/me/a $USERS/alice/b')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-SCRUB-LOCAL-PLACEHOLDER-REFUSED')
+	public function testThePlaceholderAndTheTailOfAnotherPathAreNoLocalPath(): Void {
+		Assert.same(
+			[], ScrubGuard.localPaths('f', '$USERS/me/dev\n$HOMES/me/x\nhttps://example.com$HOMES/bob/x\nUsers/alice/x\n$USERS/alice')
+		);
+	}
+
+	/** A line a base already holds is the owner's of that commit, not this range's; only what the range adds is read, with no list. */
+	@:pin('guard')
+	public function testARangeRefusesTheHomePathItAddsAndNotOneItsBaseHolds(): Void {
+		TempDir.with(dir -> {
+			final root: String = dir.file('repo');
+			FileSystem.createDirectory(root);
+			cmd('git init -q $root').check();
+			File.saveContent('$root/a.txt', 'cd $USERS/alice/dev\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'base');
+			File.saveContent('$root/a.txt', 'cd $USERS/alice/dev\nplain\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'plain line');
+			Assert.same([], ScrubGuard.scanRange('HEAD~1..HEAD', [], root));
+			File.saveContent('$root/a.txt', 'cd $USERS/alice/dev\nplain\ncd $HOMES/bob/dev\ncd $USERS/me/x\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'path line');
+			Assert.same(['diff HEAD~1..HEAD:1: local path'], ScrubGuard.scanRange('HEAD~1..HEAD', [], root));
+		});
+	}
+
+	public function testARangeNeedsNoListAndTheTreeDoes(): Void {
+		Assert.isTrue(ScrubGuard.unconfigured(null, [], false));
+		Assert.isTrue(ScrubGuard.unconfigured('', [], false));
+		Assert.isFalse(ScrubGuard.unconfigured(null, [], true), 'a range reads the home paths it adds');
+		Assert.isFalse(ScrubGuard.unconfigured('list', [], false));
+		Assert.isFalse(ScrubGuard.unconfigured(null, ['root'], false));
+	}
+
+	@:pin('control')
+	@:killer('M-SCRUB-RANGE-UNCONFIGURED-SKIPPED')
+	public function testARangeWithNoListAndNoRootStillRefusesAnAddedHomePath(): Void {
+		TempDir.with(dir -> {
+			final root: String = dir.file('repo');
+			FileSystem.createDirectory(root);
+			cmd('git init -q $root').check();
+			File.saveContent('$root/a.txt', 'one\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'base');
+			File.saveContent('$root/a.txt', 'one\ntwo\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'clean line');
+			final unset: String -> Null<String> = _ -> null;
+			Assert.equals(0, ScrubGuard.run(['--range', 'HEAD~1..HEAD', '--quiet'], root, unset), 'a clean range passes');
+			File.saveContent('$root/a.txt', 'one\ntwo\ncd $USERS/alice/dev\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'path line');
+			Assert.equals(1, ScrubGuard.run(['--range', 'HEAD~1..HEAD', '--quiet'], root, unset), 'an added home path refuses the range');
+			Assert.equals(0, ScrubGuard.run(['--quiet'], root, unset), 'the tree scan has nothing configured and says so');
+		});
 	}
 
 	private static function commit(root: String, message: String): Void {

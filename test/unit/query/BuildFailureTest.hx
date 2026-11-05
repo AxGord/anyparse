@@ -24,7 +24,7 @@ class BuildFailureTest extends Test {
 		+ ' formatted : Array<anyparse.runtime.Span> } with anyparse.query.OpaqueCondRegion';
 
 	/** utest emits this on every build of this project — it must never be read as the failure. */
-	private static final DEPRECATION_WARNING: String = '/Users/x/haxelib/utest/1,13,2/src/utest/utils/TestBuilder.hx:12: characters 1-7 :'
+	private static final DEPRECATION_WARNING: String = '/Users/me/haxelib/utest/1,13,2/src/utest/utils/TestBuilder.hx:12: characters 1-7 :'
 		+ ' Warning : (WDeprecatedEnumAbstract) `@:enum abstract` is deprecated in favor of `enum abstract`';
 
 	public function testTheStructureLiteralRefusalGetsItsOwnName(): Void {

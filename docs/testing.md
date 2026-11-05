@@ -248,8 +248,7 @@ node bin/dev.js scrub-guard --range origin/main..HEAD   # what a push would add:
 ln -s ../../tools/hooks/pre-push-scrub.sh .git/hooks/pre-push   # once per clone
 ```
 
-A match prints `<where>:<line>: rule <n>` and exits 1; the matched text is never printed. Unset, the guard and the hook
-pass and say so.
+A match prints `<where>:<line>: rule <n>` and exits 1; the matched text is never printed. Unset, the tree scan passes and says so; a range (and so the hook) needs no list: it still refuses an added line that spells a home path (`/Users/<name>/`, `/home/<name>/`, any name but the placeholder `me`), printed as `<where>:<line>: local path`.
 
 A list only catches the names someone wrote into it. The structural half takes the downstream checkout itself:
 `--private-root <dir>` (repeatable; or `ANYPARSE_SCRUB_PRIVATE_ROOTS`, `:`-separated — never a default, never a path
@@ -1183,7 +1182,7 @@ The other direction has the same shape: `hxq comment-rewrite` FINDS its place ag
 
 ### A Pony writer blast pair needs all SIX roots, not `src` alone
 
-A before/after byte comparison of the writer against the user's Pony fork — `cp -R` two copies, format both with the base engine and the slice engine, `diff -rq` — is complete only when it covers every root the fork ships `.hx` under: `src tools tests socketTests install docgen`. A `src`-only comparison answers a narrower question than the one it was asked, and a real writer-affecting file under another root stays outside either engine's reach with no wrong verdict showing. Copy the WHOLE repo (`cp -R /Users/axg/dev/libs/Pony /tmp/pony-SNNN`, never `.../Pony/src`): a `src`-only copy also loses the fork's root `apq.json` / `hxformat.json`, so it measures a DIFFERENT config than the fork runs under. `diff -rq` the two formatted copies afterward — a root-scoped file count is not a substitute.
+A before/after byte comparison of the writer against the user's Pony fork — `cp -R` two copies, format both with the base engine and the slice engine, `diff -rq` — is complete only when it covers every root the fork ships `.hx` under: `src tools tests socketTests install docgen`. A `src`-only comparison answers a narrower question than the one it was asked, and a real writer-affecting file under another root stays outside either engine's reach with no wrong verdict showing. Copy the WHOLE repo (`cp -R <Pony checkout> /tmp/pony-SNNN`, never `.../Pony/src`): a `src`-only copy also loses the fork's root `apq.json` / `hxformat.json`, so it measures a DIFFERENT config than the fork runs under. `diff -rq` the two formatted copies afterward — a root-scoped file count is not a substitute.
 
 ### Every `fmt` summary that reports a count names BOTH quantities
 

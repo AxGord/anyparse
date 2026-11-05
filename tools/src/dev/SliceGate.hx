@@ -490,13 +490,17 @@ final class SliceGate {
 	private function scrubOutcome(): Outcome {
 		final tree: Result = _gate.inTree(cmd('node bin/dev.js scrub-guard'));
 		final range: Result = _gate.inTree(cmd('node bin/dev.js scrub-guard --range ${_gate.base}..HEAD'));
-		if ('${tree.err}${range.err}'.indexOf('nothing checked') >= 0)
-			return NotRun('no token list — set ANYPARSE_SCRUB_LIST (or ANYPARSE_SCRUB_PRIVATE_ROOTS)');
-		_gate.summary.detail('tree and ${GateTree.short(_gate.base)}..HEAD clean');
-		if (tree.ok && range.ok) return Passed;
-		final failing: Result = tree.ok ? range : tree;
-		_gate.summary.excerpt(Excerpt.linesOf(failing.out + failing.err));
-		return Failed(GateTree.quote(failing));
+		final verdict: Outcome = ScrubRow.verdict(tree, range);
+		switch verdict {
+			case Failed(_):
+				final failing: Result = tree.ok ? range : tree;
+				_gate.summary.excerpt(Excerpt.linesOf(failing.out + failing.err));
+			case NotRun(_):
+				_gate.summary.detail('${GateTree.short(_gate.base)}..HEAD clean of home paths only');
+			case _:
+				_gate.summary.detail('tree and ${GateTree.short(_gate.base)}..HEAD clean');
+		}
+		return verdict;
 	}
 
 	/** The artifacts row: no touched file is build output or over 1 MB, unless `--allow` names its path. */

@@ -4262,7 +4262,7 @@ each comparison answered a narrower question than the one it was asked, and
 the tree the answer was silently narrower than kept a real writer-affecting
 file outside either engine's reach.
 
-Copy the WHOLE repo (`cp -R /Users/axg/dev/libs/Pony /tmp/pony-SNNN`, never
+Copy the WHOLE repo (`cp -R <Pony checkout> /tmp/pony-SNNN`, never
 `cp -R .../Pony/src`): beyond missing files under the other five roots, a
 `src`-only copy also loses the fork's root `apqlint.json` / `hxformat.json`,
 so it silently measures a DIFFERENT config than the fork actually runs
@@ -4355,11 +4355,11 @@ binary's. The roots of each currency sum to its UNKNOWN exactly (the run checks 
 
 **The brief's anyparse share was a denominator slip.** `facts` on anyparse (`test-js.hxml`, 2272 project files, 1851
 compiled): source 520 318 cases / 341 562 MATCH / 178 756 UNKNOWN / 0 DIFFERENT; nominal 520 318 / 345 190 / 175 128 / 0.
-The T7-0 brief's "оценено 341 562, UNKNOWN 52.3 %" divided by the MATCH count (its aggregator read the `match` column as
+The T7-0 brief's "scored 341 562, UNKNOWN 52.3 %" divided by the MATCH count (its aggregator read the `match` column as
 the case count); the share of the scored answers is **34.4 %** source, **33.7 %** nominal. The per-root "% of UNKNOWN"
 figures were right. `CENSUS-UNKNOWN` now prints the share the table counts, so no aggregator is needed.
 
-anyparse roots, `<n> (% of UNKNOWN)`, source / nominal — every brief § 2 row reproduced exactly; its "прочее" 8 107 is
+anyparse roots, `<n> (% of UNKNOWN)`, source / nominal — every brief § 2 row reproduced exactly; its "other" 8 107 is
 `string-segment` 4 923 + `other` 3 184 (nominal: 4 923 + 2 328):
 
 | root | source | nominal |
