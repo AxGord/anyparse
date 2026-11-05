@@ -655,9 +655,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	// --- registry / robustness ---
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-replace-loop'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-replace-loop'));
+		CheckFixture.assertRegistered('redundant-replace-loop');
 	}
 
 	public function testDefaultOffSuppressed(): Void {

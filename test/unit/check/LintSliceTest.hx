@@ -380,10 +380,8 @@ class LintSliceTest extends Test {
 
 	/** `unused-local` is registered in the default check set alongside `unused-import`. */
 	public function testUnusedLocalRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('unused-local'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unused-local'));
-		Assert.isTrue(ids.contains('unused-import'));
+		CheckFixture.assertRegistered('unused-local');
+		CheckFixture.assertRegistered('unused-import');
 	}
 
 	/** Two identical imports: the second is flagged; distinct aliases of one module are not. */

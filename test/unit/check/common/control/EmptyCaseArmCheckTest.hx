@@ -255,9 +255,7 @@ class EmptyCaseArmCheckTest extends Test {
 	}
 
 	public function testRegisteredAsBuiltin(): Void {
-		Assert.notNull(Linter.byId('empty-case-arm'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('empty-case-arm'));
+		CheckFixture.assertRegistered('empty-case-arm');
 	}
 
 	/** A statement switch over a `type`-annotated parameter, holding `branches`. */

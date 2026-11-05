@@ -391,9 +391,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('field-init-in-constructor'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('field-init-in-constructor'));
+		CheckFixture.assertRegistered('field-init-in-constructor');
 	}
 
 	/** A minimal parseable class: `fields`, then a constructor holding `body`, then `tail`. */

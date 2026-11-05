@@ -107,9 +107,7 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('fold-adjacent-string-literals'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('fold-adjacent-string-literals'));
+		CheckFixture.assertRegistered('fold-adjacent-string-literals');
 	}
 
 	public function testDollarEscapedSingleQuotedFolds(): Void {

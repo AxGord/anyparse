@@ -268,9 +268,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('return-reassign-ternary'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('return-reassign-ternary'));
+		CheckFixture.assertRegistered('return-reassign-ternary');
 	}
 
 	public function testNamedFunctionValueWithoutAReturnTypeIsNotFlagged(): Void {

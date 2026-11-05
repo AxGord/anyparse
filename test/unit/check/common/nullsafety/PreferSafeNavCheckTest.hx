@@ -222,9 +222,7 @@ class PreferSafeNavCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-safe-nav'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-safe-nav'));
+		CheckFixture.assertRegistered('prefer-safe-nav');
 	}
 
 	public function testSkipParseNoCrash(): Void {

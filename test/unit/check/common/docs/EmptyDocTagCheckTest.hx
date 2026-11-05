@@ -152,9 +152,7 @@ class EmptyDocTagCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('empty-doc-tag'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('empty-doc-tag'));
+		CheckFixture.assertRegistered('empty-doc-tag');
 	}
 
 	private function violations(src: String): Array<Violation> {

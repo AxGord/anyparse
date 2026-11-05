@@ -125,9 +125,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('naming'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('naming'));
+		CheckFixture.assertRegistered('naming');
 	}
 
 	public function testSkipParseNoCrash(): Void {

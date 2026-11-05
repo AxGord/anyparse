@@ -324,9 +324,7 @@ class PreferCaseGuardCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-case-guard'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-case-guard'));
+		CheckFixture.assertRegistered('prefer-case-guard');
 		final registered: Null<Check> = Linter.byId('prefer-case-guard');
 		Assert.isTrue(registered is RiskyFix, 'the guard conversion is oracle-verified, never applied unverified');
 	}

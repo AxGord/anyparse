@@ -368,9 +368,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-static-extension'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-static-extension'));
+		CheckFixture.assertRegistered('prefer-static-extension');
 	}
 
 	public function testTypedefAliasShadowNotFixable(): Void {

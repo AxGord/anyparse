@@ -108,9 +108,7 @@ class PreferFindCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-find'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-find'));
+		CheckFixture.assertRegistered('prefer-find');
 	}
 
 	public function testSkipParseNoCrash(): Void {

@@ -364,9 +364,7 @@ class SwallowedExceptionCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('swallowed-exception'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('swallowed-exception'));
+		CheckFixture.assertRegistered('swallowed-exception');
 	}
 
 	public function testSkipParseNoCrash(): Void {

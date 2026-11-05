@@ -86,9 +86,7 @@ class ImpossibleCastTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('impossible-cast'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('impossible-cast'));
+		CheckFixture.assertRegistered('impossible-cast');
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -73,9 +73,7 @@ class PreferArrayLiteralCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-array-literal'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-array-literal'));
+		CheckFixture.assertRegistered('prefer-array-literal');
 	}
 
 	public function testSkipParseNoCrash(): Void {

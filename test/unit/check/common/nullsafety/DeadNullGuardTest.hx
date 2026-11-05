@@ -165,9 +165,7 @@ class DeadNullGuardTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('dead-null-guard'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('dead-null-guard'));
+		CheckFixture.assertRegistered('dead-null-guard');
 	}
 
 	/**

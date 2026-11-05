@@ -253,9 +253,7 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-switch-expression-assignment'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-switch-expression-assignment'));
+		CheckFixture.assertRegistered('prefer-switch-expression-assignment');
 	}
 
 	/** The driving case: a field-access l-value assigned in every arm hoists out of the switch. */

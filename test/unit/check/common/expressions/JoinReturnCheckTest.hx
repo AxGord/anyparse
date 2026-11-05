@@ -173,9 +173,7 @@ class JoinReturnCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('join-return'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('join-return'));
+		CheckFixture.assertRegistered('join-return');
 	}
 
 	// --- assignment arm: `x = e; return x;` where `x` is a pre-existing param / local ---

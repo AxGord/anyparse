@@ -67,9 +67,7 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('member-order'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('member-order'));
+		CheckFixture.assertRegistered('member-order');
 	}
 
 	public function testSkipParseNoCrash(): Void {

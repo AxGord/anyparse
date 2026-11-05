@@ -86,9 +86,7 @@ class ExplicitTypeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('explicit-type'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('explicit-type'));
+		CheckFixture.assertRegistered('explicit-type');
 	}
 
 	public function testSkipParseNoCrash(): Void {

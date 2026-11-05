@@ -206,8 +206,7 @@ class PreferTernaryExpressionCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-ternary-expression'));
-		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-ternary-expression'));
+		CheckFixture.assertRegistered('prefer-ternary-expression');
 	}
 
 	public function testSkipParseNoCrash(): Void {

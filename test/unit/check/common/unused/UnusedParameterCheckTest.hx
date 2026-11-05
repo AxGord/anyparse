@@ -87,9 +87,7 @@ class UnusedParameterCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('unused-parameter'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unused-parameter'));
+		CheckFixture.assertRegistered('unused-parameter');
 	}
 
 	public function testSkipParseNoCrash(): Void {

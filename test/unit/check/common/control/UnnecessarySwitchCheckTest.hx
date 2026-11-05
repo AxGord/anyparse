@@ -265,9 +265,7 @@ class UnnecessarySwitchCheckTest extends Test {
 	}
 
 	public function testRegisteredAsBuiltin(): Void {
-		Assert.notNull(Linter.byId('unnecessary-switch'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unnecessary-switch'));
+		CheckFixture.assertRegistered('unnecessary-switch');
 	}
 
 	/** A statement switch over an `Int` parameter, holding `branches`. */

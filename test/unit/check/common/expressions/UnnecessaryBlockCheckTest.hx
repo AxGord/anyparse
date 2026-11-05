@@ -37,9 +37,7 @@ class UnnecessaryBlockCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('unnecessary-block'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unnecessary-block'));
+		CheckFixture.assertRegistered('unnecessary-block');
 	}
 
 	public function testSkipParseNoCrash(): Void {

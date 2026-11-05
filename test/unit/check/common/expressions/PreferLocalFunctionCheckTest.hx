@@ -397,9 +397,7 @@ class PreferLocalFunctionCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-local-function'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-local-function'));
+		CheckFixture.assertRegistered('prefer-local-function');
 	}
 
 	public function testSkipParseNoCrash(): Void {

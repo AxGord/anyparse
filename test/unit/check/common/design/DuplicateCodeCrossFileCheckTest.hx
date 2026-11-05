@@ -284,7 +284,7 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 	}
 
 	public function testDuplicateCodeStillSingleBuiltin(): Void {
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
+		final ids: Array<String> = CheckFixture.builtinIds();
 		Assert.equals(1, [for (id in ids) if (id == 'duplicate-code') id].length);
 	}
 

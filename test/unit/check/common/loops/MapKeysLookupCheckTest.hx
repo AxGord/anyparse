@@ -387,9 +387,7 @@ class MapKeysLookupCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('map-keys-lookup'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('map-keys-lookup'));
+		CheckFixture.assertRegistered('map-keys-lookup');
 	}
 
 	public function testSkipParseNoCrash(): Void {

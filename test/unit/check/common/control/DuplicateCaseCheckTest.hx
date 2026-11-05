@@ -88,9 +88,7 @@ class DuplicateCaseCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('duplicate-case'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('duplicate-case'));
+		CheckFixture.assertRegistered('duplicate-case');
 	}
 
 	public function testSkipParseNoCrash(): Void {

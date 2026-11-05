@@ -176,6 +176,27 @@ final class CheckFixture {
 	}
 
 	/**
+	 * The ids of every builtin rule, in registry order — the one spelling of "which rules are registered" a test reads.
+	 */
+	public static function builtinIds(): Array<String> {
+		return [for (check in Linter.builtins()) check.id()];
+	}
+
+	/**
+	 * Whether the builtin registry holds a rule with this id.
+	 */
+	public static function isRegistered(id: String): Bool {
+		return Linter.byId(id) != null;
+	}
+
+	/**
+	 * Fails unless the builtin registry holds a rule with this id.
+	 */
+	public static function assertRegistered(id: String, ?pos: haxe.PosInfos): Void {
+		Assert.notNull(Linter.byId(id), 'rule `$id` is not in Linter.builtins()', pos);
+	}
+
+	/**
 	 * `plugin` as the run host every production lint goes through — a `CachingGrammarPlugin`, the `SymbolIndexHost`:
 	 * itself when it already is one, else wrapped the way `Linter.run` wraps it; a fresh host over the Haxe plugin, with no
 	 * resolution scope, when none is given.

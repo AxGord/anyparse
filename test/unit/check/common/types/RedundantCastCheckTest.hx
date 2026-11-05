@@ -59,9 +59,7 @@ class RedundantCastCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-cast'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-cast'));
+		CheckFixture.assertRegistered('redundant-cast');
 	}
 
 	public function testNestedInnerCastResolvesOwnTarget(): Void {

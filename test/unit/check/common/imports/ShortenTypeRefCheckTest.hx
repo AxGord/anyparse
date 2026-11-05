@@ -941,9 +941,7 @@ class ShortenTypeRefCheckTest extends Test {
 	// --- registration ---
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('shorten-type-ref'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('shorten-type-ref'));
+		CheckFixture.assertRegistered('shorten-type-ref');
 	}
 
 	public function testIsOnByDefault(): Void {

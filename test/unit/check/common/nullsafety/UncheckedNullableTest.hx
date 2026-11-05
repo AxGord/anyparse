@@ -89,9 +89,7 @@ class UncheckedNullableTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('unchecked-nullable'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unchecked-nullable'));
+		CheckFixture.assertRegistered('unchecked-nullable');
 	}
 
 	public function testSkipParseNoCrash(): Void {

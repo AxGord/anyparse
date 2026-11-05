@@ -180,9 +180,7 @@ class PreferReadOnlyFieldCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-read-only-field'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-read-only-field'));
+		CheckFixture.assertRegistered('prefer-read-only-field');
 	}
 
 	public function testSkipParseNoCrash(): Void {

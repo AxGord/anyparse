@@ -91,13 +91,7 @@ class UnnecessarySafeNavCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('unnecessary-safe-nav'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unnecessary-safe-nav'));
-	}
-
-	private function violations(src: String): Array<Violation> {
-		return CheckFixture.violationsIn(new UnnecessarySafeNav(), CheckFixture.withStd(src));
+		CheckFixture.assertRegistered('unnecessary-safe-nav');
 	}
 
 	@:pin('control')
@@ -111,6 +105,10 @@ class UnnecessarySafeNavCheckTest extends Test {
 				+ '@:nullSafety(Strict) class C { function f(x:MaybeR) { var n = x?.name; } }'
 			).length
 		);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return CheckFixture.violationsIn(new UnnecessarySafeNav(), CheckFixture.withStd(src));
 	}
 
 }

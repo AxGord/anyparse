@@ -226,9 +226,7 @@ class PreferSwitchCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-switch'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-switch'));
+		CheckFixture.assertRegistered('prefer-switch');
 	}
 
 	public function testSkipParseNoCrash(): Void {

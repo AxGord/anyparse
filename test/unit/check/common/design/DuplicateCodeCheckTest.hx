@@ -288,9 +288,7 @@ class DuplicateCodeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('duplicate-code'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('duplicate-code'));
+		CheckFixture.assertRegistered('duplicate-code');
 	}
 
 	/**

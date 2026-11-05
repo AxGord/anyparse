@@ -79,9 +79,7 @@ class PreferCaseWildcardCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-case-wildcard'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-case-wildcard'));
+		CheckFixture.assertRegistered('prefer-case-wildcard');
 	}
 
 	public function testSkipParseNoCrash(): Void {

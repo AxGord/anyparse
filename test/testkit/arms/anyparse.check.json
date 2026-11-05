@@ -384,6 +384,14 @@
 			"find": "for (check in aware) check.setNameOracle(names);",
 			"replace": "",
 			"note": "the verified pass hands no name oracle to the rules that ask one, so no value site is ever rewritten"
+		},
+		{
+			"name": "M-REGISTRY-DROPS-A-RULE",
+			"type": "anyparse.check.Linter",
+			"method": "builtins",
+			"find": "new UnusedImport(),",
+			"replace": "",
+			"note": "a rule leaves the builtin registry, so the kit's registered-rule reads must stop holding it"
 		}
 	]
 }

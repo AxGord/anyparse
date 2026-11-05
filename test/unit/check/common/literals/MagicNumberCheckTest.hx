@@ -280,9 +280,7 @@ class MagicNumberCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('magic-number'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('magic-number'));
+		CheckFixture.assertRegistered('magic-number');
 	}
 
 	public function testNumberListOptionEdgeCases(): Void {

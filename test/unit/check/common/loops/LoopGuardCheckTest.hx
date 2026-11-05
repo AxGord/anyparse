@@ -191,9 +191,7 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('loop-guard'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('loop-guard'));
+		CheckFixture.assertRegistered('loop-guard');
 	}
 
 	public function testSkipParseNoCrash(): Void {

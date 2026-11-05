@@ -143,9 +143,7 @@ class AvoidDynamicCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('avoid-dynamic'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('avoid-dynamic'));
+		CheckFixture.assertRegistered('avoid-dynamic');
 	}
 
 	public function testSkipParseNoCrash(): Void {

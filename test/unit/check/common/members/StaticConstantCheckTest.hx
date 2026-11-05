@@ -283,8 +283,7 @@ class StaticConstantCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('static-constant');
 		Assert.notNull(check);
 		Assert.isTrue(check is DefaultOff);
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('static-constant'));
+		CheckFixture.assertRegistered('static-constant');
 	}
 
 	private function violations(src: String, ?other: String): Array<Violation> {

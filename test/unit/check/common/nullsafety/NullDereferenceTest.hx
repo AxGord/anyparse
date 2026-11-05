@@ -86,9 +86,7 @@ class NullDereferenceTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('null-dereference'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('null-dereference'));
+		CheckFixture.assertRegistered('null-dereference');
 	}
 
 	public function testCasePatternCaptureNotFlagged(): Void {

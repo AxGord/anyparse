@@ -46,9 +46,7 @@ class AssignmentInConditionCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('assignment-in-condition'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('assignment-in-condition'));
+		CheckFixture.assertRegistered('assignment-in-condition');
 	}
 
 	public function testSkipParseNoCrash(): Void {

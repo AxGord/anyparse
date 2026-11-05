@@ -346,9 +346,7 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('field-init-at-declaration'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('field-init-at-declaration'));
+		CheckFixture.assertRegistered('field-init-at-declaration');
 	}
 
 	public function testSkipParseNoCrash(): Void {

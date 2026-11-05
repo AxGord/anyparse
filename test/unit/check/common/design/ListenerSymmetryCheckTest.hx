@@ -145,9 +145,7 @@ class ListenerSymmetryCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('listener-symmetry'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('listener-symmetry'));
+		CheckFixture.assertRegistered('listener-symmetry');
 	}
 
 	private function violations(src: String): Array<Violation> {

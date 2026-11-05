@@ -158,9 +158,7 @@ class NarrowLocalScopeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('narrow-local-scope'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('narrow-local-scope'));
+		CheckFixture.assertRegistered('narrow-local-scope');
 	}
 
 	/** The motivating shape: a bare declaration feeding a binary-search loop. */

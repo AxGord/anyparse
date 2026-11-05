@@ -201,7 +201,7 @@ class MisplacedTypeDocCheckTest extends Test {
 	 * stays true if either side's movable region ever widens.
 	 */
 	public function testRegisteredBeforeImportOrder(): Void {
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
+		final ids: Array<String> = CheckFixture.builtinIds();
 		Assert.isTrue(ids.indexOf('misplaced-type-doc') >= 0);
 		Assert.isTrue(
 			ids.indexOf('misplaced-type-doc') < ids.indexOf('import-order'), 'misplaced-type-doc must precede import-order in the registry'

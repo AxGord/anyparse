@@ -296,9 +296,7 @@ class JoinArrayPushesCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('join-array-pushes'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('join-array-pushes'));
+		CheckFixture.assertRegistered('join-array-pushes');
 	}
 
 	/** The `TextFlavors` shape: a field-assigning prologue statement, `super()`, then object-literal pushes. */

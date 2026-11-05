@@ -114,9 +114,7 @@ class JoinDeclarationAssignmentCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('join-declaration-assignment'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('join-declaration-assignment'));
+		CheckFixture.assertRegistered('join-declaration-assignment');
 	}
 
 	/**

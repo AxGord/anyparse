@@ -253,9 +253,7 @@ class UnguardedNullableDerefTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('unguarded-nullable-deref'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unguarded-nullable-deref'));
+		CheckFixture.assertRegistered('unguarded-nullable-deref');
 	}
 
 	public function testSkipParseNoCrash(): Void {

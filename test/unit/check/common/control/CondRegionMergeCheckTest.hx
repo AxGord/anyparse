@@ -141,9 +141,7 @@ class CondRegionMergeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('cond-region-merge'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('cond-region-merge'));
+		CheckFixture.assertRegistered('cond-region-merge');
 	}
 
 	/** The check never parses, so a file the grammar chokes on is scanned like any other. */

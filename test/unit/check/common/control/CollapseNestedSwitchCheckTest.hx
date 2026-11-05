@@ -308,9 +308,7 @@ class CollapseNestedSwitchCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltinsAsDefaultOff(): Void {
-		Assert.notNull(Linter.byId('collapse-nested-switch'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('collapse-nested-switch'));
+		CheckFixture.assertRegistered('collapse-nested-switch');
 		final registered: Null<Check> = Linter.byId('collapse-nested-switch');
 		Assert.isTrue(registered is DefaultOff, 'pattern depth is a project style call, so the rule is opt-in');
 	}

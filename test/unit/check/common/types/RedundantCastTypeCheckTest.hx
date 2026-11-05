@@ -394,9 +394,7 @@ class RedundantCastTypeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-cast-type'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-cast-type'));
+		CheckFixture.assertRegistered('redundant-cast-type');
 	}
 
 	public function testSkipParseNoCrash(): Void {

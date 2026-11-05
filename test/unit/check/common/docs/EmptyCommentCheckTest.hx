@@ -146,9 +146,7 @@ class EmptyCommentCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('empty-comment'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('empty-comment'));
+		CheckFixture.assertRegistered('empty-comment');
 	}
 
 	public function testSkipParseNoCrash(): Void {

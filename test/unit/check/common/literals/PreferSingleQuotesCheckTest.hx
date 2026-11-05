@@ -106,9 +106,7 @@ class PreferSingleQuotesCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-single-quotes'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-single-quotes'));
+		CheckFixture.assertRegistered('prefer-single-quotes');
 	}
 
 	public function testCheckstyleDoublePolicyDisables(): Void {

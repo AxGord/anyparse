@@ -130,8 +130,7 @@ class HoistEmbeddedAssignmentCheckTest extends Test {
 		Assert.notNull(check);
 		Assert.isTrue(check is DefaultOff);
 		Assert.isTrue(check is RiskyFix);
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('hoist-embedded-assignment'));
+		CheckFixture.assertRegistered('hoist-embedded-assignment');
 	}
 
 	private function violations(src: String): Array<Violation> {

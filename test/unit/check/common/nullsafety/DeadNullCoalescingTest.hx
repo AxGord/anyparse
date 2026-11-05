@@ -91,9 +91,7 @@ class DeadNullCoalescingTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('dead-null-coalescing'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('dead-null-coalescing'));
+		CheckFixture.assertRegistered('dead-null-coalescing');
 	}
 
 	/**

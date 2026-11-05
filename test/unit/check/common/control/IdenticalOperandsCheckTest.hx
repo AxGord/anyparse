@@ -46,9 +46,7 @@ class IdenticalOperandsCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('identical-operands'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('identical-operands'));
+		CheckFixture.assertRegistered('identical-operands');
 	}
 
 	public function testSkipParseNoCrash(): Void {

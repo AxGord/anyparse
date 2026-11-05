@@ -262,9 +262,7 @@ class SplitVarDeclarationCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('split-var-declaration'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('split-var-declaration'));
+		CheckFixture.assertRegistered('split-var-declaration');
 	}
 
 	/** Wrap a statement body in a minimal parseable class + method. */

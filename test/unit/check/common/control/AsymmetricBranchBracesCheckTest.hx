@@ -139,8 +139,7 @@ class AsymmetricBranchBracesCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('asymmetric-branch-braces'));
-		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('asymmetric-branch-braces'));
+		CheckFixture.assertRegistered('asymmetric-branch-braces');
 	}
 
 	/**

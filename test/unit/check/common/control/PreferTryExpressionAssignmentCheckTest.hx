@@ -106,8 +106,7 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-try-expression-assignment'));
-		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-try-expression-assignment'));
+		CheckFixture.assertRegistered('prefer-try-expression-assignment');
 	}
 
 	public function testSkipParseNoCrash(): Void {

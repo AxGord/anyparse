@@ -630,8 +630,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-if-expression-chain'));
-		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-if-expression-chain'));
+		CheckFixture.assertRegistered('prefer-if-expression-chain');
 	}
 
 	public function testSkipParseNoCrash(): Void {

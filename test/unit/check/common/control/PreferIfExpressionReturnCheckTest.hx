@@ -156,9 +156,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-if-expression-return'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-if-expression-return'));
+		CheckFixture.assertRegistered('prefer-if-expression-return');
 	}
 
 	/**

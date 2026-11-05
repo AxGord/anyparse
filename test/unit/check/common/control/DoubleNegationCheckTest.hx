@@ -74,9 +74,7 @@ class DoubleNegationCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('double-negation'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('double-negation'));
+		CheckFixture.assertRegistered('double-negation');
 	}
 
 	public function testSkipParseNoCrash(): Void {

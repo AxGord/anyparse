@@ -471,9 +471,7 @@ class TailMergeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('tail-merge'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('tail-merge'));
+		CheckFixture.assertRegistered('tail-merge');
 	}
 
 	private static function violations(src: String): Array<Violation> {

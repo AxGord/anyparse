@@ -76,9 +76,7 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('simplify-boolean-return-chain'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('simplify-boolean-return-chain'));
+		CheckFixture.assertRegistered('simplify-boolean-return-chain');
 	}
 
 	/** The `&& false` absorb arm: `b` would be dropped (`!b && false` -> false): refuse. */

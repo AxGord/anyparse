@@ -177,9 +177,7 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 	// --- registry / robustness ---
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('explicit-local-type'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('explicit-local-type'));
+		CheckFixture.assertRegistered('explicit-local-type');
 	}
 
 	public function testSkipParseNoCrash(): Void {

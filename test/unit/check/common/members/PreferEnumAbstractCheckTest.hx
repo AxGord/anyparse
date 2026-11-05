@@ -85,9 +85,7 @@ class PreferEnumAbstractCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-enum-abstract'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-enum-abstract'));
+		CheckFixture.assertRegistered('prefer-enum-abstract');
 	}
 
 	public function testNegativeLiteralConstantCounted(): Void {

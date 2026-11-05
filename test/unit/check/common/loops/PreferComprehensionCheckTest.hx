@@ -225,9 +225,7 @@ class PreferComprehensionCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-comprehension'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-comprehension'));
+		CheckFixture.assertRegistered('prefer-comprehension');
 	}
 
 	public function testSkipParseNoCrash(): Void {

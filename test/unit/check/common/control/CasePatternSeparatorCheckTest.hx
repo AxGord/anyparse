@@ -183,9 +183,7 @@ class CasePatternSeparatorCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('case-pattern-separator'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('case-pattern-separator'));
+		CheckFixture.assertRegistered('case-pattern-separator');
 	}
 
 	/** DEFAULT OFF: the rule picks a house style, so it ships opt-in. */

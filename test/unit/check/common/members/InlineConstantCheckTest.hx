@@ -189,9 +189,7 @@ class InlineConstantCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('inline-constant'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('inline-constant'));
+		CheckFixture.assertRegistered('inline-constant');
 	}
 
 	public function testSkipParseNoCrash(): Void {

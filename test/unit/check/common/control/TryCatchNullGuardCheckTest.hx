@@ -19,9 +19,7 @@ class TryCatchNullGuardCheckTest extends Test {
 		+ 'msg:String) null;\n\t\tif (p == null) return;\n\t\tp.exitCode();\n\t}\n}';
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('try-catch-null-guard'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('try-catch-null-guard'));
+		CheckFixture.assertRegistered('try-catch-null-guard');
 	}
 
 	/** DEFAULT OFF: the rule ships opt-in, so a project only sees it after enabling it. */

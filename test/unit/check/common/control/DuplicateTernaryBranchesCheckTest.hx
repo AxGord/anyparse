@@ -39,9 +39,7 @@ class DuplicateTernaryBranchesCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('duplicate-ternary-branches'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('duplicate-ternary-branches'));
+		CheckFixture.assertRegistered('duplicate-ternary-branches');
 	}
 
 	public function testSkipParseNoCrash(): Void {

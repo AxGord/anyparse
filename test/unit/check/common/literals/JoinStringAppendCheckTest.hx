@@ -167,9 +167,7 @@ class JoinStringAppendCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('join-string-append'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('join-string-append'));
+		CheckFixture.assertRegistered('join-string-append');
 	}
 
 	/** Wrap a statement body in a minimal parseable class + method. */

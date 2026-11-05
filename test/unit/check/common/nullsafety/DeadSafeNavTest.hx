@@ -70,9 +70,7 @@ class DeadSafeNavTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('dead-safe-nav'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('dead-safe-nav'));
+		CheckFixture.assertRegistered('dead-safe-nav');
 	}
 
 	/**

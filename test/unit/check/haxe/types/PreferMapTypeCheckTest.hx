@@ -495,9 +495,7 @@ class PreferMapTypeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-map-type'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-map-type'));
+		CheckFixture.assertRegistered('prefer-map-type');
 	}
 
 	public function testSkipParseNoCrash(): Void {

@@ -119,9 +119,7 @@ class EmptyBlockCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('empty-block'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('empty-block'));
+		CheckFixture.assertRegistered('empty-block');
 	}
 
 	public function testSkipParseNoCrash(): Void {

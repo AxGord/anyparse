@@ -141,9 +141,7 @@ class RedundantUncheckedCastCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-unchecked-cast'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-unchecked-cast'));
+		CheckFixture.assertRegistered('redundant-unchecked-cast');
 	}
 
 	public function testSkipParseNoCrash(): Void {

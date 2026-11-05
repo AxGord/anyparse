@@ -157,9 +157,7 @@ class ConstantConditionCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('constant-condition'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('constant-condition'));
+		CheckFixture.assertRegistered('constant-condition');
 	}
 
 	public function testSkipParseNoCrash(): Void {

@@ -284,9 +284,7 @@ import anyparse.check.common.unused.UnusedPublicMember;
 	// --- registry / enablement ---
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId(RULE));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains(RULE));
+		CheckFixture.assertRegistered(RULE);
 	}
 
 	public function testDefaultOffSuppressed(): Void {

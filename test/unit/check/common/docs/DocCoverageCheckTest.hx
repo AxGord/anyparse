@@ -169,9 +169,7 @@ class DocCoverageCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('doc-coverage'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('doc-coverage'));
+		CheckFixture.assertRegistered('doc-coverage');
 	}
 
 	/** Run with member coverage opted in and the type requirement off (isolates member findings). */

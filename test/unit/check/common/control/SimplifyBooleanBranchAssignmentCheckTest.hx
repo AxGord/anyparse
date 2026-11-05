@@ -226,9 +226,7 @@ class SimplifyBooleanBranchAssignmentCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('simplify-boolean-branch-assignment'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('simplify-boolean-branch-assignment'));
+		CheckFixture.assertRegistered('simplify-boolean-branch-assignment');
 	}
 
 	private function twoTargets(cond: String): String {

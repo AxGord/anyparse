@@ -90,9 +90,7 @@ class PreferFinalCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-final'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-final'));
+		CheckFixture.assertRegistered('prefer-final');
 	}
 
 	public function testSkipParseNoCrash(): Void {

@@ -43,9 +43,7 @@ class RedundantVoidReturnCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-void-return'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-void-return'));
+		CheckFixture.assertRegistered('redundant-void-return');
 	}
 
 	public function testSkipParseNoCrash(): Void {

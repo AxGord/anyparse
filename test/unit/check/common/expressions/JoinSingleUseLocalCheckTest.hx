@@ -314,9 +314,7 @@ class JoinSingleUseLocalCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('join-single-use-local'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('join-single-use-local'));
+		CheckFixture.assertRegistered('join-single-use-local');
 	}
 
 	/**

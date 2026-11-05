@@ -80,8 +80,7 @@ class PreferTryExpressionReturnCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-try-expression-return'));
-		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-try-expression-return'));
+		CheckFixture.assertRegistered('prefer-try-expression-return');
 	}
 
 	public function testSkipParseNoCrash(): Void {

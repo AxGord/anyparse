@@ -65,9 +65,7 @@ class FragmentedDocCommentCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('fragmented-doc-comment'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('fragmented-doc-comment'));
+		CheckFixture.assertRegistered('fragmented-doc-comment');
 	}
 
 	public function testNoCrashOnEmpty(): Void {

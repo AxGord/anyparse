@@ -91,9 +91,7 @@ class OversizedTypeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('oversized-type'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('oversized-type'));
+		CheckFixture.assertRegistered('oversized-type');
 	}
 
 	public function testRespectsApqlintThresholdsFromDisk(): Void {

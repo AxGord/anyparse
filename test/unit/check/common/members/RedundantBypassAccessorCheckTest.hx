@@ -116,9 +116,7 @@ class RedundantBypassAccessorCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-bypass-accessor'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-bypass-accessor'));
+		CheckFixture.assertRegistered('redundant-bypass-accessor');
 	}
 
 	public function testSkipParseNoCrash(): Void {

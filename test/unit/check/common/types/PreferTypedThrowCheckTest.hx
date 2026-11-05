@@ -324,9 +324,7 @@ class PreferTypedThrowCheckTest extends Test {
 	// --- registration ---
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-typed-throw'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-typed-throw'));
+		CheckFixture.assertRegistered('prefer-typed-throw');
 	}
 
 	public function testIsDefaultOff(): Void {

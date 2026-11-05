@@ -141,9 +141,7 @@ class RedundantCaseBodyCheckTest extends Test {
 	}
 
 	public function testRegisteredAsBuiltin(): Void {
-		Assert.notNull(Linter.byId('redundant-case-body'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-case-body'));
+		CheckFixture.assertRegistered('redundant-case-body');
 	}
 
 	/**

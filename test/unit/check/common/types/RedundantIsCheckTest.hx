@@ -113,9 +113,7 @@ class RedundantIsCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-is-check'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-is-check'));
+		CheckFixture.assertRegistered('redundant-is-check');
 	}
 
 	/** A module whose `f` takes a provably-non-null `x:Int`, wrapping `body`. */

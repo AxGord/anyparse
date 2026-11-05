@@ -189,9 +189,7 @@ class PossibleNullDereferenceTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('possible-null-dereference'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('possible-null-dereference'));
+		CheckFixture.assertRegistered('possible-null-dereference');
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -341,10 +339,10 @@ class PossibleNullDereferenceTest extends Test {
 	@:killer('M-NULLFLOW-VALUE-FACT-BLIND')
 	public function testRereadMapEntryNotFlagged(): Void {
 		final head: String = 'class C { function f(m:Map<String,Array<Int>>, k:String, j:String, t:Null<Int>) { ';
-		Assert.equals(0, violations(head + 'if (t == null && m[k] != null) { final d = m[k].length; } } }').length);
-		Assert.equals(0, violations(head + 'if (t == null && m[k] != null && m[k].length == 1) t = 1; } }').length);
-		Assert.equals(0, violations(head + 'if (m[k] == null) m[k] = []; m[k].push(1); } }').length);
-		Assert.equals(0, violations(head + 'if (m[k] == null) return; m[k].push(1); } }').length);
+		Assert.equals(0, violations('${head}if (t == null && m[k] != null) { final d = m[k].length; } } }').length);
+		Assert.equals(0, violations('${head}if (t == null && m[k] != null && m[k].length == 1) t = 1; } }').length);
+		Assert.equals(0, violations('${head}if (m[k] == null) m[k] = []; m[k].push(1); } }').length);
+		Assert.equals(0, violations('${head}if (m[k] == null) return; m[k].push(1); } }').length);
 	}
 
 	/**

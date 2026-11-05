@@ -88,9 +88,7 @@ class RedundantNullCoalescingCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-null-coalescing'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-null-coalescing'));
+		CheckFixture.assertRegistered('redundant-null-coalescing');
 	}
 
 	public function testSelfShadowNullableParamNotFlagged(): Void {
@@ -103,7 +101,6 @@ class RedundantNullCoalescingCheckTest extends Test {
 		// Same self-shadow via a `p:Foo = null` param (nullable per Haxe null-safety).
 		Assert.equals(0, violations('@:nullSafety class C { function f(p:Foo = null) { final p:Foo = p ?? other; } }').length);
 	}
-
 
 	public function testSelfShadowNonNullOuterStillFlagged(): Void {
 		// Self-shadow whose ENCLOSING binding is a non-null param — the RHS resolves to it,
@@ -120,14 +117,6 @@ class RedundantNullCoalescingCheckTest extends Test {
 	public function testFixLeavesSelfShadowNullableUntouched(): Void {
 		final src: String = '@:nullSafety class C { function f(p:Null<Foo>) { final p:Foo = p ?? other; } }';
 		Assert.equals(src, applyFix(src));
-	}
-
-	private function violations(src: String): Array<Violation> {
-		return CheckFixture.violations(new RedundantNullCoalescing(), src);
-	}
-
-	private function applyFix(src: String): String {
-		return CheckFixture.fixedSource(new RedundantNullCoalescing(), src);
 	}
 
 	@:pin('control')
@@ -160,6 +149,14 @@ class RedundantNullCoalescingCheckTest extends Test {
 		Assert.equals(
 			1, violations('class C { var n(get, never):Int; function get_n():Int return 1; function f() { var a = n ?? 5; } }').length
 		);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return CheckFixture.violations(new RedundantNullCoalescing(), src);
+	}
+
+	private function applyFix(src: String): String {
+		return CheckFixture.fixedSource(new RedundantNullCoalescing(), src);
 	}
 
 }

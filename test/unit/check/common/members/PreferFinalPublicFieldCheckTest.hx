@@ -265,9 +265,7 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-final-public-field'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-final-public-field'));
+		CheckFixture.assertRegistered('prefer-final-public-field');
 	}
 
 	public function testSkipParseNoCrash(): Void {

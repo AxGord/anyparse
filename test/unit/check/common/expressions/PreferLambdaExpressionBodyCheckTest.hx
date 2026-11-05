@@ -386,8 +386,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-lambda-expression-body'));
-		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-lambda-expression-body'));
+		CheckFixture.assertRegistered('prefer-lambda-expression-body');
 	}
 
 	public function testSkipParseNoCrash(): Void {

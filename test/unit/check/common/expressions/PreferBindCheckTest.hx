@@ -228,9 +228,7 @@ class PreferBindCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-bind'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-bind'));
+		CheckFixture.assertRegistered('prefer-bind');
 	}
 
 	public function testSkipParseNoCrash(): Void {

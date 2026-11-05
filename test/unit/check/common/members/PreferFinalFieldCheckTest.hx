@@ -184,9 +184,7 @@ class PreferFinalFieldCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-final-field'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-final-field'));
+		CheckFixture.assertRegistered('prefer-final-field');
 	}
 
 	public function testSkipParseNoCrash(): Void {

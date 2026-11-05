@@ -61,9 +61,7 @@ class ModifierOrderCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('modifier-order'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('modifier-order'));
+		CheckFixture.assertRegistered('modifier-order');
 	}
 
 	public function testSkipParseNoCrash(): Void {

@@ -112,9 +112,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-ternary-return'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-ternary-return'));
+		CheckFixture.assertRegistered('prefer-ternary-return');
 	}
 
 	/**

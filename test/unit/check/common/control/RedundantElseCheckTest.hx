@@ -297,9 +297,7 @@ class RedundantElseCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-else-after-return'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-else-after-return'));
+		CheckFixture.assertRegistered('redundant-else-after-return');
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -93,9 +93,7 @@ class ComplexityCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('complexity'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('complexity'));
+		CheckFixture.assertRegistered('complexity');
 	}
 
 	public function testCheckstyleMaxFromThresholds(): Void {

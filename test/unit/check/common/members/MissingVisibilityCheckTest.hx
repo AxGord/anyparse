@@ -114,9 +114,7 @@ class MissingVisibilityCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('missing-visibility'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('missing-visibility'));
+		CheckFixture.assertRegistered('missing-visibility');
 	}
 
 	public function testSkipParseNoCrash(): Void {

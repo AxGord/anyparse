@@ -87,9 +87,7 @@ class ImpossibleIsCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('impossible-is-check'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('impossible-is-check'));
+		CheckFixture.assertRegistered('impossible-is-check');
 	}
 
 	public function testUnrelatedSiblingsFlagged(): Void {

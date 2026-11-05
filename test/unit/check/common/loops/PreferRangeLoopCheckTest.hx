@@ -153,9 +153,7 @@ class PreferRangeLoopCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-range-loop'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-range-loop'));
+		CheckFixture.assertRegistered('prefer-range-loop');
 	}
 
 	public function testSkipParseNoCrash(): Void {

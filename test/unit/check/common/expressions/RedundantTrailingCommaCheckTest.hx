@@ -154,8 +154,7 @@ class RedundantTrailingCommaCheckTest extends Test {
 	public function testRegisteredInBuiltinsAsDefaultOff(): Void {
 		final registered: Null<Check> = Linter.byId('redundant-trailing-comma');
 		Assert.notNull(registered);
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-trailing-comma'));
+		CheckFixture.assertRegistered('redundant-trailing-comma');
 		Assert.isTrue(registered is DefaultOff, 'a trailing comma is a project style call, so the rule is opt-in');
 	}
 

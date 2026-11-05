@@ -406,9 +406,7 @@ class PreferArrowCallbackCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-arrow-callback'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-arrow-callback'));
+		CheckFixture.assertRegistered('prefer-arrow-callback');
 	}
 
 	public function testSkipParseNoCrash(): Void {

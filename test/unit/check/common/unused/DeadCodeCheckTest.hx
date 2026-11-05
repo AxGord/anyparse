@@ -62,9 +62,7 @@ class DeadCodeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('dead-code'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('dead-code'));
+		CheckFixture.assertRegistered('dead-code');
 	}
 
 	public function testFixNestedDeadRunDeletesOuter(): Void {

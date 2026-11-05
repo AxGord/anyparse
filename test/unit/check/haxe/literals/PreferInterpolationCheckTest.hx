@@ -123,9 +123,7 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-interpolation'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-interpolation'));
+		CheckFixture.assertRegistered('prefer-interpolation');
 	}
 
 	public function testSkipParseNoCrash(): Void {

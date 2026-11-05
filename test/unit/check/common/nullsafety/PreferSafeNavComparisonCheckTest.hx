@@ -247,9 +247,7 @@ class PreferSafeNavComparisonCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-safe-nav-comparison'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-safe-nav-comparison'));
+		CheckFixture.assertRegistered('prefer-safe-nav-comparison');
 	}
 
 	public function testSkipParseNoCrash(): Void {

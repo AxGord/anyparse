@@ -220,9 +220,7 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('nullable-switch-missing-null'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('nullable-switch-missing-null'));
+		CheckFixture.assertRegistered('nullable-switch-missing-null');
 	}
 
 	public function testSkipParseNoCrash(): Void {

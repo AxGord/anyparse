@@ -90,9 +90,7 @@ class InvertNegatedIfElseCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('invert-negated-if-else'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('invert-negated-if-else'));
+		CheckFixture.assertRegistered('invert-negated-if-else');
 	}
 
 	public function testSkipParseNoCrash(): Void {

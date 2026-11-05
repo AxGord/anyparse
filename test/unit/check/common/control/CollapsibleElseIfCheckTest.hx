@@ -173,9 +173,7 @@ class CollapsibleElseIfCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('collapsible-else-if'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('collapsible-else-if'));
+		CheckFixture.assertRegistered('collapsible-else-if');
 	}
 
 	public function testSkipParseNoCrash(): Void {

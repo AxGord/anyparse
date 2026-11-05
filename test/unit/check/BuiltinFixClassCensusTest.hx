@@ -67,7 +67,7 @@ class BuiltinFixClassCensusTest extends Test {
 	 * adds names and never removes one.
 	 */
 	public function testTheBuiltinSetIsTheRecordedOne(): Void {
-		final actual: Array<String> = [for (check in Linter.builtins()) check.id()];
+		final actual: Array<String> = CheckFixture.builtinIds();
 		final recorded: Array<String> = readRecorded();
 		final record: Bool = Sys.getEnv('APQ_CENSUS_RECORD') == '1';
 		if (shouldWrite(actual, recorded, record)) save(render(actual));

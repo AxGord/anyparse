@@ -71,7 +71,7 @@ class UnusedCaseBinderCheckTest extends Test {
 	@:killer('M-CAPTURE-SUBJECT-UNPROVEN')
 	public function testWholeBinderNeedsAProvenSubjectType(): Void {
 		final source: (String) -> String = type ->
-			'class C {\n\tfunction f(v: $type): Void {\n\t\tswitch v {\n\t\t\tcase "a": p();' + '\n\t\t\tcase other: r();\n\t\t}\n\t}\n}';
+			'class C {\n\tfunction f(v: $type): Void {\n\t\tswitch v {\n\t\t\tcase "a": p();\n\t\t\tcase other: r();\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(source('String')).length);
 		Assert.equals(0, violations(source('Kind')).length);
 	}
@@ -81,7 +81,7 @@ class UnusedCaseBinderCheckTest extends Test {
 	@:killer('M-CAPTURE-STRUCTURAL')
 	public function testElementBinderNeedsADynamicSubject(): Void {
 		final source: (String) -> String = type ->
-			'class C {\n\tfunction f(v: $type): Void {\n\t\tswitch v {\n\t\t\tcase [a, b]: use(b);' + '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}';
+			'class C {\n\tfunction f(v: $type): Void {\n\t\tswitch v {\n\t\t\tcase [a, b]: use(b);\n\t\t\tcase _: r();\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(source('Dynamic')).length);
 		Assert.equals(0, violations(source('Array<Kind>')).length);
 	}
@@ -247,9 +247,7 @@ class UnusedCaseBinderCheckTest extends Test {
 	}
 
 	public function testRegisteredAsBuiltin(): Void {
-		Assert.notNull(Linter.byId('unused-case-binder'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unused-case-binder'));
+		CheckFixture.assertRegistered('unused-case-binder');
 	}
 
 	/**
@@ -312,9 +310,8 @@ class UnusedCaseBinderCheckTest extends Test {
 	 * "spell it `_`" is exactly the right advice for it.
 	 */
 	public function testNestedShadowingBinderStillFlagged(): Void {
-		final src: String = 'class C {\n\tfunction f(e: Dynamic, v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase Node(e): r();'
-			+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}'
-			+ ENUMS;
+		final src: String = 'class C {\n\tfunction f(e: Dynamic, v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase Node(e): r();\n'
+			+ '\t\t\tcase _: r();\n\t\t}\n\t}\n}$ENUMS';
 		Assert.equals(1, violations(src).length);
 		Assert.stringContains('case Node(_)', applyFixOnce(src));
 	}
@@ -327,7 +324,7 @@ class UnusedCaseBinderCheckTest extends Test {
 
 	/** A statement switch over `v` holding `branches`. */
 	private function sw(branches: String): String {
-		return 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\t$branches\n\t\t}\n\t}\n}' + ENUMS;
+		return 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\t$branches\n\t\t}\n\t}\n}$ENUMS';
 	}
 
 	private function violations(src: String): Array<Violation> {

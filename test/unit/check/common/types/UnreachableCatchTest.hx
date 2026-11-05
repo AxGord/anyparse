@@ -124,9 +124,7 @@ class UnreachableCatchTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('unreachable-catch'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unreachable-catch'));
+		CheckFixture.assertRegistered('unreachable-catch');
 	}
 
 	public function testUntypedCatchAllFirstFlagged(): Void {

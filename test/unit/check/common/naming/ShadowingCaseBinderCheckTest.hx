@@ -3,8 +3,6 @@ package unit.check.common.naming;
 import anyparse.check.Severity;
 import anyparse.check.common.naming.ShadowingCaseBinder;
 
-using StringTools;
-
 /**
  * The `shadowing-case-binder` check: a bare case-pattern binder that takes a name already
  * declared in scope and never reads it — the shape Haxe turns into a silent catch-all where the
@@ -121,9 +119,7 @@ class ShadowingCaseBinderCheckTest extends Test {
 	}
 
 	public function testRegisteredAsBuiltin(): Void {
-		Assert.notNull(Linter.byId('shadowing-case-binder'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('shadowing-case-binder'));
+		CheckFixture.assertRegistered('shadowing-case-binder');
 	}
 
 	/**

@@ -225,9 +225,7 @@ class RedundantPropertyAccessCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-property-access'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-property-access'));
+		CheckFixture.assertRegistered('redundant-property-access');
 	}
 
 	/**

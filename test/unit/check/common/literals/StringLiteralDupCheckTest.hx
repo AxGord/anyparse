@@ -146,9 +146,7 @@ class StringLiteralDupCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('string-literal-dup'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('string-literal-dup'));
+		CheckFixture.assertRegistered('string-literal-dup');
 	}
 
 	public function testDataTableEntriesExcluded(): Void {

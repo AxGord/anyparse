@@ -75,9 +75,7 @@ class PreferNullCoalescingCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('prefer-null-coalescing'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('prefer-null-coalescing'));
+		CheckFixture.assertRegistered('prefer-null-coalescing');
 	}
 
 	public function testSkipParseNoCrash(): Void {

@@ -399,9 +399,7 @@ class GuardReturnCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('guard-return'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('guard-return'));
+		CheckFixture.assertRegistered('guard-return');
 	}
 
 	// --- implicit Void tail: an `if` with no explicit trailing return -----------------------

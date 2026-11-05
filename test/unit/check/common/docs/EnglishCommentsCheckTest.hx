@@ -82,9 +82,7 @@ class EnglishCommentsCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('english-comments'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('english-comments'));
+		CheckFixture.assertRegistered('english-comments');
 	}
 
 	private function violations(src: String): Array<Violation> {

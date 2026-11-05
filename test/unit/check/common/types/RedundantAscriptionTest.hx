@@ -119,9 +119,7 @@ class RedundantAscriptionTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-ascription'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-ascription'));
+		CheckFixture.assertRegistered('redundant-ascription');
 	}
 
 	public function testSkipParseNoCrash(): Void {

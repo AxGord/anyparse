@@ -5,6 +5,8 @@ import anyparse.check.common.loops.RedundantMapIterKey;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * The `redundant-map-iter-key` check: a key-value `for` loop that discards its key
  * (`for (_ => v in m)`) is flagged `Info` and the `_ => ` prefix is dropped. A
@@ -99,7 +101,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 	public function testFixDropsKeyOverALocalMapTheLoopLeavesUnchanged(): Void {
 		for (init in ['[\'a\' => 1]', 'new Map()']) {
 			final src: String = localMap(init, 'g(v);');
-			Assert.equals(StringTools.replace(src, 'for (_ => v in m)', 'for (v in m)'), fixed(src), init);
+			Assert.equals(src.replace('for (_ => v in m)', 'for (v in m)'), fixed(src), init);
 		}
 	}
 
@@ -119,7 +121,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 
 	/** A map local the body reassigns is refused by the same gate as any other local (`NominalTypes.valueIterationProvable`). */
 	public function testFixDeclinedOverAReassignedLocalMap(): Void {
-		assertDeclined(StringTools.replace(localMap('[\'a\' => 1]', 'm = new Map(); g(v);'), 'final m:', 'var m:'));
+		assertDeclined(localMap('[\'a\' => 1]', 'm = new Map(); g(v);').replace('final m:', 'var m:'));
 	}
 
 	/**
@@ -153,7 +155,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }, { file: 'Tree.hx', source: tree }];
 		Assert.equals(
-			StringTools.replace(src, 'for (_ => v in m)', 'for (v in m)'),
+			src.replace('for (_ => v in m)', 'for (v in m)'),
 			CanonicalEdit.applyEdits(src, CheckFixture.fixRun(check, files, plugin).edits)
 		);
 	}
@@ -173,9 +175,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-map-iter-key'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-map-iter-key'));
+		CheckFixture.assertRegistered('redundant-map-iter-key');
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -194,12 +194,6 @@ class RedundantMapIterKeyCheckTest extends Test {
 		return CheckFixture.violations(new RedundantMapIterKey(), src);
 	}
 
-	/** A class whose method declares the local map `m` initialised by `init` and runs `body` in a discarded-key loop over it. */
-	private static function localMap(init: String, body: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\tfinal m:Map<String, Int> = $init;\n\t\tfor (_ => v in m) { $body }\n\t}\n\n'
-			+ '\tfunction g(v:Int):Void {}\n}';
-	}
-
 	private function fixed(src: String): String {
 		final check: RedundantMapIterKey = new RedundantMapIterKey();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
@@ -212,6 +206,12 @@ class RedundantMapIterKeyCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length, src);
 		if (vs.length == 1) Assert.notNull(vs[0].declineReason);
+	}
+
+	/** A class whose method declares the local map `m` initialised by `init` and runs `body` in a discarded-key loop over it. */
+	private static function localMap(init: String, body: String): String {
+		return 'class C {\n\tfunction f():Void {\n\t\tfinal m:Map<String, Int> = $init;\n\t\tfor (_ => v in m) { $body }\n\t}\n\n'
+			+ '\tfunction g(v:Int):Void {}\n}';
 	}
 
 }

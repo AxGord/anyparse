@@ -200,9 +200,7 @@ class UnnecessaryNullCheckCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('unnecessary-null-check'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('unnecessary-null-check'));
+		CheckFixture.assertRegistered('unnecessary-null-check');
 	}
 
 	public function testReshadowedNullableParamGuardNotFlagged(): Void {
@@ -248,6 +246,19 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		assertFixContains(wrap(body), '{\n\t\t\tfinal t:Int = x;', 'if (x != null)');
 	}
 
+	@:pin('control')
+	@:killer('M-PROVER-NULLITY-SKIPPED')
+	public function testTypedefOfNullOperandNotFlagged(): Void {
+		// Dropping this check changes what `f(null)` returns, with or without null safety.
+		Assert.equals(
+			0,
+			violations(
+				'typedef MaybeR = Null<R>; class R {} '
+				+ '@:nullSafety(Strict) class C { function f(x:MaybeR):String { if (x != null) return "a"; return "b"; } }'
+			).length
+		);
+	}
+
 	/** A module whose `f` takes a provably-non-null `x:Int`, wrapping `body`. */
 	private function wrap(body: String): String {
 		return
@@ -283,19 +294,6 @@ class UnnecessaryNullCheckCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violationsIn(new UnnecessaryNullCheck(), CheckFixture.withStd(src));
-	}
-
-	@:pin('control')
-	@:killer('M-PROVER-NULLITY-SKIPPED')
-	public function testTypedefOfNullOperandNotFlagged(): Void {
-		// Dropping this check changes what `f(null)` returns, with or without null safety.
-		Assert.equals(
-			0,
-			violations(
-				'typedef MaybeR = Null<R>; class R {} '
-				+ '@:nullSafety(Strict) class C { function f(x:MaybeR):String { if (x != null) return "a"; return "b"; } }'
-			).length
-		);
 	}
 
 }

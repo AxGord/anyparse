@@ -353,7 +353,7 @@ class RedundantParensCheckTest extends Test {
 	public function testSpliceReificationKeepsItsParensInASplicingHost(): Void {
 		// The rule is `QuotationAware`, so a quoted pair the gate does not keep reports — which is what makes the
 		// three zeroes below the splice gate's answer rather than the reification drop's.
-		Assert.equals(1, violations(inFn("var a = macro g((x));")).length);
+		Assert.equals(1, violations(inFn('var a = macro g((x));')).length);
 		Assert.equals(0, violations(inFn("var a = macro g(($a{args}));")).length);
 		Assert.equals(0, violations(inFn("var a = macro [($a{args})];")).length);
 		Assert.equals(0, violations(inFn("var a = macro new T(($a{args}));")).length);
@@ -531,9 +531,7 @@ class RedundantParensCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-parens'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('redundant-parens'));
+		CheckFixture.assertRegistered('redundant-parens');
 	}
 
 	public function testSkipParseNoCrash(): Void {

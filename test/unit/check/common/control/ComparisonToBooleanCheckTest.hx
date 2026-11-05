@@ -76,8 +76,8 @@ class ComparisonToBooleanCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-NULLITY-TYPE-PARAM-BLIND')
 	public function testTypeParamSpelledLikeBoolSkipped(): Void {
-		final src: String = 'class A {\n\tfunction f<Bool>(x:Bool):Bool\n\t\treturn x == true;\n\n\tfunction g(x:Bool):Bool\n\t\treturn x == true;\n}\n\n'
-			+ 'class B<Bool> {\n\tfunction h(x:Bool):Bool\n\t\treturn x == true;\n}';
+		final src: String = 'class A {\n\tfunction f<Bool>(x:Bool):Bool\n\t\treturn x == true;\n\n\tfunction g(x:Bool):Bool\n'
+			+ '\t\treturn x == true;\n}\n\nclass B<Bool> {\n\tfunction h(x:Bool):Bool\n\t\treturn x == true;\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(6, vs.length == 1 ? src.substring(0, vs[0].span.from).split('\n').length : -1);
@@ -163,9 +163,7 @@ class ComparisonToBooleanCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('comparison-to-boolean'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('comparison-to-boolean'));
+		CheckFixture.assertRegistered('comparison-to-boolean');
 	}
 
 	public function testSkipParseNoCrash(): Void {

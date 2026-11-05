@@ -100,9 +100,7 @@ class AlwaysNullComparisonTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('always-null-comparison'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('always-null-comparison'));
+		CheckFixture.assertRegistered('always-null-comparison');
 	}
 
 	public function testSwitchCaseWriteDoesNotLeak(): Void {

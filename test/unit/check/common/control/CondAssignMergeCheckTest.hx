@@ -486,9 +486,7 @@ class CondAssignMergeCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('cond-assign-merge'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('cond-assign-merge'));
+		CheckFixture.assertRegistered('cond-assign-merge');
 	}
 
 	/** Wrap a statement body in a minimal parseable class + method. */

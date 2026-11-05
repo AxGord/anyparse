@@ -267,9 +267,7 @@ class OptionalParamShorthandCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('optional-param-shorthand'));
-		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
-		Assert.isTrue(ids.contains('optional-param-shorthand'));
+		CheckFixture.assertRegistered('optional-param-shorthand');
 	}
 
 	public function testSkipParseNoCrash(): Void {
