@@ -270,7 +270,9 @@ final class ReconCommand implements CliCommand {
 		CliIo.sysPrint('                          sweep. Incompatible with --predict-strip / --predict-\n');
 		CliIo.sysPrint('                          relax (their patched source diverges from expected by\n');
 		CliIo.sysPrint('                          construction). Requires --probe.\n');
-		CliIo.sysPrint('  --writer-equals-plain   Same as --writer-equals but routes through the PLAIN\n');
+		CliIo.sysPrint(
+			'  --writer-equals-plain   Same as --writer-equals but routes through the PLAIN (only with -D anyparse_plain_pipeline)\n'
+		);
 		CliIo.sysPrint('                          (non-trivia) pipeline (HxModuleParser → HxModuleWriter).\n');
 		CliIo.sysPrint('  --expected <path>       Override the expected-bytes source (default: .hxtest\n');
 		CliIo.sysPrint('                          section 3, or the input itself for raw .hx). Requires\n');
@@ -1006,7 +1008,9 @@ final class ReconCommand implements CliCommand {
 		}
 		if (emittedRaw == null) {
 			final flagName: String = plain ? '--writer-equals-plain' : '--writer-equals';
-			CliIo.stderr('apq recon: no writer wired up for lang "$lang" ($flagName)\n');
+			CliIo.stderr(
+				plain ? 'apq recon: ${CliArgs.noPlainPipeline(lang)}\n' : 'apq recon: no writer wired up for lang "$lang" ($flagName)\n'
+			);
 			return EXIT_USAGE;
 		}
 		final emitted: String = (emittedRaw: String);

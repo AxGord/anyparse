@@ -272,7 +272,8 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		);
 		CliIo.sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
 		CliIo.sysPrint(
-			'  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) writer — mirrors the unit-test entry '
+			'  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) '
+			+ 'writer, only in an engine built with -D anyparse_plain_pipeline — mirrors the unit-test entry '
 			+ 'HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n'
 		);
 		CliIo.sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
@@ -562,7 +563,11 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		}
 		if (emitted == null) {
 			final flagName: String = writerOutputPlain ? '--writer-output-plain' : '--writer-output';
-			CliIo.stderr('apq ast: $flagName: no writer wired up for lang "$lang"\n');
+			CliIo.stderr(
+				writerOutputPlain
+					? 'apq ast: $flagName: ${CliArgs.noPlainPipeline(lang)}\n'
+					: 'apq ast: $flagName: no writer wired up for lang "$lang"\n'
+			);
 			return EXIT_USAGE;
 		}
 		if (!writerDiff) {

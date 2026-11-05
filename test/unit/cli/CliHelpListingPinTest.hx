@@ -398,7 +398,7 @@ class CliHelpListingPinTest extends Test {
 		'                          sweep. Incompatible with --predict-strip / --predict-',
 		'                          relax (their patched source diverges from expected by',
 		'                          construction). Requires --probe.',
-		'  --writer-equals-plain   Same as --writer-equals but routes through the PLAIN',
+		'  --writer-equals-plain   Same as --writer-equals but routes through the PLAIN (only with -D anyparse_plain_pipeline)',
 		'                          (non-trivia) pipeline (HxModuleParser → HxModuleWriter).',
 		'  --expected <path>       Override the expected-bytes source (default: .hxtest',
 		'                          section 3, or the input itself for raw .hx). Requires',

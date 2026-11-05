@@ -139,8 +139,11 @@ final class WriterEqualsCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		if (emitted == null) {
-			final flagName: String = plain ? '--plain' : '(trivia)';
-			CliIo.stderr('apq writer-equals: no writer wired up for lang "$lang" $flagName\n');
+			CliIo.stderr(
+				plain
+					? 'apq writer-equals: ${CliArgs.noPlainPipeline(lang)}\n'
+					: 'apq writer-equals: no writer wired up for lang "$lang" (trivia)\n'
+			);
 			return EXIT_USAGE;
 		}
 		if (emitted == expected) return EXIT_OK;
@@ -170,7 +173,9 @@ final class WriterEqualsCommand implements CliCommand {
 		CliIo.sysPrint('Usage: apq writer-equals [options] <input> <expected>\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --plain             Use the plain (non-trivia) writer (mirrors unit tests)\n');
+		CliIo.sysPrint(
+			'  --plain             Use the plain (non-trivia) writer (mirrors unit tests; only with -D anyparse_plain_pipeline)\n'
+		);
 		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		CliIo.sysPrint('  --config <path>     Load writer options from JSON file (hxformat.json-shaped).\n');
 		CliIo.sysPrint('                      Used for plain .hx inputs (dogfood opt-in); a .hxtest section-1\n');

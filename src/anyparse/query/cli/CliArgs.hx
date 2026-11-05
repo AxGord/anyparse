@@ -77,6 +77,11 @@ final class CliArgs {
 		return (first == "'" && last == "'") || (first == '"' && last == '"') ? t.substring(1, t.length - 1) : t;
 	}
 
+	/** The one wording for a plain-pipeline request on an engine built without it (`-D anyparse_plain_pipeline` absent). */
+	public static function noPlainPipeline(lang: String): String {
+		return 'no plain pipeline for lang "$lang" in this engine (build with -D anyparse_plain_pipeline)';
+	}
+
 	/**
 	 * A fresh `WalkerScan` for `args`: `--flat`/`--limit` at their defaults, an empty name
 	 * and scope-spec accumulator, and the separator index.

@@ -61,6 +61,10 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 			CliIo.stderr('apq writer-probe: $label: $file: ${exception.message}\n');
 			return false;
 		}
+		if (emitted == null && plain) {
+			CliIo.stderr('apq writer-probe: plain: skipped, ${CliArgs.noPlainPipeline(lang)}\n');
+			return true;
+		}
 		if (emitted == null) {
 			final flag: String = plain ? '--writer-output-plain' : '--writer-output';
 			CliIo.stderr('apq writer-probe: $label: no writer wired up for lang "$lang" ($flag equivalent)\n');

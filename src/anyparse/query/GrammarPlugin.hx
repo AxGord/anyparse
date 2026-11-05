@@ -227,7 +227,9 @@ interface GrammarPlugin {
 	 * different bytes on the same input — unit-test expected strings
 	 * MUST be probed via the plain entry. Return `null` when the
 	 * grammar plugin has no plain writer (binary grammars, plugins with
-	 * a single unified pipeline).
+	 * a single unified pipeline), or when this engine was built without it
+	 * (the Haxe plugin compiles its plain pipeline only under
+	 * `-D anyparse_plain_pipeline`).
 	 *
 	 * `optsJson` follows the same convention as `writeRoundTrip` — a
 	 * language-defined JSON config or `null` for defaults.

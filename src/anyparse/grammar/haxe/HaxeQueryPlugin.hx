@@ -311,13 +311,17 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * input (anon-struct flattens, terminators differ); always probe
 	 * the pipeline that matches the test entry being constructed.
 	 *
+	 * Only an engine compiled with `-D anyparse_plain_pipeline` carries the
+	 * plain parser and writer; the shipped `apq.js` does not and answers
+	 * `null`, like a plugin with no plain writer.
+	 *
 	 * `optsJson` follows the same convention as `writeRoundTrip`
 	 * (`writeOptionsOf`) — an `hxformat.json`-shaped payload routes
 	 * through `HaxeFormatConfigLoader.loadHxFormatJson`; `null`, and
 	 * equally a BLANK payload, keeps the defaults.
 	 */
 	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String> {
-		return HxModuleWriter.write(HaxeModuleParser.parse(source), writeOptionsOf(optsJson));
+		return #if anyparse_plain_pipeline HxModuleWriter.write(HaxeModuleParser.parse(source), writeOptionsOf(optsJson)) #else null #end;
 	}
 
 	/**
