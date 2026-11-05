@@ -429,6 +429,30 @@
 			"find": "docAdds(prevDocLed, nextDocLed && !nextSplitLead, after, before)",
 			"replace": "docAdds(prevDocLed, nextDocLed, after, before)",
 			"note": "member-order demands a before-doc blank above a split-led member that fmt never writes"
+		},
+		{
+			"name": "M-FITLINE-LITERAL-NAMED",
+			"type": "anyparse.format.BodyFit",
+			"method": "offerLiteralBreaks",
+			"find": "final named: Doc = namedThresholdLiterals(body);",
+			"replace": "final named: Doc = body;",
+			"note": "a fit-line host measures a flat literal as a flat body, so the literal moves to the next line and the next rewrite glues it back"
+		},
+		{
+			"name": "M-FITLINE-HOST-OFFER",
+			"type": "anyparse.format.BodyFit",
+			"method": "offerLiteralBreaks",
+			"find": "return BreakCommits.offerItemBreaks([named], shape(named), (with, _) -> shape(with[0]), null, true);",
+			"replace": "return shape(named);",
+			"note": "the literal breaks at the measure render, but its fit-line host keeps the placement it read off the flat body, so a single write does not reach the fixed point"
+		},
+		{
+			"name": "M-CHAIN-LINK-THROUGH-OFFER",
+			"type": "anyparse.format.BodyFit",
+			"method": "tailBodyGroup",
+			"find": "case Doc.BreakCommit(_, fl, _):\n\t\t\treturn tailBodyGroup(fl);",
+			"replace": "case Doc.BreakCommit(_, _, _):\n\t\t\treturn null;",
+			"note": "a nested fit-line host whose body offers a literal's break is no longer read as a chain link, so its staircase glues the headers onto one line for a literal that never breaks"
 		}
 	]
 }

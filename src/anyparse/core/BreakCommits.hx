@@ -32,13 +32,23 @@ final class BreakCommits {
 	}
 
 	/**
+	 * `decision`, a list's own width decision the next rewrite takes again rather than reading its break from the source:
+	 * it drops the list's source newlines (`WrapMode.Ignore`, a value-`if` branch's literal). So no host may lay itself out
+	 * for that break, and this `committed` form, which holds the decision on both sides, is what `named` leaves alone.
+	 */
+	public static inline function redecided(decision: Doc): Doc {
+		return committed(decision, decision);
+	}
+
+	/**
 	 * `doc` with every `BreakCommit` resolved, or `doc` itself when it holds none. A layout one round committed can move a
 	 * break the round before saw at another column (a list that opens pushes a literal in it past the limit), so the
 	 * committed layout is measured again, and resolved again from `doc` with every break taken so far, until a round
 	 * takes no new break.
 	 */
 	public static function resolve(doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int): Doc {
-		if (nested(doc).length == 0) return doc;
+		final settled: Null<Doc> = settledWithoutMeasure(doc);
+		if (settled != null) return settled;
 		final tokens: Array<BreakToken> = [];
 		var measured: Doc = doc;
 		for (_ in 0...MEASURE_ROUNDS) {
@@ -279,7 +289,7 @@ final class BreakCommits {
 	private static function hardSeams(d: Doc): Doc {
 		return switch d {
 			case Line(flat, verbatim) if (flat != '\n'): Line('\n', verbatim);
-			case Concat(_) | Nest(_, _): D.mapChildren(d, hardSeams);
+			case Concat(_), Nest(_, _): D.mapChildren(d, hardSeams);
 			case _: d;
 		};
 	}
@@ -295,6 +305,38 @@ final class BreakCommits {
 		});
 		holds.set(n, found);
 		return found;
+	}
+
+	/**
+	 * `d` with every committed break (a `BreakCommit` with no token) resolved to its `flat` side, or null when `d` holds a
+	 * `BreakCommit` with a token, which only a measure render resolves. Only the nodes above a committed break are rebuilt,
+	 * so a Doc holding none comes back as itself and the walk costs no more than `nested`.
+	 */
+	private static function settledWithoutMeasure(d: Doc): Null<Doc> {
+		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
+		var measured: Bool = false;
+		function walk(n: Doc): Doc {
+			if (measured) return n;
+			final kids: Array<Doc> = CollapsePass.children(n);
+			// A leaf holds no commit, so it skips the memo: leaves are most of a Doc's nodes.
+			if (kids.length == 0) return n;
+			final hit: Null<Doc> = memo.get(n);
+			if (hit != null) return hit;
+			final out: Doc = switch n {
+				case BreakCommit(_, flat, null): walk(flat);
+				case BreakCommit(_, _, _):
+					measured = true;
+					n;
+				case _:
+					var changed: Bool = false;
+					for (c in kids) if (walk(c) != c) changed = true;
+					changed ? D.mapChildren(n, walk) : n;
+			};
+			memo.set(n, out);
+			return out;
+		}
+		final out: Doc = walk(d);
+		return measured ? null : out;
 	}
 
 }

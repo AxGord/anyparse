@@ -528,25 +528,29 @@ final class WriterBodyPolicyLowering {
 			// One soft line, no group of its own — see WrapBodyOpts.constructFitBody.
 			macro _dn(_cols, _dc([_dl(), _body]));
 		else if (opts.condFitGroup == true)
-			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
-				? $multilineGlue
-				: opt.fitLineBodyGlue
-					? _dib(
-						anyparse.format.BodyFit.continuationRescuesBody(
-							_cols, _body, _dc([_dop(' '), $gluedBody]), anyparse.format.wrap.WrapList.flatLength(_body), opt.lineWidth
-						),
-						_dn(_cols, _dc([_dl(), _body]))
-					)
-					: anyparse.format.BodyFit.chainStaircase(_cols, _body, _dn(_cols, _dc([_dl(), _body])), opt.lineWidth);
+			offeringLiteralBreaks(
+				macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
+					? $multilineGlue
+					: opt.fitLineBodyGlue
+						? _dib(
+							anyparse.format.BodyFit.continuationRescuesBody(
+								_cols, _body, _dc([_dop(' '), $gluedBody]), anyparse.format.wrap.WrapList.flatLength(_body), opt.lineWidth
+							),
+							_dn(_cols, _dc([_dl(), _body]))
+						)
+						: anyparse.format.BodyFit.chainStaircase(_cols, _body, _dn(_cols, _dc([_dl(), _body])), opt.lineWidth)
+			);
 		else if (singleLineFlagName != null)
-			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
-				? $multilineGlue
-				: _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]));
+			offeringLiteralBreaks(
+				macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
+					? $multilineGlue
+					: _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]))
+			);
 		else
 			// ω-case-body-fitline-shared: the plain FitLine shape now has ONE
 			// owner (`anyparse.format.BodyFit`), shared with the case-body Star
 			// path. `nestGluedBody = false` keeps this site byte-identical.
-			macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth);
+			offeringLiteralBreaks(macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth));
 		// ω-loop-body-if-else-next is NOT here: it is a substitution on the policy
 		// value in `buildBodyCoreWrap`, upstream of every layout.
 		if (elseFieldName == null) return macro {
@@ -1135,6 +1139,13 @@ final class WriterBodyPolicyLowering {
 	 */
 	private static function readBodyValueLocal(e: Expr, bodyValue: Expr): Expr {
 		return e == bodyValue ? macro _bpVal : haxe.macro.ExprTools.map(e, sub -> readBodyValueLocal(sub, bodyValue));
+	}
+
+	/**
+	 * The layout Expr `inner` over the local `_body`, offered once per object-literal break in that body (`BodyFit.offerLiteralBreaks`).
+	 */
+	private static function offeringLiteralBreaks(inner: Expr): Expr {
+		return macro anyparse.format.BodyFit.offerLiteralBreaks(_body, _body -> $inner);
 	}
 
 }

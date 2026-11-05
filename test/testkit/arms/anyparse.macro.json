@@ -1718,6 +1718,30 @@
 			"find": "final docRefusal: Expr = runOn == BeforeSeparator ? macro {} : docEndsLineRefusal(p, macro _start);",
 			"replace": "final docRefusal: Expr = docEndsLineRefusal(p, macro _start);",
 			"note": "the THEN slot of a ternary refuses a doc comment ending its line, as if the `:` after it were a declaration it documents, so the comment is left out and the writer round trip refuses the file"
+		},
+		{
+			"name": "M-RETURN-LITERAL-OFFER",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyFitExpr",
+			"find": "offeringLiteralBreaks(\n\tmacro anyparse.format.wrap.WrapList.flatLength(_body) == -1\n\t\t? $multilineGlue\n\t\t: _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]))\n);",
+			"replace": "macro anyparse.format.wrap.WrapList.flatLength(_body) == -1\n\t? $multilineGlue\n\t: _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]));",
+			"note": "a return reads its expression as flat under a literal that breaks, and drops the literal below the bare keyword on the first write"
+		},
+		{
+			"name": "M-FOR-LITERAL-OFFER",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyFitExpr",
+			"find": "offeringLiteralBreaks(macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth));",
+			"replace": "macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth);",
+			"note": "a plain fit-line host (a loop body) measures a flat literal that fits nowhere as a flat body, moves it to the next line, and the next rewrite glues it back"
+		},
+		{
+			"name": "M-IGNORED-LITERAL-REDECIDED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "redecidedWhenIgnored",
+			"find": "_ignoreEmit ? anyparse.core.BreakCommits.redecided(_cascade) : _cascade;",
+			"replace": "_cascade;",
+			"note": "a literal whose source newlines the next write drops is named, so its host lays itself out for a break the next write decides again and the value-if moves onto the return line"
 		}
 	]
 }

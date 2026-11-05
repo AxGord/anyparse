@@ -1,6 +1,9 @@
 package anyparse.format;
 
+import anyparse.core.BreakCommits;
+import anyparse.core.D;
 import anyparse.core.Doc;
+import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
 import anyparse.core.LineSpan;
 import anyparse.format.wrap.WrapList;
@@ -93,6 +96,19 @@ final class BodyFit {
 		if (refuseGlue) return breakLayout(cols, body);
 		final glued: Doc = Doc.Concat([Doc.OptSpace(' '), body]);
 		return glueLayout(cols, body, nestGluedBody ? Doc.Nest(cols, glued) : glued, lineWidth);
+	}
+
+	/**
+	 * `shape(body)`, offered once more per object literal in a `body` that renders flat as far as it knows, with that
+	 * literal broken. An object literal's Star force-commits a source-multi-line literal, so the next rewrite reads a broken
+	 * literal as a body that cannot render flat and answers `FitLine` by the glue, where this one measured a flat body: a
+	 * placement read off `flatLength` has to be read off the break the measure render takes, or a single pass does not
+	 * reach the fixed point.
+	 */
+	public static function offerLiteralBreaks(body: Doc, shape: Doc -> Doc): Doc {
+		if (WrapList.flatLength(body) == -1) return shape(body);
+		final named: Doc = namedThresholdLiterals(body);
+		return BreakCommits.offerItemBreaks([named], shape(named), (with, _) -> shape(with[0]), null, true);
 	}
 
 	/**
@@ -339,6 +355,32 @@ final class BodyFit {
 		}
 	}
 
+	/**
+	 * `d` with every object literal in it that still decides its own threshold break named
+	 * (`WrapList.namedThresholdLiteral`), or `d` itself when it holds none. One literal is one node however many layouts of
+	 * its host hold it, so it gets one token; a decision a host has already named keeps the token it has.
+	 */
+	private static function namedThresholdLiterals(d: Doc): Doc {
+		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
+		function walk(n: Doc): Doc {
+			final hit: Null<Doc> = memo.get(n);
+			if (hit != null) return hit;
+			final out: Doc = switch n {
+				case BreakCommit(_, flat, _) if (BreakCommits.decisionMapped(flat, (brk, _) -> brk) != null):
+					n;
+				case BreakCommit(brk, flat, token):
+					final f: Doc = walk(flat);
+					f == flat ? n : BreakCommit(brk, f, token);
+				case _:
+					final named: Doc = WrapList.namedThresholdLiteral(n);
+					named != n ? named : D.mapChildrenShared(n, walk);
+			};
+			memo.set(n, out);
+			return out;
+		}
+		return walk(d);
+	}
+
 	/** The `Nest` indent of `d` when `d` is a body slot whose separator is a hardline (`next`) or the glue space, else `-1`. */
 	private static function slotIndent(d: Doc, next: Bool): Int {
 		return switch d {
@@ -488,6 +530,9 @@ final class BodyFit {
 			// staircases as one shape instead of gluing its top two links.
 			case Doc.IfLineExceeds(_, _, fl):
 				return tailBodyGroup(fl);
+			// A link's literal offer stands in for its plain layout until a break resolves it.
+			case Doc.BreakCommit(_, fl, _):
+				return tailBodyGroup(fl);
 			case Doc.Concat(items):
 				final i: Int = lastNonEmptyIdx(items);
 				return i < 0 ? null : tailBodyGroup(items[i]);
@@ -505,6 +550,8 @@ final class BodyFit {
 			// slot's place; read through the same-line branch so a chain one
 			// link longer still classifies every link below it.
 			case Doc.IfLineExceeds(_, _, fl):
+				return tailSlotInner(fl);
+			case Doc.BreakCommit(_, fl, _):
 				return tailSlotInner(fl);
 			case Doc.Concat(items):
 				final i: Int = lastNonEmptyIdx(items);
@@ -556,6 +603,9 @@ final class BodyFit {
 			// own break branch — the staircase it built for everything below.
 			case Doc.IfLineExceeds(_, brk, fl) if (tailBodyGroup(fl) != null):
 				return brk;
+			case Doc.BreakCommit(brk, fl, token):
+				final rebuilt: Null<Doc> = forceTailBodyGroup(fl);
+				return rebuilt == null ? null : Doc.BreakCommit(brk, rebuilt, token);
 			case Doc.Concat(items):
 				return rebuiltTail(items, forceTailBodyGroup);
 			case _:
@@ -576,6 +626,9 @@ final class BodyFit {
 			// own break branch — the staircase it built for everything below.
 			case Doc.IfLineExceeds(_, brk, fl) if (tailSlotInner(fl) != null):
 				return brk;
+			case Doc.BreakCommit(brk, fl, token):
+				final rebuilt: Null<Doc> = forceTailSlot(fl);
+				return rebuilt == null ? null : Doc.BreakCommit(brk, rebuilt, token);
 			case Doc.Concat(items):
 				return rebuiltTail(items, forceTailSlot);
 			case _:

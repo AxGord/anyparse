@@ -24,10 +24,7 @@ final class XconfigFmt {
 	 * The files the writer settles only on a second rewrite under the vendored config. Compared for equality:
 	 * a file joining is a regression and one leaving is progress, and either is recorded here with the measurement.
 	 */
-	public static final XCONFIG_ONE_PASS: Array<String> = [
-		'src/anyparse/check/common/control/UnnecessarySwitch.hx',
-		'src/anyparse/query/cli/DeclarationDelta.hx'
-	];
+	public static final XCONFIG_ONE_PASS: Array<String> = [];
 
 	/** The files under the scratch `root` that `fmt --one-pass`'s stderr `err` names, relative to `root`, sorted. */
 	public static function onePassSet(err: String, root: String): Array<String> {
@@ -104,8 +101,8 @@ final class XconfigFmt {
 	 * The filed files that no longer exist under `repo`: a slice that deletes one leaves the filed set holding a name the writer can
 	 * never report, which the battery then reads as a file that settled.
 	 */
-	public static function missingFiled(repo: String): Array<String> {
-		return XCONFIG_ONE_PASS.filter(file -> !FileSystem.exists(Path.join([repo, file])));
+	public static function missingFiled(repo: String, ?filed: Array<String>): Array<String> {
+		return (filed ?? XCONFIG_ONE_PASS).filter(file -> !FileSystem.exists(Path.join([repo, file])));
 	}
 
 	/**
@@ -113,12 +110,14 @@ final class XconfigFmt {
 	 * files among them (an untouched filed file is not compared: the battery sees it at the landing), and every filed file gone from
 	 * `repo`, touched or not. Nothing to run and nothing gone is `Skipped`.
 	 */
-	public static function touchedStand(hxq: Array<String> -> Command, repo: String, touched: Array<String>, root: String): XconfigStand {
-		final gone: Array<String> = missingFiled(repo);
+	public static function touchedStand(
+		hxq: Array<String> -> Command, repo: String, touched: Array<String>, root: String, ?filed: Array<String>
+	): XconfigStand {
+		final gone: Array<String> = missingFiled(repo, filed);
 		final files: Array<String> = hxFilesOf(touched);
 		final failure: Null<XconfigFailure> = files.length == 0
 			? failureOf([], [], gone)
-			: xconfigVerdict(xconfigRun(hxq, repo, root, files), XCONFIG_ONE_PASS.filter(file -> files.contains(file)), gone);
+			: xconfigVerdict(xconfigRun(hxq, repo, root, files), (filed ?? XCONFIG_ONE_PASS).filter(file -> files.contains(file)), gone);
 		return if (failure != null)
 			Breaks(failure)
 		else if (files.length == 0)

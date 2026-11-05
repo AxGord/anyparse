@@ -51,11 +51,10 @@ final class ImportSpelling {
 	 */
 	public static function split(text: String, usingFlag: Bool = false): Null<ImportSpelled> {
 		final line: String = text.trim();
-		for (keyword in [IMPORT_WORD, USING_WORD]) if (line == keyword || line.startsWith('$keyword ')) { // noqa: redundant-braces
+		for (keyword in [IMPORT_WORD, USING_WORD]) if (line == keyword || line.startsWith('$keyword '))
 			return usingFlag && keyword == IMPORT_WORD
 				? null
 				: { keyword: keyword, path: withoutSemicolon(line.substr(keyword.length).trim()) };
-		}
 		return { keyword: usingFlag ? USING_WORD : null, path: withoutSemicolon(line) };
 	}
 

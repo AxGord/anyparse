@@ -338,6 +338,7 @@ final class TriviaSepLowering {
 		);
 		final dispatchCtx: WriterLowering.SepStarDispatchCtx = {
 			reflowSourceMultiline: reflowSourceMultiline,
+			bracedList: openText == '{',
 			matrixWrap: matrixWrap,
 			uniformStmtBlanks: uniformStmtBlanks,
 			keepCheckExpr: keepCheckExpr,
@@ -1534,7 +1535,7 @@ final class TriviaSepLowering {
 			} else if (_forceMulti) {
 				$forceMultiExpr;
 			} else {
-				${triviaSepCloseTrailAppendExpr(noTriviaBranch)};
+				${redecidedWhenIgnored(c.bracedList, triviaSepCloseTrailAppendExpr(noTriviaBranch))};
 			}
 		};
 	}
@@ -1806,6 +1807,19 @@ final class TriviaSepLowering {
 		return macro anyparse.format.wrap.WrapList.continuationCols(
 			$rulesExpr, opt, _fmDocs, $v{sepText.length + 1}, $suppressAdditionalIndent, 0, false, false
 		);
+	}
+
+	/**
+	 * `cascade`, the wrap cascade's Doc of a braced list, held `BreakCommits.redecided` when the list drops its source newlines
+	 * (`_ignoreEmit`): the next rewrite takes its width decision again, so no host lays itself out for that break.
+	 */
+	private static function redecidedWhenIgnored(braced: Bool, cascade: Expr): Expr {
+		return braced
+			? macro {
+				final _cascade: anyparse.core.Doc = $cascade;
+				_ignoreEmit ? anyparse.core.BreakCommits.redecided(_cascade) : _cascade;
+			}
+			: cascade;
 	}
 
 }

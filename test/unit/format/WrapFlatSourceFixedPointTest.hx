@@ -682,7 +682,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 				name: 'statement-if body call with a literal argument (ifBody: fitLine)',
 				config: IF_BODY_CALL,
 				src: IF_BODY_CALL_SRC,
-				closed: false
+				closed: true
 			},
 			{
 				name: 'ternary under a sole-arg call (HasSignalBuilder.hx)',
@@ -1035,11 +1035,11 @@ class WrapFlatSourceFixedPointTest extends Test {
 	}
 
 	/**
-	 * A literal argument under a FIT cascade is not named: its next rewrite re-decides it, so the call the source opened
-	 * one argument per line is already the fixed point and must come back byte for byte.
+	 * A literal argument under an ignore-mode FIT cascade is not named: its next rewrite re-decides it, so the call the source
+	 * opened one argument per line is already the fixed point and must come back byte for byte. Two guards hold it, the
+	 * ignore-mode list held redecided and the fit-pivot exclusion, so no single arm kills it.
 	 */
-	@:pin('control')
-	@:killer('M-NAMED-FIT-PIVOT')
+	@:pin('guard')
 	public function testFitPivotArgumentKeepsItsOpenCall(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tnew DownloadReader(\n\t\t\txml,\n\t\t\t{\n\t\t\t\tdebug: ac.debug,\n'
 			+ '\t\t\t\tapp: ac.app,\n\t\t\t\tbefore: false,\n\t\t\t\tsection: BASection.Prepare,\n\t\t\t\tpath: \'\',\n\t\t\t\tunits: [],\n'

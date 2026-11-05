@@ -1388,6 +1388,18 @@ class WrapList {
 	}
 
 	/**
+	 * An object literal still deciding its own THRESHOLD break (`renderPivotBreakArm`), named (`BreakCommits.named`) so a host around it —
+	 * an argument list, a chain, a `FitLine` body — lays itself out as the next rewrite reads that break back: an object
+	 * literal's Star force-commits a source-multi-line literal, so that rewrite measures the host's item multi-line. A fit
+	 * pivot is not named: an ignore-mode list is re-decided by the next rewrite (it is held `BreakCommits.redecided` too), and
+	 * two named pivots in one ternary would each commit only their own break. A sole argument stays the bare decision
+	 * `BodyAllman` reads. Anything else comes back as it is.
+	 */
+	public static function namedThresholdLiteral(item: Doc): Doc {
+		return DocMeasure.firstVisibleTextStartsWith(item, '{'.code) && renderPivotBreakArm(item) != null ? BreakCommits.named(item) : item;
+	}
+
+	/**
 	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
 	 * pointless single-element `Concat` for the common no-lead path.
 	 */
@@ -4829,17 +4841,6 @@ class WrapList {
 			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
 		else
 			WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
-	}
-
-	/**
-	 * An argument that is an object literal still deciding its own THRESHOLD break (`renderPivotBreakArm`), named
-	 * (`BreakCommits.named`) so the argument list lays itself out as the next rewrite reads that break back: an object
-	 * literal's Star force-commits a source-multi-line literal, so that rewrite measures the argument multi-line. A fit
-	 * pivot is re-decided by the next rewrite rather than read back committed, and a sole argument stays the bare
-	 * decision `BodyAllman` reads, so neither is named. Any other argument comes back as it is.
-	 */
-	private static function namedThresholdLiteral(item: Doc): Doc {
-		return DocMeasure.firstVisibleTextStartsWith(item, '{'.code) && renderPivotBreakArm(item) != null ? BreakCommits.named(item) : item;
 	}
 
 }

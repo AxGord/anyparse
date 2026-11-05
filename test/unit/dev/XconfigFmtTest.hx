@@ -21,6 +21,9 @@ final class XconfigFmtTest extends Test {
 
 	private static inline final SUMMARY: String = 'apq fmt --list: 0 of 2 file(s) would be rewritten';
 
+	/** A filed set for the stand's own contract: the real one holds whatever the writer leaves unsettled today, even nothing. */
+	private static final FILED: Array<String> = ['src/x/Filed.hx', 'src/x/Other.hx'];
+
 	public function testTheOnePassSetIsTheFilesUnderTheScratchRootSorted(): Void {
 		final err: String = [
 			'apq fmt: /w/xconfig/src/b/B.hx: the writer needed 2 rewrites to reach its fixed point',
@@ -132,21 +135,21 @@ final class XconfigFmtTest extends Test {
 	/** The filed files that are no longer in the tree are named, whatever was touched. */
 	public function testAFiledFileGoneFromTheTreeIsMissing(): Void {
 		TempDir.with(dir -> {
-			final repo: String = fixtureRepo(dir, XconfigFmt.XCONFIG_ONE_PASS.slice(1));
-			Assert.same(XconfigFmt.XCONFIG_ONE_PASS.slice(0, 1), XconfigFmt.missingFiled(repo));
-			Assert.same([], XconfigFmt.missingFiled(fixtureRepo(dir, XconfigFmt.XCONFIG_ONE_PASS)));
+			final repo: String = fixtureRepo(dir, FILED.slice(1));
+			Assert.same(FILED.slice(0, 1), XconfigFmt.missingFiled(repo, FILED));
+			Assert.same([], XconfigFmt.missingFiled(fixtureRepo(dir, FILED), FILED));
 		});
 	}
 
 	/** No touched `.hx` and nothing gone: the half is skipped, and the engine is not even asked. */
 	public function testNoTouchedHxFileSkipsTheCrossConfigHalf(): Void {
 		TempDir.with(dir -> {
-			final repo: String = fixtureRepo(dir, XconfigFmt.XCONFIG_ONE_PASS);
+			final repo: String = fixtureRepo(dir, FILED);
 			var asked: Bool = false;
 			final stand: XconfigStand = XconfigFmt.touchedStand(_ -> {
 				asked = true;
 				return printing(SUMMARY);
-			}, repo, ['docs/testing.md', 'bin/G.hx'], dir.file('scratch'));
+			}, repo, ['docs/testing.md', 'bin/G.hx'], dir.file('scratch'), FILED);
 			Assert.isTrue(stand.match(Skipped));
 			Assert.isFalse(asked);
 		});
@@ -155,8 +158,8 @@ final class XconfigFmtTest extends Test {
 	/** A touched file that settles holds; a filed file nobody touched is not compared, so it is never a `-`. */
 	public function testAnUntouchedFiledFileIsNotCompared(): Void {
 		TempDir.with(dir -> {
-			final repo: String = fixtureRepo(dir, ['src/a/A.hx'].concat(XconfigFmt.XCONFIG_ONE_PASS));
-			final stand: XconfigStand = XconfigFmt.touchedStand(_ -> printing(SUMMARY), repo, ['src/a/A.hx'], dir.file('scratch'));
+			final repo: String = fixtureRepo(dir, ['src/a/A.hx'].concat(FILED));
+			final stand: XconfigStand = XconfigFmt.touchedStand(_ -> printing(SUMMARY), repo, ['src/a/A.hx'], dir.file('scratch'), FILED);
 			Assert.isTrue(stand.match(Holds), '$stand');
 		});
 	}
@@ -164,9 +167,9 @@ final class XconfigFmtTest extends Test {
 	/** A touched file that is filed and now settles is a `-`, and a touched file joining the set is a `+`. */
 	public function testATouchedFiledFileThatSettlesBreaksTheStand(): Void {
 		TempDir.with(dir -> {
-			final filed: String = XconfigFmt.XCONFIG_ONE_PASS[0];
-			final repo: String = fixtureRepo(dir, ['src/a/A.hx'].concat(XconfigFmt.XCONFIG_ONE_PASS));
-			switch XconfigFmt.touchedStand(_ -> printing(SUMMARY), repo, [filed], dir.file('scratch')) {
+			final filed: String = FILED[0];
+			final repo: String = fixtureRepo(dir, ['src/a/A.hx'].concat(FILED));
+			switch XconfigFmt.touchedStand(_ -> printing(SUMMARY), repo, [filed], dir.file('scratch'), FILED) {
 				case Breaks(failure):
 					Assert.contains('- $filed', failure.detail);
 				case other:
@@ -174,7 +177,7 @@ final class XconfigFmtTest extends Test {
 			}
 			final root: String = dir.file('scratch2');
 			final joining: String = 'apq fmt: $root/src/a/A.hx: the writer needed 2 rewrites to reach its fixed point\n$SUMMARY';
-			switch XconfigFmt.touchedStand(_ -> printing(joining), repo, ['src/a/A.hx'], root) {
+			switch XconfigFmt.touchedStand(_ -> printing(joining), repo, ['src/a/A.hx'], root, FILED) {
 				case Breaks(failure):
 					Assert.contains('+ src/a/A.hx', failure.detail);
 				case other:
@@ -186,9 +189,9 @@ final class XconfigFmtTest extends Test {
 	/** A slice that deletes a filed file fails with nothing else touched: the battery would read it as a file that settled. */
 	public function testADeletedFiledFileBreaksTheStandWithNothingElseTouched(): Void {
 		TempDir.with(dir -> {
-			final repo: String = fixtureRepo(dir, XconfigFmt.XCONFIG_ONE_PASS.slice(1));
-			final gone: String = XconfigFmt.XCONFIG_ONE_PASS[0];
-			switch XconfigFmt.touchedStand(_ -> printing(SUMMARY), repo, [], dir.file('scratch')) {
+			final repo: String = fixtureRepo(dir, FILED.slice(1));
+			final gone: String = FILED[0];
+			switch XconfigFmt.touchedStand(_ -> printing(SUMMARY), repo, [], dir.file('scratch'), FILED) {
 				case Breaks(failure):
 					Assert.contains('- $gone (gone from the tree)', failure.detail);
 					Assert.stringContains('remove from XCONFIG_ONE_PASS', failure.line);

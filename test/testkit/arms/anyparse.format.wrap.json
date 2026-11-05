@@ -167,7 +167,7 @@
 			"method": "namedThresholdLiteral",
 			"find": "'{'.code) && renderPivotBreakArm(item) != null ?",
 			"replace": "'{'.code) ?",
-			"note": "an object-literal argument under a FIT cascade is named too, though the next write re-decides it instead of reading it back committed, so a call the source opened one argument per line is rewritten into a hug"
+			"note": "a fit-pivot literal is named too, so a ternary of two breaking literals under the compiled defaults commits only one break per alternative and takes a second rewrite"
 		},
 		{
 			"name": "M-CHAIN-OFFER-OFF",
@@ -434,6 +434,14 @@
 			"find": "parts.exists(WrapList.startsWithHardline)",
 			"replace": "false",
 			"note": "an operand opening with a hardline joins the fill, whose flat gap leaves a space at the line end and takes a second rewrite"
+		},
+		{
+			"name": "M-CHAIN-LITERAL-NAMED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emit",
+			"find": "final items: Array<Doc> = items.map(WrapList.namedThresholdLiteral);",
+			"replace": "final items: Array<Doc> = items;",
+			"note": "a ternary lays itself out from the flat literal in its branch, so the first write takes the cascade's break where the next one, reading the broken literal, keeps the ternary on one line"
 		}
 	]
 }

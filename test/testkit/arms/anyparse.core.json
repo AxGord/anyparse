@@ -636,6 +636,22 @@
 			"find": "ctx.spanStart >= 0 && written > ctx.spanStart",
 			"replace": "written > ctx.spanStart",
 			"note": "a read with no begin in the render compares against the unset record and always takes the left side"
+		},
+		{
+			"name": "M-SETTLE-KEEPS-COMMITTED",
+			"type": "anyparse.core.BreakCommits",
+			"method": "settledWithoutMeasure",
+			"find": "case BreakCommit(_, flat, null): walk(flat);",
+			"replace": "case BreakCommit(_, _, null): n;",
+			"note": "a committed break settled without a measure render is left in the Doc, which the collapse pass and the emit render never resolve"
+		},
+		{
+			"name": "M-SETTLE-SKIPS-TOKEN",
+			"type": "anyparse.core.BreakCommits",
+			"method": "settledWithoutMeasure",
+			"find": "measured = true;",
+			"replace": "",
+			"note": "a break carrying a token is taken for settled, so resolve skips the measure render and leaves that break unresolved"
 		}
 	]
 }

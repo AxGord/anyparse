@@ -2424,6 +2424,7 @@ typedef SepStarTypedefInserts = {
  */
 typedef SepStarDispatchCtx = {
 	final reflowSourceMultiline: Bool;
+	final bracedList: Bool;
 	final matrixWrap: Bool;
 	final uniformStmtBlanks: Bool;
 	final keepCheckExpr: Expr;
