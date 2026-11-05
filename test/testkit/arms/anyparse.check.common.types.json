@@ -227,6 +227,37 @@
 			"find": "name.indexOf('.') < 0 && ",
 			"replace": "",
 			"note": "a qualified path is read as a simple name, though only the compiler's package lookup can decide it"
+		},
+		{
+			"name": "M-MAS-GROWTH-BLIND",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "growsInRepetition",
+			"force": "false",
+			"note": "a set filled inside a loop, a local function or a self-calling member is advised an Array and contains, which is quadratic once it grows"
+		},
+		{
+			"name": "M-MAS-FRESH-PER-TURN",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "growsInRepetition",
+			"find": "!opensMap && ",
+			"replace": "",
+			"note": "a repetition that also declares the map is counted as growth, so a map rebuilt on every turn is no longer advised an array"
+		},
+		{
+			"name": "M-MAS-MEMBER-LIFETIME-BLIND",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "growsInRepetition",
+			"find": "ask.repeating.contains(node.kind) || callable",
+			"replace": "ask.repeating.contains(node.kind)",
+			"note": "a memo field written by a member that is no recursion is advised an array, whose contains is linear over the keys every call adds"
+		},
+		{
+			"name": "M-MAS-CTOR-LIFETIME",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "growsInRepetition",
+			"find": " && node.name != ask.constructor",
+			"replace": "",
+			"note": "the constructor counts as a repeating member, so a field set filled once there goes unreported"
 		}
 	]
 }

@@ -60,7 +60,7 @@ import anyparse.query.SymbolIndex;
 final class MapValueScan {
 
 	/** The one Map member that STORES a value — `m.set(k, v)`, whose value needs the non-null proof. */
-	private static inline final SET_METHOD: String = 'set';
+	public static inline final SET_METHOD: String = 'set';
 
 	/** The boolean literal every value of a set of keys holds (`MapClaim.KeySet`). */
 	private static inline final TRUE_LITERAL: String = 'true';
