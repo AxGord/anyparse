@@ -16,6 +16,12 @@ typedef GateRecord = {
 	/** The compiler that built the binaries the rows ran (`BaseEngine.toolchain`). */
 	var toolchain: String;
 
+	/**
+	 * The node version the suite and the kits ran under (`GateReuse.nodeVersion`); a record without it is an older one, which no
+	 * land takes rows from.
+	 */
+	@:optional var node: Null<String>;
+
 	/** The corpus fork's state (`GateReuse.forkState`), empty when none was set. */
 	var fork: String;
 

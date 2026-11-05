@@ -783,6 +783,14 @@
 			"find": "if (lines.length > 0 && seen.failure != '') lines.unshift('failure: ${seen.failure}');",
 			"replace": "",
 			"note": "a deviating row no longer names why the engine gave no answer, so a failed batch share reads as empty streams"
+		},
+		{
+			"name": "M-GATE-REUSE-NODE-BLIND",
+			"type": "dev.GateReuse",
+			"method": "refusal",
+			"find": "if (record.node != facts.node) return",
+			"replace": "if (false) return",
+			"note": "a gate record stands for a land under another node, or for an older record that names none, so a node upgrade between the gate and the land takes rows measured by the old runtime"
 		}
 	]
 }

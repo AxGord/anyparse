@@ -139,6 +139,33 @@ final class GateReuseTest extends Test {
 		Assert.isFalse(GateReuse.heldTree(false, 't1', 't1'));
 	}
 
+	@:pin('control')
+	@:killer('M-GATE-REUSE-NODE-BLIND')
+	public function testARecordStandsForALandOnlyUnderTheNodeItRanUnder(): Void {
+		Assert.same(['suite', 'corpus', 'jvm probe', 'kit probes'], GateReuse.rows(passing('t1'), facts('t1')), 'the same node');
+		final upgraded: GateFacts = facts('t1');
+		upgraded.node = 'v22.0.0';
+		Assert.same([], GateReuse.rows(passing('t1'), upgraded), 'another node runs the battery');
+		Assert.stringContains('another node', GateReuse.report(passing('t1'), upgraded, []));
+		final older: GateRecord = passing('t1');
+		older.node = null;
+		Assert.same([], GateReuse.rows(older, facts('t1')), 'a record without the node is an older one');
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-REUSE-NODE-BLIND')
+	public function testARecordFileWithoutTheNodeKeyStandsForNoRow(): Void {
+		TempDir.with(dir -> {
+			final file: String = dir.file(GateReuse.FILE);
+			GateReuse.write(file, passing('t1'));
+			File.saveContent(file, ~/"node"\s*:\s*"[^"]*"\s*,?/.replace(File.getContent(file), ''));
+			Assert.isFalse(File.getContent(file).contains('"node"'), 'the file is the record an older gate left');
+			final back: Null<GateRecord> = GateReuse.read(file);
+			Assert.notNull(back, 'the older record file still reads');
+			if (back != null) Assert.same([], GateReuse.rows(back, facts('t1')), 'an older record file never stands for a row');
+		});
+	}
+
 	/** The tree a gate judged on the slice's tip, then the tree a land of it onto `main` commits, `main` moved one commit or not. */
 	private static function landed(moved: Bool): Array<String> {
 		return TempDir.with(dir -> {
@@ -169,6 +196,7 @@ final class GateReuseTest extends Test {
 			tree: tree,
 			passed: true,
 			toolchain: 'Haxe 4',
+			node: 'v20.1.0',
 			fork: '',
 			allow: [],
 			rows: ['suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'kits'],
@@ -182,6 +210,7 @@ final class GateReuseTest extends Test {
 		return {
 			tree: tree,
 			toolchain: 'Haxe 4',
+			node: 'v20.1.0',
 			fork: '',
 			quick: true
 		};

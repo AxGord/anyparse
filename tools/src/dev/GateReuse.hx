@@ -87,6 +87,12 @@ final class GateReuse {
 		return cmd('git -C $repo rev-parse $rev^{tree}').text().trim();
 	}
 
+	/** The node the suite and the kits are spawned under, as `node --version` names it. */
+	public static function nodeVersion(): String {
+		final version: Result = cmd('node --version').check();
+		return (version.out + version.err).trim();
+	}
+
 	/** The corpus fork's state as both the gate and the battery read it, empty when the fork is unset. */
 	public static function forkState(): String {
 		final fork: String = Sys.getEnv(GateTree.FORK_VAR) ?? '';
@@ -103,6 +109,7 @@ final class GateReuse {
 		return {
 			tree: treeOf(repo),
 			toolchain: BaseEngine.toolchain(),
+			node: nodeVersion(),
 			fork: forkState(),
 			quick: quick
 		};
@@ -114,6 +121,7 @@ final class GateReuse {
 		if (!record.passed) return 'the gate of $judged failed';
 		if (record.tree != facts.tree) return 'the gate judged $judged, the land verifies ${GateTree.short(facts.tree)}';
 		if (record.toolchain != facts.toolchain) return 'the gate of $judged built with another compiler';
+		if (record.node != facts.node) return 'the gate of $judged ran under another node, or recorded none';
 		if (record.fork != facts.fork) return 'the corpus fork moved since the gate of $judged';
 		return null;
 	}
@@ -163,6 +171,7 @@ final class GateReuse {
 			tree: started,
 			passed: heldTree(gate.summary.passed(), started, treeOf(gate.tree)),
 			toolchain: BaseEngine.toolchain(),
+			node: nodeVersion(),
 			fork: forkState(),
 			allow: gate.options.allow,
 			rows: passedRows(gate.summary.steps()),
@@ -191,6 +200,7 @@ final class GateReuse {
 typedef GateFacts = {
 	var tree: String;
 	var toolchain: String;
+	var node: String;
 	var fork: String;
 
 	/** Whether the battery's suite skips verifying the shard plan, as the gate's does. */
