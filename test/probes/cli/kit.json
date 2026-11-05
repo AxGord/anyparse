@@ -7657,6 +7657,155 @@
 				"err": "922156930589b6ab",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "verify: created module shadowing a std module another build uses is put back",
+			"note": "both builds hold src; only the larger one reaches haxe.Json, so the shadow must be compiled by it: rc=1, file removed, big.hxml still green",
+			"argv": [
+				"hxq",
+				"new",
+				"src/haxe/Json.hx",
+				"--kind",
+				"class",
+				"--field",
+				"public static function other(): Int { return 1; }",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"cheap.hxml\"},{\"hxml\":\"big.hxml\"}]}\n",
+				"cheap.hxml": "-cp src\n-main Good\n--no-output\n",
+				"big.hxml": "-cp src\n-cp more\n-main Big\n--no-output\n",
+				"src/Good.hx": "class Good { static function main() {} }\n",
+				"more/Big.hx": "class Big { static function main() { trace(haxe.Json.stringify(1)); } }\n"
+			},
+			"compile": {
+				"args": [
+					"big.hxml"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "2388039224022760",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "verify: created module a sub-package file binds by parent lookup is put back",
+			"note": "app.sub.User reads Date, which the created app/Date.hx now binds from the parent package: only the larger build reaches User; rc=1, file removed, big.hxml still green",
+			"argv": [
+				"hxq",
+				"new",
+				"src/app/Date.hx",
+				"--kind",
+				"class",
+				"--field",
+				"public static function other(): Int { return 1; }",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"cheap.hxml\"},{\"hxml\":\"big.hxml\"}]}\n",
+				"cheap.hxml": "-cp src\n-main Good\n--no-output\n",
+				"big.hxml": "-cp src\n-cp more\n-main Big\n--no-output\n",
+				"src/Good.hx": "class Good { static function main() {} }\n",
+				"more/Big.hx": "class Big { static function main() { trace(app.sub.User.f()); } }\n",
+				"more/app/sub/User.hx": "package app.sub;\n\nclass User {\n\tpublic static function f(): Float {\n\t\treturn Date.now().getTime();\n\t}\n}\n"
+			},
+			"compile": {
+				"args": [
+					"big.hxml"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "ab3a6fe8314687f8",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "verify: created module read only by a folder-walking build macro is put back",
+			"note": "no source spells the module; big.hxml runs a macro over src/walk that rejects a file without the marker: rc=1, file removed, big.hxml still green",
+			"argv": [
+				"hxq",
+				"new",
+				"src/walk/Zz.hx",
+				"--kind",
+				"class",
+				"--field",
+				"public static function other(): Int { return 1; }",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"cheap.hxml\"},{\"hxml\":\"big.hxml\"}]}\n",
+				"cheap.hxml": "-cp src\n-main Good\n--no-output\n",
+				"big.hxml": "-cp src\n-cp more\n--macro Walk.check(\"src/walk\")\n-main Big\n--no-output\n",
+				"src/Good.hx": "class Good { static function main() {} }\n",
+				"more/Big.hx": "class Big { static function main() {} }\n",
+				"more/Walk.hx": "class Walk {\n\tpublic static function check(dir: String): Void {\n\t\tfor (f in sys.FileSystem.readDirectory(dir)) {\n\t\t\tif (sys.io.File.getContent('$dir/$f').indexOf('@:registered') < 0) haxe.macro.Context.error('$f registers nothing', haxe.macro.Context.currentPos());\n\t\t}\n\t}\n}\n",
+				"src/walk/Seen.hx": "package walk;\n\n@:registered\nclass Seen {}\n"
+			},
+			"compile": {
+				"args": [
+					"big.hxml"
+				]
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "a14713f62ef6c8f2",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "verify: created test module only the test build holds is kept",
+			"note": "the real-repo shape: a src build and a test build, the new module under test/ reads src; only the test build can vouch for it: rc=0, file kept, stderr has no -v lines",
+			"argv": [
+				"hxq",
+				"new",
+				"test/unit/cli/ZzProbe.hx",
+				"--kind",
+				"class",
+				"--field",
+				"public static function f(): Int { return anyparse.query.ExitCode.EXIT_RUNTIME; }",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"apq-js.hxml\"},{\"hxml\":\"test-js.hxml\"}]}\n",
+				"apq-js.hxml": "-cp src\n-main Cli\n--no-output\n",
+				"test-js.hxml": "-cp src\n-cp test\n-main TestMain\n--no-output\n",
+				"src/Cli.hx": "class Cli { static function main() {} }\n",
+				"src/anyparse/query/ExitCode.hx": "package anyparse.query;\n\nclass ExitCode {\n\tpublic static inline final EXIT_RUNTIME: Int = 1;\n}\n",
+				"test/TestMain.hx": "class TestMain { static function main() {} }\n"
+			},
+			"compile": {
+				"args": [
+					"-cp",
+					"src",
+					"-cp",
+					"test",
+					"--no-output",
+					"unit.cli.ZzProbe"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "e4f572f1a381da9e",
+				"files": "5e132adbbdbfa723",
+				"compiles": [
+					true
+				]
+			}
 		}
 	]
 }
