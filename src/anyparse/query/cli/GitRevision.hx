@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
 import haxe.io.Path;
 

@@ -219,15 +219,16 @@ final class HaxeSpawn {
 		+ " c.stalled = 'no progress for ' + Math.round(j.idle / 1000) + ' s' + (last ? ' — last started: ' + last : ''); kill(c); }"
 		+ 'function cancelAfter(i) { for (let k = i + 1; k < jobs.length; k++) { if (out[k]) continue;'
 		+ ' if (kids[k]) { kids[k].cancelled = true; kill(kids[k]); }'
-		+ " else if (k >= next) { out[k] = { status: null, out: '', err: '', failure: '"
+		+ " else if (k >= next) { out[k] = { out: '', err: '', failure: '"
 		+ NOT_STARTED
 		+ "', overflowed: false,"
 		+ ' cancelled: true, unstarted: true }; done++; } } next = jobs.length; }'
-		+ 'function finish(i, rec) { if (out[i]) return; out[i] = rec; if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);'
+		+ 'function finish(i, rec) { if (out[i]) return; if (rec.status === null) delete rec.status; out[i] = rec;'
+		+ ' if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);'
 		+ ' if (kids[i]) { clearTimeout(kids[i].grace); clearTimeout(kids[i].stuck); clearInterval(kids[i].watch); }'
 		+ ' kids[i] = null; running--; done++; if (dying) { settle(); return; }'
 		+ ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
-		+ ' if (done === jobs.length) emit(JSON.stringify(out)); else start(); }'
+		+ " if (done === jobs.length) emit('{\"runs\":' + JSON.stringify(out) + '}'); else start(); }"
 		+ 'function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;'
 		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const prog = j.cmd == null ? 'haxe' : j.cmd;"
 		+ " const what = j.shell == null ? prog : 'the command'; let input = j.tethered ? 'pipe' : 'ignore';"
@@ -257,7 +258,7 @@ final class HaxeSpawn {
 		+ " : c.stalled ? what + ' made ' + c.stalled : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '',"
 		+ ' overflowed: over, cancelled: c.cancelled === true }); };'
 		+ " c.on('close', code => answer(code)); c.on('exit', () => lingering(i, c, j.reap === true, answer)); } }"
-		+ "if (jobs.length === 0) emit('[]'); else start();";
+		+ "if (jobs.length === 0) emit('{\"runs\":[]}'); else start();";
 
 	/**
 	 * Whether this target's spawn honours the `cwd` argument. False on the native `sys`
@@ -442,9 +443,7 @@ final class HaxeSpawn {
 		dropBatch(batch.dir);
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		final status: Null<Int> = (res.status: Null<Int>);
-		final answer: Null<Array<HaxeRun>> = launchError != null || status != 0
-			? null
-			: try haxe.Json.parse(streamText(res.stdout)) catch (exception: haxe.Exception) null;
+		final answer: Null<Array<HaxeRun>> = launchError != null || status != 0 ? null : runsOf(streamText(res.stdout));
 		if (answer != null && answer.length == jobs.length) return answer;
 		// the driver itself failed: every job is answered as a run that produced no verdict
 		final code: Null<Dynamic> = launchError == null ? null : Reflect.field(launchError, 'code');
@@ -883,6 +882,11 @@ final class HaxeSpawn {
 		return job.shell != null || job.tethered == true || job.reap == true || (job.idle ?? 0) > 0;
 	}
 
+	/** The runs the process driver answered in `text`; null when it is no answer of the driver's shape. */
+	public static function runsOf(text: String): Null<Array<HaxeRun>> {
+		return try HaxeRunsDocumentParser.parse(text).runs catch (exception: haxe.Exception) null;
+	}
+
 }
 
 /** A batch directory `HaxeSpawn.writeJobs` made, and the jobs file in it the process driver reads. */
@@ -898,30 +902,4 @@ typedef CapturedRun = {
 	var out: String;
 	var err: String;
 	var overflowed: Bool;
-}
-
-/**
- * What one `haxe` spawn produced: its exit `status` (null when the process gave none),
- * its `out` and `err` streams, and — the fields that keep a non-verdict apart from a
- * verdict — `failure`, non-empty only when no exit status could be obtained at all, and
- * `overflowed`, which says the process RAN and out-wrote its buffer rather than never
- * having started.
- *
- * Folding the last two into a null status would make "no `haxe` on PATH" and "the
- * compiler out-wrote the output buffer" one sentence, and those send a reader to
- * opposite places. `out` / `err` are the PARTIAL streams in the overflow case, which is
- * what lets a caller still quote a failing build's errors.
- */
-typedef HaxeRun = {
-	var status: Null<Int>;
-	var out: String;
-	var err: String;
-	var failure: String;
-	var overflowed: Bool;
-
-	/** `runAll` under `stopAfterFailure` ended this job because an earlier one failed: no verdict, by design. */
-	var ?cancelled: Bool;
-
-	/** A cancelled job that never started — no process was spawned for it. */
-	var ?unstarted: Bool;
 }

@@ -1,7 +1,7 @@
 package anyparse.query;
 
+import anyparse.grammar.json.JsonNative;
 import haxe.Exception;
-import haxe.Json;
 import haxe.io.Path;
 
 using Lambda;
@@ -173,12 +173,11 @@ final class PackageDocuments {
 		if (cut == null) throw new Exception('${document.file} has no "$arrayKey" array');
 		final records: Array<Record> = [];
 		for (body in cut.records) {
-			final parsed: Any = try Json.parse(body) catch (exception: Exception) throw new Exception(
-				'${document.file}: a record does not parse: ${exception.message}'
-			);
-			final type: Null<Any> = Reflect.field(parsed, field);
-			if (!(type is String)) throw new Exception('${document.file}: a record carries no string "$field"');
-			records.push({ text: body, type: Std.string(type) });
+			final type: Null<String> =
+				try JsonNative.stringField(
+					body, field
+				) catch (exception: Exception) throw new Exception('${document.file}: a record does not parse: ${exception.message}');
+			records.push({ text: body, type: type ?? throw new Exception('${document.file}: a record carries no string "$field"') });
 		}
 		return {
 			file: document.file,

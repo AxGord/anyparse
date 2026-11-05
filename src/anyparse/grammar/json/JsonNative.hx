@@ -116,4 +116,15 @@ final class JsonNative {
 		return JArray(items);
 	}
 
+	/**
+	 * The string the object `text` holds under `key`; null when `text` is
+	 * no object or `key` holds no string. Throws on text that is no JSON.
+	 */
+	public static function stringField(text: String, key: String): Null<String> {
+		final raw: Any = parse(text);
+		if (!isObject(raw)) return null;
+		final held: Null<Any> = field(raw, key);
+		return held != null && isString(held) ? (held: String) : null;
+	}
+
 }

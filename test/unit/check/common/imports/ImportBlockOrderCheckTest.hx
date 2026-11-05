@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.ImportBlockOrder;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;

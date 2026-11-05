@@ -1,6 +1,6 @@
 package anyparse.query.cli.command;
 
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.query.cli.DeclarationDelta;
 import anyparse.query.cli.GitRevision;
 

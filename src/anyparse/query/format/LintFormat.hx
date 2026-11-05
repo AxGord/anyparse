@@ -121,29 +121,34 @@ final class LintFormat {
 				record;
 			}
 		];
-		if (explain == null) return Json.stringify(records, null, '  ');
+		if (explain == null) return printed(records);
 		final longLocks: Null<LongLockReport> = explain.report;
-		if (longLocks == null) return Json.stringify({ findings: records, longLocks: null }, null, '  ');
-		final explained: Dynamic = {
-			long: [
-				for (l in longLocks.long)
-					{
-						lock: l.lock,
-						reasons: [for (r in l.reasons) reasonRecord(r, sourceOf, indexes)],
-						circular: l.circular,
-						aside: l.aside == null ? null : [for (r in l.aside) reasonRecord(r, sourceOf, indexes)]
-					}
-			],
-			mainShort: [
-				for (t in longLocks.mainShort) {
-					final record: DynamicAccess<Bool> = siteRecord(t.lock, t.file, t.span, t.holder, indexFor(t.file, sourceOf, indexes));
-					record['quiet'] = t.quiet;
-					record;
+		return longLocks == null
+			? printed({ findings: records, longLocks: null })
+			: printed({
+				findings: records,
+				longLocks: {
+					long: [
+						for (l in longLocks.long)
+							{
+								lock: l.lock,
+								reasons: [for (r in l.reasons) reasonRecord(r, sourceOf, indexes)],
+								circular: l.circular,
+								aside: l.aside == null ? null : [for (r in l.aside) reasonRecord(r, sourceOf, indexes)]
+							}
+					],
+					mainShort: [
+						for (t in longLocks.mainShort) {
+							final record: DynamicAccess<Bool> = siteRecord(
+								t.lock, t.file, t.span, t.holder, indexFor(t.file, sourceOf, indexes)
+							);
+							record['quiet'] = t.quiet;
+							record;
+						}
+					],
+					dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]
 				}
-			],
-			dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]
-		};
-		return Json.stringify({ findings: records, longLocks: explained }, null, '  ');
+			});
 	}
 
 	/**
@@ -359,6 +364,15 @@ final class LintFormat {
 	private static function severitiesOf(group: Array<Violation>): String {
 		final levels: Array<Severity> = [Severity.Error, Severity.Warning, Severity.Info];
 		return [for (level in levels) if (group.exists(v -> v.severity == level)) level.label()].join('/');
+	}
+
+	/**
+	 * `value` as report text: two spaces of indent, a space after each colon, every non-empty container broken over lines. A
+	 * generated writer lays a document out by the Doc width with no space after a colon and four spaces of indent, so these bytes
+	 * stay on the engine's own printer.
+	 */
+	private static function printed<T>(value: T): String {
+		return Json.stringify(value, null, '  '); // noqa: avoid-haxe-json
 	}
 
 }

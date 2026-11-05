@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.core.TempScratch;
 import anyparse.query.merge.KeyedMerge.MergeChoice;

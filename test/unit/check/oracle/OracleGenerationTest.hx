@@ -9,6 +9,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.GenerationRecord;
 import anyparse.check.oracle.GenerationRecordParser;
 import anyparse.check.oracle.GenerationRecordWriter;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.OracleGeneration;
 import anyparse.check.oracle.OracleGenerationLock;

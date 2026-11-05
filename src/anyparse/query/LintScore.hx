@@ -222,7 +222,9 @@ final class LintScore {
 
 	/** The score as a JSON document: the result's fields, each bucket's verdict counts as an object in `VERDICTS` order. */
 	public static function json(result: LintScoreResult): String {
-		return Json.stringify({
+		// the report's bytes are two-space indent, a space after each colon, every container broken: a generated writer lays out by
+		// the Doc width with no space after a colon and four spaces of indent, so they stay on the engine's own printer
+		return Json.stringify({ // noqa: avoid-haxe-json
 			rule: result.rule,
 			project: result.project,
 			commit: result.commit,

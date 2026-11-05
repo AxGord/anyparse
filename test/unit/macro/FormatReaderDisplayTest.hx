@@ -2,6 +2,7 @@ package unit.macro;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerDisplayOracle;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.OracleRunMemo;
 import unit.cli.CliFixture;

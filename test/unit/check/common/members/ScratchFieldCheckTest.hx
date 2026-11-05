@@ -2,6 +2,7 @@ package unit.check.common.members;
 
 import anyparse.check.Severity;
 import anyparse.check.common.members.ScratchField;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
@@ -47,7 +48,7 @@ class ScratchFieldCheckTest extends Test {
 	@:pin('control') @:killer('M-SCRATCH-SILENT')
 	public function testSeveralWritesDeclareAVar(): Void {
 		final out: String = fixed(
-			scratch('private var _tmp:Int = 0;', 'function sum(n:Int):Int {\n\t\t_tmp = n;\n\t\t_tmp += 1;\n' + '\t\treturn _tmp * 2;\n\t}')
+			scratch('private var _tmp:Int = 0;', 'function sum(n:Int):Int {\n\t\t_tmp = n;\n\t\t_tmp += 1;\n\t\treturn _tmp * 2;\n\t}')
 		);
 		Assert.isTrue(out.indexOf('var tmp:Int = n;') >= 0, out);
 		Assert.isTrue(out.indexOf('tmp += 1;') >= 0, out);
@@ -138,7 +139,7 @@ class ScratchFieldCheckTest extends Test {
 		assertDeclinedAs(
 			scratch(
 				'private var _b:Int = 0;',
-				'function f(c:Bool):Int {\n\t\tif (c) {\n\t\t\t_b = 1;\n\t\t} else {\n\t\t\t_b = 2;\n' + '\t\t}\n\t\treturn _b;\n\t}'
+				'function f(c:Bool):Int {\n\t\tif (c) {\n\t\t\t_b = 1;\n\t\t} else {\n\t\t\t_b = 2;\n\t\t}\n\t\treturn _b;\n\t}'
 			),
 			'no one place to declare'
 		);
@@ -163,9 +164,7 @@ class ScratchFieldCheckTest extends Test {
 	@:pin('control') @:killer('M-SCRATCH-RECURSION-OFF')
 	public function testARecursiveMethodDeclines(): Void {
 		assertDeclinedAs(
-			scratch(
-				'private var _r:Int = 0;', 'function rec(n:Int):Int {\n\t\t_r = n;\n\t\tif (n > 0) rec(n - 1);\n' + '\t\treturn _r;\n\t}'
-			),
+			scratch('private var _r:Int = 0;', 'function rec(n:Int):Int {\n\t\t_r = n;\n\t\tif (n > 0) rec(n - 1);\n\t\treturn _r;\n\t}'),
 			'recursive call'
 		);
 	}
@@ -184,7 +183,7 @@ class ScratchFieldCheckTest extends Test {
 		assertDeclinedAs(
 			scratch(
 				'private var _i:Int = compute();',
-				'function f():Int {\n\t\t_i = 4;\n\t\treturn _i;\n\t}\n\n' + '\tstatic function compute():Int {\n\t\treturn 3;\n\t}'
+				'function f():Int {\n\t\t_i = 4;\n\t\treturn _i;\n\t}\n\n\tstatic function compute():Int {\n\t\treturn 3;\n\t}'
 			),
 			'initializer'
 		);
@@ -215,7 +214,7 @@ class ScratchFieldCheckTest extends Test {
 			0,
 			violations(scratch(
 				'private var _o:Int = 0;',
-				'function a():Void {\n\t\t_o = 1;\n\t}\n\n' + '\tfunction b():Int {\n\t\t_o = 2;\n\t\treturn _o;\n\t}'
+				'function a():Void {\n\t\t_o = 1;\n\t}\n\n\tfunction b():Int {\n\t\t_o = 2;\n\t\treturn _o;\n\t}'
 			)).length
 		);
 	}
@@ -237,7 +236,7 @@ class ScratchFieldCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				scratch('private var _s:Int = 0;', 'function f():Int {\n\t\t_s = 2;\n' + '\t\treturn _s + Reflect.field(this, "_s");\n\t}')
+				scratch('private var _s:Int = 0;', 'function f():Int {\n\t\t_s = 2;\n\t\treturn _s + Reflect.field(this, "_s");\n\t}')
 			).length
 		);
 	}
@@ -286,11 +285,10 @@ class ScratchFieldCheckTest extends Test {
 	public function testTheFixedProgramRunsTheSame(): Void {
 		#if (sys || nodejs)
 		final main: String = 'class Main {\n\tprivate var _point:P;\n\tprivate var _tmp:Int = 0;\n\n\tpublic function new() {}\n\n'
-			+ '\tfunction move(v:Float):Float {\n\t\t_point = new P(v * 2);\n\t\treturn if (_point.x < 0) 0 else _point.x + this._point.x;\n\t}\n\n'
-			+ '\tfunction sum(n:Int):Int {\n\t\t_tmp = n;\n\t\tfor (i in 0...n) _tmp += i;\n\t\treturn _tmp;\n\t}\n\n'
-			+ '\tstatic function main():Void {\n\t\tfinal m:Main = new Main();\n\t\tSys.println(m.move(3) + " " + m.sum(4) + " " + m.move(-1));\n'
-			+ '\t}\n}\n\n'
-			+ SUPPORT;
+			+ '\tfunction move(v:Float):Float {\n\t\t_point = new P(v * 2);\n'
+			+ '\t\treturn if (_point.x < 0) 0 else _point.x + this._point.x;\n\t}\n\n\tfunction sum(n:Int):Int {\n\t\t_tmp = n;\n'
+			+ '\t\tfor (i in 0...n) _tmp += i;\n\t\treturn _tmp;\n\t}\n\n\tstatic function main():Void {\n\t\tfinal m:Main = new Main();\n'
+			+ '\t\tSys.println(m.move(3) + " " + m.sum(4) + " " + m.move(-1));\n\t}\n}\n\n$SUPPORT';
 		final dir: String = CliFixture.writeTree('scratchfield', [{ name: 'Main.hx', source: main }]);
 		final before: HaxeRun = HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
 		if (before.status != 0) {

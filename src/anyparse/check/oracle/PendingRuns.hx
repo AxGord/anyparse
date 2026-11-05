@@ -149,7 +149,7 @@ final class PendingRuns {
 		}
 		final text: Null<String> = try sys.io.File.getContent(_result) catch (exception: Exception) null;
 		forget();
-		final answer: Null<Array<HaxeRun>> = text == null ? null : try haxe.Json.parse(text) catch (exception: Exception) null;
+		final answer: Null<Array<HaxeRun>> = text == null ? null : HaxeSpawn.runsOf(text);
 		return answer != null && answer.length == _jobs.length
 			? answer
 			: HaxeSpawn.unanswered(_jobs.length, 'the background process driver ended without an answer', '', false);

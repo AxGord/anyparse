@@ -2,6 +2,7 @@ package unit.check.common.members;
 
 import anyparse.check.Severity;
 import anyparse.check.common.members.UnstoredProperty;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.scan.ReflectionScan.ScopeFile;
 import anyparse.query.CachingGrammarPlugin;

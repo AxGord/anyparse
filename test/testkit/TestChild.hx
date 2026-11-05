@@ -1,8 +1,9 @@
 package testkit;
 
 #if nodejs
-import anyparse.check.oracle.HaxeSpawn.HaxeRun;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.oracle.OracleGeneration;

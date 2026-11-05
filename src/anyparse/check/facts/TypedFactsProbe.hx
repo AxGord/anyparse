@@ -2,7 +2,7 @@ package anyparse.check.facts;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.HaxeSpawn.HaxeRun;
+import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn.HaxeSpawn;
 import anyparse.check.oracle.OracleCache;
 import anyparse.check.oracle.OracleCoverage;
