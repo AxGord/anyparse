@@ -1641,6 +1641,22 @@
 			"find": "if (key != name) steps.push(macro $p{doorPath}.set(raw, $v{name}, $value));",
 			"replace": "",
 			"note": "a field spelled with @:key is checked under its key but never set under its Haxe name, so the record reads it as absent"
+		},
+		{
+			"name": "M-FANOUT-SHIM-INLINE",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "clearElseIfBranchField",
+			"find": "access: [APrivate, AStatic],",
+			"replace": "access: [APrivate, AStatic, AInline],",
+			"note": "the else-if clear shim is inlined at every call site again and the if-statement rule no longer calls it"
+		},
+		{
+			"name": "M-FITGROUP-RESPLICE",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "fitGroupExpr",
+			"find": "_dbg(_fgInner)",
+			"replace": "_dbg($grpInner)",
+			"note": "the no-else arm re-splices the cond-fit body instead of wrapping the bound local"
 		}
 	]
 }

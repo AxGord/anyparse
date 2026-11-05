@@ -25,6 +25,10 @@ using Lambda;
  * previous step already made instead of minting one per step. Both are
  * called from nowhere else — `chainBaseArg`'s callers are exactly the shims below.
  *
+ * Every shim is emitted out of line: its body is several statements and the
+ * rule methods call it at many sites, so inlining would copy that body into
+ * each site of the generated writer.
+ *
  * Split out of `WriterCodegen`, which kept the entry points, the
  * per-rule fields and the Doc / layout / comment helpers. Nothing here
  * reads state: `WriterCodegen` declared no field at all, so the split
@@ -275,7 +279,7 @@ final class WriterOptFanout {
 		};
 		return {
 			name: '_setExprPosition',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -288,7 +292,7 @@ final class WriterOptFanout {
 	private static function setLiteralReflowField(optionsCT: ComplexType, name: String, state: Expr): Field {
 		return {
 			name: name,
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -319,7 +323,7 @@ final class WriterOptFanout {
 	private static function clearValueIfBranchField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearValueIfBranch',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -363,7 +367,7 @@ final class WriterOptFanout {
 	private static function setArrowValueIfElemTrailCommentField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setArrowValueIfElemTrailComment',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -381,7 +385,7 @@ final class WriterOptFanout {
 	private static function setArrowValueIfBlockedField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setArrowValueIfBlocked',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -399,7 +403,7 @@ final class WriterOptFanout {
 	private static function setArrowLambdaBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setArrowLambdaBody',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -417,7 +421,7 @@ final class WriterOptFanout {
 	private static function clearArrowLambdaBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearArrowLambdaBody',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -448,7 +452,7 @@ final class WriterOptFanout {
 	private static function clearExprPositionField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearExprPosition',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -474,7 +478,7 @@ final class WriterOptFanout {
 	private static function setElseIfBranchField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setElseIfBranch',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -500,7 +504,7 @@ final class WriterOptFanout {
 	private static function clearElseIfBranchField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearElseIfBranch',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -529,7 +533,7 @@ final class WriterOptFanout {
 	private static function setAnonFnBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setAnonFnBody',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -560,7 +564,7 @@ final class WriterOptFanout {
 	private static function clearAnonFnBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearAnonFnBody',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -590,7 +594,7 @@ final class WriterOptFanout {
 	private static function setTypedefBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setTypedefBody',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -621,7 +625,7 @@ final class WriterOptFanout {
 	private static function clearTypedefBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearTypedefBody',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -650,7 +654,7 @@ final class WriterOptFanout {
 	private static function setIntersectionBreakField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setIntersectionBreak',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -679,7 +683,7 @@ final class WriterOptFanout {
 	private static function setFieldLevelVarField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setFieldLevelVar',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -708,7 +712,7 @@ final class WriterOptFanout {
 	private static function clearFieldLevelVarField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearFieldLevelVar',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -738,7 +742,7 @@ final class WriterOptFanout {
 	private static function setCallArgChainNestField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setCallArgChainNest',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -768,7 +772,7 @@ final class WriterOptFanout {
 	private static function clearCallArgChainNestField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearCallArgChainNest',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -817,7 +821,7 @@ final class WriterOptFanout {
 	private static function setParenInConditionField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setParenInCondition',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
@@ -847,7 +851,7 @@ final class WriterOptFanout {
 	private static function setInTernaryCondField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setInTernaryCond',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
@@ -879,7 +883,7 @@ final class WriterOptFanout {
 	private static function setSuppressCallRestProbeField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setSuppressCallRestProbe',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
@@ -909,7 +913,7 @@ final class WriterOptFanout {
 	private static function setSuppressComplexItemsField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setSuppressComplexItems',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -939,7 +943,7 @@ final class WriterOptFanout {
 	private static function setSuppressPatternRestProbeField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setSuppressPatternRestProbe',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -965,7 +969,7 @@ final class WriterOptFanout {
 	private static function clearParenInConditionField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearParenInCondition',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -992,7 +996,7 @@ final class WriterOptFanout {
 	private static function setVarKwNewlineField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setVarKwNewline',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
@@ -1022,7 +1026,7 @@ final class WriterOptFanout {
 	private static function clearVarKwNewlineField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearVarKwNewline',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -1049,7 +1053,7 @@ final class WriterOptFanout {
 	private static function setKeepFlatInnerField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setKeepFlatInner',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
@@ -1077,7 +1081,7 @@ final class WriterOptFanout {
 	private static function clearKeepFlatInnerField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearKeepFlatInner',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -1101,7 +1105,7 @@ final class WriterOptFanout {
 	private static function setKeepChainInParenField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setKeepChainInParen',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
@@ -1128,7 +1132,7 @@ final class WriterOptFanout {
 	private static function clearKeepChainInParenField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearKeepChainInParen',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -1155,7 +1159,7 @@ final class WriterOptFanout {
 	private static function setSuppressMoreField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setSuppressMore',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -1181,7 +1185,7 @@ final class WriterOptFanout {
 	private static function clearSuppressMoreField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearSuppressMore',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -1230,7 +1234,7 @@ final class WriterOptFanout {
 			};
 		return {
 			name: forceRules ? '_setChainModeOverride' : '_setCondWrapChainMode',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
@@ -1449,7 +1453,7 @@ final class WriterOptFanout {
 	private static function setEnumAbstractField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setEnumAbstract',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -1482,7 +1486,7 @@ final class WriterOptFanout {
 	private static function setSsbSuppressField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setSsbSuppress',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -1520,7 +1524,7 @@ final class WriterOptFanout {
 	private static function clearBracePolicyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearBracePolicy',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
@@ -1549,7 +1553,7 @@ final class WriterOptFanout {
 	private static function setSsbChainSuppressField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setSsbChainSuppress',
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'o', type: optionsCT },
@@ -1612,7 +1616,7 @@ final class WriterOptFanout {
 	private static function nestedTypeFields(optionsCT: ComplexType): Array<Field> {
 		function shim(name: String, nested: Bool): Field return {
 			name: name,
-			access: [APrivate, AStatic, AInline],
+			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,

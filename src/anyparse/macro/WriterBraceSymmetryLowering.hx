@@ -128,13 +128,17 @@ final class WriterBraceSymmetryLowering {
 	 * `BodyGroup` with no else, `Group` with one. On a node carrying `@:fmt(arrowValueIfReflow)` the
 	 * `Group` arm is additionally suppressed while the value-if re-flow is active (see the call site);
 	 * `_vifFit` exists only on such a node, and is false unless its knob is on, so every other struct
-	 * is byte-identical.
+	 * is byte-identical. The body is bound to one local before the dispatch, so its generated code is
+	 * spliced once rather than once per arm.
 	 */
 	private static function fitGroupExpr(node: ShapeNode, elseAcc: Expr, grpInner: Expr): Expr {
 		final grouped: Expr = node.fmtReadStringArgs('arrowValueIfReflow') == null
-			? macro _dg($grpInner)
-			: macro (_vifFit ? $grpInner : _dg($grpInner));
-		return macro $elseAcc == null ? _dbg($grpInner) : $grouped;
+			? macro _dg(_fgInner)
+			: macro (_vifFit ? _fgInner : _dg(_fgInner));
+		return macro {
+			final _fgInner: anyparse.core.Doc = $grpInner;
+			$elseAcc == null ? _dbg(_fgInner) : $grouped;
+		};
 	}
 
 	/**
