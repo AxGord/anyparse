@@ -241,10 +241,11 @@ final class ShardPlan {
 	 * optimal and needs no search — but only over pieces no heavier than a
 	 * shard, so a class heavier than its share is dealt as slices first
 	 * (`split`). `measured` (a run's own `--weights`) overrides `CLASS_WEIGHTS`
-	 * row by row.
+	 * row by row. A `partial` list is a chosen subset of the registry, so it
+	 * need not hold the sticky classes.
 	 */
 	public static function planClasses(
-		registered: Array<String>, shards: Int, source: String, ?measured: Map<String, ClassWeight>
+		registered: Array<String>, shards: Int, source: String, ?measured: Map<String, ClassWeight>, partial: Bool = false
 	): ShardPlanResult {
 		if (shards < 1) return Refused('${TAG}--shards must be >= 1, got $shards');
 		if (registered.length == 0) return Refused('$TAG$source names no test classes');
@@ -272,8 +273,10 @@ final class ShardPlan {
 				+ collisions.join('\n')
 			);
 
-		for (sticky in STICKY_CLASSES) if (!unique.contains(sticky))
-			return Refused('${TAG}pinned class $sticky is not registered in $source — renamed or removed? update the sticky list');
+		if (!partial)
+			for (sticky in STICKY_CLASSES)
+				if (!unique.contains(sticky))
+					return Refused('${TAG}pinned class $sticky is not registered in $source — renamed or removed? update the sticky list');
 
 		final placements: Array<ShardPlacement> = deal(unique, shards, measured ?? []);
 		final parity: Null<String> = checkParity(unique, placements, shards);

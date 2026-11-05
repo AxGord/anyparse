@@ -600,7 +600,7 @@
 		{
 			"name": "M-GATE-CORPUS-FORK-NOT-CHECKED",
 			"type": "dev.GateTree",
-			"method": "corpusProblem",
+			"method": "forkProblem",
 			"find": "final fork: String = Sys.getEnv(FORK_VAR) ?? '';",
 			"replace": "final fork: String = '';",
 			"note": "a corpus fork that names no directory is not named as the cause of the missing snapshot"
@@ -608,7 +608,7 @@
 		{
 			"name": "M-GATE-CORPUS-SNAPSHOT-NOT-CHECKED",
 			"type": "dev.GateTree",
-			"method": "corpusProblem",
+			"method": "snapshotProblem",
 			"find": "return FileSystem.exists(Path.join([tree, SWEEP_SNAPSHOT]))",
 			"replace": "return (true || FileSystem.exists(Path.join([tree, SWEEP_SNAPSHOT])))",
 			"note": "the corpus row goes on to save or compare a snapshot the suite never wrote"
@@ -823,6 +823,85 @@
 			"find": "root == null ? p.file : p.file.substr(root.length + 1)",
 			"replace": "p.file",
 			"note": "an embedded module of tool code is typed under the name tools.src.dev.E, which names no module, so its copy is never checked in the macro context"
+		},
+		{
+			"name": "M-GATE-REUSE-IMPACT-SUITE-TAKEN",
+			"type": "dev.GateReuse",
+			"method": "rows",
+			"find": "(!facts.quick || record.impact != null)",
+			"replace": "!facts.quick",
+			"note": "a land takes over the suite a gate ran on the classes its change reaches, so a slice lands with most of the suite never run on its tree"
+		},
+		{
+			"name": "M-SHARD-SUBSET-REFRESHES-WEIGHTS",
+			"type": "dev.Shard",
+			"method": "refreshTimings",
+			"find": " || job.only != null) return;",
+			"replace": ") return;",
+			"note": "a subset run rewrites the class weights with its own few classes, so the next whole run deals every other class by the default weight"
+		},
+		{
+			"name": "M-SUITE-IMPACT-NOTHING-REACHED",
+			"type": "dev.SuiteImpact",
+			"method": "scope",
+			"find": "return Selected(classes);",
+			"replace": "return Selected([]);",
+			"note": "a change reaches no test class, so a gate passes a slice whose tests never ran"
+		},
+		{
+			"name": "M-SUITE-IMPACT-MACRO-BOUNDED",
+			"type": "dev.SuiteImpact",
+			"method": "wholeReason",
+			"find": "if (path.endsWith(HX)) for (prefix in WHOLE_PREFIXES)",
+			"replace": "if (false) for (prefix in WHOLE_PREFIXES)",
+			"note": "a change of the macros, the runtime, a grammar or the test kit runs only the classes that name it, though generated code reaches every class"
+		},
+		{
+			"name": "M-SUITE-IMPACT-STATE-BLIND",
+			"type": "dev.SuiteImpact",
+			"method": "stateReason",
+			"force": "null",
+			"note": "a helper that leaves an environment variable or a working directory behind runs only the classes that name it, though it reaches every class in its shard's process"
+		},
+		{
+			"name": "M-SUITE-IMPACT-MACRO-DEPENDENT-BOUNDED",
+			"type": "dev.SuiteImpact",
+			"method": "scope",
+			"find": "if (path.startsWith(MACROS))",
+			"replace": "if (false)",
+			"note": "a module a macro depends on runs only the classes that name it, though the macro's generated code reaches classes that never name the module"
+		},
+		{
+			"name": "M-SUITE-IMPACT-RUNNER-BOUNDED",
+			"type": "dev.SuiteImpact",
+			"method": "scope",
+			"find": "if (runner != null && moduleOf(path)?.qualified == runner)",
+			"replace": "if (false)",
+			"note": "a change of the runner every class runs inside runs only the classes that name it"
+		},
+		{
+			"name": "M-SUITE-IMPACT-UNPARSED-BOUNDED",
+			"type": "dev.SuiteImpact",
+			"method": "scope",
+			"find": "if (types.unparsed.length > 0)",
+			"replace": "if (false)",
+			"note": "a source that does not parse declares no types, so a same-package file using one of them is never reached"
+		},
+		{
+			"name": "M-GATE-CORPUS-SHORTFALL-SKIPPED",
+			"type": "dev.GateTree",
+			"method": "corpusShortfall",
+			"find": "selected != null && !selected.contains(CORPUS_CLASS)",
+			"replace": "selected != null",
+			"note": "an impact run whose corpus class ran and wrote no snapshot leaves the corpus row skipped, so a broken harness passes the gate"
+		},
+		{
+			"name": "M-GATE-CORPUS-FORK-SKIPPED",
+			"type": "dev.GateTree",
+			"method": "corpusShortfall",
+			"find": "if (fork != null) return Failed(fork);",
+			"replace": "",
+			"note": "a fork that names no directory leaves an impact run's corpus row skipped instead of failing the misconfiguration"
 		}
 	]
 }

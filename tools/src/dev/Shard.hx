@@ -36,11 +36,11 @@ final class Shard {
 	/** The shard count when `-n` names none. */
 	public static inline final DEFAULT_SHARDS: Int = 4;
 
+	/** The last green run's per-class timings: the weights the next plan balances on. */
+	public static inline final WEIGHTS: String = 'bin/.suite-timings.tsv';
+
 	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under, and sweeps it by. */
 	private static inline final WORK_PREFIX: String = 'apq-suite-shard';
-
-	/** The last green run's per-class timings: the weights the next plan balances on. */
-	private static inline final WEIGHTS: String = 'bin/.suite-timings.tsv';
 
 	/**
 	 * The test tree whose `*Test.hx` files the runner's class list must match one for one: the build macro
@@ -224,8 +224,9 @@ final class Shard {
 	private static function execute(job: ShardJob, work: String): Int {
 		final split: Null<ShardSplit> = split(job, work);
 		if (split == null) return 1;
+		final shards: Int = split.lists.length;
 		if (job.planOnly) {
-			job.print('dev shard: ${split.classes} classes over ${job.shards} shards (class parity OK)');
+			job.print('dev shard: ${split.classes} classes over $shards shards (class parity OK)');
 			job.print('  plan: ${Path.join([work, 'assigned.txt'])}');
 			for (s => list in split.lists) job.print('  shard $s: ${list.length} classes -> ${Path.join([work, 'shard$s.list'])}');
 			return 0;
@@ -235,8 +236,8 @@ final class Shard {
 		final path: String = Sys.getEnv('PATH') ?? '';
 		final verdict: Verdict = new Verdict();
 		final started: Float = Timer.stamp();
-		final runs: Array<Result> = Pool.of(job.shards).map(
-			[for (s in 0...job.shards) s],
+		final runs: Array<Result> = Pool.of(shards).map(
+			[for (s in 0...shards) s],
 			s -> callerGc(
 				cmd('node ${job.testJs}')
 					.at(job.repo)
@@ -259,7 +260,7 @@ final class Shard {
 		job.print(
 			'--- suite-shard: ${split.classes} classes / ${sum.tests} tests / ${sum.assertions} assertions / ${sum.failures} failures / '
 			+ '${sum.errors} errors in ${Std.int(elapsed / MS_PER_SECOND)}.${pad(elapsed % MS_PER_SECOND, MILLIS_WIDTH, '0')}s '
-			+ 'across ${job.shards} shards ---'
+			+ 'across $shards shards ---'
 		);
 		job.print(
 			if (job.fixtureCache == null)
@@ -280,7 +281,7 @@ final class Shard {
 		job.print(
 			verdict.red
 				? 'suite-shard: FAILED — ${verdict.reasons.length == 0 ? 'see the messages above' : verdict.reasons.join('; ')}'
-				: 'suite-shard: PASS — ${split.classes} classes / ${sum.tests} tests / ${sum.assertions} assertions over ${job.shards} shards'
+				: 'suite-shard: PASS — ${split.classes} classes / ${sum.tests} tests / ${sum.assertions} assertions over $shards shards'
 		);
 		return verdict.red ? 1 : 0;
 	}
@@ -299,21 +300,30 @@ final class Shard {
 		}
 		final classesFile: String = Path.join([work, 'classes.txt']);
 		File.saveContent(classesFile, listed.out);
-		final classes: Array<String> = [for (line in listed.out.split('\n')) if (line.trim() != '') line.trim()];
+		final registered: Array<String> = [for (line in listed.out.split('\n')) if (line.trim() != '') line.trim()];
+		final only: Null<Array<String>> = job.only;
+		final classes: Array<String> = only == null ? registered : [for (name in registered) if (only.contains(name)) name];
+		if (classes.length == 0) {
+			job.warn('dev shard: none of the ${only?.length ?? 0} classes asked for is registered in ${job.testJs}');
+			return null;
+		}
+		// a subset deals over no more shards than it has classes
+		final shards: Int = only == null ? job.shards : Std.int(Math.min(job.shards, classes.length));
 		final weights: String = Path.join([job.repo, WEIGHTS]);
 		final measured: Null<Map<String, ClassWeight>> = FileSystem.exists(weights) && FileSystem.stat(weights).size > 0
 			? ShardPlan.parseWeights(File.getContent(weights))
 			: null;
-		final placements: Array<ShardPlacement> = switch ShardPlan.planClasses(classes, job.shards, classesFile, measured) {
+		final placements: Array<ShardPlacement> = switch ShardPlan.planClasses(classes, shards, classesFile, measured, only != null) {
 			case Planned(placements): placements;
 			case Refused(message):
 				job.warn(message);
 				return null;
 		};
 		File.saveContent(Path.join([work, 'assigned.txt']), ShardPlan.renderLines(placements));
-		final filters: Array<String> = ShardPlan.renderFilters(placements, job.shards).split('\n').slice(0, job.shards);
+		final filters: Array<String> = ShardPlan.renderFilters(placements, shards).split('\n').slice(0, shards);
 		final total: Int = [for (p in placements) p.cls => true].count();
-		final onDisk: Null<Int> = testFileCount(Path.join([job.repo, TEST_ROOT]));
+		// the producer check compares the whole list with the tree; a subset is a choice, not a producer's count
+		final onDisk: Null<Int> = only == null ? testFileCount(Path.join([job.repo, TEST_ROOT])) : null;
 		if (onDisk != null && total != onDisk) {
 			job.warn('dev shard: the class-list producer printed $total classes, but');
 			job.warn('  the test tree holds $onDisk *$TEST_FILE_SUFFIX files.');
@@ -329,9 +339,7 @@ final class Shard {
 			filters: filters,
 			lists: lists,
 			classes: total,
-			producerNote: onDisk == null
-				? 'producer count not cross-checked (no $TEST_ROOT/ tree)'
-				: 'producer count == *$TEST_FILE_SUFFIX files ($onDisk)'
+			producerNote: producerNote(only == null ? null : registered.length, onDisk)
 		};
 	}
 
@@ -400,6 +408,7 @@ final class Shard {
 	 * answers the parity note, or null when neither was asked for.
 	 */
 	private static function crossCheck(job: ShardJob, work: String, sum: Tally, verdict: Verdict): Null<String> {
+		if (job.only != null) return null;
 		final expect: Null<SuiteCounts> = job.expect;
 		if (expect != null) {
 			final asked: String = '${expect.tests}/${expect.assertions}';
@@ -449,7 +458,7 @@ final class Shard {
 		].join('\n'));
 		final timings: Null<String> = job.timings;
 		if (timings != null) File.saveContent(timings, merged);
-		if (verdict.red || verdict.partial || merged == '') return;
+		if (verdict.red || verdict.partial || merged == '' || job.only != null) return;
 		// staged beside the target: a rename never crosses a filesystem, and a reader never sees half a file
 		final target: String = Path.join([job.repo, WEIGHTS]);
 		final staged: String = '$target.${js.Node.process.pid}.tmp';
@@ -548,6 +557,16 @@ final class Shard {
 		return Path.join([work, 'shard$s.progress']);
 	}
 
+	/** What the parity line says of the class list: a subset of `registered` classes, or how its producer was cross-checked. */
+	private static function producerNote(registered: Null<Int>, onDisk: Null<Int>): String {
+		return if (registered != null)
+			'a subset of $registered registered classes'
+		else if (onDisk == null)
+			'producer count not cross-checked (no $TEST_ROOT/ tree)'
+		else
+			'producer count == *$TEST_FILE_SUFFIX files ($onDisk)';
+	}
+
 }
 
 /** What a run found wrong so far: every reason in the order found, whether it is red, whether a shard did not finish. */
@@ -593,6 +612,12 @@ typedef ShardJob = {
 
 	/** How long a shard may be silent before it is cut; `Shard.IDLE_MS` when absent. */
 	var ?idleMs: Int;
+
+	/**
+	 * The registered classes to run, or every one when absent. A subset skips the cross-checks that compare a run with the
+	 * whole suite and never refreshes the class weights the next whole run deals by.
+	 */
+	var ?only: Array<String>;
 }
 
 /** A shard plan as the run uses it: each shard's `APQ_TEST` value and its tokens, the class total, the producer check. */

@@ -96,6 +96,19 @@ final class GateReuseTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-GATE-REUSE-IMPACT-SUITE-TAKEN')
+	public function testASuiteTheGateRanOnTheClassesItsChangeReachesLeavesTheLandItsOwnSuiteAndCorpus(): Void {
+		final impact: GateRecord = passing('t1');
+		impact.impact = 37;
+		Assert.same(['jvm probe', 'kit probes'], GateReuse.rows(impact, facts('t1')));
+		TempDir.with(dir -> {
+			final file: String = dir.file(GateReuse.FILE);
+			GateReuse.write(file, impact);
+			Assert.equals(37, GateReuse.read(file)?.impact);
+		});
+	}
+
+	@:pin('control')
 	@:killer('M-GATE-REUSE-LOCATE-ANY')
 	public function testARecordIsReadOnlyFromTheGateLogsOfTheWorktreeHoldingTheBranch(): Void {
 		TempDir.with(dir -> {
@@ -202,7 +215,8 @@ final class GateReuseTest extends Test {
 			rows: ['suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'kits'],
 			tests: 5,
 			assertions: 6,
-			sweep: '/logs/${GateReuse.SWEEP}'
+			sweep: '/logs/${GateReuse.SWEEP}',
+			impact: null
 		};
 	}
 

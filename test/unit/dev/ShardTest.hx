@@ -1,5 +1,6 @@
 package unit.dev;
 
+import anyparse.query.ShardPlan;
 import dev.Shard;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
@@ -139,6 +140,23 @@ process.exitCode = failed;
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-SHARD-SUBSET-REFRESHES-WEIGHTS')
+	public function testASubsetRunsOnlyItsClassesOverNoMoreShardsThanItHasAndLeavesTheWeights(): Void {
+		TempDir.with(dir -> {
+			FileSystem.createDirectory(dir.file('test/unit'));
+			File.saveContent(dir.file('test/unit/OnlyOneTest.hx'), '');
+			final names: Array<String> = TestRegistry.classNames().filter(n -> !ShardPlan.STICKY_CLASSES.contains(n)).slice(0, 2);
+			final run: Ran = runFake(dir, 'green', 3, true, null, null, names.concat(['unit.NoSuchTest']));
+			Assert.equals(0, run.status, run.warned.join('\n'));
+			Assert.equals('suite-shard: PASS — 2 classes / 2 tests / 4 assertions over 2 shards', run.printed[run.printed.length - 1]);
+			Assert.isTrue(run.printed.exists(l -> l.contains('a subset of ')), run.printed.join('\n'));
+			Assert.isFalse(
+				FileSystem.exists(dir.file('bin/.suite-timings.tsv')), 'a subset never rewrites the weights a whole run deals by'
+			);
+		});
+	}
+
 	public function testAnExpectThatDisagreesFailsTheRun(): Void {
 		TempDir.with(dir -> {
 			final run: Ran = runFake(dir, 'green', 2, false, { tests: 1, assertions: 2 });
@@ -186,7 +204,9 @@ process.exitCode = failed;
 	}
 
 	/** `dev shard` over the fake runner in `dir` in `mode`; a kept work directory is removed again. */
-	private static function runFake(dir: TempDir, mode: String, shards: Int, verify: Bool, ?expect: SuiteCounts, ?idleMs: Int): Ran {
+	private static function runFake(
+		dir: TempDir, mode: String, shards: Int, verify: Bool, ?expect: SuiteCounts, ?idleMs: Int, ?only: Array<String>
+	): Ran {
 		File.saveContent(dir.file('fake.js'), RUNNER);
 		File.saveContent(dir.file('classes.txt'), TestRegistry.classNames().join('\n') + '\n');
 		File.saveContent(dir.file('mode'), mode);
@@ -205,7 +225,8 @@ process.exitCode = failed;
 			fixtureCache: null,
 			print: printed.push,
 			warn: warned.push,
-			idleMs: idleMs
+			idleMs: idleMs,
+			only: only
 		});
 		for (line in warned) if (line.startsWith('dev shard: work files kept in '))
 			js.Syntax.code(

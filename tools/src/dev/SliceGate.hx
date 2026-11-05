@@ -9,6 +9,7 @@ import dev.FrozenTree;
 import dev.GateArms.ArmPlan;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
+import dev.SuiteImpact.SuiteScope;
 import dev.XconfigFmt.XconfigStand;
 import devkit.Args;
 import devkit.Branches;
@@ -114,6 +115,9 @@ final class SliceGate {
 	/** Where the build's and the branches' threads come from. */
 	private final _mode: LeaseMode;
 
+	/** The classes this gate's suite ran on, or null when it ran every class or has not run. */
+	private var _selected: Null<Array<String>> = null;
+
 	private function new(options: GateOptions, mode: LeaseMode) {
 		_gate = new GateTree(options);
 		_lint = new GateLint(_gate);
@@ -157,7 +161,7 @@ final class SliceGate {
 				tests: _readings['tests'] ?? 0,
 				assertions: _readings['assertions'] ?? 0,
 				lists: lists,
-				sweep: forkSet() ? _gate.log(GateTree.SWEEP_BASE) : null,
+				sweep: GateTree.forkSet() ? _gate.log(GateTree.SWEEP_BASE) : null,
 				lint: _gate.log('lint-base.json'),
 				infra: _gate.infraSnapshots(),
 				frozen: digests
@@ -360,11 +364,25 @@ final class SliceGate {
 	}
 
 	/**
-	 * The suite row: `dev shard` over the heavy rows' threads (its own default outside a lease), green and counted, its
-	 * counts beside the baseline's — or, when `recording`, kept for the baseline.
+	 * The suite row: `dev shard` over the heavy rows' threads (its own default outside a lease), green and counted. A check runs
+	 * only the classes its change reaches (`SuiteImpact`), or every class when no text dependency bounds the change, and says
+	 * which; only a whole run is set beside the baseline's counts. When `recording`, every class runs and the counts are kept.
 	 */
 	private function suiteOutcome(recording: Bool): Outcome {
 		GateTree.clearSnapshotIn(_gate.tree);
+		final scope: SuiteScope = recording ? WholeSuite('a baseline measures every class') : SuiteImpact.ofTree(_gate.tree, _gate.base);
+		final only: Null<Array<String>> = switch scope {
+			case Selected(classes): classes;
+			case WholeSuite(_): null;
+		};
+		final mode: String = switch scope {
+			case WholeSuite(why): 'whole suite — $why';
+			case Selected(classes): 'impact — ${classes.length} class(es) the change reaches';
+		};
+		File.saveContent(_gate.log('suite-scope.txt'), [mode].concat(only ?? []).join('\n') + '\n');
+		_selected = only;
+		if (only != null) _readings[GateReuse.IMPACT] = only.length;
+		if (only != null && only.length == 0) return Skipped('impact — no test class depends on the change');
 		final lines: Array<String> = [];
 		var totals: Null<Tally> = null;
 		final shards: Int = _gate.options.threads ?? Shard.DEFAULT_SHARDS;
@@ -380,7 +398,8 @@ final class SliceGate {
 			fixtureCache: Shard.fixtureCacheOfEnv(),
 			print: line -> lines.push(line),
 			warn: line -> lines.push(line),
-			counted: sum -> totals = sum
+			counted: sum -> totals = sum,
+			only: only
 		});
 		File.saveContent(_gate.log('suite.log'), lines.join('\n') + '\n');
 		final sum: Null<Tally> = totals;
@@ -392,12 +411,12 @@ final class SliceGate {
 		_readings['tests'] = sum.tests;
 		_readings['assertions'] = sum.assertions;
 		final baseline: Null<Baseline> = _gate.baseline;
-		final delta: String = baseline == null
+		final delta: String = baseline == null || only != null
 			? ''
 			: ' (${GateTree.signed(sum.tests - baseline.tests)} / ${GateTree.signed(sum.assertions - baseline.assertions)})';
-		_gate.summary.detail(
-			'${sum.tests} tests / ${sum.assertions} assertions / ${sum.failures}F / ${sum.errors}E$delta, $shards shard(s)'
-		);
+		_gate.summary.detail(GateTree.clip(
+			'${sum.tests} tests / ${sum.assertions} assertions / ${sum.failures}F / ${sum.errors}E$delta, $shards shard(s); $mode'
+		));
 		if (status == 0) return Passed;
 		_gate.summary.excerpt(GateExcerpt.suite(lines));
 		final verdict: String = lines.find(l -> l.startsWith('suite-shard: FAILED')) ?? 'dev shard exited $status';
@@ -432,7 +451,7 @@ final class SliceGate {
 
 	/** The corpus row of `--baseline`: the sweep the suite just wrote, saved for the gate to compare with. */
 	private function corpusSaved(): Outcome {
-		if (!forkSet()) return Skipped('ANYPARSE_HXFORMAT_FORK unset — the suite ran no corpus');
+		if (!GateTree.forkSet()) return Skipped('ANYPARSE_HXFORMAT_FORK unset — the suite ran no corpus');
 		final problem: Null<String> = _gate.corpusProblem();
 		if (problem != null) return Failed(problem);
 		final saved: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --save ${_gate.log(GateTree.SWEEP_BASE)}'));
@@ -445,9 +464,9 @@ final class SliceGate {
 		final baseline: Null<Baseline> = _gate.baseline;
 		if (baseline == null) return NotRun(GateTree.NO_BASELINE);
 		final sweep: Null<String> = baseline.sweep;
-		if (sweep == null || !forkSet()) return NotRun('no corpus: ANYPARSE_HXFORMAT_FORK unset at the baseline or now');
-		final problem: Null<String> = _gate.corpusProblem();
-		if (problem != null) return Failed(problem);
+		if (sweep == null || !GateTree.forkSet()) return NotRun('no corpus: ANYPARSE_HXFORMAT_FORK unset at the baseline or now');
+		final shortfall: Null<Outcome> = GateTree.corpusShortfall(GateTree.forkProblem(), _gate.snapshotProblem(), _selected);
+		if (shortfall != null) return shortfall;
 		if (!FileSystem.exists(sweep)) return NotRun('the baseline snapshot $sweep is gone — take the baseline again');
 		_gate.inTree(cmd('node bin/apq.js sweep --lang haxe --save ${_gate.log(GateReuse.SWEEP)}'));
 		final diff: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --diff $sweep'));
@@ -718,11 +737,6 @@ final class SliceGate {
 			case [Failed(first), Failed(second)]: Failed('$first; $second');
 			case _: project;
 		};
-	}
-
-	/** Whether the corpus harness runs: the fork it reads is named. */
-	private static inline function forkSet(): Bool {
-		return (Sys.getEnv(GateTree.FORK_VAR) ?? '') != '';
 	}
 
 }

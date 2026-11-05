@@ -22,6 +22,9 @@ final class GateReuse {
 	/** The record's file inside the gate's logs. */
 	public static inline final FILE: String = 'gate-record.json';
 
+	/** The reading that holds how many classes an impact-selected suite ran; absent when the suite ran every class. */
+	public static inline final IMPACT: String = 'impact';
+
 	/** The corpus snapshot the gate's suite left, copied beside the record. */
 	public static inline final SWEEP: String = 'gate-sweep.json';
 
@@ -129,8 +132,9 @@ final class GateReuse {
 	/**
 	 * The battery rows `record` stands for. A row the gate waived is never taken: it passed
 	 * only by its waiver, which the land must show and judge itself; the gate's suite
-	 * never verifies the shard plan, so a full battery runs its own; the corpus row reads the suite's snapshot, so it is taken
-	 * over only with the suite.
+	 * never verifies the shard plan, so a full battery runs its own; a suite the gate ran on the classes its change reaches
+	 * is no whole suite, so the land runs its own; the corpus row reads the suite's snapshot, so it is taken over only with
+	 * the suite.
 	 */
 	public static function rows(record: GateRecord, facts: GateFacts): Array<String> {
 		if (refusal(record, facts) != null) return [];
@@ -140,7 +144,7 @@ final class GateReuse {
 			final batteryRow: String = pair[1];
 			if (!record.rows.contains(gateRow)) continue;
 			if (record.allow.contains(gateRow)) continue;
-			if (gateRow == 'suite' && !facts.quick) continue;
+			if (gateRow == 'suite' && (!facts.quick || record.impact != null)) continue;
 			if (gateRow == 'corpus' && (record.sweep == null || !taken.contains('suite'))) continue;
 			taken.push(batteryRow);
 		}
@@ -177,6 +181,7 @@ final class GateReuse {
 			rows: passedRows(gate.summary.steps()),
 			tests: readings['tests'] ?? 0,
 			assertions: readings['assertions'] ?? 0,
+			impact: readings[IMPACT],
 			sweep: FileSystem.exists(sweep) ? sweep : null
 		});
 	}

@@ -46,4 +46,19 @@ final class GateTreeTest extends Test {
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-GATE-CORPUS-SHORTFALL-SKIPPED')
+	@:killer('M-GATE-CORPUS-FORK-SKIPPED')
+	public function testOnlyAnImpactRunWithoutTheCorpusClassLeavesTheCorpusRowSkipped(): Void {
+		final missing: String = 'no snapshot';
+		final failed: String = 'Failed($missing)';
+		Assert.isNull(GateTree.corpusShortfall(null, null, ['unit.query.OtherTest']));
+		Assert.stringContains(
+			'Skipped(', Std.string(GateTree.corpusShortfall(null, missing, ['unit.query.OtherTest'])), 'no corpus class ran'
+		);
+		Assert.equals(failed, Std.string(GateTree.corpusShortfall(null, missing, [GateTree.CORPUS_CLASS])), 'the corpus class ran');
+		Assert.equals(failed, Std.string(GateTree.corpusShortfall(null, missing, null)), 'every class ran');
+		Assert.equals('Failed(no fork)', Std.string(GateTree.corpusShortfall('no fork', missing, [])), 'a bad fork is no impact choice');
+	}
+
 }

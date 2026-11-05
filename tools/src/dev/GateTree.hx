@@ -34,6 +34,9 @@ final class GateTree {
 	/** The environment variable that names the corpus the suite's harness reads. */
 	public static inline final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';
 
+	/** The test class that runs the corpus and writes its snapshot. */
+	public static inline final CORPUS_CLASS: String = 'unit.grammar.haxe.HxFormatterCorpusTest';
+
 	/** The scope of a whole-tree lint of this project. */
 	public static final TREE_SCOPE: Array<String> = ['src', 'test', 'tools'];
 
@@ -187,9 +190,11 @@ final class GateTree {
 	 * the fork names no directory, and writes nothing when none of its cases ran.
 	 */
 	public function corpusProblem(): Null<String> {
-		final fork: String = Sys.getEnv(FORK_VAR) ?? '';
-		if (fork != '' && (!FileSystem.exists(fork) || !FileSystem.isDirectory(fork)))
-			return clip('$FORK_VAR=$fork is no directory, so the suite ran no corpus');
+		return forkProblem() ?? snapshotProblem();
+	}
+
+	/** Why the suite left no corpus snapshot in the tree, or null when it left one. */
+	public function snapshotProblem(): Null<String> {
 		return FileSystem.exists(Path.join([tree, SWEEP_SNAPSHOT]))
 			? null
 			: 'the suite left no corpus snapshot ($SWEEP_SNAPSHOT): no corpus case ran under $FORK_VAR';
@@ -201,6 +206,21 @@ final class GateTree {
 
 	public static inline function signed(n: Int): String {
 		return n >= 0 ? '+$n' : '$n';
+	}
+
+	/**
+	 * Whether the environment names a corpus for the suite to run.
+	 */
+	public static inline function forkSet(): Bool {
+		return (Sys.getEnv(FORK_VAR) ?? '') != '';
+	}
+
+	/** Why the fork the corpus class reads is unusable, or null when it is unset or a directory: a misconfiguration. */
+	public static function forkProblem(): Null<String> {
+		final fork: String = Sys.getEnv(FORK_VAR) ?? '';
+		return fork != '' && (!FileSystem.exists(fork) || !FileSystem.isDirectory(fork))
+			? clip('$FORK_VAR=$fork is no directory, so the suite ran no corpus')
+			: null;
 	}
 
 	/**
@@ -287,6 +307,19 @@ final class GateTree {
 
 	public static function clip(text: String): String {
 		return text.length <= QUOTE_WIDTH ? text : '${text.substr(0, QUOTE_WIDTH - 1)}…';
+	}
+
+	/**
+	 * The corpus row's verdict on what the suite left it, or null when nothing is missing: `fork` and `snapshot` name what is
+	 * wrong, `selected` the classes an impact run held (null for a whole run). Only a missing snapshot of a selection without
+	 * the corpus class is left to the land's whole suite; a bad fork, or a corpus class that ran and wrote nothing, fails.
+	 */
+	public static function corpusShortfall(fork: Null<String>, snapshot: Null<String>, selected: Null<Array<String>>): Null<Outcome> {
+		if (fork != null) return Failed(fork);
+		if (snapshot == null) return null;
+		return selected != null && !selected.contains(CORPUS_CLASS)
+			? Skipped('the impact suite ran no corpus case — the land runs it')
+			: Failed(snapshot);
 	}
 
 	/** The path (under `dir`, from `prefix`), size and modification time of every file below `dir/prefix`, in name order. */

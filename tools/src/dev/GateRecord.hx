@@ -34,6 +34,9 @@ typedef GateRecord = {
 	var tests: Int;
 	var assertions: Int;
 
+	/** How many test classes an impact-selected suite ran, or null when the suite ran every class. */
+	@:optional var impact: Null<Int>;
+
 	/** The corpus snapshot the gate's suite left, copied into the gate's logs, or null when the suite ran no corpus. */
 	@:optional var sweep: Null<String>;
 }
