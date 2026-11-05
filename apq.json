@@ -315,7 +315,8 @@
 		"join-string-append": true,
 		"map-as-set": {
 			"enabled": true,
-			"set": "anyparse.ds.Set"
+			"set": "anyparse.ds.Set",
+			"bits": "anyparse.ds.Bits"
 		},
 		"misplaced-type-doc": true,
 		"naming": {

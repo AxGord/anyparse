@@ -35,6 +35,10 @@ import anyparse.query.TypeSyntax;
  * a set another declaration of the same name shares the file with, a key other than `String` / `Int` (an enum value is
  * compared structurally by `Map` and by identity by a native set), and any use the set type has no equal for — an index read,
  * `get`, `keys`, `copy` — stay silent.
+ *
+ * A project that names its bit-set type (`"map-as-set": { "bits": "anyparse.ds.Bits" }`) is told that a set whose key is a
+ * fixed enum domain — an enum without constructor parameters, an `Int` enum abstract of literal values — is a bit set,
+ * grown or not, and `--fix` respells it. A bit set is replaced by its own `add`, so a `final` binding keeps the plain advice.
  */
 @:nullSafety(Strict)
 final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAware {
@@ -46,6 +50,9 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 
 	/** The `apq.json` option naming the project's set type. */
 	private static inline final SET_OPTION: String = 'set';
+
+	/** The `apq.json` option naming the project's bit-set type, which takes a set whose key is a fixed enum domain. */
+	private static inline final BITS_OPTION: String = 'bits';
 
 	/** The written name of the map a construction respelled to the set type has. */
 	private static inline final MAP_TYPE: String = 'Map';
@@ -77,15 +84,21 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		final first: Null<Violation> = violations[0];
 		final root: Null<QueryNode> = first == null ? null : ParseGate.parseOrNull(plugin, source);
 		final seams: Null<ValueSeams> = MapValueScan.seamsOf(plugin.refShape());
-		final setType: Null<String> = first == null
-			? null
-			: LintConfig.resolveWith(_resolveConfig, first.file).stringOption(RULE_ID, SET_OPTION);
-		if (first == null || root == null || seams == null || setType == null) return [];
+		final options: Null<LintConfig> = first == null ? null : LintConfig.resolveWith(_resolveConfig, first.file);
+		final setType: Null<String> = options?.stringOption(RULE_ID, SET_OPTION);
+		final bitsType: Null<String> = options?.stringOption(RULE_ID, BITS_OPTION);
+		if (first == null || root == null || seams == null || setType == null && bitsType == null) return [];
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
 			first.file, source, root, provider == null ? [] : provider.importMap(source, first.file), plugin, index
 		);
-		final setName: String = printer.print(setType).text;
+		final project: SetProject = {
+			file: first.file,
+			index: index,
+			set: setType,
+			bits: bitsType,
+			spell: spelling -> printer.print(spelling).text
+		};
 		final out: Array<{ span: Span, text: String }> = [];
 		final written: Map<Int, String> = provider == null ? [] : provider.declaredTypeSources(source);
 		for (violation in violations) {
@@ -93,7 +106,7 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 			final edits: Array<{ span: Span, text: String }> = [];
 			final declined: Null<String> = at == null
 				? 'the finding has no span'
-				: rewriteSet(source, root, at.from, seams, plugin, written[at.from], setName, edits);
+				: rewriteSet(source, root, at.from, seams, plugin, written[at.from], project, edits);
 			if (declined != null) {
 				violation.declineReason = declined;
 				continue;
@@ -113,6 +126,7 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final boolName: Null<String> = shape.nonNullBoolTypeName;
 		final mapTypes: Array<String> = shape.mapAbstractTypeNames ?? [];
+		final config: (String) -> LintConfig = file -> LintConfig.resolveWith(_resolveConfig, file);
 		if (seams == null || provider == null || boolName == null || mapTypes.length == 0) return [];
 		final census: ValueSeams = seams;
 		// The REPORT index, as `redundant-map-exists` hands the census: it reads the report scope's skipped files as
@@ -136,9 +150,35 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 					constructor: shape.constructorName
 				};
 				final grows: Bool = growsInRepetition(root, null, -1, null, -1, false, ask);
-				final setType: Null<String> = LintConfig.resolveWith(_resolveConfig, entry.file).stringOption(RULE_ID, SET_OPTION);
+				final options: LintConfig = config(entry.file);
+				final setType: Null<String> = options.stringOption(RULE_ID, SET_OPTION);
+				final bitsType: Null<String> = options.stringOption(RULE_ID, BITS_OPTION);
+				final project: SetProject = {
+					file: entry.file,
+					index: index,
+					set: setType,
+					bits: bitsType,
+					spell: spelling -> spelling
+				};
+				// A set of enum values is a bit set, grown or not; where the bit set cannot take the rewrite the set is advised as before.
+				if (
+					bitsType != null
+					&& bitsDomain(key, project, from, shape)
+					&& rewriteSet(entry.source, root, from, census, plugin, written[from], project, []) == null
+				) {
+					out.push({
+						file: entry.file,
+						span: span,
+						rule: RULE_ID,
+						severity: Severity.Info,
+						message: '\'$name\' is a map whose every value is true, a set of the values of $key — '
+						+ '${SourceText.lastSegment(bitsType)}<$key> says the same'
+					});
+					return;
+				}
+
 				// A growing set is advice only where the rewrite exists: an unactionable finding is noise.
-				if (grows && (setType == null || rewriteSet(entry.source, root, from, census, plugin, written[from], setType, []) != null))
+				if (grows && (setType == null || rewriteSet(entry.source, root, from, census, plugin, written[from], project, []) != null))
 					return;
 				out.push({
 					file: entry.file,
@@ -189,12 +229,13 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 	}
 
 	/**
-	 * Why the set declared at `declAt` stays as written, or null after `edits` took its rewrite to `setName`: the declared
-	 * type, every initialiser and every use of the name in the file are respelled, so a use outside the four the project's set
-	 * type answers the same (`set(k, true)` / `m[k] = true`, `exists`, `remove`, `clear`) leaves all of it alone.
+	 * Why the set declared at `declAt` stays as written, or null after `edits` took its rewrite: to the bit set when the key
+	 * is a domain `anyparse.ds.Bits` takes, else to the project's set type. The declared type, every initialiser and every use
+	 * of the name in the file are respelled, so a use outside the four the target answers the same (`set(k, true)` /
+	 * `m[k] = true`, `exists`, `remove`, `clear`) leaves all of it alone.
 	 */
 	private static function rewriteSet(
-		source: String, root: QueryNode, declAt: Int, seams: ValueSeams, plugin: GrammarPlugin, written: Null<String>, setName: String,
+		source: String, root: QueryNode, declAt: Int, seams: ValueSeams, plugin: GrammarPlugin, written: Null<String>, project: SetProject,
 		edits: Array<{ span: Span, text: String }>
 	): Null<String> {
 		final shape: RefShape = plugin.refShape();
@@ -204,10 +245,16 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		final decl: Null<QueryNode> = declarationAt(root, declAt, seams.declKinds);
 		final name: Null<String> = decl?.name;
 		if (written == null || key == null || decl == null || name == null) return 'no written Map<K, Bool> declaration to respell';
-		if (!SET_KEY_TYPES.contains(key)) return 'a $key key may compare differently in the native set of some target';
+		// A bit set is a value its own `add` replaces, so a `final` binding cannot hold one and keeps the plain advice.
+		final mutable: Array<String> = (shape.mutableLocalDeclKinds ?? []).concat(shape.mutableFieldDeclKinds ?? []);
+		final asBits: Bool = mutable.contains(decl.kind) && bitsDomain(key, project, declAt, shape);
+		final target: Null<String> = asBits ? project.bits : project.set;
+		if (target == null) return 'the project names no set type';
+		if (!asBits && !SET_KEY_TYPES.contains(key)) return 'a $key key may compare differently in the native set of some target';
 		if (declarationsOf(root, name, seams.declKinds) != 1) return 'the file declares another \'$name\'';
 		// Re-bind: a null-check does not narrow into an anonymous-structure literal.
 		final declared: String = name;
+		final targetName: String = target;
 		final keyType: String = key;
 		final typeText: String = written;
 		final ask: GrowthQuery = {
@@ -218,7 +265,7 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 			functions: shape.functionKinds ?? [],
 			constructor: shape.constructorName
 		};
-		if (!growsInRepetition(root, null, -1, null, -1, false, ask)) return 'a set filled once is advice only';
+		if (!asBits && !growsInRepetition(root, null, -1, null, -1, false, ask)) return 'a set filled once is advice only';
 		final site: SetRewrite = {
 			source: source,
 			seams: seams,
@@ -226,11 +273,21 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 			member: shape.fieldDeclKinds?.contains(decl.kind) ?? false,
 			key: keyType,
 			written: typeText,
-			setName: setName
+			setName: targetName
 		};
-		final declined: Null<String> = respell(root, null, -1, null, -1, site, edits);
-		if (declined != null) edits.resize(0);
-		return declined;
+		// The target is spelled (and its import queued) only for a rewrite that holds, so a dry run decides first.
+		final dry: Null<String> = respell(root, null, -1, null, -1, site, []);
+		if (dry != null) return dry;
+		final spelled: SetRewrite = {
+			source: source,
+			seams: seams,
+			name: declared,
+			member: site.member,
+			key: keyType,
+			written: typeText,
+			setName: project.spell(targetName)
+		};
+		return respell(root, null, -1, null, -1, spelled, edits);
 	}
 
 	/** The reason an occurrence of the set's name (or one below it) cannot be respelled, else null once its edits are in `edits`. */
@@ -385,6 +442,43 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		};
 	}
 
+	/**
+	 * Whether the key type `key`, written in the project's file at `at`, is a domain the project's bit-set type takes: it
+	 * resolves to exactly one declaration that is an enum whose constructors take no parameters, or an `Int` enum abstract
+	 * whose every value is a non-negative integer literal. Stricter than `BitsBuilder` where the index cannot say more.
+	 */
+	private static function bitsDomain(key: String, project: SetProject, at: Int, shape: RefShape): Bool {
+		final index: Null<SymbolIndex> = project.index;
+		final info: Null<FileInfo> = index?.fileInfo(project.file);
+		if (project.bits == null || index == null || info == null) return false;
+		final found: Array<ResolvedType> = index.refs.resolveTypeRefAll(key, info, at);
+		if (found.length != 1) return false;
+		final type: TypeDeclInfo = found[0].type;
+		final integer: Null<String> = shape.coreValueTypes?.integer;
+		return !type.isPrivate && !type.hasBuild && type.typeParamArity == 0 && (
+			type.isEnumAbstract
+				? integer != null && type.underlyingRaw == integer && abstractValuesAreLiterals(type.members, shape)
+				: (shape.bareConstructorTypeKinds ?? []).contains(type.kind)
+					&& type.members.length > 0
+					&& type.members.filter(member -> member.paramTypeSources.length > 0 || member.guarded).length == 0
+		);
+	}
+
+	/** Whether the values of an enum abstract (its non-static fields) are at least one, each a non-negative integer literal. */
+	private static function abstractValuesAreLiterals(members: Array<MemberInfo>, shape: RefShape): Bool {
+		final fields: Array<MemberInfo> = members.filter(member -> !member.isStatic && (shape.fieldDeclKinds ?? []).contains(member.kind));
+		final literals: Array<String> = shape.numericLiteralKinds ?? [];
+		return fields.length > 0
+			&& fields.filter(
+				field ->
+					!field.guarded
+					&& literals.contains(field.initializerKind ?? '')
+					&& (Std.parseInt(field.initializerSource ?? '') ?? -1) >= 0
+			)
+				.length
+				== fields.length;
+	}
+
 }
 
 /**
@@ -409,4 +503,16 @@ private typedef SetRewrite = {
 	final key: String;
 	final written: String;
 	final setName: String;
+};
+
+/**
+ * What the rewrite of one file needs from the project: the file and the index its names resolve against, the configured
+ * set type and bit-set type (null for a project that names none), and how a configured type is spelled in the file.
+ */
+private typedef SetProject = {
+	final file: String;
+	final index: Null<SymbolIndex>;
+	final set: Null<String>;
+	final bits: Null<String>;
+	final spell: (String) -> String;
 };

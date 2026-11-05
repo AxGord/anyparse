@@ -263,8 +263,8 @@
 			"name": "M-MAS-SET-UNCONFIGURED",
 			"type": "anyparse.check.common.types.MapAsSet",
 			"method": "run",
-			"find": "(setType == null || rewriteSet(entry.source, root, from, census, plugin, written[from], setType, []) != null)",
-			"replace": "(rewriteSet(entry.source, root, from, census, plugin, written[from], setType ?? \"Set\", []) != null)",
+			"find": "(setType == null || rewriteSet(entry.source, root, from, census, plugin, written[from], project, []) != null)",
+			"replace": "(false && rewriteSet(entry.source, root, from, census, plugin, written[from], project, []) != null)",
 			"note": "a project without the set key is advised a Set on growing maps it never asked about"
 		},
 		{
@@ -306,6 +306,46 @@
 			"find": "return site.member ? null : 'a member of this type that shares the name of the local set';",
 			"replace": "return null;",
 			"note": "a `this.name` of an inherited member is respelled with the local set of the same name, which breaks the build"
+		},
+		{
+			"name": "M-MAS-BITS-PARAMS",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "bitsDomain",
+			"find": "member.paramTypeSources.length > 0 || ",
+			"replace": "",
+			"note": "an enum with a constructor that takes parameters is advised a bit set, which has no bit to give its values"
+		},
+		{
+			"name": "M-MAS-BITS-LITERAL",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "abstractValuesAreLiterals",
+			"find": "literals.contains(field.initializerKind ?? '')",
+			"replace": "true",
+			"note": "an enum abstract whose value is a computed expression is advised a bit set, though the value is no fixed bit"
+		},
+		{
+			"name": "M-MAS-BITS-UNDERLYING",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "bitsDomain",
+			"find": "integer != null && type.underlyingRaw == integer && ",
+			"replace": "",
+			"note": "an enum abstract over a type other than Int is advised a bit set"
+		},
+		{
+			"name": "M-MAS-BITS-FINAL",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "rewriteSet",
+			"find": "mutable.contains(decl.kind) && ",
+			"replace": "",
+			"note": "a final binding is respelled to a bit set, whose add assigns the variable and does not compile"
+		},
+		{
+			"name": "M-MAS-BITS-PRIVATE",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "bitsDomain",
+			"find": "!type.isPrivate && ",
+			"replace": "",
+			"note": "a module-private enum is respelled to a bit set of a module that cannot name it, which does not compile"
 		}
 	]
 }
