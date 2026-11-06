@@ -970,6 +970,67 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "S3",
+			"note": "naming catchVarName: a sibling block already binds the configured name, the catch clause is renamed all the same - the name is free in the catch's own scope - and the program still compiles and prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"naming",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\t{\n\t\t\tfinal exception = 1;\n\t\t\ttrace(exception);\n\t\t}\n\t\ttry {\n\t\t\tthrow \"x\";\n\t\t} catch (e:String) {\n\t\t\ttrace(e);\n\t\t}\n\t}\n}\n",
+				"apq.json": "{\"rules\":{\"naming\":{\"catchVarName\":\"exception\"}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "094189d90c37bda4",
+				"files": "b35ce471c6f9327e",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "S4",
+			"note": "naming local fix: two flagged _adjust locals in sibling blocks are both renamed, a third at body level is declined because the renames claim the name in its scope; the program still compiles and prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"naming",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\t{\n\t\t\tfinal _adjust = 1;\n\t\t\ttrace(_adjust);\n\t\t}\n\t\t{\n\t\t\tfinal _adjust = 2;\n\t\t\ttrace(_adjust);\n\t\t}\n\t\tfinal _adjust = 3;\n\t\ttrace(_adjust);\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "3cbb3967f3e1bfb4",
+				"files": "2aa639ec37202d12",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }
