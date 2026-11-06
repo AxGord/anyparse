@@ -81,9 +81,6 @@ final class Battery {
 		['oracle', 'lint', 'blast', 'kit probes']
 	];
 
-	/** What the static-target probe compiles: a change under any of them since the base runs it. */
-	private static final JVM_INPUTS: Array<String> = ['src', 'tools/src/dev/JvmPortability.hx', 'tools/jvm-portability.hxml'];
-
 	private final _summary: Summary = new Summary();
 	private final _readings: Map<String, Int> = [];
 	private final _plan: BatteryPlan;
@@ -584,7 +581,8 @@ final class Battery {
 		if (forced == null) {
 			if (base == null || !cmd('git -C $repo cat-file -e $base^{commit}').run().ok)
 				return 'no baseline commit to diff the core against';
-			if (cmd('git -C $repo diff --quiet $base -- $JVM_INPUTS').run().ok) return 'neither src/ nor the probe moved since $base';
+			final moved: Result = cmd('git -C $repo diff --name-only --no-renames $base').run();
+			if (moved.ok && !moved.lines().exists(GateTree.isJvmInput)) return 'neither src/ nor the probe moved since $base';
 		}
 		return cmd('java -version').run().ok ? null : 'src/ moved but java is absent';
 	}

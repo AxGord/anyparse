@@ -113,26 +113,26 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
-	 * What every branch of a gate run but the heavy one holds is one thread for the short rows, the kits row's, two for the lint row when a
+	 * What every branch of a gate run but the heavy one holds is one thread for the short
+	 * rows, the kits row's when the engine or a kit moved, two for the lint row when a
 	 * `.hx` file moved, one for the jvm probe when it runs, and the base tree's lint plus one per infra tree when rule code
 	 * moved.
 	 */
 	@:pin('control')
 	@:killer('M-GATE-DEMAND-LISTS-NONE')
 	public function testTheLightBranchesOfAGateHoldWhatItsRowsRun(): Void {
-		for (touchedHx in [false, true]) for (jvmMoved in [false, true]) for (ruleInfra in [null, 0, 3]) {
+		for (touchedHx in [false, true]) for (jvmMoved in [false, true]) for (kitsMoved in [false, true]) for (ruleInfra in [null, 0, 3]) {
 			final facts: GateDemand = {
 				recording: false,
 				infra: 0,
 				touchedHx: touchedHx,
 				jvmMoved: jvmMoved,
+				kitsMoved: kitsMoved,
 				ruleInfra: ruleInfra
 			};
-			final expected: Int = 1
-				+ Probe.GATE_THREADS
-				+ (touchedHx ? 2 : 0)
-				+ (jvmMoved ? 1 : 0)
-				+ (ruleInfra == null ? 0 : 1 + ruleInfra);
+			final expected: Int = 1 + (kitsMoved ? Probe.GATE_THREADS : 0) + (touchedHx ? 2 : 0) + (jvmMoved ? 1 : 0) + (
+				ruleInfra == null ? 0 : 1 + ruleInfra
+			);
 			Assert.equals(expected, Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts, rows)), '$facts');
 		}
 		Assert.isNull(SliceGate.demandOf({
@@ -140,6 +140,7 @@ final class SliceGateTest extends Test {
 			infra: 0,
 			touchedHx: true,
 			jvmMoved: true,
+			kitsMoved: true,
 			ruleInfra: 3
 		}, ['suite']));
 	}
@@ -196,6 +197,8 @@ final class SliceGateTest extends Test {
 	public function testTheFmtRowFailsOnEitherHalfAndNamesBoth(): Void {
 		Assert.isTrue(SliceGate.fmtCombined(Passed, Skipped('no touched .hx')).match(Passed));
 		Assert.isTrue(SliceGate.fmtCombined(Passed, Passed).match(Passed));
+		Assert.isTrue(SliceGate.fmtCombined(Skipped('none'), Failed('xconfig +1')).match(Failed('xconfig +1')));
+		Assert.isTrue(SliceGate.fmtCombined(Skipped('none'), Skipped('no touched .hx')).match(Skipped('none')));
 		Assert.isTrue(SliceGate.fmtCombined(Passed, Failed('xconfig +1')).match(Failed('xconfig +1')));
 		Assert.isTrue(SliceGate.fmtCombined(Failed('3 would be rewritten'), Passed).match(Failed('3 would be rewritten')));
 		Assert.isTrue(SliceGate.fmtCombined(Failed('a'), Failed('b')).match(Failed('a; b')));

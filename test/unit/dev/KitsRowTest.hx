@@ -35,6 +35,18 @@ final class KitsRowTest extends Test {
 		});
 	}
 
+	/** The kits row can only move when the engine they probe or a kit moved. */
+	@:pin('guard')
+	public function testTheKitsRowIsReachedByTheEngineOrAKit(): Void {
+		Assert.isTrue(KitsRow.reached(['docs/a.md', 'src/anyparse/core/A.hx']));
+		Assert.isTrue(KitsRow.reached(['apq.json']));
+		Assert.isTrue(KitsRow.reached(['bin/apq']), 'the launch shim runs every kit invocation');
+		Assert.isTrue(KitsRow.reached(['bin/hxq']));
+		Assert.isTrue(KitsRow.reached(['test/probes/cli/kit.json']));
+		Assert.isFalse(KitsRow.reached(['test/unit/dev/A.hx', 'tools/src/dev/A.hx', 'docs/a.md', 'test/probesx/a.json']));
+		Assert.isFalse(KitsRow.reached([]));
+	}
+
 	private static function report(failed: Array<String>, lines: Array<String>): KitsReport {
 		return {
 			areas: 5,

@@ -3,6 +3,7 @@ package dev;
 import dev.Probe.KitsReport;
 import devkit.Summary;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -35,6 +36,14 @@ final class KitsRow {
 		final moved: Bool = report.lines.exists(line -> line.indexOf('KNOWN-DEFECT ROW MOVED') >= 0);
 		final delete: String = moved ? ', and delete the knownDefect field of each row reported KNOWN-DEFECT ROW MOVED' : '';
 		return '${report.failing} row(s) in ${report.failed.join(', ')}; for an intended change run $record$delete: ${report.lines[0]}';
+	}
+
+	/**
+	 * Whether a slice that touched `touched` can move the kit rows: the engine they probe or a kit moved. Any other change leaves
+	 * every kit reading as the baseline's.
+	 */
+	public static function reached(touched: Array<String>): Bool {
+		return touched.exists(file -> GateTree.isEngineInput(file) || file.startsWith('${Probe.KITS}/'));
 	}
 
 }

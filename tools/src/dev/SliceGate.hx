@@ -231,7 +231,9 @@ final class SliceGate {
 			case 'scrub': scrubOutcome;
 			case 'artifacts': artifactsOutcome;
 			case 'kits': () ->
-				KitsRow.outcome(_gate.tree, _gate.summary, lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n'));
+				KitsRow.reached(_gate.touched)
+					? KitsRow.outcome(_gate.tree, _gate.summary, lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n'))
+					: Skipped('neither the engine nor a kit changed');
 			case _: () -> NotRun('no row named $name');
 		};
 	}
@@ -320,6 +322,7 @@ final class SliceGate {
 			infra: _gate.options.infra.length,
 			touchedHx: _gate.touched.exists(f -> f.endsWith('.hx')),
 			jvmMoved: _gate.jvmMoved(),
+			kitsMoved: KitsRow.reached(_gate.touched),
 			ruleInfra: _gate.ruleCodeMoved() && baseline != null ? baseline.infra.length : null
 		}, rows);
 	}
@@ -482,10 +485,12 @@ final class SliceGate {
 	}
 
 	/**
-	 * The project-config half of the fmt row: no file the writer would rewrite, none needing a second pass.
+	 * The project-config half of the fmt row: no file the writer would rewrite, none needing a second pass, over `GateTree.fmtScope`.
 	 */
 	private function projectFmtOutcome(): Outcome {
-		final fmt: Result = _gate.hxq(_gate.tree, ['fmt', '--list', '--one-pass'].concat(GateTree.TREE_SCOPE)).run();
+		final scope: Array<String> = GateTree.fmtScope(_gate.touched);
+		if (scope.length == 0) return Skipped('no engine or formatter config change, no touched .hx');
+		final fmt: Result = _gate.hxq(_gate.tree, ['fmt', '--list', '--one-pass'].concat(scope)).run();
 		final line: String = '${fmt.out}\n${fmt.err}'.split('\n').find(l -> l.indexOf('would be rewritten') >= 0) ?? '';
 		_gate.summary.detail(line.replace('apq fmt --list: ', ''));
 		if (fmt.ok && line.indexOf(': 0 of ') >= 0) return Passed;
@@ -691,7 +696,7 @@ final class SliceGate {
 			else
 				0;
 			case 'jvm': facts.jvmMoved ? 1 : 0;
-			case 'kits': facts.recording ? 0 : Probe.GATE_THREADS;
+			case 'kits': facts.recording || !facts.kitsMoved ? 0 : Probe.GATE_THREADS;
 			case 'infra4': facts.recording ? facts.infra : 1 + (facts.ruleInfra ?? -1);
 			case _: 0;
 		};
@@ -727,11 +732,14 @@ final class SliceGate {
 	}
 
 	/**
-	 * The fmt row from its two halves: the cross-config half only adds to the project half (it skipped is no news), and a row
+	 * The fmt row from its two halves: the cross-config half only adds to the project half (it skipped is no news; the project half
+	 * skipped leaves the cross half's word), and a row
 	 * failing both ways says both.
 	 */
 	public static function fmtCombined(project: Outcome, cross: Outcome): Outcome {
 		return switch [project, cross] {
+			case [Skipped(_), Skipped(_)]: project;
+			case [Skipped(_), _]: cross;
 			case [Passed, Skipped(_)]: Passed;
 			case [Passed, _]: cross;
 			case [Failed(first), Failed(second)]: Failed('$first; $second');
@@ -753,6 +761,9 @@ typedef GateDemand = {
 	var touchedHx: Bool;
 
 	var jvmMoved: Bool;
+
+	/** Whether the engine or a probe kit moved, so the kits row runs (`KitsRow.reached`). */
+	var kitsMoved: Bool;
 
 	/** The infra trees of the baseline when rule code moved, or null when INFRA gate 4 does not run. */
 	var ruleInfra: Null<Int>;

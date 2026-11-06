@@ -280,6 +280,30 @@ final class BatteryTest extends Test {
 		});
 	}
 
+	/**
+	 * The battery skips the jvm probe only when no jvm input moved since
+	 * the base: the probe's build file alone, or a launch shim, runs it.
+	 */
+	@:pin('guard')
+	public function testTheBatteryJvmSkipReadsTheGatesJvmInputs(): Void {
+		final skipped: String = 'neither src/ nor the probe moved since ';
+		TempDir.with(dir -> {
+			final repo: String = dir.file('repo');
+			FileSystem.createDirectory(repo);
+			FileSystem.createDirectory('$repo/tools');
+			git(repo, ['init', '-q', '-b', 'main']);
+			File.saveContent('$repo/tools/jvm-portability.hxml', 'a');
+			File.saveContent('$repo/notes.txt', 'a');
+			git(repo, ['add', '.']);
+			git(repo, ['commit', '-q', '-m', 'base']);
+			final base: String = cmd('git -C $repo rev-parse HEAD').run().out.trim();
+			File.saveContent('$repo/notes.txt', 'b');
+			Assert.equals(skipped + base, Battery.jvmSkip(repo, base, null), 'a change outside the jvm inputs');
+			File.saveContent('$repo/tools/jvm-portability.hxml', 'b');
+			Assert.notEquals(skipped + base, Battery.jvmSkip(repo, base, null), 'the probe build file moved');
+		});
+	}
+
 	private static function git(repo: String, words: Array<String>): Void {
 		cmd('git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false -C $repo $words').run().check();
 	}

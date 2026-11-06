@@ -55,11 +55,17 @@ final class GateTree {
 	/** The characters of a commit or a digest a report row spells. */
 	private static inline final SHORT_HASH: Int = 9;
 
-	/** The probe's own source: the jvm row runs when it moves, as when `src/` does. */
-	private static inline final JVM_PROBE: String = 'tools/src/dev/JvmPortability.hx';
+	/** The probe's own source and build file: the jvm probe runs when either moves, as when an engine input does. */
+	private static final JVM_PROBE_FILES: Array<String> = ['tools/src/dev/JvmPortability.hx', 'tools/jvm-portability.hxml'];
 
 	/** The directories whose change can move a lint rule's findings: `query` and `check`, `query/cli` excepted. */
 	private static final RULE_CODE: EReg = ~/^src\/anyparse\/(check|query)\/(?!cli\/)/;
+
+	/** The sources, build files, launch shims and configuration `bin/apq.js` is made from, run through and reads. */
+	private static final ENGINE_INPUT: EReg = ~/^(src\/|bin\/(apq|hxq)$|bin\/apq-[^\/]*\.hxml$|apq\.json$)/;
+
+	/** The file names the formatter reads its options from, in any folder. */
+	private static final FORMATTER_CONFIGS: Array<String> = ['hxformat.json', '.hxformat.json'];
 
 	public final summary: Summary = new Summary();
 
@@ -129,6 +135,11 @@ final class GateTree {
 		return touched.exists(isRuleCode);
 	}
 
+	/** Whether the jvm probe has anything to check: an input of the engine or the probe moved. */
+	public inline function jvmMoved(): Bool {
+		return touched.exists(isJvmInput);
+	}
+
 	/** `command` run in the worktree on its engine. */
 	public function inTree(command: Command): Result {
 		return command.at(tree).env(ENGINE_VAR, apq()).run();
@@ -162,11 +173,6 @@ final class GateTree {
 	/** The path the touched file `file` had at the base. */
 	public function baseOf(file: String): String {
 		return _moved[file] ?? file;
-	}
-
-	/** Whether the jvm probe has anything to check: `src/` or the probe moved. */
-	public function jvmMoved(): Bool {
-		return touched.exists(f -> f.startsWith('src/') || f == JVM_PROBE);
 	}
 
 	/** The snapshot each `--infra-tree` of a `--baseline` run is linted into. */
@@ -213,6 +219,14 @@ final class GateTree {
 	 */
 	public static inline function forkSet(): Bool {
 		return (Sys.getEnv(FORK_VAR) ?? '') != '';
+	}
+
+	/**
+	 * Whether `file` is an input of the engine `bin/apq.js`: its sources, its build files and the configuration it reads. A slice that
+	 * touches none of them leaves the engine, and every row that only measures the engine, as the base had it.
+	 */
+	public static inline function isEngineInput(file: String): Bool {
+		return ENGINE_INPUT.match(file);
 	}
 
 	/** Why the fork the corpus class reads is unusable, or null when it is unset or a directory: a misconfiguration. */
@@ -320,6 +334,24 @@ final class GateTree {
 		return selected != null && !selected.contains(CORPUS_CLASS)
 			? Skipped('the impact suite ran no corpus case — the land runs it')
 			: Failed(snapshot);
+	}
+
+	/**
+	 * What the fmt row's project half formats: the whole tree when the engine or a formatter config moved, else only the touched
+	 * `.hx` files, since every other file formats as it did at the base. Empty when there is nothing to format.
+	 */
+	public static function fmtScope(touched: Array<String>): Array<String> {
+		return touched.exists(file -> isEngineInput(file) || FORMATTER_CONFIGS.contains(Path.withoutDirectory(file)))
+			? TREE_SCOPE.copy()
+			: XconfigFmt.hxFilesOf(touched);
+	}
+
+	/**
+	 * Whether `file` makes the jvm probe's answer: an engine input or the probe itself. The one answer to "must the jvm probe run?"
+	 * for the slice gate and the battery both.
+	 */
+	public static function isJvmInput(file: String): Bool {
+		return isEngineInput(file) || JVM_PROBE_FILES.contains(file);
 	}
 
 	/** The path (under `dir`, from `prefix`), size and modification time of every file below `dir/prefix`, in name order. */

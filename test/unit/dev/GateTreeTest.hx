@@ -61,4 +61,63 @@ final class GateTreeTest extends Test {
 		Assert.equals('Failed(no fork)', Std.string(GateTree.corpusShortfall('no fork', missing, [])), 'a bad fork is no impact choice');
 	}
 
+	/**
+	 * A slice that touches neither the engine's sources, its build files nor
+	 * `apq.json` is engine-free: the rows that only measure the engine skip.
+	 */
+	@:pin('guard')
+	public function testOnlyTheEnginesOwnFilesAreEngineInputs(): Void {
+		for (file in [
+			'src/anyparse/core/A.hx',
+			'bin/apq-js.hxml',
+			'bin/apq-launch-common.hxml',
+			'bin/apq',
+			'bin/hxq',
+			'apq.json'
+		]) Assert.isTrue(GateTree.isEngineInput(file), file);
+		for (file in [
+			'test/unit/dev/A.hx',
+			'tools/src/dev/A.hx',
+			'docs/testing.md',
+			'apqlint.json',
+			'bin/test.js',
+			'bin/apq.js',
+			'bin/hxq2',
+			'test/src/apq.json',
+			'tools/bin/apq-js.hxml'
+		]) Assert.isFalse(GateTree.isEngineInput(file), file);
+	}
+
+	/**
+	 * The fmt row's project half formats the whole tree only when the engine
+	 * or a formatter config moved, else the touched `.hx` files alone.
+	 */
+	@:pin('guard')
+	public function testTheFmtRowFormatsTheWholeTreeOnlyWhenTheEngineOrAConfigMoved(): Void {
+		Assert.same(GateTree.TREE_SCOPE, GateTree.fmtScope(['src/anyparse/core/A.hx']));
+		Assert.same(GateTree.TREE_SCOPE, GateTree.fmtScope(['apq.json']));
+		Assert.same(GateTree.TREE_SCOPE, GateTree.fmtScope(['hxformat.json']));
+		Assert.same(GateTree.TREE_SCOPE, GateTree.fmtScope(['.hxformat.json', 'docs/a.md']));
+		Assert.same(['test/unit/A.hx', 'tools/src/B.hx'], GateTree.fmtScope(['test/unit/A.hx', 'docs/a.md', 'tools/src/B.hx']));
+		Assert.same([], GateTree.fmtScope(['docs/a.md', 'bin/test.js', '.claude/batch/q.md']));
+	}
+
+	/** The jvm probe runs for an engine input and for the probe's own source and build file, and for nothing else. */
+	@:pin('guard')
+	public function testTheJvmProbeRunsForTheEngineAndItsOwnFiles(): Void {
+		for (file in [
+			'src/anyparse/core/A.hx',
+			'bin/hxq',
+			'apq.json',
+			'tools/src/dev/JvmPortability.hx',
+			'tools/jvm-portability.hxml'
+		]) Assert.isTrue(GateTree.isJvmInput(file), file);
+		for (file in [
+			'tools/src/dev/GateTree.hx',
+			'tools/bench-hxcpp.hxml',
+			'test/unit/A.hx',
+			'docs/testing.md'
+		]) Assert.isFalse(GateTree.isJvmInput(file), file);
+	}
+
 }
