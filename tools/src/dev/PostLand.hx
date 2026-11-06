@@ -35,6 +35,7 @@ final class PostLand {
 	private static inline final RUNNING: String = 'running';
 	private static inline final RED: String = 'red';
 	private static inline final LOG: String = 'log';
+	private static inline final PID: String = 'pid';
 	private static inline final SCRIPT: String = 'dev.js';
 	private static inline final WORK_PREFIX: String = 'apq-dev';
 	private static inline final SHARD_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
@@ -49,14 +50,22 @@ final class PostLand {
 		priority: 0
 	};
 
-	/** The commits whose whole suite was started and has not ended (or whose run was lost). */
-	public static inline function running(cache: String): Array<String> {
-		return recorded(cache, RUNNING);
-	}
-
 	/** The commits whose whole suite ended red and were not cleared. */
 	public static inline function red(cache: String): Array<String> {
 		return recorded(cache, RED);
+	}
+
+	/** The commits whose whole suite was started, has not ended and whose process is still there. */
+	public static function running(cache: String): Array<String> {
+		return recorded(cache).filter(sha -> alive(cache, sha));
+	}
+
+	/**
+	 * The commits whose run left a `running` record and no process: killed, slept through or reaped with the process group of
+	 * the land that started it. Their whole suite never gave a verdict.
+	 */
+	public static function lost(cache: String): Array<String> {
+		return recorded(cache).filter(sha -> !alive(cache, sha));
 	}
 
 	public static function main(argv: Array<String>): Int {
@@ -77,7 +86,7 @@ final class PostLand {
 				return 0;
 			case 'clear':
 				if (all == (shas.length > 0)) throw new UsageError('clear takes <sha>... or --all');
-				final cleared: Array<String> = clear(cache, all ? red(cache) : shas);
+				final cleared: Array<String> = clear(cache, all ? red(cache).concat(lost(cache)) : shas);
 				Sys.println('post-land: cleared ${cleared.length} record(s)${cleared.length == 0 ? '' : ': ' + cleared.join(' ')}');
 				return 0;
 			case _:
@@ -98,17 +107,27 @@ final class PostLand {
 	public static function statusLines(cache: String): Array<String> {
 		final lines: Array<String> = [
 			for (sha in red(cache)) 'red      $sha  ${File.getContent(recordOf(cache, sha)).trim()}'
-		].concat([for (sha in running(cache)) 'running  $sha']);
+		].concat([for (sha in running(cache)) 'running  $sha']).concat([
+			for (sha in lost(cache)) 'LOST     $sha  no process, no verdict — the next land runs it again, or `post-land clear $sha`'
+		]);
 		return lines.length == 0 ? ['post-land: no record'] : lines;
 	}
 
-	/** Remove the red record of each of `shas`; answers the ones that had one. */
+	/** Remove the red record of each of `shas`, and what a lost run of it left; answers the ones that had one. */
 	public static function clear(cache: String, shas: Array<String>): Array<String> {
 		final cleared: Array<String> = [];
+		final gone: Array<String> = lost(cache);
 		for (sha in shas) {
 			final file: String = recordOf(cache, sha);
-			if (!FileSystem.exists(file)) continue;
-			FileSystem.deleteFile(file);
+			final red: Bool = FileSystem.exists(file);
+			final wasLost: Bool = gone.contains(sha);
+			if (!red && !wasLost) continue;
+			if (red) FileSystem.deleteFile(file);
+			if (wasLost) {
+				remove(recordOf(cache, sha, RUNNING));
+				remove(fileOf(cache, sha, PID));
+				release(directory(cache), sha, red);
+			}
 			cleared.push(sha);
 		}
 		return cleared;
@@ -132,20 +151,35 @@ final class PostLand {
 
 	/**
 	 * Start the whole-suite run of `sha` detached from this process and answer at once. The record `running` exists before
-	 * the process does, so a run that never reaches its first line still shows in `status`.
+	 * the process does, so a run that never reaches its first line still shows in `status`; the pid of the process started is
+	 * the run's until the run writes its own.
 	 */
 	public static function start(repo: String, sha: String, cache: String): Outcome {
 		FileSystem.createDirectory(directory(cache));
 		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
-		launch(directory(cache), sha, repo, script -> argvOf(Lease.pooled(), script, repo, sha, cache));
+		remove(fileOf(cache, sha, PID));
+		final pid: Int = launch(directory(cache), sha, repo, script -> argvOf(Lease.pooled(), script, repo, sha, cache));
+		keepFirst(fileOf(cache, sha, PID), pid);
 		return Passed;
 	}
 
-	/** The land's first step: it does not start on a main whose whole suite ended red after an earlier land. */
-	public static function unsettled(cache: Null<String>, note: String -> Void): Outcome {
+	/**
+	 * The land's first step: it does not start on a main whose whole suite ended red after an earlier land, and the whole suite
+	 * of a commit whose run was lost is started again by `start` (a land that cannot start one only names it).
+	 */
+	public static function unsettled(cache: Null<String>, start: Null<PostLandStart>, repo: String, note: String -> Void): Outcome {
 		if (cache == null) return Skipped('no battery');
-		final lost: Array<String> = running(cache);
-		if (lost.length > 0) note('whole suite not ended: ${lost.join(' ')} (`node bin/dev.js post-land status`)');
+		final underway: Array<String> = running(cache);
+		if (underway.length > 0) note('whole suite not ended: ${underway.join(' ')} (`node bin/dev.js post-land status`)');
+		for (sha in lost(cache)) {
+			if (start == null) {
+				note('whole suite LOST: $sha (`node bin/dev.js post-land status`)');
+				continue;
+			}
+			final again: Outcome = start(repo, sha, cache);
+			if (!again.match(Passed)) return again;
+			note('whole suite of $sha was lost, runs again in the background (`node bin/dev.js post-land status`)');
+		}
 		final refused: Null<String> = refusal(cache);
 		return refused == null ? Passed : Failed(refused);
 	}
@@ -169,7 +203,8 @@ final class PostLand {
 	 * a red run keeps it, since the `red` record names it.
 	 */
 	public static function settle(cache: String, sha: String, verdict: Outcome): Void {
-		FileSystem.deleteFile(recordOf(cache, sha, RUNNING));
+		remove(recordOf(cache, sha, RUNNING));
+		remove(fileOf(cache, sha, PID));
 		release(directory(cache), sha, verdict.match(Failed(_)));
 		switch verdict {
 			case Failed(why):
@@ -200,13 +235,13 @@ final class PostLand {
 	/**
 	 * Starts a run of this tool detached, its output in `<dir>/<sha>.log`, from a copy of the running script kept as
 	 * `<dir>/<sha>.dev.js` (a rebuilt `bin/dev.js` cannot change a run in flight); `argvOf` answers the command line for that copy.
-	 * `release` removes what this leaves.
+	 * `release` removes what this leaves. Answers the pid of the process started.
 	 */
-	public static function launch(dir: String, sha: String, repo: String, argvOf: String -> Array<String>): Void {
+	public static function launch(dir: String, sha: String, repo: String, argvOf: String -> Array<String>): Int {
 		FileSystem.createDirectory(dir);
 		final script: String = fileIn(dir, sha, SCRIPT);
 		File.copy(FileSystem.fullPath(js.Node.__filename), script);
-		detach(argvOf(script), repo, fileIn(dir, sha, LOG));
+		return detach(argvOf(script), repo, fileIn(dir, sha, LOG));
 	}
 
 	/** The command `words` behind the pool lease `mode` grants, as a detached run of this tool asks for it. */
@@ -230,18 +265,37 @@ final class PostLand {
 	}
 
 	/** `argv` started in its own session with both output streams in `log`, so it outlives this process and holds none of its pipes. */
-	private static function detach(argv: Array<String>, cwd: String, log: String): Void {
+	private static function detach(argv: Array<String>, cwd: String, log: String): Int {
 		final fd: Int = js.Syntax.code("require('fs').openSync({0}, 'w')", log);
-		js.Syntax.code(
-			"require('child_process').spawn({0}, {1}, { cwd: {2}, detached: true, stdio: ['ignore', {3}, {3}] }).unref()", argv[0],
-			argv.slice(1), cwd, fd
+		final child: js.node.child_process.ChildProcess = js.node.ChildProcess.spawn(
+			argv[0], argv.slice(1), { cwd: cwd, detached: true, stdio: ['ignore', fd, fd] }
 		);
+		child.unref();
 		js.Syntax.code("require('fs').closeSync({0})", fd);
+		return child.pid;
+	}
+
+	/** Whether the process of the run of `sha` still exists: a run with no pid recorded has none. */
+	private static function alive(cache: String, sha: String): Bool {
+		final file: String = fileOf(cache, sha, PID);
+		final pid: Null<Int> = FileSystem.exists(file) ? Std.parseInt(File.getContent(file)) : null;
+		return pid != null
+			&& js.Syntax.code(
+				"(function (p) { try { process.kill(p, 0); return true; } catch (e) { return e.code === 'EPERM'; } })({0})", pid
+			);
+	}
+
+	/** Writes `pid` into `file` unless the run, faster than its starter, has already written its own. */
+	private static function keepFirst(file: String, pid: Int): Void {
+		js.Syntax.code(
+			"(function (f, t) { try { require('fs').writeFileSync(f, t, { flag: 'wx' }); } catch (e) { } })({0}, {1})", file, '$pid\n'
+		);
 	}
 
 	private static function run(repo: String, sha: String, cache: String): Int {
 		FileSystem.createDirectory(directory(cache));
 		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
+		File.saveContent(fileOf(cache, sha, PID), '${js.Node.process.pid}\n');
 		final verdict: Outcome = inWorktree(repo, sha, DIRECTORY, (work, tree) -> judge(repo, sha, cache, work, tree));
 		settle(cache, sha, verdict);
 		switch verdict {
@@ -279,7 +333,7 @@ final class PostLand {
 		return Path.join([cache, DIRECTORY]);
 	}
 
-	private static function recorded(cache: String, state: String): Array<String> {
+	private static function recorded(cache: String, state: String = RUNNING): Array<String> {
 		final dir: String = directory(cache);
 		if (!FileSystem.exists(dir)) return [];
 		final suffix: String = '.$state';

@@ -990,6 +990,37 @@
 			"note": "a finished run leaves its copy of the tool in the cache, one large file per impact land for good"
 		},
 		{
+			"name": "M-POSTLAND-LAUNCH-PID-LOST",
+			"type": "dev.PostLand",
+			"method": "detach",
+			"find": "return child.pid;",
+			"replace": "return 0;",
+			"note": "a started run is recorded under no pid, so a live whole-suite run reads as lost and a land starts a second one beside it"
+		},
+		{
+			"name": "M-POSTLAND-CLEAR-LOST",
+			"type": "dev.PostLand",
+			"method": "clear",
+			"find": "if (!red && !wasLost) continue;",
+			"replace": "if (!red) continue;",
+			"note": "post-land clear leaves the records of a lost run behind, so the same commit is reported lost until the cache is swept by hand"
+		},
+		{
+			"name": "M-POSTLAND-LOST-RESTARTS",
+			"type": "dev.PostLand",
+			"method": "unsettled",
+			"find": "for (sha in lost(cache)) {",
+			"replace": "for (sha in ([]: Array<String>)) {",
+			"note": "a land goes on over a lost run without starting its whole suite again, so the landed commit is never verified by a whole suite"
+		},
+		{
+			"name": "M-POSTLAND-DEAD-PID-READS-LOST",
+			"type": "dev.PostLand",
+			"method": "alive",
+			"force": "true",
+			"note": "every run record counts as running, so a run whose process is gone is never reported lost and a land never starts it again"
+		},
+		{
 			"name": "M-LAND-IMPACT-SCOPE-IGNORED",
 			"type": "dev.Land",
 			"method": "impactFile",

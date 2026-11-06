@@ -153,7 +153,7 @@ final class Land {
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
 			{
 				name: 'post-red',
-				step: () -> PostLand.unsettled(cache, _summary.detail)
+				step: () -> PostLand.unsettled(cache, _postLand, _repo, _summary.detail)
 			},
 			{ name: 'clean', step: clean },
 			{ name: 'branch', step: shape },
