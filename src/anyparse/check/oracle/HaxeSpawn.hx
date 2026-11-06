@@ -578,14 +578,15 @@ final class HaxeSpawn {
 		return count;
 	}
 
-	/** `threadsFor` this machine: its logical CPUs, and its performance cores where it reports them. */
-	private static function machineThreads(): Int {
-		#if nodejs
-		final cores: Int = js.node.Os.cpus().length;
-		return threadsFor(cores, fastCores() ?? cores);
-		#else
-		return 1;
-		#end
+	/**
+	 * `threadsFor` this machine: its logical CPUs, and its performance cores where it reports them. Read once per process: the
+	 * core count is a constant of the machine, not state of a run.
+	 */
+	public static function machineThreads(): Int {
+		return #if nodejs machine ??= {
+			final cores: Int = js.node.Os.cpus().length;
+			threadsFor(cores, fastCores() ?? cores);
+		} #else 1 #end;
 	}
 
 	/**
@@ -886,6 +887,9 @@ final class HaxeSpawn {
 	public static function runsOf(text: String): Null<Array<HaxeRun>> {
 		return try HaxeRunsDocumentParser.parse(text).runs catch (exception: haxe.Exception) null;
 	}
+
+	/** The answer of `machineThreads`, once read. */
+	private static var machine: Null<Int>;
 
 }
 

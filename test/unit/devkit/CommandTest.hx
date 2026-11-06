@@ -85,6 +85,9 @@ final class CommandTest extends Test {
 	private static inline final TICK: String =
 		'let n = 0; const t = setInterval(() => { console.log("tick " + n++); if (n > 12) clearInterval(t); }, 200)';
 
+	/** Prints the parent of the `git` that runs it: a shell alias, so the one program under test is the one asked. */
+	private static inline final GIT_PARENT: String = "alias.parent=!ps -o ppid= -p $PPID";
+
 	private final _node: String = js.Node.process.execPath;
 
 	/** A tethered command runs under its tether, never as this process's own child, whatever command was derived from it. */
@@ -316,6 +319,43 @@ final class CommandTest extends Test {
 			final run: Result = cmd('$_node -e $TICK').timeout(60000).watched(1000, dir.file('never-written')).run();
 			Assert.equals(0, run.status);
 			Assert.equals('', run.failure);
+		});
+	}
+
+	/**
+	 * A short program is this process's own child: no process driver stands between it and the caller, which would cost a node
+	 * start on every `git` the tools run. One that is tethered or watched for silence still runs under the driver.
+	 */
+	@:pin('control')
+	@:killer('M-COMMAND-SHORT-DRIVEN')
+	public function testAShortProgramRunsWithNoDriverBetween(): Void {
+		final own: String = '${js.Node.process.pid}';
+		Assert.equals(own, cmd('git -c $GIT_PARENT parent').text().trim());
+		Assert.notEquals(own, cmd('git -c $GIT_PARENT parent').tethered().text().trim(), 'a tethered one keeps its tether');
+		TempDir.with(dir -> {
+			final progress: String = dir.file('progress');
+			sys.io.File.saveContent(progress, 'x');
+			Assert.notEquals(own, cmd('git -c $GIT_PARENT parent')
+				.watched(60000, progress)
+				.text()
+				.trim(), 'a watched one keeps its driver');
+		});
+	}
+
+	/** A short program answers as the driver would have: its status, both streams and the absence of a failure. */
+	public function testAShortProgramAnswersAsADrivenOneDoes(): Void {
+		TempDir.with(dir -> {
+			final progress: String = dir.file('progress');
+			sys.io.File.saveContent(progress, 'x');
+			for (args in [['rev-parse', '--verify', 'no-such-ref'], ['--version']]) {
+				final direct: Result = cmd('git $args').at(dir.path).run();
+				final driven: Result = cmd('git $args').at(dir.path).watched(60000, progress).run();
+				Assert.same(
+					[driven.status, driven.out, driven.err, driven.failure],
+					[direct.status, direct.out, direct.err, direct.failure], '$args'
+				);
+			}
+			Assert.equals(128, cmd('git rev-parse --verify no-such-ref').at(dir.path).run().status);
 		});
 	}
 

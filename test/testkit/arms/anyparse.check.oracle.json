@@ -1222,6 +1222,14 @@
 			"find": "if (before == null || before != after) return;",
 			"replace": "if (before == null) return;",
 			"note": "a build compiled while the tree changed is filed under the fingerprint taken before, so once the tree is back at that content it answers for a tree it may never have read"
+		},
+		{
+			"name": "M-MACHINE-THREADS-REREAD",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "machineThreads",
+			"find": "machine ??= {",
+			"replace": "{",
+			"note": "every parallelism question starts sysctl again for a count that is a constant of the machine"
 		}
 	]
 }

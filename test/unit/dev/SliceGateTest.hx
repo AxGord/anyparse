@@ -533,7 +533,9 @@ final class SliceGateTest extends Test {
 		File.saveContent(Path.join([tree, 'bin/apq-js-common.hxml']), '');
 		File.saveContent(Path.join([tree, 'bin/apq-js.hxml']), '');
 		FileSystem.createDirectory(Path.join([tree, 'src']));
-		File.saveContent(Path.join([tree, 'src/keep']), '');
+		// the tree's own path makes its base commit unique: the baseline cache is keyed by the base,
+		// and two trees made in one second would share one entry
+		File.saveContent(Path.join([tree, 'src/keep']), tree);
 		File.saveContent(Path.join([tree, 'bin/hxq']), hxq);
 
 		File.saveContent(registryFile, BASE_REGISTRY);

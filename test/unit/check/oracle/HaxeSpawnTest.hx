@@ -4,6 +4,8 @@ import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.SpawnJob;
 
+using StringTools;
+
 /**
  * `HaxeSpawn` — the one `haxe` child process the compiler-oracle package starts, and the
  * three OUTCOMES its callers read apart.
@@ -327,6 +329,38 @@ final class HaxeSpawnTest extends Test {
 		Assert.isTrue(Date.now().getTime() - started < holder * 1000 / 4, 'the run ended without waiting the holder out');
 		#else
 		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/**
+	 * The core count is a constant of the machine: asking for the machine's threads again does not start `sysctl` again. A `sysctl`
+	 * on the path counts its starts; the first read of the process may already have happened, so one start at most is allowed.
+	 */
+	@:pin('control')
+	@:killer('M-MACHINE-THREADS-REREAD')
+	public function testTheMachineCoreCountIsReadOnce(): Void {
+		#if nodejs
+		if (js.node.Os.platform() != 'darwin') {
+			Assert.pass('only macOS reads its performance cores through sysctl');
+			return;
+		}
+		devkit.TempDir.with(dir -> {
+			final reads: String = dir.file('reads');
+			final shim: String = dir.file('sysctl');
+			sys.io.File.saveContent(shim, '#!/bin/sh\necho read >> "$reads"\nexec /usr/sbin/sysctl "$$@"\n');
+			js.node.Fs.chmodSync(shim, 493);
+			final path: String = Sys.getEnv('PATH') ?? '';
+			Sys.putEnv('PATH', '${dir.path}:$path');
+			try {
+				for (_ in 0...3) HaxeSpawn.machineThreads();
+			} catch (exception: haxe.Exception) {
+				Sys.putEnv('PATH', path);
+				throw exception;
+			}
+			Sys.putEnv('PATH', path);
+			final starts: Int = sys.FileSystem.exists(reads) ? sys.io.File.getContent(reads).trim().split('\n').length : 0;
+			Assert.isTrue(starts <= 1, 'sysctl started $starts times for three reads');
+		});
 		#end
 	}
 
