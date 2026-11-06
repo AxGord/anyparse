@@ -1,7 +1,6 @@
 package dev;
 
-import dev.Baseline;
-import dev.InfraSnapshot;
+import anyparse.query.ShardPlan;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Result;
@@ -33,9 +32,6 @@ final class GateTree {
 
 	/** The environment variable that names the corpus the suite's harness reads. */
 	public static inline final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';
-
-	/** The test class that runs the corpus and writes its snapshot. */
-	public static inline final CORPUS_CLASS: String = 'unit.grammar.haxe.HxFormatterCorpusTest';
 
 	/** The scope of a whole-tree lint of this project. */
 	public static final TREE_SCOPE: Array<String> = ['src', 'test', 'tools'];
@@ -331,7 +327,7 @@ final class GateTree {
 	public static function corpusShortfall(fork: Null<String>, snapshot: Null<String>, selected: Null<Array<String>>): Null<Outcome> {
 		if (fork != null) return Failed(fork);
 		if (snapshot == null) return null;
-		return selected != null && !selected.contains(CORPUS_CLASS)
+		return selected != null && !selected.contains(ShardPlan.CORPUS_CLASS)
 			? Skipped('the impact suite ran no corpus case — the land runs it')
 			: Failed(snapshot);
 	}

@@ -899,7 +899,7 @@
 			"name": "M-GATE-CORPUS-SHORTFALL-SKIPPED",
 			"type": "dev.GateTree",
 			"method": "corpusShortfall",
-			"find": "selected != null && !selected.contains(CORPUS_CLASS)",
+			"find": "selected != null && !selected.contains(ShardPlan.CORPUS_CLASS)",
 			"replace": "selected != null",
 			"note": "an impact run whose corpus class ran and wrote no snapshot leaves the corpus row skipped, so a broken harness passes the gate"
 		},

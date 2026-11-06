@@ -33,7 +33,8 @@
 	"reachConfigurationsComplete": true,
 	"resolutionRoots": [
 		"src",
-		"test"
+		"test",
+		"tools/src"
 	],
 	"resolutionLibs": [
 		"hxnodejs",

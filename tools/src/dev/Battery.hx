@@ -3,7 +3,7 @@ package dev;
 import anyparse.core.PoolLease;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JsonFormat;
-import dev.BatteryPlan;
+import anyparse.query.ShardPlan;
 import dev.GateReuse.GateOffer;
 import dev.Shard.Tally;
 import dev.XconfigFmt.XconfigFailure;
@@ -274,7 +274,7 @@ final class Battery {
 	private function corpus(): Outcome {
 		if (!_suiteGreen) return NotRun('the suite was red — the sweep snapshot it writes proves nothing');
 		final only: Null<Array<String>> = _plan.only;
-		if (only != null && !only.contains(GateTree.CORPUS_CLASS))
+		if (only != null && !only.contains(ShardPlan.CORPUS_CLASS))
 			return Skipped('the impact suite ran no corpus case — the whole suite after the land runs it');
 		final base: Null<String> = baseFile('sweep.json');
 		final sweep: Result = hxq(sweepRead().concat(base == null ? [] : ['--prev', base])).run();

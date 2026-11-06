@@ -86,6 +86,9 @@ private typedef ShardEntry = {
 @:nullSafety(Strict)
 final class ShardPlan {
 
+	/** The test class that runs the formatter corpus and writes its sweep snapshot; the gate and the shard plan read its name here. */
+	public static inline final CORPUS_CLASS: String = 'unit.grammar.haxe.HxFormatterCorpusTest';
+
 	/**
 	 * Classes that share MUTABLE STATE outside their own process, pinned to shard 0 as ONE group. One path
 	 * is a fixed constant, not a per-test temp: `bin/.last-sweep.json` (the corpus delta baseline,
@@ -112,7 +115,7 @@ final class ShardPlan {
 	 * compiler-server ports, so it parallelises freely.
 	 */
 	public static final STICKY_CLASSES: Array<String> = [
-		'unit.grammar.haxe.HxFormatterCorpusTest',
+		CORPUS_CLASS,
 		'unit.cli.ApqDxTier5CliTest'
 	];
 

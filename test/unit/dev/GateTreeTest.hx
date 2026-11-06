@@ -1,7 +1,9 @@
 package unit.dev;
 
+import anyparse.query.ShardPlan;
 import dev.GateTree;
 import devkit.Result;
+import devkit.Summary.Outcome;
 import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
@@ -51,14 +53,14 @@ final class GateTreeTest extends Test {
 	@:killer('M-GATE-CORPUS-FORK-SKIPPED')
 	public function testOnlyAnImpactRunWithoutTheCorpusClassLeavesTheCorpusRowSkipped(): Void {
 		final missing: String = 'no snapshot';
-		final failed: String = 'Failed($missing)';
+		final failed: Outcome = Failed(missing);
 		Assert.isNull(GateTree.corpusShortfall(null, null, ['unit.query.OtherTest']));
 		Assert.stringContains(
 			'Skipped(', Std.string(GateTree.corpusShortfall(null, missing, ['unit.query.OtherTest'])), 'no corpus class ran'
 		);
-		Assert.equals(failed, Std.string(GateTree.corpusShortfall(null, missing, [GateTree.CORPUS_CLASS])), 'the corpus class ran');
-		Assert.equals(failed, Std.string(GateTree.corpusShortfall(null, missing, null)), 'every class ran');
-		Assert.equals('Failed(no fork)', Std.string(GateTree.corpusShortfall('no fork', missing, [])), 'a bad fork is no impact choice');
+		Assert.same(failed, GateTree.corpusShortfall(null, missing, [ShardPlan.CORPUS_CLASS]), 'the corpus class ran');
+		Assert.same(failed, GateTree.corpusShortfall(null, missing, null), 'every class ran');
+		Assert.same(Failed('no fork'), GateTree.corpusShortfall('no fork', missing, []), 'a bad fork is no impact choice');
 	}
 
 	/**
