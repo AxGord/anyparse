@@ -786,6 +786,7 @@ final class HaxeRefShape {
 			]
 		};
 		table.structureFieldHostKinds = ['Anon', 'ObjectLit'];
+		table.structureVarFieldKind = 'VarField';
 		table.nullableWrapperTypeNames = ['Null', 'Dynamic', 'Any'];
 		table.memberTransparentWrapperTypeNames = ['Null'];
 		table.nullSafetyDisableArg = 'Off';
@@ -878,6 +879,7 @@ final class HaxeRefShape {
 		table.newExprKind = 'NewExpr';
 		table.fieldAccessKind = 'FieldAccess';
 		table.returnStatementKind = 'ReturnStmt';
+		table.returnExpressionKind = 'ReturnExpr';
 		table.conditionFirstChildKinds = ['IfStmt', 'IfExpr', 'WhileStmt', 'WhileExpr'];
 		table.conditionLastChildKinds = ['DoWhileStmt', 'DoWhileExpr'];
 		table.parenLambdaKind = 'ThinParenLambdaExpr';
@@ -889,6 +891,8 @@ final class HaxeRefShape {
 		table.iterationValueBinderKinds = ['KeyValueBinder'];
 		table.paramKinds = ['Required', 'Optional', 'Rest'];
 		table.supertypeClauseKinds = ['ExtendsClause', 'ImplementsClause'];
+		table.extendsClauseKind = 'ExtendsClause';
+		table.implementsClauseKind = 'ImplementsClause';
 		table.noBodyKind = 'NoBody';
 		table.catchClauseKind = 'CatchClause';
 		table.catchAllTypeNames = ['Dynamic', 'Any'];
@@ -1148,6 +1152,7 @@ final class HaxeRefShape {
 		table.inertTextLiteralKinds = ['DoubleStringExpr', 'RegexLit'];
 		table.stringLiteralDelimiters = ['DoubleStringExpr' => '"'];
 		table.metadataNamePrefixes = ['@:', '@'];
+		table.bareMetaKind = 'Meta';
 		table.stringLiteralMethodReturns = [
 			'split' => 'Array<String>',
 			'substr' => 'String',
@@ -1250,6 +1255,7 @@ final class HaxeRefShape {
 		];
 		table.interfaceDeclKinds = ['InterfaceDecl'];
 		table.packageDeclKind = 'PackageDecl';
+		table.typeAliasDeclKind = 'TypedefDecl';
 		table.grantsPrivateAccessMetaName = '@:allow';
 		table.importLineTemplate = 'import %;';
 		table.usingLineTemplate = 'using %;';
@@ -1257,6 +1263,7 @@ final class HaxeRefShape {
 		table.qualifiedSubTypeByModulePath = true;
 		table.packageSegmentPattern = '^[a-z_][A-Za-z0-9_]*$';
 		table.publicModifierKind = 'Public';
+		table.privateModifierKind = 'Private';
 		table.classDeclKinds = ['ClassDecl', 'AbstractClassDecl'];
 		table.typeValueTypeNames = [
 			'ClassDecl' => 'Class',

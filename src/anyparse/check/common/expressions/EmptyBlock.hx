@@ -166,7 +166,7 @@ final class EmptyBlock extends RuleBase {
 	private static function emptyBlockFix(
 		node: QueryNode, parent: QueryNode, grandparent: Null<QueryNode>, source: String, blockKinds: Array<String>, shape: RefShape
 	): EmptyFix {
-		if (parent.kind != 'IfStmt') return Keep(keptBodyReason(parent, shape));
+		if (!(shape.ifStatementKinds ?? []).contains(parent.kind)) return Keep(keptBodyReason(parent, shape));
 		final nspan: Null<Span> = node.span;
 		if (nspan == null) return Keep(DECLINE_OTHER);
 		final kids: Array<QueryNode> = parent.children;

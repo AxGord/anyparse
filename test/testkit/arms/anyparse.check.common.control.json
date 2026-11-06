@@ -989,6 +989,14 @@
 			"find": " || CheckScan.hasCommentMarker(source, ends.beforeElse.to, ends.chainEnd.to)",
 			"replace": "",
 			"note": "an else emptied by the move is dropped with the comment written inside it"
+		},
+		{
+			"name": "M-COMMON-RULE-SPELLS-IF-KIND",
+			"type": "anyparse.check.common.control.ConstantCondition",
+			"method": "branchEdit",
+			"find": "\t\t\tif (!seams.ifStatementKinds.contains(node.kind)) return null;\n",
+			"replace": "\t\t\tif (node.kind != 'IfStmt') return null;\n",
+			"note": "the rule spells the Haxe if-statement kind again instead of asking RefShape, so the kind-literal guard sees an unaccounted kind"
 		}
 	]
 }

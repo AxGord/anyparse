@@ -171,7 +171,8 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 			reflected: reflection.whole,
 			fragments: reflection.fragments,
 			scopeIndex: wide,
-			retainedMeta: plugin.refShape().retainedDeclMetaName
+			retainedMeta: plugin.refShape().retainedDeclMetaName,
+			staticKind: plugin.refShape().staticModifierKind ?? ''
 		};
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			// The resolution index carries the report files too, but only when a scope reached
@@ -235,7 +236,7 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 			if (!certain || !isMethod || name == null || span == null) return;
 			final retained: Null<String> = ctx.retainedMeta;
 			final memberKept: Bool = retained != null && runCarries(run, retained, true);
-			final isStatic: Bool = runCarries(run, 'Static', false);
+			final isStatic: Bool = runCarries(run, ctx.staticKind, false);
 			final target: Null<{ prop: String, getter: Bool }> = accessorTargetOf(name);
 			if (target == null) return;
 			final prop: String = target.prop;
@@ -602,5 +603,8 @@ private typedef Ctx = {
 	 * is pinned by annotation (the type-level `hasKeep` flag still applies).
 	 */
 	var retainedMeta: Null<String>;
+
+	/** `RefShape.staticModifierKind` — the modifier that makes an accessor serve a static property; empty when unset. */
+	var staticKind: String;
 
 }

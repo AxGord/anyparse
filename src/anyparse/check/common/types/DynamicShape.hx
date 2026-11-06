@@ -16,6 +16,12 @@ typedef DynCtx = {
 	final enumAbstractKind: Null<String>;
 	final anonKind: String;
 
+	/** `RefShape.bareMetaKind` — the paren-less annotation a configured exclusion meta is written as. */
+	final bareMetaKind: Null<String>;
+
+	/** `RefShape.publicModifierKind` — the modifier that makes a member part of the type's surface. */
+	final publicKind: Null<String>;
+
 	/** Kinds projected INSIDE a declaration's annotation text - they do not end the scanned region. */
 	final typeRefKinds: Array<String>;
 	final varFieldKind: String;
@@ -142,7 +148,8 @@ final class DynamicShape {
 		if (externName != null) prefixKinds.push(externName);
 		final macroMod: Null<String> = shape.macroModifierKind;
 		if (macroMod != null) prefixKinds.push(macroMod);
-		prefixKinds.push('Meta');
+		final bareMeta: Null<String> = shape.bareMetaKind;
+		if (bareMeta != null) prefixKinds.push(bareMeta);
 		return {
 			dynName: dynName,
 			fieldKinds: fieldKinds,
@@ -152,9 +159,11 @@ final class DynamicShape {
 			prefixKinds: prefixKinds,
 			externKind: externName,
 			enumAbstractKind: shape.enumAbstractDeclKind,
-			anonKind: 'Anon',
+			anonKind: shape.anonTypeKind ?? '',
+			bareMetaKind: bareMeta,
+			publicKind: shape.publicModifierKind,
 			typeRefKinds: shape.typeRefChildKinds ?? [],
-			varFieldKind: 'VarField',
+			varFieldKind: shape.structureVarFieldKind ?? '',
 			callKind: shape.callKind ?? '',
 			fieldAccessKind: shape.fieldAccessKind ?? '',
 			identKind: shape.identKind,

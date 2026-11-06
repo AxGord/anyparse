@@ -43,6 +43,9 @@ private typedef LiveCtx = {
 
 	/** The multi-branch constructs, every `switch` and every `try`: each branch joins the same exit. */
 	var branchyKinds: Array<String>;
+
+	/** The short-circuit binaries (`ShapeVocab.shortCircuitKinds`): the right operand's kills must not leak left. */
+	var shortCircuitKinds: Array<String>;
 	var scopeKinds: Array<String>;
 	var loopJumpNames: Array<String>;
 	var ownNames: Array<String>;
@@ -59,6 +62,7 @@ private typedef LiveCtx = {
  * spans `run` produced. Built once, threaded through the edit walk.
  */
 private typedef FixCtx = {
+
 	var source: String;
 	var root: QueryNode;
 	var shape: RefShape;
@@ -66,9 +70,13 @@ private typedef FixCtx = {
 	var mutableDeclKinds: Array<String>;
 	var declTypeChildKinds: Array<String>;
 	var emptyFlagKinds: Array<String>;
+
+	/** The blocks a standalone dead assignment may be deleted FROM (`ShapeVocab.statementBlockKinds`). */
+	var deletableBlockKinds: Array<String>;
 	var declaredTypes: Map<Int, String>;
 	var index: Null<SymbolIndex>;
 	var flagged: Array<String>;
+
 }
 
 /**
@@ -172,18 +180,6 @@ private typedef FixCtx = {
 @:nullSafety(Strict)
 final class DeadStore extends RuleBase {
 
-	/** Short-circuit binary kinds — the right operand evaluates conditionally, so its kills must not leak left. */
-	private static final SHORT_CIRCUIT_KINDS: Array<String> = ['And', 'Or', 'NullCoal'];
-
-	/**
-	 * Block-statement container kinds a standalone dead assignment may be deleted FROM. Excludes the
-	 * expression-valued block (`BlockExpr`), whose LAST statement is the block's own value — deleting
-	 * that would drop the value the block yields. A function body (`BlockBody`) or bare statement
-	 * block (`BlockStmt`) never yields its last statement as a value, so removing a lone statement is
-	 * safe there.
-	 */
-	private static final DELETABLE_BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt'];
-
 	public function new() {
 		super('dead-store', 'an assignment to a local whose value is never read on any path (dead store)', RuleCategory.Unused);
 	}
@@ -228,6 +224,7 @@ final class DeadStore extends RuleBase {
 					mutableDeclKinds: mutableDeclKinds,
 					declTypeChildKinds: shape.declTypeChildKinds ?? [],
 					emptyFlagKinds: flow != null ? flow.emptyFlagKinds() : [],
+					deletableBlockKinds: ShapeVocab.statementBlockKinds(shape),
 					declaredTypes: provider != null ? provider.declaredTypes(source) : [],
 					index: index,
 					flagged: RunScan.spanKeys(violations)
@@ -272,7 +269,7 @@ final class DeadStore extends RuleBase {
 				if (strip != null) edits.push({ span: strip, text: '' });
 			}
 		}
-		if (ctx.assignKind != null && DELETABLE_BLOCK_KINDS.contains(kind)) {
+		if (ctx.assignKind != null && ctx.deletableBlockKinds.contains(kind)) {
 			final deletions: Array<{ span: Span, text: String }> = [];
 			for (stmt in node.children) if (stmt.children.length == 1) {
 				final expr: QueryNode = stmt.children[0];
@@ -330,6 +327,7 @@ final class DeadStore extends RuleBase {
 			conditionalKinds: ShapeVocab.conditionalKinds(shape),
 			loopKinds: ShapeVocab.loopKinds(shape),
 			branchyKinds: (shape.switchKinds ?? []).concat(ShapeVocab.tryKinds(shape)),
+			shortCircuitKinds: ShapeVocab.shortCircuitKinds(shape),
 			scopeKinds: shape.scopeKinds,
 			loopJumpNames: shape.loopJumpNames ?? [],
 			ownNames: ownNames,
@@ -406,7 +404,7 @@ final class DeadStore extends RuleBase {
 			handleLoop(node, live, scope, ctx);
 		else if (ctx.branchyKinds.contains(kind))
 			handleBranchy(node, live, scope, ctx);
-		else if (SHORT_CIRCUIT_KINDS.contains(kind) && node.children.length == 2)
+		else if (ctx.shortCircuitKinds.contains(kind) && node.children.length == 2)
 			handleShortCircuit(node, live, scope, ctx);
 		else if (isSafeNavCall(node, ctx))
 			handleSafeNavCall(node, live, scope, ctx);

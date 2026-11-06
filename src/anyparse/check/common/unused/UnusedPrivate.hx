@@ -15,6 +15,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
@@ -184,12 +185,14 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		final reflected: Array<String> = surface.whole;
 		final violations: Array<Violation> = [];
 		final ctorCandidates: Array<{ file: String, className: String, span: Span }> = [];
+		final shape: RefShape = plugin.refShape();
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 
 		for (entry in files) {
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final externTypes: Array<String> = [];
-			collectExternTypes(tree, externTypes);
+			collectExternTypes(tree, externTypes, shape, metaKinds);
 			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
 			// project as unmodified — so PRIVATE — fields of a plain abstract, while every one of them
 			// is public API. Left in, the check deleted 15 of one real file's 17 colour constants.
@@ -232,7 +235,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 			&& !mentionedInStrings(c.className, reflected)
 			&& !usedAsValue(c.className, files, plugin, index)
 			&& !isAliased(c.className, scopeIndex)
-			&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')
+			&& !scopeIndex.text.privilegeMayReference(c.className, shape.constructorName ?? 'new')
 		) violations.push({
 			file: c.file,
 			span: c.span,
@@ -293,7 +296,8 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		final matchMask: Array<Span> = OccurrenceScan.inertMask(source, plugin);
 
 		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }> = [];
-		collectMembers(tree, false, memberByFrom);
+		final shape: RefShape = plugin.refShape();
+		collectMembers(tree, false, memberByFrom, shape);
 		final classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }> = [];
 		collectClassMeta(plugin, tree, classMeta);
 		// The fallback path — `fix` reached without the `run` that fills the field. The empty path is a
@@ -302,7 +306,6 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		// resolution scope onto whatever it is handed.
 		final reflected: Array<String> = _reflectedContents ?? ReflectionScan.reflectionSurface([{ file: '', source: source }], plugin)
 			.whole;
-		final shape: RefShape = plugin.refShape();
 		final pure: (QueryNode) -> Bool = initializerPurity(plugin, source, tree, index);
 
 		final deleting: Array<QueryNode> = [];
@@ -320,7 +323,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 				deleting.push(node);
 				attempted[span.from] = v;
 			}
-			if (isPrivateEmptyCtor(node)) {
+			if (isPrivateEmptyCtor(node, shape)) {
 				if (hasConditional) {
 					v.declineReason = 'this is a private empty constructor and the file carries an `#if` region, so the '
 						+ 'never-instantiated proof behind its deletion is a whole-file one conditional compilation voids';
@@ -340,7 +343,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 			}
 			final decline: Null<String> = memberDeclineReason(
 				node, owner, hit.inExtends, supertypeDecline.bind(plugin, v.file, source, owner, node.name, scopeIndex), index, classMeta,
-				reflected, pure, stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
+				reflected, pure, stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index), shape
 			);
 			if (decline == null)
 				attempt();
@@ -419,8 +422,8 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * method of a subclass is spared, since a single file cannot see which one the
 	 * base declares abstract, whether or not the base is in the linted file set.
 	 */
-	private static inline function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
-		return (member.kind == 'FnMember' || member.kind == 'FinalModifiedMember') && inExtendsClass;
+	private static inline function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool, shape: RefShape): Bool {
+		return inExtendsClass && ShapeVocab.methodDeclKinds(shape).contains(member.kind);
 	}
 
 	/**
@@ -598,14 +601,14 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * when it has no initializer or one `pure` clears (its first child is the initializer expression): the type-aware deletion
 	 * purity `TypeResolver.isDeletionPure` when the fix has an index, the kind-only `MemberKinds.isSideEffectFree` without one.
 	 */
-	private static function shapeDecline(member: QueryNode, pure: (QueryNode) -> Bool): Null<String> {
+	private static function shapeDecline(member: QueryNode, pure: (QueryNode) -> Bool, shape: RefShape): Null<String> {
 		// A body-less declaration has no dead code to remove — its implementation
 		// lives elsewhere (an `extern`'s in native code; an `abstract`'s in
 		// subclasses, though those are already exempt in `violationFor`).
-		for (c in member.children) if (c.kind == 'NoBody')
+		for (c in member.children) if (c.kind == shape.noBodyKind)
 			return 'the declaration has no body, so the implementation this would delete lives outside the file (an `extern` member '
 				+ 'in native code) and there is no dead code here to remove';
-		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return null;
+		if (!(shape.fieldDeclKinds ?? []).contains(member.kind)) return null;
 		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
 		return init == null || pure(init)
 			? null
@@ -616,8 +619,8 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * Whether a class-scope `node` carries an `extends` clause among its direct
 	 * children (`(ClassForm C (ExtendsClause …) …)`).
 	 */
-	private static function classDeclaresExtends(node: QueryNode): Bool {
-		return node.children.exists(child -> child.kind == 'ExtendsClause');
+	private static function classDeclaresExtends(node: QueryNode, extendsKind: Null<String>): Bool {
+		return node.children.exists(child -> child.kind == extendsKind);
 	}
 
 	/**
@@ -631,15 +634,15 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * (`isClassScopeNode`) recomputes the flag from its own `extends` clause.
 	 */
 	private static function collectMembers(
-		node: QueryNode, inExtends: Bool, out: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }>
+		node: QueryNode, inExtends: Bool, out: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }>, shape: RefShape
 	): Void {
-		final childExtends: Bool = isClassScopeNode(node.kind) ? classDeclaresExtends(node) : inExtends;
+		final childExtends: Bool = isClassScopeNode(node.kind) ? classDeclaresExtends(node, shape.extendsClauseKind) : inExtends;
 		for (child in node.children) {
 			if (MemberKinds.isFieldMemberKind(child.kind)) {
 				final span: Null<Span> = child.span;
 				if (span != null) out[span.from] = { node: child, parent: node, inExtends: childExtends };
 			}
-			if (MemberKinds.descendsToMemberHost(node.kind, child.kind)) collectMembers(child, childExtends, out);
+			if (MemberKinds.descendsToMemberHost(node.kind, child.kind)) collectMembers(child, childExtends, out, shape);
 		}
 	}
 
@@ -651,13 +654,13 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * An extern member has no visibility keyword yet is PUBLIC, so its enclosing
 	 * type must be exempt from the private-member reference scan.
 	 */
-	private static function collectExternTypes(node: QueryNode, out: Array<String>): Void {
+	private static function collectExternTypes(node: QueryNode, out: Array<String>, shape: RefShape, metaKinds: Array<String>): Void {
 		final siblings: Array<QueryNode> = node.children;
 		for (i in 0...siblings.length) {
 			final child: QueryNode = siblings[i];
 			final name: Null<String> = child.name;
-			if (name != null && isClassScopeNode(child.kind) && precededByExtern(siblings, i)) out.push(name);
-			collectExternTypes(child, out);
+			if (name != null && isClassScopeNode(child.kind) && precededByExtern(siblings, i, shape, metaKinds)) out.push(name);
+			collectExternTypes(child, out, shape, metaKinds);
 		}
 	}
 
@@ -666,12 +669,12 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * back over the contiguous run of modifier / meta siblings (`Private` / `Extern`
 	 * / `@:meta`) that a class decl may carry, stopping at the first non-modifier.
 	 */
-	private static function precededByExtern(siblings: Array<QueryNode>, index: Int): Bool {
+	private static function precededByExtern(siblings: Array<QueryNode>, index: Int, shape: RefShape, metaKinds: Array<String>): Bool {
 		var i: Int = index - 1;
 		while (i >= 0) {
 			final kind: String = siblings[i].kind;
-			if (kind == 'Extern') return true;
-			if (kind != 'Private' && kind != 'Meta' && kind != 'MetaCall') return false;
+			if (kind == shape.externModifierKind) return true;
+			if (kind != shape.privateModifierKind && !metaKinds.contains(kind)) return false;
 			i--;
 		}
 		return false;
@@ -683,13 +686,18 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * is only ever a violation via the constructor arm (`run` skips it for the member
 	 * scan), so a `new` finding in `fix` routes here.
 	 */
-	private static function isPrivateEmptyCtor(node: QueryNode): Bool {
-		return node.kind == 'FnMember' && node.name == 'new' && isEmptyCtorBody(node);
+	private static function isPrivateEmptyCtor(node: QueryNode, shape: RefShape): Bool {
+		return isPlainMethodKind(node.kind, shape) && node.name == 'new' && isEmptyCtorBody(node, shape);
 	}
 
 	/** Whether a `FnMember`'s only child is an empty block body (no params, no statements). */
-	private static function isEmptyCtorBody(node: QueryNode): Bool {
-		return node.children.length == 1 && node.children[0].kind == 'BlockBody' && node.children[0].children.length == 0;
+	private static function isEmptyCtorBody(node: QueryNode, shape: RefShape): Bool {
+		return node.children.length == 1 && node.children[0].kind == shape.blockBodyKind && node.children[0].children.length == 0;
+	}
+
+	/** Whether `kind` is the plain method member — a method form other than the `final`-modified one. */
+	private static function isPlainMethodKind(kind: String, shape: RefShape): Bool {
+		return kind != shape.finalModifierMemberKind && ShapeVocab.methodDeclKinds(shape).contains(kind);
 	}
 
 	/** Whether `name` occurs as a word inside any collected string-literal content (a possible reflection target). */
@@ -702,9 +710,9 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * `abstract class`, the inner `ClassForm` for a `final class` (`FinalDecl`
 	 * wrapper), else null.
 	 */
-	private static function classFormOf(child: QueryNode): Null<QueryNode> {
+	private static function classFormOf(child: QueryNode, finalClassKind: Null<String>): Null<QueryNode> {
 		if (isClassScopeNode(child.kind)) return child;
-		if (child.kind == 'FinalDecl') for (c in child.children) if (isClassScopeNode(c.kind)) return c;
+		if (child.kind == finalClassKind) for (c in child.children) if (isClassScopeNode(c.kind)) return c;
 		return null;
 	}
 
@@ -728,7 +736,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		final shape: RefShape = plugin.refShape();
 		final build: Array<Int> = AnnotatedDeclScan.typeStartsAny(plugin, tree, shape.typeBuildMacroMetaNames);
 		final keep: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, shape.retainedDeclMetaName);
-		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
+		forEachClassDecl(tree, shape, (classNode, name, siblings, index) -> {
 			final span: Null<Span> = siblings[index].span;
 			out[name] = { hasBuild: AnnotatedDeclScan.covers(span, build), hasKeep: AnnotatedDeclScan.covers(span, keep) };
 		});
@@ -744,39 +752,48 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	private static function collectCtorCandidates(
 		plugin: GrammarPlugin, tree: QueryNode, file: String, out: Array<{ file: String, className: String, span: Span }>
 	): Void {
-		final build: Array<Int> = AnnotatedDeclScan.typeStartsAny(plugin, tree, plugin.refShape().typeBuildMacroMetaNames);
-		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
+		final shape: RefShape = plugin.refShape();
+		final build: Array<Int> = AnnotatedDeclScan.typeStartsAny(plugin, tree, shape.typeBuildMacroMetaNames);
+		final abstractClassKinds: Array<String> = [for (k in shape.classDeclKinds ?? []) if (k != shape.plainClassDeclKind) k];
+		forEachClassDecl(tree, shape, (classNode, name, siblings, index) -> {
 			// An abstract class is never instantiated by definition and its private
 			// empty ctor is the subclass-only idiom — `new` stays for `super()`.
-			if (classNode.kind == 'AbstractClassDecl') return;
+			if (abstractClassKinds.contains(classNode.kind)) return;
 			if (AnnotatedDeclScan.covers(siblings[index].span, build)) return;
-			final ctor: Null<QueryNode> = privateEmptyCtorOf(classNode);
+			final ctor: Null<QueryNode> = privateEmptyCtorOf(classNode, shape, plugin.metaShape().metaKinds);
 			final cspan: Null<Span> = ctor?.span;
-			if (ctor != null && cspan != null && hasStaticMember(classNode)) out.push({ file: file, className: name, span: cspan });
+			if (ctor != null && cspan != null && hasStaticMember(classNode, shape.staticModifierKind))
+				out.push({ file: file, className: name, span: cspan });
 		});
 	}
 
 	/** The class's `private function new() {}` (empty body, no params), or null. */
-	private static function privateEmptyCtorOf(classNode: QueryNode): Null<QueryNode> {
+	private static function privateEmptyCtorOf(classNode: QueryNode, shape: RefShape, metaKinds: Array<String>): Null<QueryNode> {
 		final kids: Array<QueryNode> = classNode.children;
 		for (i in 0...kids.length) {
 			final child: QueryNode = kids[i];
-			if (child.kind == 'FnMember' && child.name == 'new' && isEmptyCtorBody(child) && precededByPrivate(kids, i)) return child;
+			if (
+				isPlainMethodKind(child.kind, shape)
+				&& child.name == 'new'
+				&& isEmptyCtorBody(child, shape)
+				&& precededByPrivate(kids, i, shape, metaKinds)
+			)
+				return child;
 		}
 		return null;
 	}
 
 	/** Whether the member at `index` is preceded by a `Private` modifier (and not `Public`) in its meta / modifier run. */
-	private static function precededByPrivate(siblings: Array<QueryNode>, index: Int): Bool {
+	private static function precededByPrivate(siblings: Array<QueryNode>, index: Int, shape: RefShape, metaKinds: Array<String>): Bool {
 		var i: Int = index - 1;
 		var sawPrivate: Bool = false;
 		while (i >= 0) {
 			final kind: String = siblings[i].kind;
-			if (kind == 'Private')
+			if (kind == shape.privateModifierKind)
 				sawPrivate = true;
-			else if (kind == 'Public')
+			else if (kind == shape.publicModifierKind)
 				return false;
-			else if (kind != 'Meta' && kind != 'MetaCall')
+			else if (!metaKinds.contains(kind))
 				break;
 			i--;
 		}
@@ -799,8 +816,8 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	}
 
 	/** Whether the class carries at least one `static` member (the utility-class shape). */
-	private static function hasStaticMember(classNode: QueryNode): Bool {
-		return classNode.children.exists(child -> child.kind == 'Static');
+	private static function hasStaticMember(classNode: QueryNode, staticKind: Null<String>): Bool {
+		return classNode.children.exists(child -> child.kind == staticKind);
 	}
 
 	/** Whether `className` is instantiated (`new ClassName`) anywhere in the file set. */
@@ -899,11 +916,11 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	private static function memberDeclineReason(
 		node: QueryNode, owner: Null<String>, inExtends: Bool, supertypes: () -> Null<String>, index: Null<SymbolIndex>,
 		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>, pure: (QueryNode) -> Bool,
-		stringsUnreachable: () -> Bool
+		stringsUnreachable: () -> Bool, shape: RefShape
 	): Null<String> {
-		final shapeReason: Null<String> = shapeDecline(node, pure);
+		final shapeReason: Null<String> = shapeDecline(node, pure, shape);
 		if (shapeReason != null) return shapeReason;
-		if (mayImplementAbstractMethod(node, inExtends)) {
+		if (mayImplementAbstractMethod(node, inExtends, shape)) {
 			final reason: Null<String> = supertypes();
 			if (reason != null) return reason;
 		}
@@ -926,17 +943,19 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * scan). Descends into a class BODY, never the `FinalDecl` wrapper, so a `final
 	 * class`'s leading meta is read once at the right level.
 	 */
-	private static function forEachClassDecl(node: QueryNode, visit: (QueryNode, String, Array<QueryNode>, Int) -> Void): Void {
+	private static function forEachClassDecl(
+		node: QueryNode, shape: RefShape, visit: (QueryNode, String, Array<QueryNode>, Int) -> Void
+	): Void {
 		final kids: Array<QueryNode> = node.children;
 		for (i in 0...kids.length) {
 			final child: QueryNode = kids[i];
-			final classNode: Null<QueryNode> = classFormOf(child);
+			final classNode: Null<QueryNode> = classFormOf(child, shape.finalClassDeclKind);
 			final name: Null<String> = classNode?.name;
 			if (classNode != null && name != null) {
 				visit(classNode, name, kids, i);
-				forEachClassDecl(classNode, visit);
+				forEachClassDecl(classNode, shape, visit);
 			} else {
-				forEachClassDecl(child, visit);
+				forEachClassDecl(child, shape, visit);
 			}
 		}
 	}

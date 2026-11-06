@@ -685,7 +685,7 @@ final class PreferArrowCallback extends RuleBase {
 		if (head == null) return null;
 		final all: Array<Candidate> = idx.resolveTypeRefsFrom(head, fromFile);
 		final rt: Null<Candidate> = all.length == 1 ? all[0] : null;
-		if (rt == null || rt.type.kind != 'TypedefDecl') return null;
+		if (rt == null || rt.type.kind != ctx.shape.typeAliasDeclKind) return null;
 		final declSource: Null<String> = idx.sourceOf(rt.file.file);
 		return declSource == null ? null : TypeResolver.memoizedDeclaredTypeSources(ctx.plugin, declSource)()[rt.type.span.from];
 	}

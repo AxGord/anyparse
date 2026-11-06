@@ -573,7 +573,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 			if (ctx.prefixKinds.contains(child.kind)) {
 				if (ctx.externKind != null && child.kind == ctx.externKind) {
 					pendingExclude = true;
-				} else if (child.kind == 'Meta') {
+				} else if (child.kind == ctx.bareMetaKind) {
 					final nm: Null<String> = child.name;
 					if (nm != null && excludeMeta.contains(nm)) pendingExclude = true;
 				}

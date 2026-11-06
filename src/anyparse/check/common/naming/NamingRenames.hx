@@ -22,6 +22,7 @@ import anyparse.query.Uses;
 import haxe.Exception;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.ShapeVocab;
 
 using StringTools;
 
@@ -712,7 +713,7 @@ final class NamingRenames {
 		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its
 		// comment-along still spans the whole class.
 		final container: Null<Span> = BindingScope.enclosingScopeSpan(
-			tree, shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']), declFrom, shape
+			tree, shape.scopeKinds.concat(ShapeVocab.switchArmKinds(shape)), declFrom, shape
 		);
 		for (occ in classified) switch occ.kind {
 			case OccurrenceClass.CommentTrivia if (distinctive):
@@ -909,12 +910,12 @@ final class NamingRenames {
 	): Void {
 		if (CondRegionScan.isConditionalKind(node.kind, shape)) return;
 		final cls: Null<String> = CheckScan.isClassBodyKind(node.kind) && node.name != null ? node.name : currentClass;
-		if (node.kind == 'IdentExpr' && node.name == name) {
+		if (node.kind == shape.identKind && node.name == name) {
 			final s: Null<Span> = node.span;
 			final off: Int = s == null ? -1 : SourceText.identTokenOffset(source, s, name);
 			if (off >= 0) bare.push({ off: off, cls: cls });
-		} else if (node.kind == 'FieldAccess' && node.name == name) {
-			collectFieldAccessRef(node, name, source, cls, bare, typed, recvNames);
+		} else if (node.kind == shape.fieldAccessKind && node.name == name) {
+			collectFieldAccessRef(node, name, source, cls, bare, typed, recvNames, shape.identKind);
 		}
 		for (child in node.children) collectAttributedRefs(child, name, source, cls, bare, typed, recvNames, shape);
 	}
@@ -1092,14 +1093,14 @@ final class NamingRenames {
 	 */
 	private static function collectFieldAccessRef(
 		node: QueryNode, name: String, source: String, cls: Null<String>, bare: Array<{ off: Int, cls: Null<String> }>,
-		typed: Array<{ recv: QueryNode, fa: QueryNode }>, recvNames: Array<String>
+		typed: Array<{ recv: QueryNode, fa: QueryNode }>, recvNames: Array<String>, identKind: String
 	): Void {
 		if (node.children.length == 0) return;
 		final recv: QueryNode = node.children[0];
 		final recvSpan: Null<Span> = recv.span;
 		final faSpan: Null<Span> = node.span;
 		final rn: Null<String> = recv.name;
-		if (recvSpan == null || faSpan == null || recv.kind != 'IdentExpr' || rn == null) return;
+		if (recvSpan == null || faSpan == null || recv.kind != identKind || rn == null) return;
 		if (rn == 'this' || rn == 'super') {
 			final off: Int = SourceText.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), name);
 			if (off >= 0) bare.push({ off: off, cls: cls });

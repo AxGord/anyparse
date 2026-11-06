@@ -94,6 +94,53 @@ class ShapeVocabTest extends Test {
 			Assert.isTrue(branches.contains(kind), '$kind is not in branchKinds');
 	}
 
+	/** The short-circuit, statement-block, method and single-parameter sets, read off a second grammar's own spellings. */
+	@:pin('control') @:killer('M-VOCAB-SHORT-CIRCUIT-NO-COALESCE') @:killer('M-VOCAB-METHODS-KEEP-FIELDS')
+	public function testDerivedSetsTakeTheGrammarsOwnSpellings(): Void {
+		final shape: RefShape = bare();
+		shape.logicalAndKind = 'AndAlso';
+		shape.logicalOrKind = 'OrElse';
+		shape.nullCoalesceKind = 'Elvis';
+		shape.blockBodyKind = 'Body';
+		shape.memberDeclKinds = ['Prop', 'Method'];
+		shape.fieldDeclKinds = ['Prop'];
+		shape.paramKinds = ['Param', 'Varargs'];
+		shape.restParamKind = 'Varargs';
+		Assert.same(['AndAlso', 'OrElse', 'Elvis'], ShapeVocab.shortCircuitKinds(shape));
+		Assert.same(['Body'], ShapeVocab.statementBlockKinds(shape));
+		Assert.same(['Method'], ShapeVocab.methodDeclKinds(shape));
+		Assert.same(['Param'], ShapeVocab.singleParamKinds(shape));
+	}
+
+	/** The Haxe grammar answers each seam the common rules ask with the very kind they used to spell. */
+	public function testHaxeAnswersTheSeamsTheCommonRulesAsk(): Void {
+		final shape: RefShape = new HaxeQueryPlugin().refShape();
+		Assert.same(['And', 'Or', 'NullCoal'], ShapeVocab.shortCircuitKinds(shape));
+		Assert.same(['BlockBody', 'BlockStmt'], ShapeVocab.statementBlockKinds(shape));
+		Assert.same(['FnMember', 'FinalModifiedMember'], ShapeVocab.methodDeclKinds(shape));
+		Assert.same(['Required', 'Optional'], ShapeVocab.singleParamKinds(shape));
+		Assert.same(
+			[
+				'ExtendsClause',
+				'ImplementsClause',
+				'ReturnExpr',
+				'Private',
+				'VarField',
+				'Meta',
+				'TypedefDecl'
+			],
+			[
+				shape.extendsClauseKind,
+				shape.implementsClauseKind,
+				shape.returnExpressionKind,
+				shape.privateModifierKind,
+				shape.structureVarFieldKind,
+				shape.bareMetaKind,
+				shape.typeAliasDeclKind
+			]
+		);
+	}
+
 	/** A shape naming only the seams `RefShape` requires. */
 	private static function bare(): RefShape {
 		return new RefShape('IdentExpr', [], [], [], [], []);

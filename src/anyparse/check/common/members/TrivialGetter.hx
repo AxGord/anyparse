@@ -15,6 +15,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -176,9 +177,6 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 */
 	private static inline final IS_VAR_META: String = '@:isVar';
 
-	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
-	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
-
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -325,7 +323,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			final className: Null<String> = cls.name;
 			if (className == null) continue;
 			final owner: String = className;
-			final t = memberTables(cls, source, branch);
+			final t: MemberTables = memberTables(cls, source, branch, shape);
 			for (prop in t.properties) if (prop.span.from == span.from) {
 				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
 				final c = classifyProperty(cls, source, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
@@ -421,7 +419,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		final className: Null<String> = cls.name;
 		if (className == null) return;
 		final owner: String = className;
-		final t = memberTables(cls, source, branch);
+		final t: MemberTables = memberTables(cls, source, branch, shape);
 		for (prop in t.properties) if (!subtypeBlocks(subtypeIndex, className, prop.name)) {
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 			if (c == null) continue;
@@ -468,9 +466,9 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		return if (body == null || body.children.length != 1)
 			null
 		else if (body.kind == shape.blockBodyKind)
-			returnedField(body.children[0], 'ReturnStmt', shape)
+			returnedField(body.children[0], shape.returnStatementKind, shape)
 		else if ((shape.expressionBodyKinds ?? []).contains(body.kind))
-			returnedField(body.children[0], 'ReturnExpr', shape)
+			returnedField(body.children[0], shape.returnExpressionKind, shape)
 		else
 			null;
 	}
@@ -491,7 +489,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 * `ReturnExpr`, kind given by `returnKind`) — the name of a bare `IdentExpr`
 	 * or a `this.<name>` `FieldAccess` — else null.
 	 */
-	private static function returnedField(ret: QueryNode, returnKind: String, shape: RefShape): Null<String> {
+	private static function returnedField(ret: QueryNode, returnKind: Null<String>, shape: RefShape): Null<String> {
 		return ret.kind != returnKind || ret.children.length != 1 ? null : FieldRefScan.fieldRefName(ret.children[0], shape);
 	}
 
@@ -506,7 +504,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
-		final t = memberTables(cls, source, branch);
+		final t: MemberTables = memberTables(cls, source, branch, shape);
 		for (prop in t.properties) if (
 			wanted.contains('${prop.span.from}:${prop.span.to}') && !subtypeBlocks(index, className, prop.name)
 		) {
@@ -624,19 +622,19 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 * interface blocks. A private property is never exposed through an interface, so never blocks.
 	 */
 	private static function interfaceRequiresGetter(
-		cls: QueryNode, propName: String, isPublic: Bool, index: Null<SymbolIndex>, file: String
+		cls: QueryNode, propName: String, isPublic: Bool, index: Null<SymbolIndex>, file: String, shape: RefShape
 	): Bool {
 		if (!isPublic) return false;
-		final ifaces: Array<String> = implementedInterfaces(cls);
+		final ifaces: Array<String> = implementedInterfaces(cls, shape);
 		// The clause's SIMPLE names resolve against this file's own imports / package.
 		return ifaces.length != 0
 			&& (index == null || ifaces.exists(iface -> !index.typing.members.typeProvablyLacksMember(iface, propName, file)));
 	}
 
 	/** The simple names of every interface in `cls`'s `implements` clauses. */
-	private static function implementedInterfaces(cls: QueryNode): Array<String> {
+	private static function implementedInterfaces(cls: QueryNode, shape: RefShape): Array<String> {
 		final out: Array<String> = [];
-		for (child in cls.children) if (child.kind == 'ImplementsClause') for (named in child.children) {
+		for (child in cls.children) if (child.kind == shape.implementsClauseKind) for (named in child.children) {
 			final nm: Null<String> = named.name;
 			if (nm != null) out.push(simpleName(nm));
 		}
@@ -650,30 +648,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 * properties — `(get, never)`, `(get, null)` and `(get, set)`. The shape decision and
 	 * soundness gates for each live in `classifyProperty`.
 	 */
-	private static function memberTables(cls: QueryNode, source: String, branch: MemberBranchSeams): {
-		privateFieldNodes: Map<String, QueryNode>,
-		getters: Map<String, {
-			node: QueryNode,
-			dyn: Bool,
-			isOverride: Bool,
-			isInline: Bool
-		}>,
-		setters: Map<String, {
-			node: QueryNode,
-			dyn: Bool,
-			isOverride: Bool,
-			isInline: Bool
-		}>,
-		properties: Array<{
-			name: String,
-			node: QueryNode,
-			span: Span,
-			isPublic: Bool,
-			isStatic: Bool,
-			write: String,
-			isVarMeta: Null<QueryNode>
-		}>
-	} {
+	private static function memberTables(cls: QueryNode, source: String, branch: MemberBranchSeams, shape: RefShape): MemberTables {
 		final privateFieldNodes: Map<String, QueryNode> = [];
 		final getters: Map<String, {
 			node: QueryNode,
@@ -696,55 +671,58 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			write: String,
 			isVarMeta: Null<QueryNode>
 		}> = [];
-		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (child, run, certain) -> {
+		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
+		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
+		// An unset modifier seam reads as a kind no node carries: the member is then never public / static / ….
+		final has: (Array<String>, Null<String>) -> Bool = (mods, kind) -> kind != null && mods.contains(kind);
+		MemberBranchScan.eachMember(branch, cls, child -> memberKinds.contains(child.kind), (child, run, certain) -> {
 			// A modifier run only SOME builds see cannot answer `public` / `static`, both of which this
 			// rule reads as enabling — see `MemberBranchScan.joinRuns`. The member is left out of the
 			// tables entirely, so neither a property nor an accessor built on it can be collapsed.
 			if (!certain) return;
 			final mods: Array<String> = run.map(mod -> mod.kind);
-			switch child.kind {
-				case 'VarMember', 'FinalMember':
-					final name: Null<String> = child.name;
-					final span: Null<Span> = child.span;
-					if (name != null && span != null) {
-						final isPublic: Bool = mods.contains('Public');
-						if (!isPublic) privateFieldNodes[name] = child;
-						if (child.kind == 'VarMember') {
-							final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
-							if (
-								access != null
-								&& access.read == 'get'
-								&& (access.write == WRITE_NEVER || access.write == 'null' || access.write == 'set')
-							) properties.push({
-								name: name,
-								node: child,
-								span: span,
-								isPublic: isPublic,
-								isStatic: mods.contains('Static'),
-								write: access.write,
-								isVarMeta: run.find(node -> node.kind == 'Meta' && node.name == IS_VAR_META)
-							});
-						}
-					}
-				case _:
-					final name: Null<String> = child.name;
-					if (name != null) {
-						final entry: {
-							node: QueryNode,
-							dyn: Bool,
-							isOverride: Bool,
-							isInline: Bool
-						} = {
+			if (fieldKinds.contains(child.kind)) {
+				final name: Null<String> = child.name;
+				final span: Null<Span> = child.span;
+				if (name != null && span != null) {
+					final isPublic: Bool = has(mods, shape.publicModifierKind);
+					if (!isPublic) privateFieldNodes[name] = child;
+					if ((shape.mutableFieldDeclKinds ?? []).contains(child.kind)) {
+						final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
+						if (
+							access != null
+							&& access.read == 'get'
+							&& (access.write == WRITE_NEVER || access.write == 'null' || access.write == 'set')
+						) properties.push({
+							name: name,
 							node: child,
-							dyn: mods.contains('Dynamic'),
-							isOverride: mods.contains('Override'),
-							isInline: mods.contains('Inline')
-						};
-						if (name.startsWith('get_'))
-							getters[name] = entry;
-						else if (name.startsWith('set_'))
-							setters[name] = entry;
+							span: span,
+							isPublic: isPublic,
+							isStatic: has(mods, shape.staticModifierKind),
+							write: access.write,
+							isVarMeta: run.find(node -> node.kind == shape.bareMetaKind && node.name == IS_VAR_META)
+						});
 					}
+				}
+			} else {
+				final name: Null<String> = child.name;
+				if (name != null) {
+					final entry: {
+						node: QueryNode,
+						dyn: Bool,
+						isOverride: Bool,
+						isInline: Bool
+					} = {
+						node: child,
+						dyn: has(mods, shape.dynamicModifierKind),
+						isOverride: has(mods, shape.overrideModifierKind),
+						isInline: has(mods, shape.inlineModifierKind)
+					};
+					if (name.startsWith('get_'))
+						getters[name] = entry;
+					else if (name.startsWith('set_'))
+						setters[name] = entry;
+				}
 			}
 		});
 		return {
@@ -852,7 +830,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		if (raw.inlineGetter == null && !declaredTypesMatch(source, prop.node, fieldNode)) return null;
 		// The interface-conformance gate applies only to a COLLAPSING shape (the getter is dropped);
 		// the inline arm keeps the getter, so a required interface accessor is never removed.
-		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index, file)) return null;
+		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index, file, shape)) return null;
 		final clauseSpan: Null<Span> = raw.clauseText == '' && raw.inlineGetter == null
 			? AccessorClauseText.clauseRemovalSpan(source, prop.span)
 			: AccessorClauseText.accessorParenSpan(source, prop.span);
@@ -940,27 +918,28 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 * (any other body carries real logic).
 	 */
 	private static function trivialSetterField(setter: QueryNode, shape: RefShape): Null<String> {
-		final paramName: Null<String> = setterParamName(setter);
+		final paramName: Null<String> = setterParamName(setter, shape);
 		if (paramName == null) return null;
 		final body: Null<QueryNode> = bodyOf(setter, shape);
 		if (body == null || body.children.length != 1) return null;
 		final ret: QueryNode = body.children[0];
 		final retKind: Null<String> = if (body.kind == shape.blockBodyKind)
-			'ReturnStmt';
+			shape.returnStatementKind;
 		else if ((shape.expressionBodyKinds ?? []).contains(body.kind))
-			'ReturnExpr';
+			shape.returnExpressionKind;
 		else
 			null;
 		if (retKind == null || ret.kind != retKind || ret.children.length != 1) return null;
 		final assign: QueryNode = ret.children[0];
-		if (assign.kind != 'Assign' || assign.children.length != 2) return null;
+		if (assign.kind != shape.assignKind || assign.children.length != 2) return null;
 		final value: QueryNode = assign.children[1];
-		return value.kind != 'IdentExpr' || value.name != paramName ? null : FieldRefScan.fieldRefName(assign.children[0], shape);
+		return value.kind != shape.identKind || value.name != paramName ? null : FieldRefScan.fieldRefName(assign.children[0], shape);
 	}
 
 	/** The name of a setter's single value parameter (its first `Required` / `Optional` child), or null. */
-	private static function setterParamName(setter: QueryNode): Null<String> {
-		final param: Null<QueryNode> = setter.children.find(c -> c.kind == 'Required' || c.kind == 'Optional');
+	private static function setterParamName(setter: QueryNode, shape: RefShape): Null<String> {
+		final single: Array<String> = ShapeVocab.singleParamKinds(shape);
+		final param: Null<QueryNode> = setter.children.find(c -> single.contains(c.kind));
 		return param?.name;
 	}
 
@@ -975,7 +954,8 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	private static function findMovableCtorInit(
 		cls: QueryNode, field: String, shape: RefShape
 	): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
-		final ctor: Null<QueryNode> = cls.children.find(c -> (c.kind == 'FnMember' || c.kind == 'FinalModifiedMember') && c.name == 'new');
+		final methods: Array<String> = ShapeVocab.methodDeclKinds(shape);
+		final ctor: Null<QueryNode> = cls.children.find(c -> methods.contains(c.kind) && c.name == 'new');
 		if (ctor == null) return null;
 		final body: Null<QueryNode> = bodyOf(ctor, shape);
 		if (body == null || body.kind != shape.blockBodyKind) return null;
@@ -987,9 +967,9 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	private static function movableInitOf(
 		stmt: QueryNode, field: String, shape: RefShape
 	): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
-		if (stmt.kind != 'ExprStmt' || stmt.children.length != 1) return null;
+		if (stmt.kind != shape.exprStatementKind || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != 'Assign' || assign.children.length != 2 || FieldRefScan.fieldRefName(assign.children[0], shape) != field)
+		if (assign.kind != shape.assignKind || assign.children.length != 2 || FieldRefScan.fieldRefName(assign.children[0], shape) != field)
 			return null;
 		final rhs: QueryNode = assign.children[1];
 		if (!MemberKinds.isMovableLiteral(rhs, shape)) return null;
@@ -1287,3 +1267,29 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	}
 
 }
+
+/** What `memberTables` reads off one class body: its private fields, its accessors by name, and its `get` properties. */
+private typedef MemberTables = {
+	privateFieldNodes: Map<String, QueryNode>,
+	getters: Map<String, {
+		node: QueryNode,
+		dyn: Bool,
+		isOverride: Bool,
+		isInline: Bool
+	}>,
+	setters: Map<String, {
+		node: QueryNode,
+		dyn: Bool,
+		isOverride: Bool,
+		isInline: Bool
+	}>,
+	properties: Array<{
+		name: String,
+		node: QueryNode,
+		span: Span,
+		isPublic: Bool,
+		isStatic: Bool,
+		write: String,
+		isVarMeta: Null<QueryNode>
+	}>
+};

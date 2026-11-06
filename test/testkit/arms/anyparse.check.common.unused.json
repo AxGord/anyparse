@@ -316,7 +316,7 @@
 			"name": "M-CTOR-PRIVILEGE-UNASKED",
 			"type": "anyparse.check.common.unused.UnusedPrivate",
 			"method": "run",
-			"find": "&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')",
+			"find": "&& !scopeIndex.text.privilegeMayReference(c.className, shape.constructorName ?? 'new')",
 			"replace": "&& true",
 			"note": "the constructor arm stops asking what a privilege reaches, so a private constructor built through a waived alias or referenced as `A.new` is deleted"
 		}

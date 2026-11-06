@@ -15525,6 +15525,22 @@
 			"find": "realShort: matched(REAL_SHORT),",
 			"replace": "realShort: 0,",
 			"note": "the json score writes a verdict count that is not its own verdict's"
+		},
+		{
+			"name": "M-VOCAB-SHORT-CIRCUIT-NO-COALESCE",
+			"type": "anyparse.query.ShapeVocab",
+			"method": "shortCircuitKinds",
+			"find": ", one(shape.nullCoalesceKind)]",
+			"replace": "]",
+			"note": "the null-coalescing binary drops out of the short-circuit set, so its right operand's kills leak left in dead-store"
+		},
+		{
+			"name": "M-VOCAB-METHODS-KEEP-FIELDS",
+			"type": "anyparse.query.ShapeVocab",
+			"method": "methodDeclKinds",
+			"find": "if (!fields.contains(k)) k",
+			"replace": "k",
+			"note": "the method set keeps the field forms, so a field reads as a method that may implement an abstract one"
 		}
 	]
 }

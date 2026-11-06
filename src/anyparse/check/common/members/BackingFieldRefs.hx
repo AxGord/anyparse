@@ -233,11 +233,11 @@ final class BackingFieldRefs {
 	 * The `field` token offset inside a `this.`/`super.` field access
 	 * `node` (`span` its whole access), or -1 for any other receiver shape.
 	 */
-	private static function fieldAccessTokenOffset(node: QueryNode, span: Span, source: String, field: String): Int {
+	private static function fieldAccessTokenOffset(node: QueryNode, span: Span, source: String, field: String, identKind: String): Int {
 		if (node.children.length != 1) return -1;
 		final recv: QueryNode = node.children[0];
 		final recvSpan: Null<Span> = recv.span;
-		return recv.kind == 'IdentExpr' && (recv.name == 'this' || recv.name == 'super') && recvSpan != null
+		return recv.kind == identKind && (recv.name == 'this' || recv.name == 'super') && recvSpan != null
 			? SourceText.identTokenOffset(source, new Span(recvSpan.to, span.to), field)
 			: -1;
 	}
@@ -283,19 +283,21 @@ final class BackingFieldRefs {
 	 */
 	private static function attributeOccurrence(
 		node: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool,
-		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
+		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>,
+		shape: RefShape
 	): Bool {
 		final span: Null<Span> = node.span;
 		if (span == null) return true;
-		final off: Int = switch node.kind {
-			case 'IdentExpr': SourceText.identTokenOffset(source, span, field);
-			case 'FieldAccess': fieldAccessTokenOffset(node, span, source, field);
-			case _: -1;
-		}
+		final bareIdent: Bool = node.kind == shape.identKind;
+		final off: Int = if (bareIdent)
+			SourceText.identTokenOffset(source, span, field)
+		else if (node.kind == shape.fieldAccessKind)
+			fieldAccessTokenOffset(node, span, source, field, shape.identKind)
+		else
+			-1;
 		return off < 0
 			|| classifyOwnerBinding(
-				off, node.kind == 'IdentExpr', owner, field, propName, index, ownerFileScan, cls, writePos, shadowsProp, renameEdits,
-				excludeSpans
+				off, bareIdent, owner, field, propName, index, ownerFileScan, cls, writePos, shadowsProp, renameEdits, excludeSpans
 			);
 	}
 
@@ -324,7 +326,7 @@ final class BackingFieldRefs {
 		if (
 			node.name == field
 			&& !attributeOccurrence(
-				node, field, owner, propName, index, source, ownerFileScan, cls2, writePos, shadowsProp, renameEdits, excludeSpans
+				node, field, owner, propName, index, source, ownerFileScan, cls2, writePos, shadowsProp, renameEdits, excludeSpans, shape
 			)
 		)
 			return false;

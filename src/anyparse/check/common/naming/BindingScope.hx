@@ -82,7 +82,7 @@ final class BindingScope {
 	public static function otherBindingSpans(source: String, tree: QueryNode, name: String, declFrom: Int, shape: RefShape): Array<Span> {
 		final out: Array<Span> = [];
 		final seen: Array<Int> = [];
-		final containerKinds: Array<String> = shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']);
+		final containerKinds: Array<String> = shape.scopeKinds.concat(ShapeVocab.switchArmKinds(shape));
 		for (h in Refs.find(name, tree, shape)) {
 			final bindingSpan: Null<Span> = h.bindingSpan;
 			final boundFrom: Null<Int> = h.kind == RefKind.Decl ? h.span.from : (bindingSpan?.from);

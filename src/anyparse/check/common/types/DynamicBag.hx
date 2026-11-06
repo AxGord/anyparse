@@ -162,7 +162,7 @@ final class DynamicBag {
 		var j: Int = idx - 1;
 		while (j >= 0) {
 			final k: String = kids[j].kind;
-			if (k == 'Public') return true;
+			if (k == ctx.publicKind) return true;
 			if (!ctx.prefixKinds.contains(k)) break;
 			j--;
 		}

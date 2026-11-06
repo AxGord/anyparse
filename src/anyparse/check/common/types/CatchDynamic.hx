@@ -18,6 +18,15 @@ private typedef CatchHeader = {
 	final body: QueryNode;
 };
 
+/** The kinds a logging use of a catch value is read through: the call and its callee, and the string interpolation's two spellings. */
+private typedef LoggingKinds = {
+	final callKind: String;
+	final fieldKind: String;
+	final identKind: String;
+	final interpIdentKind: Null<String>;
+	final interpBlockKind: Null<String>;
+}
+
 /**
  * Flags a `catch` clause whose declared exception type is `Dynamic` (or `Any`) — a raw
  * catch-all. The user's rule: use `catch (exception:Exception)`, NOT `catch (e:Dynamic)`.
@@ -117,9 +126,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 		final kind: String = seams.kind;
 		final catchAll: Array<String> = seams.catchAll;
 		final condKind: Null<String> = seams.condKind;
-		final callKind: String = seams.callKind;
-		final fieldKind: String = seams.fieldKind;
-		final identKind: String = seams.identKind;
+		final logging: LoggingKinds = seams.logging;
 		return RunScan.edits(plugin, source, root -> {
 			final flagged: Map<String, Bool> = [];
 			for (v in violations) {
@@ -147,7 +154,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 					// would be unused in a build where the branch is compiled out.
 					final exText: String = insideConditional ? exceptionPath : printer.print(exceptionPath).text;
 					final catchEdits: Array<{ span: Span, text: String }> = catchRewriteEdits(
-						node, source, catchAll, exText, flagged, fixLogging ? loggingName : null, callKind, fieldKind, identKind
+						node, source, catchAll, exText, flagged, fixLogging ? loggingName : null, logging
 					);
 					if (catchEdits.length > 0) {
 						for (e in catchEdits) edits.push(e);
@@ -331,9 +338,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 		kind: String,
 		catchAll: Array<String>,
 		condKind: Null<String>,
-		callKind: String,
-		fieldKind: String,
-		identKind: String,
+		logging: LoggingKinds,
 		exceptionPath: String
 	}> {
 		final shape: RefShape = plugin.refShape();
@@ -345,9 +350,13 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 			kind: catchKind,
 			catchAll: catchAll,
 			condKind: shape.conditionalMemberKind,
-			callKind: shape.callKind ?? '',
-			fieldKind: shape.fieldAccessKind ?? '',
-			identKind: shape.identKind,
+			logging: {
+				callKind: shape.callKind ?? '',
+				fieldKind: shape.fieldAccessKind ?? '',
+				identKind: shape.identKind,
+				interpIdentKind: shape.stringInterpIdentKind,
+				interpBlockKind: shape.stringInterpBlockKind
+			},
 			exceptionPath: exceptionPath
 		};
 	}
@@ -362,18 +371,18 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	 */
 	private static function loggingSwapEdits(
 		catchNode: QueryNode, source: String, catchAll: Array<String>, exText: String, flagged: Map<String, Bool>, name: String,
-		callKind: String, fieldKind: String, identKind: String
+		logging: LoggingKinds
 	): Array<{ span: Span, text: String }> {
 		final p = catchParamRegion(catchNode, source);
 		if (p == null || !catchAll.contains(p.typeName) || !flagged.exists('${p.from}:${p.to}') || p.varName.length == 0) return [];
 		if (!mentionsName(p.body, p.varName)) return [];
 		if (p.varName != name && mentionsName(p.body, name)) return [];
-		final mentions: Null<Array<QueryNode>> = loggingMentions(p.body, p.varName, callKind, fieldKind, identKind);
+		final mentions: Null<Array<QueryNode>> = loggingMentions(p.body, p.varName, logging);
 		if (mentions == null) return [];
 		final out: Array<{ span: Span, text: String }> = [{ span: new Span(p.from, p.to), text: '($name:$exText)' }];
 		if (p.varName != name) for (m in mentions) {
 			final ms: Null<Span> = m.span;
-			if (ms != null) out.push({ span: ms, text: m.kind == 'Ident' ? '$$$name' : name });
+			if (ms != null) out.push({ span: ms, text: m.kind == logging.interpIdentKind ? '$$$name' : name });
 		}
 		return out;
 	}
@@ -385,22 +394,20 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	 * `Std.string(…)` call. A field-access receiver (`name.foo`), a `throw` / `return`, or an argument
 	 * to any other call is NOT a logging use — one such mention makes the whole clause report-only.
 	 */
-	private static function loggingMentions(
-		body: QueryNode, name: String, callKind: String, fieldKind: String, identKind: String
-	): Null<Array<QueryNode>> {
-		// Haxe string-interpolation kinds have no RefShape seam: `$ident` -> `Ident`, `${expr}` -> `Block`.
+	private static function loggingMentions(body: QueryNode, name: String, logging: LoggingKinds): Null<Array<QueryNode>> {
 		final mentions: Array<QueryNode> = [];
 		var nonLogging: Bool = false;
 		function visit(node: QueryNode, loggingPos: Bool): Void {
-			if (node.name == name && (node.kind == identKind || node.kind == 'Ident')) {
+			final interpolated: Bool = node.kind == logging.interpIdentKind;
+			if (node.name == name && (node.kind == logging.identKind || interpolated)) {
 				mentions.push(node);
-				if (node.kind != 'Ident' && !loggingPos) nonLogging = true;
+				if (!interpolated && !loggingPos) nonLogging = true;
 				return;
 			}
-			final callLogging: Bool = node.kind == callKind
+			final callLogging: Bool = node.kind == logging.callKind
 				&& node.children.length > 0
-				&& isLoggingCallee(node.children[0], fieldKind, identKind);
-			for (i => c in node.children) visit(c, (callLogging && i > 0) || node.kind == 'Block');
+				&& isLoggingCallee(node.children[0], logging.fieldKind, logging.identKind);
+			for (i => c in node.children) visit(c, (callLogging && i > 0) || node.kind == logging.interpBlockKind);
 		}
 		visit(body, false);
 		return nonLogging || mentions.length == 0 ? null : mentions;
@@ -424,7 +431,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	 */
 	private static function catchRewriteEdits(
 		node: QueryNode, source: String, catchAll: Array<String>, exText: String, flagged: Map<String, Bool>, loggingName: Null<String>,
-		callKind: String, fieldKind: String, identKind: String
+		logging: LoggingKinds
 	): Array<{ span: Span, text: String }> {
 		final bareEdit: Null<{ span: Span, text: String }> = bareSwapEdit(node, source, exText, flagged);
 		if (bareEdit != null) return [bareEdit];
@@ -432,7 +439,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 		return if (unusedEdit != null)
 			[unusedEdit]
 		else if (loggingName != null)
-			loggingSwapEdits(node, source, catchAll, exText, flagged, loggingName, callKind, fieldKind, identKind)
+			loggingSwapEdits(node, source, catchAll, exText, flagged, loggingName, logging)
 		else
 			[];
 	}

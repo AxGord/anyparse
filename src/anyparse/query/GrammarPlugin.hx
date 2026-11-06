@@ -1077,6 +1077,12 @@ final class RefShape {
 	public var returnStatementKind: Null<String>;
 
 	/**
+	 * The `return` in EXPRESSION position (Haxe `ReturnExpr`, the child of an expression-bodied function), the twin of
+	 * `returnStatementKind` — the two together are the value returns a body ends on. Optional.
+	 */
+	public var returnExpressionKind: Null<String>;
+
+	/**
 	 * Conditional kinds whose condition is `children[0]` (`if` / `while`) — the
 	 * `assignment-in-condition` check looks at that child for an `assignKind` node
 	 * (`if (a = b)`). Optional; unset (with `conditionLastChildKinds`) → no-op.
@@ -1127,6 +1133,18 @@ final class RefShape {
 	 * signature is fixed elsewhere) and skips its parameters. Optional.
 	 */
 	public var supertypeClauseKinds: Null<Array<String>>;
+
+	/**
+	 * The `extends` clause kind alone (Haxe `ExtendsClause`), one member of `supertypeClauseKinds` — a check asking whether
+	 * a class has a superclass at all reads this one. Optional.
+	 */
+	public var extendsClauseKind: Null<String>;
+
+	/**
+	 * The `implements` clause kind alone (Haxe `ImplementsClause`), one member of `supertypeClauseKinds` — a check asking
+	 * which interfaces a class promises reads this one. Optional.
+	 */
+	public var implementsClauseKind: Null<String>;
 
 	/**
 	 * The body-less function marker kind (Haxe `NoBody`, for an interface / abstract
@@ -1346,6 +1364,13 @@ final class RefShape {
 	 * out of every symbol listing, as before this field existed.
 	 */
 	public var metadataNamePrefixes: Null<Array<String>>;
+
+	/**
+	 * The paren-less annotation kind (Haxe `Meta`, `@:name`) — the form a flag-like annotation (`@:isVar`, a configured
+	 * exclusion) takes; never the verbatim catch-all (Haxe `PlainMeta`). The annotation kinds as a whole are
+	 * `MetaShape.metaKinds`. Optional.
+	 */
+	public var bareMetaKind: Null<String>;
 
 	/**
 	 * The ANNOTATION name a declaration carries to OVERLOAD an operator — Haxe `@:op`, whose
@@ -2023,6 +2048,12 @@ final class RefShape {
 	 * leaves the exclusion off.
 	 */
 	public var structureFieldHostKinds: Null<Array<String>>;
+
+	/**
+	 * The `var` field of a structure TYPE (Haxe `VarField`, `{ var x: T; }`) — the long-form field whose declared type a
+	 * check reads like a class field's. Optional.
+	 */
+	public var structureVarFieldKind: Null<String>;
 
 	/**
 	 * Node kinds that CONTINUE a variable declaration — every binding after the first in
@@ -3026,6 +3057,9 @@ final class RefShape {
 	 */
 	public var typeDeclKinds: Null<Array<String>>;
 
+	/** The type-ALIAS declaration kind (Haxe `TypedefDecl`, `typedef A = B`), one of `typeDeclKinds`. Optional. */
+	public var typeAliasDeclKind: Null<String>;
+
 	/**
 	 * The module's own package / namespace declaration kind (Haxe `PackageDecl`) — the
 	 * ONE top-level child that names the module rather than importing into it, and always
@@ -3052,6 +3086,9 @@ final class RefShape {
 	 * never explicitly public.
 	 */
 	public var publicModifierKind: Null<String>;
+
+	/** The `private` visibility modifier kind (Haxe `Private`), the twin of `publicModifierKind`. Optional. */
+	public var privateModifierKind: Null<String>;
 
 	/**
 	 * Type-declaration kinds that are PLAIN CLASSES — nominal types with no

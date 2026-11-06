@@ -154,7 +154,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
 			walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
-			final captured: Array<String> = valueCapturedNames(tree);
+			final captured: Array<String> = valueCapturedNames(tree, shape);
 			// An operator overload's arity is dictated by the OPERATOR, so an ignored operand is
 			// mandated rather than dead — and nothing NAMES such a method, so the in-file call-set
 			// proof completes on zero call sites and hands the removal a `Warning`. `--fix` then took
@@ -305,7 +305,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		if (fnSpan == null) return;
 		if (isDynamicFn(fn, parent, visibilityKinds, modifierKinds, dynamicKind)) return;
 		final fnName: Null<String> = fn.name;
-		final isLocal: Bool = fn.kind == 'LocalFnStmt';
+		final isLocal: Bool = (shape.localFunctionKinds ?? []).contains(fn.kind);
 		final ownerName: Null<String> = parent.name;
 		final eligible: Bool = isLocal || (
 			ownerName != null
@@ -358,13 +358,13 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	 * hands both functions to an expression that selects between them as values, which
 	 * is a capture in every sense that matters here.
 	 */
-	private static function valueCapturedNames(tree: QueryNode): Array<String> {
+	private static function valueCapturedNames(tree: QueryNode, shape: RefShape): Array<String> {
 		final out: Array<String> = [];
 		function scan(node: QueryNode, calleePosition: Bool): Void {
 			final name: Null<String> = node.name;
-			if (!calleePosition && name != null && !out.contains(name) && isValueReference(node)) out.push(name);
-			final isCall: Bool = node.kind == 'Call';
-			final parenthesizedCallee: Bool = calleePosition && node.kind == 'ParenExpr';
+			if (!calleePosition && name != null && !out.contains(name) && isValueReference(node, shape)) out.push(name);
+			final isCall: Bool = node.kind == shape.callKind;
+			final parenthesizedCallee: Bool = calleePosition && node.kind == shape.parenKind;
 			for (i in 0...node.children.length) scan(node.children[i], parenthesizedCallee || (isCall && i == 0));
 		}
 		scan(tree, false);
@@ -372,11 +372,11 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	}
 
 	/** Whether `node` is one of the two reference forms a value capture takes: a bare identifier, or a `this.<name>` field access. */
-	private static function isValueReference(node: QueryNode): Bool {
-		if (node.kind == 'IdentExpr') return true;
-		if (node.kind != 'FieldAccess' || node.children.length == 0) return false;
+	private static function isValueReference(node: QueryNode, shape: RefShape): Bool {
+		if (node.kind == shape.identKind) return true;
+		if (node.kind != shape.fieldAccessKind || node.children.length == 0) return false;
 		final receiver: QueryNode = node.children[0];
-		return receiver.kind == 'IdentExpr' && receiver.name == 'this';
+		return receiver.kind == shape.identKind && receiver.name == 'this';
 	}
 
 	/**
@@ -472,7 +472,9 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		if (opaqueKinds.contains(node.kind)) return;
 		if (functionKinds.contains(node.kind)) {
 			final fnSpan: Null<Span> = node.span;
-			if (fnSpan != null && !ownerMayBeOverridden(node, parent, index)) for (p in CallSites.leadingParams(node, shape)) {
+			if (
+				fnSpan != null && !ownerMayBeOverridden(node, parent, index, shape.localFunctionKinds ?? [])
+			) for (p in CallSites.leadingParams(node, shape)) {
 				final pspan: Null<Span> = p.span;
 				final name: Null<String> = p.name;
 				if (pspan == null || name == null) continue;
@@ -550,8 +552,10 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	 * direct `fix` call) leaves the rename to the walk-level contract gate that
 	 * already excludes the derived side.
 	 */
-	private static function ownerMayBeOverridden(fn: QueryNode, parent: Null<QueryNode>, index: Null<SymbolIndex>): Bool {
-		if (index == null || parent == null || fn.kind == 'LocalFnStmt') return false;
+	private static function ownerMayBeOverridden(
+		fn: QueryNode, parent: Null<QueryNode>, index: Null<SymbolIndex>, localFunctionKinds: Array<String>
+	): Bool {
+		if (index == null || parent == null || localFunctionKinds.contains(fn.kind)) return false;
 		final owner: Null<String> = parent.name;
 		final method: Null<String> = fn.name;
 		return owner != null && method != null && index.subtypes.subtypeDeclaresMember(owner, method);

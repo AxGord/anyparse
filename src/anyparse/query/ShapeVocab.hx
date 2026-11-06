@@ -80,6 +80,30 @@ final class ShapeVocab {
 		return union([one(shape.caseBranchKind), one(shape.defaultBranchKind)]);
 	}
 
+	/** The short-circuit binaries — `logicalAndKind`, `logicalOrKind`, `nullCoalesceKind`: the right operand runs only on some paths. */
+	public static function shortCircuitKinds(shape: RefShape): Array<String> {
+		return union([one(shape.logicalAndKind), one(shape.logicalOrKind), one(shape.nullCoalesceKind)]);
+	}
+
+	/**
+	 * The statement blocks that never yield their last statement as a value — the function body (`blockBodyKind`) and
+	 * the bare statement block (`blockStmtKind`); an expression-valued block is not one of them.
+	 */
+	public static function statementBlockKinds(shape: RefShape): Array<String> {
+		return union([one(shape.blockBodyKind), one(shape.blockStmtKind)]);
+	}
+
+	/** The METHOD members of a type body — `memberDeclKinds` without the field forms (`fieldDeclKinds`). */
+	public static function methodDeclKinds(shape: RefShape): Array<String> {
+		final fields: Array<String> = shape.fieldDeclKinds ?? [];
+		return [for (k in shape.memberDeclKinds ?? []) if (!fields.contains(k)) k];
+	}
+
+	/** The parameters that bind ONE argument each — `paramKinds` without the variadic `restParamKind`. */
+	public static function singleParamKinds(shape: RefShape): Array<String> {
+		return [for (k in shape.paramKinds ?? []) if (k != shape.restParamKind) k];
+	}
+
 	/**
 	 * EVERY kind that projects a function VALUE nested inside code — the lambdas in every
 	 * spelling (`lambdaKinds`, which already carries the anonymous `fnExprKind`), the NAMED

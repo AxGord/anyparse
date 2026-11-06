@@ -566,7 +566,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 		// overridden") — another file, possibly another project.
 		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
 		final subtypeMembers: Array<String> = index.subtypes.hasSubtype(owner, file) ? index.subtypes.subtypeMemberNames(owner, file) : [];
-		final ifaces: Array<String> = implementedInterfaces(cls);
+		final ifaces: Array<String> = implementedInterfaces(cls, shape.implementsClauseKind);
 		for (candidate in locals) {
 			final name: String = candidate.name;
 			if (subtypeMembers.contains(name)) continue;
@@ -837,9 +837,9 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	}
 
 	/** The simple names of every interface in `cls`'s `implements` clauses. */
-	private static function implementedInterfaces(cls: QueryNode): Array<String> {
+	private static function implementedInterfaces(cls: QueryNode, implementsKind: Null<String>): Array<String> {
 		final out: Array<String> = [];
-		for (child in cls.children) if (child.kind == 'ImplementsClause') for (named in child.children) {
+		for (child in cls.children) if (child.kind == implementsKind) for (named in child.children) {
 			final nm: Null<String> = named.name;
 			if (nm != null) out.push(simpleName(nm));
 		}
