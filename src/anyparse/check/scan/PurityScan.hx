@@ -121,7 +121,8 @@ final class PurityScan {
 
 	/**
 	 * Whether a `fieldAccessKind` node reads a member proven to be a property GETTER — resolvable
-	 * only when the receiver is a bare identifier (its declared type) or `this` (the enclosing
+	 * only when the receiver is a bare identifier (its declared type, else its own spelling
+	 * read as a type name: `Owner.p` on a static property) or `this` (the enclosing
 	 * type); a deeper receiver is left unresolved and assumed a plain read. Reuses
 	 * `MemberLookup.memberGetter` (the getter-property map).
 	 */
@@ -136,7 +137,7 @@ final class PurityScan {
 			final span: Null<Span> = fa.span;
 			span == null ? null : TypeResolver.enclosingTypeName(ctx.root, span);
 		} else {
-			TypeResolver.identTypeName(recv, ctx.root, ctx.shape, ctx.declaredTypes);
+			TypeResolver.identTypeName(recv, ctx.root, ctx.shape, ctx.declaredTypes) ?? recvName;
 		}
 		return typeName != null && ctx.index.typing.members.memberGetter(typeName, field) == true;
 	}

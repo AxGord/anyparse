@@ -1,16 +1,18 @@
 package anyparse.check.scan;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.BinderScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;
+import anyparse.query.TreePath;
 
 /**
  * The one answer to "do these statements run the same under the same names, and may a run of them move
  * without a name changing meaning": token identity of two statements, the names a statement list binds,
  * whether a tail reads one, conditional compilation and comments inside a region. Shared by `tail-merge`
- * and `hoist-common-branch-tail`.
+ * and `hoist-common-branch-tail`; `HeadScan` asks the same of the start of a run.
  */
 @:nullSafety(Strict)
 final class TailScan {
@@ -86,6 +88,58 @@ final class TailScan {
 		return names.length != 0 && tail.exists(s -> mentionsName(s, names, identKinds));
 	}
 
+	/** A branch as a statement list: a block's statements, or the one brace-less statement. */
+	public static function statementsOf(branch: QueryNode, seams: TailSeams): Array<QueryNode> {
+		return seams.blockKinds.contains(branch.kind) ? branch.children : [branch];
+	}
+
+	/**
+	 * Every `if` that stands as a DIRECT statement of a block — the only place an `if` chain head can sit — in document
+	 * order, with the statements that follow it in that block. An `else if` arm, an if-expression and a brace-less body are
+	 * reached through their head or not at all. A macro-reification subtree is not walked: its statements may be spliced
+	 * into a scope this walk never sees.
+	 */
+	public static function chainSites(tree: QueryNode, seams: TailSeams): Array<ChainSite> {
+		final out: Array<ChainSite> = [];
+		collectSites(tree, seams, out);
+		return out;
+	}
+
+	/** What `attempt` makes of each chain site of `tree`, the sites it refuses left out, in document order. */
+	public static function candidatesIn<C>(tree: QueryNode, seams: TailSeams, attempt: (ChainSite) -> Null<C>): Array<C> {
+		final out: Array<C> = [];
+		for (site in chainSites(tree, seams)) {
+			final candidate: Null<C> = attempt(site);
+			if (candidate != null) out.push(candidate);
+		}
+		return out;
+	}
+
+	/**
+	 * The final branch's index and span and the span of the one before it, where a rewrite of the final `else` addresses;
+	 * null when either has none.
+	 */
+	public static function elseEnds(branches: Array<QueryNode>): Null<ElseEnds> {
+		final last: Int = branches.length - 1;
+		final chainEnd: Null<Span> = branches[last].span;
+		final beforeElse: Null<Span> = branches[last - 1].span;
+		return chainEnd == null || beforeElse == null ? null : { last: last, chainEnd: chainEnd, beforeElse: beforeElse };
+	}
+
+	/**
+	 * The edits of the candidates whose reported span is among `violations` and that carry an edit. A candidate nested
+	 * inside another being rewritten waits for the next pass: its edits address text the outer rewrite deletes or copies.
+	 */
+	public static function flaggedEdits<C:RewriteSite>(found: Array<C>, violations: Array<Violation>): Array<FixEdit> {
+		final flagged: Array<String> = RunScan.spanKeys(violations);
+		final applied: Array<C> = [
+			for (c in found) if (c.edits.length != 0 && flagged.contains('${c.span.from}:${c.span.to}')) c
+		];
+		return [
+			for (c in applied) if (!applied.exists(o -> o.chain != c.chain && TreePath.covers(o.chain, c.chain.span))) for (e in c.edits) e
+		];
+	}
+
 	/**
 	 * Whether `[from, to)` holds a conditional-compilation directive. A plain text scan, so
 	 * a directive spelled inside a string literal refuses too — the safe direction, and the
@@ -158,7 +212,7 @@ final class TailScan {
 	 * expression form) via `BinderScan.topLevelDeclaredNode`, or a local function
 	 * (`localFunctionKinds` / `inlineFunctionKinds`) by kind. Null when `stmt` binds nothing.
 	 */
-	private static function declaredNode(stmt: QueryNode, seams: TailSeams): Null<QueryNode> {
+	public static function declaredNode(stmt: QueryNode, seams: TailSeams): Null<QueryNode> {
 		return seams.fnDeclKinds.contains(stmt.kind)
 			? stmt
 			: BinderScan.topLevelDeclaredNode(stmt, seams.localDeclKinds, seams.localDeclExprKinds, seams.metaKinds);
@@ -169,6 +223,16 @@ final class TailScan {
 		final nm: Null<String> = node.name;
 		if (nm != null && identKinds.contains(node.kind) && names.contains(nm)) return true;
 		return node.children.exists(c -> mentionsName(c, names, identKinds));
+	}
+
+	private static function collectSites(node: QueryNode, seams: TailSeams, out: Array<ChainSite>): Void {
+		if (seams.opaqueKinds.contains(node.kind)) return;
+		final isBlock: Bool = seams.blockKinds.contains(node.kind);
+		for (i => c in node.children) {
+			if (isBlock && seams.ifKinds.contains(c.kind) && !seams.opaqueKinds.contains(c.kind))
+				out.push({ head: c, following: node.children.slice(i + 1) });
+			collectSites(c, seams, out);
+		}
 	}
 
 	/** Append every line comment (`//` to end of line) and block comment in `[from, to)` to `out`, trimmed. */
@@ -214,4 +278,24 @@ typedef TailSeams = {
 	final metaKinds: Array<String>;
 	final support: ControlFlowSupport;
 	final terminator: Null<String>;
+};
+
+/** An `if` standing as a block statement, with the statements that follow it in that block. */
+typedef ChainSite = {
+	final head: QueryNode;
+	final following: Array<QueryNode>;
+};
+
+/** A rewrite of an `if` chain: the chain, the span its finding reports and the edits that carry it out (none when report-only). */
+typedef RewriteSite = {
+	final chain: QueryNode;
+	final span: Span;
+	final edits: Array<FixEdit>;
+};
+
+/** `elseEnds`: the final branch's index, its span, and the span of the branch before it. */
+typedef ElseEnds = {
+	final last: Int;
+	final chainEnd: Span;
+	final beforeElse: Span;
 };

@@ -895,27 +895,11 @@
 			"note": "a tail reading a local its own branch declares is moved out of that scope, so the same spelling no longer names the branch's declaration"
 		},
 		{
-			"name": "M-HCBT-STATEMENT-POSITION",
-			"type": "anyparse.check.common.control.HoistCommonBranchTail",
-			"method": "walk",
-			"find": "inBlock && ",
-			"replace": "",
-			"note": "an if that is a brace-less loop body or a value is a chain head, so the tail is written after the loop body's statement and runs once instead of every iteration, or lands inside an expression"
-		},
-		{
-			"name": "M-HCBT-NESTED-ALL-OR-NOTHING",
-			"type": "anyparse.check.common.control.HoistCommonBranchTail",
-			"method": "fix",
-			"find": "!applied.exists(o -> o.head != c.head && TreePath.covers(o.head, c.head.span))",
-			"replace": "true",
-			"note": "a chain nested in a chain being rewritten applies its edits too, so the outer deletion swallows some of them and keeps others: a call vanishes, or runs a second time"
-		},
-		{
 			"name": "M-HCBT-CHAIN-TERMINATOR",
 			"type": "anyparse.check.common.control.HoistCommonBranchTail",
 			"method": "fixEdits",
-			"find": "terminatorEnd(source, chainEnd.to, terminator)",
-			"replace": "chainEnd.to",
+			"find": "terminatorEnd(source, ends.chainEnd.to, terminator)",
+			"replace": "ends.chainEnd.to",
 			"note": "the moved tail is written in front of the chain's own `;`, which is left as an empty statement the compiler refuses after the tail's own `;`"
 		},
 		{
@@ -935,14 +919,6 @@
 			"note": "the terminator is looked for only where the chain ends, so a comment between the chain and its `;` hides it and the moved tail is written in front of the `;`, which the compiler refuses after the tail's own"
 		},
 		{
-			"name": "M-HCBT-REPORT-ONLY-OUTER",
-			"type": "anyparse.check.common.control.HoistCommonBranchTail",
-			"method": "fix",
-			"find": "c.edits.length != 0 && ",
-			"replace": "",
-			"note": "a report-only outer chain counts as one being rewritten, so the chain nested in it waits for a pass that never rewrites its parent and its tail is never moved"
-		},
-		{
 			"name": "M-HCBT-CAPTURE-EVERY-BRANCH",
 			"type": "anyparse.check.common.control.HoistCommonBranchTail",
 			"method": "admissible",
@@ -957,14 +933,6 @@
 			"find": "while (count > 0 && !admissible(lists, count, seams)) count--;",
 			"replace": "if (count > 0 && !admissible(lists, count, seams)) count = 0;",
 			"note": "the tail is not shortened from its front when the whole shared suffix is refused, so a chain whose suffix starts with a declaration moves nothing although its last statement could move"
-		},
-		{
-			"name": "M-HCBT-SUPPRESSED",
-			"type": "anyparse.check.common.control.HoistCommonBranchTail",
-			"method": "fix",
-			"find": " && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')",
-			"replace": "",
-			"note": "fix rewrites every chain scan finds, not only the findings it was handed, so a chain inside a CHECKSTYLE:OFF region is rewritten as well"
 		},
 		{
 			"name": "M-HCBT-PURE-CONDITION",
@@ -997,6 +965,30 @@
 			"find": "identicalBranches(lists, source, seams) ? lists[0].length : admissibleLength(lists, source, seams)",
 			"replace": "admissibleLength(lists, source, seams)",
 			"note": "identical branches that declare a local go through the tail gates, so the chain is reported as a moved tail and the shared statements are hoisted out of it instead of the chain being reported whole"
+		},
+		{
+			"name": "M-HCBH-EMPTY-ONLY-FINAL",
+			"type": "anyparse.check.common.control.HoistCommonBranchHead",
+			"method": "fixEdits",
+			"find": "i != ends.last || ",
+			"replace": "",
+			"note": "a then branch or middle arm left empty by the move is dropped like the final else, so the else-if after it attaches to the wrong condition"
+		},
+		{
+			"name": "M-HCBH-COMMENT-IN-HEAD",
+			"type": "anyparse.check.common.control.HoistCommonBranchHead",
+			"method": "fixEdits",
+			"find": "next == null || CheckScan.hasCommentMarker(source, firsts[i].from, next.from)",
+			"replace": "next == null",
+			"note": "a comment between the moved statements and the next kept one is deleted with the branch's copy and appears nowhere"
+		},
+		{
+			"name": "M-HCBH-COMMENT-IN-ELSE",
+			"type": "anyparse.check.common.control.HoistCommonBranchHead",
+			"method": "fixEdits",
+			"find": " || CheckScan.hasCommentMarker(source, ends.beforeElse.to, ends.chainEnd.to)",
+			"replace": "",
+			"note": "an else emptied by the move is dropped with the comment written inside it"
 		}
 	]
 }

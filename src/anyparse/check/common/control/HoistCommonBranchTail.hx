@@ -6,7 +6,6 @@ import anyparse.check.scan.TailScan;
 import anyparse.query.IndexScope;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TreePath;
 
 /**
  * Flags a statement-position `if` / `else if` / … / `else` chain whose EVERY branch ends with the same
@@ -19,7 +18,7 @@ import anyparse.query.TreePath;
  *
  * `tail-merge` is the neighbouring question — a branch tail equal to the code that FOLLOWS the chain; this
  * rule compares the branches with EACH OTHER, so the two never claim the same statement. Only the TAIL moves:
- * a shared HEAD would have to jump over the condition, which can read what the head writes.
+ * a shared HEAD would have to jump over the condition, which is `hoist-common-branch-head`'s question.
  *
  * ## Gates
  *
@@ -59,7 +58,7 @@ final class HoistCommonBranchTail extends RuleBase {
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			for (c in scan(tree, entry.source, seams, null)) violations.push({
 				file: entry.file,
-				span: c.tailSpan,
+				span: c.span,
 				rule: RULE_ID,
 				severity: Severity.Info,
 				message: message(c)
@@ -78,16 +77,8 @@ final class HoistCommonBranchTail extends RuleBase {
 		if (violations.length == 0) return [];
 		final resolvedIndex: SymbolIndex = index ?? IndexScope.over([{ file: violations[0].file, source: source }], plugin);
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
-			final flagged: Array<String> = RunScan.spanKeys(violations);
 			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, resolvedIndex);
-			final applied: Array<Candidate> = [
-				for (c in scan(
-					tree, source, seams, purity
-				)) if (c.edits.length != 0 && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) c
-			];
-			return [
-				for (c in applied) if (!applied.exists(o -> o.head != c.head && TreePath.covers(o.head, c.head.span))) for (e in c.edits) e
-			];
+			return TailScan.flaggedEdits(scan(tree, source, seams, purity), violations);
 		});
 	}
 
@@ -103,26 +94,7 @@ final class HoistCommonBranchTail extends RuleBase {
 
 	/** Every common-tail candidate in `tree`, in document order — the one walk `run` and `fix` share. */
 	private static function scan(tree: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>): Array<Candidate> {
-		final out: Array<Candidate> = [];
-		walk(tree, false, source, seams, purity, out);
-		return out;
-	}
-
-	/**
-	 * Visit `node`; an `if` is a chain head only as a DIRECT statement of a block, so an `else if` arm, an
-	 * if-expression and a brace-less body are reached through their head or not at all. A macro-reification
-	 * subtree is not walked: its statements may be spliced into a scope this walk never sees.
-	 */
-	private static function walk(
-		node: QueryNode, inBlock: Bool, source: String, seams: TailSeams, purity: Null<PurityCtx>, out: Array<Candidate>
-	): Void {
-		if (seams.opaqueKinds.contains(node.kind)) return;
-		if (inBlock && seams.ifKinds.contains(node.kind)) {
-			final candidate: Null<Candidate> = tryChain(node, source, seams, purity);
-			if (candidate != null) out.push(candidate);
-		}
-		final isBlock: Bool = seams.blockKinds.contains(node.kind);
-		for (c in node.children) walk(c, isBlock, source, seams, purity, out);
+		return TailScan.candidatesIn(tree, seams, site -> tryChain(site.head, source, seams, purity));
 	}
 
 	/** The candidate for the chain headed by `head`, or null when any gate refuses (see the class doc). */
@@ -132,7 +104,7 @@ final class HoistCommonBranchTail extends RuleBase {
 		final headSpan: Null<Span> = head.span;
 		if (headSpan == null) return null;
 		if (TailScan.hasConditionalCompilation(source, headSpan.from, headSpan.to)) return null;
-		final lists: Array<Array<QueryNode>> = [for (b in branches) statementsOf(b, seams)];
+		final lists: Array<Array<QueryNode>> = [for (b in branches) TailScan.statementsOf(b, seams)];
 		final count: Int = identicalBranches(lists, source, seams) ? lists[0].length : admissibleLength(lists, source, seams);
 		if (count < 1) return null;
 		final firsts: Array<Span> = [];
@@ -147,8 +119,8 @@ final class HoistCommonBranchTail extends RuleBase {
 		}
 		final whole: Bool = lists.foreach(l -> l.length == count);
 		return {
-			head: head,
-			tailSpan: new Span(firsts[0].from, lasts[0].to),
+			chain: head,
+			span: new Span(firsts[0].from, lasts[0].to),
 			count: count,
 			whole: whole,
 			edits: whole
@@ -157,10 +129,6 @@ final class HoistCommonBranchTail extends RuleBase {
 		};
 	}
 
-	/** A branch as a statement list: a block's statements, or the one brace-less statement. */
-	private static function statementsOf(branch: QueryNode, seams: TailSeams): Array<QueryNode> {
-		return seams.blockKinds.contains(branch.kind) ? branch.children : [branch];
-	}
 
 	/** The longest tail length every gate admits: the common suffix, shortened from its front until they hold. */
 	private static function admissibleLength(lists: Array<Array<QueryNode>>, source: String, seams: TailSeams): Int {
@@ -204,18 +172,15 @@ final class HoistCommonBranchTail extends RuleBase {
 		terminator: Null<String>
 	): Array<FixEdit> {
 
-		final last: Int = branches.length - 1;
-		final chainEnd: Null<Span> = branches[last].span;
-		final beforeElse: Null<Span> = branches[last - 1].span;
-		if (chainEnd == null) return [];
-		if (beforeElse == null) return [];
-		final after: Int = terminatorEnd(source, chainEnd.to, terminator);
+		final ends: Null<ElseEnds> = TailScan.elseEnds(branches);
+		if (ends == null) return [];
+		final after: Int = terminatorEnd(source, ends.chainEnd.to, terminator);
 		final edits: Array<FixEdit> = [];
 		for (i => branch in branches) {
 			final kept: Int = lists[i].length - count;
 			if (kept == 0) {
-				if (i != last) return [];
-				if (CheckScan.hasCommentMarker(source, beforeElse.to, firsts[i].from)) return [];
+				if (i != ends.last) return [];
+				if (CheckScan.hasCommentMarker(source, ends.beforeElse.to, firsts[i].from)) return [];
 				if (CheckScan.hasCommentMarker(source, lasts[i].to, after)) return [];
 				continue;
 			}
@@ -227,9 +192,9 @@ final class HoistCommonBranchTail extends RuleBase {
 			if (CheckScan.hasCommentMarker(source, lasts[i].to, block.to)) return [];
 			edits.push({ span: new Span(prev.to, lasts[i].to), text: '' });
 		}
-		final copy: String = '\n${source.substring(firsts[last].from, lasts[last].to)}';
-		final emptied: Bool = lists[last].length == count;
-		edits.push({ span: new Span(emptied ? beforeElse.to : after, after), text: copy });
+		final copy: String = '\n${source.substring(firsts[ends.last].from, lasts[ends.last].to)}';
+		final emptied: Bool = lists[ends.last].length == count;
+		edits.push({ span: new Span(emptied ? ends.beforeElse.to : after, after), text: copy });
 		return edits;
 	}
 
@@ -292,8 +257,8 @@ final class HoistCommonBranchTail extends RuleBase {
  * (empty when the finding is report-only).
  */
 private typedef Candidate = {
-	final head: QueryNode;
-	final tailSpan: Span;
+	final chain: QueryNode;
+	final span: Span;
 	final count: Int;
 	final whole: Bool;
 	final edits: Array<FixEdit>;

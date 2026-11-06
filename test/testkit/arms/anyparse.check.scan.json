@@ -1166,6 +1166,110 @@
 			"find": "? !readsGetterUnqualified(node, ctx)",
 			"replace": "? true",
 			"note": "a bare identifier naming a property of the enclosing type whose getter runs code passes as a plain value, so a condition that reads it is dropped"
+		},
+		{
+			"name": "M-HCBT-STATEMENT-POSITION",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "collectSites",
+			"find": "isBlock && ",
+			"replace": "",
+			"note": "an if that is a brace-less loop body or a value is a chain head, so the shared run is written outside the loop body's statement and runs once instead of every iteration, or lands inside an expression"
+		},
+		{
+			"name": "M-HCBH-NO-EXIT",
+			"type": "anyparse.check.scan.HeadScan",
+			"method": "mayPrecede",
+			"find": "run.exists(s -> exits(s, seams)) || ",
+			"replace": "",
+			"note": "a head holding a return, throw, break or continue is moved before the if, so the exit runs ahead of the condition and the branches' own code"
+		},
+		{
+			"name": "M-PURITY-STATIC-GETTER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "isSideEffectingGetter",
+			"find": " ?? recvName",
+			"replace": "",
+			"note": "a property read through the name of its own type is taken for a plain field, so a condition that runs the getter is moved past a head that reads what the getter changes"
+		},
+		{
+			"name": "M-HCBH-HELD-LOCAL",
+			"type": "anyparse.check.scan.HeadScan",
+			"method": "readsBeyondHeldLocals",
+			"find": "ctx.unchanged.holds(node, region)",
+			"replace": "true",
+			"note": "a local a called function literal rewrites is taken for unchanged, so a head that calls it runs ahead of a condition reading the old value"
+		},
+		{
+			"name": "M-HCBH-INERT-CALL",
+			"type": "anyparse.check.scan.HeadScan",
+			"method": "isInert",
+			"find": "(node.kind == purity.callKind && !PurityScan.isPure(node, purity))",
+			"replace": "false",
+			"note": "a call in the head is taken for inert, so a condition reading a field the call writes runs after the new value is set"
+		},
+		{
+			"name": "M-HCBH-COND-READS-WRITE",
+			"type": "anyparse.check.scan.HeadScan",
+			"method": "isInert",
+			"find": "if (reads.exists(r -> WriteSites.mayOverlap(path, r, false))) return false;",
+			"replace": "",
+			"note": "a head writing a local a condition reads through a name the held-locals gate did not clear is moved ahead of the condition, which then sees the new value"
+		},
+		{
+			"name": "M-HCBH-EFFECTFUL-COND",
+			"type": "anyparse.check.scan.HeadScan",
+			"method": "mayPrecede",
+			"find": "!conds.foreach(c -> PurityScan.isPure(c, ctx.purity))",
+			"replace": "false",
+			"note": "a condition that calls a function, assigns or runs a property getter is taken for pure, so a head that reads state those effects change runs ahead of them"
+		},
+		{
+			"name": "M-HCBH-CONSTANT-DECL",
+			"type": "anyparse.check.scan.HeadScan",
+			"method": "mayPrecede",
+			"find": "run.foreach(s -> isConstantDecl(s, ctx.purity.safeKinds, seams))",
+			"replace": "true",
+			"note": "any head may jump over a condition with a side effect, not only constant local declarations"
+		},
+		{
+			"name": "M-HCBH-DECL-CAPTURE",
+			"type": "anyparse.check.scan.HeadScan",
+			"method": "mayPrecede",
+			"find": "TailScan.referencesAny(conds.concat(following), declared, seams.identKinds)",
+			"replace": "false",
+			"note": "a local the head declares leaves its branch and shadows the same spelling a condition or the code after the chain reads"
+		},
+		{
+			"name": "M-HCBH-SHORTEN",
+			"type": "anyparse.check.scan.HeadScan",
+			"method": "admissibleLength",
+			"find": " && !mayPrecede(lists[0].slice(0, count), conds, following, seams, context)",
+			"replace": "",
+			"note": "a shared prefix the gates refuse is moved whole instead of shortened from its end to the part that may move"
+		},
+		{
+			"name": "M-HCBT-NESTED-ALL-OR-NOTHING",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "flaggedEdits",
+			"find": "!applied.exists(o -> o.chain != c.chain && TreePath.covers(o.chain, c.chain.span))",
+			"replace": "true",
+			"note": "a chain nested in a chain being rewritten applies its edits too, so the outer rewrite swallows some of them and keeps others: a call vanishes, or runs a second time"
+		},
+		{
+			"name": "M-HCBT-SUPPRESSED",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "flaggedEdits",
+			"find": " && flagged.contains('${c.span.from}:${c.span.to}')",
+			"replace": "",
+			"note": "fix rewrites every chain scan finds, not only the findings it was handed, so a chain inside a CHECKSTYLE:OFF region is rewritten as well"
+		},
+		{
+			"name": "M-HCBT-REPORT-ONLY-OUTER",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "flaggedEdits",
+			"find": "c.edits.length != 0 && ",
+			"replace": "",
+			"note": "a report-only outer chain counts as one being rewritten, so the chain nested in it waits for a pass that never rewrites its parent and its tail is never moved"
 		}
 	]
 }

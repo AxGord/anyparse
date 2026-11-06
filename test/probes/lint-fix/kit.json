@@ -754,6 +754,128 @@
 			}
 		},
 		{
+			"name": "HH1",
+			"note": "hoist-common-branch-head over a plain chain, an else-if chain with a two-statement head, an emptied final else and a constant declaration before a condition that calls a function, beside the forms it must leave: a condition reading what the head writes, a head reading what a calling condition changed, a loop body, a head that exits; the fix must keep what the program prints",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-head",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static var out:Array<String> = [];\n\tstatic var n:Int = 0;\n\n\tstatic function log(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function g():Bool {\n\t\tn++;\n\t\treturn n % 2 == 0;\n\t}\n\n\tstatic function plain(c:Bool):Void {\n\t\tif (c) {\n\t\t\tlog('h');\n\t\t\tlog('a');\n\t\t} else {\n\t\t\tlog('h');\n\t\t\tlog('b');\n\t\t}\n\t}\n\n\tstatic function chain(c:Int):Void {\n\t\tif (c == 0) {\n\t\t\tlog('h');\n\t\t\tlog('u');\n\t\t\tlog('0');\n\t\t} else if (c == 1) {\n\t\t\tlog('h');\n\t\t\tlog('u');\n\t\t\tlog('1');\n\t\t} else {\n\t\t\tlog('h');\n\t\t\tlog('u');\n\t\t\tlog('2');\n\t\t}\n\t}\n\n\tstatic function emptied(c:Bool):Void {\n\t\tif (c) {\n\t\t\tlog('h');\n\t\t\tlog('a');\n\t\t} else {\n\t\t\tlog('h');\n\t\t}\n\t}\n\n\tstatic function constDecl():Void {\n\t\tif (g()) {\n\t\t\tfinal q = 5;\n\t\t\tlog('a$q');\n\t\t} else {\n\t\t\tfinal q = 5;\n\t\t\tlog('b$q');\n\t\t}\n\t}\n\n\tstatic function condReads():Void {\n\t\tvar k = 0;\n\t\tif (k == 0) {\n\t\t\tk = 1;\n\t\t\tlog('a$k');\n\t\t} else {\n\t\t\tk = 1;\n\t\t\tlog('b$k');\n\t\t}\n\t}\n\n\tstatic function callCond():Void {\n\t\tif (g()) {\n\t\t\tlog('h$n');\n\t\t\tlog('a');\n\t\t} else {\n\t\t\tlog('h$n');\n\t\t\tlog('b');\n\t\t}\n\t}\n\n\tstatic function loopBody(c:Bool):Void {\n\t\tfor (i in 0...2) if (c) {\n\t\t\tlog('h$i');\n\t\t\tlog('a');\n\t\t} else {\n\t\t\tlog('h$i');\n\t\t\tlog('b');\n\t\t}\n\t}\n\n\tstatic function exits(c:Bool):Int {\n\t\tif (c) {\n\t\t\tlog('h');\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tlog('h');\n\t\t\treturn 2;\n\t\t}\n\t}\n\n\tstatic function main():Void {\n\t\tfor (c in [true, false]) {\n\t\t\tplain(c);\n\t\t\temptied(c);\n\t\t\tloopBody(c);\n\t\t\texits(c);\n\t\t}\n\t\tfor (i in 0...3) chain(i);\n\t\tfor (i in 0...4) {\n\t\t\tconstDecl();\n\t\t\tcondReads();\n\t\t\tcallCond();\n\t\t}\n\t\tSys.println(out.join(','));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "94e52c3bbbf752e3",
+				"files": "ef8f7c395d527c8d",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HH2",
+			"note": "hoist-common-branch-head and -tail together on a chain sharing both ends, and on a chain whose head is itself a chain with a shared head: the outer rewrite lands first and the inner waits for the next pass, so no call vanishes or runs twice",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-head",
+				"--rule",
+				"hoist-common-branch-tail",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function log(s:String):Void {\n\t\tout.push(s);\n\t}\n\n\tstatic function nested(c:Bool, d:Bool):Void {\n\t\tif (c) {\n\t\t\tif (d) {\n\t\t\t\tlog('x');\n\t\t\t\tlog('a');\n\t\t\t} else {\n\t\t\t\tlog('x');\n\t\t\t\tlog('b');\n\t\t\t}\n\t\t\tlog('p');\n\t\t} else {\n\t\t\tif (d) {\n\t\t\t\tlog('x');\n\t\t\t\tlog('a');\n\t\t\t} else {\n\t\t\t\tlog('x');\n\t\t\t\tlog('b');\n\t\t\t}\n\t\t\tlog('q');\n\t\t}\n\t}\n\n\tstatic function bothEnds(c:Bool):Void {\n\t\tif (c) {\n\t\t\tlog('h');\n\t\t\tlog('a');\n\t\t\tlog('t');\n\t\t} else {\n\t\t\tlog('h');\n\t\t\tlog('b');\n\t\t\tlog('t');\n\t\t}\n\t}\n\n\tstatic function main():Void {\n\t\tfor (c in [true, false]) {\n\t\t\tbothEnds(c);\n\t\t\tfor (d in [true, false]) nested(c, d);\n\t\t}\n\t\tSys.println(out.join(','));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "93169f0ea6c6ee1d",
+				"files": "51346439eadc009a",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HH3",
+			"note": "hoist-common-branch-head over a chain whose head calls a function that writes the field the condition reads: the head stays in its branches, so the program prints what it printed",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-head",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic var count:Int = 1;\n\tstatic var out:Array<String> = [];\n\n\tstatic function reset():Void {\n\t\tcount = 0;\n\t}\n\n\tstatic function f():Void {\n\t\tif (count > 0) {\n\t\t\treset();\n\t\t\tout.push('a');\n\t\t} else {\n\t\t\treset();\n\t\t\tout.push('b');\n\t\t}\n\t}\n\n\tstatic function main():Void {\n\t\tf();\n\t\tSys.println(out.join(','));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HH4",
+			"note": "hoist-common-branch-head over a chain whose condition reads a property whose getter changes a static the head reads: the head stays in its branches, so the program prints what it printed",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-head",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic var out:Array<String> = [];\n\tstatic var n:Int = 0;\n\tstatic var next(get, never):Int;\n\n\tstatic function get_next():Int {\n\t\tn++;\n\t\treturn n;\n\t}\n\n\tstatic function f():Void {\n\t\tif (next > 1) {\n\t\t\tout.push('h$n');\n\t\t\tout.push('a');\n\t\t} else {\n\t\t\tout.push('h$n');\n\t\t\tout.push('b');\n\t\t}\n\t}\n\n\tstatic function main():Void {\n\t\tf();\n\t\tf();\n\t\tSys.println(out.join(','));\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
 			"name": "N1",
 			"note": "naming handlerSuffix: only a callback is a listener - a value-returning onX called directly stays whatever else shares its name (a parameter, another type field, a macro template, a nested function return)",
 			"argv": [

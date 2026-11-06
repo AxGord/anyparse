@@ -55,6 +55,7 @@
 	"guard-pin-arm-reach",
 	"guard-return",
 	"hoist-branch-string-affix",
+	"hoist-common-branch-head",
 	"hoist-common-branch-tail",
 	"hoist-common-import",
 	"hoist-embedded-assignment",
