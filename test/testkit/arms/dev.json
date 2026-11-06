@@ -1184,6 +1184,92 @@
 			"find": "run: cmd('bin/hxcpp-portability/JvmPortability $paths')",
 			"replace": "run: cmd('bin/hxcpp-portability/JvmPortability')",
 			"note": "the hxcpp run drops its paths and always reads the default scope"
+		},
+		{
+			"name": "M-GATE-ARMS-FLOOR-BLIND",
+			"type": "dev.GateArms",
+			"method": "select",
+			"find": "fast.length <= floor",
+			"replace": "true",
+			"note": "a selection over the floor keeps every pin-killer and call-neighbour arm in the kill run, so a sweep over hundreds of files pays a build per arm for claims that only a changed member of the arm makes decisive"
+		},
+		{
+			"name": "M-GATE-ARMS-DEMOTED-DROPPED",
+			"type": "dev.GateArms",
+			"method": "select",
+			"find": "applyOnly.concat(demoted)",
+			"replace": "applyOnly",
+			"note": "an arm moved out of the kill run by the floor is not apply-checked either, so a rotted cut among them passes the row unseen"
+		},
+		{
+			"name": "M-GATE-ARMS-CARRY-BLIND",
+			"type": "dev.GateArms",
+			"method": "carriedOf",
+			"force": "[]",
+			"note": "a re-gate of the same tree re-runs every arm the last gate killed, so one error in a fix round costs the whole kill run again"
+		},
+		{
+			"name": "M-GATE-ARMS-CARRY-RECORD-BLIND",
+			"type": "dev.GateArms",
+			"method": "carriedOf",
+			"find": "!changed(r, last)",
+			"replace": "true",
+			"note": "a re-gate carries an arm whose record was re-encoded since the last kill run, so the new cut is never run"
+		},
+		{
+			"name": "M-GATE-ARMS-CARRY-RERUN-BLIND",
+			"type": "dev.GateArms",
+			"method": "carriedOf",
+			"find": "!rerun.contains(name) && ",
+			"replace": "",
+			"note": "a re-gate carries an arm the changes since the last kill run reach, so a fix round that weakens its pin passes unseen"
+		},
+		{
+			"name": "M-GATE-ARMS-CARRY-UNWIRED",
+			"type": "dev.GateArms",
+			"method": "carriedOver",
+			"force": "[]",
+			"note": "the arms row never reads the last kill run, so the carry exists only as a function nobody calls"
+		},
+		{
+			"name": "M-GATE-ARMS-MEMO-UNWRITTEN",
+			"type": "dev.GateArms",
+			"method": "remember",
+			"find": "if (gate.git(['status', '--porcelain']).trim() != '') return;",
+			"replace": "return;",
+			"note": "a kill run leaves no record of the arms it killed, so no re-gate can carry one"
+		},
+		{
+			"name": "M-GATE-ARMS-MEMO-DIRTY",
+			"type": "dev.GateArms",
+			"method": "remember",
+			"find": "if (gate.git(['status', '--porcelain']).trim() != '') return;",
+			"replace": "",
+			"note": "a kill run of a tree with uncommitted edits is recorded under HEAD, so the next gate carries arms killed against a state HEAD does not hold"
+		},
+		{
+			"name": "M-GATE-ARMS-MEMO-NEGATIVE",
+			"type": "dev.GateArms",
+			"method": "fastOutcome",
+			"find": "GateExcerpt.killedNames(log).filter(name -> names.contains(name))",
+			"replace": "names.filter(name -> !rows.exists(row -> row.name == name))",
+			"note": "the memo records every selected arm with no failing row as killed, so a track the tally counts but that printed no row is carried and a failed arms row turns green on a re-gate of the same HEAD"
+		},
+		{
+			"name": "M-GATE-ARMS-MEMO-SURVIVOR",
+			"type": "dev.GateExcerpt",
+			"method": "killedNames",
+			"find": "TRACK_ROW.matched(1) == 'KILLED'",
+			"replace": "true",
+			"note": "every printed track row counts as a kill, so a survivor or a waived arm is carried by the next gate and never run again"
+		},
+		{
+			"name": "M-GATE-ARMS-CARRY-ASKED-BLIND",
+			"type": "dev.GateArms",
+			"method": "carriedOver",
+			"find": "gate.options.arms, near, now.length",
+			"replace": "[], near, now.length",
+			"note": "an arm asked for with --arm can be carried out of the kill run, and the row then fails naming an arm it had selected"
 		}
 	]
 }

@@ -75,6 +75,13 @@ final class GateExcerpt {
 		];
 	}
 
+	/** The arms `log` shows killed: only a printed `KILLED` row says so, a track that printed no row is not one. */
+	public static function killedNames(log: String): Array<String> {
+		return [
+			for (line in Excerpt.linesOf(log)) if (TRACK_ROW.match(line) && TRACK_ROW.matched(1) == 'KILLED') TRACK_ROW.matched(2)
+		];
+	}
+
 }
 
 /** A track row of `dev mutation-arm`, read. */

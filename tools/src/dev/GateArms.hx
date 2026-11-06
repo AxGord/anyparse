@@ -8,7 +8,9 @@ import dev.GateExcerpt.ArmRow;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.Summary;
+import haxe.Exception;
 import haxe.io.Path;
+import sys.FileSystem;
 import sys.io.File;
 
 using Lambda;
@@ -19,13 +21,25 @@ using StringTools;
  * member the slice changed (every arm of a touched type whose changed members `hxq changed` cannot name), every arm a pin of a
  * changed test names, every arm on a direct call neighbour of a member it changed, and each
  * `--arm`. An arm whose only claim is a touched file that `hxq changed` classes as layout only runs
- * `--apply-only` instead: its cut must still apply, and no test can see a change of layout. An arm that does not kill its
+ * `--apply-only` instead: its cut must still apply, and no test can see a change of layout. A selection over `KILL_FLOOR`
+ * kill-runs only the arms that cut a member the slice changed (or are new, or asked for) and apply-checks the rest, whose
+ * claim is a pin or a call neighbour. A re-gate of one tree skips the arms the last gate killed that nothing since has
+ * reached (`KILLED_FILE`). An arm that does not kill its
  * pin is run again at the base, and the row names it `rot on base` when it fails there too. The row says how many threads the
  * kill run and the base run held, since a pin of parallel work cannot kill its arm on one. The registry's whole `--all` is
  * a release run, never a slice gate.
  */
 @:nullSafety(Strict)
 final class GateArms {
+
+	/**
+	 * The selection size past which an arm reached only as a pin's killer or as a call neighbour is apply-checked instead of
+	 * kill-run: a sweep that edits hundreds of files reaches almost every pin, and the kill run costs a build per arm.
+	 */
+	public static inline final KILL_FLOOR: Int = 400;
+
+	/** The logs file a kill run leaves: the commit it ran at, then the arms it killed, one per line. */
+	public static inline final KILLED_FILE: String = 'arms-killed.txt';
 
 	/** What a command of the plan may run before it is killed: a hung call, not a slow one; the plan runs in the gate's own process. */
 	private static inline final PLAN_TIMEOUT_MS: Int = 10 * 60 * 1000;
@@ -46,29 +60,35 @@ final class GateArms {
 	 * What the arms row of `gate` has to do: the outcome it settles without a run (`--no-arms`, a bad name, no arm selected), or
 	 * the selection to run. It spends no kill run, so a caller can ask before it takes a lease for the run.
 	 */
-	public static function plan(gate: GateTree): ArmPlan {
+	public static function plan(gate: GateTree, floor: Int = KILL_FLOOR): ArmPlan {
 		if (gate.options.noArms) return Settled(Skipped('--no-arms'));
 		final now: Array<ArmRecord> = ArmRegistry.read(Path.join([gate.tree, ArmRegistry.DIRECTORY]));
-		final old: Null<Array<ArmRecord>> = baseRecords(gate);
-		final report: String = changedReport(gate);
-		final layout: Array<String> = layoutOf(report).map(moduleOf).filter(m -> m != '');
-		final said: Map<String, Null<Array<String>>> = ChangedMembers.of(report);
-		final touches: Array<ModuleTouch> = gate.touched.map(file -> {
-			module: moduleOf(file),
-			members: said[file]
-		}).filter(t -> t.module != '' && !layout.contains(t.module));
-		final near: Array<String> = callNeighbours(gate, layout, touches);
-		final picked: ArmSelection = select(now, old, touches, layout, pinnedKillers(gate, touches), gate.options.arms, near);
+		final old: Null<Array<ArmRecord>> = recordsAt(gate, gate.base);
+		final seen: Reading = readingOf(gate, gate.base, gate.touched);
+		final pins: Array<String> = pinListing(gate);
+		final near: Array<String> = callNeighbours(gate, gate.base, seen.layout, seen.touches);
+		final chosen: ArmSelection = select(
+			now, old, seen.touches, seen.layout, killersOf(pins, seen.touches), gate.options.arms, near, floor
+		);
+		final skipped: Array<String> = carriedOver(gate, now, chosen.fast, pins);
+		final picked: ArmSelection = {
+			fast: chosen.fast.filter(name -> !skipped.contains(name)),
+			applyOnly: chosen.applyOnly,
+			demoted: chosen.demoted,
+			carried: skipped
+		};
 		for (name in gate.options.arms) if (!picked.fast.contains(name))
 			return Settled(Failed('--arm $name names no arm in ${ArmRegistry.DIRECTORY}'));
 		for (name in gate.options.allowArms) if (!now.exists(r -> r.key == name))
 			return Settled(Failed('--allow-arm $name names no arm in ${ArmRegistry.DIRECTORY}'));
-		return picked.fast.length + picked.applyOnly.length == 0 ? Settled(Skipped('no arm selected')) : Runs(picked, old);
+		return picked.fast.length + picked.applyOnly.length > 0
+			? Runs(picked, old)
+			: Settled(Skipped(skipped.length == 0 ? 'no arm selected' : '${skipped.length} arms killed at the last gate, untouched since'));
 	}
 
 	/** The arms row of `gate`, the heavy rows' threads as the arms' jobs. */
-	public static function outcome(gate: GateTree): Outcome {
-		return switch plan(gate) {
+	public static function outcome(gate: GateTree, floor: Int = KILL_FLOOR): Outcome {
+		return switch plan(gate, floor) {
 			case Settled(outcome): outcome;
 			case Runs(picked, old): run(gate, picked, old);
 		}
@@ -76,31 +96,53 @@ final class GateArms {
 
 	/**
 	 * The arms to run for the records `now` (`old` is the base's): `fast` get the kill run — every arm added or re-encoded,
-	 * cutting a member of a `touches` module that the slice changed, pinned by a touched test (`killers`), asked for (`extra`), or cutting
+	 * cutting a member of a `touches` module that the slice changed, asked for (`extra`), pinned by a touched test (`killers`), or cutting
 	 * a member in `near`, a direct call neighbour of a member the slice changed: such a change can make the arm's own pin stop
 	 * telling the cut from the original while no file of the arm's or its pin's is touched.
 	 * `applyOnly` are the other arms on a `layout` file, whose cut only has to still apply: the writer emits the same text
-	 * for both versions of that file, so no test can see it.
+	 * for both versions of that file, so no test can see it. A `fast` longer than `floor` (default `KILL_FLOOR`) keeps the kill run
+	 * for the first three families only; the last two, `demoted`, join `applyOnly`.
 	 */
 	public static function select(
 		now: Array<ArmRecord>, old: Null<Array<ArmRecord>>, touches: Array<ModuleTouch>, layout: Array<String>, killers: Array<String>,
-		extra: Array<String>, near: Array<String>
+		extra: Array<String>, near: Array<String>, floor: Int = KILL_FLOOR
 	): ArmSelection {
 		final fast: Array<String> = [];
+		final own: Array<String> = [];
 		final applyOnly: Array<String> = [];
 		for (record in now) {
-			if (
-				changed(record, old)
-				|| onTouched(record, touches)
-				|| killers.contains(record.key)
-				|| extra.contains(record.key)
-				|| cutsMember(record, near)
-			)
+			final asked: Bool = changed(record, old) || onTouched(record, touches) || extra.contains(record.key);
+			if (asked || killers.contains(record.key) || cutsMember(record, near)) {
 				fast.push(record.key);
-			else if (inModules(record, layout))
+				if (asked) own.push(record.key);
+			} else if (inModules(record, layout)) {
 				applyOnly.push(record.key);
+			}
 		}
-		return { fast: fast, applyOnly: applyOnly };
+		if (fast.length <= floor) return {
+			fast: fast,
+			applyOnly: applyOnly,
+			demoted: [],
+			carried: []
+		};
+		final demoted: Array<String> = fast.filter(name -> !own.contains(name));
+		return {
+			fast: own,
+			applyOnly: applyOnly.concat(demoted),
+			demoted: demoted,
+			carried: []
+		};
+	}
+
+	/**
+	 * The arms of `fast` the last kill run (`killed`, at the commit `last` is the registry of) already killed and nothing since
+	 * has reached: their record is as it was, and `rerun` (the selection the changes since make) does not name them. An
+	 * unreadable `last` carries nothing.
+	 */
+	public static function carriedOf(
+		fast: Array<String>, now: Array<ArmRecord>, last: Null<Array<ArmRecord>>, killed: Array<String>, rerun: Array<String>
+	): Array<String> {
+		return fast.filter(name -> killed.contains(name) && !rerun.contains(name) && now.exists(r -> r.key == name && !changed(r, last)));
 	}
 
 	/** The paths a `hxq changed` report `text` classes as `layout`, a moved file by the path it has now. */
@@ -180,7 +222,12 @@ final class GateArms {
 		final read: ArmReading = { notes: [], rows: [] };
 		final applied: Outcome = picked.applyOnly.length == 0 ? Passed : applyOutcome(gate, picked.applyOnly, read);
 		if (!applied.match(Passed)) return applied;
-		if (picked.fast.length > 0) return fastOutcome(gate, picked.fast, old, read);
+		if (picked.demoted.length > 0)
+			read.notes.push(
+				'${picked.demoted.length} reached only by a pin or a call neighbour, apply-checked alone: selection over the floor'
+			);
+		if (picked.carried.length > 0) read.notes.push('${picked.carried.length} not run: killed at the last gate, untouched since');
+		if (picked.fast.length > 0) return fastOutcome(gate, picked, old, read);
 		gate.summary.detail(passNote(read, gate.options.allowArms));
 		return Passed;
 	}
@@ -190,12 +237,27 @@ final class GateArms {
 	 * `ChangedMembers` tell a header whose comments alone changed), empty when it has none or the
 	 * tool fails: it is read for what is layout only, so an empty report widens the selection and never narrows it.
 	 */
-	private static function changedReport(gate: GateTree): String {
-		final files: Array<String> = gate.touched.filter(f -> f.endsWith('.hx'));
+	private static function changedReport(gate: GateTree, base: String, touched: Array<String>): String {
+		final files: Array<String> = touched.filter(f -> f.endsWith('.hx'));
 		if (files.length == 0) return '';
 		final shown: Array<String> = [for (file in files) for (arg in ['--diff', file]) arg];
-		final report: Result = gate.hxq(gate.tree, ['changed', gate.base].concat(shown)).timeout(PLAN_TIMEOUT_MS).run();
+		final report: Result = gate.hxq(gate.tree, ['changed', base].concat(shown)).timeout(PLAN_TIMEOUT_MS).run();
 		return report.ok ? report.out : '';
+	}
+
+	/**
+	 * What the files `touched` since `base` changed, read off `changedReport`:
+	 * the members of each module, and the modules of layout only.
+	 */
+	private static function readingOf(gate: GateTree, base: String, touched: Array<String>): Reading {
+		final report: String = changedReport(gate, base, touched);
+		final layout: Array<String> = layoutOf(report).map(moduleOf).filter(m -> m != '');
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of(report);
+		final touches: Array<ModuleTouch> = touched.map(file -> {
+			module: moduleOf(file),
+			members: said[file]
+		}).filter(t -> t.module != '' && !layout.contains(t.module));
+		return { touches: touches, layout: layout };
 	}
 
 	/** The `--apply-only` run of `names`, told to `read`: every cut still applies to a scratch copy of the base, or its arm is waived. */
@@ -206,7 +268,7 @@ final class GateArms {
 		final tally: EReg = ~/^\d+ arms: \d+ apply, (\d+) did not apply$/m;
 		gate.summary.excerpt(GateExcerpt.arms(log));
 		if (!tally.match(run.out)) return Failed('no apply verdict line — ${GateTree.quote(run)}');
-		read.notes.push('${tally.matched(0)} on layout-only files (${elided(names)})');
+		read.notes.push('${tally.matched(0)} apply-checked (${elided(names)})');
 		final rows: Array<ArmRow> = GateExcerpt.armRows(log);
 		for (row in rows) read.rows.push(row);
 		final standing: Array<ArmRow> = rows.filter(row -> !gate.options.allowArms.contains(row.name));
@@ -221,7 +283,8 @@ final class GateArms {
 	 * process's non-zero exit; an arm still standing that does not kill its pin is run again at the base (`rotOnBase`), so the
 	 * row says whose it is.
 	 */
-	private static function fastOutcome(gate: GateTree, names: Array<String>, old: Null<Array<ArmRecord>>, read: ArmReading): Outcome {
+	private static function fastOutcome(gate: GateTree, picked: ArmSelection, old: Null<Array<ArmRecord>>, read: ArmReading): Outcome {
+		final names: Array<String> = picked.fast;
 		final run: Result = gate.inTree(
 			cmd('node bin/dev.js mutation-arm $names --fast ${jobsOf(gate)}').env(MutationSlot.PROGRESS_VAR, progressOf(gate))
 		);
@@ -233,6 +296,7 @@ final class GateArms {
 		gate.summary.excerpt(excerpt);
 		if (!tally.match(run.out)) return Failed('no verdict line — ${GateTree.quote(run)}');
 		final rows: Array<ArmRow> = GateExcerpt.armRows(log);
+		remember(gate, picked.carried.concat(GateExcerpt.killedNames(log).filter(name -> names.contains(name))));
 		final standing: Array<ArmRow> = rows.filter(row -> !waived.contains(row.name));
 		final held: Null<Int> = PoolLease.threads();
 		read.notes.push('${tally.matched(0)} (${elided(names)})');
@@ -270,8 +334,8 @@ final class GateArms {
 	 * The arms every pin of a touched test class names (`--list-pins`: `Class#method :: role :: ARM,ARM`): a fixture
 	 * weakened in a touched test file must meet its killer even when the arm's own type is untouched.
 	 */
-	private static function pinnedKillers(gate: GateTree, touches: Array<ModuleTouch>): Array<String> {
-		return killersOf(gate.inTree(cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS)).check().lines(), touches);
+	private static function pinListing(gate: GateTree): Array<String> {
+		return gate.inTree(cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS)).check().lines();
 	}
 
 	/** Whether `record` is new or re-encoded since `old`. */
@@ -296,13 +360,13 @@ final class GateArms {
 	 * The records of the registry at the base: its documents, or the single document an older base kept it in; null when
 	 * the base has neither.
 	 */
-	private static function baseRecords(gate: GateTree): Null<Array<ArmRecord>> {
-		final listed: Result = cmd('git -C ${gate.tree} ls-tree -r --name-only ${gate.base} ${ArmRegistry.DIRECTORY}').run();
+	private static function recordsAt(gate: GateTree, rev: String): Null<Array<ArmRecord>> {
+		final listed: Result = cmd('git -C ${gate.tree} ls-tree -r --name-only $rev ${ArmRegistry.DIRECTORY}').run();
 		final documents: Array<String> = listed.ok ? listed.lines().filter(path -> path.endsWith('.json')) : [];
 		final texts: Array<String> = [];
 		final paths: Array<String> = documents.length > 0 ? documents : [ArmRegistry.LEGACY_FILE];
 		for (path in paths) {
-			final shown: Result = cmd('git -C ${gate.tree} show ${gate.base}:$path').run();
+			final shown: Result = cmd('git -C ${gate.tree} show $rev:$path').run();
 			if (!shown.ok) return null;
 			texts.push(shown.out);
 		}
@@ -358,9 +422,11 @@ final class GateArms {
 	 * removed changes a caller too, so it is none either. A graph
 	 * that cannot be read throws and the row does not run, because no neighbours would quietly narrow the selection.
 	 */
-	private static function callNeighbours(gate: GateTree, layout: Array<String>, touches: Array<ModuleTouch>): Array<String> {
+	private static function callNeighbours(
+		gate: GateTree, base: String, layout: Array<String>, touches: Array<ModuleTouch>
+	): Array<String> {
 		final diff: CodeGraphJson = CodeGraphJsonParser.parse(
-			gate.hxq(gate.tree, ['graph', '--diff', gate.base, 'HEAD'].concat(GRAPH_SCOPE))
+			gate.hxq(gate.tree, ['graph', '--diff', base, 'HEAD'].concat(GRAPH_SCOPE))
 				.timeout(PLAN_TIMEOUT_MS)
 				.check()
 				.out
@@ -423,6 +489,39 @@ final class GateArms {
 		return members == null || test == null || members.exists(m -> m == test || !TEST_PREFIXES.exists(p -> m.startsWith(p)));
 	}
 
+	/**
+	 * The arms of `fast` that the last kill run of the tree killed and no later change reaches: the selection the changes
+	 * since that run's commit make (`select` over them) does not name them and their record is as it was. No sidecar, a commit that
+	 * is gone, or any tool of the reading failing carries nothing: a memo never narrows a run it cannot prove about.
+	 */
+	private static function carriedOver(gate: GateTree, now: Array<ArmRecord>, fast: Array<String>, pins: Array<String>): Array<String> {
+		final file: String = gate.log(KILLED_FILE);
+		if (fast.length == 0 || !FileSystem.exists(file)) return [];
+		final lines: Array<String> = File.getContent(file).split('\n').filter(line -> line != '');
+		if (lines.length == 0) return [];
+		try {
+			final last: Null<Array<ArmRecord>> = recordsAt(gate, lines[0]);
+			if (last == null) return [];
+			final seen: Reading = readingOf(gate, lines[0], GateTree.touchedSince(gate.tree, lines[0]).paths);
+			final near: Array<String> = callNeighbours(gate, lines[0], seen.layout, seen.touches);
+			final rerun: ArmSelection = select(
+				now, last, seen.touches, seen.layout, killersOf(pins, seen.touches), gate.options.arms, near, now.length
+			);
+			return carriedOf(fast, now, last, lines.slice(1), rerun.fast);
+		} catch (_: Exception) {
+			return [];
+		}
+	}
+
+	/**
+	 * Records `killed` as what a kill run of the tree at HEAD killed, unless
+	 * the tree holds edits HEAD does not (the commit then names no state).
+	 */
+	private static function remember(gate: GateTree, killed: Array<String>): Void {
+		if (gate.git(['status', '--porcelain']).trim() != '') return;
+		File.saveContent(gate.log(KILLED_FILE), [gate.git(['rev-parse', 'HEAD']).trim()].concat(killed).join('\n') + '\n');
+	}
+
 }
 
 /** What the arms row has to do: an outcome already settled, or the `picked` selection to run against the base's registry `old`. */
@@ -433,8 +532,16 @@ enum ArmPlan {
 
 /** The arms of a slice gate by how they run: the kill run, and the apply check of arms on layout-only files. */
 typedef ArmSelection = {
+
 	var fast: Array<String>;
 	var applyOnly: Array<String>;
+
+	/** The part of `applyOnly` a selection over the floor moved out of `fast`. */
+	var demoted: Array<String>;
+
+	/** The arms the last kill run of the tree killed and nothing since reached: selected, and left out of `fast`. */
+	var carried: Array<String>;
+
 }
 
 /**
@@ -450,6 +557,12 @@ typedef ModuleTouch = {
 typedef RotReading = {
 	var rot: Array<String>;
 	var failure: Null<String>;
+}
+
+/** What the files touched since a commit changed: the members of each module, and the modules whose change is layout only. */
+private typedef Reading = {
+	var touches: Array<ModuleTouch>;
+	var layout: Array<String>;
 }
 
 /** What the runs of an arms row have read so far: each run's tally and the arm rows that did not hold. */

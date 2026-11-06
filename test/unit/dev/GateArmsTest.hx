@@ -24,21 +24,23 @@ final class GateArmsTest extends Test {
 
 	/**
 	 * Stands in for `dev.js`. `--apply-only`: only M-OK's cut applies. Otherwise M-OWN survives only where the tree holds the slice,
-	 * M-ROT, M-NEW and M-NEAR survive everywhere, `knobs/all-killed` kills them all, `knobs/exit-1` fails the process after its tally.
+	 * M-ROT, M-NEW and M-NEAR survive everywhere, `knobs/all-killed` kills them all, `knobs/ghost` names
+	 * an arm whose track is counted but prints no row, `knobs/exit-1` fails the process after its tally.
 	 */
 	private static final FAKE_DEV: String = "const fs=require('fs'),path=require('path');const a=process.argv.slice(2);"
 		+ "const r=a.indexOf('--repo');const repo=r<0?process.cwd():a[r+1];const tree=path.dirname(path.dirname(process.argv[1]));"
 		+ "const knob=n=>fs.existsSync(tree+'/knobs/'+n);fs.appendFileSync(tree+'/runs.log',(r<0?'at-slice ':'at-base ')+a.join(' ')+' "
 		+ "HXQ_BIN='+process.env.HXQ_BIN+'\\n');if(a[0]==='worker-build')process.exit(fs.existsSync(tree+'/fail-base-build')?1:0);"
-		+ "if(a.includes('--fast'))fs.appendFileSync(tree+'/progress.log',(process.env.APQ_ARMS_PROGRESS||'-')+'\\n');"
-		+ "const names=a.slice(1).filter(x=>x.startsWith('M-'));if(a.includes('--apply-only')){const "
-		+ "bad=names.filter(n=>n!=='M-OK');for(const n of bad)console.log('APPLY-FAIL  '+n+' why');console.log(names.length+' arms: "
-		+ "'+(names.length-bad.length)+' apply, '+bad.length+' did not apply');process.exit(bad.length?1:0);}"
-		+ "const slice=fs.readFileSync(repo+'/src/pkg/A.hx','utf8')==='slice';let k=0,s=0;const "
-		+ "un=knob('unrendered')?fs.readFileSync(tree+'/knobs/unrendered','utf8'):'';for(const n of names){if(n===un)continue;const "
-		+ "v=knob('all-killed')||n==='M-OK'||(n==='M-OWN'&&!slice)?'KILLED':'SURVIVED';v==='KILLED'?k++:s++;console.log(v+' '+n+' filter=x "
-		+ "y');}console.log((k+s)+' tracks: '+k+' killed, '+s+' survived, 0 mismatch, 0 error');if(un)console.log('APPLY-FAIL  '+un+' "
-		+ "why');process.exit(s||un||knob('exit-1')?1:0);";
+		+ "if(a.includes('--fast'))fs.appendFileSync(tree+'/progress.log',(process.env.APQ_ARMS_PROGRESS||'-')+'\\n');const "
+		+ "names=a.slice(1).filter(x=>x.startsWith('M-'));if(a.includes('--apply-only')){const bad=names.filter(n=>n!=='M-OK');for(const n "
+		+ "of bad)console.log('APPLY-FAIL  '+n+' why');console.log(names.length+' arms: '+(names.length-bad.length)+' apply, "
+		+ "'+bad.length+' did not apply');process.exit(bad.length?1:0);}const slice=fs.readFileSync(repo+'/src/pkg/A.hx',"
+		+ "'utf8')==='slice';let k=0,s=0,g=0;const un=knob('unrendered')?fs.readFileSync(tree+'/knobs/unrendered','utf8'):'';const "
+		+ "gh=knob('ghost')?fs.readFileSync(tree+'/knobs/ghost','utf8'):'';"
+		+ "for(const n of names){if(n===un)continue;if(n===gh){g=1;continue;}const v=knob('all-killed')||"
+		+ "n==='M-OK'||(n==='M-OWN'&&!slice)?'KILLED':'SURVIVED';v==='KILLED'?k++:s++;console.log(v+' '+n+' filter=x "
+		+ "y');}console.log((k+s+g)+' tracks: '+k+' killed, '+s+' survived, 0 mismatch, 0 error');if(un)console.log('APPLY-FAIL  '+un+' "
+		+ "why');process.exit(s||g||un||knob('exit-1')?1:0);";
 
 	private static final REGISTRY: String = '{"arms": [{"name": "M-SAME", "type": "a.Untouched", "method": "f", "force": "1"},'
 		+ '{"name": "M-LAYOUT", "type": "a.Reflowed", "method": "f", "force": "1"},{"name": "M-LAYOUT-SUB", "type": "a.Reflowed.Inner", '
@@ -291,6 +293,7 @@ final class GateArmsTest extends Test {
 				'rot on base: M-ROT; not killed: M-OWN, M-NEW — $tally — kill run held no lease, base run held no lease'
 			));
 			knob(tree, 'all-killed');
+			FileSystem.deleteFile('$tree-logs/${GateArms.KILLED_FILE}');
 			final gate: GateTree = gateOf(tree, []);
 			withLease('1', () -> gate.summary.time('arms', GateArms.outcome.bind(gate)));
 			Assert.stringContains('kill run held 1 thread', gate.summary.steps()[0].note);
@@ -423,6 +426,192 @@ final class GateArmsTest extends Test {
 		Assert.isFalse(GateArms.codeChanged('pkg.I.g', touches), 'a module whose change names no member');
 	}
 
+	/**
+	 * A selection over the floor keeps the kill run for the arms the slice itself reaches (a changed member, a new record, an asked
+	 * arm) and apply-checks the ones only a pin or a call neighbour reached; at the floor, nothing moves.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-FLOOR-BLIND')
+	public function testASelectionOverTheFloorKillRunsOnlyWhatTheSliceReaches(): Void {
+		final same: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
+		final over: ArmSelection = GateArms.select(same, same, [whole('a.Edited')], [], ['M-PINNED'], ['M-ASKED'], ['a.Untouched.f'], 3);
+		Assert.same(['M-EDITED', 'M-ASKED'], over.fast);
+		Assert.same(['M-SAME', 'M-PINNED'], over.applyOnly);
+		Assert.same(['M-SAME', 'M-PINNED'], over.demoted);
+		final at: ArmSelection = GateArms.select(same, same, [whole('a.Edited')], [], ['M-PINNED'], ['M-ASKED'], ['a.Untouched.f'], 4);
+		Assert.same(['M-SAME', 'M-EDITED', 'M-PINNED', 'M-ASKED'], at.fast);
+		Assert.same([], at.applyOnly);
+		Assert.same([], at.demoted);
+	}
+
+	/** The arms moved out of the kill run are not dropped: they join the apply check. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-DEMOTED-DROPPED')
+	public function testAnArmDemotedBelowTheKillRunStillHasToApply(): Void {
+		final same: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
+		final over: ArmSelection = GateArms.select(same, same, [], ['a.Reflowed'], ['M-PINNED'], [], [], 0);
+		Assert.same(['M-LAYOUT', 'M-LAYOUT-SUB', 'M-PINNED'], over.applyOnly);
+		Assert.same([], over.fast);
+	}
+
+	/** A rotted cut in the demoted set fails the row at the apply check, and no kill run is spent on it. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-DEMOTED-DROPPED')
+	public function testARottedArmInTheDemotedSetStillFailsTheRow(): Void {
+		withTree(tree -> {
+			knob(tree, 'diff', graph([member('pkg.A.edited', 'changed')]));
+			knob(tree, 'focus', graph([member('pkg.A.edited'), member('pkg.Other.near')]));
+			knob(tree, 'all-killed');
+			final gate: GateTree = gateOf(tree, []);
+			var outcome: Outcome = Passed;
+			withLease('4', () -> outcome = GateArms.outcome(gate, 1));
+			Assert.isTrue(failedWith(outcome, '1 arms: 0 apply, 1 did not apply'), '$outcome');
+			final runs: String = File.getContent(Path.join([tree, 'runs.log']));
+			Assert.isTrue(runs.indexOf('mutation-arm M-NEAR --apply-only') != -1, runs);
+			Assert.equals(-1, runs.indexOf('--fast'), 'the demoted arm gets no kill run');
+		});
+	}
+
+	/** An arm the last kill run killed, with its record as it was and no later change reaching it, is not run again. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-CARRY-BLIND')
+	public function testAnArmKilledLastTimeAndUntouchedSinceIsCarried(): Void {
+		final now: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
+		final last: Array<ArmRecord> = ArmRegistry.parse(
+			REGISTRY.replace('"a.Reflowed.Inner", "method": "f"', '"a.Reflowed.Inner", "method": "g"')
+		);
+		final fast: Array<String> = ['M-SAME', 'M-LAYOUT', 'M-LAYOUT-SUB', 'M-EDITED', 'M-PINNED'];
+		final killed: Array<String> = ['M-SAME', 'M-LAYOUT', 'M-LAYOUT-SUB', 'M-EDITED'];
+		Assert.same(['M-SAME', 'M-LAYOUT'], GateArms.carriedOf(fast, now, last, killed, ['M-EDITED']));
+		Assert.same([], GateArms.carriedOf(fast, now, null, killed, []), 'a registry of the last run that cannot be read carries nothing');
+	}
+
+	/** A re-encoded record is a different arm, whatever the last run said of its name. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-CARRY-RECORD-BLIND')
+	public function testAReEncodedArmIsNotCarried(): Void {
+		final now: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
+		final last: Array<ArmRecord> = ArmRegistry.parse(REGISTRY.replace('"a.Edited", "method": "f"', '"a.Edited", "method": "g"'));
+		Assert.same(['M-SAME'], GateArms.carriedOf(['M-SAME', 'M-EDITED'], now, last, ['M-SAME', 'M-EDITED'], []));
+	}
+
+	/** An arm the changes since the last kill run reach is run again, killed or not. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-CARRY-RERUN-BLIND')
+	public function testAnArmTheChangesSinceReachAreRunAgain(): Void {
+		final now: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
+		Assert.same(['M-SAME'], GateArms.carriedOf(['M-SAME', 'M-EDITED'], now, now, ['M-SAME', 'M-EDITED'], ['M-EDITED']));
+	}
+
+	/**
+	 * A re-gate at the commit of the last kill run runs only the arms that run did not kill, and the kill run it makes leaves
+	 * the arms killed at HEAD for the next one; a last commit the tree cannot read, or one the gate's files changed since, runs all.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-CARRY-UNWIRED')
+	public function testAReGateRunsOnlyTheArmsTheLastRunDidNotKill(): Void {
+		withTree(tree -> {
+			knob(tree, 'all-killed');
+			final head: String = cmd('git rev-parse HEAD').at(tree).check().out.trim();
+			final memo: String = '$tree-logs/${GateArms.KILLED_FILE}';
+			File.saveContent(memo, [head, 'M-ROT', 'M-OK', 'M-OWN', 'M-GONE'].join('\n'));
+			Assert.isTrue(reGateOf(tree, []).match(Passed));
+			final runs: String = File.getContent(Path.join([tree, 'runs.log']));
+			Assert.isTrue(runs.indexOf('at-slice mutation-arm M-NEW --fast') != -1, runs);
+			Assert.equals(-1, runs.indexOf('M-ROT'), 'a killed arm the changes since do not reach is not run');
+			Assert.same([head, 'M-ROT', 'M-OWN', 'M-OK', 'M-NEW'], File.getContent(memo).split('\n').filter(l -> l != ''));
+			File.saveContent(memo, 'deadbeef\nM-ROT\nM-OK');
+			FileSystem.deleteFile(Path.join([tree, 'runs.log']));
+			Assert.isTrue(reGateOf(tree, []).match(Passed));
+			Assert.isTrue(File.getContent(Path.join([tree, 'runs.log'])).indexOf('mutation-arm M-ROT M-OWN M-NEW M-OK --fast') != -1);
+			final base: String = cmd('git rev-parse HEAD~1').at(tree).check().out.trim();
+			File.saveContent(memo, [base, 'M-ROT', 'M-OK'].join('\n'));
+			FileSystem.deleteFile(Path.join([tree, 'runs.log']));
+			Assert.isTrue(reGateOf(tree, []).match(Passed));
+			Assert.isTrue(
+				File.getContent(Path.join([tree, 'runs.log'])).indexOf('mutation-arm M-ROT M-OWN M-NEW M-OK --fast') != -1,
+				'the file the commits since changed reaches every arm on it'
+			);
+		});
+	}
+
+	/**
+	 * A kill run leaves the arms it killed; a tree that holds edits its HEAD
+	 * does not leaves nothing, since the commit would name another state.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-MEMO-UNWRITTEN')
+	public function testAKillRunLeavesTheArmsItKilledForTheNextGate(): Void {
+		withTree(tree -> {
+			knob(tree, 'all-killed');
+			final memo: String = '$tree-logs/${GateArms.KILLED_FILE}';
+			Assert.isTrue(outcomeOf(tree, []).match(Passed));
+			Assert.isTrue(FileSystem.exists(memo));
+		});
+	}
+
+	/** A tree that holds edits its HEAD does not leaves no memo, since the commit would name another state. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-MEMO-DIRTY')
+	public function testAKillRunOfAnEditedTreeLeavesNoMemo(): Void {
+		withTree(tree -> {
+			knob(tree, 'all-killed');
+			File.saveContent(Path.join([tree, 'edit.txt']), 'uncommitted');
+			Assert.isTrue(outcomeOf(tree, []).match(Passed));
+			Assert.isFalse(FileSystem.exists('$tree-logs/${GateArms.KILLED_FILE}'));
+		});
+	}
+
+	/** A track the tally counts that printed no row is not a kill: its arm stays out of the memo and the next gate runs it. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-MEMO-NEGATIVE')
+	public function testATrackWithNoRowIsNotRecordedAsKilled(): Void {
+		withTree(tree -> {
+			knob(tree, 'all-killed');
+			knob(tree, 'ghost', 'M-NEW');
+			final memo: String = '$tree-logs/${GateArms.KILLED_FILE}';
+			final head: String = cmd('git rev-parse HEAD').at(tree).check().out.trim();
+			Assert.isTrue(failedWith(outcomeOf(tree, []), 'no row explains the run'));
+			Assert.same([head, 'M-ROT', 'M-OWN', 'M-OK'], File.getContent(memo).split('\n').filter(l -> l != ''));
+			FileSystem.deleteFile(Path.join([tree, 'knobs', 'ghost']));
+			FileSystem.deleteFile(Path.join([tree, 'runs.log']));
+			Assert.isTrue(reGateOf(tree, []).match(Passed), 'the same HEAD does not settle a failed row');
+			Assert.isTrue(File.getContent(Path.join([tree, 'runs.log'])).indexOf('at-slice mutation-arm M-NEW --fast') != -1);
+		});
+	}
+
+	/** An arm that survived, or that a waiver excused, is not recorded as killed, and the next gate runs it again. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-MEMO-SURVIVOR')
+	public function testASurvivorOrAWaivedArmIsRunAgainByTheNextGate(): Void {
+		withTree(tree -> {
+			final memo: String = '$tree-logs/${GateArms.KILLED_FILE}';
+			final head: String = cmd('git rev-parse HEAD').at(tree).check().out.trim();
+			Assert.isFalse(outcomeOf(tree, []).match(Passed));
+			Assert.same([head, 'M-OK'], File.getContent(memo).split('\n').filter(l -> l != ''), 'the survivors are not in it');
+			FileSystem.deleteFile(Path.join([tree, 'runs.log']));
+			Assert.isFalse(reGateOf(tree, []).match(Passed));
+			Assert.isTrue(File.getContent(Path.join([tree, 'runs.log'])).indexOf('at-slice mutation-arm M-ROT M-OWN M-NEW --fast') != -1);
+			Assert.isTrue(outcomeOf(tree, ['M-ROT', 'M-OWN', 'M-NEW']).match(Passed));
+			Assert.same([head, 'M-OK'], File.getContent(memo).split('\n').filter(l -> l != ''), 'the waived arms are not in it');
+		});
+	}
+
+	/** An arm asked for with `--arm` is run whatever the last gate killed. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-CARRY-ASKED-BLIND')
+	public function testAnArmAskedForIsNotCarried(): Void {
+		withTree(tree -> {
+			knob(tree, 'all-killed');
+			final head: String = cmd('git rev-parse HEAD').at(tree).check().out.trim();
+			File.saveContent('$tree-logs/${GateArms.KILLED_FILE}', [head, 'M-ROT', 'M-OK'].join('\n'));
+			var outcome: Outcome = Failed('not run');
+			withLease('4', () -> outcome = GateArms.outcome(gateOf(tree, [], ['M-ROT'])));
+			Assert.isTrue(outcome.match(Passed), '$outcome');
+			Assert.isTrue(File.getContent(Path.join([tree, 'runs.log'])).indexOf('at-slice mutation-arm M-ROT M-OWN M-NEW --fast') != -1);
+		});
+	}
+
 	private static function select(
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>, ?near: Array<String>
 	): ArmSelection {
@@ -432,6 +621,13 @@ final class GateArmsTest extends Test {
 
 	/** The row's outcome with the lease `held` (`WF_THREADS` text; empty is no lease) around both its runs. */
 	private static function outcomeOf(tree: String, allowArms: Array<String>, held: String = '4'): Outcome {
+		final memo: String = '$tree-logs/${GateArms.KILLED_FILE}';
+		if (FileSystem.exists(memo)) FileSystem.deleteFile(memo);
+		return reGateOf(tree, allowArms, held);
+	}
+
+	/** The row's outcome as `outcomeOf` reads it, but of a gate that finds what an earlier gate of the tree left. */
+	private static function reGateOf(tree: String, allowArms: Array<String>, held: String = '4'): Outcome {
 		var outcome: Outcome = Passed;
 		withLease(held, () -> outcome = GateArms.outcome(gateOf(tree, allowArms)));
 		return outcome;
@@ -452,14 +648,14 @@ final class GateArmsTest extends Test {
 		};
 	}
 
-	private static function gateOf(tree: String, allowArms: Array<String>): GateTree {
+	private static function gateOf(tree: String, allowArms: Array<String>, ?asked: Array<String>): GateTree {
 		return new GateTree({
 			tree: tree,
 			logs: '$tree-logs',
 			baseline: false,
 			frozen: [],
 			infra: [],
-			arms: [],
+			arms: asked ?? [],
 			allow: [],
 			allowArms: allowArms,
 			noArms: false,
