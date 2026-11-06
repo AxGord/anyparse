@@ -674,7 +674,9 @@ final class Linter {
 		final out: Map<String, (String) -> String> = [];
 		for (check in builtins()) if (check is VolatileMessage) {
 			final volatileMessage: VolatileMessage = cast check;
-			out[check.id()] = volatileMessage.messageIdentity;
+			// A real closure, not the bare interface-method reference: hxcpp lowers that
+			// to a dynamic field read whose type StringMap.set cannot pick an overload for.
+			out[check.id()] = message -> volatileMessage.messageIdentity(message);
 		}
 		return out;
 	}
