@@ -4,8 +4,6 @@ import anyparse.core.PoolLease;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
 import dev.ArmRegistry.ArmRegistryError;
-import dev.Baseline;
-import dev.FrozenTree;
 import dev.GateArms.ArmPlan;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
@@ -17,7 +15,6 @@ import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Excerpt;
 import devkit.Lease;
-import devkit.Lease.LeaseMode;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -34,8 +31,9 @@ using StringTools;
 /**
  * `dev slice-gate <worktree>` — every gate a worker's slice must pass, as ONE command whose report is one row per gate
  * and a verdict, a failed row quoting its first error (docs/testing.md § "The slice gate"). `--baseline`, run once on the
- * untouched worktree, records what the gates later compare with: the base commit, the suite and registry counts, the
- * corpus snapshot, the whole-tree lint, the infra trees' lint and the frozen trees' diff digests. The rows run as
+ * untouched worktree, records what the gates later compare with: the base commit, the registry counts, the whole-tree
+ * lint, the infra trees' lint and the frozen trees' diff digests; the base suite's counts and corpus snapshot are read
+ * by the first gate row that compares with them (`BaseSuite`). The rows run as
  * branches at once (`devkit.Branches`, each branch a `--rows` process of this tool): a run its caller gave a pool lease
  * splits that lease among them, and a run without one, inside a workflow, lets the build and each branch take a lease of
  * their own (`devkit.Lease`). Everything it writes goes to `<worktree>-logs/slice-gate/`, never into the worktree.
@@ -101,11 +99,11 @@ final class SliceGate {
 	];
 
 	/** The branches of a `--baseline` run; `frozen` follows them. */
-	private static final BASELINE_BRANCHES: Array<Array<String>> = [['suite', 'corpus'], ['lists'], ['lint'], ['infra4']];
+	private static final BASELINE_BRANCHES: Array<Array<String>> = [['lists'], ['lint'], ['infra4']];
 
-	private static final BASELINE_ROWS: Array<String> = ['suite', 'lists', 'corpus', 'lint', 'infra4'];
+	private static final BASELINE_ROWS: Array<String> = ['lists', 'lint', 'infra4'];
 
-	/** What a branch reads for `--baseline` to record: the suite's counts and every registry's. */
+	/** What a branch reads: the suite's counts for the gate record, every registry's for `--baseline`. */
 	private final _readings: Map<String, Int> = [];
 
 	private final _started: Float = Timer.stamp();
@@ -130,8 +128,7 @@ final class SliceGate {
 		final self: String = keepSelf();
 		_gate.retireBaseline();
 		final key: Null<String> = BaselineCache.keyOfRun(
-			_gate.base, Sys.getEnv(GateTree.FORK_VAR) ?? '', _gate.options.infra, _gate.options.allow,
-			_gate.git(['status', '--porcelain']).trim() == '', BaseEngine.toolchain()
+			_gate.base, _gate.options.infra, _gate.options.allow, _gate.git(['status', '--porcelain']).trim() == '', BaseEngine.toolchain()
 		);
 		if (!build()) return finish(title);
 		final digests: Array<FrozenTree> = [for (dir in _gate.options.frozen) { dir: dir, digest: GateTree.diffDigest(dir) }];
@@ -158,10 +155,9 @@ final class SliceGate {
 			final lists: JValue = BaselineLists.of(LISTINGS, name -> _readings['list-$name'] ?? 0);
 			final record: Baseline = {
 				base: _gate.base,
-				tests: _readings['tests'] ?? 0,
-				assertions: _readings['assertions'] ?? 0,
+
 				lists: lists,
-				sweep: GateTree.forkSet() ? _gate.log(GateTree.SWEEP_BASE) : null,
+
 				lint: _gate.log('lint-base.json'),
 				infra: _gate.infraSnapshots(),
 				frozen: digests
@@ -220,8 +216,8 @@ final class SliceGate {
 	private function rowStep(name: String): () -> Outcome {
 		final recording: Bool = _gate.options.baseline;
 		return switch name {
-			case 'suite': suiteOutcome.bind(recording);
-			case 'corpus': recording ? corpusSaved : corpusOutcome;
+			case 'suite': suiteOutcome;
+			case 'corpus': corpusOutcome;
 			case 'lists': recording ? listsRead : listsOutcome;
 			case 'lint': recording ? _lint.baseLint : _lint.lintOutcome;
 			case 'infra4': recording ? _lint.infraBaseline : _lint.infraOutcome;
@@ -369,11 +365,11 @@ final class SliceGate {
 	/**
 	 * The suite row: `dev shard` over the heavy rows' threads (its own default outside a lease), green and counted. A check runs
 	 * only the classes its change reaches (`SuiteImpact`), or every class when no text dependency bounds the change, and says
-	 * which; only a whole run is set beside the baseline's counts. When `recording`, every class runs and the counts are kept.
+	 * which; only a whole run is set beside the base's counts (`BaseSuite`).
 	 */
-	private function suiteOutcome(recording: Bool): Outcome {
+	private function suiteOutcome(): Outcome {
 		GateTree.clearSnapshotIn(_gate.tree);
-		final scope: SuiteScope = recording ? WholeSuite('a baseline measures every class') : SuiteImpact.ofTree(_gate.tree, _gate.base);
+		final scope: SuiteScope = SuiteImpact.ofTree(_gate.tree, _gate.base);
 		final only: Null<Array<String>> = switch scope {
 			case Selected(classes): classes;
 			case WholeSuite(_): null;
@@ -413,10 +409,7 @@ final class SliceGate {
 		// a check reads them too: its gate record hands them to a land of the same tree
 		_readings['tests'] = sum.tests;
 		_readings['assertions'] = sum.assertions;
-		final baseline: Null<Baseline> = _gate.baseline;
-		final delta: String = baseline == null || only != null
-			? ''
-			: ' (${GateTree.signed(sum.tests - baseline.tests)} / ${GateTree.signed(sum.assertions - baseline.assertions)})';
+		final delta: String = BaseSuite.deltaNote(_gate, _mode, sum, status, only);
 		_gate.summary.detail(GateTree.clip(
 			'${sum.tests} tests / ${sum.assertions} assertions / ${sum.failures}F / ${sum.errors}E$delta, $shards shard(s); $mode'
 		));
@@ -452,25 +445,18 @@ final class SliceGate {
 		return Failed('a fixture-named method no runner reaches: `node bin/test.js --list-dead`');
 	}
 
-	/** The corpus row of `--baseline`: the sweep the suite just wrote, saved for the gate to compare with. */
-	private function corpusSaved(): Outcome {
-		if (!GateTree.forkSet()) return Skipped('ANYPARSE_HXFORMAT_FORK unset — the suite ran no corpus');
-		final problem: Null<String> = _gate.corpusProblem();
-		if (problem != null) return Failed(problem);
-		final saved: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --save ${_gate.log(GateTree.SWEEP_BASE)}'));
-		_gate.summary.detail(saved.lines()[0] ?? '');
-		return saved.ok ? Passed : Failed(GateTree.quote(saved));
-	}
-
 	/** The corpus row: the sweep the suite just wrote against the baseline's snapshot, no fixture moved. */
 	private function corpusOutcome(): Outcome {
 		final baseline: Null<Baseline> = _gate.baseline;
 		if (baseline == null) return NotRun(GateTree.NO_BASELINE);
-		final sweep: Null<String> = baseline.sweep;
-		if (sweep == null || !GateTree.forkSet()) return NotRun('no corpus: ANYPARSE_HXFORMAT_FORK unset at the baseline or now');
+		if (!GateTree.forkSet()) return NotRun('no corpus: ANYPARSE_HXFORMAT_FORK unset');
 		final shortfall: Null<Outcome> = GateTree.corpusShortfall(GateTree.forkProblem(), _gate.snapshotProblem(), _selected);
 		if (shortfall != null) return shortfall;
-		if (!FileSystem.exists(sweep)) return NotRun('the baseline snapshot $sweep is gone — take the baseline again');
+		final sweep: Null<String> = switch BaseSuite.read(_gate, _mode) {
+			case Read(base): base.sweep;
+			case Unread(why): return NotRun(GateTree.clip('no corpus snapshot of the base: $why'));
+		};
+		if (sweep == null) return NotRun('no corpus: the base suite ran no corpus case');
 		_gate.inTree(cmd('node bin/apq.js sweep --lang haxe --save ${_gate.log(GateReuse.SWEEP)}'));
 		final diff: Result = _gate.inTree(cmd('node bin/apq.js sweep --lang haxe --diff $sweep'));
 		if (!diff.ok) {

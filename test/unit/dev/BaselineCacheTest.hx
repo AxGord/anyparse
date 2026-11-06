@@ -19,33 +19,31 @@ import utest.Test;
 @:nullSafety(Strict)
 final class BaselineCacheTest extends Test {
 
-	/** Every part of what a baseline measures moves the key, and an unset corpus differs from a set one. */
+	/** Every part of what a baseline measures moves the key; the corpus tree is not one of them, the suite is read by the gate. */
 	@:pin('guard')
 	public function testTheKeyFollowsEveryReadingItsBaselineDependsOn(): Void {
-		final key: String = BaselineCache.key('abc', 'fork s1', ['t1 s1'], 'haxe 4');
-		Assert.equals(key, BaselineCache.key('abc\n', 'fork s1', ['t1 s1'], 'haxe 4'));
-		Assert.notEquals(key, BaselineCache.key('abd', 'fork s1', ['t1 s1'], 'haxe 4'));
-		Assert.notEquals(key, BaselineCache.key('abc', 'fork s2', ['t1 s1'], 'haxe 4'));
-		Assert.notEquals(key, BaselineCache.key('abc', '', ['t1 s1'], 'haxe 4'));
-		Assert.notEquals(key, BaselineCache.key('abc', 'fork s1', ['t1 s2'], 'haxe 4'));
-		Assert.notEquals(key, BaselineCache.key('abc', 'fork s1', [], 'haxe 4'));
-		Assert.notEquals(key, BaselineCache.key('abc', 'fork s1', ['t1 s1'], 'haxe 5'));
+		final key: String = BaselineCache.key('abc', ['t1 s1'], 'haxe 4');
+		Assert.equals(key, BaselineCache.key('abc\n', ['t1 s1'], 'haxe 4'));
+		Assert.notEquals(key, BaselineCache.key('abd', ['t1 s1'], 'haxe 4'));
+		Assert.notEquals(key, BaselineCache.key('abc', ['t1 s2'], 'haxe 4'));
+		Assert.notEquals(key, BaselineCache.key('abc', [], 'haxe 4'));
+		Assert.notEquals(key, BaselineCache.key('abc', ['t1 s1'], 'haxe 5'));
 	}
 
-	/** A tree already edited, or a row waived by `--allow`, neither takes nor leaves an entry; the corpus tree's content moves the key. */
+	/** A tree already edited, or a row waived by `--allow`, neither takes nor leaves an entry; an infra tree's content moves the key. */
 	@:pin('guard')
 	public function testARunThatIsNotTheCommitsOwnMeasurementHasNoKey(): Void {
 		TempDir.with(dir -> {
-			final fork: String = dir.file('fork');
-			FileSystem.createDirectory(fork);
-			File.saveContent(Path.join([fork, 'a.txt']), 'one');
-			final key: Null<String> = BaselineCache.keyOfRun('abc', fork, [], [], true, 'haxe 4');
+			final infra: String = dir.file('infra');
+			FileSystem.createDirectory(infra);
+			File.saveContent(Path.join([infra, 'a.txt']), 'one');
+			final key: Null<String> = BaselineCache.keyOfRun('abc', [infra], [], true, 'haxe 4');
 			Assert.notNull(key);
-			Assert.isNull(BaselineCache.keyOfRun('abc', fork, [], [], false, 'haxe 4'));
-			Assert.isNull(BaselineCache.keyOfRun('abc', fork, [], ['corpus'], true, 'haxe 4'));
-			Assert.equals(key, BaselineCache.keyOfRun('abc', fork, [], [], true, 'haxe 4'));
-			File.saveContent(Path.join([fork, 'a.txt']), 'twice');
-			Assert.notEquals(key, BaselineCache.keyOfRun('abc', fork, [], [], true, 'haxe 4'));
+			Assert.isNull(BaselineCache.keyOfRun('abc', [infra], [], false, 'haxe 4'));
+			Assert.isNull(BaselineCache.keyOfRun('abc', [infra], ['lint'], true, 'haxe 4'));
+			Assert.equals(key, BaselineCache.keyOfRun('abc', [infra], [], true, 'haxe 4'));
+			File.saveContent(Path.join([infra, 'a.txt']), 'twice');
+			Assert.notEquals(key, BaselineCache.keyOfRun('abc', [infra], [], true, 'haxe 4'));
 		});
 	}
 
@@ -62,12 +60,10 @@ final class BaselineCacheTest extends Test {
 			Assert.notNull(got);
 			if (got == null) return;
 			Assert.equals('abc', got.base);
-			Assert.equals(7, got.tests);
-			Assert.equals(9, got.assertions);
+
 			Assert.equals(3, BaselineLists.count(got.lists, 'classes'));
 			Assert.same(frozen, got.frozen);
-			Assert.equals(Path.join([logs, 'sweep-base.json']), got.sweep);
-			Assert.equals('sweep', File.getContent(got.sweep ?? ''));
+
 			Assert.equals('lint', File.getContent(got.lint));
 			Assert.equals('/some/tree', got.infra[0].tree);
 			Assert.equals(Path.join([logs, 'infra-0.json']), got.infra[0].snapshot);
@@ -107,13 +103,13 @@ final class BaselineCacheTest extends Test {
 		});
 	}
 
-	/** A restored record survives the JSON round trip the gate writes it through, its sweep null when no corpus was set. */
+	/** A restored record survives the JSON round trip the gate writes it through, and no corpus snapshot is kept with it. */
 	@:pin('guard')
 	public function testARestoredRecordSurvivesTheBaselineFileRoundTrip(): Void {
 		TempDir.with(dir -> {
 			final cache: String = dir.file('cache');
 			final record: Baseline = recorded(dir.file('logs-a'), 'abc');
-			record.sweep = null;
+
 			BaselineCache.store(cache, 'k4', record);
 			final logs: String = dir.file('logs-b');
 			FileSystem.createDirectory(logs);
@@ -121,7 +117,7 @@ final class BaselineCacheTest extends Test {
 			Assert.notNull(got);
 			if (got == null) return;
 			final again: Baseline = BaselineParser.parse(BaselineWriter.write(got, JsonFormat.instance.defaultWriteOptions));
-			Assert.isNull(again.sweep);
+
 			Assert.isFalse(FileSystem.exists(Path.join([logs, 'sweep-base.json'])));
 			Assert.same(got, again);
 		});
@@ -140,29 +136,28 @@ final class BaselineCacheTest extends Test {
 		});
 	}
 
-	/** A baseline document an earlier engine wrote, `lists` an object of counts and `sweep` null, reads as it did. */
+	/** A baseline document an earlier engine wrote, with the suite's counts and a sweep it no longer records, still reads. */
 	public function testADocumentOfAnEarlierEngineIsRead(): Void {
 		final kept: Baseline = BaselineParser.parse(
 			'{"base":"b","tests":1,"assertions":2,"lists":{"classes":3},"sweep":null,"lint":"l","infra":[],"frozen":[]}'
 		);
 		Assert.equals(3, BaselineLists.count(kept.lists, 'classes'));
 		Assert.isNull(BaselineLists.count(kept.lists, 'absent'));
-		Assert.isNull(kept.sweep);
+		Assert.equals('b', kept.base);
 		Assert.isNull(BaselineLists.count(JArray([]), 'classes'));
 	}
 
 	/** A recorded baseline of `base` whose files live in `logs`, with one infra tree. */
 	private static function recorded(logs: String, base: String): Baseline {
 		FileSystem.createDirectory(logs);
-		File.saveContent(Path.join([logs, 'sweep-base.json']), 'sweep');
+
 		File.saveContent(Path.join([logs, 'lint-base.json']), 'lint');
 		File.saveContent(Path.join([logs, 'infra-0.json']), 'infra');
 		return {
 			base: base,
-			tests: 7,
-			assertions: 9,
+
 			lists: BaselineLists.of(['classes'], _ -> 3),
-			sweep: Path.join([logs, 'sweep-base.json']),
+
 			lint: Path.join([logs, 'lint-base.json']),
 			infra: [{ tree: '/some/tree', snapshot: Path.join([logs, 'infra-0.json']) }],
 			frozen: [{ dir: '/frozen/a', digest: 'old' }]

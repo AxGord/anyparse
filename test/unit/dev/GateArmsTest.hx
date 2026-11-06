@@ -292,7 +292,7 @@ final class GateArmsTest extends Test {
 			));
 			knob(tree, 'all-killed');
 			final gate: GateTree = gateOf(tree, []);
-			withLease('1', () -> gate.summary.time('arms', () -> GateArms.outcome(gate)));
+			withLease('1', () -> gate.summary.time('arms', GateArms.outcome.bind(gate)));
 			Assert.stringContains('kill run held 1 thread', gate.summary.steps()[0].note);
 		});
 	}
@@ -499,8 +499,7 @@ final class GateArmsTest extends Test {
 			File.saveContent(
 				'$tree-logs/baseline.json', BaselineWriter.write({
 					base: base,
-					tests: 0,
-					assertions: 0,
+
 					lists: JObject([]),
 					lint: '',
 					infra: [],
@@ -535,7 +534,7 @@ final class GateArmsTest extends Test {
 	/** The excerpt lines of the failed arms row of `tree` under the lease `held`. */
 	private static function excerptOf(tree: String, held: String): Array<String> {
 		final gate: GateTree = gateOf(tree, []);
-		withLease(held, () -> gate.summary.time('arms', () -> GateArms.outcome(gate)));
+		withLease(held, () -> gate.summary.time('arms', GateArms.outcome.bind(gate)));
 		return gate.summary.steps()[0].excerpt;
 	}
 

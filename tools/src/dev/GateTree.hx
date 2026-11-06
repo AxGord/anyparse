@@ -33,6 +33,9 @@ final class GateTree {
 	/** The environment variable that names the corpus the suite's harness reads. */
 	public static inline final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';
 
+	/** The environment variable that pins which `apq.js` the `hxq` shim runs. */
+	public static inline final ENGINE_VAR: String = 'HXQ_BIN';
+
 	/** The scope of a whole-tree lint of this project. */
 	public static final TREE_SCOPE: Array<String> = ['src', 'test', 'tools'];
 
@@ -44,9 +47,6 @@ final class GateTree {
 
 	/** How long a quoted error may grow in a report row. */
 	private static inline final QUOTE_WIDTH: Int = 150;
-
-	/** The environment variable that pins which `apq.js` the `hxq` shim runs. */
-	private static inline final ENGINE_VAR: String = 'HXQ_BIN';
 
 	/** The characters of a commit or a digest a report row spells. */
 	private static inline final SHORT_HASH: Int = 9;
@@ -177,22 +177,14 @@ final class GateTree {
 	}
 
 	/**
-	 * Remove the recorded baseline and its corpus snapshot before a new one is taken: a `--baseline` run that fails a row, or the
-	 * build, must leave the gate with NO baseline, never with the older one.
+	 * Remove the recorded baseline and the base suite reading kept beside it before a new baseline is taken: a `--baseline` run
+	 * that fails a row, or the build, must leave the gate with NO baseline, never with the older one.
 	 */
 	public function retireBaseline(): Void {
-		for (name in [BASELINE_FILE, SWEEP_BASE]) {
+		for (name in [BASELINE_FILE, BaseSuite.FILE, SWEEP_BASE]) {
 			final file: String = log(name);
 			if (FileSystem.exists(file)) FileSystem.deleteFile(file);
 		}
-	}
-
-	/**
-	 * Why the suite that just ran left no corpus snapshot to read, or null when it left one: the corpus class skips quietly when
-	 * the fork names no directory, and writes nothing when none of its cases ran.
-	 */
-	public function corpusProblem(): Null<String> {
-		return forkProblem() ?? snapshotProblem();
 	}
 
 	/** Why the suite left no corpus snapshot in the tree, or null when it left one. */

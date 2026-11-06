@@ -3,8 +3,7 @@ package unit.dev;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.grammar.json.JsonText;
-import dev.Baseline;
-import dev.BaselineParser;
+import dev.BaseSuite;
 import dev.BaselineWriter;
 import dev.BranchWatch;
 import dev.Probe;
@@ -84,6 +83,8 @@ final class SliceGateTest extends Test {
 		STALLED_SELF,
 		'}'
 	].join('');
+
+	private static final FAILING_LINT_SELF: String = FAKE_SELF.replace("outcome:'passed'", "outcome:n==='lint'?'failed':'passed'");
 
 	/**
 	 * A `--rows` branch runs inside the lease its gate took for it and never asks the pool itself, even inside a workflow
@@ -348,7 +349,8 @@ final class SliceGateTest extends Test {
 			Assert.stringContains('last started: $first', log, first);
 		}
 		final minute: Int = 60 * 1000;
-		Assert.equals(20 * minute, BranchWatch.idleOf(['suite', 'corpus']));
+		Assert.equals(40 * minute, BranchWatch.idleOf(['suite', 'corpus']));
+		Assert.equals(20 * minute, BranchWatch.idleOf(['corpus']));
 		Assert.equals(10 * minute, BranchWatch.idleOf(['lists', 'fmt', 'scrub', 'artifacts']));
 		Assert.equals(45 * minute, BranchWatch.idleOf(['arms']));
 		Assert.equals(5 * minute, BranchWatch.idleOf(['lists']));
@@ -385,69 +387,48 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
-	 * A `--baseline` run in which a row failed records nothing and retires the baseline an earlier run left, with its corpus
-	 * snapshot: the gate then has none to compare with, instead of the older one.
+	 * A `--baseline` run in which a row failed records nothing and retires the baseline an earlier run left, with the base
+	 * suite reading kept beside it: the gate then has none to compare with, instead of the older one.
 	 */
 	@:pin('control')
 	@:killer('M-GATE-BASELINE-RECORDED-AFTER-FAILURE')
 	@:killer('M-GATE-BASELINE-NOT-RETIRED')
 	public function testABaselineThatFailedARowIsNotRecordedAndRetiresTheOlderOne(): Void {
-		final ran: GateRan = gateRun(BASE_REGISTRY, ['--baseline'], GRAPH_HXQ, FAILING_CORPUS_SELF);
+		final ran: GateRan = gateRun(BASE_REGISTRY, ['--baseline'], GRAPH_HXQ, FAILING_LINT_SELF);
 		Assert.equals(1, ran.status);
 		Assert.isFalse(ran.logsHad.contains('baseline.json'), 'logs: ${ran.logsHad}');
 		Assert.isFalse(ran.logsHad.contains('sweep-base.json'), 'logs: ${ran.logsHad}');
+		Assert.isFalse(ran.logsHad.contains(BaseSuite.FILE), 'logs: ${ran.logsHad}');
 	}
 
-	/** A `--baseline` run in which every row passed records its readings. */
+	/**
+	 * A `--baseline` run in which every row passed records its readings, and runs neither the suite nor the corpus: a gate
+	 * reads those from the base when it needs them.
+	 */
 	@:pin('guard')
 	public function testABaselineThatPassedEveryRowIsRecorded(): Void {
 		final ran: GateRan = gateRun(BASE_REGISTRY, ['--baseline']);
 		Assert.equals(0, ran.status);
-		Assert.stringContains('"tests"', ran.baselineText);
+		Assert.stringContains('"lists"', ran.baselineText);
+		Assert.isFalse(ran.baselineText.contains('"tests"'), ran.baselineText);
+		Assert.isFalse(ran.baselineText.contains('"sweep"'), ran.baselineText);
+		Assert.isFalse(ran.branches.contains('suite'), ran.branches);
+		Assert.isFalse(ran.branches.contains('corpus'), ran.branches);
 	}
 
 	/**
-	 * The corpus row will not save or compare a snapshot the suite did not write: a fork that names no directory (the harness
-	 * skips it quietly) and a tree with no snapshot are refused with their cause, and a baseline whose snapshot file is gone is
-	 * not compared with.
+	 * The corpus row will not compare a snapshot the suite did not write: a fork that names no directory (the harness skips it
+	 * quietly) and a tree with no snapshot are refused with their cause, and a base suite that cannot be read is named, not
+	 * compared with.
 	 */
 	@:pin('control')
 	@:killer('M-GATE-CORPUS-FORK-NOT-CHECKED')
 	@:killer('M-GATE-CORPUS-SNAPSHOT-NOT-CHECKED')
-	@:killer('M-GATE-CORPUS-BASELINE-SNAPSHOT-GONE')
+	@:killer('M-GATE-CORPUS-BASE-UNREAD')
 	public function testTheCorpusRowRefusesASnapshotTheSuiteDidNotWrite(): Void {
-		Assert.stringContains(
-			'no directory', corpusWhy({
-				recording: true,
-				fork: false,
-				snapshot: true,
-				recorded: false
-			})
-		);
-		Assert.stringContains(
-			'no corpus snapshot', corpusWhy({
-				recording: true,
-				fork: true,
-				snapshot: false,
-				recorded: false
-			})
-		);
-		Assert.stringContains(
-			'no corpus snapshot', corpusWhy({
-				recording: false,
-				fork: true,
-				snapshot: false,
-				recorded: true
-			})
-		);
-		Assert.stringContains(
-			'is gone', corpusWhy({
-				recording: false,
-				fork: true,
-				snapshot: true,
-				recorded: true
-			})
-		);
+		Assert.stringContains('no directory', corpusWhy({ fork: false, snapshot: true }));
+		Assert.stringContains('the suite left no corpus snapshot', corpusWhy({ fork: true, snapshot: false }));
+		Assert.stringContains('no corpus snapshot of the base', corpusWhy({ fork: true, snapshot: true }));
 	}
 
 	/** The suite row removes the snapshot an earlier run left, so the corpus row can only read the one the suite wrote. */
@@ -463,20 +444,6 @@ final class SliceGateTest extends Test {
 			Assert.isFalse(FileSystem.exists(stale));
 			Assert.equals('{}', File.getContent(Path.join([tree, 'bin/.prev-sweep.json'])), 'it is rotated, as the corpus class would');
 		});
-	}
-
-	/**
-	 * `--allow corpus` turns a failed corpus row of the baseline into a pass (the stand-in branch reports it passed), so the
-	 * record names a snapshot that was not saved:
-	 * the next gate's corpus row says the baseline's snapshot is gone and does not compare.
-	 */
-	@:pin('guard')
-	public function testAnAllowedFailedCorpusRowLeavesABaselineTheNextGateReadsAsGone(): Void {
-		final ran: GateRan = gateRun(BASE_REGISTRY, ['--baseline', '--allow', 'corpus'], GRAPH_HXQ, null, null, true);
-		Assert.equals(0, ran.status);
-		Assert.stringContains('sweep-base.json', ran.baselineText);
-		Assert.isFalse(ran.logsHad.contains('sweep-base.json'), 'logs: ${ran.logsHad}');
-		Assert.stringContains('is gone', ran.followWhy);
 	}
 
 	/**
@@ -552,8 +519,7 @@ final class SliceGateTest extends Test {
 		File.saveContent(
 			'$tree-logs/baseline.json', BaselineWriter.write({
 				base: base,
-				tests: 0,
-				assertions: 0,
+
 				lists: JObject([]),
 				lint: '',
 				infra: [],
@@ -561,13 +527,14 @@ final class SliceGateTest extends Test {
 			}, JsonFormat.instance.compactWriteOptions)
 		);
 		File.saveContent('$tree-logs/sweep-base.json', '{}');
+		File.saveContent('$tree-logs/${BaseSuite.FILE}', 'a reading of an earlier base');
 
 		return tree;
 	}
 
 	/** A whole `check()` over a scratch tree whose slice leaves `registry`, the compiler, the branches' script and the pool faked. */
 	private static function gateRun(
-		registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ, ?self: String, ?idleMs: Int, corpus: Bool = false
+		registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ, ?self: String, ?idleMs: Int
 	): GateRan {
 		var ran: GateRan = {
 			branches: '',
@@ -576,13 +543,12 @@ final class SliceGateTest extends Test {
 			rowLogs: [],
 			logsHad: [],
 			baselineText: '',
-			followWhy: '',
+
 			table: ''
 		};
 		TempDir.with(dir -> {
 			final tree: String = scratchTree(dir, registry, hxq);
-			final fork: String = dir.file('fork');
-			FileSystem.createDirectory(fork);
+
 			final root: String = dir.file('plugin');
 			final fakeBin: String = dir.file('fakebin');
 			for (d in [Path.join([root, 'scripts']), fakeBin]) FileSystem.createDirectory(d);
@@ -605,15 +571,12 @@ final class SliceGateTest extends Test {
 			CliFixture.always(() -> for (v => value in saved) Sys.putEnv(v, value), () -> {
 				Sys.putEnv('WF_PLUGIN_ROOT', root);
 				Sys.putEnv('WF_THREADS', '');
-				Sys.putEnv(FORK_VAR, corpus ? fork : '');
+				Sys.putEnv(FORK_VAR, '');
 				Sys.putEnv('PATH', '$fakeBin:${saved['PATH']}');
 				Sys.putEnv(SliceGate.SELF_VAR, dir.file('self.js'));
 				Sys.putEnv(BranchWatch.IDLE_VAR, idleMs == null ? '' : '$idleMs');
 				status = SliceGate.main([tree, '--logs', '$tree-logs'].concat(extra ?? []));
-				if (corpus) {
-					File.saveContent(Path.join([tree, 'bin/.last-sweep.json']), '{}');
-					SliceGate.main([tree, '--rows', 'corpus', '--logs', '$tree-logs', '--run', 'follow']);
-				}
+
 			});
 			final read: String -> String = file -> FileSystem.exists(file) ? File.getContent(file) : '';
 			final rowsDir: String = '$tree-logs/rows';
@@ -628,20 +591,15 @@ final class SliceGateTest extends Test {
 				rowLogs: rowLogs,
 				logsHad: FileSystem.exists('$tree-logs') ? FileSystem.readDirectory('$tree-logs') : [],
 				baselineText: read('$tree-logs/baseline.json'),
-				table: read('$tree-logs/${SliceGate.TABLE_FILE}'),
-				followWhy: switch Branches.reportOf('$tree-logs/rows/corpus.json', 'follow')?.steps[0]?.outcome {
-					case Failed(reason), NotRun(reason): reason;
-					case _: '';
-				}
+				table: read('$tree-logs/${SliceGate.TABLE_FILE}')
 			};
 		});
 		return ran;
 	}
 
 	/**
-	 * The why of the corpus row of a scratch tree run alone: a `--baseline` run when `recording`; `fork` whether the corpus
-	 * directory the environment names exists, `snapshot` whether the tree holds a snapshot, and `recorded` whether the baseline
-	 * names one (a file that does not exist).
+	 * The why of the corpus row of a scratch tree run alone: `fork` whether the corpus directory the environment names exists
+	 * and `snapshot` whether the tree holds a snapshot. The tree's base holds no test build, so a base suite read fails fast.
 	 */
 	private static function corpusWhy(facts: CorpusFacts): String {
 		var why: String = '';
@@ -651,18 +609,12 @@ final class SliceGateTest extends Test {
 			FileSystem.createDirectory(Path.join([logs, 'rows']));
 			File.saveContent(Path.join([tree, 'bin/apq.js']), 'built');
 			if (facts.snapshot) File.saveContent(Path.join([tree, 'bin/.last-sweep.json']), '{}');
-			final record: Baseline = BaselineParser.parse(File.getContent(Path.join([logs, 'baseline.json'])));
-			record.sweep = facts.recorded ? dir.file('sweep.json') : null;
-			File.saveContent(Path.join([logs, 'baseline.json']), BaselineWriter.write(record, JsonFormat.instance.compactWriteOptions));
 			final fork: String = dir.file('fork');
 			if (facts.fork) FileSystem.createDirectory(fork);
 			final saved: String = Sys.getEnv(FORK_VAR) ?? '';
 			CliFixture.always(() -> Sys.putEnv(FORK_VAR, saved), () -> {
 				Sys.putEnv(FORK_VAR, fork);
-				Assert.equals(
-					0,
-					SliceGate.main([tree, '--rows', 'corpus', '--logs', logs, '--run', 'r'].concat(facts.recording ? ['--baseline'] : []))
-				);
+				Assert.equals(0, SliceGate.main([tree, '--rows', 'corpus', '--logs', logs, '--run', 'r']));
 			});
 			why = switch Branches.reportOf(Path.join([logs, 'rows/corpus.json']), 'r')?.steps[0]?.outcome {
 				case Failed(reason), NotRun(reason): reason;
@@ -688,8 +640,6 @@ private typedef GateRan = {
 
 	var baselineText: String;
 
-	/** With `corpus`: why the corpus row of the gate run that followed the first run did not pass, empty when it did. */
-	var followWhy: String;
 
 	/** The table the gate printed, for the message of a failed assertion. */
 	var table: String;
@@ -697,8 +647,6 @@ private typedef GateRan = {
 
 /** What the corpus row of a scratch tree meets (`SliceGateTest.corpusWhy`). */
 private typedef CorpusFacts = {
-	var recording: Bool;
 	var fork: Bool;
 	var snapshot: Bool;
-	var recorded: Bool;
 }

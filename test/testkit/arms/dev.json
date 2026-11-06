@@ -601,9 +601,9 @@
 			"name": "M-GATE-BASELINE-NOT-RETIRED",
 			"type": "dev.GateTree",
 			"method": "retireBaseline",
-			"find": "for (name in [BASELINE_FILE, SWEEP_BASE]) {",
+			"find": "for (name in [BASELINE_FILE, BaseSuite.FILE, SWEEP_BASE]) {",
 			"replace": "for (name in ([]: Array<String>)) {",
-			"note": "a baseline run that fails leaves the previous baseline and its corpus snapshot in place, and the gate compares with the older base"
+			"note": "a baseline run that fails leaves the previous baseline and the base suite reading kept beside it in place, and the gate compares with the older base"
 		},
 		{
 			"name": "M-GATE-CORPUS-FORK-NOT-CHECKED",
@@ -622,12 +622,12 @@
 			"note": "the corpus row goes on to save or compare a snapshot the suite never wrote"
 		},
 		{
-			"name": "M-GATE-CORPUS-BASELINE-SNAPSHOT-GONE",
+			"name": "M-GATE-CORPUS-BASE-UNREAD",
 			"type": "dev.SliceGate",
 			"method": "corpusOutcome",
-			"find": "if (!FileSystem.exists(sweep)) return NotRun(",
-			"replace": "if (false) return NotRun(",
-			"note": "a baseline whose corpus snapshot file is gone is not named as such"
+			"find": "case Unread(why): return NotRun(GateTree.clip('no corpus snapshot of the base: $why'));",
+			"replace": "case Unread(_): null;",
+			"note": "a base suite that could not be read is not named as the cause of the missing base corpus snapshot"
 		},
 		{
 			"name": "M-GATE-STALE-SNAPSHOT-KEPT",
@@ -1120,6 +1120,54 @@
 			"find": "PostLand.release(directory(cache), sha, verdict.match(Failed(_)));",
 			"replace": "{}",
 			"note": "a finished baseline warm leaves its copy of dev.js behind in the cache, a few megabytes for every warmed land"
+		},
+		{
+			"name": "M-BASESUITE-ENGINE-NOT-BUILT",
+			"type": "dev.BaseSuite",
+			"method": "builds",
+			"find": "[['bin/apq-js.hxml'], ['test-js.hxml']]",
+			"replace": "[['test-js.hxml']]",
+			"note": "the base checkout's suite runs without the engine its tests spawn, and ten of them fail on a clean base"
+		},
+		{
+			"name": "M-BASESUITE-ENGINE-UNPINNED",
+			"type": "dev.BaseSuite",
+			"method": "withEngine",
+			"find": "setEngine(Path.join([checkout, 'bin/apq.js']));",
+			"replace": "",
+			"note": "the base suite's tests run the engine of the tree under gate, not the base's own"
+		},
+		{
+			"name": "M-BASESUITE-ENGINE-LEAKS",
+			"type": "dev.BaseSuite",
+			"method": "withEngine",
+			"find": "return status;",
+			"replace": "setEngine('leaked'); return status;",
+			"note": "the base checkout's engine stays pinned in the gate process after the base suite ends"
+		},
+		{
+			"name": "M-BASESUITE-IMPACT-READS-BASE",
+			"type": "dev.BaseSuite",
+			"method": "deltaNote",
+			"find": "|| only != null",
+			"replace": "|| false",
+			"note": "an impact gate builds and runs a whole base suite for a delta it never prints"
+		},
+		{
+			"name": "M-BASESUITE-RED-GATE-READS-BASE",
+			"type": "dev.BaseSuite",
+			"method": "deltaNote",
+			"find": "status != 0 ||",
+			"replace": "false ||",
+			"note": "a red gate suite still pays for a base suite"
+		},
+		{
+			"name": "M-BASESUITE-DELTA-DROPPED",
+			"type": "dev.BaseSuite",
+			"method": "deltaNote",
+			"find": "' (${GateTree.signed(sum.tests - base.tests)} / ${GateTree.signed(sum.assertions - base.assertions)})'",
+			"replace": "''",
+			"note": "a whole-suite gate with a readable base prints no counts beside the base's"
 		}
 	]
 }
