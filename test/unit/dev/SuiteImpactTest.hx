@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.ArmRegistry.ArmRecord;
 import dev.SuiteImpact;
 import utest.Assert;
 import utest.Test;
@@ -185,8 +186,69 @@ final class SuiteImpactTest extends Test {
 		}
 	}
 
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ARM-MISS-BLIND')
+	public function testAPinnedClassOutsideTheReachOfTheArmsFileIsAMissAndOneInsideIsNot(): Void {
+		final pinned: Map<String, String> = [
+			'M-ARM' => 'unit.check.common.naming.RuleTest,unit.query.OtherTest',
+			'M-OTHER' => 'unit.query.OtherTest'
+		];
+		final arms: Array<ArmRecord> = [
+			arm('M-ARM', 'anyparse.check.common.naming.Rule'),
+			arm('M-OTHER', 'anyparse.query.Other')
+		];
+		final reach: ArmReach = SuiteImpact.armMisses(TREE, ENTRIES, arms, pinned);
+		Assert.same(['M-ARM src/anyparse/check/common/naming/Rule.hx unit.query.OtherTest'], reach.misses);
+		Assert.equals(2, reach.files);
+		Assert.equals(0, reach.whole);
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ARM-WHOLE-MISSED')
+	public function testAnArmWhoseFileRunsEveryClassMissesNone(): Void {
+		final tree: Array<ImpactSource> = TREE.concat([
+			source('src/anyparse/macro/Codegen.hx', 'package anyparse.macro;\nclass Codegen {}')
+		]);
+		final reach: ArmReach = SuiteImpact.armMisses(
+			tree, ENTRIES,
+			[arm('M-MACRO', 'anyparse.macro.Codegen')],
+			['M-MACRO' => 'unit.query.OtherTest']
+		);
+		Assert.same([], reach.misses);
+		Assert.equals(1, reach.whole);
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ARM-MISS-BLIND')
+	public function testAnArmWhoseTypeNoFileDeclaresNamesTheTypeAndAnArmWithoutPinsNothing(): Void {
+		final arms: Array<ArmRecord> = [arm('M-GONE', 'anyparse.query.Gone'), arm('M-UNPINNED', 'anyparse.query.Other')];
+		final reach: ArmReach = SuiteImpact.armMisses(TREE, ENTRIES, arms, ['M-GONE' => 'unit.query.OtherTest']);
+		Assert.same(['M-GONE anyparse.query.Gone unit.query.OtherTest'], reach.misses);
+		Assert.equals(0, reach.files, 'an unpinned arm\'s file is not scoped and an unlocated type adds none');
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-GRAPH-LEAKS-BETWEEN-FILES')
+	public function testOneGraphSharedAcrossArmsCarriesNoReachFromAnEarlierFileToALaterOne(): Void {
+		final pinned: Map<String, String> = [
+			'M-FIRST' => 'unit.check.common.naming.RuleTest',
+			'M-SECOND' => 'unit.check.RegistryTest'
+		];
+		final arms: Array<ArmRecord> = [
+			arm('M-FIRST', 'anyparse.check.common.naming.Rule'),
+			arm('M-SECOND', 'anyparse.query.Other')
+		];
+		Assert.same(
+			['M-SECOND src/anyparse/query/Other.hx unit.check.RegistryTest'], SuiteImpact.armMisses(TREE, ENTRIES, arms, pinned).misses
+		);
+	}
+
 	private static function source(path: String, text: String): ImpactSource {
 		return { path: path, text: text };
+	}
+
+	private static function arm(name: String, type: String): ArmRecord {
+		return { key: name, text: '{"name":"$name","type":"$type","method":"run"}' };
 	}
 
 }

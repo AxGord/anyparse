@@ -5,9 +5,12 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ShardPlan;
 import anyparse.query.SymbolIndex;
+import dev.ArmRegistry.ArmRecord;
 import dev.GateTree.ChangedPaths;
 import devkit.Args;
 import devkit.Args.UsageError;
+import devkit.Cmd.cmd;
+import devkit.Result;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -24,7 +27,7 @@ using StringTools;
 final class SuiteImpact {
 
 	public static inline final USAGE: String =
-		'usage: dev suite-impact [<base>[..<tip>]] [--list | --why <class>] [--repo <dir>] | --census <N> [--weights <tsv>] [--repo <dir>]';
+		'usage: dev suite-impact [<base>[..<tip>]] [--list | --why <class>] [--repo <dir>] | --census <N> [--weights <tsv>] [--repo <dir>] | --arm-census [--repo <dir>]';
 
 	/** The macros, which build code no text of the module they build ever names. */
 	public static inline final MACROS: String = 'src/anyparse/macro/';
@@ -72,10 +75,12 @@ final class SuiteImpact {
 		final args: Args = new Args(argv);
 		final repo: String = Repo.resolve(args.option('--repo'));
 		final census: Null<String> = args.option('--census');
+		final armCensus: Bool = args.flag('--arm-census');
 		final weights: String = args.option('--weights') ?? Path.join([repo, Shard.WEIGHTS]);
 		final list: Bool = args.flag('--list');
 		final why: Null<String> = args.option('--why');
 		final base: Null<String> = args.positionals([], ['<base>'])[0];
+		if (armCensus) return armCensusOf(repo, Sys.println);
 		if (census != null) {
 			final count: Null<Int> = Std.parseInt(census);
 			if (count == null || count < 1) throw new UsageError('--census expects a positive count, got \'$census\'');
@@ -105,25 +110,7 @@ final class SuiteImpact {
 	public static function scope(
 		sources: Array<ImpactSource>, entries: Map<String, String>, touched: Array<String>, ?declared: DeclaredTypes
 	): SuiteScope {
-		final runner: Null<String> = entries[SUITE_OUTPUT];
-		for (path in touched) {
-			final why: Null<String> = wholeReason(path) ?? stateReason(path, sources.find(s -> s.path == path)?.text ?? '');
-			if (why != null) return WholeSuite(why);
-			if (runner != null && moduleOf(path)?.qualified == runner) return WholeSuite('$path is the runner every class runs inside');
-		}
-		final types: DeclaredTypes = declared ?? declaredTypes(sources);
-		if (types.unparsed.length > 0) return WholeSuite('${types.unparsed[0]} does not parse, so the types it declares are unknown');
-		final graph: ImpactGraph = new ImpactGraph(sources, entries, types);
-		final reached: Array<String> = graph.dependents(touched);
-		for (path in reached) if (path.startsWith(MACROS))
-			return WholeSuite('a macro depends on the change: ${graph.chain(path).join(' <- ')}');
-		final classes: Array<String> = [];
-		for (path in reached) {
-			final module: Null<ImpactModule> = isTestClass(path) ? moduleOf(path) : null;
-			if (module != null) classes.push(module.qualified);
-		}
-		classes.sort(Reflect.compare);
-		return Selected(classes);
+		return scopeOn(sources, entries, touched, declared ?? declaredTypes(sources));
 	}
 
 	/** The scope of the suite the change of `tree` since `base` needs, committed or not. */
@@ -397,6 +384,93 @@ final class SuiteImpact {
 		};
 	}
 
+	/**
+	 * The arm census over the registry of `repo`: each arm whose pinning classes an impact-selected suite would leave out
+	 * when only the file declaring the arm's type changed, as `<arm> <file> <class>`, then the tally; 1 when any is missed.
+	 */
+	public static function armCensusOf(repo: String, print: String -> Void): Int {
+		final test: String = Path.join([repo, 'bin/test.js']);
+		if (!FileSystem.exists(test)) {
+			print('$test missing — build it first (node bin/dev.js worker-build <dir>)');
+			return 2;
+		}
+		final listed: Result = cmd('node $test --list-pins').run();
+		if (!listed.ok) {
+			print('--list-pins failed: ${listed.err}');
+			return 2;
+		}
+		final arms: Array<ArmRecord> = ArmRegistry.read(Path.join([repo, ArmRegistry.DIRECTORY]));
+		final pinned: Map<String, String> = MutationArm.pinTables(listed.out).classes;
+		final reach: ArmReach = armMisses(sourcesOf(repo), entriesOf(repo), arms, pinned);
+		for (miss in reach.misses) print(miss);
+		print(
+			'--- arm census: ${arms.count(arm -> pinned.exists(arm.key))} pinned arm(s) of ${arms.length}, ${reach.files} file(s) of which '
+			+ '${reach.whole} run the whole suite, ${reach.misses.length} miss(es)'
+		);
+		return reach.misses.length == 0 ? 0 : 1;
+	}
+
+	/**
+	 * Where an impact-selected suite fails a mutation arm: for every class `pinned` names for an arm (its `@:killer`s, comma
+	 * separated), `<arm> <file> <class>` when a change of the file declaring the arm's type does not reach that class. A touch
+	 * that runs every class misses none; an arm whose type no file declares names the type in the file's place, since nothing
+	 * reaches its pins.
+	 */
+	public static function armMisses(
+		sources: Array<ImpactSource>, entries: Map<String, String>, arms: Array<ArmRecord>, pinned: Map<String, String>,
+		?declared: DeclaredTypes
+	): ArmReach {
+		final types: DeclaredTypes = declared ?? declaredTypes(sources);
+		final graph: ImpactGraph = new ImpactGraph(sources, entries, types);
+		final reach: Map<String, Null<Array<String>>> = [];
+		final misses: Array<String> = [];
+		var whole: Int = 0;
+		for (arm in arms) {
+			final classes: Array<String> = (pinned[arm.key] ?? '').split(',').filter(name -> name != '');
+			if (classes.length == 0) continue;
+			final type: String = ArmHeadParser.parse(arm.text).type ?? '';
+			final file: Null<String> = fileOfType(sources, type);
+			var reached: Array<String> = [];
+			if (file != null) {
+				if (!reach.exists(file)) reach[file] = switch scopeOn(sources, entries, [file], types, graph) {
+					case WholeSuite(_):
+						whole++;
+						null;
+					case Selected(selected):
+						selected;
+				};
+				reached = reach[file] ?? continue;
+			}
+			for (name in classes) if (!reached.contains(name)) misses.push('${arm.key} ${file ?? type} $name');
+		}
+		misses.sort(Reflect.compare);
+		return { misses: misses, files: reach.count(), whole: whole };
+	}
+
+	/** `scope` over the `types` the caller read, on `shared` when it keeps one graph of `sources` for many touches. */
+	private static function scopeOn(
+		sources: Array<ImpactSource>, entries: Map<String, String>, touched: Array<String>, types: DeclaredTypes, ?shared: ImpactGraph
+	): SuiteScope {
+		final runner: Null<String> = entries[SUITE_OUTPUT];
+		for (path in touched) {
+			final why: Null<String> = wholeReason(path) ?? stateReason(path, sources.find(s -> s.path == path)?.text ?? '');
+			if (why != null) return WholeSuite(why);
+			if (runner != null && moduleOf(path)?.qualified == runner) return WholeSuite('$path is the runner every class runs inside');
+		}
+		if (types.unparsed.length > 0) return WholeSuite('${types.unparsed[0]} does not parse, so the types it declares are unknown');
+		final graph: ImpactGraph = shared ?? new ImpactGraph(sources, entries, types);
+		final reached: Array<String> = graph.dependents(touched);
+		for (path in reached) if (path.startsWith(MACROS))
+			return WholeSuite('a macro depends on the change: ${graph.chain(path).join(' <- ')}');
+		final classes: Array<String> = [];
+		for (path in reached) {
+			final module: Null<ImpactModule> = isTestClass(path) ? moduleOf(path) : null;
+			if (module != null) classes.push(module.qualified);
+		}
+		classes.sort(Reflect.compare);
+		return Selected(classes);
+	}
+
 	private static function isNameCode(code: Null<Int>): Bool {
 		return code != null && (code == '_'.code || code == '-'.code || ~/[A-Za-z0-9]/.match(String.fromCharCode(code)));
 	}
@@ -433,6 +507,17 @@ final class SuiteImpact {
 			for (word in ~/\s+/g.split(text)) if (word != '') out.push(word);
 		}
 		return out;
+	}
+
+	/** The source file declaring `type`, a module's own type or one it holds beside it; null when no file does. */
+	private static function fileOfType(sources: Array<ImpactSource>, type: String): Null<String> {
+		final parts: Array<String> = type.split('.');
+		while (parts.length > 0) {
+			final relative: String = parts.join('/') + HX;
+			for (root in ROOTS) if (sources.exists(source -> source.path == '$root/$relative')) return '$root/$relative';
+			parts.pop();
+		}
+		return null;
 	}
 
 }
@@ -640,6 +725,13 @@ private typedef PendingModule = {
 typedef BuildEntry = {
 	var main: String;
 	var output: String;
+}
+
+/** What the arm census read: the pins an impact selection leaves out, and how many files it selected for. */
+typedef ArmReach = {
+	var misses: Array<String>;
+	var files: Int;
+	var whole: Int;
 }
 
 /** What a suite runs for a change. */

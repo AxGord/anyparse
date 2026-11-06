@@ -843,7 +843,7 @@
 		{
 			"name": "M-SUITE-IMPACT-NOTHING-REACHED",
 			"type": "dev.SuiteImpact",
-			"method": "scope",
+			"method": "scopeOn",
 			"find": "return Selected(classes);",
 			"replace": "return Selected([]);",
 			"note": "a change reaches no test class, so a gate passes a slice whose tests never ran"
@@ -866,7 +866,7 @@
 		{
 			"name": "M-SUITE-IMPACT-MACRO-DEPENDENT-BOUNDED",
 			"type": "dev.SuiteImpact",
-			"method": "scope",
+			"method": "scopeOn",
 			"find": "if (path.startsWith(MACROS))",
 			"replace": "if (false)",
 			"note": "a module a macro depends on runs only the classes that name it, though the macro's generated code reaches classes that never name the module"
@@ -874,7 +874,7 @@
 		{
 			"name": "M-SUITE-IMPACT-RUNNER-BOUNDED",
 			"type": "dev.SuiteImpact",
-			"method": "scope",
+			"method": "scopeOn",
 			"find": "if (runner != null && moduleOf(path)?.qualified == runner)",
 			"replace": "if (false)",
 			"note": "a change of the runner every class runs inside runs only the classes that name it"
@@ -882,7 +882,7 @@
 		{
 			"name": "M-SUITE-IMPACT-UNPARSED-BOUNDED",
 			"type": "dev.SuiteImpact",
-			"method": "scope",
+			"method": "scopeOn",
 			"find": "if (types.unparsed.length > 0)",
 			"replace": "if (false)",
 			"note": "a source that does not parse declares no types, so a same-package file using one of them is never reached"
@@ -933,6 +933,30 @@
 			"find": "killerFirst && !buildOnly && ",
 			"replace": "killerFirst && ",
 			"note": "a build-only run (--check-apply) takes the narrow build, so a cut that breaks a class outside its pins closure no longer reads BUILD-FAIL there"
+		},
+		{
+			"name": "M-SUITE-IMPACT-ARM-MISS-BLIND",
+			"type": "dev.SuiteImpact",
+			"method": "armMisses",
+			"find": "if (!reached.contains(name)) misses.push(",
+			"replace": "if (false) misses.push(",
+			"note": "a pinned class the impact selection leaves out of an arm's file is not reported, so the census passes an arm whose killer an impact suite would never run"
+		},
+		{
+			"name": "M-SUITE-IMPACT-ARM-WHOLE-MISSED",
+			"type": "dev.SuiteImpact",
+			"method": "armMisses",
+			"find": "whole++;\nnull;",
+			"replace": "whole++;\n[];",
+			"note": "an arm whose file runs every class is reported as missing its pins, so a census cries for arms on the macros and the runtime that no selection can miss"
+		},
+		{
+			"name": "M-SUITE-IMPACT-GRAPH-LEAKS-BETWEEN-FILES",
+			"type": "dev.SuiteImpact",
+			"method": "dependents",
+			"find": "_via.clear();",
+			"replace": "",
+			"note": "a graph read for one file keeps its reach into the next, so the census, which shares one graph across every arm, widens a later selection and hides the misses it exists to find"
 		}
 	]
 }
