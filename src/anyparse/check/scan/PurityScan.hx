@@ -96,6 +96,19 @@ final class PurityScan {
 	}
 
 	/**
+	 * Whether `node` is pure AND built from the safe skeleton alone — literals, identifiers,
+	 * grouping and the pure operators: no field or index read, no call, however transparent. A
+	 * caller that DROPS the expression asks this rather than `isPure`, because the field-read
+	 * verdict is optimistic about an unresolved receiver and a dropped getter call is a lost effect.
+	 * A bare identifier is still asked of `readsGetterUnqualified`.
+	 */
+	public static function isPlainValue(node: QueryNode, ctx: PurityCtx): Bool {
+		return node.kind == ctx.identKind
+			? !readsGetterUnqualified(node, ctx)
+			: ctx.safeKinds.contains(node.kind) && node.children.foreach(c -> isPlainValue(c, ctx));
+	}
+
+	/**
 	 * Whether a `callKind` node's callee is a referentially transparent stdlib function — the one
 	 * table `StdlibPurity` holds, so this scan and the deletion predicates
 	 * (`TypeResolver.isDeletionPure`) can never disagree about which `Math` / `Std` / `StringTools` /

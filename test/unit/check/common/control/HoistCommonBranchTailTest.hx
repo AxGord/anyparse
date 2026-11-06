@@ -74,8 +74,10 @@ class HoistCommonBranchTailTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
-	public function testIdenticalBranchesAreReportOnly(): Void {
-		final src: String = 'class C { function f(c:Bool) { if (c) { t(); } else { t(); } } }';
+	@:pin('control')
+	@:killer('M-HCBT-PURE-CONDITION')
+	public function testImpureConditionIdenticalBranchesAreReportOnly(): Void {
+		final src: String = 'class C { function f(c:Bool) { if (g(c)) { t(); } else { t(); } } }';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals('every branch of this if is the same — the condition chooses nothing, keep one copy', vs[0].message);
@@ -260,10 +262,10 @@ class HoistCommonBranchTailTest extends Test {
 	@:killer('M-HCBT-REPORT-ONLY-OUTER')
 	public function testReportOnlyOuterDoesNotHoldBackItsInnerChain(): Void {
 		Assert.equals(
-			'class C { function f(c:Bool, d:Bool) { if (c) { if (d) { x(); } else { y(); }\nt(); } else { if (d) { x(); } else { y(); }\n'
-			+ 't(); } } }',
+			'class C { function f(c:Bool, d:Bool) { if (g(c)) { if (d) { x(); } else { y(); }\n'
+			+ 't(); } else { if (d) { x(); } else { y(); }\nt(); } } }',
 			fixed(
-				'class C { function f(c:Bool, d:Bool) { if (c) { if (d) { x(); t(); } else { y(); t(); } } else { if (d) { x(); t(); } '
+				'class C { function f(c:Bool, d:Bool) { if (g(c)) { if (d) { x(); t(); } else { y(); t(); } } else { if (d) { x(); t(); } '
 				+ 'else { y(); t(); } } } }'
 			)
 		);
@@ -309,6 +311,87 @@ class HoistCommonBranchTailTest extends Test {
 			+ 'function g(c:Bool) { if (c) { a(); } else { b(); }\nt(); }\n}',
 			fixed(src)
 		);
+	}
+
+	public function testIdenticalBranchesWithPlainConditionKeepOneCopy(): Void {
+		Assert.equals(
+			'class C { function f(j:Int) { { a(); b(); } } }',
+			fixed('class C { function f(j:Int) { if (j == 0) { a(); b(); } else { a(); b(); } } }')
+		);
+		Assert.equals(
+			'class C { function f(j:Int) { t(); } }', fixed('class C { function f(j:Int) { if (j == 0) { t(); } else { t(); } } }')
+		);
+		Assert.equals('class C { function f(j:Int) { t(); } }', fixed('class C { function f(j:Int) { if (j == 0) t(); else t(); } }'));
+	}
+
+	public function testElseIfChainOfPlainConditionsKeepsOneCopy(): Void {
+		Assert.equals(
+			'class C { function f(j:Int, c:Bool) { t(); } }',
+			fixed('class C { function f(j:Int, c:Bool) { if (j == 0) t(); else if (j + 2 < 3 && !c) t(); else t(); } }')
+		);
+		Assert.equals(0, edits('class C { function f(j:Int, c:Bool) { if (j == 0) t(); else if (g(j)) t(); else t(); } }').length);
+	}
+
+	@:pin('control')
+	@:killer('M-PURITY-PLAIN-VALUE-KINDS')
+	public function testFieldOrIndexReadConditionIsReportOnly(): Void {
+		for (cond in ['o.x > 0', 'xs[0] > 0', 'o.x.y']) {
+			final src: String = 'class C { function f(o:{x:Int}, xs:Array<Int>) { if ($cond) t(); else t(); } }';
+			Assert.equals(1, violations(src).length);
+			Assert.equals(0, edits(src).length);
+		}
+	}
+
+	@:pin('control')
+	@:killer('M-PURITY-PLAIN-VALUE-GETTER')
+	public function testGetterConditionIsReportOnly(): Void {
+		final src: String = 'class C { var p(get, never):Bool; function get_p():Bool return true; function f() { if (p) t(); else t(); } }';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	@:pin('control')
+	@:killer('M-HCBT-KEEP-BLOCK')
+	public function testBodyDeclaringALocalKeepsItsBlock(): Void {
+		Assert.equals(
+			'class C { function f(c:Bool) { { var v = 1; k(v); } } }',
+			fixed('class C { function f(c:Bool) { if (c) { var v = 1; k(v); } else { var v = 1; k(v); } } }')
+		);
+		Assert.equals(
+			'class C { function f(c:Bool) { { var v = 1; } } }',
+			fixed('class C { function f(c:Bool) { if (c) { var v = 1; } else { var v = 1; } } }')
+		);
+	}
+
+	public function testIdenticalBranchesThatExitAreNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(c:Bool) { if (c) { return; } else { return; } } }').length);
+	}
+
+	@:pin('control')
+	@:killer('M-HCBT-WHOLE-COMMENT')
+	public function testCommentInsideAnIdenticalChainIsReportOnly(): Void {
+		final src: String = 'class C { function f(j:Int) { if (j == 0) { // keep\n t(); } else { // keep\n t(); } } }';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	@:pin('control')
+	@:killer('M-HCBT-NESTED-ALL-OR-NOTHING')
+	public function testIdenticalOuterChainCollapsesBeforeItsInnerTailMoves(): Void {
+		final src: String = 'class C { function f(j:Int, d:Bool) { if (j == 0) { if (d) { x(); t(); } else { y(); t(); } } '
+			+ 'else { if (d) { x(); t(); } else { y(); t(); } } } }';
+		Assert.equals('class C { function f(j:Int, d:Bool) { if (d) { x(); t(); } else { y(); t(); } } }', fixed(src));
+		Assert.equals('class C { function f(j:Int, d:Bool) { if (d) { x(); } else { y(); }\nt(); } }', fixed(fixed(src)));
+	}
+
+	@:pin('control')
+	@:killer('M-HCBT-WHOLE-FIRST')
+	public function testImpureChainWithIdenticalDeclaringBodiesIsReportedWhole(): Void {
+		final src: String = 'class C { function f() { if (g()) { var v = 1; t(); } else { var v = 1; t(); } } }';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('every branch of this if is the same — the condition chooses nothing, keep one copy', vs[0].message);
+		Assert.equals(0, edits(src).length);
 	}
 
 	private static function violations(src: String): Array<Violation> {

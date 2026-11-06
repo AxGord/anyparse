@@ -1150,6 +1150,22 @@
 			"find": "prefixed || ",
 			"replace": "",
 			"note": "an abstract led by a guarded `enum` keyword reads as a plain abstract, so a move takes its values away from a file that read them through a module statement"
+		},
+		{
+			"name": "M-PURITY-PLAIN-VALUE-KINDS",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "isPlainValue",
+			"find": "ctx.safeKinds.contains(node.kind) && ",
+			"replace": "",
+			"note": "a field read, an index read or a call passes as a plain value because only its children are checked, so a condition that runs a getter is dropped"
+		},
+		{
+			"name": "M-PURITY-PLAIN-VALUE-GETTER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "isPlainValue",
+			"find": "? !readsGetterUnqualified(node, ctx)",
+			"replace": "? true",
+			"note": "a bare identifier naming a property of the enclosing type whose getter runs code passes as a plain value, so a condition that reads it is dropped"
 		}
 	]
 }

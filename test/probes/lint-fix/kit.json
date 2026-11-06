@@ -939,6 +939,37 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "H1",
+			"note": "hoist-common-branch-tail: an identical-branch chain with plain conditions collapses to one copy (b, c, d); an impure condition with a declaring body (a) and a chain without a final else (e) are refused",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"hoist-common-branch-tail",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function g():Bool {\n\t\treturn true;\n\t}\n\n\tstatic function a(c:Bool):Void {\n\t\tif (g()) {\n\t\t\tvar v = 1;\n\t\t\tp('a$v');\n\t\t} else {\n\t\t\tvar v = 1;\n\t\t\tp('a$v');\n\t\t}\n\t}\n\n\tstatic function b(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tp('b');\n\t\t\tp('b2');\n\t\t} else {\n\t\t\tp('b');\n\t\t\tp('b2');\n\t\t}\n\t}\n\n\tstatic function c(j:Int):Void {\n\t\tif (j == 0) p('c');\n\t\telse if (j > 1 && !(j == 3)) p('c');\n\t\telse p('c');\n\t}\n\n\tstatic function d(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tvar v = j;\n\t\t\tp('d$v');\n\t\t} else {\n\t\t\tvar v = j;\n\t\t\tp('d$v');\n\t\t}\n\t}\n\n\tstatic function e(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tp('e');\n\t\t} else if (j == 1) {\n\t\t\tp('e');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (j in 0...2) {\n\t\t\ta(true);\n\t\t\tb(j);\n\t\t\tc(j);\n\t\t\td(j);\n\t\t\te(j);\n\t\t}\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "d30273109ba414a4",
+				"files": "509140ae76d2016a",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

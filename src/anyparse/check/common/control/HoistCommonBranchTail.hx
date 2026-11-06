@@ -1,7 +1,9 @@
 package anyparse.check.common.control;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.TailScan;
+import anyparse.query.IndexScope;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
@@ -33,11 +35,16 @@ import anyparse.query.TreePath;
  *    cannot be enumerated) is read in the tail: the same spelling would mean a different declaration.
  *  - NO CONDITIONAL COMPILATION anywhere in the `if`.
  *
+ * ## Identical branches
+ *
+ * `if (c) A else A` is flagged whatever `A` declares (the chain is replaced whole, so nothing is captured), and
+ * FIXED to one copy of `A` only when EVERY condition is a plain value (`PurityScan.isPlainValue`): dropping `c`
+ * is sound only when `c` is pure. The copy keeps its block when it holds several statements or declares a local.
+ *
  * ## Report-only
  *
- * `if (c) A else A` is flagged without an edit: dropping `c` is sound only when `c` is pure. An edit is also
- * refused when a branch other than the final `else` would be left empty (it would need an inverted
- * condition) or when a comment sits in a removed region.
+ * An impure identical-branch chain stays report-only; so does a tail move that would empty a branch other than
+ * the final `else` (it would need an inverted condition) or that has a comment in a removed region.
  */
 @:nullSafety(Strict)
 final class HoistCommonBranchTail extends RuleBase {
@@ -50,7 +57,7 @@ final class HoistCommonBranchTail extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			for (c in scan(tree, entry.source, seams)) violations.push({
+			for (c in scan(tree, entry.source, seams, null)) violations.push({
 				file: entry.file,
 				span: c.tailSpan,
 				rule: RULE_ID,
@@ -68,10 +75,15 @@ final class HoistCommonBranchTail extends RuleBase {
 	 */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 
+		if (violations.length == 0) return [];
+		final resolvedIndex: SymbolIndex = index ?? IndexScope.over([{ file: violations[0].file, source: source }], plugin);
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
 			final flagged: Array<String> = RunScan.spanKeys(violations);
+			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, resolvedIndex);
 			final applied: Array<Candidate> = [
-				for (c in scan(tree, source, seams)) if (c.edits.length != 0 && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) c
+				for (c in scan(
+					tree, source, seams, purity
+				)) if (c.edits.length != 0 && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) c
 			];
 			return [
 				for (c in applied) if (!applied.exists(o -> o.head != c.head && TreePath.covers(o.head, c.head.span))) for (e in c.edits) e
@@ -90,9 +102,9 @@ final class HoistCommonBranchTail extends RuleBase {
 	}
 
 	/** Every common-tail candidate in `tree`, in document order — the one walk `run` and `fix` share. */
-	private static function scan(tree: QueryNode, source: String, seams: TailSeams): Array<Candidate> {
+	private static function scan(tree: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>): Array<Candidate> {
 		final out: Array<Candidate> = [];
-		walk(tree, false, source, seams, out);
+		walk(tree, false, source, seams, purity, out);
 		return out;
 	}
 
@@ -101,25 +113,27 @@ final class HoistCommonBranchTail extends RuleBase {
 	 * if-expression and a brace-less body are reached through their head or not at all. A macro-reification
 	 * subtree is not walked: its statements may be spliced into a scope this walk never sees.
 	 */
-	private static function walk(node: QueryNode, inBlock: Bool, source: String, seams: TailSeams, out: Array<Candidate>): Void {
+	private static function walk(
+		node: QueryNode, inBlock: Bool, source: String, seams: TailSeams, purity: Null<PurityCtx>, out: Array<Candidate>
+	): Void {
 		if (seams.opaqueKinds.contains(node.kind)) return;
 		if (inBlock && seams.ifKinds.contains(node.kind)) {
-			final candidate: Null<Candidate> = tryChain(node, source, seams);
+			final candidate: Null<Candidate> = tryChain(node, source, seams, purity);
 			if (candidate != null) out.push(candidate);
 		}
 		final isBlock: Bool = seams.blockKinds.contains(node.kind);
-		for (c in node.children) walk(c, isBlock, source, seams, out);
+		for (c in node.children) walk(c, isBlock, source, seams, purity, out);
 	}
 
 	/** The candidate for the chain headed by `head`, or null when any gate refuses (see the class doc). */
-	private static function tryChain(head: QueryNode, source: String, seams: TailSeams): Null<Candidate> {
+	private static function tryChain(head: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>): Null<Candidate> {
 		final branches: Null<Array<QueryNode>> = BranchChain.branchesOf(head, seams.ifKinds);
 		if (branches == null) return null;
 		final headSpan: Null<Span> = head.span;
 		if (headSpan == null) return null;
 		if (TailScan.hasConditionalCompilation(source, headSpan.from, headSpan.to)) return null;
 		final lists: Array<Array<QueryNode>> = [for (b in branches) statementsOf(b, seams)];
-		final count: Int = admissibleLength(lists, source, seams);
+		final count: Int = identicalBranches(lists, source, seams) ? lists[0].length : admissibleLength(lists, source, seams);
 		if (count < 1) return null;
 		final firsts: Array<Span> = [];
 		final lasts: Array<Span> = [];
@@ -137,7 +151,9 @@ final class HoistCommonBranchTail extends RuleBase {
 			tailSpan: new Span(firsts[0].from, lasts[0].to),
 			count: count,
 			whole: whole,
-			edits: whole ? [] : fixEdits(branches, lists, firsts, lasts, count, source, seams.terminator)
+			edits: whole
+				? wholeEdits(head, branches, lists, source, seams, purity)
+				: fixEdits(branches, lists, firsts, lasts, count, source, seams.terminator)
 		};
 	}
 
@@ -226,6 +242,46 @@ final class HoistCommonBranchTail extends RuleBase {
 		if (terminator == null) return from;
 		final at: Int = SourceComments.skipForwardTrivia(source, from);
 		return source.substr(at, terminator.length) == terminator ? at + terminator.length : from;
+	}
+
+	/**
+	 * Whether the branches are the SAME statements end to end and none exits. The whole chain is replaced, so
+	 * unlike a moved tail a declaration or a read of a branch-local name needs no gate.
+	 */
+	private static function identicalBranches(lists: Array<Array<QueryNode>>, source: String, seams: TailSeams): Bool {
+		final n: Int = lists[0].length;
+		return n != 0
+			&& lists.foreach(l -> l.length == n)
+			&& commonSuffix(lists, source) == n
+			&& !lists[0].exists(s -> seams.support.isTerminal(s));
+	}
+
+	/**
+	 * The edit that replaces an identical-branch chain with one copy of its body, or none when a condition is not a
+	 * plain value, a comment sits inside the chain, or no purity context exists. The final branch is the source of the
+	 * copy: a brace-less one leaves its statement terminator in place, and a block holding one declaration-free
+	 * statement is written bare.
+	 */
+	private static function wholeEdits(
+		head: QueryNode, branches: Array<QueryNode>, lists: Array<Array<QueryNode>>, source: String, seams: TailSeams,
+		purity: Null<PurityCtx>
+	): Array<FixEdit> {
+		if (purity == null) return [];
+		final headSpan: Null<Span> = head.span;
+		final lastIndex: Int = branches.length - 1;
+		final lastBranch: Null<Span> = branches[lastIndex].span;
+		final body: Array<QueryNode> = lists[lastIndex];
+		final first: Null<Span> = body[0].span;
+		final last: Null<Span> = body[body.length - 1].span;
+		if (headSpan == null || lastBranch == null || first == null || last == null) return [];
+		if (!BranchChain.linksFrom(head, seams.ifKinds).foreach(link -> PurityScan.isPlainValue(link.children[0], purity))) return [];
+		if (CheckScan.hasCommentMarker(source, headSpan.from, lastBranch.to)) return [];
+		final keepBlock: Bool = seams.blockKinds.contains(branches[lastIndex].kind)
+			&& (body.length != 1 || TailScan.localDeclNames(body, seams).length != 0 || TailScan.hasOpaqueDecl(body, seams));
+		final copy: Span = keepBlock ? lastBranch : new Span(first.from, last.to);
+		return [
+			{ span: new Span(headSpan.from, lastBranch.to), text: source.substring(copy.from, copy.to) }
+		];
 	}
 
 }

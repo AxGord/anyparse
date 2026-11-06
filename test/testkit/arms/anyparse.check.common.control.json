@@ -965,6 +965,38 @@
 			"find": " && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')",
 			"replace": "",
 			"note": "fix rewrites every chain scan finds, not only the findings it was handed, so a chain inside a CHECKSTYLE:OFF region is rewritten as well"
+		},
+		{
+			"name": "M-HCBT-PURE-CONDITION",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "wholeEdits",
+			"find": "PurityScan.isPlainValue(link.children[0], purity)",
+			"replace": "true",
+			"note": "a chain whose condition is a call is collapsed to one copy of its body, so the call that decided nothing visible but did run is dropped"
+		},
+		{
+			"name": "M-HCBT-KEEP-BLOCK",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "wholeEdits",
+			"find": "body.length != 1 || TailScan.localDeclNames(body, seams).length != 0 || TailScan.hasOpaqueDecl(body, seams)",
+			"replace": "false",
+			"note": "the single copy of a body that declares a local is written without its block, so the local leaves its scope and can capture a later name of the enclosing block"
+		},
+		{
+			"name": "M-HCBT-WHOLE-COMMENT",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "wholeEdits",
+			"find": "CheckScan.hasCommentMarker(source, headSpan.from, lastBranch.to)",
+			"replace": "false",
+			"note": "a comment inside a chain collapsed to one copy of its body is deleted with the other branches, so prose that explained the chain vanishes"
+		},
+		{
+			"name": "M-HCBT-WHOLE-FIRST",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "tryChain",
+			"find": "identicalBranches(lists, source, seams) ? lists[0].length : admissibleLength(lists, source, seams)",
+			"replace": "admissibleLength(lists, source, seams)",
+			"note": "identical branches that declare a local go through the tail gates, so the chain is reported as a moved tail and the shared statements are hoisted out of it instead of the chain being reported whole"
 		}
 	]
 }
