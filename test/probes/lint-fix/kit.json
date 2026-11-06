@@ -1153,6 +1153,34 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "R1",
+			"note": "a safe fold writes a null-guard ternary that a report-only rule flags, at the rule's default severity and with no project config: the run names the finding it wrote and exits 3",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\n\tpublic static function pick(a:Null<Int>, b:Int):Int {\n\t\tif (a != null) return a;\n\t\treturn b;\n\t}\n\n\tstatic function main() {}\n\n}\n"
+			},
+			"expect": {
+				"exit": 3,
+				"out": "e3b0c44298fc1c14",
+				"err": "a286a9b0677a6f5f",
+				"files": "90fc96979480c2c1",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

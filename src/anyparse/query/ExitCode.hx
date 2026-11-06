@@ -12,4 +12,5 @@ enum abstract ExitCode(Int) to Int {
 	final EXIT_OK = 0;
 	final EXIT_USAGE = 2;
 	final EXIT_RUNTIME = 1;
+	final EXIT_RESIDUE = 3;
 }

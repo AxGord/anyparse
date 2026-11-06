@@ -484,8 +484,8 @@
 			"name": "M-SAFE-REVERT-EXIT-OK",
 			"type": "anyparse.query.cli.command.LintFixDriver",
 			"method": "applyLintFixes",
-			"find": "return safePass.reverted || followUp.reverted ? EXIT_RUNTIME : EXIT_OK;",
-			"replace": "return EXIT_OK;",
+			"find": "safePass.reverted || followUp.reverted",
+			"replace": "false",
 			"note": "a run that had to revert a safe fix exits as a success"
 		},
 		{
@@ -809,6 +809,45 @@
 			"method": "leadingQueryCount",
 			"force": "0",
 			"note": "an annotation ending in a registered extension is read as a file naming that grammar"
+		},
+		{
+			"name": "M-FIX-RESIDUE-IGNORED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "reportResidue",
+			"force": "EXIT_OK",
+			"note": "a finding the run wrote on a changed line is never named and the run exits clean"
+		},
+		{
+			"name": "M-FIX-RESIDUE-WHOLE-FILE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "residueOnChangedLines",
+			"find": ".filter(onChangedLine);",
+			"replace": ";",
+			"note": "every finding the run added to a rewritten file counts, so one created on a line it never touched is named as its own"
+		},
+		{
+			"name": "M-FIX-RESIDUE-INFO",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "residueOnChangedLines",
+			"find": "LintBaseline.added(ordered",
+			"replace": "LintBaseline.added(ordered.filter(v -> v.severity.label() != 'info')",
+			"note": "an advisory finding on a changed line is filtered out, so the pair at its default severity is never named"
+		},
+		{
+			"name": "M-FIX-RESIDUE-CARRIED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "residueOnChangedLines",
+			"find": "LintBaseline.added(ordered, carried, '', identities)",
+			"replace": "ordered",
+			"note": "a finding the original text already held and the rewrite merely moved is named as the run's own"
+		},
+		{
+			"name": "M-FIX-RESIDUE-ORDER",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "residueOnChangedLines",
+			"find": "live.filter(v -> !onChangedLine(v)).concat(live.filter(onChangedLine))",
+			"replace": "live",
+			"note": "the baseline is spent in report order, so a finding the file held below the one the run wrote takes the written one's place and the run goes unreported"
 		}
 	]
 }

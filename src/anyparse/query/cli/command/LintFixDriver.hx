@@ -13,11 +13,16 @@ import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.EditJournal;
 import anyparse.query.ExitCode.*;
+import anyparse.query.LineDiff;
+import anyparse.query.LintDiff;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
 import anyparse.query.cli.command.LintCommand.LintRange;
 import anyparse.query.cli.command.LintFixVerify.AssistedOutcome;
 import anyparse.query.cli.command.LintFixVerify.RiskyFixOutcome;
+import anyparse.query.format.LintFormat;
+import anyparse.query.format.Text;
+import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -278,7 +283,11 @@ final class LintFixDriver {
 			CliIo.stderr('apq lint --fix: risky-fix DECLINED ${d.file} (${d.rule}): ${d.reason} — ${d.edits} edit(s) left report-only\n');
 		}
 		// A revert is a fixer defect even when the run recovered from it, so the run still fails — after doing everything else.
-		return safePass.reverted || followUp.reverted ? EXIT_RUNTIME : EXIT_OK;
+		return safePass.reverted || followUp.reverted
+			? EXIT_RUNTIME
+			: PhaseTimings.measure(
+				'fix residue', () -> reportResidue(files, originalOf, checks, split.activeScope, cached, resolveConfig, applyEnablement)
+			);
 	}
 
 	/**
@@ -1435,6 +1444,94 @@ final class LintFixDriver {
 		final split: Null<Map<String, Int>> = outcome.partialKept;
 		if (split != null) for (edits in split) kept += edits;
 		return kept;
+	}
+
+	/**
+	 * The findings a fix run left on lines it changed, per file with that file's text. A safe fix can write the very
+	 * shape another rule reports (a risky rule that stays report-only without an oracle), and a finding on a line the run
+	 * wrote is the run's own residue; a finding on a line it left alone is pre-existing and stays in the report.
+	 * A finding the original text already held (`LintBaseline.added`) is carried, not new, whatever line it moved to; the baseline is
+	 * spent on the unchanged lines first, so a same-keyed finding the run wrote is the one left over, not the one it merely sat beside.
+	 * Per-file rules (`narrow`) lint the changed files only; every other rule reads the whole set, as its verdict on a file
+	 * depends on the rest.
+	 */
+	private static function residueOnChangedLines(
+		files: Array<{ file: String, source: String }>, originalOf: Map<String, String>, checks: Array<Check>, narrow: Array<Check>,
+		cached: CachingGrammarPlugin, resolveConfig: (String) -> LintConfig, applyEnablement: Bool
+	): Array<{ file: String, source: String, found: Array<Violation> }> {
+		final changed: Map<String, Map<Int, Bool>> = [];
+		final originals: Array<{ file: String, source: String }> = [];
+		final indexes: Map<String, LineIndex> = [];
+		for (entry in files) {
+			final before: Null<String> = originalOf[entry.file];
+			if (before != null) originals.push({ file: entry.file, source: before });
+			if (before == entry.source) continue;
+			changed[entry.file] = changedLines(before, entry.source);
+			indexes[entry.file] = new LineIndex(entry.source);
+		}
+		final residue: Array<{ file: String, source: String, found: Array<Violation> }> = [];
+		if (!changed.keys().hasNext()) return residue;
+		final onChangedLine: (Violation) -> Bool = v -> {
+			final lines: Null<Map<Int, Bool>> = changed[v.file];
+			final index: Null<LineIndex> = indexes[v.file];
+			final span: Null<Span> = v.span;
+			return lines != null && index != null && span != null && lines.exists(index.lineColAt(span.from).line);
+		};
+		final lint: (
+			Array<{ file: String, source: String }>, Array<Check>
+		) -> Array<Violation> = (set, rules) -> Linter.run(set, cached, rules, resolveConfig, applyEnablement);
+		final wide: Array<Check> = checks.filter(c -> !narrow.contains(c));
+		final identities: LintMessageIdentities = Linter.messageIdentities();
+		final then: Array<Violation> = lintChangedFiles(lint, originals, narrow, wide, checks, changed);
+		final carried: LintDiffTally = LintDiff.tally(LintDiff.parseReport(LintFormat.json(then, originalOf)), '', identities);
+		final live: Array<Violation> = lintChangedFiles(lint, files, narrow, wide, checks, changed);
+		final ordered: Array<Violation> = live.filter(v -> !onChangedLine(v)).concat(live.filter(onChangedLine));
+		final now: Array<Violation> = LintBaseline.added(ordered, carried, '', identities).filter(onChangedLine);
+		for (entry in files) {
+			final found: Array<Violation> = now.filter(v -> v.file == entry.file);
+			if (found.length > 0) residue.push({ file: entry.file, source: entry.source, found: found });
+		}
+		return residue;
+	}
+
+	/** The 1-based lines of `now` that differ from `before`: every line when the file is new or past the diff's budget. */
+	private static function changedLines(before: Null<String>, now: String): Map<Int, Bool> {
+		final nowLines: Array<String> = now.split('\n');
+		final edits: Null<LineEdits> = before == null ? null : LineDiff.edits(before.split('\n'), nowLines, RESIDUE_MAX_EDITS);
+		final lines: Map<Int, Bool> = [];
+		for (i in (edits == null ? [for (n in 0...nowLines.length) n] : edits.inserted)) lines[i + 1] = true;
+		return lines;
+	}
+
+	/** The line-diff budget for finding what a run changed in a file; a file past it counts as wholly changed. */
+	private static inline final RESIDUE_MAX_EDITS: Int = 2000;
+
+	/**
+	 * Names the findings a fix run wrote itself — on a line it changed — and answers `EXIT_RESIDUE` when there are any, else
+	 * `EXIT_OK`: a finding the run produced is a defect of the fix, not of the tree, and the exit says so apart from a revert.
+	 */
+	private static function reportResidue(
+		files: Array<{ file: String, source: String }>, originalOf: Map<String, String>, checks: Array<Check>, narrow: Array<Check>,
+		cached: CachingGrammarPlugin, resolveConfig: (String) -> LintConfig, applyEnablement: Bool
+	): Int {
+		final residue: Array<{ file: String, source: String, found: Array<Violation> }> = residueOnChangedLines(
+			files, originalOf, checks, narrow, cached, resolveConfig, applyEnablement
+		);
+		final count: Int = residue.fold((r, n) -> n + r.found.length, 0);
+		if (count == 0) return EXIT_OK;
+		CliIo.stderr('apq lint --fix: $count finding(s) on lines this run changed\n');
+		for (r in residue) CliIo.stderr(Text.renderViolations(r.file, r.source, r.found, true));
+		return EXIT_RESIDUE;
+	}
+
+	/** The findings `lint` reports in the changed files of `set`: per-file rules over those files alone, the rest over the whole set. */
+	private static function lintChangedFiles(
+		lint: (Array<{ file: String, source: String }>, Array<Check>) -> Array<Violation>, set: Array<{ file: String, source: String }>,
+		narrow: Array<Check>, wide: Array<Check>, checks: Array<Check>, changed: Map<String, Map<Int, Bool>>
+	): Array<Violation> {
+		final found: Array<Violation> = lint(set.filter(entry -> changed.exists(entry.file)), narrow);
+		for (v in lint(set, wide)) found.push(v);
+		return Linter.withoutSuperseded(found, checks).filter(v -> changed.exists(v.file));
 	}
 
 }
