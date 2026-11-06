@@ -27,6 +27,7 @@ import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
 import anyparse.grammar.haxe.format.HxFormatCurlyLineEndPolicy;
 import anyparse.grammar.haxe.format.HxFormatEmptyLinesSection;
+import anyparse.grammar.haxe.format.HxFormatEnumAbstractEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatEnumEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatImportAndUsingConfig;
 import anyparse.grammar.haxe.format.HxFormatIndentationSection;
@@ -907,7 +908,7 @@ final class HaxeFormatConfigLoader {
 
 	/** `enumAbstractEmptyLines`' between-member keys into the knobs an abstract body reads while `_inEnumAbstract` is set. */
 	private static function applyEnumAbstractEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
-		final conf: Null<HxFormatInterfaceEmptyLinesConfig> = section.enumAbstractEmptyLines;
+		final conf: Null<HxFormatEnumAbstractEmptyLinesConfig> = section.enumAbstractEmptyLines;
 		if (conf == null) return;
 		if (conf.existingBetweenFields != null)
 			opt.enumAbstractExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(conf.existingBetweenFields);
@@ -959,7 +960,8 @@ final class HaxeFormatConfigLoader {
 	/**
 	 * Every type kind's `beginType` / `endType` from its own `<kind>EmptyLines` section into its own knob pair. An absent
 	 * key leaves the knob `null`, so `afterLeftCurly` / `beforeRightCurly` decide from the source; a stated count, `0`
-	 * included, is exact.
+	 * included, is exact. The `…TypeIfDocComments` keys of an enum, `enum abstract` and typedef section take their own
+	 * knobs, `null` while absent.
 	 */
 	private static function applyTypeBodyEdges(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
 		opt.beginType = section.classEmptyLines?.beginType ?? opt.beginType;
@@ -978,6 +980,17 @@ final class HaxeFormatConfigLoader {
 		opt.enumAbstractEndType = section.enumAbstractEmptyLines?.endType ?? opt.enumAbstractEndType;
 		opt.typedefBeginType = section.typedefEmptyLines?.beginType ?? opt.typedefBeginType;
 		opt.typedefEndType = section.typedefEmptyLines?.endType ?? opt.typedefEndType;
+		applyTypeBodyDocEdges(section, opt);
+	}
+
+	/** The `…TypeIfDocComments` keys of the enum, `enum abstract` and typedef sections into their own knobs; absent leaves `null`. */
+	private static function applyTypeBodyDocEdges(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		opt.enumBeginTypeIfDocComments = section.enumEmptyLines?.beginTypeIfDocComments ?? opt.enumBeginTypeIfDocComments;
+		opt.enumEndTypeIfDocComments = section.enumEmptyLines?.endTypeIfDocComments ?? opt.enumEndTypeIfDocComments;
+		opt.enumAbstractBeginTypeIfDocComments = section.enumAbstractEmptyLines?.beginTypeIfDocComments ?? opt.enumAbstractBeginTypeIfDocComments;
+		opt.enumAbstractEndTypeIfDocComments = section.enumAbstractEmptyLines?.endTypeIfDocComments ?? opt.enumAbstractEndTypeIfDocComments;
+		opt.typedefBeginTypeIfDocComments = section.typedefEmptyLines?.beginTypeIfDocComments ?? opt.typedefBeginTypeIfDocComments;
+		opt.typedefEndTypeIfDocComments = section.typedefEmptyLines?.endTypeIfDocComments ?? opt.typedefEndTypeIfDocComments;
 	}
 
 	private static function applyImportAndUsingEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {

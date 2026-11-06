@@ -47,6 +47,7 @@ typedef HxAbstractDecl = {
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps) var clauses: Array<HxAbstractClause>;
 	@:fmt(leftCurly, emptyCurlyBreak,
 		beginEndType('abstractBeginType', 'abstractEndType', '_inEnumAbstract', 'enumAbstractBeginType', 'enumAbstractEndType'),
+		beginEndTypeIfDoc('', '', '_inEnumAbstract', 'enumAbstractBeginTypeIfDocComments', 'enumAbstractEndTypeIfDocComments'),
 		afterFieldsWithDocComments,
 		existingBetweenFields('abstractExistingBetweenFields', '_inEnumAbstract', 'enumAbstractExistingBetweenFields'),
 		beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading,

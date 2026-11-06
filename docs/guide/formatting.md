@@ -76,3 +76,11 @@ in the measure). A trailing comment counts as width where the branch stands on i
 with its comment leads. A two-statement or outermost-`&&` branch leads whether or not a comment holds it. Applies where `caseBody`
 or `expressionCase` is `fitLine`; under `same`, `next` and `keep` the key moves nothing. A label too wide for one row leads, since
 its flat width does not fit; a label wrapped by a rule with a flat width that fits does not lead, and only its own body moves.
+
+## Blank lines at the edges of a documented type: `emptyLines.<kind>.beginTypeIfDocComments`
+
+`beginTypeIfDocComments` / `endTypeIfDocComments` in `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines`:
+the blank lines after `{` and before `}` of a body that holds a doc comment (`/**`) in front of a member or before its
+`}`. They replace that kind's `beginType` / `endType` for such a body only, so a packed enum without docs stays packed
+while a documented one opens with a blank line. Left out, `beginType` / `endType` apply as before. Values and edge cases:
+`docs/haxe-format-config.md`.

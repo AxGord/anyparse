@@ -27,6 +27,9 @@ package anyparse.grammar.haxe.format;
  *    the fall-through (no forced count) source-blank pass-through.
  *  - `endType` — Int count, blank lines after the last field and before
  *    the closing `}`. Routes to the dedicated `opt.typedefEndType` knob.
+ *  - `beginTypeIfDocComments` / `endTypeIfDocComments` — Int counts that
+ *    replace `beginType` / `endType` for a body holding a doc comment.
+ *    Route to `opt.typedefBeginTypeIfDocComments` / `opt.typedefEndTypeIfDocComments`.
  */
 @:peg typedef HxFormatTypedefEmptyLinesConfig = {
 
@@ -37,4 +40,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var beginType: Int;
 
 	@:optional var endType: Int;
+
+	@:optional var beginTypeIfDocComments: Int;
+
+	@:optional var endTypeIfDocComments: Int;
 };

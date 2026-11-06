@@ -43,7 +43,7 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var enumEmptyLines: HxFormatEnumEmptyLinesConfig;
 
-	@:optional var enumAbstractEmptyLines: HxFormatInterfaceEmptyLinesConfig;
+	@:optional var enumAbstractEmptyLines: HxFormatEnumAbstractEmptyLinesConfig;
 
 	@:optional var macroClassEmptyLines: HxFormatClassEmptyLinesConfig;
 

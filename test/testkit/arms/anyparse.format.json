@@ -453,6 +453,44 @@
 			"find": "case Doc.BreakCommit(_, fl, _):\n\t\t\treturn tailBodyGroup(fl);",
 			"replace": "case Doc.BreakCommit(_, _, _):\n\t\t\treturn null;",
 			"note": "a nested fit-line host whose body offers a literal's break is no longer read as a chain link, so its staircase glues the headers onto one line for a literal that never breaks"
+		},
+		{
+			"name": "M-DOC-EDGE-IFDOC-IGNORED",
+			"type": "anyparse.format.MemberGap",
+			"method": "docEdge",
+			"force": "stated",
+			"note": "a type body holding a doc comment keeps its beginType / endType count, so `<kind>EmptyLines.beginTypeIfDocComments` does nothing"
+		},
+		{
+			"name": "M-DOC-EDGE-ABSENT-KEY-NULLS",
+			"type": "anyparse.format.MemberGap",
+			"method": "docEdge",
+			"find": "return ifDoc != null && bodyHasDoc(members, trailing) ? ifDoc : stated;",
+			"replace": "return bodyHasDoc(members, trailing) ? ifDoc : stated;",
+			"note": "an absent `…TypeIfDocComments` key reads as a stated null for a body holding a doc comment, so the kind`s beginType / endType stops applying there"
+		},
+		{
+			"name": "M-BODY-HAS-DOC-ALWAYS",
+			"type": "anyparse.format.MemberGap",
+			"method": "bodyHasDoc",
+			"force": "true",
+			"note": "every type body reads as holding a doc comment, so a packed enum without one takes the `…TypeIfDocComments` edges too"
+		},
+		{
+			"name": "M-BODY-HAS-DOC-TRAIL-BLIND",
+			"type": "anyparse.format.MemberGap",
+			"method": "bodyHasDoc",
+			"find": "(docLed(trailing) || members.exists(",
+			"replace": "(members.exists(",
+			"note": "a doc comment among the comments before `}` no longer counts, though the fork reads it as a direct child of the body"
+		},
+		{
+			"name": "M-BODY-HAS-DOC-EMPTY-BODY",
+			"type": "anyparse.format.MemberGap",
+			"method": "bodyHasDoc",
+			"find": "return members.length > 0 && (",
+			"replace": "return (",
+			"note": "a body holding comments alone reads as documented, though it has no member a doc comment could document - the fork's comments-only body takes no edge blanks at all"
 		}
 	]
 }

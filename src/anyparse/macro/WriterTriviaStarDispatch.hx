@@ -312,7 +312,7 @@ final class WriterTriviaStarDispatch {
 		// inside `triviaBlockStarExpr`.
 		final emptyCurlyKnob: Null<String> = fmtFirstStringArg(starNode, 'emptyCurlyBreak');
 		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
-		final beginEndKnobs: Array<Expr> = starKnobReads(starNode, 'beginEndType', BEGIN_END_KNOBS) ?? [];
+		final beginEndKnobs: Array<Expr> = docEdgeReads(starNode, starKnobReads(starNode, 'beginEndType') ?? []);
 		final beginTypeAccess: Null<Expr> = beginEndKnobs[0];
 		final endTypeAccess: Null<Expr> = beginEndKnobs[1];
 		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
@@ -733,7 +733,8 @@ final class WriterTriviaStarDispatch {
 	 * The one answer to "which option does a type body's `@:fmt` knob read": `meta` names `width` knobs of the body's own;
 	 * a flag and `width` more name the knobs it reads while `opt.<flag>` is set — how one grammar type written in two roles
 	 * (`abstract` and `enum abstract`, `class` and `extern class`) keeps two scopes. The grammar always names them: a
-	 * default here would be one grammar's option name in the core macro.
+	 * default here would be one grammar's option name in the core macro. An empty name reads `null`: the role has no
+	 * such knob.
 	 */
 	private static function knobReads(meta: String, knobs: Null<Array<String>>, width: Int): Array<Expr> {
 		if (knobs == null || (knobs.length != width && knobs.length != 2 * width + 1))
@@ -741,21 +742,46 @@ final class WriterTriviaStarDispatch {
 				'@:fmt($meta) names its $width knob(s), optionally followed by a flag and the $width it switches to, got $knobs',
 				Context.currentPos()
 			);
-		final own: Array<Expr> = [for (i in 0...width) macro $p{['opt', knobs[i]]}];
+		final own: Array<Expr> = [for (i in 0...width) knobRead(knobs[i])];
 		if (knobs.length == width) return own;
 		final flag: Expr = macro $p{['opt', knobs[width]]};
 		return [
 			for (i in 0...width) {
 				final unswitched: Expr = own[i];
-				final switched: Expr = macro $p{['opt', knobs[width + 1 + i]]};
+				final switched: Expr = knobRead(knobs[width + 1 + i]);
 				macro ($flag ? $switched : $unswitched);
 			}
 		];
 	}
 
 	/** `knobReads` over the names a Star's `@:fmt(<meta>(...))` gives; null when the Star does not carry the flag. */
-	private static function starKnobReads(star: ShapeNode, meta: String, width: Int): Null<Array<Expr>> {
+	private static function starKnobReads(star: ShapeNode, meta: String, width: Int = BEGIN_END_KNOBS): Null<Array<Expr>> {
 		return star.fmtHasFlag(meta) ? knobReads(meta, star.fmtReadStringArgs(meta), width) : null;
+	}
+
+	/** One knob of `knobReads`: `opt.<name>`, or `null` for an empty name. */
+	private static function knobRead(name: String): Expr {
+		return name == '' ? macro null : macro $p{['opt', name]};
+	}
+
+	/**
+	 * The `beginEndType` knob reads `edges` of a type body, each passed through `MemberGap.docEdge` when the Star also
+	 * carries `@:fmt(beginEndTypeIfDoc(...))`, which names the counts a body holding a doc comment takes instead.
+	 */
+	private static function docEdgeReads(star: ShapeNode, edges: Array<Expr>): Array<Expr> {
+		final ifDoc: Null<Array<Expr>> = starKnobReads(star, 'beginEndTypeIfDoc');
+		if (ifDoc == null) return edges;
+		if (edges.length != BEGIN_END_KNOBS)
+			Context.fatalError(
+				'@:fmt(beginEndTypeIfDoc) replaces the counts of @:fmt(beginEndType), which this Star lacks', Context.currentPos()
+			);
+		return [
+			for (i in 0...BEGIN_END_KNOBS) {
+				final stated: Expr = edges[i];
+				final docCount: Expr = ifDoc[i];
+				macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC);
+			}
+		];
 	}
 
 }

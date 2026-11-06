@@ -98,7 +98,7 @@ accessBrackets, afterFieldsWithDocComments, afterFileHeaderCommentBlanks, allman
 anonFuncParens, anonTypeBracesClose, anonTypeBracesOpen, arrayMatrixWrap, arrowBodyLineWrap,
 arrowBodyOpenPadSuppress, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
 atomOperand, atomOperandWhen(…), bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
-beforeNewlineSlotFirst, belowWrappedLabel, beginEndType[(…)], betweenMultilineCommentsBlanks,
+beforeNewlineSlotFirst, belowWrappedLabel, beginEndType[(…)], beginEndTypeIfDoc(…), betweenMultilineCommentsBlanks,
 blankBeforeFinalDocCommentInLeading, blankBeforeLineCommentLed, blankBeforeOrphanLineCommentTrail,
 blankLinesAfterCtor(…), blankLinesAfterCtorIf(…), blankLinesAfterCtorIfTailLeafNull(…),
 blankLinesAtHeadIfCtor(…), blankLinesBeforeCtorIfPrevNot(…), blankLinesBetweenSameCtorByLevel(…),

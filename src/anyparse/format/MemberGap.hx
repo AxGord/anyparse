@@ -26,6 +26,11 @@ enum abstract DocGapVerdict(Int) {
 
 }
 
+/** A type body member as the doc-comment rule reads it: the comments in front of it, in source order. */
+typedef LeadingCommented = {
+	var leadingComments: Array<String>;
+}
+
 /**
  * The blank-line policy a writer applies to the gap BETWEEN two adjacent members of a type body, as the runtime
  * predicates both sides read: the macro-generated writer splices calls to `docLed` / `docStrips` / `docVetoes` /
@@ -75,6 +80,26 @@ final class MemberGap {
 	 */
 	public static inline function bodyEdge(stated: Null<Int>, policy: KeepEmptyLinesPolicy, sourceBlank: Bool): Int {
 		return stated ?? (policy == Keep && sourceBlank ? 1 : 0);
+	}
+
+	/**
+	 * The `stated` count of a type body edge (`bodyEdge`'s first argument) once the body's doc comments are read:
+	 * `ifDoc`, the kind's `…TypeIfDocComments` count, replaces it when the body holds a doc comment (`bodyHasDoc`);
+	 * `null` there leaves `stated`, and the body is then not scanned.
+	 */
+	public static function docEdge<T:LeadingCommented>(
+		stated: Null<Int>, ifDoc: Null<Int>, members: Array<T>, trailing: Array<String>
+	): Null<Int> {
+		return ifDoc != null && bodyHasDoc(members, trailing) ? ifDoc : stated;
+	}
+
+	/**
+	 * Whether a type body holds a doc comment among its direct children: in front of one of its `members` or among the
+	 * `trailing` comments before its `}`. A body with no member holds comments only and has no member a doc documents,
+	 * so it answers false; a doc inside a member's own body or a conditional branch is not the body's.
+	 */
+	public static function bodyHasDoc<T:LeadingCommented>(members: Array<T>, trailing: Array<String>): Bool {
+		return members.length > 0 && (docLed(trailing) || members.exists(m -> docLed(m.leadingComments)));
 	}
 
 	/** Whether a member's leading comments carry a doc comment (`/**`), which is what the doc-comment rule keys on. */

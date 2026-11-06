@@ -1,10 +1,10 @@
 package anyparse.grammar.haxe.format;
 
 /**
- * Nested `emptyLines.interfaceEmptyLines`, `externClassEmptyLines` and `enumAbstractEmptyLines` sections of a
- * haxe-formatter `hxformat.json` config: a type body with no static or visibility subdivision (the fork's
- * `InterfaceFieldsEmptyLinesConfig` and `EnumAbstractFieldsEmptyLinesConfig`). The loader routes each section into its
- * own knobs, never the class ones.
+ * Nested `emptyLines.interfaceEmptyLines` and `externClassEmptyLines` sections of a haxe-formatter `hxformat.json`
+ * config: a type body with no static or visibility subdivision (the fork's `InterfaceFieldsEmptyLinesConfig`;
+ * `enumAbstractEmptyLines` adds its doc-comment edge keys in `HxFormatEnumAbstractEmptyLinesConfig`). The loader routes
+ * each section into its own knobs, never the class ones.
  */
 @:peg typedef HxFormatInterfaceEmptyLinesConfig = {
 

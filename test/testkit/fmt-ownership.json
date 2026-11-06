@@ -336,6 +336,7 @@
 		"beforeDocCommentEmptyLines",
 		"beforeDocCondLookThrough",
 		"beginEndType",
+		"beginEndTypeIfDoc",
 		"betweenMultilineCommentsBlanks",
 		"blankBeforeFinalDocCommentInLeading",
 		"blankBeforeOrphanLineCommentTrail",

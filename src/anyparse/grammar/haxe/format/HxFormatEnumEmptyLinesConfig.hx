@@ -23,6 +23,9 @@ package anyparse.grammar.haxe.format;
  *    constructor. Feeds the enum-only `opt.enumBeginType` knob.
  *  - `endType` — Int count, blank lines after the last constructor and
  *    before `}`. Feeds the enum-only `opt.enumEndType` knob.
+ *  - `beginTypeIfDocComments` / `endTypeIfDocComments` — Int counts that
+ *    replace `beginType` / `endType` for a body holding a doc comment.
+ *    Feed `opt.enumBeginTypeIfDocComments` / `opt.enumEndTypeIfDocComments`.
  */
 @:peg typedef HxFormatEnumEmptyLinesConfig = {
 
@@ -33,4 +36,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var beginType: Int;
 
 	@:optional var endType: Int;
+
+	@:optional var beginTypeIfDocComments: Int;
+
+	@:optional var endTypeIfDocComments: Int;
 };

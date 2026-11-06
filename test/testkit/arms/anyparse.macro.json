@@ -1199,7 +1199,7 @@
 			"name": "M-TYPEDEF-EDGE-SOURCE-ADDED",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepKeepCurlyOpenClose",
-			"find": "!(opt._inTypedefBody && opt.typedefBeginType != null)",
+			"find": "!(opt._inTypedefBody && $beginStated != null)",
 			"replace": "true",
 			"note": "a typedef body adds the kept source blank on top of a stated `typedefEmptyLines.beginType`, so a stated 0 keeps the blank"
 		},
@@ -1772,6 +1772,20 @@
 			"find": "final body: Expr = macro return '$value';",
 			"replace": "final body: Expr = macro return '$value'.indexOf('.') >= 0 ? '$value' : '$value' + '.0';",
 			"note": "a whole-number float gains a `.0` the compact writer and a native printer never write"
+		},
+		{
+			"name": "M-DOC-EDGE-READS-OFF",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "docEdgeReads",
+			"force": "edges",
+			"note": "a block-Star type body ignores its `@:fmt(beginEndTypeIfDoc(...))`, so an enum or enum abstract holding a doc comment keeps its beginType / endType edges"
+		},
+		{
+			"name": "M-TYPEDEF-DOC-EDGE-OFF",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "typedefEdgeExpr",
+			"force": "stated",
+			"note": "a typedef body holding a doc comment keeps `typedefEmptyLines.beginType` / `endType`, so its `…TypeIfDocComments` keys do nothing"
 		}
 	]
 }

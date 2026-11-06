@@ -470,6 +470,21 @@ final class HxModuleWriteOptions {
 	public var enumEndType: Null<Int> = null;
 	public var enumAbstractBeginType: Null<Int> = null;
 	public var enumAbstractEndType: Null<Int> = null;
+
+	/**
+	 * Blank lines between a type body's `{` and its first member (`…EndTypeIfDocComments`: between its last member and
+	 * `}`) when that body holds a doc comment (`MemberGap.bodyHasDoc`) — the fork's `<kind>EmptyLines.beginTypeIfDocComments`
+	 * / `endTypeIfDocComments`, for an enum, an `enum abstract` and a typedef body. `null` (the default) leaves the kind's
+	 * `…BeginType` / `…EndType` in charge; a count replaces it for a body with a doc comment, `0` included. Each enum pair
+	 * is named by its grammar field's `@:fmt(beginEndTypeIfDoc(...))`.
+	 */
+	public var enumBeginTypeIfDocComments: Null<Int> = null;
+
+	public var enumEndTypeIfDocComments: Null<Int> = null;
+	public var enumAbstractBeginTypeIfDocComments: Null<Int> = null;
+	public var enumAbstractEndTypeIfDocComments: Null<Int> = null;
+	public var typedefBeginTypeIfDocComments: Null<Int> = null;
+	public var typedefEndTypeIfDocComments: Null<Int> = null;
 	// ω-typedef-between-fields: dedicated typedef-RHS anon-body blank-line
 	// knobs (fork's `TypedefFieldsEmptyLinesConfig`), read only by the
 	// `@:sep`-Star force-multi branch under `_inTypedefBody`. Kept distinct

@@ -876,6 +876,14 @@
 			"find": "opt.existingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(classSection.existingBetweenFields);",
 			"replace": "{}",
 			"note": "classEmptyLines.existingBetweenFields is parsed and dropped, so a class body keeps its source blank lines"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-DOC-KEY-UNREAD",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyTypeBodyDocEdges",
+			"find": "opt.enumAbstractBeginTypeIfDocComments = section.enumAbstractEmptyLines?.beginTypeIfDocComments",
+			"replace": "opt.enumAbstractBeginTypeIfDocComments = null",
+			"note": "`enumAbstractEmptyLines.beginTypeIfDocComments` is dropped on load, so an enum abstract holding a doc comment gets no blank after its `{`"
 		}
 	]
 }

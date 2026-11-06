@@ -1679,10 +1679,12 @@ final class TriviaSepLowering {
 		// default `keepCurlyBlanks=false` → both pushes are `macro {}`.
 		// A typedef body whose `typedefBeginType` / `typedefEndType` is stated leaves that edge to
 		// `triviaSepTypedefBlankInserts`: a stated count is exact, so the source blank is not added on top.
+		final beginStated: Expr = typedefEdgeExpr(macro opt.typedefBeginType, macro opt.typedefBeginTypeIfDocComments);
+		final endStated: Expr = typedefEdgeExpr(macro opt.typedefEndType, macro opt.typedefEndTypeIfDocComments);
 		final keepCurlyBeginExpr: Expr = typedefBodyBlanks
 			? macro {
 				if (
-					!(opt._inTypedefBody && opt.typedefBeginType != null)
+					!(opt._inTypedefBody && $beginStated != null)
 					&& anyparse.format.MemberGap.bodyEdge(null, opt.afterLeftCurly, _arr.length > 0 && _arr[0].blankBefore) > 0
 				)
 					_inner.push(_dhl());
@@ -1691,7 +1693,7 @@ final class TriviaSepLowering {
 		final keepCurlyEndExpr: Expr = typedefBodyBlanks
 			? macro {
 				if (
-					!(opt._inTypedefBody && opt.typedefEndType != null)
+					!(opt._inTypedefBody && $endStated != null)
 					&& anyparse.format.MemberGap.bodyEdge(null, opt.beforeRightCurly, _trailBB && _arr.length > 0) > 0
 				)
 					_inner.push(_dhl());
@@ -1711,9 +1713,11 @@ final class TriviaSepLowering {
 	 * `triviaSepKeepCurlyExprs` so each builder stays under the complexity gate.
 	 */
 	private static function triviaSepTypedefBlankInserts(typedefBodyBlanks: Bool): WriterLowering.SepStarTypedefInserts {
+		final beginStated: Expr = typedefEdgeExpr(macro opt.typedefBeginType, macro opt.typedefBeginTypeIfDocComments);
+		final endStated: Expr = typedefEdgeExpr(macro opt.typedefEndType, macro opt.typedefEndTypeIfDocComments);
 		final typedefBeginExpr: Expr = typedefBodyBlanks
 			? macro {
-				final _tbn: Int = opt._inTypedefBody && _arr.length > 0 ? opt.typedefBeginType ?? 0 : 0;
+				final _tbn: Int = opt._inTypedefBody && _arr.length > 0 ? $beginStated ?? 0 : 0;
 				if (_tbn > 0) {
 					var _tbi: Int = 0;
 					while (_tbi < _tbn) {
@@ -1725,7 +1729,7 @@ final class TriviaSepLowering {
 			: macro {};
 		final typedefEndExpr: Expr = typedefBodyBlanks
 			? macro {
-				final _ten: Int = opt._inTypedefBody && _arr.length > 0 ? opt.typedefEndType ?? 0 : 0;
+				final _ten: Int = opt._inTypedefBody && _arr.length > 0 ? $endStated ?? 0 : 0;
 				if (_ten > 0) {
 					var _tei: Int = 0;
 					while (_tei < _ten) {
@@ -1753,6 +1757,14 @@ final class TriviaSepLowering {
 			typedefEndExpr: typedefEndExpr,
 			typedefBetweenExpr: typedefBetweenExpr
 		};
+	}
+
+	/**
+	 * A typedef body's stated edge count once its doc comments are read: `MemberGap.docEdge` of the `stated`
+	 * `typedefBeginType` / `typedefEndType` read and the `ifDoc` count that replaces it for a body holding a doc comment.
+	 */
+	private static function typedefEdgeExpr(stated: Expr, ifDoc: Expr): Expr {
+		return macro anyparse.format.MemberGap.docEdge($stated, $ifDoc, _arr, _trailLC);
 	}
 
 	/**

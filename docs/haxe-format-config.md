@@ -582,6 +582,26 @@ bracket branch answers the fit question like any other value (only a CURLY previ
 the soft pre-`else` seam, for the `} else` glue it owns), so `if (a) [] else [2]` stays on one line
 when it fits whichever way it was typed (`unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest`).
 
+## `emptyLines.<kind>.beginTypeIfDocComments` / `endTypeIfDocComments`
+
+In `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines` (the fork's branch
+`fx/type-doc-emptylines` has the same keys). An Int: the blank lines after the body's `{`
+(`begin…`) or before its `}` (`end…`) when the body holds a doc comment — a comment opening with
+`/**` in front of one of its members or among the comments before `}`, not one inside a member or
+a `#if` branch. The count replaces that kind's `beginType` / `endType` for such a body, `0`
+included; a body without a doc comment, or a key left out, keeps `beginType` / `endType` and
+today's output. A body holding comments alone counts as holding none. A class, interface or
+abstract body has no such key.
+Runtime: `MemberGap.docEdge`, read through the grammar's `@:fmt(beginEndTypeIfDoc(...))` (enum,
+`enum abstract`) and `TriviaSepLowering.typedefEdgeExpr` (typedef).
+
+```json
+{"emptyLines": {"enumEmptyLines": {"beginTypeIfDocComments": 1, "endTypeIfDocComments": 1}}}
+```
+
+turns `enum F { A; /** doc */ B; }` into a body with one blank line after `{` and one before `}`,
+and leaves a packed `enum E { A; B; }` packed.
+
 ## `comments.*`
 
 The fork has a `comments` section holding only `blockCommentBodyIndent`, which hxq accepts and does not read. `blockCommentStyle` and `trailingCommentOverflow` are anyparse-only and additive.
