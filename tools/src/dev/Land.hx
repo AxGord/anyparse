@@ -7,7 +7,7 @@ import dev.LandFormat.FormatTools;
 import dev.MergeBrief.MergePlace;
 import dev.PostLand.PostLandStart;
 import dev.SuiteImpact.SuiteScope;
-import devkit.Args;
+import devkit.Args.UsageError;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Lease;
@@ -52,6 +52,8 @@ final class Land {
 	/** Every this-many-th landing runs the battery in full, whatever it touched. */
 	public static inline final FULL_EVERY: Int = 10;
 
+	public static final NO_BATTERY: String = '--no-battery';
+
 	/** The merge driver `.gitattributes` names for the files a grammar reads (`apq merge-file`). */
 	private static inline final DRIVER: String = 'anyparse';
 
@@ -66,8 +68,6 @@ final class Land {
 
 	/** Where, under the battery's snapshot directory, the landings are counted. */
 	private static inline final TALLY_DIR: String = 'landings';
-
-	private static final NO_BATTERY: String = '--no-battery';
 
 	/**
 	 * Where a shard and the one-process run of the suite can diverge, so a landing that brings a path in is checked against
@@ -408,40 +408,35 @@ final class Land {
 	}
 
 	public static function main(argv: Array<String>): Int {
-		final args: Args = new Args(argv);
-		final message: Null<String> = args.option('-m');
-		final trailers: Array<String> = metricTrailers(args.option('--rounds'), args.option('--tokens'));
-		final noBattery: Bool = args.flag(NO_BATTERY);
+		final args: LandArgs = new LandArgs(argv);
 		final request: BatteryRequest = {
-			allowBlast: args.flag('--allow-blast'),
-			snapshot: args.flag('--snapshot'),
-			allow: args.options('--allow'),
-			full: args.flag('--full'),
+			allowBlast: args.allowBlast,
+			snapshot: args.snapshot,
+			allow: args.allow,
+			full: args.full,
 			leased: PoolLease.threads(),
 			cache: cacheDir(Sys.getEnv),
 			every: FULL_EVERY
 		};
-		final repo: String = Repo.resolve(args.option('--repo'));
+		final repo: String = Repo.resolve(args.repo);
 		final home: Null<String> = Sys.getEnv('HOME');
-		final logsOption: Null<String> = args.option('--logs');
-		final branch: String = args.positionals(['<branch>'])[0];
+		final branch: String = args.branch;
+		final noBattery: Bool = args.noBattery;
 		if (!noBattery && (Sys.getEnv('ANYPARSE_HXFORMAT_FORK') ?? '') == '')
 			throw new UsageError('the battery needs ANYPARSE_HXFORMAT_FORK — set it, or pass --no-battery');
-		final resolve: Array<String> = args.options('--resolve');
-		for (entry in resolve) choiceLine(entry);
-		final queue: Null<String> = args.option('--queue');
-		final logs: String = logsOption ?? Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'anyparse-land', branch.replace('/', '-')]);
+		for (entry in args.resolve) choiceLine(entry);
+		final logs: String = args.logs ?? Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'anyparse-land', branch.replace('/', '-')]);
 		FileSystem.createDirectory(logs);
-		final recipe: WarmRecipe = { frozen: args.options('--warm-frozen'), infra: args.options('--warm-infra') };
+		final recipe: WarmRecipe = args.recipe;
 		final warming: Bool = !noBattery && (recipe.frozen.length > 0 || recipe.infra.length > 0);
 		return land({
 			repo: repo,
 			branch: branch,
 			logs: logs,
-			message: message,
-			trailers: trailers,
-			resolve: resolve,
-			queue: queue,
+			message: args.message,
+			trailers: args.trailers,
+			resolve: args.resolve,
+			queue: args.queue,
 			skills: home == null ? null : Path.join([home, '.claude/skills']),
 			battery: noBattery ? null : request,
 			compile: (tree, log) -> Binaries.compileWith(tree, log, [], Lease.ofEnvironment()),
