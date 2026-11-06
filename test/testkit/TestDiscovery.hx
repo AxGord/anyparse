@@ -1,5 +1,6 @@
 package testkit;
 
+import devkit.NarrowBuild;
 import haxe.io.Path;
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -136,6 +137,9 @@ class TestDiscovery {
 	 * `addAll`, `classNames`, `deadTests`, `baseClasses` and `pins`.
 	 */
 	public static macro function build(): Array<Field> {
+		final narrow: Null<String> = Context.definedValue(NarrowBuild.DEFINE);
+		// a narrow build types the classes it lists and nothing else of the tree, so it checks nothing a full build checks
+		if (narrow != null) return Context.getBuildFields().concat(generate(narrowCensus(NarrowBuild.classes(narrow)), []));
 		final self: ClassType = Context.getLocalClass().get();
 		final here: String = Path.directory(Context.getPosInfos(self.pos).file);
 		final root: String = Path.directory(here);
@@ -173,15 +177,19 @@ class TestDiscovery {
 		census.bases.sort(compareStrings);
 		census.pins.sort(compareStrings);
 		census.claims.sort(compareStrings);
+		return Context.getBuildFields().concat(generate(census, table.arms.map(MutationArms.render)));
+	}
+
+	/** The registry's members over `census`, with `arms` the rendered mutation arms. */
+	private static function generate(census: TestCensus, arms: Array<String>): Array<Field> {
 		final adds: Array<Expr> = census.registered.map(newCase);
 		final names: Array<String> = census.registered.map(qualified);
 		final dead: Array<String> = census.dead;
 		final bases: Array<String> = census.bases;
 		final pins: Array<String> = census.pins;
 		final claims: Array<String> = census.claims;
-		final arms: Array<String> = table.arms.map(MutationArms.render);
 		final deferred: Array<String> = census.deferred;
-		final generated: Array<Field> = (macro class Generated {
+		return (macro class Generated {
 			/** Hand every discovered case to `add`, in generation order. */
 			public static function addAll(add: (utest.Test) -> Void): Void $b{adds}
 
@@ -206,7 +214,6 @@ class TestDiscovery {
 			/** Every fixture whose prose claims a role no annotation records, as `<class>#<method> :: <kinds>`. */
 			public static function claims(): Array<String> return $v{claims};
 		}).fields;
-		return Context.getBuildFields().concat(generated);
 	}
 
 	/**
@@ -583,5 +590,25 @@ class TestDiscovery {
 		1
 	else
 		0;
+
+	/** A census registering exactly `classes`, each a `utest.Test` class of the test tree, and holding nothing else. */
+	private static function narrowCensus(classes: Array<String>): TestCensus {
+		final registered: Array<ClassType> = [];
+		for (name in classes) switch Context.getType(name) {
+			case TInst(ref, _):
+				registered.push(ref.get());
+			case _:
+				Context.error('${NarrowBuild.DEFINE} names $name, which is not a class', Context.currentPos());
+		}
+		return {
+			registered: registered,
+			dead: [],
+			bases: [],
+			pins: [],
+			killers: [],
+			deferred: [],
+			claims: []
+		};
+	}
 
 }

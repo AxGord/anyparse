@@ -171,6 +171,45 @@ final class MutationSlotTest extends Test {
 		Assert.equals('a b ', MutationSlot.oneLine('a\nb\n'));
 	}
 
+	/** A narrow build compiles the classes a track's expectations name, a `<class>.<method>` by its class, each once. */
+	@:pin('control') @:killer('M-NARROW-CLASSES-NONE')
+	public function testANarrowBuildTakesTheClassesItsExpectationsName(): Void {
+		final isClass: String -> Bool = name -> ['unit.b.B', 'unit.a.A'].contains(name);
+		Assert.same(['unit.a.A', 'unit.b.B'], MutationSlot.narrowClasses(' unit.b.B.testX, unit.a.A.testY ,unit.b.B.testZ', isClass));
+		Assert.same(['unit.a.A'], MutationSlot.narrowClasses('unit.a.A', isClass), 'a class-level pin names its class');
+	}
+
+	/** An expectation naming no test class leaves the whole track to the full build: a narrow build would not run it. */
+	@:pin('control') @:killer('M-NARROW-CLASSES-SKIPS-UNKNOWN')
+	public function testAnExpectationNamingNoClassLeavesTheTrackToTheFullBuild(): Void {
+		final isClass: String -> Bool = name -> name == 'unit.a.A';
+		Assert.isNull(MutationSlot.narrowClasses('unit.a.A.testX,unit.gone.G.testY', isClass));
+		Assert.isNull(MutationSlot.narrowClasses('testX', isClass), 'a bare method has no class');
+		Assert.isNull(MutationSlot.narrowClasses('AX', name -> name == 'A'), 'a bare name is not its own prefix\'s method');
+		Assert.isNull(MutationSlot.narrowClasses(' , ', isClass), 'no expectation: nothing to narrow to');
+	}
+
+	/** A narrow kill settles a track only over a base where the same classes all pass, alone, on the unmutated tree. */
+	@:pin('control') @:killer('M-NARROW-KILL-UNGUARDED')
+	public function testANarrowKillIsTakenOnlyOverAPassingBase(): Void {
+		final killed: Classified = reading('KILLED', '1 tests failed / 2 assertions: a.T.x');
+		Assert.isTrue(MutationSlot.takesNarrowKill(killed, 'a.T.x', 'SURVIVED'));
+		Assert.isFalse(MutationSlot.takesNarrowKill(killed, 'a.T.x', 'KILLED'), 'red without the cut: no kill of the arm');
+		Assert.isFalse(MutationSlot.takesNarrowKill(killed, 'a.T.x', 'RUN-FAIL'), 'a base that did not run proves nothing');
+		Assert.isFalse(MutationSlot.takesNarrowKill(reading('SURVIVED', '0 tests failed / 2 assertions'), 'a.T.x', 'SURVIVED'));
+		Assert.isFalse(MutationSlot.takesNarrowKill(null, 'a.T.x', 'SURVIVED'));
+	}
+
+	/** A narrow build is tried only under killer-first: never in a build-only run, which asks whether the whole tree compiles. */
+	@:pin('control') @:killer('M-NARROW-IN-BUILD-ONLY')
+	public function testANarrowBuildIsTriedOnlyUnderKillerFirstAndNeverBuildOnly(): Void {
+		Assert.isTrue(MutationSlot.narrows(true, false, null));
+		Assert.isTrue(MutationSlot.narrows(true, false, ''), 'an empty off-switch is unset');
+		Assert.isFalse(MutationSlot.narrows(true, true, null), '--check-apply keeps the full build');
+		Assert.isFalse(MutationSlot.narrows(false, false, null), 'no killer-first: no narrow build');
+		Assert.isFalse(MutationSlot.narrows(true, false, '1'), 'APQ_MUTATION_NO_NARROW turns it off');
+	}
+
 	private static function reading(verdict: String, detail: String, ?full: String): Classified {
 		return { verdict: verdict, detail: detail, full: full };
 	}

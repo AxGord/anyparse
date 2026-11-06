@@ -22,6 +22,9 @@ package testkit;
  * `unit.TestDiscoveryParityTest` pins `deadTests()` and `baseClasses()` and that every name `classNames()` gives
  * resolves; WHICH classes register is held by the macro itself (every `*Test` file is one), `pins()` and `arms()` by
  * the build errors on the metadata, and `deferredArms()` is answered by `unit.MutationArmAddressTest`.
+ *
+ * A narrow build (`devkit.NarrowBuild`) registers only the classes its define lists, types nothing else of the tree,
+ * and its other views are empty.
  */
 @:build(testkit.TestDiscovery.build())
 final class TestRegistry {}

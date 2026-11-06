@@ -902,6 +902,37 @@
 			"find": "if (fork != null) return Failed(fork);",
 			"replace": "",
 			"note": "a fork that names no directory leaves an impact run's corpus row skipped instead of failing the misconfiguration"
+		},
+		{
+			"name": "M-NARROW-CLASSES-NONE",
+			"type": "dev.MutationSlot",
+			"method": "narrowClasses",
+			"force": "null",
+			"note": "no track gets a narrow build, so every arm types the whole suite again"
+		},
+		{
+			"name": "M-NARROW-CLASSES-SKIPS-UNKNOWN",
+			"type": "dev.MutationSlot",
+			"method": "narrowClasses",
+			"find": "if (cls == null) return null;",
+			"replace": "if (cls == null) continue;",
+			"note": "an expectation naming no test class is dropped from the narrow build, which then cannot run it"
+		},
+		{
+			"name": "M-NARROW-KILL-UNGUARDED",
+			"type": "dev.MutationSlot",
+			"method": "takesNarrowKill",
+			"find": " && base == 'SURVIVED'",
+			"replace": "",
+			"note": "a narrow kill is taken over a base that is red without the cut, so a class failing outside the full registry reads as a kill"
+		},
+		{
+			"name": "M-NARROW-IN-BUILD-ONLY",
+			"type": "dev.MutationSlot",
+			"method": "narrows",
+			"find": "killerFirst && !buildOnly && ",
+			"replace": "killerFirst && ",
+			"note": "a build-only run (--check-apply) takes the narrow build, so a cut that breaks a class outside its pins closure no longer reads BUILD-FAIL there"
 		}
 	]
 }

@@ -59,7 +59,7 @@ final class MutationCheck {
 	private static inline final MANIFEST_FIELDS: Int = 4;
 
 	/** The order a timing line names the build kinds in (`MutationSlot`). */
-	private static final BUILD_KINDS: Array<String> = ['warm', 'restarted', 'cold', 'schema'];
+	private static final BUILD_KINDS: Array<String> = ['narrow', 'warm', 'restarted', 'cold', 'schema'];
 
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);

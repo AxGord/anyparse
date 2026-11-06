@@ -7,9 +7,11 @@ import anyparse.query.cli.TestTranscript;
 import dev.MutationCheck.TrackRow;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.NarrowBuild;
 import devkit.Pool;
 import devkit.Result;
 import haxe.Exception;
+import haxe.crypto.Md5;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -21,7 +23,8 @@ using StringTools;
  * One job slot of a `dev mutation-check` run (`--slot <n> <workroot>`): a worktree of its own and, unless the run says
  * otherwise, one warm `haxe --wait` server, taking the run's tracks in deal order until none is left. A track resets the
  * slot to the base, applies its patch, builds (or switches the composed build's arm on), runs its tests and leaves its
- * verdict in the workroot, where the parent's report reads it. The verdict comes from `MutationVerdict` in THIS
+ * verdict in the workroot, where the parent's report reads it. A killer-first track first tries a narrow build of its
+ * pinned classes alone and takes the full build only when that does not settle it. The verdict comes from `MutationVerdict` in THIS
  * process, built from the unmutated tree: a track's own build is compiled from the mutated source.
  */
 @:nullSafety(Strict)
@@ -68,9 +71,22 @@ final class MutationSlot {
 	/** The environment variable a suite run's compiler shim goes first on. */
 	private static inline final PATH: String = 'PATH';
 
+	/** The environment variable that turns the narrow build off, so every track takes the full build. */
+	private static inline final NO_NARROW: String = 'APQ_MUTATION_NO_NARROW';
+
+	private static final TEST_JS: String = 'test.js';
+
 	/** Block this thread for `ms` milliseconds without spawning anything. */
 	public static inline function pause(ms: Int): Void {
 		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', ms);
+	}
+
+	/**
+	 * Whether a track may try a narrow build: only under killer-first, never in a build-only run — `--check-apply` asks
+	 * whether the WHOLE tree compiles, which a narrow build cannot answer — and not when `off` (`APQ_MUTATION_NO_NARROW`) is set.
+	 */
+	public static inline function narrows(killerFirst: Bool, buildOnly: Bool, off: Null<String>): Bool {
+		return killerFirst && !buildOnly && (off ?? '') == '';
 	}
 
 	/** Take tracks in deal order until none is left or the parent is gone; always answers 0 (a verdict is a file). */
@@ -222,6 +238,42 @@ final class MutationSlot {
 		};
 	}
 
+	/**
+	 * The test classes `expected` names, each once and sorted: an expectation is a class `isClass` answers for, or a
+	 * `<class>.<method>` whose class it answers for. Null when an expectation names neither or none is given: such a
+	 * track has no narrow build.
+	 */
+	public static function narrowClasses(expected: String, isClass: String -> Bool): Null<Array<String>> {
+		final classes: Array<String> = [];
+		for (entry in expected.split(',')) {
+			final want: String = entry.trim();
+			if (want == '') continue;
+			final dot: Int = want.lastIndexOf('.');
+			// a bare name has no owner: `substr(0, -1)` would read as the name minus its last character
+			final owner: String = dot > 0 ? want.substr(0, dot) : '';
+			final cls: Null<String> = if (isClass(want))
+				want
+			else if (owner != '' && isClass(owner))
+				owner
+			else
+				null;
+			if (cls == null) return null;
+			if (!classes.contains(cls)) classes.push(cls);
+		}
+		if (classes.length == 0) return null;
+		classes.sort(Reflect.compare);
+		return classes;
+	}
+
+	/**
+	 * Whether a narrow build's `reading` settles a track expecting `expected`: only a kill does, and only when the same
+	 * classes all passed in a narrow build of the unmutated tree (`base`), since a class that fails outside the full
+	 * registry would read as a kill.
+	 */
+	public static function takesNarrowKill(reading: Null<Classified>, expected: String, base: String): Bool {
+		return reading != null && matchedAny(reading, expected) && base == 'SURVIVED';
+	}
+
 	/** One track in this slot, its verdict left in the workroot. */
 	private static function track(ctx: SlotContext, row: TrackRow): Void {
 		final workroot: String = ctx.workroot;
@@ -229,6 +281,7 @@ final class MutationSlot {
 		if (!prepare(ctx, row)) return;
 		final started: Float = Sys.time();
 		final mutant: Null<String> = schemaArm(ctx, name);
+		if (mutant == null && narrowTrack(ctx, row)) return;
 		final buildLog: String = Path.join([workroot, '$name.build.log']);
 		final own: String = Path.join([workroot, 'build-$name']);
 		final kind: Null<String> = mutant != null ? 'schema' : buildTrack(ctx, own, buildLog);
@@ -246,7 +299,7 @@ final class MutationSlot {
 			return;
 		}
 		final log: String = Path.join([workroot, '$name.log']);
-		final testJs: String = Path.join([mutant != null ? ctx.schema ?? own : own, 'test.js']);
+		final testJs: String = Path.join([mutant != null ? ctx.schema ?? own : own, TEST_JS]);
 		final ran: SuiteRun = runTests(ctx, row, suiteCommand(ctx, testJs, mutant), log);
 		File.saveContent(timing, '$kind ${seconds(started, built)} ${seconds(built, Sys.time())} ${ran.phase}\n');
 		final reading: Null<Classified> = ran.reading;
@@ -254,10 +307,7 @@ final class MutationSlot {
 			writeVerdict(workroot, name, RUN_FAIL, 'classifier aborted on ${ran.read}');
 			return;
 		}
-		final full: Null<String> = reading.full;
-		// the uncapped row goes into the transcript, where a name the capped row elided is still findable
-		if (full != null) File.saveContent(log, '${File.getContent(log)}\n--- mutation-verdict: uncapped ${reading.verdict} ---\n$full\n');
-		writeVerdict(workroot, name, reading.verdict, reading.verdict == RUN_FAIL ? '${reading.detail} ($log)' : reading.detail);
+		settle(workroot, name, log, reading);
 	}
 
 	/**
@@ -267,14 +317,14 @@ final class MutationSlot {
 	 */
 	private static function buildTrack(ctx: SlotContext, build: String, log: String): Null<String> {
 		FileSystem.createDirectory(build);
-		final out: String = Path.join([build, 'test.js']);
+		final out: String = Path.join([build, TEST_JS]);
 		final server: Null<SlotServer> = ctx.server;
 		if (server != null) for (attempt in ['warm', 'restarted']) {
 			final port: Null<Int> = server.port(ctx.wt);
 			if (port == null) break;
 			final warm: Result = cmd('haxe --connect 127.0.0.1:$port test-js-common.hxml ${Binaries.CODEGEN} -js $out')
 				.at(ctx.wt)
-				.timeout(envInt('APQ_MUTATION_BUILD_TIMEOUT', BUILD_TIMEOUT_S) * MS_PER_SECOND)
+				.timeout(buildTimeoutMs())
 				.run();
 			saveLog(log, warm);
 			if (warm.ok) {
@@ -411,6 +461,84 @@ final class MutationSlot {
 		return try classify(expected, logs) catch (exception: Exception) null;
 	}
 
+	/** Leave `reading` as the verdict of track `name`, whose transcript is `log`. */
+	private static function settle(workroot: String, name: String, log: String, reading: Classified): Void {
+		final full: Null<String> = reading.full;
+		// the uncapped row goes into the transcript, where a name the capped row elided is still findable
+		if (full != null) File.saveContent(log, '${File.getContent(log)}\n--- mutation-verdict: uncapped ${reading.verdict} ---\n$full\n');
+		writeVerdict(workroot, name, reading.verdict, reading.verdict == RUN_FAIL ? '${reading.detail} ($log)' : reading.detail);
+	}
+
+	/**
+	 * Settle `row` from a narrow build of its expectations' classes alone, the rest of the suite left untyped. False when
+	 * the track still needs the full build, with the slot's tree mutated as `prepare` left it.
+	 */
+	private static function narrowTrack(ctx: SlotContext, row: TrackRow): Bool {
+		if (!narrows(ctx.killerFirst, ctx.buildOnly, Sys.getEnv(NO_NARROW))) return false;
+		final classes: Null<Array<String>> = narrowClasses(
+			row.expected, name -> FileSystem.exists(Path.join([ctx.wt, 'test', '${name.split('.').join('/')}.hx']))
+		);
+		if (classes == null) return false;
+		final workroot: String = ctx.workroot;
+		final log: String = Path.join([workroot, '${row.name}.log']);
+		final clock: NarrowClock = { build: 0, run: 0 };
+		if (!narrowRun(ctx, classes, Path.join([workroot, 'narrow-${row.name}']), killerTokens(row.expected), '$log.narrow', clock))
+			return false;
+		final reading: Null<Classified> = classifyOrNull(row.expected, ['$log.narrow']);
+		if (reading == null || !matchedAny(reading, row.expected)) return false;
+		// one base run per class set and run: the set's verdict is a file of the workroot, which every slot reads
+		final key: String = Md5.encode(classes.join(','));
+		final baseVerdict: String = Path.join([workroot, 'narrow-base-$key.verdict']);
+		if (!FileSystem.exists(baseVerdict)) {
+			if (!cmd('git -C ${ctx.wt} apply -R -- ${row.patch}').run().ok) return false;
+			final baseLog: String = Path.join([workroot, 'narrow-base-$key.log']);
+			final base: Null<Classified> = narrowRun(ctx, classes, Path.join([workroot, 'narrow-base-$key']), 'ALL', baseLog, clock)
+				? classifyOrNull('', [baseLog])
+				: null;
+			File.saveContent(baseVerdict, base?.verdict ?? RUN_FAIL);
+			final reapplied: Result = cmd('git -C ${ctx.wt} apply -- ${row.patch}').run();
+			if (!reapplied.ok) {
+				writeVerdict(
+					workroot, row.name, 'PATCH-FAIL', 'not re-applied after the narrow base: ${oneLine(reapplied.err + reapplied.failure)}'
+				);
+				return true;
+			}
+		}
+		if (!takesNarrowKill(reading, row.expected, File.getContent(baseVerdict))) return false;
+		FileSystem.rename('$log.narrow', log);
+		File.saveContent(
+			Path.join([workroot, '${row.name}.timing']), 'narrow ${seconds(0, clock.build)} ${seconds(0, clock.run)} killers\n'
+		);
+		settle(workroot, row.name, log, reading);
+		return true;
+	}
+
+	/**
+	 * Build the narrow test binary of `classes` into `dir` and run `filter` on it into `log`, charging `clock`; false when
+	 * the build fails.
+	 */
+	private static function narrowRun(
+		ctx: SlotContext, classes: Array<String>, dir: String, filter: String, log: String, clock: NarrowClock
+	): Bool {
+		FileSystem.createDirectory(dir);
+		final from: Float = Sys.time();
+		final built: Result = cmd(
+			'haxe test-js-common.hxml ${Binaries.CODEGEN} -D ${NarrowBuild.define(classes)} -js ${Path.join([dir, TEST_JS])}'
+		).at(ctx.wt).timeout(buildTimeoutMs()).run();
+		saveLog('$log.build', built);
+		final ran: Float = Sys.time();
+		clock.build += ran - from;
+		if (!built.ok) return false;
+		saveLog(log, suiteCommand(ctx, Path.join([dir, TEST_JS]), null)(filter).run());
+		clock.run += Sys.time() - ran;
+		return true;
+	}
+
+	/** What one build may take before it counts as hung: `BUILD_TIMEOUT_S` unless `APQ_MUTATION_BUILD_TIMEOUT` says otherwise. */
+	private static function buildTimeoutMs(): Int {
+		return envInt('APQ_MUTATION_BUILD_TIMEOUT', BUILD_TIMEOUT_S) * MS_PER_SECOND;
+	}
+
 }
 
 /** What every track of one slot shares. */
@@ -441,4 +569,10 @@ typedef SuiteRun = {
 	var phase: String;
 	var reading: Null<Classified>;
 	var read: String;
+}
+
+/** The seconds a narrow attempt spent building and running, charged to the track's timing row. */
+typedef NarrowClock = {
+	var build: Float;
+	var run: Float;
 }
