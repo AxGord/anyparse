@@ -10,6 +10,14 @@
 			"find": "'for (const s of [process.stdout, process.stderr]) if (s._handle && s._handle.setBlocking) s._handle.setBlocking(true)'",
 			"replace": "''",
 			"note": "the runner's streams stay asynchronous, so a transcript read through a pipe loses its tail at the exit utest ends the run with"
+		},
+		{
+			"name": "M-NARROW-FLOOR-HARNESS",
+			"type": "RunTests",
+			"method": "main",
+			"find": "final scratch: String = ScratchRoot.isolateTempDir();",
+			"replace": "unit.cli.CliFixture.repoRoot(); final scratch: String = ScratchRoot.isolateTempDir();",
+			"note": "the runner names CliFixture again, so every narrow build types the whole query engine and the small build is gone"
 		}
 	]
 }

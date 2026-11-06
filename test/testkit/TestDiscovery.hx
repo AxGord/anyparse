@@ -595,10 +595,10 @@ class TestDiscovery {
 	private static function narrowCensus(classes: Array<String>): TestCensus {
 		final registered: Array<ClassType> = [];
 		for (name in classes) switch Context.getType(name) {
-			case TInst(ref, _):
+			case TInst(ref, _) if (isUtestCase(ref.get())):
 				registered.push(ref.get());
 			case _:
-				Context.error('${NarrowBuild.DEFINE} names $name, which is not a class', Context.currentPos());
+				Context.error('${NarrowBuild.DEFINE} names $name, which is not a test class', Context.currentPos());
 		}
 		return {
 			registered: registered,

@@ -1,6 +1,6 @@
 import anyparse.query.ShardFilter;
 import testkit.TestRegistry;
-import unit.cli.CliFixture;
+import unit.cli.ScratchRoot;
 import utest.Runner;
 
 using StringTools;
@@ -40,7 +40,7 @@ class RunTests {
 		// all where the old scheme accumulated; an INTERRUPTED one leaves one claimed directory
 		// holding whatever fixtures were live, and `devkit.TmpLifecycle` reaps that once this pid
 		// is gone.
-		final scratch: String = CliFixture.isolateTempDir();
+		final scratch: String = ScratchRoot.isolateTempDir();
 		final runner: Runner = new Runner();
 
 		// Optional test-class filter for a fast dev inner-loop: APQ_TEST is a
@@ -157,7 +157,7 @@ class RunTests {
 		// remaining handlers and take the `successes:` / `failures:` block with it, so a cleanup
 		// hiccup would reach every gate as an UNCOUNTABLE transcript. The scratch root is
 		// reapable; the report is not reproducible.
-		runner.onComplete.add(_ -> try CliFixture.removeScratchRoot(scratch) catch (_exception: haxe.Exception) {});
+		runner.onComplete.add(_ -> try ScratchRoot.removeScratchRoot(scratch) catch (_exception: haxe.Exception) {});
 		utest.ui.Report.create(runner, verbose ? AlwaysShowSuccessResults : NeverShowSuccessResults, AlwaysShowHeader);
 		runner.run();
 	}

@@ -59,7 +59,7 @@ final class ScratchIsolationGateTest extends Test {
 	 * assertion fails; the raise is the whole evidence that the predicate runs.
 	 */
 	public function testRemovingAPathThisClassNeverClaimedIsRefused(): Void {
-		Assert.raises(CliFixture.removeScratchRoot.bind('/tmp/anyparse-not-a-claimed-scratch-root'), Exception);
+		Assert.raises(ScratchRoot.removeScratchRoot.bind('/tmp/anyparse-not-a-claimed-scratch-root'), Exception);
 	}
 
 }
