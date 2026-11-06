@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.LintConfig;
 import anyparse.check.common.loops.MapValueScan;
 import anyparse.query.IndexScope;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
@@ -251,7 +252,8 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		final target: Null<String> = asBits ? project.bits : project.set;
 		if (target == null) return 'the project names no set type';
 		if (!asBits && !SET_KEY_TYPES.contains(key)) return 'a $key key may compare differently in the native set of some target';
-		if (declarationsOf(root, name, seams.declKinds) != 1) return 'the file declares another \'$name\'';
+		final unconfined: Null<String> = unconfinedReason(source, root, declAt, name, seams, project, plugin);
+		if (unconfined != null) return unconfined;
 		// Re-bind: a null-check does not narrow into an anonymous-structure literal.
 		final declared: String = name;
 		final targetName: String = target;
@@ -477,6 +479,21 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 			)
 				.length
 				== fields.length;
+	}
+
+	/**
+	 * Why the set declared at `declAt` cannot be respelled from this file alone, or null: another declaration of its name shares
+	 * the file, or it is a member that a subtype or an `@:access` grantee of another file may read, which these edits cannot respell.
+	 */
+	private static function unconfinedReason(
+		source: String, root: QueryNode, declAt: Int, name: String, seams: ValueSeams, project: SetProject, plugin: GrammarPlugin
+	): Null<String> {
+		if (declarationsOf(root, name, seams.declKinds) != 1) return 'the file declares another \'$name\'';
+		final owner: Null<String> = MapValueScan.memberOwner(root, declAt, seams);
+		final scope: Null<SymbolIndex> = project.index;
+		return owner == null || scope != null && MemberWriteScan.referencesConfinedToFile(owner, name, source, scope, plugin)
+			? null
+			: 'a subtype or an @:access grantee in another file may read the member';
 	}
 
 }

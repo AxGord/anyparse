@@ -15509,6 +15509,14 @@
 			"find": "if (StdTypes.moduleTypes(_plugin, '$scope.$name')?.exists(t -> t.name == name) == true) return false;",
 			"replace": "",
 			"note": "a module of the file's own package that sits in an unglobbed std package reads as bound to nothing"
+		},
+		{
+			"name": "M-MWS-SAME-FILE-SUBTYPE",
+			"type": "anyparse.query.MemberWriteScan",
+			"method": "referencesConfinedToFile",
+			"find": "&& !subtypeMayReference(owner, name, index, plugin, source)",
+			"replace": "&& !subtypeMayReference(owner, name, index, plugin)",
+			"note": "a subtype in the declaring file counts as a reader the rewrite cannot reach, though the same edits respell it, so a correct member rewrite and its finding are lost"
 		}
 	]
 }

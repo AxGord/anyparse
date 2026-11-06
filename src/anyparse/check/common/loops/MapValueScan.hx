@@ -179,6 +179,11 @@ final class MapValueScan {
 			});
 	}
 
+	/** The simple name of the type whose MEMBER the declaration at `bindingFrom` is; null for a local, parameter or nested declaration. */
+	public static function memberOwner(root: QueryNode, bindingFrom: Int, seams: ValueSeams): Null<String> {
+		return locate(root, null, -1, null, bindingFrom, seams)?.owner;
+	}
+
 	/**
 	 * The declaration at offset `at` — its owning type when it is a MEMBER of one, and
 	 * whether that member is public. A local, a parameter and a declaration nested inside a

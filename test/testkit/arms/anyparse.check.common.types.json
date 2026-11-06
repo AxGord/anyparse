@@ -286,10 +286,18 @@
 		{
 			"name": "M-MAS-SET-SHARED-NAME",
 			"type": "anyparse.check.common.types.MapAsSet",
-			"method": "rewriteSet",
+			"method": "unconfinedReason",
 			"find": "declarationsOf(root, name, seams.declKinds) != 1",
 			"replace": "false",
 			"note": "two declarations of one name share the census, and respelling both breaks the one that is not a growing set"
+		},
+		{
+			"name": "M-MAS-SET-CROSS-FILE-READER",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "unconfinedReason",
+			"find": "owner == null || scope != null && MemberWriteScan.referencesConfinedToFile(owner, name, source, scope, plugin)",
+			"replace": "true",
+			"note": "a non-public member set is respelled in its declaring file while a subtype in another file still reads it as a map, which does not compile"
 		},
 		{
 			"name": "M-MAS-SET-OTHER-RECEIVER",

@@ -87,9 +87,12 @@ final class MemberWriteScan {
 	 * Fails closed on the same terms as `subtypeMayWrite`: an unresolvable hierarchy, a subtype
 	 * whose source was not retained, a REdeclaration of the name, and an `@:build` in the
 	 * subtype's file (a macro can inject a read no text scan sees) all answer true. Same index
-	 * choice too — the resolution scope when one is configured, else the report index.
+	 * choice too — the resolution scope when one is configured, else the report index. A source equal to `apart` (the file the
+	 * caller rewrites whole) is not scanned.
 	 */
-	public static inline function subtypeMayReference(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
+	public static inline function subtypeMayReference(
+		owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin, ?apart: String
+	): Bool {
 		return scopeOf(
 			index, plugin
 		)
@@ -97,9 +100,12 @@ final class MemberWriteScan {
 				owner, name,
 				(subtype, src, span, redeclares) ->
 					redeclares
-					|| mayReference(src, name, span.from, span.to)
+					|| src != apart
+					&& mayReference(src, name, span.from, span.to)
 					|| scopeOf(index, plugin)
-						.text.accessGrantMatches(subtype, name, granted -> mayReference(granted, name, 0, granted.length))
+						.text.accessGrantMatches(
+							subtype, name, granted -> granted != apart && mayReference(granted, name, 0, granted.length)
+						)
 			);
 	}
 
@@ -107,8 +113,10 @@ final class MemberWriteScan {
 	 * Whether any file granting itself `@:access(owner)` MENTIONS `name` —
 	 * `accessGrantMayWrite`'s read counterpart (see `subtypeMayReference`).
 	 */
-	public static inline function accessGrantMayReference(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
-		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> mayReference(src, name, 0, src.length));
+	public static inline function accessGrantMayReference(
+		owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin, ?apart: String
+	): Bool {
+		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> src != apart && mayReference(src, name, 0, src.length));
 	}
 
 	/**
@@ -200,6 +208,18 @@ final class MemberWriteScan {
 	 */
 	public static inline function coreApiPinsMemberShape(source: String): Bool {
 		return carriesMetaToken(source, '@:coreApi');
+	}
+
+	/**
+	 * `referencesConfined` for a rewrite that edits the WHOLE declaring file: a subtype or `@:access` grantee whose source is
+	 * `source` itself is respelled by the same edits, so only a mention in ANOTHER file refuses (`apart`, on the two scans above).
+	 */
+	public static inline function referencesConfinedToFile(
+		owner: String, name: String, source: String, index: SymbolIndex, plugin: GrammarPlugin
+	): Bool {
+		return RefactorSupport.privateMemberScanIsSound(source, index, name)
+			&& !subtypeMayReference(owner, name, index, plugin, source)
+			&& !accessGrantMayReference(owner, name, index, plugin, source);
 	}
 
 	/**
