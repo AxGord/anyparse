@@ -197,6 +197,48 @@ class DeclarationDeltaTest extends Test {
 		Assert.same(['- x'], DeclarationDelta.hunk(['x'], [], 2));
 	}
 
+	/**
+	 * A member moved while another one of its type is edited is reported beside that edit: a reorder changes the order
+	 * the initializers run in, so no reader of the delta may lose it to the edit.
+	 * Killed by arm `M-DECLARATION-DELTA-REORDER-HIDDEN`.
+	 */
+	@:pin('control')
+	@:killer('M-DECLARATION-DELTA-REORDER-HIDDEN')
+	public function testAMovedMemberBesideAnEditIsReported(): Void {
+		final delta: FileDelta = compareHaxe(fields('x', 'y', 2), fields('y', 'x', 20));
+		Assert.equals(ChangeClass.Declarations, delta.change);
+		Assert.same(['~ VarMember:x +0-0', '~ FnMember:g +1-1'], summary(delta));
+		Assert.same([true, false], delta.declarations.map(change -> change.moved));
+		Assert.same(['x', 'g'], DeclarationDelta.namesOf(delta));
+	}
+
+	/** A member that is both moved and edited is one row, the edit's counts marked as moved. */
+	public function testAMovedAndEditedMemberIsOneRow(): Void {
+		final delta: FileDelta = compareHaxe(fields('x', 'y', 2), fields('y', 'x', 2).replace('x: Int = 1', 'x: Int = 10'));
+		Assert.same(['~ VarMember:x +1-1'], summary(delta));
+		Assert.isTrue(delta.declarations[0].moved);
+	}
+
+	/**
+	 * A reorder with no other change stays the `(module)` row alone: it already shows the reorder, and naming the members
+	 * as well would say it twice.
+	 * Killed by arm `M-DECLARATION-DELTA-REORDER-ALONE-DOUBLED`.
+	 */
+	@:pin('control')
+	@:killer('M-DECLARATION-DELTA-REORDER-ALONE-DOUBLED')
+	public function testAReorderAloneIsTheModuleRowAlone(): Void {
+		final delta: FileDelta = compareHaxe(fields('x', 'y', 2), fields('y', 'x', 2));
+		Assert.same([DeclarationDelta.MODULE_REST], delta.declarations.map(change -> change.name));
+		Assert.isFalse(delta.declarations[0].moved);
+	}
+
+	/** An edit with no reorder marks no member as moved. */
+	public function testAnEditAloneMovesNoMember(): Void {
+		final delta: FileDelta = compareHaxe(fields('x', 'y', 2), fields('x', 'y', 20));
+		Assert.same(['~ FnMember:g +1-1'], summary(delta));
+		Assert.isFalse(delta.declarations[0].moved);
+	}
+
 	private static function compareHaxe(base: String, now: String): FileDelta {
 		return DeclarationDelta.compare(new HaxeQueryPlugin(), base, now);
 	}
@@ -213,6 +255,17 @@ class DeclarationDeltaTest extends Test {
 
 	private static function linesOf(change: DeclarationChange): String {
 		return change.status == Changed ? '+${change.added}-${change.removed}' : '${change.spanLines}';
+	}
+
+	/**
+	 * A class holding the fields named by `first` then `second` ('x' or
+	 * 'y'), and `g` returning `result`; no blank line between the fields.
+	 */
+	private static function fields(first: String, second: String, result: Int): String {
+		inline function field(name: String): String {
+			return '\tvar $name: Int = ${name == 'x' ? 1 : 2};\n';
+		}
+		return 'package p;\n\nclass C {\n${field(first)}${field(second)}\n\tpublic function g(): Int {\n\t\treturn $result;\n\t}\n}\n';
 	}
 
 }

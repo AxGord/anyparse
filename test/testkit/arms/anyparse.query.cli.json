@@ -500,6 +500,21 @@
 			"find": "FieldInitAtDeclaration.skipsReported.resize(0);",
 			"replace": "",
 			"note": "a call no longer forgets the field-init skips earlier calls reported, so a second lint --fix over the same file drops the skip line a fresh process prints"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-REORDER-HIDDEN",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "movedUnits",
+			"force": "[for (_ in after.units) false]",
+			"note": "no declaration counts as moved, so a member reorder beside an edit of another member is reported as that edit alone"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-REORDER-ALONE-DOUBLED",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "declarationChanges",
+			"find": "if (edits == 0) out.resize(0);",
+			"replace": "",
+			"note": "a reorder with no other change is named member by member beside the (module) row, which already shows it"
 		}
 	]
 }

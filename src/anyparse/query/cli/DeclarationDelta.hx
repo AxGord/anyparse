@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.ds.InOrder;
 import anyparse.ds.Set;
 import anyparse.query.Address.AddressIndex;
 import anyparse.query.DeclarationLines;
@@ -51,6 +52,9 @@ typedef DeclarationChange = {
 	final selector: String;
 	final added: Int;
 	final removed: Int;
+
+	/** Whether a declaration matched across the versions now stands in another place among its siblings. */
+	final moved: Bool;
 
 	/** How many named declarations enclose it: 0 for a module-level one. */
 	final depth: Int;
@@ -292,43 +296,73 @@ final class DeclarationDelta {
 
 	private static function declarationChanges(plugin: GrammarPlugin, before: FileVersion, after: FileVersion): Array<DeclarationChange> {
 		final out: Array<DeclarationChange> = [];
+		var edits: Int = 0;
 		final partner: Array<Int> = matchUnits(before, after);
 		final matched: Array<Bool> = [for (_ in before.units) false];
+		final moved: Array<Bool> = movedUnits(after, partner);
 		final nowAddress: AddressIndex = Address.describerFor(after.tree, plugin.selectKindEquivalence());
 		final baseAddress: AddressIndex = Address.describerFor(before.tree, plugin.selectKindEquivalence());
 		for (i => unit in after.units) {
 			final known: Int = partner[i];
 			if (known >= 0) matched[known] = true;
 			final mine: Array<String> = after.owned[i];
-			if (unit.header || (known >= 0 && sameLines(before.owned[known], mine))) continue;
+			if (unit.header) continue;
+			final selector: String = nowAddress.describe(after.source, unit.node);
+			if (known >= 0 && sameLines(before.owned[known], mine)) {
+				if (moved[i]) out.push(changeOf(Changed, unit, selector, { added: 0, removed: 0 }, mine, mine, true));
+				continue;
+			}
+			edits++;
 			final counts: LineCounts = known < 0 ? { added: mine.length, removed: 0 } : lineCounts(before.owned[known], mine);
-			out.push(changeOf(
-				known < 0 ? Added : Changed, unit, nowAddress.describe(after.source, unit.node), counts,
-				known < 0 ? [] : before.owned[known], mine
-			));
+			out.push(changeOf(known < 0 ? Added : Changed, unit, selector, counts, known < 0 ? [] : before.owned[known], mine, moved[i]));
 		}
-		for (i => unit in before.units) if (!unit.header && !matched[i])
+		for (i => unit in before.units) if (!unit.header && !matched[i]) {
+			edits++;
 			out.push(changeOf(
 				Removed, unit, baseAddress.describe(before.source, unit.node), { added: 0, removed: before.owned[i].length },
-				before.owned[i], []
+				before.owned[i], [], false
 			));
-		// lines no declaration owns, or a difference no declaration's own lines show — where the header sits among them
-		if (!sameLines(before.rest, after.rest) || out.length == 0) {
-			final rest: LineCounts = out.length == 0 ? lineCounts(before.lines, after.lines) : lineCounts(before.rest, after.rest);
-			out.push({
-				status: Changed,
-				key: MODULE_REST,
-				name: MODULE_REST,
-				selector: MODULE_REST,
-				added: rest.added,
-				removed: rest.removed,
-				depth: 0,
-				spanLines: 0,
-				before: before.rest,
-				after: after.rest
-			});
 		}
+		// a reorder alone is the `(module)` row's; beside another change no other row would show it
+		if (edits == 0) out.resize(0);
+		if (!sameLines(before.rest, after.rest) || out.length == 0) out.push(restChange(before, after, out.length == 0));
 		return out;
+	}
+
+	/** The pseudo-declaration of the lines no declaration owns, counted over the whole file when no declaration changed. */
+	private static function restChange(before: FileVersion, after: FileVersion, whole: Bool): DeclarationChange {
+		final rest: LineCounts = whole ? lineCounts(before.lines, after.lines) : lineCounts(before.rest, after.rest);
+		return {
+			status: Changed,
+			key: MODULE_REST,
+			name: MODULE_REST,
+			selector: MODULE_REST,
+			added: rest.added,
+			removed: rest.removed,
+			moved: false,
+			depth: 0,
+			spanLines: 0,
+			before: before.rest,
+			after: after.rest
+		};
+	}
+
+	/**
+	 * Per unit of `after`, whether it stands in another place than its counterpart among its siblings: the matched siblings
+	 * outside a longest run whose counterparts keep their order in `before` — the fewest that explain the reorder.
+	 */
+	private static function movedUnits(after: FileVersion, partner: Array<Int>): Array<Bool> {
+		final moved: Array<Bool> = [for (_ in after.units) false];
+		final siblings: Map<Int, Array<Int>> = [];
+		for (i => unit in after.units) if (!unit.header && partner[i] >= 0) {
+			final group: Null<Array<Int>> = siblings[unit.parent];
+			if (group == null)
+				siblings[unit.parent] = [i]
+			else
+				group.push(i);
+		}
+		for (group in siblings) for (k => inRun in InOrder.kept(group.map(at -> partner[at]))) moved[group[k]] = !inRun;
+		return moved;
 	}
 
 	/**
@@ -358,7 +392,8 @@ final class DeclarationDelta {
 	}
 
 	private static function changeOf(
-		status: DeclarationStatus, unit: OwnerUnit, selector: String, counts: LineCounts, before: Array<String>, after: Array<String>
+		status: DeclarationStatus, unit: OwnerUnit, selector: String, counts: LineCounts, before: Array<String>, after: Array<String>,
+		moved: Bool
 	): DeclarationChange {
 		return {
 			status: status,
@@ -367,6 +402,7 @@ final class DeclarationDelta {
 			selector: selector,
 			added: counts.added,
 			removed: counts.removed,
+			moved: moved,
 			depth: unit.depth,
 			spanLines: unit.last - unit.first + 1,
 			before: before,

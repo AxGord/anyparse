@@ -188,4 +188,44 @@ class ChangedCommandCliTest extends Test {
 		#end
 	}
 
+	/**
+	 * A member that only moved is named beside the edit of another one: `(moved)` alone, or after the counts of a member
+	 * edited too; a reorder with no other change stays the `(module)` row, and `--diff` prints no hunk for a moved-only row.
+	 */
+	public function testAMovedMemberIsNamedBesideAnEdit(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeTree('apq_changed_moved', [
+			{ name: 'A.hx', source: movedClass('A', 'x', 'y', '2') },
+			{ name: 'B.hx', source: 'class B {\n\tvar x: Int = 1;\n\tvar y: Int = 2;\n}\n' },
+			{ name: 'C.hx', source: 'class C {\n\tvar x: Int = 1;\n\tvar y: Int = 2;\n}\n' }
+		]);
+		CliFixture.git(root, ['init', '-q']);
+		CliFixture.git(root, ['add', '-A']);
+		CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']);
+		File.saveContent('$root/A.hx', movedClass('A', 'y', 'x', '20'));
+		File.saveContent('$root/B.hx', 'class B {\n\tvar y: Int = 2;\n\tvar x: Int = 10;\n}\n');
+		File.saveContent('$root/C.hx', 'class C {\n\tvar y: Int = 2;\n\tvar x: Int = 1;\n}\n');
+		final beside: String = CliFixture.inDir(root, ['changed', 'HEAD', 'A.hx']);
+		final shown: String = CliFixture.inDir(root, ['changed', 'HEAD', '--diff', 'A.hx']);
+		final edited: String = CliFixture.inDir(root, ['changed', 'HEAD', 'B.hx']);
+		final alone: String = CliFixture.inDir(root, ['changed', 'HEAD', 'C.hx']);
+		CliFixture.removeDir(root);
+		Assert.isTrue(beside.indexOf('    ~ VarMember:x  (moved)\n    ~ FnMember:g  +1 -1\n') >= 0, beside);
+		Assert.isTrue(shown.indexOf('    ~ VarMember:x  (moved)\n    ~ FnMember:g  +1 -1\n') >= 0, shown);
+		Assert.isTrue(edited.indexOf('    ~ VarMember:x  +1 -1 (moved)') >= 0, edited);
+		Assert.isTrue(alone.indexOf('    ~ (module)') >= 0, alone);
+		Assert.equals(-1, alone.indexOf('(moved)'), alone);
+		#else
+		Assert.pass('a git child process needs the nodejs target');
+		#end
+	}
+
+	/** A class `name` holding the fields `first` then `second` and `g` returning `result`. */
+	private static function movedClass(name: String, first: String, second: String, result: String): String {
+		inline function field(id: String): String {
+			return '\tvar $id: Int = ${id == 'x' ? 1 : 2};\n';
+		}
+		return 'class $name {\n${field(first)}${field(second)}\n\tpublic function g(): Int {\n\t\treturn $result;\n\t}\n}\n';
+	}
+
 }

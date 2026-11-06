@@ -8,6 +8,7 @@ import anyparse.check.common.members.MemberSlots.MemberRank;
 import anyparse.check.common.members.MemberSlots.OrderedMember;
 import anyparse.check.common.members.MemberSpacing.LayoutIssue;
 import anyparse.check.common.members.MemberSpacing.SpacingPolicy;
+import anyparse.ds.InOrder;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -303,14 +304,8 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 		// increasing run of source indices within `sorted` - the heaviest one is a line-weighted
 		// longest-increasing-subsequence over those indices.
 		final index: Array<Int> = sorted.map(m -> m.index);
-		final run: Array<Int> = [for (_ in index) 0];
 		var kept: Int = 0;
-		for (i in 0...index.length) {
-			var prefix: Int = 0;
-			for (j in 0...i) if (index[j] < index[i] && run[j] > prefix) prefix = run[j];
-			run[i] = prefix + extent[index[i]];
-			if (run[i] > kept) kept = run[i];
-		}
+		for (i => inRun in InOrder.kept(index, i -> extent[index[i]])) if (inRun) kept += extent[index[i]];
 		return total - kept;
 	}
 

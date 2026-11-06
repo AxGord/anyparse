@@ -241,14 +241,12 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		// a file added or deleted whole shows its lines only for the declaration a selector names
 		final lines: Bool = opts.diff && (!whole || opts.selector != null);
 		for (change in shown) {
-			final size: String = switch change.status {
-				case Changed: '+${change.added} -${change.removed}';
-				case Added: '${change.spanLines} line(s)';
-				case Removed: '${change.spanLines} line(s), base';
-			};
-			out.add('    ${change.status} ${change.selector}  $size\n');
-			if (lines) for (row in DeclarationDelta.hunk(change.before, change.after, opts.selector == null ? DIFF_CONTEXT : null))
-				out.add('        $row\n');
+			out.add('    ${change.status} ${change.selector}  ${sizeOf(change)}\n');
+			// a member that only moved has no edit to show; its lines are named on request
+			final unedited: Bool = change.status == Changed && change.added + change.removed == 0;
+			if (lines && (!unedited || opts.selector != null))
+				for (row in DeclarationDelta.hunk(change.before, change.after, opts.selector == null ? DIFF_CONTEXT : null))
+					out.add('        $row\n');
 		}
 		return out.toString();
 	}
@@ -289,6 +287,20 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			case ChangeClass.Layout, ChangeClass.Unchanged: '';
 			case ChangeClass.Values: valueCounts(delta.values);
 			case _: '  +${delta.added} -${delta.removed}';
+		};
+	}
+
+	/**
+	 * A changed declaration's size column: its line counts, or `(moved)` where
+	 * only its place changed; `(moved)` follows the counts of an edited one.
+	 */
+	private static function sizeOf(change: DeclarationChange): String {
+		return switch change.status {
+			case Changed: change.added + change.removed == 0 && change.moved
+				? '(moved)'
+				: '+${change.added} -${change.removed}${change.moved ? ' (moved)' : ''}';
+			case Added: '${change.spanLines} line(s)';
+			case Removed: '${change.spanLines} line(s), base';
 		};
 	}
 
