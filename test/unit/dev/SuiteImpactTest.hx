@@ -243,6 +243,17 @@ final class SuiteImpactTest extends Test {
 		);
 	}
 
+	@:pin('guard')
+	public function testASinkIsReachedButPassesTheChangeOnToNoFile(): Void {
+		final sources: Array<ImpactSource> = [
+			source('src/a/Base.hx', 'package a;\nclass Base {}'),
+			source('src/a/Sink.hx', 'package a;\nclass Sink { var b = Base; }'),
+			source('src/a/Far.hx', 'package a;\nclass Far { var s = Sink; }')
+		];
+		Assert.same(['src/a/Base.hx', 'src/a/Far.hx', 'src/a/Sink.hx'], SuiteImpact.reached(sources, ['src/a/Base.hx'], []));
+		Assert.same(['src/a/Base.hx', 'src/a/Sink.hx'], SuiteImpact.reached(sources, ['src/a/Base.hx'], ['src/a/Sink.hx']));
+	}
+
 	private static function source(path: String, text: String): ImpactSource {
 		return { path: path, text: text };
 	}

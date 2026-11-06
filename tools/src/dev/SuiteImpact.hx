@@ -128,6 +128,16 @@ final class SuiteImpact {
 		return WHOLE_FILES.contains(name) || Path.extension(name) == BUILD_EXTENSION ? '$path is a build or configuration file' : null;
 	}
 
+	/**
+	 * Every file a change of `touched` reaches over `sources`, the touched ones among them. A file in `sinks` is reached but
+	 * passes the change on to no file: the reader that only lists what it holds.
+	 */
+	public static function reached(
+		sources: Array<ImpactSource>, touched: Array<String>, sinks: Array<String>, ?declared: DeclaredTypes
+	): Array<String> {
+		return new ImpactGraph(sources, [], declared ?? declaredTypes(sources), sinks).dependents(touched);
+	}
+
 	/** The files a change of `touched` reaches `path` through, `path` first; empty when it does not reach it. */
 	public static function explain(
 		sources: Array<ImpactSource>, entries: Map<String, String>, touched: Array<String>, path: String
@@ -548,8 +558,14 @@ private final class ImpactGraph {
 	private final _pending: Array<PendingModule> = [];
 	private final _declared: DeclaredTypes;
 
-	public function new(sources: Array<ImpactSource>, entries: Map<String, String>, declared: DeclaredTypes) {
+	/** The files that are reached but pass the change on to no file. */
+	private final _sinks: Array<String>;
+
+	public function new(
+		sources: Array<ImpactSource>, entries: Map<String, String>, declared: DeclaredTypes, ?sinks: Array<String>
+	) {
 		_declared = declared;
+		_sinks = sinks ?? [];
 		for (i => source in sources) {
 			final text: String = SuiteImpact.uncommented(source.text);
 			_paths.push(source.path);
@@ -638,6 +654,7 @@ private final class ImpactGraph {
 		if (_via.exists(i) || (from != TOUCHED && SuiteImpact.layer(_paths[i]) < SuiteImpact.layer(_paths[from]))) return;
 		_via[i] = from;
 		final path: String = _paths[i];
+		if (_sinks.contains(path)) return;
 		final module: Null<ImpactModule> = SuiteImpact.moduleOf(path);
 		if (Path.withoutDirectory(path) != AMBIENT) {
 			if (module != null) queue(module, i);

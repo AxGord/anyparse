@@ -107,13 +107,28 @@ final class GateLint {
 	 */
 	public function infraOutcome(): Outcome {
 		if (!_gate.ruleCodeMoved()) return Skipped('no rule code touched');
-		final baseline: Null<Baseline> = _gate.baseline;
-		if (baseline == null) return NotRun(GateTree.NO_BASELINE);
+		final recorded: Null<Baseline> = _gate.baseline;
+		if (recorded == null) return NotRun(GateTree.NO_BASELINE);
+		final baseline: Baseline = recorded;
 		if (baseline.infra.length == 0) return NotRun('rule code moved, but the baseline recorded no --infra-tree');
-		final baseKey: Null<String> = cacheKey('base ${_gate.base}', GateTree.TREE_SCOPE);
+		final scope: Null<Array<String>> = RuleScope.ofTree(_gate.tree, _gate.base, _gate.touched);
+		return settle(scope == null ? null : () -> compareScoped(baseline, scope), compareScoped.bind(baseline, null));
+	}
+
+	/** The cache entry of the lint of `scope` in the tree `tree` names by this engine; null when the engine has none. */
+	private inline function cacheKey(tree: String, scope: Array<String>, ?rules: Array<String>): Null<String> {
+		return keyOf(_engine, tree, scope, rules);
+	}
+
+	/**
+	 * The comparison of INFRA gate 4 over the findings of the rules `scope` names (every rule when null): the base tree is
+	 * linted by the new engine in a checkout of the base unless the cache holds that lint.
+	 */
+	private function compareScoped(baseline: Baseline, scope: Null<Array<String>>): Outcome {
+		final baseKey: Null<String> = cacheKey('base ${_gate.base}', GateTree.TREE_SCOPE, scope);
 		return cachedLint(baseKey) == null
-			? _gate.withBaseCheckout(checkout -> compareInfra(checkout, baseKey, baseline))
-			: compareInfra(null, baseKey, baseline);
+			? _gate.withBaseCheckout(checkout -> compareInfra(checkout, baseKey, baseline, scope))
+			: compareInfra(null, baseKey, baseline, scope);
 	}
 
 	/**
@@ -139,7 +154,7 @@ final class GateLint {
 	}
 
 	/** Lint the base `checkout` (unless the cache has it under `baseKey`) and every infra tree, and compare each with its snapshot. */
-	private function compareInfra(checkout: Null<String>, baseKey: Null<String>, baseline: Baseline): Outcome {
+	private function compareInfra(checkout: Null<String>, baseKey: Null<String>, baseline: Baseline, rules: Null<Array<String>>): Outcome {
 		final trees: Array<InfraLint> = [
 			{
 				name: 'base tree',
@@ -155,7 +170,7 @@ final class GateLint {
 					name: Path.withoutDirectory(s.tree),
 					tree: s.tree,
 					scope: ['.'],
-					key: cacheKey('tree ${s.tree} ${GateTree.treeState(s.tree)} no-oracle', ['.']),
+					key: cacheKey('tree ${s.tree} ${GateTree.treeState(s.tree)} no-oracle', ['.'], rules),
 					oracle: false,
 					snapshot: s.snapshot
 				}
@@ -165,7 +180,7 @@ final class GateLint {
 		final runs: Array<Result> = misses.length == 0
 			? []
 			: Pool.of(misses.length)
-				.map(misses, i -> lintCommand(trees[i].tree, trees[i].scope, trees[i].oracle, _gate.log('infra-now-$i.json')));
+				.map(misses, i -> lintCommand(trees[i].tree, trees[i].scope, trees[i].oracle, _gate.log('infra-now-$i.json'), rules));
 		for (j => i in misses) {
 			final now: String = _gate.log('infra-now-$i.json');
 			final linted: Outcome = saveLint(runs[j], trees[i].tree, now);
@@ -179,13 +194,14 @@ final class GateLint {
 		for (i => t in trees) {
 			final now: String = _gate.log('infra-now-$i.json');
 			File.saveContent(now, reports[i] ?? '[]');
-			final moved: LintMove = lintDiff(t.snapshot, now, 'infra-$i.txt');
+			final moved: LintMove = lintDiff(snapshotOf(t.snapshot, i, rules), now, 'infra-$i.txt');
 			if (moved.added + moved.removed > 0) moves.push('${t.name} +${moved.added} -${moved.removed}');
 			for (row in moved.rows) rows.push('${t.name} $row');
 		}
 		_gate.summary.excerpt(rows);
 		final reused: Int = trees.length - misses.length;
-		_gate.summary.detail('${trees.length} tree(s), nothing moved${reused > 0 ? ', $reused lint(s) reused' : ''}');
+		final bounded: String = rules == null ? '' : ', ${rules.length} rule(s)';
+		_gate.summary.detail('${trees.length} tree(s)$bounded, nothing moved${reused > 0 ? ', $reused lint(s) reused' : ''}');
 		return moves.length == 0 ? Passed : Failed('findings moved: ${moves.join(', ')} — ${_gate.log('infra-<k>.txt')}');
 	}
 
@@ -205,8 +221,8 @@ final class GateLint {
 	 * whose oracle is unavailable is chatty there, more than a pipe can be trusted to carry. `oracle` is
 	 * false for a tree that has no project to build.
 	 */
-	private function lintCommand(dir: String, scope: Array<String>, oracle: Bool, out: String): Command {
-		return _gate.hxqLogged(dir, lintArgs(scope, oracle), errLogOf(out));
+	private function lintCommand(dir: String, scope: Array<String>, oracle: Bool, out: String, ?rules: Array<String>): Command {
+		return _gate.hxqLogged(dir, lintArgs(scope, oracle, rules), errLogOf(out));
 	}
 
 	/** `hxq lint-diff` of two snapshots, its report kept as `name` in the logs. */
@@ -222,12 +238,6 @@ final class GateLint {
 			first: first.trim(),
 			rows: GateExcerpt.lintRows(diff.out, true)
 		};
-	}
-
-	/** The cache entry of the lint of `scope` in the tree `tree` names by this engine; null when the engine has none. */
-	private function cacheKey(tree: String, scope: Array<String>): Null<String> {
-		final engine: Null<String> = _engine;
-		return engine == null ? null : Sha1.encode([tree, engine].concat(scope).join('\n'));
 	}
 
 	/** The report an earlier run of the gate cached under `key`, or null. */
@@ -248,6 +258,17 @@ final class GateLint {
 	}
 
 	/**
+	 * The baseline's snapshot `file` of the tree numbered `i`, as the comparison over `rules` reads it: narrowed to those rules in
+	 * a file of the logs, or `file` itself for the whole tree (null).
+	 */
+	private function snapshotOf(file: String, i: Int, rules: Null<Array<String>>): String {
+		if (rules == null) return file;
+		final kept: String = _gate.log('infra-base-$i.json');
+		File.saveContent(kept, RuleScope.keep(File.getContent(file), rules));
+		return kept;
+	}
+
+	/**
 	 * The lint report `report` with every record of a file `pathsNow` maps filed under the path it maps to: a moved file's
 	 * findings at the base, under the path they are compared at. A report with nothing to rename is answered as it is.
 	 */
@@ -262,8 +283,34 @@ final class GateLint {
 	}
 
 	/** The arguments of a `lint --all --format json` of `scope`, with the compiler oracle unless `oracle` is false. */
-	public static function lintArgs(scope: Array<String>, oracle: Bool): Array<String> {
-		return ['lint'].concat(scope).concat(['--all', '--format', 'json']).concat(oracle ? [] : ['--no-oracle']);
+	public static function lintArgs(scope: Array<String>, oracle: Bool, ?rules: Array<String>): Array<String> {
+		final only: Array<String> = [for (id in rules ?? []) for (arg in ['--rule', id]) arg];
+		return ['lint'].concat(scope)
+			.concat(['--all', '--format', 'json'])
+			.concat(only)
+			.concat(oracle ? [] : ['--no-oracle']);
+	}
+
+	/**
+	 * The verdict of INFRA gate 4: the `scoped` comparison's when it passes, else the `whole` one's — a movement among the rules
+	 * of a scope is decided by every rule, since a rule linted alone (one another rule supersedes) can differ from its run in the
+	 * whole set. Without a scoped comparison only `whole` runs.
+	 */
+	public static function settle(scoped: Null<() -> Outcome>, whole: () -> Outcome): Outcome {
+		if (scoped != null) {
+			final outcome: Outcome = scoped();
+			if (outcome.match(Passed)) return outcome;
+		}
+		return whole();
+	}
+
+	/**
+	 * The cache entry of a lint of `scope` in the tree `tree` by the engine built from `engine` (null: none is cached), over `rules` when
+	 * given: a report of some rules is never served for the whole set, nor one set's for another's.
+	 */
+	public static function keyOf(engine: Null<String>, tree: String, scope: Array<String>, ?rules: Array<String>): Null<String> {
+		final only: Array<String> = rules == null ? [] : ['rules'].concat(rules);
+		return engine == null ? null : Sha1.encode([tree, engine].concat(scope).concat(only).join('\n'));
 	}
 
 	/** The file the standard error of the lint reporting to `out` goes to. */
