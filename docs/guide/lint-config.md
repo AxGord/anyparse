@@ -139,9 +139,10 @@ compiled set cannot be probed, is EXCLUDED and named once per run, and the other
 still judge what they cover. One rule's edit sets in every file are judged
 TOGETHER: written at once and typechecked by every configuration any of them
 needs, so a rule whose edits all build costs one round, not one per file; a
-rejected set is put back and judged as its two halves the same way, so a half
-with no failing file is kept in one round and only a half holding one is split
-further, down to single files judged alone; a set the oracle cannot run on at
+rejected set is put back and the files the compiler's errors name are judged alone
+while the rest are typechecked as one batch of their own (errors that name no
+candidate judge the set as its two halves, a half with no failing file kept in
+one round, down to single files judged alone); a set the oracle cannot run on at
 all is judged file by file. Judged together, edits in
 two files that typecheck only together now both land where a file-by-file pass
 reverted each — the tree that results is still confirmed by every configuration

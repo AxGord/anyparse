@@ -67,11 +67,11 @@ final class FixVerifierBatchE2ETest extends Test {
 	}
 
 	/**
-	 * One file whose rewrite breaks the build: the set is rejected and judged in halves, the half without it is kept
-	 * in one round, and only the half holding it is split down to files judged alone.
+	 * One file whose rewrite breaks the build: the set is rejected, the files the compiler's errors do not blame are kept
+	 * in one round, and only the blamed file is judged alone.
 	 */
 	@:pin('control')
-	@:killer('M-FIXVERIFY-BATCH-NO-SPLIT')
+	@:killer('M-FIXVERIFY-BATCH-NO-BLAME')
 	public function testARejectedSetKeepsTheFilesThatBuild(): Void {
 		#if (sys || nodejs)
 		if (!oracleWorks()) {
@@ -92,9 +92,11 @@ final class FixVerifierBatchE2ETest extends Test {
 		Assert.equals('$dir/C.hx', result.reverted[0].file);
 		Assert.equals(sources[2], File.getContent('$dir/C.hx'), 'the failing file is byte-identical to its input');
 		for (name in ['A', 'B', 'D']) Assert.notEquals(-1, File.getContent('$dir/$name.hx').indexOf('trace("x")'));
-		Assert.equals('[4,2,2,1,1]', Std.string(result.rounds), 'the whole set, its two halves, then the files of the rejected half alone');
 		Assert.equals(
-			', 5 oracle round(s) (candidate files per round: 4, 2x2, 1x2)', LintFixVerify.roundsTail(result.rounds),
+			'[4,3,1]', Std.string(result.rounds), 'the whole set, the three files the errors do not blame, then the blamed file alone'
+		);
+		Assert.equals(
+			', 3 oracle round(s) (candidate files per round: 4, 3, 1)', LintFixVerify.roundsTail(result.rounds),
 			'the summary clause the run prints for these rounds'
 		);
 		Assert.equals('', LintFixVerify.roundsTail([]), 'a run that spent no round prints nothing');
@@ -105,12 +107,12 @@ final class FixVerifierBatchE2ETest extends Test {
 	}
 
 	/**
-	 * Two failing files in different halves: the set is judged as its two halves, each again as one batch and each
-	 * rejected, so every file ends up judged alone — the files that build land and each failer reverts.
+	 * Two failing files in different halves: both are blamed by the errors and judged alone, the two files that build are
+	 * kept in one round — the files that build land and each failer reverts.
 	 */
 	@:pin('control')
-	@:killer('M-FIXVERIFY-BATCH-NO-SPLIT')
-	public function testFailersInBothHalvesSplitTheSet(): Void {
+	@:killer('M-FIXVERIFY-BATCH-NO-BLAME')
+	public function testEveryBlamedFileIsJudgedAloneAndTheRestTogether(): Void {
 		#if (sys || nodejs)
 		if (!oracleWorks()) {
 			Assert.pass('haxe unavailable — skipped');
@@ -125,7 +127,7 @@ final class FixVerifierBatchE2ETest extends Test {
 		Assert.equals(sources[0], File.getContent('$dir/A.hx'), 'a failing file is byte-identical to its input');
 		Assert.equals(sources[3], File.getContent('$dir/D.hx'), 'a failing file is byte-identical to its input');
 		Assert.equals(
-			'[4,2,1,1,2,1,1]', Std.string(result.rounds), 'the whole set, then each half as a batch of its own, then its files alone'
+			'[4,2,1,1]', Std.string(result.rounds), 'the whole set, the two unblamed files as one batch, then each blamed file alone'
 		);
 		CliFixture.removeDir(dir);
 		#else
@@ -159,7 +161,10 @@ final class FixVerifierBatchE2ETest extends Test {
 		Assert.equals('[$dir/A.hx,$dir/C.hx]', Std.string(result.applied));
 		Assert.equals('[$dir/B.hx,$dir/D.hx]', Std.string([for (r in result.reverted) r.file]));
 		Assert.equals(sources[3], File.getContent('$dir/D.hx'), 'the second of the clashing pair is byte-identical to its input');
-		Assert.equals('[4,2,1,1,2,1,1]', Std.string(result.rounds), 'the whole set, each rejected half, then every file alone');
+		Assert.equals(
+			'[4,3,1,2,1,1,1]', Std.string(result.rounds),
+			'the whole set, the three it does not blame (their clash is blamed on Main, so halves), then B alone'
+		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -202,23 +207,85 @@ final class FixVerifierBatchE2ETest extends Test {
 		#end
 	}
 
+	/**
+	 * A failing rewrite whose error is reported in a module no candidate edits (`Main` reads the field the rewrite
+	 * retypes): the errors blame no candidate, so the rejected set is judged in halves — the half without the failer is
+	 * kept in one round and the half holding it is split down to files judged alone.
+	 */
+	@:pin('control')
+	@:killer('M-FIXVERIFY-BATCH-NO-SPLIT')
+	public function testErrorsBlamingNoCandidateJudgeTheSetInHalves(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final sources: Array<String> = [
+			traced('A'),
+			traced('B'),
+			'class C {\n\n\tpublic static var v = 1;\n\n\tpublic static function f() {}\n\n}\n',
+			traced('D')
+		];
+		final main: String = 'class Main {\n\n\tstatic function main() {\n\t\tA.f();\n\t\tB.f();\n\t\tC.f();\n\t\tD.f();\n'
+			+ '\t\tfinal x:Int = C.v;\n\t}\n\n}\n';
+		final dir: String = fixture(sources, main);
+		final result: FixVerifyResult = verify(dir, sources, new TestRiskyLiteralRewrite('"x"'));
+		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
+		Assert.equals('[$dir/A.hx,$dir/B.hx,$dir/D.hx]', Std.string(result.applied));
+		Assert.equals('[$dir/C.hx]', Std.string([for (r in result.reverted) r.file]));
+		Assert.equals(sources[2], File.getContent('$dir/C.hx'), 'the failing file is byte-identical to its input');
+		Assert.equals('[4,2,2,1,1]', Std.string(result.rounds), 'the whole set, its two halves, then the files of the rejected half alone');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Every candidate's rewrite breaks the build: the errors blame them all, the rest is empty (no round spent on it),
+	 * and each file is judged alone — cheaper than a descent through halves for failers that do not depend on each other.
+	 */
+	@:pin('control')
+	@:killer('M-FIXVERIFY-BATCH-NO-BLAME')
+	public function testASetWhoseEveryFileIsBlamedJudgesEachAlone(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final sources: Array<String> = [intField('A'), intField('B'), intField('C')];
+		final main: String = 'class Main {\n\n\tstatic function main() {\n\t\tA.f();\n\t\tB.f();\n\t\tC.f();\n\t}\n\n}\n';
+		final dir: String = fixture(sources, main);
+		final result: FixVerifyResult = verify(dir, sources, new TestRiskyLiteralRewrite('"x"'));
+		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
+		Assert.equals(0, result.applied.length);
+		Assert.equals(3, result.reverted.length);
+		Assert.equals('[3,1,1,1]', Std.string(result.rounds), 'the whole set, then each blamed file alone — no round on the empty rest');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	private static function traced(name: String): String {
 		return 'class $name {\n\n\tpublic static function f() {\n\t\ttrace(1);\n\t}\n\n}\n';
 	}
+
 	/** A module whose literal `1` initialises an `Int` field, so a string rewrite of it does not build. */
 	private static function intField(name: String): String {
 		return 'class $name {\n\n\tpublic static var v:Int = 1;\n\n\tpublic static function f() {}\n\n}\n';
 	}
+
 	/** A module holding nothing but the function `MAIN` calls. */
 	private static function plain(name: String): String {
 		return 'class $name {\n\n\tpublic static function f() {}\n\n}\n';
 	}
 
-	private static function fixture(sources: Array<String>): String {
+	private static function fixture(sources: Array<String>, ?main: String): String {
 		return CliFixture.writeDir('fixverifbatch', [
 			for (i => source in sources) { name: '${NAMES[i]}.hx', source: source }
-		].concat([{ name: 'Main.hx', source: MAIN }, { name: 'check.hxml', source: HXML }]));
+		].concat([{ name: 'Main.hx', source: main ?? MAIN }, { name: 'check.hxml', source: HXML }]));
 	}
 
 	private static function verify(dir: String, sources: Array<String>, check: Check): FixVerifyResult {

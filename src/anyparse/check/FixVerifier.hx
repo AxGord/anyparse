@@ -15,6 +15,7 @@ import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LintFixSafePass;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -915,8 +916,9 @@ final class FixVerifier {
 	 * One check's candidates judged TOGETHER, one verdict per candidate in order: written at once and typechecked by
 	 * the union of their verifying configurations, so a check whose edits all build costs one round, not one per file.
 	 *
-	 * A rejected set is put back at its own texts and judged as its two halves (`judgeHalves`), down to single files
-	 * judged alone — each on top of what the halves before it kept, as a file-by-file pass would judge it. An
+	 * A rejected set is put back at its own texts and judged by what the compiler blames (`judgeRejected`), or as its two
+	 * halves (`judgeHalves`) when the errors attribute nothing — each file judged alone on top of what the files before it
+	 * kept, as a file-by-file pass would judge it. An
 	 * unavailable oracle leaves every file to `judgeAlone` — exactly that file-by-file pass.
 	 */
 	private static function judgeBatch(
@@ -938,9 +940,35 @@ final class FixVerifier {
 		// every file is back at its own text before any is judged again, else a later confirm would read a tree still
 		// carrying another file's unkept candidate
 		for (candidate in candidates) write(candidate.entry.file, candidate.entry.source);
-		return outcome.match(Rejected(_))
-			? judgeHalves(candidates, plugin, write, rounds)
-			: [for (candidate in candidates) judgeAlone(candidate, plugin, write, rounds)];
+		return switch outcome {
+			case Rejected(errors): judgeRejected(candidates, errors, plugin, write, rounds);
+			case _: [for (candidate in candidates) judgeAlone(candidate, plugin, write, rounds)];
+		};
+	}
+
+	/**
+	 * A rejected set judged by what the compiler's errors blame: the candidates the errors name are judged alone, the
+	 * rest as one batch of their own — so a few failers among many files cost one round for the files that build plus one
+	 * per failer, not a descent through the halves. The batch of the unblamed is its own typecheck, so an error that hid
+	 * behind another (the compiler stops a module, or a configuration, at the first) is found by it and blamed again.
+	 *
+	 * Errors that name no candidate (the broken thing is a caller nobody edited) attribute nothing: the set is judged in
+	 * halves. A set whose every candidate is blamed has an empty rest, so each file is judged alone.
+	 */
+	private static function judgeRejected(
+		candidates: Array<EntryCandidate>, errors: String, plugin: GrammarPlugin, write: (String, String) -> Void, rounds: Array<Int>
+	): Array<EntryVerdict> {
+		final blamed: Array<String> = LintFixSafePass.implicated(errors, [for (candidate in candidates) candidate.entry.file], []);
+		if (blamed.length == 0) return judgeHalves(candidates, plugin, write, rounds);
+		final clear: Array<EntryVerdict> = judgeBatch(candidates.filter(c -> !blamed.contains(c.entry.file)), plugin, write, rounds);
+		final accused: Array<EntryVerdict> = [
+			for (candidate in candidates) if (blamed.contains(candidate.entry.file)) judgeAlone(candidate, plugin, write, rounds)
+		];
+		var nextClear: Int = 0;
+		var nextAccused: Int = 0;
+		return [
+			for (candidate in candidates) blamed.contains(candidate.entry.file) ? accused[nextAccused++] : clear[nextClear++]
+		];
 	}
 
 	/**

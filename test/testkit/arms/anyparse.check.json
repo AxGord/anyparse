@@ -233,9 +233,17 @@
 			"name": "M-FIXVERIFY-BATCH-UNAVAILABLE-SPLITS",
 			"type": "anyparse.check.FixVerifier",
 			"method": "judgeBatch",
-			"find": "outcome.match(Rejected(_))",
-			"replace": "!outcome.match(Confirmed)",
+			"find": "case Rejected(errors):",
+			"replace": "case Rejected(errors) | Unavailable(errors):",
 			"note": "a batch the oracle could not judge at all is split into halves and asked again, spending rounds on a compiler that cannot run"
+		},
+		{
+			"name": "M-FIXVERIFY-BATCH-NO-BLAME",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeRejected",
+			"find": "if (blamed.length == 0)",
+			"replace": "if (true)",
+			"note": "a rejected batch is judged in halves even though the compiler errors name the failing files, so the files that build are kept only after a descent through the halves"
 		},
 		{
 			"name": "M-OWNED-MERGE",
