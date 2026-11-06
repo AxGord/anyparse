@@ -18,4 +18,5 @@ The read-only commands: each finds code by its shape or by its binding, never by
 | `meta` | declarations carrying a given `@:metadata` |
 | `owner` | which component answers a question asked in words: types and members ranked by their name and doc comment; `--list` prints every question a doc says its declaration is "the one answer to" |
 | `diff` | structural AST diff between two files |
+| `get` | a value in a JSON document by dotted path (`get f.json a.0.b`), or — `get --where <path>=<value> <file\|dir\|glob>…` — the RECORDS across several documents whose key prints as that value, one `<file> <record path>` line each (`.` = the document root), exit 1 on none; a code file is refused |
 | `source` | raw verbatim lines — `--range`, or one node's source by name/position (`--select` / `--at`); no-parse mode reads files the grammar can't yet read |

@@ -2,7 +2,8 @@ package anyparse.query.cli;
 
 /**
  * Which grammar a process-level `apq` call names when its argv carries no `--lang`: the one whose
- * registered extension (`CliArgs.langOfFile`) every file argument carries, else — for a command that reads
+ * registered extension (`CliArgs.langOfFile`) every file argument carries (none at all for a call its command
+ * declares `LanguageFree` or `LanguageFreeWhen`), else — for a command that reads
  * its document from stdin — the one whose content test accepts stdin (`CliArgs.langOfContent`). The only
  * default is a preset's `--lang-default` (`hxq`), which yields to a file another grammar's extension names; a
  * call that names none is a usage error that says how to name one.
@@ -35,7 +36,7 @@ final class LanguageChoice {
 		final preset: Null<String> = presetAt(given, at);
 		final args: Array<String> = preset == null ? given : given.slice(0, at).concat(given.slice(at + 2));
 		if (args.contains(LANG_FLAG)) return { args: args, stdin: null };
-		if (command is LanguageFree || args.contains('--help') || args.contains('-h'))
+		if (command is LanguageFree || languageFreeFor(command, args) || args.contains('--help') || args.contains('-h'))
 			return preset == null ? { args: args, stdin: null } : named(preset, args);
 		final ofFiles: Array<String> = [];
 		// A `-`-led positional is stdin or a short option.
@@ -88,6 +89,11 @@ final class LanguageChoice {
 	/** Every registered `--lang` with its extensions, for a usage error: `haxe .hx, json .json`. */
 	private static function known(): String {
 		return [for (entry in CliArgs.grammars()) '${entry.lang} ${entry.extensions.join(' ')}'].join(', ');
+	}
+
+	/** Whether `command` declares this very call language-free (`LanguageFreeWhen`). */
+	private static function languageFreeFor(command: CliCommand, args: Array<String>): Bool {
+		return command is LanguageFreeWhen && cast(command, LanguageFreeWhen).languageFreeFor(args);
 	}
 
 }

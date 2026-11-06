@@ -117,8 +117,34 @@ final class DataPath {
 		return source.substring(span.from, span.to);
 	}
 
+	/**
+	 * The record paths under `start` — itself and every object nested in it, in document order — whose
+	 * `where.segments` resolve to a value that `render`s as `where.value`. The root's path is empty.
+	 */
+	public static function records(start: QueryNode, where: WhereClause, source: String, shape: RefShape): Array<Array<String>> {
+		final found: Array<Array<String>> = [];
+		collectRecords(valueOf(start, shape), [], where, source, shape, found);
+		return found;
+	}
+
 	private static inline function isContainer(node: QueryNode, shape: RefShape): Bool {
 		return node.kind == shape.objectLiteralKind || node.kind == shape.arrayLiteralKind;
+	}
+
+	private static function collectRecords(
+		node: QueryNode, at: Array<String>, where: WhereClause, source: String, shape: RefShape, into: Array<Array<String>>
+	): Void {
+		if (node.kind == shape.objectLiteralKind) {
+			switch resolve(node, where.segments, shape) {
+				case Found(value) if (render(value, source, shape) == where.value):
+					into.push(at);
+				case _:
+			}
+			for (entry in node.children) collectRecords(valueOf(entry, shape), at.concat([entry.name ?? '']), where, source, shape, into);
+		} else if (node.kind == shape.arrayLiteralKind) {
+			for (i in 0...node.children.length)
+				collectRecords(valueOf(node.children[i], shape), at.concat(['$i']), where, source, shape, into);
+		}
 	}
 
 	/** The child `segment` names in `node`: the LAST entry of that key (as a JSON reader keeps it), or the element at that index. */
@@ -149,3 +175,9 @@ enum DataLookup {
 	Found(value: QueryNode);
 	Missing(why: String);
 }
+
+/** `apq get --where`'s clause: a record matches when `segments` resolve in it to a value that prints as `value`. */
+typedef WhereClause = {
+	final segments: Array<String>;
+	final value: String;
+};

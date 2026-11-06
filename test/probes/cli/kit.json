@@ -4,6 +4,8 @@
 		"pkg/Foo.hx": "package pkg;\n\nimport haxe.ds.StringMap;\n\n/** A fixture. */\n@:keep\nclass Foo {\n\tpublic static inline final LIMIT: Int = 3;\n\n\tvar count: Int = 0;\n\tfinal names: Array<String> = ['b', 'a'];\n\n\tpublic function new() {}\n\n\tpublic function bump(by: Int, label: String): Int {\n\t\tcount += by;\n\t\ttrace('bump ' + label);\n\t\treturn helper(count);\n\t}\n\n\tfunction helper(x: Int): Int {\n\t\t#if debug\n\t\ttrace(x);\n\t\t#end\n\t\treturn switch x {\n\t\t\tcase 0: 1;\n\t\t\tcase 1 | 2: x * 2;\n\t\t\tcase _: x;\n\t\t}\n\t}\n\n\tpublic function useMap(): StringMap<Int> {\n\t\tfinal m = new StringMap<Int>();\n\t\tm.set('k', bump(1, 'k'));\n\t\treturn m;\n\t}\n}\n",
 		"pkg/Bar.hx": "package pkg;\n\nclass Bar extends Base {\n\tpublic function run(): Int {\n\t\tfinal f = new Foo();\n\t\treturn f.bump(2, 'x') + Foo.LIMIT;\n\t}\n}\n\nclass Base {\n\tpublic var shared: Int = 1;\n\n\tpublic function new() {}\n\n\tpublic function inherited(): Int {\n\t\treturn shared;\n\t}\n}\n",
 		"data.json": "{\"a\": [1, 2], \"b\": \"x\"}\n",
+		"arms/a.json": "{\"arms\": [{\"name\": \"X\", \"member\": \"run\"}, {\"name\": \"Y\", \"member\": \"walk\"}]}\n",
+		"arms/b.json": "{\"arms\": [{\"name\": \"Z\", \"member\": \"run\"}]}\n",
 		"walk/Lit.hx": "package walk;\n\nclass Lit {\n\tpublic static final SNAPSHOT: String = 'bin/.last-sweep.json';\n}\n",
 		"walk/Use.hx": "package walk;\n\nimport haxe.Json;\n\nclass Use {\n\tpublic static function parse(s: String): Dynamic {\n\t\treturn Json.parse(s);\n\t}\n}\n"
 	},
@@ -7941,6 +7943,22 @@
 				"exit": 2,
 				"out": "e3b0c44298fc1c14",
 				"err": "b73d6c16783c83b6",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq get --where member=run arms",
+			"argv": [
+				"apq",
+				"get",
+				"--where",
+				"member=run",
+				"arms"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "f039ec09b59358bf",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		}
