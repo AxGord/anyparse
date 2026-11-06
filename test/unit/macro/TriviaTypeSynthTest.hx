@@ -36,7 +36,7 @@ class TriviaTypeSynthTest extends Test {
 		public var onMissing(default, null): anyparse.format.text.MissingPolicy = Error;
 		public var onUnknown(default, null): anyparse.format.text.UnknownPolicy = Skip;
 		public var defaultWriteOptions(default, null): anyparse.format.WriteOptions = {
-			indentChar: Tab, indentSize: 1, tabWidth: 4, lineWidth: 80, lineEnd: '\\n', finalNewline: true,
+			indentChar: Tab, indentSize: 1, tabWidth: 4, lineWidth: 80, lineEnd: '\\n', finalNewline: true, keyValueSpace: false,
 			trailingWhitespace: false, maxConsecutiveBlanks: -1, commentStyle: Verbatim, arrayMatrixWrap: NoMatrixWrap,
 			trailingComma: Keep, conditionalPolicy: Aligned, alignInlineSwitchCaseBody: false, comprehensionCuddledOpen: false,
 			soleItemCuddledBrackets: false, methodChainCuddledLinks: false, ternaryCuddledBraces: false,

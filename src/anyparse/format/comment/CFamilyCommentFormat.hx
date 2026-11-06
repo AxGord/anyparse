@@ -64,6 +64,7 @@ final class CFamilyCommentFormat implements TextFormat {
 		lineWidth: 120,
 		lineEnd: '\n',
 		finalNewline: false,
+		keyValueSpace: false,
 		trailingWhitespace: false,
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,

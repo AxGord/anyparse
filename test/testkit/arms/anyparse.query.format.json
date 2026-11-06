@@ -39,8 +39,8 @@
 			"name": "M-LINT-FORMAT-ERRORPATH",
 			"type": "anyparse.query.format.LintFormat",
 			"method": "reasonRecord",
-			"find": "if (r.errorPath != null) Reflect.setField(record, 'errorPath', r.errorPath);",
-			"replace": "",
+			"find": "errorPath: call == null ? null : r.errorPath,",
+			"replace": "errorPath: null,",
 			"note": "a reason blocking only through a catch carries no errorPath in json"
 		},
 		{

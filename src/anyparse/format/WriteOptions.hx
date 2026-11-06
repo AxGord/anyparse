@@ -57,6 +57,13 @@ typedef WriteOptions = {
 	finalNewline: Bool,
 
 	/**
+	 * When `true`, a by-name mapping entry is written with one space after the format's `keyValueSep` (`"k": v`); when
+	 * `false`, tight (`"k":v`). Writer-only: the separator stays the one literal the parser reads, and the space is
+	 * whitespace the format already skips.
+	 */
+	keyValueSpace: Bool,
+
+	/**
 	 * When `true`, blank lines between content carry the surrounding
 	 * block's indent rather than rendering bare. Opt-in gate on top of
 	 * the renderer's default deferred-indent, which silently drops

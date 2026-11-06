@@ -770,9 +770,12 @@ class WriterLowering {
 	/**
 	 * Emit the writer body for a struct lowered as a key-dispatched
 	 * object. For each child field, build a `Doc` for
-	 * `"<key>"<keyValueSep> <value>` and push it into a runtime
-	 * accumulator. Optional fields whose value is `null` are skipped
-	 * entirely — neither their key nor their separator is emitted.
+	 * `"<key>"<keyValueSep><value>` (a space after the separator under
+	 * `opt.keyValueSpace`) and push it into a runtime accumulator.
+	 * Optional fields whose value is `null` are skipped entirely —
+	 * neither their key nor their separator is emitted — unless the
+	 * field says `@:writeNull`, which writes the format's null literal.
+	 * A `@:bare` struct is its one field's value alone.
 	 * The accumulator is then handed to `sepList` so the entries get
 	 * width-aware line breaks for free, just like the positional-
 	 * struct writer paths.
@@ -793,6 +796,14 @@ class WriterLowering {
 	 */
 	private function lowerStructByName(node: ShapeNode, typePath: String): Expr {
 		MetaInspect.checkWireKeys(node);
+		final bare: Null<ShapeNode> = MetaInspect.bareField(node);
+		if (bare != null) {
+			final bareName: Null<String> = bare.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
+			if (bareName == null)
+				Context.fatalError('WriterLowering: ByName struct field missing base.fieldName for $typePath', Context.currentPos());
+			final bareAccess: Expr = { expr: EField(macro value, bareName), pos: Context.currentPos() };
+			return macro return ${byNameFieldWriteExpr(bare, bareName, bareAccess)};
+		}
 		final mappingOpen: String = _formatInfo.mappingOpen;
 		final mappingClose: String = _formatInfo.mappingClose;
 		final keyValueSep: String = _formatInfo.keyValueSep;
@@ -807,6 +818,7 @@ class WriterLowering {
 			final isOptional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 			final fieldAccess: Expr = { expr: EField(macro value, fieldName), pos: Context.currentPos() };
 			final keyPrefix: String = '"${child.wireKey(fieldName)}"$keyValueSep';
+			final keyDoc: Expr = macro _dt(opt.keyValueSpace ? $v{keyPrefix + ' '} : $v{keyPrefix});
 			if (isOptional) {
 				// Strict null safety does not narrow field reads — capture into
 				// a non-null local before handing off to the per-kind writer.
@@ -817,13 +829,21 @@ class WriterLowering {
 					);
 				final localName: String = '_v_$fieldName';
 				final valueDocExpr: Expr = byNameFieldWriteExpr(child, fieldName, macro $i{localName});
-				stmts.push(macro if ($fieldAccess != null) {
+				final held: Expr = macro if ($fieldAccess != null) {
 					final $localName: $fieldCT = $fieldAccess;
-					_entries.push(_dc([_dt($v{keyPrefix}), $valueDocExpr]));
-				});
+					_entries.push(_dc([$keyDoc, $valueDocExpr]));
+				};
+				stmts.push(
+					MetaInspect.writesNull(child)
+						? macro if ($fieldAccess == null)
+							_entries.push(_dc([$keyDoc, _dt($v{_formatInfo.nullLiteral})]))
+						else
+							$held
+						: held
+				);
 			} else {
 				final valueDocExpr: Expr = byNameFieldWriteExpr(child, fieldName, fieldAccess);
-				stmts.push(macro _entries.push(_dc([_dt($v{keyPrefix}), $valueDocExpr])));
+				stmts.push(macro _entries.push(_dc([$keyDoc, $valueDocExpr])));
 			}
 		}
 

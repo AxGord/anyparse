@@ -369,6 +369,10 @@ final class StructSeqLowering {
 	 */
 	private static function lowerStructByName(sc: StructSeqCtx, node: ShapeNode): Expr {
 		MetaInspect.checkWireKeys(node);
+		if (MetaInspect.bareField(node) != null)
+			Context.fatalError(
+				'Lowering: a @:bare struct is written, never read: its document has no key to read it by', Context.currentPos()
+			);
 		final structFields: Array<ObjectField> = [];
 		final declareLocals: Array<Expr> = [];
 		final switchCases: Array<Case> = [];

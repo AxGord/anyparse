@@ -167,6 +167,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/query/FactNodeRecords.hx',
 			'src/anyparse/query/FactText.hx',
 			'src/anyparse/query/FormatConfigDiscovery.hx',
+			'src/anyparse/query/LintScore.hx',
 			'src/anyparse/query/MoveDeclaration.hx',
 			'src/anyparse/query/MoveToHelperArms.hx',
 			'src/anyparse/query/PackageDocuments.hx',
@@ -184,9 +185,11 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/query/format/GraphJson.hx',
 			'src/anyparse/query/format/GraphMermaid.hx',
 			'src/anyparse/query/format/Json.hx',
+			'src/anyparse/query/format/LintFormat.hx',
 			'src/anyparse/query/format/Text.hx',
 			'src/anyparse/query/format/json/FactNodeRecord.hx',
 			'src/anyparse/query/format/json/FormatterDriverKeys.hx',
+			'src/anyparse/query/format/json/LongLockReasonRecord.hx',
 			'src/anyparse/query/format/json/MutationArmJson.hx'
 		];
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();

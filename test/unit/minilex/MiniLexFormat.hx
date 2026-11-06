@@ -48,6 +48,7 @@ final class MiniLexFormat {
 		lineWidth: 80,
 		lineEnd: '\n',
 		finalNewline: false,
+		keyValueSpace: false,
 		trailingWhitespace: false,
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,

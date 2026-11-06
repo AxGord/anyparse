@@ -84,6 +84,35 @@ final class MetaInspect {
 		return key;
 	}
 
+	/**
+	 * Whether the by-name field `child` holding null is written as the format's null literal under its key
+	 * (`@:writeNull`) rather than left out. Only an `@:optional` field may say so: a reader takes the null literal for an
+	 * absent key, so the field reads back as it was written.
+	 */
+	public static function writesNull(child: ShapeNode): Bool {
+		if (!hasMeta(child, ':writeNull')) return false;
+		if (child.annotations[AnnotationKeys.BASE_OPTIONAL] != true)
+			Context.fatalError(
+				'@:writeNull needs an @:optional field: a required one never holds null',
+				child.annotations[AnnotationKeys.BASE_FIELD_POS] ?? Context.currentPos()
+			);
+		return true;
+	}
+
+	/**
+	 * The one field of the by-name struct `node` written bare (`@:bare`): its value alone, with neither its key nor the
+	 * struct's delimiters — how a document whose root is a sequence is written, since a schema roots on a struct. Null
+	 * for a struct written whole; refuses `@:bare` on a struct of other than one required field.
+	 */
+	public static function bareField(node: ShapeNode): Null<ShapeNode> {
+		if (!hasMeta(node, ':bare')) return null;
+		if (node.children.length != 1 || node.children[0].annotations.get(AnnotationKeys.BASE_OPTIONAL) == true)
+			Context.fatalError(
+				'@:bare needs a struct of exactly one required field: its value is the whole document', Context.currentPos()
+			);
+		return node.children[0];
+	}
+
 	/** Refuses a by-name struct `node` two of whose fields a format would spell with one key (`wireKey`). */
 	public static function checkWireKeys(node: ShapeNode): Void {
 		final seen: Map<String, String> = [];

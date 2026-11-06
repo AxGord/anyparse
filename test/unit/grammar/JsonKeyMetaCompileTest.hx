@@ -1,6 +1,5 @@
 package unit.grammar;
 
-import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -57,7 +56,7 @@ class JsonKeyMetaCompileTest extends Test {
 	#if nodejs
 	/** What compiling the parser of a schema with `fields` against this tree's `src` prints on failure; '' on success. */
 	private static function compileError(fields: String): String {
-		final dir: String = CliFixture.writeDir('jsonkey', [
+		return SchemaCompile.errorOf('jsonkey', [
 			{ name: 'Keyed.hx', source: '@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws typedef Keyed = { $fields };\n' },
 			{
 				name: 'Main.hx',
@@ -65,19 +64,6 @@ class JsonKeyMetaCompileTest extends Test {
 				+ 'class Main { static function main() KeyedParser.parse("{}"); }\n'
 			}
 		]);
-		final run: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', [
-			'-cp',
-			'${Sys.getCwd()}/src',
-			'-cp',
-			dir,
-			'--main',
-			'Main',
-			'--js',
-			'$dir/out.js',
-			'--no-output'
-		], cast { encoding: 'utf8' });
-		CliFixture.removeDir(dir);
-		return run.status == 0 ? '' : '${run.stderr}';
 	}
 	#end
 

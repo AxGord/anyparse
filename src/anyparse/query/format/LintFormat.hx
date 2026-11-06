@@ -4,13 +4,21 @@ import anyparse.check.Check.FindingData;
 import anyparse.check.Check.RepeatSite;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
+import anyparse.check.common.design.threads.LongLockExplain.LockTakeSite;
 import anyparse.check.common.design.threads.LongLockExplain.LongLockKind;
 import anyparse.check.common.design.threads.LongLockExplain.LongLockReason;
 import anyparse.check.common.design.threads.LongLockExplain.LongLockReport;
+import anyparse.format.WriteOptions;
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JsonFormat;
+import anyparse.query.format.json.LintExplainedDocumentWriter;
+import anyparse.query.format.json.LintFindingDataRecord;
+import anyparse.query.format.json.LintFindingRecord;
+import anyparse.query.format.json.LintFindingsDocumentWriter;
+import anyparse.query.format.json.LockTakeSiteRecord;
+import anyparse.query.format.json.LongLockReasonRecord;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
-import haxe.DynamicAccess;
-import haxe.Json;
 
 using Lambda;
 
@@ -96,7 +104,7 @@ final class LintFormat {
 	 * nest. A violation with no span resolves all four to null. `addressOf` (when given)
 	 * adds an `address` field — the finding's canonical edit-stable selector
 	 * (`Address.describe`), directly usable as a mutation-op `--select` argument.
-	 * Escaping is delegated to `Json.stringify`.
+	 * Written by the generated `LintFindingsDocumentWriter` in `JsonFormat.expandedWriteOptions`.
 	 *
 	 * Given `explain` (`lint --explain-long`), the document is the `{"findings": […], "longLocks": {…} | null}` envelope
 	 * instead — null when the rule ran and explained nothing. `longLocks.long` lists each long lock as `{lock, reasons,
@@ -111,44 +119,30 @@ final class LintFormat {
 		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>, ?explain: ExplainedLocks
 	): String {
 		final indexes: Map<String, LineIndex> = [];
-		final records: Array<Dynamic> = [
-			for (v in violations) {
-				final record: DynamicAccess<Null<String>> = recordOf(v, indexFor(v.file, sourceOf, indexes));
-				if (addressOf != null) {
-					final address: Null<String> = addressOf(v);
-					if (address != null) record['address'] = address;
-				}
-				record;
-			}
+		final findings: Array<LintFindingRecord> = [
+			for (v in violations) recordOf(v, indexFor(v.file, sourceOf, indexes), addressOf == null ? null : addressOf(v))
 		];
-		if (explain == null) return printed(records);
+		final options: WriteOptions = JsonFormat.instance.expandedWriteOptions;
+		if (explain == null) return LintFindingsDocumentWriter.write({ findings: findings }, options);
 		final longLocks: Null<LongLockReport> = explain.report;
-		return longLocks == null
-			? printed({ findings: records, longLocks: null })
-			: printed({
-				findings: records,
-				longLocks: {
-					long: [
-						for (l in longLocks.long)
-							{
-								lock: l.lock,
-								reasons: [for (r in l.reasons) reasonRecord(r, sourceOf, indexes)],
-								circular: l.circular,
-								aside: l.aside == null ? null : [for (r in l.aside) reasonRecord(r, sourceOf, indexes)]
-							}
-					],
-					mainShort: [
-						for (t in longLocks.mainShort) {
-							final record: DynamicAccess<Bool> = siteRecord(
-								t.lock, t.file, t.span, t.holder, indexFor(t.file, sourceOf, indexes)
-							);
-							record['quiet'] = t.quiet;
-							record;
+		return LintExplainedDocumentWriter.write({
+			findings: findings,
+			longLocks: longLocks == null ? null : {
+				long: [
+					for (l in longLocks.long)
+						{
+							lock: l.lock,
+							reasons: [for (r in l.reasons) reasonRecord(r, sourceOf, indexes)],
+							circular: l.circular,
+							aside: reasonRecords(l.aside, sourceOf, indexes)
 						}
-					],
-					dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]
-				}
-			});
+				],
+				mainShort: [
+					for (t in longLocks.mainShort) takeRecord(t, indexFor(t.file, sourceOf, indexes))
+				],
+				dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]
+			}
+		}, options);
 	}
 
 	/**
@@ -181,7 +175,7 @@ final class LintFormat {
 			final index: LineIndex = indexFor(file, sourceOf, indexes);
 			buf.add('  <file name="${xml(file)}">\n');
 			for (v in group) {
-				final pos: Null<Position> = posOf(v, index);
+				final pos: Null<Position> = positionOf(v.span, index);
 				final line: Int = pos != null ? pos.line : 0;
 				final col: Int = pos != null ? pos.col : 0;
 				buf.add('    <error line="$line" column="$col" severity="${v.severity.label()}"');
@@ -227,11 +221,12 @@ final class LintFormat {
 	 * One JSON record for a violation; a null span yields null coordinates. A violation carrying `data` gets a `data` object
 	 * (`family`, `function` for its `member`, `subject`, `chain`), and one without has no such key.
 	 */
-	private static function recordOf(v: Violation, index: LineIndex): Dynamic {
+	private static function recordOf(v: Violation, index: LineIndex, address: Null<String>): LintFindingRecord {
 		final span: Null<Span> = v.span;
-		final pos: Null<Position> = posOf(v, index);
+		final pos: Null<Position> = positionOf(v.span, index);
 		final end: Null<Position> = span == null ? null : index.lineColAt(span.to);
-		final record: Dynamic = {
+		final data: Null<FindingData> = v.data;
+		return {
 			file: v.file,
 			line: pos?.line,
 			col: pos?.col,
@@ -239,53 +234,56 @@ final class LintFormat {
 			endCol: end?.col,
 			severity: v.severity.label(),
 			rule: v.rule,
-			message: v.message
+			message: v.message,
+			data: data == null ? null : dataRecord(data),
+			address: address
 		};
-		final data: Null<FindingData> = v.data;
-		if (data != null) {
-			final fields: Dynamic = {
-				family: data.family,
-				"function": data.member,
-				subject: data.subject,
-				chain: data.chain
-			};
-			final repeated: Null<Array<RepeatSite>> = data.repeatedBy;
-			if (repeated != null) Reflect.setField(fields, 'repeatedBy', [for (r in repeated) { "function": r.member, at: r.at }]);
-			Reflect.setField(record, 'data', fields);
-		}
-		return record;
 	}
 
 	/**
-	 * One `--explain-long` reason as a JSON record: its site (`siteRecord`) and `kind`, plus a `spans-blocking` one's `call`,
-	 * `chain` and `via`, and a `blind` one's `unresolved` calls with their line and column.
+	 * One `--explain-long` reason as a record: its site and `kind`, plus a `spans-blocking` one's `call`, `chain` and `via`,
+	 * and a `blind` one's `unresolved` calls with their line and column.
 	 */
-	private static function reasonRecord(r: LongLockReason, sourceOf: Map<String, String>, indexes: Map<String, LineIndex>): Dynamic {
+	private static function reasonRecord(
+		r: LongLockReason, sourceOf: Map<String, String>, indexes: Map<String, LineIndex>
+	): LongLockReasonRecord {
 		final index: LineIndex = indexFor(r.file, sourceOf, indexes);
-		final record: Dynamic = siteRecord(null, r.file, r.span, r.holder, index);
-		Reflect.setField(record, 'kind', r.kind);
-		if (r.call != null) {
-			Reflect.setField(record, 'call', r.call);
-			Reflect.setField(record, 'chain', r.chain);
-			Reflect.setField(record, 'via', r.via);
-			if (r.errorPath != null) Reflect.setField(record, 'errorPath', r.errorPath);
-		}
-		if (r.kind == LongLockKind.Blind) Reflect.setField(record, 'unresolved', [
-			for (c in r.unresolved) {
-				final pos: Position = index.lineColAt(c.span.from);
-				{ name: c.name, line: pos.line, col: pos.col };
-			}
-		]);
-		return record;
+		final pos: Null<Position> = positionOf(r.span, index);
+		final call: Null<String> = r.call;
+		final via: Null<String> = r.via;
+		return {
+			file: r.file,
+			line: pos?.line,
+			col: pos?.col,
+			holder: r.holder,
+			kind: r.kind,
+			call: call,
+			chain: call == null ? null : r.chain,
+			via: call == null ? null : via == null ? JNull : JString(via),
+			errorPath: call == null ? null : r.errorPath,
+			unresolved: r.kind == LongLockKind.Blind ? [
+				for (c in r.unresolved) {
+					final at: Position = index.lineColAt(c.span.from);
+					{ name: c.name, line: at.line, col: at.col };
+				}
+			] : null
+		};
 	}
 
-	/** A site as a JSON record — `lock` (when given), `file`, 1-based `line`/`col` (null with no span) and `function`. */
-	private static function siteRecord(lock: Null<String>, file: String, span: Null<Span>, holder: String, index: LineIndex): Dynamic {
-		final pos: Null<Position> = span == null ? null : index.lineColAt(span.from);
-		final record: Dynamic = { file: file, line: pos?.line, col: pos?.col };
-		if (lock != null) Reflect.setField(record, 'lock', lock);
-		Reflect.setField(record, 'function', holder);
-		return record;
+	/**
+	 * A main-thread take of a lock that is not long as a record: its site, 1-based `line`/`col` (null with no span),
+	 * the lock and the function.
+	 */
+	private static function takeRecord(t: LockTakeSite, index: LineIndex): LockTakeSiteRecord {
+		final pos: Null<Position> = positionOf(t.span, index);
+		return {
+			file: t.file,
+			line: pos?.line,
+			col: pos?.col,
+			lock: t.lock,
+			holder: t.holder,
+			quiet: t.quiet
+		};
 	}
 
 	/** One reason as a text line: `<kind>  <file>:<line>:<col>  <function>`, then a `spans-blocking` reason's path. */
@@ -311,12 +309,6 @@ final class LintFormat {
 	private static function place(file: String, span: Null<Span>, index: LineIndex): String {
 		final pos: Null<Position> = span == null ? null : index.lineColAt(span.from);
 		return pos == null ? file : '$file:${pos.line}:${pos.col}';
-	}
-
-	/** Resolve a violation's 1-indexed position, or null when it has no span. */
-	private static function posOf(v: Violation, index: LineIndex): Null<Position> {
-		final span: Null<Span> = v.span;
-		return span == null ? null : index.lineColAt(span.from);
 	}
 
 	/** XML-escape an attribute value. */
@@ -367,12 +359,29 @@ final class LintFormat {
 	}
 
 	/**
-	 * `value` as report text: two spaces of indent, a space after each colon, every non-empty container broken over lines. A
-	 * generated writer lays a document out by the Doc width with no space after a colon and four spaces of indent, so these bytes
-	 * stay on the engine's own printer.
+	 * The `data` record of a finding: its identity, its chain, and the repeating calls when the rule names them.
 	 */
-	private static function printed<T>(value: T): String {
-		return Json.stringify(value, null, '  '); // noqa: avoid-haxe-json
+	private static function dataRecord(data: FindingData): LintFindingDataRecord {
+		final repeated: Null<Array<RepeatSite>> = data.repeatedBy;
+		return {
+			family: data.family,
+			member: data.member,
+			subject: data.subject,
+			chain: data.chain,
+			repeatedBy: repeated == null ? null : [for (r in repeated) { member: r.member, at: r.at }]
+		};
+	}
+
+	/** The records of `reasons`, null for none. */
+	private static function reasonRecords(
+		reasons: Null<Array<LongLockReason>>, sourceOf: Map<String, String>, indexes: Map<String, LineIndex>
+	): Null<Array<LongLockReasonRecord>> {
+		return reasons == null ? null : [for (r in reasons) reasonRecord(r, sourceOf, indexes)];
+	}
+
+	/** Where `span` starts, null for no span. */
+	private static function positionOf(span: Null<Span>, index: LineIndex): Null<Position> {
+		return span == null ? null : index.lineColAt(span.from);
 	}
 
 }

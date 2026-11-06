@@ -81,8 +81,8 @@ class JValueTransformSliceTest extends Test {
 	// ---------------- deep doubling ----------------
 
 	public function testDeepDoublePrimitive(): Void {
-		assertTransform(JNumber(21), JNumber(42), deepDouble, '42.0', 'double primitive');
-		assertTransform(JNumber(-3), JNumber(-6), deepDouble, '-6.0', 'double negative');
+		assertTransform(JNumber(21), JNumber(42), deepDouble, '42', 'double primitive');
+		assertTransform(JNumber(-3), JNumber(-6), deepDouble, '-6', 'double negative');
 		// Non-number primitives are untouched.
 		assertTransform(JBool(true), JBool(true), deepDouble, 'true', 'double leaves bool');
 		assertTransform(JNull, JNull, deepDouble, 'null', 'double leaves null');
@@ -90,7 +90,7 @@ class JValueTransformSliceTest extends Test {
 
 	public function testDeepDoubleArray(): Void {
 		assertTransform(
-			JArray([JNumber(1), JNumber(2), JNumber(3)]), JArray([JNumber(2), JNumber(4), JNumber(6)]), deepDouble, '[2.0, 4.0, 6.0]',
+			JArray([JNumber(1), JNumber(2), JNumber(3)]), JArray([JNumber(2), JNumber(4), JNumber(6)]), deepDouble, '[2, 4, 6]',
 			'double array'
 		);
 	}
@@ -98,7 +98,7 @@ class JValueTransformSliceTest extends Test {
 	public function testDeepDoubleObject(): Void {
 		assertTransform(
 			JObject([{ key: 'a', value: JNumber(10) }, { key: 'b', value: JNumber(20) }]),
-			JObject([{ key: 'a', value: JNumber(20) }, { key: 'b', value: JNumber(40) }]), deepDouble, '{"a":20.0, "b":40.0}',
+			JObject([{ key: 'a', value: JNumber(20) }, { key: 'b', value: JNumber(40) }]), deepDouble, '{"a":20, "b":40}',
 			'double object values'
 		);
 	}
@@ -124,7 +124,7 @@ class JValueTransformSliceTest extends Test {
 			},
 			{ key: 'count', value: JNumber(4) }
 		]);
-		assertTransform(input, expected, deepDouble, '{"items":[{"id":2.0}, {"id":4.0}], "count":4.0}', 'double nested');
+		assertTransform(input, expected, deepDouble, '{"items":[{"id":2}, {"id":4}], "count":4}', 'double nested');
 	}
 
 	// ---------------- deep upper-casing ----------------
@@ -140,7 +140,7 @@ class JValueTransformSliceTest extends Test {
 			{ key: 'tags', value: JArray([JString('A'), JString('BC')]) },
 			{ key: 'age', value: JNumber(30) }
 		]);
-		assertTransform(input, expected, deepUpper, '{"name":"JOHN", "tags":["A", "BC"], "age":30.0}', 'upper nested');
+		assertTransform(input, expected, deepUpper, '{"name":"JOHN", "tags":["A", "BC"], "age":30}', 'upper nested');
 	}
 
 	// ---------------- identity / no-op ----------------

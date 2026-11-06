@@ -627,12 +627,13 @@ class WriterCodegen {
 
 	// -------- encoding helpers --------
 
-	/** Format a float ensuring a decimal point is always present. */
+	/**
+	 * A float as the target prints it (`2`, `0.5`, `1e+21`): the spelling the compact writer and a native writer give it, and
+	 * one a by-name `Float` field reads back. A decimal point appended to a whole number would make an exponent form no
+	 * number at all.
+	 */
 	private static function formatFloatField(): Field {
-		final body: Expr = macro {
-			final _s: String = '$value';
-			return _s.indexOf('.') >= 0 ? _s : _s + '.0';
-		};
+		final body: Expr = macro return '$value';
 		return {
 			name: 'formatFloat',
 			access: [APrivate, AStatic],

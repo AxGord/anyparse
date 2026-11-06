@@ -1,12 +1,14 @@
 package anyparse.query;
 
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.format.json.LintFindingDataJson;
 import anyparse.query.format.json.LintFindingJson;
+import anyparse.query.format.json.LintScoreBucketRecord;
+import anyparse.query.format.json.LintScoreDocumentWriter;
 import anyparse.query.format.json.LintTruthEntryJson;
 import anyparse.query.format.json.LintTruthJson;
 import anyparse.query.format.json.LintTruthJsonParser;
 import haxe.Exception;
-import haxe.Json;
 
 using Lambda;
 
@@ -94,13 +96,22 @@ final class LintScore {
 	public static inline final ALL_SEVERITIES: String = 'all';
 
 	/** The verdicts a truth entry may carry, in the order every rendering lists them. */
-	public static final VERDICTS: Array<String> = ['real-long', 'real-short', 'rare', 'false', 'dup-of', 'unknown'];
+	public static final VERDICTS: Array<String> = [REAL_LONG, REAL_SHORT, RARE, FALSE, DUP_OF, UNKNOWN];
 
 	/** The kinds of evidence a verdict may rest on. */
 	public static final EVIDENCE_KINDS: Array<String> = ['measured', 'test', 'code'];
 
 	/** The verdict a precision counts as right. */
 	private static inline final REAL_LONG: String = 'real-long';
+
+	/** A long finding that is short in practice. */
+	private static inline final REAL_SHORT: String = 'real-short';
+
+	/** A long finding that is seldom reached. */
+	private static inline final RARE: String = 'rare';
+
+	/** A finding that is wrong. */
+	private static inline final FALSE: String = 'false';
 
 	/** The verdict a precision leaves out, like an unlabelled key. */
 	private static inline final UNKNOWN: String = 'unknown';
@@ -222,9 +233,7 @@ final class LintScore {
 
 	/** The score as a JSON document: the result's fields, each bucket's verdict counts as an object in `VERDICTS` order. */
 	public static function json(result: LintScoreResult): String {
-		// the report's bytes are two-space indent, a space after each colon, every container broken: a generated writer lays out by
-		// the Doc width with no space after a colon and four spaces of indent, so they stay on the engine's own printer
-		return Json.stringify({ // noqa: avoid-haxe-json
+		return LintScoreDocumentWriter.write({
 			rule: result.rule,
 			project: result.project,
 			commit: result.commit,
@@ -232,16 +241,26 @@ final class LintScore {
 			excluded: result.excluded,
 			overall: bucketRecord(result.overall),
 			families: [for (b in result.families) bucketRecord(b)],
-			lost: [for (e in result.lost) keyRecord(e.family, e.member, e.subject, e.verdict)],
+			lost: [
+				for (e in result.lost)
+					{
+						family: e.family,
+						member: e.member,
+						subject: e.subject,
+						verdict: e.verdict
+					}
+			],
 			unlabelled: [
-				for (k in result.unlabelled) {
-					final record: Dynamic = keyRecord(k.family, k.member, k.subject, null);
-					Reflect.setField(record, 'count', k.count);
-					Reflect.setField(record, 'file', k.file);
-					record;
-				}
+				for (k in result.unlabelled)
+					{
+						family: k.family,
+						member: k.member,
+						subject: k.subject,
+						count: k.count,
+						file: k.file
+					}
 			]
-		}, null, '  ');
+		}, JsonFormat.instance.expandedWriteOptions);
 	}
 
 	/** The key of `(family, member, subject)`, each part length-prefixed so no part can run into the next. */
@@ -268,31 +287,30 @@ final class LintScore {
 		return severity == ALL_SEVERITIES ? 'every severity' : '$severity and above';
 	}
 
-	/** One bucket as a JSON record. */
-	private static function bucketRecord(b: LintScoreBucket): Dynamic {
-		final matched: Dynamic = {};
-		for (v in VERDICTS) Reflect.setField(matched, v, b.matched[v] ?? 0);
+	/**
+	 * One bucket as a record, its verdict counts in `VERDICTS` order.
+	 */
+	private static function bucketRecord(b: LintScoreBucket): LintScoreBucketRecord {
+		final matched: (String) -> Int = verdict -> b.matched[verdict] ?? 0;
 		return {
 			family: b.family,
 			findings: b.findings,
 			keys: b.keys,
 			duplicates: b.findings - b.keys,
-			matched: matched,
+			matched: {
+				realLong: matched(REAL_LONG),
+				realShort: matched(REAL_SHORT),
+				rare: matched(RARE),
+				falseVerdict: matched(FALSE),
+				dupOf: matched(DUP_OF),
+				unknown: matched(UNKNOWN)
+			},
 			unlabelled: b.unlabelled,
 			precision: b.precision,
 			recallEntries: b.recallEntries,
 			recallHit: b.recallHit,
 			recall: b.recallEntries == 0 ? null : b.recallHit / b.recallEntries
 		};
-	}
-
-	/** A key as a JSON record — `family`, `function`, `subject`, and a `verdict` when given. */
-	private static function keyRecord(family: String, member: String, subject: String, verdict: Null<String>): Dynamic {
-		final record: Dynamic = { family: family };
-		Reflect.setField(record, 'function', member);
-		Reflect.setField(record, 'subject', subject);
-		if (verdict != null) Reflect.setField(record, 'verdict', verdict);
-		return record;
 	}
 
 	/** What is wrong with the entry `e`, whose key is `key`, among the entries keyed `keys` (`validate`). */

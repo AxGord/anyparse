@@ -285,15 +285,20 @@ final class NativeDocLowering {
 	}
 
 	private function compactBody(node: ShapeNode): Expr {
+		final bare: Null<ShapeNode> = MetaInspect.bareField(node);
+		if (bare != null) {
+			final bareAccess: Expr = { expr: EField(macro value, fieldNameOf(bare)), pos: Context.currentPos() };
+			return macro $b{compactValue(bare, bareAccess)};
+		}
 		final steps: Array<Expr> = [macro out.add($v{_format.mappingOpen})];
 		// Whether a key is known to be written already: a required one is; after only optional ones `_some` knows at run time.
 		var written: Bool = false;
 		var tracked: Bool = false;
-		final tracks: Bool = node.children.length > 1 && node.children[0].annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
+		final tracks: Bool = node.children.length > 1 && leftOutWhenNull(node.children[0]);
 		if (tracks) steps.push(macro var _some: Bool = false);
 		for (child in node.children) {
 			final name: String = fieldNameOf(child);
-			final optional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
+			final optional: Bool = leftOutWhenNull(child);
 			final access: Expr = { expr: EField(macro value, name), pos: Context.currentPos() };
 			final key: String = '"${MetaInspect.wireKey(child, name)}"${_format.keyValueSep}';
 			final lead: Array<Expr> = written
@@ -309,6 +314,17 @@ final class NativeDocLowering {
 					$b{body};
 				});
 				if (!written) tracked = true;
+			} else if (MetaInspect.writesNull(child)) {
+				final local: String = nameOf('v');
+				final fieldCT: Null<ComplexType> = child.annotations.get(AnnotationKeys.BASE_FIELD_TYPE);
+				for (step in lead) steps.push(step);
+				steps.push(macro if ($access == null)
+					out.add($v{_format.nullLiteral})
+				else {
+					final $local: $fieldCT = $access;
+					$b{compactValue(child, macro $i{local})};
+				});
+				written = true;
 			} else {
 				for (step in lead) steps.push(step);
 				for (step in compactValue(child, access)) steps.push(step);
@@ -317,6 +333,11 @@ final class NativeDocLowering {
 		}
 		steps.push(macro out.add($v{_format.mappingClose}));
 		return macro $b{steps};
+	}
+
+	/** Whether the by-name field `child` is left out of the document when it holds null: optional, and no `@:writeNull`. */
+	private function leftOutWhenNull(child: ShapeNode): Bool {
+		return child.annotations[AnnotationKeys.BASE_OPTIONAL] == true && !MetaInspect.writesNull(child);
 	}
 
 	private function compactValue(node: ShapeNode, value: Expr): Array<Expr> {
@@ -361,17 +382,21 @@ final class NativeDocLowering {
 	/** The value the door's writer spells as the record: only its declared keys, in the schema's order, the absent ones held as nothing. */
 	private function outBody(node: ShapeNode): Expr {
 		final doorPath: Array<String> = _door;
+		final bare: Null<ShapeNode> = MetaInspect.bareField(node);
+		if (bare != null)
+			return macro return ${outValue(bare, { expr: EField(macro value, fieldNameOf(bare)), pos: Context.currentPos() })};
 		final entries: Array<ObjectField> = [];
 		for (child in node.children) {
 			final name: String = fieldNameOf(child);
 			final access: Expr = { expr: EField(macro value, name), pos: Context.currentPos() };
 			final optional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
+			final held: Expr = MetaInspect.writesNull(child) ? macro null : macro $p{doorPath}.absent();
 			entries.push({
 				field: MetaInspect.wireKey(child, name),
 				quotes: Quoted,
 				expr: optional
 					? macro if ($access == null)
-						$p{doorPath}.absent()
+						$held
 					else
 						${outValue(child, access)}
 					: outValue(child, access)

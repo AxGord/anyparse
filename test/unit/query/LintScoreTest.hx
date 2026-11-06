@@ -1,5 +1,8 @@
 package unit.query;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.query.Cli;
 import anyparse.query.LintDiff;
 import anyparse.query.LintScore;
@@ -237,6 +240,7 @@ class LintScoreTest extends Test {
 		Assert.stringContains('… 1 more not shown — raise --limit', lines.join('\n'));
 		final json: String = LintScore.json(result);
 		Assert.stringContains('"precision": 0.3333', json);
+		Assert.stringContains('"recallHit": 1,\n    "recall": 1\n  },', json, 'a whole ratio keeps the spelling a native printer gives it');
 		Assert.stringContains('"function": "A.e"', json);
 		Assert.stringContains('"severity": "warning"', json);
 		Assert.stringContains('"excluded": 0', json);
@@ -288,6 +292,29 @@ class LintScoreTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/** The json score's verdict counts are keyed by `VERDICTS`, in its order, each counting its own verdict's keys. */
+	@:pin('control') @:killer('M-SCORE-JSON-VERDICT-COUNT')
+	public function testTheJsonVerdictCountsAreTheVerdicts(): Void {
+		final entries: Array<String> = [
+			for (i => v in LintScore.VERDICTS) entry('A', 'A.m$i', 'S.f', v, v == 'dup-of' ? ', "dupOf": "A|A.m0|S.f"' : '')
+		];
+		final result: LintScoreResult = score(entries, [for (i in 0...LintScore.VERDICTS.length) finding('A', 'A.m$i', 'S.f')]);
+		final matched: Null<JValue> = JValueTools.at(JValueParser.parse(LintScore.json(result)), 'overall.matched');
+		switch matched {
+			case JObject(counts):
+				Assert.equals(LintScore.VERDICTS.join(','), [for (c in counts) c.key].join(','));
+				Assert.equals(LintScore.VERDICTS.map(_ -> '1').join(','), [
+					for (c in counts)
+						switch c.value {
+							case JNumber(n): '$n';
+							case _: '?';
+						}
+				].join(','));
+			case _:
+				Assert.fail('no matched object: $matched');
+		}
 	}
 
 	private static function score(entries: Array<String>, findings: Array<String>): LintScoreResult {

@@ -1742,6 +1742,36 @@
 			"find": "_ignoreEmit ? anyparse.core.BreakCommits.redecided(_cascade) : _cascade;",
 			"replace": "_cascade;",
 			"note": "a literal whose source newlines the next write drops is named, so its host lays itself out for a break the next write decides again and the value-if moves onto the return line"
+		},
+		{
+			"name": "M-WRITE-NULL-IGNORED",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "writesNull",
+			"force": "false",
+			"note": "a held null of a `@:writeNull` field is left out of the document like any optional one, so the key it must keep is gone"
+		},
+		{
+			"name": "M-BARE-IGNORED",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "bareField",
+			"force": "null",
+			"note": "a `@:bare` struct is written whole, its key and braces around the array it stands for"
+		},
+		{
+			"name": "M-KEY-VALUE-SPACE-IGNORED",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerStructByName",
+			"find": "final keyDoc: Expr = macro _dt(opt.keyValueSpace ? $v{keyPrefix + ' '} : $v{keyPrefix});",
+			"replace": "final keyDoc: Expr = macro _dt($v{keyPrefix});",
+			"note": "a by-name entry is written tight under `keyValueSpace`, so the expanded layout loses the space after each colon"
+		},
+		{
+			"name": "M-FLOAT-POINT-FORCED",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "formatFloatField",
+			"find": "final body: Expr = macro return '$value';",
+			"replace": "final body: Expr = macro return '$value'.indexOf('.') >= 0 ? '$value' : '$value' + '.0';",
+			"note": "a whole-number float gains a `.0` the compact writer and a native printer never write"
 		}
 	]
 }
