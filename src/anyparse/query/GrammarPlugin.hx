@@ -3417,6 +3417,13 @@ final class RefShape {
 	public var pureOperatorKinds: Null<Array<String>>;
 
 	/**
+	 * The members of `pureOperatorKinds` that can still FAIL at run time on some operand values — the integer remainder by
+	 * zero the host target raises — so an expression built from the other pure operators cannot throw. Unset means any
+	 * operator may fail: `ThrowFreeScan` then admits no operator at all.
+	 */
+	public var faultingOperatorKinds: Null<Array<String>>;
+
+	/**
 	 * Expression kinds whose ROOT binds tighter than every operator the grammar has, so an
 	 * expression with such a root can be substituted into ANY operator context without
 	 * parentheses: no surrounding operator can bind into it and steal an operand.

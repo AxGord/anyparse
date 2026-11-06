@@ -106,6 +106,78 @@
 			"find": "!CheckScan.hasCommentMarker(source, m.iterableSpan.to, m.bodySpan.from)",
 			"replace": "true",
 			"note": "a comment between the iterable and the body is dropped by the rewrite"
+		},
+		{
+			"name": "M-PSP-ANY-RECEIVER",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "findings",
+			"find": "seams.arrayTypeNames.contains(type)",
+			"replace": "true",
+			"note": "a List chain is rewritten into a comprehension or an Array-only call"
+		},
+		{
+			"name": "M-PSP-PURE",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "interleavesSafely",
+			"find": "!PurityScan.isPure(q.body, purity)",
+			"replace": "false",
+			"note": "a second body that calls something unproven pure is merged and moves relative to the first"
+		},
+		{
+			"name": "M-PSP-THROW",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "interleavesSafely",
+			"find": "return throwSafe &&",
+			"replace": "return true &&",
+			"note": "two bodies that can both throw are interleaved and a different exception surfaces"
+		},
+		{
+			"name": "M-PSP-MAPMAP-FIRST",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "interleavesSafely",
+			"find": "pairing == MapMap ? firstCannotThrow : ",
+			"replace": "",
+			"note": "a throwing first map body is merged under a second body that may skip it"
+		},
+		{
+			"name": "M-PSP-CAPTURE",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "interleavesSafely",
+			"find": "InlineMethod.countIdentExprNamed(q.body, p.binder, s.shape) == 0",
+			"replace": "true",
+			"note": "a second-body read of the first binders name is captured by it"
+		},
+		{
+			"name": "M-PSP-SINGLE-READ",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "merged",
+			"find": "InlineMethod.countIdentExprNamed(q.body, q.binder, shape) == 1",
+			"replace": "true",
+			"note": "a second map body reading the result twice runs the first twice, reading it never drops the first"
+		},
+		{
+			"name": "M-PSP-AND-WRAP",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "wrap",
+			"find": "s.andLowerKinds.contains(operand.kind)",
+			"replace": "false",
+			"note": "an operand binding looser than && joins unparenthesised and changes meaning"
+		},
+		{
+			"name": "M-PSP-TYPED-PARAM",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "lambdaOf",
+			"find": "SourceText.nodeText(param, source) == binder",
+			"replace": "true",
+			"note": "a typed, defaulted or optional lambda parameter is merged and its annotation dropped"
+		},
+		{
+			"name": "M-PSP-COMMENT",
+			"type": "anyparse.check.haxe.loops.PreferSinglePass",
+			"method": "gapsHoldNoComment",
+			"find": "!CheckScan.hasCommentMarker(source, p.bodySpan.to, q.bodySpan.from)",
+			"replace": "true",
+			"note": "a comment between the two lambdas goes with the rewrite punctuation"
 		}
 	]
 }

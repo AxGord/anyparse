@@ -1484,6 +1484,8 @@ final class HaxeRefShape {
 			'Is',
 			'Ternary'
 		];
+		// Integer `%` by zero raises on the JVM and in C++; `/` is always a Float division and never does.
+		table.faultingOperatorKinds = ['Mod'];
 		// Haxe's postfix / allocation primaries: nothing outranks a call, a field read, an
 		// index or a `new`, so none of them needs wrapping when substituted. `SafeFieldAccess`
 		// and `ForceFieldAccess` are deliberately absent — they bind just as tightly, but

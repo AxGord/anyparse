@@ -88,9 +88,110 @@ final class InlineMethod {
 		};
 	}
 
+	/**
+	 * `E`'s source with every parameter `IdentExpr` replaced by the text standing at its parameter's index in `texts`, no
+	 * outer parentheses: the caller owns the precedence of the result and of each text. A null text for a parameter `E`
+	 * reads, or a node without a span, gives null so the caller refuses rather than emit a half-substituted body.
+	 */
+	public static function substituteTexts(
+		source: String, expr: QueryNode, paramNames: Array<String>, texts: Array<Null<String>>, shape: RefShape
+	): Null<String> {
+		final exprSpan: Null<Span> = expr.span;
+		if (exprSpan == null) return null;
+		final eFrom: Int = exprSpan.from;
+		final identKind: String = shape.identKind;
+		var text: String = source.substring(eFrom, exprSpan.to);
+
+		// Collect parameter-ident occurrences in `E` (absolute spans). A
+		// missing span on a target / argument node aborts to null so the
+		// caller refuses rather than emit a half-substituted body.
+		final hits: Array<{ from: Int, to: Int, text: String }> = [];
+		var failed: Bool = false;
+		function walk(node: QueryNode): Void {
+			if (failed) return;
+			if (node.kind == identKind) {
+				final nm: Null<String> = node.name;
+				final sp: Null<Span> = node.span;
+				if (nm != null && sp != null) {
+					final idx: Int = paramNames.indexOf(nm);
+					if (idx >= 0) {
+						final at: Null<String> = texts[idx];
+						if (at == null) {
+							failed = true;
+							return;
+						}
+						hits.push({ from: sp.from, to: sp.to, text: at });
+					}
+				}
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(expr);
+		if (failed) return null;
+
+		// Splice end-to-start so earlier offsets stay valid.
+		hits.sort((a, b) -> b.from - a.from);
+		for (h in hits) text = text.substring(0, h.from - eFrom) + h.text + text.substring(h.to - eFrom);
+
+		return text;
+	}
+
+	/**
+	 * An argument's source, parenthesised when its root does not outrank the operators; null when it
+	 * has no span. Takes the derived root vocabulary rather than the shape — the caller runs this
+	 * inside a subtree walk and derives it once.
+	 */
+	public static function argText(source: String, arg: QueryNode, parenFreeRoots: Array<String>): Null<String> {
+		final raw: Null<String> = SourceText.nodeText(arg, source);
+		return if (raw == null)
+			null
+		else if (parenFreeRoots.contains(arg.kind))
+			raw
+		else
+			'($raw)';
+	}
+
+	/** Count identifier nodes named `name` in `node`'s subtree. */
+	public static function countIdentExprNamed(node: QueryNode, name: String, shape: RefShape): Int {
+		final identKind: String = shape.identKind;
+		var count: Int = 0;
+		function walk(n: QueryNode): Void {
+			if (n.kind == identKind && n.name == name) count++;
+			for (c in n.children) walk(c);
+		}
+		walk(node);
+		return count;
+	}
+
 	/** Whether `inner` lies inside `outer`; a node with no span is not known to. */
 	private static inline function within(inner: Null<Span>, outer: Span): Bool {
 		return inner != null && outer.from <= inner.from && inner.to <= outer.to;
+	}
+
+	/**
+	 * The first parameter referenced via a SIMPLE `'$p'` string interpolation inside `expr`, or
+	 * null. Simple interpolation projects the grammar's `stringInterpIdentKind` (distinct from
+	 * the `identKind` of normal positions and of `${ ... }` complex interpolation, which the
+	 * substitution handles); `$p` cannot be replaced by an arbitrary argument expression, so its
+	 * presence is a refusal.
+	 */
+	private static function interpolatedParam(expr: QueryNode, paramNames: Array<String>, shape: RefShape): Null<String> {
+		final interpIdentKind: Null<String> = shape.stringInterpIdentKind;
+		if (interpIdentKind == null) return null;
+		var hit: Null<String> = null;
+		function walk(n: QueryNode): Void {
+			if (hit != null) return;
+			if (n.kind == interpIdentKind) {
+				final nm: Null<String> = n.name;
+				if (nm != null && paramNames.contains(nm)) {
+					hit = nm;
+					return;
+				}
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(expr);
+		return hit;
 	}
 
 	/**
@@ -150,73 +251,15 @@ final class InlineMethod {
 	private static function substitute(
 		source: String, expr: QueryNode, paramNames: Array<String>, args: Array<QueryNode>, shape: RefShape
 	): Null<String> {
-		final exprSpan: Null<Span> = expr.span;
-		if (exprSpan == null) return null;
-		final eFrom: Int = exprSpan.from;
-		final identKind: String = shape.identKind;
-		// Derived once for the whole substitution, not per argument: `argText` runs inside the walk.
+		// Derived once for the whole substitution, not per argument.
 		final parenFreeRoots: Array<String> = MemberKinds.parenFreeRootKinds(shape);
-		var text: String = source.substring(eFrom, exprSpan.to);
-
-		// Collect parameter-ident occurrences in `E` (absolute spans). A
-		// missing span on a target / argument node aborts to null so the
-		// caller refuses rather than emit a half-substituted body.
-		final hits: Array<{ from: Int, to: Int, text: String }> = [];
-		var failed: Bool = false;
-		function walk(node: QueryNode): Void {
-			if (failed) return;
-			if (node.kind == identKind) {
-				final nm: Null<String> = node.name;
-				final sp: Null<Span> = node.span;
-				if (nm != null && sp != null) {
-					final idx: Int = paramNames.indexOf(nm);
-					if (idx >= 0) {
-						final at: Null<String> = argText(source, args[idx], parenFreeRoots);
-						if (at == null) {
-							failed = true;
-							return;
-						}
-						hits.push({ from: sp.from, to: sp.to, text: at });
-					}
-				}
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(expr);
-		if (failed) return null;
-
-		// Splice end-to-start so earlier offsets stay valid.
-		hits.sort((a, b) -> b.from - a.from);
-		for (h in hits) text = text.substring(0, h.from - eFrom) + h.text + text.substring(h.to - eFrom);
-
-		return parenFreeRoots.contains(expr.kind) ? text : '($text)';
-	}
-
-	/**
-	 * An argument's source, parenthesised when its root does not outrank the operators; null when it
-	 * has no span. Takes the derived root vocabulary rather than the shape — the caller runs this
-	 * inside a subtree walk and derives it once.
-	 */
-	private static function argText(source: String, arg: QueryNode, parenFreeRoots: Array<String>): Null<String> {
-		final raw: Null<String> = SourceText.nodeText(arg, source);
-		return if (raw == null)
+		final text: Null<String> = substituteTexts(source, expr, paramNames, args.map(argText.bind(source, _, parenFreeRoots)), shape);
+		return if (text == null)
 			null
-		else if (parenFreeRoots.contains(arg.kind))
-			raw
+		else if (parenFreeRoots.contains(expr.kind))
+			text
 		else
-			'($raw)';
-	}
-
-	/** Count identifier nodes named `name` in `node`'s subtree. */
-	private static function countIdentExprNamed(node: QueryNode, name: String, shape: RefShape): Int {
-		final identKind: String = shape.identKind;
-		var count: Int = 0;
-		function walk(n: QueryNode): Void {
-			if (n.kind == identKind && n.name == name) count++;
-			for (c in n.children) walk(c);
-		}
-		walk(node);
-		return count;
+			'($text)';
 	}
 
 	/**
@@ -231,32 +274,6 @@ final class InlineMethod {
 		// No seam for the resolver-invisible binders: every parameter counts as shadowed.
 		final invisible: Array<String> = BinderScan.resolverInvisibleBinderNames(expr, shape) ?? paramNames;
 		return paramNames.find(p -> bound.contains(p) || invisible.contains(p));
-	}
-
-	/**
-	 * The first parameter referenced via a SIMPLE `'$p'` string interpolation inside `expr`, or
-	 * null. Simple interpolation projects the grammar's `stringInterpIdentKind` (distinct from
-	 * the `identKind` of normal positions and of `${ ... }` complex interpolation, which the
-	 * substitution handles); `$p` cannot be replaced by an arbitrary argument expression, so its
-	 * presence is a refusal.
-	 */
-	private static function interpolatedParam(expr: QueryNode, paramNames: Array<String>, shape: RefShape): Null<String> {
-		final interpIdentKind: Null<String> = shape.stringInterpIdentKind;
-		if (interpIdentKind == null) return null;
-		var hit: Null<String> = null;
-		function walk(n: QueryNode): Void {
-			if (hit != null) return;
-			if (n.kind == interpIdentKind) {
-				final nm: Null<String> = n.name;
-				if (nm != null && paramNames.contains(nm)) {
-					hit = nm;
-					return;
-				}
-			}
-			for (c in n.children) walk(c);
-		}
-		walk(expr);
-		return hit;
 	}
 
 	/**

@@ -355,6 +355,7 @@
 		"prefer-line-comment": true,
 		"prefer-lpad": true,
 		"prefer-map": true,
+		"prefer-single-pass": true,
 		"prefer-compare-function": true,
 		"prefer-typed-throw": true,
 		"prefer-value-loop": true,
