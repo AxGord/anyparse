@@ -16,11 +16,7 @@ package anyparse.grammar.haxe.format;
  * - `"one"`    → `CommentEmptyLinesPolicy.One`
  */
 enum abstract HxFormatCommentEmptyLinesPolicy(String) to String {
-
 	final Ignore = 'ignore';
-
 	final None = 'none';
-
 	final One = 'one';
-
 }

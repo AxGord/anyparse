@@ -33,11 +33,13 @@ private typedef LocalDecl = {
  * not `final`).
  */
 private typedef ReturnVar = {
+
 	var name: String;
 	var writtenAfter: Bool;
 
 	/** The binding offset of its declaration in the range — where a member extraction reads its written type. */
 	var from: Int;
+
 }
 
 /** A free local a member extraction passes in: its name, binding offset and the type its declaration writes. */

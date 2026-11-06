@@ -153,6 +153,7 @@ final class ConstantFieldScan {
  * (an `enum abstract` value is not an instance field) — so one resolution serves both.
  */
 typedef ConstantFieldSeams = {
+
 	final containers: Array<String>;
 	final classLikeContainers: Array<String>;
 	final members: Array<String>;
@@ -188,7 +189,6 @@ typedef ConstantFieldSeams = {
 	 * it is, so it takes no such gate.
 	 */
 	final implicitConstructorMetaName: Null<String>;
-
 	final literalKinds: Array<String>;
 	final stringLiteralKinds: Array<String>;
 	final numericKinds: Array<String>;
@@ -202,6 +202,6 @@ typedef ConstantFieldSeams = {
 
 	/** `RefShape.parenKind` — a grouping `isConstantExpression` sees through; null when unset. */
 	final parenKind: Null<String>;
-
 	final stringFold: Null<StringFoldSupport>;
+
 };

@@ -783,6 +783,7 @@ private typedef Candidate = {
 
 /** The nodes one collapse is built from, resolved once by `candidateFor` for `emit` to read. */
 private typedef Frame = {
+
 	final switchNode: QueryNode;
 	final at: Int;
 	final arm: QueryNode;
@@ -799,6 +800,7 @@ private typedef Frame = {
 
 	/** The call's argument that is the outer binder; null with `call`. */
 	final use: Null<QueryNode>;
+
 };
 
 /** An outer arm that passed the shape gates, before the binder the nested switch reads is chosen. */
@@ -814,6 +816,7 @@ private typedef Site = {
 
 /** The outer label text every spliced arm reproduces: the `case` lead, the slot around the binder, the terminator. */
 private typedef Label = {
+
 	final lead: String;
 
 	/** The call moved into the binder's slot (placeholder where the binder stood, then the arrow); empty for a bare-binder collapse. */
@@ -821,10 +824,12 @@ private typedef Label = {
 	final prefix: String;
 	final suffix: String;
 	final terminator: String;
+
 };
 
 /** One inner arm cut into the fragments the splice reproduces. */
 private typedef InnerArm = {
+
 	final patterns: Array<String>;
 
 	/** The text between consecutive patterns, one per pattern after the first. */
@@ -836,10 +841,12 @@ private typedef InnerArm = {
 
 	/** Whether the arm matches every subject: one wildcard pattern, no guard. */
 	final catchAll: Bool;
+
 };
 
 /** The per-file scan context: the parsed tree, its source, and the resolved seams. */
 private typedef Scan = {
+
 	final tree: QueryNode;
 	final source: String;
 	final seams: Seams;
@@ -849,6 +856,7 @@ private typedef Scan = {
 
 	/** The typed proofs of a capture and of inner coverage; null without type info. */
 	final slots: Null<CaseSlotTypes>;
+
 };
 
 /** The seam kinds `CollapseNestedSwitch` resolves once per run. */
@@ -882,4 +890,5 @@ private typedef Seams = {
 	final extractorArrow: Null<String>;
 	final conditionalKind: Null<String>;
 	final opaqueKinds: Array<String>;
+
 };

@@ -19,11 +19,7 @@ package anyparse.format;
  * operator run can reuse it.
  */
 enum abstract OperatorSpacing(Int) from Int to Int {
-
 	final Keep = 0;
-
 	final None = 1;
-
 	final Around = 2;
-
 }

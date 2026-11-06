@@ -1438,6 +1438,7 @@ typedef RenameContext = {
  * (drives the comment-along gate). Passed from `crossFileCandidate` to the per-file span pass.
  */
 typedef CrossFileCandidate = {
+
 	final declFile: String;
 	final source: String;
 	final tree: QueryNode;
@@ -1457,6 +1458,7 @@ typedef CrossFileCandidate = {
 	 * set as the base: an override left behind overrides nothing and does not compile.
 	 */
 	final family: Array<OverrideFamilyMember>;
+
 };
 
 /**

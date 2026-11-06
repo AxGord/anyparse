@@ -10,16 +10,17 @@ using StringTools;
 
 /** The tokens of one hxml text a library build is read from (`LibraryBuild.tokens`). */
 typedef HxmlTokens = {
+
 	final classPaths: Array<String>;
 	final libs: Array<String>;
 
 	/** Each `-D` as written: `name` or `name=value`. */
 	final defines: Array<String>;
-
 	final includes: Array<String>;
 
 	/** The target the hxml compiles to (`cpp`, `js`, …), null when it names none. */
 	final target: Null<String>;
+
 }
 
 /**

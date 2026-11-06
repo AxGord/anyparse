@@ -9,11 +9,13 @@ using StringTools;
  * `prefer-try-expression-return` with returned expressions; the shape is what they share.
  */
 typedef TryParts = {
+
 	/** The try body's value expression -- the r-value / returned expression the collapse hoists. */
 	var value: QueryNode;
 
 	/** Per catch clause, in source order. */
 	var catches: Array<TryCatchPart>;
+
 }
 
 /** One decomposed catch clause: its verbatim `catch (…)` header, that header's span, and the clause's value. */

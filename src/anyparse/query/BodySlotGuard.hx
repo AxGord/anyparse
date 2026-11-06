@@ -585,6 +585,7 @@ private typedef Origin = {
  * trivia takes the lexical scan of the text the span belongs to.
  */
 private typedef Reach = {
+
 	var tree: QueryNode;
 	var source: String;
 	var srcComments: Map<Int, Int>;
@@ -596,4 +597,5 @@ private typedef Reach = {
 
 	/** The plugin's statement-list kinds — a construct whose PARENT is one sits in statement position. */
 	var blocks: Array<String>;
+
 };

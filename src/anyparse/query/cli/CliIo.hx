@@ -584,9 +584,11 @@ final class CliIo {
  */
 @:nullSafety(Strict)
 private typedef StagedWrite = {
+
 	var staged: String;
 	var target: String;
 
 	/** The path as the CALLER spelled it, which is the one a diagnostic must name. */
 	var asked: String;
+
 };

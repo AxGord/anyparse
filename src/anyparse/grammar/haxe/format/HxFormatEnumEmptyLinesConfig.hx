@@ -26,18 +26,16 @@ package anyparse.grammar.haxe.format;
  *  - `beginTypeIfDocComments` / `endTypeIfDocComments` — Int counts that
  *    replace `beginType` / `endType` for a body holding a doc comment.
  *    Feed `opt.enumBeginTypeIfDocComments` / `opt.enumEndTypeIfDocComments`.
+ *  - `afterFieldsWithDocComments` — ignore / none / one after a doc-commented
+ *    constructor. Feeds `opt.enumAfterFieldsWithDocComments`; absent keeps the
+ *    source blank.
  */
 @:peg typedef HxFormatEnumEmptyLinesConfig = {
-
 	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
-
 	@:optional var betweenFields: Int;
-
 	@:optional var beginType: Int;
-
 	@:optional var endType: Int;
-
 	@:optional var beginTypeIfDocComments: Int;
-
 	@:optional var endTypeIfDocComments: Int;
+	@:optional var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
 };

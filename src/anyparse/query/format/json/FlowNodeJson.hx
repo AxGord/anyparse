@@ -6,12 +6,8 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef FlowNodeJson = {
-
 	var id: String;
-
 	var kind: String;
-
 	var label: String;
-
 	var line: Int;
 };

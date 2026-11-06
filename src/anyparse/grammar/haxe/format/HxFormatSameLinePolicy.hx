@@ -8,13 +8,8 @@ package anyparse.grammar.haxe.format;
  * the parser does not yet preserve).
  */
 enum abstract HxFormatSameLinePolicy(String) to String {
-
 	final Same = 'same';
-
 	final Next = 'next';
-
 	final Keep = 'keep';
-
 	final FitLine = 'fitLine';
-
 }

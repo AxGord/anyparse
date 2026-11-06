@@ -308,9 +308,9 @@ final class LoopGuard extends RuleBase {
 
 /** The `RefShape` kinds `LoopGuard` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	/** Every loop statement (`ShapeVocab.statementLoopKinds`); a `doWhileKinds` one carries its body FIRST, the rest last. */
 	var loopKinds: Array<String>;
-
 	var doWhileKinds: Array<String>;
 	var continueKind: String;
 	var ifKinds: Array<String>;
@@ -338,6 +338,7 @@ private typedef Seams = {
 	 * and every `if` form a lifted header's missing `else` could be absorbed by.
 	 */
 	var shield: ShieldSeams;
+
 }
 
 /**

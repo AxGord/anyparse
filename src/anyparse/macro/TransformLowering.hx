@@ -326,6 +326,7 @@ class TransformLowering {
  * One generated `_transform<T>` function descriptor.
  */
 typedef TransformFn = {
+
 	/** Full grammar type path this function transforms. */
 	final typePath: String;
 
@@ -337,17 +338,20 @@ typedef TransformFn = {
 
 	/** Body expression (the deep-rebuild + hook application). */
 	final body: Expr;
+
 };
 
 /**
  * One per-type hook descriptor for the generated `visit` typedef.
  */
 typedef TransformHook = {
+
 	/** Hook field name on the `visit` struct (`hx<SimpleName>`). */
 	final name: String;
 
 	/** The transformed type's ComplexType — the hook is `T -> T`. */
 	final ct: ComplexType;
+
 };
 
 /**
@@ -355,6 +359,7 @@ typedef TransformHook = {
  * per-type hook list for the `visit` typedef, and the root entry info.
  */
 typedef TransformResult = {
+
 	/** Full grammar root type path (e.g. `anyparse.grammar.haxe.HxModule`). */
 	final rootTypePath: String;
 
@@ -369,5 +374,6 @@ typedef TransformResult = {
 
 	/** Per-type hooks for the generated `visit` typedef. */
 	final hooks: Array<TransformHook>;
+
 };
 #end

@@ -1908,10 +1908,12 @@ private typedef IndexedDeclaration = {
  * by name, the metadata marking a method it calls, and the metadata of a type the language constructs from a literal.
  */
 typedef ImplicitMembers = {
+
 	final names: Array<String>;
 	final metas: Array<String>;
 	final typeMetas: Array<String>;
 
 	/** Whether the compiler makes the call itself, so an extern type's inline method runs its body there. */
 	final externInline: Bool;
+
 }

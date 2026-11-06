@@ -7,12 +7,14 @@ using Lambda;
  * did not exist.
  */
 typedef JournalEntry = {
+
 	final path: String;
 
 	/** The file's `FileIdentity.realPath`: two spellings of one file are one entry, whose `original` is the run's first sight of it. */
 	final identity: String;
 	final original: Null<String>;
 	final mode: Null<Int>;
+
 }
 
 /** A path's text at one moment, or null when it does not exist. */

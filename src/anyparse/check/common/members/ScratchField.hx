@@ -783,6 +783,7 @@ private typedef Seams = {
 
 /** A field that passed the in-file gates: where it lives, its occurrences in document order, and the fix's plan or why there is none. */
 private typedef Candidate = {
+
 	var owner: String;
 	var name: String;
 	var field: QueryNode;
@@ -799,6 +800,7 @@ private typedef Candidate = {
 	 * an argument — a method called on it above all, which may start work that outlives the call.
 	 */
 	var retained: Bool;
+
 }
 
 /** The fix of one candidate: the statement the declaration replaces, the local's name, how many writes, and the re-entry window. */
@@ -821,9 +823,7 @@ private typedef Occurrences = {
 
 /** What a node is to the field a scan follows (`ScratchField.useOf`). */
 private enum NameUse {
-
 	Occurrence;
 	Foreign;
 	Unrelated;
-
 }

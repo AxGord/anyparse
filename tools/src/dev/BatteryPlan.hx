@@ -3,6 +3,7 @@ package dev;
 /** What every process of one battery run reads: the run's options and what the driver decided before the branches forked. */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef BatteryPlan = {
+
 	var repo: String;
 	var work: String;
 	var cache: String;
@@ -18,7 +19,6 @@ typedef BatteryPlan = {
 
 	/** The test classes the suite row runs instead of every class (`--only`), or null for the whole suite. */
 	@:optional var only: Null<Array<String>>;
-
 	var shards: Int;
 	var quick: Bool;
 	var snapshot: Bool;
@@ -49,4 +49,5 @@ typedef BatteryPlan = {
 
 	/** The battery rows that record stands for (`GateReuse.rows`), each run as a reading of the gate instead of measured. */
 	@:optional var reused: Null<Array<String>>;
+
 };

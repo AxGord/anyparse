@@ -27,11 +27,8 @@ import anyparse.runtime.Span;
  * pick the user-facing label without string comparison.
  */
 enum abstract TestSummaryFailureKind(Int) {
-
 	final Fail = 0;
-
 	final Error = 1;
-
 }
 
 /**

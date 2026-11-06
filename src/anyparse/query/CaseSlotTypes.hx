@@ -264,6 +264,7 @@ final class CaseSlotTypes {
 
 /** A written type a pattern slot holds. */
 typedef SlotType = {
+
 	final source: String;
 
 	/** Where `source` is read; null when the text came from a declaration whose file is not known here. */
@@ -274,6 +275,7 @@ typedef SlotType = {
 
 	/** True when the slot is an optional parameter, which holds null though `source` writes no wrapper. */
 	final optional: Bool;
+
 }
 
 /** The file and offset a written type reads from. */

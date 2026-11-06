@@ -84,3 +84,11 @@ the blank lines after `{` and before `}` of a body that holds a doc comment (`/*
 `}`. They replace that kind's `beginType` / `endType` for such a body only, so a packed enum without docs stays packed
 while a documented one opens with a blank line. Left out, `beginType` / `endType` apply as before. Values and edge cases:
 `docs/haxe-format-config.md`.
+
+## The blank line after a doc-commented member: `emptyLines.<kind>.afterFieldsWithDocComments`
+
+`afterFieldsWithDocComments` in `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines`: `ignore`, `none`
+or `one`, like the global key, for the blank line after a member that carries a doc comment in that kind's body. With
+`none` a documented member keeps its blank line above (`beforeDocCommentEmptyLines`) and the next member follows it
+directly. Left out, an enum or typedef keeps the source blank and an `enum abstract` follows the global key. Details:
+`docs/haxe-format-config.md`.

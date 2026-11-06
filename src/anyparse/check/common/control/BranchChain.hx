@@ -7,6 +7,7 @@ using StringTools;
  * decide whether a statement closes on a terminator of its own.
  */
 typedef ChainSeams = {
+
 	/** `RefShape.ifStatementKinds`: statement-position `if`s, the links of a chain. */
 	final ifKinds: Array<String>;
 
@@ -27,6 +28,7 @@ typedef ChainSeams = {
 
 	/** `RefShape.catchClauseKind`; unset, no try is read as a group. */
 	final catchKind: Null<String>;
+
 };
 
 /**

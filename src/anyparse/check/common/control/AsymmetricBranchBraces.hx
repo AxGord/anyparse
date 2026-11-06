@@ -443,6 +443,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
  * else kinds, and the five `fix` reads to decide whether a bare branch may be braced.
  */
 private typedef Seams = {
+
 	final ifKinds: Array<String>;
 	final blockStmtKind: String;
 	final exemptElseKinds: Array<String>;
@@ -464,7 +465,6 @@ private typedef Seams = {
 
 	/** The try/catch kinds, statement and value alike (`BranchChain.tryBodiesOf`). */
 	final tryKinds: Array<String>;
-
 	final catchKind: Null<String>;
 
 	/** What a braced body is: the block-statement kind and `ControlFlowSupport.blockKinds` - a value `try` holds blocks too. */
@@ -475,6 +475,7 @@ private typedef Seams = {
 
 	/** The grammar's shape, for `CondRegionScan.isConditionalKind`. */
 	final shape: RefShape;
+
 };
 
 /** One asymmetric if/else or chain: the reported span, the `if` node it is anchored on, and the message naming the defect. */
@@ -486,6 +487,7 @@ private typedef Asymmetry = {
 
 /** The per-file context of `AsymmetricBranchBraces.fix`. */
 private typedef FixSite = {
+
 	final source: String;
 	final tree: QueryNode;
 	final seams: Seams;
@@ -494,6 +496,7 @@ private typedef FixSite = {
 
 	/** The file's comment tokens (`SourceComments.collectCommentTokens`): a bare branch's own comments go inside its braces. */
 	final comments: Array<CommentTok>;
+
 };
 
 /** What `fix` does with one asymmetric pair: the brace edits of its chain, or the gate that kept them bare. */

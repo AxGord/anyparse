@@ -19,6 +19,7 @@ using StringTools;
  * body.
  */
 private typedef LiveCtx = {
+
 	var identKind: String;
 	var interpIdentKind: Null<String>;
 	var assignKind: Null<String>;
@@ -49,6 +50,7 @@ private typedef LiveCtx = {
 	var file: String;
 	var source: String;
 	var out: Array<Violation>;
+
 }
 
 /**

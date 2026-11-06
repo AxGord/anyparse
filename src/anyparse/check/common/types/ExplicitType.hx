@@ -916,13 +916,13 @@ private typedef InheritedParam = {
  * violation spans this call owns, the per-file type `printer`, and the `oracle` itself.
  */
 private typedef ReturnSeams = {
+
 	final source: String;
 	final file: String;
 	final bodies: Array<String>;
 
 	/** The parameter kinds (`RefShape.paramKinds`). */
 	final params: Array<String>;
-
 	final flagged: Map<String, Violation>;
 	final printer: TypeRefPrinter;
 	final oracle: TypeOracle;
@@ -935,6 +935,7 @@ private typedef ReturnSeams = {
 
 	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
 	final typeParams: Map<Int, Array<String>>;
+
 };
 
 /**

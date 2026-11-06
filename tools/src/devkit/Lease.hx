@@ -114,6 +114,7 @@ enum LeaseMode {
 
 /** The threads one lease asks for: exactly `max`, or flexibly from `min` up to `max`. */
 typedef Ask = {
+
 	var min: Int;
 	var max: Int;
 
@@ -122,4 +123,5 @@ typedef Ask = {
 	 * re-ranked with the caller's level.
 	 */
 	@:optional var priority: Int;
+
 }

@@ -449,8 +449,6 @@ private typedef InlineMethodTarget = {
 
 /** Resolution outcome of `resolveInlineMethod`: the target or a refusal. */
 private enum InlineMethodPrep {
-
 	POk(target: InlineMethodTarget);
 	PErr(message: String);
-
 }

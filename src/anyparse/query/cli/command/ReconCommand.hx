@@ -19,6 +19,7 @@ import sys.FileSystem;
  * traversal loop.
  */
 typedef ReconRecord = {
+
 	var path: String;
 	var clusterKey: String;
 	var source: String;
@@ -33,6 +34,7 @@ typedef ReconRecord = {
 
 	/** 1-indexed column at the parse-fail locus; `0` for non-`ParseError`. */
 	var col: Int;
+
 };
 
 /**

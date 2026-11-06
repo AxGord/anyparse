@@ -34,59 +34,32 @@ package anyparse.grammar.haxe.format;
 @:peg typedef HxFormatSameLineSection = {
 
 	@:optional var ifElse: HxFormatSameLinePolicy;
-
 	@:optional var tryCatch: HxFormatSameLinePolicy;
-
 	@:optional var doWhile: HxFormatSameLinePolicy;
-
 	@:optional var ifBody: HxFormatBodyPolicy;
-
 	@:optional var elseBody: HxFormatBodyPolicy;
-
 	@:optional var forBody: HxFormatBodyPolicy;
-
 	@:optional var whileBody: HxFormatBodyPolicy;
-
 	@:optional var doWhileBody: HxFormatBodyPolicy;
-
 	@:optional var elseIf: HxFormatKeywordPlacement;
-
 	@:optional var elseSwitch: HxFormatKeywordPlacement;
-
 	@:optional var fitLineIfWithElse: Bool;
-
 	@:optional var fitLineBodyGlue: Bool;
-
 	@:optional var loopBodyIfElseNext: Bool;
-
 	@:optional var conditionalExprFit: Bool;
-
 	@:optional var ifElseSemicolonNextLine: Bool;
-
 	@:optional var expressionTry: HxFormatSameLinePolicy;
-
 	@:optional var returnBody: HxFormatBodyPolicy;
-
 	@:optional var returnBodySingleLine: HxFormatBodyPolicy;
-
 	@:optional var catchBody: HxFormatBodyPolicy;
-
 	@:optional var tryBody: HxFormatBodyPolicy;
-
 	@:optional var caseBody: HxFormatBodyPolicy;
-
 	@:optional var expressionCase: HxFormatBodyPolicy;
-
 	@:optional var caseSiblings: HxFormatSiblingPolicy;
-
 	@:optional var functionBody: HxFormatBodyPolicy;
-
 	@:optional var anonFunctionBody: HxFormatBodyPolicy;
-
 	@:optional var untypedBody: HxFormatBodyPolicy;
-
 	@:optional var expressionIf: HxFormatBodyPolicy;
-
 	@:optional var expressionIfWithBlocks: Bool;
 
 	/**
@@ -123,7 +96,6 @@ package anyparse.grammar.haxe.format;
 	 * whether an explicit knob applies.
 	 */
 	@:optional var expressionIfWithBrackets: Bool;
-
 	@:optional var expressionIfArrowBodyReflow: Bool;
 
 	/**
@@ -139,7 +111,6 @@ package anyparse.grammar.haxe.format;
 	 * cap. Inert while `expressionIfFit` is off.
 	 */
 	@:optional var expressionIfFitMaxBranches: Int;
-
 	@:optional var elseIfCommentReflow: Bool;
 
 	/**
@@ -171,4 +142,5 @@ package anyparse.grammar.haxe.format;
 	 * (`HaxeFormatConfigLoader.applyComprehensionForPadding`).
 	 */
 	@:optional var comprehensionFor: HxFormatBodyPolicy;
+
 };

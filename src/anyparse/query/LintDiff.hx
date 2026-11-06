@@ -622,15 +622,13 @@ typedef LintMessageIdentities = Map<String, (String) -> String>;
 typedef LintDiffRow = {
 
 	var file: String;
-
 	var rule: String;
-
 	var message: String;
-
 	var severity: String;
 
 	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
 	var identity: Bool;
+
 };
 
 /** The parts of a finding's structured identity a key is made of (`keyFor`): every field but the chain. */
@@ -657,6 +655,7 @@ typedef LintDiffTally = {
 
 	/** Identity key -> the normalized message of each record under it, one per record: what pairs it across `data`. */
 	var messages: Map<String, Array<String>>;
+
 };
 
 /**
@@ -673,11 +672,8 @@ typedef LintDiffPool = {
 typedef LintDiffEntry = {
 
 	var file: String;
-
 	var rule: String;
-
 	var message: String;
-
 	var severity: String;
 
 	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
@@ -685,15 +681,13 @@ typedef LintDiffEntry = {
 
 	/** How many occurrences the other side is missing. */
 	var count: Int;
+
 };
 
 /** Added/removed occurrence counts for one severity. */
 typedef LintDiffSeverityDelta = {
-
 	var severity: String;
-
 	var added: Int;
-
 	var removed: Int;
 };
 
@@ -707,10 +701,9 @@ typedef LintDiffRuleDelta = {
 
 	/** Occurrences of this rule in the compared snapshot. */
 	var after: Int;
-
 	var added: Int;
-
 	var removed: Int;
+
 };
 
 /**
@@ -721,11 +714,8 @@ typedef LintDiffRuleDelta = {
  * project's own `anon-type-dup` counts a structure written twice.
  */
 typedef LintDiffBuckets = {
-
 	var names: Array<String>;
-
 	var added: Map<String, Int>;
-
 	var removed: Map<String, Int>;
 };
 
@@ -733,19 +723,14 @@ typedef LintDiffBuckets = {
 typedef LintDiffResult = {
 
 	var oldTotal: Int;
-
 	var newTotal: Int;
-
 	var added: Array<LintDiffEntry>;
-
 	var removed: Array<LintDiffEntry>;
-
 	var addedTotal: Int;
-
 	var removedTotal: Int;
-
 	var severities: Array<LintDiffSeverityDelta>;
 
 	/** Every rule that moved, most movement first — the gate's headline question. */
 	var rules: Array<LintDiffRuleDelta>;
+
 };

@@ -299,11 +299,9 @@ final class GuardedImportCarry {
  * carry verbatim under its condition, or a reason the region is not a unit this op may relocate.
  */
 enum GuardedCarry {
-
 	GuardedNone;
 	GuardedProviders(condition: String, imports: Array<ImportInfo>);
 	GuardedRefusal(message: String);
-
 }
 
 /**
@@ -313,11 +311,9 @@ enum GuardedCarry {
  * not delimit.
  */
 private enum GuardSite {
-
 	GuardNone;
 	GuardTop(condition: String);
 	GuardBranch(keyword: String);
 	GuardNested(depth: Int);
 	GuardNoCondition;
-
 }

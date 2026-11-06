@@ -218,6 +218,7 @@ enum CliSeparator {
 
 	/** Every token after it is a positional, a flag-shaped one too (`search -- '--$x'`). */
 	EndsOptions;
+
 }
 
 /** What `CliFlags.scan` read: every token it placed, the first undeclared `--word`, a valued flag argv ended on. */

@@ -48,4 +48,5 @@ package anyparse.grammar.haxe.format;
 	 * trailing comment into the line and wraps the CODE to make room.
 	 */
 	@:optional var trailingCommentOverflow: String;
+
 };

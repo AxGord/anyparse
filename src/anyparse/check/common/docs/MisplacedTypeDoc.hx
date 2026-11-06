@@ -307,6 +307,7 @@ private typedef Header = {
 
 /** Resolved kind-sets the header walk threads through. */
 private typedef Seams = {
+
 	final typeDecls: Array<String>;
 	final nameHosts: Array<String>;
 	final modifiers: Array<String>;
@@ -331,4 +332,5 @@ private typedef Seams = {
 	 * reads as a second header declaration. Empty when the grammar leaves the seam unset.
 	 */
 	final declPrefixKeywords: Array<String>;
+
 };

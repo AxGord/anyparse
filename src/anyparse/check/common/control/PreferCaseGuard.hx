@@ -564,6 +564,7 @@ private typedef Scan = {
 
 /** The seam kinds `PreferCaseGuard` resolves once per run. */
 private typedef Seams = {
+
 	final switchKinds: Array<String>;
 	final caseBranchKind: String;
 	final plainCasePatternKind: String;
@@ -581,4 +582,5 @@ private typedef Seams = {
 	final exhaustiveDeclKinds: Array<String>;
 	final conditionalKind: Null<String>;
 	final emptyStmtKind: Null<String>;
+
 };

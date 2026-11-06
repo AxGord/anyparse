@@ -49,6 +49,7 @@ typedef HubUse = {
  * `unresolvedSites` is every unresolved site inside a member span.
  */
 typedef ClusterReport = {
+
 	var typeName: String;
 	var memberCount: Int;
 	var intraEdgeSites: Int;
@@ -61,6 +62,7 @@ typedef ClusterReport = {
 	var edges: Array<MemberEdge>;
 	var resolvedSites: Int;
 	var unresolvedSites: Int;
+
 }
 
 /**

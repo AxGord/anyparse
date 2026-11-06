@@ -208,6 +208,7 @@ typedef ReachRegion = {
 
 /** What a member's modifier / metadata run says, as `PublicReach.readRun` reads it. */
 typedef MemberRun = {
+
 	final isPublic: Bool;
 
 	/** The `public` keyword's node, or null when the run carries none. */
@@ -215,6 +216,7 @@ typedef MemberRun = {
 	final isOverride: Bool;
 	final isStatic: Bool;
 	final annotated: Bool;
+
 };
 
 /** The accumulated verdict of one inheritance-chain walk. */

@@ -20,10 +20,8 @@ import anyparse.runtime.Span;
  * Mirrors `RenameResult` / `ChangeSigResult`.
  */
 enum CrossRenameResult {
-
 	Ok(changes: Array<FileChange>, advisory: Null<String>);
 	Err(message: String);
-
 }
 
 /**
@@ -32,6 +30,7 @@ enum CrossRenameResult {
  * unchanged scope file is never returned.
  */
 typedef FileChange = {
+
 	var file: String;
 	var newSource: String;
 	var count: Int;
@@ -42,6 +41,7 @@ typedef FileChange = {
 	 * compiler-verified rename arm), needs the edits rather than the finished text.
 	 */
 	var edits: Array<{ span: Span, text: String }>;
+
 }
 
 /**
@@ -434,6 +434,7 @@ final class CrossRename {
 
 /** The paths one file can name a renamed type through — `CrossRename.pathsOf`. */
 private typedef TypePaths = {
+
 	/** The qualified spellings a type or value position accepts here (`RefactorSupport.qualifiedPaths`). */
 	final qualified: Array<String>;
 
@@ -448,4 +449,5 @@ private typedef TypePaths = {
 
 	/** Offsets of the identifiers that root a qualified spelling but are value bindings in this file. */
 	final shadowedRoots: Array<Int>;
+
 }

@@ -17,7 +17,6 @@ typedef ChainLists = {
 
 	/** The repetitions bounded few and cheap enough to run as once (`BoundedRepeats`), and the budget they are judged by. */
 	final bounded: Array<anyparse.check.common.design.threads.BoundedRepeats.BoundedRepeat>;
-
 	final repeatBudgetMs: Null<Float>;
 
 	/**
@@ -105,6 +104,7 @@ typedef ChainLists = {
 	final closedWorld: Bool;
 	final lockPairs: Array<String>;
 	final pairs: Array<LockPair>;
+
 }
 
 /** One step of a path toward a blocking call: the call taken, and the state it enters — none when the call itself blocks. */
@@ -118,6 +118,7 @@ private typedef TaintStep = {
  * repeats, and the hold being judged as the state's function sees it (`LockDominance.carry`), when it still does.
  */
 private typedef WalkState = {
+
 	final key: String;
 	final id: String;
 	final valuation: String;
@@ -130,6 +131,7 @@ private typedef WalkState = {
 
 	/** The classes the state's function runs on an instance of (`AllocationSets`), when the way to it says. */
 	final self: Null<String>;
+
 }
 
 /** What a walk state carries down to the next one: the lock held, whether a call on the way repeats, and the bounded way. */
@@ -176,6 +178,7 @@ typedef BlockingEnd = {
  * a short wait), where a call repeats, and whether a take counts at all.
  */
 typedef TaintCost = {
+
 	final blocking: Array<String>;
 	final repetition: CallRepetition;
 
@@ -190,6 +193,7 @@ typedef TaintCost = {
 
 	/** Set for the taint asking about the NORMAL paths: the calls only an error path runs (`ErrorPaths`) lead nowhere. */
 	final errors: Null<ErrorPaths>;
+
 }
 
 /**

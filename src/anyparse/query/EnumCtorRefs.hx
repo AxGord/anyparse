@@ -15,6 +15,7 @@ using Lambda;
 
 /** The constructor being renamed, and where its enum lives. */
 typedef CtorTarget = {
+
 	final typeName: String;
 	final ctor: String;
 	final newName: String;
@@ -24,6 +25,7 @@ typedef CtorTarget = {
 
 	/** The file declaring the enum. */
 	final cursorFile: String;
+
 }
 
 /** One file's constructor-token offsets, or the refusal that stops the whole rename. */

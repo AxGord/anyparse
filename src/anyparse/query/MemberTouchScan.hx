@@ -960,23 +960,26 @@ typedef Occurrence = {
  * a blind spot in the project, and a touch inside the entry region.
  */
 typedef MemberTouches = {
+
 	var touchers: Map<String, Occurrence>;
 
 	/** Toucher id -> a touch it makes on an object other than its own `this` (absent when every touch is on `this`). */
 	var notOnSelf: Map<String, Occurrence>;
-
 	var escapes: Array<Occurrence>;
 	var hidden: Null<ReachUnknown>;
 	var inRegion: Null<ReachStep>;
+
 }
 
 /** What `MemberTouchScan.isFresh` needs to type a method call's receiver: the file's tree and text. */
 typedef FreshContext = {
+
 	var tree: QueryNode;
 	var source: String;
 
 	/** Whether a call node of `tree` returns an object nothing else holds; absent, no call but a built-in one is fresh. */
 	@:optional var call: Null<QueryNode -> Bool>;
+
 }
 
 private typedef Verdict = {
@@ -1000,6 +1003,7 @@ private enum TypedTouches {
 
 /** The walk `MemberTouchScan.nodeAccesses` makes over one graph node's bodies, for the member `name` of `declaring`. */
 private typedef TouchWalk = {
+
 	final g: CallGraph;
 	final node: FnNode;
 	final name: String;
@@ -1012,8 +1016,8 @@ private typedef TouchWalk = {
 
 	/** The verdict an access no reading answers for ends the walk with. */
 	final unreadable: TypedTouches;
-
 	final out: Array<FieldFact>;
 	final work: Array<FactNode>;
 	var unread: Bool;
+
 }

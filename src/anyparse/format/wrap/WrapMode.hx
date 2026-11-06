@@ -20,13 +20,9 @@ package anyparse.format.wrap;
 enum abstract WrapMode(Int) from Int to Int {
 
 	final NoWrap = 0;
-
 	final OnePerLine = 1;
-
 	final OnePerLineAfterFirst = 2;
-
 	final FillLine = 3;
-
 	final FillLineWithLeadingBreak = 4;
 
 	/**

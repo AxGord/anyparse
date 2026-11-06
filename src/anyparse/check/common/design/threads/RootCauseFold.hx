@@ -9,6 +9,7 @@ import anyparse.check.common.design.threads.LockTaint.BlockingTrail;
 
 /** Why one long call of a warned hold is long: a wait for another lock, a sink call finding (a) warns of, or neither. */
 private enum FoldReason {
+
 	Waits(lock: String);
 
 	/**
@@ -19,6 +20,7 @@ private enum FoldReason {
 	 */
 	Site(key: String, repeated: Bool, mayRepeat: Bool, way: Array<String>, unnamed: Null<Array<String>>);
 	Uncovered;
+
 }
 
 /** Where a warned hold stands in `RootCauseFold.fold`: not yet decided, kept a warning, or folded onto others. */

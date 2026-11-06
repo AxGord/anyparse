@@ -28,6 +28,7 @@ typedef GraphFilter = {
 
 	/** Keep the nodes outside the scanned scope and the edges reaching them. */
 	final external: Bool;
+
 }
 
 /**

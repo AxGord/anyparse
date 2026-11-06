@@ -17,10 +17,8 @@ import anyparse.runtime.Span;
  * Mirrors `ChangeSigResult` (methods carry the cross-file advisory).
  */
 enum RemoveParamResult {
-
 	Ok(text: String, advisory: Null<String>);
 	Err(message: String);
-
 }
 
 /**

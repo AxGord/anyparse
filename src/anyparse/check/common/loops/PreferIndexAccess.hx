@@ -372,6 +372,7 @@ private typedef Match = {
 
 /** Per-run resolved seams + type provider. */
 private typedef Cfg = {
+
 	var shape: RefShape;
 	var typed: TypeInfoProvider;
 	var identKind: String;
@@ -384,11 +385,11 @@ private typedef Cfg = {
 
 	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
 	var typeSyntax: TypeSyntaxReader;
-
 	var opaqueKinds: Array<String>;
 	var ternaryKind: Null<String>;
 	var nullCoalKind: Null<String>;
 	var eqKind: Null<String>;
 	var notEqKind: Null<String>;
 	var nullLitKind: Null<String>;
+
 };

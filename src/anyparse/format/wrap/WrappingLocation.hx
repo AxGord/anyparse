@@ -20,9 +20,6 @@ package anyparse.format.wrap;
  * (`src/formatter/config/WrapConfig.hx`).
  */
 enum abstract WrappingLocation(Int) {
-
 	final BeforeLast = 0;
-
 	final AfterLast = 1;
-
 }

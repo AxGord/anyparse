@@ -364,12 +364,12 @@ final class GateTree {
 
 /** What `dev slice-gate` was asked, as the gate and each of its branches read it. */
 typedef GateOptions = {
+
 	var tree: String;
 	var logs: String;
 
 	/** A `--baseline` run, which records rather than compares. */
 	var baseline: Bool;
-
 	var frozen: Array<String>;
 	var infra: Array<String>;
 	var arms: Array<String>;
@@ -384,6 +384,7 @@ typedef GateOptions = {
 
 	/** The run a branch reports to: a gate's own, handed to its branches with `--run`. */
 	var run: String;
+
 }
 
 /** What `git diff --name-status -M` names: the changed paths as they are now, and each renamed one's path at the base. */

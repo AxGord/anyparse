@@ -320,6 +320,7 @@ typedef ScopeFile = {
  * only whether it spells the name as a word. `runtimeName` is where the member question puts all three together.
  */
 typedef ReflectionSurface = {
+
 	final whole: Array<String>;
 	final fragments: Array<String>;
 
@@ -329,4 +330,5 @@ typedef ReflectionSurface = {
 	 * bytes may spell any name. `runtimeName` is where that answer is asked.
 	 */
 	final unreadable: Array<String>;
+
 };

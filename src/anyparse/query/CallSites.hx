@@ -18,10 +18,8 @@ using Lambda;
  * pattern-matches without a sentinel-array convention.
  */
 enum CollectResult {
-
 	COk(sites: Array<QueryNode>);
 	CErr(message: String);
-
 }
 
 /** The function a cursor resolves to, with the tree it lives in and the name it was resolved by. */
@@ -36,10 +34,8 @@ typedef CursorFn = {
  * verbatim (an unparseable source, a cursor on nothing named, a name that binds to no declaration).
  */
 enum CursorFnResult {
-
 	FnAt(fn: CursorFn);
 	FnAtErr(message: String);
-
 }
 
 /**
@@ -526,12 +522,10 @@ final class CallSites {
 
 /** Classification of a `Call`'s callee relative to the target name — internal. */
 private enum CalleeShape {
-
 	CalleeBare(identSpan: Span);
 	CalleeThis;
 	CalleeOtherReceiver(recv: String);
 	CalleeNone;
-
 }
 
 /**

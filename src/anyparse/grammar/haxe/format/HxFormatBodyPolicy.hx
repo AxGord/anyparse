@@ -8,13 +8,8 @@ package anyparse.grammar.haxe.format;
  * break).
  */
 enum abstract HxFormatBodyPolicy(String) to String {
-
 	final Same = 'same';
-
 	final Next = 'next';
-
 	final Keep = 'keep';
-
 	final FitLine = 'fitLine';
-
 }

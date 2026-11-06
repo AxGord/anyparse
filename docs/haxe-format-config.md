@@ -602,6 +602,27 @@ Runtime: `MemberGap.docEdge`, read through the grammar's `@:fmt(beginEndTypeIfDo
 turns `enum F { A; /** doc */ B; }` into a body with one blank line after `{` and one before `}`,
 and leaves a packed `enum E { A; B; }` packed.
 
+## `emptyLines.<kind>.afterFieldsWithDocComments`
+
+In `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines`, with the values of the
+global `emptyLines.afterFieldsWithDocComments` (`ignore` / `none` / `one`): the blank line after a
+doc-commented member of that kind's body. `none` drops the source blank there, `one` puts one in,
+`ignore` keeps the source. The blank before a doc comment stays with `beforeDocCommentEmptyLines`,
+so `none` gives "a blank line only before a member carrying a doc". Left out, each kind keeps
+today's output: an enum or typedef body keeps the source blank, an `enum abstract` body follows the
+global key. A class, interface or plain abstract body reads the global key only; an anon type
+outside a typedef body is not a typedef body.
+Runtime: `MemberGap.docStrips` / `docAdds`, read through the grammar's
+`@:fmt(afterFieldsWithDocComments('<knob>'[, '<flag>', '<alt>']))` (enum, `enum abstract`, the
+typedef anon type) — `WriterTriviaStarDispatch.afterDocPolicy`.
+
+```json
+{"emptyLines": {"enumEmptyLines": {"afterFieldsWithDocComments": "none"}}}
+```
+
+turns `enum E { A; /** doc */ B; <blank> C; }` into `A;`, a blank line, `/** doc */ B;` and `C;`
+right under it.
+
 ## `comments.*`
 
 The fork has a `comments` section holding only `blockCommentBodyIndent`, which hxq accepts and does not read. `blockCommentStyle` and `trailingCommentOverflow` are anyparse-only and additive.

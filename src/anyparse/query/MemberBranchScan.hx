@@ -400,6 +400,7 @@ final class MemberBranchScan {
  * and the comment tokens that mask a directive written inside a comment.
  */
 typedef MemberBranchSeams = {
+
 	final source: String;
 
 	/** The member-position conditional region kind; null makes `fold` a plain left fold. */
@@ -407,8 +408,8 @@ typedef MemberBranchSeams = {
 
 	/** The branch-opening directives (`#else` / `#elseif`); empty makes a region one flat run. */
 	final elseKeywords: Array<String>;
-
 	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+
 };
 
 /**

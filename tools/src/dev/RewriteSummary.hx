@@ -5,6 +5,7 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef RewriteSummary = {
+
 	var turns: Int;
 	var rewrites: Int;
 	var rewriteTokens: Int;
@@ -16,8 +17,8 @@ typedef RewriteSummary = {
 
 	/** The rewrites whose gap was within the 5-minute cache lifetime, within the 1-hour one, and beyond it. */
 	var within5m: Int;
-
 	var to1h: Int;
 	var over1h: Int;
 	var worst: Array<Rewrite>;
+
 }

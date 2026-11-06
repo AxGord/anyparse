@@ -9,20 +9,12 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintTruthEntryJson = {
-
 	var family: String;
-
 	@:key('function') var member: String;
-
 	var subject: String;
-
 	var verdict: String;
-
 	@:optional var dupOf: Null<String>;
-
 	@:optional var recall: Null<Bool>;
-
 	@:optional var evidence: Null<LintTruthEvidenceJson>;
-
 	@:optional var note: Null<String>;
 };

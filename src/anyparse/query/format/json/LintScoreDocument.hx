@@ -6,22 +6,13 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintScoreDocument = {
-
 	var rule: String;
-
 	var project: String;
-
 	var commit: String;
-
 	var severity: String;
-
 	var excluded: Int;
-
 	var overall: LintScoreBucketRecord;
-
 	var families: Array<LintScoreBucketRecord>;
-
 	var lost: Array<LintScoreKeyRecord>;
-
 	var unlabelled: Array<LintScoreKeyRecord>;
 };

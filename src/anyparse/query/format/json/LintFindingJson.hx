@@ -25,13 +25,11 @@ package anyparse.query.format.json;
 typedef LintFindingJson = {
 
 	var file: String;
-
 	var severity: String;
-
 	var rule: String;
-
 	var message: String;
 
 	/** The finding's structured identity (`Check.FindingData`), present only on a rule that attaches one. */
 	@:optional var data: Null<LintFindingDataJson>;
+
 };

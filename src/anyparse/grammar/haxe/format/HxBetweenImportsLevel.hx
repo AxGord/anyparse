@@ -34,17 +34,11 @@ package anyparse.grammar.haxe.format;
 enum abstract HxBetweenImportsLevel(Int) from Int to Int {
 
 	final All = 0;
-
 	final FirstLevelPackage = 1;
-
 	final SecondLevelPackage = 2;
-
 	final ThirdLevelPackage = 3;
-
 	final FourthLevelPackage = 4;
-
 	final FifthLevelPackage = 5;
-
 	final FullPackage = 6;
 
 	/**

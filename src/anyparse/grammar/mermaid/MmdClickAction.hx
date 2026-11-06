@@ -5,10 +5,8 @@ package anyparse.grammar.mermaid;
 enum MmdClickAction {
 	@:kw('href')
 	Href(link: MmdClickLink);
-
 	@:kw('call')
 	Call(call: MmdClickCall);
-
 	Link(link: MmdClickLink);
 	Callback(call: MmdClickCall);
 }

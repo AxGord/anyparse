@@ -571,6 +571,7 @@ enum HeadReading {
  * not know is a null function (the walk skips the shape) or a null answer, never a guess.
  */
 typedef TypingHost<T, C> = {
+
 	/** `node` with what a type passes through unchanged (parentheses) peeled off, or `node` itself. */
 	final peel: (node:QueryNode, ctx:C) -> QueryNode;
 
@@ -637,4 +638,5 @@ typedef TypingHost<T, C> = {
 
 	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
 	final reading: (ctx:C) -> Array<Int>;
+
 }

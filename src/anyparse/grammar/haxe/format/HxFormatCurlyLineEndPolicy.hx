@@ -31,10 +31,7 @@ package anyparse.grammar.haxe.format;
  * surrounding sibling sep, not by `blockBody`.
  */
 @:peg typedef HxFormatCurlyLineEndPolicy = {
-
 	@:optional var leftCurly: HxFormatLeftCurlyPolicy;
-
 	@:optional var emptyCurly: HxFormatEmptyCurlyPolicy;
-
 	@:optional var rightCurly: HxFormatRightCurlyPolicy;
 };

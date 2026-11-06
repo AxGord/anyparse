@@ -1001,6 +1001,7 @@ final class LandTest extends Test {
 
 /** What a `Land.land` run over a scratch repository left behind. */
 private typedef Landing = {
+
 	var status: Int;
 	var output: String;
 
@@ -1059,10 +1060,12 @@ private typedef Landing = {
 
 	/** The log of the `prose-refs` row, or empty. */
 	var proseLog: String;
+
 }
 
 /** The battery a landing asks for: whether in full, and the landings the count already holds. */
 private typedef Battery = {
+
 	var full: Bool;
 	var landed: Int;
 
@@ -1079,6 +1082,7 @@ private typedef Battery = {
 
 	/** Whether the paths of the merge cannot be read. */
 	@:optional var unreadable: Bool;
+
 }
 
 /** One file written whole. */
@@ -1089,6 +1093,7 @@ private typedef Edit = {
 
 /** What a scratch repository holds beside the one commit of the branch. */
 private typedef Setup = {
+
 	/** The text of `.gitattributes`. */
 	@:optional var attributes: String;
 
@@ -1142,4 +1147,5 @@ private typedef Setup = {
 
 	/** Whether an earlier land's whole suite ended red. */
 	@:optional var redRecord: Bool;
+
 }

@@ -20,7 +20,6 @@ package anyparse.grammar.haxe.format;
  * produces `[ 1 ]`. Defaults (absent keys) keep the tight `[1]` form.
  */
 @:peg typedef HxFormatBracketConfigSection = {
-
 	@:optional var accessBrackets: HxFormatParenPolicySection;
 	@:optional var arrayLiteralBrackets: HxFormatParenPolicySection;
 	@:optional var mapLiteralBrackets: HxFormatParenPolicySection;

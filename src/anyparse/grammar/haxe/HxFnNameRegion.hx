@@ -19,8 +19,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxFnNameRegion {
-
 	@:trail('#end')
 	Conditional(inner: HxConditionalFnName);
-
 }

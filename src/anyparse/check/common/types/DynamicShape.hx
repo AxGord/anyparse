@@ -5,6 +5,7 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 /** Resolved kind sets + config-independent names threaded through the walk, built once per run. */
 typedef DynCtx = {
+
 	final dynName: String;
 	final fieldKinds: Array<String>;
 	final paramKinds: Array<String>;
@@ -29,6 +30,7 @@ typedef DynCtx = {
 
 	/** The rule identity and wording a finding of this walk carries. */
 	final report: DynReport;
+
 };
 
 /** What one walk calls its findings: the rule id, and the message for a position (`boundary` marks a Reflect/Json transit local). */

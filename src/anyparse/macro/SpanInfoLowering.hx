@@ -486,6 +486,7 @@ class SpanInfoLowering extends PairedShapeLowering {
  * One generated span-info function descriptor.
  */
 typedef SpanInfoFn = {
+
 	/** Full grammar type path this function serves. */
 	final typePath: String;
 
@@ -497,12 +498,14 @@ typedef SpanInfoFn = {
 
 	/** Body expression. */
 	final body: Expr;
+
 };
 
 /**
  * Result of span-info lowering: every function to emit plus the root entry.
  */
 typedef SpanInfoResult = {
+
 	/** Full grammar root type path. */
 	final rootTypePath: String;
 
@@ -523,5 +526,6 @@ typedef SpanInfoResult = {
 
 	/** Element type of an accessor clause's `ids` array, or null when the grammar has no such shape. */
 	final accessorIdCT: Null<ComplexType>;
+
 };
 #end

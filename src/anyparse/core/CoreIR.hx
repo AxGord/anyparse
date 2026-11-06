@@ -22,7 +22,6 @@ typedef BuildField = {
  * that the next bytes match a fixed signature.
  */
 enum BinKind {
-
 	U8;
 	U16LE;
 	U16BE;
@@ -46,7 +45,6 @@ enum BinKind {
 	BytesFixed(n: Int);
 	BytesVar(len: CoreIR);
 	Magic(expected: haxe.io.Bytes);
-
 }
 
 /**

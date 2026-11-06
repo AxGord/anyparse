@@ -7,6 +7,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCondSemiAssign = {
+
 	@:fmt(atomOperand) var target: HxExpr;
 	var value: HxCondSemiValue;
 
@@ -15,4 +16,5 @@ typedef HxCondSemiAssign = {
 	 * where a region of bare values (`x = #if a 1 #else 2 #end;`) puts its terminator.
 	 */
 	@:fmt(fillSeam) var end: HxNoSemiAhead;
+
 };

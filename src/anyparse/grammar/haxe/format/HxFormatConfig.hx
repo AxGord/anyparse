@@ -32,20 +32,12 @@ package anyparse.grammar.haxe.format;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef HxFormatConfig = {
-
 	@:optional var indentation: HxFormatIndentationSection;
-
 	@:optional var wrapping: HxFormatWrappingSection;
-
 	@:optional var sameLine: HxFormatSameLineSection;
-
 	@:optional var trailingCommas: HxFormatTrailingCommasSection;
-
 	@:optional var lineEnds: HxFormatLineEndsSection;
-
 	@:optional var whitespace: HxFormatWhitespaceSection;
-
 	@:optional var emptyLines: HxFormatEmptyLinesSection;
-
 	@:optional var comments: HxFormatCommentsSection;
 };

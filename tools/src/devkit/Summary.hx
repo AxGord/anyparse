@@ -174,6 +174,7 @@ final class Summary {
 
 /** How one step of a `Summary` ended. */
 enum Outcome {
+
 	Passed;
 	Failed(why: String);
 
@@ -182,10 +183,12 @@ enum Outcome {
 
 	/** The tool decided the step does not apply. */
 	Skipped(why: String);
+
 }
 
 /** One recorded step of a `Summary`. */
 typedef Step = {
+
 	var name: String;
 	var outcome: Outcome;
 	var ms: Float;
@@ -195,4 +198,5 @@ typedef Step = {
 
 	/** The lines that decide a step that failed or did not run; empty when it set none. */
 	var excerpt: Array<String>;
+
 }

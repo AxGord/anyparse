@@ -30,18 +30,16 @@ package anyparse.grammar.haxe.format;
  *  - `beginTypeIfDocComments` / `endTypeIfDocComments` — Int counts that
  *    replace `beginType` / `endType` for a body holding a doc comment.
  *    Route to `opt.typedefBeginTypeIfDocComments` / `opt.typedefEndTypeIfDocComments`.
+ *  - `afterFieldsWithDocComments` — ignore / none / one after a doc-commented
+ *    field. Routes to `opt.typedefAfterFieldsWithDocComments`; absent keeps the
+ *    source blank.
  */
 @:peg typedef HxFormatTypedefEmptyLinesConfig = {
-
 	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
-
 	@:optional var betweenFields: Int;
-
 	@:optional var beginType: Int;
-
 	@:optional var endType: Int;
-
 	@:optional var beginTypeIfDocComments: Int;
-
 	@:optional var endTypeIfDocComments: Int;
+	@:optional var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
 };

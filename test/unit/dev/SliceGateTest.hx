@@ -655,6 +655,7 @@ final class SliceGateTest extends Test {
 
 /** What a `check()` over a scratch tree left: the rows each branch process was handed, and the leases asked of the pool. */
 private typedef GateRan = {
+
 	var branches: String;
 	var leases: String;
 	var status: Int;
@@ -664,12 +665,11 @@ private typedef GateRan = {
 
 	/** The names the gate's logs directory holds afterwards, and the text of its `baseline.json` (empty when it has none). */
 	var logsHad: Array<String>;
-
 	var baselineText: String;
-
 
 	/** The table the gate printed, for the message of a failed assertion. */
 	var table: String;
+
 }
 
 /** What the corpus row of a scratch tree meets (`SliceGateTest.corpusWhy`). */

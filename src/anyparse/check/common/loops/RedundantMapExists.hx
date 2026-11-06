@@ -349,6 +349,7 @@ private typedef Match = {
 
 /** Per-run resolved seams + type provider. */
 private typedef Cfg = {
+
 	final shape: RefShape;
 	final typed: TypeInfoProvider;
 	final ternaryKind: String;
@@ -362,7 +363,7 @@ private typedef Cfg = {
 
 	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
 	final typeSyntax: TypeSyntaxReader;
-
 	final opaqueKinds: Array<String>;
 	final mutationKinds: Array<String>;
+
 };

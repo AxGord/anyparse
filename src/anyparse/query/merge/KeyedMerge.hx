@@ -14,16 +14,17 @@ typedef MergeTree = {
 
 /** One child of a container: its key, unique among its siblings, its text, and its own children when it has any. */
 typedef MergeChild = {
+
 	final key: String;
 
 	/** The blank lines leading the child: its spacing, not its content, so a change of them alone changes nothing. */
 	final lead: String;
-
 	final text: String;
 	final tree: Null<MergeTree>;
 
 	/** The statement that adds this child at the grammar's own seat (an import), or null when its place is its neighbours'. */
 	final seat: Null<String>;
+
 }
 
 /** A place both sides changed differently: its key and what each side did there. */
@@ -45,9 +46,9 @@ typedef LineMerge = (base:String, ours:String, theirs:String) -> Null<String>;
 
 /** What `KeyedMerge.merge` makes of three versions. */
 typedef MergeOutcome = {
+
 	/** The merged text, a conflict left between `<<<<<<<` / `=======` / `>>>>>>>` lines. */
 	final text: String;
-
 	final conflicts: Array<MergeConflict>;
 
 	/** The seat statements of the children only theirs added, left out of `text` for the caller to place. */
@@ -55,10 +56,12 @@ typedef MergeOutcome = {
 
 	/** How the two sides were combined, one phrase per container where both contributed. */
 	final notes: Array<String>;
+
 }
 
 /** How a place both sides changed differently is settled, once someone has chosen. */
 enum abstract MergeChoice(String) to String {
+
 	final Ours = 'ours';
 	final Theirs = 'theirs';
 
@@ -74,6 +77,7 @@ enum abstract MergeChoice(String) to String {
 			case _: null;
 		};
 	}
+
 }
 
 /**

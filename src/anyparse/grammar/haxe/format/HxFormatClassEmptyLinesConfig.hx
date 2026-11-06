@@ -41,20 +41,12 @@ package anyparse.grammar.haxe.format;
  * lowers it (`abstractEmptyLines.betweenStaticFunctions: 0`).
  */
 @:peg typedef HxFormatClassEmptyLinesConfig = {
-
 	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
-
 	@:optional var betweenVars: Int;
-
 	@:optional var betweenFunctions: Int;
-
 	@:optional var afterVars: Int;
-
 	@:optional var afterStaticVars: Int;
-
 	@:optional var betweenStaticFunctions: Int;
-
 	@:optional var beginType: Int;
-
 	@:optional var endType: Int;
 };

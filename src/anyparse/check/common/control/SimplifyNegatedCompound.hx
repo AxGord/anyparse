@@ -237,6 +237,7 @@ private typedef Candidate = {
 
 /** The resolved seams `SimplifyNegatedCompound` reads in both `run` and `fix`. */
 private typedef Seams = {
+
 	final shape: RefShape;
 	final opaqueKinds: Array<String>;
 	final negation: NegationSeams;
@@ -254,4 +255,5 @@ private typedef Seams = {
 
 	/** The operator kinds the engine may flip or rebuild — what `selection` is asked about. */
 	final operatorKinds: Array<String>;
+
 };

@@ -272,9 +272,7 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 private typedef CatchScan = {
 
 	final shape: RefShape;
-
 	final catchKind: String;
-
 	final blockKind: String;
 
 	/** `RefShape.controlExitKinds`: a rethrow or a return escalates or recovers. */
@@ -306,4 +304,5 @@ private typedef CatchScan = {
 
 	/** `RefShape.iterationValueBinderKinds`: the binder nodes ahead of a `for` iterable. */
 	final valueBinderKinds: Array<String>;
+
 };

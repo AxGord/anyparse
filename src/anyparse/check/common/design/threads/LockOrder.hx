@@ -25,12 +25,14 @@ private typedef Arrival = {
 
 /** How a lock held on entering a state came to be held: the function that took it, where it called out, and the path from it. */
 private typedef Climb = {
+
 	final holder: String;
 	final anchor: Null<CallEdge>;
 	final prefix: Array<String>;
 
 	/** Whether a call on the way from `holder` hands on the value it runs (`Ref`): a witness only when no way runs calls alone. */
 	final handed: Bool;
+
 }
 
 /** One "holds A, then takes B" step: the state that makes it, the call there that takes B, and the context it runs on. */
@@ -47,6 +49,7 @@ private typedef OrderStep = {
  * that lock (`holder`) and the path from it to the take — what orders two steps of one pair (`precedes`).
  */
 private typedef RankedStep = {
+
 	final step: OrderStep;
 	final anchor: CallEdge;
 	final holder: String;
@@ -57,6 +60,7 @@ private typedef RankedStep = {
 
 	/** Whether `path` passes a value handed on (`Climb.handed`). */
 	final handed: Bool;
+
 }
 
 /**

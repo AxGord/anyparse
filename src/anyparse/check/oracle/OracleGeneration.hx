@@ -728,6 +728,7 @@ final class OracleGeneration {
 
 /** One `prepare` call's state: who holds the locks, until when it waits, and what it has refused and said, and what it saw. */
 typedef GenerationRun = {
+
 	var me: Holder;
 	var deadline: Float;
 	var failures: Map<String, String>;
@@ -738,6 +739,7 @@ typedef GenerationRun = {
 
 	/** Why each group this run regenerated while an input moved is no snapshot of the tree, by key. */
 	var raced: Map<String, String>;
+
 }
 
 /** `OracleGeneration.prepare`'s answer: the configurations ready to use, and a line per command that ran. */

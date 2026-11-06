@@ -169,4 +169,5 @@ private typedef Seams = {
 
 	/** The modifier kinds a declaration's leading run may hold; any other kind ENDS the run. */
 	final modifiers: Array<String>;
+
 };

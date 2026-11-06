@@ -35,6 +35,7 @@ typedef FieldWrite = {
  * candidate whose declared type no builtin value can convert into.
  */
 typedef UnresolvedWrite = {
+
 	var field: String;
 	var rhsType: Null<String>;
 
@@ -46,6 +47,7 @@ typedef UnresolvedWrite = {
 	 * Deduplicated per half, so the list stays at most two entries per (field, rhsType) pair.
 	 */
 	var thirdParty: Bool;
+
 }
 
 /** A parsed nominal type source: the simple `name`, the written `path` it came from, and its type arguments as written. */
@@ -79,6 +81,7 @@ typedef WriteTypeCtx = {
  * names bound or mentioned by THIS file's case-patterns.
  */
 typedef ScanCtx = {
+
 	var file: String;
 	var source: String;
 	var tree: QueryNode;
@@ -87,7 +90,6 @@ typedef ScanCtx = {
 
 	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
 	var headerTypeParams: Map<Int, Array<String>>;
-
 	var index: SymbolIndex;
 	var writes: Array<FieldWrite>;
 	var unresolved: Array<UnresolvedWrite>;
@@ -112,6 +114,7 @@ typedef ScanCtx = {
 	var typeParams: Map<String, Array<String>>;
 	var patternNames: Null<Array<String>>;
 	var thirdParty: Bool;
+
 }
 
 /**

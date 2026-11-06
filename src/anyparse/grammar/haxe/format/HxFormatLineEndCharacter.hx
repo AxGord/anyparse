@@ -16,13 +16,8 @@ package anyparse.grammar.haxe.format;
  * Slice ω-lineend-character.
  */
 enum abstract HxFormatLineEndCharacter(String) to String {
-
 	final Auto = 'auto';
-
 	final LF = 'LF';
-
 	final CR = 'CR';
-
 	final CRLF = 'CRLF';
-
 }

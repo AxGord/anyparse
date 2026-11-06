@@ -7,13 +7,8 @@ package anyparse.grammar.haxe.format;
  * trailing comma per node, which the parser does not yet do).
  */
 enum abstract HxFormatTrailingCommaPolicy(String) to String {
-
 	final Yes = 'yes';
-
 	final No = 'no';
-
 	final Keep = 'keep';
-
 	final Ignore = 'ignore';
-
 }

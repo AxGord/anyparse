@@ -184,6 +184,7 @@ final class CaseValueKey {
 
 /** The `RefShape` seams `CaseValueKey` reads, resolved once by `CaseValueKey.seamsOf`. */
 typedef CaseValueSeams = {
+
 	final numericKinds: Array<String>;
 	final boolKind: Null<String>;
 	final nullKind: Null<String>;
@@ -197,4 +198,5 @@ typedef CaseValueSeams = {
 
 	/** `RefShape.enumAbstractImplicitValues.naming` — the underlying types an uninitialized value is named in. */
 	final namingTypes: Array<String>;
+
 };

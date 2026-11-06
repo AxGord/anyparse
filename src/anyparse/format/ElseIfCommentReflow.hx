@@ -152,4 +152,5 @@ private enum ElseIfHeadScan {
 
 	/** Something the walk cannot prove is head - the whole reflow is refused. */
 	Refused;
+
 }

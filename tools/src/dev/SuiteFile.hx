@@ -8,6 +8,7 @@ import anyparse.grammar.json.JValue;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef SuiteFile = {
+
 	@:optional var about: String;
 	@:optional var commandHelp: Bool;
 
@@ -15,4 +16,5 @@ typedef SuiteFile = {
 	@:optional var files: JValue;
 	@:optional var compile: CompileSpec;
 	@:optional var invocations: Array<SuiteInvocation>;
+
 };

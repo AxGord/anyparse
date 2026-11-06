@@ -16,13 +16,8 @@ package anyparse.grammar.haxe.format;
  *   preserve; `Same` is the nearest no-surprise fallback)
  */
 enum abstract HxFormatLeftCurlyPolicy(String) to String {
-
 	final None = 'none';
-
 	final After = 'after';
-
 	final Before = 'before';
-
 	final Both = 'both';
-
 }

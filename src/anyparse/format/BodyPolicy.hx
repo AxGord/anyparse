@@ -38,13 +38,8 @@ package anyparse.format;
  * (AS3, Python, …) can reuse the same four-way shape.
  */
 enum abstract BodyPolicy(Int) from Int to Int {
-
 	final Same = 0;
-
 	final Next = 1;
-
 	final FitLine = 2;
-
 	final Keep = 3;
-
 }

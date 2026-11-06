@@ -42,7 +42,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxAnonField {
-
 	@:kw('#if') @:trail('#end') Conditional(inner: HxConditionalAnonField);
 	@:lead('?') Optional(field: HxAnonFieldBody);
 	@:lead('>') @:fmt(spaceAfterLead) ExtendsField(type: HxTypeRef);
@@ -50,5 +49,4 @@ enum HxAnonField {
 	@:kw('final') @:trailOpt(';') FinalField(body: HxAnonVarBody);
 	@:kw('function') FnField(decl: HxFnDecl);
 	Required(field: HxAnonFieldBody);
-
 }

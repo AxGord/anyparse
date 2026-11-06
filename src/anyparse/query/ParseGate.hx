@@ -5,10 +5,8 @@ import haxe.Exception;
 
 /** A source that parsed, with its tree, or the diagnostic naming why it did not. */
 enum ParseOutcome {
-
 	Parsed(tree: QueryNode);
 	Unparsed(message: String);
-
 }
 
 /**

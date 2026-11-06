@@ -647,10 +647,12 @@ final class OracleCoverage {
  * taken for, which is the only key a reuse may be made by (`OracleCoverage.probedOnce`).
  */
 typedef OracleCoverageMemo = {
+
 	var probes: Array<ConfigCoverage>;
 
 	/** The phase's `usableOnce` split, null until its first candidate asks. */
 	var usable: Null<UsableCoverage>;
+
 }
 
 /** One compiled-set probe and the configuration it describes — never read apart. */

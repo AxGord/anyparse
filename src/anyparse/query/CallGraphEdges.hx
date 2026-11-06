@@ -1575,20 +1575,24 @@ final class CallGraphEdges {
 }
 
 private typedef Frame = {
+
 	var id: String;
 	var localFns: Map<String, String>;
 
 	/** The declaration of `id` the walk is in: a node folding several has a frame per declaration. */
 	var span: Span;
+
 }
 
 /** A method referenced as a value: its node, and the receiver type an instance reference dispatches on (null for a static one). */
 private typedef MethodRef = {
+
 	var id: String;
 	var dispatch: Null<String>;
 
 	/** For a module-level function's use bound per build, every function it may run (`moduleBinding`), `id` first; else null. */
 	@:optional var bodies: Null<Array<String>>;
+
 }
 
 /**

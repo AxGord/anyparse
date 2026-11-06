@@ -1267,7 +1267,7 @@ final class WriterStarEmitLowering {
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt, false,
 			trailingCommaRemovableAlt, uniformStmtBlanksAlt, complexItemsAlt, mapWrap, TriviaTailRehome.fnRefFor(c.starNode.children[0]),
-			branch.fmtHasFlag('relocateTrailingComments')
+			branch.fmtHasFlag('relocateTrailingComments'), WriterTriviaStarDispatch.afterDocPolicy(branch)
 		);
 	}
 
@@ -1311,7 +1311,7 @@ final class WriterStarEmitLowering {
 			: null;
 		return TriviaBlockLowering.triviaBlockStarExpr(
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
-			c.trailText, false, null, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks, false, false, null, false, null,
+			c.trailText, null, null, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks, false, false, null, false, null,
 			anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, altBlockEndedFlag ? sepText : null, altBlockEndedFlag,
 			altBlockEndedFlag ? (branch.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
 			altBlockEndedFlag ? ctx.formatInfo.schemaTypePath : null, null, branch.fmtHasFlag('clearExprPositionNonTail'), null, null,

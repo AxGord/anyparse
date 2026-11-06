@@ -138,4 +138,5 @@ private typedef Seams = {
 
 	/** The kinds a declaration's leading run may hold; any other kind ENDS the run. */
 	final leading: Array<String>;
+
 };

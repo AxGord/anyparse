@@ -17,9 +17,6 @@ package anyparse.grammar.haxe.format;
  * `HxModuleWriteOptions.dropSwitchSubjectParens` boolean.
  */
 enum abstract HxFormatSwitchSubjectParensPolicy(String) to String {
-
 	final Keep = 'keep';
-
 	final Remove = 'remove';
-
 }

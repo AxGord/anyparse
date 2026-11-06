@@ -24,13 +24,8 @@ package anyparse.grammar.haxe.format;
  * collide).
  */
 enum abstract HxFormatKeywordPlacement(String) to String {
-
 	final Same = 'same';
-
 	final Next = 'next';
-
 	final Keep = 'keep';
-
 	final FitLine = 'fitLine';
-
 }

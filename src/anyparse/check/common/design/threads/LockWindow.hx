@@ -20,6 +20,7 @@ typedef HeldWindow = {
 	 * a call starting at one of the raising offsets `trace` was handed. Each leaves the function with the lock held.
 	 */
 	final escapes: Array<QueryNode>;
+
 }
 
 /** A `try` body with a `catch` the walk is inside: its `catch` clauses, and whether a throw held the lock on its way to them. */

@@ -60,6 +60,7 @@ typedef Carried = {
  * `IfExpressionChain.shieldSeams` is the only constructor.
  */
 typedef ShieldSeams = {
+
 	/** Parents that close every child with a delimiter, so no `else` can follow one. */
 	var shieldKinds: Array<String>;
 
@@ -72,6 +73,7 @@ typedef ShieldSeams = {
 	 * of one `#if` rather than a sequence.
 	 */
 	var shape: RefShape;
+
 }
 
 /**

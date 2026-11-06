@@ -21,7 +21,6 @@ package anyparse.grammar.haxe.format;
  * "before"` produces `if( a )`.
  */
 @:peg typedef HxFormatParenConfigSection = {
-
 	@:optional var funcParamParens: HxFormatParenPolicySection;
 	@:optional var callParens: HxFormatParenPolicySection;
 	@:optional var anonFuncParamParens: HxFormatParenPolicySection;

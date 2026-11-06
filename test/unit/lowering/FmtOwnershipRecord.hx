@@ -9,6 +9,5 @@ import anyparse.grammar.json.JValue;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef FmtOwnershipRecord = {
-
 	var modules: Map<String, JValue>;
 };

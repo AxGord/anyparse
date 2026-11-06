@@ -685,15 +685,18 @@ private enum Reduction {
 
 /** What one declaration offers a caller that wants its VALUE rather than its result. */
 private typedef Signature = {
+
 	final arity: Int;
 	final isStatic: Bool;
 
 	/** False when the declaration's own shape forbids the reduction — see the type doc's gate list. */
 	final safe: Bool;
+
 };
 
 /** One file's shadowing value binders and its local function declarations. */
 private typedef FileScope = {
+
 	final valueNames: Map<String, Bool>;
 
 	/** How many times each name is bound, by ANY binder — a name bound twice is ambiguous. */
@@ -701,12 +704,13 @@ private typedef FileScope = {
 
 	/** The binding spans of the binder kinds a reduction may read through — see `bind`. */
 	final binderSpans: Map<String, Array<Span>>;
-
 	final localFns: Map<String, Signature>;
+
 };
 
 /** The resolved seams plus the per-run tables `walk` reads. */
 private typedef Ctx = {
+
 	final file: String;
 
 	/** The resolution-scope index, or null on a bare plugin — a std callee is then never proven. */
@@ -714,7 +718,6 @@ private typedef Ctx = {
 
 	/** Whether the index spans the whole project, the precondition of reading a name as the std's. */
 	final projectComplete: Bool;
-
 	final seams: Seams;
 	final shape: RefShape;
 	final types: Map<String, Null<Map<String, Signature>>>;
@@ -729,6 +732,7 @@ private typedef Ctx = {
 
 	/** Memo of "is this name ever written in this file", filled on demand by `written`. */
 	final written: Map<String, Bool>;
+
 };
 
 /** Every seam `RedundantLambdaWrapper` reads, resolved once per run. */

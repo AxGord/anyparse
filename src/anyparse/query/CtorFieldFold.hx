@@ -791,6 +791,7 @@ final class CtorFieldFold {
  * `var`), the default expression, and the ` = <default>` region the fold deletes.
  */
 private typedef FoldableDecl = {
+
 	final node: QueryNode;
 	final name: String;
 	final span: Span;
@@ -800,6 +801,7 @@ private typedef FoldableDecl = {
 	/** The default expression node itself — what a caller extracting the default must classify. */
 	final initNode: QueryNode;
 	final initDrop: Span;
+
 };
 
 /**
@@ -850,9 +852,9 @@ private typedef AssignmentParts = {
  * invariant breaks silently.
  */
 typedef CtorDefaultSite = {
+
 	/** The class-like container declaring the field — the receiving type of any emitted member. */
 	final container: QueryNode;
-
 	final fieldName: String;
 
 	/** The field's written type annotation, or null when the head states none (`declaredTypeAnnotation`). */
@@ -863,4 +865,5 @@ typedef CtorDefaultSite = {
 
 	/** The default's verbatim source text, exactly as the fold would splice it. */
 	final defaultText: String;
+
 };

@@ -263,6 +263,7 @@ private typedef Mapping = {
 
 /** The resolved seams `PreferMap` reads in both `run` and `fix`. */
 private typedef Seams = {
+
 	final arrayLiteralKind: String;
 	final callKind: String;
 	final identKind: String;
@@ -285,4 +286,5 @@ private typedef Seams = {
 
 	/** The identifier node a bare `$x` interpolation projects as. */
 	final interpIdentKind: Null<String>;
+
 };

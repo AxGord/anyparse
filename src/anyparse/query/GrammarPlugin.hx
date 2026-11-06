@@ -3742,6 +3742,7 @@ final class RefShape {
 
 /** The language's core value types (`RefShape.coreValueTypes`, which says what each field means). */
 typedef CoreValueTypes = {
+
 	final names: Array<String>;
 	final widens: Map<String, Array<String>>;
 	final integer: String;
@@ -3769,10 +3770,12 @@ typedef CoreValueTypes = {
 	 * takes depends on which side is an abstract.
 	 */
 	final classNames: Array<String>;
+
 }
 
 /** The execution facts of `RefShape` (`RefShape.execution`): what runs code no call site names, and what reach may assume. */
 typedef ExecutionShape = {
+
 	/**
 	 * The ABSTRACT types a value can have although no code writes their name, by the node kind whose syntax builds one:
 	 * a rest parameter (Haxe `haxe.Rest`), a map literal's key-value pair (Haxe `Map`). `MemberReach` counts their
@@ -4062,6 +4065,7 @@ typedef ExecutionShape = {
 	 * under `untyped`): a call of such a name, or of a member read off one, runs target code. Optional; unset makes none.
 	 */
 	@:optional var targetCodeNameAffix: String;
+
 }
 
 /**
@@ -4169,6 +4173,7 @@ typedef PrecedenceDivergence = {
  * the project did not configure that check, so the check keeps its own default.
  */
 typedef CheckOverrides = {
+
 	/** `magic-number` exempt values (checkstyle `MagicNumber.ignoreNumbers`). */
 	@:optional var magicNumberIgnore: Array<Float>;
 
@@ -4186,6 +4191,7 @@ typedef CheckOverrides = {
 
 	/** `empty-block` active — false when checkstyle `EmptyBlock.option` allows empty blocks. */
 	@:optional var emptyBlockEnabled: Bool;
+
 };
 
 /**

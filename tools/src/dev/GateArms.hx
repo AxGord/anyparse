@@ -431,10 +431,8 @@ final class GateArms {
 
 /** What the arms row has to do: an outcome already settled, or the `picked` selection to run against the base's registry `old`. */
 enum ArmPlan {
-
 	Settled(outcome: Outcome);
 	Runs(picked: ArmSelection, old: Null<Array<ArmRecord>>);
-
 }
 
 /** The arms of a slice gate by how they run: the kill run, and the apply check of arms on layout-only files. */

@@ -216,12 +216,13 @@ final class Branches {
 
 /** What a branch leaves for the run that started it: its steps, and the counts it read. */
 typedef BranchReport = {
+
 	/** The run whose branch left it; empty in a report that names none. */
 	var run: String;
 
 	/** When the branch process began, in epoch milliseconds; null in a report that names none. */
 	var started: Null<Float>;
-
 	var steps: Array<Step>;
 	var readings: Map<String, Int>;
+
 }

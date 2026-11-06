@@ -18,6 +18,7 @@ package anyparse.format.wrap;
  * `WrapList.emit` and the heritage-clause emit and ignored by the chain emitters.
  */
 typedef WrapRules = {
+
 	var rules: Array<WrapRule>;
 	var defaultMode: WrapMode;
 	@:optional var defaultLocation: WrappingLocation;
@@ -36,4 +37,5 @@ typedef WrapRules = {
 	 * everywhere.
 	 */
 	@:optional var chainItemsAfterCloseParenOnly: Bool;
+
 };

@@ -7,6 +7,7 @@ package anyparse.format.text;
  * lives in `anyparse.format.comment.BlockComment` and friends).
  */
 typedef BlockCommentDelims = {
+
 	open: String,
 	close: String,
 
@@ -16,6 +17,7 @@ typedef BlockCommentDelims = {
 	 * element's leading trivia, never the previous element's trailing comment (`FormatReader.CommentPattern.docOpen`).
 	 */
 	?doc: String
+
 };
 
 /**

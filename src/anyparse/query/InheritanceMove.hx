@@ -13,14 +13,13 @@ using Lambda;
 
 /** Move direction along the inheritance axis. */
 private enum Direction {
-
 	Up;
 	Down;
-
 }
 
 /** A resolved member: its node, cut span (doc + line included), and flags. */
 private typedef Resolved = {
+
 	var node: QueryNode;
 	var cut: Span;
 	var isStatic: Bool;
@@ -28,6 +27,7 @@ private typedef Resolved = {
 
 	/** Declared inside a `#if` region — present in only SOME builds, so it cannot leave its branch. */
 	var guarded: Bool;
+
 }
 
 /**

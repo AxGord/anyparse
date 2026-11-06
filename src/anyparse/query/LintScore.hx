@@ -38,6 +38,7 @@ typedef LintScoreBucket = {
 
 	/** Those the report still finds. */
 	final recallHit: Int;
+
 }
 
 /** A finding key of the report: the key's parts, how many findings carry it, and the file of the first. */
@@ -51,6 +52,7 @@ typedef LintScoreKey = {
 
 /** The whole score: the truth's rule and provenance, per-family buckets and the overall one, and the two lists a reader acts on. */
 typedef LintScoreResult = {
+
 	final rule: String;
 	final project: String;
 	final commit: String;
@@ -68,6 +70,7 @@ typedef LintScoreResult = {
 
 	/** Report keys no truth entry labels, in report order. */
 	final unlabelled: Array<LintScoreKey>;
+
 }
 
 /**

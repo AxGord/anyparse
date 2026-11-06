@@ -22,6 +22,7 @@ import anyparse.grammar.haxe.format.HxFormatBodyPolicy;
 import anyparse.grammar.haxe.format.HxFormatBracesConfigSection;
 import anyparse.grammar.haxe.format.HxFormatBracketConfigSection;
 import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
+import anyparse.grammar.haxe.format.HxFormatCommentEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatCommentsSection;
 import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
@@ -474,6 +475,7 @@ final class HaxeFormatConfigLoader {
 		applyMacroClassEmptyLines(section, opt);
 		applyInterfaceEnumTypedefEmptyLines(section, opt);
 		applyTypeBodyEdges(section, opt);
+		applyTypeBodyAfterDoc(section, opt);
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
 		if (section.beforePackage != null) opt.beforePackage = section.beforePackage;
 		if (section.afterFileHeaderComment != null) opt.afterFileHeaderComment = section.afterFileHeaderComment;
@@ -991,6 +993,17 @@ final class HaxeFormatConfigLoader {
 		opt.enumAbstractEndTypeIfDocComments = section.enumAbstractEmptyLines?.endTypeIfDocComments ?? opt.enumAbstractEndTypeIfDocComments;
 		opt.typedefBeginTypeIfDocComments = section.typedefEmptyLines?.beginTypeIfDocComments ?? opt.typedefBeginTypeIfDocComments;
 		opt.typedefEndTypeIfDocComments = section.typedefEmptyLines?.endTypeIfDocComments ?? opt.typedefEndTypeIfDocComments;
+	}
+
+	/** Routes each type body's `afterFieldsWithDocComments` key into its kind's knob; an absent key leaves the knob unset. */
+	private static function applyTypeBodyAfterDoc(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		final enumAfter: Null<HxFormatCommentEmptyLinesPolicy> = section.enumEmptyLines?.afterFieldsWithDocComments;
+		if (enumAfter != null) opt.enumAfterFieldsWithDocComments = HaxeFormatValues.commentEmptyLinesToRuntime(enumAfter);
+		final typedefAfter: Null<HxFormatCommentEmptyLinesPolicy> = section.typedefEmptyLines?.afterFieldsWithDocComments;
+		if (typedefAfter != null) opt.typedefAfterFieldsWithDocComments = HaxeFormatValues.commentEmptyLinesToRuntime(typedefAfter);
+		final enumAbstractAfter: Null<HxFormatCommentEmptyLinesPolicy> = section.enumAbstractEmptyLines?.afterFieldsWithDocComments;
+		if (enumAbstractAfter != null)
+			opt.enumAbstractAfterFieldsWithDocComments = HaxeFormatValues.commentEmptyLinesToRuntime(enumAbstractAfter);
 	}
 
 	private static function applyImportAndUsingEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {

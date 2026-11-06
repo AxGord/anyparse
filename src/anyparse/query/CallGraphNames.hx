@@ -195,6 +195,7 @@ final class CallGraphNames {
 
 /** A function's parameters as its declaration writes them (`CallGraphNames.paramsOf`). */
 typedef DeclaredParams = {
+
 	/** The written type of each parameter, in order; null for one written without a type. */
 	final params: Array<Null<String>>;
 
@@ -203,4 +204,5 @@ typedef DeclaredParams = {
 
 	/** The position of the first parameter a call may skip — optional or carrying a default value; the count for none. */
 	final skippableFrom: Int;
+
 }

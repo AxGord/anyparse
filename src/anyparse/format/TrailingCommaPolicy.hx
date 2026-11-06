@@ -36,7 +36,6 @@ package anyparse.format;
 enum abstract TrailingCommaPolicy(Int) from Int to Int {
 
 	final Keep = 0;
-
 	final Remove = 1;
 
 	/**

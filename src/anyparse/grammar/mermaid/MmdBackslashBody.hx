@@ -5,7 +5,6 @@ package anyparse.grammar.mermaid;
 enum MmdBackslashBody {
 	@:trail('\\]')
 	LeanLeft(text: MmdLabel);
-
 	@:trail('/]')
 	InvTrapezoid(text: MmdLabel);
 }

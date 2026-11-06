@@ -30,6 +30,7 @@ import anyparse.runtime.Span;
  * for every file whose full edit set failed and was bisected (see below).
  */
 typedef FixVerifyResult = {
+
 	var baseline: OracleOutcome;
 	var applied: Array<String>;
 
@@ -92,6 +93,7 @@ typedef FixVerifyResult = {
 	 * to the run's count and never a finding to the block that says what went unfixed.
 	 */
 	var tallies: Array<FixVerifyTally>;
+
 }
 
 /**
@@ -114,6 +116,7 @@ typedef FixVerifyResult = {
  * applied in one file and reverted in the next, and one row per rule could state only one of them.
  */
 typedef FixVerifyTally = {
+
 	var rule: String;
 	var file: String;
 
@@ -139,6 +142,7 @@ typedef FixVerifyTally = {
 	 * the verifier's own answer, never these.
 	 */
 	var declineReasons: Array<{ text: String, count: Int }>;
+
 }
 
 /**
@@ -155,11 +159,13 @@ typedef FixVerifyTally = {
  * propose a doomed edit set for the same file, and collapsing them would hide one.
  */
 typedef FixVerifyRevert = {
+
 	var file: String;
 	var rule: String;
 
 	/** Which of the two failures rolled it back — see `FixRevertCause`. */
 	var cause: FixRevertCause;
+
 }
 
 /**
@@ -174,12 +180,14 @@ typedef FixVerifyRevert = {
  * a control that cannot fire, and the run has nothing to report but that.
  */
 typedef FixVerifyDecline = {
+
 	var file: String;
 	var rule: String;
 	var edits: Int;
 
 	/** Why the oracle could say nothing about this file — ready for the summary line. */
 	var reason: String;
+
 }
 
 /**
@@ -244,6 +252,7 @@ typedef FixVerifyPartial = {
  * the kept / reverted counts, the oracle spawns spent, and why). The caller folds these into the `FixVerifyResult` lists.
  */
 private enum EntryVerdict {
+
 	NoChange;
 
 	/**
@@ -269,6 +278,7 @@ private enum EntryVerdict {
 	Declined(reason: String);
 	Reverted(cause: FixRevertCause);
 	Partial(appliedEdits: Int, revertedEdits: Int, oracleInvocations: Int, cause: FixRevertCause);
+
 }
 
 /**

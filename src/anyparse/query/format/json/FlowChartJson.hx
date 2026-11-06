@@ -9,8 +9,7 @@ typedef FlowChartJson = {
 
 	/** The qualified name of the function drawn. */
 	var name: String;
-
 	var nodes: Array<FlowNodeJson>;
-
 	var edges: Array<FlowEdgeJson>;
+
 };

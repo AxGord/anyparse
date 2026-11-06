@@ -5,6 +5,7 @@ import anyparse.grammar.json.JValue;
 /** One invocation of a parity suite or a probe kit: its arguments, its files, and for a kit its compile check and expectation. */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef SuiteInvocation = {
+
 	var name: String;
 	@:optional var note: String;
 	@:optional var knownDefect: String;
@@ -18,4 +19,5 @@ typedef SuiteInvocation = {
 	@:optional var files: JValue;
 	@:optional var compile: CompileSpec;
 	@:optional var expect: Expectation;
+
 };

@@ -448,13 +448,14 @@ private typedef IfPosition = {
 
 /** The `RefShape` kinds `JoinBranchCall` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	/** Every claimed `if` kind mapped to the position it heads -- `positionOf` is one lookup, per node. */
 	var byKind: Map<String, IfPosition>;
-
 	var exprStmtKind: String;
 	var blockStmtKind: String;
 	var callKind: String;
 	var conditionalKinds: Array<String>;
+
 }
 
 /** The per-file scan state: the parsed tree, its comment tokens, the resolved seams and the purity scan. */

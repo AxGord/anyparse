@@ -248,12 +248,14 @@ final class ZeroCountUnparsedFixture extends RuleBase implements ConfigAware imp
 
 /** The option lists the rule reads. */
 typedef FixtureOptions = {
+
 	final asserts: Array<String>;
 	final countFields: Array<String>;
 	final sourceFields: Array<String>;
 
 	/** The functions whose unparseable fixture IS the point — a test that a skipped file yields nothing. */
 	final skipParseTests: Array<String>;
+
 }
 
 /** The grammar seams the scan reads, resolved once per run. */

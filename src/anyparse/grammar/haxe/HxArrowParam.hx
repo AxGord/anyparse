@@ -41,9 +41,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxArrowParam {
-
 	@:lead('?') OptionalNamedParam(body: HxArrowParamBody);
 	NamedParam(body: HxArrowParamBody);
 	Positional(type: HxType);
-
 }

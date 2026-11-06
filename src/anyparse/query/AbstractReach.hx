@@ -179,6 +179,7 @@ typedef MemberRead = {
 
 /** The words of the index's declared signatures: by member name, and by type name (see `ReachGraph.signatureWords`). */
 typedef SignatureWords = {
+
 	/** `name@Type` -> the words of that member's declared signature. */
 	var byMember: Map<String, Array<String>>;
 
@@ -189,4 +190,5 @@ typedef SignatureWords = {
 	/** Where the members whose type the declaration leaves to inference are declared, by name / by type. */
 	var inferredMember: Map<String, Array<InferredRef>>;
 	var inferredType: Map<String, Array<InferredRef>>;
+
 }

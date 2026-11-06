@@ -262,6 +262,7 @@ final class MoveElements {
 
 /** What `MoveElements.moveElements` moves: the source array and its 1-based inclusive range, the target array. */
 typedef MoveElementsRequest = {
+
 	final source: String;
 	final sourceFile: String;
 	final address: AddressSpec;
@@ -279,14 +280,13 @@ typedef MoveElementsRequest = {
 	final reformat: Bool;
 	final optsJson: Null<String>;
 	final destOptsJson: Null<String>;
+
 }
 
 /** The result of `MoveElements.moveElements`: both new texts (dest null = the source file), the moved entries, their digest. */
 enum MoveElementsResult {
-
 	Ok(source: String, dest: Null<String>, entries: Array<String>, digest: String);
 	Err(message: String);
-
 }
 
 /** What `verify` compares the result against: the old entries of both arrays and where the arrays start. */

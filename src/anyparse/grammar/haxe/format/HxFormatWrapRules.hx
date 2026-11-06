@@ -22,11 +22,8 @@ package anyparse.grammar.haxe.format;
 @:peg typedef HxFormatWrapRules = {
 
 	@:optional var defaultWrap: String;
-
 	@:optional var defaultLocation: String;
-
 	@:optional var defaultAdditionalIndent: Int;
-
 	@:optional var rules: Array<HxFormatWrapRule>;
 
 	/**
@@ -47,4 +44,5 @@ package anyparse.grammar.haxe.format;
 	 * cascade names it.
 	 */
 	@:optional var itemsAfterCloseParenOnly: Bool;
+
 };

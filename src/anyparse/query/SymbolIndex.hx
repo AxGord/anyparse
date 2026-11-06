@@ -20,12 +20,10 @@ using Lambda;
  *  - `Using`  — `using pkg.Module;`.
  */
 enum abstract ImportKind(Int) {
-
 	final Import = 0;
 	final Alias = 1;
 	final Wild = 2;
 	final Using = 3;
-
 }
 
 /**
@@ -85,6 +83,7 @@ typedef AmbientImportGroup = {
  * importable as `import <package>.<Basename>;`.
  */
 typedef MemberInfo = {
+
 	/** The member's name. */
 	var name: String;
 
@@ -322,6 +321,7 @@ typedef MemberInfo = {
 	 * child of the type body, so `guarded` is false.
 	 */
 	var guarded: Bool;
+
 };
 
 /**
@@ -329,6 +329,7 @@ typedef MemberInfo = {
  * type, its direct `supertypes` and `members`, and `isAnonStruct`. Feeds cross-file-safe rename and move-symbol gates.
  */
 typedef TypeDeclInfo = {
+
 	var name: String;
 	var kind: String;
 	var span: Span;
@@ -569,6 +570,7 @@ typedef TypeDeclInfo = {
 	 * names none (it forwards every member) or it is not a forwarding abstract.
 	 */
 	var forwardedMembers: Null<Array<String>>;
+
 };
 
 /**
@@ -588,6 +590,7 @@ typedef CastClauses = {
  * One `#if` branch declaring a type (`TypeDeclInfo.branches`): what one build of it is.
  */
 typedef DeclBranch = {
+
 	/** The declaration kind the branch writes (an abstract in one build, a `typedef` in another). */
 	final kind: String;
 
@@ -602,6 +605,7 @@ typedef DeclBranch = {
 	 * header puts a clause under `#if` or is shared by `#if` branches (a split-header region names one branch's head only).
 	 */
 	final clauses: Null<CastClauses>;
+
 }
 
 /**
@@ -609,6 +613,7 @@ typedef DeclBranch = {
  * `accessGrants` (types it `@:access(...)`-grants itself private reach into). The unit `SymbolIndex` aggregates.
  */
 typedef FileInfo = {
+
 	var file: String;
 	var pkg: String;
 	var module: String;
@@ -655,6 +660,7 @@ typedef FileInfo = {
 	 * the one reading of the module-level fields an import of the module brings (`ImportBindings`).
 	 */
 	var moduleFields: Array<ModuleField>;
+
 }
 
 /** The names one type's reifications spell (`FileInfo.reifications`). */
@@ -665,6 +671,7 @@ typedef Reification = {
 
 /** One module-level value declaration of a file (`FileInfo.moduleFields`): its name, and the span of the node declaring it. */
 typedef ModuleField = {
+
 	final name: String;
 
 	/** The declaring node's span — where a reference's binding to it starts, and where its `#if` branch is read. */
@@ -672,6 +679,7 @@ typedef ModuleField = {
 
 	/** Whether it is declared `private`: its module reads it, no import brings it. */
 	final isPrivate: Bool;
+
 }
 
 /**
@@ -681,11 +689,13 @@ typedef ModuleField = {
  * emits `override function f` overriding nothing, which does not compile.
  */
 typedef OverrideFamilyMember = {
+
 	var file: String;
 	var typeName: String;
 
 	/** Offset of the override's own declaration node, usable as a rename cursor. */
 	var declFrom: Int;
+
 }
 
 /**

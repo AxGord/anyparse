@@ -366,10 +366,12 @@ typedef InfraLint = {
 
 /** What `hxq lint-diff` found moved, and its first added row. */
 typedef LintMove = {
+
 	var added: Int;
 	var removed: Int;
 	var first: String;
 
 	/** Every row of the report for a finding that appeared (`+ …`) or went (`- …`), in print order. */
 	var rows: Array<String>;
+
 }

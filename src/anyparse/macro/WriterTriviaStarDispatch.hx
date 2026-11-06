@@ -266,7 +266,7 @@ final class WriterTriviaStarDispatch {
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
 				uniformStmtBlanksStar, complexItemsStar, mapWrapStar, TriviaTailRehome.fnRefFor(starNode.children[0]),
-				starNode.fmtHasFlag('relocateTrailingComments')
+				starNode.fmtHasFlag('relocateTrailingComments'), afterDocPolicy(starNode)
 			));
 			return;
 		}
@@ -301,7 +301,7 @@ final class WriterTriviaStarDispatch {
 		// itself contributes nothing at the open position. Empty
 		// string → `_dt('')` is a no-op, and `emptyText = '' +
 		// closeText` stays format-neutral (invariant #5).
-		final afterDocComments: Bool = starNode.fmtHasFlag('afterFieldsWithDocComments');
+		final afterDocComments: Null<Expr> = afterDocPolicy(starNode);
 		final existingKnob: Null<Expr> = starKnobReads(starNode, 'existingBetweenFields', 1)?.pop();
 		final beforeDocComments: Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
 		final indentCaseLabelsGate: Bool = starNode.fmtHasFlag('indentCaseLabels');
@@ -762,6 +762,36 @@ final class WriterTriviaStarDispatch {
 	/** One knob of `knobReads`: `opt.<name>`, or `null` for an empty name. */
 	private static function knobRead(name: String): Expr {
 		return name == '' ? macro null : macro $p{['opt', name]};
+	}
+
+	/**
+	 * The policy a Star applies after a doc-commented member, or null when it carries no
+	 * `@:fmt(afterFieldsWithDocComments)`: the bare flag reads the global knob, `('<knob>')` or `('<knob>', '<flag>',
+	 * '<alt>')` that knob, an unset `<alt>` falling back to `<knob>` and an unset `<knob>` (or `''`) to `Ignore`.
+	 */
+	private static function afterDocPolicy(star: ShapeNode): Null<Expr> {
+		final meta: String = 'afterFieldsWithDocComments';
+		if (!star.fmtHasFlag(meta)) return null;
+		final knobs: Null<Array<String>> = star.fmtReadStringArgs(meta);
+		if (knobs == null) return macro opt.afterFieldsWithDocComments;
+		if (knobs.length != 1 && knobs.length != 3)
+			Context.fatalError(
+				'@:fmt($meta) names its knob, optionally followed by a flag and the knob it switches to, got $knobs', Context.currentPos()
+			);
+		final ignore: Expr = macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
+		final own: Expr = knobOr(knobs[0], ignore);
+		if (knobs.length == 1) return own;
+		final flag: Expr = macro $p{['opt', knobs[1]]};
+		final alt: Expr = knobOr(knobs[2], own);
+		return macro ($flag ? $alt : $own);
+	}
+
+	/**
+	 * The knob `name` with `fallback` in its place when it is unset, or `fallback` alone for `''`; the read never yields
+	 * a bare `null`, which a static target cannot hold in an enum abstract over `Int`.
+	 */
+	private static function knobOr(name: String, fallback: Expr): Expr {
+		return name == '' ? fallback : macro (${knobRead(name)} ?? $fallback);
 	}
 
 	/**

@@ -11,7 +11,6 @@ using Lambda;
 
 /** How one statement of a body shapes the chart. */
 private enum FlowStatement {
-
 	Block;
 	Branch;
 	WhileLoop;
@@ -23,7 +22,6 @@ private enum FlowStatement {
 	Cut;
 	Next;
 	Other;
-
 }
 
 /** Where control stands after a statement: the node it left and the label of the edge it leaves by. */
@@ -34,6 +32,7 @@ private typedef FlowTail = {
 
 /** A loop being drawn: the node `continue` returns to and the tails `break` leaves by. */
 private typedef FlowLoop = {
+
 	/**
 	 * The node `continue` returns to; null for a `do … while`, whose
 	 * test is drawn after its body: `continues` collects what reaches it.
@@ -43,6 +42,7 @@ private typedef FlowLoop = {
 
 	/** The `continue` nodes of a `do … while` body, which reach its test once it is drawn. */
 	final continues: Array<FlowNode>;
+
 }
 
 /**

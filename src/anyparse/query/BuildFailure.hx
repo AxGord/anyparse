@@ -41,6 +41,7 @@ enum BuildFailureCause {
 
 	/** The log holds no compiler error at all — the caller's failure is elsewhere. */
 	NoError;
+
 }
 
 /** One classified build log: the cause, and the compiler line it was read off. */
@@ -51,6 +52,7 @@ typedef BuildFailureResult = {
 
 	/** The first error line, capped for a report row; empty when there is none. */
 	line: String
+
 };
 
 /**

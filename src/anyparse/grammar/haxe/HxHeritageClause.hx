@@ -37,14 +37,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxHeritageClause {
-
 	@:kw('extends')
 	ExtendsClause(type: HxType);
-
 	@:kw('implements')
 	ImplementsClause(type: HxType);
-
 	@:kw('#if') @:trail('#end')
 	Conditional(inner: HxConditionalHeritage);
-
 }

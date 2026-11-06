@@ -15,6 +15,7 @@ import anyparse.query.SymbolIndex;
 
 /** One write of a field-shaped target in a file of the run. */
 typedef FieldWriteSite = {
+
 	/** The write itself: an assignment, a compound assignment, an increment or a decrement. */
 	final write: QueryNode;
 
@@ -57,6 +58,7 @@ typedef FieldWriteSite = {
 
 	/** For a reflective write, what it stores in the field (`ReflectiveValues.typesOf`); `Unknown` for every other write. */
 	final stored: StoredValue;
+
 }
 
 /**

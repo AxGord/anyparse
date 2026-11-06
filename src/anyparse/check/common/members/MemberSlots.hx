@@ -29,12 +29,10 @@ typedef OrderedMember = {
 	var isInline: Bool;
 	var hasMeta: Bool;
 	var initNode: Null<QueryNode>;
-
 	var condition: Null<String>;
 	var branch: Null<BranchInfo>;
 	var regionFrom: Int;
 	var regionTo: Int;
-
 	var leadTrivia: String;
 	var leadFrom: Int;
 	var leadComments: Array<String>;

@@ -595,6 +595,7 @@ private final class Verdict {
 
 /** One `dev shard` run, as `Shard.run` takes it. */
 typedef ShardJob = {
+
 	var repo: String;
 	var testJs: String;
 	var shards: Int;
@@ -624,6 +625,7 @@ typedef ShardJob = {
 	 * whole suite and never refreshes the class weights the next whole run deals by.
 	 */
 	var ?only: Array<String>;
+
 }
 
 /** A shard plan as the run uses it: each shard's `APQ_TEST` value and its tokens, the class total, the producer check. */
@@ -650,10 +652,12 @@ typedef Tally = {
 
 /** One transcript summarised: its counts, how they agree with the run's exit status, and its first failure. */
 typedef Summarised = {
+
 	var counts: Tally;
 	var rc: Int;
 	var locus: Null<String>;
 
 	/** Every test the transcript names as not passing, `Class.method`. */
 	var failing: Array<String>;
+
 }

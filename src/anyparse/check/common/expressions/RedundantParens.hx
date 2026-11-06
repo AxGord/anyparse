@@ -900,23 +900,13 @@ private typedef ParenSite = {
  * wants.
  */
 private enum abstract SlotKind(Int) {
-
 	final Plain = 0;
-
 	final Delimited = 1;
-
 	final DelimitedSplice = 2;
-
 	final TernaryCondition = 3;
-
 	final SameFamilyLeft = 4;
-
 	final Required = 5;
-
 	final ComparisonOperand = 6;
-
 	final AdditiveOperand = 7;
-
 	final TernaryElse = 8;
-
 }

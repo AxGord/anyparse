@@ -743,6 +743,7 @@ final class PreferFind extends HaxeRule {
 
 /** The `RefShape` kinds `PreferFind` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	var forStmtKind: String;
 	var returnKind: String;
 	var blockStmtKind: String;
@@ -771,6 +772,7 @@ private typedef Seams = {
 	 * loop in another and rewrite across the boundary.
 	 */
 	var blockKinds: Array<String>;
+
 }
 
 /**
@@ -778,6 +780,7 @@ private typedef Seams = {
  * partner (Form A trailing return / Form B declaration) and the destructured head.
  */
 private typedef FixCandidate = {
+
 	/** Which of the three shapes was recovered — the tag `buildEdits` dispatches on. */
 	var form: FindForm;
 
@@ -791,10 +794,12 @@ private typedef FixCandidate = {
 
 	/** The call spelling the site takes — see `Head.qualified`. */
 	var qualified: Bool;
+
 }
 
 /** A recovered GUARDED capture-and-break loop: the loop node, the holder local's name, and the destructured head. */
 private typedef GuardedBreak = {
+
 	var forNode: QueryNode;
 	var declName: String;
 	var loopVar: String;
@@ -803,6 +808,7 @@ private typedef GuardedBreak = {
 
 	/** The call spelling the site takes — see `Head.qualified`. */
 	var qualified: Bool;
+
 }
 
 /**
@@ -811,11 +817,9 @@ private typedef GuardedBreak = {
  * discriminate it and the two branches would depend on their own order.
  */
 private enum abstract FindForm(Int) {
-
 	final Return = 0;
 	final Break = 1;
 	final GuardedBreak = 2;
-
 }
 
 /**
@@ -832,6 +836,7 @@ private typedef MemberProbe = {
 
 /** The `for (v in xs) if (cond) …` destructure all three forms start from, plus the call spelling the site takes. */
 private typedef Head = {
+
 	var loopVar: String;
 	var iterable: QueryNode;
 	var cond: QueryNode;
@@ -844,4 +849,5 @@ private typedef Head = {
 	 * qualified site needs no `using Lambda;` and clears every other gate the same way.
 	 */
 	var qualified: Bool;
+
 }

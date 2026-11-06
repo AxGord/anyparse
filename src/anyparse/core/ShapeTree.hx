@@ -17,14 +17,12 @@ import haxe.macro.Type;
  *                annotation (e.g. `@:re` or `@:lit`).
  */
 enum ShapeKind {
-
 	Seq;
 	Alt;
 	Star;
 	Opt;
 	Ref;
 	Terminal;
-
 }
 
 /**

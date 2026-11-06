@@ -378,11 +378,13 @@ final class Parity {
 
 /** A parity suite: the fixture files every invocation starts from unless it names its own, and the invocations. */
 typedef Suite = {
+
 	var files: Map<String, String>;
 	var invocations: Array<Invocation>;
 
 	/** Whether `apq <command> --help` of every command the tip engine lists joins the invocations. */
 	var commandHelp: Bool;
+
 }
 
 /** One CLI call of a suite: its program (`apq` or `hxq`) and arguments, its standard input, and the files it starts from. */

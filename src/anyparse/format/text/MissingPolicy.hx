@@ -9,9 +9,7 @@ package anyparse.format.text;
  *                  back to `Optional` semantics if there is none.
  */
 enum abstract MissingPolicy(Int) {
-
 	final Error = 0;
 	final Optional = 1;
 	final UseDefault = 2;
-
 }

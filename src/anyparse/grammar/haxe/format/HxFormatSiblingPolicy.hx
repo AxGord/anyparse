@@ -5,9 +5,6 @@ package anyparse.grammar.haxe.format;
  * `anyparse.format.SiblingPolicy`: `"off"` → `Off`, `"anyBreak"` → `AnyBreak`.
  */
 enum abstract HxFormatSiblingPolicy(String) to String {
-
 	final Off = 'off';
-
 	final AnyBreak = 'anyBreak';
-
 }

@@ -361,6 +361,7 @@ final class RedundantElse extends RuleBase {
  * `scopeKinds` and `condKind` are used only by `fix`'s de-nest scope-collision check.
  */
 private typedef Seams = {
+
 	final ifKinds: Array<String>;
 	final support: ControlFlowSupport;
 
@@ -374,7 +375,6 @@ private typedef Seams = {
 
 	/** The `fix` narrowing gate's kinds: the guard shape it recognises and the receivers it compares. */
 	final identKind: String;
-
 	final fieldAccessKind: Null<String>;
 	final notEqKind: Null<String>;
 	final nullLitKind: Null<String>;
@@ -383,4 +383,5 @@ private typedef Seams = {
 
 	/** Kinds that drop a field's non-null narrowing when the kept then-branch holds one. */
 	final resetKinds: Array<String>;
+
 };

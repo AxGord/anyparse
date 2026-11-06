@@ -325,6 +325,7 @@ final class NegatedCondition {
 
 /** The per-run half of a negation read: the not and paren kinds, and the run's operator table. */
 typedef InversionSeams = {
+
 	final notKind: String;
 	final parenKind: Null<String>;
 
@@ -333,10 +334,12 @@ typedef InversionSeams = {
 
 	/** What `keepDefaultElse` and `defaultLast` read: the literals, the statement shapes around one, the config, the negation engine. */
 	final defaults: DefaultElseSeams;
+
 };
 
 /** The per-run half of the `keepDefaultElse` and `defaultLast` reads. */
 typedef DefaultElseSeams = {
+
 	final values: CaseValueSeams;
 
 	/** A block wrapping one statement is read through (`else { return null; }`); null when the grammar has none. */
@@ -362,10 +365,12 @@ typedef DefaultElseSeams = {
 
 	/** The interpolation segment kinds of a string literal: a string holding one computes its value. */
 	final interpolationKinds: Array<String>;
+
 };
 
 /** One file's negation context: the run seams plus the file, its source and its parsed tree. */
 typedef InversionSite = {
+
 	final seams: InversionSeams;
 	final file: String;
 	final source: String;
@@ -378,10 +383,12 @@ typedef InversionSite = {
 
 	/** The file's `invert-negated-if-else` `defaultLast` option (default off), read with `keepDefaultElse`. */
 	final defaultLast: () -> Bool;
+
 };
 
 /** A two-way choice read with its arms swapped (`NegatedCondition.swapOf`). */
 typedef Swap = {
+
 	/** The condition's text once the two arms change places. */
 	final condition: String;
 
@@ -390,12 +397,15 @@ typedef Swap = {
 
 	/** True for a `defaultLast` turn (a default then arm brought last), false for a dropped not. */
 	final defaultLast: Bool;
+
 };
 
 /** What one arm of a two-way choice yields (`NegatedCondition.armValue`). */
 private typedef ArmValue = {
+
 	final value: QueryNode;
 
 	/** Whether a `return` yields it — the arm is a statement. */
 	final returned: Bool;
+
 };

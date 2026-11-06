@@ -11,6 +11,7 @@ using Lambda;
 
 /** Whether one rule runs for a group of files, and what decided it. */
 typedef RuleState = {
+
 	var id: String;
 	var on: Bool;
 
@@ -22,6 +23,7 @@ typedef RuleState = {
 	 */
 	var reason: String;
 	var description: String;
+
 }
 
 /** The files that resolve through one `apq.json` chain, and the state of every rule for them. */

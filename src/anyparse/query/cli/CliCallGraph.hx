@@ -21,11 +21,9 @@ typedef GraphScope = {
  * a JSON document (`anyparse.query.graph`).
  */
 enum abstract GraphOutput(String) {
-
 	final Text = 'text';
 	final Mermaid = 'mermaid';
 	final Json = 'json';
-
 }
 
 /**

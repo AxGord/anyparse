@@ -26,10 +26,8 @@ private typedef Prep = {
 
 /** A computed value or an error message. */
 private enum Prepared {
-
 	Ready(prep: Prep);
 	Refused(message: String);
-
 }
 
 /**

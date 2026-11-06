@@ -419,11 +419,13 @@ final class FactsMethodValues {
 
 /** A read that may obtain a method's value: the type of the object it reads off, and whether that is exactly its class. */
 typedef MethodValueRead = {
+
 	final receiver: Null<String>;
 	final exact: Bool;
 
 	/** Whether the value read is of no type the program declares: a read off a value of no class (`FDynamic`), or reflection. */
 	final typeless: Bool;
+
 }
 
 /**
@@ -431,10 +433,12 @@ typedef MethodValueRead = {
  * a name computed at run time, and why some read may obtain any method, or null.
  */
 typedef MethodValueReads = {
+
 	final named: Map<String, Array<MethodValueRead>>;
 	final computed: Array<MethodValueRead>;
 	var unknown: Null<String>;
 
 	/** Whether some function hands a function a receiver of its own to run with (`REBINDING_CALLS`). */
 	var rebinds: Bool;
+
 }

@@ -1816,6 +1816,7 @@ final class RefShapeKindProjectionTest extends Test {
  * has to project for the token to count as captured.
  */
 typedef TokenProbe = {
+
 	var field: String;
 	var slot: String;
 	var kind: String;
@@ -1826,9 +1827,9 @@ typedef TokenProbe = {
 	 * body brace opens, and nothing in a parse tells those two apart.
 	 */
 	var names: String;
-
 	var before: String;
 	var after: String;
+
 };
 
 /**

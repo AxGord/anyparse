@@ -13,6 +13,7 @@ import anyparse.runtime.Span;
  * why no autofix edit was produced for it.
  */
 typedef Violation = {
+
 	var file: String;
 	var span: Null<Span>;
 	var rule: String;
@@ -41,6 +42,7 @@ typedef Violation = {
 	 * without parsing it. Only the json record carries it (as `data`); the text report and checkstyle are unchanged.
 	 */
 	@:optional var data: Null<FindingData>;
+
 }
 
 /**
@@ -50,6 +52,7 @@ typedef Violation = {
  * lock, a pair of locks), and `chain` the evidence behind it, untruncated, in the rule's own ids.
  */
 typedef FindingData = {
+
 	var family: String;
 	var member: String;
 	var subject: String;
@@ -60,6 +63,7 @@ typedef FindingData = {
 	 * sink a loop up the main thread's way repeats) — what ranks a per-item stall above a one-off one; not identity.
 	 */
 	@:optional var repeatedBy: Null<Array<RepeatSite>>;
+
 }
 
 /**
@@ -474,6 +478,7 @@ interface NameOracleAware {
  * file independently while committing the whole rename atomically.
  */
 typedef CrossFileEdits = {
+
 	final file: String;
 	final edits: Array<{ span: Span, text: String }>;
 
@@ -496,6 +501,7 @@ typedef CrossFileEdits = {
 	 * its revert RESTORES the bytes the run started from, which no edit list can express.
 	 */
 	@:optional final remove: Null<Bool>;
+
 };
 
 /** One edit set of a cross-file `RiskyArm`: the finding it fixes and its per-file slices, verified and reverted as one. */

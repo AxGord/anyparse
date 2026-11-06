@@ -804,6 +804,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 
 /** The `RefShape` kinds `PreferSafeNav` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	var ifKinds: Array<String>;
 	var notEqKind: String;
 	var nullKind: String;
@@ -839,6 +840,7 @@ private typedef Seams = {
 	 * `ternaryKind` switches off the ternary arm.
 	 */
 	var blockKinds: Array<String>;
+
 }
 
 /**

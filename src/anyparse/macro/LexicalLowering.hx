@@ -17,10 +17,8 @@ using Lambda;
  * balancing the declared nesting pair.
  */
 enum LexBodyAtom {
-
 	Skip(text: String);
 	Hole(open: String, close: String, nestOpen: String, nestClose: String);
-
 }
 
 /**
@@ -55,7 +53,6 @@ typedef LexRegionSpec = {
 
 	/** Inclusive character range accepted as trailing flags after `close`; -1 / -1 when none. */
 	flagLow: Int,
-
 	flagHigh: Int,
 
 	/** What the body holds besides plain text, in declaration order. */
@@ -63,6 +60,7 @@ typedef LexRegionSpec = {
 
 	/** The declaration this was read from — named in a macro error and in the generated doc. */
 	origin: String
+
 };
 
 /**

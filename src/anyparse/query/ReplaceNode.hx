@@ -40,10 +40,8 @@ enum ReplaceTarget {
  * modes behave identically in both ops.
  */
 enum ResolvedTarget {
-
 	Resolved(node: QueryNode);
 	Failed(message: String);
-
 }
 
 /**

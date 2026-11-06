@@ -701,6 +701,7 @@ private typedef MemberAt = {
 
 /** What `OversizedType.isConstant` reads for one file — resolved once, on the first type that needs it. */
 private typedef ConstantKit = {
+
 	final seams: ConstantFieldSeams;
 
 	/** The kinds a member's leading run may hold (modifiers and annotations) — where its `static` / `inline` sit. */
@@ -711,6 +712,7 @@ private typedef ConstantKit = {
 
 	/** `EnumAbstractForms.valueStarts`: the span starts of the members of an `@:enum abstract`. */
 	final valueStarts: Array<Int>;
+
 };
 
 /**

@@ -149,6 +149,7 @@ final class CaptureIndex {
 
 /** How `Refs` emits one pattern name `CaptureIndex` classified. */
 typedef PatternHit = {
+
 	final kind: RefKind;
 
 	/** The first capture of the name in the arm, for a capture; null for a read, which resolves as usual. */
@@ -157,4 +158,5 @@ typedef PatternHit = {
 
 	/** For an undecided capture, the binding it would shadow if it does capture — a rewrite of THAT binding refuses too. */
 	final shadows: Null<Span>;
+
 };

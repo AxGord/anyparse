@@ -7,12 +7,8 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintTruthJson = {
-
 	var rule: String;
-
 	var project: String;
-
 	var commit: String;
-
 	var entries: Array<LintTruthEntryJson>;
 };

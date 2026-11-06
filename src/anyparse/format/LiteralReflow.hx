@@ -9,11 +9,7 @@ package anyparse.format;
  * - `ThroughWrap` — this descent enters a wrapper (a paren) that hands `Here` to a literal directly inside it.
  */
 enum abstract LiteralReflow(Int) from Int to Int {
-
 	final Off = 0;
-
 	final Here = 1;
-
 	final ThroughWrap = 2;
-
 }

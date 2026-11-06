@@ -8,6 +8,7 @@ import anyparse.runtime.Span;
 
 /** One declaration `OwnerIndex` ranks: a type or one of its members, with what its doc comment says. */
 typedef OwnerEntry = {
+
 	/** The declaring type's name. */
 	final type: String;
 
@@ -40,6 +41,7 @@ typedef OwnerEntry = {
 
 	/** How many other files of the scope name this type in their code; 0 for a member, whose name is too common a word to count. */
 	final mentions: Int;
+
 };
 
 /** A ranked answer: the declaration, and how well its name and doc cover the question. */

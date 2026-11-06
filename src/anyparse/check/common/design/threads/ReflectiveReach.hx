@@ -13,22 +13,26 @@ import anyparse.query.TypeResolver;
 
 /** What a reflective write's target may be an object of (`ReflectiveReach.placeOf`). */
 typedef Placement = {
+
 	/** The types whose fields the write may reach; null when that is any type's. */
 	final reaches: Null<Array<String>>;
 
 	/** The positive exclusion bounding `reaches` though the target's declared type places it on no class; null when that type does. */
 	final by: Null<String>;
+
 }
 
 /**
  * A `case` capture typed by the parameter of its enum constructor (`ReflectiveReach.binderType`).
  */
 typedef Capture = {
+
 	/** The written type of the constructor parameter the capture binds. */
 	final type: String;
 
 	/** The exclusion that typed it, for the run notice (`Placement.by`). */
 	final by: String;
+
 }
 
 /**

@@ -136,11 +136,9 @@ final class Diff {
  */
 @:nullSafety(Strict)
 enum DiffKind {
-
 	Differs;
 	Added;
 	Removed;
-
 }
 
 /**

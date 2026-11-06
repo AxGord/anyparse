@@ -30,13 +30,8 @@ package anyparse.format;
  * other languages (AS3, Python, …) can reuse the same shape.
  */
 enum abstract SameLinePolicy(Int) from Int to Int {
-
 	final Same = 0;
-
 	final Next = 1;
-
 	final Keep = 2;
-
 	final SameOnBlock = 3;
-
 }

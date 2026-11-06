@@ -15,7 +15,6 @@ package anyparse.grammar.haxe.format;
  * / `do-while` body (maps onto the runtime `dropSingleStmtBraces` boolean). Default `"keep"` — braces preserved, byte-inert.
  */
 @:peg typedef HxFormatBracesConfigSection = {
-
 	@:optional var anonTypeBraces: HxFormatParenPolicySection;
 	@:optional var objectLiteralBraces: HxFormatParenPolicySection;
 	@:optional var singleStatementBraces: HxFormatSingleStatementBracesPolicy;

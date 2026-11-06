@@ -632,6 +632,7 @@ private typedef Rung = {
  * read BEFORE that, so it stays a fact about the SPINE the author wrote.
  */
 private typedef Chain = {
+
 	var rungs: Array<Rung>;
 	var terminal: QueryNode;
 	var ternaryRungs: Int;
@@ -646,6 +647,7 @@ private typedef Chain = {
 	 * as an else-spine link is, and reading only the spine let a claimed one be destroyed.
 	 */
 	var folded: Array<QueryNode>;
+
 }
 
 /**

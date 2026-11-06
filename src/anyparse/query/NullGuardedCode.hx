@@ -805,13 +805,14 @@ private typedef MemberParam = {
 
 /** The facts `NullGuardedCode` reads, gathered once. */
 private typedef FactsIndex = {
+
 	final calls: Map<String, Array<CallFact>>;
 	final fields: Map<String, Array<{ node: FactNode, fact: FieldFact }>>;
 
 	/** Field name -> the accesses of a field so named off a value no class types (`FieldFact.owner` null). */
 	final byName: Map<String, Array<FieldFact>>;
-
 	final reflection: Array<ReflectionFact>;
 	final targetWords: Map<String, Bool>;
 	var computedTargetCode: Bool;
+
 }

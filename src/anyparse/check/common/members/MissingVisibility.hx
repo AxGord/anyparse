@@ -460,6 +460,7 @@ final class MissingVisibility extends RuleBase {
 
 /** The resolved seams `MissingVisibility` reads in both `run` and `fix`. */
 private typedef Seams = {
+
 	final containers: Array<String>;
 	final members: Array<String>;
 	final visibility: Array<String>;
@@ -467,7 +468,6 @@ private typedef Seams = {
 
 	/** The kinds a declaration's preceding modifier run may hold; any other kind ENDS the run. */
 	final modifierRunKinds: Array<String>;
-
 	final keyword: Null<String>;
 	final overrideKind: Null<String>;
 	final externKind: Null<String>;
@@ -481,10 +481,12 @@ private typedef Seams = {
 
 	/** The region-opening directive, used only as the cheap "does this file hold any `#if`" pre-scan. */
 	final ifKeyword: String;
+
 };
 
 /** What `MissingVisibility.run`'s walk threads through every frame — resolved once per file. */
 private typedef ScanCtx = {
+
 	final out: Array<Violation>;
 	final file: String;
 	final seams: Seams;
@@ -498,10 +500,12 @@ private typedef ScanCtx = {
 	 * into `Cannot access private field`.
 	 */
 	final guarded: Array<Int>;
+
 };
 
 /** What `MissingVisibility.fix`'s walk threads through every frame — resolved once per call. */
 private typedef FixCtx = {
+
 	final edits: Array<{ span: Span, text: String }>;
 	final seams: Seams;
 	final source: String;
@@ -513,6 +517,7 @@ private typedef FixCtx = {
 
 	/** The same unprojected enum-abstract values `ScanCtx.guarded` holds, re-derived here. */
 	final guarded: Array<Int>;
+
 };
 
 /**

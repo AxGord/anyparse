@@ -32,13 +32,8 @@ package anyparse.format;
  * attributes) can reuse the same shape.
  */
 enum abstract MetadataLineEndPolicy(Int) from Int to Int {
-
 	final None = 0;
-
 	final After = 1;
-
 	final AfterLast = 2;
-
 	final ForceAfterLast = 3;
-
 }

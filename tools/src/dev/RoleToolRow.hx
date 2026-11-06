@@ -5,6 +5,7 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef RoleToolRow = {
+
 	var role: String;
 	var key: String;
 	var calls: Int;
@@ -13,4 +14,5 @@ typedef RoleToolRow = {
 
 	/** The calls with the largest answers, the largest first. */
 	var biggest: Array<BigCallRow>;
+
 }

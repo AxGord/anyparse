@@ -354,6 +354,7 @@ final class NullableSwitchMissingNull extends RuleBase implements NoAutofix {
 
 /** The `RefShape` kinds `NullableSwitchMissingNull` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	var shape: RefShape;
 	var switchKinds: Array<String>;
 	var caseBranchKind: String;
@@ -372,17 +373,18 @@ private typedef Seams = {
 
 	/** `GrammarPlugin.typeSyntax` — how a declared type's wrapper is read. */
 	var typeSyntax: TypeSyntaxReader;
-
 	var callKind: Null<String>;
 	var fieldAccessKind: Null<String>;
 	var nullAssertionCalls: Array<String>;
 	var assertTrueCalls: Array<String>;
 	var assertFalseCalls: Array<String>;
 	var cfg: Null<NullableSourceCfg>;
+
 }
 
 /** Per-file context threaded to the `NullFlow` visit callback. */
 private typedef FileCtx = {
+
 	var file: String;
 	var root: QueryNode;
 	var declaredTypes: Map<Int, String>;
@@ -393,4 +395,5 @@ private typedef FileCtx = {
 
 	/** The shared typer in RECEIVER mode (`CheckScan.typeNominalResolver`), which every nullable source's receiver is typed by. */
 	var nominalOf: Null<(QueryNode) -> Null<String>>;
+
 }

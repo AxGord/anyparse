@@ -29,6 +29,7 @@ using StringTools;
  * position it happens to name.
  */
 private typedef ScanCtx = {
+
 	var out: Array<Violation>;
 	var file: String;
 	var source: String;
@@ -45,6 +46,7 @@ private typedef ScanCtx = {
 	 * those no longer reads as a reference to a declaration it merely mentions.
 	 */
 	var matchMask: Array<Span>;
+
 }
 
 /**

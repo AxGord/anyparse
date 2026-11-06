@@ -591,6 +591,7 @@ typedef Compile = (tree:String, log:String) -> Outcome;
 
 /** The battery of a `Land` run: its flags, the snapshot directory that keeps the count of landings, and how often it runs in full. */
 typedef BatteryRequest = {
+
 	var allowBlast: Bool;
 	var snapshot: Bool;
 
@@ -599,10 +600,10 @@ typedef BatteryRequest = {
 
 	/** Whether the full battery was asked for. */
 	var full: Bool;
-
 	var leased: Null<Int>;
 	var cache: String;
 	var every: Int;
+
 }
 
 /** The paths a merge brought into the tree, or null when they cannot be read. */
@@ -615,6 +616,7 @@ typedef ImpactScope = (tree:String, base:String) -> SuiteScope;
 
 /** What a run of `Land` is given: what to merge into where, and the two seams a test replaces (the build and the output). */
 typedef LandOptions = {
+
 	var repo: String;
 	var branch: String;
 	var logs: String;
@@ -634,7 +636,6 @@ typedef LandOptions = {
 
 	/** The battery to run; null runs none. */
 	var battery: Null<BatteryRequest>;
-
 	var compile: Compile;
 
 	/** The writer runs of the `fmt` step (`LandFormat.engine` for a real landing). */
@@ -648,8 +649,8 @@ typedef LandOptions = {
 
 	/** Starts the baseline of the landed commit beside the next land (`BaselineWarm.start`); absent starts none. */
 	@:optional var warm: Null<WarmStart>;
-
 	var exec: BatteryExec;
 	var merged: MergedPaths;
 	var print: String -> Void;
+
 }

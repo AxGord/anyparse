@@ -35,6 +35,7 @@ typedef AheadBuilds = {
  * the probe's own macros, so one compile answers both.
  */
 typedef ProbeRider = {
+
 	/** The defines the hook needs, set right after the probe read the first define set. */
 	defines: Array<String>,
 
@@ -49,6 +50,7 @@ typedef ProbeRider = {
 
 	/** The dotted name of the hook's initialization macro: the hook's own loads end where it exits. */
 	hook: String
+
 };
 
 /**

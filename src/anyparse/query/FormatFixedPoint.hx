@@ -200,4 +200,5 @@ typedef FormatFixedPointResult = {
 
 	/** Why no fixed point was reached; `null` whenever `converged` is true. */
 	var failure: Null<String>;
+
 };

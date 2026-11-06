@@ -1073,13 +1073,11 @@ private enum abstract UnknownRoot(String) to String {
 
 	/** A name a pattern or another binder declares. */
 	var PatternCapture = 'pattern-capture';
-
 	var LoopElement = 'loop-element';
 	var IndexAccess = 'index-access';
 
 	/** A construction in the written-source currency. */
 	var Construction = 'construction';
-
 	var OperatorResult = 'operator-result';
 
 	/** `(e : T)`, its type written. */
@@ -1087,8 +1085,8 @@ private enum abstract UnknownRoot(String) to String {
 
 	/** A segment of an interpolated string. */
 	var StringSegment = 'string-segment';
-
 	var Other = 'other';
+
 }
 
 /** The root of one UNKNOWN answer and what in the code led to it. */
@@ -1099,6 +1097,7 @@ private typedef UnknownCause = {
 
 /** What one `facts` run read (`TyperConformance.probeRefusal`). */
 typedef FactsRun = {
+
 	/** The configurations the compiler compiled with the facts hook. */
 	final configurations: Int;
 
@@ -1113,6 +1112,7 @@ typedef FactsRun = {
 
 	/** The cases scored, every verdict counted. */
 	final cases: Int;
+
 }
 
 /**

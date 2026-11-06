@@ -94,7 +94,7 @@ options in the macro; `docs/design/writer-rules.md` § 5 says which could move.
 forms; everything else is bare.
 
 ```
-accessBrackets, afterFieldsWithDocComments, afterFileHeaderCommentBlanks, allmanIndentForCtor(…),
+accessBrackets, afterFieldsWithDocComments[(…)], afterFileHeaderCommentBlanks, allmanIndentForCtor(…),
 anonFuncParens, anonTypeBracesClose, anonTypeBracesOpen, arrayMatrixWrap, arrowBodyLineWrap,
 arrowBodyOpenPadSuppress, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
 atomOperand, atomOperandWhen(…), bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),

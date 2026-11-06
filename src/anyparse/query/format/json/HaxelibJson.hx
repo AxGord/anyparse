@@ -14,6 +14,5 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef HaxelibJson = {
-
 	@:optional var classPath: String;
 };

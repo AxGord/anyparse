@@ -160,6 +160,7 @@ final class DoubleNegation extends RuleBase {
 
 /** The resolved seams `DoubleNegation` reads in both `run` and `fix`. */
 private typedef Seams = {
+
 	final notKind: String;
 
 	/**
@@ -167,7 +168,6 @@ private typedef Seams = {
 	 * null when the grammar has none — then only the bare `!!x` shape is seen.
 	 */
 	final parenKind: Null<String>;
-
 	final opaqueKinds: Array<String>;
 	final nullableKinds: Array<String>;
 
@@ -176,4 +176,5 @@ private typedef Seams = {
 	 * the proof that the stripped `!` is an involution at all (`builtinNot`).
 	 */
 	final selection: Null<OperatorSelection>;
+
 };

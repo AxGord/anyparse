@@ -17,8 +17,6 @@ package anyparse.grammar.haxe.format;
  * `@:peg` ByName Array<T> ingestion lift.
  */
 @:peg typedef HxFormatWrapCondition = {
-
 	@:optional var cond: String;
-
 	@:optional var value: Int;
 };

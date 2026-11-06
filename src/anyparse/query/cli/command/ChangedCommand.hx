@@ -6,6 +6,7 @@ import anyparse.query.cli.GitRevision;
 
 /** What `apq changed` was asked. */
 private typedef ChangedOpts = {
+
 	final lang: String;
 	final namesOnly: Bool;
 
@@ -16,6 +17,7 @@ private typedef ChangedOpts = {
 	final selector: Null<String>;
 	final ref: String;
 	final paths: Array<String>;
+
 }
 
 /** One file's reading: what changed and the names a reader looks up, or why it could not be read. */

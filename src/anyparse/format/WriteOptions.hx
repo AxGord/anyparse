@@ -429,4 +429,5 @@ typedef WriteOptions = {
 	 * short-circuits on the null check.
 	 */
 	?betweenImportsPathDiffers: Null<(String, String, Int) -> Bool>
+
 };

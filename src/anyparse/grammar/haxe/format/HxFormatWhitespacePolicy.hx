@@ -21,21 +21,12 @@ package anyparse.grammar.haxe.format;
  * opposite side's policy.
  */
 enum abstract HxFormatWhitespacePolicy(String) to String {
-
 	final None = 'none';
-
 	final Before = 'before';
-
 	final NoneBefore = 'noneBefore';
-
 	final OnlyBefore = 'onlyBefore';
-
 	final After = 'after';
-
 	final OnlyAfter = 'onlyAfter';
-
 	final NoneAfter = 'noneAfter';
-
 	final Around = 'around';
-
 }

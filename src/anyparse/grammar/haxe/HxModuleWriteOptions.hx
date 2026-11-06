@@ -481,6 +481,17 @@ final class HxModuleWriteOptions {
 	public var enumBeginTypeIfDocComments: Null<Int> = null;
 
 	public var enumEndTypeIfDocComments: Null<Int> = null;
+
+	/**
+	 * The blank-line policy after a doc-commented member of an enum, a typedef and an `enum abstract` body — the fork's
+	 * `<kind>EmptyLines.afterFieldsWithDocComments`, each named by its grammar Star's
+	 * `@:fmt(afterFieldsWithDocComments(...))`. `null` (the default) means the config did not say: an enum or typedef body
+	 * then keeps the source blank (`Ignore`), an `enum abstract` body reads the global `afterFieldsWithDocComments`.
+	 */
+	public var enumAfterFieldsWithDocComments: Null<CommentEmptyLinesPolicy> = null;
+
+	public var typedefAfterFieldsWithDocComments: Null<CommentEmptyLinesPolicy> = null;
+	public var enumAbstractAfterFieldsWithDocComments: Null<CommentEmptyLinesPolicy> = null;
 	public var enumAbstractBeginTypeIfDocComments: Null<Int> = null;
 	public var enumAbstractEndTypeIfDocComments: Null<Int> = null;
 	public var typedefBeginTypeIfDocComments: Null<Int> = null;

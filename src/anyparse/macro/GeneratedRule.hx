@@ -53,9 +53,11 @@ class GeneratedRule {
  * of a generated rule body.
  */
 typedef EregSpec = {
+
 	/** Private static field name, e.g. `_re_JStringLit`. */
 	varName: String,
 
 	/** Regex source without surrounding slashes or `^` anchor. */
 	pattern: String
+
 };

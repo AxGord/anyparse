@@ -12,12 +12,14 @@ import anyparse.query.ShapeVocab;
  * run a function's valuation may stand for.
  */
 typedef GiveFacts = {
+
 	final sameObject: (LockAcquire, LockGive) -> Bool;
 	final takenBefore: (CallEdge, String, Int) -> Bool;
 
 	/** Whether a give may run more than once after one take of its function (`CallRepetition.repeatedUnder`). */
 	final repeatsAfter: (CallEdge, CallEdge) -> Bool;
 	final runs: (String, String) -> Array<String>;
+
 }
 
 /**

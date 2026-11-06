@@ -418,6 +418,7 @@ typedef PatternBinder = {
 	/** The span to replace, and what with, to unbind the name (`_`, or an empty string that drops an `x = ` capture head). */
 	final editSpan: Span;
 	final editText: String;
+
 };
 
 /** The seam kinds `CasePatternScan` resolves once per run for both case-arm rules. */
@@ -466,6 +467,7 @@ typedef CaseSeams = {
 
 	/** The SCOPE kinds `shadowedDeclaration` walks the ancestor chain with. */
 	final scope: ScopeSeams;
+
 };
 
 /** The scope-shaped half of `CaseSeams`, read only by `shadowedDeclaration` and its helpers. */
@@ -485,6 +487,7 @@ typedef ScopeSeams = {
 
 	/** The member kinds a `classLikeKinds` container declares. */
 	final memberDeclKinds: Array<String>;
+
 };
 
 /** What `runContextOf` resolves once for a whole lint run. */
@@ -498,4 +501,5 @@ typedef CaseRunContext = {
 
 	/** The index over the same file set — the resolution half of `shadowedDeclaration`. */
 	final index: SymbolIndex;
+
 };

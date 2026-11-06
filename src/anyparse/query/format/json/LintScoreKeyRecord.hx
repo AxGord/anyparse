@@ -6,16 +6,10 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintScoreKeyRecord = {
-
 	var family: String;
-
 	@:key('function') var member: String;
-
 	var subject: String;
-
 	@:optional var verdict: Null<String>;
-
 	@:optional var count: Null<Int>;
-
 	@:optional var file: Null<String>;
 };

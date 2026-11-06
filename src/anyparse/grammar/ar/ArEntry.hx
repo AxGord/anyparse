@@ -35,4 +35,5 @@ typedef ArEntry = {
 	 * macro-generated parser/writer and do not appear in the AST.
 	 */
 	@:length(10, Dec) @:lead('`\n') var data: haxe.io.Bytes;
+
 };

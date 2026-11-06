@@ -659,6 +659,7 @@ final class ShadowingLocal extends RuleBase {
 
 /** The scope vocabulary `ShadowingLocal` walks with — resolved once per run, never per node. */
 private typedef ScopeSeams = {
+
 	final shape: RefShape;
 
 	/** Whether this run reports PARAMETERS (`shadowing-parameter`) rather than local declarations (`shadowing-local`). */
@@ -666,7 +667,6 @@ private typedef ScopeSeams = {
 
 	/** The rule id stamped on every finding of this run — the two spellings share the walk, not the id. */
 	final ruleId: String;
-
 	final localDeclKinds: Array<String>;
 	final declHostKinds: Array<String>;
 	final positionScopedKinds: Array<String>;
@@ -685,16 +685,18 @@ private typedef ScopeSeams = {
 	 * check's documented extra over the authority.
 	 */
 	final nestedFnKinds: Array<String>;
+
 };
 
 /** The binding a shadowing declaration hides: what to call it, the scope frame declaring it, and its own node. */
 private typedef Hidden = {
+
 	final label: String;
 
 	/** The position-scoped frame the binding is declared in — a loop / catch frame binds itself (`node == frame`). */
 	final frame: QueryNode;
-
 	final node: QueryNode;
+
 };
 
 /** What `fix` does with one finding: its edits, or the gate that kept it report-only. */
@@ -705,6 +707,7 @@ private enum ShadowFix {
 
 /** The per-file context of `ShadowingLocal.fix`. */
 private typedef FixFile = {
+
 	final source: String;
 	final tree: QueryNode;
 	final plugin: GrammarPlugin;
@@ -719,4 +722,5 @@ private typedef FixFile = {
 	 * waits for the next pass. Disjoint frames cannot meet.
 	 */
 	final claimed: Array<{ name: String, scope: Span }>;
+
 };

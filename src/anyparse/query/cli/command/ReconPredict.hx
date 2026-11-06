@@ -62,11 +62,9 @@ typedef ReconRegressionResult = {
  *    (typically `//` or empty), so there was nothing to inject.
  */
 enum PredictRelaxKind {
-
 	Unblock;
 	StillFail;
 	NoTarget;
-
 }
 
 /**

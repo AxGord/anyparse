@@ -574,6 +574,7 @@ final class TypedFactsMacro {
 }
 /** A method declared in `file` at `min`–`max` whose body a call site may splice in: `inline`, or inlined by its call site. */
 typedef InlineMethod = {
+
 	final file: String;
 	final min: Int;
 	final max: Int;
@@ -591,5 +592,6 @@ typedef InlineMethod = {
 	 * call site but its receiver, so a value of that code spliced into its body is the receiver.
 	 */
 	final arity: Int;
+
 }
 #end

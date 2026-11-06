@@ -12,9 +12,6 @@ package anyparse.grammar.haxe.format;
  * Slice ω-empty-curly-break.
  */
 enum abstract HxFormatEmptyCurlyPolicy(String) to String {
-
 	final NoBreak = 'noBreak';
-
 	final Break = 'break';
-
 }

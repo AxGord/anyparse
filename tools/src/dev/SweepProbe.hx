@@ -3,6 +3,7 @@ package dev;
 /** One probe of a trap catalog: the file it probes, its text, and the position the resolution traps ask at. */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef SweepProbe = {
+
 	var file: String;
 	@:optional var text: Array<String>;
 
@@ -15,4 +16,5 @@ typedef SweepProbe = {
 
 	/** True when the resolver must name `expect` rather than answer `Unknown`. */
 	@:optional var answered: Bool;
+
 };

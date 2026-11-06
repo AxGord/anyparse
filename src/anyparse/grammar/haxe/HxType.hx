@@ -49,7 +49,6 @@ package anyparse.grammar.haxe;
 enum HxType {
 
 	Named(ref: HxTypeRef);
-
 	@:lead("$")
 	DollarType(name: HxWordLit);
 
@@ -127,10 +126,8 @@ enum HxType {
 	 */
 	@:trivia @:lead('[') @:trail(']') @:sep(',')
 	BracketExprListType(elems: Array<HxExpr>);
-
 	@:kw('#if') @:trail('#end') @:fmt(spaceBeforeTrail, propagateNestedType)
 	ConditionalType(c: HxConditionalType);
-
 	@:infix('->', 0, 'Right') @:fmt(functionTypeHaxe3)
 	Arrow(left: HxType, right: HxType);
 
@@ -155,12 +152,10 @@ enum HxType {
 	 */
 	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';', selfEnded('anonMemberNoSep')) @:fmt(anonTypeBracesOpen,
 		anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'),
-		beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks, typedefBodyBlanks, groupRestProbe,
-		trailingComma('trailingCommaAnonTypes'))
+		beforeDocCommentEmptyLines, afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'),
+		forceMultiInTypedef, keepCurlyBlanks, typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'))
 	Anon(fields: Array<HxAnonMember>);
-
 	ArrowFn(fn: HxArrowFnType);
-
 	@:wrap('(', ')') @:fmt(propagateNestedType)
 	Parens(inner: HxType);
 

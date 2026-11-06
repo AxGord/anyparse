@@ -77,6 +77,7 @@ typedef SafeBisectSeat = {
 
 	/** `file`'s text as the round left it, or null when the round deleted it. */
 	final fixed: (file:String) -> Null<String>;
+
 };
 
 /**
@@ -678,6 +679,7 @@ private class IsolationProbes {
  * confirmed green, so the caller goes on to its later phases and fails the run at the end.
  */
 typedef SafePassOutcome = {
+
 	final reverted: Bool;
 
 	/** The files the net rolled back (empty when it rolled back nothing), for the caller to take off its edit count. */
@@ -696,4 +698,5 @@ typedef SafePassOutcome = {
 	 * caller to name, since a net silently shrunk to the green subset reads as covering every build.
 	 */
 	final excluded: Array<OracleExclusion>;
+
 };

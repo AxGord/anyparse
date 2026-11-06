@@ -12,11 +12,9 @@ package unit.grammar;
  * Closed set of policy strings for `TestConfig.policy`.
  */
 enum abstract TestPolicy(String) from String to String {
-
 	final First = 'first';
 	final Second = 'second';
 	final Third = 'third';
-
 }
 
 /** Nested section to test recursive ByName parsing. */

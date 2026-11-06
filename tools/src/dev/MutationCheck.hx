@@ -375,12 +375,12 @@ final class MutationCheck {
 
 /** One `dev mutation-check` run, as `MutationCheck.run` takes it. */
 typedef CheckJob = {
+
 	var repo: String;
 	var manifest: String;
 
 	/** The job slots asked for, unparsed; null for the default (`MutationCheck.defaultJobs`). */
 	var jobs: Null<String>;
-
 	var keep: Bool;
 	var buildOnly: Bool;
 	var killerFirst: Bool;
@@ -390,6 +390,7 @@ typedef CheckJob = {
 
 	/** The commit every slot worktree is made from. */
 	var base: String;
+
 }
 
 /** One track of a manifest: its name, its patch (an absolute path), its `APQ_TEST` filter and its expectations. */

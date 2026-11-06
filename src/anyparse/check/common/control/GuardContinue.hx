@@ -642,7 +642,6 @@ private typedef Seams = {
 
 	/** Every loop statement this check visits (`ShapeVocab.statementLoopKinds`): `loopKinds` and `doWhileKinds` together. */
 	var statementLoopKinds: Array<String>;
-
 	var loopKinds: Array<String>;
 	var doWhileKinds: Array<String>;
 	var ifKinds: Array<String>;
@@ -665,8 +664,8 @@ private typedef Seams = {
 
 	/** The dangling-`else` position gate's inputs — read only to mirror `loop-guard`'s own claim. */
 	var shield: ShieldSeams;
-
 	var support: Null<BooleanLogicSupport>;
+
 }
 
 /**

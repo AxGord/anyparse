@@ -492,7 +492,6 @@ typedef OpaqueCondRegion = {
 
 	/** The projected ctor the grammar fell back to — one of `RefShape.opaqueCondRegionKinds`. */
 	final kind: String;
-
 	final region: Span;
 	final gaps: Array<Span>;
 
@@ -502,6 +501,7 @@ typedef OpaqueCondRegion = {
 	 * ctors that keep only their unbalanced HEAD raw.
 	 */
 	final formatted: Array<Span>;
+
 };
 
 /**

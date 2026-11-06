@@ -8,14 +8,9 @@ import anyparse.grammar.json.JValue;
  * named nowhere here is skipped, and the registry's whole schema is the test kit's. `find` is a string or a list of them.
  */
 @:peg typedef MutationArmJson = {
-
 	var name: String;
-
 	var type: String;
-
 	var method: String;
-
 	@:optional var kind: String;
-
 	@:optional var find: JValue;
 };

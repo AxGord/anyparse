@@ -332,6 +332,7 @@ typedef DocumentMemo = Map<String, Null<LintDocument>>;
  * `apq.json` a relative `"../src"` was written next to.
  */
 typedef LintDocument = {
+
 	var rules: Map<String, RuleConfig>;
 
 	/**
@@ -355,4 +356,5 @@ typedef LintDocument = {
 	/** Read off the document as PARSED, never off a merged one — a fold has already decided where the chain ends. */
 	var ?inherit: Bool;
 	var drops: Array<String>;
+
 }

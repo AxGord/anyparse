@@ -6,8 +6,6 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef CodeGraphJson = {
-
 	var nodes: Array<CodeGraphNodeJson>;
-
 	var edges: Array<CodeGraphEdgeJson>;
 };

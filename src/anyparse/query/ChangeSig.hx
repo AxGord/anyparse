@@ -16,10 +16,8 @@ import anyparse.runtime.Span;
  * sentinel-string convention. Mirrors `ExtractResult` / `InlineResult`.
  */
 enum ChangeSigResult {
-
 	Ok(text: String, advisory: Null<String>);
 	Err(message: String);
-
 }
 
 /**
@@ -194,8 +192,6 @@ final class ChangeSig {
 
 /** Parsed permutation or a diagnostic — internal to `ChangeSig`. */
 private enum PermResult {
-
 	POk(order: Array<Int>);
 	PErr(message: String);
-
 }

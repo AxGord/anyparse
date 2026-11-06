@@ -44,6 +44,7 @@ typedef CallEffects = {
 
 	/** Whether the value `receiver` reads cannot change in place, so a member read off it changes only with the receiver. */
 	final immutable: (receiver:QueryNode) -> Bool;
+
 };
 
 /** A call or construction, with the span of the innermost function literal or declaration holding it. */

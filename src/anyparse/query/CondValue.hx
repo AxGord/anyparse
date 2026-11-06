@@ -8,6 +8,7 @@ using Lambda;
  * a define's value or a literal — a `version("…")`, or a define known to be set whose value is not known (`Set`).
  */
 enum CondValue {
+
 	Undefined;
 	Truth(value: Bool);
 	Number(value: Float);
@@ -16,6 +17,7 @@ enum CondValue {
 
 	/** A define known to be set, its value unknown: a string, true, and of no known order against anything but a boolean. */
 	Set;
+
 }
 
 /** One dot-separated part of a semantic version: a number, or anything `int_of_string` refuses. */

@@ -474,6 +474,7 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 
 /** The `RefShape` kinds `DeadBinderCounterLoop` reads on top of the shared `LoopScan` core. */
 private typedef Seams = {
+
 	var core: LoopSeams;
 	var postIncrKind: String;
 	var continueKind: String;
@@ -486,6 +487,7 @@ private typedef Seams = {
 
 	/** `RefactorSupport.projectIsComplete` — whether the std-container proof has a whole project to rule project types out over. */
 	var projectComplete: Bool;
+
 }
 
 /** The counting expression a matched container yields, plus whether it needs `using Lambda;` in scope. */

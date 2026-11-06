@@ -10,6 +10,7 @@ import anyparse.grammar.json.JValue;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef Baseline = {
+
 	var base: String;
 
 	/** Each registry's line count, by its `--list-<name>` name; read and made through `BaselineLists`. */
@@ -17,7 +18,7 @@ typedef Baseline = {
 
 	/** The base tree's whole lint by the base engine. */
 	var lint: String;
-
 	var infra: Array<InfraSnapshot>;
 	var frozen: Array<FrozenTree>;
+
 }

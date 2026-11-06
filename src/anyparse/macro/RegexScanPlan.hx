@@ -132,11 +132,13 @@ final class RegexScanPlan {
 
 /** What may come after a node in its pattern. */
 private typedef Follow = {
+
 	/** A superset of the code units the rest may begin with, an assertion's reach counted. */
 	final first: CodeSet;
 
 	/** The rest matches from anywhere: all of it optional, no assertion in it. */
 	final infallible: Bool;
+
 }
 
 /** A lookahead body split at its head alternation. */

@@ -1199,12 +1199,12 @@ private typedef LoopBinderHit = {
  * convention someone must remember.
  */
 typedef ChainTypeContext = {
+
 	/** Verbatim `:Type` annotation sources, keyed exactly like `declaredTypes` (`TypeInfoProvider.declaredTypeSources`). */
 	final declaredTypeSources: Map<Int, String>;
 
 	/** Source text of the file being probed — the for-binding arm reads the loop HEADER text to refuse the key-value form. */
 	final source: String;
-
 
 	/**
 	 * The written target type of each ascription and typed cast of the file (`TypeInfoProvider.castTargetSources`), read when
@@ -1214,10 +1214,12 @@ typedef ChainTypeContext = {
 
 	/** `GrammarPlugin.typeSyntax` — how the deep mode reads a written type's wrapper and arguments. */
 	final typeSyntax: TypeSyntaxReader;
+
 }
 
 /** The type a construction writes (`NominalTypes.writtenConstruction`). */
 typedef WrittenConstruction = {
+
 	/** The type's path as written (`pkg.Box`). */
 	final path: String;
 
@@ -1226,6 +1228,7 @@ typedef WrittenConstruction = {
 
 	/** `path` with its written arguments (`pkg.Box<Int, String>`), the arguments' source kept as written between them. */
 	final text: String;
+
 }
 
 /** What the index host of `TypingService.typeWalk` reads with: the deep walk's arguments, `seen` its cycle guard. */

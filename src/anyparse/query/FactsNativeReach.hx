@@ -289,4 +289,5 @@ typedef NativeHand = {
 
 	/** What the code reaches is not known, for the reason given. */
 	final refuse: (String) -> Bool;
+
 }

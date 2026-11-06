@@ -815,11 +815,8 @@ typedef ImportPath = {
 
 /** One type a name may bind to (`TypeNameBinding.bindingsOf`): declarations of the index, or the path of a type outside it. */
 enum NameTarget {
-
 	InIndex(decls: Array<ResolvedType>);
-
 	OutOfIndex(path: String);
-
 }
 
 /**
@@ -838,11 +835,13 @@ typedef NameTargets = {
  * compiler asks them: the file's own last to first, then each ambient source nearest first, last to first.
  */
 private typedef StatementOrder = {
+
 	final explicit: Array<ImportInfo>;
 	final wildcards: Array<ImportInfo>;
 
 	/** The `#if` branch the name is used in, null when the caller gave no offset. */
 	final use: Null<Array<CondFrame>>;
+
 }
 
 /** The index's files by module and by package, and the std's own `StdTypes` files among them (`StdResolver.isStdFile`). */

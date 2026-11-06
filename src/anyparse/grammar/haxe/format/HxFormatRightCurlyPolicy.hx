@@ -21,13 +21,8 @@ package anyparse.grammar.haxe.format;
  * lowercase). Sister precedent: `HxFormatLeftCurlyPolicy`.
  */
 enum abstract HxFormatRightCurlyPolicy(String) to String {
-
 	final None = 'none';
-
 	final Before = 'before';
-
 	final After = 'after';
-
 	final Both = 'both';
-
 }

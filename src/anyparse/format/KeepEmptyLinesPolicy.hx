@@ -24,9 +24,6 @@ package anyparse.format;
  * surface from their own grammar.
  */
 enum abstract KeepEmptyLinesPolicy(Int) from Int to Int {
-
 	final Keep = 0;
-
 	final Remove = 1;
-
 }

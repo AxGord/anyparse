@@ -482,6 +482,7 @@ typedef WalkerScan = {
 
 /** One row of `CliArgs.grammars`: what a grammar plugin declares about itself, and how to build it. */
 typedef GrammarEntry = {
+
 	/** The `--lang` name. */
 	final lang: String;
 
@@ -499,4 +500,5 @@ typedef GrammarEntry = {
 
 	/** How `apq merge-file` takes the grammar's files apart: by declarations (source) or by records (data). */
 	final merge: MergeShape;
+
 };

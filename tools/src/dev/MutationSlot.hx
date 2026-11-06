@@ -547,18 +547,19 @@ final class MutationSlot {
 
 /** What every track of one slot shares. */
 typedef SlotContext = {
+
 	var workroot: String;
 	var slot: Int;
 
 	/** The slot's worktree. */
 	var wt: String;
-
 	var server: Null<SlotServer>;
 	var buildOnly: Bool;
 	var killerFirst: Bool;
 
 	/** The composed build's directory, or null. */
 	var schema: Null<String>;
+
 }
 
 /** One classified run: the verdict label, the row detail, and the uncapped detail when the row elided names. */

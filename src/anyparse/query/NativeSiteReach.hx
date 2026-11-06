@@ -128,4 +128,5 @@ typedef NativeHands = {
 	 * its name (`MemberReach.externSite`); absent for none.
 	 */
 	@:optional var blind: Bool;
+
 }

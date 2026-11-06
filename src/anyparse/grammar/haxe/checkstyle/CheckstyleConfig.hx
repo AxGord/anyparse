@@ -15,6 +15,5 @@ package anyparse.grammar.haxe.checkstyle;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef CheckstyleConfig = {
-
 	@:optional var checks: Array<CheckstyleCheck>;
 };

@@ -14,9 +14,6 @@ package anyparse.grammar.haxe.format;
  * - `"remove"` → `KeepEmptyLinesPolicy.Remove`
  */
 enum abstract HxFormatKeepEmptyLinesPolicy(String) to String {
-
 	final Keep = 'keep';
-
 	final Remove = 'remove';
-
 }

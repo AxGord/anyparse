@@ -44,6 +44,7 @@ typedef TestMirror = {
 
 /** Everything one relocation reads: the modules to move, the analysed modules, and the declared non-module texts. */
 typedef ModuleMoveRequest = {
+
 	final moves: Array<ModuleRelocation>;
 	final scopeFiles: Array<{ file: String, source: String }>;
 
@@ -52,11 +53,11 @@ typedef ModuleMoveRequest = {
 	 * never rewritten.
 	 */
 	final libraryFiles: Array<{ file: String, source: String }>;
-
 	final textFiles: Array<{ file: String, source: String }>;
 	final registries: Array<TypePathRegistry>;
 	final sortedLists: Array<Array<SortedListPart>>;
 	final mirrors: Array<TestMirror>;
+
 }
 
 /**
@@ -76,10 +77,8 @@ typedef ModuleMoveOutcome = {
  * The relocation's outcome: `Moved`, or `Refused` with every reason found, not only the first.
  */
 enum ModuleMoveResult {
-
 	Moved(outcome: ModuleMoveOutcome);
 	Refused(reasons: Array<String>);
-
 }
 
 /** One validated relocation: the move, the module rename it performs, and the types it carries. */

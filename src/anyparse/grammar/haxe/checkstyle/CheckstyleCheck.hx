@@ -16,8 +16,6 @@ package anyparse.grammar.haxe.checkstyle;
  * (`severity`, …) is dropped by the parser's inherited `UnknownPolicy.Skip`.
  */
 @:peg typedef CheckstyleCheck = {
-
 	@:optional var type: String;
-
 	@:optional var props: CheckstyleCheckProps;
 };

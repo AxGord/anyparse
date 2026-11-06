@@ -517,10 +517,8 @@ final class CanonicalEdit {
  * told.
  */
 enum EditResult {
-
 	Ok(text: String, ?rewrites: Int);
 	Err(message: String);
-
 }
 
 /**

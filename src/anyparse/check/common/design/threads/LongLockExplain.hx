@@ -82,6 +82,7 @@ typedef LockTakeSite = {
  * main-thread take of a lock that is not long, and the locks other locks dominate.
  */
 typedef LongLockReport = {
+
 	final long: Array<LongLock>;
 	final mainShort: Array<LockTakeSite>;
 
@@ -90,6 +91,7 @@ typedef LongLockReport = {
 	 * it while one of them is held there is brief however long the lock itself is.
 	 */
 	final dominated: Array<{ lock: String, by: Array<String> }>;
+
 }
 
 /**

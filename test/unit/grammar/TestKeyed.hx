@@ -7,8 +7,6 @@ package unit.grammar;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef TestKeyed = {
-
 	@:key('function') var member: String;
-
 	@:optional @:key('content-type') var contentType: Null<String>;
 };

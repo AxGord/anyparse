@@ -498,6 +498,7 @@ typedef Kit = {
  * that answer is known to carry, and the fixture file the invocation's stdout rewrites (checked for one pass and kept comments).
  */
 typedef ProbeCase = {
+
 	var compile: Null<CompileSpec>;
 	var expect: Null<Expectation>;
 	var knownDefect: Null<String>;
@@ -508,16 +509,19 @@ typedef ProbeCase = {
 
 	/** The fewest non-empty stdout lines a row with an `outShape` may print: a floor under a list that only grows. */
 	var ?outMinLines: Int;
+
 }
 
 /** One invocation's answer with both of its streams, normalized, for quoting a deviation. */
 typedef Seen = {
+
 	var answer: Expectation;
 	var out: String;
 	var err: String;
 
 	/** Why the engine gave no answer, empty when it answered. */
 	var failure: String;
+
 }
 
 /** A run's report lines, the invocations that deviate, and the known-defect rows that moved. */

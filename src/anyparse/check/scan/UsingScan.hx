@@ -557,6 +557,7 @@ final class UsingScan {
  * unguarded module and for every region the coverage gates refuse.
  */
 typedef UsingHeader = {
+
 	final root: QueryNode;
 	final guard: Null<QueryNode>;
 
@@ -569,6 +570,7 @@ typedef UsingHeader = {
 	 * level only, so its entry here is what answers — correctly, since the inner region is where it binds.
 	 */
 	final guardedUsings: Array<GuardedImport>;
+
 }
 
 /**

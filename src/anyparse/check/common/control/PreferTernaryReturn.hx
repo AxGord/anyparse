@@ -537,6 +537,7 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 
 /** The resolved seams `PreferTernaryReturn` reads in both `run` and `fix`. */
 private typedef Seams = {
+
 	final ifKinds: Array<String>;
 	final returnKind: String;
 	final support: ControlFlowSupport;
@@ -544,10 +545,10 @@ private typedef Seams = {
 
 	/** The four seams behind `TypeResolver.childReturnTypeSource`, resolved once per run. */
 	final functionKinds: Array<String>;
-
 	final lambdaKinds: Array<String>;
 	final bodyKinds: Array<String>;
 	final paramKinds: Array<String>;
+
 };
 
 /** `preservedComments`' position-split result: the hoisted block plus the one branch-attached comment. */

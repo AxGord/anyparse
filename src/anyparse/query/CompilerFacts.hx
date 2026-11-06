@@ -49,6 +49,7 @@ typedef TypeHome = {
  * positioned at the callee's body.
  */
 typedef CallFact = {
+
 	final target: Null<String>;
 	final access: String;
 	final receiver: Null<String>;
@@ -73,12 +74,13 @@ typedef CallFact = {
 	 * and whether it is an object of exactly the class that type names (`operandExact`); null for any other call.
 	 */
 	final operand: Null<String>;
-
 	final operandExact: Bool;
+
 }
 
 /** A `new`: the class and the instance type it makes. */
 typedef NewFact = {
+
 	final type: String;
 	final instance: String;
 	final at: FactPos;
@@ -88,10 +90,12 @@ typedef NewFact = {
 	 * text writes, to `type`, a class no text names — and null for any other construction (`TypedFactsMacro.genericBuilt`).
 	 */
 	final generic: Null<String>;
+
 }
 
 /** A field read or write that is not the callee of a call; a compound assignment is both. */
 typedef FieldFact = {
+
 	final owner: Null<String>;
 	final field: String;
 	final access: String;
@@ -130,6 +134,7 @@ typedef FieldFact = {
 	 * `value`: a reader that does not follow the parameter reads an escape); null otherwise.
 	 */
 	final argument: Null<ArgumentFact>;
+
 }
 
 /**
@@ -161,6 +166,7 @@ typedef ElementWriteFact = {
 
 /** A value of type `from` reaching a place of type `to` through `via`: `var`, `assign`, `arg`, `ret`, `arr`, `obj` or `cast`. */
 typedef FlowFact = {
+
 	final from: String;
 	final to: String;
 	final via: String;
@@ -171,6 +177,7 @@ typedef FlowFact = {
 	 * its own type and never written again. False in facts that do not record it.
 	 */
 	final exact: Bool;
+
 }
 
 /**
@@ -199,6 +206,7 @@ typedef InstantiationFact = {
  * (the exception wrapping hands it to `Std.string`): converted by its `toString`.
  */
 typedef StringFact = {
+
 	final operand: String;
 	final at: FactPos;
 
@@ -207,6 +215,7 @@ typedef StringFact = {
 	 * local initialized with one of its own type and never written again. False in facts that do not record it.
 	 */
 	final exact: Bool;
+
 }
 
 /** A `for` loop the compiler kept as one: the binder's type and the iterated value's. */
@@ -218,6 +227,7 @@ typedef IterationFact = {
 
 /** A `Reflect`/`Type` call, with its first literal string argument and its first type argument. */
 typedef ReflectionFact = {
+
 	final target: String;
 	final name: Null<String>;
 
@@ -228,7 +238,6 @@ typedef ReflectionFact = {
 	 * that names no member, and in facts that do not record it.
 	 */
 	final memberName: Null<String>;
-
 	final typeArgument: Null<String>;
 
 	/** Whether the member (or the class itself) is read as a value, not called: whatever calls it later is reflection. */
@@ -241,7 +250,6 @@ typedef ReflectionFact = {
 	 * `receiverSelf` when it is `this`.
 	 */
 	final receiver: Null<String>;
-
 	final receiverExact: Bool;
 	final receiverSelf: Bool;
 
@@ -256,10 +264,12 @@ typedef ReflectionFact = {
 	 * `this` of — its outermost enclosing field's, for a nested function, which captures it.
 	 */
 	final holder: String;
+
 }
 
 /** A native-code site: `syntax` for a `*.Syntax` call, `ident` for a `__js__`-style identifier, read or called. */
 typedef NativeFact = {
+
 	final kind: String;
 	final name: String;
 	final at: FactPos;
@@ -278,6 +288,7 @@ typedef NativeFact = {
 
 	/** The id of the node whose code holds the site (`FactNode.id`): whose locals, parameters and `this` its text may name. */
 	final holder: String;
+
 }
 
 /** A local, parameter or loop binder, with the type the compiler gave it. */
@@ -289,12 +300,13 @@ typedef VarFact = {
 
 /** A read of a local, parameter or loop binder, with its type: the identifier's own range. */
 typedef LocalReadFact = {
+
 	final type: String;
 
 	/** The local's name as the compiler typed it: what a read of it written in the source spells. */
 	final name: String;
-
 	final at: FactPos;
+
 }
 
 /**
@@ -302,6 +314,7 @@ typedef LocalReadFact = {
  * (`<parent id>@<offset>`), with every fact of its body. Nested functions are nodes of their own, listed in `fns`.
  */
 typedef FactNode = {
+
 	final id: String;
 	final kind: String;
 	final owner: String;
@@ -351,7 +364,6 @@ typedef FactNode = {
 	 * `params` are the first configuration's, and a second entry is a build that typed the node differently.
 	 */
 	final variants: Array<FactSignature>;
-
 	final calls: Array<CallFact>;
 	final news: Array<NewFact>;
 	final fields: Array<FieldFact>;
@@ -372,6 +384,7 @@ typedef FactNode = {
 
 	/** The expansions of expression macros written in this node's code or in code an inlined call spliced into it. */
 	final expansions: Array<ExpansionFact>;
+
 }
 
 /**
@@ -405,6 +418,7 @@ typedef FactSignature = {
 
 /** A declared field of a typed type. `kind` is `method`, `inline`, `dynamic`, `macro` or `var(<read>,<write>)`. */
 typedef FieldDeclFact = {
+
 	final name: String;
 
 	/** The first configuration's kind of the field (`var(get,set)`, `method`, `dynamic`, …): `kinds` holds every one. */
@@ -416,7 +430,6 @@ typedef FieldDeclFact = {
 	 * the kind reads them all.
 	 */
 	final kinds: Array<String>;
-
 	final type: String;
 	final isStatic: Bool;
 	final meta: Array<String>;
@@ -432,6 +445,7 @@ typedef FieldDeclFact = {
 
 	/** Every count of further overloads a configuration gave the field (`overload`): `type` is the first signature only. */
 	final overloads: Array<Int>;
+
 }
 
 /**
@@ -440,6 +454,7 @@ typedef FieldDeclFact = {
  * as written; `meta` and `interfaces` hold what any configuration recorded.
  */
 typedef TypeFact = {
+
 	final id: String;
 	final kind: String;
 	final pack: String;
@@ -482,6 +497,7 @@ typedef TypeFact = {
 	 * taking arguments, the enum itself for one taking none. Empty for any other kind.
 	 */
 	final constructors: Array<{ name: String, type: String }>;
+
 }
 
 /**

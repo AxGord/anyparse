@@ -16,10 +16,8 @@ using Lambda;
  * stderr + a non-zero exit without a sentinel-string convention.
  */
 enum RenameResult {
-
 	Ok(text: String);
 	Err(message: String);
-
 }
 
 /**

@@ -368,6 +368,7 @@ final class ExtractConstantTo {
 
 /** What `ExtractConstantTo.extractTo` moves and where. */
 typedef ExtractToRequest = {
+
 	final source: String;
 	final sourceFile: String;
 	final address: AddressSpec;
@@ -386,6 +387,7 @@ typedef ExtractToRequest = {
 	final annotate: Null<String>;
 	final reformat: Bool;
 	final optsJson: Null<String>;
+
 }
 
 /** A destination module of `extract-constant`: its file, its source (null when it is to be created), its package and name. */
@@ -399,10 +401,8 @@ typedef ExtractToModule = {
 
 /** The result of `ExtractConstantTo.extractTo`: the new source, the destination module's text (null = the source) and advisories. */
 enum ExtractToResult {
-
 	Ok(source: String, dest: Null<String>, advisories: Array<String>);
 	Err(message: String);
-
 }
 
 /** The constant `extractTo` writes. */

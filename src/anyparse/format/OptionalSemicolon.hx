@@ -32,11 +32,7 @@ package anyparse.format;
  * optional statement terminator can reuse the shape.
  */
 enum abstract OptionalSemicolon(Int) from Int to Int {
-
 	final Preserve = 0;
-
 	final Always = 1;
-
 	final Never = 2;
-
 }

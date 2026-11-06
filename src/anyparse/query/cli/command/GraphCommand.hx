@@ -24,14 +24,13 @@ import sys.io.File;
 
 /** What a `graph` draws its edges from: the scope's imports, or its call graph lifted to the level asked. */
 enum abstract GraphEdgeSource(String) to String {
-
 	final Imports = 'imports';
 	final Calls = 'calls';
-
 }
 
 /** What one `graph` run asks for, as its arguments spell it. */
 typedef GraphRequest = {
+
 	final lang: String;
 	final level: GraphLevel;
 	final edges: GraphEdgeSource;
@@ -57,6 +56,7 @@ typedef GraphRequest = {
 	/** The function `--flow` draws the body of; null for the graph of a whole scope. */
 	final flow: Null<String>;
 	final inputSpecs: Array<String>;
+
 }
 
 /**

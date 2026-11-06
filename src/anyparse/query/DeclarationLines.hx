@@ -127,13 +127,13 @@ final class DeclarationLines {
 
 /** One version of a file as the writer emits it, each line assigned to the declaration that owns it. */
 typedef FileVersion = {
+
 	final source: String;
 	final tree: QueryNode;
 	final lines: Array<String>;
 
 	/** The offset each line starts at. */
 	final starts: Array<Int>;
-
 	final units: Array<OwnerUnit>;
 
 	/** Per line, the index of the unit owning it, or -1. */
@@ -144,6 +144,7 @@ typedef FileVersion = {
 
 	/** The lines no declaration owns. */
 	final rest: Array<String>;
+
 }
 
 /** A named node that owns lines of its file. */

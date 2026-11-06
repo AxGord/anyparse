@@ -1975,6 +1975,7 @@ typedef BodyWrapShared = {
  * dispatch and Keep arm.
  */
 typedef BodyLayouts = {
+
 	final sameLayoutExpr: Expr;
 	final nextLayoutExpr: Expr;
 	final blockLayoutExpr: Expr;
@@ -1988,6 +1989,7 @@ typedef BodyLayouts = {
 	 * comment spliced onto the nested `if`'s head line.
 	 */
 	final elseIfSameLayoutExpr: Expr;
+
 };
 
 /**
@@ -2273,7 +2275,6 @@ typedef CascadeInfos = {
 typedef BlockLeafExprs = {
 	final initDocCommentExpr: Expr;
 	final initCurrDocCommentExpr: Expr;
-
 	final initPrevKindExpr: Expr;
 	final initCurrKindExpr: Expr;
 	final trackPrevKindExpr: Expr;
@@ -2282,6 +2283,7 @@ typedef BlockLeafExprs = {
 	final extraInnerTrailBlankExpr: Expr;
 };
 typedef BlockStarCtx = {
+
 	final fieldAccess: Expr;
 	final openText: String;
 	final closeText: String;
@@ -2298,7 +2300,6 @@ typedef BlockStarCtx = {
 	final trackDocCommentExpr: Expr;
 	final initDocCommentExpr: Expr;
 	final initCurrDocCommentExpr: Expr;
-
 	final initPrevKindExpr: Expr;
 	final initCurrKindExpr: Expr;
 	final trackPrevKindExpr: Expr;
@@ -2312,7 +2313,7 @@ typedef BlockStarCtx = {
 	final blockSepBeforeHardlineExpr: Expr;
 	final blockTrailSepEmitExpr: Expr;
 	final elemSepGlueExpr: Expr;
-	final afterFieldsWithDocComments: Bool;
+	final afterFieldsWithDocComments: Null<Expr>;
 	final existingBetweenFields: Null<Expr>;
 	final beforeDocCommentEmptyLines: Bool;
 	final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>;
@@ -2342,8 +2343,10 @@ typedef BlockStarCtx = {
 
 	/** `@:fmt(glueToPrevious)`: whether element `_t` is written glued to the previous one; `macro false` without the flag. */
 	final glueToPreviousExpr: Expr;
+
 };
 typedef EofStarCtx = {
+
 	final fieldAccess: Expr;
 	final triviaElemCall: Expr;
 
@@ -2365,6 +2368,7 @@ typedef EofStarCtx = {
 	final lineCommentLedAddBlank: Bool;
 	final afterFileHeaderCommentBlanks: Bool;
 	final betweenMultilineCommentsBlanks: Bool;
+
 };
 /**
  * Shared spliced-Expr fragments + compile-time text/flags bundled for the
@@ -2461,6 +2465,7 @@ typedef SepStarDispatchCtx = {
  * compile-time text/flags the no-trivia (wrap-cascade) branch builder needs.
  */
 typedef SepStarNoTriviaCtx = {
+
 	final openText: String;
 	final closeText: String;
 	final sepText: String;
@@ -2489,6 +2494,7 @@ typedef SepStarNoTriviaCtx = {
 	 * byte-identical.
 	 */
 	final complexItems: Bool;
+
 };
 
 /**
@@ -2542,6 +2548,7 @@ typedef SepStarChecks = {
  * helper signature with one context struct, mirroring `EofStarCtx`.
  */
 typedef TryparseStarCtx = {
+
 	final fieldAccess: Expr;
 	final trailBB: Expr;
 	final trailLC: Expr;
@@ -2602,6 +2609,7 @@ typedef TryparseStarCtx = {
 
 	/** `@:fmt(glueToPrevious)`: element `_t` is written right after the previous one with no separator — `macro false` without it. */
 	final glueToPreviousExpr: Expr;
+
 };
 typedef CascadeEmit = {
 	initPrev: Expr,
@@ -3037,7 +3045,6 @@ typedef TryparseSepOverrides = {
  * relies on declaration order to skip slots preceding the requested one.
  */
 enum abstract AltSlot(Int) {
-
 	final CloseTrailing = 0;
 	final TrailOpt = 1;
 	final CaptureSource = 2;
@@ -3053,6 +3060,5 @@ enum abstract AltSlot(Int) {
 	final TernaryThenTrail = 12;
 	final ChainOwnComments = 13;
 	final WrapOpenTrailing = 14;
-
 }
 #end

@@ -135,6 +135,7 @@ final class ConstructorWiring {
  * `chainGrew` asks the next wiring to re-read it because a type on its chain gained a declaration.
  */
 typedef CtorRun = {
+
 	var typeName: String;
 	var from: String;
 	var kind: EdgeKind;
@@ -147,4 +148,5 @@ typedef CtorRun = {
 	 * re-wiring adds the constructor only when it resolves to another one.
 	 */
 	var target: Null<String>;
+
 }

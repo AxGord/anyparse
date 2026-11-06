@@ -20,10 +20,8 @@ package anyparse.grammar.sexpr;
 @:schema(anyparse.format.text.SExprFormat)
 @:ws
 enum SValue {
-
 	SAtom(s: SAtomLit);
 	SString(s: SQuotedStringLit);
-
 	// `@:sep('')` — sepList already inserts a softline (space-or-break)
 	// between every pair. A non-empty literal separator would compose
 	// with that softline to produce a double space inline.
@@ -33,5 +31,4 @@ enum SValue {
 	@:lead('(') @:trail(')') @:sep('')
 	@:fmt(cuddle)
 	SList(items: Array<SValue>);
-
 }

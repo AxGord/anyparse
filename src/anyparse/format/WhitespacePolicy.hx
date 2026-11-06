@@ -34,11 +34,8 @@ package anyparse.format;
 enum abstract WhitespacePolicy(Int) from Int to Int {
 
 	final None = 0;
-
 	final Before = 1;
-
 	final After = 2;
-
 	final Both = 3;
 
 	/**

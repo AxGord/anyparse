@@ -14,6 +14,7 @@ package anyparse.check.oracle;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef HaxeRun = {
+
 	var ?status: Null<Int>;
 	var out: String;
 	var err: String;
@@ -25,4 +26,5 @@ typedef HaxeRun = {
 
 	/** A cancelled job that never started — no process was spawned for it. */
 	var ?unstarted: Bool;
+
 }

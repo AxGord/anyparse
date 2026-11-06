@@ -6,10 +6,7 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintTruthEvidenceJson = {
-
 	var kind: String;
-
 	@:optional var ref: Null<String>;
-
 	@:optional var ms: Null<Float>;
 };

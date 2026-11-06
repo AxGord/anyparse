@@ -8,24 +8,14 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintFindingRecord = {
-
 	var file: String;
-
 	@:optional @:writeNull var line: Null<Int>;
-
 	@:optional @:writeNull var col: Null<Int>;
-
 	@:optional @:writeNull var endLine: Null<Int>;
-
 	@:optional @:writeNull var endCol: Null<Int>;
-
 	var severity: String;
-
 	var rule: String;
-
 	var message: String;
-
 	@:optional var data: Null<LintFindingDataRecord>;
-
 	@:optional var address: Null<String>;
 };

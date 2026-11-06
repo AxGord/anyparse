@@ -6,6 +6,7 @@ package anyparse.check.oracle;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef GenerationRecord = {
+
 	/** The record scheme it was written under (`FORMAT_TAG`): a record of another scheme is never current. */
 	var ?format: String;
 	var ?command: String;
@@ -14,4 +15,5 @@ typedef GenerationRecord = {
 
 	/** The files the generated hxml depends on without declaring them — see `implicitInputs`. */
 	var ?implicit: Array<FileHash>;
+
 }

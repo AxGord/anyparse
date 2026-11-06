@@ -55,6 +55,7 @@ typedef MutationArm = {
 
 	/** One sentence: what stops working once the arm is applied. */
 	note: String
+
 };
 
 /**
@@ -70,6 +71,7 @@ typedef ArmTable = {
 
 	/** Every complaint about the table; non-empty is a build error at the call site. */
 	errors: Array<String>
+
 };
 
 /** One document of the registry: where it was read from, and its text. */

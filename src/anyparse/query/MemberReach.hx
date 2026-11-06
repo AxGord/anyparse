@@ -47,11 +47,9 @@ using Lambda;
  * write, or a change to the object the member holds through ANY alias of it.
  */
 enum ReachAccess {
-
 	Read;
 	Write;
 	Mutate;
-
 }
 
 /**
@@ -60,10 +58,8 @@ enum ReachAccess {
  * lambdas it creates, plus its own direct touches of the member.
  */
 enum ReachEntry {
-
 	Calls(file: String, sites: Array<QueryNode>);
 	Region(file: String, span: Span);
-
 }
 
 /** One hop of a `Reached` path: an edge of the call graph, or a site the walk admitted through a blind channel (`kind` says which). */
@@ -140,11 +136,9 @@ enum ReachUnknown {
 
 /** The answer: no reached code can do the asked thing to the member, a path that does, or the first blind spot that stops a proof. */
 enum ReachResult {
-
 	Proven;
 	Reached(path: Array<ReachStep>);
 	Unknown(reason: ReachUnknown);
-
 }
 
 /**
@@ -153,10 +147,8 @@ enum ReachResult {
  * key, `what` one line saying which.
  */
 enum FreshOnlyAnswer {
-
 	Confined(reads: Array<SharedRead>);
 	Unconfined(file: String, span: Null<Span>, what: String);
-
 }
 
 /**
@@ -3242,11 +3234,9 @@ final class MemberReach {
 
 /** What an external target of the implicit walk turns out to be. */
 private enum ImplicitTarget {
-
 	Harmless;
 	Opaque;
 	Body(node: FnNode);
-
 }
 
 /**
@@ -3274,6 +3264,7 @@ private typedef Seeds = {
  * `implicit` may run — re-applied whenever the graph grew.
  */
 private typedef AdmissionSite = {
+
 	var from: String;
 	var file: String;
 	var span: Null<Span>;
@@ -3310,6 +3301,7 @@ private typedef AdmissionSite = {
 
 	/** Whether the target code admitted may write the member by its name: a blind spot (`MemberReach.externSite`). */
 	@:optional var blind: Bool;
+
 }
 
 /** The names code reads members by (`MemberReach.reflectedNames`), and the graph's size it was read at. */

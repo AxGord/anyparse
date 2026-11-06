@@ -955,6 +955,7 @@ final class HaxeNamingSupport implements NamingSupport {
  * modifier run of its own (`static var a = 1, b = 2` writes `static` once, before the head).
  */
 private typedef VarHost = {
+
 	final category: NamingCategory;
 
 	/** The modifier run preceding the HEAD binding, which governs every binding in the list. */
@@ -962,6 +963,7 @@ private typedef VarHost = {
 
 	/** Whether the head binding is an anon-structure field, whose name is a wire contract. */
 	final structural: Bool;
+
 };
 
 /**

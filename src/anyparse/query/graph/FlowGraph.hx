@@ -17,7 +17,6 @@ enum abstract FlowKind(String) to String {
 
 	/** A loop's header, left by a `body` and a `done` edge, or the entry of a `do … while`. */
 	final Loop = 'loop';
-
 	final Switch = 'switch';
 	final Try = 'try';
 	final Catch = 'catch';

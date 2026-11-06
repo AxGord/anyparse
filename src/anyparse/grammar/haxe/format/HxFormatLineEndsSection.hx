@@ -18,22 +18,13 @@ package anyparse.grammar.haxe.format;
  * braces honour it in the trivia branch only.
  */
 @:peg typedef HxFormatLineEndsSection = {
-
 	@:optional var leftCurly: HxFormatLeftCurlyPolicy;
-
 	@:optional var rightCurly: HxFormatRightCurlyPolicy;
-
 	@:optional var emptyCurly: HxFormatEmptyCurlyPolicy;
-
 	@:optional var objectLiteralCurly: HxFormatCurlyLineEndPolicy;
-
 	@:optional var anonFunctionCurly: HxFormatCurlyLineEndPolicy;
-
 	@:optional var anonTypeCurly: HxFormatCurlyLineEndPolicy;
-
 	@:optional var blockCurly: HxFormatCurlyLineEndPolicy;
-
 	@:optional var metadataFunction: HxFormatMetadataLineEndPolicy;
-
 	@:optional var lineEndCharacter: HxFormatLineEndCharacter;
 };

@@ -122,12 +122,10 @@ final class KindEquivalence {
 }
 
 enum abstract PatternCategory(Int) {
-
 	final Decl = 0;
 	final Stmt = 1;
 	final Expr = 2;
 	final MetaArgs = 3;
-
 }
 
 /**

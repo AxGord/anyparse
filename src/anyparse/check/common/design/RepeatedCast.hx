@@ -392,6 +392,7 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 }
 
 private typedef Cast = {
+
 	final node: QueryNode;
 	final span: Span;
 	final operand: QueryNode;
@@ -406,6 +407,7 @@ private typedef Cast = {
 
 	/** The functions holding the cast, outermost first. */
 	final units: Array<QueryNode>;
+
 }
 
 /** The casts of one group a function binds once (`homes`). */
@@ -421,6 +423,7 @@ private typedef Finding = {
 }
 
 private typedef Scan = {
+
 	final source: String;
 	final tree: QueryNode;
 	final shape: RefShape;
@@ -448,4 +451,5 @@ private typedef Scan = {
 	final taken: Map<String, Bool>;
 	final minChecked: Int;
 	final minUnchecked: Int;
+
 }

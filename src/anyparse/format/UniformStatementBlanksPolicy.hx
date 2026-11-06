@@ -22,9 +22,6 @@ package anyparse.format;
  * `@:fmt(uniformStmtBlanks)`; the policy surface itself is format-neutral.
  */
 enum abstract UniformStatementBlanksPolicy(Int) from Int to Int {
-
 	final Keep = 0;
-
 	final Collapse = 1;
-
 }

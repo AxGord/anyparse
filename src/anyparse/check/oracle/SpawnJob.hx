@@ -8,6 +8,7 @@ import anyparse.grammar.json.JValue;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef SpawnJob = {
+
 	var args: Array<String>;
 	var ?cwd: String;
 
@@ -22,7 +23,6 @@ typedef SpawnJob = {
 	 * and none for a `tethered` job, whose standard input is its tether.
 	 */
 	var ?stdin: String;
-
 	var ?shell: String;
 	var ?timeout: Int;
 
@@ -52,4 +52,5 @@ typedef SpawnJob = {
 	 * runs is not silent, it has not begun.
 	 */
 	var ?awaitProgress: Bool;
+
 }

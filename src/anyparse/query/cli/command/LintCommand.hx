@@ -63,6 +63,7 @@ typedef LineWindow = {
  */
 @:nullSafety(Strict)
 typedef LintOpts = {
+
 	var lang: String;
 	var flat: Bool;
 	var includeInfo: Bool;
@@ -110,6 +111,7 @@ typedef LintOpts = {
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag/value -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
+
 };
 
 /**

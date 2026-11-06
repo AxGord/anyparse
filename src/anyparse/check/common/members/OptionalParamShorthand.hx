@@ -890,9 +890,9 @@ final class OptionalParamShorthand extends RuleBase {
  * the redundant-sigil arm to a no-op, never the two pre-existing arms.
  */
 private typedef Seams = {
+
 	/** The whole shape, for `TypeResolver.bareFieldOwner` — the one seam reader that needs more than a kind list. */
 	final shape: RefShape;
-
 	final params: Array<String>;
 	final functionKinds: Array<String>;
 	final supertypeClauseKinds: Array<String>;
@@ -917,7 +917,6 @@ private typedef Seams = {
 
 	/** The seams the hoist arm's compile-time-constant proof reads — see `constantDefaultText`. */
 	final fieldAccessKind: Null<String>;
-
 	final fieldDeclKinds: Array<String>;
 	final enumAbstractDeclKind: Null<String>;
 	final constLiteralKinds: Array<String>;
@@ -928,6 +927,7 @@ private typedef Seams = {
 
 	/** `GrammarPlugin.typeSyntax` — how the arms that read a type read it. */
 	final typeSyntax: TypeSyntaxReader;
+
 };
 
 /**
@@ -973,6 +973,7 @@ private typedef HoistPlan = {
  * "unprovable" for every bare constant, silently narrowing the arm to literals.
  */
 private typedef HoistScope = {
+
 	final root: QueryNode;
 	final resolveIndex: () -> Null<SymbolIndex>;
 
@@ -992,6 +993,7 @@ private typedef HoistScope = {
 	 * itself, and conflating them would change the qualifier test's answer too.
 	 */
 	final matchMask: () -> Array<Span>;
+
 };
 
 /**

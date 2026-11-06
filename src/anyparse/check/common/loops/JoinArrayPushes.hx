@@ -770,6 +770,7 @@ final class JoinArrayPushes extends RuleBase {
 
 /** The `RefShape` kinds `JoinArrayPushes` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	var shape: RefShape;
 	var identKind: String;
 	var callKind: String;
@@ -790,11 +791,11 @@ private typedef Seams = {
 
 	/** `GrammarPlugin.typeSyntax` — how a declaration's annotation is read. */
 	var typeSyntax: TypeSyntaxReader;
-
 	var selfText: Null<String>;
 	var superText: Null<String>;
 	var overrideKind: Null<String>;
 	var collectionKinds: Array<String>;
+
 }
 
 /**

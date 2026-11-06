@@ -303,6 +303,7 @@ enum ReachHazardKind {
 
 /** One hazard: what it is, the node span it covers and the node itself. */
 typedef ReachHazard = {
+
 	var kind: ReachHazardKind;
 	var span: Span;
 	var node: QueryNode;
@@ -319,4 +320,5 @@ typedef ReachHazard = {
 	 * is handed and names (`NativeSiteReach`); absent elsewhere.
 	 */
 	@:optional var native: NativeFact;
+
 }

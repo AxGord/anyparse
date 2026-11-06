@@ -7,16 +7,10 @@ package anyparse.grammar.haxe.format;
  * each section into its own knobs, never the class ones.
  */
 @:peg typedef HxFormatInterfaceEmptyLinesConfig = {
-
 	@:optional var betweenVars: Int;
-
 	@:optional var betweenFunctions: Int;
-
 	@:optional var afterVars: Int;
-
 	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
-
 	@:optional var beginType: Int;
-
 	@:optional var endType: Int;
 };

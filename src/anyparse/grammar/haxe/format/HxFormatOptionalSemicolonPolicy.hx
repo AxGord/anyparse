@@ -33,11 +33,7 @@ package anyparse.grammar.haxe.format;
  * (`anyparse.format.OptionalSemicolon`).
  */
 enum abstract HxFormatOptionalSemicolonPolicy(String) to String {
-
 	final Preserve = 'preserve';
-
 	final Always = 'always';
-
 	final Never = 'never';
-
 }

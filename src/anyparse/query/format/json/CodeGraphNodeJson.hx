@@ -10,19 +10,14 @@ package anyparse.query.format.json;
 typedef CodeGraphNodeJson = {
 
 	var id: String;
-
 	var level: String;
-
 	var name: String;
-
 	var label: String;
-
 	@:optional var parent: Null<String>;
-
 	var external: Bool;
-
 	var focus: Bool;
 
 	/** In a graph comparing two versions, how the node differs (`added`, `removed`, `changed`); absent when it does not. */
 	@:optional var change: Null<String>;
+
 };

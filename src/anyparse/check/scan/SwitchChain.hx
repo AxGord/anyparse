@@ -828,11 +828,13 @@ final class SwitchChain {
 
 /** One rung of a scanned chain: the `case`-pattern text per discriminant position, and the branch body's source range. */
 private typedef ChainRung = {
+
 	final patterns: Array<String>;
 
 	/** The value key of each pattern, parallel to `patterns` (null = unknown). */
 	final values: Array<Null<String>>;
 	final body: Span;
+
 };
 
 /**
@@ -870,6 +872,7 @@ private typedef ElselessHosts = {
  * across a `run` / `fix` pair, `SwitchChain` holding no state of its own.
  */
 typedef ChainScope = {
+
 	final root: QueryNode;
 	final resolveIndex: () -> Null<SymbolIndex>;
 
@@ -881,6 +884,7 @@ typedef ChainScope = {
 	 * where one does.
 	 */
 	final operandBuiltin: (QueryNode) -> Bool;
+
 };
 
 /**
@@ -892,13 +896,13 @@ typedef ChainScope = {
  * rest are `RefShape` seams, each degrading on its own when the grammar leaves it unset.
  */
 typedef ChainSeams = {
+
 	/**
 	 * The whole `RefShape`, carried because the bare-identifier constant proof asks the
 	 * RESOLVER (`TypeResolver.bareFieldOwner`) rather than a kind list, and the resolver takes
 	 * a shape. The individual kind fields below stay because the scanner reads them per node.
 	 */
 	final shape: RefShape;
-
 	final chainKinds: Array<String>;
 	final bodyTerminator: String;
 
@@ -908,7 +912,6 @@ typedef ChainSeams = {
 	 * values.
 	 */
 	final selfTerminatingEndings: Array<String>;
-
 	final eqKind: String;
 	final litKinds: Array<String>;
 	final fieldKinds: Array<String>;
@@ -921,7 +924,6 @@ typedef ChainSeams = {
 	 * the per-rung-to-once collapse observable. Derived once by `seamsOf`; gate 5's set.
 	 */
 	final mutationKinds: Array<String>;
-
 	final fieldAccessKind: Null<String>;
 	final identKind: String;
 	final enumAbstractDeclKind: Null<String>;
@@ -939,6 +941,7 @@ typedef ChainSeams = {
 	 * closes one — the expression rule, whose chains are values.
 	 */
 	final elselessHosts: Null<ElselessHosts>;
+
 };
 
 /**
@@ -946,6 +949,7 @@ typedef ChainSeams = {
  * written from and the discriminant it tests.
  */
 private typedef EqPair = {
+
 	final pattern: String;
 	final disc: QueryNode;
 
@@ -954,13 +958,16 @@ private typedef EqPair = {
 
 	/** Whether the PATTERN leaves the language's `==` selected — gate 10's pattern half (`CasePattern.builtinEq`). */
 	final patternBuiltin: Bool;
+
 };
 
 /** A pattern-valid operand: its verbatim `case`-pattern source and its `CaseValueKey` (null = unknown). */
 private typedef CasePattern = {
+
 	final text: String;
 	final value: Null<String>;
 
 	/** Whether the pattern's own type leaves the language's `==` selected (`selectsBuiltinEq`). */
 	final builtinEq: Bool;
+
 };

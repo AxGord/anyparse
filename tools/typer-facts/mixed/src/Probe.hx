@@ -61,7 +61,6 @@ abstract Lookup(Array<String>) {
 enum abstract Color(Int) to Int {
 	var Red;
 	var Green = 2;
-
 	public static var Count = 3;
 	public static final Other = 4;
 }

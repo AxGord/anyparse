@@ -188,4 +188,5 @@ typedef WriteSite = {
 
 	/** `WriteSites.targetPath` of its target — null when no path can name it, which a consumer reads as writing every operand. */
 	final path: Null<String>;
+
 };

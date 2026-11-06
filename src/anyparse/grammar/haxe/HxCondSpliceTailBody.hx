@@ -23,9 +23,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxCondSpliceTailBody {
-
 	OpTail(inner: HxCondSpliceOpTail);
 	ListTail(inner: HxCondSpliceListTail);
 	RawTail(raw: HxCondSpliceRaw);
-
 }

@@ -29,9 +29,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxFnExprBody {
-
 	BlockBody(block: HxFnBlock);
-
 	ExprBody(expr: HxExpr);
-
 }

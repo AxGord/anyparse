@@ -758,6 +758,7 @@ private typedef ConstDecl = {
 };
 
 private typedef EnumAbstractCfg = {
+
 	final constKinds: Array<String>;
 	final staticKind: String;
 	final inlineKind: String;
@@ -780,9 +781,11 @@ private typedef EnumAbstractCfg = {
 	/** What a region above the container may lead its declaration with: metadata, a modifier, a declaration keyword. */
 	final declarationLeadKinds: Array<String>;
 	final syntax: Null<EnumAbstractSyntax>;
+
 };
 
 private typedef WholeType = {
+
 	final span: Span;
 	final name: String;
 	final count: Int;
@@ -790,6 +793,7 @@ private typedef WholeType = {
 
 	/** The conversion edits for this container, or null when a refusal declined the rewrite. */
 	final plan: Null<ConversionPlan>;
+
 };
 
 /**

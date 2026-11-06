@@ -17,6 +17,7 @@ typedef SchemaArm = {
  * Lines are 1-based: `dispatch` is the line the arm's switch landed on, `copyFrom`..`copyTo` the lines of its copy.
  */
 typedef SchemaPlacement = {
+
 	id: Int,
 	skip: Null<String>,
 	dispatch: Int,
@@ -25,6 +26,7 @@ typedef SchemaPlacement = {
 
 	/** The type that holds the copy and the switch; empty when the arm is left out. */
 	owner: String
+
 };
 
 /** One composed file: its text, and one placement per arm. */
@@ -50,6 +52,7 @@ private enum SchemaRole {
 
 /** A method a copy can stand for, as `MutationSchema.method` read it off the tree. */
 private typedef SchemaMethod = {
+
 	name: String,
 	span: Span,
 	bodyOpen: Int,
@@ -62,6 +65,7 @@ private typedef SchemaMethod = {
 	/** The type's closing brace: where its switch fields go. */
 	closing: Int,
 	owner: String
+
 };
 
 /** A method a copy can stand for, or why not. */

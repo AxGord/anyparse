@@ -5,9 +5,7 @@ enum ScanNode {
 
 	/** One code unit out of the set. */
 	Chars(set: CodeSet);
-
 	Seq(items: Array<ScanNode>);
-
 	Alt(branches: Array<ScanNode>);
 
 	/** `?` (`min` 0, not `many`), `*` (`min` 0, `many`) or `+` (`min` 1, `many`). */

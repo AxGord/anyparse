@@ -1195,6 +1195,7 @@ final class CrossRenameMember {
  * proves a plain `return VALUE;`, it just proves fewer shapes.
  */
 private typedef ReturnSeams = {
+
 	final memberName: String;
 	final identKind: String;
 	final functionKinds: Array<String>;
@@ -1211,6 +1212,7 @@ private typedef ReturnSeams = {
 
 	/** The call kind whose callee is a value slot — an enum constructor's scan only, null otherwise. */
 	final ctorCallKind: Null<String>;
+
 };
 
 /**

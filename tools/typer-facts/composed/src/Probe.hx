@@ -31,7 +31,6 @@ abstract NoOp(Int) from Int to Int {}
 enum abstract Color(Int) {
 	var Red = 1;
 	var Green = 2;
-
 	public static var Other: Int = 3;
 }
 

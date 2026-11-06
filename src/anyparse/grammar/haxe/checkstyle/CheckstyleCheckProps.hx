@@ -54,4 +54,5 @@ package anyparse.grammar.haxe.checkstyle;
 
 	/** `Type`: whether enum-abstract values are exempt from the explicit-type requirement. */
 	@:optional var ignoreEnumAbstractValues: Bool;
+
 };

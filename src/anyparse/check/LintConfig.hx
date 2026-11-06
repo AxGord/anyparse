@@ -55,6 +55,7 @@ typedef RuleSwitch = {
  * one-element case of this list rather than a second code path.
  */
 typedef OracleConfig = {
+
 	var hxml: String;
 	var dir: Null<String>;
 	var defines: Array<String>;
@@ -86,6 +87,7 @@ typedef OracleConfig = {
 	 * — a module a write just created. Absent everywhere but the typecheck after a write (`WriteVerification`).
 	 */
 	var ?modules: Array<String>;
+
 }
 
 /**

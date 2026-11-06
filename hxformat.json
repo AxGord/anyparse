@@ -12,6 +12,7 @@
 		"maxAnywhereInFile": 2,
 		"afterLeftCurly": "keep",
 		"beforeRightCurly": "keep",
+		"beforeDocCommentEmptyLines": "one",
 		"classEmptyLines": {
 			"beginType": 1,
 			"endType": 1
@@ -31,6 +32,33 @@
 		"macroClassEmptyLines": {
 			"beginType": 0,
 			"endType": 0
+		},
+		"enumEmptyLines": {
+			"betweenFields": 0,
+			"existingBetweenFields": "remove",
+			"beginType": 0,
+			"endType": 0,
+			"beginTypeIfDocComments": 1,
+			"endTypeIfDocComments": 1,
+			"afterFieldsWithDocComments": "none"
+		},
+		"typedefEmptyLines": {
+			"betweenFields": 0,
+			"existingBetweenFields": "remove",
+			"beginType": 0,
+			"endType": 0,
+			"beginTypeIfDocComments": 1,
+			"endTypeIfDocComments": 1,
+			"afterFieldsWithDocComments": "none"
+		},
+		"enumAbstractEmptyLines": {
+			"betweenVars": 0,
+			"existingBetweenFields": "remove",
+			"beginType": 0,
+			"endType": 0,
+			"beginTypeIfDocComments": 1,
+			"endTypeIfDocComments": 1,
+			"afterFieldsWithDocComments": "none"
 		}
 	},
 	"wrapping": {

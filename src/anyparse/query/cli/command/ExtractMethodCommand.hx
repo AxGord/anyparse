@@ -12,6 +12,7 @@ import anyparse.runtime.Span;
  */
 @:nullSafety(Strict)
 typedef ExtractMethodOpts = {
+
 	var lang: String;
 	var write: Bool;
 	var reformat: Bool;
@@ -25,6 +26,7 @@ typedef ExtractMethodOpts = {
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / malformed
 	// position -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
 	var errExit: Null<Int>;
+
 };
 
 /**

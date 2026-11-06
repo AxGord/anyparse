@@ -17,12 +17,12 @@ using Lambda;
  * text, the per-file edits of every other file, and the bookkeeping the shared `MoveMember` passes read afterwards.
  */
 typedef HelperEdits = {
+
 	final prep: MovePrep;
 	final plugin: GrammarPlugin;
 
 	/** The source parameter each moved instance member gains. */
 	final param: String;
-
 	final helperName: String;
 	final editsByFile: Map<String, Array<{ span: Span, text: String }>>;
 	final movedTextEdits: Array<{ span: Span, text: String }>;
@@ -35,8 +35,8 @@ typedef HelperEdits = {
 
 	/** The moved members whose bodies read a non-public member of the source (`@:access`). */
 	final accessMembers: Array<String>;
-
 	final advisory: Array<String>;
+
 }
 
 /**
@@ -66,6 +66,7 @@ private typedef NodeIndex = {
 
 /** What the walk over the moved members collects before `Refs` binds it (`scanMoved`). */
 private typedef MovedScan = {
+
 	final names: Array<String>;
 
 	/** Identifiers that root a dotted path naming a TYPE (`haxe.Json.parse`), a package rather than a value. */
@@ -73,6 +74,7 @@ private typedef MovedScan = {
 
 	/** Member names reached through any receiver inside the moved members. */
 	final accessedNames: Array<{ name: String, at: Int }>;
+
 }
 
 /**

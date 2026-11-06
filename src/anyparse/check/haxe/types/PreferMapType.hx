@@ -25,6 +25,7 @@ private typedef Candidate = {
 
 /** The resolved per-file seams the candidate walk threads through, so no node visit re-derives them. */
 private typedef Seams = {
+
 	var source: String;
 	var scope: Scope;
 	var typeRefKinds: Array<String>;
@@ -40,6 +41,7 @@ private typedef Seams = {
 
 	/** `GrammarPlugin.typeSyntax` — how a written key and a pinning annotation are read. */
 	var typeSyntax: TypeSyntaxReader;
+
 }
 
 /**

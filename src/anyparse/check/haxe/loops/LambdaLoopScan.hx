@@ -1047,6 +1047,7 @@ private enum abstract CallSpelling(Int) {
 
 /** The `RefShape` kinds `LambdaLoopScan` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	var forStmtKind: String;
 	var returnKind: String;
 	var blockStmtKind: String;
@@ -1097,10 +1098,12 @@ private typedef Seams = {
 	/** `RefactorSupport.projectIsComplete`, the `length` spelling's precondition (`isLengthContainer`). */
 	var projectComplete: Bool;
 	var typeSyntax: TypeSyntaxReader;
+
 }
 
 /** The `for (v in xs) if (cond) <sink>;` destructure — the head every direction and both sinks start from. */
 private typedef Head = {
+
 	var loopVar: String;
 	var iterable: QueryNode;
 
@@ -1115,6 +1118,7 @@ private typedef Head = {
 	 * `length` site needs no `using Lambda;` and clears every other gate the same way.
 	 */
 	var spelling: CallSpelling;
+
 }
 
 /** A loop body's condition (null for an unfiltered count) and its sink's literal (null for `count`). */
@@ -1128,6 +1132,7 @@ private typedef BodyShape = {
  * trailing return or loop, an optional guard and the destructured head.
  */
 private typedef Cand = {
+
 	/** The loop, or the guard `if` holding it — the node the finding's span covers and the fix's region starts at. */
 	var anchor: QueryNode;
 	var trailing: QueryNode;
@@ -1143,6 +1148,7 @@ private typedef Cand = {
 	 * declaration rather than a `return`.
 	 */
 	var flag: Null<Flag>;
+
 }
 
 /** The declaration a FLAG-form fold re-emits: the bound name and its written annotation, if any. */
@@ -1153,6 +1159,7 @@ private typedef Flag = {
 
 /** The FLAG sink's spelling, threaded into `forIfHead` so one destructure serves both sinks. */
 private typedef FlagSink = {
+
 	var name: String;
 	var exprStmtKind: String;
 	var assignKind: String;
@@ -1160,6 +1167,7 @@ private typedef FlagSink = {
 	/** Whether the sink is the COUNT one — the name's increment — rather than a bool assignment. */
 	var counts: Bool;
 	var loopSeams: LoopSeams;
+
 }
 
 /** The re-spliced texts of one rewrite plus the source spans they came from, in ascending order, for the comment gate. */
@@ -1178,6 +1186,7 @@ private typedef Parts = {
  * construction, since a scan runs for a single `LambdaLoopKind`.
  */
 private typedef Probes = {
+
 	/** The VALUE resolver, behind the `Iterable`-shape proof a CALL iterable must clear. */
 	var nominal: () -> Null<(QueryNode) -> Null<String>>;
 
@@ -1211,6 +1220,7 @@ private typedef Probes = {
 
 	/** The nominals a CALL iterable must resolve to for this direction's call to compile (`iterableTypes`). */
 	var iterableTypes: Array<String>;
+
 }
 
 /** What a name-mention scan masks: comment spans (for the qualifier test) and every byte that can neither bind nor read a name. */

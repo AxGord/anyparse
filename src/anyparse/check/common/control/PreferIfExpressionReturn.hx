@@ -761,6 +761,7 @@ final class PreferIfExpressionReturn extends RuleBase {
 
 /** The `RefShape` kinds `PreferIfExpressionReturn` reads. */
 private typedef Seams = {
+
 	var ifKinds: Array<String>;
 	var returnKind: String;
 	var blockStmtKind: String;
@@ -776,6 +777,7 @@ private typedef Seams = {
 
 	/** The positive list of value kinds a merge may repeat: every non-boolean case literal, plus a bare name. */
 	var mergeValueKinds: Array<String>;
+
 }
 
 /**
@@ -786,6 +788,7 @@ private typedef Seams = {
  * trivia); every other span is cut back to its last token by `IfExpressionChain.tokenSpan`.
  */
 private typedef Match = {
+
 	var prefix: Span;
 	var pairs: Array<{ cond: Span, value: Span }>;
 	var terminalValue: Span;
@@ -799,6 +802,7 @@ private typedef Match = {
 
 	/** Which three values merge into two and how, or null when none do. */
 	var merge: Null<Merge>;
+
 }
 
 /**

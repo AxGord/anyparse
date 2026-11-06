@@ -9,11 +9,13 @@ import haxe.Exception;
 
 /** How a grammar's files are taken apart for a merge. */
 enum MergeShape {
+
 	/** By the declarations that own their lines (`DeclarationTree`): source code. */
 	Declarations;
 
 	/** By the members and elements their nodes span (`RecordTree`): a data document. */
 	Records;
+
 }
 
 /** The trees of three versions, or why they are not merged by key. */
@@ -24,6 +26,7 @@ private enum TreesRead {
 
 /** What `StructuralMerge.merge` makes of three versions of one file. */
 enum MergeResult {
+
 	/** The merged text and how the two sides were combined. */
 	Merged(text: String, how: Array<String>);
 
@@ -32,6 +35,7 @@ enum MergeResult {
 
 	/** A version the grammar does not read, or a merge it cannot read back: a line merge's job. */
 	Unreadable(why: String);
+
 }
 
 /**

@@ -817,4 +817,5 @@ enum SuiteScope {
 
 	/** Only these test classes, by their qualified names; none when no class depends on the change. */
 	Selected(classes: Array<String>);
+
 }

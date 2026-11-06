@@ -16,6 +16,7 @@ import anyparse.runtime.Span;
  */
 @:nullSafety(Strict)
 typedef FmtOpts = {
+
 	var lang: String;
 	var write: Bool;
 	var list: Bool;
@@ -40,6 +41,7 @@ typedef FmtOpts = {
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
+
 };
 
 /**
@@ -48,6 +50,7 @@ typedef FmtOpts = {
  */
 @:nullSafety(Strict)
 typedef FmtFileResult = {
+
 	var changed: Bool;
 	var failed: Bool;
 
@@ -85,6 +88,7 @@ typedef FmtFileResult = {
 	// Non-null = a fatal per-file outcome (no writer wired for the lang);
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;
+
 };
 
 /**

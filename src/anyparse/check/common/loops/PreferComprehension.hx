@@ -1090,6 +1090,7 @@ final class PreferComprehension extends RuleBase {
 
 /** The `RefShape` kinds `PreferComprehension` reads, bundled once so the walkers take one argument. */
 typedef ComprehensionSeams = {
+
 	var forStmtKind: String;
 	var whileStmtKind: Null<String>;
 	var localDeclKinds: Array<String>;
@@ -1116,10 +1117,10 @@ typedef ComprehensionSeams = {
 
 	/** `GrammarPlugin.typeSyntax` — how an annotation's element type is read. */
 	var typeSyntax: TypeSyntaxReader;
-
 	var atomKinds: Array<String>;
 	var pureKinds: Array<String>;
 	var eagerKinds: Array<String>;
+
 }
 
 /**
@@ -1134,6 +1135,7 @@ private typedef Match = {
 
 /** Per-file inputs the walkers share: the source, the resolved seams and the file's comment tokens (lexed once). */
 typedef ComprehensionCtx = {
+
 	var source: String;
 	var seams: ComprehensionSeams;
 	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
@@ -1141,6 +1143,7 @@ typedef ComprehensionCtx = {
 	/** The file's tree and ref shape — the write scan that decides `var` vs `final` needs both. */
 	var tree: QueryNode;
 	var shape: RefShape;
+
 }
 
 /**

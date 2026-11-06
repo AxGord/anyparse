@@ -272,11 +272,7 @@ final class CodeCacheLauncherTest extends Test {
 
 /** One finished `node` process. */
 private typedef Run = {
-
 	final status: Null<Int>;
-
 	final stdout: String;
-
 	final stderr: String;
-
 };

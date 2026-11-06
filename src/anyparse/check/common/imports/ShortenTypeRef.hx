@@ -29,6 +29,7 @@ import anyparse.query.ValueDoors;
  * sits in the body of a `macro` function.
  */
 private typedef Occurrence = {
+
 	var path: String;
 	var span: Span;
 	var conditional: Bool;
@@ -46,6 +47,7 @@ private typedef Occurrence = {
 	 * there needs its own freedom proof (`valueNameFree`).
 	 */
 	var valueSite: Null<QueryNode>;
+
 }
 
 /**
@@ -54,6 +56,7 @@ private typedef Occurrence = {
  * original names the declaration the reprint denotes, and the occurrences this rule rewrites.
  */
 private typedef PathPlan = {
+
 	var path: String;
 	var text: String;
 	var importPath: Null<String>;
@@ -62,6 +65,7 @@ private typedef PathPlan = {
 
 	/** The targets that are VALUE sites — the ones a fix rewrites only where the compiler answers for them. */
 	var valueTargets: Array<Span>;
+
 }
 
 /**
@@ -81,6 +85,7 @@ private typedef RuleOptions = {
 
 /** The immutable inputs the occurrence scan reads, threaded through the recursion. */
 private typedef ScanContext = {
+
 	var source: String;
 	var shape: RefShape;
 	var typeKinds: Array<String>;
@@ -99,6 +104,7 @@ private typedef ScanContext = {
 
 	/** Every byte that cannot bind a name — comments and literal string TEXT (`InertRegions`). */
 	var inert: Array<Span>;
+
 }
 
 /**

@@ -1360,6 +1360,7 @@ class Codegen {
 }
 /** How a verbatim trailing capture treats a block comment that runs on past its first line. */
 private enum abstract TrailingRunOn(Int) {
+
 	/** Refused: left for the next element's leading capture. */
 	var Refused;
 
@@ -1374,5 +1375,6 @@ private enum abstract TrailingRunOn(Int) {
 	 * literal, which a comment can neither lead nor document, so nothing after the closer could own it instead.
 	 */
 	var BeforeSeparator;
+
 }
 #end

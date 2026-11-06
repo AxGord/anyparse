@@ -19,7 +19,6 @@ import anyparse.runtime.Span;
  * readable debug / labels; compared by value.
  */
 enum abstract NamingCategory(String) {
-
 	final Type = 'type';
 	final Field = 'field';
 	final Method = 'method';
@@ -28,7 +27,6 @@ enum abstract NamingCategory(String) {
 	final Param = 'param';
 	final EnumValue = 'enumValue';
 	final CatchVar = 'catchVar';
-
 }
 
 /**
@@ -88,6 +86,7 @@ enum abstract ImplicitReach(String) {
  * via several per-modifier entries).
  */
 typedef NamingRule = {
+
 	var category: NamingCategory;
 	var requireMods: Array<String>;
 	var forbidMods: Array<String>;
@@ -123,6 +122,7 @@ typedef NamingRule = {
 	 * no collision.
 	 */
 	@:optional var normalizeAlt: String -> Null<String>;
+
 }
 
 /**
@@ -140,6 +140,7 @@ typedef NamingPolicy = Array<NamingRule>;
  * select the applicable rule.
  */
 typedef NamedDecl = {
+
 	var span: Null<Span>;
 	var name: String;
 	var category: NamingCategory;
@@ -210,6 +211,7 @@ typedef NamedDecl = {
 	 * still deserves a report. Absent (false) for ordinary declarations.
 	 */
 	@:optional var contractName: Bool;
+
 }
 
 /**
@@ -218,6 +220,7 @@ typedef NamedDecl = {
  * property without the facts.
  */
 typedef PropertyClause = {
+
 	/**
 	 * Neither accessor names a storage slot (in Haxe: each is `get` / `set` / `never`, never `default` / `null`). Not yet
 	 * proof of no storage: an annotation in the modifier run (`@:isVar`) can still grant one, and that is the grammar's
@@ -227,6 +230,7 @@ typedef PropertyClause = {
 
 	/** `storageless`, and the write accessor admits no write at all (`never`). */
 	final readOnly: Bool;
+
 };
 
 /**
@@ -249,6 +253,7 @@ typedef PropertyClause = {
  * keeps the shipped default and the project's roster ONE predicate instead of two that drift.
  */
 typedef FrameworkContract = {
+
 	/** Simple name of the root type whose subtypes the framework drives (`MonoBehaviour`, `Test`). */
 	final root: String;
 
@@ -257,6 +262,7 @@ typedef FrameworkContract = {
 
 	/** Member-name prefixes the framework discovers by, matched as a leading fragment. */
 	final prefixes: Array<String>;
+
 };
 
 /**
@@ -362,8 +368,10 @@ interface NamingSupport {
  * to drift from it.
  */
 typedef HoistedConstant = {
+
 	final text: String;
 
 	/** The neutral modifiers `text` carries (`['private', 'static', 'inline']`) — the rule selector. */
 	final mods: Array<String>;
+
 };

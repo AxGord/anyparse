@@ -18,9 +18,6 @@ package anyparse.grammar.haxe.format;
  * - `"collapse"` → `UniformStatementBlanksPolicy.Collapse`
  */
 enum abstract HxFormatUniformStatementBlanksPolicy(String) to String {
-
 	final Keep = 'keep';
-
 	final Collapse = 'collapse';
-
 }

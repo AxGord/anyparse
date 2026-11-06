@@ -26,11 +26,7 @@ package anyparse.format;
  * surface from their own grammar.
  */
 enum abstract CommentEmptyLinesPolicy(Int) from Int to Int {
-
 	final Ignore = 0;
-
 	final None = 1;
-
 	final One = 2;
-
 }

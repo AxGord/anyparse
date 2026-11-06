@@ -181,6 +181,7 @@ final class CondBranchPath {
  * pair of sibling regions spelling one condition.
  */
 typedef CondFrame = {
+
 	final region: Int;
 	final branch: Int;
 
@@ -190,6 +191,7 @@ typedef CondFrame = {
 	 * Empty where the directive carries no condition the reader could delimit.
 	 */
 	final condition: String;
+
 };
 
 /** The replayed directive marks of one source, in source order — `CondBranchPath.scan`'s result. */

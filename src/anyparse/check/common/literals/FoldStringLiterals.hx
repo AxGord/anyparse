@@ -1314,12 +1314,12 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 
 /** The seam kinds `FoldStringLiterals` resolves once per run and reads in both passes. */
 private typedef Seams = {
+
 	final support: StringFoldSupport;
 	final concatKind: String;
 
 	/** The operand-run conditional-splice kinds (`RefShape.condOperandRunKinds`). */
 	final condOperandRunKinds: Array<String>;
-
 	final stringLiteralKinds: Array<String>;
 
 	/**
@@ -1366,10 +1366,12 @@ private typedef Seams = {
 
 	/** A function's `{ … }` body (`RefShape.blockBodyKind`), whose statements a candidate may be measured inside alone. */
 	final blockBodyKind: Null<String>;
+
 };
 
 /** One construct flattened for planning: its segments, the SOURCE's own group boundaries, and the span to replace. */
 private typedef Decomposition = {
+
 	final segments: Array<ConcatSegment>;
 	final current: Array<Int>;
 
@@ -1400,6 +1402,7 @@ private typedef Decomposition = {
 	 * operand from a single-fragment interpolated literal (`'$x' + …`).
 	 */
 	final startsBare: Bool;
+
 };
 
 /** A construct's canonical form: the span to replace, its replacement text, and the finding message. */
@@ -1410,7 +1413,6 @@ private typedef PlannedFold = {
 
 	/** The narrower span the fix replaces — see `Decomposition.editSpan`. */
 	final editSpan: Span;
-
 	final text: String;
 
 	/** How many `+` operands the plan renders as. */
@@ -1427,6 +1429,7 @@ private typedef PlannedFold = {
 	 */
 	final constant: Bool;
 	final message: String;
+
 };
 
 /**
@@ -1434,12 +1437,14 @@ private typedef PlannedFold = {
  * starts at, and the index of the first operand that is a string literal.
  */
 private typedef Chain = {
+
 	final operands: Array<QueryNode>;
 	final from: Int;
 
 	/** The offset the LAST operand ends at — the far end of the span the fix replaces. */
 	final to: Int;
 	final firstLiteral: Int;
+
 };
 
 /** A proposed partition and the budget it was filled against — what the writer verification re-fills from. */

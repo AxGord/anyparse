@@ -20,6 +20,5 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintReportJson = {
-
 	var findings: Array<LintFindingJson>;
 };

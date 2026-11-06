@@ -29,6 +29,7 @@ interface SpanTypeInfoProvider {
  * compute a file's six maps from a single span-parse instead of six.
  */
 typedef SpanTypeInfo = {
+
 	final declaredTypes: Map<Int, String>;
 	final returnTypes: Map<Int, String>;
 	final propertyAccessors: Map<Int, Bool>;
@@ -58,4 +59,5 @@ typedef SpanTypeInfo = {
 	 * the query tree flattens beside it, is never read as one. Like `typeParamConstraints`, only the batched bundle carries it.
 	 */
 	final returnTypeSources: Map<Int, String>;
+
 };

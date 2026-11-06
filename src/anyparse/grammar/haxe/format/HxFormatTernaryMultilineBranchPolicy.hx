@@ -9,9 +9,6 @@ package anyparse.grammar.haxe.format;
  * (the layout it always wrote), the fork's is `inline`.
  */
 enum abstract HxFormatTernaryMultilineBranchPolicy(String) to String {
-
 	final Inline = 'inline';
-
 	final Break = 'break';
-
 }

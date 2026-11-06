@@ -508,6 +508,7 @@ final class PreferInterpolation extends HaxeRule {
 
 /** The resolved seams `PreferInterpolation` reads in both `run` and `fix`. */
 private typedef Seams = {
+
 	final callKind: String;
 	final fieldAccessKind: String;
 	final identKind: String;
@@ -527,10 +528,12 @@ private typedef Seams = {
 	 * wholesale, so it claims no chain inside one and this rule must not defer there.
 	 */
 	final metaKinds: Array<String>;
+
 };
 
 /** The per-file inputs `scan` reads at every node. */
 private typedef ScanCtx = {
+
 	final source: String;
 	final root: QueryNode;
 	final seams: Seams;
@@ -564,6 +567,7 @@ private typedef ScanCtx = {
 
 	/** The calls enclosing the node being scanned, innermost last — what `gate` is asked about. */
 	final calls: Array<CallRef>;
+
 };
 
 /** One flagged call: its span and the replacement text `fix` writes there. */

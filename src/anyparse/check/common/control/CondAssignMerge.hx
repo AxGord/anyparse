@@ -535,6 +535,7 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 
 /** The kinds `CondAssignMerge` reads. */
 private typedef Seams = {
+
 	var ifKeyword: String;
 	var exprStmtKind: String;
 	var assignKind: String;
@@ -545,8 +546,8 @@ private typedef Seams = {
 
 	/** The `throw` kinds, empty when the grammar leaves them unset. */
 	var throwKinds: Array<String>;
-
 	var blockKinds: Array<String>;
+
 }
 
 /** One branch of a region: the offset of its own directive, and the single statement it holds. */
@@ -564,15 +565,18 @@ private typedef Region = {
 
 /** A branch statement split into the text kept once and the r-value kept per branch. */
 private typedef Parts = {
+
 	var prefix: String;
 	var value: String;
 
 	/** Whether the statement EXITS (`return` / `throw`) — the only shape the implicit else is sound for. */
 	var exit: Bool;
+
 }
 
 /** A mergeable region: its span (finding key) and the merged statement, or null text when a comment blocks the fix. */
 private typedef Match = {
+
 	var span: Span;
 
 	/** Whether the arms are EXIT statements — picks the message, and gates the implicit else. */
@@ -580,6 +584,6 @@ private typedef Match = {
 
 	/** Whether the statement AFTER the region was consumed as the implicit else. */
 	var implicitElse: Bool;
-
 	var text: Null<String>;
+
 }

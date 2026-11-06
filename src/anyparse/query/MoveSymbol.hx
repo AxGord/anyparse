@@ -28,10 +28,8 @@ using Lambda;
  * Mirrors `CrossRenameResult`.
  */
 enum MoveResult {
-
 	Ok(changes: Array<MoveChange>, advisory: Null<String>);
 	Err(message: String);
-
 }
 
 /**
@@ -52,6 +50,7 @@ typedef MoveChange = {
  * `unseated` non-empty is a REFUSAL the caller owes — never a silent drop.
  */
 typedef CarriedEdits = {
+
 	var usingEdit: Null<{ span: Span, text: String }>;
 	var importEdit: Null<{ span: Span, text: String }>;
 
@@ -61,8 +60,8 @@ typedef CarriedEdits = {
 	 * import anchor instead, and is then part of `importEdit`.
 	 */
 	var guardedEdits: Array<{ span: Span, text: String }>;
-
 	var unseated: Array<String>;
+
 }
 
 /**
@@ -1511,8 +1510,6 @@ private typedef ImporterRepoint = {
 
 /** Resolution outcome of `resolveMoveTarget`: the target or a refusal. */
 private enum MovePrep {
-
 	POk(target: MoveTarget);
 	PErr(message: String);
-
 }

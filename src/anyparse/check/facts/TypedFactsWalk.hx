@@ -1293,6 +1293,7 @@ private enum FactUse {
 	 * that does not follow the parameter keeps reading an escape.
 	 */
 	Argument(target: String, access: String, index: Int);
+
 }
 
 /**

@@ -13,10 +13,8 @@ using Lambda;
  * without a sentinel-string convention. Mirrors `InlineResult`.
  */
 enum ExtractResult {
-
 	Ok(text: String);
 	Err(message: String);
-
 }
 
 /**

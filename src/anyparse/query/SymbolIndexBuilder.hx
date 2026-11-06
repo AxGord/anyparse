@@ -29,6 +29,7 @@ using Lambda;
  * declarations ignore it (a guarded type is indexed exactly like a plain one).
  */
 private typedef GuardedNode = {
+
 	var node: QueryNode;
 	var guarded: Bool;
 
@@ -43,6 +44,7 @@ private typedef GuardedNode = {
 	 * Which keyword it was is not asked: only an abstract reads it, and over-reading one keeps a statement.
 	 */
 	var ?enumPrefixed: Bool;
+
 };
 
 /**
@@ -52,6 +54,7 @@ private typedef GuardedNode = {
  * Passed as ONE value so a seam added later needs no new parameter.
  */
 typedef MemberSeams = {
+
 	final visibilityKinds: Array<String>;
 	final overrideKind: Null<String>;
 	final staticKind: Null<String>;
@@ -80,7 +83,6 @@ typedef MemberSeams = {
 
 	/** The optional and the rest parameter kinds (`RefShape.optionalParamKind`, `restParamKind`), null for a grammar naming none. */
 	final optionalParamKind: Null<String>;
-
 	final restParamKind: Null<String>;
 
 	/** The annotation that makes a structure field optional (`RefShape.optionalFieldMetaName`), null for a grammar naming none. */
@@ -93,6 +95,7 @@ typedef MemberSeams = {
 	/** The FIELD member kinds (`RefShape.fieldDeclKinds`) — the only members an initializer is recorded for. */
 	final fieldKinds: Array<String>;
 	final annotationKinds: Array<String>;
+
 };
 
 /**

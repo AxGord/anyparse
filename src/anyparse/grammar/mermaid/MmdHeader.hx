@@ -4,10 +4,8 @@ package anyparse.grammar.mermaid;
 @:peg
 enum MmdHeader {
 	Undirected(keyword: MmdUndirectedLit);
-
 	@:kw('flowchart')
 	Flowchart(direction: MmdDirection);
-
 	@:kw('graph')
 	Graph(direction: MmdDirection);
 }

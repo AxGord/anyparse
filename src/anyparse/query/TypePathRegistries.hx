@@ -15,6 +15,7 @@ import haxe.Exception;
  * `type` of every element of `arms`).
  */
 typedef TypePathRegistry = {
+
 	final file: String;
 	final keys: Array<String>;
 
@@ -23,6 +24,7 @@ typedef TypePathRegistry = {
 
 	/** The registry's records also name MEMBERS of those types (`MemberRegistryRename`). */
 	@:optional final members: MemberKeys;
+
 }
 
 /**

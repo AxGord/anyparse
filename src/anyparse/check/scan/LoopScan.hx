@@ -554,6 +554,7 @@ final class LoopScan {
  * this structurally — the scans then take `s.core` and stay independent of which rule calls them.
  */
 typedef LoopSeams = {
+
 	var shape: RefShape;
 	var identKind: String;
 
@@ -583,6 +584,7 @@ typedef LoopSeams = {
 	var writeParentKinds: Array<String>;
 	var closureKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+
 }
 
 /**
@@ -631,6 +633,7 @@ typedef LoopJumpSeams = {
  * scan must not read as a use), the declared-type map, the seams, and the grammar's type reader.
  */
 typedef LoopFileScan = {
+
 	var root: QueryNode;
 	var source: String;
 	var types: Null<Map<Int, String>>;
@@ -639,4 +642,5 @@ typedef LoopFileScan = {
 
 	/** `GrammarPlugin.typeSyntax` — how a gate reads a declared type's arguments. */
 	var typeSyntax: TypeSyntaxReader;
+
 }

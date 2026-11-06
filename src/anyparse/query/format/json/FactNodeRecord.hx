@@ -5,6 +5,7 @@ import anyparse.grammar.json.JValue;
 /** A facts file's node record (`{"k":"node",…}`, written by `TypedFactsMacro`). */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef FactNodeRecord = {
+
 	final id: String;
 	final f: String;
 	final p: Array<Int>;
@@ -37,4 +38,5 @@ typedef FactNodeRecord = {
 	final ?reads: Array<Array<JValue>>;
 	final ?exps: Array<FactExpRecord>;
 	final ?fns: Array<String>;
+
 }

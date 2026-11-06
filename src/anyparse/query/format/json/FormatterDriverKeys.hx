@@ -8,8 +8,6 @@ import anyparse.grammar.json.JValue;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef FormatterDriverKeys = {
-
 	@:optional var disableFormatting: JValue;
-
 	@:optional var excludes: JValue;
 };

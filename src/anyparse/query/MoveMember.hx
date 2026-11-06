@@ -95,6 +95,7 @@ private typedef SiblingScanState = {
  * infos.
  */
 typedef MovePrep = {
+
 	var srcFile: String;
 
 	/**
@@ -132,6 +133,7 @@ typedef MovePrep = {
 
 	/** The grammar's ref shape — every member scan here is branch-aware and needs it. */
 	var shape: RefShape;
+
 }
 
 /** `MoveMember.destinationOf`'s answer: the destination type's file, declaration, text and tree. */
@@ -146,10 +148,8 @@ private typedef ResolvedDest = {
  * `resolveMove`'s answer: the resolved move, or the refusal.
  */
 enum PrepResult {
-
 	POk(prep: MovePrep);
 	PErr(message: String);
-
 }
 
 /**
@@ -157,11 +157,9 @@ enum PrepResult {
  * name to scaffold (`--scaffold`), or a refusal.
  */
 enum ViaResult {
-
 	VOk(name: String);
 	VScaffold(name: String);
 	VErr(message: String);
-
 }
 
 /**
@@ -1638,8 +1636,6 @@ final class MoveMember {
  * caller words that error).
  */
 enum FindTypeResult {
-
 	FOk(hit: Null<{ file: String, decl: TypeDeclMatch }>);
 	FErr(message: String);
-
 }

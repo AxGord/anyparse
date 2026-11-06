@@ -24,6 +24,7 @@ package anyparse.runtime;
  * concept and one nesting level in generated code and consumer sites.
  */
 typedef Trivial<T> = {
+
 	/**
 	 * At least one blank source line preceded the node — or its first leading comment when it has any; the writer
 	 * emits a separator-level blank from it when preserving source grouping.
@@ -88,4 +89,5 @@ typedef Trivial<T> = {
 	 */
 	@:optional var leadingCommentsGlued: Bool;
 	var node: T;
+
 }

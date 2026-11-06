@@ -632,6 +632,7 @@ typedef CompileOutcome = {
 
 /** A recorded compile, every path in it placeheld: its status, streams, and the files it wrote (`text` null: deleted). */
 typedef CompileEntry = {
+
 	var status: Int;
 	var out: String;
 	var err: String;
@@ -639,4 +640,5 @@ typedef CompileEntry = {
 
 	/** The mutant switches (`APQ_MUTANT` ids) the compile ran, a schema build's arms; none for any other source. */
 	var reached: Array<Int>;
+
 }

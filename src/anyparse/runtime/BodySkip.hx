@@ -5,12 +5,10 @@ package anyparse.runtime;
  * (`BodySkip.closeAt`): opens a region, starts its next branch, closes it, or branches nothing.
  */
 enum abstract SkipMarkRole(Int) {
-
 	final Open = 0;
 	final Next = 1;
 	final Close = 2;
 	final Other = 3;
-
 }
 
 /** One conditional-compilation directive of the source `[from, to)` and what it does to the branch structure. */

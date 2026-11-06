@@ -397,6 +397,7 @@ final class SliceStats {
 
 /** One slice landed on the history: its id, the landing commit and its base, its branch's range, and its markers. */
 typedef Landing = {
+
 	var id: String;
 	var commit: String;
 	var base: String;
@@ -406,10 +407,10 @@ typedef Landing = {
 
 	/** When the landing was committed and when the slice's first commit was authored, in seconds since the epoch. */
 	var landed: Float;
-
 	var started: Float;
 	var rounds: Null<Int>;
 	var tokens: Null<Int>;
+
 }
 
 /** The lines a slice added and deleted under one root. */
@@ -432,6 +433,7 @@ typedef ModuleCounts = {
 
 /** The reading of one landed slice. */
 typedef SliceRow = {
+
 	var landing: Landing;
 	var hours: Float;
 	var src: LineCount;
@@ -439,19 +441,19 @@ typedef SliceRow = {
 
 	/** The `.hx` modules the slice added, and those it edited. */
 	var fresh: Int;
-
 	var edited: Int;
 	var edges: Null<EdgeShare>;
 
 	/** How the duplicate-code findings moved, added minus removed. */
 	var clones: Null<Int>;
+
 }
 
 /** The slices landed in one week, summed: hours as their median, rounds as their mean, the rest as totals. */
 typedef WeekRow = {
+
 	/** The Monday the week starts on. */
 	var week: String;
-
 	var slices: Int;
 	var hours: Float;
 	var rounds: Null<Float>;
@@ -462,4 +464,5 @@ typedef WeekRow = {
 	var edited: Int;
 	var edges: Null<EdgeShare>;
 	var clones: Null<Int>;
+
 }

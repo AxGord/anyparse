@@ -1577,6 +1577,7 @@ typedef ReflectedMembers = {
 
 /** An implicitly-called member the index declares, and the file declaring it. */
 private typedef ImplicitCandidate = {
+
 	var type: String;
 	var member: String;
 	var file: String;
@@ -1588,6 +1589,7 @@ private typedef ImplicitCandidate = {
 	/** Whether the declaring type is an abstract (its members are static calls) / an extern (target code may make one). */
 	var isAbstract: Bool;
 	var isExtern: Bool;
+
 }
 
 /** Which implicit channel runs a member — the family of `ImplicitSites.SiteFamily` it answers, or none in particular. */

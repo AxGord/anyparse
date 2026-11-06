@@ -495,6 +495,7 @@ private typedef Group = {
 
 /** Per-file resolved constants threaded through the recursive walk. */
 private typedef Ctx = {
+
 	var fieldAccessKind: String;
 	var callKind: String;
 	var candidateKinds: Array<String>;
@@ -516,6 +517,7 @@ private typedef Ctx = {
 
 	/** The file's writes and function spans once a group has asked for them (`localsOf`). */
 	var locals: Null<UnchangedLocal>;
+
 }
 
 /**

@@ -579,6 +579,7 @@ private typedef Candidate = {
 
 	/** Why the site is report-only, or null when it is fixable. */
 	final blocker: Null<String>;
+
 };
 
 /** The resolved seams `RedundantToString` reads in both `run` and `fix`. */
@@ -586,7 +587,6 @@ private typedef Seams = {
 
 	/** The whole shape, for the `TypeResolver` calls that take it directly. */
 	final shape: RefShape;
-
 	final callKind: String;
 	final fieldAccessKind: String;
 	final identKind: String;
@@ -617,10 +617,12 @@ private typedef Seams = {
 
 	/** Subtrees the walk does not descend into (macro reification). */
 	final opaqueKinds: Array<String>;
+
 };
 
 /** The per-file inputs every collector function reads — one struct instead of a six-parameter tuple. */
 private typedef Ctx = {
+
 	final root: QueryNode;
 	final source: String;
 	final seams: Seams;
@@ -640,6 +642,7 @@ private typedef Ctx = {
 
 	/** The compiler's facts, asked by `fix` for a receiver type the resolution scope cannot place; null in `run`. */
 	final facts: Null<FactsTypeOracle>;
+
 };
 
 /** What a receiver resolves to — the two facts every gate downstream needs. */
@@ -653,4 +656,5 @@ private typedef ReceiverInfo = {
 
 	/** Whether the receiver is provably non-null. */
 	final nonNull: Bool;
+
 };

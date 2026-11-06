@@ -56,34 +56,19 @@ import anyparse.grammar.json.JValue;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef ApqLintConfig = {
-
 	@:optional var inherit: Bool;
-
 	@:optional var rules: Map<String, JValue>;
-
 	@:optional var categories: Map<String, JValue>;
-
 	@:optional var compilerOracle: JValue;
-
 	@:optional var compilerOracleServer: Bool;
-
 	@:optional var reachConfigurationsComplete: Bool;
-
 	@:optional var reflectiveClasses: Array<String>;
-
 	@:optional var reflectiveMethodHolders: Array<String>;
-
 	@:optional var resolutionRoots: Array<String>;
-
 	@:optional var resolutionLibs: Array<String>;
-
 	@:optional var resolutionStd: Bool;
-
 	@:optional var languageVersion: String;
-
 	@:optional var frameworks: Array<JValue>;
-
 	@:optional var reportSummaryThreshold: Int;
-
 	@:optional var ownedTypes: Array<JValue>;
 };

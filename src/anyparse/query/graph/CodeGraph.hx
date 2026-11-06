@@ -30,7 +30,6 @@ enum abstract GraphLevel(String) to String {
  * joins the file that writes it to the module or package it names.
  */
 enum abstract GraphEdgeKind(String) to String {
-
 	final Call = 'call';
 	final Ref = 'ref';
 	final New = 'new';
@@ -38,7 +37,6 @@ enum abstract GraphEdgeKind(String) to String {
 	final Accessor = 'accessor';
 	final Contains = 'contains';
 	final Import = 'import';
-
 }
 
 /**
@@ -88,6 +86,7 @@ typedef GraphNode = {
 
 	/** How the node differs between two versions, in a graph comparing them; absent everywhere else and when it does not. */
 	var ?change: GraphChange;
+
 }
 
 /** One edge per (from, to, kind): `weight` counts the sites it stands for. */
@@ -103,6 +102,7 @@ typedef GraphEdge = {
 
 	/** The weight the earlier version gives a `Changed` edge; `weight` is the later version's. */
 	var ?before: Int;
+
 }
 
 /**

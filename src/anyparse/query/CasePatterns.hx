@@ -434,6 +434,7 @@ typedef SubjectProof = {
 
 	/** The type is dynamic, and so is every element and field of it. */
 	final isDynamic: Bool;
+
 };
 
 /** One name a pattern may bind. */
@@ -455,14 +456,17 @@ typedef PatternIdent = {
 
 	/** The sub-pattern of an `x = p` capture, whose start ends the text that unbinds `x`; null otherwise. */
 	final assigned: Null<QueryNode>;
+
 };
 
 /** The result of `CasePatterns.scan`. */
 typedef PatternScan = {
+
 	final idents: Array<PatternIdent>;
 
 	/** Whether every pattern stayed inside the whitelist; when false, a name the scan missed may still bind. */
 	final modelled: Bool;
+
 };
 
 /** The mutable accumulator of one `CasePatterns.scan`. */

@@ -664,14 +664,12 @@ final class OccurrenceScan {
  * is not `CommentTrivia` but `DirectiveComment`: it addresses the TOOL, and the tool must obey.
  */
 enum abstract OccurrenceClass(Int) {
-
 	final ActiveCode = 0;
 	final ConditionalRaw = 1;
 	final CommentTrivia = 2;
 	final StringLiteral = 3;
 	final DirectiveComment = 4;
 	final StringWord = 5;
-
 }
 
 /**

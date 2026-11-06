@@ -48,7 +48,7 @@ typedef HxAbstractDecl = {
 	@:fmt(leftCurly, emptyCurlyBreak,
 		beginEndType('abstractBeginType', 'abstractEndType', '_inEnumAbstract', 'enumAbstractBeginType', 'enumAbstractEndType'),
 		beginEndTypeIfDoc('', '', '_inEnumAbstract', 'enumAbstractBeginTypeIfDocComments', 'enumAbstractEndTypeIfDocComments'),
-		afterFieldsWithDocComments,
+		afterFieldsWithDocComments('afterFieldsWithDocComments', '_inEnumAbstract', 'enumAbstractAfterFieldsWithDocComments'),
 		existingBetweenFields('abstractExistingBetweenFields', '_inEnumAbstract', 'enumAbstractExistingBetweenFields'),
 		beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading,
 		blankBeforeOrphanLineCommentTrail,

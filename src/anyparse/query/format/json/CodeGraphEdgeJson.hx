@@ -8,11 +8,8 @@ package anyparse.query.format.json;
 typedef CodeGraphEdgeJson = {
 
 	var from: String;
-
 	var to: String;
-
 	var kind: String;
-
 	var weight: Int;
 
 	/** Present and true when an edge runs back from `to` to `from`: the two ends depend on each other. */
@@ -23,4 +20,5 @@ typedef CodeGraphEdgeJson = {
 
 	/** The earlier version's weight of a `changed` edge; `weight` is the later one's. */
 	@:optional var before: Null<Int>;
+
 };

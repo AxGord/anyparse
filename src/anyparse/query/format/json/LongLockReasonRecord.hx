@@ -10,24 +10,14 @@ import anyparse.grammar.json.JValue;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LongLockReasonRecord = {
-
 	var file: String;
-
 	@:optional @:writeNull var line: Null<Int>;
-
 	@:optional @:writeNull var col: Null<Int>;
-
 	@:key('function') var holder: String;
-
 	var kind: String;
-
 	@:optional var call: Null<String>;
-
 	@:optional var chain: Null<Array<String>>;
-
 	@:optional var via: Null<JValue>;
-
 	@:optional var errorPath: Null<String>;
-
 	@:optional var unresolved: Null<Array<BlindCallRecord>>;
 };

@@ -8,9 +8,9 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef GateRecord = {
+
 	/** The gated tip's tree id (`git rev-parse HEAD^{tree}`), the one thing a land compares its merge with. */
 	var tree: String;
-
 	var passed: Bool;
 
 	/** The compiler that built the binaries the rows ran (`BaseEngine.toolchain`). */
@@ -30,7 +30,6 @@ typedef GateRecord = {
 
 	/** The gate rows that passed, by their gate names. */
 	var rows: Array<String>;
-
 	var tests: Int;
 	var assertions: Int;
 
@@ -39,4 +38,5 @@ typedef GateRecord = {
 
 	/** The corpus snapshot the gate's suite left, copied into the gate's logs, or null when the suite ran no corpus. */
 	@:optional var sweep: Null<String>;
+
 }

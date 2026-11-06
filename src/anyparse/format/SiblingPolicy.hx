@@ -8,9 +8,6 @@ package anyparse.format;
  * - `AnyBreak` — a sibling placed below its head, by width or by shape, moves all of them.
  */
 enum abstract SiblingPolicy(Int) from Int to Int {
-
 	final Off = 0;
-
 	final AnyBreak = 1;
-
 }

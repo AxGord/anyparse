@@ -747,6 +747,7 @@ final class SliceGate {
 
 /** What the threads of a slice gate's branches depend on (`SliceGate.demandOf`). */
 typedef GateDemand = {
+
 	/** Whether the run is a `--baseline` one. */
 	var recording: Bool;
 
@@ -755,7 +756,6 @@ typedef GateDemand = {
 
 	/** Whether the slice touched a `.hx` file, which the lint row lints at the base and now. */
 	var touchedHx: Bool;
-
 	var jvmMoved: Bool;
 
 	/** Whether the engine or a probe kit moved, so the kits row runs (`KitsRow.reached`). */
@@ -763,4 +763,5 @@ typedef GateDemand = {
 
 	/** The infra trees of the baseline when rule code moved, or null when INFRA gate 4 does not run. */
 	var ruleInfra: Null<Int>;
+
 }

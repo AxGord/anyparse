@@ -7,16 +7,10 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintScoreVerdictCounts = {
-
 	@:key('real-long') var realLong: Int;
-
 	@:key('real-short') var realShort: Int;
-
 	var rare: Int;
-
 	@:key('false') var falseVerdict: Int;
-
 	@:key('dup-of') var dupOf: Int;
-
 	var unknown: Int;
 };

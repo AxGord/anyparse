@@ -7,6 +7,7 @@ import anyparse.query.CallGraph;
  * One `boundedRepeats` entry, resolved: the one repetition of `member` (of its call into `calls`, when named) runs at most `max` times.
  */
 typedef BoundedRepeat = {
+
 	/** The `site` as written, naming the entry in a notice. */
 	final site: String;
 
@@ -18,11 +19,11 @@ typedef BoundedRepeat = {
 
 	/** The header of the loop it bounds (`Loops.label`, `for (id in update)`); null: whichever one repetition is there. */
 	final loop: Null<String>;
-
 	final max: Float;
 
 	/** The measured worst cost of one repetition — every short sink call it makes — in milliseconds. */
 	final costMs: Float;
+
 }
 
 /**

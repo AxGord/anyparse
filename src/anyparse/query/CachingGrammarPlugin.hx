@@ -980,6 +980,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
  * pass per edited file — can never accumulate there.
  */
 typedef ResolutionSources = {
+
 	final report: Array<{ file: String, source: String }>;
 	final projectRoots: Array<{ file: String, source: String }>;
 	final library: LibrarySources;
@@ -1003,6 +1004,7 @@ typedef ResolutionSources = {
 	 * matched nothing may be where project files live. Absent reads as false.
 	 */
 	@:optional final rootsAllMatched: Bool;
+
 };
 
 /**
@@ -1045,6 +1047,7 @@ abstract LibrarySources(Array<{ file: String, source: String }>) {
  * sources (`unused-private`'s zero-occurrence scan) asks for the declared one.
  */
 typedef ResolutionScope = {
+
 	final declared: Bool;
 	final sources: () -> ResolutionSources;
 
@@ -1091,4 +1094,5 @@ typedef ResolutionScope = {
 	 * the tree as it is when first asked, as it always did. Absent with `builds`.
 	 */
 	@:optional final buildsSettled: () -> Void;
+
 };

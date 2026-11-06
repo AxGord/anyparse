@@ -13,6 +13,7 @@ import sys.io.File;
  */
 @:nullSafety(Strict)
 typedef PatchOpts = {
+
 	var lang: String;
 	var write: Bool;
 	var reformat: Bool;
@@ -33,6 +34,7 @@ typedef PatchOpts = {
 	var batch: Null<String>;
 	// Non-null = parsing hit a terminal case; the caller returns it immediately.
 	var errExit: Null<Int>;
+
 };
 
 /**

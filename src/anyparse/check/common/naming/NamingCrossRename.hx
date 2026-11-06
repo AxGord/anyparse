@@ -340,6 +340,7 @@ final class NamingCrossRename {
 
 /** What every gate of one `edits` call reads, gathered once. */
 private typedef Context = {
+
 	final files: Array<{ file: String, source: String }>;
 
 	/** Every project source, the run's own files at their current text. */
@@ -353,4 +354,5 @@ private typedef Context = {
 
 	/** The reflection surface over the run's files and the resolution sources. */
 	final surface: ReflectionSurface;
+
 };

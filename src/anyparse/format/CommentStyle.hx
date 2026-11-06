@@ -30,10 +30,8 @@ package anyparse.format;
  *   column, so the close is flush and a blank interior line emits nothing.
  */
 enum abstract CommentStyle(Int) from Int to Int {
-
 	var Verbatim = 0;
 	var Plain = 1;
 	var Javadoc = 2;
 	var JavadocNoStars = 3;
-
 }

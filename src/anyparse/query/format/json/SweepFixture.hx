@@ -22,8 +22,6 @@ package anyparse.query.format.json;
  * non-crashing degradation than before.
  */
 @:peg typedef SweepFixture = {
-
 	@:optional var path: String;
-
 	@:optional var status: String;
 };

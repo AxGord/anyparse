@@ -203,6 +203,7 @@ final class GateReuse {
 
 /** What a battery run is, compared with a `GateRecord`. */
 typedef GateFacts = {
+
 	var tree: String;
 	var toolchain: String;
 	var node: String;
@@ -210,6 +211,7 @@ typedef GateFacts = {
 
 	/** Whether the battery's suite skips verifying the shard plan, as the gate's does. */
 	var quick: Bool;
+
 }
 
 /** A record a battery was offered and the battery rows it stands for. */

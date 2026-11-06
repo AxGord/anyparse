@@ -20,6 +20,7 @@ using Lambda;
  * values that never reach the generator.
  */
 typedef FormatInfo = {
+
 	/** Characters to consume when `@:ws` is active on the schema. */
 	whitespace: String,
 
@@ -136,6 +137,7 @@ typedef FormatInfo = {
 
 	/** The compile defines under which a compact writer goes through `nativeDoor`'s writer instead of a buffer. */
 	nativeWriteTargets: Array<String>
+
 };
 
 /**
@@ -147,6 +149,7 @@ typedef FormatInfo = {
  * multiple lines.
  */
 typedef CommentPattern = {
+
 	open: String,
 	close: String,
 	lineTerminated: Bool,
@@ -157,6 +160,7 @@ typedef CommentPattern = {
 	 * for the next element's leading trivia (`Codegen.trailingAttemptBlock`). Always null on a line pattern.
 	 */
 	docOpen: Null<String>
+
 };
 
 /**

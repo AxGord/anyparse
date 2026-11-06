@@ -128,10 +128,8 @@ private typedef RouteWidths = {
 	replacement) or broken (line breaks become real newlines).
 **/
 private enum Mode {
-
 	MFlat;
 	MBreak;
-
 }
 
 /**
@@ -158,11 +156,9 @@ private enum Mode {
 	  to honour source `(<chain>` vs `(\n<chain>` distinctions).
 **/
 private enum LastEmit {
-
 	Other;
 	Hardline;
 	OpenDelim;
-
 }
 
 /**

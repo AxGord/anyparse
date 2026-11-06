@@ -1888,6 +1888,46 @@
 			"find": "stranded.push(e);",
 			"replace": "{}",
 			"note": "a case value or an inline constant holding a trigraph is no longer answered, so guard lets it reach the C++ compiler silently"
+		},
+		{
+			"name": "M-AFTER-DOC-OWN-KNOB-UNREAD",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "afterDocPolicy",
+			"find": "final own: Expr = knobOr(knobs[0], ignore);",
+			"replace": "final own: Expr = ignore;",
+			"note": "a Star stops reading the knob its `@:fmt(afterFieldsWithDocComments(...))` names first, so `enumEmptyLines.afterFieldsWithDocComments` does nothing and an enum abstract without its own key no longer falls back to the global key"
+		},
+		{
+			"name": "M-AFTER-DOC-ALT-UNREAD",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "afterDocPolicy",
+			"find": "final alt: Expr = knobOr(knobs[2], own);",
+			"replace": "final alt: Expr = own;",
+			"note": "the knob a flag switches to is never read, so `enumAbstractEmptyLines.afterFieldsWithDocComments` gives way to the global key and `typedefEmptyLines.afterFieldsWithDocComments` does nothing"
+		},
+		{
+			"name": "M-AFTER-DOC-FLAG-IGNORED",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "afterDocPolicy",
+			"find": "return macro ($flag ? $alt : $own);",
+			"replace": "return alt;",
+			"note": "the switching flag is dropped, so an anon type outside a typedef body reads `typedefEmptyLines.afterFieldsWithDocComments`"
+		},
+		{
+			"name": "M-AFTER-DOC-IGNORE-FALLBACK",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "afterDocPolicy",
+			"find": "final ignore: Expr = macro anyparse.format.CommentEmptyLinesPolicy.Ignore;",
+			"replace": "final ignore: Expr = macro opt.afterFieldsWithDocComments;",
+			"note": "an unset per-kind knob falls back to the global key, so an enum or typedef body with no key of its own gains a blank after a doc-commented member"
+		},
+		{
+			"name": "M-TYPEDEF-AFTER-DOC-OFF",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepBlankBeforeExpr",
+			"find": "final prevDocExpr: Expr = afterDocPolicy != null ? macro _prevHadDocComment : macro false;",
+			"replace": "final prevDocExpr: Expr = macro false;",
+			"note": "a sep-Star never reads its previous element as doc-led, so `typedefEmptyLines.afterFieldsWithDocComments` does nothing"
 		}
 	]
 }

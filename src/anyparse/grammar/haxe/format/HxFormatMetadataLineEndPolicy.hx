@@ -12,13 +12,8 @@ package anyparse.grammar.haxe.format;
  * - `"forceAfterLast"` → `MetadataLineEndPolicy.ForceAfterLast`
  */
 enum abstract HxFormatMetadataLineEndPolicy(String) to String {
-
 	final None = 'none';
-
 	final After = 'after';
-
 	final AfterLast = 'afterLast';
-
 	final ForceAfterLast = 'forceAfterLast';
-
 }

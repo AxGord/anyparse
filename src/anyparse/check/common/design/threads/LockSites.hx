@@ -16,6 +16,7 @@ typedef LockPair = {
 
 /** One call that takes a lock, and what the function it sits in does while holding it. */
 typedef LockAcquire = {
+
 	final edge: CallEdge;
 	final pair: LockPair;
 
@@ -52,6 +53,7 @@ typedef LockAcquire = {
 
 	/** For a hold a multi-lock helper's call opens, the take inside the helper that `edge` runs; null for any other hold. */
 	final inner: Null<CallEdge>;
+
 }
 
 /** A call the graph resolves to no target, by the name its callee is written with, at its site. */
@@ -77,12 +79,14 @@ typedef CrossingRelease = {
  * a multi-lock helper that gives — the give inside the helper it runs.
  */
 typedef LockGive = {
+
 	final edge: CallEdge;
 	final lock: Null<String>;
 	final inner: Null<CallEdge>;
 
 	/** Whether it is a lock wrapper's own give, which gives back at each call of the wrapper instead. */
 	final own: Bool;
+
 }
 
 /** One call that takes or gives back the lock of `pair`: a call of the pair's own member, or of a lock wrapper. */

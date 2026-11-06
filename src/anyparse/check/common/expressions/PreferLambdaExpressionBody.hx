@@ -872,6 +872,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 
 /** The kinds `PreferLambdaExpressionBody` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	var arrowKinds: Array<String>;
 	var blockKinds: Array<String>;
 	var valueReturnKinds: Array<String>;
@@ -898,6 +899,7 @@ private typedef Seams = {
 
 	/** Statement kinds whose span covers a trailing terminator the emitted text must not carry. */
 	var terminatedKinds: Array<String>;
+
 }
 
 /**

@@ -424,9 +424,9 @@ final class JoinReturn extends RuleBase {
 
 /** The kinds `JoinReturn` reads. */
 private typedef Seams = {
+
 	/** `GrammarPlugin.typeSyntax` — how an ascription is read. */
 	var typeSyntax: TypeSyntaxReader;
-
 	var localDeclKinds: Array<String>;
 	var returnKind: String;
 	var exprStmtKind: Null<String>;
@@ -438,6 +438,7 @@ private typedef Seams = {
 	var blockKinds: Array<String>;
 	var newExprKind: Null<String>;
 	var shape: RefShape;
+
 }
 
 /** A joinable pair: the declaration span (finding key), the replaced span, and the single-return replacement text. */

@@ -402,6 +402,7 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 
 /** The grammar seams the check reads. */
 private typedef Seams = {
+
 	var shape: RefShape;
 	var loopKinds: Array<String>;
 	var valueBinderKinds: Array<String>;
@@ -413,10 +414,12 @@ private typedef Seams = {
 	/** The case-branch kind and the kind each of its patterns projects as; either unset leaves no pattern exempt. */
 	var caseBranchKind: Null<String>;
 	var plainPatternKind: Null<String>;
+
 };
 
 /** The per-file facts every gate reads. */
 private typedef FileCtx = {
+
 	var root: QueryNode;
 	var source: String;
 	var file: String;
@@ -440,10 +443,12 @@ private typedef FileCtx = {
 	var types: () -> Map<Int, String>;
 	var importMap: () -> Map<String, String>;
 	var claimer: () -> Null<(decl:QueryNode, forNode:QueryNode, scope:QueryNode) -> Bool>;
+
 };
 
 /** One unread binder: the span reported and the edit that unbinds it. */
 private typedef Candidate = {
+
 	var span: Span;
 	var message: String;
 	var edit: FixEdit;
@@ -453,6 +458,7 @@ private typedef Candidate = {
 
 	/** The loop a map key's drop asks `MemberReach` about before it is made; null for any other finding. */
 	var keyed: Null<KeyedLoop>;
+
 };
 
 /** A key-value loop over a map: its iterable and the body whose reach decides whether the key may go. */

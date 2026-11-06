@@ -28,14 +28,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxAbstractClause {
-
 	@:kw('from')
 	FromClause(type: HxType);
-
 	@:kw('to')
 	ToClause(type: HxType);
-
 	@:kw('#if') @:trail('#end')
 	Conditional(inner: HxConditionalAbstractClause);
-
 }

@@ -30,9 +30,7 @@ package anyparse.format;
 enum abstract ArrayMatrixWrap(Int) from Int to Int {
 
 	final NoMatrixWrap = 0;
-
 	final MatrixWrapNoAlign = 1;
-
 	final MatrixWrapWithAlign = 2;
 
 	/**

@@ -689,6 +689,7 @@ final class MutationArm {
 
 /** One arm's cut as its record declares it. */
 enum ArmCut {
+
 	/** `find`/`replace`: the `hxq patch` payload. */
 	Find(type: String, method: String, kind: String, payload: String);
 
@@ -697,6 +698,7 @@ enum ArmCut {
 
 	/** An arm the registry does not hold, or whose pairs do not pair up. */
 	Unrenderable(why: String);
+
 }
 
 /** Where one arm cuts, and why it could not be rendered once that is known. */
@@ -722,13 +724,13 @@ typedef PinTables = {
 
 /** One `dev mutation-arm` run. */
 typedef ArmJob = {
+
 	var repo: String;
 	var registry: String;
 	var names: Array<String>;
 
 	/** The engine that renders the cuts, and the runner whose registry names the pins. */
 	var apq: String;
-
 	var test: String;
 	var jobs: Null<String>;
 	var fast: Bool;
@@ -740,6 +742,7 @@ typedef ArmJob = {
 
 	/** The commit the cuts are rendered against and every slot is made from. */
 	var base: String;
+
 }
 
 /** The engine and the runner a run reads the unmutated tree through. */

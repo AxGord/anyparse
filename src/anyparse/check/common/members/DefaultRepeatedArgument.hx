@@ -589,6 +589,7 @@ private typedef Parsed = {
 
 /** One function declaration the rule can see, and what its signature allows. */
 private typedef MemberInfo = {
+
 	final file: String;
 	final owner: String;
 	final name: String;
@@ -597,6 +598,7 @@ private typedef MemberInfo = {
 
 	/** False when the declaration's own shape forbids a default — see the type doc's gate list. */
 	final plain: Bool;
+
 };
 
 /** One agreeing call site's deletion span. */
@@ -626,9 +628,9 @@ private typedef Scope = {
 
 /** Every seam `DefaultRepeatedArgument` reads, resolved once per run. */
 private typedef Seams = {
+
 	/** The kinds of an expression that is never `null` (`provenNonNull`). */
 	final nonNullKinds: Array<String>;
-
 	final nullLiteralKind: Null<String>;
 	final parenKind: Null<String>;
 	final negationKind: Null<String>;
@@ -658,4 +660,5 @@ private typedef Seams = {
 
 	/** The literal test an `inline` constant's initializer passes to be spelled as a default; null when unset. */
 	final constantFields: Null<ConstantFieldSeams>;
+
 };

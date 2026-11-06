@@ -316,6 +316,7 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 
 /** The resolved seams `InvertNegatedIfElse` reads in both `run` and `fix`. */
 private typedef Seams = {
+
 	final ifKinds: Array<String>;
 	final ternaryKind: Null<String>;
 	final ifExpressionKinds: Array<String>;
@@ -328,19 +329,23 @@ private typedef Seams = {
 
 	/** Read by `RegionTerminator` for the region kind and its terminator. */
 	final shape: RefShape;
+
 };
 
 /** One file's scan: the run seams and that file's negation site. */
 private typedef Scan = {
+
 	final seams: Seams;
 	final site: InversionSite;
 
 	/** The file's lexical regions, lexed on first demand (`ElementSpan.trailingTrimmedSpan`). */
 	final regions: () -> Array<LexRegion>;
+
 };
 
 /** What a value form is to this rule. */
 private enum ValueVerdict {
+
 	Skip;
 
 	/** Rewritten as `swap` reads it. */
@@ -348,4 +353,5 @@ private enum ValueVerdict {
 
 	/** Reported, not rewritten: a comment would be dropped or left describing the other branch. */
 	CommentBlocked(swap: Swap);
+
 }

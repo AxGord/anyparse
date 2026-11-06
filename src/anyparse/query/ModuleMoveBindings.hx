@@ -20,6 +20,7 @@ typedef BindingProbe = {
 
 /** One simple name whose meaning a relocation changed in one file. */
 typedef BindingDrift = {
+
 	final file: String;
 	final name: String;
 	final before: String;
@@ -27,22 +28,24 @@ typedef BindingDrift = {
 
 	/** The import path that gives the name its old meaning back (`pkg.Mod` / `pkg.Mod.Sub`), or null when none can. */
 	final repair: Null<String>;
+
 }
 
 /** One qualified sub-type spelling (`Mod.Sub`) whose module-path reading a relocation changed in one file. */
 typedef QualifiedDrift = {
+
 	final file: String;
 	final spelling: String;
 
 	/** Where the spelling's first name starts in the file's text after the relocation. */
 	final at: Int;
-
 	final head: String;
 	final before: String;
 	final after: String;
 
 	/** The module path that, written in place of the first name, reads as before (`pkg.Mod`), or null when none does. */
 	final qualified: Null<String>;
+
 }
 
 /** One qualified sub-type spelling written in code: the module name it starts with, the sub-type, and where it starts. */

@@ -26,6 +26,7 @@ import anyparse.runtime.SameItems;
  * exists-guard model rather than two.
  */
 typedef NullFacts = {
+
 	var nonNull: String -> Bool;
 
 	/**
@@ -39,6 +40,7 @@ typedef NullFacts = {
 	var isNull: String -> Bool;
 	var isMaybeNull: String -> Bool;
 	var indexPresent: QueryNode -> Bool;
+
 }
 
 /**
@@ -57,6 +59,7 @@ typedef NullFlowVisit = {
  * Every transfer keeps the three sets pairwise disjoint (marking one polarity clears the others).
  */
 private typedef FlowState = {
+
 	var nonNull: Array<String>;
 
 	/** The `nonNull` names some path proves only through a narrowing the compiler cannot see (see `NullFacts.nonNullVisible`). */
@@ -66,6 +69,7 @@ private typedef FlowState = {
 	var predicates: Array<PredicateFact>;
 	var aliases: Array<AliasPair>;
 	var present: Array<ExistsFact>;
+
 }
 
 /**
@@ -126,6 +130,7 @@ private typedef NonNullPredicate = {
  * Built once per analyzed function body.
  */
 private typedef FlowCtx = {
+
 	var identKind: String;
 	var assignKind: Null<String>;
 	var notEqKind: Null<String>;
@@ -224,8 +229,8 @@ private typedef FlowCtx = {
 
 	/** The last state a recording walk froze, and the facts built over it — handed out again while the state is unchanged. */
 	var frozen: Null<FlowState>;
-
 	var frozenFacts: Null<NullFacts>;
+
 }
 
 /**

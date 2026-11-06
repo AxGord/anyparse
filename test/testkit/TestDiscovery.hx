@@ -19,6 +19,7 @@ using Lambda;
  * pins both so a new one has to be noticed.
  */
 typedef TestCensus = {
+
 	/** Classes that will be registered, sorted by fully-qualified name. */
 	registered: Array<ClassType>,
 
@@ -39,6 +40,7 @@ typedef TestCensus = {
 
 	/** Every fixture whose doc-comment prose claims a role no annotation records. */
 	claims: Array<String>
+
 };
 
 /**

@@ -576,6 +576,7 @@ typedef IteratorElement = {
  * `memberCouldUnify` then does not apply and only the positive proof runs.
  */
 typedef StructureMember = {
+
 	/** The member's name. */
 	var name: String;
 
@@ -591,6 +592,7 @@ typedef StructureMember = {
 	 * structure's), where a mutable one asks for the same type.
 	 */
 	var readOnly: Bool;
+
 };
 
 /** A written type as a structure-member unification compares it (`StructuralTypes.comparableTypeOf`). */

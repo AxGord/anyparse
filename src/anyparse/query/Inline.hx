@@ -16,10 +16,8 @@ using Lambda;
  * sentinel-string convention. Mirrors `RenameResult`.
  */
 enum InlineResult {
-
 	Ok(text: String);
 	Err(message: String);
-
 }
 
 /**
@@ -363,6 +361,7 @@ final class Inline {
  * to substitute.
  */
 private typedef InlineTarget = {
+
 	final name: String;
 	final decl: QueryNode;
 	final initializer: QueryNode;
@@ -371,6 +370,7 @@ private typedef InlineTarget = {
 	/** Every hit of every name the initializer reads, resolved once over the original tree. */
 	final initHits: Map<String, Array<RefHit>>;
 	final reads: Array<RefHit>;
+
 };
 
 /** An identifier of an initializer that names a binding, with the span it is written at. */
@@ -381,8 +381,6 @@ private typedef NamedIdent = {
 
 /** Resolution outcome of `resolveInlineTarget`: the target or a refusal. */
 private enum InlinePrep {
-
 	POk(target: InlineTarget);
 	PErr(message: String);
-
 }

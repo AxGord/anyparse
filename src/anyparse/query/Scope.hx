@@ -159,6 +159,7 @@ final class ScopeFrame {
  * itself so it can recurse. `Refs.visibleFrom` derives the offset per declaration kind.
  */
 typedef ScopeBinding = {
+
 	/**
 	 * The node that DECLARES the binding — the very node `Refs` bound the name from, not one
 	 * re-found later by span arithmetic. A consumer asking what a reference actually binds to
@@ -166,7 +167,7 @@ typedef ScopeBinding = {
 	 * `TypeResolver.bindsToValueDeclaration` is the one that does.
 	 */
 	final node: QueryNode;
-
 	final span: Span;
 	final visibleFrom: Int;
+
 };

@@ -16,6 +16,7 @@ using Lambda;
  * `values` decides a comparison (`haxe_ver >= 4.2`) the way the compiler does. `compiled` is every file whose code it runs.
  */
 typedef ReachConfiguration = {
+
 	var name: String;
 	var defined: Array<String>;
 	var everDefined: Array<String>;
@@ -38,6 +39,7 @@ typedef ReachConfiguration = {
 	 * from a compile's transcript.
 	 */
 	var ?parsed: Array<String>;
+
 }
 
 /**
@@ -45,6 +47,7 @@ typedef ReachConfiguration = {
  * that can run at all, the per-target standard-library copies included.
  */
 typedef ReachBuilds = {
+
 	var configurations: Array<ReachConfiguration>;
 	var library: Array<{ file: String, source: String }>;
 
@@ -61,6 +64,7 @@ typedef ReachBuilds = {
 	 * such a read may obtain any method.
 	 */
 	var ?reflectiveMethodHolders: Array<String>;
+
 }
 
 /**

@@ -21,9 +21,6 @@ package anyparse.format;
  * curly-brace languages (AS3, C-family, …) can reuse the same shape.
  */
 enum abstract EmptyCurly(Int) from Int to Int {
-
 	final Same = 0;
-
 	final Break = 1;
-
 }

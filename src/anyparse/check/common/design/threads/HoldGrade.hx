@@ -8,6 +8,7 @@ import anyparse.query.SourceText;
 
 /** The calls a hold finding names, the taint that found them, and what its message adds (`HoldGrade.grade`). */
 typedef GradedHold = {
+
 	final calls: Array<{ edge: CallEdge, path: Array<String> }>;
 	final taint: LockTaint;
 	final note: String;
@@ -17,10 +18,12 @@ typedef GradedHold = {
 
 	/** Whether it is info because a finding (a) warning names its every long call: a main-only hold's own work. */
 	final ?elsewhere: Bool;
+
 }
 
 /** One hold finding (b) judges: its lock, whether it makes that lock long, and, once warned, what it was judged by. */
 typedef FoldHold = {
+
 	final hold: LockAcquire;
 
 	/** The lock object, or the pair's take member for a lock no member names. */
@@ -34,7 +37,6 @@ typedef FoldHold = {
 
 	/** The long calls the finding names, the taint that found them, and the lock re-held there; empty for no finding. */
 	final calls: Array<CallEdge>;
-
 	final taint: Null<LockTaint>;
 	final held: Null<String>;
 
@@ -46,8 +48,8 @@ typedef FoldHold = {
 	 * hold around it (`ThreadSafety.nestHolds`, `foldEnclosed`), or a main-only hold whose work a finding (a) warns of.
 	 */
 	final madeWarning: Bool;
-
 	final elsewhere: Bool;
+
 }
 
 /**
@@ -55,6 +57,7 @@ typedef FoldHold = {
  * a hold only the main thread runs), the long ones over the normal paths (`normal`), and where those part (`errors`).
  */
 typedef HoldJudges = {
+
 	final plain: LockTaint;
 	final long: LockTaint;
 	final normal: LockTaint;
@@ -62,6 +65,7 @@ typedef HoldJudges = {
 
 	/** By `MainSinkReport.siteKey`, the finding (a) warning that reports each main-thread sink call. */
 	final reported: Map<String, Violation>;
+
 }
 
 /**

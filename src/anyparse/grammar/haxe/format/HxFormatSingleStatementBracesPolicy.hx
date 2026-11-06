@@ -21,11 +21,7 @@ package anyparse.grammar.haxe.format;
  * `"symmetric"` only the second, `"keep"` neither.
  */
 enum abstract HxFormatSingleStatementBracesPolicy(String) to String {
-
 	final Keep = 'keep';
-
 	final Remove = 'remove';
-
 	final Symmetric = 'symmetric';
-
 }

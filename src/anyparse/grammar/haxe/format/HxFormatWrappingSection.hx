@@ -38,56 +38,30 @@ package anyparse.grammar.haxe.format;
  * its own keeps both brackets cuddled to it).
  */
 @:peg typedef HxFormatWrappingSection = {
-
 	@:optional var maxLineLength: Int;
-
 	@:optional var arrayMatrixWrap: String;
-
 	@:optional var trailingComma: HxFormatWrappingTrailingCommaPolicy;
-
 	@:optional var comprehensionCuddledOpen: Bool;
-
 	@:optional var methodChainCuddledLinks: Bool;
-
 	@:optional var soleItemCuddledBrackets: Bool;
-
 	@:optional var ternaryCuddledBraces: Bool;
-
 	@:optional var ternaryMultilineBranch: HxFormatTernaryMultilineBranchPolicy;
-
 	@:optional var arrayWrap: HxFormatWrapRules;
-
 	@:optional var mapWrap: HxFormatWrapRules;
-
 	@:optional var multiVar: HxFormatWrapRules;
-
 	@:optional var casePattern: HxFormatWrapRules;
-
 	@:optional var anonType: HxFormatWrapRules;
-
 	@:optional var methodChain: HxFormatWrapRules;
-
 	@:optional var opBoolChain: HxFormatWrapRules;
-
 	@:optional var opAddSubChain: HxFormatWrapRules;
-
 	@:optional var callParameter: HxFormatWrapRules;
-
 	@:optional var objectLiteral: HxFormatWrapRules;
-
 	@:optional var conditionWrapping: HxFormatWrapRules;
-
 	@:optional var ternaryExpression: HxFormatWrapRules;
-
 	@:optional var functionSignature: HxFormatWrapRules;
-
 	@:optional var anonFunctionSignature: HxFormatWrapRules;
-
 	@:optional var metadataCallParameter: HxFormatWrapRules;
-
 	@:optional var typeParameter: HxFormatWrapRules;
-
 	@:optional var expressionWrapping: HxFormatWrapRules;
-
 	@:optional var implementsExtends: HxFormatWrapRules;
 };

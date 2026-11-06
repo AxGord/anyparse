@@ -22,13 +22,9 @@ using Lambda;
  *    and trivia writer.
  */
 enum AstPredMode {
-
 	PredPlain;
-
 	PredSpans;
-
 	PredTrivia;
-
 }
 
 /**

@@ -273,6 +273,7 @@ enum SiteFamily {
  * subtype of it, nor an instance that left the type system (`ValueEscapes`).
  */
 typedef ImplicitSite = {
+
 	var family: SiteFamily;
 	var span: Span;
 	var types: Array<Null<String>>;
@@ -289,4 +290,5 @@ typedef ImplicitSite = {
 	 * `UncheckedConversions.convertsSomewhere`); absent for one every build makes.
 	 */
 	var ?landing: Bool;
+
 }

@@ -25,6 +25,7 @@ import haxe.io.Path;
  * the NAME and every edit is about the path.
  */
 private typedef Hoistable = {
+
 	final path: String;
 	final isUsing: Bool;
 	final simple: String;
@@ -35,6 +36,7 @@ private typedef Hoistable = {
 	 * silently retarget in a module that never spelled the statement.
 	 */
 	final names: Array<String>;
+
 }
 
 /**
@@ -65,6 +67,7 @@ private typedef HoistPlan = {
  * EXISTING ambient source already carries, and what this run has decided to put at each site.
  */
 private typedef HoistContext = {
+
 	final sites: Array<String>;
 	final governedAt: Map<String, Array<String>>;
 	final infoOf: Map<String, FileInfo>;
@@ -96,6 +99,7 @@ private typedef HoistContext = {
 	 * declared its build list complete, so that evidence vouches for nothing a build of the list reads.
 	 */
 	final holdsWithoutBuilds: () -> Bool;
+
 }
 
 /**

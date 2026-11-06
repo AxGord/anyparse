@@ -401,6 +401,7 @@ final class ConstantHoist {
  * goes, what to remove, and what to write.
  */
 typedef Hoist = {
+
 	/** The flagged declaration's cursor offset — how the caller knows to keep its rename arm off it. */
 	final declFrom: Int;
 
@@ -415,6 +416,7 @@ typedef Hoist = {
 
 	/** The member declaration the grammar renders for it (`NamingSupport.hoistedConstant`). */
 	final memberText: String;
+
 };
 
 /**
@@ -436,6 +438,7 @@ typedef OccurrenceResolver = (declFrom:Int, name:String) -> Null<Array<Span>>;
  * occurrence resolver.
  */
 private typedef HoistContext = {
+
 	final source: String;
 	final tree: QueryNode;
 	final policy: NamingPolicy;
@@ -448,7 +451,6 @@ private typedef HoistContext = {
 
 	/** The statement-list hosts — a declaration must be a DIRECT child of one. */
 	final blockKinds: Array<String>;
-
 	final plugin: GrammarPlugin;
 	final shape: RefShape;
 	final support: NamingSupport;
@@ -456,4 +458,5 @@ private typedef HoistContext = {
 	final index: SymbolIndex;
 	final file: String;
 	final occurrences: OccurrenceResolver;
+
 };

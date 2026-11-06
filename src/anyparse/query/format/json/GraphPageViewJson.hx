@@ -6,12 +6,8 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef GraphPageViewJson = {
-
 	var id: String;
-
 	var title: String;
-
 	@:optional var up: Null<String>;
-
 	var mermaid: String;
 };

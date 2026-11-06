@@ -42,7 +42,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxCondModPrefix {
-
 	@:kw('public') Public;
 	@:kw('private') Private;
 	@:kw('static') Static;
@@ -53,10 +52,7 @@ enum HxCondModPrefix {
 	@:kw('overload') Overload;
 	@:kw('macro') Macro;
 	@:kw('enum') EnumKw;
-
 	@:kw('#if') @:trail('#end')
 	Conditional(inner: HxConditionalMod);
-
 	Meta(entry: HxMetadata);
-
 }

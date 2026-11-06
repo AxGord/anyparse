@@ -394,6 +394,7 @@ final class ReturnReassignTernary extends RuleBase implements DefaultOff impleme
 
 /** The kinds `ReturnReassignTernary` reads. */
 private typedef Seams = {
+
 	var ifKinds: Array<String>;
 	var returnKind: String;
 	var exprStmtKind: String;
@@ -410,12 +411,15 @@ private typedef Seams = {
 	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
 	var negation: Null<InversionSeams>;
 	var shape: RefShape;
+
 }
 
 /** A collapsible pair: the `if` span (finding key), the replaced span, and the merged text (null = report-only). */
 private typedef Match = {
+
 	var ifSpan: Span;
 
 	/** The ternary `return` replacing the pair, its condition a `ParenGuard` hole; null when a comment would be dropped. */
 	var edit: Null<GuardedEdit>;
+
 }

@@ -15,10 +15,8 @@ import haxe.Exception;
  * containing node as a best-effort extra).
  */
 enum AddressResult {
-
 	Ok(offset: Int, node: Null<QueryNode>);
 	Err(message: String);
-
 }
 
 /**

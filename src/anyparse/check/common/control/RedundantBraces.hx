@@ -252,11 +252,11 @@ final class RedundantBraces extends RuleBase implements DefaultOff {
 
 /** The seam kinds `RedundantBraces` reads. */
 private typedef Seams = {
+
 	final ifKinds: Array<String>;
 
 	/** Every loop statement; a `do … while` one (`doWhileKinds`) is skipped. */
 	final loopKinds: Array<String>;
-
 	final doWhileKinds: Array<String>;
 
 	/** The `switch` statement kinds: an `else switch` is neither braced nor bare. */
@@ -273,6 +273,7 @@ private typedef Seams = {
 
 	/** The dangling-`else` position gate's inputs (`IfExpressionChain.shieldSeams`). */
 	final shield: ShieldSeams;
+
 };
 
 /** One file's context: its source and comment tokens, the seams and the grammar. */

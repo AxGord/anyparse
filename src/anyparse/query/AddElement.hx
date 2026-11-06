@@ -18,10 +18,8 @@ using Lambda;
  * branches uniformly.
  */
 enum InsertSide {
-
 	After;
 	Before;
-
 }
 
 /**

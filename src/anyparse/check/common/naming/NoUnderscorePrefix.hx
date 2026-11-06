@@ -483,9 +483,11 @@ private typedef Options = {
  * be unique within. The set of these decides the same-target conflict between two flagged bindings before any rename is emitted.
  */
 private typedef Candidate = {
+
 	final decl: NamedDecl;
 	final target: String;
 
 	/** The binding's innermost enclosing function span, or null when none resolves (treated as conflicting with everything). */
 	final scope: Null<Span>;
+
 };

@@ -452,6 +452,7 @@ final class ExpectedType {
  * gate chain threads all six through four helpers unchanged.
  */
 typedef FileTypes = {
+
 	final shape: RefShape;
 	final source: String;
 	final declaredTypeSources: Map<Int, String>;
@@ -461,6 +462,7 @@ typedef FileTypes = {
 
 	/** `GrammarPlugin.typeSyntax` — how a cast's target type is read. */
 	final typeSyntax: TypeSyntaxReader;
+
 };
 
 /**

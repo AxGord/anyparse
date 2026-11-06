@@ -52,6 +52,7 @@ typedef OracleBatchResult = {
  */
 @:nullSafety(Strict)
 typedef RiskyFixOutcome = {
+
 	var tail: String;
 	var appliedCount: Int;
 	var reverts: Array<FixVerifyRevert>;
@@ -78,6 +79,7 @@ typedef RiskyFixOutcome = {
 	 * whole compile, which is the expense this hand-off exists to avoid.
 	 */
 	var coverage: Array<ConfigCoverage>;
+
 };
 
 /**

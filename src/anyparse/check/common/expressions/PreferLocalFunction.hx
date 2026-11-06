@@ -580,6 +580,7 @@ final class PreferLocalFunction extends RuleBase {
 
 /** The kinds `prefer-local-function` reads. */
 private typedef Seams = {
+
 	var literalKinds: Array<String>;
 	var assignKind: String;
 	var exprStmtKind: String;
@@ -605,6 +606,7 @@ private typedef Seams = {
 
 	/** `GrammarPlugin.typeSyntax` — how a declared function type is read. */
 	var typeSyntax: TypeSyntaxReader;
+
 }
 
 /** One rewritable binding: the literal's span (the finding key) and the edits that hoist it. */
@@ -618,15 +620,16 @@ private typedef Match = {
  * that body is a block, and whether it arrived BARE — a lambda's arrow body rather than a body node.
  */
 private typedef FnParts = {
+
 	var params: Array<String>;
 
 	/** Each parameter's optionality (a `?` or a default value) and written type, read off its node. */
 	var signature: Array<ParamSig>;
-
 	var hintSpan: Null<Span>;
 	var bodySpan: Span;
 	var block: Bool;
 	var bare: Bool;
+
 }
 
 /**

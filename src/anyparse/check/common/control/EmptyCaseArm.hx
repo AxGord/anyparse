@@ -328,6 +328,7 @@ final class EmptyCaseArm extends RuleBase {
 
 /** The grammar-level seams the check reads once per run — any one missing makes it a no-op. */
 private typedef Scan = {
+
 	final seams: CaseSeams;
 	final shape: RefShape;
 
@@ -337,6 +338,7 @@ private typedef Scan = {
 	/** The subject type names free of exhaustiveness checking (`RefShape.openSwitchSubjectTypes`). */
 	final openTypes: Array<String>;
 	final provider: TypeInfoProvider;
+
 };
 
 /** One file's scan context: the grammar seams plus everything resolving that file's switch subjects needs. */

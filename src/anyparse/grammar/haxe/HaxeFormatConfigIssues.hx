@@ -23,4 +23,5 @@ typedef HaxeFormatConfigIssues = {
 
 	/** Wrap-cascade strings with no runtime mapping, deduplicated and quoted. */
 	wrapValues: Array<String>
+
 };

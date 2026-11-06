@@ -233,6 +233,7 @@ typedef Lineage = {
  * graph's enclosing type). A question the typer cannot answer soundly answers null — the engine then expects nothing.
  */
 typedef ExpectationHost<W, C> = {
+
 	/** The type the declaration `holder` (a local or a field) is written with. */
 	final declared: (holder:QueryNode, ctx:C) -> Null<W>;
 
@@ -260,4 +261,5 @@ typedef ExpectationHost<W, C> = {
 
 	/** The part `text` of the type `of` — a function type's parameter or result — in the same currency. */
 	final part: (of:W, text:String, ctx:C) -> W;
+
 }

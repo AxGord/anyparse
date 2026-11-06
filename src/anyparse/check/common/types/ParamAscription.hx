@@ -415,6 +415,7 @@ private typedef LeadingRun = {
 
 /** The parameter a `Dynamic` finding sits on, plus what the arm needs to reach its owner and its reads. */
 private typedef ParamSubject = {
+
 	/** The type-member function declaring the parameter. */
 	final owner: QueryNode;
 
@@ -430,10 +431,12 @@ private typedef ParamSubject = {
 
 	/** Whether the `Dynamic` sits INSIDE an explicit nullable wrapper that is the rest of the written type. */
 	final wrapped: Bool;
+
 };
 
 /** The classified reads of a `Dynamic` parameter — built only when every one of them is an ascription or a null comparison. */
 private typedef ParamReads = {
+
 	/** The ascription nodes the fix unwraps to their operand. */
 	final ascriptions: Array<QueryNode>;
 
@@ -442,4 +445,5 @@ private typedef ParamReads = {
 
 	/** Whether some read compares the parameter with null — the retyped signature must still admit it. */
 	var nullCompared: Bool;
+
 };

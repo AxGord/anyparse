@@ -29,11 +29,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxDeclHead {
-
 	@:trail('{') @:fmt(spaceBeforeTrail)
 	ClassHead(head: HxClassDeclHead);
-
 	@:trail('{') @:fmt(spaceBeforeTrail)
 	AbstractHead(head: HxAbstractDeclHead);
-
 }

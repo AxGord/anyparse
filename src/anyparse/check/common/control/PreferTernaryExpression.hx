@@ -292,6 +292,7 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware {
 
 /** The kinds `PreferTernaryExpression` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
 	var ifExprKinds: Array<String>;
 	var branchKinds: Array<String>;
 	var delimitedAllKinds: Array<String>;
@@ -301,18 +302,22 @@ private typedef Seams = {
 	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
 	var negation: Null<InversionSeams>;
 	var shape: RefShape;
+
 }
 
 /** A rewritable `if`-expression: the finding key span, the (trivia-trimmed) replaced span, and the ternary text. */
 private typedef Match = {
+
 	var span: Span;
 
 	/** `cond ? then : else` over the `if`-expression up to its else-branch's end, the condition a `ParenGuard` hole. */
 	var edit: GuardedEdit;
+
 }
 
 /** The per-file walk state: the parsed tree, its source and comment tokens, the seams, and the lazy symbol index. */
 private typedef Scan = {
+
 	var root: QueryNode;
 	var source: String;
 
@@ -322,4 +327,5 @@ private typedef Scan = {
 	var seams: Seams;
 	var plugin: GrammarPlugin;
 	var resolveIndex: () -> Null<SymbolIndex>;
+
 }

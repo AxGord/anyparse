@@ -24,35 +24,19 @@ package anyparse.format.wrap;
  * § `rules[].conditions[].cond`.
  */
 enum abstract WrapConditionType(Int) from Int to Int {
-
 	final ItemCountLargerThan = 0;
-
 	final ItemCountLessThan = 1;
-
 	final AnyItemLengthLargerThan = 2;
-
 	final AllItemLengthsLessThan = 3;
-
 	final TotalItemLengthLargerThan = 4;
-
 	final TotalItemLengthLessThan = 5;
-
 	final ExceedsMaxLineLength = 6;
-
 	final LineLengthLargerThan = 7;
-
 	final HasMultilineItems = 8;
-
 	final ComplexItemCountLargerThan = 9;
-
 	final AllItemLengthsLargerThan = 10;
-
 	final AnyItemLengthLessThan = 11;
-
 	final EqualItemLengths = 12;
-
 	final HasContainerItems = 13;
-
 	final HasMultilineLambdaItems = 14;
-
 }

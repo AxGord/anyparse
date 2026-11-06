@@ -963,6 +963,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
  * One generated walker function descriptor.
  */
 typedef WalkerFn = {
+
 	/** Full grammar type path this function serves. */
 	final typePath: String;
 
@@ -974,12 +975,14 @@ typedef WalkerFn = {
 
 	/** Body expression. */
 	final body: Expr;
+
 };
 
 /**
  * Result of query-walker lowering: every function to emit plus the root entry.
  */
 typedef QueryWalkerResult = {
+
 	/** Full grammar root type path. */
 	final rootTypePath: String;
 
@@ -1026,5 +1029,6 @@ typedef QueryWalkerResult = {
 	 * spells it.
 	 */
 	final ambiguousProjectedKinds: Array<String>;
+
 };
 #end

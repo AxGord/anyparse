@@ -19,8 +19,6 @@ package anyparse.grammar.haxe.checkstyle;
  * write either; the consumer narrows with `Std.int`.
  */
 @:peg typedef CheckstyleThreshold = {
-
 	@:optional var severity: String;
-
 	@:optional var complexity: Float;
 };

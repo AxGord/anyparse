@@ -759,6 +759,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 }
 
 private typedef Operand = {
+
 	var src: String;
 	var prec: Precedence;
 
@@ -784,6 +785,7 @@ private typedef Operand = {
 	 * disagree about which branch was taken.
 	 */
 	var notDelta: Int;
+
 };
 
 /**
@@ -791,6 +793,7 @@ private typedef Operand = {
  * bare null test can source a narrowing from (`nullTestIdents`), and those any null comparison inside it names.
  */
 private typedef OrLeaf = {
+
 	final op: Operand;
 	final names: Array<String>;
 	final providers: Array<String>;
@@ -798,6 +801,7 @@ private typedef OrLeaf = {
 
 	/** Where the operand stands in the source: a comment between two operands has no place in a regrouped chain. */
 	final span: Null<Span>;
+
 };
 
 /**

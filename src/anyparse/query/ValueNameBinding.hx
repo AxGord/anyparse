@@ -363,20 +363,24 @@ final class ValueNameBinding {
 
 /** What a bare value name means at module level at one use (`ValueNameBinding.moduleValuesAt`). */
 typedef ModuleValues = {
+
 	/** Each module-level declaration of the name a build compiling the use binds it to, in source order. */
 	final decls: Array<ModuleField>;
 
 	/** What the imports supply in the builds compiling the use and none of `decls`; null when every such build compiles one. */
 	final imported: Null<ImportedStatics>;
+
 }
 
 /** What the imports of a file may supply under one bare value name (`ValueNameBinding.importedStatics`). */
 typedef ImportedStatics = {
+
 	/** Each static an import binds the name to. */
 	final statics: Array<ImportedStatic>;
 
 	/** Whether an import may supply it that the index cannot list: a wildcard over an unlisted type, an undecoded alias. */
 	var unknown: Bool;
+
 }
 
 /**

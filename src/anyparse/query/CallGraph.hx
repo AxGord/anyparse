@@ -21,6 +21,7 @@ using Lambda;
  * holds at that moment, not necessarily this body.
  */
 typedef FnNode = {
+
 	var id: String;
 	var file: String;
 	var typeName: Null<String>;
@@ -34,6 +35,7 @@ typedef FnNode = {
 	 * only dispatch reaches, or an extern one, whose code lives in the target.
 	 */
 	var isBodyless: Bool;
+
 }
 
 /**
@@ -58,6 +60,7 @@ typedef FnDeclaration = {
  * later can recompute the override targets against the subtypes it has loaded since.
  */
 typedef CallEdge = {
+
 	var from: String;
 	var to: String;
 	var kind: EdgeKind;
@@ -107,6 +110,7 @@ typedef CallEdge = {
 	 * not the graph resolves the call; null on every other edge, and on one the compiler facts add or a stored value derives.
 	 */
 	@:optional var argument: Null<ArgumentPosition>;
+
 }
 
 /**
@@ -152,6 +156,7 @@ enum UnresolvedReason {
  * reachability walk can tell whether the site lies on its path.
  */
 typedef UnresolvedCall = {
+
 	var file: String;
 	var span: Null<Span>;
 	var from: String;
@@ -174,6 +179,7 @@ typedef UnresolvedCall = {
 
 	/** For a site the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
 	@:optional var spliced: Null<SplicedSite>;
+
 }
 
 /**
@@ -183,6 +189,7 @@ typedef UnresolvedCall = {
  * `Dynamic` / `Any`.
  */
 typedef UnresolvedAccess = {
+
 	var file: String;
 	var span: Null<Span>;
 	var from: String;
@@ -192,6 +199,7 @@ typedef UnresolvedAccess = {
 
 	/** For an access the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
 	@:optional var spliced: Null<SplicedSite>;
+
 }
 
 /**

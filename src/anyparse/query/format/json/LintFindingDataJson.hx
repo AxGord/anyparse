@@ -7,12 +7,8 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintFindingDataJson = {
-
 	var family: String;
-
 	@:key('function') var member: String;
-
 	var subject: String;
-
 	@:optional var chain: Null<Array<String>>;
 };

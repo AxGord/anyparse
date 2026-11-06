@@ -17,6 +17,7 @@ enum abstract DeclarationStatus(String) to String {
 
 /** What a file's change amounts to, the cheapest reading first: each class excludes every one above it. */
 enum abstract ChangeClass(String) to String {
+
 	final Unchanged = 'unchanged';
 
 	/** The writer emits the same text for both versions: only layout moved. */
@@ -27,7 +28,6 @@ enum abstract ChangeClass(String) to String {
 
 	/** The declarations differ by one consistent identifier substitution and nothing else. */
 	final Renamed = 'renamed';
-
 	final Declarations = 'declarations';
 
 	/** A data document whose key paths differ: each added, removed or changed value is named by its path (`DataDelta`). */
@@ -35,20 +35,20 @@ enum abstract ChangeClass(String) to String {
 
 	/** A version the grammar does not parse: only a line count is known. */
 	final Text = 'text';
+
 }
 
 /** One declaration whose own lines differ, matched across the two versions by its name path, never by its position. */
 typedef DeclarationChange = {
+
 	final status: DeclarationStatus;
 
 	/** The dotted name path (`Type.member`); several declarations may share one. */
 	final key: String;
-
 	final name: String;
 
 	/** The `--select` address in the version that holds it — the base one for a removed declaration. */
 	final selector: String;
-
 	final added: Int;
 	final removed: Int;
 
@@ -60,8 +60,8 @@ typedef DeclarationChange = {
 
 	/** The lines it owns in each version as the writer emits them — empty on the side that lacks it. */
 	final before: Array<String>;
-
 	final after: Array<String>;
+
 }
 
 /** One identifier spelled differently at every one of its places. */
@@ -72,6 +72,7 @@ typedef Renaming = {
 
 /** One key path of a data document whose value differs between the two versions. */
 typedef ValueChange = {
+
 	final status: DeclarationStatus;
 
 	/** The dotted key path (`DataPath.format`); a digit segment indexes an array. */
@@ -79,22 +80,21 @@ typedef ValueChange = {
 
 	/** The value as compact JSON, shortened — empty on the side that lacks it. */
 	final before: String;
-
 	final after: String;
+
 }
 
 /** What `DeclarationDelta.compare` reads off two versions of one file. */
 typedef FileDelta = {
+
 	final change: ChangeClass;
 
 	/** Header lines (package, import) only the working version has, and only the base has. */
 	final headerAdded: Array<String>;
-
 	final headerRemoved: Array<String>;
 
 	/** The header holds the same lines in another order — which, among imports of one simple name, decides the binding. */
 	final headerReordered: Bool;
-
 	final renames: Array<Renaming>;
 	final declarations: Array<DeclarationChange>;
 
@@ -103,8 +103,8 @@ typedef FileDelta = {
 
 	/** Changed lines of the whole file, counted on the writer's output where the grammar parses it. */
 	final added: Int;
-
 	final removed: Int;
+
 }
 
 /** Lines an edit inserted and deleted. */

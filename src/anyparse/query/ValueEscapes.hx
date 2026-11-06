@@ -702,10 +702,12 @@ private typedef MemberFacts = {
 
 /** What `ValueEscapes` answers: the escaped types (null for any), whether a raw region decided it, and their typed ids. */
 private typedef EscapeAnswer = {
+
 	final types: Null<Array<String>>;
 	final raw: Bool;
 	final ids: Null<Array<String>>;
 
 	/** The function types of the function values that escaped (`FactsEscapes.functionTypes`); null when not known. */
 	final ?functions: Array<FactsType>;
+
 }

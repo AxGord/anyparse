@@ -16,6 +16,7 @@ import anyparse.query.TypeResolver;
 
 /** What a reflective write stores in the field it writes (`FieldWriteSite.stored`). */
 enum StoredValue {
+
 	/** It stores no value: it deletes the field (`Reflect.deleteField`, `DynamicAccess.remove`). */
 	Nothing;
 
@@ -24,6 +25,7 @@ enum StoredValue {
 
 	/** What it stores is out of sight: the writing function handed on as a value, a write of any other shape. */
 	Unknown;
+
 }
 
 /**

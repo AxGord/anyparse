@@ -277,4 +277,5 @@ typedef Guard = {
 
 	/** Whether `idle` counts from the first change of `progress` and not from the start. */
 	var awaitProgress: Bool;
+
 }

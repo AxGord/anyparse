@@ -174,6 +174,7 @@ final class PurityScan {
 
 /** Per-file resolved constants threaded through `PurityScan`'s recursive walk. */
 typedef PurityCtx = {
+
 	final shape: RefShape;
 
 	/**
@@ -183,7 +184,6 @@ typedef PurityCtx = {
 	 * the file it was built for.
 	 */
 	final safeKinds: Array<String>;
-
 	final identKind: String;
 	final fieldAccessKind: String;
 	final callKind: String;
@@ -192,4 +192,5 @@ typedef PurityCtx = {
 	final declaredTypes: Map<Int, String>;
 	final index: SymbolIndex;
 	final root: QueryNode;
+
 };

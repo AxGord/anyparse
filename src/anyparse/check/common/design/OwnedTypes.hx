@@ -24,6 +24,7 @@ using StringTools;
  * One owned subject of a run, resolved against the index: a type (`member` null) or a member of one.
  */
 typedef OwnedSubject = {
+
 	/** The declared path, as a finding names it: `pkg.Mod.T`, `pkg.Mod.T.build`. */
 	final label: String;
 
@@ -44,10 +45,12 @@ typedef OwnedSubject = {
 
 	/** The declaration the subject came from. */
 	final declaration: TypeOwnership;
+
 }
 
 /** One file's scan: what every step of `OwnedTypes.scanFile` reads, and the findings it makes. */
 typedef FileScan = {
+
 	final file: String;
 	final source: String;
 	final info: FileInfo;
@@ -70,13 +73,12 @@ typedef FileScan = {
 
 	/** `from:to:label` of every finding made, so a site two steps see is reported once. */
 	final reported: Array<String>;
-
 	final out: Array<Violation>;
 
 	/** The shared typer over the file's tree, built on the first instance-member question (`typerBuilt`). */
 	var typer: Null<(QueryNode) -> Null<String>>;
-
 	var typerBuilt: Bool;
+
 }
 
 /**

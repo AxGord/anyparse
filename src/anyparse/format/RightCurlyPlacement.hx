@@ -34,9 +34,6 @@ package anyparse.format;
  * curly-brace languages (AS3, C-family, ...) can reuse the same shape.
  */
 enum abstract RightCurlyPlacement(Int) from Int to Int {
-
 	final Same = 0;
-
 	final Inline = 1;
-
 }

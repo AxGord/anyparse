@@ -2,12 +2,14 @@ package anyparse.query;
 
 /** One `APQ_TEST` token: the class substring it selects, and which slice of that class's tests it runs. */
 typedef ShardToken = {
+
 	cls: String,
 	part: Int,
 	parts: Int,
 
 	/** A `test:` token's substring of `<fq.Class>.<method>`; null for a class token. */
 	test: Null<String>
+
 };
 
 /**

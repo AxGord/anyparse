@@ -33,14 +33,9 @@ package anyparse.grammar.haxe.format;
  * Default `false` keeps fork-compatible (override-source-blank) behaviour.
  */
 @:peg typedef HxFormatImportAndUsingConfig = {
-
 	@:optional var beforeUsing: Int;
-
 	@:optional var betweenImports: Int;
-
 	@:optional var betweenImportsLevel: String;
-
 	@:optional var beforeType: Int;
-
 	@:optional var keepSourceBlankAcrossConditional: Bool;
 };

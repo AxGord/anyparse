@@ -730,6 +730,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 
 /** Mutable accumulator threaded through the local-narrowing use classifier. */
 private typedef NarrowAcc = {
+
 	/** A use where raw Dynamic is load-bearing was seen — skip the declaration. */
 	var disqualified: Bool;
 
@@ -747,6 +748,7 @@ private typedef NarrowAcc = {
 
 	/** Named types of the weak typed sinks the value flows into (`y = x` / `var y: T = x`) — a consistency veto only. */
 	var sinkTypes: Array<String>;
+
 };
 
 /** The initializer shape of a `Dynamic` local: presence, null-literal, and resolved source type. */

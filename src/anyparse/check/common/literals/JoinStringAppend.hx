@@ -397,11 +397,11 @@ final class JoinStringAppend extends RuleBase implements DefaultOff {
 
 /** The seams `JoinStringAppend` reads. */
 private typedef Seams = {
+
 	var shape: RefShape;
 
 	/** `GrammarPlugin.typeSyntax` — how a target's declared type is read. */
 	var typeSyntax: TypeSyntaxReader;
-
 	var addAssignKind: String;
 	var assignKind: Null<String>;
 	var identKind: String;
@@ -420,6 +420,7 @@ private typedef Seams = {
 	 * look String-typed.
 	 */
 	var selection: Null<OperatorSelection>;
+
 }
 
 /**
@@ -427,6 +428,7 @@ private typedef Seams = {
  * the finding key), the replaced region, and the built replacement text.
  */
 private typedef Match = {
+
 	var anchorSpan: Span;
 	var editSpan: Span;
 	var replacementText: String;
@@ -435,4 +437,5 @@ private typedef Match = {
 	/** The target's own identifier node — what the operator gate resolves to a type (`builtinAppend`). */
 	var targetNode: QueryNode;
 	var termCount: Int;
+
 }

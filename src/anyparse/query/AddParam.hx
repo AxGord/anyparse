@@ -14,10 +14,8 @@ using Lambda;
  * `ExtractResult`.
  */
 enum AddParamResult {
-
 	Ok(text: String);
 	Err(message: String);
-
 }
 
 /**

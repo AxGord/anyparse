@@ -1252,10 +1252,8 @@ final class DependencyCarry {
  * silently retyped the destination's own `new Dep()` from `p.Dep` to `b.Dep`.
  */
 enum CarryResult {
-
 	CarryOk(lines: Array<String>);
 	CarryErr(message: String);
-
 }
 
 /**
@@ -1312,6 +1310,7 @@ typedef NameSpan = {
  * wildcards, which is where the two answers have to be compared.
  */
 private typedef WildProvider = {
+
 	var imp: ImportInfo;
 	var module: String;
 	var names: Array<String>;
@@ -1321,6 +1320,7 @@ private typedef WildProvider = {
 
 	/** Rank in the file's resolution order (a higher one wins a shared name): the farthest ambient group first, the file's own last. */
 	var order: Int;
+
 }
 
 /**

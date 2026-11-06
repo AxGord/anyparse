@@ -18,9 +18,6 @@ package anyparse.grammar.haxe.format;
  * - `"remove"` → `TrailingCommaPolicy.Remove`
  */
 enum abstract HxFormatWrappingTrailingCommaPolicy(String) to String {
-
 	final Keep = 'keep';
-
 	final Remove = 'remove';
-
 }

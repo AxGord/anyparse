@@ -215,6 +215,7 @@ final class FactText {
 
 /** One positioned type a node records for an expression (`FactText.typedSites`). */
 typedef TypedSite = {
+
 	final at: Null<FactPos>;
 	final type: String;
 
@@ -226,10 +227,12 @@ typedef TypedSite = {
 	 * receiver to count (null when the call names no member). Null for every other site.
 	 */
 	final call: Null<{ at: FactPos, member: Null<String> }>;
+
 }
 
 /** A node line's head, read without parsing the line. */
 typedef NodeHead = {
+
 	final id: String;
 	final file: String;
 	final min: Int;
@@ -241,4 +244,5 @@ typedef NodeHead = {
 	 * its generic class's body (`gi`), or a function spliced in from another body (`inl`). Such a node is found by id.
 	 */
 	final generated: Bool;
+
 }

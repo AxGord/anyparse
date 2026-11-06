@@ -605,9 +605,11 @@ private typedef ValueContext = {
 
 /** A write in the project (an assignment, a compound one, an increment) and where it sits. */
 private typedef WriteSite = {
+
 	final node: QueryNode;
 	final at: ValueContext;
 
 	/** The write as `FieldWrites` records it: what `FieldWrites.mayWrite` asks whether it may write a given type's field. */
 	final site: FieldWriteSite;
+
 }

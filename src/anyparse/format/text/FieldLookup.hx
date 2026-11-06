@@ -9,9 +9,7 @@ package anyparse.format.text;
  *                  (binary tagged unions, protobuf).
  */
 enum abstract FieldLookup(Int) {
-
 	final ByName = 0;
 	final ByPosition = 1;
 	final ByTag = 2;
-
 }

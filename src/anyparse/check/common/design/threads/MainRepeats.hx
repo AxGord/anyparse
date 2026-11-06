@@ -7,6 +7,7 @@ import anyparse.query.CallGraph;
 
 /** A repeating call up the main thread's way to a call, and the functions from its target down to the call's own. */
 typedef RepeatOwner = {
+
 	final edge: CallEdge;
 	final path: Array<String>;
 
@@ -15,10 +16,12 @@ typedef RepeatOwner = {
 	 * at one distance it ranks after an owner whose way runs calls alone.
 	 */
 	final handed: Bool;
+
 }
 
 /** What the main thread's ways up from one call say about how often it runs (`MainRepeats.climb`). */
 typedef MainClimb = {
+
 	/**
 	 * The nearest calls that repeat on each way (`CallRepetition.repeated`), and each value marshalled onto the main
 	 * thread on the way (`CallRepetition.marshalled`) — nearest first, then by file, offset and target.
@@ -39,10 +42,12 @@ typedef MainClimb = {
 	 * as once, its bounds multiplied along each way and judged against the budget for the whole way.
 	 */
 	final bounded: Array<BoundedRepeat>;
+
 }
 
 /** The state of one `MainRepeats.climb`: its owners, the way down from each state, what each way binds, the queue. */
 private typedef ClimbWalk = {
+
 	final owners: Array<RepeatOwner>;
 	final down: Map<String, Array<String>>;
 	final ways: Map<String, BoundedWay>;
@@ -51,6 +56,7 @@ private typedef ClimbWalk = {
 	final handed: Map<String, Bool>;
 	final queue: Array<{ id: String, valuation: String }>;
 	var registered: Bool;
+
 }
 
 /**

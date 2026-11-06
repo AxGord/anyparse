@@ -151,7 +151,9 @@ final class TriviaSepLowering {
 		?tailRehomeFn: Expr,
 		// `@:fmt(relocateTrailingComments)`: under `comments.trailingCommentOverflow: "above"` an element's
 		// overflowing `//` comment may move above it (`triviaSepForceMultiLineExpr`). False → byte-identical.
-		relocateTrailingComments: Bool = false
+		relocateTrailingComments: Bool = false,
+		// The policy after a doc-commented element (`WriterTriviaStarDispatch.afterDocPolicy`); null → no after-doc rule.
+		?afterDocPolicy: Expr
 	): Expr {
 		// noqa: complexity
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
@@ -171,7 +173,7 @@ final class TriviaSepLowering {
 		// and `sepCtx` consume. Extracted to `triviaSepTypedefBlanksExprs` so the
 		// orchestrator stays under the complexity gate; behaviour byte-identical.
 		final blanks: WriterLowering.SepStarBlanks = triviaSepTypedefBlanksExprs(
-			beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks
+			beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks, afterDocPolicy
 		);
 		final keepCurlyBeginExpr: Expr = blanks.keepCurlyBeginExpr;
 		final keepCurlyEndExpr: Expr = blanks.keepCurlyEndExpr;
@@ -652,11 +654,20 @@ final class TriviaSepLowering {
 	 * kept local.
 	 */
 	private static function triviaSepTypedefBlanksExprs(
-		beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool, uniformStmtBlanks: Bool
+		beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool, uniformStmtBlanks: Bool, afterDocPolicy: Null<Expr>
 	): WriterLowering.SepStarBlanks {
 		final curly: WriterLowering.SepStarKeepCurly = triviaSepKeepCurlyExprs(typedefBodyBlanks);
-		final blankBeforeExpr: Expr = triviaSepBlankBeforeExpr(beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks);
-		final initCurrDocCommentExpr: Expr = beforeDocCommentEmptyLines ? macro var _currHasDocComment: Bool = false : macro {};
+		final blankBeforeExpr: Expr = triviaSepBlankBeforeExpr(
+			beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks, afterDocPolicy
+		);
+		// One `var` expression: a block wrapping the two would scope them away from the loop that reads them.
+		final initCurrDocCommentExpr: Expr = switch [beforeDocCommentEmptyLines, afterDocPolicy != null] {
+			case [true, true]: macro var _currHasDocComment: Bool = false,
+				_prevHadDocComment: Bool = false;
+			case [true, false]: macro var _currHasDocComment: Bool = false;
+			case [false, true]: macro var _prevHadDocComment: Bool = false;
+			case [false, false]: macro {};
+		};
 		return {
 			keepCurlyBeginExpr: curly.keepCurlyBeginExpr,
 			keepCurlyEndExpr: curly.keepCurlyEndExpr,
@@ -1599,7 +1610,7 @@ final class TriviaSepLowering {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaSepBlankBeforeExpr(
-		beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool, uniformStmtBlanks: Bool
+		beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool, uniformStmtBlanks: Bool, afterDocPolicy: Null<Expr>
 	): Expr {
 		// noqa: complexity
 		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
@@ -1609,20 +1620,23 @@ final class TriviaSepLowering {
 		// at inter-element slots. Compile-time gate keeps callers without
 		// the flag (`HxExpr.ArrayExpr.elems`, `HxObjectLit.fields`)
 		// byte-identical to pre-slice behaviour.
-		// The doc-comment rule is the shared runtime policy (`anyparse.format.MemberGap`); a sep-Star
-		// carries the before-doc half only, so the previous element reads as not doc-led.
-		final stripByCurrDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro anyparse.format.MemberGap.docStrips(
-				false, _currHasDocComment, anyparse.format.CommentEmptyLinesPolicy.Ignore, opt.beforeDocCommentEmptyLines
-			)
-			: macro false;
-		final addByCurrDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro anyparse.format.MemberGap.docAdds(
-				false, _currHasDocComment, anyparse.format.CommentEmptyLinesPolicy.Ignore, opt.beforeDocCommentEmptyLines
-			)
-			: macro false;
+		// The doc-comment rule is the shared runtime policy (`anyparse.format.MemberGap`), composed as the block Star
+		// composes it; each half the Star carries no flag for reads as "not doc-led" under `Ignore`.
+		final docRule: Bool = beforeDocCommentEmptyLines || afterDocPolicy != null;
+		final prevDocExpr: Expr = afterDocPolicy != null ? macro _prevHadDocComment : macro false;
+		final currDocExpr: Expr = beforeDocCommentEmptyLines ? macro _currHasDocComment : macro false;
+		final afterExpr: Expr = afterDocPolicy ?? macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
+		final beforeExpr: Expr = beforeDocCommentEmptyLines
+			? macro opt.beforeDocCommentEmptyLines
+			: macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
+		final stripByCurrDocExpr: Expr = macro anyparse.format.MemberGap.docStrips($prevDocExpr, $currDocExpr, $afterExpr, $beforeExpr);
+		final addByCurrDocExpr: Expr = macro !anyparse.format.MemberGap.docVetoes($currDocExpr, $beforeExpr)
+			&& anyparse.format.MemberGap.docAdds($prevDocExpr, $currDocExpr, $afterExpr, $beforeExpr);
 		final currHasDocComputeExpr: Expr = beforeDocCommentEmptyLines
 			? macro _currHasDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
+			: macro {};
+		final trackPrevDocExpr: Expr = afterDocPolicy != null
+			? macro _prevHadDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
 			: macro {};
 		// ω-typedef-between-fields: runtime predicate that strips the
 		// source-captured inter-field blank for a typedef RHS body. Fires
@@ -1646,7 +1660,7 @@ final class TriviaSepLowering {
 		// byte-identical.
 		final uniformStripExpr: Expr = uniformStmtBlanks ? macro _uniformCollapse : macro false;
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
-		return beforeDocCommentEmptyLines
+		return docRule
 			? macro {
 				$currHasDocComputeExpr;
 				final _stripBlank: Bool = $stripByCurrDocExpr || $typedefStripBetweenExpr || $uniformStripExpr;
@@ -1656,6 +1670,7 @@ final class TriviaSepLowering {
 					_inner.push(_dhl());
 					if (_sourceBlank) $blankExtras;
 				}
+				$trackPrevDocExpr;
 			}
 			: macro {
 				if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr) && !($uniformStripExpr)) {

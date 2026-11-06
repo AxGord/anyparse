@@ -26,6 +26,7 @@ typedef CondBranchStep = {
  * — only an operator asking "resolve this file as if X were not defined" can supply it.
  */
 typedef DefineFacts = {
+
 	final defined: Array<String>;
 	final undefined: Array<String>;
 
@@ -35,6 +36,7 @@ typedef DefineFacts = {
 	 * is set to a value nobody knows: true, and of no known order.
 	 */
 	@:optional final values: Null<Map<String, String>>;
+
 };
 
 private typedef Frame = {

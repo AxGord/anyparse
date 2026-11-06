@@ -6,12 +6,10 @@ using Lambda;
  * Kind of a lexically-scanned non-code source region (comment, string or regex literal).
  */
 enum abstract LexRegionKind(Int) {
-
 	final LineComment = 0;
 	final BlockComment = 1;
 	final StringLit = 2;
 	final RegexLit = 3;
-
 }
 
 /** A lexically-scanned non-code region: `[from, to)` and its kind. */

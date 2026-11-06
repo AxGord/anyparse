@@ -173,7 +173,7 @@ final class TriviaBlockLowering {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaBlockBlankBeforeExpr(
-		afterFieldsWithDocComments: Bool, existingBetweenFields: Null<Expr>, beforeDocCommentEmptyLines: Bool,
+		afterFieldsWithDocComments: Null<Expr>, existingBetweenFields: Null<Expr>, beforeDocCommentEmptyLines: Bool,
 		condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo>, interMember: Bool,
 		interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>, uniformBetween: Bool, uniformBetweenOptField: Null<String>,
@@ -183,15 +183,13 @@ final class TriviaBlockLowering {
 		if (!anyEmptyLinesFlag) return triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
 		// The doc-comment rule is ONE runtime policy (`anyparse.format.MemberGap`), shared with the
 		// `member-order` check: each side the Star carries no flag for reads as "not doc-led" under `Ignore`.
-		final prevDocExpr: Expr = afterFieldsWithDocComments ? macro _prevHadDocComment : macro false;
-		final afterPolicyExpr: Expr = afterFieldsWithDocComments
-			? macro opt.afterFieldsWithDocComments
-			: macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
+		final prevDocExpr: Expr = afterFieldsWithDocComments != null ? macro _prevHadDocComment : macro false;
+		final afterPolicyExpr: Expr = afterFieldsWithDocComments ?? macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
 		final currDocExpr: Expr = beforeDocCommentEmptyLines ? macro _currHasDocComment : macro false;
 		final beforePolicyExpr: Expr = beforeDocCommentEmptyLines
 			? macro opt.beforeDocCommentEmptyLines
 			: macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
-		final docRule: Bool = afterFieldsWithDocComments || beforeDocCommentEmptyLines;
+		final docRule: Bool = afterFieldsWithDocComments != null || beforeDocCommentEmptyLines;
 		final stripByDocExpr: Expr = docRule
 			? macro anyparse.format.MemberGap.docStrips($prevDocExpr, $currDocExpr, $afterPolicyExpr, $beforePolicyExpr)
 			: macro false;
@@ -392,7 +390,7 @@ final class TriviaBlockLowering {
 		elemFn: String,
 		openText: String,
 		closeText: String,
-		afterFieldsWithDocComments: Bool = false,
+		?afterFieldsWithDocComments: Expr,
 		?existingBetweenFields: Expr,
 		beforeDocCommentEmptyLines: Bool = false,
 		?interMemberInfo: WriterLowering.InterMemberClassifyInfo,
@@ -534,7 +532,7 @@ final class TriviaBlockLowering {
 		// computation entirely.
 		final interMember: Bool = interMemberInfo != null;
 		final uniformBetween: Bool = uniformBetweenOptField != null;
-		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments
+		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments != null
 			|| existingBetweenFields != null
 			|| beforeDocCommentEmptyLines
 			|| interMember
@@ -945,10 +943,10 @@ final class TriviaBlockLowering {
 	 * trail-blank).
 	 */
 	private static function triviaBlockLeafExprs(
-		afterFieldsWithDocComments: Bool, beforeDocCommentEmptyLines: Bool, interMember: Bool, indentCaseLabelsGate: Bool,
+		afterFieldsWithDocComments: Null<Expr>, beforeDocCommentEmptyLines: Bool, interMember: Bool, indentCaseLabelsGate: Bool,
 		lineCommentTrailBlank: Bool
 	): WriterLowering.BlockLeafExprs {
-		final trackDocCommentExpr: Expr = afterFieldsWithDocComments
+		final trackDocCommentExpr: Expr = afterFieldsWithDocComments != null
 			? macro _prevHadDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
 			: macro {};
 		// ω-indent-case-labels: when the call site opts in via
@@ -964,7 +962,7 @@ final class TriviaBlockLowering {
 			? macro (_arr.length > 0 && (_trailBB || (_trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//'))))
 			: macro (_trailBB && _arr.length > 0);
 		return {
-			initDocCommentExpr: afterFieldsWithDocComments ? macro var _prevHadDocComment: Bool = false : macro {},
+			initDocCommentExpr: afterFieldsWithDocComments != null ? macro var _prevHadDocComment: Bool = false : macro {},
 			initCurrDocCommentExpr: beforeDocCommentEmptyLines ? macro var _currHasDocComment: Bool = false : macro {},
 
 			initPrevKindExpr: interMember ? macro var _prevKind: Int = 0 : macro {},
@@ -1235,13 +1233,10 @@ final class TriviaBlockLowering {
 typedef BlankGateExprs = {
 	final currHasDocComputeExpr: Expr;
 	final currKindComputeExpr: Expr;
-
 	final stripByDocExpr: Expr;
 	final stripByExistingExpr: Expr;
 	final vetoByDocExpr: Expr;
-
 	final addByDocExpr: Expr;
-
 	final addByInterMemberExpr: Expr;
 	final addByUniformBetweenExpr: Expr;
 };

@@ -597,7 +597,6 @@ typedef RefBinding = {
  * see the walker docstring for the propagation rule.
  */
 enum abstract RefKind(Int) {
-
 	final Decl = 0;
 	final Read = 1;
 	final Write = 2;
@@ -609,5 +608,4 @@ enum abstract RefKind(Int) {
 			case Write: 'write';
 		}
 	}
-
 }
