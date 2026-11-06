@@ -6,6 +6,9 @@ typedef BranchReportJson = {
 	/** The run whose branch left it; absent in a report that names none. */
 	@:optional var run: String;
 
+	/** When the branch process began, in epoch milliseconds; absent in a report that names none. */
+	@:optional var started: Float;
+
 	var steps: Array<StepRecord>;
 	var readings: Array<Reading>;
 };

@@ -361,7 +361,7 @@ final class SliceGate {
 		final excerpts: String = _gate.summary.excerpts();
 		if (excerpts != '') Sys.println(excerpts);
 		final passed: Bool = _gate.summary.passed();
-		final wall: String = '${Math.round(Timer.stamp() - _started)}s';
+		final wall: String = '${Math.round(Timer.stamp() - _started)}s${_gate.summary.waitedSuffix()}';
 		Sys.println(passed ? 'slice-gate: PASS in $wall' : 'slice-gate: FAIL in $wall — logs ${_gate.logs}');
 		return passed ? 0 : 1;
 	}

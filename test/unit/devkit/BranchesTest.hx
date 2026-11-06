@@ -162,6 +162,89 @@ final class BranchesTest extends Test {
 		});
 	}
 
+	/** A branch that began after its pool lease shows the seconds on its first row and in the total; an immediate grant shows none. */
+	public function testALeaseWaitIsShownOnTheRowAndInTheTotalButAnImmediateGrantIsNot(): Void {
+		TempDir.with(dir -> {
+			final steps: Array<Step> = [
+				{
+					name: 'a',
+					outcome: Passed,
+					ms: 0,
+					note: '',
+					excerpt: []
+				}
+			];
+			final now: Float = Date.now().getTime();
+			final run: (Float) -> Summary = began -> {
+				final report: String = dir.file('${Std.int(began - now)}.json');
+				final left: String = Branches.encode('r1', steps, [], began);
+				final script: String = 'require("fs").writeFileSync(process.argv[1], process.argv[2])';
+				final summary: Summary = new Summary();
+				final readings: Map<String, Int> = Branches.run(
+					'r1', [['a']], ['a'], names -> Command.of(['node', '-e', script, report, left]), names -> report, summary
+				);
+				Assert.isFalse(readings.keys().hasNext());
+				summary;
+			};
+			final delayed: Summary = run(now + 2400);
+			Assert.stringContains('waited 2s', delayed.table());
+			Assert.equals('waited 2s', delayed.waitedTotal());
+			final immediate: Summary = run(now);
+			Assert.isFalse(immediate.table().contains('waited'), immediate.table());
+			Assert.equals('', immediate.waitedTotal());
+		});
+	}
+
+	/** Two branches that wait at once cost the run the longer wait, never the sum of both. */
+	public function testConcurrentBranchesTotalTheirLongestWait(): Void {
+		TempDir.with(dir -> {
+			final now: Float = Date.now().getTime();
+			final script: String = 'require("fs").writeFileSync(process.argv[1], process.argv[2])';
+			final report: String -> String = name -> dir.file('$name.json');
+			final left: String -> String = name -> Branches.encode('r1', [
+				{
+					name: name,
+					outcome: Passed,
+					ms: 0,
+					note: '',
+					excerpt: []
+				}
+			], [], now + 2400);
+			final summary: Summary = new Summary();
+			final readings: Map<String, Int> = Branches.run(
+				'r1', [['a'], ['b']],
+				['a', 'b'],
+				names -> Command.of(['node', '-e', script, report(names[0]), left(names[0])]), names -> report(names[0]), summary
+			);
+			Assert.isFalse(readings.keys().hasNext());
+			Assert.stringContains('waited 2s', summary.table());
+			Assert.equals('waited 2s', summary.waitedTotal());
+		});
+	}
+
+	/** The stamp a branch leaves is its process start: not after now, and no earlier than the process's uptime reaches. */
+	public function testLeaveStampsTheProcessStart(): Void {
+		TempDir.with(dir -> {
+			final file: String = dir.file('r.json');
+			final earliest: Float = Date.now().getTime() - js.Node.process.uptime() * 1000 - 1000;
+			Branches.leave(file, 'r1', new Summary(), []);
+			final started: Null<Float> = Branches.decode(sys.io.File.getContent(file)).started;
+			Assert.notNull(started);
+			if (started != null) {
+				Assert.isTrue(started >= earliest, 'start $started before $earliest');
+				final latest: Float = Date.now().getTime() - js.Node.process.uptime() * 1000 + 250;
+				Assert.isTrue(started <= latest, 'start $started is the leave time, not the process start');
+			}
+		});
+	}
+
+	/** A report names when its branch began, and an older report names none. */
+	public function testAReportKeepsWhenItsBranchBegan(): Void {
+		Assert.equals(5.0, Branches.decode(Branches.encode('r1', [], [], 5)).started);
+		Assert.isNull(Branches.decode('{"run": "r0", "steps": [], "readings": []}').started);
+		Assert.equals(0.0, Branches.waitedMs(10, 4));
+	}
+
 	/** A branch cut in its second row keeps the result of its first: the report it left names only that row, which stays passed. */
 	public function testACutBranchKeepsTheRowsItFinished(): Void {
 		TempDir.with(dir -> {

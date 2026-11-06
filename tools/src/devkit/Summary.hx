@@ -27,7 +27,16 @@ final class Summary {
 	/** The width of the table's seconds column. */
 	private static inline final SECONDS_WIDTH: Int = 7;
 
+	/** The shortest lease wait, in milliseconds, a table shows: a shorter one is process start, not the pool. */
+	private static inline final WAIT_SHOWN_MS: Float = 1000;
+
 	private final _steps: Array<Step> = [];
+
+	/** How long the branch that ran each step waited for its pool lease before the step, in milliseconds, by step name. */
+	private final _waits: Map<String, Float> = [];
+
+	/** The longest wait of each fan-out, in milliseconds: fan-outs run one after another, so these add up to at most the wall. */
+	private final _phases: Array<Float> = [];
 
 	/** The note the step `time` is running has set so far (`detail`). */
 	private var _note: String = '';
@@ -48,6 +57,19 @@ final class Summary {
 	 */
 	public inline function excerpt(lines: Array<String>): Void {
 		_excerpt = lines;
+	}
+
+	/**
+	 * Record the longest lease wait among the branches one fan-out started together. Branches wait concurrently, so a
+	 * fan-out costs the run its longest wait, never their sum.
+	 */
+	public inline function phase(ms: Float): Void {
+		_phases.push(ms);
+	}
+
+	/** The steps recorded so far, in run order. */
+	public inline function steps(): Array<Step> {
+		return _steps.copy();
 	}
 
 	/** Record `name` as ended with `outcome` after `ms` milliseconds, with `note` shown beside a pass and `excerpt` under a failure. */
@@ -71,9 +93,22 @@ final class Summary {
 		return outcome;
 	}
 
-	/** The steps recorded so far, in run order. */
-	public function steps(): Array<Step> {
-		return _steps.copy();
+	/** Record that the branch whose first step is `name` waited `ms` milliseconds for its pool lease. */
+	public function wait(name: String, ms: Float): Void {
+		_waits[name] = ms;
+	}
+
+	/** The seconds the branches waited for their leases in all, as the verdict line shows them; empty when none waited. */
+	public function waitedTotal(): String {
+		var sum: Float = 0;
+		for (ms in _phases) if (ms >= WAIT_SHOWN_MS) sum += ms;
+		return sum == 0 ? '' : 'waited ${Math.round(sum / MS_PER_SECOND)}s';
+	}
+
+	/** The verdict line's tail: the total in parentheses after a space, or empty when no fan-out waited. */
+	public function waitedSuffix(): String {
+		final total: String = waitedTotal();
+		return total == '' ? '' : ' ($total)';
 	}
 
 	/** Whether every step passed or was skipped. */
@@ -95,7 +130,9 @@ final class Summary {
 					case Passed: step.note == '' ? '' : '  ${step.note}';
 					case Failed(why), NotRun(why), Skipped(why): '  $why';
 				};
-				'${step.name.rpad(' ', width)}  ${label(step.outcome).rpad(' ', OUTCOME_WIDTH)}  ${seconds(step.ms).lpad(' ', SECONDS_WIDTH)}$why';
+				final waited: Float = _waits[step.name] ?? 0;
+				final wait: String = waited >= WAIT_SHOWN_MS ? '  waited ${Math.round(waited / MS_PER_SECOND)}s' : '';
+				'${step.name.rpad(' ', width)}  ${label(step.outcome).rpad(' ', OUTCOME_WIDTH)}  ${seconds(step.ms).lpad(' ', SECONDS_WIDTH)}$why$wait';
 			}
 		];
 		return rows.join('\n');

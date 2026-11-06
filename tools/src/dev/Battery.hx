@@ -216,11 +216,12 @@ final class Battery {
 		// a snapshot is a reading, not a verdict: a red tip is the next landing's base all the same
 		final refused: Null<String> = _plan.snapshot && span != null ? snapshot() : null;
 		if (refused != null) Sys.println('battery: no snapshot — $refused');
+		final suffix: String = _summary.waitedSuffix();
 		if (!_summary.passed() || refused != null) {
-			Sys.println('--- battery: FAIL ---');
+			Sys.println('--- battery: FAIL$suffix ---');
 			return 1;
 		}
-		Sys.println('--- battery: PASS ---');
+		Sys.println('--- battery: PASS$suffix ---');
 		return 0;
 	}
 

@@ -26,6 +26,16 @@ final class SummaryTest extends Test {
 		Assert.isFalse(notRun.passed());
 	}
 
+	public function testTheVerdictTailTotalsOneWaitPerFanOutAndHidesAShortOne(): Void {
+		final summary: Summary = new Summary();
+		Assert.equals('', summary.waitedSuffix());
+		summary.phase(400);
+		Assert.equals('', summary.waitedSuffix(), 'process start is not a lease wait');
+		summary.phase(2000);
+		summary.phase(1000);
+		Assert.equals(' (waited 3s)', summary.waitedSuffix());
+	}
+
 	public function testAStepThatThrowsDidNotRun(): Void {
 		final summary: Summary = new Summary();
 		Assert.same(Passed, summary.time('build', () -> Passed));

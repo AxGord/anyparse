@@ -24,6 +24,9 @@ final class Branches {
 	/** How long the reason of a step whose branch left no report may grow. */
 	private static inline final WHY_WIDTH: Int = 100;
 
+	/** Milliseconds in a second. */
+	private static inline final MS_PER_SECOND: Float = 1000;
+
 	/** The bound of a run id's random part. */
 	private static inline final NONCE_BOUND: Int = 0x7fffffff;
 
@@ -36,14 +39,22 @@ final class Branches {
 		report: Array<String> -> String, into: Summary
 	): Map<String, Int> {
 		for (names in branches) if (FileSystem.exists(report(names))) FileSystem.deleteFile(report(names));
+		final spawned: Float = Date.now().getTime();
 		final runs: Array<Result> = Pool.of(branches.length).map(branches, command);
 		final readings: Map<String, Int> = [];
 		final steps: Map<String, Step> = [];
+		var longest: Float = 0;
 		for (i => names in branches) {
 			final file: String = report(names);
 			final ran: Result = runs[i];
 			File.saveContent('$file.log', ran.out + ran.err + ran.failure);
 			final left: Null<BranchReport> = reportOf(file, id);
+			final began: Null<Float> = left?.started;
+			if (began != null) {
+				final waited: Float = waitedMs(spawned, began);
+				into.wait(names[0], waited);
+				longest = Math.max(longest, waited);
+			}
 			if (left != null) for (name => value in left.readings) readings[name] = value;
 			final why: String = reasonOf(ran);
 			for (name in names) steps[name] = left?.steps.find(s -> s.name == name) ?? {
@@ -58,7 +69,13 @@ final class Branches {
 			final step: Null<Step> = steps[name];
 			if (step != null) into.add(step.name, step.outcome, step.ms, step.note, step.excerpt);
 		}
+		into.phase(longest);
 		return readings;
+	}
+
+	/** How long a branch started at `spawned` waited before its process began at `began`: the pool's lease, never below nothing. */
+	public static function waitedMs(spawned: Float, began: Float): Float {
+		return Math.max(0, began - spawned);
 	}
 
 	/**
@@ -75,7 +92,7 @@ final class Branches {
 
 	/** Leave the steps of `summary` and `readings` at `file` for the run `id` that started this branch. */
 	public static function leave(file: String, id: String, summary: Summary, readings: Map<String, Int>): Void {
-		File.saveContent(file, encode(id, summary.steps(), readings));
+		File.saveContent(file, encode(id, summary.steps(), readings, Date.now().getTime() - js.Node.process.uptime() * MS_PER_SECOND));
 	}
 
 	/** The report at `file` when a branch of the run `id` left it, else null — a report of another run is none. */
@@ -91,7 +108,7 @@ final class Branches {
 	}
 
 	/** `steps` and `readings` of the run `id` as the JSON of a branch report. */
-	public static function encode(id: String, steps: Array<Step>, readings: Map<String, Int>): String {
+	public static function encode(id: String, steps: Array<Step>, readings: Map<String, Int>, ?started: Float): String {
 		final rows: Array<StepRecord> = [
 			for (step in steps) {
 				final kind: Array<String> = switch step.outcome {
@@ -111,7 +128,12 @@ final class Branches {
 			}
 		];
 		final counts: Array<Reading> = [for (name => value in readings) { name: name, value: value }];
-		return BranchReportJsonWriter.write({ run: id, steps: rows, readings: counts }, JsonFormat.instance.defaultWriteOptions);
+		return BranchReportJsonWriter.write({
+			run: id,
+			started: started,
+			steps: rows,
+			readings: counts
+		}, JsonFormat.instance.defaultWriteOptions);
 	}
 
 	/** The steps and readings of the branch report `text`, as `encode` wrote them. */
@@ -119,6 +141,7 @@ final class Branches {
 		final parsed: BranchReportJson = BranchReportJsonParser.parse(text);
 		return {
 			run: parsed.run ?? '',
+			started: parsed.started,
 			steps: [
 				for (row in parsed.steps)
 					{
@@ -186,6 +209,9 @@ final class Branches {
 typedef BranchReport = {
 	/** The run whose branch left it; empty in a report that names none. */
 	var run: String;
+
+	/** When the branch process began, in epoch milliseconds; null in a report that names none. */
+	var started: Null<Float>;
 
 	var steps: Array<Step>;
 	var readings: Map<String, Int>;
