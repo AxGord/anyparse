@@ -4561,3 +4561,52 @@ Whole-registry `--all --fast`: NOT measured here. `dev mutation-arm` typed by ha
 Census (the planning stage, upper bound: arms whose module a commit touched, last 40 first-parent commits): 8 of 40 gates held `anyparse.macro` arms, 2 to 39 each. Registry: 221 macro arms over 91 distinct pin-class sets and 87 classes; the most shared class is pinned by 13 arms.
 
 Builds, interleaved, unmutated tree at `851a2b06e`, load 11 to 14: `haxe test-js-common.hxml -D analyzer-optimize` 55 s / 54 s; the same with `-D anyparse_narrow=unit.lowering.BranchOutliningTest` 14 s / 15 s. The killer run of that class: under 1 s on either binary (27 tests). An empty class list costs the same 14 s: the floor is the harness (`RunTests` -> `CliFixture` -> the query engine with the Haxe grammar), which every Hx pin needs anyway. A settled narrow track costs one narrow build and run, plus one base build and run per class set and run.
+
+## SUITE-TIME-CENSUS (2026-11-06): where the whole suite's seconds go
+
+Base `e9cb56142`, machine load 8 to 12 on 16 CPUs (other workers running), so SHARES are the finding and absolutes are inflated. Four whole-suite runs of the same tree, no code change: the runner's own `APQ_TEST_TIMING` rows, a `NODE_OPTIONS --require` preload that logs every `child_process` call with the running test (read from `APQ_TEST_PROGRESS`) and its duration, `node --cpu-prof` on the runner process, and `dev shard -n 4`. Class totals of the three single-process runs: 938 / 966 / 976 s; the top 22 classes keep their order and stay within 10 % of each other across them. Rerun ALONE under the same load, three of the top 10: `MemberReachFactsTest` 333 s (347 to 377 s in the whole runs), `CrossScopeSoundnessTest` 40 s, `PrivateAccessFormParityTest` 29 s; the other seven of the top 10 were not rerun alone, since shares held across the three whole runs and the shard run.
+
+**Single process (`node bin/test.js`, no fixture cache), the runner's 977 s by self time:**
+
+| Cause | s | share |
+|---|---|---|
+| blocked in `spawnSync` on a child | 432 | 44 % |
+| polling a background `haxe` batch (`PendingRuns.collectTimed`) | 314 | 32 % |
+| native file reads / stats (`readFileUtf8`, `realpath`, ...) | 85 | 9 % |
+| engine `anyparse_*` functions, own time | 52 | 5 % |
+| node internals, GC, `Sys.sleep`, test code, other | 94 | 10 % |
+
+The engine is not slow: the 15 hottest engine functions by own time are `SourceSlice.leadingDocBlock` 3.33 s, `SymbolIndexBuilder.collectInto` 2.58, `Renderer.embeddedLineWidths` 2.45, `OracleGenerationLock.holdShared` 1.75, `HaxeModuleSpanParser.skipWs` 1.58, `CollapsePass.anyInSubtree` 1.55, the generated helper `walk` 1.51, `Renderer.fitsFlat` 1.21, `Renderer.fitsFlatStep` 1.18, `HaxeModuleSpanParser.matchLit` 1.13, the generated helper `fresh` 0.95, `FactNodeRecords.parseLine` 0.90, `Refs.walkMulti` 0.89, `HaxeRefShape.shape` 0.89 and the generated helper `rank` 0.88: about 23 s together. The one engine hot spot is I/O, not compute: `HaxeAmbientImports.collectModules` reads the text of EVERY module under an `import.hx`'s directory on each `governanceFor` call; 41 of the 46 s of `readFileUtf8` and 12 s of `readFileSync` land there. In inclusive time `collectModules` (reached through `governanceFor`) is 54.0 of the 69.1 s (78 %) of `CrossScopeSoundnessTest` (8 tests) + `PrivateAccessFormParityTest` (9 tests) run alone, and 64.9 of the whole plain run's 977 s: that, not the 49 % read self time, is the size of the memo lever.
+
+**Spawns (14 588 in one run, the preload's count), by what ran:** 3 214 `haxe` (788 `build.hxml --no-output` of the reach/facts fixtures, 751 `-v` defines probes, 284 `check.hxml --no-output`, the rest per-test builds), 4 123 `node -e` TETHER wrappers (one per supervised child, mostly `git`: 2 663 `git`, 193 `apq.js`), 2 442 `sysctl -n hw.perflevel0.logicalcpu` (`HaxeSpawn.fastCores` on every `parallelism()` call; 2 401 of them from the runner, 1 380 from `MemberReachFactsTest`), 928 `ps`. Blocked time of the runner by spawn kind: direct `haxe` 187 s (1 918 calls, median 64 ms), tether-wrapped 199 s (3 097 calls: git 111 s, node 30, `apq`/`haxe`/shell the rest), `sleep` 19 s, `sysctl` 8 s (2 ms each), `ps` 3 s, `git` direct 4 s. A tether costs a node start (22 to 25 ms measured) on top of the 6 ms a `git` takes: about 77 s of the blocked time is that wrapper.
+
+**Top classes, single process (wall s; the shard run's in-suite s in brackets, fixture cache hot):**
+
+| Class | s | tests | cause |
+|---|---|---|---|
+| `unit.query.MemberReachFactsTest` | 377 [94] | 278 | 729 background fixture compiles (median 317 ms each, mean concurrency ~1) polled for 240 s, 617 `haxe -v` probes 75 s, 1 380 `sysctl`; cache hit 62 ms |
+| `unit.dev.LandTest` | 60 [58] | 58 | 1 536 tethers, 1 491 `git` |
+| `unit.check.CrossScopeSoundnessTest` | 36 [45] | 8 | no spawn; `collectModules` file reads |
+| `unit.check.common.unused.PrivateAccessFormParityTest` | 32 [37] | 9 | no spawn; `collectModules` file reads |
+| `unit.dev.SliceGateTest` | 31 [34] | 25 | 416 tethers, 320 `git` |
+| `unit.check.oracle.OracleServerPortTest` | 23 [25] | 17 | 830 `ps` polls, 134 `haxe`, node children |
+| `unit.dev.GateArmsTest` | 22 [30] | 27 | 399 tethers, 264 `git` |
+| `unit.devkit.CommandTest` | 18 [18] | 24 | node children, waits |
+| `unit.check.FactsFixGateE2ETest` | 17 [18] | 15 | 110 `haxe` |
+| `unit.check.oracle.OracleGenerationTest` | 15 [15] | 45 | 415 spawns, 129 tethers |
+| `unit.macro.SpaceFlagTest` | 15 [16] | 8 | 15 `haxe -v` builds of a real grammar, ~1 s each |
+| `PreferStaticExtensionFactsTest` | 14 | 25 | 24 nested fixture compiles |
+| `unit.check.facts.TypedFactsProbeTest` | 13 [-] | 31 | 31 nested fixture compiles |
+| `unit.check.oracle.HaxeSpawnTest` | 13 [13] | 15 | spawn / kill / sleep cases |
+| `unit.macro.OptionsRecordTest` | 12 [12] | 7 | 12 `haxe -v` builds |
+| `unit.query.ApqAstIntegrationTest` | 11 [11] | 1 | no spawn |
+| `unit.check.oracle.OracleRunMemoTest` | 11 [11] | 20 | 126 `haxe`, 277 spawns |
+| `unit.macro.ElemChainFlagTest` | 10 [11] | 11 | 11 `haxe -v` builds |
+| `unit.check.facts.FactsTypeOracleE2ETest` | 10 [10] | 3 | 43 `haxe` |
+| `unit.check.oracle.PendingRunsTest` | 9 [9] | 5 | waits |
+
+81 classes over 1 s hold 920 of the 966 s; the other 1 187 hold 46 s. `MemberReachFactsTest` alone is 39 % of the single-process run.
+
+**`dev shard -n 4` on the same tree: 187 s** (shards 186 / 168 / 181 / 171 s, balanced; class sum 706 s), with the fixture cache hot: 1 512 hits, 3 misses. The 5x against the plain runner has two parts: the cache saves about 260 s of class time (966 to 706 s, about 1.37x, nearly all of it `MemberReachFactsTest` 377 to 94 s), and the 4 shards turn 706 s of class time into 187 s of wall (about 3.8x). A plain `node bin/test.js` arms no cache. What the cache does not cover stays: the two `collectModules` classes (82 s in the shard run), the git-heavy `dev` classes (122 s), the four `unit.macro` real-grammar builds (~50 s).
+
+Levers (savings are in-suite seconds of the shard run unless marked): ambient-governance read memo, run-scoped (about 70 s, 10 %); no tether for a short synchronous `git` (about 60 s of the 122 s `dev` classes plus the rest); `sysctl` once per run (8 s plain, 1 s shard); the cache's hit path as an in-process lookup instead of a node shim (`MemberReachFactsTest` 94 s at 62 ms a hit); fixture batches launched ahead for a cold cache only (plain run, first run after a compiler change: about 200 s of the 240 s polled); the `unit.macro` builds into the cache plan's whitelist (about 45 s).
