@@ -99,7 +99,7 @@ final class BinaryChainEmit {
 	 * plain operand does not (`BreakCommits.offerItemBreaks`): the next rewrite reads that break from its source, and an
 	 * operand with a hardline commits the chain to its break shape (`anyHardline`), so the first rewrite lays the chain out
 	 * the same way exactly when the break happens. An operand that is itself an object literal deciding its own threshold
-	 * break is named for the same reason (`WrapList.namedThresholdLiteral`).
+	 * break is named for the same reason (`WrapList.namedThresholdLiteral`), and in a ternary one deciding by fit as well.
 	 *
 	 * `inlineMultilineBranch` is the caller's verdict that a ternary's hardline comes from a block inside a branch and that its
 	 * config keeps such a block on the condition's line: the hardline then no longer commits the chain to its break shape, and
@@ -111,7 +111,9 @@ final class BinaryChainEmit {
 		?afterComments: Array<Null<Doc>>, restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>,
 		inlineMultilineBranch: Bool = false, ?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList
 	): Doc {
-		final items: Array<Doc> = items.map(WrapList.namedThresholdLiteral);
+		final items: Array<Doc> = isTernaryOps(ops)
+			? items.map(item -> WrapList.namedThresholdLiteral(item, true))
+			: items.map(item -> WrapList.namedThresholdLiteral(item));
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return layout(
 				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, headBreak, forceKeep, afterComments, restAware,

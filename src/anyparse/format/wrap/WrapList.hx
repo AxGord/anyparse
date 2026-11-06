@@ -308,7 +308,7 @@ class WrapList {
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
-		final items: Array<Doc> = open == '(' && items.length > 1 ? items.map(namedThresholdLiteral) : items;
+		final items: Array<Doc> = open == '(' && items.length > 1 ? items.map(item -> namedThresholdLiteral(item)) : items;
 		final plain: Doc = emitList(open, close, sep, items, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return emitList(open, close, sep, with, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
@@ -1390,13 +1390,16 @@ class WrapList {
 	/**
 	 * An object literal still deciding its own THRESHOLD break (`renderPivotBreakArm`), named (`BreakCommits.named`) so a host around it —
 	 * an argument list, a chain, a `FitLine` body — lays itself out as the next rewrite reads that break back: an object
-	 * literal's Star force-commits a source-multi-line literal, so that rewrite measures the host's item multi-line. A fit
-	 * pivot is not named: an ignore-mode list is re-decided by the next rewrite (it is held `BreakCommits.redecided` too), and
-	 * two named pivots in one ternary would each commit only their own break. A sole argument stays the bare decision
-	 * `BodyAllman` reads. Anything else comes back as it is.
+	 * literal's Star force-commits a source-multi-line literal, so that rewrite measures the host's item multi-line. With
+	 * `fitPivot` a literal deciding by fit is named too, for the hosts that ask for it (a ternary, an arrow body); an argument
+	 * list does not, since an object literal's own field list never lays itself out for a break inside it, and naming costs
+	 * every file that holds one a measure render. A sole argument stays the bare decision `BodyAllman` reads. Anything else
+	 * comes back as it is.
 	 */
-	public static function namedThresholdLiteral(item: Doc): Doc {
-		return DocMeasure.firstVisibleTextStartsWith(item, '{'.code) && renderPivotBreakArm(item) != null ? BreakCommits.named(item) : item;
+	public static function namedThresholdLiteral(item: Doc, fitPivot: Bool = false): Doc {
+		return DocMeasure.firstVisibleTextStartsWith(item, '{'.code) && renderPivotBreakArm(item, fitPivot) != null
+			? BreakCommits.named(item)
+			: item;
 	}
 
 	/**

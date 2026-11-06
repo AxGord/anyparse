@@ -124,18 +124,17 @@ final class HxFitLineLiteralBreakFixedPointTest extends Test {
 	}
 
 	/**
-	 * Two literals breaking in one ternary keep their second rewrite: each alternative commits only its own break, so the
-	 * first write settles on one branch's layout. The message says to flip this, not delete it, the day that settles.
+	 * Two literals breaking in one ternary settle in one write: the ternary is offered with both breaks committed, so the
+	 * first write lays it out for both rather than for one branch's break alone.
 	 */
-	@:pin('guard')
-	public function testTwoBreakingBranchesStillNeedASecondRewrite(): Void {
+	@:pin('control')
+	@:killer('M-OFFER-COMBINED')
+	public function testTwoBreakingBranchesSettleInOneWrite(): Void {
 		final literal: String = '{ aaaa: 1, ${''.lpad('b', 61)}: ${''.lpad('2', 56)} }';
 		final once: String = HxWriteFixture.triviaWrite(
 			statement('if (line == keyword || line.startsWith(prefix)) return flag ? $literal : $literal;'), CFG
 		);
-		final twice: String = HxWriteFixture.triviaWrite(once, CFG);
-		Assert.notEquals(once, twice, 'two breaking branches now settle in one write: flip this to Assert.equals');
-		Assert.equals(twice, HxWriteFixture.triviaWrite(twice, CFG), 'the second rewrite must itself be the fixed point');
+		Assert.equals(once, HxWriteFixture.triviaWrite(once, CFG), 'one write of two breaking branches must be the fixed point');
 	}
 
 	/** A plain fit-line host, a loop body, reads the break as well as the construct-group one does. */
@@ -185,11 +184,11 @@ final class HxFitLineLiteralBreakFixedPointTest extends Test {
 	}
 
 	/**
-	 * Two literals breaking in one ternary under the compiled defaults are fit pivots, so they are not named and the first
-	 * write lands on the fixed point. Named, each alternative would commit only its own break and take a second rewrite.
+	 * Two literals breaking in one ternary under the compiled defaults land on the fixed point in one write: they are fit
+	 * pivots, named, and the ternary is offered with both breaks committed. No single cut flips it: unnamed, the renderer's
+	 * own fit decision already settled it.
 	 */
-	@:pin('control')
-	@:killer('M-NAMED-FIT-PIVOT')
+	@:pin('guard')
 	public function testTwoFitPivotBranchesSettleInOneWrite(): Void {
 		final literal: String = '{aaaa: 1, bbbb: \'${''.lpad('k', 124)}\'}';
 		final broken: String = '{\n\t\t\t\t\taaaa: 1,\n\t\t\t\t\tbbbb: \'${''.lpad('k', 124)}\'\n\t\t\t\t}';

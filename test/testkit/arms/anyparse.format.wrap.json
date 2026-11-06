@@ -157,17 +157,9 @@
 			"name": "M-THRESHOLD-ARG-UNNAMED",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "namedThresholdLiteral",
-			"find": "? BreakCommits.named(item) : item;",
-			"replace": "? item : item;",
+			"find": "? BreakCommits.named(item)",
+			"replace": "? item",
 			"note": "an object-literal argument deciding its own threshold break is no longer named, so the argument list lays itself out from the flat literal and the next write, reading the broken literal back committed, packs the list differently"
-		},
-		{
-			"name": "M-NAMED-FIT-PIVOT",
-			"type": "anyparse.format.wrap.WrapList",
-			"method": "namedThresholdLiteral",
-			"find": "'{'.code) && renderPivotBreakArm(item) != null ?",
-			"replace": "'{'.code) ?",
-			"note": "a fit-pivot literal is named too, so a ternary of two breaking literals under the compiled defaults commits only one break per alternative and takes a second rewrite"
 		},
 		{
 			"name": "M-CHAIN-OFFER-OFF",
@@ -439,9 +431,17 @@
 			"name": "M-CHAIN-LITERAL-NAMED",
 			"type": "anyparse.format.wrap.BinaryChainEmit",
 			"method": "emit",
-			"find": "final items: Array<Doc> = items.map(WrapList.namedThresholdLiteral);",
-			"replace": "final items: Array<Doc> = items;",
+			"find": "? items.map(item -> WrapList.namedThresholdLiteral(item, true))",
+			"replace": "? items",
 			"note": "a ternary lays itself out from the flat literal in its branch, so the first write takes the cascade's break where the next one, reading the broken literal, keeps the ternary on one line"
+		},
+		{
+			"name": "M-TERNARY-NAMES-FIT-PIVOT",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emit",
+			"find": "WrapList.namedThresholdLiteral(item, true)",
+			"replace": "WrapList.namedThresholdLiteral(item)",
+			"note": "a ternary operand literal deciding its break by fit is not named, so a branch literal that breaks under the compiled defaults leaves the ternary broken on the first write and glued on the next"
 		}
 	]
 }

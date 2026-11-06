@@ -24,6 +24,12 @@ final class BreakCommits {
 	private static inline final MEASURE_ROUNDS: Int = 4;
 
 	/**
+	 * The most breaks `offerItemBreaks` offers in every combination. Each combination is one more layout of the host, so
+	 * the alternatives double with every break offered; past this count each alternative commits only its own break.
+	 */
+	private static inline final COMBINED_OFFERS: Int = 2;
+
+	/**
 	 * A COMMITTED break: `source`, the layout the next rewrite reads from its own source and every walker reads, with
 	 * `bare` kept for `followBare`. A `BreakCommit` with no token, which no measure render can resolve to `brk`.
 	 */
@@ -152,26 +158,44 @@ final class BreakCommits {
 	 * item `i` holding that break committed. A host whose layout reads its items' Docs at build time so lays itself out the
 	 * way the next rewrite will, which reads the break from the source. `wanted(item, i, broken)` keeps an offer only when
 	 * the committed item changes what the host reads from it; without it every break is offered. `throughBodies` reaches
-	 * into bodies as `nested` does. Each alternative commits only its own break: when two are taken, the one offered last
-	 * wins and the other stays a live decision inside it.
+	 * into bodies as `nested` does. Up to `COMBINED_OFFERS` breaks are offered in every combination, so two that are both
+	 * taken (a literal in each branch of a ternary) lay the host out with both committed; past it each alternative commits
+	 * only its own break, the one offered last wins and the other stays a live decision inside it.
 	 */
 	public static function offerItemBreaks(
 		items: Array<Doc>, plain: Doc, laidOut: (items:Array<Doc>, committed:Int) -> Doc, ?wanted: (item:Doc, i:Int, broken:Doc) -> Bool,
 		throughBodies: Bool = false
 	): Doc {
-		var out: Doc = plain;
 		final holds: DocIdentityMap<Bool> = new DocIdentityMap();
+		final offers: Array<ItemBreak> = [];
 		for (i => item in items) for (inner in outermostPerToken(nested(item, throughBodies))) switch inner {
 			case BreakCommit(brk, _, token) if (token != null):
-				final broken: Doc = replaced(item, inner, brk, holds);
-				if (wanted == null || wanted(item, i, broken)) {
-					final with: Array<Doc> = items.copy();
-					with[i] = broken;
-					out = BreakCommit(laidOut(with, i), out, token);
-				}
+				offers.push({
+					item: i,
+					node: inner,
+					brk: brk,
+					token: token
+				});
 			case _:
 		}
-		return out;
+		final combined: Bool = offers.length <= COMBINED_OFFERS;
+		final keep: (item:Doc, i:Int, broken:Doc) -> Bool = wanted ?? (_, _, _) -> true;
+		// The alternative for offer `k` holds the offers before it, laid out on top of its own committed break: the
+		// measure resolves the outermost taken token first, so every taken subset reaches the layout committing it whole.
+		function offered(with: Array<Doc>, host: Doc, upTo: Int): Doc {
+			var out: Doc = host;
+			for (k in 0...upTo) {
+				final offer: ItemBreak = offers[k];
+				final broken: Doc = replaced(with[offer.item], offer.node, offer.brk, holds);
+				if (broken == with[offer.item] || !keep(with[offer.item], offer.item, broken)) continue;
+				final next: Array<Doc> = with.copy();
+				next[offer.item] = broken;
+				final alone: Doc = laidOut(next, offer.item);
+				out = BreakCommit(combined ? offered(next, alone, k) : alone, out, offer.token);
+			}
+			return out;
+		}
+		return offered(items, plain, offers.length);
 	}
 
 	/**
@@ -351,4 +375,12 @@ final class BreakCommits {
 		return measured ? null : out;
 	}
 
+}
+
+/** One break `offerItemBreaks` offers: the `BreakCommit` `node` nested in item `item`, resolved to `brk` when `token` is taken. */
+private typedef ItemBreak = {
+	var item: Int;
+	var node: Doc;
+	var brk: Doc;
+	var token: Null<BreakToken>;
 }

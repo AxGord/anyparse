@@ -514,8 +514,8 @@
 			"name": "M-OFFER-WANTED-DROPS",
 			"type": "anyparse.core.BreakCommits",
 			"method": "offerItemBreaks",
-			"find": "if (wanted == null || wanted(item, i, broken)) {",
-			"replace": "if (wanted == null) {",
+			"find": "= wanted ?? (_, _, _) -> true;",
+			"replace": "= wanted == null ? (_, _, _) -> true : (_, _, _) -> false;",
 			"note": "a host that filters its offers gets none, so the chain never lays itself out for the region break"
 		},
 		{
@@ -660,6 +660,14 @@
 			"find": "return { doc: measured, decisions: taken };",
 			"replace": "return { doc: commit(doc, tokens, new DocIdentityMap()), decisions: taken };",
 			"note": "the measure decisions handed to CollapsePass are keyed by nodes of a Doc the pass does not rewrite"
+		},
+		{
+			"name": "M-OFFER-COMBINED",
+			"type": "anyparse.core.BreakCommits",
+			"method": "offerItemBreaks",
+			"find": "combined ? offered(next, alone, k) : alone",
+			"replace": "alone",
+			"note": "each alternative commits only its own break, so a ternary whose two literal branches both break settles on one branch's layout and takes a second rewrite"
 		}
 	]
 }

@@ -165,7 +165,8 @@ final class WriterBlankLowering {
 	 * glued to the arrow (while the line stays inside `opt.lineWidth`), or — under
 	 * `opt.fitLineBodyGlue` on a hardline-free body — is rescued onto the
 	 * continuation by `BodyFit.continuationRescuesArrowBody`, or else breaks after
-	 * the arrow and nests one level.
+	 * the arrow and nests one level. An object literal body is named (`WrapList.namedThresholdLiteral`, fit pivot too): once
+	 * it breaks, the arrow measures the line it leaves, as the next rewrite reading the broken literal does.
 	 *
 	 * Shared verbatim by the Pratt infix `->` branch (`lowerInfixTightAssign`) and the
 	 * bare-Ref field path (`emitBareRefNonBodyPolicy`).
@@ -173,7 +174,7 @@ final class WriterBlankLowering {
 	private static function arrowBodyLineWrapExpr(bodyCall: Expr): Expr {
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			final _doc: anyparse.core.Doc = $bodyCall;
+			final _doc: anyparse.core.Doc = anyparse.format.wrap.WrapList.namedThresholdLiteral($bodyCall, true);
 			final _flat: Int = anyparse.format.wrap.WrapList.flatLength(_doc);
 			_dwb(_dilr(
 				opt.lineWidth,

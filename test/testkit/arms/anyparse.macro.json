@@ -1928,6 +1928,14 @@
 			"find": "final prevDocExpr: Expr = afterDocPolicy != null ? macro _prevHadDocComment : macro false;",
 			"replace": "final prevDocExpr: Expr = macro false;",
 			"note": "a sep-Star never reads its previous element as doc-led, so `typedefEmptyLines.afterFieldsWithDocComments` does nothing"
+		},
+		{
+			"name": "M-ARROW-LITERAL-NAMED",
+			"type": "anyparse.macro.WriterBlankLowering",
+			"method": "arrowBodyLineWrapExpr",
+			"find": "anyparse.format.wrap.WrapList.namedThresholdLiteral($bodyCall, true)",
+			"replace": "$bodyCall",
+			"note": "an arrow measures its body literal flat, so a literal body that breaks moves below the arrow on the first write and glues to it on the next"
 		}
 	]
 }
