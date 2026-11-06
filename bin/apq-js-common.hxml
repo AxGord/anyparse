@@ -10,5 +10,9 @@
 -main anyparse.query.Cli
 -lib hxnodejs
 -D js-es=6
+# Full DCE on the engine only: it drops the unused std and the unreached members, so a smaller bundle and code cache
+# for the same work and byte-identical output. Here, not in a leaf, so every engine build (the shared leaf, `dev
+# worker-build`, `dev base-engine`) and its typecheck agree.
+-dce full
 # `-D analyzer-optimize` is NOT here: a real build adds it itself (the leaf, `dev worker-build`'s argv,
 # `dev base-engine`) and the typecheck leaf the compiler oracle declares does not — see `bin/apq-js-check.hxml`.

@@ -50,6 +50,11 @@ final class BuildFlagsTest extends Test {
 		}
 	}
 
+	/** Every engine build (the shared leaf, `dev worker-build`, `dev base-engine`) reaches full DCE through the engine's common flags. */
+	public function testTheEngineIsBuiltUnderFullDce(): Void {
+		Assert.contains('-dce full', flags('bin/apq-js-common.hxml'));
+	}
+
 	public function testATypecheckLeafIsNamedByItsBuildLeaf(): Void {
 		Assert.equals('bin/apq-js-check.hxml', Binaries.checkOf('bin/apq-js.hxml'));
 		Assert.equals('test-js-check.hxml', Binaries.checkOf('test-js.hxml'));
