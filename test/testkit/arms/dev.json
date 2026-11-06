@@ -197,6 +197,14 @@
 			"note": "the count of landings never asks for the full battery, so a run of quiet slices is never checked against the one-process suite"
 		},
 		{
+			"name": "M-LAND-FULL-BATTERY-SHARDS",
+			"type": "dev.Land",
+			"method": "batteryFlags",
+			"find": "full && leased != null ? 1 : ",
+			"replace": "",
+			"note": "a full battery under a lease takes the lease's shards, so its suite adds a monolith run beside them and the land waits for both"
+		},
+		{
 			"name": "M-LAND-COMMIT-LOSES-AUTHOR",
 			"type": "dev.Land",
 			"method": "commit",

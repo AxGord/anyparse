@@ -511,8 +511,9 @@ final class Land {
 
 	/**
 	 * What `dev battery` is given. The monolith cross-check of the suite is not run at every landing, so `--quick`
-	 * is the default (`fullReason` says when it is not); under a pool lease (`leased` threads) the suite takes the shards the
-	 * lease leaves beside the battery's light branches; otherwise the battery
+	 * is the default (`fullReason` says when it is not); under a pool lease (`leased` threads) a quick battery's suite takes the
+	 * shards the lease leaves beside the battery's light branches, and a full one runs on one shard, which is the monolith run
+	 * itself — more shards would add a second, monolith run to the cross-check; otherwise the battery
 	 * sizes it, from its own count or from the lease its suite's branch takes. `reuse` is the gate record
 	 * of the branch's worktree; the battery itself judges which rows it may take over (`GateReuse`).
 	 */
@@ -539,7 +540,7 @@ final class Land {
 			flags.push('--only');
 			flags.push(only);
 		}
-		final shards: Null<Int> = Branches.share(leased, Battery.lightThreads());
+		final shards: Null<Int> = full && leased != null ? 1 : Branches.share(leased, Battery.lightThreads());
 		if (shards != null) {
 			flags.push('-n');
 			flags.push('$shards');

@@ -80,6 +80,7 @@ final class LandTest extends Test {
 
 	public function testTheSuiteTakesTheShardsALeaseLeavesBesideTheLightBranches(): Void {
 		Assert.same(['--quick', '-n', '4'], Land.batteryFlags(false, false, false, 8, []));
+		Assert.same(['--quick', '-n', '1'], Land.batteryFlags(false, false, false, 4, []));
 		Assert.same(['--quick', '-n', '1'], Land.batteryFlags(false, false, false, 2, []));
 		Assert.same(['--allow', 'corpus', '--allow', 'lint', '--quick'], Land.batteryFlags(false, false, false, null, ['corpus', 'lint']));
 	}
@@ -715,6 +716,14 @@ final class LandTest extends Test {
 		Assert.isTrue(run.moved);
 		Assert.equals(1, run.warmed.length);
 		Assert.stringContains('baseline warm not started: no pool', run.output);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-FULL-BATTERY-SHARDS')
+	public function testAFullBatteryUnderALeaseRunsOnOneShardWhateverTheLeaseHolds(): Void {
+		Assert.same(['-n', '1'], Land.batteryFlags(false, false, true, 8, []));
+		Assert.same(['-n', '1'], Land.batteryFlags(false, false, true, 4, []));
+		Assert.same([], Land.batteryFlags(false, false, true, null, []));
 	}
 
 	/**
