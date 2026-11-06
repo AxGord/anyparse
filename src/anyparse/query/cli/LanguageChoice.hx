@@ -62,10 +62,15 @@ final class LanguageChoice {
 
 	/**
 	 * The positionals of `args` that can name a file: by the command's own flag spec, so never a flag's value, and for a
-	 * `LeadingQuery` command only the scope side of `CliArgs.routePositional`, so never the text it searches for.
+	 * `LeadingQuery` command only the scope side of `CliArgs.routePositional`, so never the text it searches for, and
+	 * for a `LeadingQueryCount` command none of the positionals its argv counts as text.
 	 */
 	private static function fileArguments(args: Array<String>, command: CliCommand): Array<String> {
 		final positionals: Array<Int> = command.flags().positionals(args);
+		if (command is LeadingQueryCount) {
+			final texts: Int = cast(command, LeadingQueryCount).leadingQueryCount(args);
+			return [for (n => i in positionals) if (n >= texts) args[i]];
+		}
 		if (!(command is LeadingQuery)) return [for (i in positionals) args[i]];
 		final separator: Int = CliArgs.nameSeparatorIndex(args);
 		final queries: Array<String> = [];

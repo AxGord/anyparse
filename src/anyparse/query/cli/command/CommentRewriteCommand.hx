@@ -34,7 +34,7 @@ typedef CommentRewriteOpts = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class CommentRewriteCommand implements CliCommand {
+final class CommentRewriteCommand implements CliCommand implements LeadingQueryCount {
 
 	public function new() {}
 
@@ -56,6 +56,11 @@ final class CommentRewriteCommand implements CliCommand {
 
 	public function usage(): Void {
 		printCommentRewriteUsage();
+	}
+
+	/** The text to find and the text to put in its place. */
+	public function leadingQueryCount(args: Array<String>): Int {
+		return 2;
 	}
 
 	private static inline function commentRewriteParseExit(code: Int): CommentRewriteOpts {

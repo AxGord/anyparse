@@ -10,6 +10,7 @@ import anyparse.query.cli.command.CalleesCommand;
 import anyparse.query.cli.command.CallersCommand;
 import anyparse.query.cli.command.CasesCommand;
 import anyparse.query.cli.command.ChangedCommand;
+import anyparse.query.cli.command.CommentRewriteCommand;
 import anyparse.query.cli.command.CondCommand;
 import anyparse.query.cli.command.DeclaresCommand;
 import anyparse.query.cli.command.FmtCommand;
@@ -18,6 +19,8 @@ import anyparse.query.cli.command.ImportersCommand;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.LitCommand;
 import anyparse.query.cli.command.MentionsCommand;
+import anyparse.query.cli.command.MetaCommand;
+import anyparse.query.cli.command.OwnerCommand;
 import anyparse.query.cli.command.RefsCommand;
 import anyparse.query.cli.command.ResolveDefineCommand;
 import anyparse.query.cli.command.SearchCommand;
@@ -226,6 +229,39 @@ class LanguageChoiceTest extends Test {
 		];
 		for (command in commands)
 			Assert.same(['--lang', 'haxe', 'q.json', 'A.hx'], choose(command, ['q.json', 'A.hx']).args, command.name());
+	}
+
+	/** `owner` reads its question as text, so a question ending in `.json` names no grammar; `--list` has none. */
+	@:killer('M-LANG-OWNER-QUESTION-READ-AS-FILE')
+	@:pin('control')
+	public function testTheQuestionOfOwnerIsNoFile(): Void {
+		final owner: CliCommand = new OwnerCommand();
+		Assert.same(['--lang', 'haxe', 'who reads apqlint.json', 'A.hx'], choose(owner, ['who reads apqlint.json', 'A.hx']).args);
+		Assert.same(['--lang', 'haxe', '--limit', '3', 'q.json', 'A.hx'], choose(owner, ['--limit', '3', 'q.json', 'A.hx']).args);
+		Assert.same(['--lang', 'json', '--list', 'a.json'], choose(owner, ['--list', 'a.json']).args);
+	}
+
+	/** `comment-rewrite` reads TWO texts, the find and the replace, before the files. */
+	@:killer('M-LANG-REWRITE-TEXTS-READ-AS-FILES')
+	@:pin('control')
+	public function testTheTwoTextsOfCommentRewriteAreNoFiles(): Void {
+		final rewrite: CliCommand = new CommentRewriteCommand();
+		Assert.same(['--lang', 'haxe', 'a.json', 'b.json', 'A.hx'], choose(rewrite, ['a.json', 'b.json', 'A.hx']).args);
+		Assert.same(
+			['--lang', 'haxe', '--write', 'a.json', 'b.json', 'A.hx'], choose(rewrite, ['--write', 'a.json', 'b.json', 'A.hx']).args
+		);
+		Assert.raises(() -> choose(rewrite, ['a.json', 'b.json']), UsageFailure);
+	}
+
+	/** `meta` reads its leading positional as text only when it is an annotation: `--on` may leave the annotation out. */
+	@:killer('M-LANG-META-ANNOTATION-READ-AS-FILE')
+	@:pin('control')
+	public function testTheAnnotationOfMetaIsNoFile(): Void {
+		final meta: CliCommand = new MetaCommand();
+		Assert.same(['--lang', 'haxe', '@:keep.json', 'A.hx'], choose(meta, ['@:keep.json', 'A.hx']).args);
+		Assert.same(['--lang', 'json', '--on', 'ClassDecl', 'a.json'], choose(meta, ['--on', 'ClassDecl', 'a.json']).args);
+		Assert.same(['--lang', 'haxe', '@:fmt(a.json)', 'A.hx'], choose(meta, ['@:fmt(a.json)', 'A.hx']).args);
+		Assert.raises(() -> choose(meta, ['@:keep.json']), UsageFailure);
 	}
 
 	private static function choose(command: CliCommand, args: Array<String>): LanguageChoiceResult {

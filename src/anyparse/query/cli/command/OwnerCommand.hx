@@ -14,7 +14,7 @@ import anyparse.query.cli.CliArgs.ResolvedInputs;
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class OwnerCommand implements CliCommand {
+final class OwnerCommand implements CliCommand implements LeadingQueryCount {
 
 	/** How many ranked declarations print without `--limit`. */
 	private static inline final DEFAULT_LIMIT: Int = 10;
@@ -39,6 +39,11 @@ final class OwnerCommand implements CliCommand {
 
 	public function usage(): Void {
 		printOwnerUsage();
+	}
+
+	/** The question, unless `--list` has none. */
+	public function leadingQueryCount(args: Array<String>): Int {
+		return args.contains('--list') ? 0 : 1;
 	}
 
 	/**

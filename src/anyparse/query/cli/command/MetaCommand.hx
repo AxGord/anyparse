@@ -36,7 +36,7 @@ typedef MetaOpts = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class MetaCommand implements CliCommand {
+final class MetaCommand implements CliCommand implements LeadingQueryCount {
 
 	/** The flag that names the declaration kind — spelled once, so the kind gate reports the flag the user typed. */
 	private static inline final ON_FLAG: String = '--on';
@@ -66,6 +66,11 @@ final class MetaCommand implements CliCommand {
 		printMetaUsage();
 	}
 
+	/** The annotation, when the first positional is written with its `@` sigil; `--on` may leave it out. */
+	public function leadingQueryCount(args: Array<String>): Int {
+		return leadsWithAnnotation([for (i in flags().positionals(args)) args[i]]) ? 1 : 0;
+	}
+
 	private static inline function metaParseExit(code: Int): MetaOpts {
 		return {
 			lang: '',
@@ -77,6 +82,11 @@ final class MetaCommand implements CliCommand {
 			positionals: [],
 			errExit: code
 		};
+	}
+
+	/** Whether the leading positional is an annotation: file and directory specs never start with the `@` sigil. */
+	private static function leadsWithAnnotation(positionals: Array<String>): Bool {
+		return positionals.length > 0 && positionals[0].charAt(0) == '@';
 	}
 
 	private static function runMeta(args: Array<String>, ctx: CliContext): Int {
@@ -101,7 +111,7 @@ final class MetaCommand implements CliCommand {
 		// driving case (`@:fmt(propagateExprPosition)`), but the split is
 		// tag-agnostic. `@:tag` with no `(...)` leaves the tag untouched and
 		// `argFilter` null (the historical no-arg behaviour).
-		final rawAnnotation: Null<String> = positionals.length > 0 && StringTools.startsWith(positionals[0], '@') ? positionals[0] : null;
+		final rawAnnotation: Null<String> = leadsWithAnnotation(positionals) ? positionals[0] : null;
 		final annotation: Null<String> = rawAnnotation != null ? annotationTag(rawAnnotation) : null;
 		final argFilter: Null<String> = rawAnnotation != null ? annotationArgFilter(rawAnnotation) : null;
 		final inputSpecs: Array<String> = rawAnnotation != null ? positionals.slice(1) : positionals.copy();

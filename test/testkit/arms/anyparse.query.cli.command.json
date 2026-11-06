@@ -788,6 +788,27 @@
 			"find": "o.ruleFilters.length == 0 && o.categoryFilters.length == 0",
 			"replace": "o.ruleFilters.length == 0",
 			"note": "a --category run reads its builds off the facts compiles, so a run that asks the builds and never the facts pays the facts hook's walk for them"
+		},
+		{
+			"name": "M-LANG-OWNER-QUESTION-READ-AS-FILE",
+			"type": "anyparse.query.cli.command.OwnerCommand",
+			"method": "leadingQueryCount",
+			"force": "0",
+			"note": "owner counts no text positional, so `hxq owner 'who reads apqlint.json' src` reads the question's extension as a file naming JSON and parses every Haxe file as it"
+		},
+		{
+			"name": "M-LANG-REWRITE-TEXTS-READ-AS-FILES",
+			"type": "anyparse.query.cli.command.CommentRewriteCommand",
+			"method": "leadingQueryCount",
+			"force": "1",
+			"note": "only the find counts as text, so a replace ending in a registered extension names a second grammar beside the files"
+		},
+		{
+			"name": "M-LANG-META-ANNOTATION-READ-AS-FILE",
+			"type": "anyparse.query.cli.command.MetaCommand",
+			"method": "leadingQueryCount",
+			"force": "0",
+			"note": "an annotation ending in a registered extension is read as a file naming that grammar"
 		}
 	]
 }

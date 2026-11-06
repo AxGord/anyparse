@@ -7961,6 +7961,55 @@
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "hxq owner who reads .last-sweep.json walk",
+			"argv": [
+				"hxq",
+				"owner",
+				"who reads .last-sweep.json",
+				"walk"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "33acf02a6575eff0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq comment-rewrite .last-sweep.json x.json walk",
+			"argv": [
+				"hxq",
+				"comment-rewrite",
+				".last-sweep.json",
+				"x.json",
+				"walk"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "c980622bebbb2663",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq meta @:keep.json walk",
+			"argv": [
+				"hxq",
+				"meta",
+				"@:keep.json",
+				"walk"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "ef3bdbb565f6ea57",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }
