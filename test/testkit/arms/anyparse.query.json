@@ -1371,6 +1371,14 @@
 			"note": "the memo of a directory chain and of the import maps keyed by path survives a pass that rewrote an ambient source, so every later pass of one --fix run resolves against the tree that was while the plugin behind the decorator reads disk fresh"
 		},
 		{
+			"name": "M-AMBIENT-GOVERN-STALE",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "invalidateAmbientChain",
+			"find": "_governanceMemo.clear();",
+			"replace": "_governanceMemo.keys();",
+			"note": "what an ambient source governs, memoised per path, survives a pass that created or rewrote a module of its subtree, so the next pass of one --fix run judges the tree that was"
+		},
+		{
 			"name": "M-IMPORT-LEAF-ONLY-NAMES",
 			"type": "anyparse.query.SymbolIndex",
 			"method": "namesBoundBy",

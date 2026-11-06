@@ -134,6 +134,15 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _ambientImportCache: Map<String, AmbientImports> = [];
 
 	/**
+	 * What each ambient source governs per path, memoised for the run: the seam lists a directory subtree and
+	 * reads every module in it, and the import rules ask the same source once per file they judge.
+	 *
+	 * Instance state (invariant 1), dropped with the chain at the head of every `--fix` pass, because that
+	 * is where the run's own writes — a created or rewritten module or source — become visible to a check.
+	 */
+	private final _governanceMemo: Map<String, Null<AmbientImportGovernance>> = [];
+
+	/**
 	 * The scope-wide reflection surface `check/ReflectionScan` collects, memoised for the run like
 	 * every cache above it. `final`, because the memo validates itself against the sources it read
 	 * rather than being expired from here: a `--fix` pass rewrites a report entry in place, and an
@@ -686,18 +695,23 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	}
 
 	/**
-	 * Deliberately NOT memoised: the answer is a directory LISTING plus the text under it, which a
-	 * pass that creates or edits a module changes, and one decorator instance serves every pass of a
-	 * `--fix` run.
+	 * What the source at `path` governs, read from disk once per run until `invalidateAmbientChain`. The answer
+	 * is a directory LISTING plus the text under it, which a pass that creates or edits a module changes, and
+	 * one decorator instance serves every pass of a `--fix` run — so the memo dies at each pass head.
 	 */
-	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance> return _inner.ambientImportGovernance(path);
+	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance> {
+		if (_governanceMemo.exists(path)) return _governanceMemo[path];
+		final governance: Null<AmbientImportGovernance> = _inner.ambientImportGovernance(path);
+		_governanceMemo[path] = governance;
+		return governance;
+	}
 
 	/** Forwarded: the ladder is a function of the path, the package and the grammar's own stop rule, so there is nothing to cache. */
 	public function ambientImportSites(path: String, pkg: String): Array<String> return _inner.ambientImportSites(path, pkg);
 
 	/**
-	 * Drop every memo whose answer depends on an ambient source's TEXT — the chain per directory
-	 * and the import maps keyed by path and source.
+	 * Drop every memo whose answer depends on an ambient source's TEXT — the chain per directory,
+	 * what each source governs and the import maps keyed by path and source.
 	 *
 	 * One decorator instance serves every pass of a `--fix` run, and the run writes ambient
 	 * sources between passes, so a memo taken before a write answers the tree that was. The chain
@@ -709,6 +723,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_importMapCache.clear();
 		_indexMemo.clear();
 		_writeIndexMemo.clear();
+		_governanceMemo.clear();
 	}
 
 	/**
