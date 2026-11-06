@@ -16,6 +16,9 @@ typedef BatteryPlan = {
 	/** The base snapshot's suite counts (tests, assertions), or null. */
 	@:optional var baseSuite: Null<Array<Int>>;
 
+	/** The test classes the suite row runs instead of every class (`--only`), or null for the whole suite. */
+	@:optional var only: Null<Array<String>>;
+
 	var shards: Int;
 	var quick: Bool;
 	var snapshot: Bool;

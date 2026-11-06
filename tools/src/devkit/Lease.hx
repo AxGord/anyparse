@@ -36,6 +36,11 @@ final class Lease {
 		return modeOf(PoolLease.threads(), Sys.getEnv('WF_PLUGIN_ROOT'), budgetThrough);
 	}
 
+	/** The mode a process takes for a lease of its own though its caller holds one: the pool, else `Unpooled`. */
+	public static function pooled(): LeaseMode {
+		return modeOf(null, Sys.getEnv('WF_PLUGIN_ROOT'), budgetThrough);
+	}
+
 	/**
 	 * The mode for a `held` lease of the caller and the workflow plugin's `root`: `Held` under a lease, `Own` when the root's
 	 * `wf-run` is there and `probe` reads the pool's budget through it, else `Unpooled`.

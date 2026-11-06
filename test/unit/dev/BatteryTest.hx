@@ -304,8 +304,122 @@ final class BatteryTest extends Test {
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-BATTERY-IMPACT-DISPATCH-DROPPED')
+	public function testASuiteThatRanOnlyTheReachedClassesLeavesTheCorpusToTheWholeSuite(): Void {
+		TempDir.with(dir -> {
+			final report: BranchReportJson = impactRun(dir, ['unit.cli.ApqDxTier5CliTest']);
+			Assert.same(
+				[{ name: 'suite', outcome: 'passed' }, { name: 'corpus', outcome: 'skipped' }],
+				report.steps.map(s -> {name: s.name, outcome: s.outcome })
+			);
+			Assert.same(
+				[1],
+				report.readings.filter(r -> r.name == 'impact-classes').map(r -> r.value),
+				'the selection, not the whole suite, was what ran'
+			);
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-BATTERY-IMPACT-DISPATCH-DROPPED')
+	public function testASelectionOfNoClassSkipsTheSuiteAndTheCorpus(): Void {
+		TempDir.with(dir -> {
+			final report: BranchReportJson = impactRun(dir, []);
+			Assert.same(
+				[{ name: 'suite', outcome: 'skipped' }, { name: 'corpus', outcome: 'skipped' }],
+				report.steps.map(s -> {name: s.name, outcome: s.outcome })
+			);
+		});
+	}
+
+	public function testAnImpactRunNamesItsClassesAndKeepsNoTotalsOfTheWholeSuite(): Void {
+		final readings: Map<String, Int> = ['impact-classes' => 3, 'impact-tests' => 12, 'impact-assertions' => 40];
+		Assert.same([
+			'suite  impact — 3 class(es), 12 tests / 40 assertions (the whole suite runs after the land)',
+			'corpus not run'
+		], Battery.totalsLines(readings, 'abc', [10, 41]));
+	}
+
+	public function testAnImpactSnapshotCarriesTheBasesSweepAndSuiteLineSoTheNextLandNeedsNoBaseBattery(): Void {
+		TempDir.with(dir -> {
+			final work: String = dir.file('work');
+			FileSystem.createDirectory(work);
+			File.saveContent(dir.file('abc-suite.txt'), '10 41\n');
+			File.saveContent(dir.file('abc-sweep.json'), '{"base":1}');
+			final readings: Map<String, Int> = ['impact-classes' => 2, 'impact-tests' => 3, 'impact-assertions' => 4];
+			final saved: Array<String> = [];
+			Assert.isNull(Battery.keepSnapshot(dir.path, 'def', work, readings, file -> {
+				saved.push(file);
+				return new Result('sweep', {
+					status: 0,
+					out: '',
+					err: '',
+					failure: '',
+					overflowed: false
+				});
+			}, 'abc'));
+			Assert.same([], saved);
+			Assert.equals('10 41', File.getContent(dir.file('def-suite.txt')).trim(), 'provisional, until the whole suite counts it');
+			Assert.equals('{"base":1}', File.getContent(dir.file('def-sweep.json')));
+		});
+	}
+
+	public function testAnImpactRunThatSweptKeepsItsOwnSweep(): Void {
+		TempDir.with(dir -> {
+			final work: String = dir.file('work');
+			FileSystem.createDirectory(work);
+			File.saveContent(dir.file('abc-sweep.json'), '{"base":1}');
+			final readings: Map<String, Int> = ['impact-classes' => 2, 'sweep-pass' => 1];
+			Assert.isNull(Battery.keepSnapshot(dir.path, 'def', work, readings, file -> {
+				File.saveContent(file, '{"own":1}');
+				return new Result('sweep', {
+					status: 0,
+					out: '',
+					err: '',
+					failure: '',
+					overflowed: false
+				});
+			}, 'abc'));
+			Assert.equals('{"own":1}', File.getContent(dir.file('def-sweep.json')));
+			Assert.isFalse(FileSystem.exists(dir.file('def-suite.txt')), 'the base has no suite line to carry');
+		});
+	}
+
 	private static function git(repo: String, words: Array<String>): Void {
 		cmd('git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false -C $repo $words').run().check();
+	}
+
+	/** The steps of the suite and corpus rows over a fake runner, for a plan whose suite is limited to `only`. */
+	private static function impactRun(dir: TempDir, only: Array<String>): BranchReportJson {
+		final tree: String = dir.file('tree');
+		final work: String = dir.file('work');
+		FileSystem.createDirectory(dir.file('tree/bin'));
+		FileSystem.createDirectory(work);
+		File.saveContent(dir.file('tree/bin/test.js'), GREEN_RUNNER);
+		final engine: String = Sys.getEnv('HXQ_BIN') ?? FileSystem.fullPath('bin/apq.js');
+		File.saveContent(dir.file('tree/bin/hxq'), 'cmd="$$1"; shift; exec node "$engine" "$$cmd" --lang haxe "$$@"\n');
+		final plan: BatteryPlan = {
+			repo: tree,
+			work: work,
+			cache: dir.file('cache'),
+			head: 'h1',
+			base: null,
+			baseSuite: null,
+			only: only,
+			shards: 1,
+			quick: true,
+			snapshot: false,
+			allowBlast: false,
+			allow: [],
+			client: null,
+			jvmSkip: '--no-jvm',
+			run: 'r',
+			ownLease: false
+		};
+		File.saveContent(dir.file('work/plan.json'), BatteryPlanWriter.write(plan, JsonFormat.instance.compactWriteOptions));
+		Assert.equals(0, Battery.main(['--rows', 'suite,corpus', '--plan', dir.file('work/plan.json')]));
+		return BranchReportJsonParser.parse(File.getContent(dir.file('work/branch-suite.json')));
 	}
 
 }

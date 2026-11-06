@@ -3,6 +3,7 @@ package unit.dev;
 import dev.GateReuse;
 import dev.Land;
 import dev.LandFormat;
+import dev.SuiteImpact.SuiteScope;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Summary.Outcome;
@@ -615,6 +616,74 @@ final class LandTest extends Test {
 		Assert.stringContains('offered the gate record', run.output);
 	}
 
+	@:pin('control')
+	@:killer('M-LAND-IMPACT-SCOPE-IGNORED')
+	public function testAnImpactLandListsOnlyTheClassesTheMergeReachesAgainstTheCommitBeforeIt(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null,
+			{ impact: Selected(['unit.a.ATest', 'unit.b.BTest']) }
+		);
+		Assert.equals(0, run.status, run.output);
+		final flags: Array<String> = run.flags[0];
+		final at: Int = flags.indexOf('--only');
+		Assert.isTrue(at >= 0 && flags[at + 1].endsWith('suite-impact.txt'), flags.join(' '));
+		Assert.equals('unit.a.ATest\nunit.b.BTest\n', run.selected);
+		Assert.equals(run.headBefore, run.impactBase);
+		Assert.stringContains('impact suite under the lock', run.output);
+	}
+
+	public function testAnImpactLandStartsTheWholeSuiteOfTheLandedCommit(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null,
+			{ impact: Selected(['unit.a.ATest']) }
+		);
+		Assert.equals(0, run.status, run.output);
+		Assert.same([run.headAfter], run.started);
+		Assert.stringContains('runs in the background', run.output);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-WHOLE-SCOPE-STARTS-POST-LAND')
+	public function testAChangeNoTextBoundsRunsTheWholeSuiteUnderTheLockAndStartsNothingAfter(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null,
+			{ impact: WholeSuite('a macro depends on the change') }
+		);
+		Assert.equals(0, run.status, run.output);
+		Assert.isFalse(run.flags[0].contains('--only'), run.flags[0].join(' '));
+		Assert.same([], run.started);
+		Assert.stringContains('whole suite under the lock — a macro depends on the change', run.output);
+	}
+
+	public function testAFullBatteryRunsEveryClassWhateverTheScopeSays(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: true, landed: 0 }, null, { impact: Selected(['unit.a.ATest']) });
+		Assert.equals(0, run.status, run.output);
+		Assert.isFalse(run.flags[0].contains('--only'), run.flags[0].join(' '));
+		Assert.same([], run.started);
+		Assert.equals('', run.impactBase, 'the scope is not even asked');
+	}
+
+	public function testARedImpactBatteryStartsNoWholeSuite(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'docs/note.md', { full: false, landed: 0, fails: true }, null,
+			{ impact: Selected(['unit.a.ATest']) }
+		);
+		Assert.equals(1, run.status);
+		Assert.same([], run.started);
+	}
+
+	@:pin('control')
+	@:killer('M-POSTLAND-RED-RECORD-REFUSES-NOTHING')
+	public function testALandAfterARedWholeSuiteIsRefusedBeforeItTouchesTheTree(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { redRecord: true });
+		Assert.equals(1, run.status);
+		Assert.stringContains('ended red', run.output);
+		Assert.stringContains('post-land clear deadbeef', run.output);
+		Assert.isFalse(run.moved);
+		Assert.equals(0, run.builds);
+		Assert.same([], run.flags);
+	}
+
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
@@ -640,6 +709,9 @@ final class LandTest extends Test {
 				File.saveContent('$cache/landings/${battery.landed}', '');
 			}
 			seedBase(battery, cache, base);
+			seedRed(shape, cache);
+			final started: Array<String> = [];
+			final bases: Array<String> = [];
 			var builtFrom: String = '';
 			var builtTree: String = '';
 			final red: Bool = battery != null && battery.fails == true;
@@ -664,6 +736,11 @@ final class LandTest extends Test {
 				resolve: shape.resolve,
 				skills: skillsDir,
 				battery: request,
+				impact: scopeSeam(shape, bases),
+				postLand: (tree, sha, snapshots) -> {
+					started.push(sha);
+					return Passed;
+				},
 				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
 				format: shape.format ?? idle(),
 				exec: (words, tree, log) -> {
@@ -692,6 +769,10 @@ final class LandTest extends Test {
 				againOutput: printed.slice(firstLines).join('\n'),
 				output: printed.join('\n'),
 				flags: flags,
+				started: started,
+				impactBase: bases[0] ?? '',
+				selected: contentsOf('$logs/suite-impact.txt'),
+				headAfter: cmd('git -C $repo rev-parse --short=${dev.Battery.KEY_LENGTH} HEAD').run().out.trim(),
 				base: base,
 				builtFrom: builtFrom,
 				builtTreeLeft: FileSystem.exists(builtTree),
@@ -842,6 +923,24 @@ final class LandTest extends Test {
 		return FileSystem.exists(path) ? File.getContent(path) : '';
 	}
 
+	/** The record an earlier land's red whole suite leaves, when the setup asks for one. */
+	private static function seedRed(shape: Setup, cache: String): Void {
+		if (shape.redRecord != true) return;
+		makeDirectories('$cache/post-land');
+		File.saveContent('$cache/post-land/deadbeef.red', 'suite-shard: FAILED — shard 1\n');
+	}
+
+	/** The scope seam of a setup that names a scope; the commit each question is asked against is pushed on `bases`. */
+	private static function scopeSeam(shape: Setup, bases: Array<String>): Null<(tree:String, base:String) -> SuiteScope> {
+		final named: Null<SuiteScope> = shape.impact;
+		if (named == null) return null;
+		final scope: SuiteScope = named;
+		return (tree, since) -> {
+			bases.push(since);
+			return scope;
+		};
+	}
+
 }
 
 /** What a `Land.land` run over a scratch repository left behind. */
@@ -851,6 +950,14 @@ private typedef Landing = {
 
 	/** The flags of every battery the run started. */
 	var flags: Array<Array<String>>;
+
+	/** The commits whose whole suite the landing started, the commit the scope was asked against, the classes it listed. */
+	var started: Array<String>;
+	var impactBase: String;
+	var selected: String;
+
+	/** The snapshot key of the commit `main` ends at. */
+	var headAfter: String;
 
 	/**
 	 * The commit `main` was at before the run and its snapshot key; when a battery made the snapshot, the commit of the tree
@@ -967,4 +1074,10 @@ private typedef Setup = {
 
 	/** Documents of the skills directory the landing reads beside the repository's own prose. */
 	@:optional var skills: Array<Edit>;
+
+	/** The scope the merge needs, or none for a land with no scope seam. */
+	@:optional var impact: SuiteScope;
+
+	/** Whether an earlier land's whole suite ended red. */
+	@:optional var redRecord: Bool;
 }

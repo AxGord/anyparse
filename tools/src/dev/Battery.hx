@@ -13,7 +13,6 @@ import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Lease;
-import devkit.Lease.LeaseMode;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -37,7 +36,7 @@ using StringTools;
 final class Battery {
 
 	public static inline final USAGE: String = 'usage: dev battery [-n <N>] [--quick] [--snapshot] [--allow <row>]... [--base <key> | --no-base] [--cache <dir>] [--allow-blast] [--keep] '
-		+ '[--client <tree> | --no-client] [--jvm | --no-jvm] [--reuse <gate-record.json>] [--repo <tree>]';
+		+ '[--client <tree> | --no-client] [--jvm | --no-jvm] [--reuse <gate-record.json>] [--only <class-list-file>] [--repo <tree>]';
 
 	/** The characters of HEAD a snapshot is keyed by. */
 	public static inline final KEY_LENGTH: Int = 8;
@@ -46,6 +45,12 @@ final class Battery {
 	private static inline final TESTS: String = 'tests';
 
 	private static inline final ASSERTIONS: String = 'assertions';
+
+	/** The reading of a suite row that ran only the classes the change reaches: how many, and what they counted. */
+	private static inline final IMPACT: String = 'impact-classes';
+
+	private static inline final IMPACT_TESTS: String = 'impact-tests';
+	private static inline final IMPACT_ASSERTIONS: String = 'impact-assertions';
 	private static inline final SWEEP_PASS: String = 'sweep-pass';
 	private static inline final SWEEP_FAIL: String = 'sweep-fail';
 	private static inline final SWEEP_SKIP: String = 'sweep-skip';
@@ -225,7 +230,7 @@ final class Battery {
 	 */
 	private function snapshot(): Null<String> {
 		final refused: Null<String> = keepSnapshot(
-			_plan.cache, _plan.head, _plan.work, _readings, file -> hxq(sweepRead().concat(['--save', file])).run()
+			_plan.cache, _plan.head, _plan.work, _readings, file -> hxq(sweepRead().concat(['--save', file])).run(), _plan.base
 		);
 		if (refused == null) Sys.println('battery: snapshot written for ${_plan.head} in ${_plan.cache}');
 		return refused;
@@ -234,6 +239,8 @@ final class Battery {
 	/** The suite, sharded through `dev shard` (the monolith cross-check unless `--quick`), its counts kept. */
 	private function suite(): Outcome {
 		GateTree.clearSnapshotIn(_plan.repo);
+		final only: Null<Array<String>> = _plan.only;
+		if (only != null) return impactSuite(only);
 		var totals: Null<Tally> = null;
 		final status: Int = Shard.run({
 			repo: _plan.repo,
@@ -265,6 +272,9 @@ final class Battery {
 	 */
 	private function corpus(): Outcome {
 		if (!_suiteGreen) return NotRun('the suite was red — the sweep snapshot it writes proves nothing');
+		final only: Null<Array<String>> = _plan.only;
+		if (only != null && !only.contains(GateTree.CORPUS_CLASS))
+			return Skipped('the impact suite ran no corpus case — the whole suite after the land runs it');
 		final base: Null<String> = baseFile('sweep.json');
 		final sweep: Result = hxq(sweepRead().concat(base == null ? [] : ['--prev', base])).run();
 		final text: String = sweep.out + sweep.err;
@@ -446,6 +456,42 @@ final class Battery {
 		return recorded != null && (_plan.reused ?? []).contains(CORPUS_ROW) ? ['sweep', '--file', recorded] : ['sweep'];
 	}
 
+	/**
+	 * The suite row of a land that ran only the classes its change reaches: no monolith cross-check, and no totals of the whole
+	 * suite, which only the whole run beside it can give.
+	 */
+	private function impactSuite(only: Array<String>): Outcome {
+		_readings[IMPACT] = only.length;
+		_suiteGreen = true;
+		if (only.length == 0) return Skipped('impact — no test class depends on the change');
+		var totals: Null<Tally> = null;
+		final status: Int = Shard.run({
+			repo: _plan.repo,
+			testJs: Path.join([_plan.repo, 'bin/test.js']),
+			shards: _plan.ownLease ? PoolLease.threads() ?? _plan.shards : _plan.shards,
+			verify: false,
+			expect: null,
+			planOnly: false,
+			keep: false,
+			timings: null,
+			fixtureCache: Shard.fixtureCacheOfEnv(),
+			print: Sys.println,
+			warn: Sys.println,
+			counted: sum -> totals = sum,
+			only: only
+		});
+		final sum: Null<Tally> = totals;
+		if (sum == null || sum.tests == 0) {
+			_suiteGreen = false;
+			return Failed('impact — the ${only.length} selected class(es) counted no tests');
+		}
+		_readings[IMPACT_TESTS] = sum.tests;
+		_readings[IMPACT_ASSERTIONS] = sum.assertions;
+		_summary.detail('impact — ${only.length} class(es), ${sum.tests} tests / ${sum.assertions} assertions');
+		_suiteGreen = status == 0;
+		return _suiteGreen ? Passed : Failed('the impact suite is not green (dev shard keeps its own per-shard logs on failure)');
+	}
+
 	/** The threads every branch but the suite's holds while the battery runs — what a held lease's suite leaves them. */
 	public static inline function lightThreads(): Int {
 		return Branches.light(BRANCHES, branchThreads);
@@ -480,6 +526,7 @@ final class Battery {
 		final jvm: Bool = args.flag('--jvm');
 		final noJvm: Bool = args.flag('--no-jvm');
 		final reuse: Null<String> = args.option('--reuse');
+		final onlyFile: Null<String> = args.option('--only');
 		final repo: String = Repo.resolve(args.option('--repo'));
 		args.done();
 		for (name in allow) if (!rowNames().contains(name))
@@ -507,6 +554,7 @@ final class Battery {
 			head: cmd('git -C $repo rev-parse --short=$KEY_LENGTH HEAD').text().trim(),
 			base: base,
 			baseSuite: base == null ? null : suiteCounts(Path.join([cache, '$base-suite.txt'])),
+			only: onlyFile == null ? null : File.getContent(onlyFile).split('\n').filter(line -> line != ''),
 			shards: shards,
 			quick: quick,
 			snapshot: snapshot,
@@ -634,7 +682,12 @@ final class Battery {
 		final assertions: Int = readings[ASSERTIONS] ?? 0;
 		final suite: String = 'suite  $tests tests / $assertions assertions';
 		final lines: Array<String> = [];
-		if (baseSuite == null || baseSuite[0] <= 0) {
+		if (readings.exists(IMPACT)) {
+			lines.push(
+				'suite  impact — ${readings[IMPACT]} class(es), ${readings[IMPACT_TESTS] ?? 0} tests / ${readings[IMPACT_ASSERTIONS] ?? 0} '
+				+ 'assertions (the whole suite runs after the land)'
+			);
+		} else if (baseSuite == null || baseSuite[0] <= 0) {
 			lines.push(suite);
 		} else {
 			final delta: String = '${GateTree.signed(tests - baseSuite[0])} / ${GateTree.signed(assertions - baseSuite[1])}';
@@ -655,7 +708,7 @@ final class Battery {
 	 * `saveSweep` writes the corpus sweep to the file it is given. Answers why it could not be written, or null.
 	 */
 	public static function keepSnapshot(
-		cache: String, head: String, work: String, readings: Map<String, Int>, saveSweep: String -> Result
+		cache: String, head: String, work: String, readings: Map<String, Int>, saveSweep: String -> Result, ?carried: String
 	): Null<String> {
 		final key: String = Path.join([cache, head]);
 		final lint: String = Path.join([work, 'lint-anyparse.json']);
@@ -667,6 +720,7 @@ final class Battery {
 			if (!save.ok) return 'the corpus sweep could not be saved: ${save.firstError()}';
 		}
 		if (readings.exists(TESTS)) File.saveContent('$key-suite.txt', '${readings[TESTS] ?? 0} ${readings[ASSERTIONS] ?? 0}\n');
+		if (readings.exists(IMPACT) && carried != null) carryOver(Path.join([cache, carried]), key, readings.exists(SWEEP_PASS));
 		return null;
 	}
 
@@ -730,6 +784,16 @@ final class Battery {
 		} catch (_: Exception) {
 			return false;
 		}
+	}
+
+	/**
+	 * What an impact run could not measure, taken from the snapshot it compared with: the sweep (no corpus case ran, so the
+	 * corpus is the base's) and provisionally the suite counts, which the whole suite after the land rewrites. A snapshot with
+	 * no suite line does not exist for the next land, which would then measure its base in full.
+	 */
+	private static function carryOver(from: String, to: String, swept: Bool): Void {
+		if (!swept && FileSystem.exists('$from-sweep.json')) File.copy('$from-sweep.json', '$to-sweep.json');
+		if (FileSystem.exists('$from-suite.txt')) File.copy('$from-suite.txt', '$to-suite.txt');
 	}
 
 }

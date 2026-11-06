@@ -3,6 +3,8 @@ package dev;
 import anyparse.core.PoolLease;
 import dev.LandFormat.FormatTools;
 import dev.MergeBrief.MergePlace;
+import dev.PostLand.PostLandStart;
+import dev.SuiteImpact.SuiteScope;
 import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
@@ -103,6 +105,11 @@ final class Land {
 
 	private final _queue: Null<String>;
 
+	/** The scope seam, and the start of the whole suite after the land. */
+	private final _impact: Null<ImpactScope>;
+
+	private final _postLand: Null<PostLandStart>;
+
 	/** Whether the pick of this run has begun, so a failed step rolls the tree back. */
 	private var _picking: Bool = false;
 
@@ -114,6 +121,9 @@ final class Land {
 
 	/** The snapshot key of the commit the checked-out branch was at when the landing began, or null before the base step. */
 	private var _base: Null<String> = null;
+
+	/** Whether the battery's suite ran only the classes the merge reaches, so the whole suite still has to run. */
+	private var _impacted: Bool = false;
 
 	private function new(options: LandOptions) {
 		_repo = options.repo;
@@ -128,6 +138,8 @@ final class Land {
 		_trailers = options.trailers ?? [];
 		_resolve = options.resolve ?? [];
 		_queue = options.queue;
+		_impact = options.impact;
+		_postLand = options.postLand;
 	}
 
 	/**
@@ -135,7 +147,12 @@ final class Land {
 	 * back leaves binaries built from the picked tree behind (they are not tracked), so they are rebuilt from HEAD.
 	 */
 	private function run(message: Null<String>, battery: Null<BatteryRequest>): Int {
+		final cache: Null<String> = battery?.cache;
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
+			{
+				name: 'post-red',
+				step: () -> PostLand.unsettled(cache, _summary.detail)
+			},
 			{ name: 'clean', step: clean },
 			{ name: 'branch', step: shape },
 			{ name: 'base', step: ensureBase.bind(battery) },
@@ -144,7 +161,11 @@ final class Land {
 			{ name: 'fmt', step: _format.run },
 			{ name: 'commit', step: commit.bind(message) },
 			{ name: 'prose-refs', step: _prose.run },
-			{ name: 'battery', step: runBattery.bind(battery) }
+			{ name: 'battery', step: runBattery.bind(battery) },
+			{
+				name: 'post-land',
+				step: () -> PostLand.afterwards(_postLand, _impacted, _repo, git(['rev-parse', 'HEAD']).out.trim(), cache, _summary.detail)
+			}
 		];
 		var aborted: Bool = false;
 		for (s in steps) if (_summary.passed()) {
@@ -310,7 +331,8 @@ final class Land {
 		final mode: String = why == null ? 'battery quick' : 'battery full: $why';
 		_summary.detail(record == null ? mode : '$mode, offered the gate record of the branch\'s worktree');
 		final flags: Array<String> = batteryFlags(
-			request.allowBlast, request.snapshot, why != null, request.leased, request.allow, _base, record
+			request.allowBlast, request.snapshot, why != null, request.leased, request.allow, _base, record,
+			why == null ? impactFile() : null
 		);
 		return switch _exec(flags, _repo, Path.join([_logs, 'battery.log'])) {
 			case Failed(failure): Failed('$mode — $failure');
@@ -359,6 +381,26 @@ final class Land {
 		return Passed;
 	}
 
+	/**
+	 * The file listing the test classes the merge reaches against the commit before it, or null when the suite runs whole: no
+	 * scope seam, or a change no text dependency bounds. The whole suite of the landed commit then runs after the land.
+	 */
+	private function impactFile(): Null<String> {
+		final impact: Null<ImpactScope> = _impact;
+		if (impact == null) return null;
+		return switch impact(_repo, _before) {
+			case WholeSuite(why):
+				_summary.detail('whole suite under the lock — $why');
+				null;
+			case Selected(classes):
+				final file: String = Path.join([_logs, 'suite-impact.txt']);
+				File.saveContent(file, classes.map(name -> '$name\n').join(''));
+				_summary.detail('impact suite under the lock — ${classes.length} class(es), listed in $file');
+				_impacted = true;
+				file;
+		}
+	}
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final message: Null<String> = args.option('-m');
@@ -396,6 +438,8 @@ final class Land {
 			battery: noBattery ? null : request,
 			compile: (tree, log) -> Binaries.compileWith(tree, log, [], Lease.ofEnvironment()),
 			format: LandFormat.engine(),
+			impact: SuiteImpact.ofTree,
+			postLand: PostLand.start,
 			exec: execBattery,
 			merged: mergedPaths,
 			print: Sys.println
@@ -469,7 +513,7 @@ final class Land {
 	 * of the branch's worktree; the battery itself judges which rows it may take over (`GateReuse`).
 	 */
 	public static function batteryFlags(
-		allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>, allow: Array<String>, ?base: String, ?reuse: String
+		allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>, allow: Array<String>, ?base: String, ?reuse: String, ?only: String
 	): Array<String> {
 		final flags: Array<String> = [];
 		if (allowBlast) flags.push('--allow-blast');
@@ -486,6 +530,10 @@ final class Land {
 		if (reuse != null) {
 			flags.push('--reuse');
 			flags.push(reuse);
+		}
+		if (only != null) {
+			flags.push('--only');
+			flags.push(only);
 		}
 		final shards: Null<Int> = Branches.share(leased, Battery.lightThreads());
 		if (shards != null) {
@@ -556,6 +604,10 @@ typedef BatteryRequest = {
 typedef MergedPaths = (tree:String) -> Null<Array<String>>;
 /** The run of `dev battery`: its flags, the tree it runs over and the log it leaves. */
 typedef BatteryExec = (flags:Array<String>, tree:String, log:String) -> Outcome;
+
+/** The scope of the suite a merge needs: the tree and the commit it is compared with. */
+typedef ImpactScope = (tree:String, base:String) -> SuiteScope;
+
 /** What a run of `Land` is given: what to merge into where, and the two seams a test replaces (the build and the output). */
 typedef LandOptions = {
 	var repo: String;
@@ -582,6 +634,13 @@ typedef LandOptions = {
 
 	/** The writer runs of the `fmt` step (`LandFormat.engine` for a real landing). */
 	var format: FormatTools;
+
+	/** Which test classes the merge needs against the commit before it (`SuiteImpact.ofTree`); absent runs the whole suite. */
+	@:optional var impact: Null<ImpactScope>;
+
+	/** Starts the whole suite of the landed commit beside the next land (`PostLand.start`); absent starts none. */
+	@:optional var postLand: Null<PostLandStart>;
+
 	var exec: BatteryExec;
 	var merged: MergedPaths;
 	var print: String -> Void;

@@ -957,6 +957,60 @@
 			"find": "_via.clear();",
 			"replace": "",
 			"note": "a graph read for one file keeps its reach into the next, so the census, which shares one graph across every arm, widens a later selection and hides the misses it exists to find"
+		},
+		{
+			"name": "M-POSTLAND-RED-RECORD-REFUSES-NOTHING",
+			"type": "dev.PostLand",
+			"method": "refusal",
+			"force": "null",
+			"note": "a red whole-suite record refuses nothing, so a land goes on over a main whose landed commit is known red"
+		},
+		{
+			"name": "M-POSTLAND-STARTS-AFTER-WHOLE-BATTERY",
+			"type": "dev.PostLand",
+			"method": "afterwards",
+			"find": " || !impacted",
+			"replace": "",
+			"note": "a land whose battery already ran the whole suite starts a second whole suite after it"
+		},
+		{
+			"name": "M-POSTLAND-GREEN-KEEPS-LOG",
+			"type": "dev.PostLand",
+			"method": "settle",
+			"find": "remove(log);",
+			"replace": "{}",
+			"note": "a green whole-suite run leaves its log in the cache, one file per impact land for good"
+		},
+		{
+			"name": "M-POSTLAND-RED-KEEPS-SCRIPT",
+			"type": "dev.PostLand",
+			"method": "settle",
+			"find": "remove(fileOf(cache, sha, SCRIPT));",
+			"replace": "{}",
+			"note": "a finished run leaves its copy of the tool in the cache, one large file per impact land for good"
+		},
+		{
+			"name": "M-LAND-IMPACT-SCOPE-IGNORED",
+			"type": "dev.Land",
+			"method": "impactFile",
+			"force": "null",
+			"note": "the impact of the merge is never asked, so every land runs every test class under the lock as before"
+		},
+		{
+			"name": "M-LAND-WHOLE-SCOPE-STARTS-POST-LAND",
+			"type": "dev.Land",
+			"method": "impactFile",
+			"find": "_summary.detail('whole suite under the lock — $why');",
+			"replace": "{ _summary.detail('whole suite under the lock — $why'); _impacted = true; }",
+			"note": "a change no text bounds runs the whole suite under the lock and then runs it a second time after the land"
+		},
+		{
+			"name": "M-BATTERY-IMPACT-DISPATCH-DROPPED",
+			"type": "dev.Battery",
+			"method": "suite",
+			"find": "if (only != null) return impactSuite(only);",
+			"replace": "{}",
+			"note": "the suite row ignores the list of classes it was given and runs every class, so an impact land pays for the whole suite under the lock"
 		}
 	]
 }
