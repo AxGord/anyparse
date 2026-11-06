@@ -71,6 +71,9 @@ final class ScratchRoot {
 	 * reach, a SIGKILLed run, is swept by the tool that already owns that job for the other
 	 * four scratch producers. Without that shape this would be the project's fifth scratch
 	 * directory and the only one nothing reaps.
+	 *
+	 * The process environment is this call's other concern: it also switches git commit and tag signing off for every
+	 * `git` child (`silenceGitSigning`), so a fixture commit never waits on the user's gpg agent.
 	 */
 	public static function isolateTempDir(): String {
 		final dir: String = makeScratchRoot(TempScratch.root());
@@ -83,6 +86,7 @@ final class ScratchRoot {
 		#end
 		Sys.putEnv('TMPDIR', dir);
 		Sys.putEnv('TEMP', dir);
+		silenceGitSigning();
 		return dir;
 	}
 
@@ -119,6 +123,25 @@ final class ScratchRoot {
 		FileSystem.createDirectory(dir);
 		return dir;
 		#end
+	}
+
+	/**
+	 * Turn commit and tag signing off for every `git` child this process spawns, through git's own environment
+	 * configuration (`GIT_CONFIG_COUNT` and its key/value pairs), which outranks the user's global, system and repository files.
+	 *
+	 * A fixture repository commits as a throwaway identity, and a signing setup inherited from the user's
+	 * configuration makes each of those commits depend on a running gpg agent: under load it fails
+	 * ("Cannot allocate memory") and the test fails with it. Set once for the process, it covers every producer of a
+	 * fixture commit, the ones not written yet included; entries already present are kept.
+	 */
+	private static function silenceGitSigning(): Void {
+		var count: Int = Std.parseInt(Sys.getEnv('GIT_CONFIG_COUNT') ?? '') ?? 0;
+		for (key in ['commit.gpgsign', 'tag.gpgsign']) {
+			Sys.putEnv('GIT_CONFIG_KEY_$count', key);
+			Sys.putEnv('GIT_CONFIG_VALUE_$count', 'false');
+			count++;
+		}
+		Sys.putEnv('GIT_CONFIG_COUNT', '$count');
 	}
 
 }

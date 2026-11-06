@@ -39,7 +39,7 @@ class RunTests {
 		// temp root per process is what keeps them apart. A COMPLETED run leaves nothing at
 		// all where the old scheme accumulated; an INTERRUPTED one leaves one claimed directory
 		// holding whatever fixtures were live, and `devkit.TmpLifecycle` reaps that once this pid
-		// is gone.
+		// is gone. The same call switches git signing off for every fixture's `git` child.
 		final scratch: String = ScratchRoot.isolateTempDir();
 		final runner: Runner = new Runner();
 

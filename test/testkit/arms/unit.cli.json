@@ -1,0 +1,15 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package unit.cli. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-FIXTURE-GIT-SIGNING-ON",
+			"type": "unit.cli.ScratchRoot",
+			"method": "isolateTempDir",
+			"find": "silenceGitSigning();",
+			"replace": "Sys.putEnv('TEMP', dir);",
+			"note": "the suite process keeps the user's git signing configuration, so a fixture commit needs a working gpg agent and fails when it cannot allocate memory"
+		}
+	]
+}
