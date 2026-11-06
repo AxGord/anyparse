@@ -2,6 +2,7 @@ package devkit;
 
 import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.HaxeSpawn;
+import anyparse.check.oracle.PendingRuns;
 import anyparse.check.oracle.SpawnJob;
 import haxe.DynamicAccess;
 import haxe.Exception;
@@ -155,6 +156,20 @@ final class Command {
 		final own: String = argv.map(quoted).join(' ');
 		final upstream: Null<Command> = _upstream;
 		return upstream == null ? own : '$upstream | $own';
+	}
+
+	/**
+	 * The command started in the background: the caller polls `PendingRuns.running`, may `cancel` it, and turns the batch into
+	 * its `Result` with `answer`. A pipeline or a command with an input is refused (run it with `run`).
+	 */
+	public function background(): PendingRuns {
+		if (_upstream != null || _input != null) throw new Exception('`${toString()}` is a pipeline or reads an input — run it with `run`');
+		return HaxeSpawn.startAll([job(null)], MAX_BUFFER, 1);
+	}
+
+	/** The result of this command's `batch` (from `background`), waiting for it to end. */
+	public function answer(batch: PendingRuns): Result {
+		return new Result(toString(), batch.await()[0]);
 	}
 
 	/** The text this command reads on its standard input, or null. */

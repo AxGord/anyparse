@@ -976,16 +976,16 @@
 		{
 			"name": "M-POSTLAND-GREEN-KEEPS-LOG",
 			"type": "dev.PostLand",
-			"method": "settle",
-			"find": "remove(log);",
+			"method": "release",
+			"find": "if (!keepLog) remove(fileIn(dir, sha, LOG));",
 			"replace": "{}",
 			"note": "a green whole-suite run leaves its log in the cache, one file per impact land for good"
 		},
 		{
 			"name": "M-POSTLAND-RED-KEEPS-SCRIPT",
 			"type": "dev.PostLand",
-			"method": "settle",
-			"find": "remove(fileOf(cache, sha, SCRIPT));",
+			"method": "release",
+			"find": "remove(fileIn(dir, sha, SCRIPT));",
 			"replace": "{}",
 			"note": "a finished run leaves its copy of the tool in the cache, one large file per impact land for good"
 		},
@@ -1058,6 +1058,29 @@
 			"find": "graph.dependents(withReaders(sources, touched))",
 			"replace": "graph.dependents(touched)",
 			"note": "the why answer ignores the readers of an environment key a touched file sets, so it calls not reached a class the scope selects"
+		},
+		{
+			"name": "M-LAND-WARM-THROW-FAILS-LAND",
+			"type": "dev.BaselineWarm",
+			"method": "afterwards",
+			"force": "start == null ? Skipped('no baseline warm requested') : start(repo, head)",
+			"note": "a baseline warm that cannot start throws through the land step, so a green land is rolled back for a background measurement"
+		},
+		{
+			"name": "M-WARM-MOVED-KEEPS-GATE",
+			"type": "dev.BaselineWarm",
+			"method": "warm",
+			"find": "warming.cancel();",
+			"replace": "{}",
+			"note": "a baseline warm whose commit is no longer the tip leaves its gate running to the end, holding the pool for an entry no new slice will ask for"
+		},
+		{
+			"name": "M-WARM-SETTLE-KEEPS-SCRIPT",
+			"type": "dev.BaselineWarm",
+			"method": "settle",
+			"find": "PostLand.release(directory(cache), sha, verdict.match(Failed(_)));",
+			"replace": "{}",
+			"note": "a finished baseline warm leaves its copy of dev.js behind in the cache, a few megabytes for every warmed land"
 		}
 	]
 }

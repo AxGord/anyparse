@@ -1,6 +1,8 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import dev.BaselineWarm.WarmRecipe;
+import dev.BaselineWarm.WarmStart;
 import dev.LandFormat.FormatTools;
 import dev.MergeBrief.MergePlace;
 import dev.PostLand.PostLandStart;
@@ -40,7 +42,7 @@ final class Land {
 
 	public static inline final USAGE: String = 'usage: dev land <branch> [-m <message>] [--no-battery] [--full] [--allow-blast] '
 		+ '[--allow <row>]... [--snapshot] [--rounds <n>] [--tokens <n>] [--resolve <path>#<key>=<ours|theirs|both>]... '
-		+ '[--queue <file>] [--logs <dir>] [--repo <tree>]';
+		+ '[--queue <file>] [--warm-frozen <dir>]... [--warm-infra <dir>]... [--logs <dir>] [--repo <tree>]';
 
 	/** The trailers a landing carries its review rounds and the tokens the slice cost under, which `dev slice-stats` reads. */
 	public static inline final ROUNDS_TRAILER: String = 'Review-Rounds';
@@ -146,7 +148,7 @@ final class Land {
 	 * Every step in turn, each only while the ones before it passed; answers the exit status. A pick a failed step rolls
 	 * back leaves binaries built from the picked tree behind (they are not tracked), so they are rebuilt from HEAD.
 	 */
-	private function run(message: Null<String>, battery: Null<BatteryRequest>): Int {
+	private function run(message: Null<String>, battery: Null<BatteryRequest>, warm: Null<WarmStart>): Int {
 		final cache: Null<String> = battery?.cache;
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
 			{
@@ -165,6 +167,10 @@ final class Land {
 			{
 				name: 'post-land',
 				step: () -> PostLand.afterwards(_postLand, _impacted, _repo, git(['rev-parse', 'HEAD']).out.trim(), cache, _summary.detail)
+			},
+			{
+				name: 'warm',
+				step: () -> BaselineWarm.afterwards(warm, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail)
 			}
 		];
 		var aborted: Bool = false;
@@ -426,6 +432,8 @@ final class Land {
 		final queue: Null<String> = args.option('--queue');
 		final logs: String = logsOption ?? Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'anyparse-land', branch.replace('/', '-')]);
 		FileSystem.createDirectory(logs);
+		final recipe: WarmRecipe = { frozen: args.options('--warm-frozen'), infra: args.options('--warm-infra') };
+		final warming: Bool = !noBattery && (recipe.frozen.length > 0 || recipe.infra.length > 0);
 		return land({
 			repo: repo,
 			branch: branch,
@@ -440,6 +448,7 @@ final class Land {
 			format: LandFormat.engine(),
 			impact: SuiteImpact.ofTree,
 			postLand: PostLand.start,
+			warm: warming ? (tree, sha) -> BaselineWarm.start(tree, sha, request.cache, recipe) : null,
 			exec: execBattery,
 			merged: mergedPaths,
 			print: Sys.println
@@ -448,7 +457,7 @@ final class Land {
 
 	/** The pick, the build and the battery of `options`; answers the exit status. */
 	public static function land(options: LandOptions): Int {
-		return new Land(options).run(options.message, options.battery);
+		return new Land(options).run(options.message, options.battery, options.warm);
 	}
 
 	/**
@@ -640,6 +649,9 @@ typedef LandOptions = {
 
 	/** Starts the whole suite of the landed commit beside the next land (`PostLand.start`); absent starts none. */
 	@:optional var postLand: Null<PostLandStart>;
+
+	/** Starts the baseline of the landed commit beside the next land (`BaselineWarm.start`); absent starts none. */
+	@:optional var warm: Null<WarmStart>;
 
 	var exec: BatteryExec;
 	var merged: MergedPaths;

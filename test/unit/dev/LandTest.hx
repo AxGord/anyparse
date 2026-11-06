@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.BaselineWarm.WarmStart;
 import dev.GateReuse;
 import dev.Land;
 import dev.LandFormat;
@@ -8,6 +9,7 @@ import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Summary.Outcome;
 import devkit.TempDir;
+import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -567,7 +569,7 @@ final class LandTest extends Test {
 		final tools: FormatTools = rewriting('layout', Passed);
 		final run: Landing = formatting({
 			rewrite: tools.rewrite,
-			changes: (tree, base, files) -> throw new haxe.Exception('boom'),
+			changes: (tree, base, files) -> throw new Exception('boom'),
 			settled: tools.settled
 		});
 		Assert.equals(1, run.status);
@@ -684,6 +686,37 @@ final class LandTest extends Test {
 		Assert.same([], run.flags);
 	}
 
+	public function testAPassedLandStartsTheBaselineWarmOfTheLandedCommit(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { warm: 'starts' });
+		Assert.equals(0, run.status, run.output);
+		Assert.equals(1, run.warmed.length, run.output);
+		Assert.isTrue(run.warmed[0].startsWith(run.headAfter), run.warmed.join(' '));
+
+		Assert.stringContains('measured in the background', run.output);
+	}
+
+	public function testALandThatFailedStartsNoBaselineWarm(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0, fails: true }, null, { warm: 'starts' });
+		Assert.equals(1, run.status);
+		Assert.same([], run.warmed);
+	}
+
+	public function testALandWithNoBatteryOrNoWarmSeamStartsNone(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 });
+		Assert.equals(0, run.status, run.output);
+		Assert.same([], run.warmed);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-WARM-THROW-FAILS-LAND')
+	public function testAWarmThatCannotStartNeverFailsOrRollsBackTheLand(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { warm: 'throws' });
+		Assert.equals(0, run.status, run.output);
+		Assert.isTrue(run.moved);
+		Assert.equals(1, run.warmed.length);
+		Assert.stringContains('baseline warm not started: no pool', run.output);
+	}
+
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
@@ -711,6 +744,7 @@ final class LandTest extends Test {
 			seedBase(battery, cache, base);
 			seedRed(shape, cache);
 			final started: Array<String> = [];
+			final warmed: Array<String> = [];
 			final bases: Array<String> = [];
 			var builtFrom: String = '';
 			var builtTree: String = '';
@@ -741,6 +775,7 @@ final class LandTest extends Test {
 					started.push(sha);
 					return Passed;
 				},
+				warm: warmSeam(shape, warmed),
 				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
 				format: shape.format ?? idle(),
 				exec: (words, tree, log) -> {
@@ -770,6 +805,7 @@ final class LandTest extends Test {
 				output: printed.join('\n'),
 				flags: flags,
 				started: started,
+				warmed: warmed,
 				impactBase: bases[0] ?? '',
 				selected: contentsOf('$logs/suite-impact.txt'),
 				headAfter: cmd('git -C $repo rev-parse --short=${dev.Battery.KEY_LENGTH} HEAD').run().out.trim(),
@@ -941,6 +977,17 @@ final class LandTest extends Test {
 		};
 	}
 
+	private static function warmSeam(shape: Setup, warmed: Array<String>): Null<WarmStart> {
+		final mode: Null<String> = shape.warm;
+		return mode == null
+			? null
+			: (repo, sha) -> {
+				warmed.push(sha);
+				if (mode == 'throws') throw new Exception('no pool');
+				return Passed;
+			};
+	}
+
 }
 
 /** What a `Land.land` run over a scratch repository left behind. */
@@ -953,6 +1000,9 @@ private typedef Landing = {
 
 	/** The commits whose whole suite the landing started, the commit the scope was asked against, the classes it listed. */
 	var started: Array<String>;
+
+	/** The commits the baseline warm was started for. */
+	var warmed: Array<String>;
 	var impactBase: String;
 	var selected: String;
 
@@ -1077,6 +1127,9 @@ private typedef Setup = {
 
 	/** The scope the merge needs, or none for a land with no scope seam. */
 	@:optional var impact: SuiteScope;
+
+	/** The baseline warm seam: `starts` or `throws`; no seam when absent. */
+	@:optional var warm: String;
 
 	/** Whether an earlier land's whole suite ended red. */
 	@:optional var redRecord: Bool;

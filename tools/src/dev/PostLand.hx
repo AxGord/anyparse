@@ -127,10 +127,7 @@ final class PostLand {
 	 * the pool lease `mode` grants it.
 	 */
 	public static function argvOf(mode: LeaseMode, script: String, repo: String, sha: String, cache: String): Array<String> {
-		return Lease.take(
-			mode, Command.of(['node', script, 'post-land', 'run', sha, '--repo', repo, '--cache', cache]), ASK, 'post-land $sha'
-		)
-			.argv;
+		return leased(mode, ['node', script, DIRECTORY, 'run', sha, '--repo', repo, '--cache', cache], 'post-land $sha');
 	}
 
 	/**
@@ -138,14 +135,9 @@ final class PostLand {
 	 * the process does, so a run that never reaches its first line still shows in `status`.
 	 */
 	public static function start(repo: String, sha: String, cache: String): Outcome {
-		final dir: String = directory(cache);
-		FileSystem.createDirectory(dir);
-		final script: String = fileOf(cache, sha, SCRIPT);
-		final log: String = fileOf(cache, sha, LOG);
-		File.copy(FileSystem.fullPath(js.Node.__filename), script);
-		File.saveContent(recordOf(cache, sha, RUNNING), '$log\n');
-		final argv: Array<String> = argvOf(Lease.pooled(), script, repo, sha, cache);
-		detach(argv, repo, log);
+		FileSystem.createDirectory(directory(cache));
+		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
+		launch(directory(cache), sha, repo, script -> argvOf(Lease.pooled(), script, repo, sha, cache));
 		return Passed;
 	}
 
@@ -177,15 +169,60 @@ final class PostLand {
 	 * a red run keeps it, since the `red` record names it.
 	 */
 	public static function settle(cache: String, sha: String, verdict: Outcome): Void {
-		final log: String = fileOf(cache, sha, LOG);
 		FileSystem.deleteFile(recordOf(cache, sha, RUNNING));
-		remove(fileOf(cache, sha, SCRIPT));
+		release(directory(cache), sha, verdict.match(Failed(_)));
 		switch verdict {
 			case Failed(why):
-				File.saveContent(recordOf(cache, sha), '$why — $log\n');
+				File.saveContent(recordOf(cache, sha), '$why — ${fileOf(cache, sha, LOG)}\n');
 			case _:
-				remove(log);
 		}
+	}
+
+	/**
+	 * What `body` answers over a checkout of `sha` in a worktree and a scratch directory of this run's own (`work`, `tree`),
+	 * both removed after it; a body that throws, or a commit that cannot be checked out, answers `Failed` naming `who`.
+	 */
+	public static function inWorktree(repo: String, sha: String, who: String, body: (work:String, tree:String) -> Outcome): Outcome {
+		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
+		final work: String = dirs.claimAfterSweep(WORK_PREFIX, repo);
+		final tree: String = Path.join([work, 'tree']);
+		final verdict: Outcome = try {
+			final added: Result = cmd('git -C $repo worktree add --detach $tree $sha').run();
+			added.ok ? body(work, tree) : Failed('no tree of $sha: ${added.firstError()}');
+		} catch (exception: haxe.Exception) {
+			Failed('$who stopped: ${exception.message}');
+		}
+		if (FileSystem.exists(tree)) cmd('git -C $repo worktree remove --force $tree').run();
+		dirs.discard(work, repo);
+		return verdict;
+	}
+
+	/**
+	 * Starts a run of this tool detached, its output in `<dir>/<sha>.log`, from a copy of the running script kept as
+	 * `<dir>/<sha>.dev.js` (a rebuilt `bin/dev.js` cannot change a run in flight); `argvOf` answers the command line for that copy.
+	 * `release` removes what this leaves.
+	 */
+	public static function launch(dir: String, sha: String, repo: String, argvOf: String -> Array<String>): Void {
+		FileSystem.createDirectory(dir);
+		final script: String = fileIn(dir, sha, SCRIPT);
+		File.copy(FileSystem.fullPath(js.Node.__filename), script);
+		detach(argvOf(script), repo, fileIn(dir, sha, LOG));
+	}
+
+	/** The command `words` behind the pool lease `mode` grants, as a detached run of this tool asks for it. */
+	public static function leased(mode: LeaseMode, words: Array<String>, label: String): Array<String> {
+		return Lease.take(mode, Command.of(words), ASK, label).argv;
+	}
+
+	/** What `launch` left in `dir` for `sha`: the script copy always, the log unless `keepLog`. */
+	public static function release(dir: String, sha: String, keepLog: Bool): Void {
+		remove(fileIn(dir, sha, SCRIPT));
+		if (!keepLog) remove(fileIn(dir, sha, LOG));
+	}
+
+	/** The file `<sha>.<suffix>` in `dir`. */
+	public static function fileIn(dir: String, sha: String, suffix: String): String {
+		return Path.join([dir, '$sha.$suffix']);
 	}
 
 	private static inline function recordOf(cache: String, sha: String, state: String = RED): String {
@@ -205,16 +242,7 @@ final class PostLand {
 	private static function run(repo: String, sha: String, cache: String): Int {
 		FileSystem.createDirectory(directory(cache));
 		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
-		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
-		final work: String = dirs.claimAfterSweep(WORK_PREFIX, repo);
-		final tree: String = Path.join([work, 'tree']);
-		final verdict: Outcome = try {
-			judge(repo, sha, cache, work, tree);
-		} catch (exception: haxe.Exception) {
-			Failed('post-land stopped: ${exception.message}');
-		}
-		if (FileSystem.exists(tree)) cmd('git -C $repo worktree remove --force $tree').run();
-		dirs.discard(work, repo);
+		final verdict: Outcome = inWorktree(repo, sha, DIRECTORY, (work, tree) -> judge(repo, sha, cache, work, tree));
 		settle(cache, sha, verdict);
 		switch verdict {
 			case Failed(why):
@@ -227,8 +255,7 @@ final class PostLand {
 	}
 
 	private static function judge(repo: String, sha: String, cache: String, work: String, tree: String): Outcome {
-		final added: Result = cmd('git -C $repo worktree add --detach $tree $sha').run();
-		if (!added.ok) return Failed('no tree of $sha: ${added.firstError()}');
+
 		switch Binaries.compileWith(tree, Path.join([work, 'build.log']), [], Lease.ofEnvironment()) {
 			case Failed(why):
 				return Failed('the build of $sha failed: $why');
@@ -262,7 +289,7 @@ final class PostLand {
 	}
 
 	private static function fileOf(cache: String, sha: String, suffix: String): String {
-		return Path.join([directory(cache), '$sha.$suffix']);
+		return fileIn(directory(cache), sha, suffix);
 	}
 
 	private static function remove(path: String): Void {
