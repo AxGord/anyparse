@@ -405,7 +405,7 @@ class ImportBlockOrderCheckTest extends Test {
 			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
 			return;
 		}
-		final files: Array<{ file: String, source: String }> = [for (f in libs) { file: '$dir/${f.name}', source: f.source }];
+		final files: Array<{ file: String, source: String }> = libs.map(f -> {file: '$dir/${f.name}', source: f.source });
 		files.push({ file: '$dir/Main.hx', source: main });
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
@@ -469,7 +469,7 @@ class ImportBlockOrderCheckTest extends Test {
 			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
 			return;
 		}
-		final files: Array<{ file: String, source: String }> = [for (f in libs) { file: '$dir/${f.name}', source: f.source }];
+		final files: Array<{ file: String, source: String }> = libs.map(f -> {file: '$dir/${f.name}', source: f.source });
 		files.push({ file: '$dir/Main.hx', source: main });
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
@@ -947,7 +947,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final source: String =
 			'package app;\n\nimport unit.Alpha;\nimport unit.Charlie;\nimport utest.Runner;\nimport unit.Bravo;\n\nclass C {}\n';
 		final vs: Array<Violation> = violations(source);
-		Assert.equals(1, vs.length, 'the four imports are ONE block: ${[for (v in vs) v.message].join(' / ')}');
+		Assert.equals(1, vs.length, 'the four imports are ONE block: ${vs.map(v -> v.message).join(' / ')}');
 		if (vs.length != 1) return;
 		Assert.isTrue(vs[0].message.contains("'unit.Bravo'"), 'and the import past the foreign one is the offender: ${vs[0].message}');
 		Assert.equals(

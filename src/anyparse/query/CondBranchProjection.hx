@@ -132,7 +132,7 @@ final class CondBranchProjection {
 	private static function projectBranches(node: QueryNode, source: String, seams: BranchSeams): QueryNode {
 		final kids: Array<QueryNode> = node.children;
 		if (kids.length == 0) return node;
-		final projected: Array<QueryNode> = [for (k in kids) projectBranches(k, source, seams)];
+		final projected: Array<QueryNode> = kids.map(projectBranches.bind(_, source, seams));
 		final rebuilt: Array<QueryNode> = seams.blockKinds.contains(node.kind) ? splitBlockChildren(projected, source, seams) : projected;
 		return SameItems.of(kids, rebuilt) ? node : new QueryNode(node.kind, node.name, rebuilt, node.span, node.type, node.typeArgCount);
 	}
@@ -162,9 +162,9 @@ final class CondBranchProjection {
 	private static function splitRegion(region: QueryNode, source: String, seams: BranchSeams): Null<QueryNode> {
 		final runs: Null<Array<CondBranchRun>> = conditionalBranchRuns(region, source, seams.elseKeywords, seams.comments);
 		if (runs == null || runs.length == 0) return null;
-		final branches: Array<QueryNode> = [
-			for (run in runs) new QueryNode(COND_BRANCH_KIND, null, splitBlockChildren(run.nodes, source, seams), run.span)
-		];
+		final branches: Array<QueryNode> = runs.map(run ->
+			new QueryNode(COND_BRANCH_KIND, null, splitBlockChildren(run.nodes, source, seams), run.span)
+		);
 		return new QueryNode(region.kind, region.name, branches, region.span);
 	}
 

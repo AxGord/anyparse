@@ -283,7 +283,7 @@ final class NullGuardedCode {
 		if (!callable(fact, field) || node.params.length != count || node.variants.exists(v -> v.params.length != count)) return false;
 		final param: String = node.params[index].name;
 		// a test against null is the language's own only for a value of no abstract, which may define its own `!=`
-		final types: Array<String> = [node.params[index].type].concat([for (v in node.variants) v.params[index].type]);
+		final types: Array<String> = [node.params[index].type].concat(node.variants.map(v -> v.params[index].type));
 		if (!types.foreach(t -> FactsTypeText.unwrapNull(t) == UNBOUND || builtinEquality(FactsTypeTree.read(t), 0))) return false;
 		if (namedByTargetCode(name) || namesInNode(node, param)) return false;
 		final hierarchy: Array<String> = [owner].concat(_view.subtypesOf(owner));

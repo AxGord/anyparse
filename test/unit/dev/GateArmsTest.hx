@@ -427,7 +427,7 @@ final class GateArmsTest extends Test {
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>, ?near: Array<String>
 	): ArmSelection {
 		final same: Array<ArmRecord> = ArmRegistry.parse(REGISTRY);
-		return GateArms.select(same, same, [for (module in touched) whole(module)], layout, killers, extra, near ?? []);
+		return GateArms.select(same, same, touched.map(whole), layout, killers, extra, near ?? []);
 	}
 
 	/** The row's outcome with the lease `held` (`WF_THREADS` text; empty is no lease) around both its runs. */
@@ -511,9 +511,7 @@ final class GateArmsTest extends Test {
 	}
 
 	private static function registry(names: Array<String>): String {
-		final rows: Array<String> = [
-			for (name in names) '{"name": "$name", "type": "pkg.A", "method": "f", "force": "1"}'
-		];
+		final rows: Array<String> = names.map(name -> '{"name": "$name", "type": "pkg.A", "method": "f", "force": "1"}');
 		rows.push('{"name": "M-NEAR", "type": "pkg.Other", "method": "near", "force": "1"}');
 		return '{"arms": [${rows.join(', ')}]}';
 	}

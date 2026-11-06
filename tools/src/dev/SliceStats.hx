@@ -57,9 +57,9 @@ final class SliceStats {
 		args.done();
 		final queueText: Null<String> = queue == null ? null : File.getContent(queue);
 		final measure: Null<SliceMeasure> = edges || clones ? new SliceMeasure(repo, roots, cache) : null;
-		final rows: Array<SliceRow> = [
-			for (landing in landings(repo, rev, since)) rowOf(repo, withQueue(landing, queueText), measure, edges, clones)
-		];
+		final rows: Array<SliceRow> = landings(
+			repo, rev, since
+		).map(landing -> rowOf(repo, withQueue(landing, queueText), measure, edges, clones));
 		Sys.println(sliceTable(rows, edges, clones));
 		Sys.println('');
 		Sys.println(trendTable(trend(rows), edges, clones));

@@ -81,9 +81,11 @@ class DeclarationQueriesTest extends Test {
 		Assert.isTrue(index.typing.members.declaresMemberAs('Red', ctorKinds), 'an enum constructor');
 		Assert.isFalse(index.typing.members.declaresMemberAs('tone', ctorKinds), 'a field is no constructor');
 		Assert.isFalse(index.typing.members.declaresMemberAs('Blue', ctorKinds), 'nothing declares it');
-		Assert.same(['q/Box.hx:String', 'r/Box.hx:Int'], [
-			for (d in index.typing.members.memberDeclarationsOf('Box', 'item')) '${d.file.file}:${d.member.typeSource}'
-		], 'each declaration, with its file');
+		Assert.same(
+			['q/Box.hx:String', 'r/Box.hx:Int'],
+			index.typing.members.memberDeclarationsOf('Box', 'item').map(d -> '${d.file.file}:${d.member.typeSource}'),
+			'each declaration, with its file'
+		);
 		final paths: Array<String> = [
 			for (r in index.refs.resolvedDeclsNamed('Colour')) for (p in TypeNameBinding.namingPaths(r)) p
 		];

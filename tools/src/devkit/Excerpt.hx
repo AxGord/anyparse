@@ -39,9 +39,7 @@ final class Excerpt {
 	/** `lines` as a table prints them: each clipped to `MAX_WIDTH`, at most `MAX_LINES`, the last saying how many were left out. */
 	public static function cut(lines: Array<String>): Array<String> {
 		final shown: Array<String> = lines.length <= MAX_LINES ? lines : lines.slice(0, MAX_LINES - 1);
-		final cutLines: Array<String> = [
-			for (line in shown) line.length <= MAX_WIDTH ? line : '${line.substr(0, MAX_WIDTH - 1)}…'
-		];
+		final cutLines: Array<String> = shown.map(line -> line.length <= MAX_WIDTH ? line : '${line.substr(0, MAX_WIDTH - 1)}…');
 		if (lines.length > MAX_LINES) cutLines.push('… ${lines.length - shown.length} more');
 		return cutLines;
 	}

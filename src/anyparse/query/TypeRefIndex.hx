@@ -110,14 +110,14 @@ final class TypeRefIndex {
 
 	/** Every indexed type decl whose simple name is `name`, across all files. */
 	public function declsNamed(name: String): Array<TypeDeclInfo> {
-		return [for (r in resolvedDeclsNamed(name)) r.type];
+		return resolvedDeclsNamed(name).map(r -> r.type);
 	}
 
 	/**
 	 * Every indexed decl named `typeName` (simple name), each paired with its declaring file.
 	 */
 	public function resolvedDeclsNamed(typeName: String): Array<ResolvedType> {
-		return [for (r in named(typeName)) { file: r.file, type: r.type }];
+		return named(typeName).map(r -> {file: r.file, type: r.type });
 	}
 
 	/**

@@ -393,7 +393,7 @@ final class CtorFieldFold {
 		if (i >= limit || source.fastCodeAt(i) != '('.code) return { dropped: null, end: nameEnd };
 		final close: Int = source.indexOf(')', i);
 		if (close < 0 || close >= limit) return null;
-		final accessors: Array<String> = [for (a in source.substring(i + 1, close).split(',')) StringTools.trim(a)];
+		final accessors: Array<String> = source.substring(i + 1, close).split(',').map(StringTools.trim);
 		return accessors.length != 2 || accessors[0] != 'default' || accessors[1] != 'null' ? null : {
 			dropped: new Span(nameEnd, close + 1),
 			end: close + 1

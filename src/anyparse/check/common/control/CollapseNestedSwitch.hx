@@ -411,7 +411,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 			parts.push(part);
 		}
 		final kept: Null<Array<InnerArm>> = keptArms(scan, frame, parts);
-		return kept == null ? null : { span: armSpan, text: [for (part in kept) render(label, part)].join('\n') };
+		return kept == null ? null : { span: armSpan, text: kept.map(render.bind(label)).join('\n') };
 	}
 
 	/**
@@ -509,7 +509,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 			&& nodes[0].kind == seams.identKind
 			&& nodes[0].name == seams.wildcardPatternName;
 		return {
-			patterns: [for (span in spans) source.substring(span.from, span.to)],
+			patterns: spans.map(span -> source.substring(span.from, span.to)),
 			separators: separators,
 			guard: guard,
 			body: rest.substring(at + terminator.length).trim(),

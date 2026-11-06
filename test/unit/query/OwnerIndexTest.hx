@@ -56,8 +56,8 @@ class OwnerIndexTest extends Test {
 			},
 			{ file: 'src/a/X.hx', source: 'package a;\n\n/** Plain prose, no question. */\nclass X {}\n' }
 		]);
-		Assert.same(['Y.keys', 'Z'], [for (entry in owners.owned()) OwnerIndex.nameOf(entry)]);
-		Assert.same(['are all keys alike?', 'which zone is this?'], [for (entry in owners.owned()) entry.question]);
+		Assert.same(['Y.keys', 'Z'], owners.owned().map(OwnerIndex.nameOf));
+		Assert.same(['are all keys alike?', 'which zone is this?'], owners.owned().map(entry -> entry.question));
 	}
 
 	/** A declaration whose NAME shares no word with the question is still found by what its doc says, with its line. */
@@ -90,7 +90,7 @@ class OwnerIndexTest extends Test {
 			{ file: 'src/a/E.hx', source: 'package a;\n\n/** A node counter. */\nclass E {}\n' }
 		]);
 		final hits: Array<OwnerHit> = owners.rank('node identity', 2);
-		Assert.same(['IdentityMap', 'NodeHolder'], [for (hit in hits) OwnerIndex.nameOf(hit.entry)]);
+		Assert.same(['IdentityMap', 'NodeHolder'], hits.map(hit -> OwnerIndex.nameOf(hit.entry)));
 	}
 
 	/** Of two equal matches, the type other files name in their code ranks first; a name in a comment counts for nothing. */
@@ -105,7 +105,7 @@ class OwnerIndexTest extends Test {
 				source: 'package a;\n\n// PathAlpha, named in a comment only.\nclass Prose {\n\tvar s:String = "PathAlpha";\n}\n'
 			}
 		]);
-		Assert.same(['PathBeta', 'PathAlpha'], [for (hit in owners.rank('path', 2)) OwnerIndex.nameOf(hit.entry)]);
+		Assert.same(['PathBeta', 'PathAlpha'], owners.rank('path', 2).map(hit -> OwnerIndex.nameOf(hit.entry)));
 	}
 
 	/** Of two equal matches, the declaration whose doc states the question it owns ranks first. */
@@ -115,7 +115,7 @@ class OwnerIndexTest extends Test {
 			{ file: 'src/a/A.hx', source: 'package a;\n\nclass ZoneBeta {}\n' },
 			{ file: 'src/a/B.hx', source: 'package a;\n\n/** The one answer to "zone". */\nclass ZoneAlpha {}\n' }
 		]);
-		Assert.same(['ZoneAlpha', 'ZoneBeta'], [for (hit in owners.rank('zone', 2)) OwnerIndex.nameOf(hit.entry)]);
+		Assert.same(['ZoneAlpha', 'ZoneBeta'], owners.rank('zone', 2).map(hit -> OwnerIndex.nameOf(hit.entry)));
 	}
 
 	/**
@@ -126,16 +126,13 @@ class OwnerIndexTest extends Test {
 	public function testEachDuplicatedQuestionFindsItsOwnerOnThisTree(): Void {
 		#if (sys || nodejs)
 		final io: ResolvedInputs = CliArgs.resolveInputPaths('haxe', ['${CliFixture.repoRoot()}/src']);
-		final files: Array<{ file: String, source: String }> = [
-			for (path in io.paths)
-				{
-					file: path,
-					source: sys.io.File.getContent(path)
-				}
-		];
+		final files: Array<{ file: String, source: String }> = io.paths.map(path -> {
+			file: path,
+			source: sys.io.File.getContent(path)
+		});
 		final owners: OwnerIndex = OwnerIndex.build(IndexScope.over(files, io.plugin), io.plugin);
 		for (asked in OWNED) {
-			final top: Array<String> = [for (hit in owners.rank(asked.question, TOP)) hit.entry.type];
+			final top: Array<String> = owners.rank(asked.question, TOP).map(hit -> hit.entry.type);
 			Assert.isTrue(top.contains(asked.owner), '"${asked.question}" ranks ${top.join(', ')}, not ${asked.owner}');
 		}
 		#else

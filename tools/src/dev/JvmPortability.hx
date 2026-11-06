@@ -58,9 +58,7 @@ final class JvmPortability {
 	public static function main(): Void {
 		final args: Array<String> = Sys.args();
 		final paths: Array<String> = (args.length > 0 ? args : collectAll(DEFAULT_SCOPE)).concat(collectAll([TRAPS]));
-		final files: Array<{ file: String, source: String }> = [
-			for (path in paths) { file: path, source: File.getContent(path) }
-		];
+		final files: Array<{ file: String, source: String }> = paths.map(path -> {file: path, source: File.getContent(path) });
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final opts: Null<String> = FileSystem.exists(CONFIG) ? File.getContent(CONFIG) : null;
 		// The writer is exercised for COVERAGE, not for byte-equality: that is `hxq fmt

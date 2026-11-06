@@ -175,7 +175,7 @@ final class GuardedImportCarry {
 			if (!dest.singleBranch || !dest.flat || !dest.linewise) continue;
 			if (CondDirectives.normalizeCondition(conditionOf(destSource, dest)) != condition) continue;
 			final present: String = destSource.substring(dest.headerEnd, dest.closeFrom);
-			final held: Array<String> = [for (line in present.split('\n')) line.trim()];
+			final held: Array<String> = present.split('\n').map(line -> line.trim());
 			final missing: Array<String> = lines.filter(line -> !held.contains(line.trim()));
 			if (missing.length == 0) return { span: new Span(dest.closeFrom, dest.closeFrom), text: '' };
 			final seat: Int = regionImportSeat(destSource, destImports, dest);

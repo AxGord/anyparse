@@ -25,7 +25,7 @@ class MermaidQueryPluginTest extends Test {
 	public function testTheProjectionIsTheStatementList(): Void {
 		final root: QueryNode = _plugin.parseFile(DOCUMENT);
 		Assert.equals('Document', root.kind);
-		Assert.equals('Header,Comment,Chain,Subgraph', [for (child in root.children) child.kind].join(','));
+		Assert.equals('Header,Comment,Chain,Subgraph', root.children.map(child -> child.kind).join(','));
 		Assert.equals(1, root.children[0].span?.from);
 	}
 
@@ -43,14 +43,14 @@ class MermaidQueryPluginTest extends Test {
 	/** Every `%%` comment is a line-comment region. */
 	public function testTheLexicalRegionsAreTheComments(): Void {
 		final regions: Array<LexRegion> = _plugin.lexicalRegions(DOCUMENT);
-		Assert.equals('%% note', [for (r in regions) DOCUMENT.substring(r.from, r.to)].join('|'));
+		Assert.equals('%% note', regions.map(r -> DOCUMENT.substring(r.from, r.to)).join('|'));
 	}
 
 	/** A pattern is one statement, and a node id `$name` is a metavariable. */
 	public function testAPatternNodeIdIsAMetavariable(): Void {
 		final pattern: Pattern = _plugin.parsePattern('$$a --> $$b');
 		Assert.equals('Chain', pattern.root.kind);
-		Assert.equals('Metavar:a,Arrow:null,Metavar:b', [for (child in pattern.root.children) '${child.kind}:${child.name}'].join(','));
+		Assert.equals('Metavar:a,Arrow:null,Metavar:b', pattern.root.children.map(child -> '${child.kind}:${child.name}').join(','));
 	}
 
 	/** `writeRoundTrip` is the canonical form, not the file's own layout. */

@@ -210,11 +210,11 @@ class TypedEventConstantCheckTest extends Test {
 		if (own.length == 0) return [];
 		final source: String = files.filter(f -> f.file == file)[0].source;
 		final edits: Array<{ span: Span, text: String }> = rule.fix(source, own, plugin, CheckFixture.index(files, plugin));
-		return [for (e in edits) e.text];
+		return edits.map(e -> e.text);
 	}
 
 	private static function messages(vs: Array<Violation>): String {
-		return [for (v in vs) '${v.file} ${v.severity} ${v.message}'].join('\n');
+		return vs.map(v -> '${v.file} ${v.severity} ${v.message}').join('\n');
 	}
 
 	/**

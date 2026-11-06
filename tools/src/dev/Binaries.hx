@@ -41,7 +41,7 @@ final class Binaries {
 	 * of a file no binary reaches —, each compile on a thread `mode` leases for it alone.
 	 */
 	public static function compileWith(tree: String, log: String, typechecks: Array<String>, mode: LeaseMode): Outcome {
-		return compileBuilds(tree, log, [for (hxml in HXMLS) [hxml]].concat([for (hxml in typechecks) [hxml, '--no-output']]), mode);
+		return compileBuilds(tree, log, HXMLS.map(hxml -> [hxml]).concat(typechecks.map(hxml -> [hxml, '--no-output'])), mode);
 	}
 
 	/**
@@ -52,22 +52,22 @@ final class Binaries {
 	 */
 	public static function compileBuilds(tree: String, log: String, builds: Array<Array<String>>, mode: LeaseMode): Outcome {
 		final declared: Array<OracleConfig> = plainOracles(tree);
-		final oracles: Array<Null<OracleConfig>> = [
-			for (words in builds) declared.find(oracle ->
+		final oracles: Array<Null<OracleConfig>> = builds.map(words ->
+			declared.find(oracle ->
 				[words[0], checkOf(words[0])].exists(hxml -> Path.normalize(oracle.hxml) == Path.normalize(Path.join([tree, hxml])))
 			)
-		];
+		);
 		final read: Map<String, String> = [];
-		final fingerprints: Array<Null<String>> = [
-			for (oracle in oracles) oracle == null ? null : OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, read)
-		];
+		final fingerprints: Array<Null<String>> = oracles.map(
+			oracle -> oracle == null ? null : OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, read)
+		);
 		final runs: Array<Result> = Pool.of(builds.length).map([for (i in 0...builds.length) i], i -> {
 			final words: Array<String> = oracles[i] == null ? builds[i] : ['-v'].concat(builds[i]);
 			return Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${builds[i].join(' ')}');
 		});
 		// a -v compile prints a line per parsed file and per macro on stdout: it stays out of the log and of the error a failure quotes
 		final quiet: Array<Result> = [for (i => run in runs) oracles[i] == null ? run : run.errorsOnly()];
-		File.saveContent(log, [for (run in quiet) run.out + run.err].join('\n'));
+		File.saveContent(log, quiet.map(run -> run.out + run.err).join('\n'));
 		final after: Map<String, String> = [];
 		for (i => oracle in oracles) {
 			final fingerprint: Null<String> = fingerprints[i];

@@ -76,7 +76,7 @@ final class HaxeFormatConfigDiagnostics {
 		final wrapValues: Array<String> = [];
 		final wrapping: Null<HxFormatWrappingSection> = cfg.wrapping;
 		if (wrapping != null) collectWrappingIssues(wrapping, wrapValues);
-		final keys: Array<String> = [for (field in ctx.unknownFields) unknownKeyIssue(field, index)];
+		final keys: Array<String> = ctx.unknownFields.map(unknownKeyIssue.bind(_, index));
 		final whitespace: Null<HxFormatWhitespaceSection> = cfg.whitespace;
 		if (whitespace != null) collectColonIssue(whitespace, keys);
 		return { keys: keys, wrapValues: wrapValues };

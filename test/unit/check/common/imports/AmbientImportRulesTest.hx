@@ -495,9 +495,9 @@ class AmbientImportRulesTest extends Test {
 		final root: String = CliFixture.writeTree('apq_ambient_rules', tree);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final files: Array<{ file: String, source: String }> = [
-				for (name in analysed) { file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
-			];
+			final files: Array<{ file: String, source: String }> = analysed.map(name ->
+				{file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
+			);
 			out = reported(files, '$root/');
 		});
 		return out;
@@ -520,7 +520,7 @@ class AmbientImportRulesTest extends Test {
 				for (entry in tree) if (!entry.name.endsWith('import.hx')) { file: '$root/${entry.name}', source: entry.source }
 			];
 			final violations: Array<Violation> = CheckFixture.violationsIn(new RedundantImport(), files);
-			out = [for (v in violations) '${v.file.substr(root.length + 1)}:${pathOf(v.message)}'].join(',');
+			out = violations.map(v -> '${v.file.substr(root.length + 1)}:${pathOf(v.message)}').join(',');
 		});
 		return out;
 		#else
@@ -531,9 +531,7 @@ class AmbientImportRulesTest extends Test {
 	/** Every `unused-import` finding as `<file without prefix>:<import path>`, comma-joined in report order. */
 	private function reported(files: Array<{ file: String, source: String }>, prefix: String): String {
 		final violations: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files);
-		return [
-			for (v in violations) '${v.file.substr(prefix.length)}:${pathOf(v.message)}'
-		].join(',');
+		return violations.map(v -> '${v.file.substr(prefix.length)}:${pathOf(v.message)}').join(',');
 	}
 
 	/** The import path a finding names, taken from the quoted span of its message. */

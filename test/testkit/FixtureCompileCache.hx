@@ -237,7 +237,7 @@ final class FixtureCompileCache {
 		if (!probe || !args.contains('--no-output')) return null;
 		// a root inside another is walked twice, and a compile running beside this one would write into both
 		for (a in roots) for (b in roots) if (a != b && a.startsWith('$b/')) return null;
-		return { roots: roots, args: [for (a in args) encode(a, roots)] };
+		return { roots: roots, args: args.map(encode.bind(_, roots)) };
 	}
 
 	/**
@@ -442,10 +442,10 @@ final class FixtureCompileCache {
 			for (files in contents) {
 				final names: Array<String> = [for (name in files.keys()) name];
 				names.sort(Reflect.compare);
-				[for (name in names) '$name\t${files[name]}'];
+				names.map(name -> '$name\t${files[name]}');
 			}
 		];
-		final env: Array<String> = [for (name in HAXE_ENV) '$name=${environment.get(name) ?? ''}'];
+		final env: Array<String> = HAXE_ENV.map(name -> '$name=${environment.get(name) ?? ''}');
 		return hash(Buffer.from(Json.stringify({ // noqa: avoid-haxe-json
 			layout: LAYOUT,
 			stamp: stamp,
@@ -539,7 +539,7 @@ final class FixtureCompileCache {
 	private static function forward(log: Null<String>, reached: Array<Int>): Void {
 		if (
 			log != null && reached.length > 0
-		) try Fs.appendFileSync(log, [for (id in reached) '$id\n'].join('')) catch (exception: Exception) {} // noqa: swallowed-exception
+		) try Fs.appendFileSync(log, reached.map(id -> '$id\n').join('')) catch (exception: Exception) {} // noqa: swallowed-exception
 	}
 
 	/** `bytes` as a string when it is UTF-8 that round-trips, else null. */

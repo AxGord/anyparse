@@ -469,9 +469,7 @@ final class FixVerifier {
 				// all-null group array it yields bisects per edit exactly as it did before.
 				final edits: Array<GroupedEdit> = check is GroupedFix
 					? (cast check: GroupedFix).fixGrouped(entry.source, own, plugin, index)
-					: [
-						for (e in flatFix(check, entry.source, own, plugin, index)) { span: e.span, text: e.text, group: null }
-					];
+					: flatFix(check, entry.source, own, plugin, index).map(e -> {span: e.span, text: e.text, group: null });
 				if (edits.length == 0) {
 					pending.push({
 						entry: entry,
@@ -653,7 +651,7 @@ final class FixVerifier {
 			if (seen == null) order.push(reason);
 			counts[reason] = (seen ?? 0) + 1;
 		}
-		return [for (text in order) { text: text, count: counts[text] ?? 0 }];
+		return order.map(text -> {text: text, count: counts[text] ?? 0 });
 	}
 
 	/**
@@ -688,7 +686,7 @@ final class FixVerifier {
 		excluded: Array<OracleExclusion>, write: (String, String) -> Void, rounds: Array<Int>
 	): EntryPrep {
 		final before: String = entry.source;
-		final full: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
+		final full: Array<{ span: Span, text: String }> = edits.map(e -> {span: e.span, text: e.text });
 		// Three outcomes, not two: an `Err` here is the WRITER declining the spliced
 		// source, which is not the same event as a check that proposed nothing — and
 		// `case _: return NoChange` recorded both as the latter, so a refused edit set
@@ -716,7 +714,7 @@ final class FixVerifier {
 		// EVERY edit's whole span, because the set is written and judged as ONE candidate: one edit
 		// landing where nothing is compiled makes the verdict on the rest unattributable, and a
 		// single edit STRADDLING such a region is the same thing with both its ends in live code.
-		final spans: Array<Span> = [for (edit in edits) edit.span];
+		final spans: Array<Span> = edits.map(edit -> edit.span);
 		final regions: Array<LexRegion> = plugin.lexicalRegions(before);
 		final covering: Array<OracleConfig> = [];
 		final gaps: Array<String> = [];
@@ -935,7 +933,7 @@ final class FixVerifier {
 		candidates: Array<EntryCandidate>, plugin: GrammarPlugin, write: (String, String) -> Void, rounds: Array<Int>
 	): Array<EntryVerdict> {
 		final n: Int = candidates.length;
-		if (n < 2) return [for (candidate in candidates) judgeAlone(candidate, plugin, write, rounds)];
+		if (n < 2) return candidates.map(candidate -> judgeAlone(candidate, plugin, write, rounds));
 		final configs: Array<OracleConfig> = [];
 		for (candidate in candidates) {
 			write(candidate.entry.file, candidate.fullText);
@@ -952,7 +950,7 @@ final class FixVerifier {
 		for (candidate in candidates) write(candidate.entry.file, candidate.entry.source);
 		return switch outcome {
 			case Rejected(errors): judgeRejected(candidates, errors, plugin, write, rounds);
-			case _: [for (candidate in candidates) judgeAlone(candidate, plugin, write, rounds)];
+			case _: candidates.map(candidate -> judgeAlone(candidate, plugin, write, rounds));
 		};
 	}
 
@@ -968,7 +966,7 @@ final class FixVerifier {
 	private static function judgeRejected(
 		candidates: Array<EntryCandidate>, errors: String, plugin: GrammarPlugin, write: (String, String) -> Void, rounds: Array<Int>
 	): Array<EntryVerdict> {
-		final blamed: Array<String> = LintFixSafePass.implicated(errors, [for (candidate in candidates) candidate.entry.file], []);
+		final blamed: Array<String> = LintFixSafePass.implicated(errors, candidates.map(candidate -> candidate.entry.file), []);
 		if (blamed.length == 0) return judgeHalves(candidates, plugin, write, rounds);
 		final clear: Array<EntryVerdict> = judgeBatch(candidates.filter(c -> !blamed.contains(c.entry.file)), plugin, write, rounds);
 		final accused: Array<EntryVerdict> = [
@@ -976,9 +974,7 @@ final class FixVerifier {
 		];
 		var nextClear: Int = 0;
 		var nextAccused: Int = 0;
-		return [
-			for (candidate in candidates) blamed.contains(candidate.entry.file) ? accused[nextAccused++] : clear[nextClear++]
-		];
+		return candidates.map(candidate -> blamed.contains(candidate.entry.file) ? accused[nextAccused++] : clear[nextClear++]);
 	}
 
 	/**
@@ -1022,7 +1018,7 @@ final class FixVerifier {
 		if (kept.length == 0 || kept.length == units.length) return whole;
 		final flat: Array<Int> = [for (u in kept) for (i in units[u]) i];
 		flat.sort((a, b) -> a - b);
-		final keptEdits: Array<GroupedEdit> = [for (i in flat) edits[i]];
+		final keptEdits: Array<GroupedEdit> = flat.map(i -> edits[i]);
 		final refused: Int = edits.length - keptEdits.length;
 		final spentBefore: Int = CompilerOracle.invocations;
 		final inner: EntryVerdict = verifyEntry(entry, keptEdits, plugin, opts, usable, excluded, write, rounds);
@@ -1075,7 +1071,7 @@ final class FixVerifier {
 	): Array<{ span: Span, text: String }> {
 		final flat: Array<Int> = [for (u in unitIndices) for (i in units[u]) i];
 		flat.sort((a, b) -> a - b);
-		return [for (i in flat) { span: edits[i].span, text: edits[i].text }];
+		return flat.map(i -> {span: edits[i].span, text: edits[i].text });
 	}
 
 	/** The flat edits `check` proposes for `own` in `source`: a `RiskyArm`'s risky arm, every other check's `fix`. */

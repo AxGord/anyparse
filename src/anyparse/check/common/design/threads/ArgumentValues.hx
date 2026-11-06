@@ -105,6 +105,11 @@ final class ArgumentValues {
 		_builtKinds = builtKindsOf(_shape);
 	}
 
+	/** The operand `cond` (an `==` / `!=`) compares with the `null` literal; null when neither side is that literal. */
+	public inline function nullTested(cond: QueryNode): Null<QueryNode> {
+		return NodeShape.nullComparedSide(cond, _shape.nullLiteralKind);
+	}
+
 	/** The valuation of `id` that knows nothing: every tracked parameter unknown. */
 	public function unknown(id: String): String {
 		return [for (_ in tracked(id)) UNKNOWN].join('');
@@ -146,11 +151,6 @@ final class ArgumentValues {
 			if (paramKinds.contains(p.kind) && name != null && read.contains(name) && BareNames.stable(fn, p, _shape)) names.push(name);
 		}
 		return names;
-	}
-
-	/** The operand `cond` (an `==` / `!=`) compares with the `null` literal; null when neither side is that literal. */
-	public function nullTested(cond: QueryNode): Null<QueryNode> {
-		return NodeShape.nullComparedSide(cond, _shape.nullLiteralKind);
 	}
 
 	/**
@@ -210,9 +210,7 @@ final class ArgumentValues {
 			callerNames: callerNames,
 			valuation: valuation
 		};
-		return [
-			for (name in names) valueOver(runs, params.findIndex(p -> p.name == name), call, tested.contains(name))
-		].join('');
+		return names.map(name -> valueOver(runs, params.findIndex(p -> p.name == name), call, tested.contains(name))).join('');
 	}
 
 	/**
@@ -224,11 +222,9 @@ final class ArgumentValues {
 	private function bindings(
 		edge: CallEdge, args: Array<QueryNode>, callee: QueryNode, params: Array<QueryNode>, calleeFile: String
 	): Null<Array<Array<Int>>> {
-		final given: Array<Null<WrittenType>> = [for (a in args) _types.argumentType(a, edge.file, edge.from)];
-		final slots: Array<SlotParam> = [
-			for (p in params) { optional: skippable(p), rest: p.kind == _shape.restParamKind }
-		];
-		final wanted: Array<Null<String>> = [for (p in params) _types.annotationOf(p, calleeFile)];
+		final given: Array<Null<WrittenType>> = args.map(a -> _types.argumentType(a, edge.file, edge.from));
+		final slots: Array<SlotParam> = params.map(p -> {optional: skippable(p), rest: p.kind == _shape.restParamKind });
+		final wanted: Array<Null<String>> = params.map(p -> _types.annotationOf(p, calleeFile));
 		function fit(a: Int, p: Int): ArgumentFit {
 			return _types.fit(args[a], given[a], wanted[p], calleeFile, slots[p].optional, edge.from, edge.to);
 		}
@@ -354,7 +350,7 @@ final class ArgumentValues {
 		final atoms: Null<Array<String>> = atomsOf(value);
 		return atoms == null || atoms.exists(a -> a != TRUE && a != FALSE)
 			? UNKNOWN
-			: spell([for (a in atoms) a == TRUE ? FALSE : TRUE], false);
+			: spell(atoms.map(a -> a == TRUE ? FALSE : TRUE), false);
 	}
 
 	/**

@@ -8,7 +8,6 @@ import anyparse.query.cli.BatchAnswersParser;
 import anyparse.query.cli.BatchCalls;
 import anyparse.query.cli.BatchCallsWriter;
 import anyparse.query.cli.BatchRun;
-import dev.SuiteFile;
 import devkit.Args;
 import devkit.Command;
 import devkit.Pool;
@@ -250,15 +249,12 @@ final class Parity {
 		final help: Result = shim(shimTree, engine, ['apq', '--help']).at(shimTree).run();
 		final names: Array<String> = commandsOf(help.out);
 		if (names.length == 0) throw new haxe.Exception('`apq --help` of $engine lists no command');
-		return [
-			for (name in names)
-				{
-					name: 'help $name',
-					argv: ['apq', name, '--help'],
-					stdin: null,
-					files: files
-				}
-		];
+		return names.map(name -> {
+			name: 'help $name',
+			argv: ['apq', name, '--help'],
+			stdin: null,
+			files: files
+		});
 	}
 
 	/** `argv` (`apq|hxq <command> …`) run by the shim of `shimTree` on `engine`, the code cache off on both sides alike. */
@@ -326,9 +322,7 @@ final class Parity {
 		final commands: Array<Command> = [
 			for (s => share in shares) {
 				final calls: BatchCalls = {
-					calls: [
-						for (i in share) { argv: engineArgv(invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin }
-					]
+					calls: share.map(i -> {argv: engineArgv(invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin })
 				};
 				final callsFile: String = work.file('batch-$s.json');
 				File.saveContent(callsFile, BatchCallsWriter.write(calls, JsonFormat.instance.compactWriteOptions));

@@ -249,11 +249,10 @@ final class OracleCoverage {
 	 */
 	public static function probeAll(oracles: Array<OracleConfig>): Array<OracleCoverage> {
 		#if (sys || nodejs)
-		if (!HaxeSpawn.honoursCwd()) return [
-			for (oracle in oracles) oracle.unavailable == null
-				? probe(oracle.hxml, oracle.dir, oracle.defines)
-				: unknown(oracle.unavailable ?? '')
-		];
+		if (!HaxeSpawn.honoursCwd())
+			return oracles.map(
+				oracle -> oracle.unavailable == null ? probe(oracle.hxml, oracle.dir, oracle.defines) : unknown(oracle.unavailable ?? '')
+			);
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
 		final runs: Array<HaxeRun> = remembered(asked);
 		final out: Array<OracleCoverage> = [];
@@ -289,7 +288,7 @@ final class OracleCoverage {
 			missing.push(oracle);
 		final probed: Array<OracleCoverage> = probeAll(missing);
 		for (i in 0...missing.length) memo.probes.push({ config: missing[i], coverage: probed[i] });
-		return [for (oracle in oracles) probedFor(memo, oracle)];
+		return oracles.map(probedFor.bind(memo));
 	}
 
 	/**
@@ -366,7 +365,7 @@ final class OracleCoverage {
 	 */
 	public static function of(paths: Array<String>, root: String, ?defines: Array<String>): OracleCoverage {
 		#if (sys || nodejs)
-		final resolved: Array<String> = [for (path in paths) canonical(root, path)];
+		final resolved: Array<String> = paths.map(path -> canonical(root, path));
 		return new OracleCoverage(resolved, [
 			{
 				files: resolved,
@@ -524,7 +523,7 @@ final class OracleCoverage {
 					defines: arm.defines
 				}
 		];
-		return new OracleCoverage([for (token in tokens) canonical(root, token)], arms, '');
+		return new OracleCoverage(tokens.map(token -> canonical(root, token)), arms, '');
 		#else
 		return unknown(UNSUPPORTED_TARGET);
 		#end
@@ -548,7 +547,7 @@ final class OracleCoverage {
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (i in spawned) { args: probeArgs(asked[i].hxml, asked[i].defines), cwd: asked[i].dir ?? Sys.getCwd() }
 		], PROBE_BUFFER, HaxeSpawn.parallelism());
-		final after: Array<Null<String>> = memo == null ? [] : memo.fingerprints([for (i in spawned) asked[i]]);
+		final after: Array<Null<String>> = memo == null ? [] : memo.fingerprints(spawned.map(i -> asked[i]));
 		return [
 			for (i in 0...asked.length) {
 				final reused: Null<HaxeRun> = held[i];

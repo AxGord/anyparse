@@ -3,7 +3,6 @@ package dev;
 import anyparse.query.format.json.AstDumpJson;
 import anyparse.query.format.json.AstNodeJson;
 import anyparse.query.format.json.AstSearchSpan;
-import dev.ReportRecord;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -65,7 +64,7 @@ final class CloneCensus {
 		final base: Array<Array<Finding>> = [parseReport(given[1]), parseReport(given[2])];
 		final later: Null<Array<Array<Finding>>> = after == null ? null : [parseReport(after[0]), parseReport(after[1])];
 		final all: Array<Finding> = base[0].concat(base[1]).concat(later == null ? [] : later[0].concat(later[1]));
-		runs.prefetch([for (f in all) f.file]);
+		runs.prefetch(all.map(f -> f.file));
 		var lines: Array<String> = census(label, base[0], base[1], runs);
 		if (later != null) {
 			lines = lines.concat(census('$label after', later[0], later[1], runs));
@@ -275,7 +274,7 @@ final class CloneCensus {
 	private static function pyDict(counts: Map<String, Int>): String {
 		final keys: Array<String> = [for (k in counts.keys()) k];
 		keys.sort(Reflect.compare);
-		return '{' + [for (k in keys) '\'$k\': ${counts[k]}'].join(', ') + '}';
+		return '{' + keys.map(k -> '\'$k\': ${counts[k]}').join(', ') + '}';
 	}
 
 	/** Whether the character `code` is whitespace to Python's `str.isspace`. */
@@ -334,7 +333,7 @@ final class Runs {
 	public function classify(f: Finding): String {
 		final statements: Null<Array<AstNodeJson>> = runOf(f);
 		if (statements == null) return 'unresolved';
-		final texts: Array<String> = [for (s in statements) CloneCensus.pyStrip(text(f.file, s.span))];
+		final texts: Array<String> = statements.map(s -> CloneCensus.pyStrip(text(f.file, s.span)));
 		if (texts.foreach(t -> _bareDecl.match(t))) return 'bare-decl';
 		if (texts.foreach(t -> _bareAssign.match(t))) return 'bare-assign';
 		if (texts.foreach(t -> _bareDecl.match(t) || _bareAssign.match(t))) return 'bare-mixed';

@@ -90,10 +90,10 @@ final class TrapFixSweepTest extends Test {
 		final swept: Array<SweptProbe> = TrapFixSweep.sweep(catalog, FileSystem.absolutePath(engine), ['--all']);
 		FileSystem.deleteFile(catalog);
 		FileSystem.deleteDirectory(dir);
-		Assert.same(['SAME'], [for (s in swept) s.verdict]);
-		Assert.isTrue(swept.length == 1 && swept[0].exercised.contains('prefer-map-type'), [for (s in swept) s.exercised.join(', ')].join(
-			' | '
-		));
+		Assert.same(['SAME'], swept.map(s -> s.verdict));
+		Assert.isTrue(
+			swept.length == 1 && swept[0].exercised.contains('prefer-map-type'), swept.map(s -> s.exercised.join(', ')).join(' | ')
+		);
 	}
 
 	/** Both the sweep and the resolution traps read a project through this, so a probe's own text must reach them over the trap's file. */

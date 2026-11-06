@@ -221,7 +221,7 @@ final class TokenAuditTest extends Test {
 
 	private static function landedOf(file: String, slices: Array<String>): Array<Bool> {
 		final report: AuditReport = TokenReportParser.parse(File.getContent(file));
-		return [for (slice in slices) report.slices.filter(row -> row.slice == slice)[0].landed];
+		return slices.map(slice -> report.slices.filter(row -> row.slice == slice)[0].landed);
 	}
 
 	private static function transcript(slice: String, day: String): String {

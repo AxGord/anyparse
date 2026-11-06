@@ -154,7 +154,7 @@ final class ThreadSafetyOptions {
 
 	/** Every option this read keeps, as one string: two reads keeping the same options have the same signature. */
 	public function signature(): String {
-		final parts: Array<String> = [for (key in LIST_KEYS) '$key=' + list(key).join('\n')];
+		final parts: Array<String> = LIST_KEYS.map(key -> '$key=' + list(key).join('\n'));
 		for (key in FLAG_KEYS) parts.push('$key=${flag(key)}');
 		parts.push('$BUDGET_KEY=$repeatBudgetMs');
 		for (b in boundedRepeats) parts.push('${b.site}>${b.call}@${b.loop}:${b.max}x${b.costMs}');

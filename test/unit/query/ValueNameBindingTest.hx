@@ -22,7 +22,8 @@ class ValueNameBindingTest extends Test {
 		final index: SymbolIndex = indexOf([
 			'a/A.hx' => 'package a;\n\nclass A {\n\tpublic static var x:Int = 0;\n\tpublic static function f():Void {}\n'
 			+ '\tpublic static function g():Void {}\n}\n',
-			'Main.hx' => 'import a.A.*;\nimport a.A.g as held;\n\nvar x:Int = 1;\nfinal y = 2;\n#if foo\nfunction f() {}\n#end\n\nclass Main {}\n'
+			'Main.hx' => 'import a.A.*;\nimport a.A.g as held;\n\nvar x:Int = 1;\nfinal y = 2;\n#if foo\nfunction f() {}\n#end\n\n'
+			+ 'class Main {}\n'
 		]);
 		Assert.equals('x,y,f', [for (f in fileOf(index, 'Main.hx').moduleFields) f.name].join(
 			','
@@ -46,7 +47,8 @@ class ValueNameBindingTest extends Test {
 			+ '#if foo\nclass InFoo {}\n#else\nclass InElse {}\n#end\n#if bar\nclass InBar {}\n#end\nclass Out {}\n'
 			+ '#if foo\nfinal z:Int = 1;\nclass ZFoo {}\n#else\nclass ZElse {}\n#end\n';
 		final index: SymbolIndex = indexOf([
-			'a/A.hx' => 'package a;\n\nclass A {\n\tpublic static var x:Int = 0;\n\tpublic static var y:Int = 0;\n\tpublic static var z:Int = 0;\n}\n',
+			'a/A.hx' => 'package a;\n\nclass A {\n\tpublic static var x:Int = 0;\n\tpublic static var y:Int = 0;\n'
+			+ '\tpublic static var z:Int = 0;\n}\n',
 			'Main.hx' => source
 		]);
 		final at: (String, String) -> String = valuesAt.bind(index, source);
@@ -93,7 +95,8 @@ class ValueNameBindingTest extends Test {
 	@:killer('M-VALUES-SUBTYPE-IMPORT') @:killer('M-VALUES-ENUM-CTOR') @:killer('M-GRAPH-IMPORT-UNLISTED')
 	public function testAnExplicitImportBindsTheStaticItsPathNames(): Void {
 		final index: SymbolIndex = indexOf([
-			'p/T.hx' => 'package p;\n\nclass T {\n\tpublic static function f():Void {}\n}\n\nclass Sub {\n\tpublic static function h():Void {}\n}\n',
+			'p/T.hx' => 'package p;\n\nclass T {\n\tpublic static function f():Void {}\n}\n\nclass Sub {\n'
+			+ '\tpublic static function h():Void {}\n}\n',
 			'p/Mod.hx' => 'package p;\n\nfunction helper():Void {}\n\nclass Mod {}\n',
 			'p/E.hx' => 'package p;\n\nenum E {\n\tOne;\n\tTwo(x:Int);\n}\n',
 			'Main.hx' => 'import p.T.f;\nimport p.T.Sub.h;\nimport p.T.f as g;\nimport p.Mod.helper;\nimport p.T.Sub;\nimport p.T as U;\n'
@@ -245,7 +248,7 @@ class ValueNameBindingTest extends Test {
 	/** The statics `name` binds in `file`, as `Owner.member[declaring files]`, then `?` when one may be unlisted. */
 	private static function statics(index: SymbolIndex, file: String, name: String, ?at: Int): String {
 		final found: ImportedStatics = index.values.importedStatics(fileOf(index, file), name, at);
-		final out: Array<String> = [for (s in found.statics) render(s)];
+		final out: Array<String> = found.statics.map(render);
 		if (found.unknown) out.push('?');
 		return out.join(' ');
 	}
@@ -262,7 +265,7 @@ class ValueNameBindingTest extends Test {
 	}
 
 	private static function render(s: ImportedStatic): String {
-		return '${s.owner}.${s.member}[${[for (d in s.decls) d.file.file].join(',')}]';
+		return '${s.owner}.${s.member}[${s.decls.map(d -> d.file.file).join(',')}]';
 	}
 
 	/**
@@ -273,10 +276,8 @@ class ValueNameBindingTest extends Test {
 		final values: Null<ModuleValues> = index.values.moduleValuesAt(fileOf(index, 'Main.hx'), name, source.indexOf('class $type'));
 		if (values == null) return 'none';
 		final imported: Null<ImportedStatics> = values.imported;
-		final decls: String = [
-			for (d in values.decls) d.name + '@' + source.substr(0, d.span.from).split('\n').length
-		].join(',');
-		return '$decls|${imported == null ? '-' : [for (s in imported.statics) render(s)].join(' ')}';
+		final decls: String = values.decls.map(d -> d.name + '@' + source.substr(0, d.span.from).split('\n').length).join(',');
+		return '$decls|${imported == null ? '-' : imported.statics.map(render).join(' ')}';
 	}
 
 }

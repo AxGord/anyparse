@@ -120,9 +120,7 @@ final class CondRegionScan {
 		// rename of a local `debug` standing beside `#if debug`, and of one named `end` beside the
 		// region's own `#end`. Scanned only when a region was found: the whole point of this
 		// module is that the file holding one is rare.
-		final directives: Array<Span> = [
-			for (directive in CondDirectives.scan(source, shape, noLexicalMask)) directive.span
-		];
+		final directives: Array<Span> = CondDirectives.scan(source, shape, noLexicalMask).map(directive -> directive.span);
 		for (region in regions)
 			for (gap in region.gaps)
 				for (run in outsideDirectives(gap, directives))

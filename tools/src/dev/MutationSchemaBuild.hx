@@ -170,7 +170,7 @@ final class MutationSchemaBuild {
 			for (line in read(dir, PLAN).split('\n')) if (line != '' && !ids.contains(Std.parseInt(line.split('\t')[0]) ?? 0)) '$line\n'
 		];
 		File.saveContent(Path.join([dir, PLAN]), kept.join(''));
-		append(dir, 'culprits', [for (id in ids) '$id\n'].join(''));
+		append(dir, 'culprits', ids.map(id -> '$id\n').join(''));
 	}
 
 	/** Type every module holding one of the embedded arms `ids` in the macro context over the composed tree. */
@@ -208,7 +208,7 @@ final class MutationSchemaBuild {
 	}
 
 	private static function save(dir: String, name: String, ids: Array<Int>): Void {
-		File.saveContent(Path.join([dir, name]), [for (id in ids) '$id\n'].join(''));
+		File.saveContent(Path.join([dir, name]), ids.map(id -> '$id\n').join(''));
 	}
 
 	private static function append(dir: String, name: String, text: String): Void {
@@ -233,9 +233,7 @@ final class MutationSchemaBuild {
 
 	/** The answer of a build that compiled: `<arm> <id>` for every composed arm whose switch no compile-time code reached. */
 	private static function writeMap(dir: String, macroLog: String): Void {
-		final reached: Array<String> = FileSystem.exists(macroLog)
-			? [for (l in File.getContent(macroLog).split('\n')) l.split('\t')[0]]
-			: [];
+		final reached: Array<String> = FileSystem.exists(macroLog) ? File.getContent(macroLog).split('\n').map(l -> l.split('\t')[0]) : [];
 		final names: Map<String, String> = [];
 		for (line in read(dir, 'names').split('\n')) {
 			final space: Int = line.indexOf(' ');

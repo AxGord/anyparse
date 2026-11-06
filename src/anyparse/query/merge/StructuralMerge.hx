@@ -101,10 +101,8 @@ final class StructuralMerge {
 			case Declarations:
 				final version: Null<FileVersion> = DeclarationLines.versionOf(plugin, source);
 				if (version == null) return Refused('a version does not parse in the writer\'s form');
-				final directives: Array<Int> = [
-					for (directive in CondDirectives.scan(source, plugin.refShape(), () -> plugin.lexicalRegions(source)))
-						directive.span.from
-				];
+				final directives: Array<Int> = CondDirectives.scan(source, plugin.refShape(), () -> plugin.lexicalRegions(source))
+					.map(directive -> directive.span.from);
 				if (DeclarationTree.conditionalBetween(version, directives))
 					return Refused('a conditional-compilation line stands between declarations');
 				out.push(DeclarationTree.of(version));

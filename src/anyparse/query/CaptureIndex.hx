@@ -90,7 +90,7 @@ final class CaptureIndex {
 		final lastSpan: Null<Span> = run.length == 0 ? null : run[run.length - 1].span;
 		final visibleFrom: Int = lastSpan == null ? armSpan.from : lastSpan.to;
 		final constants: Array<QueryNode> = constantDeclarations();
-		final found: PatternScan = CasePatterns.scan(arm, _shape, [for (c in constants) c.name ?? '']);
+		final found: PatternScan = CasePatterns.scan(arm, _shape, constants.map(c -> c.name ?? ''));
 		final proof: SubjectProof = CasePatterns.subjectProof(_switchOf[arm], _root, _shape, subject -> {
 			final name: Null<String> = subject.name;
 			final span: Null<Span> = subject.span;

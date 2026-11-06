@@ -457,12 +457,12 @@ final class SwitchChain {
 			if (known == null) {
 				final texts: Null<Array<String>> = discriminantTexts(pairs, source);
 				if (texts == null) return null;
-				discs = [for (p in pairs) p.disc];
+				discs = pairs.map(p -> p.disc);
 				discTexts = texts;
 			} else if (!sameDiscriminants(known, pairs, source)) {
 				return null;
 			}
-			rungs.push({ patterns: [for (p in pairs) p.pattern], values: [for (p in pairs) p.value], body: bodySpan });
+			rungs.push({ patterns: pairs.map(p -> p.pattern), values: pairs.map(p -> p.value), body: bodySpan });
 			final elseChild: Null<QueryNode> = cur.children.length >= CHAIN_WITH_ELSE_CHILD_COUNT ? cur.children[ELSE_SLOT_INDEX] : null;
 			if (elseChild == null) break;
 			if (seams.chainKinds.contains(elseChild.kind)) {
@@ -780,7 +780,7 @@ final class SwitchChain {
 	 * so only a value they all share is known.
 	 */
 	private static function agreedValue(decls: Array<MemberDeclaration>, seams: ChainSeams): Null<String> {
-		final values: Array<Null<String>> = [for (decl in decls) CaseValueKey.ofMember(decl.type, decl.member, seams.values)];
+		final values: Array<Null<String>> = decls.map(decl -> CaseValueKey.ofMember(decl.type, decl.member, seams.values));
 		final first: Null<String> = values[0];
 		return first != null && values.foreach(v -> v == first) ? first : null;
 	}

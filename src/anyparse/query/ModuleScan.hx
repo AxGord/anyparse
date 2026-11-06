@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.ModulePath;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
@@ -353,7 +352,7 @@ final class ModuleScan {
 	private static function guardedImportDecls(root: QueryNode): Array<QueryNode> {
 		final out: Array<GuardedImport> = [];
 		collectGuardedImports(root, false, null, _ -> null, out);
-		return [for (g in out) g.decl];
+		return out.map(g -> g.decl);
 	}
 
 	/**
@@ -404,24 +403,6 @@ final class ModuleScan {
 			} else if (depth == 1 && seams.contains(directive.keyword)) {
 				return false;
 			}
-		}
-		return false;
-	}
-
-	/** Whether the type named `name` in `file` is that module's MAIN type — the only kind a package wildcard binds. */
-	private static function isMainTypeIn(file: FileInfo, name: String): Bool {
-		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == name);
-		return decl != null && decl.isMain;
-	}
-
-	/**
-	 * Whether the file's own top level declares a type named `name` — a same-module type,
-	 * visible with no import. `final class` wrappers normalised via `RefactorSupport.typeDeclOf`.
-	 */
-	private static function declaresTypeNamed(root: QueryNode, name: String): Bool {
-		for (c in root.children) {
-			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(c);
-			if (decl != null && decl.name == name) return true;
 		}
 		return false;
 	}

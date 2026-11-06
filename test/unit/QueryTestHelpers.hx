@@ -59,9 +59,10 @@ final class QueryTestHelpers {
 		function builds(): ReachBuilds {
 			final all: Array<{ file: String, source: String }> = project.concat(libraryFiles);
 			final index: SymbolIndex = CheckFixture.index(all, new HaxeQueryPlugin());
-			final types: Array<{ name: String, file: String }> = [];
-			for (fi in index.allFiles()) for (t in fi.types) types.push({ name: t.name, file: OracleCoverage.canonical(cwd, fi.file) });
-			final compiled: Array<String> = [for (f in all) OracleCoverage.canonical(cwd, f.file)];
+			final types: Array<{ name: String, file: String }> = [
+				for (fi in index.allFiles()) for (t in fi.types) { name: t.name, file: OracleCoverage.canonical(cwd, fi.file) }
+			];
+			final compiled: Array<String> = all.map(f -> OracleCoverage.canonical(cwd, f.file));
 			return {
 				configurations: [
 					for (c in declared)
@@ -77,7 +78,7 @@ final class QueryTestHelpers {
 				library: libraryFiles
 			};
 		}
-		final sources: () -> ResolutionSources = () -> {
+		function sources(): ResolutionSources return {
 			report: project,
 			projectRoots: [],
 			library: new LibrarySources(libraryFiles),
@@ -107,7 +108,12 @@ final class QueryTestHelpers {
 				final dir: String = packageDecl.match(sources[i]) ? packageDecl.matched(1).split('.').join('/') + '/' : '';
 				final named: String = declaration.match(sources[i]) ? '$dir${declaration.matched(2)}.hx' : '';
 				// A second source of one module is that module on another class path, as the compiler would see two.
-				final file: String = named == '' ? 'F$i.hx' : taken.contains(named) ? 'cp$i/$named' : named;
+				final file: String = if (named == '')
+					'F$i.hx'
+				else if (taken.contains(named))
+					'cp$i/$named'
+				else
+					named;
 				taken.push(file);
 				{ file: file, source: sources[i] };
 			}

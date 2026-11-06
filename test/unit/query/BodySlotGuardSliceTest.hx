@@ -574,9 +574,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * a construct's end can land in an edit OTHER than the one that touched its body.
 	 */
 	private static function splicesOf(source: String, pairs: Array<{ find: String, text: String }>): EditResult {
-		return SeamEdit.apply(source, [
-			for (pair in pairs) { find: pair.find, covered: pair.find.length, text: pair.text }
-		]);
+		return SeamEdit.apply(source, pairs.map(pair -> {find: pair.find, covered: pair.find.length, text: pair.text }));
 	}
 
 }

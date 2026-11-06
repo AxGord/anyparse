@@ -126,9 +126,7 @@ final class ConfigDisagreement {
 	 * answers first.
 	 */
 	private static function oracleSignature(oracles: Array<OracleConfig>): String {
-		return [
-			for (oracle in oracles) '${oracle.hxml}|${oracle.dir ?? ''}|${oracle.defines.join(' ')}'
-		].join('\n');
+		return oracles.map(oracle -> '${oracle.hxml}|${oracle.dir ?? ''}|${oracle.defines.join(' ')}').join('\n');
 	}
 
 	/**
@@ -218,9 +216,7 @@ final class ConfigDisagreement {
 	 * agree and must not be reported as disagreeing.
 	 */
 	private static function rosterSignature(roster: Array<FrameworkContract>): String {
-		final rendered: Array<String> = [
-			for (contract in roster) '${contract.root}(${sorted(contract.names)})(${sorted(contract.prefixes)})'
-		];
+		final rendered: Array<String> = roster.map(contract -> '${contract.root}(${sorted(contract.names)})(${sorted(contract.prefixes)})');
 		rendered.sort(Reflect.compare);
 		return rendered.join(' ');
 	}

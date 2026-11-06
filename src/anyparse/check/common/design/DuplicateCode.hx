@@ -524,7 +524,7 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 
 		final grams: Map<String, Array<DupPos>> = buildGrams(blocks);
 		final findings: Array<DupFinding> = [];
-		final silent: Array<Bool> = [for (pf in perFile) reportable != null && !reportable(pf.file)];
+		final silent: Array<Bool> = perFile.map(pf -> reportable != null && !reportable(pf.file));
 		for (bucket in grams) if (bucket.length >= 2) collectCrossFindings(blocks, blockFile, perFile, silent, bucket, findings);
 
 		final kept: Array<DupFinding> = dropOverlapping(findings);

@@ -748,7 +748,7 @@ final class JoinArrayPushes extends RuleBase {
 	 * end of the previous line, and the literal lies before the first push.
 	 */
 	private static function foldEdits(literal: Span, run: Array<Push>, ctx: Ctx): Array<{ span: Span, text: String }> {
-		final elements: Array<String> = [for (push in run) ctx.source.substring(push.argSpan.from, push.argSpan.to)];
+		final elements: Array<String> = run.map(push -> ctx.source.substring(push.argSpan.from, push.argSpan.to));
 		final edits: Array<{ span: Span, text: String }> = [{ span: literal, text: '[${elements.join(', ')}]' }];
 		for (push in run) edits.push({ span: CheckScan.lineDeletionSpan(ctx.source, push.stmt), text: '' });
 		return edits;

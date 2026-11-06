@@ -349,7 +349,7 @@ class HxFormatterCorpusTest extends Test {
 				skipWrite: sweepSkipWrite,
 				skipConfig: sweepSkipConfig,
 				skipMalformed: sweepSkipMalformed,
-				fixtures: [for (f in sweepFixtures) { path: f.path, status: f.status }]
+				fixtures: sweepFixtures.map(f -> {path: f.path, status: f.status })
 			}, JsonFormat.instance.compactWriteOptions);
 			// Auto-rotate: before overwriting the current snapshot, copy
 			// the previous one to `bin/.prev-sweep.json` so the next

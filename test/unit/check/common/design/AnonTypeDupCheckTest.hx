@@ -200,7 +200,7 @@ class AnonTypeDupCheckTest extends Test {
 		for (files in [[x, y], [y, x]]) {
 			final check: AnonTypeDup = new AnonTypeDup();
 			check.setConfigResolver(f -> f.startsWith('x/') ? low : high);
-			Assert.same(['x/X.hx'], [for (v in CheckFixture.violationsIn(check, files)) v.file]);
+			Assert.same(['x/X.hx'], CheckFixture.violationsIn(check, files).map(v -> v.file));
 		}
 	}
 
@@ -226,7 +226,7 @@ class AnonTypeDupCheckTest extends Test {
 				[new AnonTypeDup()],
 				f -> f.startsWith('x/') ? on : off, true
 			);
-			Assert.same(['x/X.hx'], [for (v in found) v.file]);
+			Assert.same(['x/X.hx'], found.map(v -> v.file));
 		}
 	}
 

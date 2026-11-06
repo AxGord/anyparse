@@ -107,7 +107,7 @@ class HxWrapRulesIngestTest extends Test {
 			'{"cond":"HasMultiLineItems","value":1}',
 			'{"cond":"allItemLengths < n","value":30}'
 		];
-		final ruleList: String = [for (cond in conds) '{"type":"noWrap","conditions":[$cond]}'].join(',');
+		final ruleList: String = conds.map(cond -> '{"type":"noWrap","conditions":[$cond]}').join(',');
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"wrapping":{"arrayWrap":{"rules":[$ruleList]}}}');
 		final rules: Array<WrapRule> = opts.arrayLiteralWrap.rules;
 		Assert.equals(6, rules.length);

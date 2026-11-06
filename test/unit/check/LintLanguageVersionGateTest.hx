@@ -93,7 +93,7 @@ class LintLanguageVersionGateTest extends Test {
 	private function rulesFor(version: Null<String>): Array<String> {
 		final config: LintConfig = new LintConfig([], null, null, null, null, null, version);
 		final found: Array<Violation> = Linter.run([{ file: 'V.hx', source: SOURCE }], new HaxeQueryPlugin(), null, _ -> config, true);
-		return [for (v in found) v.rule];
+		return found.map(v -> v.rule);
 	}
 
 }

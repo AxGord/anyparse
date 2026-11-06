@@ -88,7 +88,7 @@ final class LintFormat {
 				for (f in files.slice(0, SUMMARY_FILES_SINGLE_RULE)) buf.add('  ${'${f.count}'.lpad(' ', countWidth)}  ${f.file}\n');
 				if (files.length > SUMMARY_FILES_SINGLE_RULE) buf.add('  ... +${files.length - SUMMARY_FILES_SINGLE_RULE} more file(s)\n');
 			} else {
-				final named: Array<String> = [for (f in files.slice(0, SUMMARY_FILES_PER_RULE)) '${f.file} (${f.count})'];
+				final named: Array<String> = files.slice(0, SUMMARY_FILES_PER_RULE).map(f -> '${f.file} (${f.count})');
 				if (files.length > SUMMARY_FILES_PER_RULE) named.push('+${files.length - SUMMARY_FILES_PER_RULE} more');
 				buf.add('    ${named.join(', ')}\n');
 			}
@@ -119,28 +119,23 @@ final class LintFormat {
 		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>, ?explain: ExplainedLocks
 	): String {
 		final indexes: Map<String, LineIndex> = [];
-		final findings: Array<LintFindingRecord> = [
-			for (v in violations) recordOf(v, indexFor(v.file, sourceOf, indexes), addressOf == null ? null : addressOf(v))
-		];
+		final findings: Array<LintFindingRecord> = violations.map(v ->
+			recordOf(v, indexFor(v.file, sourceOf, indexes), addressOf == null ? null : addressOf(v))
+		);
 		final options: WriteOptions = JsonFormat.instance.expandedWriteOptions;
 		if (explain == null) return LintFindingsDocumentWriter.write({ findings: findings }, options);
 		final longLocks: Null<LongLockReport> = explain.report;
 		return LintExplainedDocumentWriter.write({
 			findings: findings,
 			longLocks: longLocks == null ? null : {
-				long: [
-					for (l in longLocks.long)
-						{
-							lock: l.lock,
-							reasons: [for (r in l.reasons) reasonRecord(r, sourceOf, indexes)],
-							circular: l.circular,
-							aside: reasonRecords(l.aside, sourceOf, indexes)
-						}
-				],
-				mainShort: [
-					for (t in longLocks.mainShort) takeRecord(t, indexFor(t.file, sourceOf, indexes))
-				],
-				dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]
+				long: longLocks.long.map(l -> {
+					lock: l.lock,
+					reasons: l.reasons.map(reasonRecord.bind(_, sourceOf, indexes)),
+					circular: l.circular,
+					aside: reasonRecords(l.aside, sourceOf, indexes)
+				}),
+				mainShort: longLocks.mainShort.map(t -> takeRecord(t, indexFor(t.file, sourceOf, indexes))),
+				dominated: longLocks.dominated.map(d -> {lock: d.lock, by: d.by })
 			}
 		}, options);
 	}
@@ -291,7 +286,7 @@ final class LintFormat {
 		final index: LineIndex = indexFor(r.file, sourceOf, indexes);
 		final head: String = '${r.kind.rpad(' ', LONG_REASON_WIDTH)}  ${place(r.file, r.span, index)}  ${r.holder}';
 		if (r.kind == LongLockKind.Blind)
-			return '$head  unresolved: ${[for (c in r.unresolved) '${c.name} at ${lineCol(c.span, index)}'].join(', ')}';
+			return '$head  unresolved: ${r.unresolved.map(c -> '${c.name} at ${lineCol(c.span, index)}').join(', ')}';
 		final call: Null<String> = r.call;
 		if (call == null) return head;
 		final via: String = r.via == null ? '' : ' via ${r.via}';
@@ -347,7 +342,7 @@ final class LintFormat {
 			if (seen == null) order.push(v.file);
 			counts[v.file] = (seen ?? 0) + 1;
 		}
-		final files: Array<{ file: String, count: Int }> = [for (file in order) { file: file, count: counts[file] ?? 0 }];
+		final files: Array<{ file: String, count: Int }> = order.map(file -> {file: file, count: counts[file] ?? 0 });
 		files.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.file, b.file));
 		return files;
 	}
@@ -368,7 +363,7 @@ final class LintFormat {
 			member: data.member,
 			subject: data.subject,
 			chain: data.chain,
-			repeatedBy: repeated == null ? null : [for (r in repeated) { member: r.member, at: r.at }]
+			repeatedBy: repeated?.map(r -> {member: r.member, at: r.at })
 		};
 	}
 
@@ -376,7 +371,7 @@ final class LintFormat {
 	private static function reasonRecords(
 		reasons: Null<Array<LongLockReason>>, sourceOf: Map<String, String>, indexes: Map<String, LineIndex>
 	): Null<Array<LongLockReasonRecord>> {
-		return reasons == null ? null : [for (r in reasons) reasonRecord(r, sourceOf, indexes)];
+		return reasons?.map(reasonRecord.bind(_, sourceOf, indexes));
 	}
 
 	/** Where `span` starts, null for no span. */

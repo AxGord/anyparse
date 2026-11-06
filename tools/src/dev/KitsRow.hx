@@ -32,7 +32,7 @@ final class KitsRow {
 	 * first report line. `--record` keeps every other field of a row, so a moved known-defect row also needs its `knownDefect` deleted.
 	 */
 	public static function failure(report: KitsReport): String {
-		final record: String = [for (area in report.failed) 'node bin/dev.js probe $area --record --compile'].join('; ');
+		final record: String = report.failed.map(area -> 'node bin/dev.js probe $area --record --compile').join('; ');
 		final moved: Bool = report.lines.exists(line -> line.indexOf('KNOWN-DEFECT ROW MOVED') >= 0);
 		final delete: String = moved ? ', and delete the knownDefect field of each row reported KNOWN-DEFECT ROW MOVED' : '';
 		return '${report.failing} row(s) in ${report.failed.join(', ')}; for an intended change run $record$delete: ${report.lines[0]}';

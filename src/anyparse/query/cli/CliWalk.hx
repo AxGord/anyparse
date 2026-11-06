@@ -227,7 +227,7 @@ final class CliWalk {
 	 * about every failure, exactly as a single-query run does.
 	 */
 	public static function skipsFor(query: String, prefiltered: Bool, skips: Array<QuerySkip>): Array<SkipEntry> {
-		return prefiltered ? [for (s in skips) if (s.source.indexOf(query) >= 0) s.entry] : [for (s in skips) s.entry];
+		return prefiltered ? [for (s in skips) if (s.source.indexOf(query) >= 0) s.entry] : skips.map(s -> s.entry);
 	}
 
 	/**

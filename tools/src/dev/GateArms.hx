@@ -51,15 +51,12 @@ final class GateArms {
 		final now: Array<ArmRecord> = ArmRegistry.read(Path.join([gate.tree, ArmRegistry.DIRECTORY]));
 		final old: Null<Array<ArmRecord>> = baseRecords(gate);
 		final report: String = changedReport(gate);
-		final layout: Array<String> = [for (file in layoutOf(report)) moduleOf(file)].filter(m -> m != '');
+		final layout: Array<String> = layoutOf(report).map(moduleOf).filter(m -> m != '');
 		final said: Map<String, Null<Array<String>>> = ChangedMembers.of(report);
-		final touches: Array<ModuleTouch> = [
-			for (file in gate.touched)
-				{
-					module: moduleOf(file),
-					members: said[file]
-				}
-		].filter(t -> t.module != '' && !layout.contains(t.module));
+		final touches: Array<ModuleTouch> = gate.touched.map(file -> {
+			module: moduleOf(file),
+			members: said[file]
+		}).filter(t -> t.module != '' && !layout.contains(t.module));
 		final near: Array<String> = callNeighbours(gate, layout, touches);
 		final picked: ArmSelection = select(now, old, touches, layout, pinnedKillers(gate, touches), gate.options.arms, near);
 		for (name in gate.options.arms) if (!picked.fast.contains(name))
@@ -171,12 +168,11 @@ final class GateArms {
 
 	/** How many threads a kill run held, as the row says it: the lease the tracks' suites read as `WF_THREADS`, not the `--jobs` slots. */
 	private static function leaseNote(held: Null<Int>): String {
-		return if (held == null)
-			'no lease'
-		else if (held == 1)
-			'1 thread'
-		else
-			'$held threads';
+		return switch (held) {
+			case null: 'no lease';
+			case 1: '1 thread';
+			case _: '$held threads';
+		};
 	}
 
 	/** The runs of a `picked` selection, `old` being the registry at the base: the apply check first, then the kill run. */

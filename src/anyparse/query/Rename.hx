@@ -201,7 +201,7 @@ final class Rename {
 		final sorted: Array<Span> = edits.copy();
 		sorted.sort((a, b) -> a.from - b.from);
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
-		final resolvedFrom: Array<Int> = [for (occ in resolved) occ.from];
+		final resolvedFrom: Array<Int> = resolved.map(occ -> occ.from);
 		final expected: Array<Int> = [];
 		var shift: Int = 0;
 		var newCursor: Int = -1;
@@ -212,7 +212,7 @@ final class Rename {
 			shift += delta;
 		}
 		if (newCursor < 0) newCursor = expected[0];
-		final actual: Array<Int> = [for (occ in renameOccurrences(rewritten, newTree, newCursor, shape)) occ.from];
+		final actual: Array<Int> = renameOccurrences(rewritten, newTree, newCursor, shape).map(occ -> occ.from);
 		actual.sort((a, b) -> a - b);
 		if (actual.length == expected.length && actual.foreach(off -> expected.contains(off))) return [];
 		final out: Array<Capture> = [for (off in actual) if (!expected.contains(off)) { offset: off, extra: true }];
@@ -415,7 +415,7 @@ final class Rename {
 	 * change length.
 	 */
 	private static function spliceRename(source: String, occurrences: Array<Span>, newName: String): String {
-		final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
+		final edits: Array<{ span: Span, text: String }> = occurrences.map(occ -> {span: occ, text: newName });
 		return CanonicalEdit.applyEdits(source, edits);
 	}
 
@@ -467,7 +467,7 @@ final class Rename {
 			edits.push({ span: new Span(capture.offset, capture.offset), text: '$self.' });
 		}
 		if (edits.length == 0) return null;
-		final offsets: Array<Int> = [for (edit in edits) edit.span.from];
+		final offsets: Array<Int> = edits.map(edit -> edit.span.from);
 		offsets.sort((a, b) -> a - b);
 		return { source: CanonicalEdit.applyEdits(rewritten, edits), insertions: offsets, prefixLength: '$self.'.length };
 	}
@@ -689,7 +689,7 @@ final class Rename {
 		final sorted: Array<Span> = edits.copy();
 		sorted.sort((a, b) -> a.from - b.from);
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
-		final resolvedFrom: Array<Int> = [for (occ in resolved) occ.from];
+		final resolvedFrom: Array<Int> = resolved.map(occ -> occ.from);
 		final expected: Array<Int> = [];
 		var shift: Int = 0;
 		var newCursor: Int = -1;
@@ -703,7 +703,7 @@ final class Rename {
 		}
 		if (newCursor < 0) newCursor = expected[0];
 
-		final actual: Array<Int> = [for (occ in renameOccurrences(qualified, tree, newCursor, shape)) occ.from];
+		final actual: Array<Int> = renameOccurrences(qualified, tree, newCursor, shape).map(occ -> occ.from);
 		actual.sort((a, b) -> a - b);
 		return actual.length != expected.length || !actual.foreach(off -> expected.contains(off))
 			? Err('rename to "$newName" is unsafe: qualifying the captured occurrences did not resolve the capture')

@@ -382,7 +382,7 @@ final class MemberSlots {
 			for (o in branchOpenings(constructSpan, source, shape)) if (!insideAnyMember(out, firstIdx, o.at)) o
 		];
 		if (opens.length == 0) return;
-		final texts: Array<String> = [for (o in opens) o.text];
+		final texts: Array<String> = opens.map(o -> o.text);
 		final condition: Null<String> = out[firstIdx].condition;
 		if (condition == null || !isFlatBranchSet(out, firstIdx, condition)) {
 			final refused: BranchInfo = { index: -1, opens: texts };

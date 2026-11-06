@@ -561,9 +561,7 @@ class PreferCompareFunctionCheckTest extends Test {
 			final compare: PreferCompareFunction = new PreferCompareFunction();
 			final config: LintConfig = LintConfig.parse(json);
 			compare.setConfigResolver(_ -> config);
-			return [
-				for (v in Linter.collect(files, scoped, [compare, new RedundantLambdaWrapper()], _ -> config, false)) v.rule
-			].join(',');
+			return Linter.collect(files, scoped, [compare, new RedundantLambdaWrapper()], _ -> config, false).map(v -> v.rule).join(',');
 		}
 		Assert.equals('prefer-compare-function', rulesUnder(NAMED));
 		Assert.equals('redundant-lambda-wrapper', rulesUnder('{}'));

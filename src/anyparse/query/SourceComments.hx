@@ -225,7 +225,7 @@ final class SourceComments {
 	 * directive reader) and must not grow a lexer of its own. Not memoised: each call re-lexes.
 	 */
 	public static function collectNonCodeRegions(regions: Array<LexRegion>): Array<Span> {
-		return [for (region in regions) new Span(region.from, region.to)];
+		return regions.map(region -> new Span(region.from, region.to));
 	}
 
 	/**
@@ -242,7 +242,7 @@ final class SourceComments {
 	 * it off the tree. Not memoised: each call re-lexes, so a per-file caller should hoist it.
 	 */
 	public static function collectCommentRegions(regions: Array<LexRegion>): Array<Span> {
-		return [for (token in collectCommentTokens(regions)) new Span(token.from, token.to)];
+		return collectCommentTokens(regions).map(token -> new Span(token.from, token.to));
 	}
 
 	/**

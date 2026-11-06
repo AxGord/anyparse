@@ -3,8 +3,6 @@ package dev;
 import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.PendingRuns;
 import anyparse.core.PoolLease;
-import dev.ArmRecordJson;
-import dev.ArmTable;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -310,7 +308,7 @@ final class MutationArm {
 		final manifest: String = Path.join([workroot, 'manifest']);
 		final lines: Null<Array<String>> = manifestLines(job, rendered, workroot);
 		if (lines == null) return 2;
-		File.saveContent(manifest, [for (line in lines) '$line\n'].join(''));
+		File.saveContent(manifest, lines.map(line -> '$line\n').join(''));
 		if (!job.checkApply && !isSet('APQ_MUTATION_NO_SCHEMA')) state.schema = schema(job, rendered, targets, gen, workroot);
 		// the patches are rendered: the scratch worktree is not held for the length of the run
 		cmd('git -C ${job.repo} worktree remove --force $gen').run();
@@ -372,7 +370,7 @@ final class MutationArm {
 		];
 		final batches: Array<Array<String>> = deal(rows, cores, RENDER_CHUNK);
 		final files: Array<String> = [for (b => _ in batches) Path.join([workroot, 'render-batch.$b'])];
-		for (b => batch in batches) File.saveContent(files[b], [for (row in batch) '$row\n'].join(''));
+		for (b => batch in batches) File.saveContent(files[b], batch.map(row -> '$row\n').join(''));
 		final applied: Array<Result> = Pool.of(Std.int(Math.max(1, files.length)))
 			.map(files, file -> cmd('node ${job.apq} patch --lang haxe --batch $file').at(gen).timeout(RENDER_TIMEOUT_MS));
 		for (b => result in applied) File.saveContent('${files[b]}.log', result.out + result.err + result.failure);
@@ -406,18 +404,16 @@ final class MutationArm {
 	 * an arm has no pin in the generated registry.
 	 */
 	private static function manifestLines(job: ArmJob, rendered: Array<String>, workroot: String): Null<Array<String>> {
-		if (job.checkApply) return [
-			for (name in rendered) manifestLine(name, Path.join([workroot, '$name.patch']), 'ALL', '')
-		];
+		if (job.checkApply) return rendered.map(name -> manifestLine(name, Path.join([workroot, '$name.patch']), 'ALL', ''));
 		if (rendered.length == 0) return [];
 		final pins: PinTables = pinTables(cmd('node ${job.test} --list-pins').text());
 		final unpinned: Null<String> = rendered.find(name -> !pins.tests.exists(name));
-		if (unpinned == null) return [
-			for (name in rendered)
+		if (unpinned == null)
+			return rendered.map(name ->
 				manifestLine(
 					name, Path.join([workroot, '$name.patch']), job.fast ? pins.classes[name] ?? 'ALL' : 'ALL', pins.tests[name] ?? ''
 				)
-		];
+			);
 		say([
 			'$unpinned: no @:killer in the generated registry names it — rebuild ${job.test}'
 		]);
@@ -448,10 +444,10 @@ final class MutationArm {
 			names.push('$id $name');
 			candidates.push(name);
 		}
-		File.saveContent(Path.join([dir, 'candidates']), [for (c in candidates) '$c\n'].join(''));
+		File.saveContent(Path.join([dir, 'candidates']), candidates.map(c -> '$c\n').join(''));
 		if (plan.length == 0) return null;
-		File.saveContent(Path.join([dir, 'plan']), [for (p in plan) '$p\n'].join(''));
-		File.saveContent(Path.join([dir, 'names']), [for (n in names) '$n\n'].join(''));
+		File.saveContent(Path.join([dir, 'plan']), plan.map(p -> '$p\n').join(''));
+		File.saveContent(Path.join([dir, 'names']), names.map(n -> '$n\n').join(''));
 		Sys.println('schema: ${plan.length} arm(s) composed into one build');
 		final devJs: String = FileSystem.fullPath(js.Node.__filename);
 		final build: Command = Command.of([

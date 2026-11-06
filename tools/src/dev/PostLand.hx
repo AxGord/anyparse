@@ -105,11 +105,12 @@ final class PostLand {
 
 	/** The report `status` prints: a line per record, or one line saying there is none. */
 	public static function statusLines(cache: String): Array<String> {
-		final lines: Array<String> = [
-			for (sha in red(cache)) 'red      $sha  ${File.getContent(recordOf(cache, sha)).trim()}'
-		].concat([for (sha in running(cache)) 'running  $sha']).concat([
-			for (sha in lost(cache)) 'LOST     $sha  no process, no verdict — the next land runs it again, or `post-land clear $sha`'
-		]);
+		final lines: Array<String> = red(cache)
+			.map(sha -> 'red      $sha  ${File.getContent(recordOf(cache, sha)).trim()}')
+			.concat(running(cache).map(sha -> 'running  $sha'))
+			.concat(
+				lost(cache).map(sha -> 'LOST     $sha  no process, no verdict — the next land runs it again, or `post-land clear $sha`')
+			);
 		return lines.length == 0 ? ['post-land: no record'] : lines;
 	}
 

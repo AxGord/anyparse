@@ -45,9 +45,9 @@ final class BranchOutliningTest extends Test {
 		if (helper == null) return;
 		Assert.equals('parseRAlt0', helper.fnName);
 		Assert.equals('Null<Foo>', ComplexTypeTools.toString(helper.returnCT));
-		Assert.same(['_start:Int'], [
-			for (arg in helper.extraArgs) '${arg.name}:${arg.type == null ? '?' : ComplexTypeTools.toString(arg.type)}'
-		]);
+		Assert.same(
+			['_start:Int'], helper.extraArgs.map(arg -> '${arg.name}:${arg.type == null ? '?' : ComplexTypeTools.toString(arg.type)}')
+		);
 	}
 
 	/** A local declared INSIDE the trial is the trial's own, not a capture — even when a sibling trial declares one too. */
@@ -259,7 +259,7 @@ final class BranchOutliningTest extends Test {
 			}
 			throw anyparse.runtime.ParseError.backtrack;
 		});
-		Assert.same(['parseR', 'parseRAlt0', 'parseRAlt1'], [for (rule in rules) rule.fnName]);
+		Assert.same(['parseR', 'parseRAlt0', 'parseRAlt1'], rules.map(rule -> rule.fnName));
 	}
 
 	/** A try whose catch is not `tryBranch`'s is somebody else's rollback and is left alone. */
@@ -285,7 +285,7 @@ final class BranchOutliningTest extends Test {
 	private function assertKeptInline(body: Expr): Void {
 		final before: String = ExprTools.toString(body);
 		final rules: Array<GeneratedRule> = outlined(body);
-		Assert.equals(1, rules.length, 'expected the trial to stay inline, got ${[for (rule in rules) rule.fnName]}');
+		Assert.equals(1, rules.length, 'expected the trial to stay inline, got ${rules.map(rule -> rule.fnName)}');
 		Assert.equals(before, ExprTools.toString(rules[0].body));
 	}
 

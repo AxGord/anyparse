@@ -413,9 +413,7 @@ class CliHelpListingPinTest extends Test {
 	 * pair fails as loudly as a reworded line: order is part of the expectation.
 	 */
 	public function testTheRenderedListingIsTheBaseBinarysBytes(): Void {
-		final rendered: Array<String> = [
-			for (command in CliRegistry.commands()) CliRegistry.helpLine(command.name()).rtrim()
-		];
+		final rendered: Array<String> = CliRegistry.commands().map(command -> CliRegistry.helpLine(command.name()).rtrim());
 		Assert.same(BASE_HELP_LISTING, rendered, 'apq --help no longer lists what the pre-seam binary listed');
 	}
 
@@ -476,10 +474,8 @@ class CliHelpListingPinTest extends Test {
 
 	/** The registry owns every command the listing names, and no more. */
 	public function testTheRegistryHoldsExactlyTheListedCommands(): Void {
-		final names: Array<String> = [for (command in CliRegistry.commands()) command.name()];
-		final listed: Array<String> = [
-			for (line in BASE_HELP_LISTING) line.substring(2, line.indexOf(' ', 2))
-		];
+		final names: Array<String> = CliRegistry.commands().map(command -> command.name());
+		final listed: Array<String> = BASE_HELP_LISTING.map(line -> line.substring(2, line.indexOf(' ', 2)));
 		Assert.same(listed, names, 'the registry and the pre-seam listing name the same commands, in the same order');
 	}
 

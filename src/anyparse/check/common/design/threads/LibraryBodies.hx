@@ -153,7 +153,7 @@ final class LibraryBodies {
 			return null;
 		}
 		final build: Null<LibraryBuild> = PhaseTimings.measure(
-			'library build read', () -> LibraryBuild.read(oracle, [for (f in files) f.file], problems)
+			'library build read', () -> LibraryBuild.read(oracle, files.map(f -> f.file), problems)
 		);
 		if (build == null) return null;
 		final sources: Array<{ file: String, source: String }> = PhaseTimings.measure(
@@ -170,9 +170,7 @@ final class LibraryBodies {
 					types: []
 				}
 			]);
-			[
-				for (s in sources) { file: s.file, source: blanked(s.source, liveness.skippedOf(s.file, s.source)) }
-			];
+			sources.map(s -> {file: s.file, source: blanked(s.source, liveness.skippedOf(s.file, s.source)) });
 		});
 		return new LibraryBodies(
 			{ graph: project.graph, known: project.sinks.builtin.concat(project.sinks.natives) }, plugin, kept, picked.options

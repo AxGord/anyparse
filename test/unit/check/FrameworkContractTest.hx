@@ -287,7 +287,7 @@ import anyparse.runtime.Span;
 		final reported: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, reported.length, 'the second root nominates Tick and gets no say');
 		if (reported.length == 1) Assert.equals('b/B.hx', reported[0].file, 'and it is B, under the root that named Tick');
-		final paths: Array<String> = [for (entry in files) entry.file];
+		final paths: Array<String> = files.map(entry -> entry.file);
 		final message: Null<String> = ConfigDisagreement.rosterMessage(twoRootResolver, paths);
 		Assert.notNull(message, 'a two-root scope with two rosters is a disagreement');
 		if (message != null)

@@ -186,7 +186,7 @@ final class GraphHtml {
 				final open: Map<String, Bool> = above.copy();
 				open[id] = true;
 				openHolders(graph, n, open);
-				final held: Array<String> = [for (c in graph.held(id)) c.id];
+				final held: Array<String> = graph.held(id).map(c -> c.id);
 				final drawn: CodeGraph = GraphView.filter(GraphView.opening(graph, id, open), viewFilter(prune, held));
 				// a node shows only inside its holder opened, so the holder's view, when it has one, was reached first
 				final parent: Null<String> = n.parent;

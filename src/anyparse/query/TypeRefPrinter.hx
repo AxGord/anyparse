@@ -424,7 +424,7 @@ final class TypeRefPrinter {
 		final scopes: Null<Array<Span>> = typeParamScopes()[name];
 		if (scopes == null) return false;
 		final sites: Array<Int> = if (owned != null && owned.length > 0)
-			[for (span in owned) span.from]
+			owned.map(span -> span.from)
 		else if (_site >= 0)
 			[_site]
 		else

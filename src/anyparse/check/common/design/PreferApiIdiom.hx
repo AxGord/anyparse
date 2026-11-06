@@ -211,9 +211,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	private static function validatedFor(
 		specs: Array<IdiomSpec>, index: SymbolIndex, seams: Seams, memo: Map<String, Array<Idiom>>
 	): Array<Idiom> {
-		final key: String = [
-			for (s in specs) '${s.type}|${s.fields.join(',')}|${s.method}|${s.copy}|${s.subtypes}'
-		].join(';');
+		final key: String = specs.map(s -> '${s.type}|${s.fields.join(',')}|${s.method}|${s.copy}|${s.subtypes}').join(';');
 		final known: Null<Array<Idiom>> = memo[key];
 		if (known != null) return known;
 		final problems: Array<String> = [];
@@ -411,7 +409,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	/** `window` as a site of `idiom`, with its replacement, or null when a gate refuses. */
 	private static function windowMatch(window: Array<Write>, idiom: Idiom, ctx: Ctx): Null<Match> {
 		final fields: Array<String> = idiom.spec.fields;
-		final written: Array<String> = [for (w in window) w.field];
+		final written: Array<String> = window.map(w -> w.field);
 		if (fields.exists(f -> !written.contains(f)) || written.exists(f -> !fields.contains(f))) return null;
 		// inside the type itself or a subtype, the window may BE the method's own body: rewriting it would recurse
 		final host: Null<ResolvedType> = enclosingType(window[0].span, ctx);
@@ -432,10 +430,10 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		} else {
 			if (!carriedOnly(window, ctx.source, lineEnd)) return null;
 			for (k in 0...window.length) {
-				final earlier: Array<String> = [for (w in window.slice(0, k)) w.field];
+				final earlier: Array<String> = window.slice(0, k).map(w -> w.field);
 				if (!PurityScan.isPure(window[k].rhs, ctx.purity) || mentionsAny(window[k].rhs, earlier, ctx.seams)) return null;
 			}
-			final args: Array<String> = [for (f in fields) rhsText(window.find(w -> w.field == f), ctx.source)];
+			final args: Array<String> = fields.map(f -> rhsText(window.find(w -> w.field == f), ctx.source));
 			'$recvText.${idiom.spec.method}(${args.join(', ')});';
 		};
 		final method: String = copy ?? idiom.spec.method ?? '';

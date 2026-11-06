@@ -34,7 +34,7 @@ class ModuleRelativeRefTest extends Test {
 
 	/** The declaring files `written` resolves to from `from`, joined. */
 	private static function declaring(index: SymbolIndex, from: String, written: String = 'Mod.Sub'): String {
-		return [for (r in index.resolveTypeRefsFrom(written, from)) r.file.file].join(' | ');
+		return index.resolveTypeRefsFrom(written, from).map(r -> r.file.file).join(' | ');
 	}
 
 	/** `a.Mod` holds `Sub` and `Near`; `a.b.Mod` holds `Near` only; readers in `a.b.c`, an unrelated `z` and an importer `q`. */

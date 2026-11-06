@@ -85,7 +85,7 @@ final class OracleServerStaleTest extends Test {
 		#if nodejs
 		final root: String = CliFixture.writeTree('apq_stale', files);
 		final config: OracleConfig = { hxml: 'build.hxml', dir: root, defines: [] };
-		final pool: OracleServerPool = new OracleServerPool(() -> [for (path in watched) '$root/$path']);
+		final pool: OracleServerPool = new OracleServerPool(() -> watched.map(path -> '$root/$path'));
 		var after: Null<HaxeRun> = null;
 		CliFixture.always(() -> {
 			pool.stop();

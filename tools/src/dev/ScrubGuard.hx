@@ -95,7 +95,7 @@ final class ScrubGuard {
 			}
 			rules = loadRules(sys.io.File.getContent(list));
 		}
-		final privates: Array<PathIndex> = [for (root in roots) new PathIndex(privateFiles(root))];
+		final privates: Array<PathIndex> = roots.map(root -> new PathIndex(privateFiles(root)));
 		if (prePush) return pushed(js.Syntax.code("require('fs').readFileSync(0, 'utf8')"), rules, privates, quiet);
 		final rows: Array<String> = range == null ? scanTree(rules, tree, privates) : scanRange(range, rules, tree, privates);
 		report(rows, rules, privates, quiet);

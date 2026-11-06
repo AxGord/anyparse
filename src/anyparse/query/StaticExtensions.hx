@@ -113,7 +113,7 @@ final class StaticExtensions {
 		final out: Array<String> = [];
 		for (u in usingsOf(fi)) {
 			final hosts: Null<UsingHosts> = usingHosts(u.raw);
-			final names: Array<String> = hosts == null ? [SourceText.lastSegment(u.raw)] : [for (t in hosts.types) t.type.name];
+			final names: Array<String> = hosts == null ? [SourceText.lastSegment(u.raw)] : hosts.types.map(t -> t.type.name);
 			for (n in names) if (!out.contains(n)) out.push(n);
 		}
 		return out;

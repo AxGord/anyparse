@@ -279,9 +279,7 @@ final class UnusedImport extends RuleBase {
 		return if (governance == null)
 			[scanOf(info.file, sourceOf[info.file] ?? '', plugin, info.imports, index)]
 		else if (governance.bounded)
-			[
-				for (governed in governance.governs) scanOf(governed.file, governed.source, plugin, [], index)
-			]
+			governance.governs.map(governed -> scanOf(governed.file, governed.source, plugin, [], index))
 		else
 			null;
 	}
@@ -305,7 +303,7 @@ final class UnusedImport extends RuleBase {
 		return {
 			file: file,
 			source: source,
-			excluded: [for (imp in imports) imp.span].concat(comments),
+			excluded: imports.map(imp -> imp.span).concat(comments),
 			commentRegions: comments,
 			matchMask: [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)],
 			sites: new UsingSites(source, plugin, file, index)
@@ -498,9 +496,7 @@ final class UnusedImport extends RuleBase {
 		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin, evidence: ImportEvidence
 	): Void {
 		// A bare mention in the module declaring what the statement names is that module's own declaration, never a use.
-		final declaring: Array<String> = [
-			for (r in evidence.resolveIndex.refs.resolveQualifiedRefAll(imp.raw)) r.file.file
-		];
+		final declaring: Array<String> = evidence.resolveIndex.refs.resolveQualifiedRefAll(imp.raw).map(r -> r.file.file);
 		if (referenced(scans.filter(s -> !declaring.contains(s.file)), SourceText.lastSegment(imp.raw))) return;
 		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? evidence.reportMembersByModule[imp.raw];
 		if (methods == null) {

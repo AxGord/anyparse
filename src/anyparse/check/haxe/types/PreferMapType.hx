@@ -279,9 +279,7 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (edit in fixGrouped(source, violations, plugin, index)) { span: edit.span, text: edit.text }
-		];
+		return fixGrouped(source, violations, plugin, index).map(edit -> {span: edit.span, text: edit.text });
 	}
 
 	/**

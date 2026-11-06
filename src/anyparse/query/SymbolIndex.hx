@@ -1067,7 +1067,7 @@ final class SymbolIndex {
 		// the other.
 		final ds: Array<TypeDeclInfo> = typeName.indexOf('.') < 0
 			? refs.declsNamed(typeName)
-			: [for (resolved in refs.resolveQualifiedRefAll(typeName)) resolved.type];
+			: refs.resolveQualifiedRefAll(typeName).map(resolved -> resolved.type);
 		if (ds.length != 1) return false;
 		final decl: TypeDeclInfo = ds[0];
 		// `hasBuild` disqualifies an abstract outright: the macro can add the `@:from` the member scan

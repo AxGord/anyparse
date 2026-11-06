@@ -171,7 +171,7 @@ final class UsingScan {
 	public static function appendUsingInsert(
 		header: UsingHeader, module: String, edits: Array<{ span: Span, text: String }>, violations: Array<Violation>
 	): Bool {
-		final scope: UsingScope = usingScopeAt(header, module, [for (e in edits) e.span.from]);
+		final scope: UsingScope = usingScopeAt(header, module, edits.map(e -> e.span.from));
 		if (scope == UsingScope.Guarded) {
 			for (violation in violations) violation.declineReason = guardedUsingDecline(module);
 			return false;

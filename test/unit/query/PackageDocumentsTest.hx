@@ -123,9 +123,7 @@ final class PackageDocumentsTest extends Test {
 	/** A registry document of package `pkg` holding one arm per type path in `types`, in the layout the registry is written in. */
 	private static function doc(pkg: String, types: Array<String>): String {
 		final rest: String = '\t\t\t"method": "m",\n\t\t\t"force": "1",\n\t\t\t"note": "n"\n\t\t}';
-		final records: Array<String> = [
-			for (type in types) '\t\t{\n\t\t\t"name": "M-$type",\n\t\t\t"type": "$type",\n$rest'
-		];
+		final records: Array<String> = types.map(type -> '\t\t{\n\t\t\t"name": "M-$type",\n\t\t\t"type": "$type",\n$rest');
 		final body: String = records.join(',\n');
 		return '{\n\t"$$comment": [\n\t\t"Mutation arms cutting the types of package $pkg'
 			+ '. Format and rules: docs/testing.md, Declared arms."\n\t],\n\t"arms": [\n$body\n\t]\n}\n';

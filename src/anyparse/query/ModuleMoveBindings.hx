@@ -217,7 +217,7 @@ final class ModuleMoveBindings {
 			final trees: FileSides = fileSides(before, after, textBefore[f.before], textAfter[f.after], plugin);
 			final typed: Array<Span> = typeRefSpans(trees.postTree, plugin);
 			// a head the file itself binds as a value keeps that binding wherever the file lives
-			final ownValues: Array<Int> = valueBoundSites(textBefore[f.before], [for (s in was) s.head], plugin);
+			final ownValues: Array<Int> = valueBoundSites(textBefore[f.before], was.map(s -> s.head), plugin);
 			for (i => s in was) if (!ownValues.contains(s.at)) {
 				final at: Int = now[i].at;
 				final asValue: Bool = !typed.exists(span -> span.from <= at && at < span.to);
@@ -345,7 +345,7 @@ final class ModuleMoveBindings {
 			case Unknown:
 				final candidates: Null<Array<NameTarget>> = index.refs.names.unknownCandidates(name, info, at);
 				{
-					key: candidates == null ? UNKNOWN : 'either ${[for (c in candidates) targetKey(c, mapped)].join(' | ')}',
+					key: candidates == null ? UNKNOWN : 'either ${candidates.map(c -> targetKey(c, mapped)).join(' | ')}',
 					single: null
 				};
 			case Free:
@@ -355,7 +355,7 @@ final class ModuleMoveBindings {
 
 	/** One declaration set as a comparable key: each `module#Type` (module through `mapped`), sorted. */
 	private static function declsKey(decls: Array<ResolvedType>, mapped: (String) -> String): String {
-		final keys: Array<String> = [for (d in decls) '${mapped(d.file.module)}#${d.type.name}'];
+		final keys: Array<String> = decls.map(d -> '${mapped(d.file.module)}#${d.type.name}');
 		keys.sort(Reflect.compare);
 		return keys.join(',');
 	}

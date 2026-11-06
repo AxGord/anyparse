@@ -176,9 +176,8 @@ final class ModifierOrder extends RuleBase {
 		edits: Array<{ span: Span, text: String }>, source: String, run: Array<{ rank: Int, span: Span }>, flagged: Array<Int>
 	): Void {
 		if (run.length < 2 || !flagged.contains(run[0].span.from)) return;
-		final ranked: Array<{ rank: Int, text: String }> = [
-			for (el in run) { rank: el.rank, text: source.substring(el.span.from, el.span.to) }
-		];
+		final ranked: Array<{ rank: Int, text: String }> =
+			run.map(el -> {rank: el.rank, text: source.substring(el.span.from, el.span.to) });
 		ranked.sort((a, b) -> a.rank - b.rank);
 		for (i in 0...run.length) edits.push({ span: run[i].span, text: ranked[i].text });
 	}

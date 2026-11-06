@@ -182,7 +182,7 @@ final class MermaidQueryPlugin implements GrammarPlugin {
 		final name: Null<String> = node.name;
 		return node.kind == ID_KIND && name != null && name.startsWith(METAVAR_SIGIL) && name.length > 1
 			? new QueryNode(Metavar.KIND, name.substr(1), [], node.span)
-			: new QueryNode(node.kind, node.name, [for (child in node.children) metavars(child)], node.span);
+			: new QueryNode(node.kind, node.name, node.children.map(metavars), node.span);
 	}
 
 	/** Push the line-comment region of every `Comment` statement under `node`. */

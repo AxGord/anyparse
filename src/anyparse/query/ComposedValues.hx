@@ -104,7 +104,7 @@ final class ComposedValues {
 	public static function indexArithmetic(node: QueryNode, operands: Array<String>, c: IndexTyping): Null<String> {
 		final index: Null<SymbolIndex> = c.index;
 		if (index == null) return null;
-		final cores: Array<Null<String>> = [for (o in operands) coreTypeOf(o, c)];
+		final cores: Array<Null<String>> = operands.map(coreTypeOf.bind(_, c));
 		if (c.shape.execution?.compoundAssignOperators?.exists(node.kind) == true)
 			return TypingService.compoundKeepsTarget(node.kind, cores, c.shape) ? operands[0] : null;
 		final core: Null<String> = TypingService.coreOperatorType(node.kind, cores, c.shape);
@@ -601,10 +601,10 @@ final class ComposedValues {
 	 */
 	private static function unifiedType(parts: Array<String>, c: IndexTyping): Null<String> {
 		final core: Null<CoreValueTypes> = c.shape.coreValueTypes;
-		final spelled: Array<String> = [for (p in parts) ~/\s+/g.replace(p, '')];
+		final spelled: Array<String> = parts.map(p -> ~/\s+/g.replace(p, ''));
 		if (core == null || parts.length == 0) return null;
 		if (spelled.foreach(s -> s == spelled[0])) return parts[0];
-		final numbers: Array<Null<String>> = [for (p in parts) coreTypeOf(p, c)];
+		final numbers: Array<Null<String>> = parts.map(coreTypeOf.bind(_, c));
 		if (!numbers.foreach(n -> n == core.integer || n == core.real)) return null;
 		final base: String = numbers.contains(core.real) ? core.real : core.integer;
 		final wrapper: Null<String> = c.shape.optionalValueTypeName;

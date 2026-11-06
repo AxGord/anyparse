@@ -92,7 +92,7 @@ final class ProjectCoverage {
 		final base: String = Path.addTrailingSlash(Path.directory(document));
 		final roots: Array<String> = LintConfig.parse(content, base).resolutionRoots();
 		final cwd: String = Sys.getCwd();
-		final stack: Array<String> = roots.length > 0 ? [for (r in roots) Path.isAbsolute(r) ? r : Path.join([base, r])] : [base];
+		final stack: Array<String> = roots.length > 0 ? roots.map(r -> Path.isAbsolute(r) ? r : Path.join([base, r])) : [base];
 		final walked: Set<String> = new Set<String>();
 		while (stack.length > 0) {
 			final path: String = stack.pop() ?? '';

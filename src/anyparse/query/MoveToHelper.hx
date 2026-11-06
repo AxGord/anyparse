@@ -106,8 +106,8 @@ final class MoveToHelper {
 		);
 		if (destError != null) return Err(destError);
 		final carryError: Null<String> = MoveMember.pushImportEdits(
-			prep, typeRefShape, edits.callerFiles, plugin, edits.editsByFile, [for (t in types) { span: t.group, name: t.name }],
-			[for (t in types) t.name]
+			prep, typeRefShape, edits.callerFiles, plugin, edits.editsByFile, types.map(t -> {span: t.group, name: t.name }),
+			types.map(t -> t.name)
 		);
 		if (carryError != null) return Err(carryError);
 		MoveMember.pushEndpointImports(prep, edits.editsByFile, edits.movedTextEdits, plugin);
@@ -210,7 +210,7 @@ final class MoveToHelper {
 		final candidates: Array<MemberGroup> = MoveMember.membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions)
 			.filter(g -> isPrivateConstant(g) && !prep.moved.exists(m -> m.name == g.member.name));
 		if (candidates.length == 0) return [];
-		final hits: Map<String, Array<RefHit>> = Refs.findMulti([for (c in candidates) c.member.name ?? ''], prep.srcTree, prep.shape);
+		final hits: Map<String, Array<RefHit>> = Refs.findMulti(candidates.map(c -> c.member.name ?? ''), prep.srcTree, prep.shape);
 		return [
 			for (c in candidates) {
 				final name: String = c.member.name ?? '';

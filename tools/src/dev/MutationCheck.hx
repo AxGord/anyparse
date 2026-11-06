@@ -97,7 +97,7 @@ final class MutationCheck {
 			case Refused(why): return refuse([why]);
 		};
 		if (rows.length == 0) return refuse(['manifest \'${job.manifest}\' has no tracks']);
-		final dupes: Array<String> = duplicates([for (row in rows) row.name]);
+		final dupes: Array<String> = duplicates(rows.map(row -> row.name));
 		if (dupes.length > 0) return refuse(['duplicate track name(s): ${dupes.join(' ')}']);
 		final missing: Array<String> = [
 			for (row in rows) if (!FileSystem.exists(row.patch)) 'track \'${row.name}\': patch \'${row.patch}\' not found'
@@ -206,9 +206,8 @@ final class MutationCheck {
 		if (!count.keys().hasNext()) return null;
 		final kinds: Array<String> = BUILD_KINDS.filter(k -> count.exists(k))
 			.concat([for (k in count.keys()) if (!BUILD_KINDS.contains(k)) k]);
-		final builds: String = [
-			for (k in kinds) ' $k builds ${count[k]} (mean ${Math.round((seconds[k] ?? 0) / (count[k] ?? 1))}s),'
-		].join('');
+		final builds: String = kinds.map(k -> ' $k builds ${count[k]} (mean ${Math.round((seconds[k] ?? 0) / (count[k] ?? 1))}s),')
+			.join('');
 		final killerNote: String = killers > 0 ? ', $killers answered killer-first' : '';
 		return 'timing:$builds suite runs $runs (mean ${runs == 0 ? 0 : Math.round(runSeconds / runs)}s)$killerNote';
 	}
@@ -235,7 +234,7 @@ final class MutationCheck {
 			final why: String = MutationSlot.oneLine(File.getContent(Path.join([workroot, 'slot-1.wt.log'])));
 			for (row in rows) MutationSlot.writeVerdict(workroot, row.name, 'WT-FAIL', 'worktree add failed: $why');
 		}
-		File.saveContent(Path.join([workroot, MutationSlot.ROWS]), [for (row in rows) '${MutationSlot.encodeRow(row)}\n'].join(''));
+		File.saveContent(Path.join([workroot, MutationSlot.ROWS]), rows.map(row -> '${MutationSlot.encodeRow(row)}\n').join(''));
 		File.saveContent(Path.join([workroot, MutationSlot.OWNER]), '${js.Node.process.pid}\n');
 		if (job.killerFirst) File.saveContent(Path.join([workroot, MutationSlot.KILLER_FIRST]), '');
 		if (job.buildOnly) File.saveContent(Path.join([workroot, MutationSlot.BUILD_ONLY]), '');
@@ -310,7 +309,7 @@ final class MutationCheck {
 	 * last — it waits on that build, and the per-arm builds are the long pole.
 	 */
 	private static function dealOrder(rows: Array<TrackRow>, schema: Null<String>): Array<String> {
-		final names: Array<String> = [for (row in rows) row.name];
+		final names: Array<String> = rows.map(row -> row.name);
 		if (schema == null) return names;
 		final file: String = Path.join([schema, 'candidates']);
 		final candidates: Array<String> = FileSystem.exists(file) ? File.getContent(file).split('\n') : [];

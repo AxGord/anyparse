@@ -62,7 +62,7 @@ class TriviaTypeSynthTest extends Test {
 	 * The output of a program built from one trivia grammar per package in `packs`, or the compiler error.
 	 */
 	private static function roundTrips(packs: Array<String>): String {
-		final calls: Array<String> = [for (pack in packs) '$pack.W.write($pack.P.parse(src))'];
+		final calls: Array<String> = packs.map(pack -> '$pack.W.write($pack.P.parse(src))');
 		final main: String = 'class Main { static function main() { final src = ${JsonText.quote(SOURCE)}; '
 			+ 'js.Syntax.code("process.stdout.write({0})", [${calls.join(', ')}].join("|")); } }\n';
 		final dir: String = CliFixture.writeDir('trivia2', [{ name: 'Main.hx', source: main }]);

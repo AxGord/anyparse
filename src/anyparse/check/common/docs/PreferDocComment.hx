@@ -428,7 +428,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	): Bool {
 		final stop: Int = sectionStop(source, stops, self, indent);
 		return anchors.foreach(
-			other -> !(other.from > self.to && other.from < stop && other.owner == self.owner && other.kind == self.kind)
+			other -> other.from <= self.to || other.from >= stop || other.owner != self.owner || other.kind != self.kind
 		);
 	}
 
@@ -488,7 +488,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	 */
 	private static function docText(lines: Array<String>, indent: String, newline: String): String {
 		if (lines.length == 1) return '/** ${lines[0]} */';
-		final body: Array<String> = [for (line in lines) line == '' ? '$indent *' : '$indent * $line'];
+		final body: Array<String> = lines.map(line -> line == '' ? '$indent *' : '$indent * $line');
 		return '/**$newline${body.join(newline)}$newline$indent */';
 	}
 

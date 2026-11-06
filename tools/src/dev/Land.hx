@@ -280,7 +280,7 @@ final class Land {
 	/** The `--resolve` choices written where `apq merge-file --choices` reads them: `<path>\t<key>\t<choice>` lines. */
 	private function choicesFile(): String {
 		final file: String = Path.join([_logs, 'merge-choices.tsv']);
-		File.saveContent(file, [for (entry in _resolve) choiceLine(entry)].join(''));
+		File.saveContent(file, _resolve.map(choiceLine).join(''));
 		return file;
 	}
 

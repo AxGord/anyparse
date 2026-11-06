@@ -135,7 +135,7 @@ class GraphViewChangeTest extends Test {
 
 	/** Each node of `graph` by name and the sign of its change, `=` for none. */
 	private static function changes(graph: CodeGraph): String {
-		return [for (n in graph.nodes()) '${n.name} ${signOf(n.change)}'].join('|');
+		return graph.nodes().map(n -> '${n.name} ${signOf(n.change)}').join('|');
 	}
 
 	private static function signOf(change: Null<GraphChange>): String {

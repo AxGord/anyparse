@@ -161,11 +161,11 @@ final class CliFlags {
 	}
 
 	private function optionalNames(): Array<String> {
-		return [for (flag in _optional) flag.name];
+		return _optional.map(flag -> flag.name);
 	}
 
 	private function multiNames(): Array<String> {
-		return [for (flag in _multi) flag.name];
+		return _multi.map(flag -> flag.name);
 	}
 
 	/** How many tokens after `token` are its values: one, unless the spec gives it more. */

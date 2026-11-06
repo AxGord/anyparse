@@ -217,12 +217,12 @@ class RedundantImportVisibleTest extends Test {
 		final root: String = CliFixture.writeTree('apq_redundant_visible', tree);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final files: Array<{ file: String, source: String }> = [
-				for (name in analysed) { file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
-			];
-			out = [
-				for (v in CheckFixture.violationsIn(new RedundantImport(), files)) '${v.file.substr(root.length + 1)}: ${v.message}'
-			].join('\n');
+			final files: Array<{ file: String, source: String }> = analysed.map(name ->
+				{file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
+			);
+			out = CheckFixture.violationsIn(new RedundantImport(), files)
+				.map(v -> '${v.file.substr(root.length + 1)}: ${v.message}')
+				.join('\n');
 		});
 		return out;
 		#else

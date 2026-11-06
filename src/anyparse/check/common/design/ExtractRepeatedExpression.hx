@@ -316,7 +316,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 
 	/** Whether every pair of occurrences is mutually exclusive — so at most one runs per invocation. */
 	private static function allPairsExclusive(occ: Array<Candidate>): Bool {
-		return BranchPaths.allPairsExclusive([for (o in occ) o.path]);
+		return BranchPaths.allPairsExclusive(occ.map(o -> o.path));
 	}
 
 	/**

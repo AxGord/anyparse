@@ -99,7 +99,7 @@ final class ParseProf {
 		if (mode.startsWith('json-')) return JsonProf.run(mode, target, reps);
 		final config: Null<String> = args.length > 3 ? args[3] : null;
 		final files: Array<String> = resolveTargets(target);
-		final sources: Array<Src> = [for (f in files) { file: f, source: sys.io.File.getContent(f) }];
+		final sources: Array<Src> = files.map(f -> {file: f, source: sys.io.File.getContent(f) });
 		var bytes: Int = 0;
 		for (s in sources) bytes += s.source.length;
 		final optsJson: Null<String> = config != null && sys.FileSystem.exists(config) ? sys.io.File.getContent(config) : null;

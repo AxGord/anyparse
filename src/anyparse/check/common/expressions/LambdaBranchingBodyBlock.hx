@@ -118,7 +118,7 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
-		final found: Array<String> = [for (span in collect(plugin, source, seams)) '${span.from}:${span.to}'];
+		final found: Array<String> = collect(plugin, source, seams).map(span -> '${span.from}:${span.to}');
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final vspan: Null<Span> = v.span;

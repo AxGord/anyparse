@@ -201,7 +201,7 @@ class LiteralClassificationTest extends Test {
 	 * the fixture names the kind rather than silently classifying one fewer.
 	 */
 	public function testTheSpecimenTableCoversTheDeclaredVocabulary(): Void {
-		final projected: Array<String> = [for (specimen in SPECIMENS) initializerOf(specimen.expr).kind];
+		final projected: Array<String> = SPECIMENS.map(specimen -> initializerOf(specimen.expr).kind);
 		final uncovered: Array<String> = MemberKinds.constantLiteralKinds(SHAPE).filter(kind -> !projected.contains(kind));
 		Assert.equals('', uncovered.join(', '), 'declared literal kind(s) no specimen projects: [${uncovered.join(', ')}]');
 	}

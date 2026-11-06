@@ -268,7 +268,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 			+ '`Dynamic` is a field, a return type, a type argument, a rest parameter, or a lambda / local-function parameter',
 			'-',
 			'a local, but its uses prove no single plain nominal type to narrow it to'
-		], [for (v in run.violations) v.declineReason ?? '-']);
+		], run.violations.map(v -> v.declineReason ?? '-'));
 	}
 
 	private inline function apply(src: String, e: Array<FixEdit>): String {

@@ -84,9 +84,10 @@ final class RuleScopeTest extends Test {
 
 	public function testMoreRulesThanTheCapRunAll(): Void {
 		final names: Array<String> = [for (i in 0...60) 'R$i'];
-		final sources: Array<ImpactSource> = [
-			for (name in names) rule(name, quoted(name.toLowerCase()), 'anyparse.check.scan.Walk', 'Walk.go()')
-		].concat([registry(names), WALK]);
+		final sources: Array<ImpactSource> = names.map(name ->
+			rule(name, quoted(name.toLowerCase()), 'anyparse.check.scan.Walk', 'Walk.go()')
+		)
+			.concat([registry(names), WALK]);
 		Assert.isNull(RuleScope.idsOf(sources, [WALK.path], null));
 	}
 
@@ -184,16 +185,17 @@ final class RuleScopeTest extends Test {
 	}
 
 	private static function registry(classes: Array<String>): ImpactSource {
-		final lines: Array<String> =
-			['package anyparse.check;', ''].concat([for (name in classes) 'import anyparse.check.common.imports.$name;'])
-				.concat([
-					'',
-					'final class Linter {',
-					'\tpublic static function builtins() {',
-					'\t\treturn ['
-				])
-				.concat([[for (name in classes) '\t\t\tnew $name()'].join(',\n')])
-				.concat(['\t\t];', '\t}', '}', '']);
+		final lines: Array<String> = ['package anyparse.check;', ''].concat(
+			classes.map(name -> 'import anyparse.check.common.imports.$name;')
+		)
+			.concat([
+				'',
+				'final class Linter {',
+				'\tpublic static function builtins() {',
+				'\t\treturn ['
+			])
+			.concat([classes.map(name -> '\t\t\tnew $name()').join(',\n')])
+			.concat(['\t\t];', '\t}', '}', '']);
 		return { path: RuleScope.REGISTRY, text: lines.join('\n') };
 	}
 
@@ -211,11 +213,11 @@ final class RuleScopeTest extends Test {
 
 	/** A tree of the registry listing `names` and a rule class for each, each spelling the id its name lowercased. */
 	private static function tree(names: Array<String>): Array<ImpactSource> {
-		return [for (name in names) rule(name, quoted(name.toLowerCase()))].concat([registry(names)]);
+		return names.map(name -> rule(name, quoted(name.toLowerCase()))).concat([registry(names)]);
 	}
 
 	private static function withText(sources: Array<ImpactSource>, name: String, text: String): Array<ImpactSource> {
-		return [for (s in sources) s.path == at(name) ? { path: s.path, text: text } : s];
+		return sources.map(s -> s.path == at(name) ? {path: s.path, text: text } : s);
 	}
 
 	/** A source of the query package that names `imported` and runs `call`. */
@@ -236,7 +238,7 @@ final class RuleScopeTest extends Test {
 	}
 
 	private static function withPath(sources: Array<ImpactSource>, path: String, text: String): Array<ImpactSource> {
-		return [for (s in sources) s.path == path ? { path: path, text: text } : s];
+		return sources.map(s -> s.path == path ? {path: path, text: text } : s);
 	}
 
 	private static function quoted(id: String): String {

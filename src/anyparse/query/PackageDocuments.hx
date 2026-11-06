@@ -76,9 +76,9 @@ final class PackageDocuments {
 	 * Documents already in place are not returned.
 	 */
 	public static function carry(documents: Array<RegistryDocument>, keys: Array<String>): CarriedDocuments {
-		final path: Null<Array<String>> = [for (key in keys) key.split('.')].find(p -> p.length == 2);
+		final path: Null<Array<String>> = keys.map(key -> key.split('.')).find(p -> p.length == 2);
 		if (path == null) return { written: [], emptied: [] };
-		final parsed: Array<ParsedDocument> = [for (d in documents) parse(d, path[0], path[1])];
+		final parsed: Array<ParsedDocument> = documents.map(d -> parse(d, path[0], path[1]));
 		final incoming: Map<String, Array<Record>> = [];
 		final sender: Map<String, ParsedDocument> = [];
 		for (doc in parsed) {

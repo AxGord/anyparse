@@ -747,7 +747,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		final windows: Array<Null<Span>> = o.wantDoc || o.wantSource
 			? CliEdit.sourceWindows(tree, raw, source, plugin.lexicalRegions.bind(source))
 			: [];
-		final matches: Array<QueryNode> = [for (m in raw) shapeAstOutput(m, o.depth, o.childrenLimit)];
+		final matches: Array<QueryNode> = raw.map(m -> shapeAstOutput(m, o.depth, o.childrenLimit));
 		CliIo.sysPrint(
 			o.json
 				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource, plugin.lexicalRegions(source))

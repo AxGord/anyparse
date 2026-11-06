@@ -73,7 +73,7 @@ class MermaidRoundTripTest extends Test {
 		final dir: String = '$CORPUS/$set';
 		final names: Array<String> = FileSystem.readDirectory(dir).filter(name -> name.endsWith('.mmd'));
 		names.sort(Reflect.compare);
-		return [for (name in names) '$dir/$name'];
+		return names.map(name -> '$dir/$name');
 	}
 	#end
 

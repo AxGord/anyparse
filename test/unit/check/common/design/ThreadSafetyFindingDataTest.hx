@@ -41,7 +41,7 @@ class ThreadSafetyFindingDataTest extends Test {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', [
 			'class A { function boot():Void { final f:() -> Void = () -> Sys.sleep(1); f(); } }'
 		]);
-		Assert.same(['A.boot'], [for (v in found) v.data?.member]);
+		Assert.same(['A.boot'], found.map(v -> v.data?.member));
 		Assert.stringContains('A.boot#', found[0].message, 'the message keeps the lambda\'s own id');
 		#else
 		Assert.pass('non-sys target');
@@ -58,8 +58,8 @@ class ThreadSafetyFindingDataTest extends Test {
 			'class Ann implements I { public function new() {} public function m():Void {} }',
 			'class A { final i:I = new Zed(); function boot():Void i.m(); }'
 		]);
-		Assert.same(['Ann.m / Zed.m'], [for (v in found) v.data?.subject]);
-		Assert.same([['A.boot', 'Ann.m', 'Zed.m']], [for (v in found) v.data?.chain], 'the chain ends in each sink, sorted');
+		Assert.same(['Ann.m / Zed.m'], found.map(v -> v.data?.subject));
+		Assert.same([['A.boot', 'Ann.m', 'Zed.m']], found.map(v -> v.data?.chain), 'the chain ends in each sink, sorted');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -79,12 +79,12 @@ class ThreadSafetyFindingDataTest extends Test {
 		]);
 		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning') v];
 		warned.sort((a, b) -> Reflect.compare(a.data?.member, b.data?.member));
-		Assert.same(['A.each', 'A.once', 'A.one'], [for (v in warned) v.data?.member], 'one warning per call, at the call');
+		Assert.same(['A.each', 'A.once', 'A.one'], warned.map(v -> v.data?.member), 'one warning per call, at the call');
 		Assert.same([
 			[{ member: 'A.each', at: 'for (i in 0...n)' }],
 			null,
 			[{ member: 'A.main', at: 'for (p in [1, 2])' }]
-		], [for (v in warned) v.data?.repeatedBy]);
+		], warned.map(v -> v.data?.repeatedBy));
 		Assert.isTrue(warned[2].message.endsWith(' — repeated by A.main'), warned[2].message);
 		#else
 		Assert.pass('non-sys target');
@@ -137,8 +137,8 @@ class ThreadSafetyFindingDataTest extends Test {
 				+ ' public static function main():Void two(3); }'
 			]);
 		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning') v];
-		Assert.same(['Sys.sleep'], [for (v in warned) v.data?.subject]);
-		Assert.same([[{ member: 'A.two', at: 'for (i in 0...n)' }]], [for (v in warned) v.data?.repeatedBy]);
+		Assert.same(['Sys.sleep'], warned.map(v -> v.data?.subject));
+		Assert.same([[{ member: 'A.two', at: 'for (i in 0...n)' }]], warned.map(v -> v.data?.repeatedBy));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -165,8 +165,8 @@ class ThreadSafetyFindingDataTest extends Test {
 				]
 			);
 		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning' && v.data?.family == 'A') v];
-		Assert.same(['S.get'], [for (v in warned) v.data?.member]);
-		Assert.same([[{ member: 'S.reboot', at: 'for (i in 0...3)' }]], [for (v in warned) v.data?.repeatedBy]);
+		Assert.same(['S.get'], warned.map(v -> v.data?.member));
+		Assert.same([[{ member: 'S.reboot', at: 'for (i in 0...3)' }]], warned.map(v -> v.data?.repeatedBy));
 		Assert.isTrue(warned[0]?.message.endsWith(' — repeated by S.reboot') == true, warned[0]?.message);
 		#else
 		Assert.pass('non-sys target');
@@ -185,19 +185,14 @@ class ThreadSafetyFindingDataTest extends Test {
 				]
 			)
 				.filter(v -> v.data?.family == 'B');
-		Assert.same(
-			[
-				{
-					family: 'B',
-					member: 'A.work',
-					subject: 'A._m',
-					chain: ['A.work', 'A.save', 'File.saveContent']
-				}
-			],
-			[
-				for (v in found) v.data
-			]
-		);
+		Assert.same([
+			{
+				family: 'B',
+				member: 'A.work',
+				subject: 'A._m',
+				chain: ['A.work', 'A.save', 'File.saveContent']
+			}
+		], found.map(v -> v.data));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -222,7 +217,7 @@ class ThreadSafetyFindingDataTest extends Test {
 				subject: 'Db._m',
 				chain: ['Db.add']
 			}
-		], [for (v in found) v.data]);
+		], found.map(v -> v.data));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -233,24 +228,20 @@ class ThreadSafetyFindingDataTest extends Test {
 	public function testLockOrderData(): Void {
 		#if (sys || nodejs)
 		// `Db` renamed past `Fs`: the walk meets the background step's pair (`Zd._batch`, then `Fs._mutation`) first
-		final found: Array<Violation> = ThreadSafetyCheckTest.orderFindings([
-			for (source in ThreadSafetyCheckTest.storeFixture(
+		final found: Array<Violation> = ThreadSafetyCheckTest.orderFindings(
+			ThreadSafetyCheckTest.storeFixture(
 				'acquireMutation(); db.add(false); releaseMutation();', 'Runner.create(fs.download); fs.save();'
-			)) source.replace('Db', 'Zd')
-		]);
-		Assert.same(
-			[
-				{
-					family: 'D',
-					member: 'Fs.save',
-					subject: 'Fs._mutation / Zd._batch',
-					chain: ['Fs.save', 'Zd.add', 'Mutex.acquire']
-				}
-			],
-			[
-				for (v in found) v.data
-			]
+			)
+				.map(source -> source.replace('Db', 'Zd'))
 		);
+		Assert.same([
+			{
+				family: 'D',
+				member: 'Fs.save',
+				subject: 'Fs._mutation / Zd._batch',
+				chain: ['Fs.save', 'Zd.add', 'Mutex.acquire']
+			}
+		], found.map(v -> v.data));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -267,16 +258,15 @@ class ThreadSafetyFindingDataTest extends Test {
 			for (start in [
 				'Runner.create(fs.download); fs.save(); fs.store();',
 				'Runner.create(fs.download); fs.store(); fs.save();'
-			]) [
-				for (v in ThreadSafetyCheckTest.orderFindings([
-					for (source in ThreadSafetyCheckTest.storeFixture('acquireMutation(); db.add(false); releaseMutation();', start))
-						source.replace(
-							'public function save():Void',
-							'public function store():Void { acquireMutation(); db.add(false); releaseMutation(); } '
-							+ 'public function save():Void'
-						)
-				])) '${v.data?.member} ${v.data?.subject} @${v.span?.from}'
-			]
+			]) ThreadSafetyCheckTest.orderFindings([
+				for (source in ThreadSafetyCheckTest.storeFixture('acquireMutation(); db.add(false); releaseMutation();', start))
+					source.replace(
+						'public function save():Void',
+						'public function store():Void { acquireMutation(); db.add(false); releaseMutation(); } '
+						+ 'public function save():Void'
+					)
+			])
+				.map(v -> '${v.data?.member} ${v.data?.subject} @${v.span?.from}')
 		];
 		Assert.equals(1, keys[0].length);
 		Assert.same(keys[0], keys[1]);
@@ -293,16 +283,17 @@ class ThreadSafetyFindingDataTest extends Test {
 	@:pin('control') @:killer('M-TS-ORDER-MAIN-FIRST-SEEN')
 	public function testLockOrderNamesTheLeastHolder(): Void {
 		#if (sys || nodejs)
-		final sources: Array<String> = [
-			for (source in ThreadSafetyCheckTest.storeFixture(
-				'acquireMutation(); _other.acquire(); db.add(false); _other.release(); releaseMutation();',
-				'Runner.create(fs.download); fs.store(); fs.wrap();'
-			)) source.replace(
-				'public function save():Void',
-				'final _other:Mutex = new Mutex(); public function store():Void {'
-				+ ' acquireMutation(); db.add(false); releaseMutation(); } public function wrap():Void save(); public function save():Void'
-			)
-		];
+		final sources: Array<String> = ThreadSafetyCheckTest.storeFixture(
+			'acquireMutation(); _other.acquire(); db.add(false); _other.release(); releaseMutation();',
+			'Runner.create(fs.download); fs.store(); fs.wrap();'
+		)
+			.map(source ->
+				source.replace(
+					'public function save():Void',
+					'final _other:Mutex = new Mutex(); public function store():Void { acquireMutation(); db.add(false); '
+					+ 'releaseMutation(); } public function wrap():Void save(); public function save():Void'
+				)
+			);
 		Assert.same(['Fs.save'], [
 			for (v in ThreadSafetyCheckTest.orderFindings(sources)) if (v.data?.subject == 'Db._batch / Fs._mutation') v.data?.member
 		]);
@@ -329,9 +320,7 @@ class ThreadSafetyFindingDataTest extends Test {
 				source,
 				source.replace('p0', 'q0'),
 				source.replace('fs.p1(); fs.p0();', 'fs.p0(); fs.p1();')
-			]) [
-				for (v in ThreadSafetyCheckTest.orderFindings([renamed])) '${v.data?.member} ${v.data?.subject} @${v.span?.from}'
-			]
+			]) ThreadSafetyCheckTest.orderFindings([renamed]).map(v -> '${v.data?.member} ${v.data?.subject} @${v.span?.from}')
 		];
 		Assert.same(['Fs.alpha Fs._a / Fs._b @${source.indexOf('t();')}'], keys[0]);
 		Assert.same(keys[0], keys[1]);
@@ -351,7 +340,7 @@ class ThreadSafetyFindingDataTest extends Test {
 			[ThreadSafetyCheckTest.MUTEX, ThreadSafetyCheckTest.watcherFixture('ensure(p);')]
 		)
 			.filter(v -> v.data?.family == 'C');
-		Assert.same([['W.make', 'W.prepare', 'W.ensure', 'FileSystem.createDirectory']], [for (v in found) v.data?.chain]);
+		Assert.same([['W.make', 'W.prepare', 'W.ensure', 'FileSystem.createDirectory']], found.map(v -> v.data?.chain));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -364,7 +353,7 @@ class ThreadSafetyFindingDataTest extends Test {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', [
 			'class A { final direct:Void = Sys.sleep(1); final later:() -> Void = () -> Sys.sleep(2); public function new() {} }'
 		]);
-		final members: Array<Null<String>> = [for (v in found) v.data?.member];
+		final members: Array<Null<String>> = found.map(v -> v.data?.member);
 		members.sort(Reflect.compare);
 		Assert.same(['A.<init>', 'A.<init>'], members);
 		#else
@@ -378,7 +367,7 @@ class ThreadSafetyFindingDataTest extends Test {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
 			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"lockPairs":["Mutex"]}}}', ['class A { function boot():Void Sys.sleep(1); }']
 		);
-		Assert.same([true, false], [for (v in found) v.data != null]);
+		Assert.same([true, false], found.map(v -> v.data != null));
 		#else
 		Assert.pass('non-sys target');
 		#end

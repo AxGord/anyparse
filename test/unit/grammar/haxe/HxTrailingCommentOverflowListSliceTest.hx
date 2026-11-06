@@ -222,7 +222,7 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 
 	/** A one-function class whose body is `lines`, each at the body's indent. */
 	private static function fn(lines: Array<String>): String {
-		return 'class C {\n\tfunction f() {\n' + [for (line in lines) '\t\t$line\n'].join('') + '\t}\n}';
+		return 'class C {\n\tfunction f() {\n' + lines.map(line -> '\t\t$line\n').join('') + '\t}\n}';
 	}
 
 }

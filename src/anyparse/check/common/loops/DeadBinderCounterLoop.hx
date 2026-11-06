@@ -179,7 +179,7 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 			// edit an enclosing one swallows is not in the output, so neither is the `count()` that
 			// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
 			// widens static-extension resolution for the whole file.
-			final edits: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([for (c in collected) c.edit]);
+			final edits: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits(collected.map(c -> c.edit));
 			// The insert is asked for only when a SURVIVING edit is the `count()` form, and
 			// `appendUsingInsert` answering false is its refusal, in either of the two ways it comes: the
 			// file declares `using Lambda;` only inside a `#if` region that leaves a rewritten call out, or

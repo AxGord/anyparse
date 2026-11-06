@@ -178,14 +178,16 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		Assert.equals(
 			1,
 			quickTakes(
-				'final opt:haxe.ds.Option<D> = haxe.ds.Option.Some(this); switch opt { case Some(v): Reflect.setField(v, k, _m); case None: }'
+				'final opt:haxe.ds.Option<D> = haxe.ds.Option.Some(this); switch opt {'
+				+ ' case Some(v): Reflect.setField(v, k, _m); case None: }'
 			),
 			'a library Option capture'
 		);
 		Assert.equals(
 			1,
 			quickTakes(
-				'final e:haxe.ds.Either<D, Int> = haxe.ds.Either.Left(this); switch e { case Left(v): Reflect.setField(v, k, _m); case Right(_): }'
+				'final e:haxe.ds.Either<D, Int> = haxe.ds.Either.Left(this); switch e {'
+				+ ' case Left(v): Reflect.setField(v, k, _m); case Right(_): }'
 			),
 			'a library Either capture'
 		);
@@ -245,7 +247,9 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		);
 		Assert.equals(
 			0,
-			importAsTakes('import somelib.Gadget;', 'final x = new Gadget(); final y = new otherlib.Thing(); new V().toTarget("_l", d._m);'),
+			importAsTakes(
+				'import somelib.Gadget;', 'final x = new Gadget(); final y = new otherlib.Thing(); new V().toTarget("_l", ' + 'd._m);'
+			),
 			'a library type imported or written out'
 		);
 		Assert.equals(0, importAsTakes('using haxe.io.Path;', 'final x = new Path("p"); new V().toTarget("_l", d._m);'), 'a using');
@@ -254,7 +258,9 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		);
 		Assert.equals(
 			0,
-			nodeTakes(CLOSED, '', 'final m = new Map<String, Int>(); final s = new haxe.ds.StringMap<Int>(); new V().toTarget("_l", d._m);'),
+			nodeTakes(
+				CLOSED, '', 'final m = new Map<String, Int>(); final s = new haxe.ds.StringMap<Int>(); new V().toTarget("_l", ' + 'd._m);'
+			),
 			'std types made'
 		);
 		#else
@@ -525,24 +531,22 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * the main thread takes `_l`; `modules` are more modules of the run.
 	 */
 	private static function helperFindings(config: String, helpers: String, use: String, ?modules: Array<String>): Array<String> {
-		return [
-			for (v in ThreadSafetyCheckTest.violations(config, (modules ?? []).concat([
-				ThreadSafetyCheckTest.MUTEX,
-				'class Runner { public static function create(fn:()->Void):Void {} }',
-				'class Other { public function new() {} }',
-				'class Sub extends Mutex { public function new() { super(); } }',
-				'enum Color { Red; }',
-				'typedef Lockable = { function acquire():Void; function release():Void; }',
-				'typedef Obj = {}',
-				'typedef Base0 = { function acquire():Void; }',
-				'typedef Ext = { > Base0, function release():Void; }',
-				'class Help { public static function assign(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v); $helpers }',
-				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public static var bag:Dynamic = null;'
-				+ ' public function new() {} public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
-				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
-				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); } }'
-			]))) v.message
-		];
+		return ThreadSafetyCheckTest.violations(config, (modules ?? []).concat([
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class Other { public function new() {} }',
+			'class Sub extends Mutex { public function new() { super(); } }',
+			'enum Color { Red; }',
+			'typedef Lockable = { function acquire():Void; function release():Void; }',
+			'typedef Obj = {}',
+			'typedef Base0 = { function acquire():Void; }',
+			'typedef Ext = { > Base0, function release():Void; }',
+			'class Help { public static function assign(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v); $helpers }',
+			'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public static var bag:Dynamic = null;'
+			+ ' public function new() {} public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
+			+ ' public function quick():Void { _l.acquire(); _l.release(); }'
+			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); } }'
+		])).map(v -> v.message);
 	}
 
 	/**
@@ -550,25 +554,23 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * `Mutex` `_m` and the `Gate` `_h` across a sleep, the main thread runs `use` and takes `_l` and `_g`.
 	 */
 	private static function gateFindings(use: String): Array<String> {
-		return [
-			for (v in ThreadSafetyCheckTest.violations(
-				'{"reflectiveClasses":["nothing.*"],"reflectiveMethodHolders":["nothing.*"],"rules":{"thread-safety":{'
-				+ '"sinks":["Mutex.acquire","Gate.lock","Sys.sleep"],"spawns":["Runner.create"],'
-				+ '"lockPairs":["Mutex.acquire/release","Gate.lock/unlock"],"closedWorld":true}}}',
-				[
-					ThreadSafetyCheckTest.MUTEX,
-					'class Gate { public function new() {} public function lock():Void {} public function unlock():Void {} }',
-					'class Runner { public static function create(fn:()->Void):Void {} }',
-					'class Help { public static function assign(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v); }',
-					'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); var _g:Gate = new Gate(); final _h:Gate = new Gate();'
-					+ ' public function new() {}'
-					+ ' public function work():Void { _m.acquire(); _h.lock(); Sys.sleep(1); _h.unlock(); _m.release(); }'
-					+ ' public function quick():Void { _l.acquire(); _l.release(); }'
-					+ ' public function gate():Void { _g.lock(); _g.unlock(); }'
-					+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); d.gate(); } }'
-				]
-			)) v.message
-		];
+		return ThreadSafetyCheckTest.violations(
+			'{"reflectiveClasses":["nothing.*"],"reflectiveMethodHolders":["nothing.*"],"rules":{"thread-safety":{'
+			+ '"sinks":["Mutex.acquire","Gate.lock","Sys.sleep"],"spawns":["Runner.create"],'
+			+ '"lockPairs":["Mutex.acquire/release","Gate.lock/unlock"],"closedWorld":true}}}',
+			[
+				ThreadSafetyCheckTest.MUTEX,
+				'class Gate { public function new() {} public function lock():Void {} public function unlock():Void {} }',
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'class Help { public static function assign(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v); }',
+				'class D {'
+				+ ' var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); var _g:Gate = new Gate(); final _h:Gate = new Gate(); public '
+				+ 'function new() {} public function work():Void { _m.acquire(); _h.lock(); Sys.sleep(1); _h.unlock(); _m.release(); }'
+				+ ' public function quick():Void { _l.acquire(); _l.release(); } public function gate():Void { _g.lock(); _g.unlock(); }'
+				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); d.gate(); } }'
+			]
+		)
+			.map(v -> v.message);
 	}
 
 	/**
@@ -596,19 +598,15 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * and runs `write` in `D.alias(k, m)` first.
 	 */
 	private static function unsealedFindings(write: String): Array<String> {
-		return [
-			for (v in ThreadSafetyCheckTest.violations('{"rules":{$RULE}}}', [
-				ThreadSafetyCheckTest.MUTEX,
-				'class Runner { public static function create(fn:()->Void):Void {} }',
-				'class D { var _l:Mutex = new Mutex(); public static final arr:Array<D> = []; public function new() {}'
-				+ ' public function work():Void { _l.acquire(); Sys.sleep(1); _l.release(); }'
-				+ ' public function alias(k:String, m:Mutex):Void { $write }'
-				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
-				+ ' public function risky():Void { _l.acquire(); throw "x"; }'
-				+ ' public static function main():Void { final d:D = new D(); arr.push(d); Runner.create(() -> d.work());'
-				+ ' d.alias("_l", new Mutex()); d.quick(); d.risky(); } }'
-			])) v.message
-		];
+		return ThreadSafetyCheckTest.violations('{"rules":{$RULE}}}', [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class D { var _l:Mutex = new Mutex(); public static final arr:Array<D> = []; public function new() {}'
+			+ ' public function work():Void { _l.acquire(); Sys.sleep(1); _l.release(); } public function alias(k:String, m:Mutex):Void { '
+			+ '$write } public function quick():Void { _l.acquire(); _l.release(); }'
+			+ ' public function risky():Void { _l.acquire(); throw "x"; } public static function main():Void {'
+			+ ' final d:D = new D(); arr.push(d); Runner.create(() -> d.work()); d.alias("_l", new Mutex()); d.quick(); d.risky(); } }'
+		]).map(v -> v.message);
 	}
 
 	/** How many findings of `found(alias)` report the main thread's take of `_l` in `D.quick`. */
@@ -621,26 +619,21 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * sleep and the main thread takes `_l`.
 	 */
 	private static function found(alias: String): Array<String> {
-		return [
-			for (v in ThreadSafetyCheckTest.violations('{"rules":{$RULE}}}', [
-				ThreadSafetyCheckTest.MUTEX,
-				'class Runner { public static function create(fn:()->Void):Void {} }',
-				'class Other { public function new() {} }',
-				'enum Crate { Pack(o:Other); Wrap(s:Shelf); } enum Shelf { Pack(d:D); } enum Mine { Some(o:Other); Left(o:Other); }',
-				'enum Gen<Other> { Hold(x:Other); } enum Twin { Twice(o:Other); }',
-				'enum Twin { Twice(d:D); }',
-				'enum Box { Holder(d:D); Bag(m:Map<String, Mutex>); Pack(d:D); }',
-				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex();'
-				+ ' public static final owners:haxe.ds.List<D> = new haxe.ds.List<D>(); public static final arr:Array<D> = [];'
-				+ ' public static var box:Box = null; public static var crate:Crate = null;'
-				+ ' public static var gen:Gen<D> = null; public static var twin:Twin = null; public function new() {}'
-				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
-				+ ' public function alias(k:String):Void { $alias }'
-				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
-				+ ' public static function main():Void { final d:D = new D(); owners.add(d); arr.push(d);'
-				+ ' Runner.create(() -> d.work()); d.alias("_l"); d.quick(); } }'
-			])) v.message
-		];
+		return ThreadSafetyCheckTest.violations('{"rules":{$RULE}}}', [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class Other { public function new() {} }',
+			'enum Crate { Pack(o:Other); Wrap(s:Shelf); } enum Shelf { Pack(d:D); } enum Mine { Some(o:Other); Left(o:Other); }',
+			'enum Gen<Other> { Hold(x:Other); } enum Twin { Twice(o:Other); }',
+			'enum Twin { Twice(d:D); }',
+			'enum Box { Holder(d:D); Bag(m:Map<String, Mutex>); Pack(d:D); }',
+			'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex();'
+			+ ' public static final owners:haxe.ds.List<D> = new haxe.ds.List<D>(); public static final arr:Array<D> = []; public static '
+			+ 'var box:Box = null; public static var crate:Crate = null; public static var gen:Gen<D> = null; public static var twin:Twin '
+			+ '= null; public function new() {} public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); } public function '
+			+ 'alias(k:String):Void { $alias } public function quick():Void { _l.acquire(); _l.release(); } public static function '
+			+ 'main():Void { final d:D = new D(); owners.add(d); arr.push(d); Runner.create(() -> d.work()); d.alias("_l"); d.quick(); } }'
+		]).map(v -> v.message);
 	}
 
 	/** How many findings of `nodeFindings` report the main thread's take of `_l` in `D.quick`. */
@@ -659,22 +652,19 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		// `packaged`: `Node` a sub-type of the module `pkg.Nodes`, imported by its module, its runtime path `pkg.Node`
 		final home: String = packaged ? 'package pkg; class Nodes {} ' : '';
 		final imported: String = packaged ? 'import pkg.Nodes; ' : '';
-		return [
-			for (v in ThreadSafetyCheckTest.violations(config, [
-				ThreadSafetyCheckTest.MUTEX,
-				'class Runner { public static function create(fn:()->Void):Void {} }',
-				'class Other { public function new() {} }',
-				'${home}class Node<T> { public var targetObject:T = null; public function new() {}'
-				+ ' public function toTarget(k:String, m:Mutex):Void Reflect.setField(targetObject, k, m);'
-				+ ' public static function poke<X:Other>(o:X, k:String, m:Mutex):Void Reflect.setField(o, k, m); $members }',
-				'${imported}final class V extends Node<Void> {} class P<X:Other> extends Node<X> {} $classes',
-				'${imported}class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
-				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
-				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
-				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); Node.poke(new Other(), "x", null);'
-				+ ' $use d.quick(); } }'
-			])) v.message
-		];
+		return ThreadSafetyCheckTest.violations(config, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class Other { public function new() {} }',
+			'${home}class Node<T> { public var targetObject:T = null; public function new() {}'
+			+ ' public function toTarget(k:String, m:Mutex):Void Reflect.setField(targetObject, k, m);'
+			+ ' public static function poke<X:Other>(o:X, k:String, m:Mutex):Void Reflect.setField(o, k, m); $members }',
+			'${imported}final class V extends Node<Void> {} class P<X:Other> extends Node<X> {} $classes',
+			'${imported}class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
+			+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
+			+ ' public function quick():Void { _l.acquire(); _l.release(); } public static function main():Void {'
+			+ ' final d:D = new D(); Runner.create(() -> d.work()); Node.poke(new Other(), "x", null); $use d.quick(); } }'
+		]).map(v -> v.message);
 	}
 	#end
 

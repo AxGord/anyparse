@@ -61,7 +61,7 @@ final class LintBaseline {
 	): Array<Violation> {
 		// a pool, because the tally belongs to the caller and a second call over the same baseline must see the same counts
 		final pool: LintDiffPool = LintDiff.pool(baseline);
-		final messages: Array<String> = [for (v in all) LintDiff.normalizeMessage(v.rule, v.message, root, identities)];
+		final messages: Array<String> = all.map(v -> LintDiff.normalizeMessage(v.rule, v.message, root, identities));
 		// every finding spends its own key before any spends across `data`, so the answer does not hang on the run's order
 		final spent: Array<Bool> = [
 			for (i in 0...all.length) LintDiff.spendOwn(pool, keyOf(all[i], root, identities), messages[i])

@@ -245,7 +245,7 @@ final class LambdaLoopScan {
 	private static function withUsingInsert(
 		rewrites: Array<{ span: Span, text: String }>, extensionForm: Array<Bool>, header: UsingHeader, violations: Array<Violation>
 	): Array<GroupedEdit> {
-		final flat: Array<GroupedEdit> = [for (e in rewrites) { span: e.span, text: e.text, group: null }];
+		final flat: Array<GroupedEdit> = rewrites.map(e -> {span: e.span, text: e.text, group: null });
 		if (!extensionForm.contains(true)) return flat;
 		// Only the EXTENSION-form sites depend on the module, so only their offsets decide: a
 		// qualified rewrite outside the guard is no reason to refuse. `Guarded` is a refusal of the

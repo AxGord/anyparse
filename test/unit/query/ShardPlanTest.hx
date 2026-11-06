@@ -293,9 +293,9 @@ class ShardPlanTest extends Test {
 		final heavy: Array<ShardPlacement> = rows.filter(r -> r.cls == 'unit.HeavyTest');
 		// total 4200 over 4 shards is a share of 1050: 3000 needs three slices, and each lands on a shard of its own
 		Assert.equals(3, heavy.length);
-		Assert.equals(3, distinct([for (r in heavy) '${r.shard}']).length);
+		Assert.equals(3, distinct(heavy.map(r -> '${r.shard}')).length);
 		for (r in heavy) Assert.equals(3, r.parts);
-		Assert.equals('0,1,2', [for (r in heavy) r.part].join(','));
+		Assert.equals('0,1,2', heavy.map(r -> r.part).join(','));
 		for (r in rows) if (r.cls != 'unit.HeavyTest') Assert.equals(1, r.parts);
 		// each slice weighs a third of the class: weighed whole, the three would leave every light class to shard 0
 		Assert.isTrue(distinct([for (r in rows) if (r.cls.indexOf('unit.Gen') == 0) '${r.shard}']).length > 1);
@@ -491,7 +491,7 @@ class ShardPlanTest extends Test {
 	}
 
 	private function names(placements: Array<ShardPlacement>): Array<String> {
-		return [for (p in placements) p.cls];
+		return placements.map(p -> p.cls);
 	}
 
 	private function counts(placements: Array<ShardPlacement>, shards: Int): Array<Int> {

@@ -55,9 +55,7 @@ final class PreferForeach extends HaxeRule implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (e in LambdaLoopScan.edits(source, violations, plugin, index, LambdaLoopKind.Foreach)) { span: e.span, text: e.text }
-		];
+		return LambdaLoopScan.edits(source, violations, plugin, index, LambdaLoopKind.Foreach).map(e -> {span: e.span, text: e.text });
 	}
 
 }

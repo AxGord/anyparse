@@ -181,9 +181,7 @@ final class SplitVarDeclaration extends RuleBase {
 	 * directive. Scanned ONCE per file -- both scans walk the whole source.
 	 */
 	private static function blockedRegions(source: String, s: Seams, regions: Array<LexRegion>): Array<Span> {
-		final out: Array<Span> = [
-			for (tok in SourceComments.collectCommentTokens(regions)) new Span(tok.from, tok.to)
-		];
+		final out: Array<Span> = SourceComments.collectCommentTokens(regions).map(tok -> new Span(tok.from, tok.to));
 		for (directive in CondDirectives.scan(source, s.shape, () -> regions)) out.push(directive.span);
 		return out;
 	}

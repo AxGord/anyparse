@@ -179,7 +179,7 @@ final class HaxeInferencePolicy implements InferencePolicy {
 				final passed: Null<Array<String>> = _ancestors.argumentsTo(start, ancestor);
 				passed == null || passed.length != arity || !_ancestors.chainReadsAlike(start, ancestor, reading)
 					? null
-					: Of(head, [for (p in passed) termOf(p, start.file, start.type.span.from, [])], text);
+					: Of(head, passed.map(p -> termOf(p, start.file, start.type.span.from, [])), text);
 			case _: null;
 		};
 	}

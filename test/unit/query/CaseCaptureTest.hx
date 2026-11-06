@@ -343,7 +343,7 @@ class CaseCaptureTest extends Test {
 		if (arm == null) return;
 		final found: PatternScan = CasePatterns.scan(arm, plugin.refShape(), []);
 		Assert.isTrue(found.modelled);
-		Assert.equals('n,n', [for (ident in found.idents) ident.name].join(','));
+		Assert.equals('n,n', found.idents.map(ident -> ident.name).join(','));
 	}
 
 	private function assertInlineRefused(source: String, line: Int, col: Int, fragment: String): Void {
@@ -371,6 +371,10 @@ class CaseCaptureTest extends Test {
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');
 		}
+	}
+
+	private static inline function lines(parts: Array<String>): String {
+		return parts.join('\n');
 	}
 
 	private static function inlineAt(source: String, line: Int, col: Int): InlineResult {
@@ -402,10 +406,6 @@ class CaseCaptureTest extends Test {
 			if (found != null) return found;
 		}
 		return null;
-	}
-
-	private static inline function lines(parts: Array<String>): String {
-		return parts.join('\n');
 	}
 
 	private static function pos(source: String, span: Span): String {

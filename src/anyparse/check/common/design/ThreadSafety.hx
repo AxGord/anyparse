@@ -213,8 +213,8 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			{ seedable: seedable, inertRef: inertRef }, ReflectiveReach.declaredMethodHolders(files, _resolveConfig)
 		);
 		final sites: LockSites = new LockSites(
-			graph, [for (f in files) f.file],
-			plugin, file -> listsOf(file).pairs, throws, trees, new ExhaustiveSwitches(graph, plugin, writes, seedable), writes
+			graph, files.map(f -> f.file), plugin, file -> listsOf(file).pairs, throws, trees,
+			new ExhaustiveSwitches(graph, plugin, writes, seedable), writes
 		);
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
 		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
@@ -353,7 +353,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		final byFile: Map<String, ChainLists> = [];
 		final read: ObjectMap<LintConfig, ThreadSafetyOptions> = new ObjectMap();
 		// the files the graph HOLDS: one of the run that failed to parse contributes no call and no write, so it covers nothing
-		final coverage: ProjectCoverage = new ProjectCoverage([for (h in graph.heldFiles()) h.file]);
+		final coverage: ProjectCoverage = new ProjectCoverage(graph.heldFiles().map(h -> h.file));
 		final factsAsked: Array<Bool> = [];
 		for (entry in files) {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
@@ -499,7 +499,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			throwerIds: matchAll(graph, option('throwers')),
 			neverInvokeIds: matchAll(graph, neverInvokes),
 			neverInvokeNames: [for (p in neverInvokes) if (p.indexOf('.') < 0) p],
-			mainCheckIds: matchAll(graph, mainChecks.concat([for (c in mainChecks) getterOf(c, accessorPrefixes)])),
+			mainCheckIds: matchAll(graph, mainChecks.concat(mainChecks.map(getterOf.bind(_, accessorPrefixes)))),
 			closedWorld: closedWorld,
 			lockPairs: lockPairs,
 			pairs: resolvePairs(graph, lockPairs)
@@ -812,7 +812,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			made[key] = finding;
 			if (!short) reported.push({
 				hold: a,
-				calls: [for (b in blocking) b.edge],
+				calls: blocking.map(b -> b.edge),
 				finding: finding,
 				handOff: graded.note == CostNote.HandOff,
 				taint: graded.taint,
@@ -856,7 +856,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			r.finding.severity = Severity.Info;
 			r.finding.message += ' — taken inside a hold of ${r.hold.lock ?? r.hold.pair.lockId} every caller keeps, whose warning at '
 				+ '${members.join(', ')} is long through the call into this one';
-			covers.push({ finding: r.finding, by: [for (w in around) w.finding] });
+			covers.push({ finding: r.finding, by: around.map(w -> w.finding) });
 		}
 	}
 

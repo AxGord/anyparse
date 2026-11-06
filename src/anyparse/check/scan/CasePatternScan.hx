@@ -353,7 +353,7 @@ final class CasePatternScan {
 		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = CheckScan.parseAll(plugin, files);
 		return {
 			parsed: parsed,
-			constants: declaredConstantNames(seams, [for (entry in parsed) entry.tree]),
+			constants: declaredConstantNames(seams, parsed.map(entry -> entry.tree)),
 			index: IndexScope.report(files, plugin)
 		};
 	}

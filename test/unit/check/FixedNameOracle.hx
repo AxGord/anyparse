@@ -24,7 +24,7 @@ final class FixedNameOracle implements NameOracle {
 		file: String, before: String, after: String, sites: Array<NameSite>, edits: Array<{ span: Span, text: String }>
 	): Array<Bool> {
 		asked += sites.length;
-		return [for (site in sites) _answer(after, site.after)];
+		return sites.map(site -> _answer(after, site.after));
 	}
 
 	/** An oracle that confirms every rewrite. */

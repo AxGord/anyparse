@@ -302,7 +302,7 @@ final class FmtCommand implements CliCommand {
 				// COORDINATE as well as the quote: a comment before the `#if` moves the line the
 				// note names off the directive it is about. A gap that was ONLY a comment trims to
 				// nothing and drops out; if every one of them does, the region itself is the quote.
-				final trimmed: Array<Span> = [for (gap in opaque.gaps) SourceComments.trimTrivia(source, gap, comments)];
+				final trimmed: Array<Span> = opaque.gaps.map(SourceComments.trimTrivia.bind(source, _, comments));
 				final raw: Array<Span> = trimmed.filter(s -> s.to > s.from);
 				final quoted: Array<Span> = raw.length > 0 ? raw : [SourceComments.trimTrivia(source, opaque.region, comments)];
 				final at: Position = quoted[0].lineCol(source);

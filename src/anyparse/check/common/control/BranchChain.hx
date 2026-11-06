@@ -123,7 +123,7 @@ final class BranchChain {
 		final links: Array<QueryNode> = linksFrom(head, ifKinds);
 		final finalElse: Null<QueryNode> = elseOf(links[links.length - 1], ifKinds);
 		if (finalElse == null) return null;
-		final branches: Array<QueryNode> = [for (link in links) link.children[THEN_BRANCH_INDEX]];
+		final branches: Array<QueryNode> = links.map(link -> link.children[THEN_BRANCH_INDEX]);
 		branches.push(finalElse);
 		return branches;
 	}

@@ -90,7 +90,7 @@ class CallSitesTest extends Test {
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile('class C {\n\tfunction m(a:Int, ?b:Int, ...r:Int):Void {}\n}\n');
 		final decl: Null<QueryNode> = firstOfKind(tree, 'FnMember');
 		if (decl == null) throw 'the fixture must declare a method';
-		final names: Array<String> = [for (p in CallSites.leadingParams(decl, SHAPE)) p.name ?? '?'];
+		final names: Array<String> = CallSites.leadingParams(decl, SHAPE).map(p -> p.name ?? '?');
 		Assert.same(['a', 'b'], names, 'a variadic tail is not a positional slot: $names');
 		final rest: Null<String> = SHAPE.restParamKind;
 		Assert.notNull(rest, 'the Haxe grammar declares a rest parameter spelling');

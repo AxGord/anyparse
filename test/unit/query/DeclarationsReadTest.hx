@@ -73,7 +73,7 @@ class DeclarationsReadTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		Assert.isNull(plugin.parseRoot(source), 'the full parse reads the body and fails');
 		final info: Null<FileInfo> = IndexScope.declarationsOf('p/A.hx', source, plugin);
-		Assert.equals('A,B', info == null ? 'null' : [for (t in info.types) t.name].join(','), 'the declarations read never reads it');
+		Assert.equals('A,B', info == null ? 'null' : info.types.map(t -> t.name).join(','), 'the declarations read never reads it');
 	}
 
 	@:pin('guard')

@@ -337,7 +337,7 @@ final class InlineMethod {
 		}
 
 		// Per-parameter substitution count in `E` (the IdentExpr targets).
-		final occ: Array<Int> = [for (pn in paramNames) countIdentExprNamed(exprBody, pn, shape)];
+		final occ: Array<Int> = paramNames.map(countIdentExprNamed.bind(exprBody, _, shape));
 
 		return POk({
 			name: name,

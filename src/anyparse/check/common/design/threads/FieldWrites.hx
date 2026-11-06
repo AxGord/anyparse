@@ -490,7 +490,7 @@ final class FieldWrites {
 	private function heldIndex(): SymbolIndex {
 		final built: Null<SymbolIndex> = _index;
 		if (built != null) return built;
-		final index: SymbolIndex = IndexScope.over([for (held in _graph.heldFiles()) { file: held.file, source: held.source }], _plugin);
+		final index: SymbolIndex = IndexScope.over(_graph.heldFiles().map(held -> {file: held.file, source: held.source }), _plugin);
 		_index = index;
 		return index;
 	}
@@ -503,7 +503,7 @@ final class FieldWrites {
 	private function storesLock(site: FieldWriteSite, fields: Null<Array<String>>): Bool {
 		final types: Null<Array<String>> = storedTypes(site);
 		if (types == null) return true;
-		final members: Array<Null<String>> = fields == null || fields.length == 0 ? [null] : [for (f in fields) _values.memberTypeOf(f)];
+		final members: Array<Null<String>> = fields == null || fields.length == 0 ? [null] : fields.map(f -> _values.memberTypeOf(f));
 		return types.exists(t -> members.exists(m -> _values.mayHold(t, m)));
 	}
 
@@ -518,9 +518,7 @@ final class FieldWrites {
 				String, Null<String>, QueryNode
 			) -> Null<String> = (file, fn, node) -> typeOf(file, _graph.sourceOf(file) ?? '', fn, node);
 			final all: Array<FieldWriteSite> = [for (sites in _byName) for (s in sites) if (s.reflective && s.reaches == null) s];
-			stores = [
-				for (s in all.concat(unplaced())) { site: s, types: _values.typesOf(s.file, s.fn, s.stored, typer) }
-			];
+			stores = all.concat(unplaced()).map(s -> {site: s, types: _values.typesOf(s.file, s.fn, s.stored, typer) });
 			_stores = stores;
 		}
 		return stores.find(s -> s.site == site)?.types;

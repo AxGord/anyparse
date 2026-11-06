@@ -176,7 +176,7 @@ final class MainSinkReport {
 				final subject: String = d.finding.data?.subject ?? d.edge.to;
 				if (!named.contains(subject)) named.push(subject);
 			}
-			if (named.length > 0) kept.message += ' — with ${[for (n in named) '"$n"'].join(', ')} on the same way, reported here';
+			if (named.length > 0) kept.message += ' — with ${named.map(n -> '"$n"').join(', ')} on the same way, reported here';
 		}
 	}
 
@@ -412,9 +412,7 @@ final class MainSinkReport {
 	 * it relied on, by member, loop or call, and bound — never "none in a loop".
 	 */
 	private static function boundedNote(bounded: Array<BoundedRepeat>): String {
-		final named: Array<String> = [
-			for (b in bounded) b.site + (b.loop == null ? '' : ' `${b.loop}`') + ' ≤ ${b.max} × ${b.costMs} ms'
-		];
+		final named: Array<String> = bounded.map(b -> b.site + (b.loop == null ? '' : ' `${b.loop}`') + ' ≤ ${b.max} × ${b.costMs} ms');
 		return ' — short: a short sink or a take of a lock held only across short calls, run as once only by the repetitions'
 			+ ' `boundedRepeats` binds on its ways (${named.join(', ')}), their bounds multiplied along each way under'
 			+ ' `repeatBudgetMs`, so reported as info';
@@ -434,7 +432,7 @@ final class MainSinkReport {
 	private static function mainSinkFinding(
 		graph: CallGraph, edge: CallEdge, sinks: Array<String>, path: Array<String>, ctx: Int, note: String, warn: Bool
 	): Violation {
-		final named: String = [for (t in sinks) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR);
+		final named: String = sinks.map(t -> '"$t"').join(ThreadSafety.SUBJECT_SEPARATOR);
 		final also: String = (ctx & ThreadSafety.CTX_BG) != 0 ? ' (also reachable from a background thread)' : '';
 		final sorted: Array<String> = ThreadSafety.sortedIds(sinks);
 		return {
@@ -515,9 +513,8 @@ final class MainSinkReport {
 		final sorted: Array<String> = ThreadSafety.sortedIds(owned.sinks);
 		owned.sinks = sorted;
 		owned.finding.message = 'main thread repeats short blocking '
-			+ [for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)
-			+ ' at this call: ${ThreadStates.chainText(owned.path)} -> '
-			+ sorted.join(ThreadSafety.SUBJECT_SEPARATOR);
+			+ sorted.map(t -> '"$t"').join(ThreadSafety.SUBJECT_SEPARATOR)
+			+ ' at this call: ${ThreadStates.chainText(owned.path)} -> ${sorted.join(ThreadSafety.SUBJECT_SEPARATOR)}';
 		final data: Null<FindingData> = owned.finding.data;
 		if (data != null) data.chain = owned.path.concat(sorted);
 	}

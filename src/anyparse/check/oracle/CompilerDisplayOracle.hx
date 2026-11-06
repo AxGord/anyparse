@@ -160,12 +160,12 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 			HaxeSpawn.dropBatch(dir);
 			return out;
 		}
-		final forms: Array<Array<String>> = [for (request in requests) displayForms(file, request.cwd)];
+		final forms: Array<Array<String>> = requests.map(request -> displayForms(file, request.cwd));
 		var asking: Array<Int> = [for (i in 0...requests.length) i];
 		var form: Int = 0;
 		while (asking.length > 0) {
 			final replies: Array<HaxeRun> = HaxeSpawn.runAll(
-				[for (i in asking) positionJob(requests[i], forms[i][form], inputs)], REPLY_OUTPUT, HaxeSpawn.parallelism()
+				asking.map(i -> positionJob(requests[i], forms[i][form], inputs)), REPLY_OUTPUT, HaxeSpawn.parallelism()
 			);
 			final next: Array<Int> = [];
 			for (k => i in asking) {

@@ -27,7 +27,7 @@ class LintFixSafeIsolateTest extends Test {
 	@:pin('control')
 	@:killer('M-SAFE-BISECT-OFF')
 	public function testABisectionKeepsEveryFileButTheOneThatBreaksTheBuild(): Void {
-		final changed: Array<String> = [for (name in 'ABCDEFGH'.split('')) '/p/$name.hx'];
+		final changed: Array<String> = 'ABCDEFGH'.split('').map(name -> '/p/$name.hx');
 		var probes: Int = 0;
 		final outcome: SafePassNarrowing = LintFixSafePass.isolate(
 			SURRENDER, changed, [], seat((keep, _) -> {

@@ -34,14 +34,9 @@ class CompilerFactsTest extends Test {
 		final grown: CompilerFacts = table(dump('{"k":"future","id":"A.f"}\n'));
 		Assert.equals(0, grown.configurations.length);
 		Assert.isNull(grown.node('A.f'));
-		Assert.same(
-			[
-				'one: its facts file holds a record of the kind `future`, which no reader here knows'
-			],
-			[
-				for (d in grown.dropped) '${d.name}: ${d.reason}'
-			]
-		);
+		Assert.same([
+			'one: its facts file holds a record of the kind `future`, which no reader here knows'
+		], grown.dropped.map(d -> '${d.name}: ${d.reason}'));
 	}
 
 	@:pin('control') @:killer('M-FACTS-WITHIN-MARKER-UNKNOWN')
@@ -65,12 +60,15 @@ class CompilerFactsTest extends Test {
 		// code inlined from another file carries that file's index; two dumps may number their files differently
 		final other: String = 'class B {}';
 		final dump: String = '{"k":"facts","v":1,"inline":true}\n{"k":"file","i":0,"path":"B.hx"}\n'
-			+ '{"k":"node","id":"A.f","f":"A.hx","p":[10,27],"kind":"method","owner":"A","t":"()->Void","vars":[{"n":"x","t":"Int","p":[0,6,7]}]}\n'
-			+ '{"k":"end","nodes":1,"types":0}\n';
-		final facts: CompilerFacts = CompilerFacts.build(
-			[{ name: 'one', text: dump, file: path -> path }],
-			file -> file == 'A.hx' ? SOURCE : file == 'B.hx' ? other : null, file -> file
-		);
+			+ '{"k":"node","id":"A.f","f":"A.hx","p":[10,27],"kind":"method","owner":"A","t":"()->Void","vars":[{"n":"x","t":"Int",'
+			+ '"p":[0,6,7]}]}\n{"k":"end","nodes":1,"types":0}\n';
+		final facts: CompilerFacts = CompilerFacts.build([{ name: 'one', text: dump, file: path -> path }], file -> {
+			switch (file) {
+				case 'A.hx': SOURCE;
+				case 'B.hx': other;
+				case _: null;
+			}
+		}, file -> file);
 		final at: Null<FactPos> = facts.node('A.f')?.vars[0]?.at;
 		Assert.equals('B.hx', at?.file);
 		Assert.equals(6, at?.span.from);
@@ -101,21 +99,24 @@ class CompilerFactsTest extends Test {
 		final y: String = at(b, 'y()');
 		final inC: String = at(c, 'C');
 		final dump: String = '{"k":"facts","v":1,"inline":true}\n{"k":"file","i":0,"path":"B.hx"}\n{"k":"file","i":1,"path":"C.hx"}\n'
-			+ '{"k":"node","id":"A.f","f":"A.hx","p":[$body],"kind":"method","owner":"A","t":"()->Void","inc":["inline-site-unknown"],'
-			+ '"calls":[{"t":"B.i","a":"inlined","rt":"Void","p":[0,$iRoot],"s":[$g],"d":[0,$iDeclared]},'
-			+ '{"t":"B.i","a":"inlined","rt":"Void","p":[0,$iRoot],"s":[$h],"d":[0,$iDeclared]},'
-			+ '{"t":"B.j","a":"inlined","rt":"Void","p":[0,$jRoot],"s":[$k],"d":[0,$jDeclared]}],'
-			+ '"native":[{"w":"syntax","n":"x","p":[0,$x]},{"w":"syntax","n":"y","p":[0,$y]},'
-			+ '{"w":"syntax","n":"c","p":[1,$inC]}]}\n{"k":"end","nodes":1,"types":0}\n';
-		final facts: CompilerFacts = CompilerFacts.build(
-			[{ name: 'one', text: dump, file: path -> path }],
-			file -> file == 'A.hx' ? a : file == 'B.hx' ? b : file == 'C.hx' ? c : null, file -> file
-		);
+			+ '{"k":"node","id":"A.f","f":"A.hx","p":[$body'
+			+ '],"kind":"method","owner":"A","t":"()->Void","inc":["inline-site-unknown"],"calls":[{"t":"B.i","a":"inlined","rt":"Void",'
+			+ '"p":[0,$iRoot],"s":[$g],"d":[0,$iDeclared]},{"t":"B.i","a":"inlined","rt":"Void","p":[0,$iRoot],"s":[$h],"d":[0,$iDeclared'
+			+ ']},{"t":"B.j","a":"inlined","rt":"Void","p":[0,$jRoot],"s":[$k],"d":[0,$jDeclared]}],"native":[{"w":"syntax","n":"x","p":[0,'
+			+ '$x]},{"w":"syntax","n":"y","p":[0,$y]},{"w":"syntax","n":"c","p":[1,$inC]}]}\n{"k":"end","nodes":1,"types":0}\n';
+		final facts: CompilerFacts = CompilerFacts.build([{ name: 'one', text: dump, file: path -> path }], file -> {
+			switch (file) {
+				case 'A.hx': a;
+				case 'B.hx': b;
+				case 'C.hx': c;
+				case _: null;
+			}
+		}, file -> file);
 		function natives(part: String, ?harmless: (callee:String) -> Bool): Array<String> {
 			final from: Int = a.lastIndexOf(part);
 			final span: Span = new Span(from, from + part.length);
 			final found: Null<Array<NativeFact>> = facts.within('A.hx', span, n -> n.natives, n -> n.at, true, harmless);
-			return found == null ? ['null'] : [for (n in found) n.name];
+			return found == null ? ['null'] : found.map(n -> n.name);
 		}
 		Assert.same(['x', 'c'], natives('g();'));
 		Assert.same(['x', 'c'], natives('h();'));

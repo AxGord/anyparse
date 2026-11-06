@@ -163,7 +163,7 @@ class ApqSelectorTest extends Test {
 		final tree: QueryNode = mkFinalTree();
 		final equiv: KindEquivalence = new KindEquivalence([['ClassDecl', 'ClassForm'], ['FnMember', 'FinalModifiedMember']]);
 		final r: Array<QueryNode> = Engine.select(tree, Selector.parse('ClassDecl > FnMember'), equiv);
-		final names: Array<String> = [for (m in r) m.name ?? '?'];
+		final names: Array<String> = r.map(m -> m.name ?? '?');
 		Assert.equals(2, r.length);
 		Assert.isTrue(names.contains('compute'), 'final method under final class reachable via chain');
 		Assert.isTrue(names.contains('plain'), 'plain method also reachable');
@@ -178,7 +178,7 @@ class ApqSelectorTest extends Test {
 		final equiv: KindEquivalence = plugin.selectKindEquivalence();
 
 		final classes: Array<QueryNode> = Engine.select(tree, Selector.parse('ClassDecl'), equiv);
-		final classNames: Array<String> = [for (c in classes) c.name ?? '?'];
+		final classNames: Array<String> = classes.map(c -> c.name ?? '?');
 		Assert.isTrue(classNames.contains('Widget'), 'final class Widget must match --select ClassDecl');
 		Assert.isTrue(classNames.contains('Plain'), 'plain class Plain must still match');
 

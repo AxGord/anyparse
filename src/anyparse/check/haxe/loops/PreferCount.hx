@@ -53,9 +53,7 @@ final class PreferCount extends HaxeRule implements DefaultOff implements RiskyF
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (e in fixGrouped(source, violations, plugin, index)) { span: e.span, text: e.text }
-		];
+		return fixGrouped(source, violations, plugin, index).map(e -> {span: e.span, text: e.text });
 	}
 
 	public function fixGrouped(

@@ -116,7 +116,7 @@ final class ParenGuard {
 	 * non-overlapping spans, and a metavariable expands once per occurrence).
 	 */
 	public static function guard(source: String, edits: Array<GuardedEdit>, plugin: GrammarPlugin): Array<{ span: Span, text: String }> {
-		final plain: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
+		final plain: Array<{ span: Span, text: String }> = edits.map(e -> {span: e.span, text: e.text });
 		final shape: RefShape = plugin.refShape();
 		final declared: Null<ParenDelimiters> = shape.parenDelimiters;
 		if (shape.parenKind == null || declared == null) return plain;
@@ -131,7 +131,7 @@ final class ParenGuard {
 		// Reference shapes: what each site's content parses as when every
 		// legal position is parenthesised. A site with no node at its own
 		// span there is unverifiable and is left alone.
-		final allLegal: Array<Bool> = [for (s in sites) legal[s.position]];
+		final allLegal: Array<Bool> = sites.map(s -> legal[s.position]);
 		final refBuild: Null<Variant> = buildAndParse(source, edits, allLegal, delims, plugin);
 		if (refBuild == null) return plain;
 		final refTree: Null<QueryNode> = refBuild.tree;
@@ -210,7 +210,7 @@ final class ParenGuard {
 	): Array<Bool> {
 		return [
 			for (p in 0...maxPosition(sites)
-				+ 1) parseVariant(source, edits, ([for (s in sites) s.position == p]: Array<Bool>), delims, plugin) != null
+				+ 1) parseVariant(source, edits, (sites.map(s -> s.position == p): Array<Bool>), delims, plugin) != null
 		];
 	}
 
@@ -393,7 +393,7 @@ final class ParenGuard {
 		out.add(source.substring(cursor));
 		return {
 			text: out.toString(),
-			spans: [for (s in spans) s ?? new Span(0, 0)],
+			spans: spans.map(s -> s ?? new Span(0, 0)),
 			pairs: pairs,
 			edits: outEdits,
 			tree: null

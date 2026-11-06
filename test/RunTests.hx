@@ -215,7 +215,7 @@ class RunTests {
 		runner.onComplete.add(_ -> {
 			final classes: Array<String> = [for (cls in millis.keys()) cls];
 			classes.sort((a, b) -> Reflect.compare(millis[b], millis[a]));
-			sys.io.File.saveContent(path, [for (cls in classes) '${Math.round(millis[cls] ?? 0.0)}\t${counts[cls]}\t$cls\n'].join(''));
+			sys.io.File.saveContent(path, classes.map(cls -> '${Math.round(millis[cls] ?? 0.0)}\t${counts[cls]}\t$cls\n').join(''));
 		});
 	}
 

@@ -270,7 +270,7 @@ final class CallGraphEdges {
 		function returnSourceOf(target: String): Null<String> {
 			// another signature a call may select returns another type (`@:overload`)
 			if (g._facts.overloadedReturns.exists(target)) return null;
-			final files: Array<String> = [for (d in g.declarationsOf(target)) d.file];
+			final files: Array<String> = g.declarationsOf(target).map(d -> d.file);
 			final settled: Null<String> = g._facts.returnSources[target];
 			final each: Null<Array<WrittenIn>> = settled == null && files.length > 1 ? CallGraphKeys.returnsWritten(g, target) : null;
 			return readIn(files, settled, g.nodes[target]?.typeName, target, each);
@@ -349,9 +349,7 @@ final class CallGraphEdges {
 			final bound: Array<String> = valueArgs != null && valueArgs.length >= viewParams.length
 				? valueArgs
 				: [for (_ in viewParams) CallGraph.UNKNOWN_TYPE];
-			return [
-				for (a in inherited) CallGraphNames.substituteTypeParams(a, viewParams, bound, g._plugin.typeSyntax)
-			];
+			return inherited.map(a -> CallGraphNames.substituteTypeParams(a, viewParams, bound, g._plugin.typeSyntax));
 		}
 
 		/**
@@ -765,7 +763,7 @@ final class CallGraphEdges {
 			if (values == null || imported == null || values.decls.length == 0 || CallGraphKeys.memberMayBind(g, currentType, name))
 				return null;
 			if (imported.unknown || imported.statics.length > 1) return null;
-			final written: Array<Null<String>> = [for (d in values.decls) typeSources[d.span.from]];
+			final written: Array<Null<String>> = values.decls.map(d -> typeSources[d.span.from]);
 			for (s in imported.statics) written.push(memberTypeSource(s.owner, s.member));
 			final out: Array<Receiver> = [];
 			for (w in written) {
@@ -970,9 +968,9 @@ final class CallGraphEdges {
 			// an imported static: `import p.T.f;` or `import p.T.*;` — every type that may be meant, a placeholder for one the
 			// index does not list
 			final imported: ImportedStatics = importedOf(name, span?.from);
-			final targets: Array<String> = [
-				for (s in imported.statics) g.memberOnChain(s.owner, s.member) ?? g.externalNode(s.owner, s.member)
-			];
+			final targets: Array<String> = imported.statics.map(s ->
+				g.memberOnChain(s.owner, s.member) ?? g.externalNode(s.owner, s.member)
+			);
 			if (targets.length > 0) {
 				for (i in 1...targets.length) g.addEdge(frameId(currentType), targets[i], Call, null, file, span);
 				// a build that declares a module-level value of the name calls the function it holds

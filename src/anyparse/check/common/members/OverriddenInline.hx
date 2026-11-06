@@ -130,9 +130,7 @@ final class OverriddenInline extends RuleBase {
 
 	/** The qualified names of `types`, each followed by `.member` when one is given, comma-joined. */
 	private static function listed(types: Array<ResolvedType>, member: Null<String>): String {
-		return [
-			for (r in types) member == null ? SymbolIndex.typePath(r) : '${SymbolIndex.typePath(r)}.$member'
-		].join(', ');
+		return types.map(r -> member == null ? SymbolIndex.typePath(r) : '${SymbolIndex.typePath(r)}.$member').join(', ');
 	}
 
 	/** A finding on the header line of `m`'s declaration, so a `// noqa` inside its body cannot swallow it. */

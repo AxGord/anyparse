@@ -92,12 +92,12 @@ class LexicalRegionsSeamTest extends Test {
 
 	/** The region texts joined, so a failure says what was actually scanned. */
 	private function text(source: String, regions: Array<LexRegion>): String {
-		return [for (region in regions) source.substring(region.from, region.to)].join(' | ');
+		return regions.map(region -> source.substring(region.from, region.to)).join(' | ');
 	}
 
 	/** Region bounds and kinds, for a length assertion that would otherwise say only a number. */
 	private function dump(regions: Array<LexRegion>): String {
-		return [for (region in regions) '[${region.from},${region.to})'].join(' ');
+		return regions.map(region -> '[${region.from},${region.to})').join(' ');
 	}
 
 	#if (sys || nodejs)
@@ -298,10 +298,9 @@ class LexicalRegionsSeamTest extends Test {
 
 	/** The `Hx…` module names under the Haxe grammar package — one module per rule type. */
 	private function haxeGrammarRuleTypeNames(): Array<String> {
-		return [
-			for (path in hxFilesUnder(HAXE_GRAMMAR_DIR))
-				path.substring(path.lastIndexOf('/') + 1, path.length - '.hx'.length)
-		].filter(name -> name.startsWith('Hx'));
+		return hxFilesUnder(HAXE_GRAMMAR_DIR)
+			.map(path -> path.substring(path.lastIndexOf('/') + 1, path.length - '.hx'.length))
+			.filter(name -> name.startsWith('Hx'));
 	}
 
 	/**

@@ -70,9 +70,9 @@ final class DeclaredSortedLists {
 			final entries: Array<ListEntry> = assigned[i];
 			if (entries.length == 0) return Left('sorted list part ${parts[i].file} (${parts[i].select}) would be left empty — refusing');
 			ArraySort.sort(entries, (a, b) -> compare(a.content, b.content));
-			if ([for (e in entries) e.literal].join('\n') == [for (e in p.entries) e.literal].join('\n')) continue;
+			if (entries.map(e -> e.literal).join('\n') == p.entries.map(e -> e.literal).join('\n')) continue;
 			final edits: Array<TextEdit> = out[parts[i].file] ?? [];
-			edits.push({ span: p.array, text: '[${p.lead}${[for (e in entries) e.literal].join(p.sep)}${p.trail}]' });
+			edits.push({ span: p.array, text: '[${p.lead}${entries.map(e -> e.literal).join(p.sep)}${p.trail}]' });
 			out[parts[i].file] = edits;
 		}
 		return Right(out);
@@ -106,7 +106,7 @@ final class DeclaredSortedLists {
 
 	/** `parts` named for a diagnostic. */
 	private static function describe(parts: Array<SortedListPart>): String {
-		return [for (p in parts) '${p.file} (${p.select})'].join(' + ');
+		return parts.map(p -> '${p.file} (${p.select})').join(' + ');
 	}
 
 	/** One part of `source`: the array `part.select` addresses, its string entries and the text between them. */

@@ -561,12 +561,12 @@ class TestDiscovery {
 	/** The string arguments of one metadata entry; anything else is a build error. */
 	private static function metaArgs(entry: MetadataEntry): Array<String> {
 		final params: Null<Array<Expr>> = entry.params;
-		return params == null ? [] : [
-			for (param in params) switch param.expr {
+		return params == null
+			? []
+			: params.map(param -> switch param.expr {
 				case EConst(CString(s, _)): s;
 				case _: Context.error('@${entry.name} expects string arguments', param.pos);
-			}
-		];
+			});
 	}
 
 	/** The superclass of `c`, or `null` at the top of the chain. */

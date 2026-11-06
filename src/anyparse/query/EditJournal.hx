@@ -38,7 +38,7 @@ final class EditJournal {
 		_steps[before] = from;
 		final sorted: Array<{ span: Span, text: String }> = edits.copy();
 		sorted.sort((a, b) -> a.span.from != b.span.from ? a.span.from - b.span.from : a.span.to - b.span.to);
-		final key: String = [for (e in sorted) '${e.span.from}:${e.span.to}:${e.text}'].join('\u0000');
+		final key: String = sorted.map(e -> '${e.span.from}:${e.span.to}:${e.text}').join('\u0000');
 		if (!from.exists(s -> s.after == after && s.key == key)) from.push(new EditStep(before, sorted, after, key));
 	}
 

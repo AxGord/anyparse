@@ -268,7 +268,7 @@ final class ArgumentTypes {
 	 * operator yields (`overloadType`); null otherwise.
 	 */
 	private function arithmeticType(node: QueryNode, operands: Array<WrittenType>, scope: ArgumentScope): Null<WrittenType> {
-		final cores: Array<Null<String>> = [for (o in operands) coreName(o.text)];
+		final cores: Array<Null<String>> = operands.map(o -> coreName(o.text));
 		if (_shape.execution?.compoundAssignOperators?.exists(node.kind) == true)
 			return TypingService.compoundKeepsTarget(node.kind, cores, _shape) ? operands[0] : null;
 		final core: Null<String> = TypingService.coreOperatorType(node.kind, cores, _shape);

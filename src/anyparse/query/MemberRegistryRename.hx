@@ -72,7 +72,7 @@ final class MemberRegistryRename {
 				tree: tree,
 				newSource: change.newSource,
 				newTree: plugin.parseFile(change.newSource),
-				edited: [for (edit in change.edits) edit.span]
+				edited: change.edits.map(edit -> edit.span)
 			});
 		}
 		return oldName == null ? null : { oldName: oldName, newName: newName, modules: modules };
@@ -157,7 +157,7 @@ final class MemberRegistryRename {
 				notes.push('arm ${record.name}: its find cannot be carried over the rename of "$old" — re-aim it');
 				continue;
 			}
-			final verdicts: Array<Bool> = [for (at in inSource) isEdited(module, cut.from + at)];
+			final verdicts: Array<Bool> = inSource.map(at -> isEdited(module, cut.from + at));
 			for (k => at in inFind) if (verdicts[k]) edits.push(TypePathRegistries.spliceOf(find, at, at + old.length, rename.newName));
 			final rewritten: String = spliced(find.value, [for (k => at in inFind) if (verdicts[k]) at], old, rename.newName);
 			if (newTargets.length != 1 || Patch.cutSpan(module.newSource, module.newTree, newTargets[0], rewritten, plugin) == null)

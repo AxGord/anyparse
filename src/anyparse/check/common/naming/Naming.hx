@@ -257,7 +257,7 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 						{ index: resolutionIndex, file: violations[0].file }
 					)
 		);
-		final hoistedFroms: Array<Int> = [for (h in hoists) h.declFrom];
+		final hoistedFroms: Array<Int> = hoists.map(h -> h.declFrom);
 		final edits: Array<{ span: Span, text: String }> = ConstantHoist.edits(hoists);
 		final claims: Array<DeclRename> = [];
 		for (decl in decls) {

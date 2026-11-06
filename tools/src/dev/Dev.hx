@@ -93,7 +93,7 @@ final class Dev {
 	}
 
 	private static function usage(): String {
-		return 'usage: node bin/dev.js <subcommand> [args]\n' + [for (c in COMMANDS) '  ${c.usage}'].join('\n');
+		return 'usage: node bin/dev.js <subcommand> [args]\n' + COMMANDS.map(c -> '  ${c.usage}').join('\n');
 	}
 
 }

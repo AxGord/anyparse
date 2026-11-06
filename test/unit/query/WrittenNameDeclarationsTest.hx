@@ -196,7 +196,7 @@ class WrittenNameDeclarationsTest extends Test {
 	}
 
 	private static function filesOf(found: Array<ResolvedType>): String {
-		final files: Array<String> = [for (r in found) r.file.file];
+		final files: Array<String> = found.map(r -> r.file.file);
 		files.sort(Reflect.compare);
 		return files.join(',');
 	}

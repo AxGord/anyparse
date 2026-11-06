@@ -77,7 +77,7 @@ class GraphCliTest extends Test {
 			]));
 			final doc: CodeGraphJson = CodeGraphJsonParser.parse(out);
 			Assert.equals('pkg.a.Alpha.run', [for (n in doc.nodes) if (n.focus) n.name].join(','));
-			Assert.equals('', [for (e in doc.edges) e.from].join(','), 'radius 0 keeps the focus alone, its own recursion aside');
+			Assert.equals('', doc.edges.map(e -> e.from).join(','), 'radius 0 keeps the focus alone, its own recursion aside');
 			final wider: CodeGraphJson = CodeGraphJsonParser.parse(
 				CliFixture.captureStdout(() -> Cli.run(['graph', root, '--level', 'member', '--focus', 'Alpha.run', '--format', 'json']))
 			);
@@ -174,13 +174,12 @@ class GraphCliTest extends Test {
 	/** A file that fails to parse is named on stderr on the import path too: its imports are missing from the graph. */
 	public function testTheImportPathWarnsOfAnUnparsedFile(): Void {
 		#if nodejs
-		final root: String = CliFixture.writeTree('graphcli', [
-			for (f in GraphFixture.FILES)
-				{
-					name: f.file,
-					source: f.source
-				}
-		].concat([{ name: 'pkg/c/Broken.hx', source: 'package pkg.c;\n\nclass Broken {\n' }]));
+		final root: String = CliFixture.writeTree(
+			'graphcli', GraphFixture.FILES.map(f -> {
+				name: f.file,
+				source: f.source
+			}).concat([{ name: 'pkg/c/Broken.hx', source: 'package pkg.c;\n\nclass Broken {\n' }])
+		);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			var code: Int = -1;
 			final err: String = CliFixture.captureStderr(() -> CliFixture.captureStdout(() -> code = Cli.run(['graph', root])));
@@ -196,7 +195,7 @@ class GraphCliTest extends Test {
 	#if (sys || nodejs)
 	/** Run `body` over the graph fixture written to a fresh directory, removed afterwards. */
 	private static function withFixture(body: (root:String) -> Void): Void {
-		final root: String = CliFixture.writeTree('graphcli', [for (f in GraphFixture.FILES) { name: f.file, source: f.source }]);
+		final root: String = CliFixture.writeTree('graphcli', GraphFixture.FILES.map(f -> {name: f.file, source: f.source }));
 		CliFixture.always(CliFixture.removeDir.bind(root), body.bind(root));
 	}
 	#end

@@ -68,9 +68,7 @@ class WriteSitesTest extends Test {
 
 	private static function writtenPaths(source: String): Array<String> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return [
-			for (site in WriteSites.of(plugin.parseFile(source), plugin.refShape())) site.path == null ? 'null' : masked(site.path)
-		];
+		return WriteSites.of(plugin.parseFile(source), plugin.refShape()).map(site -> site.path == null ? 'null' : masked(site.path));
 	}
 
 	private static function masked(path: String): String {

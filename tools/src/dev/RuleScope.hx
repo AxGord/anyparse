@@ -90,7 +90,7 @@ final class RuleScope {
 			if (own == null) return null;
 			for (id in own) if (!ids.contains(id)) ids.push(id);
 		}
-		final created: Array<String> = [for (path in touched) moduleOf(path)];
+		final created: Array<String> = touched.map(moduleOf);
 		final registryOk: Bool = !touched.contains(REGISTRY) || gainsOnly(registryDiff, created);
 		if (ids.length == 0 || ids.length > MAX_RULES || !registryOk) return null;
 		ids.sort(Reflect.compare);

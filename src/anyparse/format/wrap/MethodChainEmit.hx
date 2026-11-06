@@ -692,7 +692,7 @@ class MethodChainEmit {
 	 * (`IfFirstLineExceeds`) keep their existing local decision.
 	 */
 	private static function restAwareCallParamSegments(segments: Array<Doc>, lineWidth: Int): Array<Doc> {
-		return [for (seg in segments) restAwareCallParamSegment(seg, lineWidth)];
+		return segments.map(restAwareCallParamSegment.bind(_, lineWidth));
 	}
 
 	/**

@@ -1517,7 +1517,7 @@ class MemberOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final applied: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
-		return { reasons: [for (v in vs) v.declineReason], edits: applied.length };
+		return { reasons: vs.map(v -> v.declineReason), edits: applied.length };
 	}
 
 	private function edits(src: String, ?resolve: (String) -> LintConfig): Array<{ span: Span, text: String }> {

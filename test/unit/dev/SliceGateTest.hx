@@ -393,7 +393,7 @@ final class SliceGateTest extends Test {
 			Assert.equals('true|lists', File.getContent(marker), 'while the second row ran');
 			Assert.equals('lists', File.getContent(progress));
 			final left: Null<BranchReport> = Branches.reportOf(report, 'r');
-			Assert.same(['artifacts', 'lists'], left == null ? [] : [for (step in left.steps) step.name]);
+			Assert.same(['artifacts', 'lists'], left == null ? [] : left.steps.map(step -> step.name));
 		});
 	}
 

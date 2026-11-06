@@ -136,7 +136,7 @@ class PreferApiIdiomCheckTest extends Test {
 	@:pin('control') @:killer('M-IDIOM-NO-SELF-TYPE-GATE')
 	public function testTheTypesOwnBodyIsNeverRewritten(): Void {
 		final vs: Array<Violation> = violationsOf(user('p.x = 1;\n\t\tp.y = 2;'));
-		Assert.equals(0, vs.filter(v -> v.file == 'geom/Point.hx').length, [for (v in vs) '${v.file} ${v.message}'].join('\n'));
+		Assert.equals(0, vs.filter(v -> v.file == 'geom/Point.hx').length, vs.map(v -> '${v.file} ${v.message}').join('\n'));
 		Assert.equals(1, vs.length);
 	}
 

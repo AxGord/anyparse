@@ -129,7 +129,7 @@ class HxAccessorSliceTest extends HxTestHelpers {
 	private function accessorIds(decl: HxVarDecl): Array<String> {
 		final clause: Null<HxAccessClause> = decl.access;
 		if (clause == null) throw 'expected accessor clause, got null';
-		return [for (id in clause.ids) (id: String)];
+		return clause.ids.map(id -> (id: String));
 	}
 
 	private function expectFinalMember(member: HxClassMember): HxVarDecl {

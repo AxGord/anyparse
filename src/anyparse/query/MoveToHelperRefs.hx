@@ -341,7 +341,7 @@ final class MoveToHelperRefs {
 			final maybe: Array<Span> = [];
 			sortSubtypeSpans(prep, info, subtypes, maybe);
 			if (subtypes.length == 0 && maybe.length == 0) continue;
-			final hits: Map<String, Array<RefHit>> = Refs.findMulti([for (m in instance) m.name], tree, prep.shape);
+			final hits: Map<String, Array<RefHit>> = Refs.findMulti(instance.map(m -> m.name), tree, prep.shape);
 			for (m in instance) for (hit in hits[m.name] ?? []) if (hit.kind != RefKind.Decl && hit.bindingSpan == null) {
 				// A type that MAY extend the source without proof could inherit the member: its bare call is refused, not left.
 				if (within(hit, maybe))

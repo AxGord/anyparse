@@ -593,7 +593,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		final check: PreferKeyValueLoop = new PreferKeyValueLoop();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(0, CheckFixture.fixOf(check, src, vs, project(src)).length);
-		return [for (v in vs) v.declineReason];
+		return vs.map(v -> v.declineReason);
 	}
 
 	/** A class with a `_vals` field around a method taking `vals`, `keys` and a sink. */

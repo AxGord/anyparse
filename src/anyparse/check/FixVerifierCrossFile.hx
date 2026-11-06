@@ -136,7 +136,7 @@ final class FixVerifierCrossFile {
 	private static function componentsOf(sets: Array<RiskyCrossFileEdit>): Array<Array<RiskyCrossFileEdit>> {
 		final groups: Array<{ sets: Array<RiskyCrossFileEdit>, files: Array<String> }> = [];
 		for (set in sets) {
-			final touched: Array<String> = [for (slice in set.slices) slice.file];
+			final touched: Array<String> = set.slices.map(slice -> slice.file);
 			final merged: { sets: Array<RiskyCrossFileEdit>, files: Array<String> } = { sets: [set], files: touched.copy() };
 			for (group in groups.copy()) if (group.files.exists(f -> touched.contains(f))) {
 				groups.remove(group);
@@ -145,7 +145,7 @@ final class FixVerifierCrossFile {
 			}
 			groups.push(merged);
 		}
-		return [for (group in groups) group.sets];
+		return groups.map(group -> group.sets);
 	}
 
 	/** Every file `judge`'s edit sets touch, at its current text, or null when one of them is not among the run's files. */
@@ -183,7 +183,7 @@ final class FixVerifierCrossFile {
 		function keep(indices: Array<Int>): ComponentVerdict {
 			final texts: Null<Map<String, String>> = candidate(judge, before, indices);
 			if (texts != null) for (file => text in texts) for (entry in judge.files) if (entry.file == file) entry.source = text;
-			return Kept([for (i in indices) judge.sets[i]]);
+			return Kept(indices.map(i -> judge.sets[i]));
 		}
 		final all: Array<Int> = [for (i in 0...n) i];
 		final settled: Null<ComponentVerdict> = wholeVerdict(attempt(all), n);

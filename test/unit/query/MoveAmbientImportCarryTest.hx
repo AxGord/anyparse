@@ -174,9 +174,7 @@ final class MoveAmbientImportCarryTest extends Test {
 		].concat(extra ?? []);
 		final root: String = CliFixture.writeTree('apq_move_ambient', tree);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final files: Array<{ file: String, source: String }> = [
-				for (entry in tree) { file: '$root/${entry.name}', source: entry.source }
-			];
+			final files: Array<{ file: String, source: String }> = tree.map(entry -> {file: '$root/${entry.name}', source: entry.source });
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			result = MoveSymbol.moveType('$root/src/p/Host.hx', 5, 7, '$root/$destPath', files, plugin, plugin.typeRefShape());
 		});

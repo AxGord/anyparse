@@ -94,7 +94,7 @@ class StdlibDifferentialTest extends Test {
 	/** A body constant of the return type is a baseline too -- a constant function is no reimplementation. */
 	public function testBodyConstantIsABaseline(): Void {
 		final candidate: StdlibCandidate = one("class C {\n\tfunction f(n:Int):String return n > 0 ? '0' : '0';\n}");
-		final displays: Array<String> = [for (map in StdlibDifferential.trivials(candidate)) map.display];
+		final displays: Array<String> = StdlibDifferential.trivials(candidate).map(map -> map.display);
 		Assert.isTrue(displays.contains("'0'"), 'baselines: $displays');
 	}
 
@@ -188,7 +188,7 @@ class StdlibDifferentialTest extends Test {
 
 	/** The human-facing spelling of every enumerated mapping. */
 	private static function displays(maps: Array<Mapping>): Array<String> {
-		return [for (map in maps) map.display];
+		return maps.map(map -> map.display);
 	}
 
 	/** How many times `needle` occurs in `text`. */

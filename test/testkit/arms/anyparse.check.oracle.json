@@ -23,7 +23,7 @@
 			"name": "M-ORACLE-COVERAGE-PAIRED-BY-INDEX",
 			"type": "anyparse.check.oracle.OracleCoverage",
 			"method": "probedOnce",
-			"find": "return [for (oracle in oracles) probedFor(memo, oracle)];",
+			"find": "return oracles.map(probedFor.bind(memo));",
 			"replace": "return [for (i in 0...oracles.length) i < memo.probes.length ? memo.probes[i].coverage : probedFor(memo, oracles[i])];",
 			"note": "a seeded probe is handed to whichever configuration sits at its position, so a phase judging a different subset reads another build's compiled set and verifies an edit the judging build never compiles"
 		},

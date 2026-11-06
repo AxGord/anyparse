@@ -152,7 +152,7 @@ final class FactsProvenance {
 	 */
 	private function textual(g: CallGraph, type: String, files: Array<String>, ids: Array<String>): Bool {
 		final table: CompilerFacts = _view._table;
-		final keys: Array<String> = [for (f in files) table.keyOf(f)];
+		final keys: Array<String> = files.map(table.keyOf);
 		final vouched: Array<String> = [];
 		var coded: Bool = false;
 		for (id in ids) {
@@ -357,11 +357,12 @@ final class FactsProvenance {
 			return false;
 		for (v in n.vars) if (!own(v.at, body.spells(v.at, v.name) || body.binds(v.at) || body.declares(v.at, v.name))) return false;
 		for (r in n.reads) if (!own(r.at, body.holds(r.at) && (body.bare(r.at) || body.lowered(r.at) || body.binds(r.at)))) return false;
-		final placed: Array<FactPos> = [for (f in n.flows) f.at].concat([for (s in n.strings) s.at])
-			.concat([for (i in n.iterations) i.at])
-			.concat([for (x in n.natives) x.at])
-			.concat([for (r in n.reflection) r.at])
-			.concat([for (e in n.elementWrites) e.at]);
+		final placed: Array<FactPos> = n.flows.map(f -> f.at)
+			.concat(n.strings.map(s -> s.at))
+			.concat(n.iterations.map(i -> i.at))
+			.concat(n.natives.map(x -> x.at))
+			.concat(n.reflection.map(r -> r.at))
+			.concat(n.elementWrites.map(e -> e.at));
 		if (!placed.foreach(p -> own(p, body.holds(p) || readJoined(n, p, body)))) return false;
 		for (child in n.fns) {
 			// as the same builds typed it: another build's copy places its code in its own file

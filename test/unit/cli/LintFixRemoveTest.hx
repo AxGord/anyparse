@@ -125,10 +125,8 @@ class LintFixRemoveTest extends Test {
 	#if (sys || nodejs)
 	/** One `lint --fix` over every file of the fixture tree under `root`, judged by `oracles` when there are any. */
 	private static function run(root: String, checks: Array<Check>, oracles: Array<OracleConfig>): Int {
-		final files: Array<{ file: String, source: String }> = [
-			for (entry in MODULES.concat([{ name: 'src/aqq/import.hx', source: '' }]))
-				{ file: '$root/${entry.name}', source: File.getContent('$root/${entry.name}') }
-		];
+		final files: Array<{ file: String, source: String }> = MODULES.concat([{ name: 'src/aqq/import.hx', source: '' }])
+			.map(entry -> {file: '$root/${entry.name}', source: File.getContent('$root/${entry.name}') });
 		var code: Int = 0;
 		CliFixture.captureStderr(() ->
 			code = LintFixDriver.runLintFix(

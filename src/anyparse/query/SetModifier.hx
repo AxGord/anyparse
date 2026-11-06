@@ -115,7 +115,7 @@ final class SetModifier {
 		// to the run walk on the way OUT.
 		final shape: RefShape = plugin.refShape();
 		final modifierKinds: Array<String> = CheckScan.modifierKinds(shape);
-		final vocabulary: Array<String> = [for (kind in modifierKinds) kind.toLowerCase()];
+		final vocabulary: Array<String> = modifierKinds.map(kind -> kind.toLowerCase());
 		final visibility: Array<String> = [for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase()];
 		final invalid: Null<String> = validate(changes, vocabulary, visibility);
 		if (invalid != null) return Err(invalid);

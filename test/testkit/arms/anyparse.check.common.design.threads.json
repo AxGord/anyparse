@@ -1745,8 +1745,8 @@
 			"name": "M-TS-FOLD-NORMAL",
 			"type": "anyparse.check.common.design.threads.RootCauseFold",
 			"method": "judgedAs",
-			"find": "calls: [for (c in normal.blockingCalls(fold.hold, held)) c.edge],",
-			"replace": "calls: [for (c in graded.calls) c.edge],",
+			"find": "calls: normal.blockingCalls(fold.hold, held).map(c -> c.edge),",
+			"replace": "calls: graded.calls.map(c -> c.edge),",
 			"note": "a call only a catch runs counts as a reason a folded hold warns"
 		},
 		{
@@ -3036,7 +3036,7 @@
 			"name": "M-TS-STORED-MEMBER-TYPE",
 			"type": "anyparse.check.common.design.threads.FieldWrites",
 			"method": "storesLock",
-			"find": "fields == null || fields.length == 0 ? [null] : [for (f in fields) _values.memberTypeOf(f)]",
+			"find": "fields == null || fields.length == 0 ? [null] : fields.map(f -> _values.memberTypeOf(f))",
 			"replace": "[null]",
 			"note": "what a write stores costs every lock member, whatever its type (R3 M4)"
 		},

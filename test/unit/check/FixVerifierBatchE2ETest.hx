@@ -38,7 +38,7 @@ final class FixVerifierBatchE2ETest extends Test {
 	private static final NAMES: Array<String> = ['A', 'B', 'C', 'D'];
 
 	/** A literal any rewrite keeps building: `trace` takes anything. */
-	private static final TRACED: Array<String> = [for (name in NAMES) traced(name)];
+	private static final TRACED: Array<String> = NAMES.map(traced);
 	#end
 
 	/**
@@ -123,7 +123,7 @@ final class FixVerifierBatchE2ETest extends Test {
 		final result: FixVerifyResult = verify(dir, sources, new TestRiskyLiteralRewrite('"x"'));
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals('[$dir/B.hx,$dir/C.hx]', Std.string(result.applied));
-		Assert.equals('[$dir/A.hx,$dir/D.hx]', Std.string([for (r in result.reverted) r.file]));
+		Assert.equals('[$dir/A.hx,$dir/D.hx]', Std.string(result.reverted.map(r -> r.file)));
 		Assert.equals(sources[0], File.getContent('$dir/A.hx'), 'a failing file is byte-identical to its input');
 		Assert.equals(sources[3], File.getContent('$dir/D.hx'), 'a failing file is byte-identical to its input');
 		Assert.equals(
@@ -148,7 +148,7 @@ final class FixVerifierBatchE2ETest extends Test {
 			Assert.pass('haxe unavailable — skipped');
 			return;
 		}
-		final sources: Array<String> = [for (name in NAMES) plain(name)];
+		final sources: Array<String> = NAMES.map(plain);
 		final dir: String = fixture(sources);
 		final tails: Map<String, String> = [
 			'A.hx' => '\ntypedef Clash = Int;\n',
@@ -159,7 +159,7 @@ final class FixVerifierBatchE2ETest extends Test {
 		final result: FixVerifyResult = verify(dir, sources, new AppendFake(tails));
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals('[$dir/A.hx,$dir/C.hx]', Std.string(result.applied));
-		Assert.equals('[$dir/B.hx,$dir/D.hx]', Std.string([for (r in result.reverted) r.file]));
+		Assert.equals('[$dir/B.hx,$dir/D.hx]', Std.string(result.reverted.map(r -> r.file)));
 		Assert.equals(sources[3], File.getContent('$dir/D.hx'), 'the second of the clashing pair is byte-identical to its input');
 		Assert.equals(
 			'[4,3,1,2,1,1,1]', Std.string(result.rounds),
@@ -187,18 +187,17 @@ final class FixVerifierBatchE2ETest extends Test {
 			unavailable: 'no compiler in this test'
 		};
 		final rounds: Array<Int> = [];
-		final verdicts: Array<String> = [
-			for (verdict in FixVerifier.judgeBatch([
-				for (name in NAMES)
-					{
-						entry: { file: '$name.hx', source: plain(name) },
-						edits: [{ span: new Span(0, 0), text: '// x\n', group: null }],
-						opts: null,
-						fullText: '// x\n${plain(name)}',
-						verifying: [unavailable]
-					}
-			], new HaxeQueryPlugin(), (file, text) -> disk[file] = text, rounds)) Std.string(verdict)
-		];
+		final verdicts: Array<String> = FixVerifier.judgeBatch([
+			for (name in NAMES)
+				{
+					entry: { file: '$name.hx', source: plain(name) },
+					edits: [{ span: new Span(0, 0), text: '// x\n', group: null }],
+					opts: null,
+					fullText: '// x\n${plain(name)}',
+					verifying: [unavailable]
+				}
+		], new HaxeQueryPlugin(), (file, text) -> disk[file] = text, rounds)
+			.map(Std.string);
 		Assert.equals('[4,1,1,1,1]', Std.string(rounds), 'the batch round, then each file alone — no halves');
 		for (verdict in verdicts) Assert.equals('Reverted(OracleUnavailable(no compiler in this test))', verdict);
 		for (name in NAMES) Assert.equals(plain(name), disk['$name.hx'], 'every file is back at its input text');

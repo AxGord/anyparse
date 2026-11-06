@@ -277,7 +277,7 @@ final class CommentRewrite {
 	 * wrong line costs is a misleading message, and the worst a throw costs is the refusal itself.
 	 */
 	private static function gainedLine(got: Array<WideLine>, had: Array<WideLine>): WideLine {
-		final unmatched: Array<String> = [for (line in had) line.text];
+		final unmatched: Array<String> = had.map(line -> line.text);
 		var blamed: Null<WideLine> = null;
 		for (line in got) {
 			final at: Int = unmatched.indexOf(line.text);

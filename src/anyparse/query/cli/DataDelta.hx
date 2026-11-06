@@ -167,12 +167,11 @@ final class DataDelta {
 		final partner: Array<Int> = [for (_ in is) -1];
 		final taken: Array<Bool> = [for (_ in was) false];
 		pairEqual(
-			[for (element in was) DataPath.json(element, versions.base, shape)],
-			[for (element in is) DataPath.json(element, versions.now, shape)],
-			partner, taken
+			was.map(element -> DataPath.json(element, versions.base, shape)),
+			is.map(element -> DataPath.json(element, versions.now, shape)), partner, taken
 		);
 		pairEqual(
-			remainingKeys(versions.base, old.children, taken), remainingKeys(versions.now, now.children, [for (j in partner) j >= 0]),
+			remainingKeys(versions.base, old.children, taken), remainingKeys(versions.now, now.children, partner.map(j -> j >= 0)),
 			partner, taken
 		);
 		return partner;
@@ -186,8 +185,8 @@ final class DataDelta {
 		path: Array<String>, old: QueryNode, now: QueryNode, versions: Versions, out: Array<ValueChange>
 	): Void {
 		final shape: RefShape = versions.shape;
-		final was: Array<QueryNode> = [for (element in old.children) DataPath.valueOf(element, shape)];
-		final is: Array<QueryNode> = [for (element in now.children) DataPath.valueOf(element, shape)];
+		final was: Array<QueryNode> = old.children.map(DataPath.valueOf.bind(_, shape));
+		final is: Array<QueryNode> = now.children.map(DataPath.valueOf.bind(_, shape));
 		final partner: Array<Int> = counterparts(old, now, was, is, versions);
 		final taken: Array<Bool> = [for (j in 0...was.length) partner.contains(j)];
 		final leftOld: Array<Int> = [for (j in 0...was.length) if (!taken[j] && !isContainer(was[j], shape)) j];
@@ -292,11 +291,7 @@ final class DataDelta {
 		final value: QueryNode = DataPath.valueOf(document, shape);
 		final entries: Map<String, QueryNode> = entriesOf(value);
 		final text: String = if (value.kind == shape.objectLiteralKind)
-			'{'
-				+ [
-					for (key in keysOf(value)) sized(key, DataPath.valueOf(entries[key] ?? value, shape), shape)
-				].join(', ')
-				+ '}'
+			'{' + keysOf(value).map(key -> sized(key, DataPath.valueOf(entries[key] ?? value, shape), shape)).join(', ') + '}'
 		else if (value.kind == shape.arrayLiteralKind)
 			'[${value.children.length} element(s)]'
 		else

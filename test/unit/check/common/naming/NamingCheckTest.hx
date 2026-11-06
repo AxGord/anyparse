@@ -153,7 +153,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 			+ '\tpublic var vertical(get, never):Bool;\n\tpublic static var count:Int = 0;\n\tpublic static var Bad_Static:Int = 0;\n\n'
 			+ '\tpublic inline function get_vertical():Bool {\n\t\treturn abstract == FROM_LEFT;\n\t}\n}';
 		final vs: Array<Violation> = CheckFixture.violations(new Naming(), src);
-		final messages: Array<String> = [for (v in vs) v.message];
+		final messages: Array<String> = vs.map(v -> v.message);
 		Assert.equals(2, vs.length, messages.join(' | '));
 		Assert.isTrue(messages.exists(m -> m.contains('enum value') && m.contains("'bad'")), messages.join(' | '));
 		Assert.isTrue(messages.exists(m -> !m.contains('enum value') && m.contains("'Bad_Static'")), messages.join(' | '));
@@ -520,7 +520,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 		final src: String = 'class C {\n\tprivate var active(get, never):Bool;\n\tprivate var _shown(get, set):Bool;\n'
 			+ '\t@:isVar private var stored(get, set):Bool;\n\tprivate var nullable(get, null):Bool;\n\t#if js @:isVar #end private var '
 			+ 'hidden(get, never):Bool;\n\tprivate var Bad_Name(get, never):Bool;\n\tpublic var _exposed(get, never):Bool;\n}';
-		final messages: Array<String> = [for (v in CheckFixture.violations(new Naming(), src)) v.message];
+		final messages: Array<String> = CheckFixture.violations(new Naming(), src).map(v -> v.message);
 		Assert.equals([
 			"private field _ prefix: 'stored'",
 			"private field _ prefix: 'nullable'",
@@ -543,7 +543,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 			+ '\tpublic static var libraryRoot(get, never):String;\n\tpublic static var SETTABLE_PATH(get, set):String;\n'
 			+ '\tpublic static var STORED_PATH(default, never):String;\n\t@:isVar public static var VAR_PATH(get, never):String;\n'
 			+ '\tpublic var INSTANCE_PATH(get, never):String;\n\tpublic static var Bad_Path(get, never):String;\n}';
-		final messages: Array<String> = [for (v in CheckFixture.violations(new Naming(), src)) v.message];
+		final messages: Array<String> = CheckFixture.violations(new Naming(), src).map(v -> v.message);
 		Assert.equals([
 			"camelCase public field: 'SETTABLE_PATH'",
 			"camelCase public field: 'STORED_PATH'",

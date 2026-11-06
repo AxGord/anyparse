@@ -504,7 +504,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 					}
 					: {
 						file: site,
-						edits: [for (span in spans) { span: span, text: '' }]
+						edits: spans.map(span -> {span: span, text: '' })
 					};
 			}
 		];
@@ -633,7 +633,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		for (site in order) {
 			final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(site);
 			if (governance == null || !governance.bounded) continue;
-			final names: Array<String> = [for (governed in governance.governs) governed.file];
+			final names: Array<String> = governance.governs.map(governed -> governed.file);
 			if (names.length > 0 && names.foreach(name -> infoOf.exists(name))) governedAt[site] = names;
 		}
 		final sites: Array<String> = [for (site in order) if (governedAt.exists(site)) site];

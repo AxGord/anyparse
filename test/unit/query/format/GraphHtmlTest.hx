@@ -23,12 +23,11 @@ class GraphHtmlTest extends Test {
 	 */
 	public function testViewsOpenPackagesThenTypes(): Void {
 		final data: GraphPageJson = GraphHtml.data(members(), Package, prune(), 'calls');
-		Assert.equals(',p_pkg_da,p_pkg_db,t_pkg_da_dAlpha,t_pkg_db_dBeta,t_pkg_db_dGamma', [for (v in data.views) v.id].join(','));
+		Assert.equals(',p_pkg_da,p_pkg_db,t_pkg_da_dAlpha,t_pkg_db_dBeta,t_pkg_db_dGamma', data.views.map(v -> v.id).join(','));
 		Assert.equals(
-			'calls|package pkg.a|package pkg.b|type pkg.a.Alpha|type pkg.b.Beta|type pkg.b.Gamma',
-			[for (v in data.views) v.title].join('|')
+			'calls|package pkg.a|package pkg.b|type pkg.a.Alpha|type pkg.b.Beta|type pkg.b.Gamma', data.views.map(v -> v.title).join('|')
 		);
-		Assert.equals('-,,,p_pkg_da,p_pkg_db,p_pkg_db', [for (v in data.views) v.up ?? '-'].join(','), 'a view goes up to its holder');
+		Assert.equals('-,,,p_pkg_da,p_pkg_db,p_pkg_db', data.views.map(v -> v.up ?? '-').join(','), 'a view goes up to its holder');
 	}
 
 	/** The first view is the graph lifted to the level asked; a type's view holds its members and folds the rest. */
@@ -45,8 +44,8 @@ class GraphHtmlTest extends Test {
 	/** Started at the type level, the packages stand open in every view and only the types open further. */
 	public function testAFinerLevelOpensWhatHoldsIt(): Void {
 		final data: GraphPageJson = GraphHtml.data(members(), Type, prune(), 'calls');
-		Assert.equals(',t_pkg_da_dAlpha,t_pkg_db_dBeta,t_pkg_db_dGamma', [for (v in data.views) v.id].join(','));
-		Assert.equals('-,,,', [for (v in data.views) v.up ?? '-'].join(','), 'a package open from the start has no view to go up to');
+		Assert.equals(',t_pkg_da_dAlpha,t_pkg_db_dBeta,t_pkg_db_dGamma', data.views.map(v -> v.id).join(','));
+		Assert.equals('-,,,', data.views.map(v -> v.up ?? '-').join(','), 'a package open from the start has no view to go up to');
 	}
 
 	/**
@@ -74,8 +73,8 @@ class GraphHtmlTest extends Test {
 		Assert.equals(-1, json.indexOf('<'), 'no markup can start inside the data');
 		final back: GraphPageJson = GraphPageJsonParser.parse(json);
 		Assert.equals(
-			[for (v in data.views) '${v.id} ${v.title} ${v.mermaid}'].join('\n'),
-			[for (v in back.views) '${v.id} ${v.title} ${v.mermaid}'].join('\n')
+			data.views.map(v -> '${v.id} ${v.title} ${v.mermaid}').join('\n'),
+			back.views.map(v -> '${v.id} ${v.title} ${v.mermaid}').join('\n')
 		);
 		Assert.equals(data.legend, back.legend);
 	}
@@ -87,7 +86,7 @@ class GraphHtmlTest extends Test {
 	public function testAComparisonColoursEveryView(): Void {
 		final diff: CodeGraph = GraphDiff.compare(declared(GraphFixture.DIFF_BEFORE), declared(GraphFixture.DIFF_AFTER), ['p.A.run']);
 		final data: GraphPageJson = GraphHtml.data(diff, Package, prune(), 'diff');
-		Assert.equals(',p_p,t_p_dA,t_p_dC', [for (v in data.views) v.id].join(','));
+		Assert.equals(',p_p,t_p_dA,t_p_dC', data.views.map(v -> v.id).join(','));
 		Assert.isTrue(data.views[0].mermaid.indexOf('class p_p changed') >= 0, data.views[0].mermaid);
 		final pkg: String = data.views[1].mermaid;
 		Assert.isTrue(pkg.indexOf('class t_p_dA changed') >= 0, pkg);

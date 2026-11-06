@@ -582,7 +582,7 @@ final class LintConfig {
 			// project wrote simply is not there. Same once-per-file-per-process ledger, and
 			// attributed to the document that declared it, since a chain has several.
 			if (doc.drops.length > 0) {
-				final lines: Array<String> = [for (drop in doc.drops) 'apq: ${entry.path}: $drop\n'];
+				final lines: Array<String> = doc.drops.map(drop -> 'apq: ${entry.path}: $drop\n');
 				warnOnce(entry.path, lines.join(''));
 			}
 			merged = merged == null ? doc : LintDocuments.mergeDocuments(merged, doc);

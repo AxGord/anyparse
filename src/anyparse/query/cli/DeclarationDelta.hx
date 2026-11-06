@@ -162,8 +162,8 @@ final class DeclarationDelta {
 		final counts: LineCounts = lineCounts(before.lines, after.lines);
 		final headerBefore: Array<String> = headerLines(before);
 		final headerAfter: Array<String> = headerLines(after);
-		final headerAdded: Array<String> = [for (line in multisetMinus(headerAfter, headerBefore)) line.trim()];
-		final headerRemoved: Array<String> = [for (line in multisetMinus(headerBefore, headerAfter)) line.trim()];
+		final headerAdded: Array<String> = multisetMinus(headerAfter, headerBefore).map(line -> line.trim());
+		final headerRemoved: Array<String> = multisetMinus(headerBefore, headerAfter).map(line -> line.trim());
 		final headerMoved: Bool = !sameLines(headerBefore, headerAfter);
 		inline function delta(change: ChangeClass, renames: Array<Renaming>, declarations: Array<DeclarationChange>): FileDelta {
 			return {
@@ -239,7 +239,7 @@ final class DeclarationDelta {
 	/** Every line of `before` and `after` once, marked `- `, `+ ` or two spaces, deletions ahead of the line they sat before. */
 	private static function editRows(before: Array<String>, after: Array<String>): Array<String> {
 		final edits: Null<LineEdits> = LineDiff.edits(before, after, MAX_LINE_EDITS);
-		if (edits == null) return [for (line in before) '- $line'].concat([for (line in after) '+ $line']);
+		if (edits == null) return before.map(line -> '- $line').concat(after.map(line -> '+ $line'));
 		final inserted: Map<Int, Bool> = [for (index in edits.inserted) index => true];
 		final rows: Array<String> = [];
 		var next: Int = 0;

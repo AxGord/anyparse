@@ -1337,7 +1337,7 @@ final class RefShapeKindProjectionTest extends Test {
 	public function testEveryTokenBearingSlotIsProbedOrDeclaredATemplate(): Void {
 		for (lang in CliArgs.langNames()) {
 			final shape: RefShape = CliArgs.pickPlugin(lang).refShape();
-			final probed: Array<String> = [for (probe in tokenProbesFor(lang)) '${probe.field}#${probe.slot}'];
+			final probed: Array<String> = tokenProbesFor(lang).map(probe -> '${probe.field}#${probe.slot}');
 			final wanted: Array<String> = tokenSlotsOf(shape);
 			probed.sort(Reflect.compare);
 			wanted.sort(Reflect.compare);

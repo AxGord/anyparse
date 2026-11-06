@@ -436,8 +436,8 @@ final class StdlibDifferential {
 			if (!coversEveryParameter(candidate, chosen)) return;
 			out.push({
 				fn: entry,
-				code: render(entry, [for (argument in chosen) argument.code]),
-				display: render(entry, [for (argument in chosen) argument.display])
+				code: render(entry, chosen.map(argument -> argument.code)),
+				display: render(entry, chosen.map(argument -> argument.display))
 			});
 			return;
 		}

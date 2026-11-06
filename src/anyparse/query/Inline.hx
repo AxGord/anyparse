@@ -330,7 +330,7 @@ final class Inline {
 		shape: RefShape
 	): Null<Int> {
 		final idents: Array<NamedIdent> = namedIdents(target.initializer);
-		final newHits: Map<String, Array<RefHit>> = Refs.findMulti([for (id in idents) id.name], newTree, shape);
+		final newHits: Map<String, Array<RefHit>> = Refs.findMulti(idents.map(id -> id.name), newTree, shape);
 		for (id in idents) {
 			final from: Int = id.span.from;
 			final bound: Null<Span> = (target.initHits[id.name] ?? []).find(h -> h.span.from == from)?.bindingSpan;

@@ -133,7 +133,7 @@ final class OracleGeneration {
 			for (group in ordered) OracleGenerationLock.dropShared(lockDir(group), run.me);
 			candidates = moved;
 		}
-		return { oracles: [for (oracle in oracles) ready(oracle, run)], notes: notes };
+		return { oracles: oracles.map(ready.bind(_, run)), notes: notes };
 	}
 
 	/** Why `group`'s recorded generation is not current, or null when it is. */
@@ -355,7 +355,7 @@ final class OracleGeneration {
 
 	/** Every path of `paths` with its content hash, through `memo`. */
 	private static function hashAll(paths: Array<String>, memo: Map<String, String>): Array<FileHash> {
-		return #if (sys || nodejs) [for (path in paths) { path: path, hash: hashOf(path, memo) }] #else [] #end;
+		return #if (sys || nodejs) paths.map(path -> {path: path, hash: hashOf(path, memo) }) #else [] #end;
 	}
 
 	/**
@@ -532,9 +532,9 @@ final class OracleGeneration {
 	private static function record(s: StaleGroup, libraries: LibraryIndex): String {
 		final after: Map<String, String> = [];
 		final moved: Null<FileHash> = s.implicitBefore.find(held -> hashOf(held.path, after) != held.hash);
-		final implicit: Array<FileHash> = [
-			for (path in implicitInputs(s.group, libraries)) { path: path, hash: hashIn(s.implicitBefore, path) ?? hashOf(path, after) }
-		];
+		final implicit: Array<FileHash> = implicitInputs(
+			s.group, libraries
+		).map(path -> {path: path, hash: hashIn(s.implicitBefore, path) ?? hashOf(path, after) });
 		if (moved != null) return ' — NOT recorded: ${moved.path} changed while it ran, so the next run regenerates';
 		writeRecord(s.group, s.inputs, implicit, after);
 		final raced: Null<FileHash> = s.inputs.find(held -> hashOf(held.path, after) != held.hash);
@@ -694,7 +694,7 @@ final class OracleGeneration {
 		final record: Null<GenerationRecord> = try GenerationRecordParser.parse(written) catch (exception: haxe.Exception) null;
 		final paths: Array<String> = group.hxmls.concat(group.inputs ?? []).concat([for (held in record?.implicit ?? []) held.path]);
 		final epoch: String = try sys.io.File.getContent(epochFile(group)) catch (exception: haxe.Exception) MISSING;
-		return [epoch, written].concat([for (hash in hashAll(paths, memo)) '${hash.path} ${hash.hash}']).join('\n');
+		return [epoch, written].concat(hashAll(paths, memo).map(hash -> '${hash.path} ${hash.hash}')).join('\n');
 		#else
 		return '';
 		#end

@@ -180,7 +180,7 @@ class ClustersTest extends Test {
 		final r: Null<ClusterReport> = analyzeOf([HUB_GLUED], 'A', 10);
 		Assert.notNull(r);
 		if (r == null) return;
-		Assert.equals('A.log,A.b,A.d', [for (h in r.hubs) h.id].join(','));
+		Assert.equals('A.log,A.b,A.d', r.hubs.map(h -> h.id).join(','));
 		Assert.equals(2, r.components.length);
 	}
 
@@ -189,7 +189,7 @@ class ClustersTest extends Test {
 	}
 
 	private function ids(component: Array<FnNode>): String {
-		return [for (n in component) n.id].join(',');
+		return component.map(n -> n.id).join(',');
 	}
 
 }

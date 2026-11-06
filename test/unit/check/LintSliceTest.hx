@@ -602,7 +602,7 @@ class LintSliceTest extends Test {
 		final outer: { span: Span, text: String } = { span: new Span(10, 50), text: '' };
 		final disjoint: { span: Span, text: String } = { span: new Span(60, 70), text: '' };
 		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([inner, outer, disjoint]);
-		final froms: Array<Int> = [for (e in kept) e.span.from];
+		final froms: Array<Int> = kept.map(e -> e.span.from);
 		Assert.equals(2, kept.length);
 		Assert.isTrue(froms.contains(10));
 		Assert.isTrue(froms.contains(60));

@@ -691,7 +691,7 @@ final class Patch {
 	 * file clean.
 	 */
 	private static function findDedented(slice: String, oldText: String): Array<Located> {
-		final wanted: Array<String> = [for (l in oldText.split('\n')) l.trim()];
+		final wanted: Array<String> = oldText.split('\n').map(l -> l.trim());
 		final lines: Array<String> = slice.split('\n');
 		final offsets: Array<Int> = [];
 		var acc: Int = 0;
@@ -740,7 +740,7 @@ final class Patch {
 		final own: String = leadingSpace(lines[0]);
 		if (own.length >= siteIndent.length) return text;
 		final shift: String = siteIndent.substring(0, siteIndent.length - own.length);
-		return [for (line in lines) line == '' ? line : shift + line].join('\n');
+		return lines.map(line -> line == '' ? line : shift + line).join('\n');
 	}
 
 	/**
@@ -859,7 +859,7 @@ final class Patch {
 	 * the second.
 	 */
 	private static function midLineAnchor(slice: String, oldText: String): Null<String> {
-		final wanted: Array<String> = [for (l in oldText.split('\n')) l.trim()];
+		final wanted: Array<String> = oldText.split('\n').map(l -> l.trim());
 		if (wanted.length < 2 || wanted[0] == '') return null;
 		final lines: Array<String> = slice.split('\n');
 		for (start in 0...lines.length - wanted.length + 1) {
@@ -897,7 +897,7 @@ final class Patch {
 	 * once would have to guess which end the caller meant.
 	 */
 	private static function midLineTail(slice: String, oldText: String): Null<String> {
-		final wanted: Array<String> = [for (l in oldText.split('\n')) l.trim()];
+		final wanted: Array<String> = oldText.split('\n').map(l -> l.trim());
 		final last: Int = wanted.length - 1;
 		if (wanted.length < 2 || wanted[last] == '') return null;
 		final lines: Array<String> = slice.split('\n');

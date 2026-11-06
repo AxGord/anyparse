@@ -888,7 +888,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * spelling, which no caller produces (the list is a literal in this file).
 	 */
 	private static function modNames(kinds: Array<String>): Array<String> {
-		return [for (kind in kinds) MOD_KIND_TO_NAME[kind] ?? kind];
+		return kinds.map(kind -> MOD_KIND_TO_NAME[kind] ?? kind);
 	}
 
 	/**

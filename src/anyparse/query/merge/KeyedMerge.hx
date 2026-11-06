@@ -137,7 +137,7 @@ final class KeyedMerge {
 			out.insert(seatAfter(out, theirs, i, oursAdded), placed(child.key, child.lead, text));
 		}
 		if (oursAdded.length > 0 && theirsAdded > 0) _notes.push('both sides added in $key');
-		return head + [for (child in out) child.lead + child.text].join(separatorOf([ours, theirs, base])) + tail;
+		return head + out.map(child -> child.lead + child.text).join(separatorOf([ours, theirs, base])) + tail;
 	}
 
 	/** What ours' `mine` becomes, given its `old` text in the base and `other` in theirs; null when it goes. */
@@ -239,7 +239,7 @@ final class KeyedMerge {
 
 	/** The text `tree` was read from. */
 	private static function textOf(tree: MergeTree): String {
-		return tree.head + [for (child in tree.children) child.lead + child.text].join(tree.separator) + tree.tail;
+		return tree.head + tree.children.map(child -> child.lead + child.text).join(tree.separator) + tree.tail;
 	}
 
 	/**

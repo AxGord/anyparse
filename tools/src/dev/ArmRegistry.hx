@@ -34,7 +34,7 @@ final class ArmRegistry {
 		final cut: Null<RecordCut> =
 			try PackageDocuments.cut(text, ARRAY_NAME) catch (exception: Exception) throw new ArmRegistryError(exception.message);
 		if (cut == null) throw new ArmRegistryError('no $ARRAY_KEY array');
-		final records: Array<ArmRecord> = [for (body in cut.records) { key: keyOf(body), text: body }];
+		final records: Array<ArmRecord> = cut.records.map(body -> {key: keyOf(body), text: body });
 		final keys: Array<String> = [];
 		for (record in records) {
 			if (keys.contains(record.key)) throw new ArmRegistryError('arm ${record.key} is declared twice');
@@ -67,7 +67,7 @@ final class ArmRegistry {
 	public static function read(path: String): Array<ArmRecord> {
 		final files: Array<String> = RegistryFiles.of(path);
 		if (files.length == 0) throw new ArmRegistryError('no arm registry at $path');
-		final texts: Array<String> = [for (file in files) File.getContent(file)];
+		final texts: Array<String> = files.map(file -> File.getContent(file));
 		if (FileSystem.isDirectory(path)) for (i => text in texts) {
 			final document: String = Path.withoutDirectory(files[i]);
 			final parsed: Array<ArmRecord> =
@@ -78,7 +78,7 @@ final class ArmRegistry {
 				if (complaint != null) throw new ArmRegistryError('$document: arm ${record.key} $complaint');
 			}
 		}
-		return parseAll(texts, [for (file in files) Path.withoutDirectory(file)]);
+		return parseAll(texts, files.map(Path.withoutDirectory));
 	}
 
 	/** Reads the registry at `path` for nothing but its refusal: raises what `read` raises, answers nothing. */
@@ -88,7 +88,7 @@ final class ArmRegistry {
 
 	/** The registry at `path` as ONE document — what `MutationArm.cuts` and `armNames` read. */
 	public static function merged(path: String): String {
-		return '{"arms": [' + [for (record in read(path)) record.text].join(',') + ']}';
+		return '{"arms": [' + read(path).map(record -> record.text).join(',') + ']}';
 	}
 
 	/** The `type` of the record `body`, null when it carries none. */

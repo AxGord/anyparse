@@ -343,7 +343,7 @@ final class ValueNameBinding {
 	/** The import statements of `fi`: its own, then each group of its ambient chain, nearest first. */
 	private static function importsOf(fi: FileInfo): Array<ImportInfo> {
 		return [
-			for (imports in [fi.imports].concat([for (group in fi.ambientImports) group.imports])) for (imp in imports) imp
+			for (imports in [fi.imports].concat(fi.ambientImports.map(group -> group.imports))) for (imp in imports) imp
 		];
 	}
 

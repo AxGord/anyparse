@@ -397,10 +397,10 @@ final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 	private static function affixesOf(branches: Array<Branch>, region: Span, directives: Array<CondDirective>, ctx: Ctx): Null<Match> {
 		final quote: String = branches[0].head.quote;
 		for (b in branches) if (b.head.quote != quote || b.tail.quote != quote) return null;
-		final head: Int = worthIt(branches, sharedRun(branches, ctx, true, [for (b in branches) budgetOf(b, true, 0)]));
-		final tail: Int = worthIt(branches, sharedRun(branches, ctx, false, [for (b in branches) budgetOf(b, false, head)]));
+		final head: Int = worthIt(branches, sharedRun(branches, ctx, true, branches.map(budgetOf.bind(_, true, 0))));
+		final tail: Int = worthIt(branches, sharedRun(branches, ctx, false, branches.map(budgetOf.bind(_, false, head))));
 		if (head == 0 && tail == 0) return null;
-		final kept: Array<Span> = [for (d in directives) d.span];
+		final kept: Array<Span> = directives.map(d -> d.span);
 		final texts: Null<Array<String>> = remaindersOf(branches, head, tail, kept, ctx);
 		if (texts == null || IfExpressionChain.droppedComment(region, kept, ctx.comments)) return null;
 		final first: Literal = branches[0].head;
@@ -409,7 +409,7 @@ final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 			region: new Span(directives[0].span.from, directives[directives.length - 1].span.to),
 			head: head == 0 ? '' : quote + ctx.source.substring(first.from, first.from + head) + quote,
 			tail: tail == 0 ? '' : quote + ctx.source.substring(last.to - tail, last.to) + quote,
-			directives: [for (d in directives) CondDirectives.text(ctx.source, d)],
+			directives: directives.map(d -> CondDirectives.text(ctx.source, d)),
 			branches: texts
 		};
 	}

@@ -40,7 +40,7 @@ final class BranchOutlining {
 
 	/** Rewrites `rules` in place and returns them with their helpers, each right after the rule it came from. */
 	public static function outline(rules: Array<GeneratedRule>): Array<GeneratedRule> {
-		final taken: Array<String> = [for (rule in rules) rule.fnName];
+		final taken: Array<String> = rules.map(rule -> rule.fnName);
 		final out: Array<GeneratedRule> = [];
 		for (rule in rules) {
 			final helpers: Array<GeneratedRule> = [];
@@ -229,7 +229,7 @@ private final class TrialScan {
 		final loops: Int = _loops;
 		_loops = 0;
 		_fns++;
-		_scopes.push([for (arg in f.args) arg.name]);
+		_scopes.push(f.args.map(arg -> arg.name));
 		for (arg in f.args) walk(arg.value);
 		walk(f.expr);
 		_scopes.pop();

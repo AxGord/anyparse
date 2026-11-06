@@ -178,7 +178,7 @@ final class WriteVerification {
 	}
 
 	private static function names(answers: Array<BuildAnswer>): String {
-		return [for (a in answers) a.oracle.hxml].join(', ');
+		return answers.map(a -> a.oracle.hxml).join(', ');
 	}
 
 	/** Whether `answer`'s build parsed `file`. */
@@ -208,7 +208,7 @@ final class WriteVerification {
 			putBack(op, blamed, 'the created module does not typecheck in ${names(blamed)}');
 			return true;
 		}
-		final before: Array<BuildAnswer> = compile([for (r in red) r.oracle], parallel, []);
+		final before: Array<BuildAnswer> = compile(red.map(r -> r.oracle), parallel, []);
 		final broken: Array<BuildAnswer> = [for (k => r in red) if (confirmed(before[k])) r];
 		if (broken.length > 0) {
 			putBack(op, broken, 'the write breaks ${names(broken)}, which typechecked before it');
@@ -273,7 +273,7 @@ final class WriteVerification {
 			for (i => oracle in oracles) { oracle: oracle, weight: sourcesOf(oracle), order: i }
 		];
 		weighed.sort((a, b) -> a.weight != b.weight ? a.weight - b.weight : a.order - b.order);
-		return [for (w in weighed) w.oracle];
+		return weighed.map(w -> w.oracle);
 	}
 
 	/**

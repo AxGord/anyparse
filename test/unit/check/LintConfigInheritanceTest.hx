@@ -45,7 +45,7 @@ class LintConfigInheritanceTest extends Test {
 		Assert.equals('4.3', config.languageVersion(), 'languageVersion falls through');
 		Assert.same(['model.**'], config.reflectiveClasses(), 'reflectiveClasses falls through');
 		Assert.same(['ui.Handler'], config.reflectiveMethodHolders(), 'reflectiveMethodHolders falls through');
-		Assert.same([['a.T']], [for (o in config.ownedTypes()) o.types], 'ownedTypes falls through');
+		Assert.same([['a.T']], config.ownedTypes().map(o -> o.types), 'ownedTypes falls through');
 		Assert.isFalse(config.enabledFor('magic-number'), 'the nested document still disables its own rule');
 		CliFixture.removeDir(root);
 		#else

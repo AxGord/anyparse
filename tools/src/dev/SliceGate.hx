@@ -132,7 +132,7 @@ final class SliceGate {
 			_gate.base, _gate.options.infra, _gate.options.allow, _gate.git(['status', '--porcelain']).trim() == '', BaseEngine.toolchain()
 		);
 		if (!build()) return finish(title);
-		final digests: Array<FrozenTree> = [for (dir in _gate.options.frozen) { dir: dir, digest: GateTree.diffDigest(dir) }];
+		final digests: Array<FrozenTree> = _gate.options.frozen.map(dir -> {dir: dir, digest: GateTree.diffDigest(dir) });
 		final reused: Null<Baseline> = key == null ? null : BaselineCache.restore(BaselineCache.defaultCache(), key, _gate.logs, digests);
 		if (reused != null) {
 			final kept: Baseline = reused;
@@ -146,7 +146,7 @@ final class SliceGate {
 		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS);
 		gate('frozen', () -> {
 			if (digests.length == 0) return Skipped('no --frozen');
-			_gate.summary.detail([for (d in digests) '${Path.withoutDirectory(d.dir)} ${GateTree.short(d.digest)}'].join(', '));
+			_gate.summary.detail(digests.map(d -> '${Path.withoutDirectory(d.dir)} ${GateTree.short(d.digest)}').join(', '));
 			return Passed;
 		});
 		gate('baseline', () -> {
@@ -426,7 +426,7 @@ final class SliceGate {
 	private function listsRead(): Outcome {
 		final listed: Map<String, Array<String>> = listings();
 		for (name in LISTINGS) _readings['list-$name'] = listed[name]?.length ?? 0;
-		_gate.summary.detail([for (name in LISTINGS) '$name ${listed[name]?.length ?? 0}'].join(' '));
+		_gate.summary.detail(LISTINGS.map(name -> '$name ${listed[name]?.length ?? 0}').join(' '));
 		return Passed;
 	}
 
@@ -549,9 +549,7 @@ final class SliceGate {
 		if (baseline == null) return NotRun(GateTree.NO_BASELINE);
 		if (baseline.frozen.length == 0) return Skipped('none recorded at --baseline');
 		final moved: Array<String> = [for (f in baseline.frozen) if (GateTree.diffDigest(f.dir) != f.digest) f.dir];
-		_gate.summary.detail([
-			for (f in baseline.frozen) '${Path.withoutDirectory(f.dir)} ${GateTree.short(f.digest)} unchanged'
-		].join(', '));
+		_gate.summary.detail(baseline.frozen.map(f -> '${Path.withoutDirectory(f.dir)} ${GateTree.short(f.digest)} unchanged').join(', '));
 		return moved.length == 0 ? Passed : Failed('the git diff of ${moved.join(', ')} changed since the baseline');
 	}
 

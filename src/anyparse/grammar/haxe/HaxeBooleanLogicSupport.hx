@@ -490,8 +490,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	private static function negateAndChain(node: QueryNode, source: String, types: Null<(QueryNode) -> Null<String>>): Operand {
 		final operands: Array<QueryNode> = [];
 		flattenAnd(node, operands);
-		final negated: Array<Operand> = [for (o in operands) negate(o, source, types)];
-		final names: Array<Array<String>> = [for (o in operands) identNames(o, [])];
+		final negated: Array<Operand> = operands.map(o -> negate(o, source, types));
+		final names: Array<Array<String>> = operands.map(o -> identNames(o, []));
 		final providers: Array<Array<String>> = operands.map(nullTestIdents);
 		return orJoinGrouped(negated, names, providers, 0);
 	}
@@ -720,8 +720,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			for (j in i + 1...leaves.length)
 				for (name in leaves[j].names)
 					if (leaf.tested.contains(name) && !leaf.providers.contains(name)) return null;
-		final names: Array<Array<String>> = [for (l in leaves) l.names];
-		final providers: Array<Array<String>> = [for (l in leaves) l.providers];
+		final names: Array<Array<String>> = leaves.map(l -> l.names);
+		final providers: Array<Array<String>> = leaves.map(l -> l.providers);
 		if (strandedGroupStart(names, providers, 0) < 0) return flat;
 		// The regrouped chain is joined from the operands' own text, one line: no comment may stand between two operands,
 		// and none inside one (a node's span can carry a trailing line comment, which would swallow the rest of the line).
@@ -732,7 +732,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			final glue: String = after.from < before.to ? '' : source.substring(before.to, after.from);
 			if (commented(glue) || commented(leaf.op.src)) return null;
 		}
-		return orJoinGrouped([for (l in leaves) l.op], names, providers, 0).src;
+		return orJoinGrouped(leaves.map(l -> l.op), names, providers, 0).src;
 	}
 
 	/** Append to `out` every plain identifier a `== null` / `!= null` comparison anywhere in `node`'s subtree names, and return it. */

@@ -45,8 +45,8 @@ class LintScoreTest extends Test {
 			all.matched['false'],
 			all.unlabelled
 		]);
-		Assert.same(['A', 'B'], [for (b in result.families) b.family]);
-		Assert.same(['X.y'], [for (k in result.unlabelled) k.member]);
+		Assert.same(['A', 'B'], result.families.map(b -> b.family));
+		Assert.same(['X.y'], result.unlabelled.map(k -> k.member));
 	}
 
 	/**
@@ -82,13 +82,13 @@ class LintScoreTest extends Test {
 			[finding('A', 'A.b', 'S.f')]
 		);
 		Assert.same([1, 2], [result.overall.recallHit, result.overall.recallEntries]);
-		Assert.same(['A.c'], [for (e in result.lost) e.member]);
+		Assert.same(['A.c'], result.lost.map(e -> e.member));
 	}
 
 	/** A zero denominator is no ratio, and a family with entries but no finding still has its row, its recall lost. */
 	public function testZeroDenominatorsAndAFamilyWithoutFindings(): Void {
 		final result: LintScoreResult = score([entry('B', 'C.d', 'C._m', 'real-long')], [finding('A', 'A.b', 'S.f')]);
-		Assert.same(['A', 'B'], [for (b in result.families) b.family]);
+		Assert.same(['A', 'B'], result.families.map(b -> b.family));
 		final a: LintScoreBucket = result.families[0];
 		final b: LintScoreBucket = result.families[1];
 		Assert.same([null, 0, 0], [a.precision, a.recallEntries, a.recallHit]);

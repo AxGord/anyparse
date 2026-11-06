@@ -291,7 +291,7 @@ final class CrossRename {
 		for (entry in parsed) {
 			final occurrences: Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape, module);
 			if (occurrences.length == 0) continue;
-			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
+			final edits: Array<{ span: Span, text: String }> = occurrences.map(occ -> {span: occ, text: newName });
 			final newSource: String = CanonicalEdit.applyEdits(entry.source, edits);
 
 			// Atomic validation: every rewritten file must re-parse.

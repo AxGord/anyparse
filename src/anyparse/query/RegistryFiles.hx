@@ -23,7 +23,7 @@ final class RegistryFiles {
 		if (!FileSystem.isDirectory(path)) return [path];
 		final names: Array<String> = FileSystem.readDirectory(path).filter(name -> name.endsWith(EXTENSION));
 		names.sort(Reflect.compare);
-		return [for (name in names) Path.join([path, name])];
+		return names.map(name -> Path.join([path, name]));
 		#else
 		return [];
 		#end

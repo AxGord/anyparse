@@ -345,7 +345,7 @@ class AmbientImportResolutionTest extends Test {
 		withTree(root -> {
 			final chain: AmbientImports = HaxeAmbientImports.chainFor('$root/src/lib/deep/Deep.hx', 'lib.deep');
 			Assert.equals(
-				'$root/src/lib/deep/import.hx,$root/src/lib/import.hx,$root/src/import.hx', [for (s in chain.sources) s.file].join(','),
+				'$root/src/lib/deep/import.hx,$root/src/lib/import.hx,$root/src/import.hx', chain.sources.map(s -> s.file).join(','),
 				'the chain is the walk upward from the module to its source root, nearest first'
 			);
 			Assert.isTrue(chain.bounded, 'the walk consumed exactly the package it was given');
@@ -405,9 +405,9 @@ class AmbientImportResolutionTest extends Test {
 	/** The index over every `.hx` of the fixture tree, paths as written. */
 	private function indexOf(root: String): SymbolIndex {
 		#if (sys || nodejs)
-		final files: Array<{ file: String, source: String }> = [
-			for (entry in TREE) { file: '$root/${entry.name}', source: sys.io.File.getContent('$root/${entry.name}') }
-		];
+		final files: Array<{ file: String, source: String }> = TREE.map(entry ->
+			{file: '$root/${entry.name}', source: sys.io.File.getContent('$root/${entry.name}') }
+		);
 		return CheckFixture.index(files, new HaxeQueryPlugin());
 		#else
 		return CheckFixture.index([], new HaxeQueryPlugin());
@@ -417,9 +417,9 @@ class AmbientImportResolutionTest extends Test {
 	/** The index over exactly `names` of the tree at `root`, paths as written — for a narrow-scope fixture. */
 	private function indexOfTree(root: String, names: Array<String>): SymbolIndex {
 		#if (sys || nodejs)
-		final files: Array<{ file: String, source: String }> = [
-			for (name in names) { file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
-		];
+		final files: Array<{ file: String, source: String }> = names.map(name ->
+			{file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
+		);
 		return CheckFixture.index(files, new HaxeQueryPlugin());
 		#else
 		return CheckFixture.index([], new HaxeQueryPlugin());
@@ -434,7 +434,7 @@ class AmbientImportResolutionTest extends Test {
 
 	/** The declaring files of every declaration `name` is in scope of from `from`, in answer order. */
 	private function candidates(index: SymbolIndex, name: String, from: String): String {
-		return [for (r in index.resolveTypeRefsFrom(name, from)) r.file.file].join(' | ');
+		return index.resolveTypeRefsFrom(name, from).map(r -> r.file.file).join(' | ');
 	}
 
 	/** Whether the ambient chain of the module declaring `typeName` in `file` was bounded. */

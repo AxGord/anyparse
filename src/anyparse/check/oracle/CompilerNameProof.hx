@@ -51,14 +51,14 @@ final class CompilerNameProof implements NameOracle {
 		if (judges == null || plugin == null) return [for (_ in sites) false];
 		final usable: UsableCoverage = judges();
 		if (usable.stop != null) return [for (_ in sites) false];
-		final asked: Array<Array<OracleConfig>> = [for (site in sites) compiling(usable, file, before, site.before, plugin)];
+		final asked: Array<Array<OracleConfig>> = sites.map(site -> compiling(usable, file, before, site.before, plugin));
 		final configs: Array<OracleConfig> = [];
 		for (row in asked) for (config in row) if (!configs.contains(config)) configs.push(config);
 		// the sites each configuration is asked about, by index into `sites`; its answers come in pairs, before then after
 		final sitesOf: Array<Array<Int>> = [for (config in configs) [for (j => row in asked) if (row.contains(config)) j]];
 		final answers: Array<Null<Array<Null<TypeReplyPosition>>>> = positionsOf(
 			configs,
-			[for (c in sitesOf) asksAbout([for (j in c) sites[j]], before, after)],
+			[for (c in sitesOf) asksAbout(c.map(j -> sites[j]), before, after)],
 			file, usable
 		);
 		final journal: EditJournal = new EditJournal();
@@ -181,7 +181,7 @@ final class CompilerNameProof implements NameOracle {
 			pool.start(usable.configs.concat(usable.unknown));
 			final mine: Array<Int> = [for (c => config in configs) if (config.runs?.servers == pool) c];
 			final replies: Array<Null<Array<Null<TypeReplyPosition>>>> = pool.positionsIn(
-				[for (c in mine) configs[c]], file, [for (c in mine) asks[c]]
+				mine.map(c -> configs[c]), file, mine.map(c -> asks[c])
 			);
 			for (k => c in mine) out[c] = replies[k];
 		}

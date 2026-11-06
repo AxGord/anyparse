@@ -219,7 +219,7 @@ class PrivateAccessFormParityTest extends Test {
 		];
 		final plugin: CachingGrammarPlugin = scoped(files);
 		final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, plugin).filter(v -> v.file == DECL_FILE);
-		Assert.equals(2, found.length, 'both private fields are unreached: ${[for (v in found) v.message]}');
+		Assert.equals(2, found.length, 'both private fields are unreached: ${found.map(v -> v.message)}');
 	}
 
 	/**
@@ -263,7 +263,7 @@ class PrivateAccessFormParityTest extends Test {
 			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }];
 			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, scoped(files))
 				.filter(v -> v.file == DECL_FILE);
-			Assert.equals(0, found.length, '$form: ${[for (v in found) v.message]}');
+			Assert.equals(0, found.length, '$form: ${found.map(v -> v.message)}');
 		}
 	}
 
@@ -288,7 +288,7 @@ class PrivateAccessFormParityTest extends Test {
 			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }];
 			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, scoped(files))
 				.filter(v -> v.file == DECL_FILE);
-			Assert.equals(shape == 'none' ? 1 : 0, found.length, '$shape: ${[for (v in found) v.message]}');
+			Assert.equals(shape == 'none' ? 1 : 0, found.length, '$shape: ${found.map(v -> v.message)}');
 		}
 	}
 
@@ -362,7 +362,7 @@ class PrivateAccessFormParityTest extends Test {
 			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }];
 			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, scoped(files))
 				.filter(v -> v.file == DECL_FILE);
-			Assert.equals(built ? 0 : 1, found.length, 'built=$built: ${[for (v in found) v.message]}');
+			Assert.equals(built ? 0 : 1, found.length, 'built=$built: ${found.map(v -> v.message)}');
 		}
 	}
 

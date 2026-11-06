@@ -994,7 +994,7 @@ final class SubtypeGraph {
 			final up: Null<Array<String>> = outer == null ? null : chainVia(owner, outer, seen, linksOf, paramsOf, typeSyntax, keyIn);
 			final params: Array<String> = outer == null ? [] : paramsOf(outer);
 			if (up != null && args.length >= params.length)
-				return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args, typeSyntax)];
+				return up.map(CallGraphNames.substituteTypeParams.bind(_, params, args, typeSyntax));
 		}
 		return null;
 	}

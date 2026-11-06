@@ -136,7 +136,7 @@ final class MutationArms {
 	 */
 	public static function candidateFiles(type: String): Array<String> {
 		final relative: String = '${type.split('.').join('/')}.hx';
-		return [for (root in SOURCE_ROOTS) '$root/$relative'];
+		return SOURCE_ROOTS.map(root -> '$root/$relative');
 	}
 
 	/**
@@ -249,9 +249,10 @@ final class MutationArms {
 	#if (sys || nodejs)
 	/** `parseAll` over the documents of the registry directory `path`, each named by its file name. */
 	public static function parseDirectory(path: String): ArmTable {
-		return readSources([
-			for (file in RegistryFiles.of(path)) { file: Path.withoutDirectory(file), text: File.getContent(file) }
-		], FileSystem.isDirectory(path));
+		return readSources(
+			RegistryFiles.of(path).map(file -> {file: Path.withoutDirectory(file), text: File.getContent(file) }),
+			FileSystem.isDirectory(path)
+		);
 	}
 	#end
 

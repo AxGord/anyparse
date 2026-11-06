@@ -122,7 +122,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 			[new Naming(), new NoUnderscorePrefix()],
 			file -> on, false
 		);
-		Assert.equals(1, both.length, [for (v in both) '${v.rule}: ${v.message}'].join(' | '));
+		Assert.equals(1, both.length, both.map(v -> '${v.rule}: ${v.message}').join(' | '));
 		Assert.equals('no-underscore-prefix', both[0].rule);
 		final off: LintConfig = LintConfig.parse('{}');
 		final namingOnly: Array<Violation> = Linter.collect(files, new HaxeQueryPlugin(), [new Naming()], file -> off, false);

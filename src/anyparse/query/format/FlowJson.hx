@@ -15,14 +15,12 @@ final class FlowJson {
 	public static function document(graph: FlowGraph): FlowChartJson {
 		return {
 			name: graph.name,
-			nodes: [
-				for (n in graph.nodes()) ({
-					id: n.id,
-					kind: n.kind,
-					label: n.label,
-					line: n.line
-				}: FlowNodeJson)
-			],
+			nodes: graph.nodes().map(n -> ({
+				id: n.id,
+				kind: n.kind,
+				label: n.label,
+				line: n.line
+			}: FlowNodeJson)),
 			edges: [
 				for (e in graph.edges()) {
 					final edge: FlowEdgeJson = { from: e.from, to: e.to };

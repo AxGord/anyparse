@@ -331,9 +331,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (edit in fixGrouped(source, violations, plugin, index)) { span: edit.span, text: edit.text }
-		];
+		return fixGrouped(source, violations, plugin, index).map(edit -> {span: edit.span, text: edit.text });
 	}
 
 	/**
@@ -436,8 +434,8 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		];
 		if (rewrites.length == 0) return [];
 		final oracle: Null<NameOracle> = _nameOracle;
-		if (oracle == null) return [for (r in rewrites) spanKey(r.site)];
-		final spliced: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
+		if (oracle == null) return rewrites.map(r -> spanKey(r.site));
+		final spliced: Array<{ span: Span, text: String }> = edits.map(e -> {span: e.span, text: e.text });
 		final after: String = CanonicalEdit.applyEdits(source, spliced);
 		final sites: Array<NameSite> = [];
 		for (r in rewrites) {

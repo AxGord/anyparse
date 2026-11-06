@@ -872,23 +872,20 @@ final class MemberTouchScan {
 	private static function expansionRuns(n: FactNode, f: FieldFact, view: FactsView): Array<FieldFact> {
 		final expansion: Null<ExpansionFact> = view.expansionOf(n, f.at);
 		final sites: Array<Span> = (expansion == null ? null : view.expansionSites(n, expansion)) ?? [n.at.span];
-		return [
-			for (s in sites)
-				{
-					owner: f.owner,
-					field: f.field,
-					access: f.access,
-					receiver: f.receiver,
-					type: f.type,
-					write: f.write,
-					at: { file: n.at.file, span: s },
-					use: f.use,
-					method: f.method,
-					fresh: f.fresh,
-					held: f.held,
-					argument: f.argument
-				}
-		];
+		return sites.map(s -> {
+			owner: f.owner,
+			field: f.field,
+			access: f.access,
+			receiver: f.receiver,
+			type: f.type,
+			write: f.write,
+			at: { file: n.at.file, span: s },
+			use: f.use,
+			method: f.method,
+			fresh: f.fresh,
+			held: f.held,
+			argument: f.argument
+		});
 	}
 
 	/**

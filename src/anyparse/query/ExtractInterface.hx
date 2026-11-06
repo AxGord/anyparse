@@ -116,7 +116,7 @@ final class ExtractInterface {
 		if (selected.length == 0) return Err('class "$srcTypeName" has no public instance method to extract');
 
 		final pkg: String = ModuleScan.packageOf(src.tree);
-		final imports: Array<String> = TypeExtraction.carriedImports(src.tree, [for (m in selected) m.signature].join('\n'));
+		final imports: Array<String> = TypeExtraction.carriedImports(src.tree, selected.map(m -> m.signature).join('\n'));
 		var ifaceRewrites: Null<Int> = null;
 		final ifaceSource: String = switch TypeExtraction.assembleTypeFile(
 			pkg, imports, interfaceSource(ifaceName, selected), 'interface', plugin, optsJson
@@ -237,8 +237,7 @@ final class ExtractInterface {
 		final out: Array<IfaceMethod> = [];
 		for (name in memberNames) {
 			final m: Null<IfaceMethod> = all.find(x -> x.name == name);
-			if (m == null)
-				return Left('"$name" is not a public instance method of the class (have: ${[for (x in all) x.name].join(', ')})');
+			if (m == null) return Left('"$name" is not a public instance method of the class (have: ${all.map(x -> x.name).join(', ')})');
 			out.push(m);
 		}
 		return Right(out);

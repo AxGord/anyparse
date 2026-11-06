@@ -8,7 +8,6 @@ import anyparse.query.SymbolIndex;
 import dev.ArmRegistry.ArmRecord;
 import dev.GateTree.ChangedPaths;
 import devkit.Args;
-import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import haxe.io.Path;
@@ -424,7 +423,7 @@ final class SuiteImpact {
 	/** The types each of `sources` declares, read off one symbol index over them all. */
 	public static function declaredTypes(sources: Array<ImpactSource>): DeclaredTypes {
 		final index: SymbolIndex = IndexScope.over(
-			[for (source in sources) { file: source.path, source: source.text }], new CachingGrammarPlugin(new HaxeQueryPlugin())
+			sources.map(source -> {file: source.path, source: source.text }), new CachingGrammarPlugin(new HaxeQueryPlugin())
 		);
 		return {
 			types: [for (info in index.allFiles()) info.file => [for (type in info.types) type.name]],

@@ -122,7 +122,7 @@ final class NamingRenames {
 		);
 		if (renameSpans == null) return RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.OCCURRENCE_UNRESOLVED);
 		final spans: Array<Span> = renameSpans;
-		final edits: Array<{ span: Span, text: String }> = [for (occ in spans) { span: occ, text: newName }];
+		final edits: Array<{ span: Span, text: String }> = spans.map(occ -> {span: occ, text: newName });
 		final scope: Span = claimScope(tree, shape, span.from, bodyScoped, source.length);
 		if (!collides) return { newName: newName, edits: edits, scope: scope };
 		final qualified: Null<Array<{ span: Span, text: String }>> = qualifyCapturedEdits(
@@ -195,7 +195,7 @@ final class NamingRenames {
 		final sorted: Array<Span> = renameSpans.copy();
 		sorted.sort((a, b) -> a.from - b.from);
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
-		final starts: Array<Int> = [for (s in sorted) s.from];
+		final starts: Array<Int> = sorted.map(s -> s.from);
 		final targets: Array<Int> = [];
 		final captured: Array<{ span: Span, text: String }> = [];
 		for (offset in qualification.insertions) {
@@ -212,9 +212,7 @@ final class NamingRenames {
 			if (source.substring(orig, end) != newName || sorted.exists(s -> orig < s.to && end > s.from)) return null;
 			captured.push({ span: new Span(orig, end), text: '$self.$newName' });
 		}
-		return [
-			for (e in edits) { span: e.span, text: targets.contains(e.span.from) ? '$self.$newName' : e.text }
-		].concat(captured);
+		return edits.map(e -> {span: e.span, text: targets.contains(e.span.from) ? '$self.$newName' : e.text }).concat(captured);
 	}
 
 	/**
@@ -474,7 +472,7 @@ final class NamingRenames {
 			// across the OWNER's own hierarchy in this file only, since a sibling hierarchy's same-named
 			// member is not reachable from it (see `unrelatedTypeSpans`).
 			final unrelated: Array<Span> = unrelatedTypeSpans(fileTree, c.ownerName, shape, resolutionIndex);
-			final baseEdits: Array<{ span: Span, text: String }> = [for (s in spans) { span: s, text: c.targetName }];
+			final baseEdits: Array<{ span: Span, text: String }> = spans.map(s -> {span: s, text: c.targetName });
 			// The param idiom, reached one path over from where the single-file rename repairs it:
 			// `__x = x` renamed to `x` is the self-assignment `x = x`, and qualified it reads
 			// `this.x = x`. Only the DECLARING file can be repaired that way - `this.` names the enclosing
@@ -515,7 +513,7 @@ final class NamingRenames {
 	): Null<String> {
 		final project: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);
 		if (project == null) return null;
-		final projectFiles: Array<String> = [for (entry in project) entry.file];
+		final projectFiles: Array<String> = project.map(entry -> entry.file);
 		for (file in affectedFiles(c.ownerName, c.declFile, resolutionIndex, c.oldName))
 			if (!sourceByFile.exists(file) && projectFiles.contains(file)) return file;
 		if (!c.isPublic) return null;
@@ -1036,7 +1034,7 @@ final class NamingRenames {
 		// A quoted spelling is deliberately NOT a verdict: the same text matches a comment, a
 		// `case 'name':` and an asset key, which is exactly the over-refusal the AST projection below
 		// exists to end. It is a pre-filter, so a file holding no such text needs no parse.
-		final quoted: Array<Array<String>> = [for (name in candidates) ['\'$name\'', '"$name"']];
+		final quoted: Array<Array<String>> = candidates.map(name -> ['\'$name\'', '"$name"']);
 		inline function spelled(source: String, forms: Array<String>): Bool {
 			return forms.exists(form -> source.indexOf(form) >= 0);
 		}
@@ -1067,8 +1065,8 @@ final class NamingRenames {
 	 * would put the skip-parse blindness back one layer down.
 	 */
 	private static function indexSources(index: SymbolIndex): Array<ScopeFile> {
-		final files: Array<String> = [for (fi in index.allFiles()) fi.file].concat(index.skippedFiles());
-		return [for (file in files) { file: file, source: index.sourceOf(file) ?? '' }];
+		final files: Array<String> = index.allFiles().map(fi -> fi.file).concat(index.skippedFiles());
+		return files.map(file -> {file: file, source: index.sourceOf(file) ?? '' });
 	}
 
 	/**

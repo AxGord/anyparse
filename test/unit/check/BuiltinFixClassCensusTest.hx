@@ -323,7 +323,7 @@ class BuiltinFixClassCensusTest extends Test {
 			1
 		else
 			0);
-		return '{\n"builtins": [\n' + [for (name in sorted) '\t"$name"'].join(',\n') + '\n]\n}\n';
+		return '{\n"builtins": [\n' + sorted.map(name -> '\t"$name"').join(',\n') + '\n]\n}\n';
 	}
 
 	/** Whether a record run rewrites the file: only for pure additions, a loss is never recorded. */

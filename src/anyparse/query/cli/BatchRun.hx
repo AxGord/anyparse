@@ -34,7 +34,7 @@ final class BatchRun {
 			return EXIT_USAGE;
 		}
 		final calls: Array<BatchCall> = BatchCallsParser.parse(CliIo.readFile(args[1])).calls;
-		final answers: BatchAnswers = { answers: [for (call in calls) answer(call)] };
+		final answers: BatchAnswers = { answers: calls.map(answer) };
 		File.saveContent(args[2], BatchAnswersWriter.write(answers, JsonFormat.instance.compactWriteOptions));
 		return EXIT_OK;
 	}

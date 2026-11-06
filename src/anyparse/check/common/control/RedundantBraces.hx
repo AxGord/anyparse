@@ -207,7 +207,7 @@ final class RedundantBraces extends RuleBase implements DefaultOff {
 	/** The kind tree of `node`, each block of `unwrapped` read as its one statement. */
 	private static function shapeOf(node: QueryNode, unwrapped: Array<QueryNode>): String {
 		final at: QueryNode = unwrapped.contains(node) ? node.children[0] : node;
-		final children: String = [for (child in at.children) shapeOf(child, unwrapped)].join(',');
+		final children: String = at.children.map(shapeOf.bind(_, unwrapped)).join(',');
 		return '${at.kind}($children)';
 	}
 

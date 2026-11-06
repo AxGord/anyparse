@@ -314,7 +314,7 @@ final class ReachGraph {
 		final view: Null<FactsView> = _scope.facts;
 		if (view == null || !view.truth) return null;
 		final facts: FactsView = view;
-		final described: Array<ImplicitMembers> = [for (f in families) implicitMembers(f)];
+		final described: Array<ImplicitMembers> = families.map(implicitMembers);
 		if (always) {
 			final execution: Null<ExecutionShape> = _scope.shape.execution;
 			// a conversion or a field-name fallback: any marking metadata that is neither an operator nor an index access
@@ -398,7 +398,7 @@ final class ReachGraph {
 			// what the file imports is in scope in every member of it — a `using` brings in functions no code qualifies
 			final fi: Null<FileInfo> = _scope.index.fileInfo(file);
 			if (fi != null)
-				for (group in [fi.imports].concat([for (a in fi.ambientImports) a.imports]))
+				for (group in [fi.imports].concat(fi.ambientImports.map(a -> a.imports)))
 					for (imp in group) eachWord(imp.raw, word);
 		}
 		if (typeName != null) word(typeName);
@@ -526,7 +526,7 @@ final class ReachGraph {
 			if (!paths.contains(path)) paths.push(path);
 		}
 		if (paths.length != 1) return false;
-		final folded: Array<String> = [for (d in g.declarationsOf(node.id)) CallGraphNames.normalizePath(d.file)];
+		final folded: Array<String> = g.declarationsOf(node.id).map(d -> CallGraphNames.normalizePath(d.file));
 		// an extern copy's declaration folds as one with no body: what runs there is target code, which must run nothing of ours
 		return copies.foreach(
 			d -> folded.contains(CallGraphNames.normalizePath(d.file.file)) && (!d.type.isExtern || library.externQuiet(g, type, name))

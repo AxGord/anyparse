@@ -325,9 +325,10 @@ class LintConfigTest extends Test {
 			+ '{"hxml":"d.hxml","hxlm":"typo"}]}',
 			'/proj'
 		);
-		Assert.same(['/proj/a.hxml', '/proj/c.hxml', '/proj/d.hxml'], [
-			for (oracle in config.compilerOracles()) oracle.hxml
-		], 'the readable elements survive; the unreadable ones are gone');
+		Assert.same(
+			['/proj/a.hxml', '/proj/c.hxml', '/proj/d.hxml'],
+			config.compilerOracles().map(oracle -> oracle.hxml), 'the readable elements survive; the unreadable ones are gone'
+		);
 		Assert.same([
 			'compilerOracle[1] is not an object — dropped',
 			'compilerOracle[2] declares no "hxml" — dropped',

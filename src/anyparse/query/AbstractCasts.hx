@@ -165,7 +165,7 @@ final class AbstractCasts {
 			case Nominal(path, args) if (!params.contains(path)):
 				final r: Null<ResolvedType> = _refs.resolveTypeRef(path, file, at);
 				final written: Array<String> = NominalTypes.typeArgumentSourcesOf(trimmed, _typeSyntax) ?? [];
-				r == null ? Open : appliedEnd(r, [for (a in written) endIn(a, file, at, params)]);
+				r == null ? Open : appliedEnd(r, written.map(endIn.bind(_, file, at, params)));
 			case _: Open;
 		};
 	}
@@ -216,7 +216,7 @@ final class AbstractCasts {
 	 * such branch of which the index does not read as an abstract (`clausesOf`).
 	 */
 	public function liveMembers(r: ResolvedType): Null<Array<Array<MemberInfo>>> {
-		return clausesOf(r) == null ? null : [for (b in _builds.of(r)) membersOf(r, b)];
+		return clausesOf(r) == null ? null : _builds.of(r).map(membersOf.bind(r));
 	}
 
 	/**

@@ -459,7 +459,7 @@ final class ShardPlan {
 
 	/** Sticky group onto shard 0 as one block, then greedy longest-processing-time-first over the pieces `split` cuts. */
 	private static function deal(names: Array<String>, shards: Int, measured: Map<String, ClassWeight>): Array<ShardPlacement> {
-		final weights: Array<ClassWeight> = [for (name in names) weightOf(name, measured)];
+		final weights: Array<ClassWeight> = names.map(weightOf.bind(_, measured));
 		var total: Int = 0;
 		for (w in weights) total += w.ms;
 		final share: Int = Math.ceil(total / shards);

@@ -71,7 +71,7 @@ class JsonQueryPluginTest extends Test {
 	public function testTheLexicalRegionsAreTheStrings(): Void {
 		final source: String = '{"k": ["v", 1]}';
 		final regions: Array<LexRegion> = _plugin.lexicalRegions(source);
-		Assert.equals('"k"|"v"', [for (r in regions) source.substring(r.from, r.to)].join('|'));
+		Assert.equals('"k"|"v"', regions.map(r -> source.substring(r.from, r.to)).join('|'));
 	}
 
 	/** A pattern string written `"$name"` is a metavariable. */

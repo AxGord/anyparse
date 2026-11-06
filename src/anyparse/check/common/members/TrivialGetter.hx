@@ -571,7 +571,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			if (s == null) return null;
 			deleted.push({ node: acc, span: s });
 		}
-		final skipSpans: Array<Span> = [for (d in deleted) d.span];
+		final skipSpans: Array<Span> = deleted.map(d -> d.span);
 		if (c.ctorInit != null) {
 			final cs: Null<Span> = c.ctorInit.stmt.span;
 			if (cs == null) return null;
@@ -701,7 +701,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			// rule reads as enabling — see `MemberBranchScan.joinRuns`. The member is left out of the
 			// tables entirely, so neither a property nor an accessor built on it can be collapsed.
 			if (!certain) return;
-			final mods: Array<String> = [for (mod in run) mod.kind];
+			final mods: Array<String> = run.map(mod -> mod.kind);
 			switch child.kind {
 				case 'VarMember', 'FinalMember':
 					final name: Null<String> = child.name;
@@ -906,7 +906,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 */
 	private static function selfBackedMessage(propName: String, clauseText: String, deleted: Array<QueryNode>, hasMeta: Bool): String {
 		final decl: String = clauseText == '' ? 'a plain field \'var $propName\'' : '\'var $propName$clauseText\'';
-		final names: Array<String> = [for (acc in deleted) acc.name ?? '?'];
+		final names: Array<String> = deleted.map(acc -> acc.name ?? '?');
 		return 'property \'$propName\' is its own backing field; use $decl, remove ${names.join('/')}'
 			+ (hasMeta ? ' and drop $IS_VAR_META' : '');
 	}

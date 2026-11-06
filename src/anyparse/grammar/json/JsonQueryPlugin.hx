@@ -202,7 +202,7 @@ final class JsonQueryPlugin implements GrammarPlugin {
 		final name: Null<String> = node.name;
 		return node.kind == JsonProjection.STRING && name != null && name.startsWith(METAVAR_SIGIL) && name.length > 1
 			? new QueryNode(Metavar.KIND, name.substr(1), [], node.span)
-			: new QueryNode(node.kind, node.name, [for (child in node.children) metavars(child)], node.span);
+			: new QueryNode(node.kind, node.name, node.children.map(metavars), node.span);
 	}
 
 	/** Push the string-literal region of every `String` value and every `Member` key under `node`. */

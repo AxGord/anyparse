@@ -866,7 +866,7 @@ final class MoveSymbol {
 		final destInfo: FileInfo = target.destInfo;
 		final typeName: String = target.typeName;
 		final remaining: Array<String> = target.bindings.boundBesidesType(target.cursorInfo, typeName);
-		final destExcluded: Array<Span> = [for (imp in destInfo.imports) imp.span];
+		final destExcluded: Array<Span> = destInfo.imports.map(imp -> imp.span);
 		for (imp in destInfo.imports) if (SymbolIndex.pathImportedBy(imp) == oldImportPath) {
 			// A MODULE statement here binds the source module's OTHER types too, so removing it as
 			// "redundant" takes them away — the destination-side twin of the importer defect, and the

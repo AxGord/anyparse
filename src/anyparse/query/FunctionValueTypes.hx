@@ -522,7 +522,7 @@ final class FunctionValueTypes {
 		if (held != null) return held;
 		final types: Null<Array<FactsType>> = _escapedFunctions();
 		if (types == null) return null;
-		final out: Array<String> = [for (t in types) FactsTypeText.unwrapNull(FactsTypeTree.text(t))];
+		final out: Array<String> = types.map(t -> FactsTypeText.unwrapNull(FactsTypeTree.text(t)));
 		_escapedText = out;
 		return out;
 	}
@@ -763,7 +763,7 @@ final class FunctionValueTypes {
 	private function parameterArity(id: String, index: Int): Null<Int> {
 		final n: Null<FactNode> = _view._table.node(id);
 		if (n == null) return null;
-		final lists: Array<Array<{ name: String, type: String }>> = [n.params].concat([for (v in n.variants) v.params]);
+		final lists: Array<Array<{ name: String, type: String }>> = [n.params].concat(n.variants.map(v -> v.params));
 		var found: Null<Int> = null;
 		for (params in lists) {
 			final p: Null<{ name: String, type: String }> = params[index];

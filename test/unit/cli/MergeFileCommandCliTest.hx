@@ -111,16 +111,14 @@ class MergeFileCommandCliTest extends Test {
 	private static function module(members: Map<String, String>): String {
 		final names: Array<String> = [for (name in members.keys()) name];
 		names.sort(Reflect.compare);
-		final body: String = [
-			for (name in names) '\tpublic function $name():Int {\n\t\treturn ${members[name]};\n\t}\n'
-		].join('\n');
+		final body: String = names.map(name -> '\tpublic function $name():Int {\n\t\treturn ${members[name]};\n\t}\n').join('\n');
 		final source: String = 'class C {\n$body}\n';
 		return new HaxeQueryPlugin().writeRoundTrip(source, null) ?? source;
 	}
 
 	/** The shape of `test/testkit/fmt-ownership.json` for one module: one flag name per line. */
 	private static function ownershipRecord(flags: Array<String>): String {
-		return '{\n"modules": {\n\t"M": [\n' + [for (flag in flags) '\t\t"$flag"'].join(',\n') + '\n\t]\n}\n}\n';
+		return '{\n"modules": {\n\t"M": [\n' + flags.map(flag -> '\t\t"$flag"').join(',\n') + '\n\t]\n}\n}\n';
 	}
 
 }

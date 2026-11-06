@@ -199,7 +199,7 @@ final class Shard {
 			final slower: Int = (ms[b] ?? 0) - (ms[a] ?? 0);
 			slower != 0 ? slower : Reflect.compare(a, b);
 		});
-		return [for (cls in classes) '${ms[cls]}\t${tests[cls]}\t$cls\n'].join('');
+		return classes.map(cls -> '${ms[cls]}\t${tests[cls]}\t$cls\n').join('');
 	}
 
 	/**
@@ -333,7 +333,7 @@ final class Shard {
 			job.warn('  ${job.testJs} was built from another tree — rebuild it (`haxe test-js.hxml`); its list is $classesFile');
 			return null;
 		}
-		final lists: Array<Array<String>> = [for (filter in filters) filter.split(',')];
+		final lists: Array<Array<String>> = filters.map(filter -> filter.split(','));
 		for (s => filter in filters) {
 			File.saveContent(Path.join([work, 'shard$s.filter']), '$filter\n');
 			File.saveContent(Path.join([work, 'shard$s.list']), lists[s].join('\n') + '\n');

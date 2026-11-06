@@ -93,15 +93,12 @@ final class ExtractSuperclass {
 			case Right(list): list;
 		};
 		final stranded: Array<String> = TypeExtraction.referencedMembers(
-			declNN, [for (m in moved) m.name].concat(['new']),
-			[for (m in moved) m.node], srcSource, shape, plugin.lexicalRegions.bind(srcSource)
+			declNN, moved.map(m -> m.name).concat(['new']), moved.map(m -> m.node), srcSource, shape, plugin.lexicalRegions.bind(srcSource)
 		);
 		if (stranded.length > 0)
 			return Err('pulled-up member(s) reference member(s) staying behind: ${stranded.join(', ')} — add them to the set or refactor');
 
-		final blocks: Array<String> = [
-			for (m in moved) SourceText.trimNewlineEdges(srcSource.substring(m.cut.from, m.cut.to))
-		];
+		final blocks: Array<String> = moved.map(m -> SourceText.trimNewlineEdges(srcSource.substring(m.cut.from, m.cut.to)));
 		final pkg: String = ModuleScan.packageOf(src.tree);
 		final imports: Array<String> = TypeExtraction.carriedImports(src.tree, blocks.join('\n'));
 		var superRewrites: Null<Int> = null;
@@ -119,7 +116,7 @@ final class ExtractSuperclass {
 		);
 		if (headerEdit == null)
 			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add extends (nothing written)');
-		final edits: Array<{ span: Span, text: String }> = [for (m in moved) { span: m.cut, text: '' }];
+		final edits: Array<{ span: Span, text: String }> = moved.map(m -> {span: m.cut, text: '' });
 		edits.push(headerEdit);
 		// The WRITER gives back the separator a cut left doubled, and it is the only thing
 		// that can: the hand-rolled newline-run collapse that stood here read the whole file

@@ -140,21 +140,18 @@ final class Branches {
 		return {
 			run: parsed.run ?? '',
 			started: parsed.started,
-			steps: [
-				for (row in parsed.steps)
-					{
-						name: row.name,
-						outcome: switch row.outcome {
-							case 'passed': Passed;
-							case 'failed': Failed(row.why);
-							case 'skipped': Skipped(row.why);
-							case _: NotRun(row.why);
-						},
-						ms: row.ms,
-						note: row.note,
-						excerpt: row.excerpt ?? []
-					}
-			],
+			steps: parsed.steps.map(row -> {
+				name: row.name,
+				outcome: switch row.outcome {
+					case 'passed': Passed;
+					case 'failed': Failed(row.why);
+					case 'skipped': Skipped(row.why);
+					case _: NotRun(row.why);
+				},
+				ms: row.ms,
+				note: row.note,
+				excerpt: row.excerpt ?? []
+			}),
 			readings: [for (reading in parsed.readings) reading.name => reading.value]
 		};
 	}

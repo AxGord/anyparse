@@ -404,9 +404,7 @@ final class CallGraphKeys {
 				? null
 				: CallGraphNames.declaredParams(entry.tree, entry.source, d.span.from, g._shape, g._provider);
 			if (read == null) return null;
-			final written: Array<Null<String>> = [
-				for (p in read.params) p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed)
-			];
+			final written: Array<Null<String>> = read.params.map(p -> p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed));
 			final held: Null<Array<Null<String>>> = out;
 			skippableFrom = skippableFrom < 0 ? read.skippableFrom : Std.int(Math.min(skippableFrom, read.skippableFrom));
 			if (held == null) {

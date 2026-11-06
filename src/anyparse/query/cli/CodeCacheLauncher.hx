@@ -282,7 +282,7 @@ final class CodeCacheLauncher {
 		final engine: CompiledEngine = compile(binary, false);
 		Node.process.on(ProcessEvent.UncaughtException, (error: Any) -> {});
 		final runs: Array<Array<String>> = [
-			for (line in WARM_RUNS) [line[0], '--lang', 'haxe'].concat([for (arg in line.slice(1)) arg == FIXTURE ? fixture : arg])
+			for (line in WARM_RUNS) [line[0], '--lang', 'haxe'].concat(line.slice(1).map(arg -> arg == FIXTURE ? fixture : arg))
 		];
 		warmNext(engine, binary, runs);
 	}

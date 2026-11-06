@@ -87,8 +87,7 @@ class LanguageBoundTest extends Test {
 		final records: Array<JValue> = RawJson.items(JValueParser.parse(RuleIndex.json([new PreferLpad(), new MagicNumber()])));
 		Assert.same(
 			['["haxe"]', '[]'],
-			[for (r in records) RawJson.print(JValueTools.field(r, 'languages') ?? JNull)],
-			'an unbound rule lists no grammar'
+			records.map(r -> RawJson.print(JValueTools.field(r, 'languages') ?? JNull)), 'an unbound rule lists no grammar'
 		);
 	}
 

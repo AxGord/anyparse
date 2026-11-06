@@ -137,7 +137,7 @@ class StdlibDupScanTest extends Test {
 
 	/** The verbatim spellings of a candidate's lifted body literals. */
 	private static function literalCodes(candidate: StdlibCandidate): Array<String> {
-		return [for (literal in candidate.literals) literal.code];
+		return candidate.literals.map(literal -> literal.code);
 	}
 
 	/** One in-memory file through a real Haxe plugin. */

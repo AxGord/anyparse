@@ -90,7 +90,7 @@ final class Meta {
 		final parenIdx: Int = rawName.indexOf('(');
 		final tag: String = StringTools.trim(parenIdx < 0 ? rawName : rawName.substring(0, parenIdx));
 		final args: Array<String> = if (metaNode.children.length > 0) {
-			[for (c in metaNode.children) sliceSpan(source, c.span).trim()];
+			metaNode.children.map(c -> sliceSpan(source, c.span).trim());
 		} else if (parenIdx >= 0) {
 			final closeIdx: Int = rawName.lastIndexOf(')');
 			final raw: String = closeIdx > parenIdx ? rawName.substring(parenIdx + 1, closeIdx) : '';

@@ -39,8 +39,8 @@ class CallSelectionTest extends Test {
 		Assert.same(['Int'], [for (p in f.signatures[0].params) p.type], 'its own first');
 		Assert.equals('Void', f.signatures[0].returnSource);
 		final first: CallSignature = f.signatures[1];
-		Assert.same(['String', 'Int', 'Float'], [for (p in first.params) p.type], 'then the annotations in written order');
-		Assert.same([ParamForm.Plain, ParamForm.Optional, ParamForm.Defaulted], [for (p in first.params) p.form]);
+		Assert.same(['String', 'Int', 'Float'], first.params.map(p -> p.type), 'then the annotations in written order');
+		Assert.same([ParamForm.Plain, ParamForm.Optional, ParamForm.Defaulted], first.params.map(p -> p.form));
 		Assert.equals('Array<T>', first.returnSource);
 		Assert.same(['T'], first.typeParamNames);
 		Assert.equals(FIXTURE.indexOf('function<T:Int>'), first.at, 'written at the annotation\'s function');

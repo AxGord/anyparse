@@ -287,7 +287,7 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 		final covered: Array<Bool> = [for (_ in 0...conjuncts.length) false];
 		if (inInlineFunction(stack, s)) return covered;
 		final compKind: String = chainKind == s.andKind ? s.notEqKind : s.eqKind;
-		final operands: Array<Null<QueryNode>> = [for (c in conjuncts) nullCompOperand(c, compKind, s)];
+		final operands: Array<Null<QueryNode>> = conjuncts.map(nullCompOperand.bind(_, compKind, s));
 		var i: Int = 0;
 		while (i < conjuncts.length - 1) {
 			var k: Int = i;

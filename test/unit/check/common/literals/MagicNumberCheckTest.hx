@@ -43,7 +43,7 @@ class MagicNumberCheckTest extends Test {
 	public function testADirectArgumentOfAnIgnoredCallIsExempt(): Void {
 		final src: String = 'class C {\n\tfunction f(k:Int) {\n\t\tt("a", 10233);\n\t\tthis.t("b", 77);\n\t\tmake().t("c", 88);\n'
 			+ '\t\tt("x", 100 + k);\n\t\tt("y", -55);\n\t\tother("z", 5000);\n\t}\n}';
-		final flagged: Array<String> = [for (v in withCalls(src, ['t'])) v.message.split(' ')[2]];
+		final flagged: Array<String> = withCalls(src, ['t']).map(v -> v.message.split(' ')[2]);
 		Assert.same(['100', '5000'], flagged, 'only the nested and the unlisted call stay flagged');
 		Assert.equals(6, violations(src).length, 'without the option every one of them is a finding');
 	}
@@ -60,7 +60,7 @@ class MagicNumberCheckTest extends Test {
 	public function testADottedEntryMatchesTheCalleeTail(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tLang.t("a", 11);\n\t\thelper.Lang.t("b", 22);\n\t\tt("c", 33);\n'
 			+ '\t\tBlang.t("d", 44);\n\t}\n}';
-		final flagged: Array<String> = [for (v in withCalls(src, ['Lang.t'])) v.message.split(' ')[2]];
+		final flagged: Array<String> = withCalls(src, ['Lang.t']).map(v -> v.message.split(' ')[2]);
 		Assert.same(['33', '44'], flagged, 'a bare t() and a different receiver are not Lang.t');
 	}
 
@@ -77,7 +77,7 @@ class MagicNumberCheckTest extends Test {
 	@:killer('M-MAGIC-CALLARG-NEG-BLIND')
 	public function testANegatedArgumentOfAnIgnoredCallIsExempt(): Void {
 		final src: String = 'class C {\n\tfunction g(k:Int) {\n\t\tf(18);\n\t\tf(-18);\n\t\tf(-83.75, -k * 4);\n\t}\n}';
-		final flagged: Array<String> = [for (v in withCalls(src, ['f'])) v.message.split(' ')[2]];
+		final flagged: Array<String> = withCalls(src, ['f']).map(v -> v.message.split(' ')[2]);
 		Assert.same(['4'], flagged, 'only the literal under arithmetic stays flagged');
 		Assert.equals(4, violations(src).length, 'without the option every one of them is a finding');
 	}
@@ -97,7 +97,7 @@ class MagicNumberCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction g() {\n\t\tnew ShapeDescriptor("a", 77);\n\t\tnew data.ShapeDescriptor("b", 78);\n'
 			+ '\t\tnew Map<String, Int>(79);\n\t\tnew Other("c", 80);\n\t\tnew Blah.ShapeDescriptorX("d", 81);\n\t}\n}';
 		final calls: Array<String> = ['ShapeDescriptor.new', 'Map.new', 'Other'];
-		final flagged: Array<String> = [for (v in withCalls(src, calls)) v.message.split(' ')[2]];
+		final flagged: Array<String> = withCalls(src, calls).map(v -> v.message.split(' ')[2]);
 		Assert.same(['80', '81'], flagged, 'a bare entry and a different type name reach no constructor');
 	}
 
@@ -117,9 +117,7 @@ class MagicNumberCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction g(k:Int) {\n\t\tnew ShapeDescriptor("a", new Point(-28, -77.65));\n'
 			+ '\t\tnew ShapeDescriptor("b", make(5));\n\t\tnew ShapeDescriptor("c", new Point(3 * k, 6));\n'
 			+ '\t\tnew Point(9, 10);\n\t\tsetHitArea(-16, 4, 80, 64);\n\t}\n}';
-		final flagged: Array<String> = [
-			for (v in withCalls(src, ['ShapeDescriptor.new', 'setHitArea'])) v.message.split(' ')[2]
-		];
+		final flagged: Array<String> = withCalls(src, ['ShapeDescriptor.new', 'setHitArea']).map(v -> v.message.split(' ')[2]);
 		Assert.same(['5', '3', '9', '10'], flagged, 'only what no listed callee receives directly or through a new stays flagged');
 	}
 
@@ -143,7 +141,7 @@ class MagicNumberCheckTest extends Test {
 			+ ' case 21: 22; case 23: k; case _: 0; };\n\t\tfinal d:Int = switch k { case 31 if (c): 32; case _: 0; };\n'
 			+ '\t\tfinal e:Int = switch k { case 41: 42; case z: 0; };\n\t\tfinal f:Int = switch k { case 51: { 52; } default: 0; };\n'
 			+ '\t\treturn switch k { case 61: 62; default: 63; };\n\t}\n}';
-		final flagged: Array<String> = [for (v in withTables(src)) v.message.split(' ')[2]];
+		final flagged: Array<String> = withTables(src).map(v -> v.message.split(' ')[2]);
 		Assert.same(
 			['16', '21', '22', '23', '31', '32', '41', '42', '51', '52'], flagged, 'the subject and the non-table switches stay flagged'
 		);
@@ -168,7 +166,7 @@ class MagicNumberCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction g(k:Int) {\n\t\tfinal widths = [30, -45, 60];\n\t\tvar keys = [7 => "a", -8 => "b"];\n'
 			+ '\t\tdraw([3, 4]);\n\t\tfinal mixed = [5, k];\n\t}\n\tfunction dec():Array<Int> {\n\t\treturn [-1, 62, 63];\n\t}\n'
 			+ '\tfunction enc():Array<Int> return [64, 65];\n\tfunction two():Array<Int> {\n\t\ttrace(1);\n\t\treturn [97, 98];\n\t}\n}';
-		final flagged: Array<String> = [for (v in withTables(src)) v.message.split(' ')[2]];
+		final flagged: Array<String> = withTables(src).map(v -> v.message.split(' ')[2]);
 		Assert.same(['3', '4', '5', '97', '98'], flagged, 'an inline, a mixed and a not-sole-return collection stay flagged');
 	}
 

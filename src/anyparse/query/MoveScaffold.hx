@@ -151,7 +151,7 @@ final class MoveScaffold {
 		});
 		final at: Null<Int> = viaWiringOffset(prep, ctor.member, fields);
 		if (at == null) return 'cannot --scaffold via field "$viaName": could not locate the "${prep.srcTypeName}" constructor body';
-		final args: String = [for (f in fields) f.name].join(', ');
+		final args: String = fields.map(f -> f.name).join(', ');
 		ScopeFiles.editsFor(editsByFile, prep.srcFile).push({
 			span: new Span(at, at),
 			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);'
@@ -189,8 +189,8 @@ final class MoveScaffold {
 	 * assigning each, ready to splice into an empty destination.
 	 */
 	private static function scaffoldDestBlock(fields: Array<ScaffoldField>): String {
-		final fieldLines: String = [for (f in fields) '\tprivate final ${f.name}: ${f.type};'].join('\n');
-		final params: String = [for (f in fields) '${paramNameOf(f.name)}: ${f.type}'].join(', ');
+		final fieldLines: String = fields.map(f -> '\tprivate final ${f.name}: ${f.type};').join('\n');
+		final params: String = fields.map(f -> '${paramNameOf(f.name)}: ${f.type}').join(', ');
 		final assigns: String = [
 			for (f in fields) {
 				final p: String = paramNameOf(f.name);
@@ -227,7 +227,7 @@ final class MoveScaffold {
 		final body: Null<QueryNode> = ctorMember.children.find(c -> c.kind == 'BlockBody');
 		final bodySpan: Null<Span> = body?.span;
 		if (body == null || bodySpan == null) return null;
-		final names: Array<String> = [for (f in fields) f.name];
+		final names: Array<String> = fields.map(f -> f.name);
 		final shape: RefShape = prep.shape;
 		function writes(node: QueryNode): Bool {
 			final target: Null<QueryNode> = node.children[0];

@@ -47,7 +47,7 @@ final class EdgeDiff {
 		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
 		Sys.println('facts: ${Math.round(Sys.time() - started)}s, configurations ${facts?.configurations}, dropped ${facts?.dropped}');
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final index: SymbolIndex = SymbolIndex.build(project.concat(library), plugin, [for (f in library) f.file]);
+		final index: SymbolIndex = SymbolIndex.build(project.concat(library), plugin, library.map(f -> f.file));
 		final view: Null<FactsView> = FactsView.of(facts, new ReachProject(plugin, index, project));
 		final plain: CallGraph = CallGraph.build(project, plugin, index);
 		final typed: CallGraph = CallGraph.build(project, plugin, index, view);

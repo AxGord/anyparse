@@ -64,9 +64,8 @@ final class DataPath {
 
 	/** `segments` written back as a path — the inverse of `parse`, for messages. */
 	public static function format(segments: Array<String>): String {
-		return [
-			for (segment in segments) segment.split(ESCAPE).join(ESCAPE + ESCAPE).split(SEPARATOR).join(ESCAPE + SEPARATOR)
-		].join(SEPARATOR);
+		return segments.map(segment -> segment.split(ESCAPE).join(ESCAPE + ESCAPE).split(SEPARATOR).join(ESCAPE + SEPARATOR))
+			.join(SEPARATOR);
 	}
 
 	/**
@@ -105,13 +104,15 @@ final class DataPath {
 	/** `value` as compact JSON: strings quoted and escaped, scalars as written, keys in source order. */
 	public static function json(value: QueryNode, source: String, shape: RefShape): String {
 		if (isString(value, shape)) return JsonFormat.instance.quote(value.name ?? '');
-		if (value.kind == shape.objectLiteralKind) return '{'
-			+ [
-				for (entry in value.children) JsonFormat.instance.quote(entry.name ?? '') + ':${json(valueOf(entry, shape), source, shape)}'
-			].join(',')
-			+ '}';
+		if (value.kind == shape.objectLiteralKind)
+			return '{'
+				+ value.children.map(
+					entry -> JsonFormat.instance.quote(entry.name ?? '') + ':${json(valueOf(entry, shape), source, shape)}'
+				)
+					.join(',')
+				+ '}';
 		if (value.kind == shape.arrayLiteralKind)
-			return '[' + [for (element in value.children) json(valueOf(element, shape), source, shape)].join(',') + ']';
+			return '[' + value.children.map(element -> json(valueOf(element, shape), source, shape)).join(',') + ']';
 		final span: Null<Span> = value.span;
 		if (span == null || value.children.length > 0) throw new UsageFailure('a ${value.kind} node is not a data value');
 		return source.substring(span.from, span.to);
@@ -164,7 +165,7 @@ final class DataPath {
 			return node.kind == shape.arrayLiteralKind
 				? 'an array of ${node.children.length}'
 				: 'a ${node.kind}, not an object or an array';
-		final keys: Array<String> = [for (entry in node.children) '"${entry.name ?? ''}"'];
+		final keys: Array<String> = node.children.map(entry -> '"${entry.name ?? ''}"');
 		return keys.length == 0 ? 'an empty object' : 'an object with keys ${keys.join(', ')}';
 	}
 

@@ -346,7 +346,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		final modules: Array<String> = config.stringListOption(RULE_ID, 'types') ?? ['Lambda', 'StringTools'];
 		return {
 			modules: modules,
-			simpleNames: [for (module in modules) CheckScan.simpleModuleName(module)],
+			simpleNames: modules.map(CheckScan.simpleModuleName),
 			addUsing: config.boolOption(RULE_ID, 'addUsing') ?? true
 		};
 	}

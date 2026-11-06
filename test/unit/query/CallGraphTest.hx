@@ -49,7 +49,7 @@ class CallGraphTest extends Test {
 			'class A { var m:M; static var s:M; function f(m:M):Void { m.go(); this.m.go(); A.s.go(); s.go(); } }',
 			'class M { public function go():Void {} }'
 		]);
-		Assert.same([null, 'A.m', 'A.s', 'A.s'], [for (e in edges(g, 'A.f', 'M.go', Call)) e.receiverField]);
+		Assert.same([null, 'A.m', 'A.s', 'A.s'], edges(g, 'A.f', 'M.go', Call).map(e -> e.receiverField));
 	}
 
 	/** A member read off ANOTHER value of a type the graph recovers names that member too: `o.m` is `A.m`. */
@@ -59,7 +59,7 @@ class CallGraphTest extends Test {
 			'class A { public var m:M; static function f(o:A):Void o.m.go(); }',
 			'class M { public function go():Void {} }'
 		]);
-		Assert.same(['A.m'], [for (e in edges(g, 'A.f', 'M.go', Call)) e.receiverField]);
+		Assert.same(['A.m'], edges(g, 'A.f', 'M.go', Call).map(e -> e.receiverField));
 	}
 
 	/** A property with a getter hands back whatever the getter returns, so it names no one stored object. */
@@ -69,7 +69,7 @@ class CallGraphTest extends Test {
 			'class A { var p(get, never):M; var q:M; function get_p():M return q; function f():Void p.go(); }',
 			'class M { public function go():Void {} }'
 		]);
-		Assert.same([null], [for (e in edges(g, 'A.f', 'M.go', Call)) e.receiverField]);
+		Assert.same([null], edges(g, 'A.f', 'M.go', Call).map(e -> e.receiverField));
 	}
 
 	public function testLocalFunctionCallAndContains(): Void {
@@ -90,7 +90,8 @@ class CallGraphTest extends Test {
 		// Both receiver forms in one test: the field `_w` and the accessor `getWorker()` name the
 		// SAME declared type, so a fix that reads one form must not be able to lose the other.
 		final g: CallGraph = graphOf([
-			'class A { private final _w:Worker; function viaField():Void _w.run(); function getWorker():Worker return _w; function viaCall():Void getWorker().run(); }',
+			'class A { private final _w:Worker; function viaField():Void _w.run(); function getWorker():Worker return _w; function '
+			+ 'viaCall():Void getWorker().run(); }',
 			'class Worker { public function run():Void {} }'
 		]);
 		Assert.equals(1, edges(g, 'A.viaField', 'Worker.run', Call).length);
@@ -173,7 +174,8 @@ class CallGraphTest extends Test {
 		// One variable: `hook()` vs `this.hook()`. A bare call to an INSTANCE member of the
 		// enclosing type IS an implicit-`this` call, so it dispatches the same way.
 		final g: CallGraph = graphOf([
-			'class Base { public function hook():Void {} public function drive():Void hook(); public function driveThis():Void this.hook(); }',
+			'class Base { public function hook():Void {} '
+			+ 'public function drive():Void hook(); public function driveThis():Void this.hook(); }',
 			'class Sub extends Base { override public function hook():Void {} }'
 		]);
 		Assert.equals(1, edges(g, 'Base.driveThis', 'Sub.hook', Virtual).length);
@@ -462,7 +464,8 @@ class CallGraphTest extends Test {
 		// `this.foo()` in `abstract Wrap(Under)` calls `Under.foo`; a bare `foo()` there is the abstract's own.
 		final g: CallGraph = graphOf([
 			'class Under { public function foo():Void {} }',
-			'abstract Wrap(Under) { public function callsUnder():Void this.foo(); public function foo():Void {} public function bare():Void foo(); }'
+			'abstract Wrap(Under) { public function callsUnder():Void this.foo(); public function foo():Void {} '
+			+ 'public function bare():Void foo(); }'
 		]);
 		Assert.equals(1, edges(g, 'Wrap.callsUnder', 'Under.foo', Call).length);
 		Assert.equals(0, edges(g, 'Wrap.callsUnder', 'Wrap.foo', Call).length);
@@ -532,8 +535,8 @@ class CallGraphTest extends Test {
 		final g: CallGraph = graphOf([
 			'class Base { public function run():Void {} }',
 			'class Taker { public function new(f:Void->Void) {} }',
-			'class Holder { var b:Base; function tern(c:Bool):Void new Taker(c ? b.run : inst); function bound():Void new Taker(b.run.bind()); '
-			+ 'function inst():Void {} }'
+			'class Holder { var b:Base; function tern(c:Bool):Void new Taker(c ? b.run : inst); function bound():Void new '
+			+ 'Taker(b.run.bind()); function inst():Void {} }'
 		]);
 		Assert.equals(1, edges(g, 'Holder.tern', 'Base.run', Ref).length);
 		Assert.equals(1, edges(g, 'Holder.tern', 'Holder.inst', Ref).length);
@@ -575,12 +578,11 @@ class CallGraphTest extends Test {
 		// an array element, a nullable, a field initializer — it runs `S`'s constructor.
 		final g: CallGraph = graphOf([
 			'@:structInit class S { public var x:Int; public function new(x:Int) this.x = x; }',
-			'class M { var field:S = {x: 0}; function mk():Void { var s:S = {x: 1}; } function take(s:S):Void {} '
-			+ 'function arg():Void take({x: 2}); function ret():S return {x: 3}; function assign():Void { var s:S; s = {x: 4}; } '
-			+ 'function arr():Void { var a:Array<S> = [{x: 5}]; } function nul():Void { var n:Null<S> = {x: 6}; } '
-			+ 'function sw(k:Int):S return switch k { case 0: {x: 7}; case _: { trace(k); {x: 8}; } }; '
-			+ 'function ifE(c:Bool):S return if (c) {x: 9} else {x: 10}; function rest(...ss:S):Void {} '
-			+ 'function restF():Void rest({x: 11}, {x: 12}); function lam():Void { final f:Void->S = () -> {x: 13}; } '
+			'class M { var field:S = {x: 0}; function mk():Void { var s:S = {x: 1}; } function take(s:S):Void {} function arg():Void '
+			+ 'take({x: 2}); function ret():S return {x: 3}; function assign():Void { var s:S; s = {x: 4}; } function arr():Void { var '
+			+ 'a:Array<S> = [{x: 5}]; } function nul():Void { var n:Null<S> = {x: 6}; } function sw(k:Int):S return switch k { case 0: {x: '
+			+ '7}; case _: { trace(k); {x: 8}; } }; function ifE(c:Bool):S return if (c) {x: 9} else {x: 10}; function rest(...ss:S):Void '
+			+ '{} function restF():Void rest({x: 11}, {x: 12}); function lam():Void { final f:Void->S = () -> {x: 13}; } '
 			+ 'function map():Void { final m:Map<String, S> = ["a" => {x: 14}]; } function anon():Void { final o:{s:S} = {s: {x: 15}}; } }'
 		]);
 		for (fn in [
@@ -656,10 +658,9 @@ class CallGraphTest extends Test {
 			'class Box<T> { public var item:T; public var list:Array<T>; public var maybe:Null<T>; public function get():T return item; }',
 			'class BoxW extends Box<W> {}',
 			'class Lst<T> { public function all():Array<T> return []; }',
-			'class Ch { var bw:Box<W>; var sub:BoxW; var raw:Box; var lst:Lst<W>; function allF():Void lst.all()[0].w(); '
-			+ 'function listF():Void bw.list[0].w(); function maybeF():Void bw.maybe.w(); '
-			+ 'function getF():Void bw.get().w(); function subF():Void sub.item.w(); function rawF():Void raw.item.w(); '
-			+ 'function gen<T:W>(t:T):T return t; function genF():Void gen(new W()).w(); }'
+			'class Ch { var bw:Box<W>; var sub:BoxW; var raw:Box; var lst:Lst<W>; function allF():Void lst.all()[0].w(); function '
+			+ 'listF():Void bw.list[0].w(); function maybeF():Void bw.maybe.w(); function getF():Void bw.get().w(); function subF():Void '
+			+ 'sub.item.w(); function rawF():Void raw.item.w(); function gen<T:W>(t:T):T return t; function genF():Void gen(new W()).w(); }'
 		]);
 		for (fn in ['Ch.listF', 'Ch.maybeF', 'Ch.getF', 'Ch.subF', 'Ch.allF']) Assert.equals(1, edges(g, fn, 'W.w', Call).length, fn);
 		for (fn in ['Ch.listF', 'Ch.maybeF', 'Ch.getF', 'Ch.subF', 'Ch.rawF', 'Ch.genF'])
@@ -729,9 +730,8 @@ class CallGraphTest extends Test {
 			'class A { public function m():Void {} }',
 			'class SubA extends A { override public function m():Void {} }',
 			'class B { public function m():Void {} }',
-			'class Shadow<T:A> { var item:T; function methodShadow<T:B>(x:T):Void item.m(); '
-			+ 'function localShadow(x:T):Void { function g<T:B>(y:T):Void x.m(); } '
-			+ 'function own<T:B>(x:T):Void x.m(); }'
+			'class Shadow<T:A> { var item:T; function methodShadow<T:B>(x:T):Void item.m(); function localShadow(x:T):Void {'
+			+ ' function g<T:B>(y:T):Void x.m(); } function own<T:B>(x:T):Void x.m(); }'
 		]);
 		for (fn in ['Shadow.methodShadow', 'Shadow.localShadow#g']) {
 			Assert.equals(1, edges(g, fn, 'A.m', Call).length, fn);
@@ -1160,8 +1160,10 @@ class CallGraphTest extends Test {
 		}
 		final g: CallGraph = graphOf([
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
-			'package app; import sys.thread.Lock; class Hold { public static var lock:Lock = null; public static function make():Lock return null; }',
-			'package app; import utils.Lock; class Hold { public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package app; import sys.thread.Lock; class Hold {'
+			+ ' public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package app; import utils.Lock; class Hold {'
+			+ ' public static var lock:Lock = null; public static function make():Lock return null; }',
 			'package app; class C { static function field():Void Hold.lock.wait(); static function call():Void Hold.make().wait(); }'
 		]);
 		function waits(from: String): Array<String> {
@@ -1209,11 +1211,12 @@ class CallGraphTest extends Test {
 			},
 			{
 				file: 'app/A.hx',
-				source: 'package app; class A { @:overload(function(x:Int):sys.thread.Lock {}) public static function get(x:String):utils.Lock'
-					+ ' return null; @:overload(function(x:Int):utils.Lock {}) public static function same(x:String):utils.Lock return null;'
-					+ ' @:overload(function(f:(sys.thread.Lock) -> Void):Void {}) public static function run(f:(utils.Lock) -> Void):Void {}'
-					+ ' #if never @:overload(function(x:Int):sys.thread.Lock {}) public static function each(x:String):utils.Lock return null;'
-					+ ' #else public static function each(x:String):utils.Lock return null; #end }'
+				source: 'package app; class A { @:overload(function(x:Int):sys.thread.Lock {}) '
+					+ 'public static function get(x:String):utils.Lock'
+					+ ' return null; @:overload(function(x:Int):utils.Lock {}) public static function same(x:String):utils.Lock return '
+					+ 'null; @:overload(function(f:(sys.thread.Lock) -> Void):Void {}) public static function run(f:(utils.Lock) '
+					+ '-> Void):Void {} #if never @:overload(function(x:Int):sys.thread.Lock {}) public static function '
+					+ 'each(x:String):utils.Lock return null; #else public static function each(x:String):utils.Lock return null; #end }'
 			},
 			{
 				file: 'app/Box.hx',
@@ -1222,10 +1225,10 @@ class CallGraphTest extends Test {
 			},
 			{
 				file: 'app/C.hx',
-				source: 'package app; import lib.L; class C { static function get():Void A.get(1).wait(); static function same():Void A.same(1).wait();'
-					+ ' static function run():Void A.run(l -> l.wait()); static function each():Void A.each("x").wait();'
-					+ ' static function lib():Void L.run(l -> l.wait());'
-					+ ' static function own(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait(); }'
+				source: 'package app; import lib.L; class C {'
+					+ ' static function get():Void A.get(1).wait(); static function same():Void A.same(1).wait();'
+					+ ' static function run():Void A.run(l -> l.wait()); static function each():Void A.each("x").wait(); static function '
+					+ 'lib():Void L.run(l -> l.wait()); static function own(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait(); }'
 			}
 		];
 		final library: Array<{ file: String, source: String }> = [
@@ -1238,11 +1241,12 @@ class CallGraphTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final g: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(library), plugin));
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [];
-			for (id in g.nodes.keys())
-				if (id == from || StringTools.startsWith(id, '$from#'))
-					for (e in g.outEdges(id))
-						if (e.kind == Call) out.push(e.to);
+			final out: Array<String> = [
+				for (id in g.nodes.keys()) if (
+					id == from || StringTools.startsWith(id, '$from#')
+				)
+					for (e in g.outEdges(id)) if (e.kind == Call) e.to
+			];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1341,7 +1345,8 @@ class CallGraphTest extends Test {
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
 			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; }',
 			'package app; import app.A.*; final lock:utils.Lock = null; class M { static function field():Void lock.wait(); }',
-			'package app; import app.A.*; #if !never var lock:utils.Lock = null; #end class N { static function field():Void lock.wait(); }',
+			'package app; import app.A.*; #if !never var lock:utils.Lock = null; #end class N {'
+			+ ' static function field():Void lock.wait(); }',
 			'package app; import app.A.*; class W { static function field():Void lock.wait(); }',
 			'package app; import app.A.lock as held; class Q { static function field():Void held.wait(); }'
 		]);
@@ -1377,12 +1382,11 @@ class CallGraphTest extends Test {
 			'package utils; class Other { public function new() {} public function wait():Bool return true; }',
 			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; }',
 			'package app; class Holder { public var lock:utils.Other = null; }',
-			'package app; import app.A.*; #if never final lock:utils.Lock = null; #end'
-			+ ' class Outside { static function field():Void lock.wait(); }'
-			+ ' #if never class Inside { static function field():Void lock.wait(); } #end',
+			'package app; import app.A.*; #if never final lock:utils.Lock = null; #end class Outside {'
+			+ ' static function field():Void lock.wait(); } #if never class Inside { static function field():Void lock.wait(); } #end',
 			'package app; #if a final lock:utils.Lock = null; #else var lock:utils.Other = null; #end'
-			+ ' class Either { static function field():Void lock.wait(); }'
-			+ ' #if a class InA { static function field():Void lock.wait(); } #else class InElse { static function field():Void lock.wait(); } #end',
+			+ ' class Either { static function field():Void lock.wait(); } #if a class InA { static function field():Void lock.wait(); } '
+			+ '#else class InElse { static function field():Void lock.wait(); } #end',
 			'package app; import app.A.*; #if a final lock:utils.Lock = null; #end'
 			+ ' #if !a class Elsewhere { static function field():Void lock.wait(); } #end',
 			'package app; final lock:utils.Lock = null; class Kid extends Holder { function field():Void lock.wait(); }',
@@ -1437,7 +1441,8 @@ class CallGraphTest extends Test {
 		}
 		final g: CallGraph = graphOf([
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
-			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package app; import sys.thread.Lock; class A {'
+			+ ' public static var lock:Lock = null; public static function make():Lock return null; }',
 			'package app; import app.A.*; class W { static function field():Void lock.wait(); static function call():Void make().wait(); }',
 			'package app; import app.A.lock; import app.A.make; class F { static function field():Void lock.wait();'
 			+ ' static function call():Void make().wait(); }',
@@ -1476,7 +1481,8 @@ class CallGraphTest extends Test {
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
 			'package app; class T { public function new() {} public function wait():Bool return true; }',
 			'package app; import sys.thread.Lock; @:forward abstract H(Lock) { public inline function new(l:Lock) this = l; }',
-			'package app; import sys.thread.Lock; typedef Held = Lock; @:forward abstract HA(Held) { public inline function new(l:Held) this = l; }',
+			'package app; import sys.thread.Lock; typedef Held = Lock; @:forward abstract HA(Held) { public inline function new(l:Held) '
+			+ 'this = l; }',
 			'package app; @:forward abstract W<T>(T) { public inline function new(v:T) this = v; }',
 			'package app; class C { static function h(x:H):Void x.wait(); static function ha(x:HA):Void x.wait();'
 			+ ' static function w(x:W<utils.Lock>):Void x.wait(); }'
@@ -1537,16 +1543,18 @@ class CallGraphTest extends Test {
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
 			'package app; class X { public function new() {} public function wait():Bool return true; }',
 			'package app; import sys.thread.Lock; class A { public static var locks:Array<Lock> = [];'
-			+ ' public static var byName:Map<String, Lock> = null; public static var bag:Bag = null; public static var walker:Walker = null;'
-			+ ' public static var both:Both = null; public static var gen:Gen = null; public static var box:Box<Lock> = null; }',
-			'package app; import sys.thread.Lock; class Bag { public function new() {} public function iterator():Iterator<Lock> return null; }',
+			+ ' public static var byName:Map<String, Lock> = null; public static var bag:Bag = null; public static var walker:Walker = '
+			+ 'null; public static var both:Both = null; public static var gen:Gen = null; public static var box:Box<Lock> = null; }',
+			'package app; import sys.thread.Lock; class Bag { public function new() {} '
+			+ 'public function iterator():Iterator<Lock> return null; }',
 			'package app; import sys.thread.Lock; class Walker { public function new() {} public function hasNext():Bool return false;'
 			+ ' public function next():Lock return null; }',
 			'package app; class Both { public function new() {} public function iterator():Iterator<utils.Lock> return null;'
 			+ ' public function hasNext():Bool return false; public function next():sys.thread.Lock return null; }',
 			'package app; class Gen { public function new() {} public function iterator<X>():Iterator<X> return null; }',
 			'package app; class Box<T> { public function new() {} public function iterator():Iterator<T> return null; }',
-			'package app; class C { static function arr():Void for (l in A.locks) l.wait(); static function values():Void for (l in A.byName) l.wait();'
+			'package app; class C { static function arr():Void for (l in A.locks) l.wait(); static function values():Void for ('
+			+ 'l in A.byName) l.wait();'
 			+ ' static function kv():Void for (k => l in A.byName) l.wait(); static function key():Void for (k => l in A.byName) k.wait();'
 			+ ' static function kvOther():Void for (k => l in A.bag) l.wait(); static function iterable():Void for (l in A.bag) l.wait();'
 			+ ' static function iterator():Void for (l in A.walker) l.wait(); static function both():Void for (l in A.both) l.wait();'
@@ -1589,16 +1597,16 @@ class CallGraphTest extends Test {
 			'package pkg; class List<T> { public function new() {} public function iterator():Iterator<sys.thread.Lock> return null; }',
 			'package pkg; abstract Vector<T>(Array<utils.Lock>) { public inline function new() this = [];'
 			+ ' @:arrayAccess inline function get(i:Int):utils.Lock return this[i]; }',
-			'package app; import pkg.List; import pkg.Vector; class C {'
-			+ ' static function list():Void { final l:List<utils.Lock> = null; for (x in l) x.wait(); }'
-			+ ' static function index():Void { final v:Vector<sys.thread.Lock> = null; v[0].wait(); }'
-			+ ' static function std():Void { final v:haxe.ds.Vector<sys.thread.Lock> = null; for (x in v) x.wait(); }'
+			'package app; import pkg.List; import pkg.Vector; class C { static function list():Void {'
+			+ ' final l:List<utils.Lock> = null; for (x in l) x.wait(); } static function index():Void { final v:Vector<sys.thread.Lock> = '
+			+ 'null; v[0].wait(); } static function std():Void { final v:haxe.ds.Vector<sys.thread.Lock> = null; for (x in v) x.wait(); }'
 			+ ' static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }',
 			'package other; import pkg.List; class Holder { public static var l:List<utils.Lock> = null; }',
 			'package app; import other.Holder; class E { static function read():Void for (x in Holder.l) x.wait(); }',
 			'package app; import pkg.List; import nowhere.Iterator; class F {'
 			+ ' static function list():Void { final l:List<utils.Lock> = null; for (x in l) x.wait(); } }',
-			'package app; #if never import nowhere.Array; #end class H { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }',
+			'package app; #if never import nowhere.Array; #end class H { static function arr():Void {'
+			+ ' final a:Array<sys.thread.Lock> = []; a[0].wait(); } }',
 			'package app; import somelib.*; class W { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }'
 		]);
 		final own: CallGraph = graphOf([
@@ -1658,16 +1666,16 @@ class CallGraphTest extends Test {
 			+ ' public static function curried(f:Lock -> Void):Void {} public static function gen<T>(f:T -> Void, v:T):Void {}'
 			+ ' public static function maybe(f:Null<(Lock) -> Void>):Void {} }',
 			'package app; class Box<T> { public function new() {} public function each(f:T -> Void):Void {} }',
-			'package app; class C { static function call():Void A.run(l -> l.wait()); static function second():Void A.pair((n, l) -> l.wait());'
-			+ ' static function fnExpr():Void A.curried(function(l) l.wait()); static function arity():Void A.first(l -> l.wait());'
-			+ ' static function own():Void A.gen(l -> l.wait(), null); static function box(b:Box<utils.Lock>):Void b.each(l -> l.wait());'
-			+ ' static function declared():Void { final f:(utils.Lock) -> Void = l -> l.wait(); }'
-			+ ' static function annotated():Void A.run((l:Null<utils.Lock>) -> l.wait()); static function nullable():Void A.maybe(l -> l.wait()); }'
+			'package app; class C { static function call():Void A.run(l -> l.wait()); static function second():Void A.pair((n, l) '
+			+ '-> l.wait()); static function fnExpr():Void A.curried(function(l) l.wait()); static function arity():Void A.first(l -> '
+			+ 'l.wait()); static function own():Void A.gen(l -> l.wait(), null); static function box(b:Box<utils.Lock>):Void b.each(l -> '
+			+ 'l.wait()); static function declared():Void { final f:(utils.Lock) -> Void = l -> l.wait(); } static function '
+			+ 'annotated():Void A.run((l:Null<utils.Lock>) -> l.wait()); static function nullable():Void A.maybe(l -> l.wait()); }'
 		]);
 		function inLambdas(fn: String): Array<String> {
-			final out: Array<String> = [];
-			for (id in g.nodes.keys()) if (StringTools.startsWith(id, '$fn#')) for (e in g.outEdges(id)) if (e.kind == Call) out.push(e.to);
-			return out;
+			return [
+				for (id in g.nodes.keys()) if (StringTools.startsWith(id, '$fn#')) for (e in g.outEdges(id)) if (e.kind == Call) e.to
+			];
 		}
 		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.call'), 'a call\'s parameter, read in the file declaring the callee');
 		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.second'), 'each parameter by its position');
@@ -1708,9 +1716,9 @@ class CallGraphTest extends Test {
 			+ ' static function paren():Void new Box<(Int)>(l -> l.wait()); }'
 		]);
 		function inLambdas(fn: String): Array<String> {
-			final out: Array<String> = [];
-			for (id in g.nodes.keys()) if (StringTools.startsWith(id, '$fn#')) for (e in g.outEdges(id)) if (e.kind == Call) out.push(e.to);
-			return out;
+			return [
+				for (id in g.nodes.keys()) if (StringTools.startsWith(id, '$fn#')) for (e in g.outEdges(id)) if (e.kind == Call) e.to
+			];
 		}
 		Assert.same([], inLambdas('C.shift'), 'an optional parameter before it, fewer arguments than declared');
 		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.full'), 'every argument passed');
@@ -1735,8 +1743,8 @@ class CallGraphTest extends Test {
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
 			'package app; import sys.thread.Lock; class Maker { public function new() {} public function make():Lock return null; }',
 			'package app; class Box<T> { public function new(v:T) {} public function get():T return null; }',
-			'package app; class C { static function made():Void new Maker().make().wait(); static function direct():Void new utils.Lock().wait();'
-			+ ' static function generic():Void new Box(new utils.Lock()).get().wait(); }'
+			'package app; class C { static function made():Void new Maker().make().wait(); static function direct():Void new '
+			+ 'utils.Lock().wait(); static function generic():Void new Box(new utils.Lock()).get().wait(); }'
 		]);
 		function targets(from: String): Array<String> {
 			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
@@ -1861,18 +1869,16 @@ class CallGraphTest extends Test {
 		final g: CallGraph = graphOf([
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
 			'package app; import utils.Lock; class A { public static function id<Lock>(x:Lock):Lock return x;'
-			+ ' public static function two<Lock>(a:Lock, b:Lock):Lock return a; public static function pick<Lock>(...xs:Lock):Lock return xs[0];'
-			+ ' public static function head<Lock>(xs:Array<Lock>):Lock return xs[0];'
+			+ ' public static function two<Lock>(a:Lock, b:Lock):Lock return a; public static function pick<Lock>(...xs:Lock):Lock return '
+			+ 'xs[0]; public static function head<Lock>(xs:Array<Lock>):Lock return xs[0];'
 			+ ' public static function skip<Lock>(?n:Int, x:Lock, ?y:utils.Lock):Lock return x; }',
 			'package app; class Box<T> { public function new() {} public function get<T>(x:T):T return x; }',
 			'package app; class C { static function id(s:sys.thread.Lock):Void A.id(s).wait();'
-			+ ' static function local(s:sys.thread.Lock):Void { final l = A.id(s); l.wait(); }'
-			+ ' static function same(s:sys.thread.Lock, t:sys.thread.Lock):Void A.two(s, t).wait();'
-			+ ' static function apart(s:sys.thread.Lock, u:utils.Lock):Void A.two(s, u).wait();'
+			+ ' static function local(s:sys.thread.Lock):Void { final l = A.id(s); l.wait(); } static function same(s:sys.thread.Lock, '
+			+ 't:sys.thread.Lock):Void A.two(s, t).wait(); static function apart(s:sys.thread.Lock, u:utils.Lock):Void A.two(s, u).wait();'
 			+ ' static function rest(s:sys.thread.Lock, u:utils.Lock):Void A.pick(s, u).wait();'
-			+ ' static function nested(xs:Array<sys.thread.Lock>):Void A.head(xs).wait();'
-			+ ' static function shadow(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait();'
-			+ ' static function shifted(s:sys.thread.Lock, u:utils.Lock):Void A.skip(s, u).wait();'
+			+ ' static function nested(xs:Array<sys.thread.Lock>):Void A.head(xs).wait(); static function shadow(b:Box<utils.Lock>, '
+			+ 's:sys.thread.Lock):Void b.get(s).wait(); static function shifted(s:sys.thread.Lock, u:utils.Lock):Void A.skip(s, u).wait();'
 			+ ' static function placed(s:sys.thread.Lock, u:utils.Lock):Void A.skip(0, s, u).wait(); }'
 		]);
 		function waits(from: String): Array<String> {
@@ -1915,11 +1921,14 @@ class CallGraphTest extends Test {
 		final g: CallGraph = graphOf([
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
 			'package utils; class Gate { public function new() {} public function wait():Bool return true; }',
-			'package app; class A {\n#if sys\npublic static var lock:sys.thread.Lock = null;\npublic static function make():sys.thread.Lock return null;\n'
-			+ 'public static function gate():sys.thread.Lock return null;\n#else\npublic static var lock:utils.Lock = null;\n'
-			+ 'public static function make():utils.Lock return null;\npublic static function gate():utils.Gate return null;\n#end\n}',
-			'package app; class B {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock:Array<utils.Lock> = null;\n#end\n}',
-			'package app; class D {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock = null;\n#end\n}',
+			'package app; class A {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n'
+			+ 'public static function make():sys.thread.Lock return null;\npublic static function gate():sys.thread.Lock return null;\n'
+			+ '#else\npublic static var lock:utils.Lock = null;\npublic static function make():utils.Lock return null;\n'
+			+ 'public static function gate():utils.Gate return null;\n#end\n}',
+			'package app; class B {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\n'
+			+ 'public static var lock:Array<utils.Lock> = null;\n#end\n}',
+			'package app; class D {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock = null;\n'
+			+ '#end\n}',
 			'package app; class C { static function field():Void A.lock.wait(); static function call():Void A.make().wait();'
 			+ ' static function named():Void A.gate().wait(); static function apart():Void B.lock.wait();'
 			+ ' static function noType():Void D.lock.wait(); }'

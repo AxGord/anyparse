@@ -143,7 +143,7 @@ final class TypeNameBinding {
 	 */
 	public function tierOf(name: String, fi: FileInfo, ?at: Int, ?without: ImportInfo): Tier {
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
-		if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);
+		if (own.length > 0) return Bound(own.map(t -> {file: fi, type: t }));
 		final order: StatementOrder = orderOf(fi, at);
 		final asked: StatementOrder = without == null ? order : {
 			explicit: order.explicit.filter(o -> o != without),
@@ -271,7 +271,7 @@ final class TypeNameBinding {
 		final out: NameTargets = { bound: null, guarded: [], unlisted: [] };
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
 		if (own.length > 0) {
-			out.bound = InIndex([for (t in own) { file: fi, type: t }]);
+			out.bound = InIndex(own.map(t -> {file: fi, type: t }));
 			return out;
 		}
 		final order: StatementOrder = orderOf(fi, at);
@@ -378,7 +378,7 @@ final class TypeNameBinding {
 	private function orderOf(fi: FileInfo, at: Null<Int>): StatementOrder {
 		final explicit: Array<ImportInfo> = [];
 		final wildcards: Array<ImportInfo> = [];
-		for (imports in [fi.imports].concat([for (group in fi.ambientImports) group.imports])) {
+		for (imports in [fi.imports].concat(fi.ambientImports.map(group -> group.imports))) {
 			final lastFirst: Array<ImportInfo> = imports.copy();
 			lastFirst.reverse();
 			for (imp in lastFirst) (imp.kind == ImportKind.Wild ? wildcards : explicit).push(imp);
@@ -711,7 +711,7 @@ final class TypeNameBinding {
 	/** Whether two answers name the same declarations, as files and spans. */
 	public static function sameDecls(a: Array<ResolvedType>, b: Array<ResolvedType>): Bool {
 		inline function keys(decls: Array<ResolvedType>): Array<String> {
-			final out: Array<String> = [for (d in decls) '${d.file.file}#${d.type.span.from}'];
+			final out: Array<String> = decls.map(d -> '${d.file.file}#${d.type.span.from}');
 			out.sort(Reflect.compare);
 			return out;
 		}

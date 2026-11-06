@@ -197,9 +197,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 	 * `GroupedFix` states: the two views can never disagree about WHICH edits a fix produces.
 	 */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return [
-			for (edit in fixGrouped(source, violations, plugin, index)) { span: edit.span, text: edit.text }
-		];
+		return fixGrouped(source, violations, plugin, index).map(edit -> {span: edit.span, text: edit.text });
 	}
 
 	/**

@@ -86,26 +86,18 @@ final class MoveDeclaration {
 			text: strings(section, 'text').map(at),
 			textExclude: strings(section, 'textExclude').map(at),
 			textExtensions: strings(section, 'textExtensions'),
-			registries: [
-				for (r in objects(section, 'registries', ['file', 'keys', 'byPackage', 'members'])) registry(r, at)
-			],
+			registries: objects(section, 'registries', ['file', 'keys', 'byPackage', 'members']).map(r -> registry(r, at)),
 			sortedLists: [
-				for (list in objects(section, 'sortedLists', ['parts'])) [
-					for (part in objects(list, 'parts', ['file', 'select']))
-						{
-							file: at(string(part, 'sortedLists.parts', 'file')),
-							select: string(part, 'sortedLists.parts', 'select')
-						}
-				]
+				for (list in objects(section, 'sortedLists', ['parts'])) objects(list, 'parts', ['file', 'select']).map(part -> {
+					file: at(string(part, 'sortedLists.parts', 'file')),
+					select: string(part, 'sortedLists.parts', 'select')
+				})
 			],
-			mirrors: [
-				for (m in objects(section, 'mirrors', ['source', 'test', 'suffixes']))
-					{
-						source: at(string(m, 'mirrors', 'source')),
-						test: at(string(m, 'mirrors', 'test')),
-						suffixes: strings(m, 'suffixes')
-					}
-			]
+			mirrors: objects(section, 'mirrors', ['source', 'test', 'suffixes']).map(m -> {
+				source: at(string(m, 'mirrors', 'source')),
+				test: at(string(m, 'mirrors', 'test')),
+				suffixes: strings(m, 'suffixes')
+			})
 		}) catch (exception: Exception) Left(exception.message);
 	}
 

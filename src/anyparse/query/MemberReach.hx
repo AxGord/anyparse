@@ -1633,7 +1633,7 @@ final class MemberReach {
 		final constructs: Bool = bodies.foreach(n ->
 			n.kind == FACT_CONSTRUCTOR || (node.name == CallGraph.INIT_NAME && n.kind == FACT_INITIALIZER)
 		);
-		final work: Array<{ n: FactNode, fresh: Bool }> = [for (n in bodies) { n: n, fresh: constructs }];
+		final work: Array<{ n: FactNode, fresh: Bool }> = bodies.map(n -> {n: n, fresh: constructs });
 		while (work.length > 0) {
 			final item: Null<{ n: FactNode, fresh: Bool }> = work.pop();
 			if (item == null) break;
@@ -1701,7 +1701,7 @@ final class MemberReach {
 		final key: String = f.at.file;
 		final view: Null<FactsView> = _scope.facts;
 		if (view == null) return false;
-		final files: Array<String> = [node.file].concat([for (d in g.declarationsOf(node.id)) d.file]).concat(g.initializerFiles(node.id));
+		final files: Array<String> = [node.file].concat(g.declarationsOf(node.id).map(d -> d.file)).concat(g.initializerFiles(node.id));
 		final file: Null<String> = files.find(path -> view.keyOf(path) == key);
 		return file != null && _touches.selfHandler(g, file, f.at.span, f.field);
 	}
@@ -2376,7 +2376,7 @@ final class MemberReach {
 	private function bodySpans(g: CallGraph, node: FnNode): Null<Array<Occurrence>> {
 		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
 		if (declared.length > 0)
-			return _scope.facts?.typedElsewhere(node, declared) == true ? null : [for (d in declared) { file: d.file, span: d.span }];
+			return _scope.facts?.typedElsewhere(node, declared) == true ? null : declared.map(d -> {file: d.file, span: d.span });
 		final type: Null<String> = node.typeName;
 		final files: Array<String> = g.initializerFiles(node.id);
 		final isStatic: Bool = node.name == CallGraph.STATIC_INIT_NAME;
@@ -2607,7 +2607,7 @@ final class MemberReach {
 			site.implicit.push({
 				family: Text,
 				span: callSpan,
-				types: [for (o in converted) convertedType(o)],
+				types: converted.map(convertedType),
 				exact: false
 			});
 		}
@@ -2943,7 +2943,7 @@ final class MemberReach {
 	): AdmissionSite {
 		final out: AdmissionSite = site(from, file, span, 'native', [], values);
 		final ids: Array<String> = [];
-		final named: Array<Null<String>> = [for (c in classes) FactsView.simpleSource(c)];
+		final named: Array<Null<String>> = classes.map(FactsView.simpleSource);
 		for (c in named) {
 			final members: Null<Array<String>> = c == null ? null : _g.namedClassIds(g, c);
 			if (members == null) {
@@ -2978,7 +2978,7 @@ final class MemberReach {
 		final scoped: Null<Array<{ file: String, source: String }>> = host?.completeProjectFiles();
 		final project: Array<{ file: String, source: String }> = scoped == null
 			? [{ file: file, source: source }]
-			: [for (f in scoped) f.file == file ? { file: file, source: source } : f];
+			: scoped.map(f -> f.file == file ? {file: file, source: source } : f);
 		if (scoped != null && !project.exists(f -> f.file == file)) project.push({ file: file, source: source });
 		// an edit applied earlier in the pass to ANY project file makes the memoised graph describe code that is gone:
 		// taken in place when it changed no declaration, else the analysis is rebuilt
@@ -3060,7 +3060,7 @@ final class MemberReach {
 	 */
 	private static function signatureOf(fi: FileInfo): String {
 		final parts: Array<String> = [fi.pkg, fi.module];
-		for (group in [fi.imports].concat([for (g in fi.ambientImports) g.imports])) for (imp in group)
+		for (group in [fi.imports].concat(fi.ambientImports.map(g -> g.imports))) for (imp in group)
 			parts.push('import ${imp.kind} ${imp.raw} ${imp.alias} ${imp.aliasTarget}');
 		for (t in fi.types) {
 			parts.push(
@@ -3090,7 +3090,7 @@ final class MemberReach {
 		final cwd: String = Sys.getCwd();
 		final projectPaths: Map<String, Bool> = [for (f in project) OracleCoverage.canonical(cwd, f.file) => true];
 		final library: Array<{ file: String, source: String }> = [for (f in builds.library) if (!projectPaths.exists(f.file)) f];
-		return IndexScope.over(project.concat(library), plugin, [for (f in library) f.file]);
+		return IndexScope.over(project.concat(library), plugin, library.map(f -> f.file));
 	}
 
 	// -- locals -----------------------------------------------------------------------------------

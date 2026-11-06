@@ -246,7 +246,7 @@ final class LintFixLedger {
 		// counts its arm's findings as hand-off declines until the risky phase answers for them.
 		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) if (!(c is RiskyArm)) c.id()];
 		riskyIds.sort(Reflect.compare);
-		final oracleIds: Array<String> = [for (c in oracleAssisted) c.id()];
+		final oracleIds: Array<String> = oracleAssisted.map(c -> c.id());
 		final reasons: Map<String, String> = [
 			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()
 		];
@@ -254,7 +254,7 @@ final class LintFixLedger {
 		// that gains the seam without touching `Cli` would otherwise keep the wrong verdict silently.
 		final crossFileIds: Array<String> = [for (c in checks) if (c is CrossFileFix) c.id()];
 		final lines: Array<String> = unfixedFixLedger(ledger, reasons, oracleIds, riskyIds, crossFileIds);
-		for (line in exerciseCensus(ledger, [for (c in checks) c.id()], riskyIds)) lines.push(line);
+		for (line in exerciseCensus(ledger, checks.map(c -> c.id()), riskyIds)) lines.push(line);
 		return lines;
 	}
 
@@ -285,7 +285,7 @@ final class LintFixLedger {
 			if (unseen.length == 0) continue;
 			var count: Int = 0;
 			for (r in unseen) count += r.count;
-			rows.push({ rule: rule, count: count, texts: [for (r in unseen) r.text] });
+			rows.push({ rule: rule, count: count, texts: unseen.map(r -> r.text) });
 		}
 		if (rows.length == 0) return [];
 		rows.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.rule, b.rule));

@@ -41,7 +41,7 @@ final class Args {
 
 	/** The value of every occurrence of the repeatable option `name`, in command-line order; empty when it is not given. */
 	public function options(name: String): Array<String> {
-		return [for (values in every(name, 1)) values[0]];
+		return every(name, 1).map(values -> values[0]);
 	}
 
 	/**

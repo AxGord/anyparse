@@ -109,7 +109,7 @@ class HxMemberVarTrailOptSliceTest extends HxTestHelpers {
 
 	private function parseMembers(source: String): Array<HxClassMember> {
 		final ast: HxClassDecl = HaxeParser.parse(source);
-		return [for (m in ast.members) m.member];
+		return ast.members.map(m -> m.member);
 	}
 
 	private function expectFinalMember(member: HxClassMember): HxVarDecl {

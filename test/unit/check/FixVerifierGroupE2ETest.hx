@@ -243,9 +243,9 @@ private class TableFake implements Check implements RiskyFix implements GroupedF
 	private final _table: Array<FakeEdit>;
 	private final _id: String;
 
-	public function new(table: Array<FakeEdit>, ?id: String) {
+	public function new(table: Array<FakeEdit>, id: String = RULE_ID) {
 		_table = table;
-		_id = id ?? RULE_ID;
+		_id = id;
 	}
 
 	public function id(): String {
@@ -276,9 +276,7 @@ private class TableFake implements Check implements RiskyFix implements GroupedF
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (edit in fixGrouped(source, violations, plugin, index)) { span: edit.span, text: edit.text }
-		];
+		return fixGrouped(source, violations, plugin, index).map(edit -> {span: edit.span, text: edit.text });
 	}
 
 	public function fixGrouped(

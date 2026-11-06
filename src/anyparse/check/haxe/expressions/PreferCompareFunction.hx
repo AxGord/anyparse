@@ -140,9 +140,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return [
-			for (edit in fixGrouped(source, violations, plugin, index)) { span: edit.span, text: edit.text }
-		];
+		return fixGrouped(source, violations, plugin, index).map(edit -> {span: edit.span, text: edit.text });
 	}
 
 	/** An `import` and the rewrites that need it are kept or dropped together. */
@@ -167,7 +165,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
 			file, source, tree, RunScan.typeInfoOf(plugin)?.importMap(source, file) ?? [], plugin, scope()
 		);
-		final texts: Array<String> = [for (m in fixed) replacementOf(m, printer)];
+		final texts: Array<String> = fixed.map(replacementOf.bind(_, printer));
 		final imports: Array<PendingImportEdit> = printer.pendingImportEdits();
 		final groupOf: Map<String, Int> = [];
 		for (group => edit in imports) for (path in edit.paths) groupOf[path] = group;

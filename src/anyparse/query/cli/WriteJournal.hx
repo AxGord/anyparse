@@ -56,12 +56,12 @@ final class WriteJournal {
 
 	/** Every recorded path's text before the run. */
 	public function originals(): Array<JournalState> {
-		return [for (entry in _entries) { path: entry.path, content: entry.original }];
+		return _entries.map(entry -> {path: entry.path, content: entry.original });
 	}
 
 	/** Every recorded path's text now — what `replay` writes back after a `rollback`. */
 	public function current(): Array<JournalState> {
-		return [for (entry in _entries) { path: entry.path, content: read(entry.path) }];
+		return _entries.map(entry -> {path: entry.path, content: read(entry.path) });
 	}
 
 	/**

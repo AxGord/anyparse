@@ -50,7 +50,7 @@ final class AncestorTable {
 	 * it resolves to when that is a single declaration, and the type arguments it passes.
 	 */
 	public function links(r: ResolvedType): Array<AncestorLink> {
-		return _cache.ancestorLinks.answer(DeclarationKey.ofType(r), () -> [for (raw in r.type.supertypesRaw) linkOf(r, raw)]);
+		return _cache.ancestorLinks.answer(DeclarationKey.ofType(r), () -> r.type.supertypesRaw.map(linkOf.bind(r)));
 	}
 
 	/**
@@ -105,8 +105,8 @@ final class AncestorTable {
 		// a type parameter of the member shadows the declaring type's of its name
 		final visible: Array<Int> = [for (i in 0...params.length) if (!own.contains(params[i])) i];
 		return if (passed != null && passed.length >= params.length)
-			CallGraphNames.substituteTypeParams(complete, [for (i in visible) params[i]], [for (i in visible) passed[i]], _typeSyntax)
-		else if (CallGraphNames.mentionsTypeName(complete, [for (i in visible) params[i]], _typeSyntax))
+			CallGraphNames.substituteTypeParams(complete, visible.map(i -> params[i]), visible.map(i -> passed[i]), _typeSyntax)
+		else if (CallGraphNames.mentionsTypeName(complete, visible.map(i -> params[i]), _typeSyntax))
 			null
 		else
 			complete;
@@ -166,7 +166,7 @@ final class AncestorTable {
 		return if (via == null || own.length == 0)
 			via
 		else if (args.length >= own.length)
-			[for (a in via) CallGraphNames.substituteTypeParams(a, own, args, _typeSyntax)]
+			via.map(a -> CallGraphNames.substituteTypeParams(a, own, args, _typeSyntax))
 		else if (via.exists(a -> CallGraphNames.mentionsTypeName(a, own, _typeSyntax)))
 			null
 		else
@@ -256,9 +256,9 @@ final class AncestorTable {
 			if (above == null) continue;
 			final params: Array<String> = ancestor.type.typeParamNames;
 			final args: Null<Array<String>> = link.args;
-			return args == null || args.length < params.length ? null : [
-				for (a in above) CallGraphNames.substituteTypeParams(a, params, args, _typeSyntax)
-			];
+			return args == null || args.length < params.length
+				? null
+				: above.map(a -> CallGraphNames.substituteTypeParams(a, params, args, _typeSyntax));
 		}
 		return null;
 	}

@@ -102,7 +102,7 @@ class TestChild {
 		if (driver != null && stopped(driver)) js.Syntax.code('process.kill({0}, "SIGKILL")', driver);
 		final written: Null<Array<ChildRun>> = try TestChildDocumentParser.parse(sys.io.File.getContent('$dir/runs.json'))
 			.runs catch (exception: haxe.Exception) null;
-		return written == null ? null : [for (r in written) haxeRun(r)];
+		return written?.map(haxeRun);
 	}
 
 	/** The input file of a `spawn`, `bounded-run` or `bounded-pending` child: the jobs it runs. */
@@ -112,23 +112,20 @@ class TestChild {
 
 	/** The input file of a `prepare` child: the configurations it prepares. */
 	public static function configsText(configs: Array<OracleConfig>): String {
-		return TestChildDocumentWriter.write({ configs: [for (c in configs) childConfig(c)] }, JsonFormat.instance.compactWriteOptions);
+		return TestChildDocumentWriter.write({ configs: configs.map(childConfig) }, JsonFormat.instance.compactWriteOptions);
 	}
 
 	/** The output file of a `bounded-run` or `bounded-pending` child: the runs it answers. */
 	private static function runsText(runs: Array<HaxeRun>): String {
-		final written: Array<ChildRun> = [
-			for (r in runs)
-				{
-					status: r.status,
-					out: r.out,
-					err: r.err,
-					failure: r.failure,
-					overflowed: r.overflowed,
-					cancelled: r.cancelled,
-					unstarted: r.unstarted
-				}
-		];
+		final written: Array<ChildRun> = runs.map(r -> {
+			status: r.status,
+			out: r.out,
+			err: r.err,
+			failure: r.failure,
+			overflowed: r.overflowed,
+			cancelled: r.cancelled,
+			unstarted: r.unstarted
+		});
 		return TestChildDocumentWriter.write({ runs: written }, JsonFormat.instance.compactWriteOptions);
 	}
 

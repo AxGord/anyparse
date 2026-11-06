@@ -395,7 +395,7 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 			lock: fold.lock,
 			longMaking: fold.longMaking,
 			finding: finding,
-			calls: [for (c in normal.blockingCalls(fold.hold, held)) c.edge],
+			calls: normal.blockingCalls(fold.hold, held).map(c -> c.edge),
 			taint: normal,
 			held: held,
 			opaque: handOff || graded.taint.blindLong(fold.hold),

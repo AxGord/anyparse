@@ -266,7 +266,7 @@ class HxTestHelpers extends Test {
 	 * analog of `expectAnon`.
 	 */
 	private function enumCtors(ed: HxEnumDecl): Array<HxEnumCtor> {
-		return [for (m in ed.ctors) m.ctor];
+		return ed.ctors.map(m -> m.ctor);
 	}
 
 	/**
@@ -385,7 +385,7 @@ class HxTestHelpers extends Test {
 	 * `HxVarDecl.type`) directly; throws on any non-Anon input.
 	 */
 	private function expectAnon(t: Null<HxType>): Array<HxAnonField> {
-		return [for (m in expectAnonMembers(t)) m.field];
+		return expectAnonMembers(t).map(m -> m.field);
 	}
 
 	/**

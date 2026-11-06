@@ -332,9 +332,7 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 	/** Every raw `#if` region of `source`, or null when it does not parse — the fail-closed answer. */
 	private static function opaqueRegionsOf(source: String, plugin: GrammarPlugin): Null<Array<Span>> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
-		return tree == null ? null : [
-			for (region in CondRegionScan.opaqueCondRegions(tree, source, plugin.refShape())) region.region
-		];
+		return tree == null ? null : CondRegionScan.opaqueCondRegions(tree, source, plugin.refShape()).map(region -> region.region);
 	}
 
 }

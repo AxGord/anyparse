@@ -393,7 +393,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final memo: Null<{ sources: Array<String>, index: SymbolIndex }> = _indexMemo[key];
 		if (memo != null && sameSources(memo.sources, files)) return memo.index;
 		final index: SymbolIndex = SymbolIndex.build(files, this, thirdPartyFiles);
-		_indexMemo[key] = { sources: [for (entry in files) entry.source], index: index };
+		_indexMemo[key] = { sources: files.map(entry -> entry.source), index: index };
 		return index;
 	}
 
@@ -403,7 +403,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final memo: Null<{ sources: Array<String>, index: FieldWriteIndex }> = _writeIndexMemo[key];
 		if (memo != null && sameSources(memo.sources, files)) return memo.index;
 		final index: FieldWriteIndex = FieldWriteIndex.build(files, this, indexOver(files));
-		_writeIndexMemo[key] = { sources: [for (entry in files) entry.source], index: index };
+		_writeIndexMemo[key] = { sources: files.map(entry -> entry.source), index: index };
 		return index;
 	}
 

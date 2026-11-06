@@ -333,7 +333,7 @@ class LexicalRegionAgreementTest extends Test {
 
 	/** Every outermost literal node of `tree` that `source`'s scanner regions do not report exactly. */
 	private function literalsWithoutARegion(source: String, tree: QueryNode): Array<String> {
-		final keys: Array<String> = [for (span in scannerLiteralSpans(source)) '${span.from}:${span.to}'];
+		final keys: Array<String> = scannerLiteralSpans(source).map(span -> '${span.from}:${span.to}');
 		return orphansAgainst(tree, keys);
 	}
 

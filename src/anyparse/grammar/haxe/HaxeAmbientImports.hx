@@ -47,9 +47,7 @@ final class HaxeAmbientImports {
 		final root: Null<String> = sourceRootOf(path, pkg);
 		final stop: String = named(root ?? Path.directory(path));
 		final walk: ConfigChain = ConfigFinder.findUpTo(path, AMBIENT_FILE, stop);
-		final chain: Array<AmbientImportSource> = [
-			for (doc in walk.documents) { file: doc.path, source: doc.content }
-		];
+		final chain: Array<AmbientImportSource> = walk.documents.map(doc -> {file: doc.path, source: doc.content });
 		// A source that EXISTS and could not be read leaves the chain knowingly short, and a short chain
 		// binds names this answer does not carry — the one state a consumer must refuse to pin against.
 		return { sources: chain, bounded: root != null && walk.unreadable.length == 0 };

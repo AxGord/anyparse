@@ -281,7 +281,7 @@ final class CallGraphTypes {
 		unionInto(_kinds, t.name, [t.kind]);
 		// each supertype as the declaration's own file binds the name it writes (`CallGraphImports.typeOf`): a library type a
 		// project type's simple name bears is another type, never the project's
-		final supers: Array<String> = [for (raw in t.supertypesRaw) imports.typeOf(file, raw)];
+		final supers: Array<String> = t.supertypesRaw.map(raw -> imports.typeOf(file, raw));
 		unionInto(_supers, t.name, supers);
 		generics.record(t, file);
 		unionInto(_interfaces, t.name, [

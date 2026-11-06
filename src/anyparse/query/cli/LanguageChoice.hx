@@ -71,7 +71,7 @@ final class LanguageChoice {
 			final texts: Int = cast(command, LeadingQueryCount).leadingQueryCount(args);
 			return [for (n => i in positionals) if (n >= texts) args[i]];
 		}
-		if (!(command is LeadingQuery)) return [for (i in positionals) args[i]];
+		if (!(command is LeadingQuery)) return positionals.map(i -> args[i]);
 		final separator: Int = CliArgs.nameSeparatorIndex(args);
 		final queries: Array<String> = [];
 		final scope: Array<String> = [];
@@ -93,7 +93,7 @@ final class LanguageChoice {
 
 	/** Every registered `--lang` with its extensions, for a usage error: `haxe .hx, json .json`. */
 	private static function known(): String {
-		return [for (entry in CliArgs.grammars()) '${entry.lang} ${entry.extensions.join(' ')}'].join(', ');
+		return CliArgs.grammars().map(entry -> '${entry.lang} ${entry.extensions.join(' ')}').join(', ');
 	}
 
 	/** Whether `command` declares this very call language-free (`LanguageFreeWhen`). */

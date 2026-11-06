@@ -356,7 +356,7 @@ final class OracleCache {
 	public static function readsHashed(root: String, parsed: Null<Array<String>>, hashed: Map<String, String>): Bool {
 		#if (sys || nodejs)
 		if (parsed == null || parsed.length == 0) return false;
-		final read: Array<String> = [for (path in parsed) OracleCoverage.canonical(root, path)];
+		final read: Array<String> = parsed.map(path -> OracleCoverage.canonical(root, path));
 		if ([for (path in read) if (!hashed.exists(path)) path].length == 0) return true;
 		final resolved: Map<String, String> = [for (path => hash in hashed) OracleCoverage.canonical(root, path) => hash];
 		return [for (path in read) if (!resolved.exists(path)) path].length == 0;
@@ -421,7 +421,7 @@ final class OracleCache {
 	}
 
 	private static function rootsOf(root: String, chain: HxmlChain, probe: CompilerProbe): Array<String> {
-		return chain.classPaths.concat([for (dir in probe.dirs) absolute(root, dir)]);
+		return chain.classPaths.concat(probe.dirs.map(dir -> absolute(root, dir)));
 	}
 
 	#if (sys || nodejs)

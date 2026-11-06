@@ -30,7 +30,7 @@ class ReachDefinesProbeTest extends Test {
 			Assert.equals('js,nodejs', read.defined.join(','));
 			Assert.equals('js,nodejs,late', read.everDefined.join(','));
 			Assert.equals('src/Main.hx', read.compiled.join(','));
-			Assert.equals('Main@src/Main.hx,Sub@src/Main.hx', [for (t in read.types) '${t.name}@${t.file}'].join(','));
+			Assert.equals('Main@src/Main.hx,Sub@src/Main.hx', read.types.map(t -> '${t.name}@${t.file}').join(','));
 		}
 		// the macro joins the LAST arm only: an earlier arm's defines are not in the transcript
 		Assert.isNull(ReachDefinesProbe.parse('two.hxml', 'Defines: js\n$one'));
@@ -172,7 +172,7 @@ class ReachDefinesProbeTest extends Test {
 			ReachDefinesProbe.probeAll([{ hxml: 'build.hxml', dir: dir, defines: [] }])?.configurations[0];
 		Assert.notNull(read);
 		if (read != null) {
-			final names: Array<String> = [for (t in read.types) t.name];
+			final names: Array<String> = read.types.map(t -> t.name);
 			for (name in ['Main', 'Base', 'Wrap', 'Made']) Assert.isTrue(names.contains(name), '$name was not reported');
 			Assert.isFalse(names.exists(n -> n.indexOf('_Impl_') >= 0), 'an abstract implementation class was reported');
 			final main: Null<{ name: String, file: String }> = read.types.find(t -> t.name == 'Main');

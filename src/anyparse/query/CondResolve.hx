@@ -170,7 +170,7 @@ final class CondResolve {
 	 * equal-span tie-break cannot fire here.
 	 */
 	private static function outermost(regions: Array<CondRegion>): Array<CondRegion> {
-		final placeholders: Array<{ span: Span, text: String }> = [for (region in regions) { span: region.span, text: '' }];
+		final placeholders: Array<{ span: Span, text: String }> = regions.map(region -> {span: region.span, text: '' });
 		return [
 			for (i in 0...regions.length) if (!CanonicalEdit.isContainedEdit(placeholders, i)) regions[i]
 		];

@@ -68,7 +68,7 @@ final class CatchTypes {
 	public static function writtenType(declared: QueryNode, shape: RefShape): Null<String> {
 		final name: Null<String> = declared.name;
 		if (!(shape.typeAnnotationKinds ?? []).contains(declared.kind) || name == null) return null;
-		final args: Array<Null<String>> = [for (c in declared.children) writtenType(c, shape)];
+		final args: Array<Null<String>> = declared.children.map(writtenType.bind(_, shape));
 		return if (args.contains(null))
 			null
 		else if (args.length == 0)

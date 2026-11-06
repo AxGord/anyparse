@@ -762,7 +762,7 @@ final class SourceCommand implements CliCommand {
 		final index: AddressIndex = Address.describerFor(tree, plugin.selectKindEquivalence());
 		final entries: Array<OutlineEntry> = [];
 		collectOutline(tree, 0, plugin.refShape(), entries);
-		final nodes: Array<QueryNode> = [for (entry in entries) entry.node];
+		final nodes: Array<QueryNode> = entries.map(entry -> entry.node);
 		// The SAME window `--select` prints, not the bare node span — so a menu entry
 		// states what following it costs. It also exposes a greedy one: a module-level
 		// declaration whose span runs on to the next declaration reads as a
@@ -786,11 +786,11 @@ final class SourceCommand implements CliCommand {
 		// is still better than no menu at all.
 		final spanning: Array<{ selector: String, from: Int, to: Int }> = found.filter(entry -> entry.to > entry.from);
 		final menu: Array<{ selector: String, from: Int, to: Int }> = spanning.length > 0 ? spanning : found;
-		return [
-			for (entry in menu)
+		return menu.map(
+			entry ->
 				'${entry.selector}   lines ${entry.from}-${entry.to}'
-					+ (entry.to - entry.from + 1 > budget ? ' (past the budget itself — prefer --range)' : '')
-		];
+				+ (entry.to - entry.from + 1 > budget ? ' (past the budget itself — prefer --range)' : '')
+		);
 	}
 
 	/** The 1-based inclusive line range `span` covers in `source` — the window a reader is offered. */
@@ -911,7 +911,7 @@ final class SourceCommand implements CliCommand {
 		final shape: RefShape = plugin.refShape();
 		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final windows: Array<Null<Span>> = CliEdit.sourceWindows(
-			tree, [for (entry in entries) entry.node], source, plugin.lexicalRegions.bind(source)
+			tree, entries.map(entry -> entry.node), source, plugin.lexicalRegions.bind(source)
 		);
 		final folded: Array<Span> = [];
 		final rows: Array<OutlineRow> = outlineRows(entries, windows, source, shape, folded);

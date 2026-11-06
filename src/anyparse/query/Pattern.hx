@@ -246,7 +246,7 @@ final class Metavar {
 	 */
 	public static function reclassify(tree: QueryNode, identKind: String): QueryNode {
 		final n: Null<String> = tree.name;
-		final newChildren: Array<QueryNode> = [for (c in tree.children) reclassify(c, identKind)];
+		final newChildren: Array<QueryNode> = tree.children.map(reclassify.bind(_, identKind));
 		// The type SLOT is carried through and reclassified like any other subtree. Rebuilding
 		// a pattern node without it dropped every type a pattern WROTE, so `final $x:Int = $v`
 		// reached the matcher with no annotation at all and matched `final b:String = 1`;
@@ -455,7 +455,7 @@ final class PatternStar {
 	 * placeholder: the star's whole point is that it is not a metavar.
 	 */
 	public static function reclassify(tree: QueryNode): QueryNode {
-		final children: Array<QueryNode> = [for (c in tree.children) reclassify(c)];
+		final children: Array<QueryNode> = tree.children.map(reclassify);
 		final span: Null<Span> = tree.span;
 		// Carried through for the same reason as in `Metavar.reclassify`: a rebuild that
 		// dropped the type slot dropped the pattern's own annotation.

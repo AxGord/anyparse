@@ -237,21 +237,18 @@ final class CondDirectives {
 	 */
 	public static function skipMarks(source: String, shape: RefShape, regions: Array<LexRegion>): Array<SkipMark> {
 		final elseKeywords: Array<String> = shape.conditionalElseKeywords ?? [];
-		return [
-			for (directive in scan(source, shape, () -> regions))
-				{
-					from: directive.span.from,
-					to: directive.span.to,
-					role: if (directive.keyword == shape.conditionalIfKeyword)
-						SkipMarkRole.Open
-					else if (directive.keyword == shape.conditionalEndKeyword)
-						SkipMarkRole.Close
-					else if (elseKeywords.contains(directive.keyword))
-						SkipMarkRole.Next
-					else
-						SkipMarkRole.Other
-				}
-		];
+		return scan(source, shape, () -> regions).map(directive -> {
+			from: directive.span.from,
+			to: directive.span.to,
+			role: if (directive.keyword == shape.conditionalIfKeyword)
+				SkipMarkRole.Open
+			else if (directive.keyword == shape.conditionalEndKeyword)
+				SkipMarkRole.Close
+			else if (elseKeywords.contains(directive.keyword))
+				SkipMarkRole.Next
+			else
+				SkipMarkRole.Other
+		});
 	}
 
 	/** Whether `c` opens a string literal. */

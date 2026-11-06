@@ -76,7 +76,7 @@ final class GraphMermaid {
 		final changes: Array<GraphChange> = [Added, Removed, Changed];
 		for (change in changes) classed(statements, change, nodeStyle(change), leaves.filter(n -> n.change == change));
 		// a link's ordinal is its place among the chart's links, and every edge is one chain of one link
-		final mutual: Array<Bool> = [for (e in edges) graph.isMutual(e)];
+		final mutual: Array<Bool> = edges.map(graph.isMutual);
 		for (change in changes)
 			linkStyled(statements, [for (i => e in edges) if (e.change == change && !mutual[i]) '$i'], linkStyle(change));
 		// a changed link closing a cycle keeps its change's colour, which a comparison exists to show, and is drawn thick
@@ -102,7 +102,7 @@ final class GraphMermaid {
 		final children: Null<Array<GraphNode>> = byParent[n.id];
 		return children == null
 			? Chain({ head: group(vertex(n)), links: [] })
-			: Subgraph({ head: Titled({ name: n.id, title: Plain(titleOf(n)) }), body: [for (c in children) declaration(byParent, c)] });
+			: Subgraph({ head: Titled({ name: n.id, title: Plain(titleOf(n)) }), body: children.map(declaration.bind(byParent)) });
 	}
 
 	/** `n` as a vertex: a member rounded, a type a subroutine box, a package or group a rectangle, an external node a stadium. */
@@ -166,7 +166,7 @@ final class GraphMermaid {
 	private static function classed(statements: Array<MmdStatement>, name: String, style: String, nodes: Array<GraphNode>): Void {
 		if (nodes.length == 0) return;
 		statements.push(ClassDef({ names: name, styles: style }));
-		statements.push(Class({ nodes: [for (n in nodes) n.id].join(','), className: name }));
+		statements.push(Class({ nodes: nodes.map(n -> n.id).join(','), className: name }));
 	}
 
 }

@@ -57,7 +57,7 @@ final class LintOracleRun {
 		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
 		// `files` is the run's own list, which a created file joins: the memo hashes whatever it holds at each question
 		// the run's grammar reads the compilers' sources, so each facts compile carries the baseline and the builds' probe
-		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file], grammar));
+		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> files.map(f -> f.file), grammar));
 	}
 
 	/**
@@ -260,7 +260,7 @@ final class LintOracleRun {
 	 */
 	public static function reachComplete(paths: Array<String>, resolveConfig: String -> LintConfig): Bool {
 		if (paths.length == 0) return false;
-		final list: LintConfig -> String = c -> [for (o in c.compilerOracles()) OracleDeclaration.oracleKey(o)].join('|');
+		final list: LintConfig -> String = c -> c.compilerOracles().map(OracleDeclaration.oracleKey).join('|');
 		final first: String = list(resolveConfig(paths[0]));
 		var declared: Bool = false;
 		var all: Bool = true;

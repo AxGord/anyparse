@@ -17,7 +17,7 @@ class RuleGuideTest extends Test {
 		final dir: String = 'docs/guide/lint';
 		final pages: Array<String> = sys.FileSystem.readDirectory(dir).filter(f -> f.endsWith('.md'));
 		pages.sort(Reflect.compare);
-		final expectedPages: Array<String> = [for (c in RuleCategory.ALL) '$c.md'];
+		final expectedPages: Array<String> = RuleCategory.ALL.map(c -> '$c.md');
 		expectedPages.sort(Reflect.compare);
 		Assert.same(expectedPages, pages, 'one page per category and no other');
 		for (category in RuleCategory.ALL) {

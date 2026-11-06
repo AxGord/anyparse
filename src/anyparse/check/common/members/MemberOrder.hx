@@ -302,7 +302,7 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 		// `sorted` is a permutation of `members`, so a common subsequence of the two is exactly an
 		// increasing run of source indices within `sorted` - the heaviest one is a line-weighted
 		// longest-increasing-subsequence over those indices.
-		final index: Array<Int> = [for (m in sorted) m.index];
+		final index: Array<Int> = sorted.map(m -> m.index);
 		final run: Array<Int> = [for (_ in index) 0];
 		var kept: Int = 0;
 		for (i in 0...index.length) {

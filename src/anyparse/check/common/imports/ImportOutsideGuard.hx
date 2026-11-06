@@ -165,16 +165,15 @@ final class ImportOutsideGuard extends RuleBase {
 		final aliases: Null<Array<ImportLine>> = ImportOrder.linesOfKinds(source, guarded.tree, ALIAS_KINDS);
 		final innerAliases: Null<Array<ImportLine>> = ImportOrder.linesOfKinds(source, guarded.guard, ALIAS_KINDS);
 		if (aliases == null || innerAliases == null) return [];
-		final aliasStarts: Array<Int> = [for (line in aliases.concat(innerAliases)) line.declFrom];
+		final aliasStarts: Array<Int> = aliases.concat(innerAliases).map(line -> line.declFrom);
 		// Re-bound: a null check does not narrow a field of an anonymous-structure literal.
 		final guardedImports: Array<ImportLine> = innerImports;
 		final guardedUsings: Array<ImportLine> = innerUsings;
 		final moved: HeaderHalves = { imports: movedImports, usings: movedUsings };
 		final kept: HeaderHalves = { imports: guardedImports, usings: guardedUsings };
 		if (rebindsAName(moved, kept, [importAt, usingAt], aliasStarts, bindings)) return [];
-		final edits: Array<{ span: Span, text: String }> = [
-			for (line in movedImports.concat(movedUsings)) { span: new Span(line.chunkFrom, line.chunkTo), text: '' }
-		];
+		final edits: Array<{ span: Span, text: String }> = movedImports.concat(movedUsings)
+			.map(line -> {span: new Span(line.chunkFrom, line.chunkTo), text: '' });
 		final importText: String = textOf(source, movedImports);
 		final usingText: String = textOf(source, movedUsings);
 		// Two zero-width edits at one offset would apply in an unspecified order, so a shared

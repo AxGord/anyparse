@@ -165,9 +165,9 @@ class LintBaselineTest extends Test {
 			withData(violation('src/A.hx', Severity.Warning, 'thread-safety', 'm'), 'S.g'),
 			violation('src/A.hx', Severity.Warning, 'thread-safety', 'm')
 		];
-		Assert.same(['S.g'], [for (v in delta(live, mixed)) v.data?.subject]);
+		Assert.same(['S.g'], delta(live, mixed).map(v -> v.data?.subject));
 		live.reverse();
-		Assert.same(['S.g'], [for (v in delta(live, mixed)) v.data?.subject], 'whatever the order');
+		Assert.same(['S.g'], delta(live, mixed).map(v -> v.data?.subject), 'whatever the order');
 	}
 
 	private static function delta(all: Array<Violation>, before: LintDiffTally): Array<Violation> {

@@ -140,14 +140,11 @@ final class Json {
 
 	public static function renderSearchMatches(file: String, source: String, matches: Array<Match>): String {
 		final index: LineIndex = new LineIndex(source);
-		final entries: Array<AstSearchMatch> = [
-			for (m in matches)
-				{
-					file: file,
-					span: spanToJson(m.span, index),
-					bindings: collectBindings(m, source, index)
-				}
-		];
+		final entries: Array<AstSearchMatch> = matches.map(m -> {
+			file: file,
+			span: spanToJson(m.span, index),
+			bindings: collectBindings(m, source, index)
+		});
 		final envelope: AstSearchMatches = { matches: entries };
 		return '${AstSearchMatchesWriter.write(envelope, JsonFormat.instance.defaultWriteOptions)}\n';
 	}

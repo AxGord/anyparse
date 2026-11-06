@@ -54,7 +54,7 @@ final class PositiveSinks {
 		builtin = ids;
 		natives = projectNatives.ids;
 		this.library = library;
-		final named: Array<String> = [for (p in calls) CallGraphNames.lastSegments(p, 2)];
+		final named: Array<String> = calls.map(CallGraphNames.lastSegments.bind(_, 2));
 		shadowing = [
 			for (id in natives) if (named.contains(id) || named.contains('${graph.node(id)?.typeName}.*')) id
 		];

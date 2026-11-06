@@ -116,9 +116,10 @@ final class TmpLifecycleTest extends Test {
 				Assert.equals(c.orphan, dirs.isOrphan(path, now), c.name);
 			}
 			Assert.equals(3, dirs.sweep(now));
-			Assert.same(['apq-x.keep03', 'apq-x.live02', 'apq-x.young4', 'apq-y.legcy6'], [
-				for (path in dirs.claimed()) Path.withoutDirectory(path)
-			], 'the sweep takes the orphans and nothing else');
+			Assert.same(
+				['apq-x.keep03', 'apq-x.live02', 'apq-x.young4', 'apq-y.legcy6'],
+				dirs.claimed().map(Path.withoutDirectory), 'the sweep takes the orphans and nothing else'
+			);
 		});
 	}
 

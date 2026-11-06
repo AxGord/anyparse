@@ -101,9 +101,7 @@ class LexicalRegionsTest extends Test {
 
 	/** Both region ends and their text, for a failure message that says what was actually scanned. */
 	private function dump(source: String, regions: Array<LexRegion>): String {
-		return [
-			for (region in regions) '[${region.from},${region.to}) ${source.substring(region.from, region.to)}'
-		].join(' | ');
+		return regions.map(region -> '[${region.from},${region.to}) ${source.substring(region.from, region.to)}').join(' | ');
 	}
 
 }

@@ -80,7 +80,7 @@ final class GroupSafeNav extends RuleBase {
 			: CheckScan.applyTextMatches(plugin, source, violations, (tree, text) -> {
 				final runs: Array<SafeNavRun> = [];
 				collectRuns(tree, text, seams, runs);
-				return [for (r in runs) { span: r.span, text: guarded(r, text) }];
+				return runs.map(r -> {span: r.span, text: guarded(r, text) });
 			});
 	}
 

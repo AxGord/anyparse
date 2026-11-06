@@ -560,7 +560,7 @@ class MemberReachTest extends Test {
 						defined: [],
 						everDefined: [],
 						values: [],
-						compiled: [for (f in files) OracleCoverage.canonical(cwd, f.file)],
+						compiled: files.map(f -> OracleCoverage.canonical(cwd, f.file)),
 						types: [
 							for (t in [['C', 'F0.hx'], ['Other', 'F1.hx'], ['Poker', 'F2.hx'], ['Made', 'F0.hx']])
 								{ name: t[0], file: OracleCoverage.canonical(cwd, t[1]) }

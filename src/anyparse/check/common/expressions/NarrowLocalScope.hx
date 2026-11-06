@@ -224,7 +224,7 @@ final class NarrowLocalScope extends RuleBase {
 		// block (or a construct in it) already binds the name, and the sink would redeclare it.
 		if (occurrences.length == 0 || occurrences.exists(h -> h.kind == RefKind.Decl)) return null;
 
-		final spans: Array<Span> = [for (h in occurrences) h.span];
+		final spans: Array<Span> = occurrences.map(h -> h.span);
 		final carrier: Null<QueryNode> = laterSiblingHolding(kids, i, spans);
 		if (carrier == null) return null;
 		final block: Null<QueryNode> = innermostBlockScope(carrier, spans, s);

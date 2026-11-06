@@ -115,11 +115,9 @@ final class OracleCommand implements CliCommand {
 		// one read of each source across every configuration, before the compiles and again after them
 		final before: Map<String, String> = [];
 		final after: Map<String, String> = [];
-		final fingerprints: Array<Null<String>> = [
-			for (oracle in ready) oracle.unavailable == null
-				? OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before)
-				: null
-		];
+		final fingerprints: Array<Null<String>> = ready.map(
+			oracle -> oracle.unavailable == null ? OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before) : null
+		);
 		// the compiles print what they parse, so a verdict is kept only when each file it read is one the fingerprint hashed
 		final readings: Array<OracleReading> = CompilerOracle.typecheckEachReading(ready, false);
 		var exit: Int = EXIT_OK;

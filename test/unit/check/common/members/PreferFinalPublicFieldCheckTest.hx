@@ -504,16 +504,14 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	 * `Base4.item` is never reassigned, so having a subtype no longer suppresses it.
 	 */
 	public function testCaptureVarShadowingInheritedFieldPoisons(): Void {
-		final flagged: Array<String> = [
-			for (v in multi([
-				{
-					file: 'T4.hx',
-					source: 'class Other4 { public var sx2:Int = 1; } class Sprite4 { public var sx:Int = 0; } class Base4 {'
-					+ ' public var item:Other4 = new Other4(); } class D4 extends Base4 { public function pick(v:Sprite4):Void {'
-					+ ' switch v { case var item: item.sx = 5; } } }'
-				}
-			])) v.message
-		];
+		final flagged: Array<String> = multi([
+			{
+				file: 'T4.hx',
+				source: 'class Other4 { public var sx2:Int = 1; } class Sprite4 { public var sx:Int = 0; } class Base4 {'
+				+ ' public var item:Other4 = new Other4(); } class D4 extends Base4 { public function pick(v:Sprite4):Void {'
+				+ ' switch v { case var item: item.sx = 5; } } }'
+			}
+		]).map(v -> v.message);
 
 		Assert.isTrue(flagged.exists(m -> m.indexOf('sx2') >= 0), '$flagged');
 		Assert.isFalse(flagged.exists(m -> m.indexOf('\'sx\'') >= 0), 'written field must stay out — $flagged');

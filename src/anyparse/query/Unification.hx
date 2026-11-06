@@ -243,7 +243,7 @@ final class Unification {
 	 */
 	private function membersFit(graph: CastGraph, fields: Array<CastField>, fit: (f:CastField, allow:Bool) -> ArgumentFit): ArgumentFit {
 		var open: Bool = !graph.fieldsComplete;
-		for (f in fields) switch agreed([for (b in graph.branches) fit(f, b.transitive)]) {
+		for (f in fields) switch agreed(graph.branches.map(b -> fit(f, b.transitive))) {
 			case Fits if (f.certain):
 				return Fits;
 			case Misfits:

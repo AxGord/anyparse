@@ -418,7 +418,7 @@ final class LintFixVerify {
 
 	/** Every configuration named for one diagnostic line, in declared order. */
 	private static function describeOracles(oracles: Array<OracleConfig>): String {
-		return [for (oracle in oracles) OracleDeclaration.describeOracle(oracle)].join(', ');
+		return oracles.map(OracleDeclaration.describeOracle).join(', ');
 	}
 
 	/**
@@ -467,15 +467,12 @@ final class LintFixVerify {
 			outcomes.push(unavailable == null ? cached : Unavailable(unavailable));
 			if (unavailable == null && cached == null) compile.push(i);
 		}
-		final pending: Array<OracleConfig> = [for (i in compile) oracles[i]];
+		final pending: Array<OracleConfig> = compile.map(i -> oracles[i]);
 		// the cold compiles print what they parse, so a verdict is kept only when each file it read is one the fingerprint hashed
 		final compiled: Array<OracleReading> = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER')
 			? CompilerOracle.typecheckEachReading(pending, false)
-			: [
-				for (oracle in pending) { outcome: compiledOracleVerdict(oracle, paths), parsed: null }
-			];
-		for (k in 0...compile.length) {
-			final i: Int = compile[k];
+			: pending.map(oracle -> {outcome: compiledOracleVerdict(oracle, paths), parsed: null });
+		for (k => i in compile) {
 			final outcome: OracleOutcome = compiled[k].outcome ?? Unavailable('the typecheck was cancelled');
 			outcomes[i] = outcome;
 			final fingerprint: Null<String> = fingerprints[i];
@@ -486,7 +483,7 @@ final class LintFixVerify {
 					oracles[i].hxml, oracles[i].dir, fingerprint, outcome, oracles[i].defines, after, compiled[k].parsed
 				);
 		}
-		return [for (outcome in outcomes) outcome ?? Unavailable('no verdict was taken')];
+		return outcomes.map(outcome -> outcome ?? Unavailable('no verdict was taken'));
 	}
 
 	/**
@@ -586,13 +583,10 @@ final class LintFixVerify {
 		// alone). What the suite does cover is the shared entry itself and the identical wiring
 		// in `FixVerifier.verify`, which IS discriminating. Keep this line spelled the same as that
 		// one so the two cannot drift apart unnoticed.
-		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = [
-			for (check in oracleChecks)
-				{
-					check: check,
-					all: Linter.collect(files, plugin, [check], resolveConfig, applyEnablement).filter(v -> v.rule == check.id())
-				}
-		];
+		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = oracleChecks.map(check -> {
+			check: check,
+			all: Linter.collect(files, plugin, [check], resolveConfig, applyEnablement).filter(v -> v.rule == check.id())
+		});
 		// Nothing to annotate costs nothing: no probe, no display server.
 		if (!findingsByCheck.exists(byCheck -> byCheck.all.length > 0))
 			return { tail: ', oracle-assisted: 0 applied${excludedTail(excluded)}', appliedCount: 0, excluded: excluded };
@@ -918,7 +912,7 @@ final class LintFixVerify {
 		compiled: Array<OracleCoverage>, excluded: Array<OracleExclusion>, entry: { file: String, source: String },
 		edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin
 	): Null<String> {
-		final spans: Array<Span> = [for (edit in edits) edit.span];
+		final spans: Array<Span> = edits.map(edit -> edit.span);
 		final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
 		final gaps: Array<String> = [];
 		for (coverage in compiled) {
@@ -954,7 +948,7 @@ final class LintFixVerify {
 		// error text naming no candidate, a batch that never settles) and a fixture cannot stage
 		// them against a real haxe. A test supplies canned verdicts; production passes nothing.
 		final verdict: (Array<OracleConfig>) -> OracleOutcome = typecheck ?? configs -> CompilerOracle.typecheckAll(configs);
-		CliIo.writeFiles([for (c in candidates) { path: c.file, content: c.after }]);
+		CliIo.writeFiles(candidates.map(c -> {path: c.file, content: c.after }));
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;
 		var reason: String = 'compiler rejected';
@@ -1031,7 +1025,7 @@ final class LintFixVerify {
 		// circumstances. Per-CULPRIT reverts above stay individual — those are incremental by
 		// construction, one round per oracle verdict.
 		final undo: Array<{ file: String, before: String, after: String }> = candidates.filter(c -> !reverted.contains(c.file));
-		CliIo.writeFiles([for (c in undo) { path: c.file, content: c.before }]);
+		CliIo.writeFiles(undo.map(c -> {path: c.file, content: c.before }));
 		for (c in undo) reverted.push(c.file);
 	}
 

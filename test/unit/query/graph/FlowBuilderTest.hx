@@ -251,12 +251,12 @@ class FlowBuilderTest extends Test {
 	}
 
 	private static function describe(g: FlowGraph): String {
-		final edges: Array<String> = [for (e in g.edges()) '${e.from}${e.label == null ? '' : '-' + e.label}>${e.to}'];
+		final edges: Array<String> = g.edges().map(e -> '${e.from}${e.label == null ? '' : '-' + e.label}>${e.to}');
 		return '${nodeLines(g).join('|')} # ${edges.join(' ')}';
 	}
 
 	private static function nodeLines(g: FlowGraph): Array<String> {
-		return [for (n in g.nodes()) '${n.id} ${n.kind} ${n.label.split('\n').join(' / ')}'];
+		return g.nodes().map(n -> '${n.id} ${n.kind} ${n.label.split('\n').join(' / ')}');
 	}
 
 	private static function nodes(body: String): Array<String> {

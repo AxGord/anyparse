@@ -72,7 +72,7 @@ final class OrphanContinuation {
 		if (stranded.length == 0) return null;
 		final before: Array<QueryNode> = try unjustified(plugin.parseFile(source), source, plugin) catch (exception: Exception) [];
 		if (stranded.length <= before.length) return null;
-		final fresh: QueryNode = firstUnmatched(stranded, result, [for (node in before) textOf(node, source)]);
+		final fresh: QueryNode = firstUnmatched(stranded, result, before.map(textOf.bind(_, source)));
 		final span: Null<Span> = fresh.span;
 		final at: String = span == null ? '' : {
 			final pos: Position = span.lineCol(result);

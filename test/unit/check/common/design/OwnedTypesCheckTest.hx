@@ -126,8 +126,8 @@ class OwnedTypesCheckTest extends Test {
 	/** A static is reached through its own type, plain or qualified — never through a value, nor a subtype, which Haxe rejects. */
 	@:pin('control') @:killer('M-OWNED-STATIC-THROUGH-SUBTYPE')
 	public function testAStaticMemberIsReachedThroughItsType(): Void {
-		final user: String = 'package b;\n\nimport a.Owned;\nimport a.Sub;\n\nclass User {\n\tfunction m(o: Owned): Void {\n\t\tOwned.make();\n'
-			+ '\t\ta.Owned.make();\n\t\to.make();\n\t\tSub.make();\n\t}\n}\n';
+		final user: String = 'package b;\n\nimport a.Owned;\nimport a.Sub;\n\nclass User {\n\tfunction m(o: Owned): Void {\n'
+			+ '\t\tOwned.make();\n\t\ta.Owned.make();\n\t\to.make();\n\t\tSub.make();\n\t}\n}\n';
 		Assert.same([8, 9], linesIn(user, memberConfig('a.Owned.make')));
 	}
 
@@ -271,7 +271,7 @@ class OwnedTypesCheckTest extends Test {
 
 	/** The 1-based line of every finding in `user`, in report order. */
 	private static function linesIn(user: String, config: String): Array<Int> {
-		return [for (v in violationsOf(user, config)) lineOf(user, v.span?.from ?? 0)];
+		return violationsOf(user, config).map(v -> lineOf(user, v.span?.from ?? 0));
 	}
 
 	/** The 1-based line of every finding in `user`, the fixture project holding `extra` beside it. */
@@ -279,7 +279,7 @@ class OwnedTypesCheckTest extends Test {
 		final vs: Array<Violation> = collected([{ file: 'b/User.hx', source: user }].concat(
 			extra
 		), config).filter(v -> v.file == 'b/User.hx');
-		return [for (v in vs) lineOf(user, v.span?.from ?? 0)];
+		return vs.map(v -> lineOf(user, v.span?.from ?? 0));
 	}
 
 	private static function lineOf(source: String, offset: Int): Int {
@@ -287,7 +287,7 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	private static function filesOf(vs: Array<Violation>): Array<String> {
-		return [for (v in vs) v.file];
+		return vs.map(v -> v.file);
 	}
 
 	/** The file of every finding over the fixture project plus `extra` whose path starts with `prefix`. */
@@ -296,7 +296,7 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	private static function messages(vs: Array<Violation>): String {
-		return [for (v in vs) '${v.file} ${v.message}'].join('\n');
+		return vs.map(v -> '${v.file} ${v.message}').join('\n');
 	}
 
 }

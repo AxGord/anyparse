@@ -80,7 +80,7 @@ final class NamingPrivatize {
 			span: decl.span,
 			name: decl.name,
 			category: decl.category,
-			mods: [for (m in decl.mods) m == PUBLIC_MOD ? PRIVATE_MOD : m],
+			mods: decl.mods.map(m -> m == PUBLIC_MOD ? PRIVATE_MOD : m),
 			enclosingType: decl.enclosingType
 		};
 		final rule: Null<NamingRule> = Naming.applicableRule(privatized, policy);

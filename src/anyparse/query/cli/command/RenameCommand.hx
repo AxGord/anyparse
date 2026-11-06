@@ -223,7 +223,7 @@ final class RenameCommand implements CliCommand {
 				var totalOccurrences: Int = 0;
 				for (c in changes) totalOccurrences += c.count;
 				if (write) {
-					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+					CliIo.writeFiles(changes.map(c -> {path: c.file, content: c.newSource }));
 					CliIo.stderr('apq rename: wrote ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
 				} else {
 					for (c in changes) CliIo.sysPrint('${c.file}: ${c.count} occurrence(s)\n');

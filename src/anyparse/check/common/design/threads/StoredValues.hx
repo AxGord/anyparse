@@ -175,7 +175,7 @@ final class StoredValues {
 		final into: Null<Array<String>> = parameterStores(fn, params, name, finalFieldsBeside(node.file, fn));
 		if (into == null) return null;
 		final owner: String = type;
-		final out: Array<StoredField> = [for (f in into) { type: owner, file: node.file, name: f }];
+		final out: Array<StoredField> = into.map(f -> {type: owner, file: node.file, name: f });
 		_stores[key] = out;
 		return out;
 	}

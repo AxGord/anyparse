@@ -696,7 +696,7 @@ final class SymbolIndexBuilder {
 		defaults: Map<Int, Map<String, String>>, decl: TypeDeclMatch, names: Array<String>
 	): Array<Null<String>> {
 		final own: Map<String, String> = defaults[(decl.nameNode.span ?? decl.fullSpan).from] ?? [];
-		return [for (n in names) own[n]];
+		return names.map(n -> own[n]);
 	}
 
 	/**

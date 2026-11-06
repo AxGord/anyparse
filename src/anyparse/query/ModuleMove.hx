@@ -127,7 +127,7 @@ final class ModuleMove {
 			case Left(reasons): return Refused(reasons);
 			case Right(p): p;
 		};
-		final renames: Array<ModuleRename> = [for (p in planned) p.rename];
+		final renames: Array<ModuleRename> = planned.map(p -> p.rename);
 		final newPathOf: Map<String, String> = [for (p in planned) p.move.from => p.move.to];
 		// Phase 1: every spelling rewritten, the package statements, sorted import runs and declared lists kept sorted.
 		final texts: Map<String, String> = switch rewriteAll(request, planned, plugin) {
@@ -152,8 +152,8 @@ final class ModuleMove {
 			case Right(placeRegistries(request, _) => Left(reasons)): Refused(reasons);
 			case Right(placeRegistries(request, _) => Right(placed)): Moved({
 				changes: placed.changes,
-				removed: [for (p in planned) p.move.from].concat(placed.removed),
-				moves: [for (p in planned) p.move],
+				removed: planned.map(p -> p.move.from).concat(placed.removed),
+				moves: planned.map(p -> p.move),
 				renames: renames,
 				imports: imports
 			});
@@ -310,16 +310,14 @@ final class ModuleMove {
 			final paths: Array<String> = [for (line in run) line.path];
 			final order: Int = ImportOrder.orderOf(paths);
 			if (order < 0) continue;
-			final mapped: Array<String> = [for (p in paths) ModulePathTokens.rewrite(p, renames)];
+			final mapped: Array<String> = paths.map(ModulePathTokens.rewrite.bind(_, renames));
 			if (mapped.join('\n') == paths.join('\n') || ImportOrder.sortedUnder(mapped, order)) continue;
 			final idx: Array<Int> = [for (i in 0...run.length) i];
 			ArraySort.sort(idx, (a, b) -> ImportOrder.compare(order, mapped[a], mapped[b]));
-			final lines: Array<ImportLine> = [for (i in idx) run[i]];
+			final lines: Array<ImportLine> = idx.map(i -> run[i]);
 			out.push({
 				span: new Span(run[0].chunkFrom, run[run.length - 1].chunkTo),
-				text: [
-					for (l in lines) ModulePathTokens.rewrite(source.substring(l.chunkFrom, l.chunkTo), renames)
-				].join('')
+				text: lines.map(l -> ModulePathTokens.rewrite(source.substring(l.chunkFrom, l.chunkTo), renames)).join('')
 			});
 		}
 		return out;
@@ -351,7 +349,7 @@ final class ModuleMove {
 		final prefixes: Array<String> = [
 			for (pkg in packages) for (prefix in ['$pkg.', '${ModulePathTokens.slashPath(pkg)}/']) prefix
 		];
-		final lastSegments: Array<String> = [for (pkg in packages) pkg.substr(pkg.lastIndexOf('.') + 1)];
+		final lastSegments: Array<String> = packages.map(pkg -> pkg.substr(pkg.lastIndexOf('.') + 1));
 		final out: Array<String> = [];
 		for (e in files) if (lastSegments.exists(s -> e.source.indexOf(s) >= 0)) {
 			final regions: Array<LexRegion> = plugin.lexicalRegions(e.source);
@@ -429,7 +427,7 @@ final class ModuleMove {
 		if (shape.qualifiedSubTypeByModulePath != true) return reasons;
 		final newPathOf: Map<String, String> = [for (p in planned) p.move.from => p.move.to];
 		final oldPathOf: Map<String, String> = [for (p in planned) p.move.to => p.move.from];
-		final relocated: Array<String> = [for (p in planned) SourceText.lastSegment(p.rename.oldPath)];
+		final relocated: Array<String> = planned.map(p -> SourceText.lastSegment(p.rename.oldPath));
 		final scanned: Array<{ before: String, after: String }> = spellingReaders(files, newPathOf, relocated);
 		if (scanned.length == 0) return reasons;
 		final edits: Map<String, Array<TextEdit>> = [];
@@ -515,9 +513,7 @@ final class ModuleMove {
 		final unwritten: Null<String> = writeRepairs(texts, repairsByFile(first), lost, newPathOf, post, plugin, imports);
 		if (unwritten != null) return Left([unwritten]);
 		final again: SymbolIndex = postIndex(files, library, texts, newPathOf, plugin);
-		final second: Array<String> = [
-			for (d in driftsIn(again, files, texts, newPathOf, probes, pre, renamed, plugin, before)) describeDrift(d)
-		];
+		final second: Array<String> = driftsIn(again, files, texts, newPathOf, probes, pre, renamed, plugin, before).map(describeDrift);
 		for (r in usingRefusals(planned, pre, again, [])) second.push(r);
 		return second.length == 0 ? Right(true) : Left(second);
 	}
@@ -527,9 +523,7 @@ final class ModuleMove {
 		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, texts: Map<String, String>,
 		newPathOf: Map<String, String>, plugin: GrammarPlugin
 	): SymbolIndex {
-		return indexWith([
-			for (e in files) { file: newPathOf[e.file] ?? e.file, source: texts[e.file] ?? e.source }
-		], library, plugin);
+		return indexWith(files.map(e -> {file: newPathOf[e.file] ?? e.file, source: texts[e.file] ?? e.source }), library, plugin);
 	}
 
 	/**
@@ -539,7 +533,7 @@ final class ModuleMove {
 	private static function indexWith(
 		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, plugin: GrammarPlugin
 	): SymbolIndex {
-		final index: SymbolIndex = IndexScope.over(files.concat(library), plugin, [for (e in library) e.file]);
+		final index: SymbolIndex = IndexScope.over(files.concat(library), plugin, library.map(e -> e.file));
 		ModuleMoveBindings.attachVirtualAmbient(index, plugin);
 		return index;
 	}
@@ -609,7 +603,7 @@ final class ModuleMove {
 	private static function rewriteAll(
 		request: ModuleMoveRequest, planned: Array<PlannedMove>, plugin: GrammarPlugin
 	): Either<Array<String>, Map<String, String>> {
-		final renames: Array<ModuleRename> = [for (p in planned) p.rename];
+		final renames: Array<ModuleRename> = planned.map(p -> p.rename);
 		final reasons: Array<String> = [];
 		final texts: Map<String, String> = [];
 		final declared: Map<String, Array<Span>> = declaredListSpans(request, plugin);
@@ -708,7 +702,7 @@ final class ModuleMove {
 	private static function usingRefusals(
 		planned: Array<PlannedMove>, pre: SymbolIndex, post: SymbolIndex, lost: Map<String, Array<String>>
 	): Array<String> {
-		final renames: Array<ModuleRename> = [for (p in planned) p.rename];
+		final renames: Array<ModuleRename> = planned.map(p -> p.rename);
 		final out: Array<String> = [];
 		for (p in planned) {
 			final was: Null<FileInfo> = pre.fileInfo(p.move.from);
@@ -799,7 +793,7 @@ final class ModuleMove {
 			}
 			if (entries.length != node.children.length) continue;
 			final order: Int = ImportOrder.orderOf(entries);
-			if (order >= 0 && !ImportOrder.sortedUnder([for (e in entries) ModulePathTokens.rewrite(e, renames)], order))
+			if (order >= 0 && !ImportOrder.sortedUnder(entries.map(ModulePathTokens.rewrite.bind(_, renames)), order))
 				out.push(
 					'$file:${lineOf(source, span.from)} holds a sorted list the move would leave unsorted — declare it in the "move" '
 					+ 'section\'s "sortedLists" so it is re-sorted'

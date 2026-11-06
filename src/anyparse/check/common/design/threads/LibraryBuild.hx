@@ -185,7 +185,7 @@ final class LibraryBuild {
 
 	/** The defines the compiler of version `version` (`4.3.7`) sets: `haxe`, `haxe_ver` (`4.307`) and `haxe<major>`. */
 	public static function versionDefines(version: String): Array<String> {
-		final parts: Array<Null<Int>> = [for (p in version.split('.')) Std.parseInt(p)];
+		final parts: Array<Null<Int>> = version.split('.').map(Std.parseInt);
 		final major: Null<Int> = parts[0];
 		final minor: Null<Int> = parts.length > 1 ? parts[1] : null;
 		final patch: Null<Int> = parts.length > 2 ? parts[2] : null;
@@ -213,7 +213,7 @@ final class LibraryBuild {
 		final values: Map<String, String> = [];
 		for (d in chain.defines.concat(oracle.defines).concat(implicit).concat(versionDefines(compilerVersion())))
 			addDefine(d, defined, values);
-		final classPaths: Array<String> = [for (cp in chain.classPaths) absolute(root, cp)];
+		final classPaths: Array<String> = chain.classPaths.map(cp -> absolute(root, cp));
 		// a library or a classpath the build names and the run cannot find is one whose bodies go unread: said, by name
 		for (lib in chain.libs) {
 			final dir: Null<String> = HaxelibResolver.libSourceDir(lib);
@@ -224,7 +224,7 @@ final class LibraryBuild {
 					'libraryBodies: the library "-lib $lib" of "${oracle.hxml}" does not resolve (haxelib) — its bodies are not walked'
 				);
 		}
-		final run: Array<String> = [for (f in runFiles) absolute(Sys.getCwd(), f)];
+		final run: Array<String> = runFiles.map(f -> absolute(Sys.getCwd(), f));
 		final libraries: Array<String> = [];
 		for (cp in classPaths) if (!libraries.contains(cp)) {
 			if (!sys.FileSystem.exists(cp))

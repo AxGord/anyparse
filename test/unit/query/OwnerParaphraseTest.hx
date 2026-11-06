@@ -33,19 +33,16 @@ class OwnerParaphraseTest extends Test {
 		#if (sys || nodejs)
 		final root: String = CliFixture.repoRoot();
 		final io: ResolvedInputs = CliArgs.resolveInputPaths('haxe', ['$root/src']);
-		final files: Array<{ file: String, source: String }> = [
-			for (path in io.paths)
-				{
-					file: path,
-					source: sys.io.File.getContent(path)
-				}
-		];
+		final files: Array<{ file: String, source: String }> = io.paths.map(path -> {
+			file: path,
+			source: sys.io.File.getContent(path)
+		});
 		final owners: OwnerIndex = OwnerIndex.build(IndexScope.over(files, io.plugin), io.plugin);
 		for (name in BENCHMARKS) {
 			final benchmark: ParaphraseBenchmark = ParaphraseBenchmarkParser.parse(sys.io.File.getContent('$root/$name'));
 			final missed: Array<String> = [];
 			for (asked in benchmark.questions) {
-				final top: Array<String> = [for (hit in owners.rank(asked.question, benchmark.top)) hit.entry.type];
+				final top: Array<String> = owners.rank(asked.question, benchmark.top).map(hit -> hit.entry.type);
 				if (!top.exists(type -> asked.owners.contains(type))) missed.push('"${asked.question}" ranks ${top.join(', ')}');
 			}
 			final found: Int = benchmark.questions.length - missed.length;

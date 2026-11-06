@@ -828,14 +828,14 @@ class ThreadSafetyConditionsTest extends Test {
 	private static function sleepFindings(
 		extra: String, sources: Array<String>, ?library: Array<String>, ?defines: Array<ReachConfiguration>
 	): Array<String> {
-		final found: Array<String> = [
-			for (v in ThreadSafetyCheckTest.violations(
+		final found: Array<String> =
+			ThreadSafetyCheckTest.violations(
 				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Lock.wait","Mutex.acquire"],"spawns":["Runner.create"]'
 				+ (extra.length > 0 ? ',$extra' : '')
 				+ '}}}',
 				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources), null, false, library, defines
-			)) v.message
-		];
+			)
+				.map(v -> v.message);
 		found.sort(Reflect.compare);
 		return found;
 	}

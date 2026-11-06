@@ -375,15 +375,15 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 		final off: LintConfig = LintConfig.parse('{"rules":{"duplicate-code":{"enabled":false}}}');
 		final body: String = '{ var a = 1; var b = a + 2; var c = b * 3; var d = c - 4; trace(a + b + c + d); }';
 		for (names in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']]) {
-			final files: Array<{ file: String, source: String }> = [
-				for (name in names) { file: name, source: 'class ${name.charAt(2)} { static function f():Void $body }' }
-			];
+			final files: Array<{ file: String, source: String }> = names.map(name ->
+				{file: name, source: 'class ${name.charAt(2)} { static function f():Void $body }' }
+			);
 			final found: Array<Violation> = Linter.run(
 				files, new HaxeQueryPlugin(),
 				[new DuplicateCode()],
 				f -> f.startsWith('y/') ? off : on, true
 			);
-			Assert.same(['x/X.hx'], [for (v in found) v.file]);
+			Assert.same(['x/X.hx'], found.map(v -> v.file));
 		}
 	}
 

@@ -125,7 +125,7 @@ final class LockAliases {
 			if (root == null || !reflectionSafe(familyOf(root), smallest(slots))) continue;
 			final source: String = reads[0].member;
 			if (source != w.member && reads.foreach(r -> r.member == source))
-				_candidates.push({ target: w.member, source: source, keys: [w.key].concat([for (r in reads) r.key]) });
+				_candidates.push({ target: w.member, source: source, keys: [w.key].concat(reads.map(r -> r.key)) });
 		}
 		final sources: Array<String> = [];
 		for (a in _candidates) {
@@ -144,7 +144,7 @@ final class LockAliases {
 		var live: Array<LockAlias> = _candidates;
 		while (true) {
 			final keys: Array<String> = [for (a in live) for (k in a.keys) k];
-			final aliased: Array<String> = [for (a in live) a.target];
+			final aliased: Array<String> = live.map(a -> a.target);
 			function accounted(member: String): Bool {
 				return (breaking[LockSites.memberName(member)] ?? []).foreach(o -> keys.contains(occurrenceKey(o.file, o.node)));
 			}
@@ -389,7 +389,7 @@ final class LockAliases {
 		if (known != null) return known;
 		final found: Array<Instantiation> = [];
 		final calls: Array<String> = _shape.execution?.reflectiveInstantiationCalls ?? [];
-		final members: Array<String> = [for (c in calls) SourceText.lastSegment(c)];
+		final members: Array<String> = calls.map(SourceText.lastSegment);
 		var file: String = '';
 		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
 			final name: Null<String> = node.name;

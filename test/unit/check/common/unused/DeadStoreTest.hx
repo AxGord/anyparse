@@ -507,7 +507,7 @@ class DeadStoreTest extends Test {
 		final src: String = 'class C { static function f(a:Array<Int>):Int { a.map(v -> { var x = v * 2; x = v * 3; return x; });'
 			+ ' var g = function(v:Int) { var y = v; y = 5; return y; }; function nm(v:Int) { var z = v; z = 7; return z; }'
 			+ ' var w = 1; w = 2; return w + g(1) + nm(2); } }';
-		final names: Array<String> = [for (v in violations(src)) v.message.split("'")[1]];
+		final names: Array<String> = violations(src).map(v -> v.message.split("'")[1]);
 		names.sort((a, b) -> a < b ? -1 : 1);
 		Assert.equals('w, x, y, z', names.join(', '));
 	}

@@ -302,7 +302,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 		Assert.equals(3, grouped.length, 'the signature type plus both unwraps');
 		final first: Null<Int> = grouped[0].group;
 		Assert.notNull(first, 'a parameter rewrite is one atomic unit');
-		Assert.same([first, first, first], [for (e in grouped) e.group]);
+		Assert.same([first, first, first], grouped.map(e -> e.group));
 	}
 
 	public function testDeclineReasonNamesTheParameterRefusal(): Void {
@@ -311,7 +311,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 		Assert.equals(0, run.edits.length);
 		Assert.same([
 			'a parameter, but its reads are not all ascriptions to one conversion-free type, or its method can be overridden'
-		], [for (v in run.violations) v.declineReason ?? '-']);
+		], run.violations.map(v -> v.declineReason ?? '-'));
 	}
 
 	public function testARestParameterIsNotTheArmsSubjectAtAll(): Void {
@@ -321,7 +321,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 		Assert.same([
 			'the fix narrows a LOCAL variable from its uses, or a type-MEMBER function PARAMETER from its ascriptions; this '
 			+ '`Dynamic` is a field, a return type, a type argument, a rest parameter, or a lambda / local-function parameter'
-		], [for (v in run.violations) v.declineReason ?? '-']);
+		], run.violations.map(v -> v.declineReason ?? '-'));
 	}
 
 	// ---- helpers ----

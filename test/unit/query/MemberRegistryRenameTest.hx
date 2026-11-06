@@ -462,7 +462,7 @@ final class MemberRegistryRenameTest extends Test {
 		Assert.equals('final x: Int = o.walk() + 1;', out.arm('OWN-TOKEN').replace);
 		Assert.same(['return walk() + 1;', 'return o.walk();'], out.arm('PAIRS').replaces);
 		Assert.equals('walk', out.arm('NO-REPLACE').method);
-		final named: Array<String> = [for (note in out.notes) note.split(':')[0]];
+		final named: Array<String> = out.notes.map(note -> note.split(':')[0]);
 		Assert.same(['arm FOREIGN', 'arm PAIRS'], named);
 		Assert.isTrue(
 			out.notes[0].endsWith('on a receiver the rename cannot read — re-aim it if that is this member'), out.notes.join('|')
@@ -496,7 +496,7 @@ final class MemberRegistryRenameTest extends Test {
 
 	/** The registry document holding `arms`, its strings spelled as a JSON writer spells them. */
 	private static function document(arms: Array<ArmRow>): String {
-		final list: (Array<String>) -> String = items -> '[${[for (item in items) JsonText.quote(item)].join(', ')}]';
+		final list: (Array<String>) -> String = items -> '[${items.map(JsonText.quote).join(', ')}]';
 		final records: Array<String> = [
 			for (arm in arms) {
 				final fields: Array<String> = [

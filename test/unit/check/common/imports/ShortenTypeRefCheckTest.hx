@@ -518,7 +518,7 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testWithoutANameOracleTheValueSiteIsDeclined(): Void {
 		final src: String = inClass('import pkg.deep.Foo;\n\n', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n');
 		final asked: AskedFix = askedWith(null, src);
-		final out: String = CanonicalEdit.applyEdits(src, [for (e in asked.edits) { span: e.span, text: e.text }]);
+		final out: String = CanonicalEdit.applyEdits(src, asked.edits.map(e -> {span: e.span, text: e.text }));
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.make());') != -1 && out.indexOf('final v:Foo = g();') != -1, 'type site only, got: $out');
 		Assert.equals(2, asked.findings.length);
 		Assert.equals(
@@ -534,7 +534,7 @@ class ShortenTypeRefCheckTest extends Test {
 		final src: String = inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tg(pkg.deep.Foo.other());\n');
 		final refusing: FixedNameOracle = new FixedNameOracle((after, at) -> after.substr(at, 'Foo.make'.length) != 'Foo.make');
 		final asked: AskedFix = askedWith(refusing, src);
-		Assert.equals(0, asked.edits.length, 'nothing left to pay for the import, got: ${[for (e in asked.edits) e.text]}');
+		Assert.equals(0, asked.edits.length, 'nothing left to pay for the import, got: ${asked.edits.map(e -> e.text)}');
 		Assert.isTrue(refusing.asked > 0, 'the oracle was asked');
 	}
 
@@ -1059,7 +1059,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	/** `suppressedEdits` applied — the flat projection `Check.fix` owes `fixGrouped`. */
 	private function suppressedFix(src: String): String {
-		return CanonicalEdit.applyEdits(src, [for (e in suppressedEdits(src)) { span: e.span, text: e.text }]);
+		return CanonicalEdit.applyEdits(src, suppressedEdits(src).map(e -> {span: e.span, text: e.text }));
 	}
 
 	/** The grouped edits and the findings they were asked for, by a value-positions rule carrying `oracle` (none when null). */

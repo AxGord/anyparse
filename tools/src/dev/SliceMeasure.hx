@@ -151,7 +151,7 @@ final class SliceMeasure {
 			final key: String = '${members.graph.node(from)?.name ?? from} -> ${members.graph.node(to)?.name ?? to}';
 			edges[key] = target == null || target.isExternal ? '' : relative(copy, target.file);
 		}
-		return { files: [for (f in files) relative(copy, f.file)], edges: edges };
+		return { files: files.map(f -> relative(copy, f.file)), edges: edges };
 	}
 
 	private static function relative(root: String, file: String): String {

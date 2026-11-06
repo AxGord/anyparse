@@ -436,7 +436,7 @@ final class CondQuery {
 			final indent: Int = line.length - line.ltrim().length;
 			if (common < 0 || indent < common) common = indent;
 		}
-		return common <= 0 ? lines : [for (line in lines) line.length >= common ? line.substr(common) : line.ltrim()];
+		return common <= 0 ? lines : lines.map(line -> line.length >= common ? line.substr(common) : line.ltrim());
 	}
 
 }

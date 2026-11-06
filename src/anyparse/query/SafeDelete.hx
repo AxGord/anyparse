@@ -92,7 +92,7 @@ final class SafeDelete {
 			parsed, srcFile, memberName, memberSpanNN, refShape, plugin, IndexScope.lazySymbolIndex(scopeFiles, plugin)
 		);
 		if (refs.length <= 0) return RemoveMember.removeMember(src.source, srcTypeName, memberName, reformat, plugin, true, optsJson);
-		final where: String = [for (r in refs) '${r.file} (${r.count})'].join(', ');
+		final where: String = refs.map(r -> '${r.file} (${r.count})').join(', ');
 		return Err('"$memberName" is still referenced — refusing to delete: $where');
 	}
 
@@ -123,7 +123,7 @@ final class SafeDelete {
 		);
 		return refs.length <= 0
 			? null
-			: '"$memberName" is referenced from another file: ' + [for (r in refs) '${r.file} (${r.count})'].join(', ');
+			: '"$memberName" is referenced from another file: ' + refs.map(r -> '${r.file} (${r.count})').join(', ');
 	}
 
 	/**

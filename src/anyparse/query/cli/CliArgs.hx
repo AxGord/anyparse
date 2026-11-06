@@ -325,7 +325,7 @@ final class CliArgs {
 		final paths: Array<String> = expanded.paths;
 		// An extra file the scope walk already holds under another spelling (absolute against a relative scope) takes that
 		// entry's place: the caller looks its own spelling up, and a second entry would index the file twice.
-		final keys: Array<String> = [for (path in paths) FileIdentity.realPath(path)];
+		final keys: Array<String> = paths.map(FileIdentity.realPath);
 		for (extra in extraFiles) {
 			final at: Int = keys.indexOf(FileIdentity.realPath(extra));
 			if (at < 0) {
@@ -366,7 +366,7 @@ final class CliArgs {
 		// escape is decoded by the OUTER literal before the nested one is read, so the replacement
 		// argument arrives as a bare `"` and the call is a silent no-op — it compiles, and the only
 		// symptom is unescaped output.
-		return [for (spec in specs) '"' + spec.replace('"', '\\"') + '"'].join(', ');
+		return specs.map(spec -> '"' + spec.replace('"', '\\"') + '"').join(', ');
 	}
 
 	/**

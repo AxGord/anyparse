@@ -83,7 +83,7 @@ final class SymbolQuery {
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, modulePath: String
 	): Array<String> {
 		final index: SymbolIndex = IndexScope.over(files, plugin);
-		return [for (info in index.filesImportingModule(modulePath)) info.file];
+		return index.filesImportingModule(modulePath).map(info -> info.file);
 	}
 
 	/**

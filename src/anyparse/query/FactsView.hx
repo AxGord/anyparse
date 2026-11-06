@@ -513,7 +513,7 @@ final class FactsView {
 		final place: Null<FactsType> = FactsTypeTree.read(to);
 		final out: Array<Null<String>> = value == null || place == null
 			? [anyValue()]
-			: [for (o in unchecked().stringOperands(value, place)) FactsTypeTree.text(o)];
+			: unchecked().stringOperands(value, place).map(FactsTypeTree.text);
 		_conversionOperands[key] = out;
 		return out;
 	}
@@ -582,8 +582,8 @@ final class FactsView {
 		final calls: Null<Array<CallFact>> = _table.within(file, span, callsOf, c -> c.at, true);
 		final made: Null<Array<NewFact>> = _table.within(file, span, constructionsOf, x -> x.at, true);
 		if (hands == null || calls == null || made == null) return null;
-		final receivers: Array<Null<String>> = [for (c in calls) c.access == STATIC_ACCESS ? null : c.receiver];
-		return { handed: [for (h in hands) h.from], receivers: receivers, count: calls.length + made.length };
+		final receivers: Array<Null<String>> = calls.map(c -> c.access == STATIC_ACCESS ? null : c.receiver);
+		return { handed: hands.map(h -> h.from), receivers: receivers, count: calls.length + made.length };
 	}
 
 	/**
@@ -1057,7 +1057,7 @@ final class FactsView {
 					t
 		];
 		if (owners.length == 0) return null;
-		final roots: Array<Null<String>> = [for (t in typed) rootOf(t)];
+		final roots: Array<Null<String>> = typed.map(rootOf);
 		for (fi in _scope.index.allFiles())
 			for (t in fi.types)
 				if (
@@ -1168,7 +1168,7 @@ final class FactsView {
 		final sole: Null<String> = soleType(type);
 		if (sole != null) return [sole];
 		final owners: Array<String> = bySimpleName()[type] ?? [];
-		final roots: Array<Null<String>> = [for (o in owners) rootOf(o)];
+		final roots: Array<Null<String>> = owners.map(rootOf);
 		for (fi in _scope.index.allFiles())
 			for (t in fi.types)
 				if (t.name == type && !CallGraphNames.selfAlias(t) && !roots.contains(declaredId(fi, t))) return null;
@@ -1223,7 +1223,7 @@ final class FactsView {
 			if (fi == null || listed == null || holder != type) return null;
 			if (declaredId(fi, listed) == root) out.push(d);
 		}
-		final read: Array<String> = [for (d in out) CallGraphNames.normalizePath(d.file)];
+		final read: Array<String> = out.map(d -> CallGraphNames.normalizePath(d.file));
 		for (file in ownerFiles(type, owner, name)) if (!read.contains(CallGraphNames.normalizePath(file))) return null;
 		return out.length == 0 ? null : out;
 	}
@@ -1669,10 +1669,10 @@ final class FactsView {
 	private function scanConditional(file: String, source: String): ConditionalText {
 		final directives: Array<CondDirective> = CondDirectives.scan(source, _scope.shape, _scope.plugin.lexicalRegions.bind(source));
 		final blocks: Array<CondBlock> = CondDirectives.topLevelBlocks(source, directives, _scope.shape);
-		final regions: Array<Span> = [for (b in blocks) b.span];
+		final regions: Array<Span> = blocks.map(b -> b.span);
 		// an unbalanced scan stops at the first region it cannot close: what follows may lie in any region
 		final whole: Bool = directives.exists(d -> !regions.exists(r -> within(d.span, r)));
-		final out: ConditionalText = { directives: [for (d in directives) d.span], regions: regions, whole: whole };
+		final out: ConditionalText = { directives: directives.map(d -> d.span), regions: regions, whole: whole };
 		_conditional[file] = out;
 		return out;
 	}
@@ -1706,7 +1706,7 @@ final class FactsView {
 	private static function namesExactly(table: CompilerFacts, configurations: Null<Array<ReachConfiguration>>): Bool {
 		if (configurations == null) return false;
 		final typed: Array<String> = table.configurations.copy();
-		final listed: Array<String> = [for (c in configurations) c.name];
+		final listed: Array<String> = configurations.map(c -> c.name);
 		typed.sort(Reflect.compare);
 		listed.sort(Reflect.compare);
 		if (typed.length != listed.length) return false;

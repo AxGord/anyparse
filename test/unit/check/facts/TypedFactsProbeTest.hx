@@ -24,23 +24,17 @@ class TypedFactsProbeTest extends Test {
 		// `@:op`, `@:from`, `@:to` and a property are no syntax of their own in the typed tree: each is a static call on the
 		// abstract's implementation class, or a call of the accessor
 		final scratch: Scratch = compile([
-			'Main.hx' => 'abstract Money(Int) from Int to Int {\n'
-			+ '\t@:op(A + B) public function add(o:Money):Money return (this + (o:Int) : Money);\n'
-			+ '\t@:from static function ofString(s:String):Money return (s.length : Money);\n'
-			+ '\t@:to function show():String return "m" + this;\n'
-			+ '\tpublic var cents(get, never):Int;\n'
-			+ '\tfunction get_cents():Int return this * 100;\n}\n'
-			+ 'class Prop { public function new() {}\n'
-			+ '\tpublic var p(get, set):Int; var q:Int = 0;\n'
-			+ '\tfunction get_p():Int return q; function set_p(v:Int):Int return q = v; }\n'
-			+ 'class Main { static function main() {\n'
-			+ '\tvar a:Money = 1; var b:Money = a + a; var m:Money = "xy"; var s:String = a;\n'
-			+ '\tvar c = b.cents; var o = new Prop(); o.p = o.p + 1;\n} }\n'
+			'Main.hx' => 'abstract Money(Int) from Int to Int {\n\t@:op(A + B) public function add(o:Money):Money return (this + (o:Int) '
+			+ ': Money);\n\t@:from static function ofString(s:String):Money return (s.length : Money);\n\t@:to function show():String '
+			+ 'return "m" + this;\n\tpublic var cents(get, never):Int;\n\tfunction get_cents():Int return this * 100;\n}\n'
+			+ 'class Prop { public function new() {}\n\tpublic var p(get, set):Int; var q:Int = 0;\n\tfunction get_p():Int return q; '
+			+ 'function set_p(v:Int):Int return q = v; }\nclass Main { static function main() {\n\tvar a:Money = 1; var b:Money = a + '
+			+ 'a; var m:Money = "xy"; var s:String = a;\n\tvar c = b.cents; var o = new Prop(); o.p = o.p + 1;\n} }\n'
 		]);
 		final main: Null<FactNode> = scratch.facts?.node('Main.main');
 		Assert.notNull(main);
 		if (main != null) {
-			final targets: Array<Null<String>> = [for (c in main.calls) c.target];
+			final targets: Array<Null<String>> = main.calls.map(c -> c.target);
 			for (expected in [
 				'_Main.Money_Impl_.add',
 				'_Main.Money_Impl_.ofString',
@@ -115,8 +109,7 @@ class TypedFactsProbeTest extends Test {
 		// a class that declares no constructor still gets one, calling its super's; a field initializer is typed as the
 		// field's own expression, not folded into the constructor
 		final scratch: Scratch = compile([
-			'Main.hx' => 'class Base { public function new(x:Int) {} }\n'
-			+ 'class Kid extends Base { var list:Array<Int> = [1, 2]; }\n'
+			'Main.hx' => 'class Base { public function new(x:Int) {} }\nclass Kid extends Base { var list:Array<Int> = [1, 2]; }\n'
 			+ '@:structInit class Rec { public var a:Int; public var b:String = "x"; }\n'
 			+ 'class Main { static function main() { new Kid(3); var r:Rec = { a: 1 }; } }\n'
 		]);
@@ -136,11 +129,9 @@ class TypedFactsProbeTest extends Test {
 	public function testLoopsAndStringConversions(): Void {
 		// an Iterable loop stays a `for`; an Array loop is lowered to a `while` and leaves none. A non-String operand of
 		// `+` is recorded with its type — a basic one stays an operand, a class instance goes through `Std.string`
-		final source: String = 'class Main { static function main() {\n'
-			+ '\tvar arr = [1, 2]; for (x in arr) trace(x);\n'
+		final source: String = 'class Main { static function main() {\n\tvar arr = [1, 2]; for (x in arr) trace(x);\n'
 			+ '\tvar it:Iterable<String> = ["a"]; for (y in it) trace(y);\n'
-			+ '\tvar s = "n=" + arr.length + " m=" + new Main();\n'
-			+ '\tvar t = "q"; t += 1.5;\n} function new() {} }\n';
+			+ '\tvar s = "n=" + arr.length + " m=" + new Main();\n\tvar t = "q"; t += 1.5;\n} function new() {} }\n';
 		final scratch: Scratch = compile(['Main.hx' => source]);
 		// the lowered loop reads `arr.length` at the whole `for`: that fact is the compiler's, not the loop's type
 		final loop: Int = source.indexOf('for (x in arr) trace(x)');
@@ -151,7 +142,7 @@ class TypedFactsProbeTest extends Test {
 			Assert.equals(1, main.iterations.length);
 			Assert.equals('String', main.iterations[0]?.binder);
 			Assert.equals('Iterator<String>', main.iterations[0]?.iterated);
-			final operands: Array<String> = [for (s in main.strings) s.operand];
+			final operands: Array<String> = main.strings.map(s -> s.operand);
 			Assert.isTrue(operands.contains('Int') && operands.contains('Float'), 'operands: $operands');
 			Assert.isTrue(main.calls.exists(c -> c.target == 'Std.string'), 'an instance operand is not converted by Std.string');
 		}
@@ -161,14 +152,10 @@ class TypedFactsProbeTest extends Test {
 	@:pin('control') @:killer('M-FACTS-LOCAL-CALL') @:killer('M-FACTS-FIELD-WRITE')
 	public function testEveryCallAndFieldAccessKind(): Void {
 		final scratch: Scratch = compile([
-			'Main.hx' => 'enum E { A; B(x:Int); }\n'
-			+ 'class P { public function new() {} public var v:Int = 0;\n'
-			+ '\tpublic dynamic function dyn(a:Int):Int return a; public function m():Int return 1; }\n'
-			+ 'class Main { static function main() {\n'
-			+ '\tvar p = new P(); p.dyn(1); var clo = p.m; p.v = 2; p.v++;\n'
-			+ '\tfunction local(y:Int) return y + 1; local(2);\n'
-			+ '\tvar lam = (z:Int) -> z * 2; var f:Int->Int = lam; f(3);\n'
-			+ '\tvar e = B(3); var e2 = A; var d:Dynamic = p; d.foo(1); var an = { q: 1 }; an.q;\n} }\n'
+			'Main.hx' => 'enum E { A; B(x:Int); }\nclass P { public function new() {} public var v:Int = 0;\n\tpublic dynamic function '
+			+ 'dyn(a:Int):Int return a; public function m():Int return 1; }\nclass Main { static function main() {\n\tvar p = new P(); '
+			+ 'p.dyn(1); var clo = p.m; p.v = 2; p.v++;\n\tfunction local(y:Int) return y + 1; local(2);\n\tvar lam = (z:Int) -> z * '
+			+ '2; var f:Int->Int = lam; f(3);\n\tvar e = B(3); var e2 = A; var d:Dynamic = p; d.foo(1); var an = { q: 1 }; an.q;\n} }\n'
 		]);
 		final main: Null<FactNode> = scratch.facts?.node('Main.main');
 		Assert.notNull(main);
@@ -199,8 +186,7 @@ class TypedFactsProbeTest extends Test {
 	public function testReflectionAndNativeSites(): Void {
 		// `untyped` leaves no mark in the typed tree: an untyped field access is a Dynamic one
 		final scratch: Scratch = compile([
-			'Main.hx' => 'class Main { function new() {} static function main() {\n'
-			+ '\tvar m = new Main(); Reflect.field(m, "x");\n'
+			'Main.hx' => 'class Main { function new() {} static function main() {\n\tvar m = new Main(); Reflect.field(m, "x");\n'
 			+ '\tvar n = "y" + Std.random(2); Reflect.field(m, n); Type.createInstance(Main, []);\n'
 			+ '\tjs.Syntax.code("1"); var u = untyped m.zz;\n} }\n'
 		]);
@@ -224,9 +210,8 @@ class TypedFactsProbeTest extends Test {
 		// `Reflect` inlines none of them, as js's does `hasField` and `setField`
 		final scratch: Scratch = compile([
 			'Main.hx' => 'enum E { A; }\nclass Main { function new() {} static function main() {\n'
-			+ '\tvar m = new Main(); var n = "y" + Std.random(2);\n'
-			+ '\tReflect.hasField(m, "x"); Reflect.setField(m, n, "v"); Reflect.field(m, n); Type.resolveClass("Main");\n'
-			+ '\tType.createEnum(E, "A");\n} }\n'
+			+ '\tvar m = new Main(); var n = "y" + Std.random(2);\n\tReflect.hasField(m, "x"); Reflect.setField(m, n, "v"); '
+			+ 'Reflect.field(m, n); Type.resolveClass("Main");\n\tType.createEnum(E, "A");\n} }\n'
 		], null, '-cp .\n-main Main\n--interp\n');
 		final main: Null<FactNode> = scratch.facts?.node('Main.main');
 		Assert.notNull(main);
@@ -250,8 +235,7 @@ class TypedFactsProbeTest extends Test {
 	public function testFlowsIntoOtherTypes(): Void {
 		final scratch: Scratch = compile([
 			'Main.hx' => 'class Box<T> { public var v:T; public function new(v:T) this.v = v; }\n'
-			+ 'class Main { function new() {} static function main() {\n'
-			+ '\tvar m = new Main(); var a:Any = m; var d:Dynamic = m;\n'
+			+ 'class Main { function new() {} static function main() {\n\tvar m = new Main(); var a:Any = m; var d:Dynamic = m;\n'
 			+ '\tvar back:Main = cast d; var list:Array<Any> = [m, 1]; var b = new Box(m);\n} }\n'
 		]);
 		final main: Null<FactNode> = scratch.facts?.node('Main.main');
@@ -298,10 +282,8 @@ class TypedFactsProbeTest extends Test {
 	public function testTheTableIsTheUnionOfTheConfigurations(): Void {
 		// a member and a call only one configuration compiles are in the table; a site both type differently keeps both
 		final scratch: Scratch = compile([
-			'Main.hx' => 'class Main { static function main() {\n'
-			+ '\t#if APQ_A only(); #end\n'
-			+ '\tvar v = #if APQ_A 1 #else "s" #end;\n'
-			+ '}\n#if APQ_A static function only() {} #end\n}\n'
+			'Main.hx' => 'class Main { static function main() {\n\t#if APQ_A only(); #end\n\tvar v = #if APQ_A 1 #else "s" #end;\n}\n'
+			+ '#if APQ_A static function only() {} #end\n}\n'
 		], [[], ['APQ_A']]);
 		final facts: Null<CompilerFacts> = scratch.facts;
 		Assert.equals(2, facts?.configurations.length);
@@ -338,8 +320,8 @@ class TypedFactsProbeTest extends Test {
 		final scratch: Scratch = compile([
 			'a/Base.hx' => 'package a;\nclass Base { public function new() {} }\n',
 			'b/Base.hx' => 'package b;\ninterface Base {}\n',
-			'Main.hx' => 'class Mid<T> extends a.Base { }\nclass Leaf extends Mid<Int> implements b.Base { public function new() super(); }\n'
-			+ 'class Main { static function main() { new Leaf(); } }\n'
+			'Main.hx' => 'class Mid<T> extends a.Base { }\nclass Leaf extends Mid<Int> implements b.Base { public function new() '
+			+ 'super(); }\nclass Main { static function main() { new Leaf(); } }\n'
 		]);
 		final facts: Null<CompilerFacts> = scratch.facts;
 		final down: Array<String> = facts?.subtypesOf('a.Base') ?? [];
@@ -405,15 +387,10 @@ class TypedFactsProbeTest extends Test {
 		final source: String = '@:generic class Gen<T> { public function new() {} public function g(t:T):T { Main.hook(3); return t; } }\n'
 			+ 'class Main {\n\tstatic var stored:Void->Void;\n\tstatic function __init__() { hook(99); }\n'
 			+ '\tpublic static function hook(i:Int):Int return i;\n\tstatic function fclos():Void {}\n'
-			+ '\tstatic function main() {\n\t\tnew Gen<String>().g("x");\n'
-			+ '\t\tvar f = () -> 1; f = () -> 2; f();\n'
-			+ '\t\tvar g:Dynamic = () -> 3;\n'
-			+ '\t\tstored = fclos; stored();\n'
-			+ '\t\tReflect.callMethod(null, fclos, []);\n'
-			+ '\t\tfinal rf = Reflect.field; var r = Reflect;\n'
-			+ '\t\tvar m:Main = null; var y = untyped m; y.zz();\n'
-			+ '\t\tvar w = untyped window;\n\t}\n}\n'
-			+ '@:build(Build.build()) class Built {}\n';
+			+ '\tstatic function main() {\n\t\tnew Gen<String>().g("x");\n\t\tvar f = () -> 1; f = () -> 2; f();\n'
+			+ '\t\tvar g:Dynamic = () -> 3;\n\t\tstored = fclos; stored();\n\t\tReflect.callMethod(null, fclos, []);\n'
+			+ '\t\tfinal rf = Reflect.field; var r = Reflect;\n\t\tvar m:Main = null; var y = untyped m; y.zz();\n'
+			+ '\t\tvar w = untyped window;\n\t}\n}\n@:build(Build.build()) class Built {}\n';
 		final build: String = 'class Build { public static macro function build():Array<haxe.macro.Expr.Field> '
 			+ 'return haxe.macro.Context.getBuildFields(); }\n';
 		final scratch: Scratch = compile(['Main.hx' => source, 'Build.hx' => build]);
@@ -442,8 +419,8 @@ class TypedFactsProbeTest extends Test {
 	@:pin('control') @:killer('M-FACTS-OVERLOADS')
 	public function testEveryOverloadIsANodeAndACallNamesTheOneItChose(): Void {
 		// an overload body compiles on a target that has them: each is a node, and a call names the signature it chose
-		final source: String = 'class Main {\n\toverload static function ov(i:Int):Void {}\n\toverload static function ov(s:String):Void {}\n'
-			+ '\tstatic function main() { ov(1); ov("x"); }\n}\n';
+		final source: String = 'class Main {\n\toverload static function ov(i:Int):Void {}\n'
+			+ '\toverload static function ov(s:String):Void {}\n\tstatic function main() { ov(1); ov("x"); }\n}\n';
 		final scratch: Scratch = compile(['Main.hx' => source], null, '-cp .\n-main Main\n--jvm out.jar\n');
 		final facts: Null<CompilerFacts> = scratch.facts;
 		Assert.equals(1, facts?.node('Main.ov~1')?.overloadIndex, 'dropped: ${[for (d in facts?.dropped ?? []) d.reason]}');
@@ -554,7 +531,7 @@ class TypedFactsProbeTest extends Test {
 		facts?.invalidate(scratch.path('Other.hx'));
 		Assert.isNull(facts?.node('Other.f'), 'a rewritten file still has facts');
 		// the table reads Stale.hx only now, after the edit: its text is not the compiled one
-		File.saveContent(scratch.path('Stale.hx'), stale + '// edited\n');
+		File.saveContent(scratch.path('Stale.hx'), '$stale// edited\n');
 		Assert.isNull(facts?.node('Stale.f'), 'facts answered for a text the compile never read');
 		scratch.remove();
 	}
@@ -621,7 +598,7 @@ class TypedFactsProbeTest extends Test {
 		final reasons: Array<String> = [for (d in facts?.dropped ?? []) d.reason];
 		Assert.equals(2, reasons.length);
 		Assert.isTrue(reasons.contains('generation failed'), 'reasons: $reasons');
-		Assert.isTrue(reasons.exists(r -> StringTools.startsWith(r, 'the compile failed')), 'reasons: $reasons');
+		Assert.isTrue(reasons.exists(r -> r.startsWith('the compile failed')), 'reasons: $reasons');
 		Assert.equals(0, TypedFactsProbe.probeAll([oracles[1]])?.configurations.length);
 		CliFixture.removeDir(dir);
 	}
@@ -630,9 +607,8 @@ class TypedFactsProbeTest extends Test {
 	public function testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead(): Void {
 		// an element write names no field: it is a write through the array, found at the array's own read — a field's, a
 		// local's, a call's — as a push is found at its receiver. A compound one is made through a local of the compiler's
-		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tfunction new() {}\n'
-			+ '\tfunction get():Array<Int> return items;\n'
-			+ '\tfunction write() {\n\t\titems[0] = 1; items[1] += 2; items[2]++;\n'
+		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tfunction new() {}\n\tfunction get():Array<Int> return '
+			+ 'items;\n\tfunction write() {\n\t\titems[0] = 1; items[1] += 2; items[2]++;\n'
 			+ '\t\tvar loc = [1]; loc[0] = 3; get()[0] = 4;\n\t}\n'
 			+ '\tstatic function main() new Main().write();\n}\n';
 		final scratch: Scratch = compile(['Main.hx' => source]);
@@ -662,14 +638,11 @@ class TypedFactsProbeTest extends Test {
 	public function testAFieldReadSaysHowItsValueIsUsed(): Void {
 		// a value handed on as itself — an argument, a capture — is used as a `value`; a lowered loop reads its array
 		// through a local of the compiler's, whose reads are the field's uses
-		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tvar walker:Iterator<Int> = [1].iterator();\n'
-			+ '\tvar next:Null<Main> = null;\n\tvar count:Int = 0;\n\tfunction new() {}\n'
-			+ '\tstatic function keep(a:Array<Int>):Void {}\n'
-			+ '\tfunction use() {\n\t\titems.push(1); var a = items[0] + items.length; next.count = 2; count++;\n'
-			+ '\t\tif (items == null) return; for (x in walker) trace(x); keep(items);\n'
-			+ '\t\tfor (y in items) trace(y);\n'
-			+ '\t\tvar held = items; var f = () -> held.length;\n\t}\n'
-			+ '\tstatic function main() new Main().use();\n}\n';
+		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tvar walker:Iterator<Int> = [1].iterator();\n\tvar '
+			+ 'next:Null<Main> = null;\n\tvar count:Int = 0;\n\tfunction new() {}\n\tstatic function keep(a:Array<Int>):Void '
+			+ '{}\n\tfunction use() {\n\t\titems.push(1); var a = items[0] + items.length; next.count = 2; count++;\n'
+			+ '\t\tif (items == null) return; for (x in walker) trace(x); keep(items);\n\t\tfor (y in items) trace(y);\n'
+			+ '\t\tvar held = items; var f = () -> held.length;\n\t}\n\tstatic function main() new Main().use();\n}\n';
 		final scratch: Scratch = compile(['Main.hx' => source]);
 		final node: Null<FactNode> = scratch.facts?.node('Main.use');
 		Assert.notNull(node);
@@ -701,11 +674,10 @@ class TypedFactsProbeTest extends Test {
 	public function testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver(): Void {
 		// the compiler binds the receiver of an inlined `items.keyValueIterator()` — a key-value loop — to a local of its
 		// own at the spliced body's range; a local the method's code names so, or a parameter so named, holds an argument
-		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tfunction new() {}\n'
-			+ '\tfunction use(k:Keeper) {\n\t\tfor (i => v in items) trace(v);\n\t\tvar it = items.iterator();\n'
-			+ '\t\tvar a = k.push(items);\n\t\tk.pop(items);\n\t}\n'
-			+ '\tstatic function main() new Main().use(new Keeper());\n}\n'
-			+ 'class Keeper {\n\tpublic var kept:Array<Int> = [];\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n'
+		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tfunction new() {}\n\tfunction use(k:Keeper) {\n'
+			+ '\t\tfor (i => v in items) trace(v);\n\t\tvar it = items.iterator();\n\t\tvar a = k.push(items);\n'
+			+ '\t\tk.pop(items);\n\t}\n\tstatic function main() new Main().use(new Keeper());\n}\nclass Keeper {\n'
+			+ '\tpublic var kept:Array<Int> = [];\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n'
 			+ '\tpublic inline function push(a:Array<Int>):Array<Int> {\n\t\tvar _this = a;\n\t\treturn _this;\n\t}\n'
 			+ '\tpublic inline function pop(_this:Array<Int>):Void {\n\t\tkept = _this;\n\t\tcount = _this.length;\n\t}\n}\n';
 		final scratch: Scratch = compile(['Main.hx' => source]);
@@ -760,22 +732,21 @@ class TypedFactsProbeTest extends Test {
 		// unapplied, a same-type one too; a generic method's call and its read as a value name the instantiation chosen
 		final scratch: Scratch = compile([
 			'Main.hx' => '@:native("Object") extern class Ext<T> {\n\tfunction new(t:T);\n\tstatic function keep(o:Main):Void;\n'
-			+ '\tfunction put(t:T, n:Int):Void;\n}\n'
-			+ 'class Main { function new() {}\n'
-			+ '\tstatic function id<A>(a:A):A return a;\n\tstatic function main() {\n\t\tvar m = new Main(); Ext.keep(m);\n'
+			+ '\tfunction put(t:T, n:Int):Void;\n}\nclass Main { function new() {}\n\tstatic function id<A>(a:A):A return a;\n'
+			+ '\tstatic function main() {\n\t\tvar m = new Main(); Ext.keep(m);\n'
 			+ '\t\tvar e = new Ext<Main>(m); e.put(m, 1); id(m); var f:Main->Main = id;\n\t}\n}\n'
 		]);
 		final main: Null<FactNode> = scratch.facts?.node('Main.main');
 		Assert.notNull(main);
 		if (main != null) {
-			final handed: Array<String> = [for (h in main.handed) '${h.target}:${h.from}:${h.to}'];
+			final handed: Array<String> = main.handed.map(h -> '${h.target}:${h.from}:${h.to}');
 			for (expected in [
 				'Ext.keep:Main:Main',
 				'Ext.new:Main:$$Ext.T',
 				'Ext.put:Main:$$Ext.T',
 				'Ext.put:Int:Int'
 			]) Assert.isTrue(handed.contains(expected), '$expected is not handed: $handed');
-			final instantiated: Array<String> = [for (g in main.instantiations) '${g.declared}=>${g.applied}'];
+			final instantiated: Array<String> = main.instantiations.map(g -> '${g.declared}=>${g.applied}');
 			Assert.isTrue(instantiated.contains('($$id.A)->$$id.A=>(Main)->Main'), 'the call is no instantiation: $instantiated');
 			Assert.equals(2, main.instantiations.length);
 		}
@@ -788,23 +759,20 @@ class TypedFactsProbeTest extends Test {
 		// a construction, and a local initialized with one of its own type never written again, are objects of exactly their
 		// class; a thrown one extending `haxe.Exception` is thrown as it is, and converted by nothing
 		final scratch: Scratch = compile([
-			'Main.hx' => 'class Err extends haxe.Exception {}\n'
-			+ 'class Main { function new() {}\n\tstatic function main() {\n'
-			+ '\t\tvar a = new Main(); var b = new Main(); b = a; var c:Dynamic = new Main();\n'
-			+ '\t\ttrace("" + a); trace("" + b); trace("" + new Main()); trace("" + c);\n'
-			+ '\t\tif (Math.random() < 0) { var e = new Err("x"); throw e; }\n'
-			+ '\t\tif (Math.random() < 0) { var e:haxe.Exception = new Err("y"); throw e; }\n'
-			+ '\t\tif (Math.random() < 0) throw new Main();\n\t}\n}\n'
+			'Main.hx' => 'class Err extends haxe.Exception {}\nclass Main { function new() {}\n\tstatic function main() {\n\t\tvar a = new '
+			+ 'Main(); var b = new Main(); b = a; var c:Dynamic = new Main();\n\t\ttrace("" + a); trace("" + b); trace("" + new '
+			+ 'Main()); trace("" + c);\n\t\tif (Math.random() < 0) { var e = new Err("x"); throw e; }\n\t\tif (Math.random() < 0) {'
+			+ ' var e:haxe.Exception = new Err("y"); throw e; }\n\t\tif (Math.random() < 0) throw new Main();\n\t}\n}\n'
 		]);
 		final main: Null<FactNode> = scratch.facts?.node('Main.main');
 		Assert.notNull(main);
 		if (main != null) {
 			// a concatenated instance is converted by a call of `Std.string`, which it flows into
 			final converted: Array<FlowFact> = main.flows.filter(f -> f.via == 'arg' && f.from == 'Main');
-			final exact: Array<String> = [for (f in converted) '${f.from}:${f.exact}'];
+			final exact: Array<String> = converted.map(f -> '${f.from}:${f.exact}');
 			Assert.equals(2, converted.filter(f -> f.exact).length, 'exact: $exact');
 			Assert.equals(1, converted.filter(f -> !f.exact).length, 'exact: $exact');
-			final thrown: Array<String> = [for (s in main.strings) '${s.operand}:${s.exact}'];
+			final thrown: Array<String> = main.strings.map(s -> '${s.operand}:${s.exact}');
 			// a local of a supertype holds an object of another class than its type names: converted, and not exactly
 			Assert.isTrue(main.strings.exists(s -> s.operand == 'haxe.Exception' && !s.exact), 'thrown: $thrown');
 			Assert.isFalse(main.strings.exists(s -> s.operand == 'Err'), 'a thrown exception was converted: $thrown');
@@ -842,8 +810,7 @@ class TypedFactsProbeTest extends Test {
 		// another class than its own, use the value as a value
 		final source: String = 'class Main {\n\tvar items:Array<Int> = [1];\n\tvar others:Array<Int> = [2];\n'
 			+ '\tvar head:Node = new Node();\n\tvar sub:Sub = new Sub();\n\tfunction new() {}\n'
-			+ '\tstatic function keep(a:Array<Int>):Void {}\n'
-			+ '\tfunction use(c:String) {\n\t\tvar l:Array<Int> = null;\n'
+			+ '\tstatic function keep(a:Array<Int>):Void {}\n\tfunction use(c:String) {\n\t\tvar l:Array<Int> = null;\n'
 			+ '\t\tif (c == "h") l = items; else if (c == "v") l = others;\n\t\tfor (i => v in l) trace(i + v);\n'
 			+ '\t\tvar copy:Array<Int> = l;\n\t\ttrace(copy[0] + copy.length);\n'
 			+ '\t\tvar p:Array<Int> = null;\n\t\tp = items;\n\t\tp.push(1);\n'
@@ -884,9 +851,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	private static function compile(files: Map<String, String>, ?configurations: Array<Array<String>>, ?build: String): Scratch {
+	private static function compile(files: Map<String, String>, ?configurations: Array<Array<String>>, build: String = BUILD): Scratch {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
-		entries.push({ name: 'build.hxml', source: build ?? BUILD });
+		entries.push({ name: 'build.hxml', source: build });
 		final dir: String = CliFixture.writeTree('typed_facts', entries);
 		final oracles: Array<OracleConfig> = [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }];
 		return new Scratch(dir, TypedFactsProbe.probeAll(oracles));

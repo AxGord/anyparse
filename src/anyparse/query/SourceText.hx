@@ -320,7 +320,7 @@ final class SourceText {
 	 * one-element array, so the truncation rule has one copy.
 	 */
 	public static function regionsExcerpt(source: String, spans: Array<Span>): String {
-		final parts: Array<String> = [for (s in spans) ~/\s+/g.replace(source.substring(s.from, s.to), ' ').trim()];
+		final parts: Array<String> = spans.map(s -> ~/\s+/g.replace(source.substring(s.from, s.to), ' ').trim());
 		final flat: String = parts.filter(p -> p.length > 0).join(' … ');
 		return flat.length <= REGION_EXCERPT_CHARS ? flat : '${flat.substr(0, REGION_EXCERPT_CHARS)}...';
 	}

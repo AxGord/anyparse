@@ -280,9 +280,9 @@ final class FlowBuilder {
 		final node: FlowNode = _chart.add(Try, 'try', lineOf(s.span?.from));
 		connectAll(tails, node);
 		final catches: Array<QueryNode> = s.children.slice(1).filter(c -> c.kind == _shape.catchClauseKind);
-		final handlers: Array<FlowNode> = [
-			for (c in catches) _chart.add(Catch, limit(textBefore(c, c.children[c.children.length - 1])), lineOf(c.span?.from))
-		];
+		final handlers: Array<FlowNode> = catches.map(
+			c -> _chart.add(Catch, limit(textBefore(c, c.children[c.children.length - 1])), lineOf(c.span?.from))
+		);
 		for (h in handlers) _chart.connect(node, h, 'error');
 		_handlers.push(handlers);
 		var left: Array<FlowTail> = statements(listOf(s.children[0]), [tail(node, null)]);

@@ -62,16 +62,13 @@ final class RuleIndex {
 			description: String,
 			languages: Array<String>,
 			defaultOn: Bool
-		}> = [
-			for (c in checks)
-				{
-					id: c.id(),
-					category: c.category(),
-					description: c.description(),
-					languages: c is LanguageBound ? (cast c: LanguageBound).languages() : [],
-					defaultOn: !(c is DefaultOff)
-				}
-		];
+		}> = checks.map(c -> {
+			id: c.id(),
+			category: c.category(),
+			description: c.description(),
+			languages: c is LanguageBound ? (cast c: LanguageBound).languages() : [],
+			defaultOn: !(c is DefaultOff)
+		});
 		return JsonPrinter.print(records, null, '  ') + '\n';
 	}
 

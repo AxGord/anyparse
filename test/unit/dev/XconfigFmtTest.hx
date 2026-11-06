@@ -215,9 +215,7 @@ final class XconfigFmtTest extends Test {
 	private static function ranOver(dir: TempDir, files: Array<String>, settling: Array<String>): XconfigRun {
 		final repo: String = fixtureRepo(dir, files);
 		final root: String = dir.file('scratch');
-		final lines: Array<String> = [
-			for (file in settling) 'apq fmt: $root/$file: the writer needed 2 rewrites to reach its fixed point'
-		];
+		final lines: Array<String> = settling.map(file -> 'apq fmt: $root/$file: the writer needed 2 rewrites to reach its fixed point');
 		return XconfigFmt.xconfigRun(_ -> printing(lines.concat([SUMMARY]).join('\n')), repo, root, files);
 	}
 

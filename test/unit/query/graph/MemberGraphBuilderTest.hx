@@ -109,9 +109,7 @@ class MemberGraphBuilderTest extends Test {
 
 	/** Every edge as `from -kind-> to xweight`, by the nodes' names. */
 	private static function edges(graph: CodeGraph): Array<String> {
-		return [
-			for (e in graph.edges()) '${graph.node(e.from)?.name} -${e.kind}-> ${graph.node(e.to)?.name} x${e.weight}'
-		];
+		return graph.edges().map(e -> '${graph.node(e.from)?.name} -${e.kind}-> ${graph.node(e.to)?.name} x${e.weight}');
 	}
 
 	/** `Foo.outer` calls `Bar.inner` from a lambda and `Bar.deep` from a recursive local function; `Foo.top` calls `outer`. */

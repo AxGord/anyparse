@@ -169,12 +169,12 @@ final class ReachLiveness {
 				at = pos.pos + pos.len;
 			}
 		}
-		final facts: Array<DefineFacts> = [
-			for (c in _configurations) { defined: c.defined, undefined: flags.filter(f -> !c.everDefined.contains(f)), values: c.values }
-		];
+		final facts: Array<DefineFacts> = _configurations.map(
+			c -> {defined: c.defined, undefined: flags.filter(f -> !c.everDefined.contains(f)), values: c.values }
+		);
 		final dead: Array<Span> = CondRegionLiveness.deadSpans(source, _shape, facts, regions);
 		_dead[file] = dead;
-		_directives[file] = [for (d in directives) d.span];
+		_directives[file] = directives.map(d -> d.span);
 		return dead;
 	}
 

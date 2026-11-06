@@ -200,9 +200,9 @@ class StaticExtensionsTest extends Test {
 		]);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final names: Array<String> = ['src/p/Str.hx', 'src/p/IA.hx', 'src/p/IC.hx', 'src/p/import.hx', 'src/p/Main.hx'];
-			final index: SymbolIndex = CheckFixture.index([
-				for (n in names) { file: '$root/$n', source: sys.io.File.getContent('$root/$n') }
-			], new HaxeQueryPlugin());
+			final index: SymbolIndex = CheckFixture.index(
+				names.map(n -> {file: '$root/$n', source: sys.io.File.getContent('$root/$n') }), new HaxeQueryPlugin()
+			);
 			Assert.equals('IC.g', binding(index, '$root/src/p/Main.hx', 'Str', 'g'), 'the file\'s own `using` first');
 			Assert.equals('IA.h', binding(index, '$root/src/p/Main.hx', 'Str', 'h'), 'then the ambient one');
 		});

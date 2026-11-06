@@ -595,7 +595,7 @@ final class NominalTypes {
 		}
 		return args.length == 0 ? { path: path, args: [], text: path } : {
 			path: path,
-			args: [for (a in args) source.substring(a.from, a.to)],
+			args: args.map(a -> source.substring(a.from, a.to)),
 			text: '$path<${source.substring(args[0].from, args[args.length - 1].to)}>'
 		};
 	}

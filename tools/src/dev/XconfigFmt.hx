@@ -60,9 +60,9 @@ final class XconfigFmt {
 			if (!FileSystem.exists(parent)) FileSystem.createDirectory(parent);
 			Fs.symlinkSync(Path.join([repo, target]), link);
 		}
-		final run: Result = hxq(['fmt', '--list', '--one-pass'].concat([for (target in targets) Path.join([root, target])]))
-			.env('APQ_NO_CONFIG_WARN', '1')
-			.run();
+		final run: Result = hxq(['fmt', '--list', '--one-pass'].concat(targets.map(target ->
+			Path.join([root, target])
+		))).env('APQ_NO_CONFIG_WARN', '1').run();
 		final lines: Array<String> = run.err.split('\n').filter(l -> l != '');
 		final summary: Array<String> = lines.filter(l -> l.startsWith('apq fmt --list:') || l.startsWith('apq fmt --one-pass:'));
 		// the per-file one-pass lines are the expected bulk; anything else on stderr (a crash, a parse failure) is shown

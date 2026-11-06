@@ -41,9 +41,7 @@ final class BuildFlagsTest extends Test {
 	}
 
 	public function testTheOracleIsDeclaredTheTypecheckLeavesOnly(): Void {
-		final declared: Array<String> = [
-			for (oracle in LintConfig.discover('apq.json').compilerOracles()) Path.normalize(oracle.hxml)
-		];
+		final declared: Array<String> = LintConfig.discover('apq.json').compilerOracles().map(oracle -> Path.normalize(oracle.hxml));
 		for (leaf in Binaries.HXMLS) {
 			Assert.isTrue(declared.exists(hxml -> hxml.endsWith('/${Binaries.checkOf(leaf)}')), 'declared: ${Binaries.checkOf(leaf)}');
 			Assert.isFalse(declared.exists(hxml -> hxml.endsWith('/$leaf')), 'not declared: $leaf');

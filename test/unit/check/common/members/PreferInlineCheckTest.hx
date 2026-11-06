@@ -757,7 +757,7 @@ class PreferInlineCheckTest extends Test {
 				])
 			}
 		});
-		final scopedNames: Array<String> = [for (v in CheckFixture.violationsIn(new PreferInline(), report, scoped)) v.file];
+		final scopedNames: Array<String> = CheckFixture.violationsIn(new PreferInline(), report, scoped).map(v -> v.file);
 		Assert.equals(
 			'pkg/Exception.hx,pkg/Zzzunique.hx', scopedNames.join(','),
 			'the twin named like a library supertype keeps its finding; the type that library really subtypes loses it'

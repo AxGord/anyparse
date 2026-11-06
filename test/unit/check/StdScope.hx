@@ -53,13 +53,10 @@ final class StdScope {
 		if (std == null) throw new Exception('no installed Haxe std on this machine: the std-container proof cannot be exercised');
 		final root: String = std;
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final library: Array<{ file: String, source: String }> = [
-			for (stub in STUBS)
-				{
-					file: Path.join([root, stub[0]]),
-					source: stub[1]
-				}
-		].concat(libraries ?? []);
+		final library: Array<{ file: String, source: String }> = STUBS.map(stub -> {
+			file: Path.join([root, stub[0]]),
+			source: stub[1]
+		}).concat(libraries ?? []);
 		// `complete` declares the report the WHOLE project (`rootsMatched` / `rootsAllMatched`); false
 		// is a run whose roots did not all match, so a project file may be missing from the index.
 		function sources(): ResolutionSources return {

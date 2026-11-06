@@ -238,7 +238,7 @@ final class CallGraphFacts {
 			isBodyless: false
 		};
 		g.nodes[key] = made;
-		g._declarations[key] = [for (d in declared) { id: key, file: d.file, span: d.span }];
+		g._declarations[key] = declared.map(d -> {id: key, file: d.file, span: d.span });
 		final read: QualifiedRead = { node: id, owner: owner };
 		qualified[key] = read;
 		faceted[key] = bodies;

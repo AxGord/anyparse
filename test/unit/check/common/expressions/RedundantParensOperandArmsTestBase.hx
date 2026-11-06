@@ -85,7 +85,7 @@ class RedundantParensOperandArmsTestBase extends Test {
 
 	private function stripParens(node: QueryNode): QueryNode {
 		final bare: QueryNode = BoolExprShape.unwrapParens(node, 'ParenExpr');
-		return new QueryNode(bare.kind, bare.name, [for (c in bare.children) stripParens(c)]);
+		return new QueryNode(bare.kind, bare.name, bare.children.map(stripParens));
 	}
 
 	private function configured(json: String): (String) -> LintConfig {

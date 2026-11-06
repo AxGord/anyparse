@@ -237,7 +237,7 @@ class MemberOrderWriterGapTest extends Test {
 			final out: String = formatted(src, config);
 			Assert.equals(out, formatted(out, config), 'canonical under $config');
 			final vs: Array<Violation> = violations(fileUnder(config), out);
-			Assert.equals(0, vs.length, '$config: ${[for (v in vs) v.message]}\n$out');
+			Assert.equals(0, vs.length, '$config: ${vs.map(v -> v.message)}\n$out');
 		}
 	}
 

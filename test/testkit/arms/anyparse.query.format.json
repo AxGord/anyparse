@@ -31,7 +31,7 @@
 			"name": "M-LINT-FORMAT-DOMINATED",
 			"type": "anyparse.query.format.LintFormat",
 			"method": "json",
-			"find": "dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]",
+			"find": "dominated: longLocks.dominated.map(d -> {lock: d.lock, by: d.by })",
 			"replace": "dominated: []",
 			"note": "the json envelope names no dominated lock"
 		},

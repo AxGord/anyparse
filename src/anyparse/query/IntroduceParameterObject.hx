@@ -100,7 +100,7 @@ final class IntroduceParameterObject {
 		);
 		if (callErr != null) return Err(callErr);
 
-		final typedefText: String = 'typedef $typeName = { ${[for (f in prep.fields) '${f.name}:${f.type}'].join(', ')} }';
+		final typedefText: String = 'typedef $typeName = { ${prep.fields.map(f -> '${f.name}:${f.type}').join(', ')} }';
 		edits.push({ span: new Span(source.length, source.length), text: '\n\n$typedefText\n' });
 
 		// The WRITER gives back the separator the appended typedef doubles, and it is the only thing that

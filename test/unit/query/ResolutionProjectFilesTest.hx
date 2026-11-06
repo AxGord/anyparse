@@ -37,7 +37,7 @@ class ResolutionProjectFilesTest extends Test {
 		Assert.equals(3, files(plugin.resolutionFiles()).length, 'the resolution view is report UNION the whole library');
 		final project: Null<Array<{ file: String, source: String }>> = plugin.resolutionProjectFiles();
 		Assert.notNull(project, 'a declared resolutionRoots entry gives a project view');
-		final paths: Array<String> = [for (f in files(project)) f.file];
+		final paths: Array<String> = files(project).map(f -> f.file);
 		Assert.equals(2, paths.length, 'report UNION roots, and nothing else');
 		Assert.isTrue(paths.contains('proj/A.hx'), 'the report file stays in the project view');
 		Assert.isTrue(paths.contains('other/B.hx'), 'the declared root joins it');

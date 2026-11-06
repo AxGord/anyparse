@@ -119,7 +119,7 @@ final class Clusters {
 		];
 		if (members.length == 0) return null;
 		members.sort(byPosition);
-		final memberIds: Array<String> = [for (m in members) m.id];
+		final memberIds: Array<String> = members.map(m -> m.id);
 
 		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New, Accessor];
 		final intraEdges: Array<MemberEdge> = aggregateIntraEdges(graph, memberIds, effectiveKinds);
@@ -133,14 +133,14 @@ final class Clusters {
 		function fanIn(id: String): Int return (inNeighbors[id] ?? []).length;
 
 		final hubIds: Array<String> = pickHubs(memberIds, adj, fanIn, hubCount);
-		final hubs: Array<ClusterHub> = [for (id in hubIds) { id: id, fanIn: fanIn(id) }];
+		final hubs: Array<ClusterHub> = hubIds.map(id -> {id: id, fanIn: fanIn(id) });
 		hubs.sort((a, b) -> a.fanIn == b.fanIn ? (a.id < b.id ? -1 : 1) : b.fanIn - a.fanIn);
 
 		final components: Array<Array<String>> = componentsOf(memberIds, adj, hubIds);
 		components.sort((a, b) -> a.length == b.length ? (a[0] < b[0] ? -1 : 1) : b.length - a.length);
 		final componentNodes: Array<Array<FnNode>> = [
 			for (comp in components) {
-				final nodes: Array<FnNode> = [for (id in comp) nodeOf(graph, id)];
+				final nodes: Array<FnNode> = comp.map(nodeOf.bind(graph));
 				nodes.sort(byPosition);
 				nodes;
 			}

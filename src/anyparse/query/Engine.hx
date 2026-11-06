@@ -125,14 +125,14 @@ final class Engine {
 		// shaping is a display concern that should not strip source-
 		// position info.
 		if (depth >= maxDepth) return new QueryNode(node.kind, node.name, [], node.span);
-		final kids: Array<QueryNode> = [for (c in node.children) truncateAt(c, depth + 1, maxDepth)];
+		final kids: Array<QueryNode> = node.children.map(c -> truncateAt(c, depth + 1, maxDepth));
 		return new QueryNode(node.kind, node.name, kids, node.span);
 	}
 
 	private static function truncateChildrenAt(node: QueryNode, maxChildren: Int): QueryNode {
 		final all: Array<QueryNode> = node.children;
 		if (all.length <= maxChildren) {
-			final kids: Array<QueryNode> = [for (c in all) truncateChildrenAt(c, maxChildren)];
+			final kids: Array<QueryNode> = all.map(truncateChildrenAt.bind(_, maxChildren));
 			return new QueryNode(node.kind, node.name, kids, node.span);
 		}
 		final kept: Array<QueryNode> = [for (i in 0...maxChildren) truncateChildrenAt(all[i], maxChildren)];

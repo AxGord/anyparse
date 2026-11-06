@@ -229,9 +229,9 @@ final class ImportBlockOrder extends RuleBase implements DefaultOff implements C
 					final sorted: Array<ImportLine> = wedge.imports.filter(line -> !staying.contains(line));
 					final order: Int = fixOrder(requested, ImportOrder.pathsOf(sorted));
 					ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
-					final block: String = [for (line in sorted) source.substring(line.chunkFrom, line.chunkTo)].join('');
-					final group: String = [for (line in wedge.usings) source.substring(line.chunkFrom, line.chunkTo)].join('');
-					final below: String = [for (line in staying) source.substring(line.chunkFrom, line.chunkTo)].join('');
+					final block: String = sorted.map(line -> source.substring(line.chunkFrom, line.chunkTo)).join('');
+					final group: String = wedge.usings.map(line -> source.substring(line.chunkFrom, line.chunkTo)).join('');
+					final below: String = staying.map(line -> source.substring(line.chunkFrom, line.chunkTo)).join('');
 					final text: String = '$block\n$group$below';
 					for (line in wedge.imports) merged.push(line.declFrom);
 					edits.push({ span: new Span(wedge.from, wedge.to), text: text });
@@ -252,7 +252,7 @@ final class ImportBlockOrder extends RuleBase implements DefaultOff implements C
 					ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
 					final from: Int = block[0].chunkFrom;
 					final to: Int = block[block.length - 1].chunkTo;
-					final text: String = [for (line in sorted) source.substring(line.chunkFrom, line.chunkTo)].join('');
+					final text: String = sorted.map(line -> source.substring(line.chunkFrom, line.chunkTo)).join('');
 					if (text != source.substring(from, to)) edits.push({ span: new Span(from, to), text: text });
 				}
 				return edits;

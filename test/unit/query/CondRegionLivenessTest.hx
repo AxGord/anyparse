@@ -23,11 +23,30 @@ final class CondRegionLivenessTest extends Test {
 	private static final SHAPE: RefShape = new HaxeQueryPlugin().refShape();
 
 	/** `#if nodejs` / `#else`, the shape that motivated the class. */
-	private static final BRANCHED: String = 'class C {\n\n\tpublic function new() {}\n\n\t#if nodejs\n\tvar live:Int = 1;\n'
-		+ '\t#else\n\tvar dead:Int = 2;\n\t#end\n\n}\n';
+	private static final BRANCHED: String =
+		'class C {\n\n\tpublic function new() {}\n\n\t#if nodejs\n\tvar live:Int = 1;\n\t#else\n\tvar dead:Int = 2;\n\t#end\n\n}\n';
 
 	/** The one hypothesis no compile output can state: `X` asserted ABSENT, every other flag unknown. */
 	private static final UNDEFINED_X: DefineFacts = { defined: [], undefined: ['X'] };
+
+	// --- values: comparisons decided as the compiler decides them ---
+
+	/**
+	 * The defines of one build with the values it proved, as `-D v=4.307 -D lime=10.0.0 -D semv=1.2.0 -D flag -D num=4.50`
+	 * gave them to `haxe --interp`, and `undefinedx` never defined: every answer below is what that compile printed.
+	 */
+	private static final VALUED: DefineFacts = {
+		defined: ['v', 'lime', 'semv', 'flag', 'num', 'true'],
+		undefined: ['undefinedx'],
+		values: [
+			'v' => '4.307',
+			'lime' => '10.0.0',
+			'semv' => '1.2.0',
+			'flag' => '1',
+			'num' => '4.50',
+			'true' => '1'
+		]
+	};
 
 	// --- evaluate: the three-valued condition reader ---
 
@@ -120,25 +139,6 @@ final class CondRegionLivenessTest extends Test {
 		Assert.isNull(CondRegionLiveness.evaluate('!X', []));
 		Assert.isNull(CondRegionLiveness.evaluate('X && other', []));
 	}
-
-	// --- values: comparisons decided as the compiler decides them ---
-
-	/**
-	 * The defines of one build with the values it proved, as `-D v=4.307 -D lime=10.0.0 -D semv=1.2.0 -D flag -D num=4.50`
-	 * gave them to `haxe --interp`, and `undefinedx` never defined: every answer below is what that compile printed.
-	 */
-	private static final VALUED: DefineFacts = {
-		defined: ['v', 'lime', 'semv', 'flag', 'num', 'true'],
-		undefined: ['undefinedx'],
-		values: [
-			'v' => '4.307',
-			'lime' => '10.0.0',
-			'semv' => '1.2.0',
-			'flag' => '1',
-			'num' => '4.50',
-			'true' => '1'
-		]
-	};
 
 	@:pin('control') @:killer('M-COND-VALUES-NUMBER') @:killer('M-COND-VALUES-READ')
 	public function testAVersionDefineComparesAsANumber(): Void {
@@ -259,8 +259,8 @@ final class CondRegionLivenessTest extends Test {
 
 	/** An `#elseif` is live only when its own flag holds AND every earlier branch is refuted. */
 	public function testElseIfNeedsItsPredecessorsRefuted(): Void {
-		final source: String = 'class C {\n\n\t#if js\n\tvar a:Int = 1;\n\t#elseif nodejs\n\tvar b:Int = 2;\n\t#else\n'
-			+ '\tvar c:Int = 3;\n\t#end\n\n}\n';
+		final source: String =
+			'class C {\n\n\t#if js\n\tvar a:Int = 1;\n\t#elseif nodejs\n\tvar b:Int = 2;\n\t#else\n\tvar c:Int = 3;\n\t#end\n\n}\n';
 		Assert.isNull(CondRegionLiveness.unproven(
 			source, SHAPE,
 			[at(source, 'var a')],
@@ -294,8 +294,8 @@ final class CondRegionLivenessTest extends Test {
 	 * writer-canonical, so it reaches the gate.
 	 */
 	public function testUndelimitableBranchConditionIsUnknownNotAnElse(): Void {
-		final undelimitable: String = 'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (\n\t\tjs || sys\n\t)\n'
-			+ '\tvar b:Int = 2;\n\t#end\n\n}\n';
+		final undelimitable: String =
+			'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (\n\t\tjs || sys\n\t)\n\tvar b:Int = 2;\n\t#end\n\n}\n';
 		Assert.notNull(
 			CondRegionLiveness.unproven(
 				undelimitable, SHAPE,
@@ -306,8 +306,7 @@ final class CondRegionLivenessTest extends Test {
 		);
 		// The one variable: the same region with a condition the reader CAN delimit is granted,
 		// so the refusal above is about the undelimitable tail and not about the shape.
-		final delimitable: String = 'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (js || sys)\n'
-			+ '\tvar b:Int = 2;\n\t#end\n\n}\n';
+		final delimitable: String = 'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (js || sys)\n\tvar b:Int = 2;\n\t#end\n\n}\n';
 		Assert.isNull(
 			CondRegionLiveness.unproven(
 				delimitable, SHAPE,
@@ -373,11 +372,11 @@ final class CondRegionLivenessTest extends Test {
 		final regions: Array<anyparse.query.LexicalRegions.LexRegion> = new HaxeQueryPlugin().lexicalRegions(BRANCHED);
 		final nodejs: DefineFacts = { defined: ['nodejs'], undefined: [] };
 		final dead: Array<Span> = CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [nodejs], regions);
-		final deadText: String = [for (d in dead) BRANCHED.substring(d.from, d.to)].join('|');
+		final deadText: String = dead.map(d -> BRANCHED.substring(d.from, d.to)).join('|');
 		Assert.isTrue(deadText.indexOf('var dead') >= 0 && deadText.indexOf('var live') < 0, deadText);
 		Assert.equals(0, CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [nodejs, { defined: [], undefined: [] }], regions).length);
 		final none: Array<Span> = CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [{ defined: [], undefined: ['nodejs'] }], regions);
-		final noneText: String = [for (d in none) BRANCHED.substring(d.from, d.to)].join('|');
+		final noneText: String = none.map(d -> BRANCHED.substring(d.from, d.to)).join('|');
 		Assert.isTrue(noneText.indexOf('var live') >= 0 && noneText.indexOf('var dead') < 0, noneText);
 		Assert.equals(0, CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [], regions).length);
 	}

@@ -326,8 +326,8 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 				out.push({
 					label: path,
 					simple: SourceText.lastSegment(path),
-					keys: [for (t in types) index.refs.seenKey(t)],
-					modules: [for (t in types) t.file.module],
+					keys: types.map(t -> index.refs.seenKey(t)),
+					modules: types.map(t -> t.file.module),
 					member: null,
 					isStatic: false,
 					declaration: d
@@ -343,8 +343,8 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 				out.push({
 					label: path,
 					simple: SourceText.lastSegment(typePath),
-					keys: [for (t in types) index.refs.seenKey(t)],
-					modules: [for (t in types) t.file.module],
+					keys: types.map(t -> index.refs.seenKey(t)),
+					modules: types.map(t -> t.file.module),
 					member: name,
 					isStatic: name != CONSTRUCTOR && (declaredAs?.member.isStatic ?? true),
 					declaration: d

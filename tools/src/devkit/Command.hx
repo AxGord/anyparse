@@ -233,7 +233,7 @@ final class Command {
 	/** The arguments an array `value` (`source` in the template) fills a whole template word with. */
 	public static function words(value: Null<Array<String>>, source: String): Array<String> {
 		if (value == null) throw new Exception('cmd: `$source` is null');
-		return [for (item in value) word(item, source)];
+		return value.map(word.bind(_, source));
 	}
 
 	/** `parts` laid end to end: the argument vector of a template, one array per template word. */

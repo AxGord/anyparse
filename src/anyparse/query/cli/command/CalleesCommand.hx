@@ -108,7 +108,7 @@ final class CalleesCommand implements CliCommand implements LeadingQuery {
 		final provenEmpty: Bool = if (output == Text) {
 			renderChains(graph, matches, depth, outward, kinds, sources, limit);
 		} else {
-			final drawn: CodeGraph = MemberGraphBuilder.chains(graph, [for (m in matches) m.id], depth, outward, kinds);
+			final drawn: CodeGraph = MemberGraphBuilder.chains(graph, matches.map(m -> m.id), depth, outward, kinds);
 			CliCallGraph.printGraph(output, drawn, '$cmd $targetStr --depth $depth');
 			drawn.edges().length == 0;
 		};

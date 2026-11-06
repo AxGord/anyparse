@@ -41,8 +41,8 @@ final class TypePathRegistriesMemberTest extends Test {
 
 	public function testAFindIsOneStringOrAListAndDecoded(): Void {
 		final record: MemberRecord = TypePathRegistries.memberRecords(LAYOUT, DOC)[1];
-		Assert.same(['a\n\tb', 'c'], [for (slot in record.finds) slot.value]);
-		Assert.same(['dA'], [for (slot in record.replaces) slot.value]);
+		Assert.same(['a\n\tb', 'c'], record.finds.map(slot -> slot.value));
+		Assert.same(['dA'], record.replaces.map(slot -> slot.value));
 		Assert.equals(0, TypePathRegistries.memberRecords(LAYOUT, DOC)[0].finds.length);
 	}
 

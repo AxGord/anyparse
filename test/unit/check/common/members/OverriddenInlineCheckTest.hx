@@ -158,9 +158,7 @@ class OverriddenInlineCheckTest extends Test {
 
 	/** Each finding as `file:end`, sorted, `end` naming which side of the pair it sits on. */
 	private static function summary(vs: Array<Violation>): String {
-		final out: Array<String> = [
-			for (v in vs) '${v.file}:${v.message.indexOf('inline method') == 0 ? 'inline' : 'override'}'
-		];
+		final out: Array<String> = vs.map(v -> '${v.file}:${v.message.indexOf('inline method') == 0 ? 'inline' : 'override'}');
 		out.sort((a, b) -> if (a < b)
 			-1
 		else if (a > b)

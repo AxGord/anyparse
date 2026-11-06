@@ -549,7 +549,7 @@ class ModuleMoveTest extends Test {
 	@:killer('M-MODMOVE-MEMBER-BLIND')
 	public function testAStaticFieldOfAnImportedModuleStaysWhenTheSameNamedModuleMoves(): Void {
 		final out: ModuleMoveOutcome = moved([move('src/p/Mod.hx', 'src/p/sub/Mod.hx')], staticFieldShape());
-		Assert.isFalse(out.changes.exists(c -> c.file == 'src/p/Main.hx'), [for (c in out.changes) c.file].join(', '));
+		Assert.isFalse(out.changes.exists(c -> c.file == 'src/p/Main.hx'), out.changes.map(c -> c.file).join(', '));
 	}
 
 	@:pin('control')
@@ -702,7 +702,7 @@ class ModuleMoveTest extends Test {
 			file('src/a/Mod.hx', 'package a;\n\nclass Mod {}\n\nclass Sub {}\n'),
 			file('src/a/Main.hx', 'package a;\n\nclass Main {\n\tstatic function g(Mod: Dynamic): Dynamic {\n\t\treturn Mod.Sub;\n\t}\n}\n')
 		]);
-		Assert.isFalse(out.changes.exists(c -> c.newSource.contains('a.Mod.Sub')), [for (c in out.changes) c.file].join(', '));
+		Assert.isFalse(out.changes.exists(c -> c.newSource.contains('a.Mod.Sub')), out.changes.map(c -> c.file).join(', '));
 	}
 
 	private static inline function move(from: String, to: String): ModuleRelocation {
@@ -763,7 +763,7 @@ class ModuleMoveTest extends Test {
 	private static function textOf(out: ModuleMoveOutcome, path: String): String {
 		final change: Null<MoveChange> = out.changes.find(c -> c.file == path);
 		if (change != null) return change.newSource;
-		Assert.fail('no change for $path among ${[for (c in out.changes) c.file].join(', ')}');
+		Assert.fail('no change for $path among ${out.changes.map(c -> c.file).join(', ')}');
 		return '';
 	}
 

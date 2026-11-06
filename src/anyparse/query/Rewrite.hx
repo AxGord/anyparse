@@ -78,7 +78,7 @@ final class Rewrite {
 		// the template over the match would drop `<Int>` from `new Box<Int>(1)` or `:Float` from
 		// `final f:Float = 1`, re-parseably. Refuse, naming the site, rather than guess.
 		for (m in accepted) for (part in m.unwritten) return Err(unwrittenRefusal(source, part));
-		final trailers: Array<String> = [for (m in accepted) trailer(source, m.node)];
+		final trailers: Array<String> = accepted.map(m -> trailer(source, m.node));
 		final mixed: Bool = trailers.exists(t -> t != trailers[0]);
 		final edits: Array<GuardedEdit> = [];
 		for (k => m in accepted) {

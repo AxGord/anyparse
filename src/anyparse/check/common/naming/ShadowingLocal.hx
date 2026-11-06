@@ -639,9 +639,7 @@ final class ShadowingLocal extends RuleBase {
 				Declined('renaming it to "$newName" is refused: $message');
 			case Ok(_):
 				site.claimed.push({ name: newName, scope: frameSpan });
-				Applied([
-					for (occ in Rename.renameOccurrences(site.source, site.tree, at, shape)) { span: occ, text: newName }
-				]);
+				Applied(Rename.renameOccurrences(site.source, site.tree, at, shape).map(occ -> {span: occ, text: newName }));
 		};
 	}
 

@@ -80,7 +80,7 @@ class TypeSyntaxTest extends Test {
 			case Nominal(_, args): args;
 			case _: [];
 		};
-		Assert.same(['A & B', 'C'], [for (a in args) a.text]);
+		Assert.same(['A & B', 'C'], args.map(a -> a.text));
 		switch args[0]?.shape {
 			case Intersection(members):
 				Assert.same(['A', 'B'], [for (m in members) m.text]);

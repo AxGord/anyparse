@@ -67,7 +67,7 @@ final class HxTypeSyntax {
 	/** `head` alone, or the intersection of `head` and every `clauses` member. */
 	private function intersection(head: TypeSyntax, clauses: Array<HxIntersectionClauseS>): TypeSyntax {
 		if (clauses.length == 0) return head;
-		final members: Array<TypeSyntax> = [head].concat([for (c in clauses) type(c.type)]);
+		final members: Array<TypeSyntax> = [head].concat(clauses.map(c -> type(c.type)));
 		final to: Int = members[members.length - 1].span.to;
 		return new TypeSyntax(new Span(head.span.from, to), _text.substring(head.span.from, to), Intersection(members));
 	}

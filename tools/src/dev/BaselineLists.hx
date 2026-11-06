@@ -10,7 +10,7 @@ final class BaselineLists {
 
 	/** The counts of `names`, each read by `countOf`. */
 	public static function of(names: Array<String>, countOf: String -> Int): JValue {
-		return JObject([for (name in names) { key: name, value: JNumber(countOf(name)) }]);
+		return JObject(names.map(name -> {key: name, value: JNumber(countOf(name)) }));
 	}
 
 	/** The count recorded under `name`, or null when `lists` holds none. */

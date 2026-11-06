@@ -93,7 +93,7 @@ final class ImplicitSites {
 			out.push({
 				family: family,
 				span: span,
-				types: [for (o in operands) typeOf(file, tree, source, o)],
+				types: operands.map(typeOf.bind(file, tree, source)),
 				exact: false
 			});
 		}

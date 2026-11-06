@@ -290,7 +290,7 @@ private class DropText implements Check {
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return [for (v in violations) { span: v.span, text: '' }];
+		return violations.map(v -> {span: v.span, text: '' });
 	}
 
 }

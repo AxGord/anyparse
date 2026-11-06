@@ -258,7 +258,7 @@ class FmtFlagOwnershipTest extends Test {
 		for (module in modules) {
 			final flags: Array<String> = named[module] ?? [];
 			flags.sort(compareStrings);
-			blocks.push('\t"$module": [\n' + [for (flag in flags) '\t\t"$flag"'].join(',\n') + '\n\t]');
+			blocks.push('\t"$module": [\n' + flags.map(flag -> '\t\t"$flag"').join(',\n') + '\n\t]');
 		}
 		return '{\n"modules": {\n' + blocks.join(',\n') + '\n}\n}\n';
 	}

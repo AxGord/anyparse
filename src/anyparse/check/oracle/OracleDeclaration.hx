@@ -266,7 +266,7 @@ final class OracleDeclaration {
 	 */
 	private static function withoutRivalCommands(entries: Array<IndexedOracle>, drops: Array<String>): Array<OracleConfig> {
 		final claims: Map<String, Array<String>> = [];
-		final trees: Array<String> = [for (entry in entries) FileIdentity.realPath(entry.config.hxml)];
+		final trees: Array<String> = entries.map(entry -> FileIdentity.realPath(entry.config.hxml));
 		for (i => entry in entries) {
 			final command: Null<String> = entry.config.generate?.command;
 			if (command == null) continue;

@@ -438,7 +438,7 @@ final class LockSites {
 	 * the lock of the member it holds — or a reflective write may store a lock of its type in (`FieldWrites.markLockMembers`).
 	 */
 	private function collectUnsealed(files: Array<String>, plugin: GrammarPlugin, fields: Array<String>, writes: FieldWrites): Void {
-		final names: Array<String> = [for (f in fields) memberName(f)];
+		final names: Array<String> = fields.map(memberName);
 		if (names.length == 0) return;
 		final named: Map<String, Array<String>> = [];
 		for (e in _graph.edges) {
@@ -524,7 +524,7 @@ final class LockSites {
 	 * Every release of `gives` in a function that makes no other call on its lock: the hold began in another function.
 	 */
 	private function collectCrossing(gives: Array<LockCall>): Void {
-		final giveSites: Array<Null<String>> = [for (g in gives) siteKey(g.edge)];
+		final giveSites: Array<Null<String>> = gives.map(g -> siteKey(g.edge));
 		for (give in gives) {
 			final named: Null<String> = lockOf(give.edge);
 			// a wrapper's own release is its callers' release, each judged where it stands
@@ -767,7 +767,7 @@ private class WrapperOps {
 		ops: Array<{ call: LockCall, takes: Bool }>
 	): Bool {
 		// by the whole span: a chained call (`me()._b.release()`) starts where the call it is made on does
-		final sites: Array<String> = [for (o in ops) LockReleasers.callKey(o.call.edge.span)];
+		final sites: Array<String> = ops.map(o -> LockReleasers.callKey(o.call.edge.span));
 		if (graph.outEdges(id).exists(e -> e.kind.isInvocation() && !sites.contains(LockReleasers.callKey(e.span)))) return false;
 		final shape: RefShape = kinds.shape;
 		function runsOther(node: QueryNode): Bool {

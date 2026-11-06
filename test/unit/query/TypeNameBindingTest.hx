@@ -418,9 +418,7 @@ class TypeNameBindingTest extends Test {
 	public function testADeclarationIsAtItsCanonicalPath(): Void {
 		final index: SymbolIndex = indexOf(['p/Mod.hx' => 'package p;\n\nclass Mod {}\n\nclass Sub {}\n']);
 		function at(path: String): String {
-			return [
-				for (d in index.refs.names.declsAt(path)) '${d.type.name}@${TypeNameBinding.canonicalPath(d)}'
-			].join(' ');
+			return index.refs.names.declsAt(path).map(d -> '${d.type.name}@${TypeNameBinding.canonicalPath(d)}').join(' ');
 		}
 		Assert.equals('Mod@p.Mod', at('p.Mod'), 'a main type at its module\'s path');
 		Assert.equals('Sub@p.Mod.Sub', at('p.Mod.Sub'), 'a sub-type at its module\'s path and its own name');

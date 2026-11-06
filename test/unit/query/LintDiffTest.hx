@@ -378,7 +378,7 @@ class LintDiffTest extends Test {
 	public function testParseReportReadsTheEnvelopeAndRefusesOtherObjects(): Void {
 		Assert.same([], LintDiff.parseReport('{"findings": []}'));
 		final envelope: String = '{"findings": [${record('src/A.hx', 'warning', 'r', 'm')}], "longLocks": {"long": [], "mainShort": []}}';
-		Assert.same(['m'], [for (f in LintDiff.parseReport(envelope)) f.message]);
+		Assert.same(['m'], LintDiff.parseReport(envelope).map(f -> f.message));
 		Assert.raises(LintDiff.parseReport.bind('{"hits": []}'));
 		Assert.raises(LintDiff.parseReport.bind('"text"'));
 	}
@@ -429,8 +429,8 @@ class LintDiffTest extends Test {
 			keyed('warning', 'A', 'A.c', 'S.f', 'm3')
 		]), '');
 		Assert.same([1, 1], [result.addedTotal, result.removedTotal]);
-		Assert.same(['m3'], [for (e in result.added) e.message]);
-		Assert.same(['m2'], [for (e in result.removed) e.message]);
+		Assert.same(['m3'], result.added.map(e -> e.message));
+		Assert.same(['m2'], result.removed.map(e -> e.message));
 	}
 
 	/**
@@ -511,7 +511,7 @@ class LintDiffTest extends Test {
 			record('src/A.hx', 'warning', 'alpha-rule', 'alpha finding')
 		]);
 		final result: LintDiffResult = diff(before, after, '');
-		Assert.same(['alpha-rule', 'mid-rule', 'zeta-rule'], [for (r in result.rules) r.rule]);
+		Assert.same(['alpha-rule', 'mid-rule', 'zeta-rule'], result.rules.map(r -> r.rule));
 	}
 
 	/**

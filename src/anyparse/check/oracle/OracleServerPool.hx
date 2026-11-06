@@ -329,7 +329,7 @@ final class OracleServerPool {
 			if (server != null) for (path in moved(server.seen, now).concat(dropped))
 				invalidations.push({ index: i, job: invalidation(server, oracle, path) });
 		}
-		final replies: Array<HaxeRun> = HaxeSpawn.runAll([for (v in invalidations) v.job], BUFFER, HaxeSpawn.parallelism());
+		final replies: Array<HaxeRun> = HaxeSpawn.runAll(invalidations.map(v -> v.job), BUFFER, HaxeSpawn.parallelism());
 		final unheard: Array<Int> = [];
 		for (k => asking in invalidations)
 			if (!CompilerServer.isServerReply(replies[k].out + replies[k].err) && !unheard.contains(asking.index))

@@ -78,7 +78,7 @@ final class NameMentionScan {
 	 * is the direction that costs a refusal rather than a rebind.
 	 */
 	public static function destinationNamesType(destSource: String, destInfo: FileInfo, name: String, regions: Array<LexRegion>): Bool {
-		final excluded: Array<Span> = [for (imp in destInfo.imports) imp.span];
+		final excluded: Array<Span> = destInfo.imports.map(imp -> imp.span);
 		for (t in destInfo.types) if (t.typeParamNames.contains(name) && !t.members.exists(m -> m.isStatic)) excluded.push(t.span);
 		return sourceNamesAny(destSource, [name], excluded, regions);
 	}
@@ -159,7 +159,7 @@ final class NameMentionScan {
 	 * never touched), and a source file that kept one after the cut got none either.
 	 */
 	public static function referenceExclusions(info: FileInfo, ?cut: Span): Array<Span> {
-		final out: Array<Span> = [for (imp in info.imports) imp.span];
+		final out: Array<Span> = info.imports.map(imp -> imp.span);
 		if (cut != null) out.push(cut);
 		return out;
 	}

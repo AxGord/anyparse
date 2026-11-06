@@ -76,30 +76,30 @@ final class MoveToHelperTypes {
 				'the private type "${c.type.name}" is named both by the moved code and by code staying in ${prep.srcFile} — '
 				+ 'it cannot be private to two modules; make it public first (hxq set-modifier)'
 			);
-		return Right([for (c in carried) c.type]);
+		return Right(carried.map(c -> c.type));
 	}
 
 	public static function relocate(
 		prep: MovePrep, types: Array<CarriedType>, editsByFile: Map<String, Array<{ span: Span, text: String }>>, advisory: Array<String>
 	): Void {
 		if (types.length == 0) return;
-		for (cut in sourceCuts(prep.srcSource, [for (t in types) t.cut])) ScopeFiles.editsFor(editsByFile, prep.srcFile).push(cut);
+		for (cut in sourceCuts(prep.srcSource, types.map(t -> t.cut))) ScopeFiles.editsFor(editsByFile, prep.srcFile).push(cut);
 		var end: Int = prep.destSource.length;
 		while (end > 0 && SourceText.isSpace(prep.destSource.fastCodeAt(end - 1))) end--;
 		ScopeFiles.editsFor(editsByFile, prep.destFile).push({
 			span: new Span(end, prep.destSource.length),
-			text: '\n\n${[for (t in types) t.text].join('\n\n')}\n'
+			text: '\n\n${types.map(t -> t.text).join('\n\n')}\n'
 		});
 		advisory.push(
 			'moved the private type(s) '
-			+ [for (t in types) '"${t.name}"'].join(', ')
+			+ types.map(t -> '"${t.name}"').join(', ')
 			+ ' into ${prep.destFile}, which only the moved code names'
 		);
 	}
 
 	/** Every offset of `name` in the source: its type positions and its value positions (a private enum's `E.A`). */
 	private static function referencesOf(prep: MovePrep, typeTree: QueryNode, typeRefShape: TypeRefShape, name: String): Array<Int> {
-		final out: Array<Int> = [for (hit in Uses.find(name, typeTree, typeRefShape)) hit.span.from];
+		final out: Array<Int> = Uses.find(name, typeTree, typeRefShape).map(hit -> hit.span.from);
 		function walk(node: QueryNode): Void {
 			final from: Null<Int> = node.span?.from;
 			if (from != null && node.kind == prep.shape.identKind && node.name == name && !out.contains(from)) out.push(from);

@@ -166,9 +166,7 @@ class DataDeltaTest extends Test {
 	}
 
 	private static function rows(delta: FileDelta): Array<String> {
-		return [
-			for (change in delta.values) '${change.status} ${change.path} ${change.before} ${change.after}'
-		];
+		return delta.values.map(change -> '${change.status} ${change.path} ${change.before} ${change.after}');
 	}
 
 	private static function compare(base: String, now: String): FileDelta {
@@ -178,7 +176,7 @@ class DataDeltaTest extends Test {
 	private static function keysOf(source: String): Array<String> {
 		final tree: MergeTree = RecordTree.of(source, new JsonQueryPlugin().parseFile(source));
 		final arms: Null<MergeTree> = tree.children[0].tree;
-		return arms == null ? [] : [for (child in arms.children) child.key];
+		return arms == null ? [] : arms.children.map(child -> child.key);
 	}
 
 }

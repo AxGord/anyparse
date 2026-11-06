@@ -155,7 +155,7 @@ final class Address {
 	 * anchor spells it.
 	 */
 	public static function unknownSelectorKinds(tree: QueryNode, plugin: GrammarPlugin, selector: Selector): Array<String> {
-		return unknownKinds(plugin, [for (segment in selector.segments) segment.kind], [tree.kind]);
+		return unknownKinds(plugin, selector.segments.map(segment -> segment.kind), [tree.kind]);
 	}
 
 	/**
@@ -193,9 +193,7 @@ final class Address {
 	 */
 	public static function unknownKindClauses(plugin: GrammarPlugin, kinds: Array<String>, alsoKnown: Array<String>): String {
 		final vocabulary: Array<String> = plugin.projectedKinds().concat(alsoKnown);
-		return [
-			for (kind in unknownKinds(plugin, kinds, alsoKnown)) kindNotProjected(kind, vocabulary)
-		].join('; ');
+		return unknownKinds(plugin, kinds, alsoKnown).map(kindNotProjected.bind(_, vocabulary)).join('; ');
 	}
 
 	/**
@@ -209,9 +207,7 @@ final class Address {
 	 */
 	public static function selectMissHint(tree: QueryNode, source: String, plugin: GrammarPlugin, selector: Selector): String {
 		final vocabulary: Array<String> = plugin.projectedKinds().concat([tree.kind]);
-		final clauses: Array<String> = [
-			for (kind in unknownSelectorKinds(tree, plugin, selector)) kindNotProjected(kind, vocabulary)
-		];
+		final clauses: Array<String> = unknownSelectorKinds(tree, plugin, selector).map(kindNotProjected.bind(_, vocabulary));
 		final names: String = kindHint(tree, source, plugin, selector);
 		if (names.length > 0) clauses.push(names);
 		return clauses.length == 0 ? '' : ' — ${clauses.join('; ')}';

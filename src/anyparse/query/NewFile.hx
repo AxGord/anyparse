@@ -125,7 +125,7 @@ final class NewFile {
 		final classDoc: Null<String> = takeSection(bodies, DOC_SECTION);
 		final freeMembers: Null<String> = takeSection(bodies, MEMBERS_SECTION);
 
-		final extendsSimple: Array<String> = [for (e in extendsList) simpleNameWithImport(e, spec.pkg, imports)];
+		final extendsSimple: Array<String> = extendsList.map(e -> simpleNameWithImport(e, spec.pkg, imports));
 		final abstractClause: String = kind == 'abstract' ? abstractHeader(spec, imports) : '';
 
 		final members: Array<String> = [];
@@ -274,7 +274,7 @@ final class NewFile {
 			case 'abstract':
 				buf.add('abstract ${spec.className}$abstractClause {\n\n$body\n}\n');
 			case 'typedef':
-				final inherited: Array<String> = [for (e in extendsSimple) '> $e,'];
+				final inherited: Array<String> = extendsSimple.map(e -> '> $e,');
 				final structLines: Array<String> = inherited.concat([structBody(members)]);
 				buf.add('typedef ${spec.className} = {\n\n${structLines.join('\n')}\n}\n');
 

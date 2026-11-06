@@ -211,7 +211,7 @@ final class ImportOrder {
 
 	/** The paths of `run`, in run order — the list every order question is asked about. */
 	public static inline function pathsOf(run: Array<ImportLine>): Array<String> {
-		return [for (line in run) line.path];
+		return run.map(line -> line.path);
 	}
 
 	/**

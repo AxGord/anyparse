@@ -96,7 +96,7 @@ final class DefiniteAssignmentGuard {
 		final spliced: String = CanonicalEdit.applyEdits(source, edits);
 		final after: Null<QueryNode> = ParseGate.parseOrNull(plugin, spliced);
 		if (after == null) return null;
-		final stood: Array<String> = [for (had in findings(before, shape, vocab)) had.name];
+		final stood: Array<String> = findings(before, shape, vocab).map(had -> had.name);
 		for (hit in findings(after, shape, vocab)) if (!stood.contains(hit.name)) return message(hit, spliced);
 		return null;
 	}

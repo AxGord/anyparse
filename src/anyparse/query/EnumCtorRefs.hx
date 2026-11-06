@@ -132,7 +132,7 @@ final class EnumCtorRefs {
 		newSource: String, newTree: QueryNode, edits: Array<{ span: Span, text: String }>, newName: String, refShape: RefShape
 	): Null<String> {
 		if (edits.length == 0) return null;
-		final froms: Array<Int> = [for (e in edits) e.span.from];
+		final froms: Array<Int> = edits.map(e -> e.span.from);
 		froms.sort((a, b) -> a - b);
 		final delta: Int = newName.length - (edits[0].span.to - edits[0].span.from);
 		final moved: Array<Int> = [for (i => from in froms) from + i * delta];

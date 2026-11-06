@@ -104,7 +104,7 @@ final class HoistCommonBranchTail extends RuleBase {
 		final headSpan: Null<Span> = head.span;
 		if (headSpan == null) return null;
 		if (TailScan.hasConditionalCompilation(source, headSpan.from, headSpan.to)) return null;
-		final lists: Array<Array<QueryNode>> = [for (b in branches) TailScan.statementsOf(b, seams)];
+		final lists: Array<Array<QueryNode>> = branches.map(TailScan.statementsOf.bind(_, seams));
 		final count: Int = identicalBranches(lists, source, seams) ? lists[0].length : admissibleLength(lists, source, seams);
 		if (count < 1) return null;
 		final firsts: Array<Span> = [];

@@ -232,8 +232,8 @@ final class MutationSlotTest extends Test {
 
 	/** The files a parent writes for its slots: the rows, their deal order and the owner pid. */
 	private static function slotFiles(workroot: String, rows: Array<TrackRow>, owner: String): Void {
-		File.saveContent('$workroot/${MutationSlot.ROWS}', [for (row in rows) '${MutationSlot.encodeRow(row)}\n'].join(''));
-		File.saveContent('$workroot/${MutationSlot.ORDER}', [for (row in rows) '${row.name}\n'].join(''));
+		File.saveContent('$workroot/${MutationSlot.ROWS}', rows.map(row -> '${MutationSlot.encodeRow(row)}\n').join(''));
+		File.saveContent('$workroot/${MutationSlot.ORDER}', rows.map(row -> '${row.name}\n').join(''));
 		File.saveContent('$workroot/${MutationSlot.OWNER}', '$owner\n');
 	}
 

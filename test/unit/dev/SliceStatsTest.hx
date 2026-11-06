@@ -61,7 +61,7 @@ final class SliceStatsTest extends Test {
 
 	public function testTheLogIsReadOldestFirst(): Void {
 		final out: String = 'c2\x1fc1\x1f20\x1fsecond\x1fS2\x1f\x1f\x1e\nc1\x1fc0\x1f10\x1ffirst\x1fS1\x1f\x1f\x1e\n';
-		Assert.same(['S1', 'S2'], [for (l in SliceStats.parseLog(out)) l.id]);
+		Assert.same(['S1', 'S2'], SliceStats.parseLog(out).map(l -> l.id));
 	}
 
 	public function testTheQueueFillsWhatTheTrailersLack(): Void {
@@ -113,7 +113,7 @@ final class SliceStatsTest extends Test {
 			row(THURSDAY + DAY, 2, 3, null, { added: 1, existing: 0, fresh: 1 }, 0),
 			row(THURSDAY + 2 * DAY, 6, null, 50, null, null)
 		]);
-		Assert.same(['2026-10-19', '2026-10-26'], [for (w in weeks) w.week]);
+		Assert.same(['2026-10-19', '2026-10-26'], weeks.map(w -> w.week));
 		Assert.equals(3, weeks[1].slices);
 		Assert.equals(2.0, weeks[1].hours);
 		Assert.equals(2.0, weeks[1].rounds);
@@ -184,7 +184,7 @@ final class SliceStatsTest extends Test {
 				THURSDAY + 5 * HOUR, THURSDAY + 6 * HOUR
 			);
 			final found: Array<Landing> = SliceStats.landings(repo, 'HEAD', null);
-			Assert.same(['S1', 'S2'], [for (l in found) l.id]);
+			Assert.same(['S1', 'S2'], found.map(l -> l.id));
 			Assert.equals(3.0, (found[0].landed - found[0].started) / HOUR);
 			Assert.equals(1.0, (found[1].landed - found[1].started) / HOUR);
 			Assert.equals(2, found[1].rounds);

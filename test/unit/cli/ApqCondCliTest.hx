@@ -78,9 +78,7 @@ class ApqCondCliTest extends Test {
 		#if nodejs
 		final f: String = CliFixture.write('cond_flat', SRC_NEST);
 		final printed: Array<String> = lines(CliFixture.captureStdout(() -> Cli.run(['cond', 'nodejs', f, '--flat'])));
-		Assert.same([
-			for (line in NEST_REPORT) line.charAt(0) == ' ' && line.charAt(2) != ' ' ? '$f:${line.substr(2)}' : line
-		], printed);
+		Assert.same(NEST_REPORT.map(line -> line.charAt(0) == ' ' && line.charAt(2) != ' ' ? '$f:${line.substr(2)}' : line), printed);
 		FileSystem.deleteFile(f);
 		#else
 		Assert.pass('non-sys target');

@@ -179,7 +179,7 @@ final class CheckFixture {
 	 * The ids of every builtin rule, in registry order — the one spelling of "which rules are registered" a test reads.
 	 */
 	public static function builtinIds(): Array<String> {
-		return [for (check in Linter.builtins()) check.id()];
+		return Linter.builtins().map(check -> check.id());
 	}
 
 	/**

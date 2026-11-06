@@ -79,7 +79,7 @@ final class ModuleMoveCli {
 		final scopeFiles: Array<{ file: String, source: String }> = readAll(
 			CliArgs.expandInputs(scopes, ext).paths.map(ConfigFinder.absolute)
 		);
-		final scopePaths: Array<String> = [for (e in scopeFiles) e.file];
+		final scopePaths: Array<String> = scopeFiles.map(e -> e.file);
 		final declared: Array<String> = switch textFilesOf(declaration, ext) {
 			case Left(message):
 				CliIo.stderr('apq move: $message\n');
@@ -149,7 +149,7 @@ final class ModuleMoveCli {
 		for (entry in d.text) {
 			if (!exists(entry)) return Left('the "move" section declares text "$entry", which does not exist');
 			final found: Array<String> = ConfigFinder.fileExists(entry) ? [entry] : [
-				for (e in [for (x in d.textExtensions) '.$x'].concat([ext])) for (p in Glob.expand(entry, e)) p
+				for (e in d.textExtensions.map(x -> '.$x').concat([ext])) for (p in Glob.expand(entry, e)) p
 			];
 			for (p in found) {
 				final abs: String = ConfigFinder.absolute(p);
@@ -164,7 +164,7 @@ final class ModuleMoveCli {
 
 	/** Each of `paths` with its text. */
 	private static function readAll(paths: Array<String>): Array<{ file: String, source: String }> {
-		return [for (p in paths) { file: p, source: CliIo.readSourceForParse(p) }];
+		return paths.map(p -> {file: p, source: CliIo.readSourceForParse(p) });
 	}
 
 	/** One line per module OUTSIDE the scope that spells a relocated path — its references would be left unproven. */
@@ -190,7 +190,7 @@ final class ModuleMoveCli {
 		}
 		final originalOf: Map<String, String> = [for (e in scopeFiles) e.file => e.source];
 		for (m in outcome.moves) originalOf[m.to] = originalOf[m.from] ?? '';
-		final canonical: Array<MoveChange> = [for (c in outcome.changes) canonicalOf(c, originalOf, plugin, ext)];
+		final canonical: Array<MoveChange> = outcome.changes.map(canonicalOf.bind(_, originalOf, plugin, ext));
 		write(canonical, outcome.removed);
 		for (i in outcome.imports) CliIo.stderr('apq move: import added: $i\n');
 		CliIo.stderr('apq move: moved ${outcome.moves.length} module(s), wrote ${canonical.length} file(s)\n');
@@ -219,7 +219,7 @@ final class ModuleMoveCli {
 			created.push(c.file);
 		for (r in removed) restore.push({ path: r, content: CliIo.readFile(r) });
 		final dirs: Array<String> = missingDirectories(created);
-		CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+		CliIo.writeFiles(changes.map(c -> {path: c.file, content: c.newSource }));
 		final state: WrittenState = { restore: restore, created: created, dirs: dirs };
 		for (r in removed) if (!CliIo.deletePath(r)) {
 			rollback(state);
@@ -288,10 +288,10 @@ final class ModuleMoveCli {
 
 	/** The preview of `outcome`: every relocation, every updated file, every import the move would add. */
 	private static function preview(outcome: ModuleMoveOutcome): Int {
-		final moved: Array<String> = [for (m in outcome.moves) m.to];
+		final moved: Array<String> = outcome.moves.map(m -> m.to);
 		for (m in outcome.moves) CliIo.sysPrint('${m.from} -> ${m.to}\n');
 		for (c in outcome.changes) if (!moved.contains(c.file)) CliIo.sysPrint('${c.file}: ${exists(c.file) ? 'updated' : 'created'}\n');
-		final sources: Array<String> = [for (m in outcome.moves) m.from];
+		final sources: Array<String> = outcome.moves.map(m -> m.from);
 		for (r in outcome.removed) if (!sources.contains(r)) CliIo.sysPrint('$r: removed\n');
 		for (i in outcome.imports) CliIo.sysPrint('import added: $i\n');
 		CliIo.sysPrint('total: ${moved.length} module(s) moved, ${outcome.changes.length - moved.length} file(s) updated\n');

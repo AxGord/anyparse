@@ -410,9 +410,9 @@ final class CrossRenameMember {
 			for (off in proven.offsets) addOff(off);
 			if (offsets.length == 0) continue;
 
-			final edits: Array<{ span: Span, text: String }> = [
-				for (off in offsets) { span: new Span(off, off + target.memberName.length), text: newName }
-			];
+			final edits: Array<{ span: Span, text: String }> = offsets.map(off ->
+				{span: new Span(off, off + target.memberName.length), text: newName }
+			);
 			final newSource: String = CanonicalEdit.applyEdits(entry.source, edits);
 
 			final newTree: QueryNode = switch ParseGate.parse(plugin, newSource, 'rewritten ${entry.file}') {
@@ -421,7 +421,7 @@ final class CrossRenameMember {
 			};
 
 			final capture: Null<String> = Rename.captureDiagnostic(
-				newSource, newTree, [for (edit in edits) edit.span], resolved, newName, cursor, refShape
+				newSource, newTree, edits.map(edit -> edit.span), resolved, newName, cursor, refShape
 			);
 			if (capture != null) return Err('${entry.file}: $capture');
 			final ctorCapture: Null<String> = target.isEnumCtor

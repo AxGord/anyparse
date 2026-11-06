@@ -3,8 +3,6 @@ package dev;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
-import dev.Baseline;
-import dev.InfraSnapshot;
 import devkit.Command;
 import devkit.Excerpt;
 import devkit.Pool;
@@ -164,18 +162,15 @@ final class GateLint {
 				oracle: true,
 				snapshot: baseline.lint
 			}
-		].concat([
-			for (s in baseline.infra)
-				{
-					name: Path.withoutDirectory(s.tree),
-					tree: s.tree,
-					scope: ['.'],
-					key: cacheKey('tree ${s.tree} ${GateTree.treeState(s.tree)} no-oracle', ['.'], rules),
-					oracle: false,
-					snapshot: s.snapshot
-				}
-		]);
-		final reports: Array<Null<String>> = [for (t in trees) cachedLint(t.key)];
+		].concat(baseline.infra.map(s -> {
+			name: Path.withoutDirectory(s.tree),
+			tree: s.tree,
+			scope: ['.'],
+			key: cacheKey('tree ${s.tree} ${GateTree.treeState(s.tree)} no-oracle', ['.'], rules),
+			oracle: false,
+			snapshot: s.snapshot
+		}));
+		final reports: Array<Null<String>> = trees.map(t -> cachedLint(t.key));
 		final misses: Array<Int> = [for (i => report in reports) if (report == null) i];
 		final runs: Array<Result> = misses.length == 0
 			? []
@@ -324,7 +319,7 @@ final class GateLint {
 	 */
 	private static function engineSources(gate: GateTree): Null<String> {
 		return gate.git(['status', '--porcelain', '--', 'src'].concat(ENGINE_FLAGS)).trim() == ''
-			? gate.git(['rev-parse', 'HEAD:src'].concat([for (flags in ENGINE_FLAGS) 'HEAD:$flags']))
+			? gate.git(['rev-parse', 'HEAD:src'].concat(ENGINE_FLAGS.map(flags -> 'HEAD:$flags')))
 				.split('\n')
 				.join(' ')
 				.trim()

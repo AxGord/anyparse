@@ -20,7 +20,7 @@ final class EdgeDiffTest extends Test {
 			{ file: '/private/tmp/apq-no-such-dir/Held.hx', source: '' },
 			{ file: '/private/tmp/apq-no-such-dir/sub/../Held.hx', source: '' }
 		];
-		Assert.same(['/private/tmp/apq-no-such-dir/Other.hx'], [for (f in EdgeDiff.libraryOnly(project, libs)) f.file]);
+		Assert.same(['/private/tmp/apq-no-such-dir/Other.hx'], EdgeDiff.libraryOnly(project, libs).map(f -> f.file));
 	}
 
 }

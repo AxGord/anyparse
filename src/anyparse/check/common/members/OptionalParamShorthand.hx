@@ -629,7 +629,7 @@ final class OptionalParamShorthand extends RuleBase {
 		final sites: Array<CoalescingRead> = [];
 		collectCoalescingReads(sites, owner, name, coalKind, identKind);
 		if (sites.length == 0) return null;
-		final accounted: Array<Span> = [for (read in sites) read.ident];
+		final accounted: Array<Span> = sites.map(read -> read.ident);
 		accounted.push(declSpan);
 		final comments: Array<Span> = scope.commentRegions();
 		if (OccurrenceScan.referencedUnqualifiedInRange(source, name, fnSpan.from, fnSpan.to, accounted, comments, scope.matchMask()))

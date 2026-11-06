@@ -165,7 +165,7 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 		final lines: Array<String> = bodyLines(source.substring(bodyStartOf(source, tok), bodyEndOf(source, tok)));
 		if (lines.length == 0 || contentFree(lines)) return null;
 		final newline: String = raw.indexOf('\r\n') >= 0 ? '\r\n' : '\n';
-		final text: String = [for (line in lines) line == '' ? '//' : '// $line'].join('$newline$indent');
+		final text: String = lines.map(line -> line == '' ? '//' : '// $line').join('$newline$indent');
 		return { comment: new Span(tok.from, tok.to), edit: new Span(tok.from, lineEnd), text: text };
 	}
 
@@ -180,7 +180,7 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 	 * opens or closes on a bare delimiter line yields no empty `//`.
 	 */
 	private static function bodyLines(body: String): Array<String> {
-		final raw: Array<String> = [for (line in body.split('\n')) StringTools.rtrim(line)];
+		final raw: Array<String> = body.split('\n').map(StringTools.rtrim);
 		if (raw.length == 1) {
 			final only: String = StringTools.trim(raw[0]);
 			return only == '' ? [] : [only];

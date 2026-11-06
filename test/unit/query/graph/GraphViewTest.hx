@@ -102,12 +102,16 @@ class GraphViewTest extends Test {
 	/** A name answers its exact node first, else every node whose name ends with it after a dot. */
 	public function testNamedPrefersTheExactName(): Void {
 		final graph: CodeGraph = members();
-		Assert.equals('p.a.A.m1', [for (n in GraphView.named(graph, 'A.m1', Member)) n.name].join(','));
-		Assert.equals('p.a', [for (n in GraphView.named(graph, 'p.a', Package)) n.name].join(','));
-		Assert.equals('', [for (n in GraphView.named(graph, '1', Member)) n.name].join(','), 'a suffix counts after a dot only');
-		Assert.equals('p.a.A.m1,p.a.A.m2', [
-			for (n in GraphView.named(graph, 'm1', Member).concat(GraphView.named(graph, 'm2', Member))) n.name
-		].join(','));
+		Assert.equals('p.a.A.m1', GraphView.named(graph, 'A.m1', Member).map(n -> n.name).join(','));
+		Assert.equals('p.a', GraphView.named(graph, 'p.a', Package).map(n -> n.name).join(','));
+		Assert.equals('', GraphView.named(graph, '1', Member).map(n -> n.name).join(','), 'a suffix counts after a dot only');
+		Assert.equals(
+			'p.a.A.m1,p.a.A.m2',
+			GraphView.named(graph, 'm1', Member)
+				.concat(GraphView.named(graph, 'm2', Member))
+				.map(n -> n.name)
+				.join(',')
+		);
 	}
 
 	/** A name answers the nodes of the level asked only: the package a lift brings in above the types is never named at the type level. */
@@ -115,9 +119,9 @@ class GraphViewTest extends Test {
 	@:pin('control')
 	public function testNamedKeepsToTheLevel(): Void {
 		final lifted: CodeGraph = GraphView.lift(members(), Type);
-		Assert.equals('', [for (n in GraphView.named(lifted, 'a', Type)) n.name].join(','));
-		Assert.equals('p.a', [for (n in GraphView.named(lifted, 'a', Package)) n.name].join(','));
-		Assert.equals('p.a.A', [for (n in GraphView.named(lifted, 'A', Type)) n.name].join(','));
+		Assert.equals('', GraphView.named(lifted, 'a', Type).map(n -> n.name).join(','));
+		Assert.equals('p.a', GraphView.named(lifted, 'a', Package).map(n -> n.name).join(','));
+		Assert.equals('p.a.A', GraphView.named(lifted, 'A', Type).map(n -> n.name).join(','));
 	}
 
 	/** Opened down to a type, the type shows its members and every other node stands whole, its edges summed on it. */
@@ -199,13 +203,11 @@ class GraphViewTest extends Test {
 
 	/** Every edge as `from -> to kind weight`, by the nodes' names. */
 	private static function edges(graph: CodeGraph): String {
-		return [
-			for (e in graph.edges()) '${graph.node(e.from)?.name} -> ${graph.node(e.to)?.name} ${e.kind} ${e.weight}'
-		].join('|');
+		return graph.edges().map(e -> '${graph.node(e.from)?.name} -> ${graph.node(e.to)?.name} ${e.kind} ${e.weight}').join('|');
 	}
 
 	private static function names(graph: CodeGraph): String {
-		return [for (n in graph.nodes()) n.name].join(',');
+		return graph.nodes().map(n -> n.name).join(',');
 	}
 
 }

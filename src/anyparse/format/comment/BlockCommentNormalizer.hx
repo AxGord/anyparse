@@ -85,7 +85,7 @@ class BlockCommentNormalizer {
 		final lines: Array<BlockCommentLine> = comment.lines;
 		if (lines.length <= 1) return null;
 
-		final decoFlags: Array<Bool> = [for (l in lines) isAllStars(l.body)];
+		final decoFlags: Array<Bool> = lines.map(l -> isAllStars(l.body));
 		final last: Int = lines.length - 1;
 		var commonPrefix: Null<String> = null;
 		for (i => line in lines) {

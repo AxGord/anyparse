@@ -35,7 +35,7 @@ final class Pool {
 		if (pipeline != null) throw new Exception('`$pipeline` is a pipeline, which runs one stage at a time — run it alone');
 		return commands.exists(c -> c.stdinText() != null)
 			? TempDir.with(dir -> answer(commands, [for (i => c in commands) c.job(stdinFile(dir, i, c))]))
-			: answer(commands, [for (c in commands) c.job(null)]);
+			: answer(commands, commands.map(c -> c.job(null)));
 	}
 
 	/** The command `command` makes of every item of `items`, run as `run` runs them. */

@@ -498,7 +498,7 @@ final class LintFixDriver {
 			// A component is committed whole, so the safe-pass revert must roll it back whole:
 			// reverting half a rename leaves the tree worse off than reverting all of it, and
 			// reverting the removals without the created file leaves a tree that does not compile.
-			final unit: Array<String> = [for (m in createdNow) m.file].concat(removed).concat([for (s in staged) s.file]);
+			final unit: Array<String> = createdNow.map(m -> m.file).concat(removed).concat(staged.map(s -> s.file));
 			if (unit.length > 1) coupled.push(unit);
 			for (m in createdNow) countEdits(editsOf, m.file, 1);
 			for (slice in slices) countEdits(editsOf, slice.file, slice.edits.length);
@@ -750,7 +750,7 @@ final class LintFixDriver {
 		// the two answers disagree, which is exactly what that interface's contract forbids.
 		final carrying: Array<CarryingEdit> = check is CarryingFix ? (cast check: CarryingFix).fixCarrying(source, own, cached, index) : [];
 		final checkEdits: Array<{ span: Span, text: String }> = check is CarryingFix
-			? [for (edit in carrying) { span: edit.span, text: edit.text }]
+			? carrying.map(edit -> {span: edit.span, text: edit.text })
 			: check.fix(source, own, cached, index);
 		// The guard runs BEFORE the ledger, because the ledger's subject is what the check
 		// ACHIEVED and a refused edit set achieves nothing. Counting it as `edits` claimed the rule
@@ -1336,7 +1336,7 @@ final class LintFixDriver {
 		final fixed: Int = converge(verifiedChanged);
 		// Over ALL files, not just `verifiedChanged`: a cross-file rename in this round commits slices
 		// into files the verified phases never touched.
-		final rewritten: Array<String> = [for (entry in changedSince(files, verifiedOf)) entry.file].concat(goneSince(files, verifiedOf));
+		final rewritten: Array<String> = changedSince(files, verifiedOf).map(entry -> entry.file).concat(goneSince(files, verifiedOf));
 		if (rewritten.length == 0) return quiet;
 		for (f in rewritten) if (!changedFiles.contains(f)) changedFiles.push(f);
 		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracles, created, trail);
@@ -1435,7 +1435,7 @@ final class LintFixDriver {
 	private static function passSources(
 		files: Array<{ file: String, source: String }>, active: Array<{ file: String, source: String }>
 	): Array<String> {
-		return [for (entry in files) entry.source].concat([for (entry in active) entry.source]);
+		return files.map(entry -> entry.source).concat(active.map(entry -> entry.source));
 	}
 
 	/** How many edits the files a safe round's net only SPLIT kept — owed back to a count that took their whole files off. */

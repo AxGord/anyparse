@@ -254,7 +254,7 @@ final class CallSites {
 			for (h in hits)
 				if (h.kind == RefKind.Read && !h.interpolated && h.bindingSpan != null && bindingFrom(h) == binding) h
 		];
-		final boundReadFroms: Array<Int> = [for (h in boundReads) h.span.from];
+		final boundReadFroms: Array<Int> = boundReads.map(h -> h.span.from);
 
 		final classified: MethodCallScan = classifyMethodCalls(tree, source, name, boundReadFroms, hits, shape, receivers);
 		var error: Null<String> = classified.error;

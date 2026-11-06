@@ -327,13 +327,10 @@ final class TyperConformance {
 		final dir: String = Path.directory(stderr);
 		final files: Array<{ file: String, source: String }> = [];
 		collect(dir, files);
-		final project: Array<{ file: String, source: String }> = [
-			for (f in files)
-				{
-					file: f.file.substr(dir.length + 1),
-					source: f.source
-				}
-		];
+		final project: Array<{ file: String, source: String }> = files.map(f -> {
+			file: f.file.substr(dir.length + 1),
+			source: f.source
+		});
 		final typers: Map<String, Null<FileTyper>> = [];
 		final projectName: String = Path.withoutDirectory(dir);
 		final lines: Array<String> = File.getContent(stderr).split('\n');
@@ -432,14 +429,14 @@ final class TyperConformance {
 			Sys.println('facts: no configuration compiled');
 			return {
 				configurations: 0,
-				dropped: [for (o in asked) '${o.hxml}: no facts'],
+				dropped: asked.map(o -> '${o.hxml}: no facts'),
 				files: project.length,
 				compiled: 0,
 				cases: 0
 			};
 		}
 		Sys.println('facts: configurations ${oracle.facts.configurations}, dropped ${oracle.facts.dropped}');
-		final index: SymbolIndex = IndexScope.over(project.concat(library), plugin, [for (f in library) f.file]);
+		final index: SymbolIndex = IndexScope.over(project.concat(library), plugin, library.map(f -> f.file));
 		final aliases: Map<String, Array<Array<String>>> = typedefTargets(oracle);
 		final before: Int = report.scored();
 		var compiledFiles: Int = 0;
@@ -453,7 +450,7 @@ final class TyperConformance {
 		Sys.println('facts: ${project.length} project files under ${config.resolutionRoots()}, $compiledFiles of them compiled');
 		return {
 			configurations: oracle.facts.configurations.length,
-			dropped: [for (d in oracle.facts.dropped) '${d.name}: ${d.reason}'],
+			dropped: oracle.facts.dropped.map(d -> '${d.name}: ${d.reason}'),
 			files: project.length,
 			compiled: compiledFiles,
 			cases: report.scored() - before
@@ -588,7 +585,7 @@ final class TyperConformance {
 			if (t == null || t.kind != TYPEDEF_KIND) continue;
 			final name: String = SourceText.lastSegment(id);
 			final all: Array<Array<String>> = out[name] ?? [];
-			all.push([for (target in t.targets) outerOf(normalized(target))]);
+			all.push(t.targets.map(target -> outerOf(normalized(target))));
 			out[name] = all;
 		}
 		return out;
@@ -606,9 +603,9 @@ final class TyperConformance {
 	/** `found` against `expected`, the whole list or (`firstOnly`) its first range. */
 	private static function usageVerdict(expected: Array<Span>, found: Null<Array<Span>>, firstOnly: Bool): Verdict {
 		if (found == null) return Unknown;
-		final got: Array<String> = [for (s in found) '${s.from}-${s.to}'];
+		final got: Array<String> = found.map(s -> '${s.from}-${s.to}');
 		got.sort(Reflect.compare);
-		final want: Array<String> = [for (s in expected) '${s.from}-${s.to}'];
+		final want: Array<String> = expected.map(s -> '${s.from}-${s.to}');
 		want.sort(Reflect.compare);
 		final same: Bool = firstOnly ? got.length > 0 && got[0] == want[0] : got.join(',') == want.join(',');
 		return same ? Match : Different(got.join(','));
@@ -816,7 +813,7 @@ private final class FileTyper {
 	 */
 	public function inlinedOverload(node: QueryNode): Bool {
 		if (!isOperator(node)) return false;
-		final operands: Array<String> = [for (operand in node.children) source(operand) ?? ''];
+		final operands: Array<String> = node.children.map(operand -> source(operand) ?? '');
 		final typing: IndexTyping = {
 			root: _tree,
 			shape: _shape,
@@ -1028,7 +1025,7 @@ private final class FileTyper {
 		file: String
 	): Null<FileTyper> {
 		final own: Null<{ file: String, source: String }> = files.find(f -> f.file == file);
-		return own == null ? null : within(plugin, IndexScope.over(files.concat(std), plugin, [for (f in std) f.file]), file, own.source);
+		return own == null ? null : within(plugin, IndexScope.over(files.concat(std), plugin, std.map(f -> f.file)), file, own.source);
 	}
 
 	/** The typer of `file` over `index`; null when it does not parse. */

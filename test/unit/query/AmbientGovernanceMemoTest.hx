@@ -85,7 +85,7 @@ class AmbientGovernanceMemoTest extends Test {
 	private static function governedText(plugin: GrammarPlugin, root: String): String {
 		final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance('$root/src/gqq/import.hx');
 		if (governance == null) return 'NONE';
-		final entries: Array<String> = [for (entry in governance.governs) '${entry.file}:${entry.source}'];
+		final entries: Array<String> = governance.governs.map(entry -> '${entry.file}:${entry.source}');
 		entries.sort(Reflect.compare);
 		return entries.join(';');
 	}

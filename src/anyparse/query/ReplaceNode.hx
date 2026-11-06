@@ -82,7 +82,7 @@ final class ReplaceNode {
 		// (`finalModifierRankKind`). The nine-entry hand-copy that stood here was missing `abstract`
 		// and `overload`, so the guard let through exactly the shape it exists to refuse.
 		final shape: RefShape = plugin.refShape();
-		final bareKeywords: Array<String> = [for (kind in CheckScan.modifierKinds(shape)) kind.toLowerCase()];
+		final bareKeywords: Array<String> = CheckScan.modifierKinds(shape).map(kind -> kind.toLowerCase());
 		final foldedKeyword: Null<String> = shape.finalModifierRankKind;
 		if (foldedKeyword != null) bareKeywords.push(foldedKeyword.toLowerCase());
 		final trimmedNew: String = newSource.trim();

@@ -85,7 +85,7 @@ final class UnreachableCatch extends RuleBase {
 		clauses: Array<QueryNode>, entry: { file: String, source: String }, catchAll: Array<String>, importMap: Map<String, String>,
 		index: SymbolIndex, violations: Array<Violation>
 	): Void {
-		final raws: Array<Null<String>> = [for (c in clauses) catchTypeSource(c, entry.source)];
+		final raws: Array<Null<String>> = clauses.map(c -> catchTypeSource(c, entry.source));
 		final simples: Array<Null<String>> = raws.map(TypeResolver.simpleNominalName);
 		final catchAllFlags: Array<Bool> = [
 			for (k in 0...clauses.length) isUntypedCatch(clauses[k], entry.source) || coversAllType(simples[k], catchAll)

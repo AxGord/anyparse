@@ -304,9 +304,7 @@ final class MoveWildcardImportCarryTest extends Test {
 		]);
 		final root: String = CliFixture.writeTree('apq_move_wildcard', tree);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final files: Array<{ file: String, source: String }> = [
-				for (entry in tree) { file: '$root/${entry.name}', source: entry.source }
-			];
+			final files: Array<{ file: String, source: String }> = tree.map(entry -> {file: '$root/${entry.name}', source: entry.source });
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			result = MoveSymbol.moveType('$root/src/p/Host.hx', line, 7, '$root/$destName', files, plugin, plugin.typeRefShape());
 		});
@@ -328,9 +326,7 @@ final class MoveWildcardImportCarryTest extends Test {
 		]).concat(extra);
 		final root: String = CliFixture.writeTree('apq_move_wildcard', tree);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final scope: Array<{ file: String, source: String }> = [
-				for (entry in tree) { file: '$root/${entry.name}', source: entry.source }
-			];
+			final scope: Array<{ file: String, source: String }> = tree.map(entry -> {file: '$root/${entry.name}', source: entry.source });
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			switch MoveMember.move(
 				'$root/src/q/Tools.hx', 'Tools', ['qfun'], 'Dest', null, false, false, scope, plugin, plugin.typeRefShape()

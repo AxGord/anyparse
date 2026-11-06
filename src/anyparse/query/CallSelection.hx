@@ -112,13 +112,13 @@ final class CallSelection {
 			final m: MemberInfo = members[0];
 			return {
 				kind: m.signatures.length == 1 ? Single : Meta,
-				candidates: [for (s in m.signatures) { signature: s, member: m, host: host }]
+				candidates: m.signatures.map(s -> {signature: s, member: m, host: host })
 			};
 		}
 		// several members of one name are overloads only when every one is; a static's take in no supertype's
 		return !onType || members.exists(m -> !m.isOverload || !m.isStatic || m.signatures.length != 1)
 			? null
-			: { kind: Proper, candidates: [for (m in members) { signature: m.signatures[0], member: m, host: host }] };
+			: { kind: Proper, candidates: members.map(m -> {signature: m.signatures[0], member: m, host: host }) };
 	}
 
 	/**
@@ -131,7 +131,7 @@ final class CallSelection {
 
 	/** The candidate of `c` a call passing `args` binds (`chosen` over `verdict`), or null. */
 	public function select(c: CallCandidates, args: Array<CallArgument>): Null<CallCandidate> {
-		final at: Null<Int> = chosen(c.kind, [for (k in c.candidates) verdict(k, args)]);
+		final at: Null<Int> = chosen(c.kind, c.candidates.map(verdict.bind(_, args)));
 		return at == null ? null : c.candidates[at];
 	}
 
@@ -161,7 +161,7 @@ final class CallSelection {
 	 * differ, and when one of them returns a type `returnType` does not read.
 	 */
 	public function returnOf(start: ResolvedType, c: CallCandidates, args: Array<CallArgument>, receiverArgs: Array<String>): Null<String> {
-		final verdicts: Array<ArgumentFit> = [for (k in c.candidates) verdict(k, args)];
+		final verdicts: Array<ArgumentFit> = c.candidates.map(verdict.bind(_, args));
 		final at: Null<Int> = chosen(c.kind, verdicts);
 		if (at != null) return returnType(start, c.candidates[at], receiverArgs, args);
 		var agreed: Null<String> = null;
@@ -319,9 +319,7 @@ final class CallSelection {
 
 	/** The slot model of `signature`'s parameters (`ArgumentSlots`): which a call may leave out, which takes the rest. */
 	public static function slotsOf(signature: CallSignature): Array<SlotParam> {
-		return [
-			for (p in signature.params) { optional: p.form == Optional || p.form == Defaulted, rest: p.form == Rest }
-		];
+		return signature.params.map(p -> {optional: p.form == Optional || p.form == Defaulted, rest: p.form == Rest });
 	}
 
 	/**

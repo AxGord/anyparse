@@ -60,7 +60,7 @@ final class EffectiveRules {
 			final dir: String = Path.directory(file);
 			final found: DiscoveredConfig = byDir[dir] ?? LintConfig.discoverChain(file);
 			byDir[dir] = found;
-			groupFor(found.chain, [for (c in checks) stateOf(c, file, found.config)], groups).files.push(file);
+			groupFor(found.chain, checks.map(c -> stateOf(c, file, found.config)), groups).files.push(file);
 		}
 		return groups;
 	}
@@ -124,7 +124,7 @@ final class EffectiveRules {
 
 	/** One string per (chain, states) pair — what two files must share to be listed in one group. */
 	private static function signature(chain: Array<String>, rules: Array<RuleState>): String {
-		return chain.join('\n') + '\n\n' + [for (r in rules) '${r.id} ${r.on} ${r.reason}'].join('\n');
+		return chain.join('\n') + '\n\n' + rules.map(r -> '${r.id} ${r.on} ${r.reason}').join('\n');
 	}
 
 }

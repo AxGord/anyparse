@@ -167,7 +167,7 @@ final class ExhaustiveSwitches {
 		final underlying: Null<String> = kids.length > 0 && _typeKinds.contains(kids[0].kind) ? kids[0].name : null;
 		final members: Null<AbstractMembers> = membersOf(kids.slice(underlying == null ? 0 : 1));
 		if (members == null || members.values.length == 0) return null;
-		final names: Array<String> = [for (v in members.values) v.name ?? ''];
+		final names: Array<String> = members.values.map(v -> v.name ?? '');
 		if (!members.functions.foreach(f -> buildsNoOther(f.fn, type, names))) return null;
 		final fromTypes: Array<String> = [];
 		for (f in members.functions) {
@@ -538,9 +538,7 @@ final class ExhaustiveSwitches {
 	private function writesTo(name: String): Array<WriteSite> {
 		final known: Null<Array<WriteSite>> = _writesOf[name];
 		if (known != null) return known;
-		final sites: Array<WriteSite> = [
-			for (w in _writes.of(name)) { node: w.write, at: contextOf(w.file, w.write), site: w }
-		];
+		final sites: Array<WriteSite> = _writes.of(name).map(w -> {node: w.write, at: contextOf(w.file, w.write), site: w });
 		_writesOf[name] = sites;
 		return sites;
 	}

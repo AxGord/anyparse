@@ -109,7 +109,7 @@ final class ExtractConstant {
 			total += occurrences.length;
 			if (token == null) token = sf.source.substring(occurrences[0].from, occurrences[0].to);
 
-			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: ref }];
+			final edits: Array<{ span: Span, text: String }> = occurrences.map(occ -> {span: occ, text: ref });
 			final replaced: String = switch CanonicalEdit.canonicalize(sf.source, edits, reformat, plugin, optsJson) {
 				case Ok(text): text;
 				case Err(message): return Err('${sf.file}: $message');

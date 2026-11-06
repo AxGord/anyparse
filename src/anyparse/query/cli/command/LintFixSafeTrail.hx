@@ -221,7 +221,7 @@ final class LintFixSafeTrail {
 		// sees, and an isolation probe may have written it back.
 		for (file in whole) if (!originalOf.exists(file)) remove(file);
 		assertOnDisk(changed, target);
-		return [for (culprit in culprits) culprit.file];
+		return culprits.map(culprit -> culprit.file);
 	}
 
 	/** Take every finding a revert earlier in this run banned out of `violations`, in place; a run with no trail keeps them all. */

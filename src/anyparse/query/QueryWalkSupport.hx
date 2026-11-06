@@ -44,7 +44,7 @@ final class QueryWalkSupport {
 			indexed.push({ from: s.from, idx: i, node: children[i] });
 		}
 		indexed.sort((a, b) -> a.from != b.from ? a.from - b.from : a.idx - b.idx);
-		return [for (e in indexed) e.node];
+		return indexed.map(e -> e.node);
 	}
 
 }

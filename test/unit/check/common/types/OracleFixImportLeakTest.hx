@@ -156,7 +156,7 @@ final class OracleFixImportLeakTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = fixer.fixWithOracle(
 			source, violations, plugin, new IdentTypeOracle(source, byName)
 		);
-		return [for (edit in edits) edit.text];
+		return edits.map(edit -> edit.text);
 	}
 
 }

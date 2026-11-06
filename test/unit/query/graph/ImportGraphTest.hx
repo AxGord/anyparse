@@ -62,7 +62,7 @@ class ImportGraphTest extends Test {
 	public function testATypeNestsInItsPackage(): Void {
 		final graph: CodeGraph = ImportGraph.build(indexOf(FILES), Type);
 		Assert.equals('pkg.a', graph.node(graph.node(CodeGraph.idOf(Type, 'pkg.a.Alpha'))?.parent ?? '')?.name);
-		final held: Array<String> = [for (n in graph.held(CodeGraph.idOf(Package, 'pkg.b'))) n.name];
+		final held: Array<String> = graph.held(CodeGraph.idOf(Package, 'pkg.b')).map(n -> n.name);
 		held.sort(Reflect.compare);
 		Assert.equals('pkg.b.Beta,pkg.b.Gamma', held.join(','));
 	}
@@ -114,7 +114,7 @@ class ImportGraphTest extends Test {
 			];
 			final graph: CodeGraph = ImportGraph.build(indexOf(files), Package);
 			Assert.equals('', edges(graph).join('|'));
-			Assert.equals('y', [for (n in graph.nodes()) n.name].join(','));
+			Assert.equals('y', graph.nodes().map(n -> n.name).join(','));
 		});
 		#else
 		Assert.pass('non-sys target');
@@ -142,9 +142,7 @@ class ImportGraphTest extends Test {
 
 	/** Every edge as `from -> to xweight`, by the nodes' names. */
 	private static function edges(graph: CodeGraph): Array<String> {
-		return [
-			for (e in graph.edges()) '${graph.node(e.from)?.name} -> ${graph.node(e.to)?.name} x${e.weight}'
-		];
+		return graph.edges().map(e -> '${graph.node(e.from)?.name} -> ${graph.node(e.to)?.name} x${e.weight}');
 	}
 
 }

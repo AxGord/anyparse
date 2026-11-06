@@ -572,7 +572,7 @@ final class CallGraph {
 	 * path only), or a bare `method`. Missing types / members yield [].
 	 */
 	public function matchIds(pattern: String): Array<String> {
-		if (!pattern.endsWith('.*')) return [for (n in resolveTarget(pattern)) n.id];
+		if (!pattern.endsWith('.*')) return resolveTarget(pattern).map(n -> n.id);
 		final named: Array<String> = types.imports.typeKeys(pattern.substring(0, pattern.length - 2));
 		return [
 			for (id => n in nodes) if (n.name != null && named.contains(n.typeName ?? '')) id

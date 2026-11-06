@@ -145,7 +145,7 @@ final class ImportBindings {
 		final out: Array<String> = moduleFieldsOf(file);
 		for (t in file.types) if (t.name != moved && !t.isPrivate) {
 			out.push(t.name);
-			for (name in typeValuesOf(t, file, [], true) ?? [for (m in t.members) m.name]) out.push(name);
+			for (name in typeValuesOf(t, file, [], true) ?? t.members.map(m -> m.name)) out.push(name);
 		}
 		return out;
 	}
@@ -271,7 +271,7 @@ final class ImportBindings {
 		if (type.kind == TYPEDEF_KIND) return aliasValuesOf(type, file, seen, unseenAsNone);
 		if (!abstracts.contains(type.kind) && !enums.contains(type.kind)) return [];
 		if (type.hasBuild || type.hasAutoBuild) return null;
-		if (!abstracts.contains(type.kind)) return [for (m in type.members) m.name];
+		if (!abstracts.contains(type.kind)) return type.members.map(m -> m.name);
 		if (!type.isEnumAbstract) return [];
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		return [for (m in type.members) if (!m.isStatic && fields.contains(m.kind)) m.name];

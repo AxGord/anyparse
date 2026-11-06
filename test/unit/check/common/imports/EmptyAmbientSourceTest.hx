@@ -63,10 +63,9 @@ class EmptyAmbientSourceTest extends Test {
 		final root: String = CliFixture.writeTree('apq_empty_ambient', treeOf(ambient, module));
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			out = [
-				for (v in CheckFixture.violationsIn(new EmptyAmbientSource(), filesOf(root, ambient, module), new HaxeQueryPlugin()))
-					'${v.file.substr(root.length + 1)}:${v.message.substr(v.message.lastIndexOf('— ') + 2)}'
-			].join(',');
+			out = CheckFixture.violationsIn(new EmptyAmbientSource(), filesOf(root, ambient, module), new HaxeQueryPlugin())
+				.map(v -> '${v.file.substr(root.length + 1)}:${v.message.substr(v.message.lastIndexOf('— ') + 2)}')
+				.join(',');
 		});
 		return out;
 		#else
@@ -105,9 +104,7 @@ class EmptyAmbientSourceTest extends Test {
 
 	/** The run's file set over that tree. */
 	private static function filesOf(root: String, ambient: String, module: Null<String>): Array<{ file: String, source: String }> {
-		return [
-			for (entry in treeOf(ambient, module)) { file: '$root/${entry.name}', source: entry.source }
-		];
+		return treeOf(ambient, module).map(entry -> {file: '$root/${entry.name}', source: entry.source });
 	}
 
 }

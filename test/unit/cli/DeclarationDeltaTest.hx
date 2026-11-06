@@ -99,8 +99,8 @@ class DeclarationDeltaTest extends Test {
 		final delta: FileDelta = DeclarationDelta.compare(new JsonQueryPlugin(), base, now);
 		Assert.equals(ChangeClass.Declarations, delta.change);
 		// the list itself gains the record's braces; no record already there changed
-		Assert.same(['~', '+', '+'], [for (change in delta.declarations) (change.status: String)]);
-		Assert.same(['arms', 'arms.name', 'arms.note'], [for (change in delta.declarations) change.key]);
+		Assert.same(['~', '+', '+'], delta.declarations.map(change -> (change.status: String)));
+		Assert.same(['arms', 'arms.name', 'arms.note'], delta.declarations.map(change -> change.key));
 	}
 
 	public function testAFileNoGrammarReadsIsCountedInLines(): Void {
@@ -208,9 +208,7 @@ class DeclarationDeltaTest extends Test {
 
 	/** `<status> <selector> <lines>`: `+added-removed` for a changed declaration, the lines spanned for any other. */
 	private static function summary(delta: FileDelta): Array<String> {
-		return [
-			for (change in delta.declarations) '${change.status} ${change.selector} ${linesOf(change)}'
-		];
+		return delta.declarations.map(change -> '${change.status} ${change.selector} ${linesOf(change)}');
 	}
 
 	private static function linesOf(change: DeclarationChange): String {

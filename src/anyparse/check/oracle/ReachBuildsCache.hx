@@ -68,8 +68,8 @@ final class ReachBuildsCache {
 			format: FORMAT_TAG,
 			key: key.key,
 			stats: [for (file => stat in stats) [file, stat]],
-			configurations: [for (c in configurations) recordOf(c)],
-			library: [for (f in builds.library) { file: f.file, hash: OracleCache.md5(f.source) }]
+			configurations: configurations.map(recordOf),
+			library: builds.library.map(f -> {file: f.file, hash: OracleCache.md5(f.source) })
 		};
 		final path: String = cacheFile(oracles);
 		// staged under this process's name and renamed, so a concurrent reader meets the old record or the new one whole
@@ -144,7 +144,7 @@ final class ReachBuildsCache {
 
 	/** The name, without extension, of the record of `oracles`' builds. */
 	private static function stem(oracles: Array<OracleConfig>): String {
-		return 'apq-reach-builds-${OracleCache.md5([for (o in oracles) [o.hxml].concat(o.defines).join(' ')].join('\n'))}';
+		return 'apq-reach-builds-${OracleCache.md5(oracles.map(o -> [o.hxml].concat(o.defines).join(' ')).join('\n'))}';
 	}
 
 	/** The directory `oracle` compiles from: the one its generation probes, as a prepared configuration carries it. */
@@ -176,7 +176,7 @@ final class ReachBuildsCache {
 			everDefined: c.everDefined,
 			values: [for (name => value in c.values) [name, value]],
 			compiled: c.compiled,
-			types: [for (t in c.types) { name: t.name, file: t.file }]
+			types: c.types.map(t -> {name: t.name, file: t.file })
 		};
 		final parsed: Null<Array<String>> = c.parsed;
 		if (parsed != null) record.parsed = parsed;
@@ -216,7 +216,7 @@ final class ReachBuildsCache {
 			everDefined: c.everDefined,
 			values: values,
 			compiled: c.compiled,
-			types: [for (t in c.types) { name: t.name, file: t.file }]
+			types: c.types.map(t -> {name: t.name, file: t.file })
 		};
 		final parsed: Null<Array<String>> = c.parsed;
 		if (parsed != null) read.parsed = parsed;

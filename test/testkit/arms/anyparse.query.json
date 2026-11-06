@@ -2329,7 +2329,7 @@
 			"name": "M-REACH-FOLDED-BODIES",
 			"type": "anyparse.query.MemberReach",
 			"method": "bodySpans",
-			"find": "? null : [for (d in declared) { file: d.file, span: d.span }];",
+			"find": "? null : declared.map(d -> {file: d.file, span: d.span });",
 			"replace": "? null : [{ file: declared[0].file, span: declared[0].span }];",
 			"note": "a node folding a declaration per branch of a region is read by its first declaration's text only, so what another one runs is never seen"
 		},
@@ -5362,7 +5362,7 @@
 			"name": "M-BINDING-OWN-TIER-CUT",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "tierOf",
-			"find": "if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);",
+			"find": "if (own.length > 0) return Bound(own.map(t -> {file: fi, type: t }));",
 			"replace": "",
 			"note": "the module's own types are not asked first, so an import answers for a name the module itself declares"
 		},
@@ -5801,7 +5801,7 @@
 			"name": "M-SCOPE-AMBIENT-BLIND",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "importsOf",
-			"find": "[fi.imports].concat([for (group in fi.ambientImports) group.imports])",
+			"find": "[fi.imports].concat(fi.ambientImports.map(group -> group.imports))",
 			"replace": "[fi.imports]",
 			"note": "the ambient `import.hx` chain is not consulted, so a static it brings in reads as a capture"
 		},
@@ -6160,7 +6160,7 @@
 			"type": "anyparse.query.ReachLiveness",
 			"method": "deadOf",
 			"find": ", values: c.values }",
-			"replace": " }",
+			"replace": ", values: null }",
 			"note": "the builds' proved values never reach the liveness reading, so a version comparison keeps both branches live"
 		},
 		{
@@ -8365,7 +8365,7 @@
 			"name": "M-FACTS-OWNERS-ROOTS-OWN",
 			"type": "anyparse.query.FactsView",
 			"method": "ownersDeclaring",
-			"find": "final roots: Array<Null<String>> = [for (t in typed) rootOf(t)];",
+			"find": "final roots: Array<Null<String>> = typed.map(rootOf);",
 			"replace": "final roots: Array<Null<String>> = [for (t in owners) rootOf(t)];",
 			"note": "(precision) a typed type declaring a variable of the name refuses the owners of the method so named"
 		},
@@ -9099,7 +9099,7 @@
 			"name": "M-TS-PATH-MATCH",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "memberIds",
-			"find": "[for (path in foreignPaths(simple.substring(0, dot))) path + member]",
+			"find": "foreignPaths(simple.substring(0, dot)).map(path -> path + member)",
 			"replace": "[]",
 			"note": "a pattern never finds a call keyed by its library path, so the builtin sinks miss sys.thread.Lock.wait"
 		},
@@ -9954,7 +9954,7 @@
 			"name": "M-USING-MODULE-TYPES",
 			"type": "anyparse.query.StaticExtensions",
 			"method": "usingTypes",
-			"find": "hosts == null ? [SourceText.lastSegment(u.raw)] : [for (t in hosts.types) t.type.name]",
+			"find": "hosts == null ? [SourceText.lastSegment(u.raw)] : hosts.types.map(t -> t.type.name)",
 			"replace": "[SourceText.lastSegment(u.raw)]",
 			"note": "a using of a module brings its main type's extensions only, not its sub-types' (4.3.7 brings both)"
 		},
@@ -9970,7 +9970,7 @@
 			"name": "M-SUPERS-BY-DECLARATION",
 			"type": "anyparse.query.CallGraphTypes",
 			"method": "record",
-			"find": "final supers: Array<String> = [for (raw in t.supertypesRaw) imports.typeOf(file, raw)];",
+			"find": "final supers: Array<String> = t.supertypesRaw.map(raw -> imports.typeOf(file, raw));",
 			"replace": "final supers: Array<String> = [for (raw in t.supertypesRaw) SourceText.lastSegment(raw)];",
 			"note": "a supertype is keyed by its simple name, so a library type extended beside a project namesake lends the namesake's members"
 		},
@@ -10621,7 +10621,7 @@
 			"name": "M-SUBTYPE-ARGS-SUBSTITUTED",
 			"type": "anyparse.query.SubtypeGraph",
 			"method": "chainVia",
-			"find": "return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args, typeSyntax)];",
+			"find": "return up.map(CallGraphNames.substituteTypeParams.bind(_, params, args, typeSyntax));",
 			"replace": "return up;",
 			"note": "a chain climbing a generic type passes the argument in that type's terms, not the subtype's"
 		},
@@ -11410,7 +11410,7 @@
 			"name": "M-HELPER-TYPE-STAYS",
 			"type": "anyparse.query.MoveToHelperTypes",
 			"method": "carriedTypes",
-			"find": "return Right([for (c in carried) c.type]);",
+			"find": "return Right(carried.map(c -> c.type));",
 			"replace": "return Right([]);",
 			"note": "a private type only the moved code names stays in the source module, where the helper module cannot see it"
 		},
@@ -12079,8 +12079,8 @@
 			"name": "M-ANCESTOR-ARGS-OFF",
 			"type": "anyparse.query.AncestorTable",
 			"method": "chainTo",
-			"find": "for (a in above) CallGraphNames.substituteTypeParams(a, params, args, _typeSyntax)",
-			"replace": "for (a in above) a",
+			"find": "above.map(a -> CallGraphNames.substituteTypeParams(a, params, args, _typeSyntax))",
+			"replace": "above.map(a -> a)",
 			"note": "what a link passes is not substituted for the ancestor's parameters, so a chain answers the ancestor's own parameter names in the start's terms"
 		},
 		{
@@ -12599,7 +12599,7 @@
 			"name": "M-INDEX-PARAM-DEFAULTS",
 			"type": "anyparse.query.SymbolIndexBuilder",
 			"method": "declTypeParamDefaults",
-			"find": "return [for (n in names) own[n]];",
+			"find": "return names.map(n -> own[n]);",
 			"replace": "return [for (n in names) null];",
 			"note": "no type parameter records its default, so a reference leaving arguments out has no answer"
 		},
@@ -13191,7 +13191,7 @@
 			"name": "M-CASTS-APPLIED-WRITTEN",
 			"type": "anyparse.query.AbstractCasts",
 			"method": "endIn",
-			"find": "r == null ? Open : appliedEnd(r, [for (a in written) endIn(a, file, at, params)]);",
+			"find": "r == null ? Open : appliedEnd(r, written.map(endIn.bind(_, file, at, params)));",
 			"replace": "Open;",
 			"note": "a generic abstract written with type arguments stands for no end, so `m(true)` over `E2<String, Float>` leaves both candidates open"
 		},
@@ -13319,8 +13319,8 @@
 			"name": "M-CASTS-BRANCHES-LIVE",
 			"type": "anyparse.query.AbstractCasts",
 			"method": "liveMembers",
-			"find": "return clausesOf(r) == null ? null : [for (b in _builds.of(r)) membersOf(r, b)];",
-			"replace": "return clausesOf(r) == null ? null : [for (b in r.type.branches) membersOf(r, b)];",
+			"find": "return clausesOf(r) == null ? null : _builds.of(r).map(membersOf.bind(r));",
+			"replace": "return clausesOf(r) == null ? null : r.type.branches.map(membersOf.bind(r));",
 			"note": "a dead branch's members count as one build's, so the value its `typedef` branch lacks is no value"
 		},
 		{
@@ -14940,8 +14940,8 @@
 			"name": "M-CARRY-STATIC-WILDCARD-OWN-ONLY",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "wildcardStaticProviders",
-			"find": "for (g in info.ambientImports) { file: g.file, imports: g.imports }",
-			"replace": "for (g in info.ambientImports.slice(0, 0)) { file: g.file, imports: g.imports }",
+			"find": "info.ambientImports.map(g ->",
+			"replace": "info.ambientImports.slice(0, 0).map(g ->",
 			"note": "a module-static wildcard only the source's ambient import.hx spells provides no names, so the moved code's bare static call is carried no statement and the destination reads Unknown identifier; a caller left behind that binds through one is not repointed"
 		},
 		{
@@ -14987,7 +14987,7 @@
 			"name": "M-BINDING-NO-AMBIENT-CHAIN",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "orderOf",
-			"find": "[fi.imports].concat([for (group in fi.ambientImports) group.imports])",
+			"find": "[fi.imports].concat(fi.ambientImports.map(group -> group.imports))",
 			"replace": "[fi.imports]",
 			"note": "the ambient import.hx chain is not asked for a simple type name, so a move reads a dependency only import.hx binds as unknown and refuses a destination that binds the same type"
 		},
@@ -15365,7 +15365,7 @@
 			"name": "M-BOUND-BESIDES-NO-VALUES",
 			"type": "anyparse.query.ImportBindings",
 			"method": "boundBesidesType",
-			"find": "for (name in typeValuesOf(t, file, [], true) ?? [for (m in t.members) m.name]) out.push(name);",
+			"find": "for (name in typeValuesOf(t, file, [], true) ?? t.members.map(m -> m.name)) out.push(name);",
 			"replace": "",
 			"note": "a remaining type keeps a statement only by its own name, so a file reading just a value of it loses the value"
 		},

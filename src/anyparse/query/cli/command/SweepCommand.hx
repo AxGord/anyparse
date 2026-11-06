@@ -428,7 +428,7 @@ final class SweepCommand implements CliCommand {
 				skipWrite: census.skipWrite,
 				skipConfig: census.skipConfig,
 				skipMalformed: census.skipMalformed,
-				fixtures: [for (entry in census.entries) { path: entry.path, status: entry.status }]
+				fixtures: census.entries.map(entry -> {path: entry.path, status: entry.status })
 			};
 			sys.io.File.saveContent((savePath: String), SweepSnapshotWriter.write(snapshot, JsonFormat.instance.compactWriteOptions));
 			CliIo.sysPrint('apq sweep: saved census of $root -> $savePath\n');

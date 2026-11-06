@@ -27,7 +27,7 @@ final class Cmd {
 			'cmd: ${exception.message}', at(template.pos, exception.offset)
 		);
 		if (words.length == 0) Context.error('cmd: the template names no program', template.pos);
-		final parts: Array<Expr> = [for (word in words) wordExpr(word, template.pos)];
+		final parts: Array<Expr> = words.map(word -> wordExpr(word, template.pos));
 		return macro devkit.Command.of(devkit.Command.flat([$a{parts}]));
 	}
 

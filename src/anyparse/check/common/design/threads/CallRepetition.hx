@@ -193,7 +193,7 @@ final class CallRepetition {
 		final key: String = '$file:$at';
 		if (_loops.exists(key)) return _loops[key];
 		final tree: Null<QueryNode> = _trees.ofFile(file);
-		final found: Null<Array<Span>> = tree == null || loops.kinds.length == 0 ? null : [for (l in loops.around(tree, at)) l.repeating];
+		final found: Null<Array<Span>> = tree == null || loops.kinds.length == 0 ? null : loops.around(tree, at).map(l -> l.repeating);
 		_loops[key] = found;
 		return found;
 	}
@@ -379,7 +379,7 @@ final class CallRepetition {
 	 * value to when that may repeat it (`handedOn`) — keyed by where each sits.
 	 */
 	private function sourcesOf(edge: CallEdge, loops: Array<Span>): Array<String> {
-		final out: Array<String> = [for (l in loops) loopKey(edge.file, l)];
+		final out: Array<String> = loops.map(l -> loopKey(edge.file, l));
 		if (handedOn(edge)) out.push(handKey(edge));
 		return out;
 	}
@@ -447,7 +447,7 @@ final class CallRepetition {
 		else if (handedOn(e) && calls.contains(e.via ?? ''))
 			[handKey(e)]
 		else
-			[for (l in loops.slice(-1)) loopKey(e.file, l)];
+			loops.slice(-1).map(l -> loopKey(e.file, l));
 	}
 
 	/**

@@ -277,14 +277,12 @@ final class StructuralMergeTest extends Test {
 
 	/** The conflicts as plain records, for `Assert.same`. */
 	private static function plain(conflicts: Array<MergeConflict>): Array<{ key: String, ours: String, theirs: String }> {
-		return [
-			for (c in conflicts) { key: c.key, ours: (c.ours: String), theirs: (c.theirs: String) }
-		];
+		return conflicts.map(c -> {key: c.key, ours: (c.ours: String), theirs: (c.theirs: String) });
 	}
 
 	/** Module `a.C` importing `imports` and holding `members`, as the writer emits it. */
 	private static function module(imports: Array<String>, members: Array<String>): String {
-		final header: String = imports.length == 0 ? '' : [for (i in imports) 'import $i;\n'].join('') + '\n';
+		final header: String = imports.length == 0 ? '' : imports.map(i -> 'import $i;\n').join('') + '\n';
 		final source: String = 'package a;\n\n${header}class C {\n${members.join('\n')}}\n';
 		return HAXE.writeRoundTrip(source, null) ?? source;
 	}
@@ -295,7 +293,7 @@ final class StructuralMergeTest extends Test {
 
 	/** A function `name` tracing each of `values` on its own line. */
 	private static function traces(name: String, values: Array<String>): String {
-		return '\tpublic function $name():Void {\n${[for (v in values) '\t\ttrace($v);\n'].join('')}\t}\n';
+		return '\tpublic function $name():Void {\n${values.map(v -> '\t\ttrace($v);\n').join('')}\t}\n';
 	}
 
 	private static function canon(source: String): String {

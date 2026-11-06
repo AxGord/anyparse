@@ -63,8 +63,8 @@ class CondQueryTest extends Test {
 		final found: Array<CondRegion> = regionsOf(FLAT, 'nodejs');
 		Assert.equals(1, found.length);
 		final region: CondRegion = found[0];
-		Assert.same(['#if', '#elseif', '#else'], [for (branch in region.branches) branch.keyword]);
-		Assert.same(['a();', 'b();', 'c();'], [for (branch in region.branches) text(FLAT, branch.body).trim()]);
+		Assert.same(['#if', '#elseif', '#else'], region.branches.map(branch -> branch.keyword));
+		Assert.same(['a();', 'b();', 'c();'], region.branches.map(branch -> text(FLAT, branch.body).trim()));
 		for (branch in region.branches)
 			Assert.isTrue(text(FLAT, branch.body).indexOf('#') < 0, 'body holds a directive: ${branch.directive}');
 	}

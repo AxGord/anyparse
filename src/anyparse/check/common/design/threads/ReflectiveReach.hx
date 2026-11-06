@@ -504,7 +504,7 @@ final class ReflectiveReach {
 	private static function declaredGlobs(
 		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>, read: (LintConfig) -> Null<Array<String>>
 	): Null<Array<String>> {
-		final lists: Array<Null<Array<String>>> = [for (f in files) read(LintConfig.resolveWith(resolve, f.file))];
+		final lists: Array<Null<Array<String>>> = files.map(f -> read(LintConfig.resolveWith(resolve, f.file)));
 		final first: Null<Array<String>> = lists.length == 0 ? null : lists[0];
 		return first != null && lists.foreach(l -> l != null && l.join('\n') == first.join('\n')) ? first : null;
 	}

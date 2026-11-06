@@ -93,7 +93,7 @@ final class ShellHxAccess {
 	private static function segments(command: String): Array<String> {
 		final head: String = HEREDOC.match(command) ? command.substr(0, HEREDOC.matchedPos().pos) : command;
 		final plain: String = QUOTED.map(head, quoted -> OPAQUE.match(quoted.matched(0)) ? '\'\'' : quoted.matched(0));
-		return [for (segment in SEGMENT.split(plain)) segment.trim()].filter(segment -> segment != '');
+		return SEGMENT.split(plain).map(segment -> segment.trim()).filter(segment -> segment != '');
 	}
 
 	private static function viaHxq(segment: String): Bool {

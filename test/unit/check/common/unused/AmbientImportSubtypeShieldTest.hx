@@ -115,9 +115,7 @@ class AmbientImportSubtypeShieldTest extends Test {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_ambient_shield', tree);
 		final analysed: Array<{ name: String, source: String }> = withoutAmbient ? tree.filter(e -> !e.name.endsWith('import.hx')) : tree;
-		final files: Array<{ file: String, source: String }> = [
-			for (entry in analysed) { file: '$root/${entry.name}', source: entry.source }
-		];
+		final files: Array<{ file: String, source: String }> = analysed.map(entry -> {file: '$root/${entry.name}', source: entry.source });
 		final reported: Array<String> = [];
 		try {
 			final violations: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files);

@@ -97,7 +97,7 @@ final class HaxelibResolver {
 		if (names.length > 1) {
 			invocations++;
 			final roots: Null<Array<String>> = rootsFrom(runLibpath(names), names.length);
-			if (roots != null) return [for (root in roots) sourceDirFrom(root, readHaxelibJson(rootFrom(root)))];
+			if (roots != null) return roots.map(root -> sourceDirFrom(root, readHaxelibJson(rootFrom(root))));
 		}
 		return names.map(libSourceDir);
 	}

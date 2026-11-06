@@ -214,7 +214,7 @@
 			"name": "M-RUNMEMO-NOT-ATTACHED",
 			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "oraclesOf",
-			"find": "return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file], grammar));",
+			"find": "return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> files.map(f -> f.file), grammar));",
 			"replace": "return prepared.oracles;",
 			"note": "a lint run's configurations carry no memo, so every phase compiles the tree it asks about again"
 		},

@@ -200,9 +200,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (e in fixGrouped(source, violations, plugin, index)) { span: e.span, text: e.text }
-		];
+		return fixGrouped(source, violations, plugin, index).map(e -> {span: e.span, text: e.text });
 	}
 
 	/**
@@ -457,7 +455,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 				for (prefix => group in byPrefix) if (group.length >= MIN_GROUP) out.push({
 					prefix: prefix,
 					span: group[0].span,
-					members: [for (d in group) d.name]
+					members: group.map(d -> d.name)
 				});
 			}
 		}

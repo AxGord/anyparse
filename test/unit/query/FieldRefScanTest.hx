@@ -5,6 +5,8 @@ import anyparse.query.FieldRefScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 
+using StringTools;
+
 /**
  * `FieldRefScan` — the by-name recognizers the backing-field rewrites share, pinned against the
  * grammar's own declarations.
@@ -141,7 +143,7 @@ class FieldRefScanTest extends Test {
 				FieldRefScan.isFnScope(moduleFn, SHAPE),
 				'a module-level function declaration cannot be re-qualified with `this.` / `C.`, so it is not a scope here'
 			);
-		final covered: Array<String> = [for (spelling in FN_SCOPE_SPELLINGS) spelling.kind];
+		final covered: Array<String> = FN_SCOPE_SPELLINGS.map(spelling -> spelling.kind);
 		final uncovered: Array<String> = FieldRefScan.fnScopeKinds(SHAPE).filter(kind -> !covered.contains(kind));
 		Assert.equals('', uncovered.join(', '), 'function-scope kind(s) no spelling reaches: [${uncovered.join(', ')}]');
 	}
@@ -170,7 +172,7 @@ class FieldRefScanTest extends Test {
 		Assert.isFalse(
 			FieldRefScan.functionBindsName(parse('function m2() { return other; }'), BOUND, SHAPE), 'a name nothing declares is not bound'
 		);
-		final covered: Array<String> = [for (spelling in BINDER_SPELLINGS) spelling.kind];
+		final covered: Array<String> = BINDER_SPELLINGS.map(spelling -> spelling.kind);
 		final uncovered: Array<String> = BinderScan.binderKinds(SHAPE).filter(kind -> !covered.contains(kind));
 		Assert.equals('', uncovered.join(', '), 'binder kind(s) no spelling reaches: [${uncovered.join(', ')}]');
 	}
@@ -237,7 +239,7 @@ class FieldRefScanTest extends Test {
 			Assert.equals('_x', FieldRefScan.writeTargetField(node, SHAPE), 'writeTargetField must see the target of ${spelling.code}');
 		}
 		final declared: Array<String> = SHAPE.writeParentKinds;
-		final covered: Array<String> = [for (spelling in WRITE_SPELLINGS) spelling.kind];
+		final covered: Array<String> = WRITE_SPELLINGS.map(spelling -> spelling.kind);
 		// `BoolAndAssign` / `BoolOrAssign` are the documented exception: the grammar parses `&&=`
 		// and `||=` and Haxe refuses them, so no row can reach them from real source. Every
 		// OTHER declared write kind must have one, which is what fails when a grammar gains an
@@ -263,7 +265,7 @@ class FieldRefScanTest extends Test {
 	 */
 	private static function firstWriteNode(code: String): QueryNode {
 		// a region every branch of which ends the statement is a statement of its own, with no `;` after its `#end`
-		final terminated: Bool = StringTools.endsWith(code, '#end');
+		final terminated: Bool = code.endsWith('#end');
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(
 			'class C {\n\tfunction m():Void {\n\t\t$code${terminated ? '' : ';'}\n\t}\n}'
 		);

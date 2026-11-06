@@ -889,7 +889,7 @@ class CrossScopeSoundnessTest extends Test {
 			final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == DECL_FILE);
 			if (vs.length == 0) continue;
 			final edits: Array<{ span: Span, text: String }> = check.fix(declSource, vs, plugin, index);
-			out[check.id()] = [for (edit in edits) '${edit.span.from}:${edit.span.to}:${edit.text}'];
+			out[check.id()] = edits.map(edit -> '${edit.span.from}:${edit.span.to}:${edit.text}');
 		}
 		return out;
 	}

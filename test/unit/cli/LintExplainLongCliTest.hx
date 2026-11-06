@@ -64,7 +64,7 @@ class LintExplainLongCliTest extends Test {
 		final aside: Null<JValue> = JValueTools.at(lock(longLocks, 'A._l'), 'aside.0');
 		Assert.same(['"spans-blocking"', '"Mutex.acquire"', '"A._m"', '3', '39'], printed(aside, ['kind', 'call', 'via', 'line', 'col']));
 		final short: Array<JValue> = RawJson.items(JValueTools.at(longLocks, 'mainShort'));
-		Assert.same([['"A._s"', '4', '25', 'false']], [for (t in short) printed(t, ['lock', 'line', 'col', 'quiet'])]);
+		Assert.same([['"A._s"', '4', '25', 'false']], short.map(t -> printed(t, ['lock', 'line', 'col', 'quiet'])));
 		#else
 		Assert.pass('node only: stdout capture');
 		#end
@@ -102,9 +102,10 @@ class LintExplainLongCliTest extends Test {
 		final json: Null<JValue> = JValueTools.at(
 			JValueParser.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out), 'longLocks'
 		);
-		Assert.same([['"A._inner"', '["A._outer"]'], ['"A._outer"', '["A._inner"]']], [
-			for (d in RawJson.items(JValueTools.at(json, 'dominated'))) printed(d, ['lock', 'by'])
-		]);
+		Assert.same(
+			[['"A._inner"', '["A._outer"]'], ['"A._outer"', '["A._inner"]']],
+			RawJson.items(JValueTools.at(json, 'dominated')).map(d -> printed(d, ['lock', 'by']))
+		);
 		Assert.stringContains(
 			'dominated A._inner by A._outer: a take of it under one of those is brief',
 			lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--explain-long']).out
@@ -220,7 +221,7 @@ class LintExplainLongCliTest extends Test {
 	 * where it holds none.
 	 */
 	private static function printed(value: Null<JValue>, paths: Array<String>): Array<String> {
-		return [for (path in paths) RawJson.print(JValueTools.at(value, path) ?? JNull)];
+		return paths.map(path -> RawJson.print(JValueTools.at(value, path) ?? JNull));
 	}
 
 	/** The record of `lock` among the long locks of an `--explain-long` section. */

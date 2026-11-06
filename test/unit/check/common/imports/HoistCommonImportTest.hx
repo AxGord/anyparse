@@ -297,13 +297,10 @@ class HoistCommonImportTest extends Test {
 	@:pin('control')
 	@:killer('M-HOIST-USINGS-SOURCE-ORDER')
 	public function testHoistedUsingsKeepTheirSourceOrder(): Void {
-		final tree: Array<TreeFile> = [
-			for (file in usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n'))
-				file.name == 'apq.json' ? {
-					name: file.name,
-					source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Rqqwwee"] } } }\n'
-				} : file
-		];
+		final tree: Array<TreeFile> = usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n').map(file -> file.name == 'apq.json' ? {
+			name: file.name,
+			source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Rqqwwee"] } } }\n'
+		} : file);
 		Assert.equals('using qqz.Sqqwwee;|using qqz.Rqqwwee;|', hoisted(tree));
 	}
 
@@ -653,15 +650,15 @@ class HoistCommonImportTest extends Test {
 	@:pin('control')
 	@:killer('M-SINK-RIVAL-BLIND')
 	public function testRefusesASinkWhereANearerSourceBindsTheName(): Void {
-		Assert.equals('', sunk([
-			for (entry in SINK_TREE) entry.name == 'src/aqq/OneQq.hx' ? {
+		Assert.equals(
+			'', sunk(SINK_TREE.map(entry -> entry.name == 'src/aqq/OneQq.hx' ? {
 				name: 'src/aqq/bqq/OneQq.hx',
 				source: 'package aqq.bqq;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n'
-			} : entry
-		].concat([
-			{ name: 'src/wqq/Rqqwwee.hx', source: 'package wqq;\n\nclass Rqqwwee {}\n' },
-			{ name: 'src/aqq/bqq/import.hx', source: 'import wqq.Rqqwwee;\n' }
-		])));
+			} : entry).concat([
+				{ name: 'src/wqq/Rqqwwee.hx', source: 'package wqq;\n\nclass Rqqwwee {}\n' },
+				{ name: 'src/aqq/bqq/import.hx', source: 'import wqq.Rqqwwee;\n' }
+			]))
+		);
 	}
 
 	/** An OWN rival import of the name is refused the same way: the own copy sorts after it and the last one wins. */
@@ -717,9 +714,7 @@ class HoistCommonImportTest extends Test {
 	@:killer('M-SINK-HYSTERESIS-OFF')
 	public function testAFixedTreeIsAFixedPointOfBothDirections(): Void {
 		#if (sys || nodejs)
-		final tree: Array<TreeFile> = [
-			for (entry in COMMON_TREE) { name: entry.name, source: entry.source.replace('a: ', 'a:') }
-		];
+		final tree: Array<TreeFile> = COMMON_TREE.map(entry -> {name: entry.name, source: entry.source.replace('a: ', 'a:') });
 		final verdicts: Array<String> = [];
 		for (config in ['{}', '{ "rules": { "hoist-common-import": { "sinkThreshold": 70 } } }']) {
 			final root: String = CliFixture.writeTree('apq_hoist_fixpoint', tree);
@@ -815,11 +810,8 @@ class HoistCommonImportTest extends Test {
 		final root: String = CliFixture.writeTree('apq_hoist_plan', tree);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final rendered: Array<String> = [
-				for (v in reportOf(
-					tree, root, libraries, parsing, buildsUnknown
-				)) '${relative(v.file, root)}:${quoted(v.message, 0)}@${relative(quoted(v.message, 1), root)}'
-			];
+			final rendered: Array<String> = reportOf(tree, root, libraries, parsing, buildsUnknown)
+				.map(v -> '${relative(v.file, root)}:${quoted(v.message, 0)}@${relative(quoted(v.message, 1), root)}');
 			rendered.sort((a, b) -> if (a < b)
 				-1
 			else if (a > b)
@@ -880,9 +872,9 @@ class HoistCommonImportTest extends Test {
 		final root: String = CliFixture.writeTree('apq_hoist_fix', tree);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			out = [
-				for (slice in fixOf(tree, root)) '${relative(slice[0].file, root)}=${textOf(slice[0], tree, root).replace('\n', '|')}'
-			].join(SITE_SEPARATOR);
+			out = fixOf(tree, root)
+				.map(slice -> '${relative(slice[0].file, root)}=${textOf(slice[0], tree, root).replace('\n', '|')}')
+				.join(SITE_SEPARATOR);
 		});
 		return out;
 		#else
@@ -1082,9 +1074,8 @@ class HoistCommonImportTest extends Test {
 	#if (sys || nodejs)
 	/** One `lint --fix` over every `.hx` under `root`, by both import-moving directions and the two rules that clean up after them. */
 	private static function fixOnDisk(root: String, config: String, ?checks: Array<Check>): Void {
-		final files: Array<{ file: String, source: String }> = [
-			for (path in modulesUnder(root)) { file: path, source: sys.io.File.getContent(path) }
-		];
+		final files: Array<{ file: String, source: String }> = modulesUnder(root)
+			.map(path -> {file: path, source: sys.io.File.getContent(path) });
 		CliFixture.captureStderr(() ->
 			LintFixDriver.runLintFix(
 				files, checks ?? [new HoistCommonImport(), new UnusedImport(), new EmptyAmbientSource()], new HaxeQueryPlugin(),
@@ -1095,7 +1086,7 @@ class HoistCommonImportTest extends Test {
 
 	/** Every `.hx` file under `dir` with its text, sorted by path — the tree as a fix left it on disk. */
 	private static function diskOf(dir: String): String {
-		return [for (path in modulesUnder(dir)) '$path=${sys.io.File.getContent(path)}'].join('\n');
+		return modulesUnder(dir).map(path -> '$path=${sys.io.File.getContent(path)}').join('\n');
 	}
 
 	/** Every `.hx` path under `dir`, sorted. */

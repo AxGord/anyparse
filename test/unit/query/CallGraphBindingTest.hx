@@ -195,7 +195,7 @@ class CallGraphBindingTest extends Test {
 		Assert.same(['Main.f', 'Main.f@2'], targets('Elsewhere.call'), 'an import names the function: every body');
 		Assert.same(['Main.f', 'Main.f@2'], targets('Later.call'), 'from a file read after it too');
 		Assert.same(['Parent.f'], targets('Kid.call'), 'an inherited member comes first');
-		Assert.same(['Main.f', 'Main.f@2'], [for (n in g.resolveTarget('Main.f')) n.id], 'so does a query');
+		Assert.same(['Main.f', 'Main.f@2'], g.resolveTarget('Main.f').map(n -> n.id), 'so does a query');
 		g.removeFile(files[main].file);
 		g.addFiles([files[main]]);
 		Assert.same(['Main.f', 'Main.f@2'], targets('Elsewhere.call'), 'read again, each body once');

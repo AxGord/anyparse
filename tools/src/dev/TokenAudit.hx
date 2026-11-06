@@ -2,19 +2,9 @@ package dev;
 
 import anyparse.ds.Set;
 import anyparse.grammar.json.JsonFormat;
-import dev.AuditReport;
-import dev.BypassSummary;
-import dev.LandedSummary;
-import dev.ModelRow;
-import dev.Rewrite;
-import dev.RewriteSummary;
-import dev.RoleToolRow;
-import dev.SliceCost;
 import dev.SliceStats.Landing;
 import dev.TokenTranscript.AgentReading;
-import dev.ToolRow;
 import devkit.Args;
-import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Table;
 import haxe.Exception;
@@ -119,22 +109,13 @@ final class TokenAudit {
 			'agents ${report.agents}; turns ${report.turns}; estimated cost ${usd(report.cost)}',
 			'tool input ${thousands(report.toolInTok)}, tool output ${thousands(report.toolOutTok)}',
 			'',
-			Table.render(
-				['tool', 'calls', 'out k-tok', 'avg out', 'in k-tok', '>2k', '>5k'],
-				[for (row in report.tools.slice(0, top)) toolCells(row)]
-			),
+			Table.render(['tool', 'calls', 'out k-tok', 'avg out', 'in k-tok', '>2k', '>5k'], report.tools.slice(0, top).map(toolCells)),
 			'',
 			roleLines(report.roles.slice(0, top)),
 			'',
-			Table.render(
-				['model', 'turns', 'input', 'output', 'cache read', 'cache write', 'cost usd'],
-				[for (row in report.models) modelCells(row)]
-			),
+			Table.render(['model', 'turns', 'input', 'output', 'cache read', 'cache write', 'cost usd'], report.models.map(modelCells)),
 			'',
-			Table.render(
-				['slice', 'agents', 'turns', 'out', 'cost usd', 'landed'],
-				[for (row in report.slices.slice(0, top)) sliceCells(row)]
-			)
+			Table.render(['slice', 'agents', 'turns', 'out', 'cost usd', 'landed'], report.slices.slice(0, top).map(sliceCells))
 		];
 		if (landed != null)
 			lines.push('landed slices ${landed.slices}; cost ${usd(landed.cost)}; per landed slice ${usd(landed.perSlice)}');
@@ -145,10 +126,7 @@ final class TokenAudit {
 		lines.push('rewrite gap: median ${Math.round(rewrites.gapMedianSeconds)}s, max ${Math.round(rewrites.gapMaxSeconds)}s');
 		lines.push('rewrite gap buckets: <=5m ${rewrites.within5m}, <=1h ${rewrites.to1h}, over 1h ${rewrites.over1h}');
 		if (rewrites.worst.length > 0)
-			lines.push(Table.render(
-				['rewrite', 'slice', 'context', 'gap s', 'extra usd'],
-				[for (r in rewrites.worst.slice(0, top)) rewriteCells(r)]
-			));
+			lines.push(Table.render(['rewrite', 'slice', 'context', 'gap s', 'extra usd'], rewrites.worst.slice(0, top).map(rewriteCells)));
 		lines.push('');
 		lines.push('write payloads ${thousands(bypass.writePayloadTok)}, leading blanks ${thousands(bypass.indentTok)}');
 		lines.push('executed: shell reads of repo .hx ${bypass.shellHxReads}; writes outside hxq ${bypass.hxWrites}');
@@ -222,9 +200,10 @@ final class TokenAudit {
 
 	/** The role × tool table of `rows`, each row followed by its largest calls. */
 	private static function roleLines(rows: Array<RoleToolRow>): String {
-		final table: Array<String> = Table.render(['role', 'tool', 'calls', 'out k-tok', '>5k'], [
-			for (row in rows) [row.role, row.key, '${row.calls}', thousands(row.outTok), '${row.over5k}']
-		])
+		final table: Array<String> = Table.render(
+			['role', 'tool', 'calls', 'out k-tok', '>5k'],
+			rows.map(row -> [row.role, row.key, '${row.calls}', thousands(row.outTok), '${row.over5k}'])
+		)
 			.split('\n');
 		final lines: Array<String> = [table[0]];
 		for (i => row in rows) {

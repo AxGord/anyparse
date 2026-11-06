@@ -142,9 +142,8 @@ final class ModulePathTokens {
 	public static function inertSpans(source: String, plugin: GrammarPlugin): Array<Span> {
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
-		final out: Array<Span> = tree == null
-			? [for (r in regions) new Span(r.from, r.to)]
-			: InertRegions.of(tree, regions, plugin.refShape());
+		final out: Array<Span> =
+			tree == null ? regions.map(r -> new Span(r.from, r.to)) : InertRegions.of(tree, regions, plugin.refShape());
 		out.sort((a, b) -> a.from - b.from);
 		return out;
 	}

@@ -291,7 +291,7 @@ final class TokenTranscript {
 
 	/** The text of a message content: the string itself, or the `text` parts of a block list joined. */
 	private static function textOf(content: Null<JValue>): String {
-		return RawJson.string(content) ?? [for (block in blocksOf(content)) block.text ?? ''].join('');
+		return RawJson.string(content) ?? blocksOf(content).map(block -> block.text ?? '').join('');
 	}
 
 	private static function parse(line: String): Null<TranscriptEntry> {
@@ -300,7 +300,7 @@ final class TokenTranscript {
 
 	/** The content blocks of a message content, none when the content is a plain string. */
 	private static function blocksOf(content: Null<JValue>): Array<Block> {
-		return [for (item in RawJson.items(content)) blockOf(item)];
+		return RawJson.items(content).map(blockOf);
 	}
 
 	/** The row key of a call to a tool that is not the shell or a file read: a workflow or other MCP call, else the tool's name. */

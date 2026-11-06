@@ -24,7 +24,7 @@ class RuleCategoryTest extends Test {
 			'literals',
 			'expressions',
 			'design'
-		], [for (c in RuleCategory.ALL) (c: String)]);
+		], RuleCategory.ALL.map(c -> (c: String)));
 		for (c in RuleCategory.ALL) Assert.equals(c, RuleCategory.fromId(c), 'fromId reads back $c');
 		Assert.isNull(RuleCategory.fromId('style'), 'an id outside the set is no category');
 	}

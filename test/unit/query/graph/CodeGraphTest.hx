@@ -81,10 +81,8 @@ class CodeGraphTest extends Test {
 		graph.addEdge(a, b, Call, 2);
 		graph.addEdge(a, b, Ref);
 		final edges: Array<GraphEdge> = graph.edges();
-		Assert.equals('m_a m_b call 3|m_a m_b ref 1|m_b m_a call 1', [for (e in edges) '${e.from} ${e.to} ${e.kind} ${e.weight}'].join(
-			'|'
-		));
-		Assert.equals('m_a,m_b', [for (n in graph.nodes()) n.id].join(','));
+		Assert.equals('m_a m_b call 3|m_a m_b ref 1|m_b m_a call 1', edges.map(e -> '${e.from} ${e.to} ${e.kind} ${e.weight}').join('|'));
+		Assert.equals('m_a,m_b', graph.nodes().map(n -> n.id).join(','));
 	}
 
 	/** An edge or a parent naming no node is a bug in the builder, not a node to invent. */
@@ -110,9 +108,10 @@ class CodeGraphTest extends Test {
 		graph.addEdge(b, a, New);
 		graph.addEdge(a, c, Call);
 		graph.addEdge(c, c, Call);
-		Assert.equals('m_a m_b call true|m_a m_b ref true|m_a m_c call false|m_b m_a new true|m_c m_c call false', [
-			for (e in graph.edges()) '${e.from} ${e.to} ${e.kind} ${graph.isMutual(e)}'
-		].join('|'));
+		Assert.equals(
+			'm_a m_b call true|m_a m_b ref true|m_a m_c call false|m_b m_a new true|m_c m_c call false',
+			graph.edges().map(e -> '${e.from} ${e.to} ${e.kind} ${graph.isMutual(e)}').join('|')
+		);
 		Assert.equals(3, graph.weightBetween(a, b));
 		Assert.equals(1, graph.weightBetween(b, a));
 		Assert.equals(0, graph.weightBetween(c, a));

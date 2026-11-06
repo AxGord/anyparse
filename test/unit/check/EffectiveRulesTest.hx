@@ -206,7 +206,7 @@ class EffectiveRulesTest extends Test {
 		final source: String = 'class C {\n\tvar x:Dynamic;\n}\n';
 		final files: Array<{ file: String, source: String }> = [{ file: 'gen/C.hx', source: source }, { file: 'app/C.hx', source: source }];
 		final found: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new AvoidDynamic()], _ -> config, true);
-		Assert.same(['app/C.hx'], [for (v in found) v.file], 'only the file the listing reports on is scanned');
+		Assert.same(['app/C.hx'], found.map(v -> v.file), 'only the file the listing reports on is scanned');
 		Assert.isFalse(EffectiveRules.stateOf(new AvoidDynamic(), 'gen/C.hx', config).on, 'and the listing reports the other off');
 	}
 

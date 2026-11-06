@@ -223,7 +223,7 @@ final class LintDiff {
 			lines, result.rules, limit, 'rule(s) that moved',
 			r -> '  by rule      ${r.rule} ${r.before}->${r.after} (+${r.added} -${r.removed})'
 		);
-		final parts: Array<String> = [for (s in result.severities) '${s.severity} +${s.added} -${s.removed}'];
+		final parts: Array<String> = result.severities.map(s -> '${s.severity} +${s.added} -${s.removed}');
 		if (parts.length > 0) lines.push('  by severity  ${parts.join('   ')}');
 		pushExamples(lines, '+', 'added', result.added, limit);
 		pushExamples(lines, '-', 'removed', result.removed, limit);
@@ -466,16 +466,13 @@ final class LintDiff {
 		final counted: LintDiffBuckets = bucket(added, removed, e -> e.rule);
 		final beforeBy: Map<String, Int> = ruleTotals(before);
 		final afterBy: Map<String, Int> = ruleTotals(after);
-		final out: Array<LintDiffRuleDelta> = [
-			for (n in counted.names)
-				{
-					rule: n,
-					before: beforeBy[n] ?? 0,
-					after: afterBy[n] ?? 0,
-					added: counted.added[n] ?? 0,
-					removed: counted.removed[n] ?? 0
-				}
-		];
+		final out: Array<LintDiffRuleDelta> = counted.names.map(n -> {
+			rule: n,
+			before: beforeBy[n] ?? 0,
+			after: afterBy[n] ?? 0,
+			added: counted.added[n] ?? 0,
+			removed: counted.removed[n] ?? 0
+		});
 		out.sort(compareRuleMovement);
 		return out;
 	}
@@ -558,9 +555,7 @@ final class LintDiff {
 	private static function severityDeltas(added: Array<LintDiffEntry>, removed: Array<LintDiffEntry>): Array<LintDiffSeverityDelta> {
 		final counted: LintDiffBuckets = bucket(added, removed, e -> e.severity);
 		counted.names.sort(compareSeverity);
-		return [
-			for (n in counted.names) { severity: n, added: counted.added[n] ?? 0, removed: counted.removed[n] ?? 0 }
-		];
+		return counted.names.map(n -> {severity: n, added: counted.added[n] ?? 0, removed: counted.removed[n] ?? 0 });
 	}
 
 	/** `SEVERITY_ORDER` rank first, unknown names after all known ones, then alphabetical. */

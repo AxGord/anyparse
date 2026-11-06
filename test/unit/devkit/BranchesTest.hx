@@ -119,7 +119,7 @@ final class BranchesTest extends Test {
 			);
 			Assert.equals(1, readings['n']);
 			Assert.stringContains('b:\n  boom: it broke', summary.excerpts(), 'the dead branch\'s own last words stand in for its report');
-			Assert.same(['b', 'a'], [for (step in summary.steps()) step.name]);
+			Assert.same(['b', 'a'], summary.steps().map(step -> step.name));
 			Assert.isTrue(summary.steps()[0].outcome.match(NotRun(_)));
 			Assert.isTrue(summary.steps()[1].outcome.match(Passed));
 		});
@@ -267,7 +267,7 @@ final class BranchesTest extends Test {
 				names -> Command.of(['node', '-e', script, report, left, progress]).watched(1000, progress, true), names -> report, summary
 			);
 			Assert.isFalse(readings.keys().hasNext());
-			Assert.same(['a', 'b'], [for (step in summary.steps()) step.name]);
+			Assert.same(['a', 'b'], summary.steps().map(step -> step.name));
 			Assert.isTrue(summary.steps()[0].outcome.match(Passed), 'the finished row keeps its result');
 			switch summary.steps()[1].outcome {
 				case NotRun(why):

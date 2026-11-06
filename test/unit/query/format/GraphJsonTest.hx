@@ -18,16 +18,12 @@ class GraphJsonTest extends Test {
 		final graph: CodeGraph = MemberGraphBuilder.chains(GraphFixture.calls(), ['Alpha.run'], 3, true, null);
 		final read: CodeGraphJson = CodeGraphJsonParser.parse(GraphJson.write(graph));
 		Assert.equals(
-			[
-				for (n in graph.nodes()) '${n.id} ${n.level} ${n.name} ${n.label} ${n.parent} ${n.external} ${n.focus}'
-			].join('\n'),
-			[
-				for (n in read.nodes) '${n.id} ${n.level} ${n.name} ${n.label} ${n.parent} ${n.external} ${n.focus}'
-			].join('\n')
+			graph.nodes().map(n -> '${n.id} ${n.level} ${n.name} ${n.label} ${n.parent} ${n.external} ${n.focus}').join('\n'),
+			read.nodes.map(n -> '${n.id} ${n.level} ${n.name} ${n.label} ${n.parent} ${n.external} ${n.focus}').join('\n')
 		);
 		Assert.equals(
-			[for (e in graph.edges()) '${e.from} ${e.to} ${e.kind} ${e.weight}'].join('\n'),
-			[for (e in read.edges) '${e.from} ${e.to} ${e.kind} ${e.weight}'].join('\n')
+			graph.edges().map(e -> '${e.from} ${e.to} ${e.kind} ${e.weight}').join('\n'),
+			read.edges.map(e -> '${e.from} ${e.to} ${e.kind} ${e.weight}').join('\n')
 		);
 	}
 

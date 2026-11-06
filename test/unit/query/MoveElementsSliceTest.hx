@@ -164,9 +164,7 @@ class MoveElementsSliceTest extends Test {
 
 	/** A one-per-line class list of `names`, each spelled `'unit.<name>'`, too long for one line. */
 	private static function tall(names: Array<String>): String {
-		final lines: String = [
-			for (n in names) "\t\t'unit." + n + ".AVeryLongTestClassNameThatKeepsTheListOnSeveralLines'"
-		].join(',\n');
+		final lines: String = names.map(n -> '\t\t\'unit.$n.AVeryLongTestClassNameThatKeepsTheListOnSeveralLines\'').join(',\n');
 		return 'class A {\n\tpublic static final XS:Array<String> = [\n$lines\n\t];\n}\n';
 	}
 

@@ -57,7 +57,7 @@ final class ReflectionMemo {
 
 	/** Memoise `surface` as the answer for exactly the sources `scope` carries now. */
 	public function setSurface(scope: Array<ScopeFile>, surface: ReflectionSurface): Void {
-		_surfaceSources = [for (entry in scope) entry.source];
+		_surfaceSources = scope.map(entry -> entry.source);
 		_surface = surface;
 	}
 

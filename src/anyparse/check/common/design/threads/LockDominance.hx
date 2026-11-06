@@ -224,9 +224,7 @@ final class LockDominance {
 	 */
 	private function longCallsOf(a: LockAcquire, costs: LockTaint): Null<Array<Int>> {
 		if (LongLockExplain.leaks(a) || a.untraced) return null;
-		final at: Array<Int> = [
-			for (b in costs.blockingCalls(a, costs.reentrantHeld(a))) b.edge.span?.from ?? -1
-		];
+		final at: Array<Int> = costs.blockingCalls(a, costs.reentrantHeld(a)).map(b -> b.edge.span?.from ?? -1);
 		for (c in a.blindCalls) if (!costs.briefBlind(a, c)) at.push(c.span.from);
 		return at;
 	}

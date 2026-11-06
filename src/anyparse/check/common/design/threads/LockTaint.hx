@@ -874,7 +874,7 @@ private final class EndGraph {
 				moved = true;
 			}
 		}
-		return [for (k in known) k ?? []];
+		return known.map(k -> k ?? []);
 	}
 
 	/**
@@ -882,7 +882,7 @@ private final class EndGraph {
 	 * every call such a function makes may repeat, whichever way the walk took.
 	 */
 	private function cyclicWays(onCycle: (String) -> Bool): Array<Bool> {
-		final cyclic: Array<Bool> = [for (s in states) onCycle(s.id)];
+		final cyclic: Array<Bool> = states.map(s -> onCycle(s.id));
 		var moved: Bool = true;
 		while (moved) {
 			moved = false;

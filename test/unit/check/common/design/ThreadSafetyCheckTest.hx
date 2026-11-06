@@ -53,9 +53,17 @@ class ThreadSafetyCheckTest extends Test {
 			+ 'function start():Void Runner.create(() -> methodShadow(new B())); }',
 			'class Runner { public static function create(fn:()->Void):Void {} }'
 		]);
-		Assert.same(['B.m'], [
-			for (v in vs) v.message.indexOf('A.m') != -1 ? 'A.m' : v.message.indexOf('B.m') != -1 ? 'B.m' : v.message
-		]);
+		Assert.same(
+			['B.m'],
+			vs.map(v ->
+				if (v.message.indexOf('A.m') != -1)
+					'A.m'
+				else if (v.message.indexOf('B.m') != -1)
+					'B.m'
+				else
+					v.message
+			)
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -364,8 +372,8 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-ALIAS-STATIC-REWRITTEN')
 	public function testARewrittenStaticSourceIsNoRetake(): Void {
 		#if (sys || nodejs)
-		final found: Array<String> = [
-			for (v in violations(
+		final found: Array<String> =
+			violations(
 				'{"rules":{"thread-safety":{"reentrantLocks":["Mutex.acquire"],"sinks":["Mutex.acquire","Sys.sleep"],'
 				+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}',
 				[
@@ -378,8 +386,7 @@ class ThreadSafetyCheckTest extends Test {
 					+ ' public function work():Void { _l.acquire(); A.take(); _l.release(); } }',
 					'class Runner { public static function create(fn:()->Void):Void {} }'
 				]
-			)) v.message
-		];
+			).map(v -> v.message);
 		Assert.same(['"B.work" holds "A.s" across a call that can block: A.take -> Mutex.acquire'], heldBy('B.work', found));
 		#else
 		Assert.pass('non-sys target');
@@ -411,8 +418,8 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-ALIAS-SELF-REENTRANT')
 	public function testAnAliasIsNeverARetakeOfTheHoldersOwnLock(): Void {
 		#if (sys || nodejs)
-		final found: Array<String> = [
-			for (v in violations(
+		final found: Array<String> =
+			violations(
 				'{"rules":{"thread-safety":{"reentrantLocks":["Mutex.acquire"],"sinks":["Mutex.acquire","Sys.sleep"],'
 				+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}',
 				[
@@ -424,8 +431,7 @@ class ThreadSafetyCheckTest extends Test {
 					+ ' public function both():Void { m.acquire(); _l.acquire(); _l.release(); m.release(); } }',
 					'class Runner { public static function create(fn:()->Void):Void {} }'
 				]
-			)) v.message
-		];
+			).map(v -> v.message);
 		Assert.same(['"B.both" holds "A.m" across a call that can block: Mutex.acquire'], heldBy('B.both', found));
 		#else
 		Assert.pass('non-sys target');
@@ -935,7 +941,7 @@ class ThreadSafetyCheckTest extends Test {
 			'class A { static function main():Void save(); static function shutdown():Void save();'
 			+ ' static function save():Void Sys.sleep(1); }'
 		]);
-		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> A.save -> Sys.sleep'], [for (v in vs) v.message]);
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> A.save -> Sys.sleep'], vs.map(v -> v.message));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -950,18 +956,16 @@ class ThreadSafetyCheckTest extends Test {
 				'main thread reaches blocking "Sys.sleep": A.shutdown -> A.shutdown#1 -> Sys.sleep',
 				'main thread reaches blocking "Sys.sleep": A.shutdown#2 -> A.shutdown#2#3 -> Sys.sleep — repeated by A.shutdown'
 			],
-			[
-				for (v in violations(
-					'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"],"marshals":["Ui.marshal"],'
-					+ '"quietRoots":["A.shutdown"]}}}',
-					[
-						'class A { static final ls:Array<()->Void> = []; static function shutdown():Void {'
-						+ ' ls.push(() -> Sys.sleep(1)); Runner.create(() -> Ui.marshal(() -> Sys.sleep(2))); } }',
-						'class Runner { public static function create(fn:()->Void):Void {} }',
-						'class Ui { public static function marshal(fn:()->Void):Void {} }'
-					]
-				)) v.message
-			]
+			violations(
+				'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"],"marshals":["Ui.marshal"],'
+				+ '"quietRoots":["A.shutdown"]}}}',
+				[
+					'class A { static final ls:Array<()->Void> = []; static function shutdown():Void {'
+					+ ' ls.push(() -> Sys.sleep(1)); Runner.create(() -> Ui.marshal(() -> Sys.sleep(2))); } }',
+					'class Runner { public static function create(fn:()->Void):Void {} }',
+					'class Ui { public static function marshal(fn:()->Void):Void {} }'
+				]
+			).map(v -> v.message)
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -976,12 +980,10 @@ class ThreadSafetyCheckTest extends Test {
 			[
 				'main thread reaches blocking "Sys.sleep": A.main -> A.onButton -> A.shutdown -> Sys.sleep'
 			],
-			[
-				for (v in violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
-					'class A { static function main():Void onButton(); static function onButton():Void shutdown();'
-					+ ' static function shutdown():Void Sys.sleep(1); }'
-				])) v.message
-			]
+			violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
+				'class A { static function main():Void onButton(); static function onButton():Void shutdown();'
+				+ ' static function shutdown():Void Sys.sleep(1); }'
+			]).map(v -> v.message)
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -1060,14 +1062,14 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.same(
 			[
 				'"A.main" holds "A.m" across 11 calls that can block: Sys.sleep; '
-				+ [for (n in names.slice(0, 7)) 'A.$n -> Sys.sleep'].join('; ')
+				+ names.slice(0, 7).map(n -> 'A.$n -> Sys.sleep').join('; ')
 				+ '; +2 more'
 			],
 			heldBy('A.main', lockFindings([
 				'class A { static final m:Mutex = new Mutex(); static function main():Void { m.acquire(); Sys.sleep(1); '
-				+ [for (n in names) '$n();'].join(' ')
+				+ names.map(n -> '$n();').join(' ')
 				+ ' Sys.sleep(2); m.release(); } '
-				+ [for (n in names) 'static function $n():Void Sys.sleep(1);'].join(' ')
+				+ names.map(n -> 'static function $n():Void Sys.sleep(1);').join(' ')
 				+ ' }'
 			]))
 		);
@@ -1085,7 +1087,7 @@ class ThreadSafetyCheckTest extends Test {
 		final held: Array<Violation> = violations(
 			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"lockPairs":["Mutex.acquire/release"]}}}', [MUTEX, source]
 		).filter(v -> v.message.indexOf(' holds ') != -1);
-		Assert.same([source.indexOf('Sys.sleep(1)')], [for (v in held) v.span?.from]);
+		Assert.same([source.indexOf('Sys.sleep(1)')], held.map(v -> v.span?.from));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -1113,7 +1115,7 @@ class ThreadSafetyCheckTest extends Test {
 			'class B implements I { public function new() {} public function read():Void {} }',
 			'class A { static function main(i:I):Void i.read(); }'
 		]);
-		Assert.same(['main thread reaches blocking "I.read" / "B.read": A.main -> I.read / B.read'], [for (v in vs) v.message]);
+		Assert.same(['main thread reaches blocking "I.read" / "B.read": A.main -> I.read / B.read'], vs.map(v -> v.message));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -1135,8 +1137,8 @@ class ThreadSafetyCheckTest extends Test {
 			'lock-order inversion: "Fs.save" holds "Fs._mutation" and then takes "Db._batch" (Fs.save -> Db.add -> Mutex.acquire)'
 			+ ' on the main thread, while "Fs.download" holds "Db._batch" and then takes "Fs._mutation" (Fs.download -> Fs.save'
 			+ ' -> Fs.acquireMutation) on a background thread — each can wait forever for the lock the other holds'
-		], [for (v in found) v.message]);
-		Assert.same([sources[1].indexOf('db.add(false)')], [for (v in found) v.span?.from]);
+		], found.map(v -> v.message));
+		Assert.same([sources[1].indexOf('db.add(false)')], found.map(v -> v.span?.from));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -1304,8 +1306,8 @@ class ThreadSafetyCheckTest extends Test {
 		).filter(v -> v.message.indexOf('when it throws') != -1);
 		Assert.same([
 			'"Db.add" leaves "Db._m" held when it throws, with no catch to release it: a throw'
-		], [for (v in found) v.message]);
-		Assert.same([source.indexOf('throw')], [for (v in found) v.span?.from]);
+		], found.map(v -> v.message));
+		Assert.same([source.indexOf('throw')], found.map(v -> v.span?.from));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -1477,8 +1479,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * `transfer`/`transfer2` take another object's under their own, `cross` its own under another's, `nested` its own twice.
 	 */
 	private function objectFixture(): Array<String> {
-		final found: Array<String> = [
-			for (v in violations(
+		final found: Array<String> =
+			violations(
 				'{"rules":{"thread-safety":{"reentrantLocks":["Mutex.acquire"],"sinks":["Mutex.acquire","Sys.sleep"],'
 				+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}',
 				[
@@ -1494,16 +1496,15 @@ class ThreadSafetyCheckTest extends Test {
 					+ 'a.cross(b); a.nested(); Runner.create(() -> { a.transfer(b); a.transfer2(b); a.cross(b); a.nested(); }); } }',
 					'class Runner { public static function create(fn:()->Void):Void {} }'
 				]
-			)) v.message
-		];
+			).map(v -> v.message);
 		found.sort(Reflect.compare);
 		return found;
 	}
 
 	/** `A.main` holding `A.m` across `A.inner`, which takes `A.m` again, while a background thread sleeps under it. */
 	private function reentrantFixture(extraConfig: String): Array<String> {
-		final found: Array<String> = [
-			for (v in violations(
+		final found: Array<String> =
+			violations(
 				'{"rules":{"thread-safety":{$extraConfig"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
 				+ '"lockPairs":["Mutex.acquire/release"]}}}',
 				[
@@ -1513,8 +1514,7 @@ class ThreadSafetyCheckTest extends Test {
 					+ ' static function work():Void { m.acquire(); Sys.sleep(1); m.release(); } }',
 					'class Runner { public static function create(fn:()->Void):Void {} }'
 				]
-			)) v.message
-		];
+			).map(v -> v.message);
 		found.sort(Reflect.compare);
 		return found;
 	}
@@ -1522,9 +1522,9 @@ class ThreadSafetyCheckTest extends Test {
 	/** Every finding over `tree` with the run's files listed in `order`, as sorted `<relative path>: <message>` lines. */
 	private function chainFindings(tree: Array<{ name: String, source: String }>, order: Array<String>): Array<String> {
 		final root: String = CliFixture.writeTree('threadsafetychains', tree);
-		final files: Array<{ file: String, source: String }> = [
-			for (name in order) { file: '$root/$name', source: tree.find(t -> t.name == name)?.source ?? '' }
-		];
+		final files: Array<{ file: String, source: String }> = order.map(name ->
+			{file: '$root/$name', source: tree.find(t -> t.name == name)?.source ?? '' }
+		);
 		final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
 		final found: Array<String> = [
 			for (v in vs) if (!(v.file == '' && v.message.startsWith(PositiveSinks.NOTICE)))
@@ -1537,13 +1537,12 @@ class ThreadSafetyCheckTest extends Test {
 
 	/** Every finding of a `Mutex.acquire` / `Sys.sleep` run over `sources` (plus `Mutex`), the `Runner.create` spawn configured, sorted. */
 	private function lockFindings(sources: Array<String>): Array<String> {
-		final found: Array<String> = [
-			for (v in violations(
+		final found: Array<String> =
+			violations(
 				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
 				+ '"lockPairs":["Mutex.acquire/release"]}}}',
 				[MUTEX].concat(sources)
-			)) v.message
-		];
+			).map(v -> v.message);
 		found.sort(Reflect.compare);
 		return found;
 	}
@@ -1604,14 +1603,13 @@ class ThreadSafetyCheckTest extends Test {
 	): Array<Violation> {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apq.json', source: config }].concat(beside ?? []));
 		// Each source a root module named after its first type: the compiler binds a bare name to a module's MAIN type only.
-		final files: Array<{ file: String, source: String }> = [
-			for (entry in QueryTestHelpers.rootModules(sources)) { file: '$dir/${entry.file}', source: entry.source }
-		];
+		final files: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(sources)
+			.map(entry -> {file: '$dir/${entry.file}', source: entry.source });
 		// Through `Linter.run`, not `run`: the `sinks` / `exclude` gate is `FileGated`, applied where findings enter the tool.
 		// a `library` the resolution scope holds and the run does not (`QueryTestHelpers.projectPlugin`), under `lib/`
-		final libraryFiles: Null<Array<{ file: String, source: String }>> = library == null ? null : [
-			for (entry in QueryTestHelpers.rootModules(library)) { file: '$dir/lib/${entry.file}', source: entry.source }
-		];
+		final libraryFiles: Null<Array<{ file: String, source: String }>> = library == null
+			? null
+			: QueryTestHelpers.rootModules(library).map(entry -> {file: '$dir/lib/${entry.file}', source: entry.source });
 		final plugin: GrammarPlugin = libraryFiles == null
 			? new HaxeQueryPlugin()
 			: QueryTestHelpers.projectPlugin(files, libraryFiles, true, false, defines);

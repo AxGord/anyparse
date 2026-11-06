@@ -149,7 +149,7 @@ final class EmptyCaseArm extends RuleBase {
 		if (scan == null) return [];
 		final ctx: Null<Ctx> = contextOf(scan, plugin, file, source, index ?? IndexScope.over([{ file: file, source: source }], plugin));
 		if (ctx == null) return [];
-		final deletable: Array<String> = [for (span in collect(ctx, source)) '${span.from}:${span.to}'];
+		final deletable: Array<String> = collect(ctx, source).map(span -> '${span.from}:${span.to}');
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (violation in violations) {
 			final span: Null<Span> = violation.span;

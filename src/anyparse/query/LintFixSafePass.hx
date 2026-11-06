@@ -475,7 +475,7 @@ final class LintFixSafePass {
 			throw new IsolationStop(
 				'the written files break the build only in combination — an interaction no bisection can pin on one side'
 			);
-		return [for (i in failers) units[i]];
+		return failers.map(i -> units[i]);
 	}
 
 	/**
@@ -502,7 +502,7 @@ final class LintFixSafePass {
 	): SafePassNarrowing {
 		if (culprits.exists(culprit -> culprit.kept != null)) return Bisected(culprits, probes);
 		return switch narrowing {
-			case Narrowed(_): Narrowed([for (culprit in culprits) culprit.file], probes);
+			case Narrowed(_): Narrowed(culprits.map(culprit -> culprit.file), probes);
 			case WholeWave(why, errors) if (culprits.length >= changed.length): WholeWave(
 				'$why; every file this run wrote is implicated', errors
 			);
@@ -586,14 +586,14 @@ final class LintFixSafePass {
 		file: String, rules: Array<String>, later: Array<String>, seat: SafeBisectSeat, green: (Null<String>) -> Bool
 	): Null<SafeCulprit> {
 		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(
-			rules.length, FailerBisect.searchBudget(rules.length), indices -> green(seat.replay(file, [for (i in indices) rules[i]])), [0]
+			rules.length, FailerBisect.searchBudget(rules.length), indices -> green(seat.replay(file, indices.map(i -> rules[i]))), [0]
 		);
 		if (failers == null) return null;
 		final keptRules: Array<String> = [for (i in 0...rules.length) if (!failers.contains(i)) rules[i]];
 		final text: Null<String> = keptRules.length == 0 ? null : seat.replay(file, keptRules);
 		if (!green(text)) return null;
 		for (i in failers) if (green(seat.replay(file, keptRules.concat([rules[i]])))) return null;
-		final dropped: Array<String> = [for (i in failers) rules[i]];
+		final dropped: Array<String> = failers.map(i -> rules[i]);
 		for (rule in later) if (!dropped.contains(rule)) dropped.push(rule);
 		return {
 			file: file,

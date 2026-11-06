@@ -97,10 +97,14 @@ class CliFlagsTest extends Test {
 	/** A parser reads each flag with the value its spec says it takes, and each positional with its argv index. */
 	public function testWalkPairsEachFlagWithItsValue(): Void {
 		final spec: CliFlags = new CliFlags(['--write'], ['--select']);
-		final read: Array<String> = [
-			for (arg in spec.walk(['F.hx', '--select', '--write', '--write', '--lang', 'haxe', 'G.hx']))
-				arg.flag == null ? 'pos ${arg.token}@${arg.index}' : arg.hasValue() ? '${arg.flag}=${arg.value()}' : '${arg.flag}'
-		];
+		final read: Array<String> = spec.walk(['F.hx', '--select', '--write', '--write', '--lang', 'haxe', 'G.hx']).map(arg ->
+			if (arg.flag == null)
+				'pos ${arg.token}@${arg.index}'
+			else if (arg.hasValue())
+				'${arg.flag}=${arg.value()}'
+			else
+				'${arg.flag}'
+		);
 		Assert.same(['pos F.hx@0', '--select=--write', '--write', '--lang=haxe', 'pos G.hx@6'], read);
 	}
 

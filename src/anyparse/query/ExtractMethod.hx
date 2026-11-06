@@ -184,7 +184,7 @@ final class ExtractMethod {
 		// SPECIFIC declaration (its `span.from`), so a same-named local in a
 		// LATER function is never mistaken for a use.
 		final decls: Array<LocalDecl> = collectLocalDecls(sel.stmts, LOCAL_DECL_KINDS);
-		final declNames: Array<String> = [for (d in decls) d.name];
+		final declNames: Array<String> = decls.map(d -> d.name);
 
 		// A range binding whose name is also declared on a conditional-compilation arm that
 		// another configuration compiles out has ONE declaration answering every read past
@@ -205,9 +205,9 @@ final class ExtractMethod {
 		final block: Null<QueryNode> = TreePath.parentOf(tree, sel.stmts[0]);
 		final blockSpan: Null<Span> = block?.span;
 		final scope: QueryNode = blockSpan == null ? tree : BinderScan.enclosingFunctionSubtree(tree, blockSpan.from, shape);
-		final boundNames: Array<String> = [
-			for (d in collectLocalDecls(sel.stmts, TypeResolver.blockScopedValueDeclarationKinds(shape))) d.name
-		];
+		final boundNames: Array<String> = collectLocalDecls(
+			sel.stmts, TypeResolver.blockScopedValueDeclarationKinds(shape)
+		).map(d -> d.name);
 		for (nm in boundNames) {
 			// Same question, asked of a region with no nodes: whether a name the range binds is
 			// read after it cannot be decided when an unparsed conditional region may hold that read.

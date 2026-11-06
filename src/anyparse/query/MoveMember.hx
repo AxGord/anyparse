@@ -660,7 +660,7 @@ final class MoveMember {
 	private static function landsBare(prep: MovePrep, source: String, tree: QueryNode, receiver: Span, name: String): Bool {
 		if (receiver.to >= source.length || source.fastCodeAt(receiver.to) != '.'.code) return false;
 		if (insideReification(tree, receiver.from, prep.shape.opaqueKinds ?? [])) return false;
-		final roots: Array<QueryNode> = [prep.destDecl.declNode].concat([for (m in prep.moved) m.group.member]);
+		final roots: Array<QueryNode> = [prep.destDecl.declNode].concat(prep.moved.map(m -> m.group.member));
 		for (root in roots) {
 			if (BinderScan.boundNames(root, prep.shape).contains(name)) return false;
 			final invisible: Null<Array<String>> = BinderScan.resolverInvisibleBinderNames(root, prep.shape);
@@ -683,7 +683,7 @@ final class MoveMember {
 	 */
 	private static function collectBareCallerHits(prep: MovePrep, plugin: GrammarPlugin): Array<BareHit> {
 		final out: Array<BareHit> = [];
-		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti([for (m in prep.moved) m.name], prep.srcTree, plugin.refShape());
+		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(prep.moved.map(m -> m.name), prep.srcTree, plugin.refShape());
 		for (m in prep.moved) for (hit in hitsByName[m.name] ?? []) if (hit.kind != RefKind.Decl) {
 			final binding: Null<Span> = hit.bindingSpan;
 			if (binding == null || binding.from != m.span.from) continue;
@@ -779,8 +779,8 @@ final class MoveMember {
 		accessMembers: Array<String>,
 		missingDestFields: Array<String>
 	} {
-		final movedNames: Array<String> = [for (m in prep.moved) m.name];
-		final slices: String = [for (m in prep.moved) prep.srcSource.substring(m.cut.from, m.cut.to)].join('\n');
+		final movedNames: Array<String> = prep.moved.map(m -> m.name);
+		final slices: String = prep.moved.map(m -> prep.srcSource.substring(m.cut.from, m.cut.to)).join('\n');
 		final candidates: Array<MemberGroup> = [
 			for (sibling in membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions)) {
 				final siblingName: Null<String> = sibling.member.name;
@@ -812,7 +812,7 @@ final class MoveMember {
 			};
 		}
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(
-			[for (s in candidates) s.member.name ?? ''], prep.srcTree, plugin.refShape()
+			candidates.map(s -> s.member.name ?? ''), prep.srcTree, plugin.refShape()
 		);
 		final state: SiblingScanState = {
 			fieldDeps: [],
@@ -906,7 +906,7 @@ final class MoveMember {
 		if (edit == null) return;
 		ScopeFiles.editsFor(editsByFile, prep.destFile).push(edit);
 		advisoryExtras.push(
-			'moved bodies of ${quoted([for (m in granted) m.name])} reference private member(s) of "${prep.srcTypeName}" — added '
+			'moved bodies of ${quoted(granted.map(m -> m.name))} reference private member(s) of "${prep.srcTypeName}" — added '
 			+ '@:access($accessPath) to "${prep.destTypeName}"'
 		);
 	}
@@ -945,8 +945,8 @@ final class MoveMember {
 		// ALIAS for an alias one — the moment an alias dependency became carriable it would have
 		// emitted `import D;` here while `MoveSymbol` emitted the same wrong line separately.
 		final carried: Array<String> = [];
-		final decls: Array<{ span: Span, name: String }> =
-			[for (m in prep.moved) { span: m.group.groupSpan, name: prep.srcTypeName }].concat(extraDecls ?? []);
+		final decls: Array<{ span: Span, name: String }> = prep.moved.map(m -> {span: m.group.groupSpan, name: prep.srcTypeName })
+			.concat(extraDecls ?? []);
 		for (d in decls) switch DependencyCarry.dependencyImportLinesToCarry(
 			prep.srcSource, d.span, prep.srcInfo, prep.destInfo, prep.destSource, prep.index, plugin, typeRefShape, d.name, travelling
 		) {
@@ -1247,7 +1247,7 @@ final class MoveMember {
 			final rival: Null<String> = keepBareRival(prep, n);
 			if (rival != null) return '$head$rival "$n", which would win';
 		}
-		final clash: Null<QueryNode> = keepBareClash(prep, names, [for (h in kept) h.offset]);
+		final clash: Null<QueryNode> = keepBareClash(prep, names, kept.map(h -> h.offset));
 		if (clash == null) return null;
 		final at: Position = (clash.span ?? new Span(0, 0)).lineCol(prep.srcSource);
 		return '$head${prep.srcFile}:${at.line}:${at.col} spells "${clash.name}" for something the wildcard would rebind';
@@ -1414,7 +1414,7 @@ final class MoveMember {
 		allMembers: Array<MemberGroup>, names: Array<String>, cuts: Array<Span>, srcSource: String, srcTree: QueryNode,
 		plugin: GrammarPlugin
 	): Array<String> {
-		final slices: String = [for (c in cuts) srcSource.substring(c.from, c.to)].join('\n');
+		final slices: String = cuts.map(c -> srcSource.substring(c.from, c.to)).join('\n');
 		final candidates: Array<MemberGroup> = [
 			for (g in allMembers) {
 				final nm: Null<String> = g.member.name;
@@ -1430,9 +1430,7 @@ final class MoveMember {
 			}
 		];
 		if (candidates.length == 0) return [];
-		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(
-			[for (c in candidates) c.member.name ?? ''], srcTree, plugin.refShape()
-		);
+		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(candidates.map(c -> c.member.name ?? ''), srcTree, plugin.refShape());
 		final added: Array<String> = [];
 		for (c in candidates) {
 			final cSpan: Null<Span> = c.member.span;

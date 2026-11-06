@@ -97,7 +97,7 @@ final class ParityTest extends Test {
 					}
 			];
 			final outcomes: Array<Outcome> = TempDir.with(work -> Parity.side(tree, stand, invocations, work, 1, true));
-			Assert.same([null, null], [for (outcome in outcomes) outcome.status]);
+			Assert.same([null, null], outcomes.map(outcome -> outcome.status));
 			for (outcome in outcomes) Assert.stringContains('apq --batch gave no answer', outcome.failure);
 		});
 	}

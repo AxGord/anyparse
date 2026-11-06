@@ -68,10 +68,10 @@ final class MoveElements {
 			case Ok(text, _): text;
 			case Err(message): return Err(message);
 		};
-		final entries: Array<String> = [for (e in plan.moved) entryText(e, source)];
+		final entries: Array<String> = plan.moved.map(entryText.bind(_, source));
 		final check: MoveCheck = {
-			oldSource: [for (e in plan.array.children) entryText(e, source)],
-			oldTarget: [for (e in plan.target.children) entryText(e, plan.destOriginal)],
+			oldSource: plan.array.children.map(entryText.bind(_, source)),
+			oldTarget: plan.target.children.map(e -> entryText(e, plan.destOriginal)),
 			sourceFrom: spanOf(plan.array).from,
 			targetFrom: spanOf(targetBefore).from
 		};
@@ -238,7 +238,7 @@ final class MoveElements {
 			case Right(found): found;
 			case Left(_): arrayStartingAt(tree, from, plugin.refShape().arrayLiteralKind);
 		};
-		return array == null ? null : [for (e in array.children) entryText(e, text)];
+		return array?.children.map(entryText.bind(_, text));
 	}
 
 	/** The array literal starting at `from` in `tree`, or null. */

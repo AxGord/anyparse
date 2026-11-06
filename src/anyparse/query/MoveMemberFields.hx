@@ -44,7 +44,7 @@ final class MoveMemberFields {
 				for (g in all) if (names.contains(g.member.name ?? '') || added.contains(g.member.name ?? ''))
 					ElementSpan.memberCutSpan(srcSource, g.groupSpan, regions)
 			];
-			final slices: String = [for (c in cuts) srcSource.substring(c.from, c.to)].join('\n');
+			final slices: String = cuts.map(c -> srcSource.substring(c.from, c.to)).join('\n');
 			final candidates: Array<MemberGroup> = all.filter(g -> {
 				final nm: String = g.member.name ?? '';
 				return nm != ''
@@ -113,7 +113,7 @@ final class MoveMemberFields {
 	): Array<String> {
 		if (candidates.length == 0) return [];
 		function inside(at: Int): Bool return cuts.exists(c -> at >= c.from && at < c.to);
-		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti([for (c in candidates) c.member.name ?? ''], srcTree, shape);
+		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(candidates.map(c -> c.member.name ?? ''), srcTree, shape);
 		final out: Array<String> = [];
 		for (c in candidates) {
 			final nm: String = c.member.name ?? '';

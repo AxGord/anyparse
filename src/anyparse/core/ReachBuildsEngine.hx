@@ -19,7 +19,7 @@ final class ReachBuildsEngine {
 			'anyparse/check/oracle/CompilerOracle.hx',
 			'anyparse/check/oracle/OracleCache.hx'
 		];
-		final sources: Array<String> = [for (m in modules) sys.io.File.getContent(haxe.macro.Context.resolvePath(m))];
+		final sources: Array<String> = modules.map(m -> sys.io.File.getContent(haxe.macro.Context.resolvePath(m)));
 		return macro $v{haxe.crypto.Md5.encode(sources.join('\n'))};
 	}
 

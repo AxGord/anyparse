@@ -4,9 +4,7 @@ import anyparse.check.scan.OperandBinder.CalleeParams;
 import anyparse.check.scan.OperandBinder.Located;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CallSelection;
-import anyparse.query.CallSelection.CallArgument;
 import anyparse.query.CallSignature;
-import anyparse.query.CallSignature.ParamForm;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.NominalTypes;
 import anyparse.query.Refs.RefHit;
@@ -207,19 +205,19 @@ final class OperandCallees {
 	): Null<CallSignature> {
 		final calls: CallSelection = binder._index.typing.calls;
 		final candidates: Null<CallCandidates> = calls.candidates(declared, declared.members[0].isStatic);
-		final passed: Array<CallArgument> = [for (_ in 0...shift) Untyped].concat([
-			for (a in args) a.kind == binder._shape.nullLiteralKind ? NullValue : Untyped
-		]);
+		final passed: Array<CallArgument> = [for (_ in 0...shift) Untyped].concat(
+			args.map(a -> a.kind == binder._shape.nullLiteralKind ? NullValue : Untyped)
+		);
 		return candidates == null ? null : calls.select(candidates, passed)?.signature;
 	}
 
 	/** `signature`'s parameters as a declaration lists them (`CallGraphNames.DeclaredParams`). */
 	private static function declaredParamsOf(signature: CallSignature): DeclaredParams {
-		final forms: Array<ParamForm> = [for (p in signature.params) p.form];
+		final forms: Array<ParamForm> = signature.params.map(p -> p.form);
 		var skippable: Int = 0;
 		while (skippable < forms.length && forms[skippable] == Plain) skippable++;
 		return {
-			params: [for (p in signature.params) p.type],
+			params: signature.params.map(p -> p.type),
 			skippableFrom: skippable,
 			rest: forms.length > 0 && forms[forms.length - 1] == Rest
 		};

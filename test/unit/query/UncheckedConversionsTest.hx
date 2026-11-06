@@ -27,6 +27,9 @@ class UncheckedConversionsTest extends Test {
 		'{"k":"type","id":"Meters","f":"A.hx","p":[0,1],"kind":"abstract","pack":"","under":"Int"}'
 	];
 
+	private static final INERT: Array<String> = ['Int', 'Float', 'Bool', 'String', 'Void'];
+	private static final ARRAYS: Array<String> = ['Array'];
+
 	@:pin('control') @:killer('M-UNCHECKED-TARGET') @:killer('M-UNCHECKED-ESCAPED') @:killer('M-UNCHECKED-BOXED')
 	@:killer('M-UNCHECKED-STRING') @:killer('M-UNCHECKED-ARRAY') @:killer('M-UNCHECKED-POINTER') @:killer('M-UNCHECKED-ALIAS')
 	@:killer('M-UNCHECKED-ALIAS-PLACE') @:killer('M-UNCHECKED-BOXED-ALIAS') @:killer('M-NATIVE-SITE-INERT') @:killer('M-NATIVE-SITE-CORE-TYPE')
@@ -90,10 +93,6 @@ class UncheckedConversionsTest extends Test {
 		Assert.same(['cpp', null], table.targets);
 	}
 
-	private static final INERT: Array<String> = ['Int', 'Float', 'Bool', 'String', 'Void'];
-
-	private static final ARRAYS: Array<String> = ['Array'];
-
 	/** The conversions of one build per target of `targets`, each holding `TYPES`; a null target writes no target record. */
 	private static function conversions(targets: Array<Null<String>>): UncheckedConversions {
 		final dumps: Array<FactsDump> = [
@@ -105,7 +104,7 @@ class UncheckedConversionsTest extends Test {
 	/** A facts file of a build for `target` holding `records`; null writes no target record. */
 	private static function dump(target: Null<String>, records: Array<String>): String {
 		final head: String = '{"k":"facts","v":1,"inline":true}\n' + (target == null ? '' : '{"k":"target","n":"$target"}\n');
-		return head + [for (r in records) r + '\n'].join('') + '{"k":"end","nodes":0,"types":${records.length}}\n';
+		return head + records.map(r -> '$r\n').join('') + '{"k":"end","nodes":0,"types":${records.length}}\n';
 	}
 
 	/** The facts type `text` spells. */

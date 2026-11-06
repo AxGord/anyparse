@@ -290,7 +290,7 @@ final class JoinStringAppend extends RuleBase implements DefaultOff {
 		if (droppedComment(firstSpan, lastSpan.to, terms, comments)) return null;
 
 		final op: String = head.isBonus ? '=' : '+=';
-		final text: String = '$name $op ${[for (t in terms) operandText(t, source, s)].join(' + ')};';
+		final text: String = '$name $op ${terms.map(operandText.bind(_, source, s)).join(' + ')};';
 		return {
 			anchorSpan: anchorSpan,
 			editSpan: new Span(firstSpan.from, lastSpan.to),

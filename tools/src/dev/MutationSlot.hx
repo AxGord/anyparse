@@ -208,14 +208,14 @@ final class MutationSlot {
 	 */
 	public static function fallbackTokens(filter: String, slices: Int): Null<Array<String>> {
 		return filter == '' || filter == 'ALL' || filter.indexOf('#') >= 0 || filter.indexOf('test:') >= 0 ? null : [
-			for (i in 0...slices) [for (cls in filter.split(',')) '$cls#$i/$slices'].join(',')
+			for (i in 0...slices) filter.split(',').map(cls -> '$cls#$i/$slices').join(',')
 		];
 	}
 
 	/** The transcripts `logs` — the slices of one run when there are several — classified against `expected`. */
 	public static function classify(expected: String, logs: Array<String>): Classified {
 		final want: Array<String> = [for (e in expected.split(',')) if (e.trim() != '') e.trim()];
-		final parsed: Array<TestSummaryResult> = [for (log in logs) TestTranscript.parseTestSummary(File.getContent(log))];
+		final parsed: Array<TestSummaryResult> = logs.map(log -> TestTranscript.parseTestSummary(File.getContent(log)));
 		final result: MutationVerdictResult = MutationVerdict.classify(
 			parsed.length == 1 ? parsed[0] : MutationVerdict.merge(parsed), want
 		);
@@ -431,7 +431,7 @@ final class MutationSlot {
 				for (i => run in Pool.of(slices.length).map(slices, suite)) saveLog(logs[i], run);
 				final sliced: Null<Classified> = classifyOrNull(row.expected, logs);
 				// one transcript to open, the slices in order
-				File.saveContent(log, [for (file in logs) File.getContent(file)].join(''));
+				File.saveContent(log, logs.map(file -> File.getContent(file)).join(''));
 				return { phase: 'sliced', reading: sliced, read: '$log.slice*' };
 			}
 		}

@@ -284,9 +284,7 @@ class CondRegionKindDerivationTest extends Test {
 	/** The kinds `CondRegionScan` reports as opaque regions of `source`, in document order. */
 	private static function regionKinds(source: String): Array<String> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return [
-			for (region in CondRegionScan.opaqueCondRegions(plugin.parseFile(source), source, plugin.refShape())) region.kind
-		];
+		return CondRegionScan.opaqueCondRegions(plugin.parseFile(source), source, plugin.refShape()).map(region -> region.kind);
 	}
 
 	/** The gap the fail-closed gate reports for `name`, or null when it reports none. */

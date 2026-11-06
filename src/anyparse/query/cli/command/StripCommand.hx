@@ -319,7 +319,7 @@ final class StripCommand implements CliCommand {
 		// ReconCluster.paths are root-relative (e.g. `issue_582.hxtest`);
 		// rejoin with the root so file IO uses absolute paths regardless
 		// of CWD.
-		final out: Array<String> = [for (p in cluster.paths) '$root/$p'];
+		final out: Array<String> = cluster.paths.map(p -> '$root/$p');
 		out.sort(Reflect.compare);
 		return out;
 		#else

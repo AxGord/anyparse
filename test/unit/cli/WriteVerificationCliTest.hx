@@ -449,7 +449,7 @@ class WriteVerificationCliTest extends Test {
 			{ name: 'src/Good.hx', source: GOOD },
 			{ name: 'more/Big.hx', source: big }
 		]);
-		CliIo.writeFiles([for (f in files) { path: '$dir/${f.name}', content: f.source }]);
+		CliIo.writeFiles(files.map(f -> {path: '$dir/${f.name}', content: f.source }));
 		return dir;
 	}
 
