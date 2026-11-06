@@ -76,6 +76,22 @@
 			"find": "if (r == 0 && changed(before[0], after[0])) return null;",
 			"replace": "",
 			"note": "a compile writing into the fixture it shares with the compiles beside it is recorded, and its replay overwrites the lines a concurrent writer appended"
+		},
+		{
+			"name": "M-FIXTURE-CACHE-LOOKUP-NEVER-SERVES",
+			"type": "testkit.FixtureCompileCache",
+			"method": "lookup",
+			"find": "stored == null ? null : serve(stored, entry, compile, dir, tally, env);",
+			"replace": "null;",
+			"note": "a lookup answers nothing for a compile it has recorded, so every hit is spawned through the shim"
+		},
+		{
+			"name": "M-FIXTURE-CACHE-LOOKUP-IGNORES-REQUEST-ENV",
+			"type": "testkit.FixtureCompileCache",
+			"method": "lookup",
+			"find": "final overrides: Null<DynamicAccess<Null<String>>> = request.env;",
+			"replace": "final overrides: Null<DynamicAccess<Null<String>>> = null;",
+			"note": "the variables a job sets over the environment are not read, so a lookup answers an entry that ran the live arm's switch, and keys by this process's compiler variables"
 		}
 	]
 }

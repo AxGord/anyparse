@@ -1,5 +1,6 @@
 package testkit;
 
+import haxe.DynamicAccess;
 import haxe.Json;
 import haxe.io.Path;
 import js.Node;
@@ -42,6 +43,10 @@ using Lambda;
  * `dev mutation-check` and `dev shard` share one store kept across runs, renewing
  * an entry on every hit and dropping one unused for a week (`dev fixture-cache prune`). A cache that outlives a run
  * outlives the compiler install it recorded, so that runner's stamp names the binary by path, version, size and mtime.
+ *
+ * A hit needs no process of its own: `HaxeSpawn` asks `lookup` in-process through the module `APQ_SPAWN_ANSWER` names
+ * (`devkit.FixtureCache` writes it beside the shim), and only a compile that is not a recorded hit reaches the shim.
+ * Both read one key, so a hit is the same bytes either way.
  */
 @:nullSafety(Strict)
 final class FixtureCompileCache {
@@ -132,6 +137,8 @@ final class FixtureCompileCache {
 	 * `APQ_FIXTURE_CACHE_DIR` the cache. Answers exactly as the compiler would: its streams, then its status.
 	 */
 	public static function main(): Void {
+		// required as a module, this file only offers `lookup`
+		if (js.Syntax.code('require.main !== module')) return;
 		final real: String = Sys.getEnv('APQ_FIXTURE_CACHE_HAXE') ?? 'haxe';
 		final outcome: CompileOutcome = run(
 			real, Sys.getEnv('APQ_FIXTURE_CACHE_STAMP') ?? '', Sys.getEnv('APQ_FIXTURE_CACHE_DIR'), Sys.getCwd(), Sys.args()
@@ -147,39 +154,31 @@ final class FixtureCompileCache {
 	 * is a whitelisted probe compile that exited — recorded. `dir` null runs everything for real.
 	 */
 	public static function run(real: String, stamp: String, dir: Null<String>, cwd: String, args: Array<String>): CompileOutcome {
+		final env: DynamicAccess<String> = processEnv();
+		final tally: Null<String> = env.get('APQ_FIXTURE_CACHE_TALLY');
 		final compile: Null<CompilePlan> = dir == null ? null : plan(cwd, args);
 		if (dir == null || compile == null) {
 			final passed: CompileOutcome = spawn(real, cwd, args);
-			if (dir != null) note(dir, 'pass');
+			if (dir != null) note(dir, 'pass', tally);
 			return passed;
 		}
 		final before: Null<Array<Map<String, String>>> = trees(compile.roots);
 		if (before == null) {
-			note(dir, 'pass');
+			note(dir, 'pass', tally);
 			return spawn(real, cwd, args);
 		}
-		final id: String = key(stamp, compile, before);
+		final id: String = key(stamp, compile, before, env);
 		final entry: String = Path.join([dir, '$id.json.gz']);
-		// A schema build's probe macro carries every embedded arm's switch, and the one `APQ_MUTANT` names is live in this
-		// compile. An entry answers for it only when its compile never ran that switch — then the mutated method never ran
-		// there either, and the answer is the unmutated one every arm shares; one that ran it is compiled for real.
-		final active: Int = Std.parseInt(Sys.getEnv('APQ_MUTANT') ?? '') ?? 0;
+		final active: Int = activeArm(env);
 		// where the CALLER collects the switches its compiles run — a cache in front of this one: answered as the compiler
 		// would have, a replay included
-		final callerLog: Null<String> = Sys.getEnv('APQ_MUTANT_MACRO_LOG');
+		final callerLog: Null<String> = env.get('APQ_MUTANT_MACRO_LOG');
 		final stored: Null<String> = readEntry(entry);
 		if (stored != null) {
-			// haxe.Json: this program is built from test/testkit alone (tools/fixture-cache-common.hxml), with no engine to read through
-			final hit: CompileEntry = Json.parse(stored); // noqa: avoid-haxe-json
-			if (hit.reached.contains(active)) {
-				note(dir, 'armed');
-				return spawn(real, cwd, args);
-			}
-			// a hit renews the entry, so a cache that outlives one run ages out by disuse (`dev fixture-cache prune`)
-			try Fs.utimesSync(entry, Date.now(), Date.now()) catch (exception: Exception) {} // noqa: swallowed-exception
-			note(dir, 'hit');
-			forward(callerLog, hit.reached);
-			return replay(hit, compile.roots);
+			final served: Null<CompileOutcome> = serve(stored, entry, compile, dir, tally, env);
+			if (served != null) return served;
+			note(dir, 'armed', tally);
+			return spawn(real, cwd, args);
 		}
 		// One compile of a key at a time: the suite processes of one run ask for the same fixture TOGETHER — a sweep's
 		// tracks pin the same tests — and each used to compile it, since none had recorded it yet. A process that finds the
@@ -189,12 +188,12 @@ final class FixtureCompileCache {
 			final shared: Null<String> = awaited(entry, lock);
 			final sharedEntry: Null<CompileEntry> = shared == null ? null : Json.parse(shared); // noqa: avoid-haxe-json
 			if (sharedEntry != null && !sharedEntry.reached.contains(active)) {
-				note(dir, 'shared');
+				note(dir, 'shared', tally);
 				forward(callerLog, sharedEntry.reached);
 				return replay(sharedEntry, compile.roots);
 			}
 			final unshared: CompileOutcome = spawn(real, cwd, args);
-			note(dir, 'pass');
+			note(dir, 'pass', tally);
 			return unshared;
 		}
 		// the switches the compile runs, recorded by the probe macro's own `__mutOn` (`MutationSchema`)
@@ -214,7 +213,7 @@ final class FixtureCompileCache {
 			Fs.renameSync(temporary, entry);
 		}
 		release(lock);
-		note(dir, recorded == null ? 'pass' : 'miss');
+		note(dir, recorded == null ? 'pass' : 'miss', tally);
 		return outcome;
 	}
 
@@ -265,6 +264,35 @@ final class FixtureCompileCache {
 			for (s in 0...forms.length) out = out.split('$MARK$r.$s$MARK').join(forms[s]);
 		}
 		return out;
+	}
+
+	/**
+	 * The answer a spawn would get from the shim, when it is recorded — asked by `HaxeSpawn` through the module the
+	 * `APQ_SPAWN_ANSWER` variable names, so a hit costs no process. Lookup only: null for every compile that is not a
+	 * recorded hit (a miss, a pass, the live arm's own switch), which then runs through the shim and is recorded there,
+	 * counted there too — a hit alone is counted here. `stamp`, `dir` and `tally` are the shim's own.
+	 */
+	@:expose('lookup')
+	public static function lookup(stamp: String, dir: String, tally: Null<String>, request: SpawnRequest): Null<SpawnAnswer> {
+		if (request.cmd != 'haxe' || !request.args.exists(a -> PROBE_MACROS.exists(p -> a.indexOf(p) >= 0))) return null;
+		final env: DynamicAccess<String> = processEnv();
+		final overrides: Null<DynamicAccess<Null<String>>> = request.env;
+		if (overrides != null) for (name => value in overrides) if (value == null)
+			env.remove(name)
+		else
+			env[name] = value;
+		final compile: Null<CompilePlan> = plan(request.cwd ?? Node.process.cwd(), request.args);
+		final before: Null<Array<Map<String, String>>> = compile == null ? null : trees(compile.roots);
+		if (compile == null || before == null) return null;
+		final entry: String = Path.join([dir, '${key(stamp, compile, before, env)}.json.gz']);
+		final stored: Null<String> = readEntry(entry);
+		final served: Null<CompileOutcome> = stored == null ? null : serve(stored, entry, compile, dir, tally, env);
+		return served == null ? null : { status: served.status, out: served.out.toString('utf8'), err: served.err.toString('utf8') };
+	}
+
+	/** This process's environment, copied: the compile reads everything its caller was given. */
+	private static inline function processEnv(): DynamicAccess<String> {
+		return js.Syntax.code('Object.assign({}, process.env)');
 	}
 
 	/** The recorded entry at `entry`, unzipped, or null. */
@@ -407,7 +435,9 @@ final class FixtureCompileCache {
 	}
 
 	/** The cache key: the compiler, the environment it reads, the placeheld arguments and every root's content. */
-	private static function key(stamp: String, compile: CompilePlan, contents: Array<Map<String, String>>): String {
+	private static function key(
+		stamp: String, compile: CompilePlan, contents: Array<Map<String, String>>, environment: DynamicAccess<String>
+	): String {
 		final described: Array<Array<String>> = [
 			for (files in contents) {
 				final names: Array<String> = [for (name in files.keys()) name];
@@ -415,7 +445,7 @@ final class FixtureCompileCache {
 				[for (name in names) '$name\t${files[name]}'];
 			}
 		];
-		final env: Array<String> = [for (name in HAXE_ENV) '$name=${Sys.getEnv(name) ?? ''}'];
+		final env: Array<String> = [for (name in HAXE_ENV) '$name=${environment.get(name) ?? ''}'];
 		return hash(Buffer.from(Json.stringify({ // noqa: avoid-haxe-json
 			layout: LAYOUT,
 			stamp: stamp,
@@ -481,7 +511,7 @@ final class FixtureCompileCache {
 	/** The real compile; with `reachedLog`, the schema switches it runs are recorded there (`APQ_MUTANT_MACRO_LOG`). */
 	private static function spawn(real: String, cwd: String, args: Array<String>, ?reachedLog: String): CompileOutcome {
 		// the inherited environment, copied: the compile reads everything the test process was given
-		final env: haxe.DynamicAccess<String> = js.Syntax.code('Object.assign({}, process.env)');
+		final env: DynamicAccess<String> = js.Syntax.code('Object.assign({}, process.env)');
 		if (reachedLog != null) env['APQ_MUTANT_MACRO_LOG'] = reachedLog;
 		final res: ChildProcessSpawnSyncResult = ChildProcess.spawnSync(real, args, { cwd: cwd, maxBuffer: MAX_BUFFER, env: env });
 		final status: Null<Int> = res.status;
@@ -527,11 +557,11 @@ final class FixtureCompileCache {
 	}
 
 	/**
-	 * One line of the cache's tally — `hit`, `miss` or `pass` — for the runner's report: in `APQ_FIXTURE_CACHE_TALLY` when
-	 * set (a cache kept across runs, counted per run), else beside the entries.
+	 * One line of the cache's tally — `hit`, `miss` or `pass` — for the runner's report: in `file` when given (a cache kept
+	 * across runs, counted per run), else beside the entries.
 	 */
-	private static function note(dir: String, what: String): Void {
-		final tally: String = Sys.getEnv('APQ_FIXTURE_CACHE_TALLY') ?? Path.join([dir, 'tally']);
+	private static function note(dir: String, what: String, file: Null<String>): Void {
+		final tally: String = file ?? Path.join([dir, 'tally']);
 		try Fs.appendFileSync(tally, '$what\n') catch (exception: Exception) {} // noqa: swallowed-exception
 	}
 
@@ -542,12 +572,54 @@ final class FixtureCompileCache {
 		return false;
 	}
 
+	/**
+	 * The recorded compile `stored` (read from `entry`), replayed and counted as a hit; null when it ran the switch of the
+	 * live arm. A schema build's probe macro carries every embedded arm's switch, and the one `APQ_MUTANT` names is live in
+	 * this compile: an entry answers for it only when its compile never ran that switch — then the mutated method never ran
+	 * there either, and the answer is the unmutated one every arm shares.
+	 */
+	private static function serve(
+		stored: String, entry: String, compile: CompilePlan, dir: String, tally: Null<String>, env: DynamicAccess<String>
+	): Null<CompileOutcome> {
+		// haxe.Json: this program is built from test/testkit alone (tools/fixture-cache-common.hxml), with no engine to read through
+		final hit: CompileEntry = Json.parse(stored); // noqa: avoid-haxe-json
+		if (hit.reached.contains(activeArm(env))) return null;
+		// a hit renews the entry, so a cache that outlives one run ages out by disuse (`dev fixture-cache prune`)
+		try Fs.utimesSync(entry, Date.now(), Date.now()) catch (exception: Exception) {} // noqa: swallowed-exception
+		note(dir, 'hit', tally);
+		forward(env.get('APQ_MUTANT_MACRO_LOG'), hit.reached);
+		return replay(hit, compile.roots);
+	}
+
+	/** The id of the arm `APQ_MUTANT` names in `env`; 0 when none. */
+	private static function activeArm(env: DynamicAccess<String>): Int {
+		return Std.parseInt(env.get('APQ_MUTANT') ?? '') ?? 0;
+	}
+
 }
 
 /** A compile `FixtureCompileCache.plan` allows: the directories it reads and writes, and its placeheld arguments. */
 typedef CompilePlan = {
 	var roots: Array<String>;
 	var args: Array<String>;
+}
+
+/**
+ * What a spawn asks `FixtureCompileCache.lookup`: the program and its arguments, the directory it runs in (null: the
+ * process's own) and the variables set over the environment for it alone (a null value takes one away).
+ */
+typedef SpawnRequest = {
+	var cmd: String;
+	var args: Array<String>;
+	var cwd: Null<String>;
+	var env: Null<DynamicAccess<Null<String>>>;
+}
+
+/** A recorded compile's answer to a `SpawnRequest`: what the compiler exited with and printed. */
+typedef SpawnAnswer = {
+	var status: Int;
+	var out: String;
+	var err: String;
 }
 
 /** A compile's answer. `exited`: it ran to an exit status, so it may be recorded. */

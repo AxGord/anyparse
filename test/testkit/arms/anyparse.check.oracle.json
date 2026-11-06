@@ -1230,6 +1230,57 @@
 			"find": "machine ??= {",
 			"replace": "{",
 			"note": "every parallelism question starts sysctl again for a count that is a constant of the machine"
+		},
+		{
+			"name": "M-SPAWN-ANSWER-NEVER-ASKED",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "recordedRun",
+			"force": "null",
+			"note": "a run in this process never asks the answer module, so every recorded compile is spawned through the shim again"
+		},
+		{
+			"name": "M-SPAWN-ANSWER-ASKS-ANY-JOB",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "recordedRun",
+			"find": "if (module == '' || job.cmd != null || job.stdin != null) return null;",
+			"replace": "if (module == '') return null;",
+			"note": "a job with a program of its own or a standard input is asked too, so the module can answer a program that is not haxe from a compile's recording"
+		},
+		{
+			"name": "M-DRIVER-NEVER-ASKS",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": " const rec = recorded(jobs[i]); if (rec) { answered(i, rec); continue; } running++;",
+			"replace": " running++;",
+			"note": "the process driver never asks the answer module, so every recorded compile of a batch is spawned through the shim again"
+		},
+		{
+			"name": "M-DRIVER-ASKS-ANY-JOB",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (!m || j.cmd != null || j.shell != null || j.tethered || j.stdin != null) return null;",
+			"replace": "if (!m) return null;",
+			"note": "the driver asks for a shell, tethered, stdin or own-program job too, so the module answers a job that is not a plain compile"
+		},
+		{
+			"name": "M-DRIVER-ANSWER-REENTERS-START",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "{ answered(i, rec); continue; } running++;",
+			"replace": "{ running++; finish(i, rec); continue; }",
+			"note": "a hit settles through finish, which starts the next job inside it, so the stack grows with every consecutive hit and a few thousand of them end the driver"
+		},
+		{
+			"name": "M-DRIVER-FLUSH-TWICE",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "function flush() { if (flushed) return; flushed = true; emit(",
+			"replace": "function flush() { emit(",
+			"note": "a batch completed by a job that finish settles inside the start loop is emitted twice, so the document is invalid JSON and every job comes back as a driver failure"
 		}
 	]
 }

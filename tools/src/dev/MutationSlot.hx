@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.BuildFailure;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.MutationVerdict;
@@ -7,6 +8,7 @@ import anyparse.query.cli.TestTranscript;
 import dev.MutationCheck.TrackRow;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.FixtureCache;
 import devkit.NarrowBuild;
 import devkit.Pool;
 import devkit.Result;
@@ -445,11 +447,13 @@ final class MutationSlot {
 	private static function suiteCommand(ctx: SlotContext, testJs: String, mutant: Null<String>): String -> Command {
 		final shim: String = Path.join([ctx.workroot, 'fixture-cache/bin']);
 		final inherited: String = Sys.getEnv(PATH) ?? '';
-		final path: String = FileSystem.exists(Path.join([shim, 'haxe'])) ? '$shim:$inherited' : inherited;
+		final shimmed: Bool = FileSystem.exists(Path.join([shim, 'haxe']));
+		final path: String = shimmed ? '$shim:$inherited' : inherited;
 		return filter -> Shard.callerGc(
 			cmd('node $testJs')
 				.at(ctx.wt)
 				.env(PATH, path)
+				.env(HaxeSpawn.ANSWER_ENV, FixtureCache.answer(shimmed ? shim : null))
 				.env('APQ_TEST', filter == 'ALL' ? '' : filter)
 				.env('APQ_MUTANT', mutant ?? '')
 				.timeout(SUITE_TIMEOUT_MS)

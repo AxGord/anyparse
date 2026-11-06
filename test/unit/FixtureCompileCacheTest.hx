@@ -1,5 +1,6 @@
 package unit;
 
+import haxe.DynamicAccess;
 import haxe.io.Path;
 import js.node.ChildProcess;
 import sys.FileSystem;
@@ -28,14 +29,13 @@ class FixtureCompileCacheTest extends Test {
 		+ '\t}\n}\n';
 
 	private static inline final MAIN: String = 'class Main { static function main() {} }\n';
-
 	private static inline final BUILD: String = '-cp .\n-main Main\n--interp\n';
 
 	public function testAReplayElsewhereAnswersWhatTheCompilerAnswersThere(): Void {
 		final cache: String = CliFixture.writeTree('fcc_cache', []);
-		final first: Fixture = fixture(PROBE, MAIN);
-		final second: Fixture = fixture(PROBE, MAIN);
-		final real: Fixture = fixture(PROBE, MAIN);
+		final first: Fixture = fixture(PROBE);
+		final second: Fixture = fixture(PROBE);
+		final real: Fixture = fixture(PROBE);
 		CliFixture.always(
 			() -> for (dir in [cache, first.dir, first.probe, second.dir, second.probe, real.dir, real.probe]) CliFixture.removeDir(dir),
 			() -> {
@@ -61,10 +61,10 @@ class FixtureCompileCacheTest extends Test {
 
 	public function testAChangedProbeSourceOrFixtureIsACompile(): Void {
 		final cache: String = CliFixture.writeTree('fcc_cache', []);
-		final base: Fixture = fixture(PROBE, MAIN);
+		final base: Fixture = fixture(PROBE);
 		// a mutated facts macro reaches the probe directory as different text, exactly like this
-		final probe: Fixture = fixture(PROBE + '// mutated\n', MAIN);
-		final main: Fixture = fixture(PROBE, MAIN + '// edited\n');
+		final probe: Fixture = fixture('$PROBE// mutated\n');
+		final main: Fixture = fixture(PROBE, '$MAIN// edited\n');
 		CliFixture.always(
 			() -> for (dir in [cache, base.dir, base.probe, probe.dir, probe.probe, main.dir, main.probe]) CliFixture.removeDir(dir),
 			() -> {
@@ -80,9 +80,9 @@ class FixtureCompileCacheTest extends Test {
 	 */
 	public function testAKeyAnotherProcessHoldsIsWaitedForThenShared(): Void {
 		final cache: String = CliFixture.writeTree('fcc_cache', []);
-		final first: Fixture = fixture(PROBE, MAIN);
-		final second: Fixture = fixture(PROBE, MAIN);
-		final third: Fixture = fixture(PROBE, MAIN);
+		final first: Fixture = fixture(PROBE);
+		final second: Fixture = fixture(PROBE);
+		final third: Fixture = fixture(PROBE);
 		final probe: Any = js.Syntax.code('process.kill');
 		CliFixture.always(() -> {
 			js.Syntax.code('process.kill = {0}', probe);
@@ -133,7 +133,7 @@ class FixtureCompileCacheTest extends Test {
 			+ '\t\tSys.println("cwd " + Sys.getCwd());\n'
 		);
 		final cache: String = CliFixture.writeTree('fcc_cache', []);
-		final fixtures: Array<Fixture> = [for (_ in 0...4) fixture(switched, MAIN)];
+		final fixtures: Array<Fixture> = [for (_ in 0...4) fixture(switched)];
 		final before: Null<String> = Sys.getEnv('APQ_MUTANT');
 		CliFixture.always(() -> {
 			Sys.putEnv('APQ_MUTANT', before ?? '');
@@ -153,7 +153,7 @@ class FixtureCompileCacheTest extends Test {
 	}
 
 	public function testOnlyAWhitelistedProbeCompileInsideItsRootsIsReplayed(): Void {
-		final f: Fixture = fixture(PROBE, MAIN);
+		final f: Fixture = fixture(PROBE);
 		final outside: String = CliFixture.writeTree('fcc_outside', [{ name: 'Lib.hx', source: 'class Lib {}\n' }]);
 		CliFixture.always(() -> for (dir in [f.dir, f.probe, outside]) CliFixture.removeDir(dir), () -> {
 			final planned: Null<CompilePlan> = FixtureCompileCache.plan(f.dir, args(f));
@@ -182,6 +182,111 @@ class FixtureCompileCacheTest extends Test {
 		Assert.equals('a /var/y/B/f b /private/var/y/B/g', FixtureCompileCache.decode(encoded, to));
 	}
 
+	/**
+	 * A probe compile that writes into its cwd — the fixture, which a compile running beside it may append to as well — is
+	 * never recorded: a replay rewrites whole files, so the other writer's lines would be lost (`OracleRunMemoTest` counts
+	 * compiles through exactly such a log, and read 1 where two compiles ran).
+	 */
+	@:pin('control') @:killer('M-FIXTURE-CACHE-CWD-WRITE')
+	public function testACompileWritingIntoItsCwdIsNotRecorded(): Void {
+		final cache: String = CliFixture.writeTree('fcc_cache', []);
+		final writer: String = 'class AnyparseReachDefinesProbe {\n\tpublic static function run(out:String):Void {\n'
+			+ '\t\tsys.io.File.saveContent(out, "x");\n\t\tsys.io.File.saveContent("log.txt", "ran");\n\t}\n}\n';
+		final first: Fixture = fixture(writer);
+		final second: Fixture = fixture(writer);
+		CliFixture.always(() -> for (dir in [cache, first.dir, first.probe, second.dir, second.probe]) CliFixture.removeDir(dir), () -> {
+			final recorded: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
+			final answered: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, second.dir, args(second));
+			Assert.isTrue(recorded.exited && answered.exited, 'both compiled for real');
+			Assert.equals('pass,pass', tally(cache));
+			Assert.equals('ran', File.getContent(Path.join([second.dir, 'log.txt'])));
+		});
+	}
+
+	/**
+	 * `lookup`, the in-process ask `HaxeSpawn` makes before it starts a process, answers a recorded compile with exactly
+	 * the bytes and files the shim's `run` replays for it, counts it as a hit, and answers nothing for any other compile —
+	 * a changed input, a program that is not `haxe`, a compile that is no probe.
+	 */
+	@:pin('control')
+	@:killer('M-FIXTURE-CACHE-LOOKUP-NEVER-SERVES')
+	public function testALookupAnswersARecordedCompileAsTheShimReplaysIt(): Void {
+		final cache: String = CliFixture.writeTree('fcc_cache', []);
+		final first: Fixture = fixture(PROBE);
+		final second: Fixture = fixture(PROBE);
+		final third: Fixture = fixture(PROBE);
+		final edited: Fixture = fixture(PROBE, '$MAIN// edited\n');
+		CliFixture.always(() -> for (dir in [
+			cache,
+			first.dir,
+			first.probe,
+			second.dir,
+			second.probe,
+			third.dir,
+			third.probe,
+			edited.dir,
+			edited.probe
+		]) CliFixture.removeDir(dir), () -> {
+			final recorded: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
+			Assert.equals(0, recorded.status);
+			final dump: String = Path.join([second.probe, 'dump.txt']);
+			final answer: Null<SpawnAnswer> = FixtureCompileCache.lookup('stamp', cache, null, request(second, 'haxe'));
+			Assert.notNull(answer);
+			// the shim's replay of the same fixture elsewhere: a replay writes into the roots, so the same one would be a new key
+			final replayed: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, third.dir, args(third));
+			if (answer != null) {
+				Assert.equals(replayed.status, answer.status);
+				Assert.equals(replayed.out.toString(), moved(answer.out, second, third));
+				Assert.equals(replayed.err.toString(), moved(answer.err, second, third));
+				Assert.isTrue(answer.out.indexOf(resolved(second.dir)) >= 0, 'it names its own cwd: ${answer.out}');
+			}
+			Assert.equals(
+				File.getContent(Path.join([third.probe, 'dump.txt'])), moved(File.getContent(dump), second, third),
+				'and writes the files the replay writes'
+			);
+			Assert.equals('miss,hit,hit', tally(cache));
+			Assert.isNull(FixtureCompileCache.lookup('stamp', cache, null, request(edited, 'haxe')), 'a changed input');
+			Assert.isNull(FixtureCompileCache.lookup('other', cache, null, request(second, 'haxe')), 'another compiler');
+			Assert.isNull(FixtureCompileCache.lookup('stamp', cache, null, request(second, 'neko')), 'another program');
+			final plain: SpawnRequest = {
+				cmd: 'haxe',
+				args: ['--version'],
+				cwd: second.dir,
+				env: null
+			};
+			Assert.isNull(FixtureCompileCache.lookup('stamp', cache, null, plain), 'no probe macro');
+			Assert.equals('miss,hit,hit', tally(cache), 'a lookup that answers nothing counts nothing');
+		});
+	}
+
+	/** A lookup reads the arm and the compiler's variables from the request's environment, not from this process's. */
+	@:pin('control')
+	@:killer('M-FIXTURE-CACHE-LOOKUP-IGNORES-REQUEST-ENV')
+	public function testALookupReadsTheLiveArmFromTheRequestsEnvironment(): Void {
+		final switched: String = PROBE.replace(
+			'\t\tSys.println("cwd " + Sys.getCwd());\n',
+			'\t\tfinal log = Sys.getEnv("APQ_MUTANT_MACRO_LOG");\n\t\tif (log != null) sys.io.File.saveContent(log, "7\\n");\n'
+			+ '\t\tSys.println("cwd " + Sys.getCwd());\n'
+		);
+		final cache: String = CliFixture.writeTree('fcc_cache', []);
+		final fixtures: Array<Fixture> = [for (_ in 0...2) fixture(switched)];
+		final before: Null<String> = Sys.getEnv('APQ_MUTANT');
+		CliFixture.always(() -> {
+			Sys.putEnv('APQ_MUTANT', before ?? '');
+			for (f in fixtures) for (dir in [f.dir, f.probe]) CliFixture.removeDir(dir);
+			CliFixture.removeDir(cache);
+		}, () -> {
+			Sys.putEnv('APQ_MUTANT', '3');
+			final recorded: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, fixtures[0].dir, args(fixtures[0]));
+			Assert.equals(0, recorded.status);
+			Assert.isNull(
+				FixtureCompileCache.lookup('stamp', cache, null, armed(fixtures[1], '7')), 'the compile ran the live arm\'s switch'
+			);
+			Assert.notNull(FixtureCompileCache.lookup('stamp', cache, null, armed(fixtures[1], '4')), 'every other arm replays it');
+			Assert.equals('miss,hit', tally(cache));
+		});
+	}
+
 	/** The probe compile of `f`, as `ReachDefinesProbe` spells one: the probe directory on the command line. */
 	private static function args(f: Fixture): Array<String> {
 		return [
@@ -194,7 +299,7 @@ class FixtureCompileCacheTest extends Test {
 		];
 	}
 
-	private static function fixture(probe: String, main: String): Fixture {
+	private static function fixture(probe: String, main: String = MAIN): Fixture {
 		return {
 			dir: CliFixture.writeTree('fcc_fixture', [{ name: 'Main.hx', source: main }, { name: 'build.hxml', source: BUILD }]),
 			probe: CliFixture.writeTree('fcc_probe', [{ name: 'AnyparseReachDefinesProbe.hx', source: probe }])
@@ -233,24 +338,26 @@ class FixtureCompileCacheTest extends Test {
 		return FileSystem.exists(path) ? File.getContent(path).trim().split('\n').join(',') : '';
 	}
 
-	/**
-	 * A probe compile that writes into its cwd — the fixture, which a compile running beside it may append to as well — is
-	 * never recorded: a replay rewrites whole files, so the other writer's lines would be lost (`OracleRunMemoTest` counts
-	 * compiles through exactly such a log, and read 1 where two compiles ran).
-	 */
-	@:pin('control') @:killer('M-FIXTURE-CACHE-CWD-WRITE')
-	public function testACompileWritingIntoItsCwdIsNotRecorded(): Void {
-		final cache: String = CliFixture.writeTree('fcc_cache', []);
-		final writer: String = 'class AnyparseReachDefinesProbe {\n\tpublic static function run(out:String):Void {\n'
-			+ '\t\tsys.io.File.saveContent(out, "x");\n\t\tsys.io.File.saveContent("log.txt", "ran");\n\t}\n}\n';
-		final first: Fixture = fixture(writer, MAIN);
-		final second: Fixture = fixture(writer, MAIN);
-		CliFixture.always(() -> for (dir in [cache, first.dir, first.probe, second.dir, second.probe]) CliFixture.removeDir(dir), () -> {
-			FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
-			FixtureCompileCache.run('haxe', 'stamp', cache, second.dir, args(second));
-			Assert.equals('pass,pass', tally(cache));
-			Assert.equals('ran', File.getContent(Path.join([second.dir, 'log.txt'])));
-		});
+	/** The `lookup` request for the probe compile of `f`. */
+	private static function request(f: Fixture, cmd: String): SpawnRequest {
+		return {
+			cmd: cmd,
+			args: args(f),
+			cwd: f.dir,
+			env: null
+		};
+	}
+
+	/** The `lookup` request for the probe compile of `f` with the arm `id` switched on in its environment. */
+	private static function armed(f: Fixture, id: String): SpawnRequest {
+		final env: DynamicAccess<Null<String>> = {};
+		env['APQ_MUTANT'] = id;
+		return {
+			cmd: 'haxe',
+			args: args(f),
+			cwd: f.dir,
+			env: env
+		};
 	}
 
 }

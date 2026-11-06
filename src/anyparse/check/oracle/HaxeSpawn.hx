@@ -156,6 +156,7 @@ final class HaxeSpawn {
 	 * BACKGROUND (`PendingRuns`) answers through. Such a driver ended by a signal, or outliving `apq`, removes the
 	 * directory holding its answer file. The driver never reads its stdin: a pipe handed to `spawnSync` as `input` can
 	 * stall for good on macOS (`runAll`).
+	 * A job `ANSWER_ENV` has a recorded answer for is answered from it and never started.
 	 * A `tethered` job runs under `TETHER`, the driver holding the write end of its stdin: the job dies with the driver
 	 * however the driver went, a SIGKILL of the whole process group `apq` and the driver share included — off Windows a
 	 * job's group is its own, so that kill does not reach it. Off Windows a tethered job is killed like any other; on
@@ -181,7 +182,7 @@ final class HaxeSpawn {
 		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]); const stop = process.argv[3] === '1';"
 		+ "const group = process.platform !== 'win32';"
 		+ 'const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;'
-		+ 'let dying = false, reaping = 0; const GRACE = 3000, PIPE_GRACE = 2000;'
+		+ 'let dying = false, flushed = false, reaping = 0; const GRACE = 3000, PIPE_GRACE = 2000;'
 		+ 'function signal(c, s) { try { if (group) process.kill(-c.pid, s); else c.kill(s); }'
 		+ ' catch (err) { try { c.kill(s); } catch (ignored) {} } }'
 		+ 'function grouped(c) { if (!group) return false; try { process.kill(-c.pid, 0); return true; }'
@@ -223,13 +224,23 @@ final class HaxeSpawn {
 		+ NOT_STARTED
 		+ "', overflowed: false,"
 		+ ' cancelled: true, unstarted: true }; done++; } } next = jobs.length; }'
+		+ "function flush() { if (flushed) return; flushed = true; emit('{\"runs\":' + JSON.stringify(out) + '}'); }"
 		+ 'function finish(i, rec) { if (out[i]) return; if (rec.status === null) delete rec.status; out[i] = rec;'
 		+ ' if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);'
 		+ ' if (kids[i]) { clearTimeout(kids[i].grace); clearTimeout(kids[i].stuck); clearInterval(kids[i].watch); }'
 		+ ' kids[i] = null; running--; done++; if (dying) { settle(); return; }'
 		+ ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
-		+ " if (done === jobs.length) emit('{\"runs\":' + JSON.stringify(out) + '}'); else start(); }"
-		+ 'function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;'
+		+ ' if (done === jobs.length) flush(); else start(); }'
+		+ 'function recorded(j) { const m = process.env.'
+		+ ANSWER_ENV
+		+ '; if (!m || j.cmd != null || j.shell != null || j.tethered || j.stdin != null) return null;'
+		+ ' try { const r = require(m).answer({ cmd: "haxe", args: j.args, cwd: j.cwd == null ? null : j.cwd, env: j.env == null ? null : j.env });'
+		+ ' if (r == null || typeof r.out !== "string" || typeof r.err !== "string" || Buffer.byteLength(r.out) > max || Buffer.byteLength(r.err) > max) return null;'
+		+ ' return { status: r.status, out: r.out, err: r.err, failure: "", overflowed: false, cancelled: false }; }'
+		+ ' catch (err) { return null; } }'
+		+ 'function answered(i, rec) { out[i] = rec; done++; if (stop && rec.status !== 0) cancelAfter(i); }'
+		+ 'function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue;'
+		+ ' const rec = recorded(jobs[i]); if (rec) { answered(i, rec); continue; } running++;'
 		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const prog = j.cmd == null ? 'haxe' : j.cmd;"
 		+ " const what = j.shell == null ? prog : 'the command'; let input = j.tethered ? 'pipe' : 'ignore';"
 		+ " if (j.stdin != null && !j.tethered) try { input = require('fs').openSync(j.stdin, 'r'); } catch (err) {"
@@ -257,7 +268,8 @@ final class HaxeSpawn {
 		+ " failure: c.cancelled ? 'cancelled — an earlier job failed' : c.timedOut ? what + ' timed out after ' + j.timeout + ' ms'"
 		+ " : c.stalled ? what + ' made ' + c.stalled : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '',"
 		+ ' overflowed: over, cancelled: c.cancelled === true }); };'
-		+ " c.on('close', code => answer(code)); c.on('exit', () => lingering(i, c, j.reap === true, answer)); } }"
+		+ " c.on('close', code => answer(code)); c.on('exit', () => lingering(i, c, j.reap === true, answer)); }"
+		+ ' if (!dying && done === jobs.length) flush(); }'
 		+ "if (jobs.length === 0) emit('{\"runs\":[]}'); else start();";
 
 	/**
@@ -300,6 +312,8 @@ final class HaxeSpawn {
 			overflowed: false
 		};
 		#if nodejs
+		final recorded: Null<HaxeRun> = recordedRun(job, maxBuffer);
+		if (recorded != null) return recorded;
 		final cwd: Null<String> = job.cwd;
 		final options: Dynamic = { env: childEnv() };
 		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
@@ -891,6 +905,50 @@ final class HaxeSpawn {
 	/** The answer of `machineThreads`, once read. */
 	private static var machine: Null<Int>;
 
+	#if nodejs
+	/**
+	 * The run of `job` the module `ANSWER_ENV` names has recorded, read in this process; null when none is named, it
+	 * cannot be loaded, it has no answer, or an answer would not fit `maxBuffer` — the job is then spawned, as it always
+	 * was. Never throws.
+	 */
+	private static function recordedRun(job: SpawnJob, maxBuffer: Int): Null<HaxeRun> {
+		final module: String = Sys.getEnv(ANSWER_ENV) ?? '';
+		// a job with a program of its own or a standard input is not the compile a recording stands for
+		if (module == '' || job.cmd != null || job.stdin != null) return null;
+		final env: DynamicAccess<Null<String>> = {};
+		for (name => value in variables(job.env)) env[name] = value;
+		final request: Any = {
+			cmd: 'haxe',
+			args: job.args,
+			cwd: job.cwd,
+			env: env
+		};
+		return try {
+			final reply: Null<RecordedAnswer> = js.Syntax.code('require({0}).answer({1})', module, request);
+			reply == null || js.node.Buffer.byteLength(reply.out) > maxBuffer || js.node.Buffer.byteLength(reply.err) > maxBuffer
+				? null
+				: {
+					status: reply.status,
+					out: reply.out,
+					err: reply.err,
+					failure: '',
+					overflowed: false
+				};
+		} catch (exception: haxe.Exception) {
+			null;
+		};
+	}
+	#end
+
+	/**
+	 * The variable naming a module that is asked for the answer to a `haxe` job before one is started: `answer(request)`
+	 * there takes `{ cmd, args, cwd, env }` and returns `{ status, out, err }` for a job it has recorded, or null for any
+	 * other, which is then spawned. The answer is a lookup only, so the module decides what a recorded job is and
+	 * what keys it; empty or unset, nothing is loaded. Both ways a job starts ask it: a run in this process (`exec`) and
+	 * the process driver (`PARALLEL_DRIVER`).
+	 */
+	public static inline final ANSWER_ENV: String = 'APQ_SPAWN_ANSWER';
+
 }
 
 /** A batch directory `HaxeSpawn.writeJobs` made, and the jobs file in it the process driver reads. */
@@ -906,4 +964,11 @@ typedef CapturedRun = {
 	var out: String;
 	var err: String;
 	var overflowed: Bool;
+}
+
+/** What the module `HaxeSpawn.ANSWER_ENV` names answers for a job it has recorded. */
+typedef RecordedAnswer = {
+	var status: Int;
+	var out: String;
+	var err: String;
 }
