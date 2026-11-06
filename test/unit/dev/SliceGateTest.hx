@@ -144,6 +144,17 @@ final class SliceGateTest extends Test {
 			kitsMoved: true,
 			ruleInfra: 3
 		}, ['suite']));
+		Assert.isNull(
+			SliceGate.demandOf({
+				recording: false,
+				infra: 0,
+				touchedHx: false,
+				jvmMoved: false,
+				kitsMoved: false,
+				ruleInfra: null
+			}, ['base']),
+			'the base branch is a heavy one beside the suite'
+		);
 	}
 
 	/**
@@ -486,10 +497,26 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
+	 * A whole-suite gate whose base suite is unread starts the base branch with the others, at the gate's start and on a lease of
+	 * its own, not as a step of the suite branch behind its suite; the branch is no line of the gate's table.
+	 */
+	@:pin('guard')
+	public function testAWholeGateStartsTheBaseBranchBesideItsSuite(): Void {
+		final ran: GateRan = gateRun(BASE_REGISTRY, [], GRAPH_HXQ, null, null, 'haxelib.json');
+		Assert.equals(0, ran.status, ran.table);
+		Assert.isTrue(ran.branches.split('\n').contains('base'), 'branches: ${ran.branches}');
+		Assert.isTrue(ran.branches.split('\n').contains('suite,corpus'), 'branches: ${ran.branches}');
+		Assert.isTrue(ran.leases.contains(' base -- '), 'leases: ${ran.leases}');
+		Assert.isFalse(~/(^|\n)base /.match(ran.table), ran.table);
+		final impact: GateRan = gateRun(BASE_REGISTRY);
+		Assert.isFalse(impact.branches.split('\n').contains('base'), 'an impact gate reads no base suite: ${impact.branches}');
+	}
+
+	/**
 	 * A scratch tree whose base commit holds the arm registry `BASE_REGISTRY` and whose slice commit holds `registry`, with the
 	 * stand-ins the gate's tools need; it answers the baseline record the gate reads.
 	 */
-	private static function scratchTree(dir: TempDir, registry: String, hxq: String): String {
+	private static function scratchTree(dir: TempDir, registry: String, hxq: String, touched: String = 'notes.txt'): String {
 		final tree: String = dir.file('tree');
 		final registryFile: String = Path.join([tree, 'test/testkit/arms/a.json']);
 		FileSystem.createDirectory(Path.join([tree, 'tools']));
@@ -512,7 +539,7 @@ final class SliceGateTest extends Test {
 		cmd('git $git commit -q -m base').at(tree).check();
 		final base: String = cmd('git rev-parse HEAD').at(tree).check().out.trim();
 		File.saveContent(registryFile, registry);
-		File.saveContent(Path.join([tree, 'notes.txt']), 'slice');
+		File.saveContent(Path.join([tree, touched]), 'slice');
 		cmd('git add -A').at(tree).check();
 		cmd('git $git commit -q -m slice').at(tree).check();
 		FileSystem.createDirectory('$tree-logs');
@@ -534,7 +561,7 @@ final class SliceGateTest extends Test {
 
 	/** A whole `check()` over a scratch tree whose slice leaves `registry`, the compiler, the branches' script and the pool faked. */
 	private static function gateRun(
-		registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ, ?self: String, ?idleMs: Int
+		registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ, ?self: String, ?idleMs: Int, touched: String = 'notes.txt'
 	): GateRan {
 		var ran: GateRan = {
 			branches: '',
@@ -547,7 +574,7 @@ final class SliceGateTest extends Test {
 			table: ''
 		};
 		TempDir.with(dir -> {
-			final tree: String = scratchTree(dir, registry, hxq);
+			final tree: String = scratchTree(dir, registry, hxq, touched);
 
 			final root: String = dir.file('plugin');
 			final fakeBin: String = dir.file('fakebin');

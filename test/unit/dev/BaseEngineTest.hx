@@ -72,4 +72,20 @@ final class BaseEngineTest extends Test {
 		});
 	}
 
+	/** `keep` stores an entry nobody kept yet whole, leaves a standing one alone, and a failed fill leaves nothing, staging included. */
+	@:pin('guard')
+	public function testKeepStoresAnEntryOnceAndAFailedFillLeavesNothing(): Void {
+		TempDir.with(dir -> {
+			final cache: String = dir.file('cache');
+			BaseEngine.keep(cache, 'k', staging -> File.saveContent(Path.join([staging, 'a']), 'first'));
+			BaseEngine.keep(cache, 'k', staging -> File.saveContent(Path.join([staging, 'a']), 'second'));
+			Assert.equals('first', File.getContent(Path.join([cache, 'k', 'a'])));
+			BaseEngine.keep(cache, 'bad', staging -> {
+				File.saveContent(Path.join([staging, 'a']), 'half');
+				throw new Exception('does not fill');
+			});
+			Assert.same(['k'], FileSystem.readDirectory(cache));
+		});
+	}
+
 }

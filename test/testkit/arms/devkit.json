@@ -47,6 +47,13 @@
 			"method": "runsDirect",
 			"force": "false",
 			"note": "every git the tools run starts a node process driver first, so the gate's git-heavy classes pay a node start per call"
+		},
+		{
+			"name": "M-BRANCHES-HEAVY-NOT-SPLIT",
+			"type": "devkit.Branches",
+			"method": "perHeavy",
+			"force": "share(budget, light(branches, demand))",
+			"note": "each heavy branch of a gate asks for the whole rest of the lease, so the suite and the base suite beside it oversubscribe the threads the lease holds"
 		}
 	]
 }

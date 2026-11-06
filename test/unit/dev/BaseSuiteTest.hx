@@ -143,10 +143,132 @@ final class BaseSuiteTest extends Test {
 		});
 	}
 
+	/**
+	 * A whole-suite gate announces the base branch only while the base suite is unread: an impact gate, a gate with no baseline
+	 * and a gate whose base reading is kept start none, and a kept reading lifts the announcement of an earlier plan.
+	 */
+	@:pin('guard')
+	public function testAWholeGateAnnouncesTheBaseBranchOnlyWhileTheBaseIsUnread(): Void {
+		TempDir.with(dir -> withCache(dir.file('cache'), () -> {
+			final gate: GateTree = gateOf(dir);
+			Assert.isFalse(BaseSuite.plan(gate, false), 'an impact gate');
+			Assert.isFalse(BaseSuite.pending(gate));
+			Assert.isTrue(BaseSuite.plan(gate, true));
+			Assert.isTrue(BaseSuite.pending(gate));
+			File.saveContent(gate.log(BaseSuite.FILE), BaseSuite.encode(stampOf(gate), { tests: 1, assertions: 2, sweep: null }));
+			Assert.isFalse(BaseSuite.plan(gate, true), 'a kept reading');
+			Assert.isFalse(BaseSuite.pending(gate), 'the earlier plan is lifted');
+			final other: GateTree = gateOf(dir, '2', false);
+			Assert.isFalse(BaseSuite.plan(other, true), 'no baseline to compare with');
+		}));
+	}
+
+	/**
+	 * A second gate on the same base, in another worktree, reads what the first measured from the cache the worktrees share: it
+	 * announces no branch, runs no base build, and has the counts and the sweep.
+	 */
+	@:pin('guard')
+	public function testASecondGateOnTheSameBaseRunsNoBaseSuite(): Void {
+		TempDir.with(dir -> withCache(dir.file('cache'), () -> {
+			final first: GateTree = gateOf(dir, '1');
+			final second: GateTree = gateOf(dir, '2');
+			final stamp: String = stampOf(second);
+			final sweep: String = first.log(GateTree.SWEEP_BASE);
+			File.saveContent(sweep, '{"swept":1}');
+			final reading: BaseReading = { tests: 100, assertions: 200, sweep: sweep };
+			File.saveContent(first.log(BaseSuite.FILE), BaseSuite.encode(stamp, reading));
+			BaseSuite.store(BaseSuite.defaultCache(), stamp, first, reading);
+			Assert.isFalse(BaseSuite.plan(second, true));
+			switch BaseSuite.read(second, Unpooled) {
+				case Read(got):
+					Assert.equals(100, got.tests);
+					Assert.equals(200, got.assertions);
+					Assert.equals('{"swept":1}', File.getContent(got.sweep ?? ''));
+				case Unread(why):
+					Assert.fail(why);
+			}
+			Assert.isFalse(FileSystem.exists(second.log('suite-base-build.log')), 'no base checkout was built');
+		}));
+	}
+
+	/**
+	 * A row that asks while the base branch is still running waits for it and takes what it leaves, the counts or the reason there
+	 * are none; it never measures the base suite beside the branch. After a failed branch the next row is told why, not left to measure.
+	 */
+	@:pin('guard')
+	public function testARowWaitsForTheBaseBranchInsteadOfMeasuring(): Void {
+		TempDir.with(dir -> withCache(dir.file('cache'), () -> {
+			final gate: GateTree = gateOf(dir);
+			final record: String = dir.file('record');
+			File.saveContent(record, BaseSuite.encode(stampOf(gate), { tests: 100, assertions: 200, sweep: null }));
+			Assert.isTrue(BaseSuite.plan(gate, true));
+			later('sleep 1 && cp $record ${gate.log(BaseSuite.FILE)} && rm ${gate.log(BaseSuite.PENDING)}');
+			Assert.equals(
+				100, switch BaseSuite.read(gate, Unpooled) {
+					case Read(got): got.tests;
+					case Unread(_): -1;
+				}
+			);
+			FileSystem.deleteFile(gate.log(BaseSuite.FILE));
+			Assert.isTrue(BaseSuite.plan(gate, true));
+			later('sleep 1 && printf "no build" > ${gate.log(BaseSuite.UNREAD)} && rm ${gate.log(BaseSuite.PENDING)}');
+			Assert.same(
+				'no build', switch BaseSuite.read(gate, Unpooled) {
+					case Unread(why): why;
+					case Read(_): 'read';
+				}
+			);
+			Assert.same(
+				'no build', switch BaseSuite.read(gate, Unpooled) {
+					case Unread(why): why;
+					case Read(_): 'read';
+				},
+				'a later row is told the same'
+			);
+			Assert.isFalse(FileSystem.exists(gate.log('suite-base-build.log')), 'no base checkout was built');
+		}));
+	}
+
+	/**
+	 * The base branch that cannot read the base suite (no test build in the base checkout) fails its row, leaves why in the
+	 * logs before it lifts its announcement, and a row asking afterwards is told the same why without a second attempt; so does
+	 * a branch that throws.
+	 */
+	@:pin('guard')
+	public function testAFailedBaseBranchLeavesItsWhyBeforeLiftingItsAnnouncement(): Void {
+		TempDir.with(dir -> withCache(dir.file('cache'), () -> {
+			final gate: GateTree = gateOf(dir);
+			Assert.isTrue(BaseSuite.plan(gate, true));
+			final why: String = switch BaseSuite.branch(gate, Unpooled) {
+				case Failed(reason): reason;
+				case _: '';
+			};
+			Assert.notEquals('', why);
+			Assert.equals(why, File.getContent(gate.log(BaseSuite.UNREAD)));
+			Assert.isFalse(BaseSuite.pending(gate));
+			FileSystem.deleteFile(gate.log('suite-base-build.log'));
+			Assert.equals(
+				why, switch BaseSuite.read(gate, Unpooled) {
+					case Unread(again): again;
+					case Read(_): '';
+				}
+			);
+			Assert.isFalse(FileSystem.exists(gate.log('suite-base-build.log')), 'the base was not built a second time');
+		}));
+		TempDir.with(dir -> withCache(dir.file('cache'), () -> {
+			final gate: GateTree = gateOf(dir);
+			Assert.isTrue(BaseSuite.plan(gate, true));
+			FileSystem.createDirectory(gate.log(BaseSuite.FILE));
+			Assert.isTrue(BaseSuite.branch(gate, Unpooled).match(Failed(_)));
+			Assert.isTrue(FileSystem.exists(gate.log(BaseSuite.UNREAD)));
+			Assert.isFalse(BaseSuite.pending(gate));
+		}));
+	}
+
 	/** A git tree with one commit and the baseline record of it in a logs directory beside, as a gate over it reads them. */
-	private static function gateOf(dir: TempDir): GateTree {
-		final tree: String = dir.file('tree');
-		final logs: String = dir.file('logs');
+	private static function gateOf(dir: TempDir, name: String = '', withBaseline: Bool = true): GateTree {
+		final tree: String = dir.file('tree$name');
+		final logs: String = dir.file('logs$name');
 		FileSystem.createDirectory(tree);
 		FileSystem.createDirectory(logs);
 		File.saveContent(Path.join([tree, 'keep']), tree);
@@ -155,7 +277,7 @@ final class BaseSuiteTest extends Test {
 		cmd('git add -A').at(tree).check();
 		cmd('git $git commit -q -m base').at(tree).check();
 		final base: String = cmd('git rev-parse HEAD').at(tree).check().out.trim();
-		File.saveContent(
+		if (withBaseline) File.saveContent(
 			Path.join([logs, GateTree.BASELINE_FILE]), BaselineWriter.write({
 				base: base,
 				lists: JObject([]),
@@ -177,6 +299,31 @@ final class BaseSuiteTest extends Test {
 			threads: null,
 			run: 'r'
 		});
+	}
+
+	/** `body` with the cache shared by every gate pointed at `cache`; the environment is restored afterwards, even when `body` throws. */
+	private static function withCache(cache: String, body: () -> Void): Void {
+		final saved: Null<String> = Sys.getEnv(BaseSuite.CACHE_VAR);
+		final set: Null<String> -> Void = value -> {
+			if (value == null)
+				js.Syntax.code('delete process.env[{0}]', BaseSuite.CACHE_VAR)
+			else
+				Sys.putEnv(BaseSuite.CACHE_VAR, value);
+		};
+		CliFixture.always(() -> set(saved), () -> {
+			set(cache);
+			body();
+		});
+	}
+
+	/** The stamp a reading of `gate`'s base is kept under. */
+	private static function stampOf(gate: GateTree): String {
+		return BaseSuite.stampOf(gate.base, GateReuse.forkState(), BaseEngine.toolchain());
+	}
+
+	/** `command` started in the background, to end after the test's own wait has begun: what another process does to the gate's logs. */
+	private static function later(command: String): Void {
+		js.Syntax.code("require('child_process').exec({0})", command);
 	}
 
 }

@@ -2,8 +2,8 @@ package dev;
 
 /**
  * The one answer to "how long may a gate branch go without starting a row before it is cut": each row's limit is a few
- * times the slowest honest run of the row on a loaded pool, since a row's own commands print nothing until they end (the suite
- * and corpus rows may also carry a base checkout's build and whole suite, `BaseSuite`), and a
+ * times the slowest honest run of the row on a loaded pool, since a row's own commands print nothing until they end (the base row
+ * is a base checkout's build and whole suite, `BaseSuite`, and the suite and corpus rows may wait for it), and a
  * branch's limit is the longest of its rows'. The suite row is also watched shard by shard (`Shard.IDLE_MS`), and the
  * arms row rewrites the progress file as each track ends, so its limit bounds the gap between tracks, not the run.
  */
@@ -22,6 +22,7 @@ final class BranchWatch {
 	private static final LIMITS: Map<String, Int> = [
 		'suite' => 40,
 		'lists' => 5,
+		'base' => 40,
 		'corpus' => 20,
 		'fmt' => 10,
 		'lint' => 20,

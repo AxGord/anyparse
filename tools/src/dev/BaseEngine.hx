@@ -74,24 +74,16 @@ final class BaseEngine {
 		final entry: String = Path.join([cache, key]);
 		final engine: String = Path.join([entry, ENGINE]);
 		if (valid(entry, stamp)) {
-			final now: Date = Date.now();
-			Fs.utimesSync(entry, now, now);
+			touch(entry);
 			return engine;
 		}
-		FileSystem.createDirectory(cache);
 		remove(entry);
-		final staging: String = '$entry.${js.Node.process.pid}.tmp';
-		remove(staging);
-		FileSystem.createDirectory(staging);
-		try {
+		final failure: Null<Exception> = stage(cache, key, staging -> {
 			build(staging);
 			File.saveContent(Path.join([staging, CHECKSUM]), digest(Path.join([staging, ENGINE])));
 			File.saveContent(Path.join([staging, TOOLCHAIN]), stamp);
-			FileSystem.rename(staging, entry);
-		} catch (exception: Exception) {
-			remove(staging);
-			if (!valid(entry, stamp)) throw exception;
-		}
+		});
+		if (failure != null && !valid(entry, stamp)) throw failure;
 		return engine;
 	}
 
@@ -146,6 +138,42 @@ final class BaseEngine {
 	public static function toolchain(): String {
 		final version: Result = cmd('haxe -version').check();
 		return (version.out + version.err).trim();
+	}
+
+	/**
+	 * Build the entry `key` of `cache` in a staging directory `fill` is given and move it into place whole, so a reader never
+	 * sees half of one; null when it is in place, else why not (the staging directory is removed). Of two builders of one key
+	 * the first to move wins.
+	 */
+	public static function stage(cache: String, key: String, fill: String -> Void): Null<Exception> {
+		final entry: String = Path.join([cache, key]);
+		FileSystem.createDirectory(cache);
+		final staging: String = '$entry.${js.Node.process.pid}.tmp';
+		remove(staging);
+		FileSystem.createDirectory(staging);
+		return try {
+			fill(staging);
+			FileSystem.rename(staging, entry);
+			null;
+		} catch (exception: Exception) {
+			remove(staging);
+			exception;
+		};
+	}
+
+	/**
+	 * Keep an entry nobody has kept yet: prune `cache` by age, then `stage` the entry `key` unless it stands; a failed build
+	 * leaves nothing, and the caller measures again next time.
+	 */
+	public static function keep(cache: String, key: String, fill: String -> Void): Void {
+		prune(cache, maxAgeDays());
+		if (!FileSystem.exists(Path.join([cache, key]))) stage(cache, key, fill);
+	}
+
+	/** Mark the entry as used now, which is what keeps it from being pruned. */
+	public static function touch(entry: String): Void {
+		final now: Date = Date.now();
+		Fs.utimesSync(entry, now, now);
 	}
 
 	private static function digest(file: String): String {

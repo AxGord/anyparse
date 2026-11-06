@@ -3,8 +3,6 @@ package devkit;
 import anyparse.grammar.json.JsonFormat;
 import devkit.Lease.Ask;
 import devkit.Lease.LeaseMode;
-import devkit.Reading;
-import devkit.StepRecord;
 import devkit.Summary;
 import sys.FileSystem;
 import sys.io.File;
@@ -180,7 +178,7 @@ final class Branches {
 	): Array<String> -> Command {
 		return switch mode {
 			case Own(_, budget):
-				final rest: Int = share(budget, light(branches, demand)) ?? 1;
+				final rest: Int = perHeavy(budget, branches, demand) ?? 1;
 				final ahead: Int = Lease.ahead();
 				rows -> {
 					final threads: Null<Int> = demand(rows);
@@ -201,6 +199,17 @@ final class Branches {
 		var held: Int = 0;
 		for (rows in branches) held += demand(rows) ?? 0;
 		return held;
+	}
+
+	/**
+	 * What `budget` leaves beside the light branches, split among the heavy ones (those `demand` answers null for) and at
+	 * least one each; null without a budget. With one heavy branch it is `share`.
+	 */
+	public static function perHeavy(budget: Null<Int>, branches: Array<Array<String>>, demand: Array<String> -> Null<Int>): Null<Int> {
+		final rest: Null<Int> = share(budget, light(branches, demand));
+		if (rest == null) return null;
+		final heavy: Int = branches.count(rows -> demand(rows) == null);
+		return Std.int(Math.max(1, Math.floor(rest / Math.max(1, heavy))));
 	}
 
 }

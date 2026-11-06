@@ -4,7 +4,6 @@ import anyparse.grammar.json.JsonFormat;
 import haxe.Exception;
 import haxe.crypto.Sha1;
 import haxe.io.Path;
-import js.node.Fs.Fs;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -71,8 +70,7 @@ final class BaselineCache {
 
 			final lint: String = Path.join([logs, LINT]);
 			if (FileSystem.exists(Path.join([entry, LINT]))) File.copy(Path.join([entry, LINT]), lint);
-			final now: Date = Date.now();
-			Fs.utimesSync(entry, now, now);
+			BaseEngine.touch(entry);
 			{
 				base: kept.base,
 
@@ -92,14 +90,7 @@ final class BaselineCache {
 	 * relative to the entry, built in a staging directory and moved into place. Of two runs storing one key the first to move wins.
 	 */
 	public static function store(cache: String, key: String, record: Baseline): Void {
-		final entry: String = Path.join([cache, key]);
-		BaseEngine.prune(cache, BaseEngine.maxAgeDays());
-		if (FileSystem.exists(entry)) return;
-		FileSystem.createDirectory(cache);
-		final staging: String = '$entry.${js.Node.process.pid}.tmp';
-		BaseEngine.remove(staging);
-		FileSystem.createDirectory(staging);
-		try {
+		BaseEngine.keep(cache, key, staging -> {
 			final infra: Array<InfraSnapshot> = [];
 			for (i => s in record.infra) {
 				final name: String = 'infra-$i.json';
@@ -118,10 +109,7 @@ final class BaselineCache {
 				frozen: []
 			};
 			File.saveContent(Path.join([staging, RECORD]), BaselineWriter.write(kept, JsonFormat.instance.defaultWriteOptions));
-			FileSystem.rename(staging, entry);
-		} catch (_: Exception) {
-			BaseEngine.remove(staging);
-		}
+		});
 	}
 
 }

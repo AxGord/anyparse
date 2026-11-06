@@ -3,7 +3,6 @@ package unit.devkit;
 import devkit.Branches;
 import devkit.Command;
 import devkit.Lease;
-import devkit.Lease.LeaseMode;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -306,7 +305,7 @@ final class BranchesTest extends Test {
 		TempDir.with(dir -> {
 			sys.io.File.saveContent(dir.file('config.json'), '{"budget": 6, "load_threshold": 1000}');
 			final started: Float = Date.now().getTime();
-			final elapsed: String = 'console.log(Date.now() - ${Std.string(started)})';
+			final elapsed: String = 'console.log(Date.now() - ${started})';
 			final after: Float -> Command -> Command = (seconds, command) ->
 				command.under(['sh', '-c', 'sleep $seconds; exec "$$@"', 'sh']);
 			final leased: Array<String> -> Command = Branches.leased(
@@ -326,6 +325,21 @@ final class BranchesTest extends Test {
 			);
 			Assert.isTrue(heavy != null && heavy >= 3000, 'the heavy one waited for its whole share: ${runs[1].out}${runs[1].err}');
 		});
+	}
+
+	/** Two heavy branches split what the budget leaves beside the light ones, each at least one thread; one heavy branch takes it whole. */
+	@:pin('control')
+	@:killer('M-BRANCHES-HEAVY-NOT-SPLIT')
+	public function testTwoHeavyBranchesSplitWhatTheLightOnesLeave(): Void {
+		final demand: Array<String> -> Null<Int> = rows -> rows[0] == 'lint' ? 2 : null;
+		final two: Array<Array<String>> = [['suite'], ['base'], ['lint']];
+		Assert.equals(4, Branches.perHeavy(10, two, demand));
+		Assert.equals(1, Branches.perHeavy(3, two, demand));
+		Assert.isNull(Branches.perHeavy(null, two, demand));
+		Assert.equals(8, Branches.perHeavy(10, [['suite'], ['lint']], demand));
+		final pool: LeaseMode = Own('/p/scripts/wf-run', 10);
+		final argv: Array<String> = Branches.leased(pool, two, demand, rows -> Command.of(['node', rows[0]]), 'gate')(['base']).argv;
+		Assert.equals('2-4', argv[argv.indexOf('--threads') + 1], 'the base branch asks for its half, not the whole rest');
 	}
 
 }

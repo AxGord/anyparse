@@ -33,7 +33,7 @@ using StringTools;
  * and a verdict, a failed row quoting its first error (docs/testing.md § "The slice gate"). `--baseline`, run once on the
  * untouched worktree, records what the gates later compare with: the base commit, the registry counts, the whole-tree
  * lint, the infra trees' lint and the frozen trees' diff digests; the base suite's counts and corpus snapshot are read
- * by the first gate row that compares with them (`BaseSuite`). The rows run as
+ * by a branch of the first whole-suite gate that compares with them (`BaseSuite`). The rows run as
  * branches at once (`devkit.Branches`, each branch a `--rows` process of this tool): a run its caller gave a pool lease
  * splits that lease among them, and a run without one, inside a workflow, lets the build and each branch take a lease of
  * their own (`devkit.Lease`). Everything it writes goes to `<worktree>-logs/slice-gate/`, never into the worktree.
@@ -59,7 +59,8 @@ final class SliceGate {
 	/**
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote; the
 	 * three short rows share one branch, so they hold one thread between them. `arms` is not among them: it is the phase
-	 * that follows (`ARMS_BRANCHES`).
+	 * that follows (`ARMS_BRANCHES`). A whole-suite gate whose base suite is not yet read adds the `base` branch beside them
+	 * (`BaseSuite.plan`): the suite row and the corpus row wait for it where they need the base.
 	 */
 	public static final GATE_BRANCHES: Array<Array<String>> = [
 		['suite', 'corpus'],
@@ -185,7 +186,7 @@ final class SliceGate {
 			return finish(title);
 		}
 		if (!build()) return finish(title);
-		fanOut(self, GATE_BRANCHES, GATE_ROWS);
+		fanOut(self, BaseSuite.plan(_gate, wholeSuite()) ? GATE_BRANCHES.concat([[BaseSuite.ROW]]) : GATE_BRANCHES, GATE_ROWS);
 		armsPhase(self);
 		gate('decisions', decisionsOutcome);
 		gate('frozen', frozenOutcome);
@@ -218,6 +219,7 @@ final class SliceGate {
 		return switch name {
 			case 'suite': suiteOutcome;
 			case 'corpus': corpusOutcome;
+			case 'base': () -> BaseSuite.branch(_gate, _mode);
 			case 'lists': recording ? listsRead : listsOutcome;
 			case 'lint': recording ? _lint.baseLint : _lint.lintOutcome;
 			case 'infra4': recording ? _lint.infraBaseline : _lint.infraOutcome;
@@ -252,7 +254,7 @@ final class SliceGate {
 	 */
 	private function fanOut(self: String, branches: Array<Array<String>>, order: Array<String>): Void {
 		final threads: Null<Int> = switch _mode {
-			case Held(held): Branches.share(held, Branches.light(branches, demand));
+			case Held(held): Branches.perHeavy(held, branches, demand);
 			case _: null;
 		};
 		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)}';
@@ -608,6 +610,14 @@ final class SliceGate {
 		};
 	}
 
+	/** Whether the suite row runs every class: no text dependency bounds the slice's change (`SuiteImpact`). */
+	private function wholeSuite(): Bool {
+		return switch SuiteImpact.ofTree(_gate.tree, _gate.base) {
+			case WholeSuite(_): true;
+			case Selected(_): false;
+		};
+	}
+
 	/** The command line of the branch running `rows`: this run's options, the rows, and the heavy rows' threads. */
 	public static function branchArgs(options: GateOptions, rows: Array<String>, threads: Null<Int>): Array<String> {
 		final args: Array<String> = [
@@ -673,7 +683,7 @@ final class SliceGate {
 	 */
 	public static function demandOf(facts: GateDemand, rows: Array<String>): Null<Int> {
 		return switch rows[0] {
-			case 'suite': null;
+			case 'suite', BaseSuite.ROW: null;
 			case 'lists': facts.recording ? 0 : 1;
 			case 'lint': if (facts.recording)
 				Std.int(Math.min(1, facts.infra))
