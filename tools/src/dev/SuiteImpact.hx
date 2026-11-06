@@ -35,6 +35,9 @@ final class SuiteImpact {
 	/** The build output the suite runs as: its main module is the runner every test class runs inside. */
 	public static inline final SUITE_OUTPUT: String = 'test.js';
 
+	/** The call that sets an environment variable: it reaches the next class only through a key some file reads. */
+	public static inline final ENV_WRITER: String = 'Sys.putEnv';
+
 	/** The classpath roots, a nested root before the one holding it so a file takes its own package. */
 	public static final ROOTS: Array<String> = ['tools/src', 'src', 'test'];
 
@@ -50,8 +53,8 @@ final class SuiteImpact {
 	/** The configuration a build or a run reads whatever the module. */
 	public static final WHOLE_FILES: Array<String> = ['apq.json', 'apqlint.json', 'hxformat.json', 'haxelib.json'];
 
-	/** The calls that leave process-wide state behind for whatever runs next in the process. */
-	public static final STATE_WRITERS: Array<String> = ['Sys.putEnv', 'Sys.setCwd'];
+	/** The calls that leave a working directory behind for whatever runs next in the process, whatever they name. */
+	public static final STATE_WRITERS: Array<String> = ['Sys.setCwd'];
 
 	private static inline final BUILD_EXTENSION: String = 'hxml';
 	private static inline final TEST_ROOT: String = 'test/';
@@ -143,7 +146,7 @@ final class SuiteImpact {
 		sources: Array<ImpactSource>, entries: Map<String, String>, touched: Array<String>, path: String
 	): Array<String> {
 		final graph: ImpactGraph = new ImpactGraph(sources, entries, declaredTypes(sources));
-		return graph.dependents(touched).contains(path) ? graph.chain(path) : [];
+		return graph.dependents(withReaders(sources, touched)).contains(path) ? graph.chain(path) : [];
 	}
 
 	/** The module `path` holds, or null when it is no `.hx` under a root. */
@@ -374,13 +377,48 @@ final class SuiteImpact {
 
 	/**
 	 * Why a change of `path`, whose text is `text`, runs every class for the process-wide state it writes, or null. Classes
-	 * share a shard's process, so an environment variable or a working directory one leaves behind reaches the next whatever
-	 * either names; a test class's own change still runs only itself, since the land's whole suite meets its neighbours.
+	 * share a shard's process, so a working directory one leaves behind reaches the next whatever either names; an environment
+	 * variable reaches only the files that spell its key, so it runs everything only when one of them is the harness every class
+	 * runs in (`runner` is its module) or generated code, and otherwise `stateReaders` bounds it. A test class's own change
+	 * still runs only itself, since the land's whole suite meets its neighbours.
 	 */
-	public static function stateReason(path: String, text: String): Null<String> {
+	public static function stateReason(path: String, text: String, sources: Array<ImpactSource>, runner: Null<String>): Null<String> {
 		if (!path.endsWith(HX) || isTestClass(path)) return null;
-		for (writer in STATE_WRITERS) if (text.indexOf(writer) >= 0) return '$path writes process-wide state ($writer)';
+		final code: String = uncommented(text);
+		for (writer in STATE_WRITERS) if (code.indexOf('$writer(') >= 0) return '$path writes process-wide state ($writer)';
+		final keys: Null<Array<String>> = envKeys(code);
+		if (keys == null) return '$path writes process-wide state ($ENV_WRITER) under a key it computes';
+		for (key in keys)
+			for (reader in envReaders(sources, path, key))
+				if (wholeReason(reader) != null || moduleOf(reader)?.qualified == runner) return '$path sets $key, which $reader reads';
 		return null;
+	}
+
+	/** The files that spell a key `path`, whose text is `text`, sets in the environment, which a change of `path` reaches. */
+	public static function stateReaders(path: String, text: String, sources: Array<ImpactSource>): Array<String> {
+		if (!path.endsWith(HX) || isTestClass(path)) return [];
+		final out: Array<String> = [];
+		for (key in envKeys(uncommented(text)) ?? [])
+			for (reader in envReaders(sources, path, key))
+				if (!out.contains(reader)) out.push(reader);
+		return out;
+	}
+
+	/** The keys the calls of `code` set in the environment, or null when one of them names its key by anything but a plain literal. */
+	public static function envKeys(code: String): Null<Array<String>> {
+		final call: String = '$ENV_WRITER(';
+		final out: Array<String> = [];
+		var at: Int = code.indexOf(call);
+		while (at >= 0) {
+			final rest: String = code.substr(at + call.length).ltrim();
+			final quote: String = rest.charAt(0);
+			final end: Int = quote == '\'' || quote == '"' ? rest.indexOf(quote, 1) : -1;
+			final key: String = end < 0 ? '' : rest.substring(1, end);
+			if (key == '' || key.indexOf('$$') >= 0) return null;
+			out.push(key);
+			at = code.indexOf(call, at + 1);
+		}
+		return out;
 	}
 
 	/** The types each of `sources` declares, read off one symbol index over them all. */
@@ -463,13 +501,13 @@ final class SuiteImpact {
 	): SuiteScope {
 		final runner: Null<String> = entries[SUITE_OUTPUT];
 		for (path in touched) {
-			final why: Null<String> = wholeReason(path) ?? stateReason(path, sources.find(s -> s.path == path)?.text ?? '');
+			final why: Null<String> = wholeReason(path) ?? stateReason(path, textOf(sources, path), sources, runner);
 			if (why != null) return WholeSuite(why);
 			if (runner != null && moduleOf(path)?.qualified == runner) return WholeSuite('$path is the runner every class runs inside');
 		}
 		if (types.unparsed.length > 0) return WholeSuite('${types.unparsed[0]} does not parse, so the types it declares are unknown');
 		final graph: ImpactGraph = shared ?? new ImpactGraph(sources, entries, types);
-		final reached: Array<String> = graph.dependents(touched);
+		final reached: Array<String> = graph.dependents(withReaders(sources, touched));
 		for (path in reached) if (path.startsWith(MACROS))
 			return WholeSuite('a macro depends on the change: ${graph.chain(path).join(' <- ')}');
 		final classes: Array<String> = [];
@@ -528,6 +566,26 @@ final class SuiteImpact {
 			parts.pop();
 		}
 		return null;
+	}
+
+	/** `touched` and the files that read an environment key a touched file sets. */
+	private static function withReaders(sources: Array<ImpactSource>, touched: Array<String>): Array<String> {
+		final out: Array<String> = touched.copy();
+		for (path in touched)
+			for (reader in stateReaders(path, textOf(sources, path), sources))
+				if (!out.contains(reader)) out.push(reader);
+		return out;
+	}
+
+	/** The files other than `writer` whose code spells `key` as a whole name. */
+	private static function envReaders(sources: Array<ImpactSource>, writer: String, key: String): Array<String> {
+		return [
+			for (s in sources) if (s.path != writer && names(s.text, key) && names(uncommented(s.text), key)) s.path
+		];
+	}
+
+	private static function textOf(sources: Array<ImpactSource>, path: String): String {
+		return sources.find(s -> s.path == path)?.text ?? '';
 	}
 
 }

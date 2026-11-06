@@ -130,14 +130,68 @@ final class SuiteImpactTest extends Test {
 
 	@:pin('control')
 	@:killer('M-SUITE-IMPACT-STATE-BLIND')
-	public function testAHelperThatWritesTheEnvironmentRunsEveryClass(): Void {
-		final putEnv: String = 'Sys.putEnv(\'HXQ_BIN\', null);';
+	public function testAHelperThatChangesTheWorkingDirectoryRunsEveryClass(): Void {
+		final chdir: String = 'Sys.setCwd(dir);';
 		final tree: Array<ImpactSource> = TREE.concat([
-			source('test/unit/dev/ArmHelper.hx', 'package unit.dev;\nclass ArmHelper { function f() $putEnv }'),
-			source('test/unit/dev/PinsEnvTest.hx', 'package unit.dev;\nclass PinsEnvTest { function f() $putEnv }')
+			source('test/unit/dev/ArmHelper.hx', 'package unit.dev;\nclass ArmHelper { function f() $chdir }'),
+			source('test/unit/dev/PinsCwdTest.hx', 'package unit.dev;\nclass PinsCwdTest { function f() $chdir }')
 		]);
 		Assert.isTrue(SuiteImpact.scope(tree, ENTRIES, ['test/unit/dev/ArmHelper.hx']).match(WholeSuite(_)));
-		Assert.same(Selected(['unit.dev.PinsEnvTest']), SuiteImpact.scope(tree, ENTRIES, ['test/unit/dev/PinsEnvTest.hx']));
+		Assert.same(Selected(['unit.dev.PinsCwdTest']), SuiteImpact.scope(tree, ENTRIES, ['test/unit/dev/PinsCwdTest.hx']));
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ENV-KEY-WIDE')
+	public function testAnEnvironmentKeyNoOtherFileSpellsLeavesTheSuiteBounded(): Void {
+		final tree: Array<ImpactSource> = TREE.concat([
+			source('tools/src/dev/Exporter.hx', 'package dev;\nclass Exporter { function f() Sys.putEnv(\'IDLE_KEY\', \'1\'); }')
+		]);
+		Assert.same(Selected([]), SuiteImpact.scope(tree, ENTRIES, ['tools/src/dev/Exporter.hx']));
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ENV-READER-BLIND')
+	public function testAnEnvironmentKeyReachesTheClassesThatSpellItAndTheOnesThatCallThoseFiles(): Void {
+		final tree: Array<ImpactSource> = TREE.concat([
+			source('tools/src/dev/Exporter.hx', 'package dev;\nclass Exporter { function f() Sys.putEnv(\'SHARED_KEY\', \'1\'); }'),
+			source('tools/src/dev/Consumer.hx', 'package dev;\nclass Consumer { function f() return Sys.getEnv(\'SHARED_KEY\'); }'),
+			source('test/unit/dev/ConsumerTest.hx', 'package unit.dev;\nimport dev.Consumer;'),
+			source('test/unit/dev/SpellsKeyTest.hx', 'package unit.dev;\nclass SpellsKeyTest { final k = \'SHARED_KEY\'; }')
+		]);
+		Assert.same(
+			Selected(['unit.dev.ConsumerTest', 'unit.dev.SpellsKeyTest']), SuiteImpact.scope(tree, ENTRIES, ['tools/src/dev/Exporter.hx'])
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ENV-RUNNER-KEY-BOUNDED')
+	public function testAnEnvironmentKeyTheRunnerOrItsKitReadsRunsEveryClassAndNamesTheKey(): Void {
+		final exporter: ImpactSource = source(
+			'tools/src/dev/Exporter.hx', 'package dev;\nclass Exporter { function f() Sys.putEnv(\'KIT_KEY\', \'1\'); }'
+		);
+		for (reader in [
+			source('test/testkit/Kit.hx', 'package testkit;\nclass Kit { final k = Sys.getEnv(\'KIT_KEY\'); }'),
+			source('test/RunTests.hx', 'class RunTests { final k = Sys.getEnv(\'KIT_KEY\'); }')
+		]) switch SuiteImpact.scope(TREE.concat([exporter, reader]), ENTRIES, ['tools/src/dev/Exporter.hx']) {
+			case WholeSuite(why):
+				Assert.stringContains('KIT_KEY', why);
+				Assert.stringContains(reader.path, why);
+			case Selected(classes):
+				Assert.fail('${reader.path}: selected ${classes.join(', ')}');
+		}
+	}
+
+	@:pin('guard')
+	public function testAComputedEnvironmentKeyRunsEveryClassAndANameInAStringOrADocDoesNot(): Void {
+		final computed: ImpactSource = source(
+			'tools/src/dev/Exporter.hx', 'package dev;\nclass Exporter { function f(k: String) Sys.putEnv(k, \'1\'); }'
+		);
+		Assert.isTrue(SuiteImpact.scope(TREE.concat([computed]), ENTRIES, [computed.path]).match(WholeSuite(_)));
+		final named: ImpactSource = source(
+			'tools/src/dev/Named.hx',
+			'package dev;\n// Sys.putEnv(\'A\', \'1\')\nclass Named { final w = \'Sys.putEnv\'; final c = \'Sys.setCwd\'; }'
+		);
+		Assert.same(Selected([]), SuiteImpact.scope(TREE.concat([named]), ENTRIES, [named.path]));
 	}
 
 	@:pin('control')
@@ -252,6 +306,43 @@ final class SuiteImpactTest extends Test {
 		];
 		Assert.same(['src/a/Base.hx', 'src/a/Far.hx', 'src/a/Sink.hx'], SuiteImpact.reached(sources, ['src/a/Base.hx'], []));
 		Assert.same(['src/a/Base.hx', 'src/a/Sink.hx'], SuiteImpact.reached(sources, ['src/a/Base.hx'], ['src/a/Sink.hx']));
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ENV-INTERPOLATED-KEY-LITERAL')
+	public function testAnInterpolatedEnvironmentKeyRunsEveryClass(): Void {
+		final exporter: ImpactSource = source(
+			'tools/src/dev/Exporter.hx', 'package dev;\nclass Exporter { function f(x: String) Sys.putEnv(\'A_$$x\', \'1\'); }'
+		);
+		Assert.isTrue(SuiteImpact.scope(TREE.concat([exporter]), ENTRIES, [exporter.path]).match(WholeSuite(_)));
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ENV-LATER-CALL-DROPPED')
+	public function testEveryEnvironmentKeyAFileSetsCountsNotOnlyTheFirst(): Void {
+		final exporter: ImpactSource = source(
+			'tools/src/dev/Exporter.hx',
+			'package dev;\nclass Exporter { function f() { Sys.putEnv(\'FIRST_KEY\', \'1\'); Sys.putEnv(\'SECOND_KEY\', \'1\'); } }'
+		);
+		Assert.same(Selected(['unit.dev.SpellsSecondTest']), SuiteImpact.scope(TREE.concat([
+			exporter,
+			source('test/unit/dev/SpellsSecondTest.hx', 'package unit.dev;\nclass SpellsSecondTest { final k = \'SECOND_KEY\'; }')
+		]), ENTRIES, [exporter.path]));
+		final kit: ImpactSource = source('test/testkit/Kit.hx', 'package testkit;\nclass Kit { final k = Sys.getEnv(\'SECOND_KEY\'); }');
+		Assert.isTrue(SuiteImpact.scope(TREE.concat([exporter, kit]), ENTRIES, [exporter.path]).match(WholeSuite(_)));
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-WHY-READER-BLIND')
+	public function testWhyFollowsTheReadersOfAnEnvironmentKey(): Void {
+		final tree: Array<ImpactSource> = TREE.concat([
+			source('tools/src/dev/Exporter.hx', 'package dev;\nclass Exporter { function f() Sys.putEnv(\'SHARED_KEY\', \'1\'); }'),
+			source('tools/src/dev/Consumer.hx', 'package dev;\nclass Consumer { function f() return Sys.getEnv(\'SHARED_KEY\'); }'),
+			source('test/unit/dev/ConsumerTest.hx', 'package unit.dev;\nimport dev.Consumer;')
+		]);
+		final chain: Array<String> = SuiteImpact.explain(tree, ENTRIES, ['tools/src/dev/Exporter.hx'], 'test/unit/dev/ConsumerTest.hx');
+		Assert.equals('test/unit/dev/ConsumerTest.hx', chain[0]);
+		Assert.isTrue(chain.length > 1);
 	}
 
 	private static function source(path: String, text: String): ImpactSource {

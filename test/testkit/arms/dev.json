@@ -1011,6 +1011,53 @@
 			"find": "if (only != null) return impactSuite(only);",
 			"replace": "{}",
 			"note": "the suite row ignores the list of classes it was given and runs every class, so an impact land pays for the whole suite under the lock"
+		},
+		{
+			"name": "M-SUITE-IMPACT-ENV-KEY-WIDE",
+			"type": "dev.SuiteImpact",
+			"method": "stateReason",
+			"find": "final keys: Null<Array<String>> = envKeys(code);",
+			"replace": "final keys: Null<Array<String>> = null;",
+			"note": "a file that sets an environment key no other file spells runs every class, so a tool that exports a variable only it reads costs a whole suite"
+		},
+		{
+			"name": "M-SUITE-IMPACT-ENV-RUNNER-KEY-BOUNDED",
+			"type": "dev.SuiteImpact",
+			"method": "stateReason",
+			"find": "if (wholeReason(reader) != null || moduleOf(reader)?.qualified == runner)",
+			"replace": "if (false)",
+			"note": "a file that sets an environment key the runner, the test kit, a macro or generated code reads runs only the classes that name it, though the next class in its process meets the key"
+		},
+		{
+			"name": "M-SUITE-IMPACT-ENV-READER-BLIND",
+			"type": "dev.SuiteImpact",
+			"method": "withReaders",
+			"force": "touched",
+			"note": "a file that sets an environment key runs only the classes that name it, not the ones that read the key it sets"
+		},
+		{
+			"name": "M-SUITE-IMPACT-ENV-INTERPOLATED-KEY-LITERAL",
+			"type": "dev.SuiteImpact",
+			"method": "envKeys",
+			"find": "if (key == '' || key.indexOf('$$') >= 0) return null;",
+			"replace": "if (key == '') return null;",
+			"note": "an environment key spelled with an interpolation is taken for a literal no file spells, so a file that sets a key it computes runs only the classes that name it"
+		},
+		{
+			"name": "M-SUITE-IMPACT-ENV-LATER-CALL-DROPPED",
+			"type": "dev.SuiteImpact",
+			"method": "envKeys",
+			"find": "at = code.indexOf(call, at + 1);",
+			"replace": "at = -1;",
+			"note": "only the first environment key a file sets is read, so a key set by a later call and read by the runner side leaves the suite bounded"
+		},
+		{
+			"name": "M-SUITE-IMPACT-WHY-READER-BLIND",
+			"type": "dev.SuiteImpact",
+			"method": "explain",
+			"find": "graph.dependents(withReaders(sources, touched))",
+			"replace": "graph.dependents(touched)",
+			"note": "the why answer ignores the readers of an environment key a touched file sets, so it calls not reached a class the scope selects"
 		}
 	]
 }
