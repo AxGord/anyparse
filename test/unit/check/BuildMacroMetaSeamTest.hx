@@ -282,6 +282,23 @@ class BuildMacroMetaSeamTest extends Test {
 		Assert.equals(1, promotions('${tag}ial $body'), '${tag}ial is a different tag and blocks nothing');
 	}
 
+	/**
+	 * The macro-made list is a subset of the union, and the index sets `isMacroMade` for exactly its tags: `@:build` rewrites the
+	 * carrier's members and `@:autoBuild` its descendants', neither changes what kind of type the declaration is, and a mention
+	 * of the tag in a comment or a string marks nothing.
+	 */
+	public function testOnlyTheMacroMadeTagsMarkATypeMacroMade(): Void {
+		final made: Array<String> = new HaxeQueryPlugin().refShape().macroMadeTypeMetaNames ?? [];
+		Assert.isTrue(made.length > 0, 'the grammar declares no macro-made tag');
+		final union: Array<String> = declaredBuildMacroNames();
+		for (name in union)
+			Assert.equals(made.contains(name), indexedType('$name(M.b()) class C {}').isMacroMade, '$name: wrong isMacroMade');
+		for (name in made) {
+			Assert.isFalse(indexedType('// prose naming $name\nclass C {}').isMacroMade, '$name in a comment marks the type');
+			Assert.isFalse(indexedType('class C { final s: String = "$name"; }').isMacroMade, '$name in a string marks the type');
+		}
+	}
+
 	/** The grammar's declared build-macro tags; asserted non-empty so no guard here can pass vacuously. */
 	private function declaredBuildMacroNames(): Array<String> {
 		final names: Array<String> = new HaxeQueryPlugin().refShape().typeBuildMacroMetaNames ?? [];
@@ -342,6 +359,7 @@ class BuildMacroMetaSeamTest extends Test {
 			hasRtti: false,
 			hasBuild: false,
 			hasAutoBuild: false,
+			isMacroMade: false,
 			hasKeep: false,
 			isEnumAbstract: false,
 			constructsFromLiteral: false,

@@ -478,6 +478,13 @@ typedef TypeDeclInfo = {
 	var hasAutoBuild: Bool;
 
 	/**
+	 * True when the declaration carries a tag the grammar names in `RefShape.macroMadeTypeMetaNames` (Haxe
+	 * `@:genericBuild`): every instantiation is a type the macro makes, so the written kind says nothing about what a binding
+	 * of it is. Read by `TypeTraits.abstractRebindsThis`, which must answer "may rebind" for it.
+	 */
+	var isMacroMade: Bool;
+
+	/**
 	 * True when the declaration carries `@:keep` — its members are reached by machinery no source
 	 * scan models (reflection, a framework's runtime lookup), so none of them is provably dead.
 	 */

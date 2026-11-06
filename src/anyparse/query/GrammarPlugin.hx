@@ -3717,6 +3717,15 @@ final class RefShape {
 	 */
 	public var topTypeName: Null<String>;
 
+	/**
+	 * The metadata tags whose carrier is not the type it is written on but a type the macro makes per instantiation (Haxe
+	 * `@:genericBuild`): the declaration shows a plain class, and what an instantiation IS — an abstract that rebinds `this`
+	 * included — is the macro's to say. A subset of `typeBuildMacroMetaNames`, drawn apart from `@:build`, which rewrites a
+	 * declaration's members and cannot change what kind of type it is. `SymbolIndexBuilder` records it per type as
+	 * `TypeDeclInfo.isMacroMade`. Optional; unset means no declaration is macro-made.
+	 */
+	public var macroMadeTypeMetaNames: Null<Array<String>>;
+
 	public function new(
 		identKind: String, declHostKinds: Array<String>, moduleValueDeclKinds: Array<String>, scopeKinds: Array<String>,
 		writeParentKinds: Array<String>, selfScopeDeclKinds: Array<String>

@@ -228,4 +228,9 @@ final class RunScan {
 		});
 	}
 
+	/** Each declaration's written type in `source` by start offset, none for a grammar without type info. */
+	public static function declaredTypesOf(plugin: GrammarPlugin, source: String): Map<Int, String> {
+		return typeInfoOf(plugin)?.declaredTypes(source) ?? [];
+	}
+
 }

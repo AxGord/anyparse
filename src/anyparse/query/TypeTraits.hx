@@ -58,6 +58,9 @@ final class TypeTraits {
 	 * while with the library it resolved to an abstract with an unresolvable underlying and was
 	 * hard-vetoed. `null` hands the decision back to that one policy, so more resolution scope can
 	 * only ever add information.
+	 *
+	 * A declaration the grammar marks as of a macro's making (`TypeDeclInfo.isMacroMade`) answers `true`: each instantiation is
+	 * a type the declaration does not show, and it may be an abstract that rebinds (`anyparse.ds.Bits<E>`).
 	 */
 	public function abstractRebindsThis(typeName: String, abstractKinds: Array<String>): Null<Bool> {
 		return abstractRebindsWalk(typeName, abstractKinds, []);
@@ -194,6 +197,7 @@ final class TypeTraits {
 		var unknown: Bool = false;
 		for (fi in _files) for (t in fi.types) if (t.name == typeName) {
 			if (!abstractKinds.contains(t.kind)) {
+				if (t.isMacroMade) return true;
 				found = true;
 				continue;
 			}

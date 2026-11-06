@@ -957,6 +957,8 @@ final class HaxeRefShape {
 		// split because it reads the flags while climbing a chain upward; the file-scoped text scan does
 		// not and keeps the union.
 		table.descendantBuildMacroMetaNames = ['@:autoBuild'];
+		// The one that makes a whole TYPE per instantiation rather than rewriting the carrier's members.
+		table.macroMadeTypeMetaNames = ['@:genericBuild'];
 		table.retainedDeclMetaName = '@:keep';
 		// `@:rtti` emits a `haxe.rtti.Rtti` description keyed by member NAME — a separate question from
 		// `@:keep`, which only keeps the member alive.

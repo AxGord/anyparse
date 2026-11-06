@@ -877,6 +877,22 @@
 			"note": "the index is never asked whether the declared type rebinds `this`, so a resolved CLASS type and a ctor-only abstract both fall through to the whitelist and get suppressed as unprovable"
 		},
 		{
+			"name": "M-PFF-GENERICBUILD-ANY-BUILD",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "extractFileInfo",
+			"find": "isMacroMade: carriesAnyMeta(pendingMeta, shape.macroMadeTypeMetaNames),",
+			"replace": "isMacroMade: carriesAnyMeta(pendingMeta, shape.typeBuildMacroMetaNames),",
+			"note": "every build macro reads as one that makes a type, so a plain class carrying only `@:build` or `@:autoBuild` stops getting its `final` suggestion"
+		},
+		{
+			"name": "M-PFF-PUBLIC-FIELD-ANY-TYPE",
+			"type": "anyparse.query.CtorFieldWrite",
+			"method": "fieldTypeRebindsThis",
+			"find": "return declType != null && index.traits.abstractRebindsThis(declType, abstractKinds) == true;",
+			"replace": "return declType != null;",
+			"note": "every typed public field reads as one a method call may rebind, so prefer-final-public-field goes silent on a field of a class or ctor-only abstract type"
+		},
+		{
 			"name": "M-SCOPE-LIBRARY-DROPPED",
 			"type": "anyparse.query.CachingGrammarPlugin",
 			"method": "resolutionFiles",

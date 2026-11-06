@@ -7,7 +7,7 @@ import unit.ds.BitsDomains;
 class BitsTest extends Test {
 
 	public function testEnumMembership(): Void {
-		var hues: Bits<Hue> = new Bits<Hue>(); // noqa: prefer-final
+		var hues: Bits<Hue> = new Bits<Hue>();
 		Assert.isTrue(hues.isEmpty());
 		hues.add(Blue);
 		hues.add(Blue);
@@ -21,7 +21,7 @@ class BitsTest extends Test {
 
 	/** Bit 0 and bit 31 of one word. */
 	public function testNarrowEdgeBits(): Void {
-		var bits: Bits<Narrow> = new Bits<Narrow>(); // noqa: prefer-final
+		var bits: Bits<Narrow> = new Bits<Narrow>();
 		bits.add(Narrow.Top);
 		bits.add(Narrow.Low);
 		Assert.isTrue(bits.has(Narrow.Low));
@@ -33,7 +33,7 @@ class BitsTest extends Test {
 
 	/** Bits 0, 31, 32 and 63: each edge of both words. */
 	public function testWideEdgeBits(): Void {
-		var bits: Bits<Wide> = new Bits<Wide>(); // noqa: prefer-final
+		var bits: Bits<Wide> = new Bits<Wide>();
 		for (value in [Wide.Top, Wide.First, Wide.Last, Wide.Low]) bits.add(value);
 		for (value in [Wide.Top, Wide.First, Wide.Last, Wide.Low]) Assert.isTrue(bits.has(value));
 		Assert.isTrue(bits.remove(Wide.First));
@@ -46,10 +46,10 @@ class BitsTest extends Test {
 
 	/** Members come out in ascending bit order, whatever order they went in. */
 	public function testIterationAscendsByBit(): Void {
-		var hues: Bits<Hue> = new Bits<Hue>(); // noqa: prefer-final
+		var hues: Bits<Hue> = new Bits<Hue>();
 		for (hue in [Blue, Red, Green]) hues.add(hue);
 		Assert.same([Red, Green, Blue], [for (hue in hues) hue]);
-		var narrow: Bits<Narrow> = new Bits<Narrow>(); // noqa: prefer-final
+		var narrow: Bits<Narrow> = new Bits<Narrow>();
 		for (value in [Narrow.Top, Narrow.Next, Narrow.Low]) narrow.add(value);
 		Assert.same([Narrow.Low, Narrow.Next, Narrow.Top], [for (value in narrow) value]);
 		Assert.isFalse(new Bits<Wide>().iterator().hasNext());
@@ -98,12 +98,12 @@ class BitsTest extends Test {
 	@:killer('M-DS-BITS-RANK')
 	public function testASparseDomainTakesOneBitPerValue(): Void {
 		Assert.isTrue(Std.isOfType((cast new Bits<Sparse>(): Any), Int));
-		var sparse: Bits<Sparse> = Sparse.Far; // noqa: prefer-final
+		var sparse: Bits<Sparse> = Sparse.Far;
 		Assert.isTrue(sparse.has(Sparse.Far));
 		Assert.isFalse(sparse.has(Sparse.Zero));
 		sparse.add(Sparse.Zero);
 		Assert.same([Sparse.Zero, Sparse.Far], [for (value in sparse) value]);
-		var flags: Bits<Flag> = new Bits<Flag>(); // noqa: prefer-final
+		var flags: Bits<Flag> = new Bits<Flag>();
 		flags.add(Flag.Huge);
 		flags.add(Flag.Two);
 		Assert.same([Flag.Two, Flag.Huge], [for (flag in flags) flag]);
@@ -124,13 +124,13 @@ class BitsTest extends Test {
 
 	/** A set is a value: changing one variable leaves every set it was assigned from or to as it was. */
 	public function testAssignmentCopies(): Void {
-		var wide: Bits<Wide> = Wide.Low; // noqa: prefer-final
+		var wide: Bits<Wide> = Wide.Low;
 		final kept: Bits<Wide> = wide;
 		final copied: Bits<Wide> = wide.copy();
 		wide.add(Wide.Top);
 		Assert.isFalse(kept.has(Wide.Top));
 		Assert.isFalse(copied.has(Wide.Top));
-		var narrow: Bits<Narrow> = Narrow.Low; // noqa: prefer-final
+		var narrow: Bits<Narrow> = Narrow.Low;
 		final keptNarrow: Bits<Narrow> = narrow;
 		narrow.remove(Narrow.Low);
 		Assert.isTrue(keptNarrow.has(Narrow.Low));
@@ -156,8 +156,8 @@ class BitsTest extends Test {
 /** Sets held in fields, the way a type keeps its flags. */
 private final class Palette {
 
-	public var hues: Bits<Hue> = new Bits<Hue>(); // noqa: prefer-final-public-field
-	public var wide: Bits<Wide> = new Bits<Wide>(); // noqa: prefer-final-public-field
+	public var hues: Bits<Hue> = new Bits<Hue>();
+	public var wide: Bits<Wide> = new Bits<Wide>();
 
 	public function new() {}
 

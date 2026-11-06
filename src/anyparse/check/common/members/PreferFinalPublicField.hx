@@ -165,9 +165,16 @@ final class PreferFinalPublicField extends RuleBase implements RiskyFix implemen
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
 		final index: SymbolIndex = IndexScope.resolution(scope, plugin);
 		final writeIndex: FieldWriteIndex = IndexScope.resolutionWrites(scope, plugin);
+
+		final abstractKinds: Array<String> = plugin.refShape().underlyingThisTypeKinds ?? [];
+		final declaredTypesByFile: Map<String, Map<Int, String>> = [];
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin, _oracleRelaxed);
+			if (!exported) return;
+			final declaredTypes: Map<Int, String> = declaredTypesByFile[file] ?? RunScan.declaredTypesOf(plugin, source);
+			declaredTypesByFile[file] = declaredTypes;
+			if (CtorFieldWrite.fieldTypeRebindsThis(field, declaredTypes, index, abstractKinds)) return;
+			considerField(violations, file, source, field, owner, index, writeIndex, plugin, _oracleRelaxed);
 		});
 		return violations;
 	}

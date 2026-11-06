@@ -2,6 +2,7 @@ package unit.check.common.expressions;
 
 import anyparse.check.common.expressions.PreferFinal;
 import anyparse.check.common.members.PreferFinalField;
+import anyparse.check.common.members.PreferFinalPublicField;
 import anyparse.query.CachingGrammarPlugin;
 
 /**
@@ -29,6 +30,9 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** An abstract that REBINDS `this` in a non-ctor member (`bump`) — a `@:forward` to it inherits the rebind. */
 	private static inline final REBIND_INNER: String =
 		'abstract Inner(Int) { public inline function new(v:Int) this = v; public inline function bump():Void this = this + 1; } ';
+
+	/** A `@:genericBuild` class: each instantiation is built by the macro, here standing for a bit set that `add` rebinds. */
+	private static inline final GENERIC: String = '@:genericBuild(M.build()) class Gen<E> {} ';
 
 	// --- Field case (prefer-final-field) ---
 
@@ -289,12 +293,75 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		Assert.equals(1, vs.length);
 	}
 
+	/** A `@:genericBuild` class is instantiated as an abstract of the macro's making: a method call on a local of it may rebind it. */
+	public function testGenericBuildLocalMethodCallNotFlagged(): Void {
+		Assert.equals(
+			0, localViolations('${GENERIC}class C { function r():Void { var s:Gen<Int> = new Gen<Int>(); s.add(1); trace(s); } }').length
+		);
+	}
+
+	/** The field mirror of the generic-build local case. */
+	public function testGenericBuildFieldMethodCallNotFlagged(): Void {
+		Assert.equals(
+			0, fieldViolations('${GENERIC}class C { private var _s:Gen<Int> = new Gen<Int>(); function r():Void _s.add(1); }').length
+		);
+	}
+
+	/** A PUBLIC field of a generic-build type is called on from any file, so it stays a `var`. */
+	public function testGenericBuildPublicFieldNotFlagged(): Void {
+		Assert.equals(0, publicViolations('${GENERIC}class C { public var s:Gen<Int> = new Gen<Int>(); }').length);
+	}
+
+	/** A PUBLIC field of a resolved abstract that rebinds `this` stays a `var`: `c.s.next()` from any file would reassign it. */
+	public function testRebindingAbstractPublicFieldNotFlagged(): Void {
+		Assert.equals(0, publicViolations('${ABSTRACT}class C { public var s:Step = new Step(0); }').length);
+	}
+
+	/** Control: only `@:genericBuild` can make a class an abstract; `@:build` alone keeps the suggestion. */
+	@:pin('control')
+	@:killer('M-PFF-GENERICBUILD-ANY-BUILD')
+	public function testBuildOnlyClassLocalStillFlagged(): Void {
+		Assert.equals(
+			1,
+			localViolations(
+				'@:build(M.build()) class Plain { public function new() {} public function go():Void {} } class C { function r():Void {'
+				+ ' var p:Plain = new Plain(); p.go(); trace(p); } }'
+			).length
+		);
+	}
+
+	/** Control: a PUBLIC field of a ctor-only abstract cannot be rebound by a call, so it is still flagged. */
+	@:pin('control')
+	@:killer('M-PFF-PUBLIC-FIELD-ANY-TYPE')
+	public function testCtorOnlyAbstractPublicFieldStillFlagged(): Void {
+		Assert.equals(1, publicViolations('${CTOR_ONLY}class C { public var b:Buf = new Buf(0); }').length);
+	}
+
+	/** Control: a generic-build receiver that is never called on rebinds nothing, so it is still flagged. */
+	@:pin('control')
+	@:killer('M-PFF-CALLSCAN-ALWAYS')
+	public function testGenericBuildLocalNeverCalledStillFlagged(): Void {
+		Assert.equals(1, localViolations('${GENERIC}class C { function r():Void { var s:Gen<Int> = new Gen<Int>(); trace(s); } }').length);
+	}
+
+	/** A comment that merely names `@:genericBuild` makes no type of the file macro-made: the plain class keeps its `final` suggestion. */
+	public function testProseNamingGenericBuildMarksNothing(): Void {
+		final plain: String =
+			'// A comment that names @:genericBuild only in prose.\nclass Plain { public function new() {} public function go():Void {} } ';
+		Assert.equals(1, localViolations('${plain}class C { function r():Void { var p:Plain = new Plain(); p.go(); trace(p); } }').length);
+		Assert.equals(1, publicViolations('${plain}class C { public var p:Plain = new Plain(); }').length);
+	}
+
 	private function fieldViolations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferFinalField(), src);
 	}
 
 	private function localViolations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferFinal(), src);
+	}
+
+	private function publicViolations(src: String): Array<Violation> {
+		return CheckFixture.violations(new PreferFinalPublicField(), src);
 	}
 
 }

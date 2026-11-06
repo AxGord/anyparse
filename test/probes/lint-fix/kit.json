@@ -911,6 +911,34 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PF1",
+			"note": "prefer-final and prefer-final-public-field on a plain class whose file only NAMES a generic-build tag in a comment: both still fire, the comment makes nothing macro-made",
+			"argv": [
+				"hxq",
+				"lint",
+				"Plain.hx",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"Plain.hx": "package;\n\n// A comment that names @:genericBuild only in prose.\nclass Plain {\n\tpublic function new() {}\n\n\tpublic function go(): Void {}\n}\n\nclass User {\n\tpublic var p: Plain = new Plain();\n\n\tpublic function new() {}\n\n\tfunction r(): Void {\n\t\tvar q: Plain = new Plain();\n\t\tq.go();\n\t\ttrace(q);\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "74a5f202e5b65b9c",
+				"err": "22054bfbc60d02bc",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

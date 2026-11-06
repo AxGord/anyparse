@@ -638,6 +638,21 @@ final class CtorFieldWrite {
 		return true;
 	}
 
+	/**
+	 * Whether the `var` field's declared type is one a method call may REBIND — a resolved abstract that writes `this` outside its
+	 * constructor, or a `@:genericBuild` type that may be instantiated as one. The cross-file counterpart of
+	 * `abstractMethodMayMutate`: a PUBLIC field is called on from any file, so no single-file call scan can clear it, and only a
+	 * type the index RESOLVES to a rebinding one is refused (an unresolved type keeps today's answer, or every field of a library
+	 * type would go silent).
+	 */
+	public static function fieldTypeRebindsThis(
+		field: QueryNode, declaredTypes: Map<Int, String>, index: SymbolIndex, abstractKinds: Array<String>
+	): Bool {
+		final span: Null<Span> = field.span;
+		final declType: Null<String> = span == null ? null : declaredTypes[span.from];
+		return declType != null && index.traits.abstractRebindsThis(declType, abstractKinds) == true;
+	}
+
 	/** Whether `kinds` is set and holds `kind` — an unset seam contributes nothing. */
 	private static inline function kindIn(kinds: Null<Array<String>>, kind: String): Bool {
 		return kinds != null && kinds.contains(kind);
