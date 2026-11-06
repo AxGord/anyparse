@@ -1,0 +1,147 @@
+{
+	"about": "hxq fmt of the body-policy layouts (if/else-if chain, comprehension, loop body, value-if, try/catch, deep nests) under the sameLine, leftCurly and maxLineLength settings. Seeded from the SIZE-5A review.",
+	"files": {
+		"c0/Probe.hx": "class Probe {\n\tfunction f(a:Int, b:Array<Int>) {\n\t\tif (a > 0) // trail after cond\n\t\t{\n\t\t\ttrace(a);\n\t\t} else if (a < -10)\n\t\t\t// own-line lead\n\t\t\ttrace(b);\n\t\telse if (a == 3) trace(\"x\"); else {\n\t\t\tif (a == 4) { trace(1); } else if (a == 5) { trace(2); } else { trace(3); }\n\t\t}\n\t\tvar xs = [for (x in b) {\n\t\t\tif (x > 1) x; else 0;\n\t\t}];\n\t\tvar ys = [for (x in b) for (y in b) for (z in b) {\n\t\t\tx + y + z;\n\t\t}];\n\t\tfor (i in 0...3) if (i == 1) trace(i); else trace(-i);\n\t\twhile (a > 0) a--;\n\t\tvar v = if (a > 1) { 1; } else if (a > 2) 2 else 3;\n\t\ttry { trace(1); } catch (e:Dynamic) { trace(e); }\n\t\tif (a > 0) {} // empty\n\t\telse trace(0);\n\t}\n\tvar o = { a: 1, b: function() { if (true) return 1; else return 2; } };\n}\n",
+		"c0/hxformat.json": "{}",
+		"c1/Probe.hx": "class Probe {\n\tfunction f(a:Int, b:Array<Int>) {\n\t\tif (a > 0) // trail after cond\n\t\t{\n\t\t\ttrace(a);\n\t\t} else if (a < -10)\n\t\t\t// own-line lead\n\t\t\ttrace(b);\n\t\telse if (a == 3) trace(\"x\"); else {\n\t\t\tif (a == 4) { trace(1); } else if (a == 5) { trace(2); } else { trace(3); }\n\t\t}\n\t\tvar xs = [for (x in b) {\n\t\t\tif (x > 1) x; else 0;\n\t\t}];\n\t\tvar ys = [for (x in b) for (y in b) for (z in b) {\n\t\t\tx + y + z;\n\t\t}];\n\t\tfor (i in 0...3) if (i == 1) trace(i); else trace(-i);\n\t\twhile (a > 0) a--;\n\t\tvar v = if (a > 1) { 1; } else if (a > 2) 2 else 3;\n\t\ttry { trace(1); } catch (e:Dynamic) { trace(e); }\n\t\tif (a > 0) {} // empty\n\t\telse trace(0);\n\t}\n\tvar o = { a: 1, b: function() { if (true) return 1; else return 2; } };\n}\n",
+		"c1/hxformat.json": "{\"lineEnds\":{\"leftCurly\":\"both\"},\"sameLine\":{\"ifBody\":\"keep\",\"elseBody\":\"keep\",\"elseIf\":\"keep\",\"forBody\":\"keep\",\"whileBody\":\"keep\",\"expressionIf\":\"keep\"}}",
+		"c2/Probe.hx": "class Probe {\n\tfunction f(a:Int, b:Array<Int>) {\n\t\tif (a > 0) // trail after cond\n\t\t{\n\t\t\ttrace(a);\n\t\t} else if (a < -10)\n\t\t\t// own-line lead\n\t\t\ttrace(b);\n\t\telse if (a == 3) trace(\"x\"); else {\n\t\t\tif (a == 4) { trace(1); } else if (a == 5) { trace(2); } else { trace(3); }\n\t\t}\n\t\tvar xs = [for (x in b) {\n\t\t\tif (x > 1) x; else 0;\n\t\t}];\n\t\tvar ys = [for (x in b) for (y in b) for (z in b) {\n\t\t\tx + y + z;\n\t\t}];\n\t\tfor (i in 0...3) if (i == 1) trace(i); else trace(-i);\n\t\twhile (a > 0) a--;\n\t\tvar v = if (a > 1) { 1; } else if (a > 2) 2 else 3;\n\t\ttry { trace(1); } catch (e:Dynamic) { trace(e); }\n\t\tif (a > 0) {} // empty\n\t\telse trace(0);\n\t}\n\tvar o = { a: 1, b: function() { if (true) return 1; else return 2; } };\n}\n",
+		"c2/hxformat.json": "{\"lineEnds\":{\"leftCurly\":\"before\"},\"sameLine\":{\"ifBody\":\"next\",\"elseBody\":\"next\",\"elseIf\":\"next\",\"forBody\":\"next\",\"comprehensionFor\":\"next\"}}",
+		"c3/Probe.hx": "class Probe {\n\tfunction f(a:Int, b:Array<Int>) {\n\t\tif (a > 0) // trail after cond\n\t\t{\n\t\t\ttrace(a);\n\t\t} else if (a < -10)\n\t\t\t// own-line lead\n\t\t\ttrace(b);\n\t\telse if (a == 3) trace(\"x\"); else {\n\t\t\tif (a == 4) { trace(1); } else if (a == 5) { trace(2); } else { trace(3); }\n\t\t}\n\t\tvar xs = [for (x in b) {\n\t\t\tif (x > 1) x; else 0;\n\t\t}];\n\t\tvar ys = [for (x in b) for (y in b) for (z in b) {\n\t\t\tx + y + z;\n\t\t}];\n\t\tfor (i in 0...3) if (i == 1) trace(i); else trace(-i);\n\t\twhile (a > 0) a--;\n\t\tvar v = if (a > 1) { 1; } else if (a > 2) 2 else 3;\n\t\ttry { trace(1); } catch (e:Dynamic) { trace(e); }\n\t\tif (a > 0) {} // empty\n\t\telse trace(0);\n\t}\n\tvar o = { a: 1, b: function() { if (true) return 1; else return 2; } };\n}\n",
+		"c3/hxformat.json": "{\"sameLine\":{\"ifBody\":\"same\",\"elseBody\":\"same\",\"elseIf\":\"same\",\"forBody\":\"same\",\"whileBody\":\"same\",\"expressionIf\":\"same\",\"ifElse\":\"same\"},\"wrapping\":{\"maxLineLength\":40}}",
+		"c4/Probe.hx": "class Probe {\n\tfunction f(a:Int, b:Array<Int>) {\n\t\tif (a > 0) // trail after cond\n\t\t{\n\t\t\ttrace(a);\n\t\t} else if (a < -10)\n\t\t\t// own-line lead\n\t\t\ttrace(b);\n\t\telse if (a == 3) trace(\"x\"); else {\n\t\t\tif (a == 4) { trace(1); } else if (a == 5) { trace(2); } else { trace(3); }\n\t\t}\n\t\tvar xs = [for (x in b) {\n\t\t\tif (x > 1) x; else 0;\n\t\t}];\n\t\tvar ys = [for (x in b) for (y in b) for (z in b) {\n\t\t\tx + y + z;\n\t\t}];\n\t\tfor (i in 0...3) if (i == 1) trace(i); else trace(-i);\n\t\twhile (a > 0) a--;\n\t\tvar v = if (a > 1) { 1; } else if (a > 2) 2 else 3;\n\t\ttry { trace(1); } catch (e:Dynamic) { trace(e); }\n\t\tif (a > 0) {} // empty\n\t\telse trace(0);\n\t}\n\tvar o = { a: 1, b: function() { if (true) return 1; else return 2; } };\n}\n",
+		"c4/hxformat.json": "{\"sameLine\":{\"ifBody\":\"fitLine\",\"elseBody\":\"fitLine\",\"forBody\":\"fitLine\",\"whileBody\":\"fitLine\"},\"wrapping\":{\"maxLineLength\":60}}",
+		"c5/Probe.hx": "class Probe {\n\tfunction f(a:Int, b:Array<Int>) {\n\t\tif (a > 0) // trail after cond\n\t\t{\n\t\t\ttrace(a);\n\t\t} else if (a < -10)\n\t\t\t// own-line lead\n\t\t\ttrace(b);\n\t\telse if (a == 3) trace(\"x\"); else {\n\t\t\tif (a == 4) { trace(1); } else if (a == 5) { trace(2); } else { trace(3); }\n\t\t}\n\t\tvar xs = [for (x in b) {\n\t\t\tif (x > 1) x; else 0;\n\t\t}];\n\t\tvar ys = [for (x in b) for (y in b) for (z in b) {\n\t\t\tx + y + z;\n\t\t}];\n\t\tfor (i in 0...3) if (i == 1) trace(i); else trace(-i);\n\t\twhile (a > 0) a--;\n\t\tvar v = if (a > 1) { 1; } else if (a > 2) 2 else 3;\n\t\ttry { trace(1); } catch (e:Dynamic) { trace(e); }\n\t\tif (a > 0) {} // empty\n\t\telse trace(0);\n\t}\n\tvar o = { a: 1, b: function() { if (true) return 1; else return 2; } };\n}\n",
+		"c5/hxformat.json": "{\"lineEnds\":{\"leftCurly\":\"before\"},\"sameLine\":{\"elseIf\":\"next\",\"comprehensionFor\":\"next\"}}",
+		"deep/Deep.hx": "class Deep {\n\tfunction f(a:Int, b:Array<Int>) {\n\t\tif (a == 0) { trace(0); } else if (a == 1) { trace(1); } else if (a == 2) { trace(2); } else if (a == 3) { trace(3); } else if (a == 4) { trace(4); } else if (a == 5) { trace(5); } else if (a == 6) { trace(6); } else if (a == 7) { trace(7); } else if (a == 8) { trace(8); } else if (a == 9) { trace(9); } else if (a == 10) { trace(10); } else if (a == 11) { trace(11); } else if (a == 12) { trace(12); } else if (a == 13) { trace(13); } else if (a == 14) { trace(14); } else if (a == 15) { trace(15); } else if (a == 16) { trace(16); } else if (a == 17) { trace(17); } else if (a == 18) { trace(18); } else if (a == 19) { trace(19); } else if (a == 20) { trace(20); } else if (a == 21) { trace(21); } else if (a == 22) { trace(22); } else if (a == 23) { trace(23); } else if (a == 24) { trace(24); } else if (a == 25) { trace(25); } else if (a == 26) { trace(26); } else if (a == 27) { trace(27); } else if (a == 28) { trace(28); } else if (a == 29) { trace(29); } else if (a == 30) { trace(30); } else if (a == 31) { trace(31); } else if (a == 32) { trace(32); } else if (a == 33) { trace(33); } else if (a == 34) { trace(34); } else if (a == 35) { trace(35); } else if (a == 36) { trace(36); } else if (a == 37) { trace(37); } else if (a == 38) { trace(38); } else if (a == 39) { trace(39); } else if (a == 40) { trace(40); } else if (a == 41) { trace(41); } else if (a == 42) { trace(42); } else if (a == 43) { trace(43); } else if (a == 44) { trace(44); } else if (a == 45) { trace(45); } else if (a == 46) { trace(46); } else if (a == 47) { trace(47); } else if (a == 48) { trace(48); } else if (a == 49) { trace(49); } else if (a == 50) { trace(50); } else if (a == 51) { trace(51); } else if (a == 52) { trace(52); } else if (a == 53) { trace(53); } else if (a == 54) { trace(54); } else if (a == 55) { trace(55); } else if (a == 56) { trace(56); } else if (a == 57) { trace(57); } else if (a == 58) { trace(58); } else if (a == 59) { trace(59); } else { trace(-1); }\n\t\tvar xs = [for (x0 in b) for (x1 in b) for (x2 in b) for (x3 in b) for (x4 in b) for (x5 in b) for (x6 in b) for (x7 in b) for (x8 in b) { x0 + x1; }];\n\t\tif (a > 0) if (a > 0) if (a > 0) if (a > 0) if (a > 0) if (a > 0) if (a > 0) if (a > 0) if (a > 0) if (a > 0) if (a > 0) if (a > 0) trace(a); else trace(b);\n\t}\n}\n",
+		"deep/hxformat.json": "{\"lineEnds\":{\"leftCurly\":\"before\"}}\n"
+	},
+	"invocations": [
+		{
+			"name": "c0/Probe.hx",
+			"note": "if/else-if chain with head-gap trail and own-line lead comments, comprehension Allman body, loop if-else body, value-if, try/catch under default config",
+			"fixpoint": "c0/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"c0/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "2365d4c019a803c7",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "c1/Probe.hx",
+			"note": "if/else-if chain with head-gap trail and own-line lead comments, comprehension Allman body, loop if-else body, value-if, try/catch under keep on every body policy + leftCurly both",
+			"fixpoint": "c1/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"c1/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "68b2419ac75ffc0f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "c2/Probe.hx",
+			"note": "if/else-if chain with head-gap trail and own-line lead comments, comprehension Allman body, loop if-else body, value-if, try/catch under next on every body policy + leftCurly before",
+			"fixpoint": "c2/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"c2/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "3957a4a2467b2fc4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "c3/Probe.hx",
+			"note": "if/else-if chain with head-gap trail and own-line lead comments, comprehension Allman body, loop if-else body, value-if, try/catch under same on every body policy + maxLineLength 40",
+			"fixpoint": "c3/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"c3/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "206b3b5484c9975f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "c4/Probe.hx",
+			"note": "if/else-if chain with head-gap trail and own-line lead comments, comprehension Allman body, loop if-else body, value-if, try/catch under fitLine body policies + maxLineLength 60",
+			"fixpoint": "c4/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"c4/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "8821899b1a9c490c",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "c5/Probe.hx",
+			"note": "if/else-if chain with head-gap trail and own-line lead comments, comprehension Allman body, loop if-else body, value-if, try/catch under Allman (leftCurly before) + elseIf next",
+			"fixpoint": "c5/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"c5/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "3957a4a2467b2fc4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "deep/Deep.hx",
+			"note": "60-deep else-if chain, 9-deep for-comprehension nest, 12 nested bare ifs with dangling else; leftCurly before",
+			"fixpoint": "deep/Deep.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"deep/Deep.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e153b1db1e4bc6a4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		}
+	]
+}
