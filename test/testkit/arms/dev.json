@@ -1168,6 +1168,22 @@
 			"find": "' (${GateTree.signed(sum.tests - base.tests)} / ${GateTree.signed(sum.assertions - base.assertions)})'",
 			"replace": "''",
 			"note": "a whole-suite gate with a readable base prints no counts beside the base's"
+		},
+		{
+			"name": "M-JVM-PROBE-CPP-IGNORED",
+			"type": "dev.JvmProbe",
+			"method": "commands",
+			"find": "final cpp: Bool = args.flag('--cpp');",
+			"replace": "final cpp: Bool = false && args.flag('--cpp');",
+			"note": "--cpp no longer picks the hxcpp pair, so dev jvm-portability --cpp builds and runs the --jvm probe"
+		},
+		{
+			"name": "M-JVM-PROBE-CPP-DROPS-PATHS",
+			"type": "dev.JvmProbe",
+			"method": "commands",
+			"find": "run: cmd('bin/hxcpp-portability/JvmPortability $paths')",
+			"replace": "run: cmd('bin/hxcpp-portability/JvmPortability')",
+			"note": "the hxcpp run drops its paths and always reads the default scope"
 		}
 	]
 }

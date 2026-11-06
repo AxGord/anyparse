@@ -109,7 +109,7 @@ class Build {
 		for (f in fields) Sys.println('// field: ${printer.printField(f)}');
 		#end
 
-		return fields;
+		return CppLiteralGuard.guard(fields);
 	}
 
 	/**
@@ -159,7 +159,7 @@ class Build {
 		for (f in fields) Sys.println('// transform field: ${printer.printField(f)}');
 		#end
 
-		return fields;
+		return CppLiteralGuard.guard(fields);
 	}
 
 	public static macro function buildWriter(target: Expr, ?options: Expr, ?buildOptions: Expr): Array<Field> {
@@ -215,7 +215,7 @@ class Build {
 		for (f in fields) Sys.println('// writer field: ${printer.printField(f)}');
 		#end
 
-		return fields;
+		return CppLiteralGuard.guard(fields);
 	}
 
 	/**
@@ -226,12 +226,14 @@ class Build {
 		final resolved: ResolvedTarget = resolveTarget(target, 'buildCompactWriter');
 		final ctx: LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
-		return NativeDocLowering.compactOnly(buildShapeWithTrivia(resolved.formatInfo, resolved.rootType, ctx), resolved.formatInfo);
+		return CppLiteralGuard.guard(
+			NativeDocLowering.compactOnly(buildShapeWithTrivia(resolved.formatInfo, resolved.rootType, ctx), resolved.formatInfo)
+		);
 	}
 
 	/** `@:build` entry of a write-options class: `OptionsRecord.build`. */
 	public static macro function buildOptionsRecord(): Array<Field> {
-		return OptionsRecord.build();
+		return CppLiteralGuard.guard(OptionsRecord.build());
 	}
 
 	/**
@@ -275,7 +277,7 @@ class Build {
 		for (f in fields) Sys.println('// query-walker field: ${printer.printField(f)}');
 		#end
 
-		return fields;
+		return CppLiteralGuard.guard(fields);
 	}
 
 	/**
@@ -311,7 +313,7 @@ class Build {
 		for (f in fields) Sys.println('// lexical field: ${printer.printField(f)}');
 		#end
 
-		return fields;
+		return CppLiteralGuard.guard(fields);
 	}
 
 	/**

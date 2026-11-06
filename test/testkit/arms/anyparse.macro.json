@@ -1786,6 +1786,108 @@
 			"method": "typedefEdgeExpr",
 			"force": "stated",
 			"note": "a typedef body holding a doc comment keeps `typedefEmptyLines.beginType` / `endType`, so its `…TypeIfDocComments` keys do nothing"
+		},
+		{
+			"name": "M-CPP-LITERAL-RAW-QUESTION",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "cppLiteral",
+			"find": "if (c == '?'.code || c == '\\\\'.code",
+			"replace": "if (c == '\\\\'.code",
+			"note": "a trigraph's question marks reach the C++ literal raw, so a C++11 compiler turns ??= into #"
+		},
+		{
+			"name": "M-CPP-TRIGRAPH-NONE",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "hasTrigraph",
+			"force": "false",
+			"note": "no literal counts as a trigraph, so every one reaches gencpp as written"
+		},
+		{
+			"name": "M-CPP-TRIGRAPH-ALWAYS",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "hasTrigraph",
+			"force": "true",
+			"note": "every literal counts as a trigraph, so even one with no ?? is re-emitted"
+		},
+		{
+			"name": "M-CPP-LITERAL-RAW-QUOTE",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "cppLiteral",
+			"find": "|| c == '\"'.code)",
+			"replace": ")",
+			"note": "a double quote reaches the C++ literal unescaped and ends it early"
+		},
+		{
+			"name": "M-CPP-LITERAL-ANY-CHAR",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "cppLiteral",
+			"find": "if (c < ' '.code || c >= DEL) return null;",
+			"replace": "",
+			"note": "a non-ASCII or control character is copied into a narrow C++ literal that cannot spell it"
+		},
+		{
+			"name": "M-CPP-GUARD-BODY-RAW",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "rewriteFields",
+			"find": "if (body != null) fn.expr = rewrite(body, stranded);",
+			"replace": "if (body != null) strand(body, stranded);",
+			"note": "a function body keeps its trigraph literals raw, so hxcpp compiles ??= as #"
+		},
+		{
+			"name": "M-CPP-GUARD-CASE-VALUES-REWRITTEN",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "rewrite",
+			"find": "values: c.values,",
+			"replace": "values: [for (v in c.values) rewrite(v, stranded)],",
+			"note": "a switch case value is re-emitted as a runtime string, which a case pattern cannot be"
+		},
+		{
+			"name": "M-CPP-GUARD-CASE-GUARD-RAW",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "rewrite",
+			"find": "guard: c.guard == null ? null : rewrite(c.guard, stranded),",
+			"replace": "guard: c.guard,",
+			"note": "a case guard keeps its trigraph literals raw on hxcpp"
+		},
+		{
+			"name": "M-CPP-GUARD-INLINE-REWRITTEN",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "rewriteFields",
+			"find": "final inlined: Bool = field.access != null && field.access.contains(AInline);",
+			"replace": "final inlined: Bool = false;",
+			"note": "an inline constant is re-emitted as a runtime string, which an inline initialiser cannot be"
+		},
+		{
+			"name": "M-CPP-GUARD-INIT-RAW",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "rewriteFields",
+			"find": "if (init != null && !inlined) field.kind = FVar(type, rewrite(init, stranded));",
+			"replace": "if (init != null && !inlined) strand(init, stranded);",
+			"note": "a non-inline initialiser keeps its trigraph literals raw on hxcpp"
+		},
+		{
+			"name": "M-CPP-GUARD-INTERPOLATION-REWRITTEN",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "rewrite",
+			"find": "kind == SingleQuotes && s.indexOf('$') >= 0 ? null : cppLiteral(s)",
+			"replace": "cppLiteral(s)",
+			"note": "an interpolated single-quoted literal is re-emitted as one native string and loses its interpolation"
+		},
+		{
+			"name": "M-CPP-GUARD-CPP-REENTERED",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "rewrite",
+			"find": "case ECall({ expr: EConst(CIdent('__cpp__')) }, _):",
+			"replace": "case ECall({ expr: EConst(CIdent('__no_such_call__')) }, _):",
+			"note": "the code string of an existing __cpp__ call is rewritten into an HX_CSTRING expression, which is no C++ text"
+		},
+		{
+			"name": "M-CPP-GUARD-STRAND-NONE",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "strand",
+			"find": "stranded.push(e);",
+			"replace": "{}",
+			"note": "a case value or an inline constant holding a trigraph is no longer answered, so guard lets it reach the C++ compiler silently"
 		}
 	]
 }

@@ -1,0 +1,11 @@
+# The hxcpp twin of tools/jvm-portability.hxml: the same probe, the same `src/`, the same
+# flags, built for hxcpp — so a parse result that differs between the C++ build and js/jvm
+# (a literal the C++ compiler rewrites, say) fails here. Run it from the repo root; point
+# HXCPP_COMPILE_CACHE at a persistent directory or every build is a cold one:
+#   HXCPP_COMPILE_CACHE=~/.hxcpp_cache node bin/dev.js jvm-portability --cpp
+#   haxe tools/hxcpp-portability.hxml && bin/hxcpp-portability/JvmPortability
+-cp src
+-cp tools/src
+-main dev.JvmPortability
+-D analyzer-optimize
+-cpp bin/hxcpp-portability

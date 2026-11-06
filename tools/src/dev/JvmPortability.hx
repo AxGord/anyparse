@@ -46,12 +46,18 @@ final class JvmPortability {
 	/** The default scope: the two packages whose portability actually regressed. */
 	private static final DEFAULT_SCOPE: Array<String> = ['src/anyparse/query', 'src/anyparse/check'];
 
+	/**
+	 * Sources read on every run whatever the scope: each once parsed differently on one static target than on js. They
+	 * live in files because a literal spelling them in this probe's own source can meet the same target defect.
+	 */
+	private static final TRAPS: String = 'tools/data/portability';
+
 	/** The project's writer settings, threaded in so the probe writes the way `hxq fmt` does. */
 	private static final CONFIG: String = 'hxformat.json';
 
 	public static function main(): Void {
 		final args: Array<String> = Sys.args();
-		final paths: Array<String> = args.length > 0 ? args : collectAll(DEFAULT_SCOPE);
+		final paths: Array<String> = (args.length > 0 ? args : collectAll(DEFAULT_SCOPE)).concat(collectAll([TRAPS]));
 		final files: Array<{ file: String, source: String }> = [
 			for (path in paths) { file: path, source: File.getContent(path) }
 		];

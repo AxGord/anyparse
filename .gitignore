@@ -14,6 +14,7 @@ dump/
 .DS_Store
 .claude/
 bin/parse-prof-cpp/
+bin/hxcpp-portability/
 bin/.suite-timings.tsv
 __pycache__/
 bin/json-prof-cpp/

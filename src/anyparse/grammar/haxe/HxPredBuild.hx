@@ -13,6 +13,7 @@ import anyparse.macro.ShapeBuilder.ShapeResult;
 import anyparse.macro.SpanTypeSynth;
 import anyparse.macro.TriviaAnalysis;
 import anyparse.macro.TriviaTypeSynth;
+import anyparse.macro.CppLiteralGuard;
 
 using Lambda;
 
@@ -68,7 +69,7 @@ class HxPredBuild {
 			PredTrivia
 		else
 			PredPlain;
-		return new HxAstPredLowering(shape, mode).generate();
+		return CppLiteralGuard.guard(new HxAstPredLowering(shape, mode).generate());
 	}
 
 	/** Read a literal-`true` Bool field off the `{trivia: true}`-style options struct. */
