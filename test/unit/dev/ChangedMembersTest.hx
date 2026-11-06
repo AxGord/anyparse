@@ -167,4 +167,70 @@ final class ChangedMembersTest extends Test {
 		Assert.isNull(said['src/L.hx']);
 	}
 
+	public function testAMemberWhoseCommentsAloneChangedIsNoChangeAndOneWhoseCodeChangedIs(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/a/Doc.hx  declarations  +2 -2',
+			'    ~ FnMember:docOnly  +2 -2',
+			'        ...',
+			'          \t * one',
+			'        - \t * three',
+			'        + \t * THREE',
+			'          \t * four',
+			'        ...',
+			'          \tpublic function docOnly():Int {',
+			'          \t\tfinal x:Int = 1;',
+			'        - \t\t// note',
+			'        + \t\t// NOTE',
+			'          \t\treturn x;',
+			'    ~ FnMember:edited  +2 -2',
+			'        - \t/** old */',
+			'        - \t\treturn 1;',
+			'        + \t/** new */',
+			'        + \t\treturn 2;',
+			'    + FnMember:added  3 line(s)',
+			'    ~ VarMember:bare  +1 -1',
+			'    ~ FnMember:inline  +1 -1',
+			'        - \t\treturn 1; // a',
+			'        + \t\treturn 1; // b',
+			'M src/a/Only.hx  declarations  +1 -1',
+			'    ~ FnMember:docOnly  +1 -1',
+			'        - \t/** old */',
+			'        + \t/** new */',
+			''
+		].join('\n'));
+		Assert.same(
+			['edited', 'added', 'bare', 'inline'],
+			said['src/a/Doc.hx'], 'doc-only is dropped; code, a new member and a row without lines stay'
+		);
+		Assert.same([], said['src/a/Only.hx'], 'a file of doc-only members names none and is not unnamed');
+	}
+
+	public function testAContinuationLineOfCodeIsNotTakenForADocLine(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/a/Star.hx  declarations  +1 -1',
+			'    ~ FnMember:wrapped  +1 -1',
+			'        ...',
+			'          \t\tfinal x:Int = a',
+			'        - \t\t\t* 2;',
+			'        + \t\t\t* 3;',
+			'          \t\treturn x;',
+			''
+		].join('\n'));
+		Assert.same(['wrapped'], said['src/a/Star.hx']);
+	}
+
+	public function testADeletedFileNamesNoMemberAndLeavesTheFileBeforeItAlone(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/a/Kept.hx  declarations  +1 -1',
+			'    ~ FnMember:run  +1 -1',
+			'D src/a/Gone.hx  deleted  +0 -9',
+			'    - ClassForm:Gone  9 line(s), base',
+			'    - FnMember:run  3 line(s), base',
+			''
+		].join('\n'));
+		Assert.same(['run'], said['src/a/Kept.hx']);
+		Assert.isTrue(said.exists('src/a/Gone.hx'));
+		Assert.same([], said['src/a/Gone.hx']);
+	}
+
 }

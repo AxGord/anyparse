@@ -765,8 +765,8 @@
 			"name": "M-CHANGED-MEMBERS-NONMEMBER-NAMED",
 			"type": "dev.ChangedMembers",
 			"method": "of",
-			"find": "if (name != null && MEMBER_KINDS.contains(kind)) {",
-			"replace": "if (name != null) {",
+			"find": "final member: Null<String> = MEMBER_KINDS.contains(kind) ? name : null;",
+			"replace": "final member: Null<String> = name;",
 			"note": "a named row of a non-member kind (a type's header, a parameter) is read as a member, so a file whose change cannot be told member by member names members and the arms of the others are dropped"
 		},
 		{

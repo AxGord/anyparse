@@ -386,6 +386,43 @@ final class GateArmsTest extends Test {
 		});
 	}
 
+	public function testAMemberWhoseDocCommentAloneChangedSelectsNoArmAndSeedsNoNeighbour(): Void {
+		final doc: String =
+			'M src/pkg/A.hx  declarations  +1 -1\n    ~ FnMember:f  +1 -1\n        - \t/** old */\n        + \t/** new */\n';
+		withTree(tree -> {
+			knob(tree, 'changed', doc);
+			knob(tree, 'diff', graph([member('pkg.A.f', 'changed')]));
+			knob(tree, 'all-killed');
+			Assert.isTrue(outcomeOf(tree, []).match(Passed));
+			Assert.isTrue(
+				File.getContent(Path.join([tree, 'runs.log'])).indexOf('at-slice mutation-arm M-NEW --fast') != -1, 'only the new arm'
+			);
+			final calls: String = File.getContent(Path.join([tree, 'hxq.log']));
+			Assert.isTrue(calls.indexOf('--focus') == -1, 'a doc-only member is no seed:\n$calls');
+		});
+		withTree(tree -> {
+			knob(tree, 'changed', doc.replace('/** new */', '/** new */\n        + \treturn 1;'));
+			knob(tree, 'diff', graph([member('pkg.A.f', 'changed')]));
+			knob(tree, 'all-killed');
+			Assert.isTrue(outcomeOf(tree, []).match(Passed));
+			Assert.isTrue(File.getContent(Path.join([tree, 'hxq.log'])).indexOf('--focus pkg.A.f src') != -1, 'a body edit seeds');
+		});
+	}
+
+	public function testAMemberOfAGraphDiffChangedInCodeUnlessItsModuleNamesOthers(): Void {
+		final touches: Array<ModuleTouch> = [
+			{ module: 'pkg.A', members: ['f'] },
+			whole('pkg.W'),
+			{ module: 'pkg.I', members: [] }
+		];
+		Assert.isTrue(GateArms.codeChanged('pkg.A.f', touches));
+		Assert.isFalse(GateArms.codeChanged('pkg.A.g', touches), 'the report names another member');
+		Assert.isTrue(GateArms.codeChanged('pkg.A.Inner.f', touches), 'a sub-type counts as the module');
+		Assert.isTrue(GateArms.codeChanged('pkg.W.g', touches), 'members the report cannot name');
+		Assert.isTrue(GateArms.codeChanged('pkg.Other.g', touches), 'a module the report does not list');
+		Assert.isFalse(GateArms.codeChanged('pkg.I.g', touches), 'a module whose change names no member');
+	}
+
 	private static function select(
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>, ?near: Array<String>
 	): ArmSelection {

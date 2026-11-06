@@ -60,7 +60,7 @@ final class GateArms {
 					members: said[file]
 				}
 		].filter(t -> t.module != '' && !layout.contains(t.module));
-		final near: Array<String> = callNeighbours(gate, layout);
+		final near: Array<String> = callNeighbours(gate, layout, touches);
 		final picked: ArmSelection = select(now, old, touches, layout, pinnedKillers(gate, touches), gate.options.arms, near);
 		for (name in gate.options.arms) if (!picked.fast.contains(name))
 			return Settled(Failed('--arm $name names no arm in ${ArmRegistry.DIRECTORY}'));
@@ -150,6 +150,18 @@ final class GateArms {
 			for (arm in fields[2].split(',').map(StringTools.trim)) if (arm != '' && !killers.contains(arm)) killers.push(arm);
 		}
 		return killers;
+	}
+
+	/**
+	 * Whether the member `name` (`<type>.<member>`) of a `graph --diff` node changed in code: `graph --diff` compares by text, so a
+	 * member whose doc comment alone changed reads as changed there, and the report's member list (`touches`) is what tells it apart.
+	 * A member of a module the report does not name, or whose members it cannot name, is taken for changed.
+	 */
+	public static function codeChanged(name: String, touches: Array<ModuleTouch>): Bool {
+		final at: Int = name.lastIndexOf('.');
+		final owner: String = name.substring(0, at);
+		final own: Array<ModuleTouch> = touches.filter(t -> belongs(owner, t.module));
+		return own.length == 0 || own.exists(t -> changes(t, name.substring(at + 1)));
 	}
 
 	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
@@ -346,10 +358,11 @@ final class GateArms {
 
 	/**
 	 * The members one call edge away, either way, from a member the slice changed in place. `graph --diff` compares by text, so
-	 * a member of a `layout` module is no seed; a member added or removed changes a caller too, so it is none either. A graph
+	 * a member of a `layout` module is no seed, nor is one whose doc comment alone changed (`codeChanged`); a member added or
+	 * removed changes a caller too, so it is none either. A graph
 	 * that cannot be read throws and the row does not run, because no neighbours would quietly narrow the selection.
 	 */
-	private static function callNeighbours(gate: GateTree, layout: Array<String>): Array<String> {
+	private static function callNeighbours(gate: GateTree, layout: Array<String>, touches: Array<ModuleTouch>): Array<String> {
 		final diff: CodeGraphJson = CodeGraphJsonParser.parse(
 			gate.hxq(gate.tree, ['graph', '--diff', gate.base, 'HEAD'].concat(GRAPH_SCOPE))
 				.timeout(PLAN_TIMEOUT_MS)
@@ -358,7 +371,10 @@ final class GateArms {
 		);
 		final seeds: Array<String> = [
 			for (node in diff.nodes) if (
-				node.level == 'member' && node.change == 'changed' && !layout.exists(m -> node.name.startsWith('$m.'))
+				node.level == 'member'
+				&& node.change == 'changed'
+				&& !layout.exists(m -> node.name.startsWith('$m.'))
+				&& codeChanged(node.name, touches)
 			)
 				node.name
 		];
