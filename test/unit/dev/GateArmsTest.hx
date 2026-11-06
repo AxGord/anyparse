@@ -697,7 +697,6 @@ final class GateArmsTest extends Test {
 					base: base,
 
 					lists: JObject([]),
-					lint: '',
 					infra: [],
 					frozen: []
 				}, JsonFormat.instance.compactWriteOptions)

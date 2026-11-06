@@ -3,6 +3,7 @@ package unit.dev;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.grammar.json.JsonText;
+import dev.BaseLint;
 import dev.BaseSuite;
 import dev.BaselineWriter;
 import dev.BranchWatch;
@@ -84,7 +85,7 @@ final class SliceGateTest extends Test {
 		'}'
 	].join('');
 
-	private static final FAILING_LINT_SELF: String = FAKE_SELF.replace("outcome:'passed'", "outcome:n==='lint'?'failed':'passed'");
+	private static final FAILING_LISTS_SELF: String = FAKE_SELF.replace("outcome:'passed'", "outcome:n==='lists'?'failed':'passed'");
 
 	/**
 	 * A `--rows` branch runs inside the lease its gate took for it and never asks the pool itself, even inside a workflow
@@ -405,7 +406,7 @@ final class SliceGateTest extends Test {
 	@:killer('M-GATE-BASELINE-RECORDED-AFTER-FAILURE')
 	@:killer('M-GATE-BASELINE-NOT-RETIRED')
 	public function testABaselineThatFailedARowIsNotRecordedAndRetiresTheOlderOne(): Void {
-		final ran: GateRan = gateRun(BASE_REGISTRY, ['--baseline'], GRAPH_HXQ, FAILING_LINT_SELF);
+		final ran: GateRan = gateRun(BASE_REGISTRY, ['--baseline'], GRAPH_HXQ, FAILING_LISTS_SELF);
 		Assert.equals(1, ran.status);
 		Assert.isFalse(ran.logsHad.contains('baseline.json'), 'logs: ${ran.logsHad}');
 		Assert.isFalse(ran.logsHad.contains('sweep-base.json'), 'logs: ${ran.logsHad}');
@@ -413,18 +414,21 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
-	 * A `--baseline` run in which every row passed records its readings, and runs neither the suite nor the corpus: a gate
-	 * reads those from the base when it needs them.
+	 * A `--baseline` run in which every row passed records its readings, and runs neither the suite, nor the corpus, nor a lint
+	 * of the base tree: a gate reads those from the base when it needs them.
 	 */
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-GATE-BASELINE-LINTS-BASE')
 	public function testABaselineThatPassedEveryRowIsRecorded(): Void {
 		final ran: GateRan = gateRun(BASE_REGISTRY, ['--baseline']);
 		Assert.equals(0, ran.status);
 		Assert.stringContains('"lists"', ran.baselineText);
 		Assert.isFalse(ran.baselineText.contains('"tests"'), ran.baselineText);
 		Assert.isFalse(ran.baselineText.contains('"sweep"'), ran.baselineText);
+		Assert.isFalse(ran.baselineText.contains('"lint"'), ran.baselineText);
 		Assert.isFalse(ran.branches.contains('suite'), ran.branches);
 		Assert.isFalse(ran.branches.contains('corpus'), ran.branches);
+		Assert.isFalse(ran.branches.split('\n').contains('lint'), ran.branches);
 	}
 
 	/**
@@ -513,10 +517,29 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
+	 * A gate that moved rule code, over a baseline naming an infra tree, starts the base lint branch with the others, at the
+	 * gate's start, so its infra4 row waits for the base engine's report instead of linting the base behind its own lints; the
+	 * branch is no line of the gate's table, and a gate that moved no rule code starts none.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-BASE-LINT-NOT-STARTED')
+	public function testARuleCodeGateStartsTheBaseLintBranchBesideItsRows(): Void {
+		final ran: GateRan = gateRun(BASE_REGISTRY, [], GRAPH_HXQ, null, null, 'src/anyparse/check/Rule.hx', true);
+		Assert.equals(0, ran.status, ran.table);
+		Assert.isTrue(ran.branches.split('\n').contains(BaseLint.ROW), 'branches: ${ran.branches}');
+		Assert.isTrue(ran.branches.split('\n').contains('infra4'), 'branches: ${ran.branches}');
+		Assert.isFalse(ran.table.contains(BaseLint.ROW), ran.table);
+		final plain: GateRan = gateRun(BASE_REGISTRY, [], GRAPH_HXQ, null, null, 'notes.txt', true);
+		Assert.isFalse(plain.branches.split('\n').contains(BaseLint.ROW), 'no rule code moved: ${plain.branches}');
+	}
+
+	/**
 	 * A scratch tree whose base commit holds the arm registry `BASE_REGISTRY` and whose slice commit holds `registry`, with the
 	 * stand-ins the gate's tools need; it answers the baseline record the gate reads.
 	 */
-	private static function scratchTree(dir: TempDir, registry: String, hxq: String, touched: String = 'notes.txt'): String {
+	private static function scratchTree(
+		dir: TempDir, registry: String, hxq: String, touched: String = 'notes.txt', infra: Bool = false
+	): String {
 		final tree: String = dir.file('tree');
 		final registryFile: String = Path.join([tree, 'test/testkit/arms/a.json']);
 		FileSystem.createDirectory(Path.join([tree, 'tools']));
@@ -539,6 +562,7 @@ final class SliceGateTest extends Test {
 		cmd('git $git commit -q -m base').at(tree).check();
 		final base: String = cmd('git rev-parse HEAD').at(tree).check().out.trim();
 		File.saveContent(registryFile, registry);
+		FileSystem.createDirectory(Path.directory(Path.join([tree, touched])));
 		File.saveContent(Path.join([tree, touched]), 'slice');
 		cmd('git add -A').at(tree).check();
 		cmd('git $git commit -q -m slice').at(tree).check();
@@ -548,8 +572,7 @@ final class SliceGateTest extends Test {
 				base: base,
 
 				lists: JObject([]),
-				lint: '',
-				infra: [],
+				infra: infra ? [{ tree: dir.file('infra'), snapshot: dir.file('infra.json') }] : [],
 				frozen: []
 			}, JsonFormat.instance.compactWriteOptions)
 		);
@@ -561,7 +584,8 @@ final class SliceGateTest extends Test {
 
 	/** A whole `check()` over a scratch tree whose slice leaves `registry`, the compiler, the branches' script and the pool faked. */
 	private static function gateRun(
-		registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ, ?self: String, ?idleMs: Int, touched: String = 'notes.txt'
+		registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ, ?self: String, ?idleMs: Int, touched: String = 'notes.txt',
+		infra: Bool = false
 	): GateRan {
 		var ran: GateRan = {
 			branches: '',
@@ -574,7 +598,7 @@ final class SliceGateTest extends Test {
 			table: ''
 		};
 		TempDir.with(dir -> {
-			final tree: String = scratchTree(dir, registry, hxq, touched);
+			final tree: String = scratchTree(dir, registry, hxq, touched, infra);
 
 			final root: String = dir.file('plugin');
 			final fakeBin: String = dir.file('fakebin');

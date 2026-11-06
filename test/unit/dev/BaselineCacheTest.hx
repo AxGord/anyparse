@@ -64,7 +64,6 @@ final class BaselineCacheTest extends Test {
 			Assert.equals(3, BaselineLists.count(got.lists, 'classes'));
 			Assert.same(frozen, got.frozen);
 
-			Assert.equals('lint', File.getContent(got.lint));
 			Assert.equals('/some/tree', got.infra[0].tree);
 			Assert.equals(Path.join([logs, 'infra-0.json']), got.infra[0].snapshot);
 			Assert.equals('infra', File.getContent(got.infra[0].snapshot));
@@ -136,7 +135,9 @@ final class BaselineCacheTest extends Test {
 		});
 	}
 
-	/** A baseline document an earlier engine wrote, with the suite's counts and a sweep it no longer records, still reads. */
+	/**
+	 * A baseline document an earlier engine wrote, with the suite's counts, a sweep and a base lint it no longer records, still reads.
+	 */
 	public function testADocumentOfAnEarlierEngineIsRead(): Void {
 		final kept: Baseline = BaselineParser.parse(
 			'{"base":"b","tests":1,"assertions":2,"lists":{"classes":3},"sweep":null,"lint":"l","infra":[],"frozen":[]}'
@@ -151,14 +152,11 @@ final class BaselineCacheTest extends Test {
 	private static function recorded(logs: String, base: String): Baseline {
 		FileSystem.createDirectory(logs);
 
-		File.saveContent(Path.join([logs, 'lint-base.json']), 'lint');
 		File.saveContent(Path.join([logs, 'infra-0.json']), 'infra');
 		return {
 			base: base,
 
 			lists: BaselineLists.of(['classes'], _ -> 3),
-
-			lint: Path.join([logs, 'lint-base.json']),
 			infra: [{ tree: '/some/tree', snapshot: Path.join([logs, 'infra-0.json']) }],
 			frozen: [{ dir: '/frozen/a', digest: 'old' }]
 		};

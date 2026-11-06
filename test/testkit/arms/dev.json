@@ -1270,6 +1270,60 @@
 			"find": "gate.options.arms, near, now.length",
 			"replace": "[], near, now.length",
 			"note": "an arm asked for with --arm can be carried out of the kill run, and the row then fails naming an arm it had selected"
+		},
+		{
+			"name": "M-BASE-LINT-NEEDED-ALWAYS",
+			"type": "dev.BaseLint",
+			"method": "needed",
+			"force": "true",
+			"note": "every gate lints the base for INFRA gate 4, also one that moved no rule code or whose baseline names no infra tree"
+		},
+		{
+			"name": "M-BASE-LINT-KEPT-BLIND",
+			"type": "dev.BaseLint",
+			"method": "kept",
+			"force": "null",
+			"note": "a base lint kept in the logs or in the cache the worktrees share is never taken, so every rule-code gate lints its base again"
+		},
+		{
+			"name": "M-BASE-BRANCH-READ-MEASURES-BESIDE",
+			"type": "dev.BaseBranch",
+			"method": "read",
+			"find": "if (pending(gate)) {",
+			"replace": "if (false) {",
+			"note": "a row asking while the base branch runs measures the base again beside it instead of waiting for what the branch leaves"
+		},
+		{
+			"name": "M-BASE-BRANCH-SETTLE-FORGETS-WHY",
+			"type": "dev.BaseBranch",
+			"method": "settle",
+			"find": "if (why != null) unread(gate, why);",
+			"replace": "",
+			"note": "a failed base branch lifts its announcement without leaving why, so a row asking afterwards measures the base a second time"
+		},
+		{
+			"name": "M-GATE-BASELINE-LINTS-BASE",
+			"type": "dev.SliceGate",
+			"method": "recordBaseline",
+			"find": "fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS);",
+			"replace": "fanOut(self, BASELINE_BRANCHES.concat([[\"lint\"]]), BASELINE_ROWS.concat([\"lint\"]));",
+			"note": "a --baseline run lints again, serially before the first gate, what a rule-code gate reads from BaseLint beside its rows"
+		},
+		{
+			"name": "M-GATE-BASE-LINT-NOT-STARTED",
+			"type": "dev.SliceGate",
+			"method": "check",
+			"find": "if (BaseLint.plan(_gate)) bases.push([BaseLint.ROW]);",
+			"replace": "BaseLint.plan(_gate);",
+			"note": "a rule-code gate starts no base lint branch, so its infra4 row lints the base itself, behind its own lints"
+		},
+		{
+			"name": "M-WARM-BASE-LINT-STAMP-OFF",
+			"type": "dev.BaselineWarm",
+			"method": "baseLint",
+			"find": "cmd('git rev-parse HEAD')",
+			"replace": "cmd('git rev-parse HEAD^{tree}')",
+			"note": "the warm keeps the base lint under a key no gate on the landed commit asks for, so every land lints for nothing and every first rule-code gate lints its base again"
 		}
 	]
 }

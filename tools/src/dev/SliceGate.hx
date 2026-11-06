@@ -60,7 +60,8 @@ final class SliceGate {
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote; the
 	 * three short rows share one branch, so they hold one thread between them. `arms` is not among them: it is the phase
 	 * that follows (`ARMS_BRANCHES`). A whole-suite gate whose base suite is not yet read adds the `base` branch beside them
-	 * (`BaseSuite.plan`): the suite row and the corpus row wait for it where they need the base.
+	 * (`BaseSuite.plan`): the suite row and the corpus row wait for it where they need the base; a gate whose `infra4` row will
+	 * compare with a base lint not yet kept adds the `base-lint` branch (`BaseLint.plan`), and that row waits for it.
 	 */
 	public static final GATE_BRANCHES: Array<Array<String>> = [
 		['suite', 'corpus'],
@@ -99,10 +100,10 @@ final class SliceGate {
 		'kits'
 	];
 
-	/** The branches of a `--baseline` run; `frozen` follows them. */
-	private static final BASELINE_BRANCHES: Array<Array<String>> = [['lists'], ['lint'], ['infra4']];
+	/** The branches of a `--baseline` run; `frozen` follows them. The base tree's lint is no reading of it (`BaseLint`). */
+	private static final BASELINE_BRANCHES: Array<Array<String>> = [['lists'], ['infra4']];
 
-	private static final BASELINE_ROWS: Array<String> = ['lists', 'lint', 'infra4'];
+	private static final BASELINE_ROWS: Array<String> = ['lists', 'infra4'];
 
 	/** What a branch reads: the suite's counts for the gate record, every registry's for `--baseline`. */
 	private final _readings: Map<String, Int> = [];
@@ -158,8 +159,6 @@ final class SliceGate {
 				base: _gate.base,
 
 				lists: lists,
-
-				lint: _gate.log('lint-base.json'),
 				infra: _gate.infraSnapshots(),
 				frozen: digests
 			};
@@ -186,7 +185,10 @@ final class SliceGate {
 			return finish(title);
 		}
 		if (!build()) return finish(title);
-		fanOut(self, BaseSuite.plan(_gate, wholeSuite()) ? GATE_BRANCHES.concat([[BaseSuite.ROW]]) : GATE_BRANCHES, GATE_ROWS);
+		final bases: Array<Array<String>> = [];
+		if (BaseSuite.plan(_gate, wholeSuite())) bases.push([BaseSuite.ROW]);
+		if (BaseLint.plan(_gate)) bases.push([BaseLint.ROW]);
+		fanOut(self, GATE_BRANCHES.concat(bases), GATE_ROWS);
 		armsPhase(self);
 		gate('decisions', decisionsOutcome);
 		gate('frozen', frozenOutcome);
@@ -220,8 +222,9 @@ final class SliceGate {
 			case 'suite': suiteOutcome;
 			case 'corpus': corpusOutcome;
 			case 'base': () -> BaseSuite.branch(_gate, _mode);
+			case BaseLint.ROW: BaseLint.branch.bind(_gate);
 			case 'lists': recording ? listsRead : listsOutcome;
-			case 'lint': recording ? _lint.baseLint : _lint.lintOutcome;
+			case 'lint': _lint.lintOutcome;
 			case 'infra4': recording ? _lint.infraBaseline : _lint.infraOutcome;
 			case 'fmt': fmtOutcome;
 			case 'jvm': jvmOutcome;
@@ -682,13 +685,9 @@ final class SliceGate {
 	public static function demandOf(facts: GateDemand, rows: Array<String>): Null<Int> {
 		return switch rows[0] {
 			case 'suite', BaseSuite.ROW: null;
+			case BaseLint.ROW: 1;
 			case 'lists': facts.recording ? 0 : 1;
-			case 'lint': if (facts.recording)
-				Std.int(Math.min(1, facts.infra))
-			else if (facts.touchedHx)
-				2
-			else
-				0;
+			case 'lint': facts.touchedHx ? 2 : 0;
 			case 'jvm': facts.jvmMoved ? 1 : 0;
 			case 'kits': facts.recording || !facts.kitsMoved ? 0 : Probe.GATE_THREADS;
 			case 'infra4': facts.recording ? facts.infra : 1 + (facts.ruleInfra ?? -1);

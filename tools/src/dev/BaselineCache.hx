@@ -24,8 +24,6 @@ final class BaselineCache {
 	/** The record's file inside an entry; written last, so an entry that has it is complete. */
 	private static inline final RECORD: String = 'baseline.json';
 
-	private static inline final LINT: String = 'lint-base.json';
-
 	/** The cache the entries are kept in when the caller names none. */
 	public static function defaultCache(): String {
 		return Sys.getEnv(CACHE_VAR) ?? Path.join([anyparse.core.TempScratch.root(), 'anyparse-slice-baseline']);
@@ -67,16 +65,11 @@ final class BaselineCache {
 				File.copy(Path.join([entry, s.snapshot]), snapshot);
 				infra.push({ tree: s.tree, snapshot: snapshot });
 			}
-
-			final lint: String = Path.join([logs, LINT]);
-			if (FileSystem.exists(Path.join([entry, LINT]))) File.copy(Path.join([entry, LINT]), lint);
 			BaseEngine.touch(entry);
 			{
 				base: kept.base,
 
 				lists: kept.lists,
-
-				lint: lint,
 				infra: infra,
 				frozen: frozen
 			};
@@ -97,14 +90,10 @@ final class BaselineCache {
 				File.copy(s.snapshot, Path.join([staging, name]));
 				infra.push({ tree: s.tree, snapshot: name });
 			}
-
-			if (FileSystem.exists(record.lint)) File.copy(record.lint, Path.join([staging, LINT]));
 			final kept: Baseline = {
 				base: record.base,
 
 				lists: record.lists,
-
-				lint: LINT,
 				infra: infra,
 				frozen: []
 			};

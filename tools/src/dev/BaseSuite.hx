@@ -1,12 +1,12 @@
 package dev;
 
+import dev.BaseBranch.BaseGot;
 import dev.Shard.Tally;
 import devkit.Cmd.cmd;
 import devkit.Lease.LeaseMode;
 import devkit.Result;
 import devkit.Summary.Outcome;
 import haxe.Exception;
-import haxe.Timer;
 import haxe.crypto.Sha1;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -53,27 +53,34 @@ final class BaseSuite {
 	/** The environment variable that names the cache of readings shared by every worktree instead of the default. */
 	public static inline final CACHE_VAR: String = 'SLICE_BASE_SUITE_CACHE';
 
-	private static inline final MS_PER_SECOND: Float = 1000;
-	private static inline final POLL_MS: Int = 1000;
 	private static inline final SUITE_LOG: String = 'suite-base.log';
 
-	/** The reading for `gate`'s base: the kept one when it still stands for this base, fork and compiler, else a fresh run. */
-	public static function read(gate: GateTree, mode: LeaseMode): BaseRead {
-		final stamp: String = stampOf(gate.base, GateReuse.forkState(), BaseEngine.toolchain());
-		final kept: Null<BaseReading> = keptReading(gate, stamp);
-		if (kept != null) return Read(kept);
-		final unread: Null<String> = unreadWhy(gate);
-		if (unread != null) return Unread(unread);
-		return pending(gate) ? awaited(gate, stamp) : measured(gate, mode, stamp);
-	}
+	/** The announce-and-wait protocol of the base branch, its markers and its shared cache. */
+	private static final BRANCH: BaseBranch = new BaseBranch(ROW, PENDING, UNREAD, CACHE_VAR, 'anyparse-slice-base-suite');
 
 	/**
 	 * Whether this run's base branch is still to leave its reading (`plan` started it): a reading is awaited then, never
 	 * measured a second time beside it.
 	 */
-	public static function pending(gate: GateTree): Bool {
-		final marker: String = gate.log(PENDING);
-		return FileSystem.exists(marker) && File.getContent(marker) == gate.options.run;
+	public static inline function pending(gate: GateTree): Bool {
+		return BRANCH.pending(gate);
+	}
+
+	/** The cache the readings are kept in, one entry per stamp, for every gate on this machine. */
+	public static inline function defaultCache(): String {
+		return BRANCH.cache();
+	}
+
+	/** The reading for `gate`'s base: the kept one when it still stands for this base, fork and compiler, else a fresh run. */
+	public static function read(gate: GateTree, mode: LeaseMode): BaseRead {
+		final stamp: String = stampOf(gate.base, GateReuse.forkState(), BaseEngine.toolchain());
+		return switch BRANCH.read(
+			gate, keptReading.bind(gate, stamp), measured.bind(gate, mode, stamp),
+			'the base suite branch left no reading — ${gate.log(SUITE_LOG)}'
+		) {
+			case Got(reading): Read(reading);
+			case NotGot(why): Unread(why);
+		};
 	}
 
 	/**
@@ -81,13 +88,10 @@ final class BaseSuite {
 	 * baseline, an impact gate, or one whose base is already read (in its logs or in the cache shared by every worktree) starts none.
 	 */
 	public static function plan(gate: GateTree, whole: Bool): Bool {
-		final unread: String = gate.log(UNREAD);
-		if (FileSystem.exists(unread)) FileSystem.deleteFile(unread);
-		final marker: String = gate.log(PENDING);
-		if (FileSystem.exists(marker)) FileSystem.deleteFile(marker);
+		BRANCH.reset(gate);
 		if (!whole || gate.baseline == null) return false;
 		if (keptReading(gate, stampOf(gate.base, GateReuse.forkState(), BaseEngine.toolchain())) != null) return false;
-		File.saveContent(marker, gate.options.run);
+		BRANCH.announce(gate);
 		return true;
 	}
 
@@ -97,19 +101,7 @@ final class BaseSuite {
 	 */
 	public static function branch(gate: GateTree, mode: LeaseMode): Outcome {
 		final stamp: String = stampOf(gate.base, GateReuse.forkState(), BaseEngine.toolchain());
-		final got: BaseRead = try {
-			final kept: Null<BaseReading> = keptReading(gate, stamp);
-			kept != null ? Read(kept) : measured(gate, mode, stamp);
-		} catch (exception: Exception) {
-			unread(gate, GateTree.clip(exception.message));
-		};
-		final outcome: Outcome = switch got {
-			case Read(_): Passed;
-			case Unread(why): Failed(why);
-		};
-		final marker: String = gate.log(PENDING);
-		if (FileSystem.exists(marker)) FileSystem.deleteFile(marker);
-		return outcome;
+		return BRANCH.settle(gate, () -> keptReading(gate, stamp) != null ? null : measured(gate, mode, stamp));
 	}
 
 	/** What a record is valid for: the base commit, the corpus tree's state and the compiler, hashed to one line. */
@@ -184,11 +176,6 @@ final class BaseSuite {
 			Sys.putEnv(GateTree.ENGINE_VAR, engine);
 	}
 
-	/** The cache the readings are kept in, one entry per stamp, for every gate on this machine. */
-	public static function defaultCache(): String {
-		return Sys.getEnv(CACHE_VAR) ?? Path.join([anyparse.core.TempScratch.root(), 'anyparse-slice-base-suite']);
-	}
-
 	/**
 	 * Copy the entry `stamp` of `cache` (its record and, when it has one, its sweep) into the gate's logs; false when there is
 	 * none or it is not whole. A hit marks the entry as used.
@@ -219,11 +206,6 @@ final class BaseSuite {
 		});
 	}
 
-	/** Block this process for one poll interval. */
-	private static inline function sleep(): Void {
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', POLL_MS);
-	}
-
 	/** The reading kept for `stamp` in the gate's logs, or else in the shared cache (copied into the logs), or null. */
 	private static function keptReading(gate: GateTree, stamp: String): Null<BaseReading> {
 		final record: String = gate.log(FILE);
@@ -233,16 +215,8 @@ final class BaseSuite {
 		return restore(defaultCache(), stamp, gate) ? decode(stamp, File.getContent(record), sweep) : null;
 	}
 
-	/** The base branch's reading, waited for until it lifts its announcement or its row's limit passes. */
-	private static function awaited(gate: GateTree, stamp: String): BaseRead {
-		final deadline: Float = Timer.stamp() + BranchWatch.idleOf([ROW]) / MS_PER_SECOND;
-		while (pending(gate) && Timer.stamp() < deadline) sleep();
-		final kept: Null<BaseReading> = keptReading(gate, stamp);
-		return kept != null ? Read(kept) : Unread(unreadWhy(gate) ?? 'the base suite branch left no reading — ${gate.log(SUITE_LOG)}');
-	}
-
-	/** A run of the base suite in a checkout of the base, kept in the gate's logs and in the shared cache. */
-	private static function measured(gate: GateTree, mode: LeaseMode, stamp: String): BaseRead {
+	/** A run of the base suite in a checkout of the base, kept in the gate's logs and in the shared cache: null, else why not. */
+	private static function measured(gate: GateTree, mode: LeaseMode, stamp: String): Null<String> {
 		final record: String = gate.log(FILE);
 		final got: Array<BaseReading> = [];
 		final outcome: Outcome = gate.withBaseCheckout(checkout -> switch measure(gate, checkout, mode) {
@@ -252,15 +226,13 @@ final class BaseSuite {
 			case Unread(why):
 				Failed(why);
 		});
-		if (got.length == 0) return unread(
-			gate, switch outcome {
-				case Failed(why), NotRun(why): why;
-				case _: 'the base suite was not read';
-			}
-		);
+		if (got.length == 0) return switch outcome {
+			case Failed(why), NotRun(why): why;
+			case _: 'the base suite was not read';
+		};
 		File.saveContent(record, encode(stamp, got[0]));
 		store(defaultCache(), stamp, gate, got[0]);
-		return Read(got[0]);
+		return null;
 	}
 
 	/** Build the suite of `checkout` and run every class in it. */
@@ -303,18 +275,6 @@ final class BaseSuite {
 		final sweep: String = gate.log(GateTree.SWEEP_BASE);
 		final saved: Result = gate.inTree(cmd('node bin/apq.js sweep --lang haxe --file $snapshot --save $sweep'));
 		return saved.ok ? Read({ tests: sum.tests, assertions: sum.assertions, sweep: sweep }) : Unread(GateTree.quote(saved));
-	}
-
-	/** Why this run found no reading of the base suite, or null while none has failed: a second row never measures it again. */
-	private static function unreadWhy(gate: GateTree): Null<String> {
-		final file: String = gate.log(UNREAD);
-		return FileSystem.exists(file) ? File.getContent(file) : null;
-	}
-
-	/** `Unread(why)`, with `why` left in the gate's logs for the rows of this run that ask next. */
-	private static function unread(gate: GateTree, why: String): BaseRead {
-		File.saveContent(gate.log(UNREAD), why);
-		return Unread(why);
 	}
 
 }

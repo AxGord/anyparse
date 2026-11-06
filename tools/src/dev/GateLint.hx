@@ -3,6 +3,7 @@ package dev;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import dev.BaseBranch.BaseGot;
 import devkit.Command;
 import devkit.Excerpt;
 import devkit.Pool;
@@ -20,8 +21,8 @@ using StringTools;
 
 /**
  * The lint rows of a slice gate — `lint` (the touched files against the base) and `infra4` (INFRA gate 4) — and of its
- * `--baseline`, every lint of one row at once. A base-side lint is cached in the logs by tree, scope and what the engine
- * is built from, so a later run of the gate on an engine built from the same sources reuses it.
+ * `--baseline` (each infra tree by the base engine), every lint of one row at once. A base-side lint is cached in the logs by
+ * tree, scope and what the engine is built from, so a later run of the gate on an engine built from the same sources reuses it.
  */
 @:nullSafety(Strict)
 final class GateLint {
@@ -42,16 +43,6 @@ final class GateLint {
 	public function new(gate: GateTree) {
 		_gate = gate;
 		_engine = engineSources(gate);
-	}
-
-	/** The lint row of `--baseline`: the base engine's lint of the whole tree, which INFRA gate 4 compares the new engine with. */
-	public function baseLint(): Outcome {
-		return _gate.options.infra.length == 0
-			? Skipped('no --infra-tree, so INFRA gate 4 needs no base lint')
-			: saveLint(
-				lintCommand(_gate.tree, GateTree.TREE_SCOPE, true, _gate.log('lint-base.json')).run(), _gate.tree,
-				_gate.log('lint-base.json')
-			);
 	}
 
 	/** The infra4 row of `--baseline`: the base engine's lint of every infra tree, all at once. */
@@ -100,8 +91,9 @@ final class GateLint {
 
 	/**
 	 * The INFRA gate 4 row, for a slice that touched rule code: the base tree and every infra tree linted by this engine,
-	 * all at once, against the baseline's lint of the same tree by the base engine. A finding that moved fails the row
-	 * until it is explained and waived with `--allow infra4`.
+	 * all at once, against the base engine's lint of the same trees: the base tree's from `BaseLint` (waited for while its branch
+	 * runs), each infra tree's from the baseline. A finding that moved fails the row until it is explained and waived with
+	 * `--allow infra4`.
 	 */
 	public function infraOutcome(): Outcome {
 		if (!_gate.ruleCodeMoved()) return Skipped('no rule code touched');
@@ -109,8 +101,12 @@ final class GateLint {
 		if (recorded == null) return NotRun(GateTree.NO_BASELINE);
 		final baseline: Baseline = recorded;
 		if (baseline.infra.length == 0) return NotRun('rule code moved, but the baseline recorded no --infra-tree');
+		final baseLint: String = switch BaseLint.read(_gate) {
+			case Got(report): report;
+			case NotGot(why): return NotRun(GateTree.clip('no base lint to compare with: $why'));
+		};
 		final scope: Null<Array<String>> = RuleScope.ofTree(_gate.tree, _gate.base, _gate.touched);
-		return settle(scope == null ? null : () -> compareScoped(baseline, scope), compareScoped.bind(baseline, null));
+		return settle(scope == null ? null : () -> compareScoped(baseline, baseLint, scope), compareScoped.bind(baseline, baseLint, null));
 	}
 
 	/** The cache entry of the lint of `scope` in the tree `tree` names by this engine; null when the engine has none. */
@@ -122,11 +118,11 @@ final class GateLint {
 	 * The comparison of INFRA gate 4 over the findings of the rules `scope` names (every rule when null): the base tree is
 	 * linted by the new engine in a checkout of the base unless the cache holds that lint.
 	 */
-	private function compareScoped(baseline: Baseline, scope: Null<Array<String>>): Outcome {
+	private function compareScoped(baseline: Baseline, baseLint: String, scope: Null<Array<String>>): Outcome {
 		final baseKey: Null<String> = cacheKey('base ${_gate.base}', GateTree.TREE_SCOPE, scope);
 		return cachedLint(baseKey) == null
-			? _gate.withBaseCheckout(checkout -> compareInfra(checkout, baseKey, baseline, scope))
-			: compareInfra(null, baseKey, baseline, scope);
+			? _gate.withBaseCheckout(checkout -> compareInfra(checkout, baseKey, baseline, baseLint, scope))
+			: compareInfra(null, baseKey, baseline, baseLint, scope);
 	}
 
 	/**
@@ -151,8 +147,13 @@ final class GateLint {
 		return before;
 	}
 
-	/** Lint the base `checkout` (unless the cache has it under `baseKey`) and every infra tree, and compare each with its snapshot. */
-	private function compareInfra(checkout: Null<String>, baseKey: Null<String>, baseline: Baseline, rules: Null<Array<String>>): Outcome {
+	/**
+	 * Lint the base `checkout` (unless the cache has it under `baseKey`) and every infra tree, and compare each with its snapshot:
+	 * the base tree's is the base engine's report `baseLint`.
+	 */
+	private function compareInfra(
+		checkout: Null<String>, baseKey: Null<String>, baseline: Baseline, baseLint: String, rules: Null<Array<String>>
+	): Outcome {
 		final trees: Array<InfraLint> = [
 			{
 				name: 'base tree',
@@ -160,7 +161,7 @@ final class GateLint {
 				scope: GateTree.TREE_SCOPE,
 				key: baseKey,
 				oracle: true,
-				snapshot: baseline.lint
+				snapshot: baseLint
 			}
 		].concat(baseline.infra.map(s -> {
 			name: Path.withoutDirectory(s.tree),

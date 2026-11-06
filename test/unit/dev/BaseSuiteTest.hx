@@ -281,7 +281,6 @@ final class BaseSuiteTest extends Test {
 			Path.join([logs, GateTree.BASELINE_FILE]), BaselineWriter.write({
 				base: base,
 				lists: JObject([]),
-				lint: '',
 				infra: [],
 				frozen: []
 			}, JsonFormat.instance.compactWriteOptions)

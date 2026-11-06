@@ -2,7 +2,6 @@ package dev;
 
 import anyparse.check.oracle.PendingRuns;
 import devkit.Args;
-import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Lease;
@@ -17,7 +16,8 @@ using StringTools;
  * has passed, `dev land` starts `dev baseline-warm run <sha>` for the landed commit, a process that outlives the land and
  * its lock, takes a lease of its own from the pool, checks the commit out into a worktree of its own and records, with
  * `dev slice-gate --baseline`, the very entries a worker's first gate would build (one with the infra trees, one without),
- * into the `BaselineCache`. It never decides the land's verdict, and it is dropped — its gate killed, its worktree removed —
+ * into the `BaselineCache`, and, for a recipe with infra trees, the base engine's lint of the commit `BaseLint` keeps for the
+ * `infra4` row of a rule-code gate. It never decides the land's verdict, and it is dropped — its gate killed, its worktree removed —
  * the moment the checked-out branch of the repository is no longer `sha`, since no new slice is based on that commit any more.
  * A run that failed or was dropped leaves no cache entry: the cache stores only a baseline whose every row passed.
  */
@@ -119,6 +119,25 @@ final class BaselineWarm {
 		return Path.join([cache, DIRECTORY]);
 	}
 
+	/**
+	 * The lint of the landed `tree` by the engine its `--baseline` built (the base engine of every slice based on it), kept in the
+	 * cache `BaseLint` reads.
+	 */
+	public static function baseLint(tree: String, work: String): Warming {
+		final report: String = Path.join([work, BaseLint.FILE]);
+		final stamp: String = BaseLint.stampOf(cmd('git rev-parse HEAD').at(tree).check().out, BaseEngine.toolchain());
+		final command: Command = BaseLint.command(tree, Path.join([tree, 'bin/apq.js']), Path.withExtension(report, 'err'));
+		final batch: PendingRuns = command.background();
+		return {
+			running: batch.running,
+			cancel: batch.cancel,
+			ended: () -> {
+				final why: Null<String> = BaseLint.keep(command.answer(batch), stamp, report, BaseLint.defaultCache());
+				why == null ? Passed : Failed(why);
+			}
+		};
+	}
+
 	private static function moved(sha: String): Outcome {
 		return Skipped('dropped: the repository is no longer on $sha');
 	}
@@ -137,11 +156,17 @@ final class BaselineWarm {
 		final built: Result = cmd('haxe tools/dev.hxml').at(tree).run();
 		if (!built.ok) return Failed('bin/dev.js of $sha did not build: ${built.firstError()}');
 		var round: Int = 0;
-		return warm(sha, variants(recipe), tip, variant -> {
+		function pause(): Void {
+			Sys.sleep(POLL_SECONDS);
+		}
+		final gates: Outcome = warm(sha, variants(recipe), tip, variant -> {
 			final logs: String = Path.join([work, 'logs-${round++}']);
 			final words: Array<String> = ['node', 'bin/dev.js', 'slice-gate', tree, '--baseline'].concat(variant).concat(['--logs', logs]);
 			return warming(Command.of(words).at(tree));
-		}, () -> Sys.sleep(POLL_SECONDS));
+		}, pause);
+		if (recipe.infra.length == 0 || gates.match(Skipped(_))) return gates;
+		final linted: Outcome = warm(sha, [[BaseLint.ROW]], tip, _ -> baseLint(tree, work), pause);
+		return gates.match(Failed(_)) ? gates : linted;
 	}
 
 	private static function warming(command: Command): Warming {
