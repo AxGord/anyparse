@@ -401,7 +401,7 @@
 		{
 			"name": "M-BREAKMARK-ONE-ROUND",
 			"type": "anyparse.core.BreakCommits",
-			"method": "resolve",
+			"method": "resolveMeasured",
 			"find": "for (_ in 0...MEASURE_ROUNDS) {",
 			"replace": "for (_ in 0...1) {",
 			"note": "the committed layout is not measured again, so a literal that only the committed layout pushes past the limit (a call that opens around a comprehension) breaks un-read-back"
@@ -652,6 +652,14 @@
 			"find": "measured = true;",
 			"replace": "",
 			"note": "a break carrying a token is taken for settled, so resolve skips the measure render and leaves that break unresolved"
+		},
+		{
+			"name": "M-DECISIONS-OF-ANOTHER-DOC",
+			"type": "anyparse.core.BreakCommits",
+			"method": "resolveMeasured",
+			"find": "return { doc: measured, decisions: taken };",
+			"replace": "return { doc: commit(doc, tokens, new DocIdentityMap()), decisions: taken };",
+			"note": "the measure decisions handed to CollapsePass are keyed by nodes of a Doc the pass does not rewrite"
 		}
 	]
 }

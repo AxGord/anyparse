@@ -68,6 +68,19 @@ class D {
 	 */
 	public static inline function optSpaceSkipAfterHardline(): Doc return OptSpaceSkipAfterHardline;
 
+	/**
+	 * Whether `d` is a leaf, a node with no `Doc` child: the one answer to "is this Doc node a leaf". A walk that looks
+	 * for a node kind can return a leaf as it is without a memo entry, and leaves are most of a Doc's nodes.
+	 */
+	public static inline function isLeaf(d: Doc): Bool {
+		return switch d {
+			case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
+				OptSpaceSkipAfterHardline:
+				true;
+			case _: false;
+		};
+	}
+
 	/** Places `sep` between each item of `items`. Returns a fresh array. */
 	public static function intersperse(items: Array<Doc>, sep: Doc): Array<Doc> {
 		if (items.length <= 1) return items.copy();

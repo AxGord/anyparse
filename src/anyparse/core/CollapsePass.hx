@@ -95,7 +95,8 @@ final class CollapsePass {
 	): Doc {
 		// A `BreakCommit` answers by a break the renderer decides, so it is resolved by its own measure render first and
 		// the collapse decisions below are measured on the layout that will actually be emitted.
-		doc = BreakCommits.resolve(doc, width, indentChar, tabWidth, indentSize);
+		final resolved: ResolvedDoc = BreakCommits.resolveMeasured(doc, width, indentChar, tabWidth, indentSize);
+		doc = resolved.doc;
 		// Fast path: skip the measure render entirely when the Doc carries
 		// NONE of a forward collapse-candidate paren (`CollapseProbe`), an
 		// inverse inner-add-chain marker (`CollapseAddProbe`), an opBool
@@ -109,8 +110,13 @@ final class CollapsePass {
 		// `IfFullLineExceeds` (forward) AND every reached `CollapseAddProbe`
 		// (inverse — recorded `crosses = reached-in-break-mode`, plus `indent`
 		// = the add-tail's continuation column for the head-break re-measure).
-		// The returned string is discarded.
-		Renderer.render(doc, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, decisions._entries);
+		// The returned string is discarded. A measure render that resolved the breaks laid out this same Doc, so its
+		// decisions are these.
+		final measured: Null<Array<{ node: Doc, crosses: Bool, ?indent: Int }>> = resolved.decisions;
+		if (measured != null)
+			for (e in measured) decisions._entries.push(e);
+		else
+			Renderer.render(doc, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, decisions._entries);
 
 		// ONE top-down rewrite over the ORIGINAL `doc` (so every decision —
 		// `IfFullLineExceeds` forward, `CollapseAddProbe` inverse — is keyed by

@@ -47,15 +47,30 @@ final class BreakCommits {
 	 * takes no new break.
 	 */
 	public static function resolve(doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int): Doc {
+		return resolveMeasured(doc, width, indentChar, tabWidth, indentSize).doc;
+	}
+
+	/**
+	 * `resolve`, with the decisions of the measure render that laid out the Doc it returns. Every measure renders a fully
+	 * committed Doc, the first one with every offer on its plain side, so a round that takes no new break has measured the
+	 * Doc the emit render gets, and its decisions are the ones `CollapsePass` measures that Doc for.
+	 */
+	public static function resolveMeasured(doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int): ResolvedDoc {
 		final settled: Null<Doc> = settledWithoutMeasure(doc);
-		if (settled != null) return settled;
+		if (settled != null) {
+			final out: Doc = settled;
+			return { doc: out, decisions: null };
+		}
 		final tokens: Array<BreakToken> = [];
-		var measured: Doc = doc;
+		var measured: Doc = commit(doc, tokens, new DocIdentityMap());
 		for (_ in 0...MEASURE_ROUNDS) {
-			if (!tookNewBreaks(measured, width, indentChar, tabWidth, indentSize, tokens)) break;
+			final taken: Array<{ node: Doc, crosses: Bool, ?indent: Int }> = [];
+			// The measure render's text is not the answer; the decisions it records in `taken` are.
+			Renderer.render(measured, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, taken); // noqa: unused-return-value
+			if (!tookNewBreaks(taken, tokens)) return { doc: measured, decisions: taken };
 			measured = commit(doc, tokens, new DocIdentityMap());
 		}
-		return measured == doc ? commit(doc, tokens, new DocIdentityMap()) : measured;
+		return { doc: measured, decisions: null };
 	}
 
 	/**
@@ -231,14 +246,18 @@ final class BreakCommits {
 	}
 
 	private static function commit(d: Doc, tokens: Array<BreakToken>, memo: DocIdentityMap<Doc>): Doc {
-		final hit: Null<Doc> = memo.get(d);
-		if (hit != null) return hit;
-		final out: Doc = switch d {
-			case BreakCommit(brk, flat, token): commit(token != null && tokens.contains(token) ? brk : flat, tokens, memo);
-			case _: D.mapChildrenShared(d, c -> commit(c, tokens, memo));
-		};
-		memo.set(d, out);
-		return out;
+		function walk(n: Doc): Doc {
+			if (D.isLeaf(n)) return n;
+			final hit: Null<Doc> = memo.get(n);
+			if (hit != null) return hit;
+			final out: Doc = switch n {
+				case BreakCommit(brk, flat, token): walk(token != null && tokens.contains(token) ? brk : flat);
+				case _: D.mapChildrenShared(n, walk);
+			};
+			memo.set(n, out);
+			return out;
+		}
+		return walk(d);
 	}
 
 	/** `d` with every committed break (a `BreakCommit` with no token) replaced by its bare `brk`, through `memo`. */
@@ -257,15 +276,10 @@ final class BreakCommits {
 	}
 
 	/**
-	 * Renders `doc` to measure and appends to `tokens` every break it takes (a `LeadingBreak` or a `BreakMark`) that
+	 * Appends to `tokens` every break a measure render recorded in `taken` (a `LeadingBreak` or a `BreakMark`) that
 	 * `tokens` does not hold yet; `true` when it appended one.
 	 */
-	private static function tookNewBreaks(
-		doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int, tokens: Array<BreakToken>
-	): Bool {
-		final taken: Array<{ node: Doc, crosses: Bool, ?indent: Int }> = [];
-		// The measure render's text is not the answer; the breaks it records in `taken` are.
-		Renderer.render(doc, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, taken); // noqa: unused-return-value
+	private static function tookNewBreaks(taken: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, tokens: Array<BreakToken>): Bool {
 		var added: Bool = false;
 		for (e in taken) {
 			final token: Null<BreakToken> = switch e.node {
@@ -316,12 +330,10 @@ final class BreakCommits {
 		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
 		var measured: Bool = false;
 		function walk(n: Doc): Doc {
-			if (measured) return n;
-			final kids: Array<Doc> = CollapsePass.children(n);
-			// A leaf holds no commit, so it skips the memo: leaves are most of a Doc's nodes.
-			if (kids.length == 0) return n;
+			if (measured || D.isLeaf(n)) return n;
 			final hit: Null<Doc> = memo.get(n);
 			if (hit != null) return hit;
+			final kids: Array<Doc> = CollapsePass.children(n);
 			final out: Doc = switch n {
 				case BreakCommit(_, flat, null): walk(flat);
 				case BreakCommit(_, _, _):
