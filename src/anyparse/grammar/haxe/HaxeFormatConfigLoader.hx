@@ -941,12 +941,12 @@ final class HaxeFormatConfigLoader {
 		final enumSection: Null<HxFormatEnumEmptyLinesConfig> = section.enumEmptyLines;
 		if (enumSection != null) {
 			if (enumSection.existingBetweenFields != null)
-				opt.existingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);
+				opt.enumExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);
 			if (enumSection.betweenFields != null) opt.betweenEnumCtors = enumSection.betweenFields;
 		}
 		// ω-typedef-between-fields: `typedefEmptyLines` routes the four
 		// sub-keys to the dedicated typedef-scoped knobs (no shared-knob
-		// last-write-wins, unlike `enumEmptyLines`). Drives the
+		// last-write-wins). Drives the
 		// `HxType.Anon.fields` `@:sep`-Star force-multi blank inserts when
 		// the descendant anon body carries `_inTypedefBody == true`.
 		final typedefSection: Null<HxFormatTypedefEmptyLinesConfig> = section.typedefEmptyLines;

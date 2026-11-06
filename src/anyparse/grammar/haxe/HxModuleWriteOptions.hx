@@ -444,6 +444,7 @@ final class HxModuleWriteOptions {
 	public var macroClassAfterVars: Int = 1;
 	public var macroClassAfterStaticVars: Int = 1;
 	public var macroClassBetweenStaticFunctions: Int = 1;
+	public var enumExistingBetweenFields: KeepEmptyLinesPolicy = KeepEmptyLinesPolicy.Keep;
 	public var betweenEnumCtors: Int = 0;
 
 	/**

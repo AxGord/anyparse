@@ -852,6 +852,30 @@
 			"find": "new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions)",
 			"replace": "HaxeFormat.instance.defaultWriteOptions",
 			"note": "a config load re-baselines the shared default record"
+		},
+		{
+			"name": "M-ENUM-EXISTING-LEAKS",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyInterfaceEnumTypedefEmptyLines",
+			"find": "opt.enumExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);",
+			"replace": "opt.existingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);",
+			"note": "enumEmptyLines.existingBetweenFields lands on the knob a class body reads, so an enum config rewrites class bodies"
+		},
+		{
+			"name": "M-ENUM-EXISTING-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyInterfaceEnumTypedefEmptyLines",
+			"find": "opt.enumExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);",
+			"replace": "{}",
+			"note": "enumEmptyLines.existingBetweenFields is parsed and dropped, so an enum body keeps its source blank lines"
+		},
+		{
+			"name": "M-CLASS-EXISTING-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyClassEmptyLines",
+			"find": "opt.existingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(classSection.existingBetweenFields);",
+			"replace": "{}",
+			"note": "classEmptyLines.existingBetweenFields is parsed and dropped, so a class body keeps its source blank lines"
 		}
 	]
 }
