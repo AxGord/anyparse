@@ -2,7 +2,6 @@ package dev;
 
 import anyparse.core.PoolLease;
 import devkit.Args;
-import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Lease;
@@ -19,8 +18,9 @@ using StringTools;
 /**
  * The one answer to "did the whole suite pass on a commit whose land ran only the classes its change reaches": `dev land`
  * starts `dev post-land run <sha>` once the land has passed, a process that outlives the land and its lock, takes a lease
- * of its own from the pool, checks the commit out into a worktree of its own, builds it and runs the whole suite there. A
- * green run leaves nothing; a red one leaves `<sha>.red` in the snapshot cache, which the next land refuses on until
+ * of its own from the pool, checks the commit out into a worktree of its own, builds it and runs the whole suite
+ * there and then the whole lint (the check of the lint snapshot a land carried from its base, `LintScope`). A green
+ * run leaves nothing; a red one leaves `<sha>.red` in the snapshot cache, which the next land refuses on until
  * `dev post-land clear <sha>`. The run never holds the land lock, so it never delays the next land.
  */
 @:nullSafety(Strict)
@@ -326,7 +326,23 @@ final class PostLand {
 		final counts: Null<Array<Int>> = countsOf(text);
 		if (counts != null)
 			File.saveContent(Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-suite.txt']), '${counts[0]} ${counts[1]}\n');
-		return ran.ok ? Passed : Failed(text.split('\n').find(l -> l.startsWith('suite-shard: FAILED')) ?? ran.firstError());
+		return ran.ok
+			? wholeLint(repo, sha, cache, tree)
+			: Failed(text.split('\n').find(l -> l.startsWith('suite-shard: FAILED')) ?? ran.firstError());
+	}
+
+	/**
+	 * The whole lint of the landed tree, the truth of the landing's lint snapshot: a battery that re-linted only the files its change
+	 * reaches (`LintScope`) carried the rest from its base, and a finding that moved elsewhere makes this run red. The truth replaces
+	 * the snapshot either way, so the next landing compares with what the tree really holds.
+	 */
+	private static function wholeLint(repo: String, sha: String, cache: String, tree: String): Outcome {
+		final lint: Result = GateTree.shim(tree, tree, ['lint', '--format', 'json', '--all'].concat(LintScope.ROOTS)).run();
+		if (!lint.out.trim().startsWith('[')) return Failed('the whole lint of $sha printed no report: ${lint.firstError()}');
+		final snapshot: String = Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-anyparse.json']);
+		final refusal: Null<String> = FileSystem.exists(snapshot) ? LintScope.backstop(File.getContent(snapshot), lint.out) : null;
+		File.saveContent(snapshot, lint.out);
+		return refusal == null ? Passed : Failed(refusal);
 	}
 
 	private static function directory(cache: String): String {

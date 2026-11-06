@@ -368,20 +368,32 @@ final class Battery {
 		return Passed;
 	}
 
-	/** The whole lint of `src` and `test` and, when one is given, of the client tree, at once. */
+	/**
+	 * The lint of the files `LintScope` names for this landing (the whole of `src` and `test` when the scope is null), with the base's
+	 * findings carried for every other file, and of the client tree, at once.
+	 */
 	private function lint(): Outcome {
 		final client: Null<String> = _plan.client;
-		final jobs: Array<Command> = [hxq(['lint', '--format', 'json', '--all', 'src', 'test'])];
+		final baseReport: Null<String> = baseFile('anyparse.json');
+		final scope: Null<Array<String>> = baseReport == null ? null : _plan.lintScope;
+		final args: Null<Array<String>> = LintScope.lintArgs(scope);
+		final jobs: Array<Command> = args == null ? [] : [hxq(args)];
+		final own: Int = jobs.length;
 		if (client != null) jobs.push(hxq(['lint', '--format', 'json', '--all', Path.join([client, 'src'])]));
-		final runs: Array<Result> = Pool.of(jobs.length).run(jobs);
+		final runs: Array<Result> = jobs.length == 0 ? [] : Pool.of(jobs.length).run(jobs);
 		final why: Array<String> = [];
-		File.saveContent(workFile('lint-anyparse.json'), runs[0].out);
-		if (isJson(runs[0].out)) _readings[LINTED] = 1;
-		if (!runs[0].ok) {
-			Sys.print(runs[0].err);
-			why.push('lint of src+test exited ${runs[0].status}');
+		final report: Null<Result> = own == 0 ? null : runs[0];
+		final text: String = report?.out ?? '[]';
+		final whole: Null<String> = LintScope.whole(baseReport, scope, text, file -> FileSystem.exists(Path.join([_plan.repo, file])));
+		if (scope != null) _summary.detail('lint scoped to ${scope.length} file(s), the rest is ${_plan.base ?? 'the base'}\'s');
+		if (whole == null) why.push('the base snapshot $baseReport is no lint report to carry');
+		File.saveContent(workFile('lint-anyparse.json'), whole ?? text);
+		if (whole != null && isJson(whole)) _readings[LINTED] = 1;
+		if (report != null && !report.ok) {
+			Sys.print(report.err);
+			why.push('lint of src+test exited ${report.status}');
 		}
-		final clientRun: Null<Result> = runs[1];
+		final clientRun: Null<Result> = runs[own];
 		if (client != null && clientRun != null) {
 			File.saveContent(workFile('lint-client.json'), clientRun.out);
 			if (isJson(clientRun.out)) _readings[CLIENT_LINTED] = 1;
@@ -563,6 +575,7 @@ final class Battery {
 			allow: allow,
 			client: noClient ? null : clientOf(clientOption ?? Sys.getEnv('ANYPARSE_CLIENT_TREE')),
 			jvmSkip: jvmSkip(repo, base, jvm ? true : noJvm ? false : null),
+			lintScope: LintScope.ofImpact(repo, base, onlyFile != null),
 			run: Branches.newRunId(),
 			ownLease: mode.match(Own(_, _)),
 			gate: offer.gate,

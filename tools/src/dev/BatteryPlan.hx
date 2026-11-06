@@ -33,6 +33,11 @@ typedef BatteryPlan = {
 	/** Why the jvm probe does not apply, or null when it runs. */
 	@:optional var jvmSkip: Null<String>;
 
+	/**
+	 * The files of the lint roots this landing re-lints, the base snapshot standing for the rest (`LintScope`), or null for the whole tree.
+	 */
+	@:optional var lintScope: Null<Array<String>>;
+
 	/** The id the branches' reports carry (`Branches.newRunId`). */
 	var run: String;
 
