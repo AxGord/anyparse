@@ -100,8 +100,7 @@ final class MemberWriteScan {
 				owner, name,
 				(subtype, src, span, redeclares) ->
 					redeclares
-					|| src != apart
-					&& mayReference(src, name, span.from, span.to)
+					|| (src != apart && mayReference(src, name, span.from, span.to))
 					|| scopeOf(index, plugin)
 						.text.accessGrantMatches(
 							subtype, name, granted -> granted != apart && mayReference(granted, name, 0, granted.length)

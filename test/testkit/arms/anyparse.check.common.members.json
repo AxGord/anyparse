@@ -240,7 +240,7 @@
 			"name": "M-FIAD-TRY-BOUNDARY-CLEARED",
 			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
 			"method": "observableRead",
-			"find": "final childInTry: Bool = inTry || tryNode && child.kind != scan.catchKind;",
+			"find": "final childInTry: Bool = inTry || (tryNode && child.kind != scan.catchKind);",
 			"replace": "final childInTry: Bool = !(scan.shape.functionKinds ?? []).concat(scan.shape.lambdaKinds ?? []).contains(node.kind) && (inTry || tryNode && child.kind != scan.catchKind);",
 			"note": "the try flag is cleared again at every function and lambda boundary, so a lambda or local function written inside a `try` and called there reads the early `null` under a catch that turns it into working code"
 		},

@@ -468,12 +468,9 @@ class BuildMacroMetaSeamTest extends Test {
 			final c: Int = content.charCodeAt(i) ?? 0;
 			final part: Bool = c == '_'.code
 				|| c == '.'.code
-				|| c >= 'a'.code
-				&& c <= 'z'.code
-				|| c >= 'A'.code
-				&& c <= 'Z'.code
-				|| c >= '0'.code
-				&& c <= '9'.code;
+				|| (c >= 'a'.code && c <= 'z'.code)
+				|| (c >= 'A'.code && c <= 'Z'.code)
+				|| (c >= '0'.code && c <= '9'.code);
 			if (!part) break;
 			i++;
 		}

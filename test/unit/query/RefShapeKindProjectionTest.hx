@@ -1698,8 +1698,7 @@ final class RefShapeKindProjectionTest extends Test {
 	 * as its NAME, as the head of its name, or merely inside its span.
 	 */
 	private static function capturesToken(node: QueryNode, source: String, probe: TokenProbe, token: String): Bool {
-		return node.kind == probe.kind
-			&& carriesToken(node, source, probe.names, token)
+		return (node.kind == probe.kind && carriesToken(node, source, probe.names, token))
 			|| node.children.exists(child -> capturesToken(child, source, probe, token));
 	}
 
@@ -1722,7 +1721,7 @@ final class RefShapeKindProjectionTest extends Test {
 
 	/** Whether some node of `kind` under `node` is NAMED exactly `token` — the promotion check a `NAME_NONE` probe owes. */
 	private static function namesToken(node: QueryNode, kind: String, token: String): Bool {
-		return node.kind == kind && node.name == token || node.children.exists(child -> namesToken(child, kind, token));
+		return (node.kind == kind && node.name == token) || node.children.exists(child -> namesToken(child, kind, token));
 	}
 
 	/** The construct sources of `lang`; a lang with none is a build-time gap, so it throws. */

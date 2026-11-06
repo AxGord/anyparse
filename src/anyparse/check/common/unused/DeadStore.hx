@@ -213,7 +213,7 @@ final class DeadStore extends RuleBase {
 		final shape: RefShape = plugin.refShape();
 		final assignKind: Null<String> = shape.assignKind;
 		final mutableDeclKinds: Array<String> = shape.mutableLocalDeclKinds ?? [];
-		return assignKind == null && mutableDeclKinds.length == 0 || MemberWriteScan.carriesBuildMacro(source)
+		return (assignKind == null && mutableDeclKinds.length == 0) || MemberWriteScan.carriesBuildMacro(source)
 			? []
 			: RunScan.edits(plugin, source, tree -> {
 				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
@@ -663,8 +663,7 @@ final class DeadStore extends RuleBase {
 		rhs: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>
 	): Bool {
 		return MemberKinds.isSideEffectFree(rhs, shape)
-			|| index != null
-			&& TypeResolver.isDeletionPure(rhs, root, shape, declaredTypes, index);
+			|| (index != null && TypeResolver.isDeletionPure(rhs, root, shape, declaredTypes, index));
 	}
 
 }

@@ -279,7 +279,7 @@ final class TypeNameBinding {
 			final answer: Answer = statementAnswer(name, imp);
 			// a module the order cannot read may hold the name as a sub-type, which no reading lists: a binding only of the
 			// type the statement itself names
-			if (answer.match(Pass) || answer.match(Unreadable(_)) && !namesItsType(imp, answer)) continue;
+			if (answer.match(Pass) || (answer.match(Unreadable(_)) && !namesItsType(imp, answer))) continue;
 			final binding: Null<NameTarget> = bindingOf(answer);
 			if (!imp.guarded || coGuarded(imp, fi, order.use)) {
 				out.bound = binding;
@@ -609,7 +609,7 @@ final class TypeNameBinding {
 			if (files.length == 0) {
 				// a module the std holds, or a package nothing here lists may, which may declare `sub`
 				final std: Null<Bool> = StdTypes.declaresModule(SourceText.parentPath(m.path), module);
-				if (std == true || std == null && !m.listed) return Unknown;
+				if (std == true || (std == null && !m.listed)) return Unknown;
 				continue;
 			}
 			if (m.guarded) return Unknown;

@@ -223,7 +223,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		for (ref in c.refs) {
 			final span: Null<Span> = ref.span;
 			if (span == null || ref == plan.declTarget) continue;
-			if (ref.kind == c.seams.interpIdentKind || ref.kind == c.seams.identKind && ref.name == plan.localName) continue;
+			if (ref.kind == c.seams.interpIdentKind || (ref.kind == c.seams.identKind && ref.name == plan.localName)) continue;
 			out.push({ span: span, text: plan.localName });
 		}
 		return out;
@@ -518,11 +518,8 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		if (parent == null) return false;
 		final member: Bool = s.accessKinds.contains(parent.kind) && parent.children.length == 1;
 		return s.writeParentKinds.contains(parent.kind)
-			|| member
-			&& (grand == null || !s.invocationKinds.contains(grand.kind) || grand.children[0] != parent)
-			|| !member
-			&& s.invocationKinds.contains(parent.kind)
-			&& parent.children.indexOf(ref) > 0;
+			|| (member && (grand == null || !s.invocationKinds.contains(grand.kind) || grand.children[0] != parent))
+			|| (!member && s.invocationKinds.contains(parent.kind) && parent.children.indexOf(ref) > 0);
 	}
 
 	/**
@@ -634,7 +631,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 				&& self != null
 				&& target.children[0].name == self;
 			final name: String = target.name ?? '';
-			return (throughSelf && fields.contains(name) || bare && (fields.contains(name) || params.contains(name)))
+			return ((throughSelf && fields.contains(name)) || (bare && (fields.contains(name) || params.contains(name))))
 				&& MemberKinds.isSideEffectFree(assign.children[1], shape);
 		});
 	}

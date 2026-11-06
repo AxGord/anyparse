@@ -606,7 +606,7 @@
 			"name": "M-LOOPBOUND-NESTED-FILL",
 			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
 			"method": "checkLoops",
-			"find": "if (span == null || span.from >= fillFrom && span.to <= fillTo) return;",
+			"find": "if (span == null || (span.from >= fillFrom && span.to <= fillTo)) return;",
 			"replace": "if (span == null) return;",
 			"note": "a loop inside the fill loop, reading an array still being filled, is compared with its final length"
 		},
@@ -638,7 +638,7 @@
 			"name": "M-LOOPBOUND-SELF-REF",
 			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
 			"method": "isRef",
-			"find": "receiver.name == owner || s.selfText != null && receiver.name == s.selfText",
+			"find": "receiver.name == owner || (s.selfText != null && receiver.name == s.selfText)",
 			"replace": "receiver.name == owner",
 			"note": "`this.xs` is no occurrence of the field `xs`, so a read through it is missed"
 		},
@@ -653,7 +653,7 @@
 			"name": "M-LOOPBOUND-AHEAD",
 			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
 			"method": "keepsLength",
-			"find": "|| !isField && (from ?? -1) < src.declFrom",
+			"find": "|| (!isField && (from ?? -1) < src.declFrom)",
 			"replace": "",
 			"note": "a field's occurrence ahead of a same-named local's declaration is read as the local's, so the field's loop is compared with the local's length"
 		},

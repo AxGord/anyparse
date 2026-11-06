@@ -114,10 +114,11 @@ final class RefusalAssertIgnoresMessage extends RuleBase implements ConfigAware 
 
 	/** Whether `node`'s subtree calls one of `names`, compared by the dotted callee spelling. */
 	private static function callsAny(seams: CaseSeams, node: QueryNode, names: Array<String>): Bool {
-		return node.kind == seams.callKind
+		return (
+			node.kind == seams.callKind
 			&& node.children.length > 0
 			&& names.contains(NodeShape.calleePath(node.children[0], seams.fieldAccessKind, seams.identKind).join('.'))
-			|| node.children.exists(child -> callsAny(seams, child, names));
+		) || node.children.exists(child -> callsAny(seams, child, names));
 	}
 
 }

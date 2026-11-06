@@ -622,8 +622,7 @@ final class PreferComprehension extends RuleBase {
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: ComprehensionSeams): Bool {
 		return s.opaqueKinds.contains(node.kind)
-			|| node.name == name
-			&& (node.kind == s.identKind || node.kind == s.interpIdentKind)
+			|| (node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind))
 			|| node.children.exists(c -> referencesName(c, name, s));
 	}
 

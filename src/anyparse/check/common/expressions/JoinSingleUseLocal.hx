@@ -617,8 +617,7 @@ final class JoinSingleUseLocal extends RuleBase {
 		source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, dropSpan: Span, later: Bool
 	): Bool {
 		return comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to)
-			|| later
-			&& SourceComments.ownLineCommentAbove(source, comments, dropSpan.from, false) >= 0;
+			|| (later && SourceComments.ownLineCommentAbove(source, comments, dropSpan.from, false) >= 0);
 	}
 
 	/** Whether any node on `path` evaluates the read CONDITIONALLY (`RefShape.branchKinds`). */

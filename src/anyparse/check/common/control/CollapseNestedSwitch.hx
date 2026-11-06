@@ -423,7 +423,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		final harmless: Bool = fallThroughHarmless(scan, frame.switchNode, frame.at);
 		if (!trailing.catchAll && !harmless && !innerCovered(scan, frame)) return null;
 		final kept: Array<InnerArm> = trailing.catchAll && trailing.body == '' && harmless ? parts.slice(0, parts.length - 1) : parts;
-		return kept.length == 0 || frame.call != null && kept[0].catchAll ? null : kept;
+		return kept.length == 0 || (frame.call != null && kept[0].catchAll) ? null : kept;
 	}
 
 	/** Whether the inner arms match every value the inner subject can hold, by its declared type. */

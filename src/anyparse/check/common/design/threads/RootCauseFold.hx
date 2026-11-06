@@ -264,7 +264,7 @@ final class RootCauseFold {
 		final maker: FoldHold = _holds[m];
 		final finding: Null<Violation> = maker.finding;
 		if (finding == null || finding.severity != Severity.Info) return false;
-		return maker.elsewhere || maker.madeWarning && coverReported(finding, state, []);
+		return maker.elsewhere || (maker.madeWarning && coverReported(finding, state, []));
 	}
 
 	/**

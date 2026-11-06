@@ -319,6 +319,7 @@
 			"bits": "anyparse.ds.Bits"
 		},
 		"misplaced-type-doc": true,
+		"mixed-logical-parens": true,
 		"naming": {
 			"catchVarName": "exception",
 			"handlerSuffix": "Handler"

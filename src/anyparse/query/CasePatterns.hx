@@ -76,7 +76,7 @@ final class CasePatterns {
 			case Whole: subject.typed;
 			case Structural: subject.isDynamic;
 			case Slot(callee, index):
-				ctorArgRulesOutConstants(scope.root, scope.shape, callee, index) || typedSlot != null && typedSlot(ident);
+				ctorArgRulesOutConstants(scope.root, scope.shape, callee, index) || (typedSlot != null && typedSlot(ident));
 			case Opaque: false;
 		};
 	}
@@ -390,9 +390,7 @@ final class CasePatterns {
 		final aliases: Array<String> = shape.aliasingDeclKinds ?? [];
 		final kinds: Array<String> = (shape.typeDeclKinds ?? []).concat(closed);
 		function walk(node: QueryNode): Bool {
-			return node.name == name
-				&& kinds.contains(node.kind)
-				&& (closed.contains(node.kind) || !aliases.contains(node.kind))
+			return (node.name == name && kinds.contains(node.kind) && (closed.contains(node.kind) || !aliases.contains(node.kind)))
 				|| node.children.exists(walk);
 		}
 		return walk(root);

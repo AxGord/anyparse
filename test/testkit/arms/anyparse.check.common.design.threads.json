@@ -431,7 +431,7 @@
 			"name": "M-TS-THROW-TRY-UNCAUGHT",
 			"type": "anyparse.check.common.design.threads.ThrowReach",
 			"method": "uncaught",
-			"find": "if (intercepts(node) && inner == kids[0] || _nestedFnKinds.contains(inner.kind)) return false;",
+			"find": "if ((intercepts(node) && inner == kids[0]) || _nestedFnKinds.contains(inner.kind)) return false;",
 			"replace": "if (_nestedFnKinds.contains(inner.kind)) return false;",
 			"note": "a call inside a try with a catch still raises out of its function"
 		},
@@ -703,7 +703,7 @@
 			"name": "M-TS-DOM-EXITS-IGNORED",
 			"type": "anyparse.check.common.design.threads.MustHeld",
 			"method": "leavesFirst",
-			"find": "&& (returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site));",
+			"find": "&& (returns.contains(last.kind) || ((_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site)));",
 			"replace": "&& false;",
 			"note": "a give on a path that returns at once still kills the lock"
 		},
@@ -855,7 +855,7 @@
 			"name": "M-TS-ERROR-REACH-OFF",
 			"type": "anyparse.check.common.design.threads.LockTaint",
 			"method": "leadsNowhere",
-			"find": " || !repeated && onErrorPath(edge)",
+			"find": "|| (!repeated && onErrorPath(edge))",
 			"replace": "",
 			"note": "a call inside a callee's catch still leads the normal-path walk to its sink"
 		},
@@ -1007,7 +1007,7 @@
 			"name": "M-TS-PATH-STABLE-ANY",
 			"type": "anyparse.check.common.design.threads.ObjectPaths",
 			"method": "writtenOnlyInConstructor",
-			"find": "!_writes.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor",
+			"find": "!_writes.mayWrite(w, owner) || (w.own && ctor != null && w.fn == ctor)",
 			"replace": "true",
 			"note": "a var written outside its constructor counts stable"
 		},
@@ -1039,7 +1039,7 @@
 			"name": "M-TS-CTOR-TAKE",
 			"type": "anyparse.check.common.design.threads.QuietLocks",
 			"method": "never",
-			"find": "return lock != '' && sharedOnly(lock) || uncontended(edge);",
+			"find": "return (lock != '' && sharedOnly(lock)) || uncontended(edge);",
 			"replace": "return lock != '' && sharedOnly(lock);",
 			"note": "a constructor's own take before publication blocks"
 		},
@@ -1071,7 +1071,7 @@
 			"name": "M-TS-HELPER-SIBLINGS",
 			"type": "anyparse.check.common.design.threads.LockDominance",
 			"method": "holdOf",
-			"find": "if (h == a || h.inner != null && h.edge == a.edge) {",
+			"find": "if (h == a || (h.inner != null && h.edge == a.edge)) {",
 			"replace": "if (h == a) {",
 			"note": "a helper hold carries only its own lock, not the others its call takes"
 		},
@@ -1111,7 +1111,7 @@
 			"name": "M-TS-ALLOC-OFF",
 			"type": "anyparse.check.common.design.threads.AllocationSets",
 			"method": "dispatches",
-			"find": "return classes == null || edge.dispatchType == null && edge.kind != New\n\t\t\t? true",
+			"find": "return classes == null || (edge.dispatchType == null && edge.kind != New)\n\t\t\t? true",
 			"replace": "return classes == null || edge.kind == New || edge.kind != New\n\t\t\t? true",
 			"note": "every override of a dispatch runs whatever the receiver was built as"
 		},
@@ -1469,8 +1469,8 @@
 			"name": "M-TS-EXH-FROMFN",
 			"type": "anyparse.check.common.design.threads.ExhaustiveSwitches",
 			"method": "buildsNoOther",
-			"find": "declared.children.length == 0 && handsBackValuesOnly(fn, values);",
-			"replace": "declared.children.length == 0;",
+			"find": "declared.children.length == 0 && handsBackValuesOnly(fn, values));",
+			"replace": "declared.children.length == 0);",
 			"note": "a function of the abstract building any value keeps it closed"
 		},
 		{
@@ -1602,8 +1602,8 @@
 			"name": "M-TS-EXH-PARAM-REF",
 			"type": "anyparse.check.common.design.threads.ExhaustiveSwitches",
 			"method": "callersPassValues",
-			"find": "e.kind == Contains || e.kind.isInvocation() && {",
-			"replace": "e.kind == Contains || !e.kind.isInvocation() || {",
+			"find": "e.kind == Contains || (e.kind.isInvocation() && {",
+			"replace": "e.kind == Contains || (!e.kind.isInvocation() || {",
 			"note": "a function handed on as a value counts as handing its parameters nothing"
 		},
 		{
@@ -1777,7 +1777,7 @@
 			"name": "M-TS-BOUND-CALL",
 			"type": "anyparse.check.common.design.threads.CallRepetition",
 			"method": "bind",
-			"find": "e.kind != Contains && (calls == null || calls.contains(e.to) || e.kind == Ref && calls.contains(e.via ?? ''))",
+			"find": "e.kind != Contains && (calls == null || calls.contains(e.to) || (e.kind == Ref && calls.contains(e.via ?? '')))",
 			"replace": "e.kind != Contains",
 			"note": "an entry naming one call binds the repetitions of every call of the member"
 		},
@@ -2087,7 +2087,7 @@
 			"name": "M-TS-RELEASE-CALLBACK",
 			"type": "anyparse.check.common.design.threads.ThreadStates",
 			"method": "runsWith",
-			"find": "return e.kind.isInvocation() || e.kind == Ref && !inertRef(e);",
+			"find": "return e.kind.isInvocation() || (e.kind == Ref && !inertRef(e));",
 			"replace": "return e.kind.isInvocation();",
 			"note": "a value handed on to run, which gives the lock back, gives back nothing where it is handed"
 		},
@@ -2996,7 +2996,7 @@
 			"name": "M-TS-STORED-CAST-KINDS",
 			"type": "anyparse.check.common.design.threads.ReflectiveValues",
 			"method": "unchecked",
-			"find": "return holds(node) || typed != null && catchAll(typed);",
+			"find": "return holds(node) || (typed != null && catchAll(typed));",
 			"replace": "return typed != null && catchAll(typed);",
 			"note": "an unchecked cast or an untyped hands on a checked value (R4 F4)"
 		},
@@ -3004,7 +3004,7 @@
 			"name": "M-TS-STORED-CAST-DYNAMIC",
 			"type": "anyparse.check.common.design.threads.ReflectiveValues",
 			"method": "unchecked",
-			"find": "return holds(node) || typed != null && catchAll(typed);",
+			"find": "return holds(node) || (typed != null && catchAll(typed));",
 			"replace": "return holds(node);",
 			"note": "a Dynamic value hands on a checked value (R4 F4)"
 		},
@@ -3484,7 +3484,7 @@
 			"name": "M-TS-UNSEALED-PRECONDITIONS",
 			"type": "anyparse.check.common.design.threads.FieldWrites",
 			"method": "notices",
-			"find": "final lacking: String = where.length == 0 && typed.length == 0 || missing.length == 0",
+			"find": "final lacking: String = (where.length == 0 && typed.length == 0) || missing.length == 0",
 			"replace": "final lacking: String = true",
 			"note": "the run no longer names the preconditions of the instantiation bound it fails"
 		},
@@ -3636,7 +3636,7 @@
 			"name": "M-TS-NULL-DEFAULT-UNREAD",
 			"type": "anyparse.check.common.design.threads.ArgumentValues",
 			"method": "valueOver",
-			"find": "arg == null || hasDefault(param) && _types.unwrap(arg).kind == _shape.nullLiteralKind",
+			"find": "arg == null || (hasDefault(param) && _types.unwrap(arg).kind == _shape.nullLiteralKind)",
 			"replace": "arg == null",
 			"note": "a `null` handed to a parameter with a default reads as null, though the default applies"
 		},

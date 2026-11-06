@@ -141,7 +141,7 @@ final class ReflectiveValues {
 		if (_basic.contains(type) || enumType(type)) return false;
 		final index: Null<SymbolIndex> = _graph.index;
 		if (index == null || member == null) return true;
-		if (!classLike(type) || !classLike(member) && declared(member)) return true;
+		if (!classLike(type) || (!classLike(member) && declared(member))) return true;
 		if (!classLike(member) && index.subtypes.supertypeNamesClosure(type).exists(t -> !declared(t))) return true;
 		final under: Array<String> = index.subtypes.subtypeNamesClosure(member);
 		return index.subtypes.subtypeNamesClosure(type).exists(t -> under.contains(t));
@@ -320,7 +320,7 @@ final class ReflectiveValues {
 		}
 		if ((_shape.typeAnnotationKinds ?? []).contains(node.kind)) return false;
 		final typed: Null<String> = typer(file, null, node);
-		return holds(node) || typed != null && catchAll(typed);
+		return holds(node) || (typed != null && catchAll(typed));
 	}
 
 	/**

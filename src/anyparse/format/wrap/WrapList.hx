@@ -2664,7 +2664,7 @@ class WrapList {
 		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, keepCloseGlued: Bool, lineWidth: Int,
 		?complexItemKinds: Array<Int>
 	): Null<Doc> {
-		if (mode != FillLine && mode != FillLineWithLeadingBreak || items.length <= 1) return null;
+		if ((mode != FillLine && mode != FillLineWithLeadingBreak) || items.length <= 1) return null;
 		final collIdx: Int = soleMultilineCollectionArg(items);
 		if (collIdx < 0) return null;
 		// ω-item-close-trail: the glue shape ends `… lastItem <sep?> close`, so a

@@ -962,7 +962,7 @@ final class ReachGraph {
 		// noqa: complexity
 		final view: Null<FactsView> = _scope.facts;
 		final owners: Null<Array<Null<String>>> = at.owners;
-		if (view == null || !view.truth || owners == null || at.family != Text && at.family != Iteration) return null;
+		if (view == null || !view.truth || owners == null || (at.family != Text && at.family != Iteration)) return null;
 		final facts: FactsView = view;
 		final out: Map<String, Null<Array<String>>> = [];
 		function note(name: String, owner: Null<String>): Void {

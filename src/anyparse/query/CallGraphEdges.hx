@@ -620,7 +620,7 @@ final class CallGraphEdges {
 		function targetReturnSource(expr: QueryNode, call: CallTarget, currentType: Null<String>, ?refused: Array<String>): Null<String> {
 			final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(g._plugin, g.nodes[call.target]);
 			final outer: Null<String> = returned == null ? null : NominalTypes.outerNominalOf(returned.trim(), g._plugin.typeSyntax);
-			return returned == null || outer != null && (refused ?? []).contains(outer)
+			return returned == null || (outer != null && (refused ?? []).contains(outer))
 				? null
 				: returnThrough(
 					expr, call.target, returned, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType)

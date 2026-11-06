@@ -1079,7 +1079,7 @@ final class FieldInitAtDeclaration extends RuleBase {
 			// NOT cleared at a function or lambda boundary: one written inside the `try` may be called
 			// there (`try { f(); }`, `items.iter(i -> …)`), and refusing one stored and called later is
 			// the safe direction.
-			final childInTry: Bool = inTry || tryNode && child.kind != scan.catchKind;
+			final childInTry: Bool = inTry || (tryNode && child.kind != scan.catchKind);
 			if (observableRead(child, node, i, host, childInTry, scan)) return true;
 		}
 		return false;
@@ -1098,7 +1098,7 @@ final class FieldInitAtDeclaration extends RuleBase {
 		final span: Null<Span> = node.span;
 		if (node.kind == shape.identKind) {
 			final binding: Null<Int> = span == null ? null : TypeResolver.resolveBindingFrom(scan.name, span, scan.tree, shape);
-			return binding == null || scan.file == scan.fieldFile && binding == scan.fieldFrom;
+			return binding == null || (scan.file == scan.fieldFile && binding == scan.fieldFrom);
 		}
 		final recv: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
 		final selfText: Null<String> = shape.selfReferenceText;
@@ -1110,7 +1110,7 @@ final class FieldInitAtDeclaration extends RuleBase {
 			member.name == scan.name && memberKinds.contains(member.kind)
 		)
 			own = member.span?.from);
-		return own == null || scan.file == scan.fieldFile && own == scan.fieldFrom;
+		return own == null || (scan.file == scan.fieldFile && own == scan.fieldFrom);
 	}
 
 	/**

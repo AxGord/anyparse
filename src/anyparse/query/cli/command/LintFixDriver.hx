@@ -1413,8 +1413,7 @@ final class LintFixDriver {
 			for (file in changedFiles)
 				if (
 					files.exists(entry -> entry.file == file && entry.source != originalOf[file])
-					|| originalOf.exists(file)
-					&& !files.exists(entry -> entry.file == file)
+					|| (originalOf.exists(file) && !files.exists(entry -> entry.file == file))
 				)
 					file
 		];

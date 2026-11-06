@@ -1251,7 +1251,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		final first: Null<Span> = MemberBranchScan.branchSpanOf(branch, cls, touched[0]);
 		for (node in touched) {
 			final span: Null<Span> = MemberBranchScan.branchSpanOf(branch, cls, node);
-			if (first == null != (span == null) || first != null && span != null && (first.from != span.from || first.to != span.to))
+			if (first == null != (span == null) || (first != null && span != null && (first.from != span.from || first.to != span.to)))
 				return false;
 		}
 		if (first == null) return true;

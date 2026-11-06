@@ -122,7 +122,7 @@ final class UnchangedLocal {
 		final lo: Int = within == null ? 0 : within.from;
 		final hi: Int = within == null ? 0 : within.to;
 		return _functions.exists(
-			f -> f.from <= at && at < f.to && (f.from > binding || binding >= f.to) && (within == null || lo <= f.from && f.to <= hi)
+			f -> f.from <= at && at < f.to && (f.from > binding || binding >= f.to) && (within == null || (lo <= f.from && f.to <= hi))
 		);
 	}
 

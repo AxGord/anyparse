@@ -487,7 +487,7 @@
 			"name": "M-NAMING-STORAGELESS-ISVAR",
 			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
 			"method": "grantsStorage",
-			"find": "node.kind == CONDITIONAL_KIND || MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"find": "node.kind == CONDITIONAL_KIND || (MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META)",
 			"replace": "node.kind == CONDITIONAL_KIND",
 			"note": "an `@:isVar` property counts as storage-less, so its storage escapes the private-field rule"
 		},
@@ -495,8 +495,8 @@
 			"name": "M-NAMING-STORAGELESS-REGION",
 			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
 			"method": "grantsStorage",
-			"find": "node.kind == CONDITIONAL_KIND || MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
-			"replace": "MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"find": "node.kind == CONDITIONAL_KIND || (MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"replace": "(MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
 			"note": "a run that steps over a `#if` region counts as proven, so an `@:isVar` one build sees there is missed"
 		},
 		{

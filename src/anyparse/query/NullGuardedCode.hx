@@ -301,9 +301,7 @@ final class NullGuardedCode {
 			read ->
 				read.fact.write
 				|| read.fact.use == COMPARE
-				|| read.fact.use == VALUE
-				&& !read.fact.held
-				&& neverCalled(read.node, read.fact.at, 0)
+				|| (read.fact.use == VALUE && !read.fact.held && neverCalled(read.node, read.fact.at, 0))
 		);
 	}
 
@@ -562,10 +560,11 @@ final class NullGuardedCode {
 			case Named(id, _):
 				final fact: Null<TypeFact> = _view.type(id);
 				fact != null && fact.alike && (
-					NOMINAL_KINDS.contains(fact.kind)
-					|| fact.kind == TYPEDEF_KIND
-					&& fact.targets.length > 0
-					&& fact.targets.foreach(target -> builtinEquality(FactsTypeTree.read(target), depth + 1))
+					NOMINAL_KINDS.contains(fact.kind) || (
+						fact.kind == TYPEDEF_KIND
+						&& fact.targets.length > 0
+						&& fact.targets.foreach(target -> builtinEquality(FactsTypeTree.read(target), depth + 1))
+					)
 				);
 			case _: false;
 		};

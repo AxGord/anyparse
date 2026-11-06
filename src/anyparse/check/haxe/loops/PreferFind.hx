@@ -338,8 +338,7 @@ final class PreferFind extends HaxeRule {
 	 */
 	private static function mentionsName(node: QueryNode, name: String, s: Seams): Bool {
 		return s.opaqueKinds.contains(node.kind)
-			|| node.kind == s.identKind
-			&& node.name == name
+			|| (node.kind == s.identKind && node.name == name)
 			|| node.children.exists(c -> mentionsName(c, name, s));
 	}
 

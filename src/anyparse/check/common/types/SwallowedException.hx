@@ -122,7 +122,8 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 		if (bare && !(ancestors.length > 0 && scan.tryStatementKinds.contains(ancestors[ancestors.length - 1].kind))) return;
 		final bodySpan: Null<Span> = body.span;
 		if (bodySpan == null) return;
-		if (bare && (body.kind == scan.emptyKind || MemberKinds.isSideEffectFree(body, scan.shape) && endsItsList(ancestors, scan))) return;
+		if (bare && (body.kind == scan.emptyKind || (MemberKinds.isSideEffectFree(body, scan.shape) && endsItsList(ancestors, scan))))
+			return;
 		if (!bare && source.substring(bodySpan.from + 1, bodySpan.to - 1).trim() == '') return;
 		final varName: Null<String> = catchNode.name;
 		if (varName == null || varName.startsWith('_')) return;

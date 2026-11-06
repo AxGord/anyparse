@@ -293,13 +293,13 @@ final class CondRegionLiveness {
 
 	/** Three-valued conjunction: false wins over unknown, and true needs BOTH proved. */
 	private static function andOf(left: Null<Bool>, right: Null<Bool>): Null<Bool> {
-		if (left != null && !left || right != null && !right) return false;
+		if ((left != null && !left) || (right != null && !right)) return false;
 		return left != null && left && right != null && right ? true : null;
 	}
 
 	/** Three-valued disjunction: true wins over unknown, and false needs BOTH refuted. */
 	private static function orOf(left: Null<Bool>, right: Null<Bool>): Null<Bool> {
-		if (left != null && left || right != null && right) return true;
+		if ((left != null && left) || (right != null && right)) return true;
 		return left != null && !left && right != null && !right ? false : null;
 	}
 

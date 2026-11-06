@@ -392,7 +392,7 @@ final class LockSites {
 			return false;
 		final superclass: Null<String> = _graph.types.superclassOf(owner);
 		return !_graph.outEdges(edge.from)
-			.exists(e -> e.kind == Ref || e.dispatchType == owner || superclass != null && _graph.node(e.to)?.typeName == superclass)
+			.exists(e -> e.kind == Ref || e.dispatchType == owner || (superclass != null && _graph.node(e.to)?.typeName == superclass))
 			&& !passesSelf(body, null);
 	}
 
@@ -508,11 +508,12 @@ final class LockSites {
 			&& call.kind == _shape.callKind
 			&& call.children[0] == host
 			&& namedCalls.contains('${call.span?.from}:${node.name}');
-		return receiver
-			|| host.kind == _shape.assignKind
+		return receiver || (
+			host.kind == _shape.assignKind
 			&& host.children.length == 2
 			&& host.children[0] == node
-			&& host.children[1].kind == _shape.newExprKind;
+			&& host.children[1].kind == _shape.newExprKind
+		);
 	}
 
 	/**
@@ -768,8 +769,7 @@ private class WrapperOps {
 		function runsOther(node: QueryNode): Bool {
 			if (node != fn && kinds.nested.contains(node.kind)) return false;
 			final at: Null<Span> = node.span;
-			return (node.kind == shape.callKind || node.kind == shape.newExprKind)
-				&& !sites.contains(LockReleasers.callKey(at))
+			return ((node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at)))
 				|| node.children.exists(runsOther);
 		}
 		return !runsOther(fn);

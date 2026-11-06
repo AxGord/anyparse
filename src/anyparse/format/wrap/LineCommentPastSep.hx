@@ -51,7 +51,7 @@ class LineCommentPastSep {
 	 * `relocate` makes for a list the wrap engine lays out).
 	 */
 	public static function writtenAfterSep(comment: Null<String>, beforeSep: Bool, sepFollows: Bool): Bool {
-		return comment != null && (!beforeSep || sepFollows && comment.startsWith('//'));
+		return comment != null && (!beforeSep || (sepFollows && comment.startsWith('//')));
 	}
 
 	/**

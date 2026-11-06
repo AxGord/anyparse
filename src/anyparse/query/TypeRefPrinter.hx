@@ -483,7 +483,7 @@ final class TypeRefPrinter {
 		if (shadowedLocally(canonical, simple)) return null;
 		final binding: Null<BareBinding> = bareBinding(canonical, simple, false);
 		// An import of a module the index never saw proves the module, and so the sub-type it names: nothing contradicts it.
-		if (binding != null) return binding == Same || binding == Unreadable && moduleImportBinds(canonical) ? simple : null;
+		if (binding != null) return binding == Same || (binding == Unreadable && moduleImportBinds(canonical)) ? simple : null;
 		// Without an index only what the file itself shows proves a binding; a builtin, read last, is the std's toplevel.
 		if (StdTypes.toplevelPath(simple) == canonical) return simple;
 		if (_importMap[simple] == canonical || moduleImportBinds(canonical) || moduleLocalBinds(canonical, simple)) return simple;
@@ -675,7 +675,7 @@ final class TypeRefPrinter {
 		final bound: Null<String> = _importMap[simple];
 		if (bound != null && bound != canonical) return true;
 		final aliased: Null<String> = _aliasTargets[simple];
-		if (aliased != null && aliased != canonical || shadowedByGuardedImport(canonical, simple)) return true;
+		if ((aliased != null && aliased != canonical) || shadowedByGuardedImport(canonical, simple)) return true;
 		final info: Null<FileInfo> = _ownInfo;
 		if (info != null && info.types.exists(t -> t.name == simple) && moduleLocalPathOf(simple) != canonical) return true;
 		// An EXPLICIT import or a module-local declaration that binds `simple` to `canonical`

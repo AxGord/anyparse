@@ -483,9 +483,10 @@ final class ComparisonToBoolean extends RuleBase {
 		other: QueryNode, root: QueryNode, shape: RefShape, nullity: Null<DeclaredNullity>, boolOpKinds: Array<String>,
 		fallbackReport: Bool
 	): Bool {
-		return BoolExprShape.provablyBoolOperand(other, boolOpKinds, shape.parenKind)
-			|| other.kind == shape.identKind
-			&& (nullity == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, nullity));
+		return BoolExprShape.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || (
+			other.kind == shape.identKind
+			&& (nullity == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, nullity))
+		);
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */

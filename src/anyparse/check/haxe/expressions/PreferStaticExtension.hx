@@ -499,7 +499,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		final excluded: Bool = bound
 			&& decls.exists(d -> d.type.members.exists(m -> m.name == method && m.isStatic && m.excludedFromExtensions));
 		return {
-			elsewhere: paths.length > 0 && !paths.contains(module) || excluded,
+			elsewhere: (paths.length > 0 && !paths.contains(module)) || excluded,
 			proven: bound && info.ambientImportsBounded,
 			usings: usings
 		};

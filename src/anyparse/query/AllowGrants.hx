@@ -89,7 +89,7 @@ final class AllowGrants {
 	/** Whether `hit` sits on the member at `member` or on the type named `owner` that encloses it. */
 	private static function reachesMember(hit: MetaHit, member: Span, owner: String): Bool {
 		final decl: Null<Span> = hit.declSpan;
-		return decl != null && (decl.from == member.from || hit.declName == owner && decl.from <= member.from && member.to <= decl.to);
+		return decl != null && (decl.from == member.from || (hit.declName == owner && decl.from <= member.from && member.to <= decl.to));
 	}
 
 }

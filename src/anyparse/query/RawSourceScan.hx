@@ -409,7 +409,7 @@ final class RawSourceScan {
 
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */
 	public static inline function isWordChar(c: Int): Bool {
-		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
+		return c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
 	}
 
 	/**

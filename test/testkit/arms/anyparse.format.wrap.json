@@ -141,7 +141,7 @@
 			"name": "M-CHAIN-AFTERFIRST-COMMIT-UNREAD",
 			"type": "anyparse.format.wrap.MethodChainEmit",
 			"method": "shapeOnePerLineAfterFirst",
-			"find": "committed == i || i == 1 && committed == 0",
+			"find": "committed == i || (i == 1 && committed == 0)",
 			"replace": "false",
 			"note": "the offered layout of a chain whose head is not a call reads the committed part flat, so the offer lays the link out uncuddled as before"
 		},

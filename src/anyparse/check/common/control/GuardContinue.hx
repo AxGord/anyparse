@@ -367,8 +367,7 @@ final class GuardContinue extends RuleBase {
 	private static function mentionsName(node: QueryNode, name: String, s: Seams): Bool {
 		final h: Null<HoistSeams> = s.hoist;
 		return h == null
-			|| (node.kind == h.identKind || node.kind == h.interpIdentKind)
-			&& node.name == name
+			|| ((node.kind == h.identKind || node.kind == h.interpIdentKind) && node.name == name)
 			|| node.children.exists(c -> mentionsName(c, name, s));
 	}
 
@@ -499,7 +498,7 @@ final class GuardContinue extends RuleBase {
 	 */
 	private static function bindsName(node: QueryNode, name: String, s: Seams, ?except: QueryNode): Bool {
 		final binds: Bool = s.localDeclKinds.contains(node.kind) || s.localDeclExprKinds.contains(node.kind) || isLoop(node, s);
-		return binds && node.name == name && node != except || node.children.exists(c -> bindsName(c, name, s, except));
+		return (binds && node.name == name && node != except) || node.children.exists(c -> bindsName(c, name, s, except));
 	}
 
 	/** Whether a nested function / lambda subtree inside `node` mentions `name` — that inner scope may own it. */
@@ -561,12 +560,9 @@ final class GuardContinue extends RuleBase {
 	/** Whether `code` is an identifier character; a null code (out of range) is a boundary, not a word character. */
 	private static function isWordCode(code: Null<Int>): Bool {
 		return code != null && (
-			code >= '0'.code
-			&& code <= '9'.code
-			|| code >= 'A'.code
-			&& code <= 'Z'.code
-			|| code >= 'a'.code
-			&& code <= 'z'.code
+			(code >= '0'.code && code <= '9'.code)
+			|| (code >= 'A'.code && code <= 'Z'.code)
+			|| (code >= 'a'.code && code <= 'z'.code)
 			|| code == '_'.code
 		);
 	}

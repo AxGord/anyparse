@@ -165,8 +165,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	}
 
 	private static function readsName(node: QueryNode, name: String, s: Seams): Bool {
-		return (node.kind == s.identKind || node.kind == s.interpIdentKind)
-			&& node.name == name
+		return ((node.kind == s.identKind || node.kind == s.interpIdentKind) && node.name == name)
 			|| node.children.exists(c -> readsName(c, name, s));
 	}
 
@@ -177,13 +176,9 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	private static function leavesValue(node: QueryNode, binder: String, s: Seams): Bool {
 		final isIdent: Bool = node.kind == s.identKind;
 		return s.leavingKinds.contains(node.kind)
-			|| s.ifExpressionKinds.contains(node.kind)
-			&& node.children.length < IF_ELSE_CHILD_COUNT
-			|| isIdent
-			&& node.name == s.superText
-			|| s.writeKinds.contains(node.kind)
-			&& node.children.length > 0
-			&& isBinder(node.children[0], binder, s)
+			|| (s.ifExpressionKinds.contains(node.kind) && node.children.length < IF_ELSE_CHILD_COUNT)
+			|| (isIdent && node.name == s.superText)
+			|| (s.writeKinds.contains(node.kind) && node.children.length > 0 && isBinder(node.children[0], binder, s))
 			|| node.children.exists(c -> leavesValue(c, binder, s));
 	}
 

@@ -314,7 +314,7 @@ final class FieldWrites {
 			);
 		// what would have bounded an unplaced write on a type parameter: a run over a whole closed project declaring its reflection
 		final missing: Array<String> = _targets.lacking();
-		final lacking: String = where.length == 0 && typed.length == 0 || missing.length == 0
+		final lacking: String = (where.length == 0 && typed.length == 0) || missing.length == 0
 			? ''
 			: '; a type parameter is bounded by its instantiations only in a run over a whole closedWorld project declaring'
 				+ ' reflectiveClasses — here: ${missing.join(', ')}';

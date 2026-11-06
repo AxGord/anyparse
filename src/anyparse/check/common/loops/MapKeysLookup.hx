@@ -336,8 +336,7 @@ final class MapKeysLookup extends RuleBase {
 			|| cfg.paramKinds.contains(node.kind)
 			|| node.kind == cfg.forKind
 			|| cfg.valueBinderKinds.contains(node.kind);
-		return introducesBinding
-			&& (node.name == rootName || node.name == keyName)
+		return (introducesBinding && (node.name == rootName || node.name == keyName))
 			|| node.children.exists(c -> rebinds(c, rootName, keyName, cfg));
 	}
 

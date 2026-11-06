@@ -214,7 +214,7 @@ final class GateArms {
 		final rows: Array<ArmRow> = GateExcerpt.armRows(log);
 		for (row in rows) read.rows.push(row);
 		final standing: Array<ArmRow> = rows.filter(row -> !gate.options.allowArms.contains(row.name));
-		return run.ok || tally.matched(1) != '0' && standing.length == 0
+		return run.ok || (tally.matched(1) != '0' && standing.length == 0)
 			? Passed
 			: Failed(GateTree.clip('${tally.matched(0)} — ${gate.log('arms-apply.log')}'));
 	}

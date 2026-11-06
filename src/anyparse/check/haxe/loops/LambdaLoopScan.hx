@@ -625,7 +625,7 @@ final class LambdaLoopScan {
 	private static function mentionsSuper(node: QueryNode, s: Seams): Bool {
 		final superText: Null<String> = s.superText;
 		return superText != null
-			&& (node.kind == s.identKind && node.name == superText || node.children.exists(child -> mentionsSuper(child, s)));
+			&& ((node.kind == s.identKind && node.name == superText) || node.children.exists(child -> mentionsSuper(child, s)));
 	}
 
 	/**

@@ -304,8 +304,7 @@ final class CallGraphKeys {
 		final types: CallGraphTypes = g.types;
 		return currentType != null && (
 			!types.chainFullyIndexed(currentType)
-			|| types.declaringTypeOf(currentType, name) != null
-			&& !staticOfSupertype(g, currentType, name)
+			|| (types.declaringTypeOf(currentType, name) != null && !staticOfSupertype(g, currentType, name))
 		);
 	}
 

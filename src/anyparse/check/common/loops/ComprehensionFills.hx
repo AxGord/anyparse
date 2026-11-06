@@ -140,8 +140,7 @@ final class ComprehensionFills {
 	 */
 	private static function innerElement(text: String, annotation: Null<String>, outer: Null<String>): String {
 		final restated: Bool = annotation == null
-			|| outer != null
-			&& PreferComprehension.stripWhitespace(outer) == PreferComprehension.stripWhitespace(annotation);
+			|| (outer != null && PreferComprehension.stripWhitespace(outer) == PreferComprehension.stripWhitespace(annotation));
 		return restated ? '[$text]' : '([$text] : $annotation)';
 	}
 

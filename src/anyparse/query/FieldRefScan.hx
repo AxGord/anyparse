@@ -93,8 +93,7 @@ final class FieldRefScan {
 		final continuations: Array<String> = shape.localDeclContinuationKinds ?? [];
 		if ((shape.localDeclKinds ?? []).contains(node.kind) && !continuations.contains(node.kind))
 			return span == null
-				|| node.children.exists(c -> continuations.contains(c.kind))
-				&& SourceText.identTokenOffset(source, span, field) >= 0;
+				|| (node.children.exists(c -> continuations.contains(c.kind)) && SourceText.identTokenOffset(source, span, field) >= 0);
 		final selfScoped: Array<String> = (shape.iterationBindingKinds ?? []).concat(shape.iterationValueBinderKinds ?? []);
 		return selfScoped.contains(node.kind) && (span == null || node.name == field);
 	}

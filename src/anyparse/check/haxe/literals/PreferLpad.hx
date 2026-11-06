@@ -285,9 +285,7 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 	 * shape this check has not enumerated refuses rather than resolves to the wrong binding.
 	 */
 	private static function rebinds(node: QueryNode, binder: String, s: LpadSeams): Bool {
-		return node.name == binder
-			&& node.kind != s.identKind
-			&& node.kind != s.interpIdentKind
+		return (node.name == binder && node.kind != s.identKind && node.kind != s.interpIdentKind)
 			|| node.children.exists(child -> rebinds(child, binder, s));
 	}
 

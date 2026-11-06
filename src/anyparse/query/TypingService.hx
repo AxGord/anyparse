@@ -299,7 +299,8 @@ final class TypingService {
 		final binary: Bool = (shape.arithmeticKinds ?? []).contains(kind)
 			|| (shape.booleanOperatorKinds ?? []).contains(kind)
 			|| shape.execution?.compoundAssignOperators?.exists(kind) == true;
-		return binary && node.children.length == 2 || (kind == shape.negationKind || kind == shape.notKind) && node.children.length == 1;
+		return (binary && node.children.length == 2)
+			|| ((kind == shape.negationKind || kind == shape.notKind) && node.children.length == 1);
 	}
 
 	/**
@@ -319,7 +320,7 @@ final class TypingService {
 	public static function readingAt(index: SymbolIndex, plugin: GrammarPlugin, file: String, at: Int, ?root: QueryNode): Tier {
 		final fi: Null<FileInfo> = index.fileInfo(file);
 		final source: Null<String> = index.sourceOf(file);
-		if (fi == null || source == null && root == null) return Tier.Unknown;
+		if (fi == null || (source == null && root == null)) return Tier.Unknown;
 		final tree: QueryNode = root ?? plugin.parseFileTypeRefs(source ?? '');
 		final shape: RefShape = plugin.refShape();
 		final node: Null<QueryNode> = innermostAt(tree, at);
@@ -420,7 +421,7 @@ final class TypingService {
 		if (!~/^[0-9]+$/.match(digits)) return true;
 		final max: Null<String> = core.integerMax;
 		while (digits.length > 1 && digits.charAt(0) == '0') digits = digits.substr(1);
-		return max != null && (digits.length > max.length || digits.length == max.length && digits > max);
+		return max != null && (digits.length > max.length || (digits.length == max.length && digits > max));
 	}
 
 	/**

@@ -198,8 +198,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 			last == null
 			|| span == null
 			|| thenBraced == (last.kind == seams.blockStmtKind)
-			|| thenBraced
-			&& seams.exemptElseKinds.contains(last.kind)
+			|| (thenBraced && seams.exemptElseKinds.contains(last.kind))
 		)
 			null
 		else
@@ -329,7 +328,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	private static function holdsOnly(block: QueryNode, kind: String, exprStmtKind: Null<String>): Bool {
 		final inner: Null<QueryNode> = block.children.length == 1 ? block.children[0] : null;
 		return inner != null
-			&& (inner.kind == kind || inner.kind == exprStmtKind && inner.children.length == 1 && inner.children[0].kind == kind);
+			&& (inner.kind == kind || (inner.kind == exprStmtKind && inner.children.length == 1 && inner.children[0].kind == kind));
 	}
 
 	/**

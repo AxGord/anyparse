@@ -250,7 +250,7 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 	/** Whether every reassignment of `name` in `root` is one of the `leafCount` leaf-assignment writes inside `switchSpan`. */
 	private static function writtenOnlyByArms(name: String, root: QueryNode, switchSpan: Span, leafCount: Int, s: Seams): Bool {
 		final writes: Array<Span> = writeSpans(name, root, s.shape);
-		return writes.length == leafCount && writes.foreach(w -> !(w.from < switchSpan.from || w.from >= switchSpan.to));
+		return writes.length == leafCount && writes.foreach(w -> w.from >= switchSpan.from && w.from < switchSpan.to);
 	}
 
 	/**
@@ -320,8 +320,7 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 	 * a distinct kind). Mirrors `JoinDeclarationAssignment.referencesName`.
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
-		return (node.kind == s.identKind || node.kind == s.stringInterpKind)
-			&& node.name == name
+		return ((node.kind == s.identKind || node.kind == s.stringInterpKind) && node.name == name)
 			|| node.children.exists(c -> referencesName(c, name, s));
 	}
 

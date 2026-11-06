@@ -505,7 +505,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		if (to != from + 1 || to >= raw.length) return false;
 		final c: Int = raw.fastCodeAt(from);
 		if (c == ' '.code || c == ','.code) return raw.fastCodeAt(to) != ' '.code;
-		if (from == 0 || c != '('.code && c != '['.code && c != '{'.code) return false;
+		if (from == 0 || (c != '('.code && c != '['.code && c != '{'.code)) return false;
 		final before: Int = raw.fastCodeAt(from - 1);
 		return before == ' '.code || before == ','.code;
 	}

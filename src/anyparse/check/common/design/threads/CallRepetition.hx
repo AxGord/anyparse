@@ -143,7 +143,7 @@ final class CallRepetition {
 	 */
 	public function registered(edge: CallEdge): Bool {
 		final lists: ChainLists = _listsOf(edge.file);
-		return listed(edge, lists.registerMemberIds, []) || listed(edge, lists.registerIds, lists.registerNames) && runtimeCall(edge);
+		return listed(edge, lists.registerMemberIds, []) || (listed(edge, lists.registerIds, lists.registerNames) && runtimeCall(edge));
 	}
 
 	/**
@@ -270,7 +270,7 @@ final class CallRepetition {
 	 * (`runtimeCall`): a bare name says nothing of a project function of that name, whose body may loop over its items.
 	 */
 	private function runsOnce(edge: CallEdge, lists: ChainLists): Bool {
-		return listed(edge, lists.runsOnceIds, []) || listed(edge, [], lists.runsOnceNames) && runtimeCall(edge);
+		return listed(edge, lists.runsOnceIds, []) || (listed(edge, [], lists.runsOnceNames) && runtimeCall(edge));
 	}
 
 	/**
@@ -417,7 +417,7 @@ final class CallRepetition {
 			return 'loop "$loop" names several loops there — add the rank of the one it bounds ("$loop #1", "$loop #2", …)';
 		final found: Array<String> = [];
 		for (id in functionsOf(member)) for (e in _graph.outEdges(id)) if (
-			e.kind != Contains && (calls == null || calls.contains(e.to) || e.kind == Ref && calls.contains(e.via ?? ''))
+			e.kind != Contains && (calls == null || calls.contains(e.to) || (e.kind == Ref && calls.contains(e.via ?? '')))
 		) {
 			final loops: Null<Array<Span>> = loopsAround(e);
 			if (loops == null) return 'a call there sits where the tree cannot place it';

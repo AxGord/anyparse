@@ -198,7 +198,8 @@ final class ImportBindings {
 			for (file in filesOf(owner)) for (name in moduleFieldsOf(file)) name
 		];
 		final owners: Array<TypeDeclInfo> = typesNamed(owner);
-		final member: Bool = ownerFields.contains(leaf) || owners.length > 0 && owners.foreach(t -> t.members.exists(m -> m.name == leaf));
+		final member: Bool = ownerFields.contains(leaf)
+			|| (owners.length > 0 && owners.foreach(t -> t.members.exists(m -> m.name == leaf)));
 		return member
 			? {
 				types: [],

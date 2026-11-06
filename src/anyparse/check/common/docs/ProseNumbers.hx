@@ -213,10 +213,8 @@ final class ProseNumbers {
 		final previous: Int = wordStartBefore(source, from, last);
 		if (BOUND_PAIRS.contains('${source.substring(previous, trimmedEnd(source, previous, last)).toLowerCase()} $lastWord')) return true;
 		final digits: Int = leadingDigits(source, to, at);
-		return digits >= STANDARD_DIGITS
-			&& isAcronym(source, last, trimmedEnd(source, last, at))
-			|| digits == YEAR_DIGITS
-			&& isYear(source.substr(at, YEAR_DIGITS))
+		return (digits >= STANDARD_DIGITS && isAcronym(source, last, trimmedEnd(source, last, at)))
+			|| (digits == YEAR_DIGITS && isYear(source.substr(at, YEAR_DIGITS)))
 			|| BOUND_TAILS.exists(tail -> matchesIgnoringCase(source, to, end, tail));
 	}
 
@@ -237,9 +235,7 @@ final class ProseNumbers {
 		if (at >= to) return false;
 		final c: Int = source.fastCodeAt(at);
 		return SourceText.isIdentChar(c)
-			|| (c == '-'.code || c == '\''.code)
-			&& at + 1 < to
-			&& SourceText.isIdentChar(source.fastCodeAt(at + 1));
+			|| ((c == '-'.code || c == '\''.code) && at + 1 < to && SourceText.isIdentChar(source.fastCodeAt(at + 1)));
 	}
 
 	/** Whether the word `[at, end)` is a noun a census counts. */

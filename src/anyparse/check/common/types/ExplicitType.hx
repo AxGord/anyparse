@@ -249,7 +249,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 					span != null
 					&& span.from <= e.span.from
 					&& e.span.from <= span.to
-					&& (best == null || best.from <= span.from && span.to <= best.to)
+					&& (best == null || (best.from <= span.from && span.to <= best.to))
 				)
 					owner = v;
 			}

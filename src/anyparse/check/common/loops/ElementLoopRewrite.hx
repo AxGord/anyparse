@@ -294,7 +294,7 @@ final class ElementLoopRewrite {
 	private static function nests(a: QueryNode, b: QueryNode): Bool {
 		final sa: Null<Span> = a.span;
 		final sb: Null<Span> = b.span;
-		return sa != null && sb != null && (sa.from <= sb.from && sb.to <= sa.to || sb.from <= sa.from && sa.to <= sb.to);
+		return sa != null && sb != null && ((sa.from <= sb.from && sb.to <= sa.to) || (sb.from <= sa.from && sa.to <= sb.to));
 	}
 
 }

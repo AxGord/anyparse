@@ -118,12 +118,12 @@ final class HxStringEscape {
 	 * apart on what a name is.
 	 */
 	public static function isIdentStart(code: Int): Bool {
-		return code >= 'a'.code && code <= 'z'.code || code >= 'A'.code && code <= 'Z'.code || code == '_'.code;
+		return (code >= 'a'.code && code <= 'z'.code) || (code >= 'A'.code && code <= 'Z'.code) || code == '_'.code;
 	}
 
 	/** Whether `code` continues a Haxe identifier (a letter, a digit, or an underscore). */
 	public static function isIdentContinue(code: Int): Bool {
-		return isIdentStart(code) || code >= '0'.code && code <= '9'.code;
+		return isIdentStart(code) || (code >= '0'.code && code <= '9'.code);
 	}
 
 	/**

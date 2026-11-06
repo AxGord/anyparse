@@ -387,12 +387,10 @@ final class OptionalParamShorthand extends RuleBase {
 	 * constructor or a `static`. A conservative miss, not a correctness gap.
 	 */
 	private static function isUnoverridable(fn: QueryNode, fnParent: QueryNode, seams: Seams): Bool {
-		return seams.constructorName != null
-			&& fn.name == seams.constructorName
+		return (seams.constructorName != null && fn.name == seams.constructorName)
 			|| seams.localFunctionKinds.contains(fn.kind)
 			|| seams.inlineFunctionKinds.contains(fn.kind)
-			|| seams.finalModifierMemberKind != null
-			&& fn.kind == seams.finalModifierMemberKind
+			|| (seams.finalModifierMemberKind != null && fn.kind == seams.finalModifierMemberKind)
 			|| hasModifier(fn, fnParent, seams, seams.staticModifierKind)
 			|| hasModifier(fn, fnParent, seams, seams.inlineModifierKind);
 	}
@@ -719,7 +717,7 @@ final class OptionalParamShorthand extends RuleBase {
 		var agreed: Null<String> = null;
 		for (read in sites) {
 			final text: Null<String> = constantDefaultText(read.fallback, typeText, seams, scope, source);
-			if (text == null || agreed != null && agreed != text) return null;
+			if (text == null || (agreed != null && agreed != text)) return null;
 			agreed = text;
 		}
 		return agreed;

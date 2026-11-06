@@ -188,9 +188,10 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 
 	/** Whether `node`'s subtree names `member` as an identifier, a field read or a constructed type. */
 	private static function names(scan: PinScan, node: QueryNode, member: String): Bool {
-		return node.name == member
+		return (
+			node.name == member
 			&& (node.kind == scan.shape.identKind || node.kind == scan.shape.fieldAccessKind || node.kind == scan.shape.newExprKind)
-			|| node.children.exists(child -> names(scan, child, member));
+		) || node.children.exists(child -> names(scan, child, member));
 	}
 
 	/**

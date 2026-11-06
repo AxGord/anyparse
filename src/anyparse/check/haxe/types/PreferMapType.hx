@@ -545,7 +545,7 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 				else if (resolveConcreteMap(nominal, scope) != concrete)
 					false
 				else
-					!writesOwnKey || more && keyProven(first, scope);
+					!writesOwnKey || (more && keyProven(first, scope));
 			case _: false;
 		};
 	}
@@ -592,8 +592,9 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 	private static function keyProven(key: String, scope: Scope): Bool {
 		if (key == '') return false;
 		for (i in 0...key.length) if (!isNominalChar(key.fastCodeAt(i))) return false;
-		return !KEY_TYPES_ROUTED_ELSEWHERE.contains(CheckScan.simpleModuleName(key))
-			&& (key.indexOf('.') != -1 || (scope.imports.exists(key) || scope.declared.contains(key)) && !aliasesToAClaimedKey(key, scope));
+		return !KEY_TYPES_ROUTED_ELSEWHERE.contains(CheckScan.simpleModuleName(key)) && (
+			key.indexOf('.') != -1 || ((scope.imports.exists(key) || scope.declared.contains(key)) && !aliasesToAClaimedKey(key, scope))
+		);
 	}
 
 	/** Whether `name`'s module-declared alias chain reaches a type name an earlier `Map` selector claims. */

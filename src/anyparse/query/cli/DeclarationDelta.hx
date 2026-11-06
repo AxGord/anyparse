@@ -262,7 +262,7 @@ final class DeclarationDelta {
 			if (!SourceText.isIdentifier(from) || !SourceText.isIdentifier(to)) return null;
 			final mapped: Null<String> = forward[from];
 			final source: Null<String> = backward[to];
-			if (mapped != null && mapped != to || source != null && source != from) return null;
+			if ((mapped != null && mapped != to) || (source != null && source != from)) return null;
 			if (mapped == null && from != to) out.push({ from: from, to: to });
 			forward[from] = to;
 			backward[to] = from;
@@ -300,7 +300,7 @@ final class DeclarationDelta {
 			final known: Int = partner[i];
 			if (known >= 0) matched[known] = true;
 			final mine: Array<String> = after.owned[i];
-			if (unit.header || known >= 0 && sameLines(before.owned[known], mine)) continue;
+			if (unit.header || (known >= 0 && sameLines(before.owned[known], mine))) continue;
 			final counts: LineCounts = known < 0 ? { added: mine.length, removed: 0 } : lineCounts(before.owned[known], mine);
 			out.push(changeOf(
 				known < 0 ? Added : Changed, unit, nowAddress.describe(after.source, unit.node), counts,

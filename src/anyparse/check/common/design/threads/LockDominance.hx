@@ -94,7 +94,7 @@ final class LockDominance {
 	 */
 	public function holdOf(a: LockAcquire): Null<String> {
 		final entries: Array<String> = [];
-		for (h in _holds) if (h == a || h.inner != null && h.edge == a.edge) {
+		for (h in _holds) if (h == a || (h.inner != null && h.edge == a.edge)) {
 			final lock: Null<String> = h.lock;
 			final object: Null<String> = _must.holdObject(h);
 			if (lock != null && object != null && !entries.contains(MustHeld.heldOn(lock, object)))
@@ -203,7 +203,7 @@ final class LockDominance {
 	 */
 	private function heldAtLong(a: LockAcquire, lock: String, positions: Null<Array<Int>>): Null<Array<String>> {
 		final object: Null<String> = _must.holdObject(a);
-		if (positions == null || positions.length > 0 && object == null) return null;
+		if (positions == null || (positions.length > 0 && object == null)) return null;
 		var meet: Null<Array<String>> = null;
 		for (state in _states.statesOf(a.edge.from)) if (_conditions.carried(
 			a.edge, state.valuation, state.ctx

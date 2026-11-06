@@ -153,7 +153,7 @@ final class ConfigFinder {
 			}
 			// A computed bound the walk is not UNDER cannot be reached by climbing, and climbing past
 			// it is the fail-open direction — an ancestor nobody asked for decides what this file sees.
-			if (marksProjectRoot(dir, boundary) || bound != null && !under(dir, bound)) break;
+			if (marksProjectRoot(dir, boundary) || (bound != null && !under(dir, bound))) break;
 			final parent: String = haxe.io.Path.directory(dir);
 			if (parent == dir) break;
 			dir = parent;

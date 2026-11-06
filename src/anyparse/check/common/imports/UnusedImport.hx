@@ -526,7 +526,7 @@ final class UnusedImport extends RuleBase {
 		final typeValues: Null<Array<String>> = binding?.typeValues;
 		final fieldValues: Null<Array<String>> = binding?.fieldValues;
 		for (names in [typeValues, fieldValues]) if (names != null && names.exists(name -> referenced(scans, name))) return true;
-		if (!membersByPath.exists(imp.raw) || typeValues != null && fieldValues != null) return false;
+		if (!membersByPath.exists(imp.raw) || (typeValues != null && fieldValues != null)) return false;
 		out.push(make(file, imp, Severity.Info, 'import \'${imp.raw}\': $MSG_VALUES_UNLISTED', DECLINE_VALUES_UNLISTED));
 		return true;
 	}

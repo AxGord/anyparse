@@ -138,7 +138,7 @@ final class ExhaustiveSwitches {
 		final name: Null<String> = read.name;
 		final type: Null<String> = _graph.node(fnId)?.typeName;
 		if (name == null || type == null) return null;
-		final own: Bool = read.kind == _shape.identKind && BareNames.bindsNothing(fn, name, _shape) || isSelf(read);
+		final own: Bool = (read.kind == _shape.identKind && BareNames.bindsNothing(fn, name, _shape)) || isSelf(read);
 		final owner: Null<String> = own ? _graph.types.declaringTypeOf(type, name) : null;
 		// a written type naming no enum abstract — `Null<T>` among them — is no closed one (`closedOf`)
 		final declared: Null<String> = _graph.types.memberOnChain(type, name)?.typeSource;
@@ -196,7 +196,7 @@ final class ExhaustiveSwitches {
 		for (k in kids) {
 			if ((_shape.modifierKinds ?? []).contains(k.kind) || _metaKinds.contains(k.kind)) {
 				isStatic = isStatic || k.kind == _shape.staticModifierKind;
-				isFrom = isFrom || _metaKinds.contains(k.kind) && k.name == _shape.execution?.implicitConversionMetaName;
+				isFrom = isFrom || (_metaKinds.contains(k.kind) && k.name == _shape.execution?.implicitConversionMetaName);
 				continue;
 			}
 			if (fields.contains(k.kind) && !isStatic && k.name != null)
@@ -221,7 +221,7 @@ final class ExhaustiveSwitches {
 		if (fn.name == (_shape.constructorName ?? 'new')) return false;
 		final declared: Null<QueryNode> = fn.children.find(c -> _typeKinds.contains(c.kind));
 		if (declared != null)
-			return !mentions(declared, type) || declared.name == type && declared.children.length == 0 && handsBackValuesOnly(fn, values);
+			return !mentions(declared, type) || (declared.name == type && declared.children.length == 0 && handsBackValuesOnly(fn, values));
 		final returns: Array<QueryNode> = [];
 		collectReturns(fn, returns, true);
 		return returns.length == 0;
@@ -326,7 +326,7 @@ final class ExhaustiveSwitches {
 			&& (info.hasGetter ? getterHolds(decl, owner, member, closed) : storedHolds(decl, owner, member, closed));
 		_judging.pop();
 		// an answer that leaned on a member or a parameter still being judged is kept only once nothing is
-		if (_judging.length == 0 && _passing.length == 0 || !holds) _holds[key] = holds;
+		if ((_judging.length == 0 && _passing.length == 0) || !holds) _holds[key] = holds;
 		return holds;
 	}
 
@@ -477,12 +477,12 @@ final class ExhaustiveSwitches {
 		// an optional parameter before this one may be skipped by type, moving a later argument here
 		final skippable: Bool = params.slice(0, index).exists(p -> p.kind == _shape.optionalParamKind || p.children.length > 0);
 		final optional: Bool = param.kind == _shape.optionalParamKind;
-		final passes: Bool = _graph.inEdges(id).foreach(e -> e.kind == Contains || e.kind.isInvocation() && {
+		final passes: Bool = _graph.inEdges(id).foreach(e -> e.kind == Contains || (e.kind.isInvocation() && {
 			final args: Null<{ values: Array<QueryNode>, at: ValueContext }> = argumentsAt(e);
 			args != null
 				&& (args.values.length == params.length || args.values.length == 0 || !skippable)
 				&& (index >= args.values.length ? optional : handsValue(args.values[index], args.at, closed, optional));
-		});
+		}));
 		_passing.pop();
 		return passes;
 	}
@@ -568,7 +568,7 @@ final class ExhaustiveSwitches {
 	 */
 	private function readsOwnField(expr: QueryNode, getter: QueryNode, member: String): Bool {
 		final read: QueryNode = expr.kind == _shape.parenKind && expr.children.length == 1 ? expr.children[0] : expr;
-		return read.name == member && (read.kind == _shape.identKind && BareNames.bindsNothing(getter, member, _shape) || isSelf(read));
+		return read.name == member && ((read.kind == _shape.identKind && BareNames.bindsNothing(getter, member, _shape)) || isSelf(read));
 	}
 
 	/**
@@ -577,7 +577,7 @@ final class ExhaustiveSwitches {
 	 * value or `null`.
 	 */
 	private function handsValue(arg: QueryNode, at: ValueContext, closed: ClosedAbstract, optional: Bool): Bool {
-		return valueExpr(arg, at, closed) || optional && (arg.kind == _shape.nullLiteralKind || parameterOf(arg, at, closed, true));
+		return valueExpr(arg, at, closed) || (optional && (arg.kind == _shape.nullLiteralKind || parameterOf(arg, at, closed, true)));
 	}
 
 }

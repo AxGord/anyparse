@@ -188,10 +188,8 @@ final class Lit {
 				final delimiter: Null<String> = delimiters == null ? null : delimiters[node.kind];
 				final content: Null<String> = delimiter == null ? null : unquoted(n, delimiter);
 				final hit: Bool = matches(n, target, exact)
-					|| content != null
-					&& matches(content, target, exact)
-					|| qualifiedKinds.contains(node.kind)
-					&& SourceText.answersSimpleName(n, target);
+					|| (content != null && matches(content, target, exact))
+					|| (qualifiedKinds.contains(node.kind) && SourceText.answersSimpleName(n, target));
 				if (hit && node.span != null) out.push(new LitHit(node.kind, n, (node.span: Span)));
 			}
 		}

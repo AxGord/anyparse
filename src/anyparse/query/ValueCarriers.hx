@@ -86,7 +86,7 @@ final class ValueCarriers {
 	 * own supertypes, not the whole run.
 	 */
 	public function subtypesKnown(type: String): Bool {
-		return classpathComplete() || _buildsListed && _scope.provenance()?.subtypesIndexed(type) == true;
+		return classpathComplete() || (_buildsListed && _scope.provenance()?.subtypesIndexed(type) == true);
 	}
 
 	/**

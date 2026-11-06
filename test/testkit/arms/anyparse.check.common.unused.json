@@ -237,8 +237,8 @@
 			"name": "M-CTOR-QUALIFIED-BLIND",
 			"type": "anyparse.check.common.unused.UnusedPrivate",
 			"method": "usedAsValue",
-			"find": "&& node.name == className;",
-			"replace": "&& false;",
+			"find": "&& node.name == className);",
+			"replace": "&& false);",
 			"note": "a qualified path to the class is not a class value, so `Type.createInstance(pkg.U, [])` reaches a deleted constructor"
 		},
 		{
@@ -292,8 +292,8 @@
 			"name": "M-DEADSTORE-OWN-PURITY",
 			"type": "anyparse.check.common.unused.DeadStore",
 			"method": "rhsSafeToDelete",
-			"find": "&& TypeResolver.isDeletionPure(rhs, root, shape, declaredTypes, index);",
-			"replace": "&& false;",
+			"find": "&& TypeResolver.isDeletionPure(rhs, root, shape, declaredTypes, index));",
+			"replace": "&& false);",
 			"note": "the dead-store fix proves nothing beyond the shape, so a dead `s.toUpperCase()` / `Date.now()` / `Std.int(v)` store stays"
 		},
 		{

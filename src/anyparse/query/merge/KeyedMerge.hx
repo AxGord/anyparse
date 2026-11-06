@@ -144,7 +144,7 @@ final class KeyedMerge {
 			null
 		else
 			settle(key, old.text, mine.text, null, Changed, Removed);
-		if (other.text == mine.text || old != null && old.text == other.text) return mine.text;
+		if (other.text == mine.text || (old != null && old.text == other.text)) return mine.text;
 		if (old != null && old.text == mine.text) return other.text;
 		final oldTree: Null<MergeTree> = old?.tree;
 		final mineTree: Null<MergeTree> = mine.tree;

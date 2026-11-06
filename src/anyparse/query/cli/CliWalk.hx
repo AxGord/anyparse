@@ -444,7 +444,7 @@ final class CliWalk {
 		final isLower: Bool = first >= 'a'.code && first <= 'z'.code;
 		final leadingDot: Null<String> = CliWalk.looksLikeLeadingDotField(n);
 		final dotted: Null<Array<String>> = CliWalk.looksLikeDottedAccess(n);
-		if (leadingDot == null || cmd != 'lit' && cmd != 'refs' && cmd != 'uses')
+		if (leadingDot == null || (cmd != 'lit' && cmd != 'refs' && cmd != 'uses'))
 			return dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')
 				? nudgeDottedHint(cmd, n, dotted)
 				: nudgeCommandHint(cmd, n, isUpper, isLower, widenKinds);

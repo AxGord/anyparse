@@ -275,7 +275,7 @@ final class NamingCrossRename {
 		final kinds: Array<String> = ctx.shape.bareConstructorTypeKinds ?? [];
 		final fields: Array<String> = ctx.shape.fieldDeclKinds ?? [];
 		inline function isValue(t: TypeDeclInfo, m: MemberInfo): Bool {
-			return t.kind != ctx.shape.enumAbstractDeclKind || !m.isStatic && fields.contains(m.kind) && !m.hasGetter && !m.hasSetter;
+			return t.kind != ctx.shape.enumAbstractDeclKind || (!m.isStatic && fields.contains(m.kind) && !m.hasGetter && !m.hasSetter);
 		}
 		for (fi in ctx.index.allFiles())
 			for (t in fi.types)

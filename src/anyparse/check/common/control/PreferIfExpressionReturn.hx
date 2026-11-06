@@ -335,8 +335,7 @@ final class PreferIfExpressionReturn extends RuleBase {
 		kids: Array<QueryNode>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams,
 		found: (Match, Merge, Span) -> Void
 	): Void {
-		for (i in 0...kids.length) {
-			if (i > 0 && isReturnRung(kids[i - 1], s)) continue; // not a run HEAD
+		for (i in 0...kids.length) if (i <= 0 || !isReturnRung(kids[i - 1], s)) { // a run HEAD: the previous kid is no return rung
 			final m: Null<Match> = cascadeMatch(kids, i, source, comments, s);
 			final merge: Null<Merge> = m?.merge;
 			if (m == null || merge == null) continue;
@@ -620,14 +619,14 @@ final class PreferIfExpressionReturn extends RuleBase {
 		source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Merge> {
 		final from: Int = values.length - MERGED_VALUE_COUNT;
-		if (from < 0 || from > 0 && from >= rungs.length) return null;
+		if (from < 0 || (from > 0 && from >= rungs.length)) return null;
 		final start: Null<Span> = from == 0 ? region : rungs[from].span;
 		final returned: Null<Span> = chain.branches[from].stmt.span;
 		if (start == null || returned == null) return null;
 		final span: Span = new Span(start.from, region.to);
 		final tail: Array<QueryNode> = values.slice(from);
 		final shape: Null<MergeShape> = mergeShape(tail, span, source, comments, s);
-		return shape == null || from > 0 && repeatsTail(values[from - 1], tail, source, comments) ? null : {
+		return shape == null || (from > 0 && repeatsTail(values[from - 1], tail, source, comments)) ? null : {
 			shape: shape,
 			from: from,
 			span: span,

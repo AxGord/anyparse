@@ -241,7 +241,7 @@ final class DataDelta {
 		if (text.length < DIGEST_MIN) return false;
 		for (i in 0...text.length) {
 			final code: Int = text.fastCodeAt(i);
-			if (!(code >= '0'.code && code <= '9'.code || code >= 'a'.code && code <= 'f'.code)) return false;
+			if (!((code >= '0'.code && code <= '9'.code) || (code >= 'a'.code && code <= 'f'.code))) return false;
 		}
 		return true;
 	}

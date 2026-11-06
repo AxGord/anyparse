@@ -307,7 +307,7 @@ final class StaticReflectionReach {
 	 */
 	private static function noteString(content: String, inCarrier: Bool, scan: FileScan, state: ScanState): Void {
 		final named: Bool = JS_CLASS_HANDLES.contains(content) || CLASS_SOURCES.contains(content) || NAME_SOURCES.contains(content);
-		if (named || inCarrier && JS_CLASS_HANDLES.exists(h -> RawSourceScan.mentionsWord(content, h))) state.escapesAll = true;
+		if (named || (inCarrier && JS_CLASS_HANDLES.exists(h -> RawSourceScan.mentionsWord(content, h)))) state.escapesAll = true;
 		if (!inCarrier && !scan.macroFile) state.relaxable.push(content);
 	}
 

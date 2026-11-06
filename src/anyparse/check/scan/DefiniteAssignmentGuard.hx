@@ -272,7 +272,7 @@ final class DefiniteAssignmentGuard {
 	 * loses findings rather than inventing them.
 	 */
 	private static function exits(node: QueryNode, vocab: Vocabulary): Bool {
-		return vocab.exitKinds.contains(node.kind) || node.children.length > 0 && exits(node.children[node.children.length - 1], vocab);
+		return vocab.exitKinds.contains(node.kind) || (node.children.length > 0 && exits(node.children[node.children.length - 1], vocab));
 	}
 
 	/** Record one finding, at most one per name per unit. */

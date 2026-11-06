@@ -177,7 +177,7 @@ final class MustHeld {
 	 * or code an unresolved call of it may run can.
 	 */
 	public function mayRelease(lock: String, id: String): Bool {
-		return _releasers.releasersOf(lock).exists(id) || _releasers.hazard(lock) && (_releasers.blindIn(id) ?? [0]).length > 0;
+		return _releasers.releasersOf(lock).exists(id) || (_releasers.hazard(lock) && (_releasers.blindIn(id) ?? [0]).length > 0);
 	}
 
 	/** What a lock held on `object` in the caller is held on in the callee of `call`; null when nothing says. */
@@ -283,7 +283,7 @@ final class MustHeld {
 				&& runsBefore(g.edge, valuation, pos)
 				&& !(_holdsIn[id] ?? []).exists(a -> {
 					final take: Int = a.edge.span?.from ?? -1;
-					a.lock == cover && (take > given && take < at || around.exists(l -> l.from <= take && take < l.to));
+					a.lock == cover && ((take > given && take < at) || around.exists(l -> l.from <= take && take < l.to));
 				});
 		});
 	}
@@ -311,7 +311,7 @@ final class MustHeld {
 			if (cT == null || cA == null) return null;
 			// a `case`'s statements run in order after its patterns, which make no call
 			if (cT != cA)
-				return _sequenceKinds.contains(common.kind) || common.kind == _shape.caseBranchKind && common.children.indexOf(cT) > 0
+				return _sequenceKinds.contains(common.kind) || (common.kind == _shape.caseBranchKind && common.children.indexOf(cT) > 0)
 					? cT
 					: null;
 			common = cT;
@@ -373,7 +373,7 @@ final class MustHeld {
 			final k: { id: String, valuation: String } = keys[i];
 			final next: Null<Array<String>> = meetInto(k.id, k.valuation);
 			final key: String = '${k.id}|${k.valuation}';
-			if (next == null || _entry.exists(key) && (_entry[key] ?? []).join('\n') == next.join('\n')) continue;
+			if (next == null || (_entry.exists(key) && (_entry[key] ?? []).join('\n') == next.join('\n'))) continue;
 			_entry[key] = next;
 			for (e in _graph.outEdges(k.id)) if (e.kind.isInvocation()) for (j in keysOf[e.to] ?? []) if (!queued[j]) {
 				queued[j] = true;
@@ -426,11 +426,11 @@ final class MustHeld {
 		final block: Null<QueryNode> = site == null ? null : blockOf(give.file, site, at);
 		if (site == null || block == null) return false;
 		final span: Null<Span> = block.span;
-		if (span == null || span.from <= at && at < span.to || block.children.length == 0) return false;
+		if (span == null || (span.from <= at && at < span.to) || block.children.length == 0) return false;
 		final returns: Array<String> = ShapeVocab.returnStatementKinds(_shape);
 		final last: QueryNode = block.children[block.children.length - 1];
 		return !((last.span?.from ?? -1) <= site.from)
-			&& (returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site));
+			&& (returns.contains(last.kind) || ((_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site)));
 	}
 
 	/**
@@ -509,7 +509,7 @@ private final class BodyFacts {
 			final inner: Null<Bool> = decided(kids[0], id, valuation);
 			return inner == null ? null : !inner;
 		}
-		if (kind != _shape.logicalAndKind && kind != _shape.logicalOrKind || kids.length != 2) return decidedParam(cond, id, valuation);
+		if ((kind != _shape.logicalAndKind && kind != _shape.logicalOrKind) || kids.length != 2) return decidedParam(cond, id, valuation);
 		final a: Null<Bool> = decided(kids[0], id, valuation);
 		final b: Null<Bool> = decided(kids[1], id, valuation);
 		final and: Bool = kind == _shape.logicalAndKind;

@@ -621,9 +621,10 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 	 */
 	private static function conditionalRegionsCovered(members: Array<OrderedMember>, source: String): Bool {
 		final conditional: Array<OrderedMember> = [for (m in members) if (m.condition != null) m];
-		return conditional.length == 0
-			|| regionContentCovered(conditional, members, source)
-			&& uncoveredIsDirectiveOnly(source, members[0].regionFrom, members[members.length - 1].regionTo, coveredSlotSpans(members));
+		return conditional.length == 0 || (
+			regionContentCovered(conditional, members, source)
+			&& uncoveredIsDirectiveOnly(source, members[0].regionFrom, members[members.length - 1].regionTo, coveredSlotSpans(members))
+		);
 	}
 
 	/**
@@ -734,7 +735,7 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 			var covered: Bool = false;
 			for (m in members) {
 				final leadEnd: Int = m.leadFrom + m.leadTrivia.length;
-				if (c.from >= m.leadFrom && c.to <= leadEnd || c.from >= m.span.from && c.to <= m.span.to) {
+				if ((c.from >= m.leadFrom && c.to <= leadEnd) || (c.from >= m.span.from && c.to <= m.span.to)) {
 					covered = true;
 					break;
 				}

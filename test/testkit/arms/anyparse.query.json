@@ -1165,7 +1165,7 @@
 			"name": "M-LIT-DELIMITERS-IGNORED",
 			"type": "anyparse.query.Lit",
 			"method": "walk",
-			"find": "final hit: Bool = matches(n, target, exact)\n\t\t\t\t\t|| content != null\n\t\t\t\t\t&& matches(content, target, exact)",
+			"find": "final hit: Bool = matches(n, target, exact)\n\t\t\t\t\t|| (content != null && matches(content, target, exact))",
 			"replace": "final hit: Bool = matches(n, target, exact)\n\t\t\t\t\t",
 			"note": "the declared quotes stay on the name slot for the compare, so `--exact` can never match content written in the grammar's whole-span string spelling and the two spellings answer differently again"
 		},
@@ -5778,7 +5778,7 @@
 			"name": "M-CAPTURE-SLOT-UNPROVEN",
 			"type": "anyparse.query.CasePatterns",
 			"method": "isDecidedCapture",
-			"find": "ctorArgRulesOutConstants(scope.root, scope.shape, callee, index) || typedSlot != null && typedSlot(ident);",
+			"find": "ctorArgRulesOutConstants(scope.root, scope.shape, callee, index) || (typedSlot != null && typedSlot(ident));",
 			"replace": "true;",
 			"note": "a constructor argument capture is decided without its constructor's parameter type"
 		},
@@ -7451,7 +7451,7 @@
 			"name": "M-REACH-IMPORT-ALIAS-OTHER-TYPE",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "aliasesIn",
-			"find": "target.owner != declaring\n\t\t\t\t&& target.decls.length == 1\n\t\t\t\t&& target.decls[0].type.members.exists(m -> m.name == name)",
+			"find": "target.owner != declaring && target.decls.length == 1 && target.decls[0].type.members.exists(m -> m.name == name)",
 			"replace": "false",
 			"note": "an alias of another type's own static of the same name is read as the member"
 		},
@@ -7966,7 +7966,7 @@
 			"name": "M-BIND-FIELD-IMPORT-MODULE-FIELD",
 			"type": "anyparse.query.ImportBindings",
 			"method": "readExplicit",
-			"find": "ownerFields.contains(leaf) || ",
+			"find": "ownerFields.contains(leaf)\n\t\t\t||",
 			"replace": "",
 			"note": "an explicit import of a MODULE-LEVEL field is read as an unknown module, so it collides with every line binding any field value"
 		},
@@ -8317,8 +8317,8 @@
 			"name": "M-REACH-OWN-TYPES-NONE",
 			"type": "anyparse.query.MemberReach",
 			"method": "sharedName",
-			"find": "&& ownTypes(g, node) == null;",
-			"replace": ";",
+			"find": "&& ownTypes(g, node) == null);",
+			"replace": ");",
 			"note": "(precision) a nested function or an initializer run read through its facts stays a name two types share"
 		},
 		{
@@ -9514,7 +9514,7 @@
 			"name": "M-TS-IMPORT-STATIC-OWN",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "memberMayBind",
-			"find": "|| types.declaringTypeOf(currentType, name) != null\n\t\t\t\t&& !staticOfSupertype(g, currentType, name)",
+			"find": "|| (types.declaringTypeOf(currentType, name) != null && !staticOfSupertype(g, currentType, name))",
 			"replace": "",
 			"note": "an imported static outranks a member of the reading type of the same name"
 		},
@@ -9930,7 +9930,7 @@
 			"name": "M-BINDINGS-UNREADABLE-SUBTYPE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "bindingsOf",
-			"find": " || answer.match(Unreadable(_)) && !namesItsType(imp, answer)",
+			"find": "|| (answer.match(Unreadable(_)) && !namesItsType(imp, answer))",
 			"replace": "",
 			"note": "a module the order cannot read binds every name to a sub-type of it, so an unindexed module import keys every type written beside it"
 		},
@@ -10058,7 +10058,7 @@
 			"name": "M-TS-SUPER-STATIC-IMPORT",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "memberMayBind",
-			"find": "\n\t\t\t&& !staticOfSupertype(g, currentType, name)",
+			"find": "&& !staticOfSupertype(g, currentType, name)",
 			"replace": "",
 			"note": "a supertype's static keeps an imported static of the name out of a bare read"
 		},
@@ -10218,8 +10218,8 @@
 			"name": "M-VALUES-IMPORTED-CTOR",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "importMayBring",
-			"find": "types == null\n\t\t\t\t\t\t|| carriesValue(types, name)\n\t\t\t\t\t\t|| split.rest.length == 0",
-			"replace": "types == null\n\t\t\t\t\t\t|| split.rest.length == 0",
+			"find": "types == null || carriesValue(types, name) || (\n\t\t\t\t\t\t\tsplit.rest.length == 0",
+			"replace": "types == null\n\t\t\t\t\t\t|| (split.rest.length == 0",
 			"note": "an import that puts an enum in scope brings none of its constructors, so a bare pattern naming one reads as a capture"
 		},
 		{
@@ -10305,7 +10305,7 @@
 			"name": "M-NOMINAL-RETURN-AGREE",
 			"type": "anyparse.query.NominalTypes",
 			"method": "returnSourceOf",
-			"find": "found != null && written != found || ",
+			"find": "(found != null && written != found) ||",
 			"replace": "",
 			"note": "declarations writing the return differently answer the last one read"
 		},
@@ -12151,7 +12151,7 @@
 			"name": "M-INDEX-OPTIONAL-FIELD",
 			"type": "anyparse.query.SymbolIndexMembers",
 			"method": "optionalField",
-			"find": "return decl != null && decl.kind == kind && decl.name == member.name || meta != null && metas.contains(meta);",
+			"find": "return (decl != null && decl.kind == kind && decl.name == member.name) || (meta != null && metas.contains(meta));",
 			"replace": "return meta != null && metas.contains(meta);",
 			"note": "a structure field written `?a: T` or `var ?b: T` is not optional, only one under `@:optional`"
 		},
@@ -12343,7 +12343,7 @@
 			"name": "M-LIT-QUALIFIED-KINDS-IGNORED",
 			"type": "anyparse.query.Lit",
 			"method": "walk",
-			"find": "|| qualifiedKinds.contains(node.kind)\n\t\t\t\t\t&& SourceText.answersSimpleName(n, target)",
+			"find": "|| (qualifiedKinds.contains(node.kind) && SourceText.answersSimpleName(n, target))",
 			"replace": "",
 			"note": "the import kinds a caller asks to widen are carried and never read, so a dotted import or using is blind to a simple-name query"
 		},
@@ -12559,7 +12559,7 @@
 			"name": "M-ANCESTOR-LINK-DEFAULTS",
 			"type": "anyparse.query.AncestorTable",
 			"method": "linkOf",
-			"find": "decl == null ? written[0] : withDefaults(decl, written[0]) ?? written[0]",
+			"find": "withDefaults(decl, written[0]) ?? written[0]",
 			"replace": "written[0]",
 			"note": "an extends link leaving arguments out passes none, so an inherited member written with the parameter has no answer"
 		},
@@ -12775,7 +12775,7 @@
 			"name": "M-OPS-MAYFIT",
 			"type": "anyparse.query.OperatorOverloads",
 			"method": "branchSelection",
-			"find": "if (taken == MayFit || taken == Misfits && _commutativeMeta == null) return Undecided;",
+			"find": "if (taken == MayFit || (taken == Misfits && _commutativeMeta == null)) return Undecided;",
 			"replace": "if (taken == Misfits && _commutativeMeta == null) return Undecided;",
 			"note": "a candidate whose cast is not decided is passed over, so `Z - A0` takes `subA` though `sub` binds in a build where `Q`'s `@:from` is"
 		},
@@ -12791,7 +12791,7 @@
 			"name": "M-OPS-BRANCHES-AGREE",
 			"type": "anyparse.query.OperatorOverloads",
 			"method": "selection",
-			"find": "if (one.match(Undecided) || agreed != null && !samePick(agreed, one)) return Undecided;",
+			"find": "if (one.match(Undecided) || (agreed != null && !samePick(agreed, one))) return Undecided;",
 			"replace": "if (one.match(Undecided)) return Undecided;",
 			"note": "the last `#if` branch decides for every build, so `D - D` answers one build's type"
 		},
@@ -12919,7 +12919,7 @@
 			"name": "M-CALLS-RETURN-AGREE",
 			"type": "anyparse.query.CallSelection",
 			"method": "returnOf",
-			"find": "if (returned == null || agreed != null && agreed != returned) return null;",
+			"find": "if (returned == null || (agreed != null && agreed != returned)) return null;",
 			"replace": "if (returned == null) return null;",
 			"note": "candidates left open that return different types answer the last one's"
 		},
@@ -13095,7 +13095,7 @@
 			"name": "M-NOMINAL-STATIC-ALIAS",
 			"type": "anyparse.query.CallReturns",
 			"method": "agreedOver",
-			"find": "if (statics && (own == null || !AncestorTable.same(declared.host, own)) || misread) return null;",
+			"find": "if ((statics && (own == null || !AncestorTable.same(declared.host, own))) || misread) return null;",
 			"replace": "if (statics && !AncestorTable.same(declared.host, start) || misread) return null;",
 			"note": "a static read through a `typedef` alias is taken for an inherited one, so `OA.g(1)` has no answer"
 		},
@@ -13426,7 +13426,7 @@
 			"name": "M-WALK-INTEGER-RANGE-FALSE",
 			"type": "anyparse.query.TypingService",
 			"method": "spellsAnotherType",
-			"find": "return max != null && (digits.length > max.length || digits.length == max.length && digits > max);",
+			"find": "return max != null && (digits.length > max.length || (digits.length == max.length && digits > max));",
 			"replace": "return false;",
 			"note": "a decimal literal past the integer range is typed as the integer type, though 4.3.7 types `3000000000` as a `Float`"
 		},

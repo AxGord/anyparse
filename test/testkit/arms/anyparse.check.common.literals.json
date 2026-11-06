@@ -139,7 +139,7 @@
 			"name": "M-MAGIC-CALLARG-NESTED-NEW",
 			"type": "anyparse.check.common.literals.MagicNumber",
 			"method": "walk",
-			"find": " || keyCtx && node.kind == cfg.newExprKind",
+			"find": "|| (keyCtx && node.kind == cfg.newExprKind)",
 			"replace": "",
 			"note": "a value object built in place as a listed argument (`new ShapeDescriptor(id, new Point(-18, -83))`) no longer carries the callee's context, so its literals are flagged"
 		},

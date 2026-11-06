@@ -90,11 +90,8 @@ final class ChangedMembers {
 				final sign: String = row.matched(1);
 				if (
 					HEADER_KINDS.contains(kind)
-					|| TYPE_KINDS.contains(kind)
-					&& sign == '+'
-					|| (member != null || TYPE_KINDS.contains(kind))
-					&& sign == '~'
-					&& commentsOnly(diff)
+					|| (TYPE_KINDS.contains(kind) && sign == '+')
+					|| ((member != null || TYPE_KINDS.contains(kind)) && sign == '~' && commentsOnly(diff))
 				)
 					continue;
 				if (member != null) {

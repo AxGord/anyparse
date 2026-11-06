@@ -405,8 +405,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	/** Whether a receiver of type `recvType` is one `idiom` speaks for: the declared type, or a subtype when it opts in. */
 	private static function receiverMatches(recvType: ResolvedType, idiom: Idiom, index: SymbolIndex): Bool {
 		return ConfiguredTypes.same(index, recvType, idiom.type)
-			|| idiom.spec.subtypes
-			&& ConfiguredTypes.inherits(index, recvType, idiom.type) == true;
+			|| (idiom.spec.subtypes && ConfiguredTypes.inherits(index, recvType, idiom.type) == true);
 	}
 
 	/** `window` as a site of `idiom`, with its replacement, or null when a gate refuses. */
@@ -461,7 +460,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 			final rhs: QueryNode = window[k].rhs;
 			if (rhs.kind != ctx.seams.fieldKind || rhs.name != window[k].field || rhs.children.length != 1) return null;
 			final path: Null<Array<String>> = NominalTypes.pathOf(rhs.children[0], ctx.seams.identKind, ctx.seams.fieldKind);
-			if (path == null || key != null && path.join('.') != key) return null;
+			if (path == null || (key != null && path.join('.') != key)) return null;
 			// a hop of the value path named after a field written above would read the NEW value there
 			if (path.exists(seg -> window.slice(0, k).exists(w -> w.field == seg))) return null;
 			key = path.join('.');

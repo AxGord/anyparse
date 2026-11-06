@@ -56,7 +56,7 @@ final class LineDiff {
 			var reached: Bool = false;
 			var k: Int = -d;
 			while (k <= d) {
-				final down: Bool = k == -d || k != d && v[offset + k - 1] < v[offset + k + 1];
+				final down: Bool = k == -d || (k != d && v[offset + k - 1] < v[offset + k + 1]);
 				var x: Int = down ? v[offset + k + 1] : v[offset + k - 1] + 1;
 				var y: Int = x - k;
 				while (x < n && y < m && a[x] == b[y]) {
@@ -83,7 +83,7 @@ final class LineDiff {
 		while (d > 0) {
 			final previous: Array<Int> = trace[d - 1];
 			final k: Int = x - y;
-			final down: Bool = k == -d || k != d && previous[k - 1 + d - 1] < previous[k + 1 + d - 1];
+			final down: Bool = k == -d || (k != d && previous[k - 1 + d - 1] < previous[k + 1 + d - 1]);
 			final priorK: Int = down ? k + 1 : k - 1;
 			final priorX: Int = previous[priorK + d - 1];
 			final priorY: Int = priorX - priorK;

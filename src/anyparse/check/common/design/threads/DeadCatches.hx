@@ -119,9 +119,7 @@ final class DeadCatches {
 	 */
 	private function staticCallee(file: String, callee: QueryNode): Bool {
 		return callee.kind == _shape.identKind
-			|| callee.kind == _shape.fieldAccessKind
-			&& callee.children.length == 1
-			&& staticPath(file, callee.children[0]);
+			|| (callee.kind == _shape.fieldAccessKind && callee.children.length == 1 && staticPath(file, callee.children[0]));
 	}
 
 	/** Whether `node` of `file` is a static path: a name no binding or member holds, or a field read off one. */

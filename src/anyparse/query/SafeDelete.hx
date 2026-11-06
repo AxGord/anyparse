@@ -235,7 +235,7 @@ final class SafeDelete {
 			final span: Null<Span> = node.span;
 			if (ModuleScan.IMPORT_DECL_KINDS.contains(node.kind)) {
 				final aliased: String = span == null ? '' : ModuleScan.aliasTargetOf(entry.source.substring(span.from, span.to));
-				if (SourceText.lastSegment(name) == memberName || aliased != '' && SourceText.lastSegment(aliased) == memberName) count++;
+				if (SourceText.lastSegment(name) == memberName || (aliased != '' && SourceText.lastSegment(aliased) == memberName)) count++;
 				return;
 			}
 			for (c in node.children) walk(c);

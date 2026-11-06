@@ -289,7 +289,7 @@ final class InlineConstant extends RuleBase {
 		for (child in node.children) {
 			if (seams.metaKinds.contains(child.kind)) {
 				classPinned = classPinned || isPinMeta(child.name, seams);
-				classNative = classNative || seams.nativeInteropMetaName != null && child.name == seams.nativeInteropMetaName;
+				classNative = classNative || (seams.nativeInteropMetaName != null && child.name == seams.nativeInteropMetaName);
 			} else {
 				if (seams.containers.contains(child.kind))
 					scanContainer(
@@ -373,7 +373,7 @@ final class InlineConstant extends RuleBase {
 			// caller's read changes from `Cls.X` to `0.5`.
 			// PUBLIC only — a private constant is on no foreign surface, and the `static inline
 			// var` -> `static inline final` arm below changes no emission at all, only the keyword.
-			final pinned: Bool = sawKeep || classPinned || classNative && exported;
+			final pinned: Bool = sawKeep || classPinned || (classNative && exported);
 			if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !pinned)
 				consider(out, file, member, seams, reflected, macroConsumed, container, exported, proof);
 			else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)

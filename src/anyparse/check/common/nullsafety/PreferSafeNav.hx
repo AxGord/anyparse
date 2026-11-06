@@ -724,11 +724,9 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final an: Null<String> = a.name;
 		final bn: Null<String> = b.name;
 		if (a.kind != b.kind || an == null || bn == null || an != bn) return false;
-		return a.kind == s.identKind
-			|| a.kind == s.fieldAccessKind
-			&& a.children.length == 1
-			&& b.children.length == 1
-			&& sameSubject(a.children[0], b.children[0], s);
+		return a.kind == s.identKind || (
+			a.kind == s.fieldAccessKind && a.children.length == 1 && b.children.length == 1 && sameSubject(a.children[0], b.children[0], s)
+		);
 	}
 
 	/**
@@ -766,8 +764,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 */
 	private static function mentionsOutsideRoot(node: QueryNode, root: QueryNode, subject: QueryNode, s: Seams): Bool {
 		return s.opaqueKinds.contains(node.kind)
-			|| node != root
-			&& denotesSubject(node, subject, s)
+			|| (node != root && denotesSubject(node, subject, s))
 			|| node.children.exists(c -> mentionsOutsideRoot(c, root, subject, s));
 	}
 

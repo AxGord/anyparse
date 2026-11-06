@@ -822,7 +822,7 @@ final class NamingRenames {
 			final span: Null<Span> = decl.span;
 			final bodyScoped: Bool = isBodyScopedCategory(decl.category);
 			final owner: Null<String> = decl.enclosingType;
-			if (span == null || !bodyScoped && !unrelatedMember(decl, owner, ownerName, resolutionIndex)) continue;
+			if (span == null || (!bodyScoped && !unrelatedMember(decl, owner, ownerName, resolutionIndex))) continue;
 			final ctx: RenameContext = bodyScoped || owner == null
 				? { index: resolutionIndex, file: file }
 				: { index: resolutionIndex, file: file, ownerName: owner };

@@ -521,7 +521,8 @@ final class BinaryChainEmit {
 	private static function leadingOperandOpensDelim(item0: Doc, parenOnly: Bool = false): Bool {
 		return switch item0 {
 			case Text(s):
-				s.length > 0 && (s.fastCodeAt(0) == '('.code || !parenOnly && (s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code));
+				s.length > 0
+					&& (s.fastCodeAt(0) == '('.code || (!parenOnly && (s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code)));
 			case Concat(arr):
 				var hit: Bool = false;
 				var done: Bool = false;
@@ -806,7 +807,7 @@ final class BinaryChainEmit {
 	): Bool {
 		return i != 0
 			&& gapComment(owns, i - 1) == null
-			&& (gapComment(afterComments, i - 1) != null || location == AfterLast && i - 1 < breaks.length && breaks[i - 1]);
+			&& (gapComment(afterComments, i - 1) != null || (location == AfterLast && i - 1 < breaks.length && breaks[i - 1]));
 	}
 
 	private static function shapeOnePerLineAfterFirst(

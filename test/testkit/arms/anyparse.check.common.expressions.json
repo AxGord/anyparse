@@ -77,7 +77,7 @@
 			"name": "M-PARENS-SPLICE-HOST-OPEN",
 			"type": "anyparse.check.common.expressions.RedundantParens",
 			"method": "dropsParens",
-			"find": "atom || !slots.splice.contains(bare.kind) && !spineEndsWith(bare, slots.greedy);",
+			"find": "atom || (!slots.splice.contains(bare.kind) && !spineEndsWith(bare, slots.greedy));",
 			"replace": "atom || !spineEndsWith(bare, slots.greedy);",
 			"note": "a pair around $a{...} in a splicing host drops, so the quoted call's arity changes"
 		},

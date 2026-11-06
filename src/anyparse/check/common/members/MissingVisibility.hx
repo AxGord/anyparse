@@ -284,7 +284,7 @@ final class MissingVisibility extends RuleBase {
 		var publicDefault: Bool = incomingPublicDefault;
 		for (child in node.children) {
 			final metaName: Null<String> = child.name;
-			if (externKind != null && child.kind == externKind || metaName != null && ctx.seams.publicMetaNames.contains(metaName))
+			if ((externKind != null && child.kind == externKind) || (metaName != null && ctx.seams.publicMetaNames.contains(metaName)))
 				publicDefault = true;
 			if (ctx.seams.modifierRunKinds.contains(child.kind)) continue;
 			if (ctx.seams.containers.contains(child.kind)) {

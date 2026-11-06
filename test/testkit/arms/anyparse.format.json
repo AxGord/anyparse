@@ -331,7 +331,7 @@
 			"name": "M-SSB-WRAP-FROM-UNLIFTED",
 			"type": "anyparse.format.SingleStmtBraces",
 			"method": "wrappedFrom",
-			"find": "return node == raw || Reflect.isEnumValue(node) && paramAt(cast node, 0) == raw;",
+			"find": "return node == raw || (Reflect.isEnumValue(node) && paramAt(cast node, 0) == raw);",
 			"replace": "return node == raw;",
 			"note": "a value branch lifted into a statement inside its new block no longer reads as wrapped, so its head-gap comments stay outside the braces"
 		},

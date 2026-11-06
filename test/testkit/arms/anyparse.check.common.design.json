@@ -324,8 +324,8 @@
 			"name": "M-IDIOM-SUBTYPES-ALWAYS",
 			"type": "anyparse.check.common.design.PreferApiIdiom",
 			"method": "receiverMatches",
-			"find": "|| idiom.spec.subtypes",
-			"replace": "|| true",
+			"find": "|| (idiom.spec.subtypes",
+			"replace": "|| (true",
 			"note": "a subclass receiver matches without the opt-in, though its override of the method may not be the declared equivalence"
 		},
 		{

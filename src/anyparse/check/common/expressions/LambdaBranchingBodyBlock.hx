@@ -173,7 +173,7 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 
 	/** The SAME boundary `PreferLambdaExpressionBody.branchesInternally` refuses on. */
 	private static function branchesInternally(body: QueryNode, s: Seams): Bool {
-		return s.switchKinds.contains(body.kind) || s.conditionalKinds.contains(body.kind) && body.children.length >= IF_ELSE_CHILD_COUNT;
+		return s.switchKinds.contains(body.kind) || (s.conditionalKinds.contains(body.kind) && body.children.length >= IF_ELSE_CHILD_COUNT);
 	}
 
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {

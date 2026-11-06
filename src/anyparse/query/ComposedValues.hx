@@ -88,7 +88,7 @@ final class ComposedValues {
 			final element: Null<String> = read == null || returned == null
 				? null
 				: index.typing.ancestors.boundType(decl, decl, args, returned, read.declFrom, read.typeParamNames);
-			if (element == null || found != null && found != element) return null;
+			if (element == null || (found != null && found != element)) return null;
 			found = element;
 		}
 		return found;

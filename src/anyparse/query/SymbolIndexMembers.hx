@@ -243,7 +243,7 @@ final class SymbolIndexMembers {
 		final meta: Null<String> = seams.optionalFieldMetaName;
 		if (kind == null) return meta != null && metas.contains(meta);
 		final decl: Null<QueryNode> = ANON_WRAPPED_FIELD_KINDS.contains(member.kind) ? member.children[0] : member;
-		return decl != null && decl.kind == kind && decl.name == member.name || meta != null && metas.contains(meta);
+		return (decl != null && decl.kind == kind && decl.name == member.name) || (meta != null && metas.contains(meta));
 	}
 
 	/** Whether `node` is an annotation under which the language calls the member implicitly (`MemberSeams.implicitCallMetaNames`). */

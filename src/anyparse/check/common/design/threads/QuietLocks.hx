@@ -35,7 +35,7 @@ final class QuietLocks {
 	 */
 	public function never(edge: CallEdge): Bool {
 		final lock: String = _sites.lockOf(edge) ?? '';
-		return lock != '' && sharedOnly(lock) || uncontended(edge);
+		return (lock != '' && sharedOnly(lock)) || uncontended(edge);
 	}
 
 	/**

@@ -714,7 +714,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function holdsRunTarget(region: QueryNode, target: NamingCategory): Bool {
 		return region.children.exists(child -> {
 			final category: Null<NamingCategory> = categoryOf(child, []);
-			return category != null && sameRunScope(category, target) || holdsRunTarget(child, target);
+			return (category != null && sameRunScope(category, target)) || holdsRunTarget(child, target);
 		});
 	}
 
@@ -825,8 +825,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function isReservedName(category: NamingCategory, name: String): Bool {
 		return DISCARD_NAME_PATTERN.match(name)
 			|| DUNDER_NAME_PATTERN.match(name)
-			|| category == NamingCategory.Method
-			&& isAccessorName(name);
+			|| (category == NamingCategory.Method && isAccessorName(name));
 	}
 
 	/**

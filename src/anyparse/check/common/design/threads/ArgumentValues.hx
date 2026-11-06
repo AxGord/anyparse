@@ -3,7 +3,6 @@ package anyparse.check.common.design.threads;
 import anyparse.check.common.design.threads.ArgumentTypes.WrittenType;
 import anyparse.core.IdentityMap;
 import anyparse.query.ArgumentSlots;
-import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CallGraphTypes.HeldFile;
@@ -128,35 +127,6 @@ final class ArgumentValues {
 		return bound;
 	}
 
-	/** `bind` of `edge` under `valuation`, `names` the callee's tracked parameters (never empty): what it reads anew. */
-	private function bindOnce(edge: CallEdge, valuation: String, names: Array<String>): String {
-		final unknownValuation: String = unknown(edge.to);
-		if (edge.kind != Call && edge.kind != Virtual && edge.kind != New || edge.spliced != null) return unknownValuation;
-		final args: Null<Array<QueryNode>> = argumentsAt(edge);
-		final callee: Null<QueryNode> = _trees.ofId(edge.to);
-		if (args == null || callee == null) return unknownValuation;
-		final params: Array<QueryNode> = [for (c in callee.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
-		final calleeFile: String = _graph.node(edge.to)?.file ?? '';
-		final known: Null<{ final runs: Null<Array<Array<Int>>>; }> = _runs.get(edge);
-		final runs: Null<Array<Array<Int>>> = known != null ? known.runs : bindings(edge, args, callee, params, calleeFile);
-		if (known == null) _runs.set(edge, { runs: runs });
-		if (runs == null || runs.length == 0) return unknownValuation;
-		final callerNames: Array<String> = tracked(edge.from);
-		final tested: Array<String> = stringTested(edge.to);
-		final passed: Array<QueryNode> = args;
-		final call: CallBinding = {
-			edge: edge,
-			args: passed,
-			params: params,
-			calleeFile: calleeFile,
-			callerNames: callerNames,
-			valuation: valuation
-		};
-		return [
-			for (name in names) valueOver(runs, params.findIndex(p -> p.name == name), call, tested.contains(name))
-		].join('');
-	}
-
 	/**
 	 * The parameters of `id` a condition or a call of its body reads bare and nothing in it writes or shadows: what a
 	 * valuation of `id` is over. Empty for a function of several declarations, or one the graph holds no body of.
@@ -214,6 +184,35 @@ final class ArgumentValues {
 		return core == null || core != stringTypeName() || !affixResolves(file, method, affix.module)
 			? null
 			: { param: at, suffix: method == affix.suffix, text: text };
+	}
+
+	/** `bind` of `edge` under `valuation`, `names` the callee's tracked parameters (never empty): what it reads anew. */
+	private function bindOnce(edge: CallEdge, valuation: String, names: Array<String>): String {
+		final unknownValuation: String = unknown(edge.to);
+		if ((edge.kind != Call && edge.kind != Virtual && edge.kind != New) || edge.spliced != null) return unknownValuation;
+		final args: Null<Array<QueryNode>> = argumentsAt(edge);
+		final callee: Null<QueryNode> = _trees.ofId(edge.to);
+		if (args == null || callee == null) return unknownValuation;
+		final params: Array<QueryNode> = [for (c in callee.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
+		final calleeFile: String = _graph.node(edge.to)?.file ?? '';
+		final known: Null<{ final runs: Null<Array<Array<Int>>>; }> = _runs.get(edge);
+		final runs: Null<Array<Array<Int>>> = known != null ? known.runs : bindings(edge, args, callee, params, calleeFile);
+		if (known == null) _runs.set(edge, { runs: runs });
+		if (runs == null || runs.length == 0) return unknownValuation;
+		final callerNames: Array<String> = tracked(edge.from);
+		final tested: Array<String> = stringTested(edge.to);
+		final passed: Array<QueryNode> = args;
+		final call: CallBinding = {
+			edge: edge,
+			args: passed,
+			params: params,
+			calleeFile: calleeFile,
+			callerNames: callerNames,
+			valuation: valuation
+		};
+		return [
+			for (name in names) valueOver(runs, params.findIndex(p -> p.name == name), call, tested.contains(name))
+		].join('');
 	}
 
 	/**
@@ -277,7 +276,7 @@ final class ArgumentValues {
 			final bound: Int = run.indexOf(at);
 			final arg: Null<QueryNode> = bound < 0 ? null : call.args[bound];
 			// a `null` handed to a parameter with a default leaves it the default
-			final value: String = arg == null || hasDefault(param) && _types.unwrap(arg).kind == _shape.nullLiteralKind
+			final value: String = arg == null || (hasDefault(param) && _types.unwrap(arg).kind == _shape.nullLiteralKind)
 				? defaultOf(param, call.calleeFile, keepStrings)
 				: valueOf(arg, call, keepStrings);
 			final part: Null<Array<String>> = atomsOf(value);
@@ -515,8 +514,7 @@ final class ArgumentValues {
 			|| callee == null
 			|| callee.kind != _shape.fieldAccessKind
 			|| callee.children.length != 1
-			|| method != affix.suffix
-			&& method != affix.prefix
+			|| (method != affix.suffix && method != affix.prefix)
 			? null
 			: callee.children[0];
 	}
@@ -542,11 +540,12 @@ final class ArgumentValues {
 		if (fn == null || type == null || name == null) return false;
 		if (!graph.types.isStatic(type, name)) return true;
 		final callee: QueryNode = call.children[0];
-		return callee.kind == shape.identKind
-			|| callee.kind == shape.fieldAccessKind
+		return callee.kind == shape.identKind || (
+			callee.kind == shape.fieldAccessKind
 			&& callee.children.length == 1
 			&& callee.children[0].kind == shape.identKind
-			&& callee.children[0].name == type;
+			&& callee.children[0].name == type
+		);
 	}
 
 	/** The kinds of a value built where it is written, never null: a construction, an object or array literal. */

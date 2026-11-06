@@ -335,7 +335,9 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 			final callee: QueryNode = node.children[0];
 			final method: Null<String> = callee.name;
 			if (
-				method == null || !spec.listenerMethods.contains(method) || callee.kind != seams.fieldKind && callee.kind != seams.identKind
+				method == null
+				|| !spec.listenerMethods.contains(method)
+				|| (callee.kind != seams.fieldKind && callee.kind != seams.identKind)
 			)
 				return;
 			final key: Null<String> = constantKey(node.children[1], p, candidates, index, seams);

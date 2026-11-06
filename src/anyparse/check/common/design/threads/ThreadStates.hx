@@ -193,7 +193,7 @@ final class ThreadStates {
 	 * the helper inference of `LockSites`).
 	 */
 	public static inline function runsWith(e: CallEdge, inertRef: (CallEdge) -> Bool): Bool {
-		return e.kind.isInvocation() || e.kind == Ref && !inertRef(e);
+		return e.kind.isInvocation() || (e.kind == Ref && !inertRef(e));
 	}
 
 	/**

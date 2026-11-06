@@ -553,7 +553,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 		final kids: Array<QueryNode> = arg.children;
 		return (arg.kind == seams.parenKind || arg.kind == seams.negationKind) && kids.length == 1
 			? provenNonNull(kids[0], owner, entry, scope, seams)
-			: seams.nonNullKinds.contains(arg.kind) || owner != null && constantSpelling(arg, owner, owner, entry, scope, seams) != null;
+			: seams.nonNullKinds.contains(arg.kind) || (owner != null && constantSpelling(arg, owner, owner, entry, scope, seams) != null);
 	}
 
 	/**

@@ -162,7 +162,7 @@ final class OracleGenerationLock {
 			pid: pid,
 			start: start,
 			identity: text ?? '',
-			abandoned: !living(pid, start) || start == '' && now - since > MAX_LOCK_AGE
+			abandoned: !living(pid, start) || (start == '' && now - since > MAX_LOCK_AGE)
 		};
 	}
 

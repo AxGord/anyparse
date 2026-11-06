@@ -124,7 +124,7 @@ final class Monomorphs {
 		final held: Null<TypeTerm> = _bound[a];
 		final other: Null<TypeTerm> = _bound[b];
 		_parent[b] = a;
-		if (_poisoned[b] || held != null && other != null && !same(held, other))
+		if (_poisoned[b] || (held != null && other != null && !same(held, other)))
 			_poisoned[a] = true;
 		else if (held == null)
 			_bound[a] = other;

@@ -36,7 +36,7 @@ final class ElemChainEmit {
 			else if (elem.tail.length > 0)
 				parts[parts.length - 1] = Concat([parts[parts.length - 1]].concat(elem.tail));
 		}
-		if (parts.length < 2 || !ops.contains(op) && !leadsWithSep(rules)) return null;
+		if (parts.length < 2 || (!ops.contains(op) && !leadsWithSep(rules))) return null;
 		if (cascadeLeavesTheList(parts.length, rules) || namesAdditionalIndent(rules) || operandOpensItsOwnLine(parts)) return null;
 		if (parts.slice(0, parts.length - 1).concat(tail).exists(WrapList.endsWithLineComment)) return null;
 		return BinaryChainEmit.emit(

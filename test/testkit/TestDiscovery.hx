@@ -545,8 +545,7 @@ class TestDiscovery {
 		// the constructor is no field: the typer keeps it apart, and an arm cuts it as `FnMember:new` like any method
 		return c.fields.get().exists(f -> f.name == name && isMethod(f))
 			|| c.statics.get().exists(f -> f.name == name && isMethod(f))
-			|| name == 'new'
-			&& c.constructor != null;
+			|| (name == 'new' && c.constructor != null);
 	}
 
 	/** Is this field a method rather than a variable or a property. */

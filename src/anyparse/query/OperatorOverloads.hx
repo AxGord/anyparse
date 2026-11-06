@@ -88,7 +88,7 @@ final class OperatorOverloads {
 		var agreed: Null<MemberInfo> = null;
 		for (members in branches) {
 			final one: Null<MemberInfo> = branchIndexRead(decl, members, key);
-			if (one == null || agreed != null && agreed.returnSource != one.returnSource) return null;
+			if (one == null || (agreed != null && agreed.returnSource != one.returnSource)) return null;
 			agreed = one;
 		}
 		return agreed;
@@ -98,7 +98,7 @@ final class OperatorOverloads {
 	private inline function isIndexAccess(m: MemberInfo): Bool {
 		final meta: String = _indexMeta ?? '';
 		final indexOperator: String = _indexOperator ?? '';
-		return meta != '' && m.metaNames.contains(meta) || indexOperator != '' && m.operatorOverloads.contains(indexOperator);
+		return (meta != '' && m.metaNames.contains(meta)) || (indexOperator != '' && m.operatorOverloads.contains(indexOperator));
 	}
 
 	/** Whether the overload `m` takes its operands in either order. */
@@ -137,7 +137,7 @@ final class OperatorOverloads {
 				var agreed: Null<OverloadPick> = null;
 				for (members in branches) {
 					final one: OverloadPick = branchSelection(decl, members, kind, left, right, onLeft);
-					if (one.match(Undecided) || agreed != null && !samePick(agreed, one)) return Undecided;
+					if (one.match(Undecided) || (agreed != null && !samePick(agreed, one))) return Undecided;
 					agreed = one;
 				}
 				return agreed ?? Undecided;
@@ -163,7 +163,7 @@ final class OperatorOverloads {
 			// a `@:commutative` overload is tried with the operands swapped, the right one in the first parameter
 			if (taken == Misfits && isCommutative(m)) taken = takes(right, params[0], left, params[1]);
 			// with no commutativity annotation to read, a misfit may still be taken swapped
-			if (taken == MayFit || taken == Misfits && _commutativeMeta == null) return Undecided;
+			if (taken == MayFit || (taken == Misfits && _commutativeMeta == null)) return Undecided;
 			if (taken == Fits) {
 				final end: TypeEnd = _casts.writtenEnd(returned, decl, m.declFrom, []);
 				return end.match(Open)

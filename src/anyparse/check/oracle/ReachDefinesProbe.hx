@@ -499,7 +499,7 @@ final class ReachDefinesProbe {
 
 	/** Whether a transcript line is the probe's own: a line its macro printed, or the parse of its macro's file. */
 	private static function ownLine(line: String): Bool {
-		return line.startsWith(PROBE_LINE) || line.startsWith(PARSED_PREFIX) && line.endsWith('$MACRO_CLASS.hx');
+		return line.startsWith(PROBE_LINE) || (line.startsWith(PARSED_PREFIX) && line.endsWith('$MACRO_CLASS.hx'));
 	}
 
 	/** The define and value one value line carries — a JSON array of two strings — or null for anything else. */

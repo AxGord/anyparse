@@ -230,7 +230,7 @@ final class ArgumentTypes {
 		final read: Null<MemberReading> = decl == null ? null : held.index.typing.members.memberRead(decl, name, decl.type.typeParamNames);
 		if (decl == null || read == null) return null;
 		final own: Bool = AncestorTable.same(read.host, decl);
-		if (!isField(read.member) || read.member.isStatic && !onSelf && !own) return null;
+		if (!isField(read.member) || (read.member.isStatic && !onSelf && !own)) return null;
 		// what the chain substitutes for a supertype's parameters is written elsewhere
 		final written: Bool = own || read.text == read.member.typeSource || read.host.type.typeParamNames.length == 0;
 		return { text: read.text, file: written ? read.host.file.file : null };

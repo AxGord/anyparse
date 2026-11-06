@@ -54,7 +54,7 @@ final class WriteVerification {
 	 */
 	public static function settle(op: String, journal: WriteJournal, exit: Int, forced: Bool): Int {
 		final changed: Array<String> = journal.changed();
-		if (changed.length == 0 || !forced && !journal.createdOrDeleted()) return exit;
+		if (changed.length == 0 || (!forced && !journal.createdOrDeleted())) return exit;
 		final oracles: Array<OracleConfig> = try {
 			oraclesOf(changed);
 		} catch (exception: ConfigConflict) {

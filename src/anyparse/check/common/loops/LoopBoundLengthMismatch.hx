@@ -351,23 +351,23 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 
 	/** Whether `node` is the bare `name` or `this.name`. */
 	private static function isPlainRef(node: QueryNode, name: String, s: Seams): Bool {
-		return node.kind == s.core.identKind
-			&& node.name == name
-			|| node.kind == s.core.fieldAccessKind
+		return (node.kind == s.core.identKind && node.name == name) || (
+			node.kind == s.core.fieldAccessKind
 			&& node.name == name
 			&& node.children.length == 1
 			&& node.children[0].kind == s.core.identKind
 			&& s.selfText != null
-			&& node.children[0].name == s.selfText;
+			&& node.children[0].name == s.selfText
+		);
 	}
 
 	/** Whether `node` builds an EMPTY array of the built-in type: `[]` or `new Array()` with no argument. */
 	private static function isEmptyArray(node: QueryNode, s: Seams): Bool {
-		return node.kind == s.arrayLiteralKind
-			&& node.children.length == 0
-			|| node.kind == s.newExprKind
+		return (node.kind == s.arrayLiteralKind && node.children.length == 0) || (
+			node.kind == s.newExprKind
 			&& s.arrayTypes.contains(node.name ?? '')
-			&& !node.children.exists(c -> !s.typeArgKinds.contains(c.kind));
+			&& !node.children.exists(c -> !s.typeArgKinds.contains(c.kind))
+		);
 	}
 
 	/** Whether the type declared at `declSpan`, when there is one, is the type `source` builds. */
@@ -403,7 +403,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 			}
 			if (isRef(node, src.name, owner, isField, s)) {
 				// a local's name ahead of its declaration is some other binding's (a field's)
-				if (!admitted(node, parent, grand, src, s) || !isField && (from ?? -1) < src.declFrom) ok = false;
+				if (!admitted(node, parent, grand, src, s) || (!isField && (from ?? -1) < src.declFrom)) ok = false;
 				return;
 			}
 			if (isField && node.kind == s.core.fieldAccessKind && node.name == src.name) {
@@ -424,7 +424,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		if (node.kind == s.core.identKind) return node.name == name;
 		if (!isField || node.kind != s.core.fieldAccessKind || node.name != name || node.children.length != 1) return false;
 		final receiver: QueryNode = node.children[0];
-		return receiver.kind == s.core.identKind && (receiver.name == owner || s.selfText != null && receiver.name == s.selfText);
+		return receiver.kind == s.core.identKind && (receiver.name == owner || (s.selfText != null && receiver.name == s.selfText));
 	}
 
 	/**
@@ -460,14 +460,14 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 	): Void {
 		final s: Seams = ctx.seams;
 		final related: Array<String> = [
-			for (o in all) if (o.name == src.name || src.fillLoop != null && o.fillLoop == src.fillLoop) o.name
+			for (o in all) if (o.name == src.name || (src.fillLoop != null && o.fillLoop == src.fillLoop)) o.name
 		];
 		final fillFrom: Int = src.fillLoop?.span?.from ?? -1;
 		final fillTo: Int = src.fillLoop?.span?.to ?? -1;
 		function visit(node: QueryNode): Void {
 			if (s.core.opaqueKinds.contains(node.kind)) return;
 			final span: Null<Span> = node.span;
-			if (span == null || span.from >= fillFrom && span.to <= fillTo) return;
+			if (span == null || (span.from >= fillFrom && span.to <= fillTo)) return;
 			final index: Null<String> = node.name;
 			for (kind in s.loopKinds) {
 				final bound: Null<QueryNode> = zeroBasedBound(node, kind, ctx);
@@ -519,7 +519,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 
 	/** Whether a binder anywhere under `node` takes `name`. */
 	private static function binds(node: QueryNode, name: String, s: Seams): Bool {
-		return node.name == name && s.binderKinds.contains(node.kind) || node.children.exists(c -> binds(c, name, s));
+		return (node.name == name && s.binderKinds.contains(node.kind)) || node.children.exists(c -> binds(c, name, s));
 	}
 
 	/** Whether `node`'s subtree holds an occurrence of the array `name`. */

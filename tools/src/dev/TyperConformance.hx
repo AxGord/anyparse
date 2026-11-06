@@ -1205,7 +1205,7 @@ private final class UnknownCauses {
 
 	/** An initializer that leaves its local a monomorph: `null`, `[]`. */
 	private inline function isMonomorphSeed(init: QueryNode): Bool {
-		return init.kind == _shape.nullLiteralKind || init.kind == _shape.arrayLiteralKind && init.children.length == 0;
+		return init.kind == _shape.nullLiteralKind || (init.kind == _shape.arrayLiteralKind && init.children.length == 0);
 	}
 
 	/** `node`'s root, memoised; a chain that comes back to a node it is still walking is rooted as a cycle. */
@@ -1549,7 +1549,7 @@ private final class TypeText {
 			_at++;
 			// one unnamed type in parentheses before an arrow groups an argument of an old-style chain (4.3.7:
 			// `(A -> B) -> C -> D` takes two arguments), any other list is a new-style function's
-			if (peek() != '->' || plain && items.length == 1) return items;
+			if (peek() != '->' || (plain && items.length == 1)) return items;
 			_at++;
 			return ['(${items.join(',')})->${type()}'];
 		}

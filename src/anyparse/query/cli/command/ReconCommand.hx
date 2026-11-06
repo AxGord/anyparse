@@ -321,11 +321,7 @@ final class ReconCommand implements CliCommand {
 		}
 		if (
 			o.candidatesRegex == null
-			|| o.probePath == null
-			&& !o.predictStrip
-			&& o.clusterFilter == null
-			&& !o.regressionProbe
-			&& !o.predictRelax
+			|| (o.probePath == null && !o.predictStrip && o.clusterFilter == null && !o.regressionProbe && !o.predictRelax)
 		)
 			return null;
 		CliIo.stderr(
@@ -386,14 +382,10 @@ final class ReconCommand implements CliCommand {
 			}
 		}
 		if (
-			!o.permissiveConstruct
-			|| o.probePath == null
-			&& !o.predictStrip
-			&& !o.predictRelax
-			&& !o.regressionProbe
-			&& o.clusterFilter == null
-			&& o.candidatesRegex == null
-			&& o.patterns.length <= 0
+			!o.permissiveConstruct || (
+				o.probePath == null && !o.predictStrip && !o.predictRelax && !o.regressionProbe && o.clusterFilter == null
+				&& o.candidatesRegex == null && o.patterns.length <= 0
+			)
 		)
 			return null;
 		CliIo.stderr(

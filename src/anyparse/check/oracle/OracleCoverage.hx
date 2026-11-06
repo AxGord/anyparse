@@ -470,7 +470,7 @@ final class OracleCoverage {
 	public static function macroDefineName(line: String): Null<String> {
 		final open: Int = line.indexOf('\'', MACRO_DEFINE_PREFIX.length);
 		final openDouble: Int = line.indexOf('"', MACRO_DEFINE_PREFIX.length);
-		final quoteAt: Int = open < 0 || openDouble >= 0 && openDouble < open ? openDouble : open;
+		final quoteAt: Int = open < 0 || (openDouble >= 0 && openDouble < open) ? openDouble : open;
 		if (quoteAt < 0) return null;
 		final close: Int = line.indexOf(line.charAt(quoteAt), quoteAt + 1);
 		return close <= quoteAt + 1 ? null : line.substring(quoteAt + 1, close);

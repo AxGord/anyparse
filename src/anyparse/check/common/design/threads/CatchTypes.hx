@@ -48,12 +48,15 @@ final class CatchTypes {
 		if (declared == null) return true;
 		final written: Null<String> = writtenType(declared, shape);
 		return written != null && (
-			catchesAll(written, shape, index) || thrown != null && (
-				written == thrown
-				|| index != null
-				&& index.refs.onlyDeclaration(thrown) != null
-				&& index.refs.onlyDeclaration(written) != null
-				&& index.subtypes.isSubtype(thrown, written)
+			catchesAll(written, shape, index) || (
+				thrown != null && (
+					written == thrown || (
+						index != null
+						&& index.refs.onlyDeclaration(thrown) != null
+						&& index.refs.onlyDeclaration(written) != null
+						&& index.subtypes.isSubtype(thrown, written)
+					)
+				)
 			)
 		);
 	}

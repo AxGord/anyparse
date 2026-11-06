@@ -895,7 +895,9 @@ final class NominalTypes {
 			final written: Null<String> = returned == null
 				? null
 				: index.typing.ancestors.completed(returned, d.file, d.member.declFrom, params);
-			if (written == null || found != null && written != found || CallGraphNames.mentionsTypeName(written, params, index.typeSyntax))
+			if (
+				written == null || (found != null && written != found) || CallGraphNames.mentionsTypeName(written, params, index.typeSyntax)
+			)
 				return null;
 			found = written;
 		}

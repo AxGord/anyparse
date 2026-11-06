@@ -343,7 +343,7 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 
 	/** Whether `node`'s subtree declares a member or module-level value named `name`. */
 	private static function declaresValue(node: QueryNode, name: String, kinds: Array<String>): Bool {
-		return kinds.contains(node.kind) && node.name == name || node.children.exists(c -> declaresValue(c, name, kinds));
+		return (kinds.contains(node.kind) && node.name == name) || node.children.exists(c -> declaresValue(c, name, kinds));
 	}
 
 	/** The no-opener finding's text: the binder named outright, or the key-value form described when none can be written. */

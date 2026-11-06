@@ -343,7 +343,7 @@ final class PreferLocalFunction extends RuleBase {
 
 	/** Whether `decl` binds no value, or only the definite-assignment placeholder a hoist may drop. */
 	private static function declarationIsBare(decl: QueryNode, s: Seams): Bool {
-		return decl.children.length == 0 || decl.children.length == 1 && isNullPlaceholder(decl.children[0], s);
+		return decl.children.length == 0 || (decl.children.length == 1 && isNullPlaceholder(decl.children[0], s));
 	}
 
 	/**
@@ -452,8 +452,7 @@ final class PreferLocalFunction extends RuleBase {
 	 * hoist would turn a call to another function into unbounded recursion.
 	 */
 	private static function readsName(fn: QueryNode, name: String, s: Seams): Bool {
-		return (fn.kind == s.identKind || fn.kind == s.stringInterpKind)
-			&& fn.name == name
+		return ((fn.kind == s.identKind || fn.kind == s.stringInterpKind) && fn.name == name)
 			|| fn.children.exists(c -> readsName(c, name, s));
 	}
 

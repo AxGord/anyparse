@@ -318,9 +318,7 @@ final class RedundantElse extends RuleBase {
 
 	/** Whether `node`'s subtree reads a member off `subject` — a field access whose receiver is that subject. */
 	private static function dereferences(node: QueryNode, subject: String, seams: Seams): Bool {
-		return node.kind == seams.fieldAccessKind
-			&& node.children.length > 0
-			&& receiverName(node.children[0], seams) == subject
+		return (node.kind == seams.fieldAccessKind && node.children.length > 0 && receiverName(node.children[0], seams) == subject)
 			|| node.children.exists(child -> dereferences(child, subject, seams));
 	}
 

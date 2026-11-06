@@ -189,7 +189,7 @@ final class TokenAudit {
 	public static function startedFrom(agents: Array<AgentReading>, from: Float, landed: Array<String>): Array<AgentReading> {
 		return from <= 0
 			? agents
-			: agents.filter(a -> a.turns.length > 0 && (a.turns[0].start >= from || a.slice != null && landed.contains(a.slice)));
+			: agents.filter(a -> a.turns.length > 0 && (a.turns[0].start >= from || (a.slice != null && landed.contains(a.slice))));
 	}
 
 	/**

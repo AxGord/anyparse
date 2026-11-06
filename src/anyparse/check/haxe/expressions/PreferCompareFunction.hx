@@ -381,8 +381,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		if (first == null || second == null) return null;
 		if (
 			valueText(chain.terminal, source, s) != EQUAL
-			|| (v1 != ASCENDING || v2 != DESCENDING)
-			&& (v1 != DESCENDING || v2 != ASCENDING)
+			|| ((v1 != ASCENDING || v2 != DESCENDING) && (v1 != DESCENDING || v2 != ASCENDING))
 			|| !IfExpressionChain.sameSource(first.smallNode, second.bigNode, source)
 			|| !IfExpressionChain.sameSource(first.bigNode, second.smallNode, source)
 		)

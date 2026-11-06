@@ -825,9 +825,7 @@ final class MemberTouchScan {
 			// a static of a type declared once, which declares `name` itself, is provably not `declaring`'s
 			final other: Bool = target != null && (
 				target.member != name
-				|| target.owner != declaring
-				&& target.decls.length == 1
-				&& target.decls[0].type.members.exists(m -> m.name == name)
+				|| (target.owner != declaring && target.decls.length == 1 && target.decls[0].type.members.exists(m -> m.name == name))
 			);
 			if (!other && a.alias != name && !out.contains(a.alias)) out.push(a.alias);
 		}

@@ -126,7 +126,7 @@
 			"name": "M-PSE-CHANNEL-ALIAS",
 			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "channelsOf",
-			"find": "elsewhere: paths.length > 0 && !paths.contains(module) || excluded,",
+			"find": "elsewhere: (paths.length > 0 && !paths.contains(module)) || excluded,",
 			"replace": "elsewhere: excluded,",
 			"note": "a module name an import alias rebinds to another type keeps the site as a candidate"
 		},

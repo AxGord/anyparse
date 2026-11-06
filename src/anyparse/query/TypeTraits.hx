@@ -159,8 +159,7 @@ final class TypeTraits {
 			typeName, fromFile,
 			source ->
 				source == null
-				|| MemberWriteScan.carriesBuildMacro(source)
-				&& OccurrenceScan.referencedInRange(source, name, 0, source.length, [])
+				|| (MemberWriteScan.carriesBuildMacro(source) && OccurrenceScan.referencedInRange(source, name, 0, source.length, []))
 		);
 	}
 

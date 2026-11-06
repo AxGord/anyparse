@@ -419,7 +419,7 @@ final class JoinArrayPushes extends RuleBase {
 	private static function annotationNamesArray(decl: QueryNode, ctx: Ctx): Bool {
 		final text: Null<String> = CtorFieldFold.declaredTypeAnnotation(ctx.source, decl);
 		final root: Null<String> = text == null ? null : NominalTypes.outerNominalOf(text, ctx.seams.typeSyntax);
-		return text == null || root != null && ctx.seams.arrayTypeNames.contains(root);
+		return text == null || (root != null && ctx.seams.arrayTypeNames.contains(root));
 	}
 
 	/** The maximal run of adjacent `<name>.push(e);` siblings starting at `start`, unqualified receivers only. */
@@ -737,8 +737,7 @@ final class JoinArrayPushes extends RuleBase {
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
 		return s.opaqueKinds.contains(node.kind)
-			|| node.name == name
-			&& (node.kind == s.identKind || node.kind == s.interpIdentKind)
+			|| (node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind))
 			|| node.children.exists(child -> referencesName(child, name, s));
 	}
 

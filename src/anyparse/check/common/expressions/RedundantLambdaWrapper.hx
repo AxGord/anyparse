@@ -311,11 +311,12 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 
 	/** Whether a lambda parameter node is a plain binder — the bare arrow form, or a non-optional, non-rest, undefaulted declared one. */
 	private static function plainBinder(param: QueryNode, seams: Seams): Bool {
-		return param.kind == seams.identKind
-			|| seams.paramKinds.contains(param.kind)
+		return param.kind == seams.identKind || (
+			seams.paramKinds.contains(param.kind)
 			&& param.kind != seams.optionalParamKind
 			&& param.kind != seams.restParamKind
-			&& param.children.length == 0;
+			&& param.children.length == 0
+		);
 	}
 
 	/** Whether `name` occurs anywhere in `node`'s subtree, in ANY slot — the deliberately blunt reading of "used nowhere else". */

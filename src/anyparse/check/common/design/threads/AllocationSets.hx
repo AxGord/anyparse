@@ -67,7 +67,7 @@ final class AllocationSets {
 	 * dispatched one or a construction when some class of them resolves to it (`resolves`).
 	 */
 	public function dispatches(edge: CallEdge, classes: Null<String>): Bool {
-		return classes == null || edge.dispatchType == null && edge.kind != New
+		return classes == null || (edge.dispatchType == null && edge.kind != New)
 			? true
 			: classes.split(SEPARATOR).exists(c -> resolves(c, edge));
 	}

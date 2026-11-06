@@ -341,7 +341,7 @@ final class LockTaint {
 		if (!_threads.runsFrom(edge) || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
 		if (!takesLock(edge)) return true;
 		final lock: Null<String> = _sites.lockOf(edge);
-		return !quiet.never(edge) && (lock == null || !(lock == held && _sites.selfTake(edge)) && blockingLocks().contains(lock));
+		return !quiet.never(edge) && (lock == null || (!(lock == held && _sites.selfTake(edge)) && blockingLocks().contains(lock)));
 	}
 
 	/**
@@ -354,7 +354,7 @@ final class LockTaint {
 		if (retakesElsewhere(edge, held)) return held != null && _long.contains(held);
 		if (!takesLock(edge)) return !listsOf(edge.file).shortSinkIds.contains(edge.to);
 		final lock: Null<String> = _sites.lockOf(edge);
-		return lock == null || _long.contains(lock) && _cost?.dominance.dominated(edge, valuation) != true;
+		return lock == null || (_long.contains(lock) && _cost?.dominance.dominated(edge, valuation) != true);
 	}
 
 	/**
@@ -444,8 +444,7 @@ final class LockTaint {
 	private inline function counts(edge: CallEdge, held: Null<String>, repeats: Bool, valuation: String): Bool {
 		final cost: Null<TaintCost> = _cost;
 		return cost == null
-			|| (cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held)))
-			&& (repeats || costsLong(edge, held, valuation));
+			|| ((cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held))) && (repeats || costsLong(edge, held, valuation)));
 	}
 
 	/**
@@ -455,7 +454,7 @@ final class LockTaint {
 	 * `catch` is then a path of the normal run.
 	 */
 	private inline function leadsNowhere(edge: CallEdge, repeated: Bool): Bool {
-		return listsOf(edge.file).sinkIds.contains(edge.from) || !repeated && onErrorPath(edge);
+		return listsOf(edge.file).sinkIds.contains(edge.from) || (!repeated && onErrorPath(edge));
 	}
 
 	/** Whether this taint asks about the normal paths and only an error path runs the call `edge` (`ErrorPaths`). */
@@ -470,7 +469,7 @@ final class LockTaint {
 
 	/** Whether the call `edge` of a walk blocks itself under a hold of `held`: a sink call that blocks, or a re-take elsewhere. */
 	private inline function blockingHere(edge: CallEdge, held: Null<String>): Bool {
-		return _sinkIds.contains(edge.to) && blocks(edge, held) || retakesElsewhere(edge, held);
+		return (_sinkIds.contains(edge.to) && blocks(edge, held)) || retakesElsewhere(edge, held);
 	}
 
 	/**
@@ -808,7 +807,7 @@ private final class EndGraph {
 			final way: BlockingTrail = wayTo(f.from, f.edge, trail);
 			final key: String = '${MainSinkReport.siteKey(f.edge)}|${way.via ?? ''}';
 			final passes: Array<String> = (f.from < 0 ? [] : passing[f.from]).concat([_call.to, f.edge.to]);
-			final mayRepeat: Bool = f.repeated || onCycle(_call.to) || onCycle(f.edge.to) || f.from >= 0 && cyclic[f.from];
+			final mayRepeat: Bool = f.repeated || onCycle(_call.to) || onCycle(f.edge.to) || (f.from >= 0 && cyclic[f.from]);
 			final at: Int = keys.indexOf(key);
 			if (at < 0) {
 				keys.push(key);

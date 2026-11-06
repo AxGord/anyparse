@@ -822,11 +822,9 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		final shape: RefShape = plugin.refShape();
 		function valueUse(node: QueryNode, parent: Null<QueryNode>, names: Array<String>): Bool {
 			final isReceiver: Bool = parent != null && parent.kind == shape.fieldAccessKind && parent.children[0] == node;
-			final named: Bool = node.kind == shape.identKind
-				&& names.contains(node.name ?? '')
-				|| node.kind == shape.fieldAccessKind
-				&& node.name == className;
-			return named && !isReceiver || node.children.exists(c -> valueUse(c, node, names));
+			final named: Bool = (node.kind == shape.identKind && names.contains(node.name ?? ''))
+				|| (node.kind == shape.fieldAccessKind && node.name == className);
+			return (named && !isReceiver) || node.children.exists(c -> valueUse(c, node, names));
 		}
 		return files.exists(entry -> {
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);

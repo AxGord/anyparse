@@ -179,7 +179,7 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 			if (isNamedTable(node, parent, cfg, exempt.source)) return;
 		}
 		final posCall: Bool = isPositionCall(node, cfg);
-		final keyHost: Bool = isIgnoredCall(node, cfg, exempt.calls) || keyCtx && node.kind == cfg.newExprKind;
+		final keyHost: Bool = isIgnoredCall(node, cfg, exempt.calls) || (keyCtx && node.kind == cfg.newExprKind);
 		for (i in 0...node.children.length) {
 			final child: QueryNode = node.children[i];
 			walk(

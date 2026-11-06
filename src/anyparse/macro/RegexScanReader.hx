@@ -183,7 +183,9 @@ final class RegexScanReader {
 
 	private static function isPunctuation(c: Int): Bool {
 		if (c < 0 || c > MAX_ASCII) return false;
-		final letterOrDigit: Bool = c >= '0'.code && c <= '9'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code;
+		final letterOrDigit: Bool = (c >= '0'.code && c <= '9'.code)
+			|| (c >= 'a'.code && c <= 'z'.code)
+			|| (c >= 'A'.code && c <= 'Z'.code);
 		return !letterOrDigit;
 	}
 

@@ -725,10 +725,12 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 */
 	private static function isAccessorOrForward(root: QueryNode, shape: RefShape): Bool {
 		final kids: Array<QueryNode> = root.children;
-		return isChain(root, shape) || kids.length >= 1 && isChain(kids[0], shape) && kids[0].name != 'bind' && (
-			root.kind == shape.callKind
-				? allSimpleOperands(kids, 1, shape)
-				: shape.writeParentKinds.contains(root.kind) && (kids.length == 1 || isSimpleOperand(kids[1], shape))
+		return isChain(root, shape) || (
+			kids.length >= 1 && isChain(kids[0], shape) && kids[0].name != 'bind' && (
+				root.kind == shape.callKind
+					? allSimpleOperands(kids, 1, shape)
+					: shape.writeParentKinds.contains(root.kind) && (kids.length == 1 || isSimpleOperand(kids[1], shape))
+			)
 		);
 	}
 
@@ -758,9 +760,10 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 * walk rebuilt it once per NODE of the subtree; `typeAnnotationKinds` is the same shape read.
 	 */
 	private static function constExprWalk(node: QueryNode, shape: RefShape, pure: Array<String>, typeChildKinds: Array<String>): Bool {
-		return isSimpleOperand(node, shape)
-			|| pure.contains(node.kind)
-			&& node.children.foreach(c -> typeChildKinds.contains(c.kind) || constExprWalk(c, shape, pure, typeChildKinds));
+		return isSimpleOperand(node, shape) || (
+			pure.contains(node.kind)
+			&& node.children.foreach(c -> typeChildKinds.contains(c.kind) || constExprWalk(c, shape, pure, typeChildKinds))
+		);
 	}
 
 	/**
@@ -872,8 +875,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	/** Whether `node`'s subtree contains a null literal in a value slot. */
 	private static function subtreeHasNullSafetyRisk(node: QueryNode, parentKind: String, root: Null<QueryNode>, shape: RefShape): Bool {
 		return isRiskyHere(node, parentKind, shape)
-			|| node != root
-			&& isNullGuard(node, shape)
+			|| (node != root && isNullGuard(node, shape))
 			|| node.children.exists(c -> subtreeHasNullSafetyRisk(c, node.kind, root, shape));
 	}
 

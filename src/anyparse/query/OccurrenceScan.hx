@@ -570,7 +570,7 @@ final class OccurrenceScan {
 		final prev: Int = at - 1;
 		if (prev <= region.from) return false;
 		final prevCode: Int = source.fastCodeAt(prev);
-		return prevCode == '$'.code || prevCode == '{'.code && prev - 1 > region.from && source.fastCodeAt(prev - 1) == '$'.code;
+		return prevCode == '$'.code || (prevCode == '{'.code && prev - 1 > region.from && source.fastCodeAt(prev - 1) == '$'.code);
 	}
 
 	/** Walk `node`, appending the name-token span of every direct child of a `hosts` node. */

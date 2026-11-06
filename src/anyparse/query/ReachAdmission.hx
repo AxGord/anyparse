@@ -158,7 +158,7 @@ final class ReachAdmission {
 		final name: Null<String> = node.name;
 		return type == null || name == null
 			? node.isExternal
-			: (node.isExternal || node.isBodyless && g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name))
+			: (node.isExternal || (node.isBodyless && g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name)))
 				&& !_g.library.runsNoUserCode(g, type, name, true);
 	}
 

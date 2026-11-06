@@ -109,7 +109,7 @@ final class EmptyDocTag extends RuleBase {
 
 	/** Whether code unit `c` is an ASCII letter. */
 	private static inline function isLetter(c: Int): Bool {
-		return c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code;
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code);
 	}
 
 	/** Scan every doc comment in `source`, flagging each content-free tag section. */

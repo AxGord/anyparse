@@ -142,7 +142,7 @@
 			"name": "M-UNUSED-VALUES-UNLISTED-DELETED",
 			"type": "anyparse.check.common.imports.UnusedImport",
 			"method": "valuesKeepAlive",
-			"find": "if (!membersByPath.exists(imp.raw) || typeValues != null && fieldValues != null) return false;",
+			"find": "if (!membersByPath.exists(imp.raw) || (typeValues != null && fieldValues != null)) return false;",
 			"replace": "return false;",
 			"note": "a known module whose constructors cannot be listed is deleted on its type names alone"
 		},

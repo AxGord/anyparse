@@ -269,16 +269,14 @@ final class ValueNameBinding {
 				final split: Null<ImportPath> = TypeNameBinding.splitPath(imp.raw);
 				final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(imp.raw);
 				// a static-field import brings its one field, which the last segment spells
-				!besideType
-					&& SourceText.lastSegment(imp.raw) == name
-					|| split != null
-					&& SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))
-					&& (
-						types == null
-						|| carriesValue(types, name)
-						|| split.rest.length == 0
-						&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.exists(m -> m.name == name))
-					);
+				(!besideType && SourceText.lastSegment(imp.raw) == name) || (
+					split != null && SourceText.isUpperInitial(SourceText.lastSegment(imp.raw)) && (
+						types == null || carriesValue(types, name) || (
+							split.rest.length == 0
+							&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.exists(m -> m.name == name))
+						)
+					)
+				);
 		};
 	}
 

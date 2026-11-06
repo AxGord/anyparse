@@ -150,7 +150,7 @@ final class TrapFixSweep {
 		// the fixer declines every edit in a file the writer would rewrite, so the project is made canonical first
 		final formatted: Result = cmd('node $engine fmt --write . --lang haxe').at(dir.path).run();
 		final before: Null<Result> = raw.ok && formatted.ok ? cmd('haxe -cp . -main $main --interp').at(dir.path).run() : null;
-		final formatKept: Bool = !formatted.ok || before != null && before.ok && printed(before.out) == printed(raw.out);
+		final formatKept: Bool = !formatted.ok || (before != null && before.ok && printed(before.out) == printed(raw.out));
 		final fix: Null<Result> = raw.ok && formatted.ok && formatKept
 			? cmd('node $engine lint . --lang haxe $ruleArgs --fix').at(dir.path).run()
 			: null;

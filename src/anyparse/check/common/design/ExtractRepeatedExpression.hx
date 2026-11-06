@@ -394,7 +394,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 		var bestLength: Int = 0;
 		for (u in units) {
 			final s: Null<Span> = u.span;
-			if (s == null || !holds(s, offset) || best != null && s.to - s.from >= bestLength) continue;
+			if (s == null || !holds(s, offset) || (best != null && s.to - s.from >= bestLength)) continue;
 			best = u;
 			bestLength = s.to - s.from;
 		}

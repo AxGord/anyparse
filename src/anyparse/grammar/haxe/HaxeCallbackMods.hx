@@ -103,11 +103,11 @@ final class HaxeCallbackMods {
 		final before: Null<QueryNode> = kids.length > 1 ? kids[kids.length - 2] : null;
 		return before != null && !NON_RESULT_KINDS.contains(before.kind)
 			? before.kind == 'Named' && before.name == 'Void'
-			: body.kind == 'NoBody' || body.kind == 'BlockBody' && !holdsValueReturn(body);
+			: body.kind == 'NoBody' || (body.kind == 'BlockBody' && !holdsValueReturn(body));
 	}
 
 	private function holdsValueReturn(node: QueryNode): Bool {
-		return node.kind == VALUE_RETURN_KIND || !_nested.contains(node.kind) && node.children.exists(holdsValueReturn);
+		return node.kind == VALUE_RETURN_KIND || (!_nested.contains(node.kind) && node.children.exists(holdsValueReturn));
 	}
 
 	private static function key(owner: Null<String>, name: String): String {

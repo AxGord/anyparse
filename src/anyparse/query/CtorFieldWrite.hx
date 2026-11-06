@@ -370,7 +370,7 @@ final class CtorFieldWrite {
 		// An uppercase root is a TYPE reference (`Colors.WHITE`) — never an inherited member, and
 		// decided without touching the index. A lowercase one asks the index whether any ancestor
 		// could declare it.
-		return c0 >= 'A'.code && c0 <= 'Z'.code || !mayBeInherited(name);
+		return (c0 >= 'A'.code && c0 <= 'Z'.code) || !mayBeInherited(name);
 	}
 
 	/**
@@ -615,7 +615,7 @@ final class CtorFieldWrite {
 		final span: Null<Span> = node.span;
 		// Spans are monotone, so a subtree starting past the boundary holds no match.
 		if (span != null && span.from >= boundary) return false;
-		return span != null && kinds.contains(node.kind) || node.children.exists(child -> kindStartsBefore(child, kinds, boundary));
+		return (span != null && kinds.contains(node.kind)) || node.children.exists(child -> kindStartsBefore(child, kinds, boundary));
 	}
 
 	/**
@@ -737,8 +737,7 @@ final class CtorFieldWrite {
 		final span: Null<Span> = node.span;
 		return span != null && (
 			span.from == writeFrom
-			|| transparent.contains(node.kind)
-			&& node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent))
+			|| (transparent.contains(node.kind) && node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent)))
 		);
 	}
 
@@ -812,7 +811,7 @@ final class CtorFieldWrite {
 				MemberBranchScan.fold(ctx.branch, node.children, false, (exported, child) -> {
 					if (ctx.visibility.contains(child.kind)) {
 						final span: Null<Span> = child.span;
-						return exported || span != null && ctx.source.substring(span.from, span.to).trim() != ctx.defaultVis;
+						return exported || (span != null && ctx.source.substring(span.from, span.to).trim() != ctx.defaultVis);
 					}
 					if (!ctx.members.contains(child.kind)) return exported;
 					if (ctx.mutableFields.contains(child.kind)) ctx.visit(owner, child, ctx.source, ctx.file, exported);

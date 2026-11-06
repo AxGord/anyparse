@@ -443,8 +443,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 		final head: String = trimmedAt(before, divergence);
 		final collapsedHead: String = trimmedAt(after, divergence);
 		return collapsedHead.length > head.length
-			|| headOnlyLostItsBrace(head, collapsedHead)
-			&& interiorSurvives(before, after, divergence);
+			|| (headOnlyLostItsBrace(head, collapsedHead) && interiorSurvives(before, after, divergence));
 	}
 
 	/**
@@ -699,8 +698,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	 */
 	private static function branchesInternally(stmt: QueryNode, s: Seams): Bool {
 		return s.branchingKinds.contains(stmt.kind)
-			|| s.shield.conditionalKinds.contains(stmt.kind)
-			&& stmt.children.length >= IF_ELSE_CHILD_COUNT;
+			|| (s.shield.conditionalKinds.contains(stmt.kind) && stmt.children.length >= IF_ELSE_CHILD_COUNT);
 	}
 
 	/**

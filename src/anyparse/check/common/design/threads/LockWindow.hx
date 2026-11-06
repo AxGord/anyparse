@@ -300,7 +300,7 @@ final class LockWindow {
 	private function raisesInside(node: QueryNode, after: Int): Void {
 		final from: Int = node.span?.from ?? -1;
 		if (_nestedFnKinds.contains(node.kind)) return;
-		if (from > after && (_throwKinds.contains(node.kind) || node.kind == _callKind && _raisingFroms.contains(from))) {
+		if (from > after && (_throwKinds.contains(node.kind) || (node.kind == _callKind && _raisingFroms.contains(from)))) {
 			raise(node);
 			if (node.kind != _callKind) return;
 		}

@@ -187,7 +187,7 @@ final class StaticExtensions {
 			}
 			if (sub == null) for (f in fi.moduleFields) fields.push(f);
 		}
-		return files.length == 0 || sub != null && !named ? null : { types: types, moduleFields: fields, ambiguous: files.length > 1 };
+		return files.length == 0 || (sub != null && !named) ? null : { types: types, moduleFields: fields, ambiguous: files.length > 1 };
 	}
 
 	/** `binding`, computed. */
@@ -306,8 +306,7 @@ final class StaticExtensions {
 	 */
 	public static inline function accessible(m: MemberInfo, host: ResolvedType): Bool {
 		return m.visibility == SymbolIndex.PUBLIC_VISIBILITY
-			|| m.visibility == null
-			&& (host.type.isExtern || host.type.kind == SymbolIndex.INTERFACE_DECL_KIND);
+			|| (m.visibility == null && (host.type.isExtern || host.type.kind == SymbolIndex.INTERFACE_DECL_KIND));
 	}
 
 	/** The `using` statements of `fi`: its own, then each group of its ambient chain, nearest first. */

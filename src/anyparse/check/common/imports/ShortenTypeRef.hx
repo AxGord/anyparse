@@ -571,7 +571,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 			final eligible: Array<Occurrence> = occurrences.filter(
 				o ->
 					resolved[o.path] == path
-					&& (o.valueSite == null || options.valuePositions && valueNameFree(simple, o, context, index, file))
+					&& (o.valueSite == null || (options.valuePositions && valueNameFree(simple, o, context, index, file)))
 			);
 			final unguarded: Array<Occurrence> = eligible.filter(o -> !o.conditional);
 			// `targets` stays WHOLE-file — the finding set the fix path filters against `wanted` itself — while the two

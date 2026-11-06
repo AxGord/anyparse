@@ -379,8 +379,8 @@ final class PreferInterpolation extends HaxeRule {
 	 */
 	private static function isCoreDeclaration(r: ResolvedType, shape: RefShape): Bool {
 		final t: TypeDeclInfo = r.type;
-		final noRepresentation: Bool = t.isExtern || (shape.underlyingThisTypeKinds ?? []).contains(t.kind) && t.underlyingRaw == null;
-		return convertsNothing(t) && (StdResolver.isStdFile(r.file.file) || r.file.pkg == '' && noRepresentation);
+		final noRepresentation: Bool = t.isExtern || ((shape.underlyingThisTypeKinds ?? []).contains(t.kind) && t.underlyingRaw == null);
+		return convertsNothing(t) && (StdResolver.isStdFile(r.file.file) || (r.file.pkg == '' && noRepresentation));
 	}
 
 	/** Whether the declaration `t` is unguarded, built by no macro, and declares no member the language calls implicitly. */

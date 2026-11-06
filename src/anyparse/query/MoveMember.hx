@@ -675,7 +675,7 @@ final class MoveMember {
 	private static function insideReification(tree: QueryNode, offset: Int, opaqueKinds: Array<String>): Bool {
 		final span: Null<Span> = tree.span;
 		if (span != null && (offset < span.from || offset >= span.to)) return false;
-		return span != null && opaqueKinds.contains(tree.kind) || tree.children.exists(c -> insideReification(c, offset, opaqueKinds));
+		return (span != null && opaqueKinds.contains(tree.kind)) || tree.children.exists(c -> insideReification(c, offset, opaqueKinds));
 	}
 
 	/**

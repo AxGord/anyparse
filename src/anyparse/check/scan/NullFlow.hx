@@ -731,8 +731,7 @@ final class NullFlow {
 			carries(shape.dynamicModifierKind)
 			|| carries(shape.macroModifierKind)
 			|| carries(shape.overloadModifierKind)
-			|| overloadMeta != null
-			&& modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
+			|| (overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta))
 		)
 			return false;
 		return fn.kind == shape.finalModifierMemberKind || carries(shape.inlineModifierKind) || carries(shape.staticModifierKind);
@@ -744,7 +743,7 @@ final class NullFlow {
 	): Array<Int> {
 		final conjuncts: Array<QueryNode> = [];
 		function flatten(n: QueryNode): Void {
-			if (n.kind == BOOL_AND_KIND || n.kind == shape.parenKind && n.children.length == 1)
+			if (n.kind == BOOL_AND_KIND || (n.kind == shape.parenKind && n.children.length == 1))
 				for (c in n.children) flatten(c)
 			else
 				conjuncts.push(n);
@@ -1482,7 +1481,7 @@ final class NullFlow {
 		collectExists(cond, present, ctx, combineKind, combineKind == BOOL_OR_KIND);
 		for (e in present) if (!e.names.exists(n -> written.contains(n))) out.present.push(e);
 		for (n in nonNull) if (!written.contains(n)) {
-			final seen: Bool = visible.contains(n) || out.nonNull.contains(n) && !out.unseen.contains(n);
+			final seen: Bool = visible.contains(n) || (out.nonNull.contains(n) && !out.unseen.contains(n));
 			markNonNull(out, n);
 			if (!seen && !out.unseen.contains(n)) out.unseen.push(n);
 		}
@@ -1568,12 +1567,8 @@ final class NullFlow {
 	private static function armExits(arm: QueryNode, ctx: FlowCtx): Bool {
 		return ctx.controlExitKinds.contains(arm.kind)
 			|| isLoopJump(arm, ctx)
-			|| arm.kind == ctx.exprStmtKind
-			&& arm.children.length == 1
-			&& isLoopJump(arm.children[0], ctx)
-			|| ctx.blockKinds.contains(arm.kind)
-			&& arm.children.length > 0
-			&& armExits(arm.children[arm.children.length - 1], ctx);
+			|| (arm.kind == ctx.exprStmtKind && arm.children.length == 1 && isLoopJump(arm.children[0], ctx))
+			|| (ctx.blockKinds.contains(arm.kind) && arm.children.length > 0 && armExits(arm.children[arm.children.length - 1], ctx));
 	}
 
 	/** Whether `node` is a bare loop-jump identifier (`break` / `continue` — `RefShape.loopJumpNames`). */

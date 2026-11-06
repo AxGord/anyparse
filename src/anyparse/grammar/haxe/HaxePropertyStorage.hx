@@ -62,7 +62,7 @@ final class HaxePropertyStorage {
 
 	/** Whether the run sibling `node` may grant storage: an `@:isVar`, or a region one of whose builds may hold one. */
 	private static function grantsStorage(node: QueryNode): Bool {
-		return node.kind == CONDITIONAL_KIND || MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META;
+		return node.kind == CONDITIONAL_KIND || (MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META);
 	}
 
 }

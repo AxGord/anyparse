@@ -167,7 +167,7 @@ final class CallSelection {
 		var agreed: Null<String> = null;
 		for (i => fits in verdicts) if (fits != Misfits) {
 			final returned: Null<String> = returnType(start, c.candidates[i], receiverArgs, args);
-			if (returned == null || agreed != null && agreed != returned) return null;
+			if (returned == null || (agreed != null && agreed != returned)) return null;
 			agreed = returned;
 		}
 		return agreed;

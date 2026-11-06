@@ -214,11 +214,12 @@ final class StoredValues {
 		if (parent.kind != _shape.assignKind || grand.kind != _shape.exprStatementKind) return null;
 		if (parent.children.length != 2 || parent.children[1] != node) return null;
 		final target: QueryNode = parent.children[0];
-		final own: Bool = target.kind == _shape.identKind
-			|| target.kind == _shape.fieldAccessKind
+		final own: Bool = target.kind == _shape.identKind || (
+			target.kind == _shape.fieldAccessKind
 			&& target.children.length == 1
 			&& target.children[0].kind == _shape.identKind
-			&& target.children[0].name == THIS;
+			&& target.children[0].name == THIS
+		);
 		return own ? target.name : null;
 	}
 

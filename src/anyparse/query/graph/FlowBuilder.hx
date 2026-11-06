@@ -180,7 +180,7 @@ final class FlowBuilder {
 			case WhileLoop, Guarded: 1;
 			case _: 0;
 		};
-		return s.children.length < needed || (cls == Cut || cls == Next) && _loops.length == 0 ? Other : cls;
+		return s.children.length < needed || ((cls == Cut || cls == Next) && _loops.length == 0) ? Other : cls;
 	}
 
 	private function branch(s: QueryNode, tails: Array<FlowTail>): Array<FlowTail> {

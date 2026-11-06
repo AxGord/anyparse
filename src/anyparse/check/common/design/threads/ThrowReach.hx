@@ -128,7 +128,7 @@ final class ThrowReach {
 			final kids: Array<QueryNode> = node.children;
 			final inner: Null<QueryNode> = kids.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
 			if (inner == null) return true;
-			if (intercepts(node) && inner == kids[0] || _nestedFnKinds.contains(inner.kind)) return false;
+			if ((intercepts(node) && inner == kids[0]) || _nestedFnKinds.contains(inner.kind)) return false;
 			node = inner;
 		}
 		return false;

@@ -168,7 +168,7 @@ final class LoopScan {
 	/** Whether `node`'s subtree re-declares a local named `name`, skipping reification subtrees. */
 	public static function declares(node: QueryNode, name: String, s: LoopSeams): Bool {
 		return !s.opaqueKinds.contains(node.kind)
-			&& (s.localDeclKinds.contains(node.kind) && node.name == name || node.children.exists(c -> declares(c, name, s)));
+			&& ((s.localDeclKinds.contains(node.kind) && node.name == name) || node.children.exists(c -> declares(c, name, s)));
 	}
 
 	/** Whether `node`'s subtree contains a node of `kind`, skipping reification subtrees. */
@@ -209,11 +209,12 @@ final class LoopScan {
 		if (stmt.kind != exprStmtKind || stmt.children.length != 1) return false;
 		final step: QueryNode = stmt.children[0];
 		return step.children.length > 0 && bareIdentName(step.children[0], s) == name && (
-			incrementKinds.contains(step.kind)
-			|| addAssignKind != null
-			&& step.kind == addAssignKind
-			&& step.children.length == COMPOUND_ASSIGN_CHILD_COUNT
-			&& isNumericLiteral(step.children[1], ONE_LITERAL, source, s)
+			incrementKinds.contains(step.kind) || (
+				addAssignKind != null
+				&& step.kind == addAssignKind
+				&& step.children.length == COMPOUND_ASSIGN_CHILD_COUNT
+				&& isNumericLiteral(step.children[1], ONE_LITERAL, source, s)
+			)
 		);
 	}
 
@@ -298,9 +299,7 @@ final class LoopScan {
 	 */
 	public static function bindsName(node: QueryNode, name: String, s: LoopSeams): Bool {
 		return !s.opaqueKinds.contains(node.kind) && (
-			node.name == name
-			&& !isReadKind(node.kind, s)
-			&& !s.textLiteralKinds.contains(node.kind)
+			(node.name == name && !isReadKind(node.kind, s) && !s.textLiteralKinds.contains(node.kind))
 			|| node.children.exists(c -> bindsName(c, name, s))
 		);
 	}
@@ -491,7 +490,7 @@ final class LoopScan {
 
 	/** Whether `kind` is one of the two positions that READ a name — plain identifier, or `$name` inside a string. */
 	private static inline function isReadKind(kind: String, s: LoopSeams): Bool {
-		return kind == s.identKind || s.stringInterpIdentKind != null && kind == s.stringInterpIdentKind;
+		return kind == s.identKind || (s.stringInterpIdentKind != null && kind == s.stringInterpIdentKind);
 	}
 
 	/** Whether `node` is a numeric literal spelled exactly `text`. */
@@ -511,9 +510,10 @@ final class LoopScan {
 	private static function stableUseScan(
 		node: QueryNode, parent: Null<QueryNode>, grandParent: Null<QueryNode>, name: String, sizeMember: String, s: LoopSeams
 	): Bool {
-		return s.opaqueKinds.contains(node.kind)
-			|| (node.kind != s.identKind || node.name != name || isStablePosition(node, parent, grandParent, sizeMember, s))
-			&& node.children.foreach(c -> stableUseScan(c, node, parent, name, sizeMember, s));
+		return s.opaqueKinds.contains(node.kind) || (
+			(node.kind != s.identKind || node.name != name || isStablePosition(node, parent, grandParent, sizeMember, s))
+			&& node.children.foreach(c -> stableUseScan(c, node, parent, name, sizeMember, s))
+		);
 	}
 
 	/**

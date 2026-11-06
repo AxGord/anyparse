@@ -111,7 +111,7 @@ final class LandProse {
 		for (row in changes) {
 			final columns: Array<String> = row.split('\t');
 			final kind: String = columns[0].charAt(0);
-			if (kind == 'D' && columns.length >= 2 || kind == 'R' && columns.length >= 3) files.push(columns[1]);
+			if ((kind == 'D' && columns.length >= 2) || (kind == 'R' && columns.length >= 3)) files.push(columns[1]);
 		}
 		final emptied: Map<String, Bool> = [];
 		for (file in files) {
@@ -171,7 +171,7 @@ final class LandProse {
 			final at: Int = line.indexOf(name, from);
 			if (at < 0) return false;
 			final end: Int = at + name.length;
-			final extended: Bool = partOfName(line.charAt(end)) || line.charAt(end) == '.' && partOfName(line.charAt(end + 1));
+			final extended: Bool = partOfName(line.charAt(end)) || (line.charAt(end) == '.' && partOfName(line.charAt(end + 1)));
 			if (!partOfName(line.charAt(at - 1)) && !extended) return true;
 			from = at + 1;
 		}

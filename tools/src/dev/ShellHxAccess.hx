@@ -63,8 +63,7 @@ final class ShellHxAccess {
 		return find(
 			command, cwd,
 			(segment, dir) -> !viaHxq(segment) && (
-				EDITOR.match(segment)
-				&& touches(segment, dir, slice)
+				(EDITOR.match(segment) && touches(segment, dir, slice))
 				|| redirectsIntoRepo(segment, dir, slice)
 				|| transfers(segment, dir, slice)
 			)

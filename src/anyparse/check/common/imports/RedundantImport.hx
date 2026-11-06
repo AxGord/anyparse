@@ -189,7 +189,7 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 			'this module declares them'
 		else if (ambient != null)
 			'\'${ambient.file}\' imports them'
-		else if (!decl.type.isMain || pkg != '' && info.pkg != pkg && !info.pkg.startsWith('$pkg.'))
+		else if (!decl.type.isMain || (pkg != '' && info.pkg != pkg && !info.pkg.startsWith('$pkg.')))
 			'a wildcard import binds them'
 		else if (pkg == info.pkg)
 			'this module\'s own package \'$pkg\' holds them'

@@ -629,7 +629,7 @@ final class SourceComments {
 			final kept: String = line.rtrim();
 			// The line has to END on a marker. A body's LAST line is the whitespace carrying the
 			// closer's indentation, and rtrimming that put `*\/` flush against column 0.
-			if (kept == line || !kept.endsWith(GUTTER_STAR) && !kept.endsWith(LINE_OPEN)) continue;
+			if (kept == line || (!kept.endsWith(GUTTER_STAR) && !kept.endsWith(LINE_OPEN))) continue;
 			lines[i] = kept;
 			changed = true;
 		}

@@ -269,7 +269,7 @@ final class AncestorTable {
 		if (!_refs.markSeen(cur, seen)) return false;
 		for (link in links(cur)) {
 			final up: Null<ResolvedType> = link.decl;
-			if (up == null || !same(up, host) && chainTo(up, host, []) == null) continue;
+			if (up == null || (!same(up, host) && chainTo(up, host, []) == null)) continue;
 			final ancestor: ResolvedType = up;
 			final args: Array<String> = link.args ?? [];
 			return link.args != null
@@ -289,9 +289,12 @@ final class AncestorTable {
 		}
 		final decl: Null<ResolvedType> = matches.length == 1 ? matches[0] : null;
 		// a link leaving trailing arguments out passes the defaults of the type it names (`extends Box` is `Box<Int>`)
-		final args: Null<Array<String>> = written.length != 1
-			? null
-			: decl == null ? written[0] : withDefaults(decl, written[0]) ?? written[0];
+		final args: Null<Array<String>> = if (written.length != 1)
+			null
+		else if (decl == null)
+			written[0]
+		else
+			withDefaults(decl, written[0]) ?? written[0];
 		return {
 			raw: raw,
 			matches: matches,

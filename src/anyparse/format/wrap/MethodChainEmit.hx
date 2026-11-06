@@ -491,7 +491,7 @@ class MethodChainEmit {
 		// multi-line) takes the pre-knob construction below verbatim.
 		final cuddle: Array<Bool> = cuddledLinks ? [
 			for (i in 1...segs.length)
-				endsWithMultilineClose(i == 1 ? Concat([receiver, segs[0]]) : segs[i - 1], committed == i || i == 1 && committed == 0)
+				endsWithMultilineClose(i == 1 ? Concat([receiver, segs[0]]) : segs[i - 1], committed == i || (i == 1 && committed == 0))
 		] : [];
 		if (cuddle.indexOf(true) != -1) return Concat(cuddledRuns([segs[0]], segs, 1, cuddle, cols));
 		final tail: Array<Doc> = [];

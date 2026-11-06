@@ -257,7 +257,7 @@ final class PreferRangeLoop extends RuleBase {
 	/** Whether `node`'s subtree re-declares a local named `name`, skipping reification subtrees. */
 	private static function declaresName(node: QueryNode, name: String, s: Seams): Bool {
 		return !s.opaqueKinds.contains(node.kind)
-			&& (s.localDeclKinds.contains(node.kind) && node.name == name || node.children.exists(c -> declaresName(c, name, s)));
+			&& ((s.localDeclKinds.contains(node.kind) && node.name == name) || node.children.exists(c -> declaresName(c, name, s)));
 	}
 
 	/** The normalized source, truncated with an ellipsis beyond the excerpt cap. */

@@ -178,7 +178,7 @@
 			"name": "M-DSN-RENARROW-HIDES",
 			"type": "anyparse.check.scan.NullFlow",
 			"method": "narrowedCopy",
-			"find": "final seen: Bool = visible.contains(n) || out.nonNull.contains(n) && !out.unseen.contains(n);",
+			"find": "final seen: Bool = visible.contains(n) || (out.nonNull.contains(n) && !out.unseen.contains(n));",
 			"replace": "final seen: Bool = visible.contains(n);",
 			"note": "an invisible re-narrowing hides a proof the compiler already has, so an accepted fix is declined"
 		},
@@ -379,7 +379,7 @@
 			"name": "M-OPERAND-CASE-CAPTURE-INSIDE",
 			"type": "anyparse.check.scan.OperandBinder",
 			"method": "capturedBetween",
-			"find": "node.kind == branchKind\n\t\t\t\t&& !inside\n\t\t\t\t&&",
+			"find": "node.kind == branchKind && !inside &&",
 			"replace": "node.kind == branchKind\n\t\t\t\t&& ",
 			"note": "a binding declared inside the capturing branch is refused too, though it shadows the capture"
 		},
@@ -1139,7 +1139,7 @@
 			"name": "M-ENUM-ABSTRACT-LEGACY-META",
 			"type": "anyparse.check.scan.EnumAbstractForms",
 			"method": "isEnumAbstract",
-			"find": " || metaName != null && annotations.contains(metaName)",
+			"find": "|| (metaName != null && annotations.contains(metaName))",
 			"replace": "",
 			"note": "a legacy `@:enum abstract` reads as a plain abstract, so a move takes its values away from a file that read them through a module statement"
 		},

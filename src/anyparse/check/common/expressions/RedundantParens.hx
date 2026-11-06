@@ -438,7 +438,7 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 
 	/** Whether `c` is an identifier or number character — one a neighbouring token can lex into. */
 	private static inline function isWordChar(c: Int): Bool {
-		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
+		return c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
 	}
 
 	/** Whether `c` is a character operators are spelled from, which the lexer reads greedily. */
@@ -542,7 +542,7 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 		final inner: Bool = opaque || slots.opaqueSubtree.contains(node.kind);
 		final host: Bool = slots.prefixAnnotation.contains(node.kind);
 		for (i => c in node.children)
-			walk(out, file, source, c, slots, slotOf(node, i, slots), inner, host || prefixed && startsTogether(node, c));
+			walk(out, file, source, c, slots, slotOf(node, i, slots), inner, host || (prefixed && startsTogether(node, c)));
 	}
 
 	/**
@@ -595,11 +595,11 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 			// exactly where the arm does. A SEPARATOR-greedy tail is a different question and does
 			// gate — a declaration continuation reaches past the `,` that ends the enclosing slot.
 			case SlotKind.TernaryElse:
-				atom || bare.kind == slots.ternaryKind && !spineEndsWith(bare, slots.greedy);
+				atom || (bare.kind == slots.ternaryKind && !spineEndsWith(bare, slots.greedy));
 			case SlotKind.Delimited:
 				atom || !spineEndsWith(bare, slots.greedy);
 			case SlotKind.DelimitedSplice:
-				atom || !slots.splice.contains(bare.kind) && !spineEndsWith(bare, slots.greedy);
+				atom || (!slots.splice.contains(bare.kind) && !spineEndsWith(bare, slots.greedy));
 		}
 	}
 
@@ -627,7 +627,7 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 	 * uniformly false.
 	 */
 	private static function isAtom(node: QueryNode, slots: ParenSlots): Bool {
-		return slots.atoms.contains(node.kind) || slots.atomChains.contains(node.kind) && node.children.foreach(c -> isAtom(c, slots));
+		return slots.atoms.contains(node.kind) || (slots.atomChains.contains(node.kind) && node.children.foreach(c -> isAtom(c, slots)));
 	}
 
 	/**
@@ -803,7 +803,7 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 		final inner: Bool = opaque || slots.opaqueSubtree.contains(node.kind);
 		final host: Bool = slots.prefixAnnotation.contains(node.kind);
 		for (i => c in node.children)
-			indexParens(c, slots, slotOf(node, i, slots), inner, host || prefixed && startsTogether(node, c), out);
+			indexParens(c, slots, slotOf(node, i, slots), inner, host || (prefixed && startsTogether(node, c)), out);
 	}
 
 }

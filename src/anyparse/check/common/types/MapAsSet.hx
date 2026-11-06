@@ -88,7 +88,7 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		final options: Null<LintConfig> = first == null ? null : LintConfig.resolveWith(_resolveConfig, first.file);
 		final setType: Null<String> = options?.stringOption(RULE_ID, SET_OPTION);
 		final bitsType: Null<String> = options?.stringOption(RULE_ID, BITS_OPTION);
-		if (first == null || root == null || seams == null || setType == null && bitsType == null) return [];
+		if (first == null || root == null || seams == null || (setType == null && bitsType == null)) return [];
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
 			first.file, source, root, provider == null ? [] : provider.importMap(source, first.file), plugin, index
@@ -221,11 +221,8 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		parent: Null<QueryNode>, parentSlot: Int, grand: Null<QueryNode>, grandSlot: Int, seams: ValueSeams
 	): Bool {
 		return parent != null && grand != null && parentSlot == 0 && grandSlot == 0 && (
-			parent.kind == seams.indexAccessKind
-			&& grand.kind == seams.assignKind
-			|| parent.kind == seams.fieldAccessKind
-			&& parent.name == MapValueScan.SET_METHOD
-			&& grand.kind == seams.callKind
+			(parent.kind == seams.indexAccessKind && grand.kind == seams.assignKind)
+			|| (parent.kind == seams.fieldAccessKind && parent.name == MapValueScan.SET_METHOD && grand.kind == seams.callKind)
 		);
 	}
 
@@ -380,10 +377,8 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 	): Null<String> {
 		final span: Null<Span> = init.span;
 		final seams: ValueSeams = site.seams;
-		final constructs: Bool = init.kind == seams.newExprKind
-			&& SourceText.lastSegment(init.name ?? '') == MAP_TYPE
-			|| init.kind == seams.arrayLiteralKind
-			&& init.children.length == 0;
+		final constructs: Bool = (init.kind == seams.newExprKind && SourceText.lastSegment(init.name ?? '') == MAP_TYPE)
+			|| (init.kind == seams.arrayLiteralKind && init.children.length == 0);
 		if (span == null || !constructs) return 'the map is built from something other than an empty construction';
 		edits.push({ span: span, text: 'new ${site.setName}<${site.key}>()' });
 		return null;
@@ -491,7 +486,7 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		if (declarationsOf(root, name, seams.declKinds) != 1) return 'the file declares another \'$name\'';
 		final owner: Null<String> = MapValueScan.memberOwner(root, declAt, seams);
 		final scope: Null<SymbolIndex> = project.index;
-		return owner == null || scope != null && MemberWriteScan.referencesConfinedToFile(owner, name, source, scope, plugin)
+		return owner == null || (scope != null && MemberWriteScan.referencesConfinedToFile(owner, name, source, scope, plugin))
 			? null
 			: 'a subtype or an @:access grantee in another file may read the member';
 	}

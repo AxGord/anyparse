@@ -1428,9 +1428,7 @@ final class MemberReach {
 		if (_g.oneTypeEverywhere(g, node)) return false;
 		final facts: Null<FactsView> = _scope.facts;
 		return facts == null
-			|| facts.soleType(type) == null
-			&& (name == null || facts.soleMember(type, name) == null)
-			&& ownTypes(g, node) == null;
+			|| (facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null) && ownTypes(g, node) == null);
 	}
 
 	/**
@@ -2743,7 +2741,7 @@ final class MemberReach {
 	 * excused.
 	 */
 	private function freshlyConstructed(g: CallGraph, id: String, step: Null<ReachStep>, scan: MemberTouches, member: MemberRef): Bool {
-		if (step == null || step.kind != EdgeKind.New.label() && step.kind != REFLECTIVE_CONSTRUCTOR || scan.notOnSelf.exists(id))
+		if (step == null || (step.kind != EdgeKind.New.label() && step.kind != REFLECTIVE_CONSTRUCTOR) || scan.notOnSelf.exists(id))
 			return false;
 		return g.node(id)?.name == (_shape.constructorName ?? 'new') && g.types.memberOnChain(member.owner, member.name)?.isStatic == false;
 	}

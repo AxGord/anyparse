@@ -267,7 +267,7 @@ class SingleStmtBraces {
 		final elems: Array<Any> = cast stmts;
 		if (elems.length != 1) return false;
 		final node: Any = triviaNode(elems[0]);
-		return node == raw || Reflect.isEnumValue(node) && paramAt(cast node, 0) == raw;
+		return node == raw || (Reflect.isEnumValue(node) && paramAt(cast node, 0) == raw);
 	}
 
 	/**

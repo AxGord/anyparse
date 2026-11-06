@@ -214,10 +214,11 @@ final class ImplicitSites {
 	 * checked (`landings`).
 	 */
 	private function mayConvertAt(place: Null<String>): Bool {
-		return place == null
-			|| !(_shape.catchAllTypeNames ?? []).contains(place)
+		return place == null || (
+			!(_shape.catchAllTypeNames ?? []).contains(place)
 			&& !(_shape.nonNullableTypeNames ?? []).contains(place)
-			&& ((_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place));
+			&& ((_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place))
+		);
 	}
 
 	/**

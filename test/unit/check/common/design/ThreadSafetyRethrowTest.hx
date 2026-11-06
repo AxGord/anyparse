@@ -107,7 +107,7 @@ class ThreadSafetyRethrowTest extends Test {
 		final out: Array<String> = [
 			for (v in found) {
 				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'C' && (data.subject == 'W.outer' || inner && data.subject == 'W.inner')) data.member;
+				if (data != null && data.family == 'C' && (data.subject == 'W.outer' || (inner && data.subject == 'W.inner'))) data.member;
 			}
 		];
 		out.sort(Reflect.compare);

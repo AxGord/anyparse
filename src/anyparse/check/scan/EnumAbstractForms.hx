@@ -56,8 +56,7 @@ final class EnumAbstractForms {
 	public static function isEnumAbstract(shape: RefShape, kind: String, prefixed: Bool, annotations: Array<String>): Bool {
 		final metaName: Null<String> = shape.enumAbstractMetaName;
 		return kind == shape.enumAbstractDeclKind
-			|| (shape.underlyingThisTypeKinds ?? []).contains(kind)
-			&& (prefixed || metaName != null && annotations.contains(metaName));
+			|| ((shape.underlyingThisTypeKinds ?? []).contains(kind) && (prefixed || (metaName != null && annotations.contains(metaName))));
 	}
 
 	/** The unprojected enum-abstract declarations of `tree`, in document order. */
@@ -67,7 +66,7 @@ final class EnumAbstractForms {
 		final prefixKinds: Array<String> = shape.condDeclPrefixKeywordKinds ?? [];
 		final metaName: Null<String> = shape.enumAbstractMetaName;
 		final out: Array<QueryNode> = [];
-		if (abstracts.length == 0 || prefixKinds.length == 0 && metaName == null) return out;
+		if (abstracts.length == 0 || (prefixKinds.length == 0 && metaName == null)) return out;
 		final leading: Array<String> = CheckScan.modifierKinds(shape).concat(plugin.metaShape().metaKinds);
 		collectHosts(tree, {
 			condKind: shape.conditionalMemberKind,
@@ -107,8 +106,7 @@ final class EnumAbstractForms {
 	/** Whether `region` holds a declaration-prefix keyword or the enum-abstract meta in any branch. */
 	private static function carriesEnumMarker(region: QueryNode, seams: Seams): Bool {
 		return seams.prefixKinds.contains(region.kind)
-			|| seams.metaName != null
-			&& region.name == seams.metaName
+			|| (seams.metaName != null && region.name == seams.metaName)
 			|| region.children.exists(child -> carriesEnumMarker(child, seams));
 	}
 

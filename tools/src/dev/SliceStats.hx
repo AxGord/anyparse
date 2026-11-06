@@ -123,7 +123,7 @@ final class SliceStats {
 
 	/** `landing` with the rounds and tokens its trailers lack taken from its line in the queue text `queue`, if any. */
 	public static function withQueue(landing: Landing, queue: Null<String>): Landing {
-		if (queue == null || landing.rounds != null && landing.tokens != null) return landing;
+		if (queue == null || (landing.rounds != null && landing.tokens != null)) return landing;
 		final head: String = '] ${landing.id} ';
 		for (line in queue.split('\n')) if (line.startsWith('- [') && line.indexOf(head) == '- [x'.length) {
 			final rounds: EReg = ~/review-rounds:\s*([0-9][0-9_]*)/;

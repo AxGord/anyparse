@@ -366,8 +366,7 @@ final class ReflectiveReach {
 		return index == null
 			|| decl == null
 			|| !(_shape.classDeclKinds ?? []).contains(decl.type.kind)
-			|| fn != null
-			&& _graph.typeParamBoundsOf(fn, made) != null
+			|| (fn != null && _graph.typeParamBoundsOf(fn, made) != null)
 			? null
 			: { reaches: index.subtypes.supertypeNamesClosure(made), by: 'a fresh $made' };
 	}
@@ -418,7 +417,7 @@ final class ReflectiveReach {
 
 	/** Whether `node` is the pattern `pattern` or an alternative (`A(x) | B(x)`) holding it as one of its own. */
 	private function topPattern(node: QueryNode, pattern: QueryNode): Bool {
-		return node == pattern || node.kind == _shape.orPatternKind && node.children.exists(c -> topPattern(c, pattern));
+		return node == pattern || (node.kind == _shape.orPatternKind && node.children.exists(c -> topPattern(c, pattern)));
 	}
 
 	/** The names a `case` pattern of `file`, whose tree is `tree`, captures. */

@@ -222,7 +222,7 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 			if (!certain || !seams.finalFieldKinds.contains(member.kind)) return;
 			var blocked: Bool = false;
 			for (mod in run) {
-				if (mod.kind == seams.staticKind || seams.inlineKind != null && mod.kind == seams.inlineKind)
+				if (mod.kind == seams.staticKind || (seams.inlineKind != null && mod.kind == seams.inlineKind))
 					blocked = true;
 				else if (seams.visibility.contains(mod.kind))
 					blocked = blocked || ConstantFieldScan.isExportedVisibility(ctx.source, mod, seams.defaultVis);
@@ -282,7 +282,7 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 			at = idx + len;
 			final boundedBefore: Bool = idx == 0 || !SourceText.isIdentChar(source.fastCodeAt(idx - 1));
 			final boundedAfter: Bool = at >= source.length || !SourceText.isIdentChar(source.fastCodeAt(at));
-			if (!boundedBefore || !boundedAfter || idx >= decl.from && idx < decl.to) continue;
+			if (!boundedBefore || !boundedAfter || (idx >= decl.from && idx < decl.to)) continue;
 			if (precededByDot(source, idx)) return true;
 		}
 	}

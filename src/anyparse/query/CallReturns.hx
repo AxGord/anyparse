@@ -188,7 +188,7 @@ final class CallReturns {
 			final own: Null<ResolvedType> = index.typing.casts.followed(start);
 			// a static is not inherited, and a value reads no static
 			final misread: Bool = onType != null && declared.members.exists(m -> m.isStatic != onType);
-			if (statics && (own == null || !AncestorTable.same(declared.host, own)) || misread) return null;
+			if ((statics && (own == null || !AncestorTable.same(declared.host, own))) || misread) return null;
 			final candidates: Null<CallCandidates> = calls.candidates(declared, statics);
 			if (candidates != null && calls.excludes(candidates, args)) continue;
 			final given: Null<T> = candidates == null ? null : answer(calls, start, candidates, args);
