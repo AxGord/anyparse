@@ -26,13 +26,15 @@ final class ShardTest extends Test {
 
 	/**
 	 * The fake runner. It counts a class once however it is sliced (only slice `0/k` counts), so a monolith run of it and
-	 * any shard split of it agree; `mode` beside it picks how the shard holding the first class ends. It sets its exit
+	 * any shard split of it agree; `mode` beside it picks how the shard holding the first class ends, and `runs` gets a
+	 * `shard` or `mono` line per run it is started for (a monolith run has an empty `APQ_TEST`). It sets its exit
 	 * status instead of calling `process.exit`, which would cut off output still queued for a pipe.
 	 */
 	private static inline final RUNNER: String = "const fs = require('fs'), path = require('path');
 const classes = fs.readFileSync(path.join(__dirname, 'classes.txt'), 'utf8').split('\\n').filter(c => c);
 (function () {
 if (process.argv.includes('--list-classes')) return process.stdout.write(classes.join('\\n') + '\\n');
+fs.appendFileSync(path.join(__dirname, 'runs'), (process.env.APQ_TEST ? 'shard' : 'mono') + '\\n');
 const mode = fs.readFileSync(path.join(__dirname, 'mode'), 'utf8').trim();
 const tokens = (process.env.APQ_TEST || '').split(',').filter(t => t);
 const run = tokens.length === 0 ? classes : tokens;
@@ -102,6 +104,44 @@ process.exitCode = failed;
 			);
 			Assert.isTrue(FileSystem.exists(dir.file('bin/.suite-timings.tsv')), 'a green run refreshes the weights');
 			Assert.equals(File.getContent(dir.file('bin/.suite-timings.tsv')), File.getContent(dir.file('timings.tsv')));
+		});
+	}
+
+	/** One shard under `--verify` is the one-process run already: node starts once, and the parity note says so. */
+	public function testOneShardUnderVerifyStartsNodeOnce(): Void {
+		TempDir.with(dir -> {
+			final run: Ran = runFake(dir, 'green', 1, true);
+			Assert.equals(0, run.status, run.warned.join('\n'));
+			final classes: Int = TestRegistry.classNames().length;
+			Assert.same(['shard'], runsOf(dir));
+			Assert.equals(
+				'parity: the one shard is the monolith run (all $classes classes whole, in registry order); no second run',
+				run.printed[run.printed.length - 2]
+			);
+			Assert.equals(
+				'suite-shard: PASS — $classes classes / $classes tests / ${2 * classes} assertions over 1 shards',
+				run.printed[run.printed.length - 1]
+			);
+		});
+	}
+
+	/** A red one shard is red under `--verify` too: taking the shard for the monolith never turns its verdict green. */
+	public function testARedOneShardUnderVerifyStaysRed(): Void {
+		TempDir.with(dir -> {
+			final run: Ran = runFake(dir, 'red', 1, true);
+			Assert.equals(1, run.status);
+			Assert.same(['shard'], runsOf(dir));
+			Assert.stringContains('suite-shard: FAILED', run.printed[run.printed.length - 1]);
+		});
+	}
+
+	/** Two shards under `--verify` still run the monolith after them: the class order differs between processes. */
+	public function testTwoShardsUnderVerifyStillRunTheMonolith(): Void {
+		TempDir.with(dir -> {
+			final run: Ran = runFake(dir, 'green', 2, true);
+			Assert.equals(0, run.status, run.warned.join('\n'));
+			Assert.same(['mono', 'shard', 'shard'], runsOf(dir));
+			Assert.stringContains('counts verified against a monolith run', run.printed[run.printed.length - 2]);
 		});
 	}
 
@@ -233,6 +273,13 @@ process.exitCode = failed;
 				"require('fs').rmSync({0}, { recursive: true, force: true })", line.substr('dev shard: work files kept in '.length)
 			);
 		return { status: status, printed: printed, warned: warned };
+	}
+
+	/** The runs the fake runner was started for, sorted: `mono` or `shard` each. */
+	private static function runsOf(dir: TempDir): Array<String> {
+		final lines: Array<String> = File.getContent(dir.file('runs')).split('\n').filter(l -> l != '');
+		lines.sort(Reflect.compare);
+		return lines;
 	}
 
 	private static function killQuietly(pid: Null<Int>): Void {

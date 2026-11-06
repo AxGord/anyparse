@@ -280,114 +280,6 @@ class ShardPlanTest extends Test {
 		Assert.stringContains('pinned class unit.cli.ApqDxTier5CliTest is not registered in a list', message);
 	}
 
-	/** A runner registering every pinned class, then `statements` verbatim. */
-	private inline function runnerWith(statements: Array<String>): String {
-		return build(ShardPlan.STICKY_CLASSES, statements);
-	}
-
-	/** Parse `source` as a runner and plan it, failing the test on a refusal. */
-	private function planned(source: String, shards: Int): Array<ShardPlacement> {
-		return unwrap(plan(source, shards));
-	}
-
-	/** Parse `source` as a runner and return the refusal, failing the test on a plan. */
-	private function refusal(source: String, shards: Int): String {
-		return switch plan(source, shards) {
-			case Planned(_):
-				Assert.fail('expected a refusal');
-				'';
-			case Refused(message):
-				message;
-		};
-	}
-
-	private function unwrap(result: ShardPlanResult): Array<ShardPlacement> {
-		return switch result {
-			case Planned(placements):
-				placements;
-			case Refused(message):
-				Assert.fail('unexpected refusal: $message');
-				[];
-		};
-	}
-
-	private function plan(source: String, shards: Int): ShardPlanResult {
-		final tree: QueryNode = new HaxeQueryPlugin().parseFile(source);
-		return ShardPlan.plan({
-			tree: tree,
-			source: source,
-			runner: 'test/RunTests.hx',
-			shards: shards
-		});
-	}
-
-	/** A runner registering every pinned class except `omitted`. */
-	private function runnerWithout(omitted: String): String {
-		// Padding so the class count clears the `--shards 2` floor on its own —
-		// `STICKY_CLASSES` is down to 2, and without this the run would hit
-		// the "exceeds registered classes" gate before reaching the one this test means.
-		return build(
-			ShardPlan.STICKY_CLASSES.filter(name -> name != omitted), ['addCase(new PaddingOneTest());', 'addCase(new PaddingTwoTest());']
-		);
-	}
-
-	/** A runner registering every pinned class, then one `addCase(new X());` per name. */
-	private function registering(extras: Array<String>): String {
-		return runnerWith(extras.map(name -> 'addCase(new $name());'));
-	}
-
-	private function build(sticky: Array<String>, statements: Array<String>): String {
-		final buf: StringBuf = new StringBuf();
-		// The sticky classes live in `unit.*` SUBPACKAGES since the test tree was
-		// laid out by package, and a bare registration is qualified through the
-		// runner's imports — so the synthetic runner has to carry them, exactly as
-		// the real one's generated registry does.
-		for (name in sticky) buf.add('import $name;\n');
-		buf.add('class RunTests {\n');
-		buf.add('\tstatic function main(): Void {\n');
-		// The wrapper the real runner declares — its call must not be read as a
-		// registration. The argument is a `new` on purpose: with the callee-shape
-		// guard removed this becomes a NAMEABLE registration and inflates the
-		// count, so the class-count assertion is what fires rather than a generic
-		// refusal from somewhere else.
-		buf.add('\t\trunner.addCase(new WrapperTest());\n');
-		for (name in sticky) buf.add('\t\taddCase(new ${bareName(name)}());\n');
-		for (statement in statements) buf.add('\t\t$statement\n');
-		buf.add('\t}\n');
-		buf.add('}\n');
-		return buf.toString();
-	}
-
-	/** `unit.FooTest` -> `FooTest`, so a fixture exercises the bare-name path. */
-	private function bareName(qualified: String): String {
-		final dot: Int = qualified.lastIndexOf('.');
-		return dot < 0 ? qualified : qualified.substr(dot + 1);
-	}
-
-	/** `Gen00Test` … — same length, so none is a substring of another. */
-	private function generated(count: Int): Array<String> {
-		return [for (i in 0...count) 'Gen${i < 10 ? '0$i' : '$i'}Test'];
-	}
-
-	private function names(placements: Array<ShardPlacement>): Array<String> {
-		return [for (p in placements) p.cls];
-	}
-
-	private function counts(placements: Array<ShardPlacement>, shards: Int): Array<Int> {
-		return [for (s in 0...shards) placements.count(p -> p.shard == s)];
-	}
-
-	private function distinct(input: Array<String>): Array<String> {
-		final out: Array<String> = [];
-		for (name in input) if (!out.contains(name)) out.push(name);
-		return out;
-	}
-
-	/** A runner that imports `path` and registers it by its bare simple name. */
-	private function runnerImporting(path: String): String {
-		return 'import $path;\n\n${build(ShardPlan.STICKY_CLASSES, ['addCase(new ${bareName(path)}());'])}';
-	}
-
 	/**
 	 * A class heavier than a shard's share is dealt as slices, one per shard it needs, each placed once — the shape
 	 * that took `MemberReachFactsTest`, the heaviest class, off a single shard. Every lighter class stays whole.
@@ -494,6 +386,127 @@ class ShardPlanTest extends Test {
 		final a: Null<ClassWeight> = weights['unit.A'];
 		Assert.equals('350/7', a == null ? 'none' : '${a.ms}/${a.tests}');
 		Assert.isFalse(weights.exists('bad row'));
+	}
+
+	/**
+	 * One shard holds the whole suite, so no class is dealt as slices however heavy it is measured;
+	 * `dev shard --verify` reads that run as the monolith.
+	 */
+	public function testOneShardDealsEveryClassWholeHoweverHeavy(): Void {
+		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(['unit.HeavyTest']).concat(generated(6).map(n -> 'unit.$n'));
+		final measured: Map<String, ClassWeight> = ['unit.HeavyTest' => { ms: 9000, tests: 40 }];
+		final rows: Array<ShardPlacement> = unwrap(ShardPlan.planClasses(listed, 1, 'a list', measured));
+		Assert.equals(listed.length, rows.length);
+		Assert.isTrue(rows.foreach(r -> r.parts == 1 && r.shard == 0));
+		Assert.equals(-1, ShardPlan.renderFilters(rows, 1).indexOf('#'));
+	}
+
+	/** A runner registering every pinned class, then `statements` verbatim. */
+	private inline function runnerWith(statements: Array<String>): String {
+		return build(ShardPlan.STICKY_CLASSES, statements);
+	}
+
+	/** Parse `source` as a runner and plan it, failing the test on a refusal. */
+	private function planned(source: String, shards: Int): Array<ShardPlacement> {
+		return unwrap(plan(source, shards));
+	}
+
+	/** Parse `source` as a runner and return the refusal, failing the test on a plan. */
+	private function refusal(source: String, shards: Int): String {
+		return switch plan(source, shards) {
+			case Planned(_):
+				Assert.fail('expected a refusal');
+				'';
+			case Refused(message):
+				message;
+		};
+	}
+
+	private function unwrap(result: ShardPlanResult): Array<ShardPlacement> {
+		return switch result {
+			case Planned(placements):
+				placements;
+			case Refused(message):
+				Assert.fail('unexpected refusal: $message');
+				[];
+		};
+	}
+
+	private function plan(source: String, shards: Int): ShardPlanResult {
+		final tree: QueryNode = new HaxeQueryPlugin().parseFile(source);
+		return ShardPlan.plan({
+			tree: tree,
+			source: source,
+			runner: 'test/RunTests.hx',
+			shards: shards
+		});
+	}
+
+	/** A runner registering every pinned class except `omitted`. */
+	private function runnerWithout(omitted: String): String {
+		// Padding so the class count clears the `--shards 2` floor on its own —
+		// `STICKY_CLASSES` is down to 2, and without this the run would hit
+		// the "exceeds registered classes" gate before reaching the one this test means.
+		return build(
+			ShardPlan.STICKY_CLASSES.filter(name -> name != omitted), ['addCase(new PaddingOneTest());', 'addCase(new PaddingTwoTest());']
+		);
+	}
+
+	/** A runner registering every pinned class, then one `addCase(new X());` per name. */
+	private function registering(extras: Array<String>): String {
+		return runnerWith(extras.map(name -> 'addCase(new $name());'));
+	}
+
+	private function build(sticky: Array<String>, statements: Array<String>): String {
+		final buf: StringBuf = new StringBuf();
+		// The sticky classes live in `unit.*` SUBPACKAGES since the test tree was
+		// laid out by package, and a bare registration is qualified through the
+		// runner's imports — so the synthetic runner has to carry them, exactly as
+		// the real one's generated registry does.
+		for (name in sticky) buf.add('import $name;\n');
+		buf.add('class RunTests {\n');
+		buf.add('\tstatic function main(): Void {\n');
+		// The wrapper the real runner declares — its call must not be read as a
+		// registration. The argument is a `new` on purpose: with the callee-shape
+		// guard removed this becomes a NAMEABLE registration and inflates the
+		// count, so the class-count assertion is what fires rather than a generic
+		// refusal from somewhere else.
+		buf.add('\t\trunner.addCase(new WrapperTest());\n');
+		for (name in sticky) buf.add('\t\taddCase(new ${bareName(name)}());\n');
+		for (statement in statements) buf.add('\t\t$statement\n');
+		buf.add('\t}\n');
+		buf.add('}\n');
+		return buf.toString();
+	}
+
+	/** `unit.FooTest` -> `FooTest`, so a fixture exercises the bare-name path. */
+	private function bareName(qualified: String): String {
+		final dot: Int = qualified.lastIndexOf('.');
+		return dot < 0 ? qualified : qualified.substr(dot + 1);
+	}
+
+	/** `Gen00Test` … — same length, so none is a substring of another. */
+	private function generated(count: Int): Array<String> {
+		return [for (i in 0...count) 'Gen${i < 10 ? '0$i' : '$i'}Test'];
+	}
+
+	private function names(placements: Array<ShardPlacement>): Array<String> {
+		return [for (p in placements) p.cls];
+	}
+
+	private function counts(placements: Array<ShardPlacement>, shards: Int): Array<Int> {
+		return [for (s in 0...shards) placements.count(p -> p.shard == s)];
+	}
+
+	private function distinct(input: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		for (name in input) if (!out.contains(name)) out.push(name);
+		return out;
+	}
+
+	/** A runner that imports `path` and registers it by its bare simple name. */
+	private function runnerImporting(path: String): String {
+		return 'import $path;\n\n${build(ShardPlan.STICKY_CLASSES, ['addCase(new ${bareName(path)}());'])}';
 	}
 
 }

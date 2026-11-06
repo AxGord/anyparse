@@ -273,7 +273,8 @@ final class Shard {
 		handTotals(job, sum);
 		if (verdict.partial) job.warn('dev shard: the totals above are a SUM OF WHAT RAN, not a total — at least one shard did not finish');
 		if (sum.failures != 0 || sum.errors != 0) verdict.red = true;
-		final parity: String = crossCheck(job, work, sum, verdict) ?? 'counts not cross-checked (class parity OK: ${split.classes} placed; ${split.producerNote})';
+		final checked: Null<String> = crossCheck(job, work, sum, verdict, split.classes);
+		final parity: String = checked ?? 'counts not cross-checked (class parity OK: ${split.classes} placed; ${split.producerNote})';
 		refreshTimings(job, work, verdict);
 		final stale: Null<String> = CliIo.testJsStaleness(job.testJs, job.repo);
 		if (stale != null) job.warn('dev shard: WARNING: $stale');
@@ -405,9 +406,11 @@ final class Shard {
 
 	/**
 	 * `--verify` (a monolith run, its counts compared and its own verdict read) or `--expect` against the shards' `sum`;
-	 * answers the parity note, or null when neither was asked for.
+	 * answers the parity note, or null when neither was asked for. With ONE shard `--verify` starts no second process: that
+	 * shard names every class whole and the runner registers in one fixed order whatever the filter, so it already is the
+	 * in-order one-process run a monolith would be.
 	 */
-	private static function crossCheck(job: ShardJob, work: String, sum: Tally, verdict: Verdict): Null<String> {
+	private static function crossCheck(job: ShardJob, work: String, sum: Tally, verdict: Verdict, classes: Int): Null<String> {
 		if (job.only != null) return null;
 		final expect: Null<SuiteCounts> = job.expect;
 		if (expect != null) {
@@ -419,6 +422,7 @@ final class Shard {
 			return 'counts DIVERGED from --expect $asked';
 		}
 		if (!job.verify) return null;
+		if (job.shards == 1) return 'the one shard is the monolith run (all $classes classes whole, in registry order); no second run';
 		// an empty APQ_TEST runs everything: a filter exported by the caller must not shrink the monolith
 		final mono: Result = callerGc(cmd('node ${job.testJs}').at(job.repo).env('APQ_TEST', '')).run();
 		final exit: Int = mono.ok ? 0 : mono.status ?? 1;
