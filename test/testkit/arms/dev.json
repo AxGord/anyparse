@@ -1454,6 +1454,101 @@
 			"find": "renewed ? _outputs.concat([Shard.WEIGHTS]) : _outputs",
 			"replace": "_outputs",
 			"note": "the weights a green battery measured die with the candidate tree, so lands no longer refresh main's suite weights"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-OWNED-NOT-HIGH",
+			"type": "dev.OwnerOverlap",
+			"method": "overlapOf",
+			"find": "best.question != null",
+			"replace": "false",
+			"note": "an owner stating its question grades like any other, so the one component that owns the question is no longer told apart from a lookalike"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-THRESHOLD-BLIND",
+			"type": "dev.OwnerOverlap",
+			"method": "overlapOf",
+			"find": "best == null || top < threshold",
+			"replace": "best == null",
+			"note": "every candidate sharing a word is reported, so a census lists most of the tree"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-SAME-FILE-COUNTS",
+			"type": "dev.OwnerOverlap",
+			"method": "rivals",
+			"find": "candidate.file != entry.file && ",
+			"replace": "",
+			"note": "a declaration of the same file counts as a rival, so every helper beside its own owner is reported"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-UNDOCUMENTED-RIVAL",
+			"type": "dev.OwnerOverlap",
+			"method": "rivals",
+			"find": "candidate.summary != '' && ",
+			"replace": "",
+			"note": "a declaration with no doc answers a question by its name alone, so bare declarations are reported as owners"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-MENTION-BLIND",
+			"type": "dev.OwnerOverlap",
+			"method": "rivals",
+			"find": "!mentions(entry, candidate) && !mentions(candidate, entry)",
+			"replace": "true",
+			"note": "a doc pointing at its neighbour counts as a rival, so every delegate and consumer is reported beside the component it names"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-CENSUS-DROPS-ALL",
+			"type": "dev.OwnerOverlap",
+			"method": "census",
+			"find": "found.push(overlap);",
+			"replace": "",
+			"note": "the census finds no overlap whatever the tree holds"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-ECHO-KEPT",
+			"type": "dev.OwnerOverlap",
+			"method": "withoutEchoes",
+			"find": "!(seen.has(pairKey(o.owner, o.entry)) && prefers(o.entry, o.owner))",
+			"replace": "true",
+			"note": "a pair found from both ends is reported twice, once under each of its declarations as the owner"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-ALLOW-BLIND",
+			"type": "dev.OwnerOverlap",
+			"method": "isAllowed",
+			"force": "false",
+			"note": "the allow-list excuses nothing, so a declared independent implementation is reported on every census"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-ALLOW-REASON-OPTIONAL",
+			"type": "dev.OwnerOverlap",
+			"method": "parseAllowed",
+			"find": " || columns[2].trim() == ''",
+			"replace": "",
+			"note": "an allow-list row with an empty reason is accepted, so an exemption can be filed without saying why"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-INTERFACE-BLIND",
+			"type": "dev.OwnerOverlap",
+			"method": "census",
+			"find": "member != null && (widths[member] ?? 0) >= config.interfaceWidth",
+			"replace": "false",
+			"note": "a member name declared by many types is asked like any other, so every interface method is reported against its siblings"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-RENDER-FORGETS-GROUP",
+			"type": "dev.OwnerOverlap",
+			"method": "render",
+			"find": "groups[key] = group;",
+			"replace": "",
+			"note": "the report loses the declarations grouped under their owner, so a finding is listed with no owner to name"
+		},
+		{
+			"name": "M-OWNER-OVERLAP-SIMILARITY-UNCHECKED",
+			"type": "dev.OwnerOverlap",
+			"method": "floatOption",
+			"find": "Math.isNaN(parsed) || parsed < 0 || parsed > 1",
+			"replace": "false",
+			"note": "a similarity floor that is no number is accepted as NaN, so every rival sharing one word is reported and the reading changes without an error"
 		}
 	]
 }

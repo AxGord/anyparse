@@ -174,10 +174,20 @@ final class OwnerIndex {
 	/** How many entries carry each term anywhere. */
 	private final _documentFrequency: Map<String, Int> = [];
 
+	/**
+	 * The positions in `entries` of the entries carrying each term,
+	 * ascending: a question reads only the entries sharing a word with it.
+	 */
+	private final _postings: Map<String, Array<Int>> = [];
+
 	public function new(entries: Array<OwnerEntry>) {
 		this.entries = entries;
-		for (entry in entries) for (term in distinct(entry.nameTerms.concat(entry.questionTerms).concat(entry.docTerms)))
+		for (position => entry in entries) for (term in distinct(entry.nameTerms.concat(entry.questionTerms).concat(entry.docTerms))) {
 			_documentFrequency[term] = (_documentFrequency[term] ?? 0) + 1;
+			final posting: Array<Int> = _postings[term] ?? [];
+			posting.push(position);
+			_postings[term] = posting;
+		}
 	}
 
 	/**
@@ -189,32 +199,43 @@ final class OwnerIndex {
 	public function rank(question: String, limit: Int): Array<OwnerHit> {
 		final asked: Array<String> = distinct(terms(question));
 		if (asked.length == 0) return [];
-		final hits: Array<OwnerHit> = [];
-		for (entry in entries) {
-			var score: Float = 0;
-			var matched: Int = 0;
-			for (term in asked) {
+		final scores: Map<Int, Float> = [];
+		final matches: Map<Int, Int> = [];
+		final candidates: Array<Int> = [];
+		for (term in asked) {
+			final rarity: Float = rarity(term);
+			for (position in _postings[term] ?? []) {
+				final entry: OwnerEntry = entries[position];
 				final weight: Float = if (entry.nameTerms.contains(term) || entry.questionTerms.contains(term))
 					NAME_WEIGHT
 				else if (entry.summaryTerms.contains(term))
 					SUMMARY_WEIGHT
-				else if (entry.docTerms.contains(term))
-					DOC_WEIGHT
 				else
-					0;
-				if (weight == 0) continue;
-				matched++;
-				score += weight * Math.log(1 + entries.length / (_documentFrequency[term] ?? 1));
+					DOC_WEIGHT;
+				if (!scores.exists(position)) candidates.push(position);
+				scores[position] = (scores[position] ?? 0) + weight * rarity;
+				matches[position] = (matches[position] ?? 0) + 1;
 			}
-			if (matched > 0) hits.push({ entry: entry, score: standing(entry) * score * matched / asked.length });
 		}
-		hits.sort((a, b) -> if (a.score > b.score)
-			-1
-		else if (a.score < b.score)
-			1
-		else
-			entryOrder(a.entry, b.entry));
-		return hits.slice(0, limit);
+		final best: Array<OwnerHit> = [];
+		for (position in candidates) {
+			final entry: OwnerEntry = entries[position];
+			final hit: OwnerHit = {
+				entry: entry,
+				score: standing(entry) * (scores[position] ?? 0) * (matches[position] ?? 0) / asked.length
+			};
+			var at: Int = best.length;
+			while (at > 0 && outranks(hit, best[at - 1])) at--;
+			if (at >= limit) continue;
+			best.insert(at, hit);
+			if (best.length > limit) best.pop();
+		}
+		return best;
+	}
+
+	/** How much a search term tells in this scope: high for a word few declarations carry, low for one most do. */
+	public function rarity(term: String): Float {
+		return Math.log(1 + entries.length / (_documentFrequency[term] ?? 1));
 	}
 
 	/** Every declaration whose doc names the question it is the one answer to, ordered by that question. */
@@ -315,6 +336,11 @@ final class OwnerIndex {
 		var close: Int = open + 1;
 		while (close < prose.length && !isQuote(prose.fastCodeAt(close))) close++;
 		return close >= prose.length || close == open + 1 ? null : prose.substring(open + 1, close);
+	}
+
+	/** Whether `a` ranks before `b`: a higher score, and on equal scores the earlier declaration. */
+	private static inline function outranks(a: OwnerHit, b: OwnerHit): Bool {
+		return a.score > b.score || (a.score == b.score && entryOrder(a.entry, b.entry) < 0);
 	}
 
 	private static inline function entryOrder(a: OwnerEntry, b: OwnerEntry): Int {

@@ -1,0 +1,8 @@
+# declaration<TAB>owner<TAB>reason. A `*` at either end of a name stands for any text.
+# Families whose docs repeat one template on purpose: the sentence is alike because the shape is.
+HxFormat*	*	one declarative section type per hxformat.json block, documented from one template
+Hx*	*	grammar node types document their keyword and position from one template
+Mmd*	*	grammar node types document their syntax from one template
+*Parser	*	macro-generated marker classes share one sentence
+*Writer	*	macro-generated marker classes share one sentence
+*WriteOptions	*	macro-generated marker classes share one sentence

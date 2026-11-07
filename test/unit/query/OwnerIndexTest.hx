@@ -140,6 +140,17 @@ class OwnerIndexTest extends Test {
 		#end
 	}
 
+	/** A word few declarations carry tells more than one most of them carry. */
+	@:pin('control') @:killer('M-OWNER-RARITY-BLIND')
+	public function testARareWordTellsMoreThanACommonOne(): Void {
+		final owners: OwnerIndex = ownersOf([
+			{ file: 'src/a/A.hx', source: 'package a;\n\n/** Holds a zebra value. */\nclass A {}\n' },
+			{ file: 'src/a/B.hx', source: 'package a;\n\n/** Holds a value. */\nclass B {}\n' },
+			{ file: 'src/a/C.hx', source: 'package a;\n\n/** Holds the value too. */\nclass C {}\n' }
+		]);
+		Assert.isTrue(owners.rarity(OwnerIndex.terms('zebra')[0]) > owners.rarity(OwnerIndex.terms('value')[0]));
+	}
+
 	private static function ownersOf(files: Array<{ file: String, source: String }>): OwnerIndex {
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		return OwnerIndex.build(IndexScope.over(files, plugin), plugin);

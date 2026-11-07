@@ -15033,7 +15033,7 @@
 		{
 			"name": "M-OWNER-RARITY-BLIND",
 			"type": "anyparse.query.OwnerIndex",
-			"method": "rank",
+			"method": "rarity",
 			"find": "Math.log(1 + entries.length / (_documentFrequency[term] ?? 1))",
 			"replace": "1.0",
 			"note": "every term counts alike, so a word every declaration carries ties with the rare word that names the concept"

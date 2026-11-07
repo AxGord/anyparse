@@ -17,6 +17,7 @@ final class Dev {
 	private static final COMMANDS: Array<Subcommand> = [
 		{ name: 'scrub-guard', main: ScrubGuard.main, usage: ScrubGuard.USAGE },
 		{ name: 'clone-census', main: CloneCensus.main, usage: CloneCensus.USAGE },
+		{ name: 'owner-overlap', main: OwnerOverlap.main, usage: OwnerOverlap.USAGE },
 		{ name: 'worker-build', main: WorkerBuild.main, usage: WorkerBuild.USAGE },
 		{ name: 'shard', main: Shard.main, usage: Shard.USAGE },
 		{ name: 'mutation-arm', main: MutationArm.main, usage: MutationArm.USAGE },
