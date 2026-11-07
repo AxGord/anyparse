@@ -3,6 +3,7 @@ package dev;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.util.Compare;
 import dev.BaseBranch.BaseGot;
 import devkit.Command;
 import devkit.Excerpt;
@@ -40,9 +41,13 @@ final class GateLint {
 	/** What the engine is built from (`engineSources`), or null when no lint is cached. */
 	private final _engine: Null<String>;
 
-	public function new(gate: GateTree) {
+	/** Whether the lint row's lints run with the compiler oracle: the gate's do, `dev lint-new --no-oracle` is the cheap approximation. */
+	private final _oracle: Bool;
+
+	public function new(gate: GateTree, oracle: Bool = true) {
 		_gate = gate;
 		_engine = engineSources(gate);
+		_oracle = oracle;
 	}
 
 	/** The infra4 row of `--baseline`: the base engine's lint of every infra tree, all at once. */
@@ -69,8 +74,8 @@ final class GateLint {
 		final atBase: Array<String> = _gate.git(['ls-tree', '-r', '--name-only', _gate.base]).split('\n');
 		final pathsNow: Map<String, String> = [for (f in files) if (atBase.contains(_gate.baseOf(f))) _gate.baseOf(f) => f];
 		final scope: Array<String> = [for (path in pathsNow.keys()) path];
-		scope.sort(Reflect.compare);
-		final key: Null<String> = cacheKey('base ${_gate.base}', scope);
+		scope.sort(Compare.compareString);
+		final key: Null<String> = cacheKey('base ${_gate.base}${_oracle ? '' : ' no-oracle'}', scope);
 		final cached: Null<String> = scope.length == 0 ? '[]' : cachedLint(key);
 		final linted: Outcome = cached == null
 			? _gate.withBaseCheckout(checkout -> lintPair(files, checkout, scope, key, null))
@@ -132,8 +137,8 @@ final class GateLint {
 	private function lintPair(
 		files: Array<String>, checkout: Null<String>, scope: Array<String>, key: Null<String>, cached: Null<String>
 	): Outcome {
-		final commands: Array<Command> = [lintCommand(_gate.tree, files, true, _gate.log(TOUCHED_REPORT))];
-		if (checkout != null) commands.push(lintCommand(checkout, scope, true, _gate.log(TOUCHED_BASE_REPORT)));
+		final commands: Array<Command> = [lintCommand(_gate.tree, files, _oracle, _gate.log(TOUCHED_REPORT))];
+		if (checkout != null) commands.push(lintCommand(checkout, scope, _oracle, _gate.log(TOUCHED_BASE_REPORT)));
 		final runs: Array<Result> = Pool.of(commands.length).run(commands);
 		final now: Outcome = saveLint(runs[0], _gate.tree, _gate.log(TOUCHED_REPORT));
 		if (!now.match(Passed)) return now;

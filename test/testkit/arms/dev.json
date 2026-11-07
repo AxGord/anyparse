@@ -1347,6 +1347,62 @@
 			"find": "if (!row.match(File.getContent(file))) throw new Exception('$file has no line matching ${row}');",
 			"replace": "if (!row.match(File.getContent(file))) return [];",
 			"note": "a shim without the line parity reads answers no words instead of failing, so a batch process runs without the node flags or the hxq preset while a call through the shim keeps them"
+		},
+		{
+			"name": "M-LINT-NEW-BASE-BLIND",
+			"type": "dev.GateLint",
+			"method": "lintOutcome",
+			"find": "final scope: Array<String> = [for (path in pathsNow.keys()) path];",
+			"replace": "final scope: Array<String> = [];",
+			"note": "the base is linted over no files, so every finding of a touched file is new and a line the slice only edited is refused"
+		},
+		{
+			"name": "M-LINT-NEW-ADDED-IGNORED",
+			"type": "dev.GateLint",
+			"method": "lintOutcome",
+			"find": "if (moved.added == 0) return Passed;",
+			"replace": "if (moved.added >= 0) return Passed;",
+			"note": "the lint row passes whatever the slice added, so a commit step on it refuses nothing"
+		},
+		{
+			"name": "M-LINT-NEW-MOVE-BLIND",
+			"type": "dev.GateLint",
+			"method": "lintOutcome",
+			"find": "File.saveContent(old, rebased(File.getContent(old), pathsNow));",
+			"replace": "File.saveContent(old, File.getContent(old));",
+			"note": "a moved file is compared with no base findings at its new path, so every finding of a renamed file is new"
+		},
+		{
+			"name": "M-LINT-NEW-BASE-IGNORED",
+			"type": "dev.GateTree",
+			"method": "new",
+			"find": "options.base ?? baseline?.base ??",
+			"replace": "baseline?.base ??",
+			"note": "the base a caller names is dropped for the merge-base with main, so lint-new answers against another commit than the one asked"
+		},
+		{
+			"name": "M-LINT-NEW-ORACLE-ALWAYS",
+			"type": "dev.GateLint",
+			"method": "lintPair",
+			"find": "lintCommand(_gate.tree, files, _oracle,",
+			"replace": "lintCommand(_gate.tree, files, true,",
+			"note": "the tree is linted with the oracle whatever --no-oracle says, so the cheap lint-new costs a project build"
+		},
+		{
+			"name": "M-LINT-NEW-UNSTAGED-MOVE-BLIND",
+			"type": "dev.GateTree",
+			"method": "stagedDiff",
+			"find": "--cached --name-status -M",
+			"replace": "--cached --name-status --no-renames",
+			"note": "a move not yet staged is read as a deletion and an untracked file, so every finding of the moved file is new against a base that held it"
+		},
+		{
+			"name": "M-LINT-NEW-OWN-INDEX-STAGED",
+			"type": "dev.GateTree",
+			"method": "stagedDiff",
+			"find": "cmd('git -C $tree add -A').env('GIT_INDEX_FILE', index)",
+			"replace": "cmd('git -C $tree add -A')",
+			"note": "the tree is staged in the caller's own index, so a commit step that reads its changes leaves everything it had not staged added"
 		}
 	]
 }

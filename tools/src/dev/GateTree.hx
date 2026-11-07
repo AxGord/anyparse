@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.query.ShardPlan;
+import anyparse.util.Compare;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Result;
@@ -89,7 +90,7 @@ final class GateTree {
 		baseline = !options.baseline && FileSystem.exists(file) ? BaselineParser.parse(File.getContent(file)) : null;
 		base = options.baseline
 			? gitIn(tree, ['rev-parse', 'HEAD']).trim()
-			: baseline?.base ?? gitIn(tree, ['merge-base', 'HEAD', 'main']).trim();
+			: options.base ?? baseline?.base ?? gitIn(tree, ['merge-base', 'HEAD', 'main']).trim();
 		final changed: ChangedPaths = options.baseline ? { paths: [], moved: [] } : touchedSince(tree, base);
 		for (name in changed.paths) touched.push(name);
 		_moved = changed.moved;
@@ -244,11 +245,9 @@ final class GateTree {
 	 * renamed one paired with its path at the base. A `tree` that is no git work tree throws.
 	 */
 	public static function touchedSince(tree: String, base: String): ChangedPaths {
-		final changed: ChangedPaths = changedPaths(gitIn(tree, ['diff', '--name-status', '-M', base]));
-		final untracked: Array<String> = gitIn(tree, ['ls-files', '--others', '--exclude-standard']).split('\n');
+		final changed: ChangedPaths = changedPaths(stagedDiff(tree, base));
 		final paths: Array<String> = [];
-		for (name in changed.paths.concat(untracked)) if (name != '' && !paths.contains(name) && FileSystem.exists(Path.join([tree, name])))
-			paths.push(name);
+		for (name in changed.paths) if (name != '' && !paths.contains(name) && FileSystem.exists(Path.join([tree, name]))) paths.push(name);
 		return { paths: paths, moved: changed.moved };
 	}
 
@@ -345,7 +344,7 @@ final class GateTree {
 	/** The path (under `dir`, from `prefix`), size and modification time of every file below `dir/prefix`, in name order. */
 	private static function fileStamps(dir: String, prefix: String): Array<String> {
 		final names: Array<String> = FileSystem.readDirectory(Path.join([dir, prefix]));
-		names.sort(Reflect.compare);
+		names.sort(Compare.compareString);
 		final stamps: Array<String> = [];
 		for (name in names) {
 			final path: String = prefix == '' ? name : '$prefix/$name';
@@ -360,6 +359,21 @@ final class GateTree {
 		return stamps;
 	}
 
+	/**
+	 * `git diff --name-status -M <base>` of the tree as a `git add -A` would leave it, read through a copy of the index so the caller's
+	 * own is untouched: git pairs a moved file with its old path only once the new path is in an index, and a move not yet staged
+	 * (a filesystem move) must read as the move the gate sees after the commit.
+	 */
+	private static function stagedDiff(tree: String, base: String): String {
+		return TempDir.with(scratch -> {
+			final index: String = scratch.file('index');
+			final own: String = gitIn(tree, ['rev-parse', '--git-path', 'index']).trim();
+			File.copy(Path.isAbsolute(own) ? own : Path.join([tree, own]), index);
+			cmd('git -C $tree add -A').env('GIT_INDEX_FILE', index).check();
+			return cmd('git -C $tree diff --cached --name-status -M $base').env('GIT_INDEX_FILE', index).text();
+		});
+	}
+
 }
 
 /** What `dev slice-gate` was asked, as the gate and each of its branches read it. */
@@ -370,6 +384,9 @@ typedef GateOptions = {
 
 	/** A `--baseline` run, which records rather than compares. */
 	var baseline: Bool;
+
+	/** The commit to measure against instead of the baseline's (null: the baseline's, else the merge-base with main). */
+	@:optional var base: Null<String>;
 	var frozen: Array<String>;
 	var infra: Array<String>;
 	var arms: Array<String>;

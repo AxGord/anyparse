@@ -22,6 +22,7 @@ final class Dev {
 		{ name: 'mutation-arm', main: MutationArm.main, usage: MutationArm.USAGE },
 		{ name: 'mutation-check', main: MutationCheck.main, usage: MutationCheck.USAGE },
 		{ name: 'slice-gate', main: SliceGate.main, usage: SliceGate.USAGE },
+		{ name: 'lint-new', main: LintNew.main, usage: LintNew.USAGE },
 		{ name: 'suite-impact', main: SuiteImpact.main, usage: SuiteImpact.USAGE },
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
 		{ name: 'post-land', main: PostLand.main, usage: PostLand.USAGE },
