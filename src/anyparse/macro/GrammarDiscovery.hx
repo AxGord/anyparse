@@ -2,13 +2,15 @@ package anyparse.macro;
 
 #if macro
 import haxe.macro.Context;
-import haxe.macro.Type;
 #end
 
+using Lambda;
 using StringTools;
 
+import anyparse.util.Compare;
 import haxe.io.Path;
 import haxe.macro.Expr;
+import haxe.macro.Type;
 import sys.FileSystem;
 
 /**
@@ -18,10 +20,12 @@ import sys.FileSystem;
  *
  * The module's class of that name must implement `GrammarPlugin`, take no constructor argument and declare the statics
  * `LANG` (its `--lang`), `EXTENSIONS` (lower case, with the dot) and `MERGE` (how `apq merge-file` takes its files apart),
- * and may declare `recognises(text): Bool` (stdin with no `--lang`). A module that carries the name and breaks the
- * contract is a build error naming it, never a silent skip. It lives outside `anyparse.query.cli` because that
- * package's ambient imports would drag the CLI into the macro context; the walk and the row builder need no compiler
- * and stay outside `#if macro`, so the suite types them.
+ * and may declare `recognises(text): Bool` (stdin with no `--lang`). `LANG` and `EXTENSIONS` are initialised with
+ * literals, and two plugins claiming one `--lang` or one extension are a build error naming both. A module that carries
+ * the name and breaks the contract is a build error naming it, never a silent skip. A compilation server does not
+ * re-run the walk when a plugin file appears (docs/cli-query-tool.md says why). It lives outside `anyparse.query.cli`
+ * because that package's ambient imports would drag the CLI into the macro context; the walk, the row builder, the
+ * clash check and the literal reader need no compiler and stay outside `#if macro`, so the suite types them.
  */
 @:nullSafety(Strict)
 final class GrammarDiscovery {
@@ -46,7 +50,15 @@ final class GrammarDiscovery {
 	 * literal: the caller builds it afresh on every call, so the registry is never process-scoped state (invariant 1).
 	 */
 	public static macro function rows(): Expr {
-		final rows: Array<Expr> = pluginModules(Context.getClassPath()).map(row);
+		final rows: Array<Expr> = [];
+		final claims: Array<PluginClaim> = [];
+		for (module in pluginModules(Context.getClassPath())) {
+			final plugin: ClassType = pluginClass(module);
+			rows.push(entry(macro $p{module.split('.')}, [for (field in plugin.statics.get()) field.name]));
+			claims.push({ module: module, lang: literal(module, plugin, 'LANG')[0], extensions: literal(module, plugin, 'EXTENSIONS') });
+		}
+		final problem: Null<String> = clash(claims);
+		if (problem != null) Context.error(problem, Context.currentPos());
 		return macro $a{rows};
 	}
 
@@ -55,7 +67,7 @@ final class GrammarDiscovery {
 		final seen: Map<String, Bool> = [];
 		for (root in roots) if (root != '' && FileSystem.isDirectory(root)) collect(root, [], seen);
 		final found: Array<String> = [for (module in seen.keys()) module];
-		found.sort(Reflect.compare);
+		found.sort(Compare.compareString);
 		return found;
 	}
 
@@ -75,6 +87,52 @@ final class GrammarDiscovery {
 		};
 	}
 
+	/**
+	 * The first two plugins of `claims` that claim one `--lang` or one file extension, as the build error naming both
+	 * modules, else null: the CLI dispatches a claim to one plugin, so a shared one would silently go to whichever
+	 * module sorts first.
+	 */
+	public static function clash(claims: Array<PluginClaim>): Null<String> {
+		final langs: Map<String, String> = [];
+		final extensions: Map<String, String> = [];
+		for (claim in claims) {
+			final langOwner: Null<String> = langs[claim.lang];
+			if (langOwner != null)
+				return 'grammar plugins $langOwner and ${claim.module} both declare LANG "${claim.lang}",'
+					+ ' so the CLI cannot tell which one it dispatches';
+			langs[claim.lang] = claim.module;
+			for (extension in claim.extensions) {
+				final extensionOwner: Null<String> = extensions[extension];
+				if (extensionOwner != null && extensionOwner != claim.module)
+					return 'grammar plugins $extensionOwner and ${claim.module} both declare the extension "$extension",'
+						+ ' so the CLI cannot tell which one a file of it goes to';
+				extensions[extension] = claim.module;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The strings `e` spells as a string literal or an array literal of them, through parentheses, metadata and
+	 * unchecked casts, else null — never a partial list, so a non-literal claim is refused rather than shortened.
+	 */
+	public static function strings(e: TypedExpr): Null<Array<String>> {
+		return switch e.expr {
+			case TConst(TString(s)): [s];
+			case TParenthesis(inner), TCast(inner, null), TMeta(_, inner): strings(inner);
+			case TArrayDecl(items):
+				final found: Array<String> = [];
+				for (item in items) switch item.expr {
+					case TConst(TString(s)):
+						found.push(s);
+					case _:
+						return null;
+				}
+				found;
+			case _: null;
+		}
+	}
+
 	/** Record in `seen` the `*QueryPlugin` module of every file under `dir`, whose package is `pack`. */
 	private static function collect(dir: String, pack: Array<String>, seen: Map<String, Bool>): Void {
 		for (entry in FileSystem.readDirectory(dir)) if (!entry.startsWith('.')) {
@@ -87,8 +145,8 @@ final class GrammarDiscovery {
 	}
 
 	#if macro
-	/** The registry row of the plugin `module`; a module breaking the contract is a build error. */
-	private static function row(module: String): Expr {
+	/** The plugin class of `module`; a module breaking the contract is a build error. */
+	private static function pluginClass(module: String): ClassType {
 		final plugin: ClassType = switch Context.getType(module) {
 			case TInst(ref, _): ref.get();
 			case _:
@@ -106,7 +164,22 @@ final class GrammarDiscovery {
 		final statics: Array<String> = [for (field in plugin.statics.get()) field.name];
 		for (name in REQUIRED_STATICS) if (!statics.contains(name))
 			Context.error('grammar plugin $module declares no static $name, which its CLI registry row reads', plugin.pos);
-		return entry(macro $p{module.split('.')}, statics);
+		return plugin;
+	}
+
+	/**
+	 * The strings the static `name` of the plugin `module` is initialised with — a string literal or an array literal
+	 * of them; any other initialiser is a build error, since the claim could not be checked against the other plugins.
+	 */
+	private static function literal(module: String, plugin: ClassType, name: String): Array<String> {
+		final field: Null<ClassField> = plugin.statics.get().find(field -> field.name == name);
+		final value: Null<TypedExpr> = field?.expr();
+		final found: Null<Array<String>> = value == null ? null : strings(value);
+		return found ?? Context.error(
+			'grammar plugin $module initialises its static $name with no string literal or array literal of them, so its claim'
+			+ ' cannot be checked against the other plugins',
+			plugin.pos
+		);
 	}
 
 	/** Whether `c`, its superclasses or the interfaces they extend include `GrammarPlugin`. */
@@ -118,4 +191,11 @@ final class GrammarDiscovery {
 	}
 	#end
 
+}
+
+/** One grammar plugin's claim on the CLI's dispatch: its module path, its `--lang` and its file extensions. */
+typedef PluginClaim = {
+	final module: String;
+	final lang: String;
+	final extensions: Array<String>;
 }

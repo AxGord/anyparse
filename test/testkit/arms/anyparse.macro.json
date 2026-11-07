@@ -1904,6 +1904,46 @@
 			"find": "!entry.startsWith('.')",
 			"replace": "true",
 			"note": "a dot-directory or dotfile under a classpath root is walked too, so a *QueryPlugin.hx inside .git or a hidden tree is registered under a module path the compiler cannot type"
+		},
+		{
+			"name": "M-GRAMMAR-CLASH-LANG-IGNORED",
+			"type": "anyparse.macro.GrammarDiscovery",
+			"method": "clash",
+			"find": "if (langOwner != null)",
+			"replace": "if (false)",
+			"note": "two plugins declaring one LANG build silently, and the CLI dispatches the language to whichever module sorts first"
+		},
+		{
+			"name": "M-GRAMMAR-CLASH-EXTENSION-IGNORED",
+			"type": "anyparse.macro.GrammarDiscovery",
+			"method": "clash",
+			"find": "if (extensionOwner != null && extensionOwner != claim.module)",
+			"replace": "if (false)",
+			"note": "two plugins declaring one file extension build silently, and a file of it goes to whichever module sorts first"
+		},
+		{
+			"name": "M-GRAMMAR-CLASH-OWN-EXTENSION",
+			"type": "anyparse.macro.GrammarDiscovery",
+			"method": "clash",
+			"find": "if (extensionOwner != null && extensionOwner != claim.module)",
+			"replace": "if (extensionOwner != null)",
+			"note": "a plugin naming its own extension twice is reported as clashing with itself, failing a build that dispatches unambiguously"
+		},
+		{
+			"name": "M-GRAMMAR-LITERAL-NO-WRAPPERS",
+			"type": "anyparse.macro.GrammarDiscovery",
+			"method": "strings",
+			"find": "case TParenthesis(inner), TCast(inner, null), TMeta(_, inner): strings(inner);",
+			"replace": "case TParenthesis(inner), TCast(inner, null), TMeta(_, inner): null;",
+			"note": "a claim initialised through parentheses, metadata or an unchecked cast is no longer read, so a plugin whose LANG is a parenthesised literal fails the build as non-literal"
+		},
+		{
+			"name": "M-GRAMMAR-LITERAL-PARTIAL",
+			"type": "anyparse.macro.GrammarDiscovery",
+			"method": "strings",
+			"find": "return null;",
+			"replace": "{}",
+			"note": "an EXTENSIONS array holding a non-literal element is read as its literal elements alone, so the clash check runs on a shortened claim and the CLI dispatches extensions the check never saw"
 		}
 	]
 }
