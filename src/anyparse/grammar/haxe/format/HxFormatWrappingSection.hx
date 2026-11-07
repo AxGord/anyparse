@@ -28,7 +28,7 @@ package anyparse.grammar.haxe.format;
  *
  * The keys that are not cascades: `arrayMatrixWrap` (string → `ArrayMatrixWrap.resolve`, default
  * `matrixWrapWithAlign`, whether a source-detected matrix grid is preserved and its columns right-aligned);
- * `trailingComma` (anyparse-only, `"remove"` → `TrailingCommaPolicy.Remove`, else `Keep` — see
+ * `trailingComma` (anyparse-only, `"keep"` / `"remove"` → `TrailingCommaPolicy`; absent = `Remove` — see
  * `HxFormatWrappingTrailingCommaPolicy`); `ternaryMultilineBranch` (the fork's key and spellings, `"inline"` / `"break"` →
  * `ternaryMultilineBranchInline`, hxq default `break`); and the `Bool` layout policies defaulting to `false` (absent =
  * byte-inert), documented on their `WriteOptions` fields — `ternaryCuddledBraces`, `comprehensionCuddledOpen`

@@ -5,7 +5,9 @@ package anyparse.format;
  * list literal.
  *
  * `Keep`   — the source's trailing `,` round-trips, and the per-construct
- * `trailingComma*` knobs may still ADD one. Byte-inert default.
+ * `trailingComma*` knobs may still ADD one. The Haxe writer defaults to
+ * `Remove`; `Keep` is an explicit opt-in, and a config whose `trailingCommas.*Default: "yes"` asks to ADD one while leaving
+ * `wrapping.trailingComma` unset loads as `Keep`.
  * `Remove` — a multiline list never ends with a separator, whatever the
  * source had and whatever the per-construct knob asks for. `Remove`
  * therefore OUTRANKS `trailingCommas.arrayLiteralDefault` /

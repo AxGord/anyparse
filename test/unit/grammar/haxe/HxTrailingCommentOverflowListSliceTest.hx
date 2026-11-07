@@ -13,7 +13,8 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxTrailingCommentOverflowListSliceTest extends Test {
 
-	private static final BASE: String = '"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 60';
+	private static final BASE: String =
+		'"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"trailingComma": "keep", "maxLineLength": 60';
 	private static final ON: String = '"comments": {"trailingCommentOverflow": "above"}';
 	private static final CONFIG_ON: String = '{$BASE}, $ON}';
 	private static final CONFIG_OFF: String = '{$BASE}}';

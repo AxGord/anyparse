@@ -29,7 +29,7 @@ final class HxDroppedSepCommentTest extends Test {
 		+ '"trailingComma": "remove", "comprehensionCuddledOpen": true}}';
 
 	/** The compiled defaults: the source's trailing comma is kept. */
-	private static final CFG_KEEP: String = '{}';
+	private static final CFG_KEEP: String = '{"wrapping": {"trailingComma": "keep"}}';
 
 	/** Element tails whose close literal captures a same-line comment that follows it. */
 	private static final CAPTURING_TAILS: Array<String> = [

@@ -50,7 +50,8 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	private static final ONE_PER_LINE_OFF: String = config(ONE_PER_LINE);
 
 	/**
-	 * Knob on plus the client's `callParameter` cascade, whose `fillLineWithLeadingBreak` default makes a >100-char sole argument wrap once the
+	 * Knob on plus the client's `callParameter` cascade, whose
+	 * `fillLineWithLeadingBreak` default makes a >100-char sole argument wrap once the
 	 * rendered line exceeds `maxLineLength`. The boundary fixtures need that cascade to show the args wrapping under a cuddled head.
 	 */
 	private static final BOUNDARY_ON: String = config(KNOB + CALL_PARAM);
@@ -301,8 +302,8 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	 * because the fixture constants are initialised before any instance exists.
 	 */
 	private static function config(extraWrapping: String): String {
-		return '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {$extraWrapping"maxLineLength": 140},'
-			+ ' "sameLine": {"ifBody": "fitLine", "functionBody": "fitLine"},'
+		return '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {$extraWrapping'
+			+ '"trailingComma": "keep", "maxLineLength": 140}, "sameLine": {"ifBody": "fitLine", "functionBody": "fitLine"},'
 			+ ' "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
 	}
 

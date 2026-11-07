@@ -302,8 +302,8 @@ final class HaxeFormatValues {
 
 	/**
 	 * Maps the `wrapping.trailingComma` config string onto the runtime
-	 * `TrailingCommaPolicy`. Unknown / absent values fall back to `Keep`,
-	 * the byte-inert default.
+	 * `TrailingCommaPolicy`. Only an explicit `keep` yields `Keep` (the opt-out of
+	 * the `Remove` default of `HxModuleWriteOptions`); the loader never calls this for an absent key.
 	 */
 	private static function trailingCommaRemovalToRuntime(policy: HxFormatWrappingTrailingCommaPolicy): TrailingCommaPolicy {
 		return switch policy {

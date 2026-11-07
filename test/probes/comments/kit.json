@@ -117,7 +117,9 @@
 		"w2e/t5.hx": "class A {\n\tfunction f() {\n\t\treturn a ? b : c /* m\n\t\t\tn */;\n\t}\n}\n",
 		"w2e/t6.hx": "class A {\n\tfunction f() {\n\t\tvar x = a ? b /** m */\n\t\t\t: c;\n\t}\n}\n",
 		"w2e/p3.hx": "class A {\n\tfunction f() {\n\t\tvar x = [a ? b /* m\n\t\tn */ : c, 2];\n\t}\n}\n",
-		"w2e/p8.hx": "class A {\n\tfunction f() {\n\t\tvar x = {k: a ? b /* m\n\t\tn */ : c};\n\t}\n}\n"
+		"w2e/p8.hx": "class A {\n\tfunction f() {\n\t\tvar x = {k: a ? b /* m\n\t\tn */ : c};\n\t}\n}\n",
+		"trailcomma-add/A.hx": "class A {\n\tstatic function f() {\n\t\tvar a = [\n\t\t\t1,\n\t\t\t2,\n\t\t];\n\t\tvar b = [\n\t\t\t1111111111111111111111111111111, 2222222222222222222222222222222222, 33333333333333333333333333333333333\n\t\t];\n\t}\n}\n",
+		"trailcomma-add/hxformat.json": "{\"trailingCommas\":{\"arrayLiteralDefault\":\"yes\"}}\n"
 	},
 	"invocations": [
 		{
@@ -1029,7 +1031,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "44fa318e16282171",
+				"out": "e8bbd5b2b11013b0",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -2086,6 +2088,23 @@
 			"expect": {
 				"exit": 0,
 				"out": "541744ad2b702282",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "trailcomma-add/A.hx",
+			"fixpoint": "trailcomma-add/A.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"trailcomma-add/A.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c010ab4f5ea737ef",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

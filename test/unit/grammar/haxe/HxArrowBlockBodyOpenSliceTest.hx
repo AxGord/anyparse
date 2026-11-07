@@ -36,7 +36,7 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 		+ '"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAnywhereInFile":2,"afterBlocks":"remove",'
 		+ '"afterLeftCurly":"keep","beforeRightCurly":"keep","classEmptyLines":{"beginType":1,"endType":1},'
 		+ '"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,'
-		+ '"endType":1}},"wrapping":{"functionSignature":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"endType":1}},"wrapping":{"trailingComma":"keep","functionSignature":{"defaultWrap":"fillLineWithLeadingBreak",'
 		+ '"rules":[{"conditions":[{"cond":"totalItemLength <= n","value":100},{'
 		+ '"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},'
 		+ '{"conditions":[{"cond":"itemCount <= n","value":1}],"type":"noWrap"}]},'

@@ -3,6 +3,7 @@ package unit.grammar.haxe;
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
+import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.WhitespaceInvariant;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.FormatterOff;
@@ -189,7 +190,7 @@ class HxFormatterCorpusTest extends Test {
 		final parseReasons: Map<String, Int> = [];
 
 		final names: Array<String> = FileSystem.readDirectory(dir);
-		names.sort(Reflect.compare);
+		names.sort(anyparse.util.Compare.compareString);
 
 		for (name in names) if (name.endsWith(HXTEST_EXT)) {
 			final path: String = '$dir/$name';
@@ -236,6 +237,9 @@ class HxFormatterCorpusTest extends Test {
 			// it drops the trailing LF leaving the `\r` that the fixture's
 			// stripPadNewlines also leaves in `expected`.
 			opts.finalNewline = true;
+			// The fork has no trailing-comma removal: its fixtures expect a source
+			// trailing `,` to survive, and no fork config can say otherwise.
+			opts.trailingComma = TrailingCommaPolicy.Keep;
 			final module: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = try {
 				HaxeModuleTriviaParser.parse(tc.input);
 			} catch (exception: Exception) {

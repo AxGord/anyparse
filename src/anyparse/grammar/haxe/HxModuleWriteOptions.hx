@@ -82,7 +82,7 @@ final class HxModuleWriteOptions {
 	public var normalizeLineCommentIndent: Bool = false;
 	public var compressSuccessiveParenthesis: Bool = true;
 	public var arrayMatrixWrap: ArrayMatrixWrap = ArrayMatrixWrap.MatrixWrapWithAlign;
-	public var trailingComma: TrailingCommaPolicy = TrailingCommaPolicy.Keep;
+	public var trailingComma: TrailingCommaPolicy = TrailingCommaPolicy.Remove;
 	public var conditionalPolicy: ConditionalIndentationPolicy = ConditionalIndentationPolicy.Aligned;
 	public var alignInlineSwitchCaseBody: Bool = false;
 	public var comprehensionCuddledOpen: Bool = false;

@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.format.TrailingCommaPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
@@ -177,6 +178,7 @@ class HxTrailingCommaOptionsTest extends Test {
 	private function makeOpts(lineWidth: Int, arrays: Bool, args: Bool, params: Bool): HxModuleWriteOptions {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.lineWidth = lineWidth;
+		opts.trailingComma = TrailingCommaPolicy.Keep;
 		opts.trailingCommaArrays = arrays;
 		opts.trailingCommaArgs = args;
 		opts.trailingCommaParams = params;

@@ -141,10 +141,14 @@ class HxListLiteralEmissionSliceTest extends Test {
 	private static final MATRIX: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
 		+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';
 
+	private static final KEEP_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
+		+ '"wrapping":{"maxLineLength":140,"trailingComma":"keep"},"whitespace":{"commaPolicy":"after"}}';
+
 	// --- config plumbing ---
 
-	public inline function testTrailingCommaDefaultsToKeep(): Void {
-		Assert.equals(TrailingCommaPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.trailingComma);
+	@:pin('guard')
+	public inline function testTrailingCommaDefaultsToRemove(): Void {
+		Assert.equals(TrailingCommaPolicy.Remove, HaxeFormat.instance.defaultWriteOptions.trailingComma);
 	}
 
 	public function testRemoveDropsMultilineCallArgTrailingComma(): Void {
@@ -190,12 +194,16 @@ class HxListLiteralEmissionSliceTest extends Test {
 		Assert.equals(TrailingCommaPolicy.Remove, opts('{"wrapping":{"trailingComma":"remove"}}').trailingComma);
 	}
 
+	@:pin('control')
+	@:killer('M-TRAILING-COMMA-KEEP-MAPS-TO-REMOVE')
 	public function testConfigTrailingCommaKeepParsed(): Void {
 		Assert.equals(TrailingCommaPolicy.Keep, opts('{"wrapping":{"trailingComma":"keep"}}').trailingComma);
 	}
 
-	public function testConfigTrailingCommaOmittedDefaultsKeep(): Void {
-		Assert.equals(TrailingCommaPolicy.Keep, opts('{}').trailingComma);
+	@:pin('control')
+	@:killer('M-TRAILING-COMMA-ABSENT-KEY-RESETS')
+	public function testConfigTrailingCommaOmittedDefaultsRemove(): Void {
+		Assert.equals(TrailingCommaPolicy.Remove, opts('{"wrapping":{"maxLineLength":120}}').trailingComma);
 	}
 
 	/**
@@ -258,8 +266,16 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	// --- item (b) ---
 
-	public function testDefaultKeepsMultilineArrayTrailingComma(): Void {
-		Assert.isTrue(base(ARR_TRAIL).indexOf('beta,\n\t\t]') >= 0, base(ARR_TRAIL));
+	@:pin('guard')
+	public function testDefaultRemovesMultilineArrayTrailingComma(): Void {
+		Assert.isTrue(base(ARR_TRAIL).indexOf('beta\n\t\t]') >= 0, base(ARR_TRAIL));
+		Assert.isTrue(base(ARR_TRAIL).indexOf('beta,') < 0, base(ARR_TRAIL));
+	}
+
+	@:pin('control')
+	@:killer('M-TRAILING-COMMA-KEEP-MAPS-TO-REMOVE')
+	public function testExplicitKeepKeepsMultilineArrayTrailingComma(): Void {
+		Assert.isTrue(write(ARR_TRAIL, KEEP_JSON).indexOf('beta,\n\t\t]') >= 0, write(ARR_TRAIL, KEEP_JSON));
 	}
 
 	public function testRemoveDropsMultilineArrayTrailingComma(): Void {
@@ -273,7 +289,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 	}
 
 	public function testRemoveDropsMultilineNewArgsTrailingComma(): Void {
-		Assert.isTrue(base(NEW_TRAIL).indexOf('epsilonEpsilonEpsilonEps,);') >= 0, base(NEW_TRAIL));
+		Assert.isTrue(write(NEW_TRAIL, KEEP_JSON).indexOf('epsilonEpsilonEpsilonEps,);') >= 0, write(NEW_TRAIL, KEEP_JSON));
 		Assert.isTrue(remove(NEW_TRAIL).indexOf('epsilonEpsilonEpsilonEps);') >= 0, remove(NEW_TRAIL));
 	}
 
@@ -303,6 +319,15 @@ class HxListLiteralEmissionSliceTest extends Test {
 		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
 			+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';
 		Assert.equals(expected, noAlign(MATRIX));
+	}
+
+	/** An add-knob (`trailingCommas.*Default: "yes"`) with no `wrapping.trailingComma` still adds its comma: the policy loads as `Keep`. */
+	@:pin('control')
+	@:killer('M-TRAILING-COMMA-ADD-KNOB-IMPLIES-REMOVE')
+	public function testAddKnobWithoutPolicyKeepsTheAddedComma(): Void {
+		Assert.equals(TrailingCommaPolicy.Keep, opts('{"trailingCommas":{"arrayLiteralDefault":"yes"}}').trailingComma);
+		Assert.isTrue(addKnob(ARR_NO_TRAIL).indexOf('gamma,\n\t\t]') >= 0, addKnob(ARR_NO_TRAIL));
+		Assert.equals(TrailingCommaPolicy.Remove, opts('{"trailingCommas":{"functionParameterDefault":"yes"}}').trailingComma);
 	}
 
 	private static inline function collapse(source: String): String {

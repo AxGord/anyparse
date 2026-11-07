@@ -70,6 +70,13 @@ Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (
 `trailingComma`, `comprehensionCuddledOpen` (Bool), `methodChainCuddledLinks` (Bool),
 `soleItemCuddledBrackets` (Bool), `ternaryCuddledBraces` (Bool).
 
+`trailingComma` is an anyparse extension with two values: `"remove"` (the default when the key is
+absent) drops the trailing `,` of every multiline array, object literal and argument list, and
+`"keep"` lets a source trailing `,` survive and the `trailingCommas.*Default` keys add one. A config that
+sets `trailingCommas.arrayLiteralDefault`, `callArgumentDefault` or `objectLiteralDefault` to `"yes"` and says
+nothing about `wrapping.trailingComma` loads as `"keep"`, so the comma it asks for is added; an explicit
+`"remove"` outranks every add-knob.
+
 All four cuddle keys are **anyparse extensions** — the fork has no such concept, so their
 shapes were derived here, not copied — and each is documented on its `WriteOptions` field:
 `ternaryCuddledBraces` (a broken ternary's `:` and the else branch's opening delimiter ride

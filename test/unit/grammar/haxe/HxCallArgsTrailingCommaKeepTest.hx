@@ -19,7 +19,7 @@ class HxCallArgsTrailingCommaKeepTest extends Test {
 	@:killer('M-CALL-FLAT-SOURCE-TRAIL-OFF')
 	public function testAFlatCallKeepsItsTrailingComma(): Void {
 		final source: String = 'class A {\n\tfunction c() {\n\t\tv(1, 2,);\n\t\tv(1, 2);\n\t}\n}\n';
-		assertWritesOnce('{}', source, source);
+		assertWritesOnce('{"wrapping": {"trailingComma": "keep"}}', source, source);
 	}
 
 	@:pin('control')
@@ -28,7 +28,9 @@ class HxCallArgsTrailingCommaKeepTest extends Test {
 		final source: String = 'class A {\n\tfunction c() {\n\t\tv(1, 2,);\n\t\tv(1, 2);\n\t}\n}\n';
 		final expected: String =
 			'class A {\n\tfunction c() {\n\t\tv(\n\t\t\t1,\n\t\t\t2,\n\t\t);\n\t\tv(\n\t\t\t1,\n\t\t\t2\n\t\t);\n\t}\n}\n';
-		assertWritesOnce('{"wrapping": {"callParameter": {"defaultWrap": "onePerLine", "rules": []}}}', source, expected);
+		assertWritesOnce(
+			'{"wrapping": {"trailingComma": "keep", "callParameter": {"defaultWrap": "onePerLine", "rules": []}}}', source, expected
+		);
 	}
 
 	/** Under `config`, `source` writes as `expected`, and `expected` writes as itself. */

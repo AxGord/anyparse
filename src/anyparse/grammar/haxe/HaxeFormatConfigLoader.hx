@@ -10,6 +10,7 @@ import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.OperatorSpacing;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
+import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.wrap.WrapCondition;
 import anyparse.format.wrap.WrapConditionType;
@@ -118,6 +119,7 @@ final class HaxeFormatConfigLoader {
 		result.doBody = BodyPolicy.Next;
 		if (cfg.sameLine != null) applySameLine(cfg.sameLine, result);
 		if (cfg.trailingCommas != null) applyTrailingCommas(cfg.trailingCommas, result);
+		if (addKnobWithoutPolicy(cfg, result)) result.trailingComma = TrailingCommaPolicy.Keep;
 		if (cfg.lineEnds != null) applyLineEnds(cfg.lineEnds, result);
 		if (cfg.whitespace != null) applyWhitespace(cfg.whitespace, result);
 		// haxe-formatter couples comprehension bracket padding to
@@ -1228,6 +1230,16 @@ final class HaxeFormatConfigLoader {
 		// (statement terminators) composes with `semicolonBeforeElse: never`.
 		final semiElse: Null<HxFormatOptionalSemicolonPolicy> = section.semicolonBeforeElse;
 		if (semiElse != null) opt.semicolonBeforeElse = HaxeFormatValues.optionalSemicolonToRuntime(semiElse);
+	}
+
+	/**
+	 * Whether the config asks for a trailing comma to be ADDED (`trailingCommas.*Default: "yes"` on an array, call or object
+	 * literal) without saying anything about `wrapping.trailingComma`. `Remove` would silently void that request, so the
+	 * policy is `Keep` for such a config; an explicit `wrapping.trailingComma` always wins.
+	 */
+	private static function addKnobWithoutPolicy(cfg: HxFormatConfig, opt: HxModuleWriteOptions): Bool {
+		final stated: Bool = cfg.wrapping?.trailingComma != null;
+		return !stated && (opt.trailingCommaArrays || opt.trailingCommaArgs || opt.trailingCommaObjectLits);
 	}
 
 }

@@ -129,8 +129,8 @@ class AddElementSliceTest extends Test {
 	 * found appending to `TestDiscoveryParityTest`'s deferred-arm census).
 	 */
 	public function testAppendToArrayWithTrailingComma(): Void {
-		final source: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t];\n}\n';
-		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\',\n\t];\n}\n';
+		final source: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\'\n\t];\n}\n';
+		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\'\n\t];\n}\n';
 		assertAppend(source, 2, 33, "'c'", false, expected);
 		assertAppend(
 			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\',];\n}\n', 2, 33, "'c'", false,

@@ -900,6 +900,30 @@
 			"find": "case HxFormatBodyPolicy.Keep: current;",
 			"replace": "case HxFormatBodyPolicy.Keep: BodyPolicy.Same;",
 			"note": "an unsupported keep body policy overrides the knob instead of leaving its default"
+		},
+		{
+			"name": "M-TRAILING-COMMA-KEEP-MAPS-TO-REMOVE",
+			"type": "anyparse.grammar.haxe.HaxeFormatValues",
+			"method": "trailingCommaRemovalToRuntime",
+			"find": "case _: TrailingCommaPolicy.Keep;",
+			"replace": "case _: TrailingCommaPolicy.Remove;",
+			"note": "an explicit `keep` is read as `remove`, so the opt-out of the Remove default stops working"
+		},
+		{
+			"name": "M-TRAILING-COMMA-ABSENT-KEY-RESETS",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyWrappingScalars",
+			"find": "if (section.trailingComma != null) opt.trailingComma = HaxeFormatValues.trailingCommaRemovalToRuntime(section.trailingComma);",
+			"replace": "opt.trailingComma = section.trailingComma == null ? anyparse.format.TrailingCommaPolicy.Keep : HaxeFormatValues.trailingCommaRemovalToRuntime(section.trailingComma);",
+			"note": "a wrapping section without the key resets the policy to Keep instead of leaving the default"
+		},
+		{
+			"name": "M-TRAILING-COMMA-ADD-KNOB-IMPLIES-REMOVE",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "loadHxFormatJson",
+			"find": "if (addKnobWithoutPolicy(cfg, result)) result.trailingComma = TrailingCommaPolicy.Keep;",
+			"replace": "if (addKnobWithoutPolicy(cfg, result)) result.trailingComma = TrailingCommaPolicy.Remove;",
+			"note": "an add-knob config without wrapping.trailingComma loads as Remove, which silently voids the requested trailing comma"
 		}
 	]
 }

@@ -3,7 +3,7 @@ package anyparse.grammar.haxe.format;
 /**
  * Closed set of values the anyparse-specific `wrapping.trailingComma` field
  * accepts. No haxe-formatter counterpart exists — this knob is an anyparse
- * extension, so it defaults to `keep` (byte-inert) and never re-baselines
+ * extension, so it defaults to `remove` (the Haxe writer's default) and never re-baselines
  * at JSON-load entry the way the fork-canonical wrapping knobs do.
  *
  * Distinct from `HxFormatTrailingCommaPolicy` (the fork's

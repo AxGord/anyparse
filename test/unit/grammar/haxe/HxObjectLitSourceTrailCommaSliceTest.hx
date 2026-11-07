@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.format.TrailingCommaPolicy;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -97,6 +98,7 @@ final class HxObjectLitSourceTrailCommaSliceTest extends Test {
 	private inline function formatWithKnob(src: String, trailingCommaObjectLits: Bool): String {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.finalNewline = false;
+		opts.trailingComma = TrailingCommaPolicy.Keep;
 		opts.trailingCommaObjectLits = trailingCommaObjectLits;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
