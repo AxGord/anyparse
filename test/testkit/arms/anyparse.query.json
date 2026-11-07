@@ -15549,6 +15549,14 @@
 			"find": "\tRunLedger.begin();\n",
 			"replace": "",
 			"note": "a run no longer starts with an empty warn-once ledger, so a second call in one engine process stays silent about a broken lint config and a skipped field-init where a fresh process warns"
+		},
+		{
+			"name": "M-MODMOVE-USING-STATEMENT-COUNTS",
+			"type": "anyparse.query.ModulePathTokens",
+			"method": "inertSpans",
+			"find": "\tif (tree != null) collectImportStatements(tree, out);\n",
+			"replace": "",
+			"note": "import and using statements stay countable names, so a using statement a move adds to a file whose body also writes that name makes the before and after name counts differ and the move is refused"
 		}
 	]
 }

@@ -1,7 +1,7 @@
 package unit.ds;
 
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import haxe.Exception;
 import unit.cli.CliFixture;
 

@@ -318,8 +318,8 @@
 			"name": "M-HOIST-UNPARSED-RECEIVER-WITHHELD",
 			"type": "anyparse.check.common.imports.HoistCommonImport",
 			"method": "parsedWithEveryReceiver",
-			"find": "parsing[OracleCoverage.canonical(cwd, file)] ?? [];",
-			"replace": "parsing[OracleCoverage.canonical(cwd, file)] ?? [-1];",
+			"find": "parsing[FileIdentity.canonical(cwd, file)] ?? [];",
+			"replace": "parsing[FileIdentity.canonical(cwd, file)] ?? [-1];",
 			"note": "a receiver no declared build parses is read as parsed by a build that lacks the statement's module, so a statement is withheld from a directory holding code no build compiles"
 		},
 		{

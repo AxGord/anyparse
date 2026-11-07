@@ -3,7 +3,10 @@ package anyparse.check.oracle;
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.oracle.OracleCache.HxmlRefs;
 import anyparse.check.oracle.OracleGenerationLock.Holder;
+import anyparse.core.ContentHash;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.ConfigFinder;
 import anyparse.query.FileIdentity;
 import haxe.Exception;
@@ -274,11 +277,6 @@ final class OracleGeneration {
 		#end
 	}
 
-	/** md5 of `text`. */
-	private static function md5(text: String): String {
-		return #if nodejs js.node.Crypto.createHash('md5').update(text, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(text) #end;
-	}
-
 	#if (sys || nodejs)
 	/** The record at `path`, or null when there is none or it does not have a record's shape. */
 	private static function readRecord(path: String): Null<GenerationRecord> {
@@ -301,7 +299,7 @@ final class OracleGeneration {
 			final lines: Array<String> = [];
 			listTree(path, '', lines, 0, memo);
 			lines.sort(Reflect.compare);
-			md5('dir\n${lines.join('\n')}');
+			ContentHash.md5('dir\n${lines.join('\n')}');
 		} else {
 			hashReads++;
 			try
@@ -497,7 +495,7 @@ final class OracleGeneration {
 		hxmls.sort(Reflect.compare);
 		final declaring: String = FileIdentity.realPath(absolute(Sys.getCwd(), group.generate.root));
 		final home: String = ConfigFinder.projectRoot(declaring) ?? declaring;
-		return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\n'))]);
+		return Path.join([home, STATE_DIR, 'oracle-generate', ContentHash.md5(hxmls.join('\n'))]);
 		#else
 		return '';
 		#end

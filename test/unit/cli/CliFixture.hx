@@ -1,8 +1,8 @@
 package unit.cli;
 
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
 import anyparse.core.TempScratch;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.Cli;
 #if (sys || nodejs)
 import haxe.Exception;

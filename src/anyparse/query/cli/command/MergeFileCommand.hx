@@ -1,8 +1,8 @@
 package anyparse.query.cli.command;
 
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
 import anyparse.core.TempScratch;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.merge.KeyedMerge.MergeChoice;
 import anyparse.query.merge.StructuralMerge;
 import haxe.io.Path;

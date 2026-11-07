@@ -1,6 +1,6 @@
 package devkit;
 
-import anyparse.check.oracle.HaxeRun;
+import anyparse.proc.HaxeRun;
 
 using StringTools;
 using Lambda;

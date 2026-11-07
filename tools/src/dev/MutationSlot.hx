@@ -1,6 +1,6 @@
 package dev;
 
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.BuildFailure;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.MutationVerdict;

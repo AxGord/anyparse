@@ -1,8 +1,8 @@
 package devkit;
 
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.SpawnJob;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.SpawnJob;
 import haxe.Exception;
 
 using Lambda;

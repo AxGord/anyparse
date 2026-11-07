@@ -96,7 +96,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 	@:pin('control')
 	@:killer('M-DISPLAY-SERVER-UNTETHERED')
 	@:access(anyparse.check.oracle.CompilerDisplayOracle)
-	@:access(anyparse.check.oracle.PendingRuns)
+	@:access(anyparse.proc.PendingRuns)
 	public function testTheDisplayServerDiesWithItsDriver(): Void {
 		#if nodejs
 		if (!oracleWorks()) {

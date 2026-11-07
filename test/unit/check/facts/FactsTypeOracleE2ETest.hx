@@ -6,7 +6,7 @@ import sys.io.File;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.Cli;
 
 /**

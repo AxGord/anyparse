@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.oracle.OracleCache;
+import anyparse.core.ContentHash;
 import anyparse.core.ParseProjectionEngine;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
@@ -102,7 +102,7 @@ final class ParseDiskCache {
 	}
 
 	private function entryName(file: String): String {
-		return OracleCache.md5('$_lang|$file');
+		return ContentHash.md5('$_lang|$file');
 	}
 
 	private static function encodeTree(tree: QueryNode): String {
@@ -210,7 +210,7 @@ final class ParseDiskCache {
 	}
 
 	private static function header(source: String): String {
-		return '$FORMAT_TAG ${OracleCache.md5(source)}';
+		return '$FORMAT_TAG ${ContentHash.md5(source)}';
 	}
 	#end
 

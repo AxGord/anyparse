@@ -1,8 +1,8 @@
 package dev;
 
 import anyparse.check.oracle.CompilerServer;
-import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.PendingRuns;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.PendingRuns;
 import devkit.Cmd.cmd;
 import haxe.io.Path;
 import sys.FileSystem;

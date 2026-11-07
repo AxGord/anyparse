@@ -2306,6 +2306,35 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "M1",
+			"note": "module-form move of a module whose body writes a name its old directory's import.hx gives as a using: the using statement the move adds must not count as a new use of that name",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/A.hx",
+				"--to",
+				"src/s",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/A.hx": "package p;\n\nclass A {\n\tpublic static function f(s: String): String return StringTools.trim(s);\n}\n",
+				"src/p/import.hx": "using StringTools;\n",
+				"main/Main.hx": "class Main { static function main() { trace(s.A.f(' x ')); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "ed4a455ade859b7b",
+				"files": "24573836c58028d9",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

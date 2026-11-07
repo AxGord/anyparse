@@ -4,6 +4,10 @@ import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerServer.ConnectResult;
 import anyparse.core.EnvFlag;
 import anyparse.core.PhaseTimings;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.PendingRuns;
+import anyparse.proc.SpawnJob;
 import anyparse.query.LintFixSafePass;
 
 /**

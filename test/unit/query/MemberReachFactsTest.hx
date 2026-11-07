@@ -2,12 +2,12 @@ package unit.query;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.facts.TypedFactsProbe;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
 import anyparse.query.FactsView;
+import anyparse.query.FileIdentity;
 import anyparse.query.FunctionValueTypes;
 import anyparse.query.MemberReach;
 import anyparse.query.MemberTouchScan;
@@ -485,7 +485,7 @@ class MemberReachFactsTest extends Test {
 			Assert.fail('no Haxe std to read `Reflect` from', pos);
 			return Unknown(OutOfScope('no std'));
 		}
-		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, interp ? 'Reflect.hx' : 'js/_std/Reflect.hx']));
+		final path: String = FileIdentity.canonical(Sys.getCwd(), Path.join([std, interp ? 'Reflect.hx' : 'js/_std/Reflect.hx']));
 		final result: ReachResult = ask(
 			files, configurations, true, null, false, interp ? INTERP_BUILD : null, library, null, listed,
 			[path => sys.io.File.getContent(path)],
@@ -2330,7 +2330,7 @@ class MemberReachFactsTest extends Test {
 			'cpp/ConstPointer.hx',
 			'cpp/Char.hx'
 		]) {
-			final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, f]));
+			final path: String = FileIdentity.canonical(Sys.getCwd(), Path.join([std, f]));
 			declared[path] = sys.io.File.getContent(path);
 		}
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main], declared), r -> r.match(Proven));
@@ -5268,7 +5268,7 @@ class MemberReachFactsTest extends Test {
 		assertGuarded(odds.replace('config:Dynamic', 'config:Odd') + odd, false);
 		// a build that assigns it: a parameter is kept only where every build keeps it
 		final std: Null<String> = StdResolver.stdDir();
-		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std ?? '', 'Reflect.hx']));
+		final path: String = FileIdentity.canonical(Sys.getCwd(), Path.join([std ?? '', 'Reflect.hx']));
 		final assigned: String = guardedFixture(null, null, '#if other config = new Main(); #end\n\t\t' + guardedBy('config != null'));
 		final result: ReachResult = ask(
 			['Main.hx' => assigned], [[], ['other']], true, null, false, INTERP_BUILD,

@@ -1,8 +1,7 @@
-package unit.check.oracle;
+package unit.proc;
 
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.PendingRuns;
+import anyparse.proc.PendingRuns;
+import unit.check.ProcessProbe;
 
 /**
  * `PendingRuns`: a batch started with `HaxeSpawn.startAll` runs while the caller goes on, and `cancel` ends it.
@@ -93,7 +92,7 @@ final class PendingRunsTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-TETHER-IGNORES-EOF')
-	@:access(anyparse.check.oracle.PendingRuns)
+	@:access(anyparse.proc.PendingRuns)
 	public function testATetheredJobDiesWithItsDriver(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('pendingtether', []);

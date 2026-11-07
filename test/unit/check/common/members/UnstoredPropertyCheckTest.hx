@@ -2,9 +2,9 @@ package unit.check.common.members;
 
 import anyparse.check.Severity;
 import anyparse.check.common.members.UnstoredProperty;
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.scan.ReflectionScan.ScopeFile;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;

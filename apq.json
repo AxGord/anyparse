@@ -285,7 +285,7 @@
 				"test/unit/cli/CliFixture.hx",
 				"test/unit/cli/CliCommandSeamTest.hx",
 				"tools/src/devkit/Command.hx",
-				"src/anyparse/check/oracle/HaxeSpawn.hx",
+				"src/anyparse/proc/HaxeSpawn.hx",
 				"src/anyparse/grammar/json/JsonNative.hx",
 				"tools/src/dev/ParseProf.hx",
 				"tools/src/dev/JsonProf.hx"

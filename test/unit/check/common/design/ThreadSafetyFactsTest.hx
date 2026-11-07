@@ -4,9 +4,9 @@ import anyparse.check.LintConfig;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.facts.TypedFactsProbe;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FileIdentity;
 import unit.cli.CliFixture;
 
 using StringTools;
@@ -43,7 +43,7 @@ class ThreadSafetyFactsTest extends Test {
 			return;
 		}
 		// the facts key a file by its canonical path, as a lint run hands it over
-		final files: Array<{ file: String, source: String }> = [{ file: OracleCoverage.canonical(dir, 'Main.hx'), source: MAIN }];
+		final files: Array<{ file: String, source: String }> = [{ file: FileIdentity.canonical(dir, 'Main.hx'), source: MAIN }];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		// by syntax `s.work()` is unresolved, and `S.work`, reached by nothing, is assumed to run on the main thread
 		final syntax: Array<String> = graded(CheckFixture.violationsIn(new ThreadSafety(), files, plugin));

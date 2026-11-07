@@ -1,6 +1,6 @@
 package unit.ds;
 
-import anyparse.check.oracle.HaxeRun;
+import anyparse.proc.HaxeRun;
 
 /**
  * `anyparse.ds.Set` on the targets the suite itself does not run on: the membership contract on the interpreter (the

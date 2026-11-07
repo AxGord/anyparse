@@ -1,6 +1,4 @@
-package unit.check.oracle;
-
-import anyparse.check.oracle.HaxeSpawn;
+package unit.proc;
 
 /**
  * `HaxeSpawn.parallelism`: how many compiles of one project run at once. A compile is a single-threaded process the

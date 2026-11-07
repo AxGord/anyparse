@@ -1,13 +1,13 @@
 package testkit;
 
 #if nodejs
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.HaxeRun;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.HaxeRun;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.oracle.OracleGeneration;
-import anyparse.check.oracle.SpawnJob;
+import anyparse.proc.SpawnJob;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
 import devkit.RawJson;

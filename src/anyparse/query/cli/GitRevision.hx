@@ -1,7 +1,7 @@
 package anyparse.query.cli;
 
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import haxe.io.Path;
 
 using Lambda;

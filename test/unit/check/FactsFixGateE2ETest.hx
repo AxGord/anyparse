@@ -4,7 +4,7 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 

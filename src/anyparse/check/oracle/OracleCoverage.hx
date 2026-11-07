@@ -2,6 +2,8 @@ package anyparse.check.oracle;
 
 import anyparse.check.oracle.CompilerOracle.OracleExclusion;
 import anyparse.core.PhaseTimings;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.CondRegionLiveness;
 import anyparse.query.FileIdentity;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -161,7 +163,7 @@ final class OracleCoverage {
 	public function covers(file: String): Bool {
 		#if (sys || nodejs)
 		final paths: Null<Array<String>> = _compiled;
-		return paths != null && paths.contains(canonical(Sys.getCwd(), file));
+		return paths != null && paths.contains(FileIdentity.canonical(Sys.getCwd(), file));
 		#else
 		return false;
 		#end
@@ -186,7 +188,7 @@ final class OracleCoverage {
 		#if (sys || nodejs)
 		final paths: Null<Array<String>> = _compiled;
 		if (paths == null) return reason;
-		final key: String = canonical(Sys.getCwd(), file);
+		final key: String = FileIdentity.canonical(Sys.getCwd(), file);
 		if (!paths.contains(key)) return fileGap(paths.length);
 		var regionGap: Null<String> = null;
 		var claimed: Bool = false;
@@ -365,7 +367,7 @@ final class OracleCoverage {
 	 */
 	public static function of(paths: Array<String>, root: String, ?defines: Array<String>): OracleCoverage {
 		#if (sys || nodejs)
-		final resolved: Array<String> = paths.map(path -> canonical(root, path));
+		final resolved: Array<String> = paths.map(path -> FileIdentity.canonical(root, path));
 		return new OracleCoverage(resolved, [
 			{
 				files: resolved,
@@ -493,9 +495,9 @@ final class OracleCoverage {
 	public static function moduleUnder(classPaths: Array<String>, file: String): Null<String> {
 		#if (sys || nodejs)
 		if (!isSource(file)) return null;
-		final key: String = canonical(Sys.getCwd(), file);
+		final key: String = FileIdentity.canonical(Sys.getCwd(), file);
 		for (root in classPaths) {
-			final dir: String = canonical(Sys.getCwd(), root);
+			final dir: String = FileIdentity.canonical(Sys.getCwd(), root);
 			final prefix: String = dir.endsWith('/') ? dir : '$dir/';
 			if (!key.startsWith(prefix)) continue;
 			final segments: Array<String> = Path.withoutExtension(key.substr(prefix.length)).split('/');
@@ -517,9 +519,12 @@ final class OracleCoverage {
 		final tokens: Array<String> = parsedPaths(result.out);
 		if (tokens.length == 0) return unknown('`haxe -v` named no parsed source file');
 		final arms: Array<CompiledArm> = [
-			for (arm in parseArms(result.out)) { files: [for (token in arm.files) canonical(root, token)], defines: arm.defines }
+			for (arm in parseArms(result.out)) {
+				files: [for (token in arm.files) FileIdentity.canonical(root, token)],
+				defines: arm.defines
+			}
 		];
-		return new OracleCoverage(tokens.map(token -> canonical(root, token)), arms, '');
+		return new OracleCoverage(tokens.map(token -> FileIdentity.canonical(root, token)), arms, '');
 		#else
 		return unknown(UNSUPPORTED_TARGET);
 		#end
@@ -579,21 +584,6 @@ final class OracleCoverage {
 	}
 
 	#if (sys || nodejs)
-	/**
-	 * `path` resolved against `root` when relative, then symlink-resolved. Both sides of
-	 * the membership test go through this: the compiler prints paths against ITS working
-	 * directory and the lint run names files against the PROCESS one, and on a host whose
-	 * temp dir is a symlink (`/tmp` on macOS) the two spellings of one file differ. A path that does not exist
-	 * keys through its nearest existing ancestor (`FileIdentity.realPath`) rather than failing the lookup.
-	 */
-	public static function canonical(root: String, path: String): String {
-		// `root` is absolutised FIRST, so a relative one cannot produce a key the membership
-		// test can never match: `covers` resolves against the process cwd, and a relative `pkg/C.hx`
-		// on one side would meet an absolute `/…/pkg/C.hx` on the other.
-		final base: String = Path.isAbsolute(root) ? root : Path.join([Sys.getCwd(), root]);
-		final joined: String = Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path]));
-		return FileIdentity.realPath(joined);
-	}
 	/**
 	 * `dir` with exactly one trailing separator, so a `startsWith` test of a path against it
 	 * cannot match a sibling directory that shares its name as a prefix.

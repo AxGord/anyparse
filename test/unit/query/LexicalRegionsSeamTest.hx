@@ -158,12 +158,12 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/facts/TypedFactsTypeStrings.hx',
 			'src/anyparse/check/facts/TypedFactsWalk.hx',
 			'src/anyparse/check/oracle/CompilerServer.hx',
-			'src/anyparse/check/oracle/HaxeSpawn.hx',
 			'src/anyparse/check/oracle/OracleCache.hx',
 			'src/anyparse/check/oracle/OracleDeclaration.hx',
 			'src/anyparse/check/oracle/OracleGeneration.hx',
 			'src/anyparse/check/oracle/ReachDefinesProbe.hx',
-			'src/anyparse/check/oracle/SpawnJob.hx',
+			'src/anyparse/proc/HaxeSpawn.hx',
+			'src/anyparse/proc/SpawnJob.hx',
 			'src/anyparse/query/FactNodeRecords.hx',
 			'src/anyparse/query/FactText.hx',
 			'src/anyparse/query/FormatConfigDiscovery.hx',
@@ -194,7 +194,12 @@ class LexicalRegionsSeamTest extends Test {
 		];
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final found: Array<String> = [];
-		for (dir in ['src/anyparse/check', 'src/anyparse/format', 'src/anyparse/query']) for (path in hxFilesUnder(dir)) {
+		for (dir in [
+			'src/anyparse/check',
+			'src/anyparse/format',
+			'src/anyparse/proc',
+			'src/anyparse/query'
+		]) for (path in hxFilesUnder(dir)) {
 			// A language's own rule package is that language's by definition, and may read its grammar.
 			if (path.startsWith(HAXE_RULES)) continue;
 			final source: String = File.getContent(path);

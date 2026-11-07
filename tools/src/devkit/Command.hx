@@ -1,9 +1,9 @@
 package devkit;
 
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.PendingRuns;
-import anyparse.check.oracle.SpawnJob;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.PendingRuns;
+import anyparse.proc.SpawnJob;
 import haxe.DynamicAccess;
 import haxe.Exception;
 

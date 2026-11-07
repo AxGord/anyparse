@@ -5,12 +5,12 @@ import sys.io.File;
 #end
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.ReachBuildsCache;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import anyparse.query.Cli;
+import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import devkit.RawJson;
 
@@ -120,10 +120,10 @@ class ReachBuildsCacheTest extends Test {
 		if (dir == null) return;
 		final outside: String = CliFixture.writeTree('rootsoutside', [{ name: 'Far.hx', source: 'class Far {}\n' }]);
 		final oracles: Array<OracleConfig> = [{ hxml: '$dir/check.hxml', dir: dir, defines: [] }];
-		final far: String = OracleCoverage.canonical(outside, 'Far.hx');
+		final far: String = FileIdentity.canonical(outside, 'Far.hx');
 		ReachBuildsCache.store(oracles, ReachBuildsCache.fingerprint(oracles), builds(far, far));
 		Assert.isNull(ReachBuildsCache.load(oracles), 'a read outside is not stored');
-		ReachBuildsCache.store(oracles, ReachBuildsCache.fingerprint(oracles), builds(OracleCoverage.canonical(dir, 'Main.hx'), far));
+		ReachBuildsCache.store(oracles, ReachBuildsCache.fingerprint(oracles), builds(FileIdentity.canonical(dir, 'Main.hx'), far));
 		final read: Null<ReachBuilds> = ReachBuildsCache.load(oracles);
 		if (read == null) {
 			Assert.fail('the stored builds are read');
@@ -192,7 +192,7 @@ class ReachBuildsCacheTest extends Test {
 		final dir: Null<String> = tree('shape', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');
 		if (dir == null) return;
 		final oracles: Array<OracleConfig> = [{ hxml: '$dir/check.hxml', dir: dir, defines: [] }];
-		final main: String = OracleCoverage.canonical(dir, 'Main.hx');
+		final main: String = FileIdentity.canonical(dir, 'Main.hx');
 		ReachBuildsCache.store(oracles, ReachBuildsCache.fingerprint(oracles), builds(main, main));
 		Assert.notNull(ReachBuildsCache.load(oracles), 'the record as written');
 		final path: String = ReachBuildsCache.cacheFile(oracles);

@@ -9,7 +9,7 @@ import anyparse.check.facts.TypedFactsProbe;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.check.haxe.expressions.StaticExtensionFacts;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;

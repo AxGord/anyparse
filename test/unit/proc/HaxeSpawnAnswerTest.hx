@@ -1,8 +1,6 @@
-package unit.check.oracle;
+package unit.proc;
 
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.SpawnJob;
+import anyparse.proc.SpawnJob;
 import haxe.DynamicAccess;
 import sys.FileSystem;
 import sys.io.File;

@@ -1,4 +1,4 @@
-package anyparse.check.oracle;
+package anyparse.proc;
 
 import anyparse.grammar.json.JValue;
 

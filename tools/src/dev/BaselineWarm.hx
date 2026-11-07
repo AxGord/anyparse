@@ -1,6 +1,6 @@
 package dev;
 
-import anyparse.check.oracle.PendingRuns;
+import anyparse.proc.PendingRuns;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;

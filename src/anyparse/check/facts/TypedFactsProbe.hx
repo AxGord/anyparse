@@ -2,18 +2,19 @@ package anyparse.check.facts;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn.HaxeSpawn;
 import anyparse.check.oracle.OracleCache;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleDeclaration;
 import anyparse.check.oracle.OracleRunMemo;
-import anyparse.check.oracle.PendingRuns;
 import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonText;
 import anyparse.macro.EmbeddedSource;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn.HaxeSpawn;
+import anyparse.proc.PendingRuns;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import haxe.io.Path;
 
@@ -417,13 +418,13 @@ final class TypedFactsProbe {
 			: { name: OracleDeclaration.describeOracle(oracle), text: text, file: memoised(oracle.dir ?? Sys.getCwd()) };
 	}
 
-	/** `OracleCoverage.canonical` against `root`, each path resolved once: a facts file names one path on many lines. */
+	/** `FileIdentity.canonical` against `root`, each path resolved once: a facts file names one path on many lines. */
 	private static function memoised(root: String): (String) -> String {
 		final known: Map<String, String> = [];
 		return path -> {
 			final hit: Null<String> = known[path];
 			if (hit != null) return hit;
-			final resolved: String = OracleCoverage.canonical(root, path);
+			final resolved: String = FileIdentity.canonical(root, path);
 			known[path] = resolved;
 			return resolved;
 		};

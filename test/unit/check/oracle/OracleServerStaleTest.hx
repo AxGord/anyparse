@@ -1,8 +1,8 @@
 package unit.check.oracle;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.oracle.HaxeRun;
 import anyparse.check.oracle.OracleServerPool;
+import anyparse.proc.HaxeRun;
 
 /**
  * A warm server's green is believed only when every change the run made reached the server. `server/invalidate` reaches a

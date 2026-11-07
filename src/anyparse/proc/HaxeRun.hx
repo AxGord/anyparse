@@ -1,4 +1,4 @@
-package anyparse.check.oracle;
+package anyparse.proc;
 
 /**
  * What one `haxe` spawn produced: its exit `status` (null when the process gave none),

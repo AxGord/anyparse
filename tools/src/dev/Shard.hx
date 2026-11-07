@@ -1,6 +1,6 @@
 package dev;
 
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.ShardPlan;
 import anyparse.query.cli.CliIo;

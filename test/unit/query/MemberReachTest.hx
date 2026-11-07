@@ -1,9 +1,9 @@
 package unit.query;
 
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FileIdentity;
 import anyparse.query.MemberReach;
 import anyparse.query.NullGuardedCode;
 import anyparse.query.QueryNode;
@@ -560,11 +560,11 @@ class MemberReachTest extends Test {
 						defined: [],
 						everDefined: [],
 						values: [],
-						compiled: files.map(f -> OracleCoverage.canonical(cwd, f.file)),
+						compiled: files.map(f -> FileIdentity.canonical(cwd, f.file)),
 						types: [
 							for (t in [['C', 'F0.hx'], ['Other', 'F1.hx'], ['Poker', 'F2.hx'], ['Made', 'F0.hx']]) {
 								name: t[0],
-								file: OracleCoverage.canonical(cwd, t[1])
+								file: FileIdentity.canonical(cwd, t[1])
 							}
 						]
 					}
@@ -1932,9 +1932,9 @@ class MemberReachTest extends Test {
 				types: [
 					{
 						name: 'C',
-						file: OracleCoverage.canonical(Sys.getCwd(), 'F0.hx')
+						file: FileIdentity.canonical(Sys.getCwd(), 'F0.hx')
 					}
-				].concat(parsesLoud ? [{ name: 'Loud', file: OracleCoverage.canonical(Sys.getCwd(), 'L0.hx') }] : [])
+				].concat(parsesLoud ? [{ name: 'Loud', file: FileIdentity.canonical(Sys.getCwd(), 'L0.hx') }] : [])
 			};
 			plugin.setResolutionScope({
 				declared: true,
@@ -1990,7 +1990,7 @@ class MemberReachTest extends Test {
 				everDefined: [],
 				values: [],
 				compiled: ['F0.hx'],
-				types: [{ name: 'C', file: OracleCoverage.canonical(Sys.getCwd(), 'F0.hx') }]
+				types: [{ name: 'C', file: FileIdentity.canonical(Sys.getCwd(), 'F0.hx') }]
 			};
 			plugin.setResolutionScope({
 				declared: true,

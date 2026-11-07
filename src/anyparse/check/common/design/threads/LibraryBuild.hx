@@ -1,8 +1,8 @@
 package anyparse.check.common.design.threads;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.HaxelibResolver;
 import haxe.io.Path;
 

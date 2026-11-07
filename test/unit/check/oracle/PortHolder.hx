@@ -1,8 +1,8 @@
 package unit.check.oracle;
 
 import anyparse.check.oracle.CompilerServer;
-import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.PendingRuns;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.PendingRuns;
 
 /**
  * A loopback port something other than a haxe server holds, for the tests of every starter that must keep off one. The one

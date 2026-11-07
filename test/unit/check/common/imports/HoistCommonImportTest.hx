@@ -5,7 +5,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.common.imports.EmptyAmbientSource;
 import anyparse.check.common.imports.HoistCommonImport;
 import anyparse.check.common.naming.Naming;
-import anyparse.check.oracle.OracleCoverage;
+import anyparse.query.FileIdentity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.StdResolver;
@@ -950,7 +950,7 @@ class HoistCommonImportTest extends Test {
 					compiled: [],
 					types: [],
 					parsed: [
-						for (name in names) OracleCoverage.canonical(cwd, name.startsWith('/') ? name : '$root/$name')
+						for (name in names) FileIdentity.canonical(cwd, name.startsWith('/') ? name : '$root/$name')
 					]
 				}
 			],

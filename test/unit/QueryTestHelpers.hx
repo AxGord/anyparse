@@ -1,9 +1,9 @@
 package unit;
 
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
+import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.SymbolIndex;
@@ -60,9 +60,9 @@ final class QueryTestHelpers {
 			final all: Array<{ file: String, source: String }> = project.concat(libraryFiles);
 			final index: SymbolIndex = CheckFixture.index(all, new HaxeQueryPlugin());
 			final types: Array<{ name: String, file: String }> = [
-				for (fi in index.allFiles()) for (t in fi.types) { name: t.name, file: OracleCoverage.canonical(cwd, fi.file) }
+				for (fi in index.allFiles()) for (t in fi.types) { name: t.name, file: FileIdentity.canonical(cwd, fi.file) }
 			];
-			final compiled: Array<String> = all.map(f -> OracleCoverage.canonical(cwd, f.file));
+			final compiled: Array<String> = all.map(f -> FileIdentity.canonical(cwd, f.file));
 			return {
 				configurations: [
 					for (c in declared) {

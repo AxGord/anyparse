@@ -1,5 +1,8 @@
 package anyparse.check.oracle;
 
+import anyparse.core.ContentHash;
+import anyparse.proc.HaxeRun;
+import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 
 /**
@@ -133,7 +136,7 @@ final class OracleRunMemo {
 				} else {
 					_roots[OracleDeclaration.oracleKey(oracle)] = scan.roots;
 					written = written ?? writtenDigest(_written());
-					OracleCache.md5('${scan.fingerprint}\n$written');
+					ContentHash.md5('${scan.fingerprint}\n$written');
 				}
 			}
 		];
@@ -148,11 +151,11 @@ final class OracleRunMemo {
 		if (run.status != 0 || _blind.contains(config)) return;
 		final base: String = oracle.dir ?? Sys.getCwd();
 		final roots: Array<String> = [
-			for (dir in _roots[config] ?? []) OracleCoverage.directoryPrefix(OracleCoverage.canonical(base, dir))
+			for (dir in _roots[config] ?? []) OracleCoverage.directoryPrefix(FileIdentity.canonical(base, dir))
 		];
 		final read: Array<String> = OracleCoverage.parsedPaths(run.out);
 		final inside: Bool = read.length > 0 && read.foreach(path -> {
-			final file: String = OracleCoverage.canonical(base, path);
+			final file: String = FileIdentity.canonical(base, path);
 			roots.exists(dir -> file.startsWith(dir));
 		});
 		if (inside) {
@@ -194,10 +197,10 @@ final class OracleRunMemo {
 		final lines: Array<String> = [
 			for (path in sorted) {
 				final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
-				'$path ${text == null ? 'absent' : OracleCache.md5(text)}';
+				'$path ${text == null ? 'absent' : ContentHash.md5(text)}';
 			}
 		];
-		return OracleCache.md5(lines.join('\n'));
+		return ContentHash.md5(lines.join('\n'));
 	}
 
 }

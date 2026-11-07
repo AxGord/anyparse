@@ -2,6 +2,7 @@ package anyparse.check.oracle;
 
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.oracle.OracleCache.OracleScan;
+import anyparse.core.ContentHash;
 import anyparse.core.PhaseTimings;
 import anyparse.core.ReachBuildsEngine;
 import anyparse.core.TempScratch;
@@ -69,7 +70,7 @@ final class ReachBuildsCache {
 			key: key.key,
 			stats: [for (file => stat in stats) [file, stat]],
 			configurations: configurations.map(recordOf),
-			library: builds.library.map(f -> {file: f.file, hash: OracleCache.md5(f.source) })
+			library: builds.library.map(f -> {file: f.file, hash: ContentHash.md5(f.source) })
 		};
 		final path: String = cacheFile(oracles);
 		// staged under this process's name and renamed, so a concurrent reader meets the old record or the new one whole
@@ -136,7 +137,7 @@ final class ReachBuildsCache {
 			lines.push(OracleDeclaration.oracleKey({ hxml: oracle.hxml, dir: dir, defines: oracle.defines }));
 			lines.push(scan.fingerprint);
 		}
-		return { key: OracleCache.md5(lines.join('\n')), bases: bases, hashed: hashed };
+		return { key: ContentHash.md5(lines.join('\n')), bases: bases, hashed: hashed };
 		#else
 		return null;
 		#end
@@ -144,7 +145,7 @@ final class ReachBuildsCache {
 
 	/** The name, without extension, of the record of `oracles`' builds. */
 	private static function stem(oracles: Array<OracleConfig>): String {
-		return 'apq-reach-builds-${OracleCache.md5(oracles.map(o -> [o.hxml].concat(o.defines).join(' ')).join('\n'))}';
+		return 'apq-reach-builds-${ContentHash.md5(oracles.map(o -> [o.hxml].concat(o.defines).join(' ')).join('\n'))}';
 	}
 
 	/** The directory `oracle` compiles from: the one its generation probes, as a prepared configuration carries it. */
@@ -197,7 +198,7 @@ final class ReachBuildsCache {
 			final source: Null<String> = try File.getContent(entry.file) catch (exception: Exception) null;
 			if (source == null) return null;
 			final read: String = source;
-			if (OracleCache.md5(read) != entry.hash) return null;
+			if (ContentHash.md5(read) != entry.hash) return null;
 			library.push({ file: entry.file, source: read });
 		}
 		return { configurations: configurations, library: library };

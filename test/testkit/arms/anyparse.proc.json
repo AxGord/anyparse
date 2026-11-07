@@ -1,0 +1,309 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.proc. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-SPAWN-RUN-IGNORES-CWD",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "exec",
+			"find": "if (cwd != null) Reflect.setField(options, 'cwd', cwd);",
+			"replace": "",
+			"note": "a single haxe spawn runs in the process cwd whatever the configuration's dir says, so a relative -cp resolves against the wrong tree and the typecheck and every probe answer about a different project"
+		},
+		{
+			"name": "M-SPAWN-RUNALL-IGNORES-CWD",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "const opts = { cwd: j.cwd == null ? undefined : j.cwd,",
+			"replace": "const opts = { cwd: undefined,",
+			"note": "the parallel driver spawns every job in its own cwd rather than the job's, so overlapped typechecks and coverage probes of a configuration with a dir answer about a different tree"
+		},
+		{
+			"name": "M-DRIVER-CANCELS-EARLIER-JOBS",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "for (let k = i + 1; k < jobs.length; k++)",
+			"replace": "for (let k = 0; k < jobs.length; k++)",
+			"note": "a failing job also kills the jobs declared BEFORE it, so the overlapped verdict is the first failure to finish rather than the first in declared order"
+		},
+		{
+			"name": "M-DRIVER-NEVER-STOPS",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": " if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);",
+			"replace": "",
+			"note": "a failing job no longer ends the later ones, so a rejection waits for and pays every compile declared after it"
+		},
+		{
+			"name": "M-DRIVER-KILLS-ONLY-THE-SHELL",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (group) process.kill(-c.pid, s); else c.kill(s);",
+			"replace": "c.kill(s);",
+			"note": "a kill reaches only the shell, so a build tool it started keeps writing into the generated tree after its job was cancelled"
+		},
+		{
+			"name": "M-DRIVER-NO-TIMEOUT",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);",
+			"replace": "",
+			"note": "a job's timeout is ignored, so a hung generate command blocks the run forever"
+		},
+		{
+			"name": "M-DRIVER-SIGNAL-ORPHANS",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, die);",
+			"replace": "",
+			"note": "a signalled driver exits without its detached job groups, so Ctrl-C leaves a build tool writing into dist/oracle"
+		},
+		{
+			"name": "M-DRIVER-OUTLIVES-ITS-PARENT",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "setInterval(() => { if (process.ppid !== parent) die(); }, 500).unref();",
+			"replace": "",
+			"note": "a driver whose apq was SIGKILLed keeps its jobs running, so the next run regenerates concurrently with an orphaned build tool"
+		},
+		{
+			"name": "M-DRIVER-KILLS-WITHOUT-GRACE",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "signal(c, 'SIGTERM');",
+			"replace": "signal(c, 'SIGKILL');",
+			"note": "a killed job gets a bare SIGKILL again, so a pool lease wrapper cannot forward its end and the command it runs in a group of its own outlives the run with its threads"
+		},
+		{
+			"name": "M-DRIVER-NO-HARD-KILL",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (left) signal(c, 'SIGKILL'); ",
+			"replace": "",
+			"note": "a job group that ignores the SIGTERM is never SIGKILLed after the grace, so a stubborn tool keeps running until the driver's last-resort exit or forever"
+		},
+		{
+			"name": "M-SPAWN-ORDER",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "if (answer != null && answer.length == jobs.length) return answer;",
+			"replace": "if (answer != null && answer.length == jobs.length) return [for (k in 0...answer.length) answer[answer.length - 1 - k]];",
+			"note": "overlapping compiles answer in the order they finished, so one configuration's defines decide another's branches"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-HALF-THE-CORES",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "threadsFor",
+			"find": ": cores - 1;",
+			"replace": ": Std.int(cores / 2);",
+			"note": "the compile budget is half the cores again, so a thirteen-configuration project compiles in four waves on a sixteen-core machine"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-COUNTS-SLOW-CORES",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "threadsFor",
+			"find": "fast > 0 && fast < cores ? fast : cores - 1",
+			"replace": "cores - 1",
+			"note": "the efficiency cores count as compile threads again, so every round waits on the compiles that landed on the slowest cores"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-IGNORES-LEASE",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "parallelism",
+			"find": "PoolLease.threads() ?? machineThreads()",
+			"replace": "machineThreads()",
+			"note": "a run under a pool lease takes the whole machine again, so its compiles crowd out the processes the lease was shared with"
+		},
+		{
+			"name": "M-PENDING-JOBS-FILE-KEPT",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "+ \"if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}\"",
+			"replace": "+ \"\"",
+			"note": "the driver leaves the job list in its directory, so a run killed mid-batch leaves the job list behind"
+		},
+		{
+			"name": "M-TETHER-IGNORES-EOF",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "TETHER",
+			"kind": "FinalMember",
+			"find": "process.stdin.on(\"end\", end); process.stdin.on(\"close\", end); process.stdin.on(\"error\", end); process.stdin.resume();",
+			"replace": "",
+			"note": "a tether never reads its stdin, so the driver's death goes unnoticed and a tethered server outlives the run"
+		},
+		{
+			"name": "M-GC-RUN-INHERITS",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "exec",
+			"find": "{ env: childEnv() }",
+			"replace": "{}",
+			"note": "a single haxe spawn inherits the caller's environment untouched, so every typecheck run through `run` pays the default collector again"
+		},
+		{
+			"name": "M-GC-DRIVER-INHERITS",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "env: childEnv(),",
+			"replace": "",
+			"note": "the parallel driver and every job it starts run in the caller's environment, so the overlapped typechecks run under the default collector"
+		},
+		{
+			"name": "M-GC-INHERITED-OVERRIDDEN",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "gcParams",
+			"find": "if (!taken.contains(paramName(p))) p",
+			"replace": "p",
+			"note": "our parameters are appended even where the caller's own OCAMLRUNPARAM sets the same one, so a later duplicate overrides the setting the caller chose"
+		},
+		{
+			"name": "M-GC-OFF-IGNORED",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "gcParams",
+			"find": "asked == GC_OFF ? [] : ",
+			"replace": "",
+			"note": "APQ_ORACLE_GC=off is passed to the runtime as a parameter named off instead of leaving the collector alone"
+		},
+		{
+			"name": "M-GC-EMPTY-DECLARED-OFF",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "gcParams",
+			"find": "declared == null || declared.trim() == ''",
+			"replace": "declared == null",
+			"note": "an empty APQ_ORACLE_GC (how a test restores an unset variable) turns the tuning off instead of meaning the default"
+		},
+		{
+			"name": "M-GC-MEMORY-UNCOUNTED",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "residentFor",
+			"find": "(tunedCollector ? GC_MEMORY : 0)",
+			"replace": "0",
+			"note": "the budget ignores the extra memory a tuned collector's compile holds, so a small machine runs more compiles than it has memory for"
+		},
+		{
+			"name": "M-DRIVER-READS-STDIN",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "stdio: ['ignore', 'pipe', 'pipe'],",
+			"replace": "input: haxe.Json.stringify(jobs),",
+			"note": "the jobs are piped to the driver's stdin again, the channel node's spawnSync can stall for good on macOS, so about one runAll in seven hundred at 200 KB hangs the run forever"
+		},
+		{
+			"name": "M-DRIVER-UNBOUNDED",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "timeout: limit,",
+			"replace": "",
+			"note": "a wedged parallel driver is waited on forever, so one stopped or stalled driver hangs the whole lint run"
+		},
+		{
+			"name": "M-DRIVER-BOUND-IGNORES-ROUNDS",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "driverBound",
+			"find": "rounds * longest",
+			"replace": "longest",
+			"note": "the bound is one job's share however many rounds the parallelism splits the jobs into, so an honest run of many jobs on a small machine is killed as wedged"
+		},
+		{
+			"name": "M-MACHINE-THREADS-REREAD",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "machineThreads",
+			"find": "machine ??= {",
+			"replace": "{",
+			"note": "every parallelism question starts sysctl again for a count that is a constant of the machine"
+		},
+		{
+			"name": "M-SPAWN-ANSWER-NEVER-ASKED",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "recordedRun",
+			"force": "null",
+			"note": "a run in this process never asks the answer module, so every recorded compile is spawned through the shim again"
+		},
+		{
+			"name": "M-SPAWN-ANSWER-ASKS-ANY-JOB",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "recordedRun",
+			"find": "if (module == '' || job.cmd != null || job.stdin != null) return null;",
+			"replace": "if (module == '') return null;",
+			"note": "a job with a program of its own or a standard input is asked too, so the module can answer a program that is not haxe from a compile's recording"
+		},
+		{
+			"name": "M-DRIVER-NEVER-ASKS",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": " const rec = recorded(jobs[i]); if (rec) { answered(i, rec); continue; } running++;",
+			"replace": " running++;",
+			"note": "the process driver never asks the answer module, so every recorded compile of a batch is spawned through the shim again"
+		},
+		{
+			"name": "M-DRIVER-ASKS-ANY-JOB",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (!m || j.cmd != null || j.shell != null || j.tethered || j.stdin != null) return null;",
+			"replace": "if (!m) return null;",
+			"note": "the driver asks for a shell, tethered, stdin or own-program job too, so the module answers a job that is not a plain compile"
+		},
+		{
+			"name": "M-DRIVER-ANSWER-REENTERS-START",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "{ answered(i, rec); continue; } running++;",
+			"replace": "{ running++; finish(i, rec); continue; }",
+			"note": "a hit settles through finish, which starts the next job inside it, so the stack grows with every consecutive hit and a few thousand of them end the driver"
+		},
+		{
+			"name": "M-DRIVER-FLUSH-TWICE",
+			"type": "anyparse.proc.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "function flush() { if (flushed) return; flushed = true; emit(",
+			"replace": "function flush() { emit(",
+			"note": "a batch completed by a job that finish settles inside the start loop is emitted twice, so the document is invalid JSON and every job comes back as a driver failure"
+		},
+		{
+			"name": "M-PENDING-RUNS-IN-FOREGROUND",
+			"type": "anyparse.proc.PendingRuns",
+			"method": "await",
+			"find": "final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);",
+			"replace": "final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);",
+			"note": "a background batch is run again in the foreground when it is awaited, so nothing it did while the caller worked is saved"
+		},
+		{
+			"name": "M-PENDING-CANCEL-LEAVES-JOBS",
+			"type": "anyparse.proc.PendingRuns",
+			"method": "cancel",
+			"find": "if (pid != null) try",
+			"replace": "if (pid == -1) try",
+			"note": "a cancelled batch leaves its driver running, so the jobs it started run to their end after the run abandoned them"
+		},
+		{
+			"name": "M-GC-PENDING-INHERITS",
+			"type": "anyparse.proc.PendingRuns",
+			"method": "new",
+			"find": "{ stdio: 'ignore', env: HaxeSpawn.childEnv() }",
+			"replace": "{ stdio: 'ignore' }",
+			"note": "a batch started in the background (the facts compiles, the reach probes, the warm servers) runs under the default collector"
+		},
+		{
+			"name": "M-PENDING-UNBOUNDED",
+			"type": "anyparse.proc.PendingRuns",
+			"method": "collectTimed",
+			"find": "if (Date.now().getTime() - _started > _bound) {",
+			"replace": "if (false) {",
+			"note": "await polls a wedged background driver forever: a stopped driver still answers the liveness probe, so the run never ends"
+		}
+	]
+}

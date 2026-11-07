@@ -705,6 +705,18 @@ class ModuleMoveTest extends Test {
 		Assert.isFalse(out.changes.exists(c -> c.newSource.contains('a.Mod.Sub')), out.changes.map(c -> c.file).join(', '));
 	}
 
+	/** A `using` statement the move gives a module is no use of the name it binds: a body that also writes the name still moves. */
+	@:pin('control')
+	@:killer('M-MODMOVE-USING-STATEMENT-COUNTS')
+	public function testAUsingStatementTheMoveAddsDoesNotCountAsAUseOfItsName(): Void {
+		final a: String = 'package p;\n\nclass A {\n\tpublic static function f(s: String): String return StringTools.trim(s);\n}\n';
+		final out: ModuleMoveOutcome = moved([move('src/p/A.hx', 'src/s/A.hx')], [
+			file('src/p/A.hx', a),
+			file('src/p/import.hx', 'using StringTools;\n')
+		]);
+		Assert.isTrue(textOf(out, 'src/s/A.hx').contains('using StringTools;'));
+	}
+
 	private static inline function move(from: String, to: String): ModuleRelocation {
 		return { from: from, to: to };
 	}

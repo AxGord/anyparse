@@ -1,6 +1,9 @@
 package anyparse.check.oracle;
 
 import anyparse.core.PhaseTimings;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.PendingRuns;
 
 /**
  * The verdict of one compiler-oracle typecheck run — `apq lint`'s bridge to

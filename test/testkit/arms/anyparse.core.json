@@ -668,6 +668,14 @@
 			"find": "combined ? offered(next, alone, k) : alone",
 			"replace": "alone",
 			"note": "each alternative commits only its own break, so a ternary whose two literal branches both break settles on one branch's layout and takes a second rewrite"
+		},
+		{
+			"name": "M-CONTENT-HASH-UTF8",
+			"type": "anyparse.core.ContentHash",
+			"method": "md5",
+			"find": ".update(data, 'utf8')",
+			"replace": ".update(data, 'latin1')",
+			"note": "node digests the text as latin1, so a text holding a non-ASCII character hashes to another value than the md5 of its UTF-8 bytes"
 		}
 	]
 }

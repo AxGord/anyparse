@@ -6,11 +6,11 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.VolatileMessage;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.scan.UsingSites;
 import anyparse.query.AddImport;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ConfigFinder;
+import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
@@ -879,9 +879,9 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		module: String, site: String, ctx: HoistContext, parsing: Map<String, Array<Int>>
 	): Bool {
 		final cwd: String = Sys.getCwd();
-		final carrying: Array<Int> = parsing[OracleCoverage.canonical(cwd, module)] ?? [];
+		final carrying: Array<Int> = parsing[FileIdentity.canonical(cwd, module)] ?? [];
 		for (file in ctx.governedAt[site] ?? []) {
-			final readers: Array<Int> = parsing[OracleCoverage.canonical(cwd, file)] ?? [];
+			final readers: Array<Int> = parsing[FileIdentity.canonical(cwd, file)] ?? [];
 			if (!readers.foreach(build -> carrying.contains(build))) return false;
 		}
 		return true;

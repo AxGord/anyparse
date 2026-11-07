@@ -4,6 +4,11 @@ import anyparse.core.PhaseTimings;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.PendingRuns;
+import anyparse.proc.SpawnJob;
+import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import haxe.Exception;
@@ -433,13 +438,13 @@ final class ReachDefinesProbe {
 		// the probe's own macro is not the build's code
 		final own: String = '$MACRO_CLASS.hx';
 		read.compiled = [
-			for (path in read.compiled) if (!path.endsWith(own)) OracleCoverage.canonical(root, path)
+			for (path in read.compiled) if (!path.endsWith(own)) FileIdentity.canonical(root, path)
 		];
 		read.types = [
-			for (t in read.types) if (!t.file.endsWith(own)) { name: t.name, file: OracleCoverage.canonical(root, t.file) }
+			for (t in read.types) if (!t.file.endsWith(own)) { name: t.name, file: FileIdentity.canonical(root, t.file) }
 		];
 		read.parsed = [
-			for (path in read.parsed ?? []) if (!path.endsWith(own)) OracleCoverage.canonical(root, path)
+			for (path in read.parsed ?? []) if (!path.endsWith(own)) FileIdentity.canonical(root, path)
 		];
 		return read;
 	}
@@ -450,7 +455,7 @@ final class ReachDefinesProbe {
 	 * read at its home (`homeOf`); null when one has none.
 	 */
 	private static function cleared(lines: Array<String>, root: String, rider: ProbeRider): Null<Array<String>> {
-		final own: String = OracleCoverage.directoryPrefix(OracleCoverage.canonical(root, rider.dir));
+		final own: String = OracleCoverage.directoryPrefix(FileIdentity.canonical(root, rider.dir));
 		final ownEnd: String = '$EXIT_PREFIX$MACRO_CLASS.run';
 		final riderEnd: String = '$EXIT_PREFIX${rider.hook}';
 		var classPaths: Array<String> = [];
@@ -485,13 +490,13 @@ final class ReachDefinesProbe {
 	 * that directory; null when none does or that file's text is not the rider's, as the build would then read another.
 	 */
 	private static function homeOf(root: String, file: String, own: String, classPaths: Array<String>, rider: ProbeRider): Null<String> {
-		final resolved: String = OracleCoverage.canonical(root, file);
+		final resolved: String = FileIdentity.canonical(root, file);
 		if (!resolved.startsWith(own)) return file;
 		final relative: String = resolved.substr(own.length);
 		final text: Null<String> = rider.files.find(f -> f.path == relative)?.text;
 		for (dir in classPaths) {
 			final candidate: String = dir == '' ? relative : Path.join([dir, relative]);
-			final at: String = OracleCoverage.canonical(root, candidate);
+			final at: String = FileIdentity.canonical(root, candidate);
 			if (at.startsWith(own) || !sys.FileSystem.exists(at)) continue;
 			final held: Null<String> = try sys.io.File.getContent(at) catch (exception: Exception) null;
 			return held != null && held == text ? candidate : null;

@@ -39,6 +39,24 @@ final class FileIdentity {
 		return a == b || realPath(a) == realPath(b);
 	}
 
+	#if (sys || nodejs)
+	/**
+	 * `path` resolved against `root` when relative, then symlink-resolved. Both sides of
+	 * the membership test go through this: the compiler prints paths against ITS working
+	 * directory and the lint run names files against the PROCESS one, and on a host whose
+	 * temp dir is a symlink (`/tmp` on macOS) the two spellings of one file differ. A path that does not exist
+	 * keys through its nearest existing ancestor (`FileIdentity.realPath`) rather than failing the lookup.
+	 */
+	public static function canonical(root: String, path: String): String {
+		// `root` is absolutised FIRST, so a relative one cannot produce a key the membership
+		// test can never match: `covers` resolves against the process cwd, and a relative `pkg/C.hx`
+		// on one side would meet an absolute `/…/pkg/C.hx` on the other.
+		final base: String = Path.isAbsolute(root) ? root : Path.join([Sys.getCwd(), root]);
+		final joined: String = Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path]));
+		return realPath(joined);
+	}
+	#end
+
 	/**
 	 * An existing `path` resolved by the kernel: every symlink followed and, on node, the letter case the directory entries
 	 * really carry (`realpath.native`), which `fs.realpathSync` leaves as the caller spelled it.

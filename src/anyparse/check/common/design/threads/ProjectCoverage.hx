@@ -1,8 +1,8 @@
 package anyparse.check.common.design.threads;
 
 import anyparse.check.LintDocuments.DocumentMemo;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.ds.Set;
+import anyparse.query.FileIdentity;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -29,7 +29,7 @@ import sys.io.File;
 @:nullSafety(Strict)
 final class ProjectCoverage {
 
-	/** The run's files, each by its canonical path (`OracleCoverage.canonical`). */
+	/** The run's files, each by its canonical path (`FileIdentity.canonical`). */
 	private final _run: Set<String> = new Set<String>();
 
 	/** Each directory of a run file -> the document declaring `closedWorld` for it, `''` for none. */
@@ -48,7 +48,7 @@ final class ProjectCoverage {
 	public function new(files: Array<String>) {
 		#if (sys || nodejs)
 		final cwd: String = Sys.getCwd();
-		for (f in files) _run.add(OracleCoverage.canonical(cwd, f));
+		for (f in files) _run.add(FileIdentity.canonical(cwd, f));
 		#end
 	}
 
@@ -97,7 +97,7 @@ final class ProjectCoverage {
 		while (stack.length > 0) {
 			final path: String = stack.pop() ?? '';
 			if (skip(path.startsWith(base) ? path.substring(base.length) : path) || !FileSystem.exists(path)) continue;
-			final canonical: String = OracleCoverage.canonical(cwd, path);
+			final canonical: String = FileIdentity.canonical(cwd, path);
 			if (!FileSystem.isDirectory(path)) {
 				if (path.endsWith('.hx') && !_run.has(canonical)) return false;
 				continue;

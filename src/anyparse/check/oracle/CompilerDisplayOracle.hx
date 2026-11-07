@@ -1,6 +1,10 @@
 package anyparse.check.oracle;
 
 import anyparse.core.TempScratch;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.PendingRuns;
+import anyparse.proc.SpawnJob;
 import anyparse.query.FileIdentity;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;

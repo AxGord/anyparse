@@ -2,10 +2,10 @@ package anyparse.query.cli;
 
 import anyparse.check.LintConfig;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.OracleCache;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleDeclaration;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.ExitCode;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.WriteJournal.JournalState;
@@ -133,7 +133,7 @@ final class WriteVerification {
 				{
 					oracle: oracle,
 					outcome: readings[i].outcome,
-					parsed: [for (path in readings[i].parsed ?? []) OracleCoverage.canonical(base, path)]
+					parsed: [for (path in readings[i].parsed ?? []) FileIdentity.canonical(base, path)]
 				};
 			}
 		];
@@ -183,7 +183,7 @@ final class WriteVerification {
 
 	/** Whether `answer`'s build parsed `file`. */
 	private static function parsedBy(answer: BuildAnswer, file: String): Bool {
-		return answer.parsed.contains(OracleCoverage.canonical(Sys.getCwd(), file));
+		return answer.parsed.contains(FileIdentity.canonical(Sys.getCwd(), file));
 	}
 
 	/** Whether `answer` is a typecheck that passed. */
@@ -319,7 +319,7 @@ final class WriteVerification {
 	/** The sources under the explicit class paths of `oracle`, as the canonical paths the class paths spell. */
 	private static function sourcesIn(oracle: OracleConfig): Array<String> {
 		final out: Array<String> = [];
-		for (root in OracleCache.classPaths(oracle.hxml, oracle.dir)) collectSources(OracleCoverage.canonical(Sys.getCwd(), root), out);
+		for (root in OracleCache.classPaths(oracle.hxml, oracle.dir)) collectSources(FileIdentity.canonical(Sys.getCwd(), root), out);
 		return out;
 	}
 
@@ -354,9 +354,9 @@ final class WriteVerification {
 		if (roots == null) return true;
 		final base: String = oracle.dir ?? Sys.getCwd();
 		for (root in roots) {
-			final dir: String = OracleCoverage.canonical(base, root);
+			final dir: String = FileIdentity.canonical(base, root);
 			final prefix: String = dir.endsWith('/') ? dir : '$dir/';
-			if (files.exists(file -> OracleCoverage.canonical(Sys.getCwd(), file).startsWith(prefix))) return true;
+			if (files.exists(file -> FileIdentity.canonical(Sys.getCwd(), file).startsWith(prefix))) return true;
 		}
 		return false;
 	}

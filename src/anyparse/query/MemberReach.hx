@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.check.facts.FactsTypeTree;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.core.PhaseTimings;
 import anyparse.ds.Set;
 import anyparse.query.CallGraph.CallEdge;
@@ -3088,7 +3087,7 @@ final class MemberReach {
 		project: Array<{ file: String, source: String }>, builds: ReachBuilds, plugin: GrammarPlugin
 	): SymbolIndex {
 		final cwd: String = Sys.getCwd();
-		final projectPaths: Map<String, Bool> = [for (f in project) OracleCoverage.canonical(cwd, f.file) => true];
+		final projectPaths: Map<String, Bool> = [for (f in project) FileIdentity.canonical(cwd, f.file) => true];
 		final library: Array<{ file: String, source: String }> = [for (f in builds.library) if (!projectPaths.exists(f.file)) f];
 		return IndexScope.over(project.concat(library), plugin, library.map(f -> f.file));
 	}
@@ -3222,7 +3221,7 @@ final class MemberReach {
 	 */
 	private static function declaresEveryType(builds: ReachBuilds, index: SymbolIndex): Bool {
 		final cwd: String = Sys.getCwd();
-		final byPath: Map<String, FileInfo> = [for (fi in index.allFiles()) OracleCoverage.canonical(cwd, fi.file) => fi];
+		final byPath: Map<String, FileInfo> = [for (fi in index.allFiles()) FileIdentity.canonical(cwd, fi.file) => fi];
 		for (c in builds.configurations) for (t in c.types) {
 			final declaring: Null<FileInfo> = byPath[t.file];
 			if (declaring == null || !declaring.types.exists(d -> d.name == t.name)) return false;

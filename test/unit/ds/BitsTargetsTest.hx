@@ -1,6 +1,6 @@
 package unit.ds;
 
-import anyparse.check.oracle.HaxeRun;
+import anyparse.proc.HaxeRun;
 
 /**
  * `anyparse.ds.Bits` where the suite does not run: the contract on the interpreter, whose bit scan is the portable one

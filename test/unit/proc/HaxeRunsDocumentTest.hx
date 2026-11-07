@@ -1,7 +1,4 @@
-package unit.check.oracle;
-
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
+package unit.proc;
 
 /** The answer the process driver writes: `HaxeSpawn.runsOf` reads it as runs in job order, and refuses what is not that shape. */
 class HaxeRunsDocumentTest extends Test {

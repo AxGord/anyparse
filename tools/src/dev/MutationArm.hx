@@ -1,8 +1,8 @@
 package dev;
 
-import anyparse.check.oracle.HaxeSpawn;
-import anyparse.check.oracle.PendingRuns;
 import anyparse.core.PoolLease;
+import anyparse.proc.HaxeSpawn;
+import anyparse.proc.PendingRuns;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;

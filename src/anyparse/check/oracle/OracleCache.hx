@@ -1,8 +1,12 @@
 package anyparse.check.oracle;
 
 import anyparse.check.oracle.CompilerOracle.OracleOutcome;
+import anyparse.core.ContentHash;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
+import anyparse.query.FileIdentity;
 import haxe.io.Path;
 
 /**
@@ -192,7 +196,7 @@ final class OracleCache {
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
 		final hashed: Map<String, String> = [];
 		return probe.ok ? {
-			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo, walks, hashed).join('\n')),
+			fingerprint: ContentHash.md5(buildManifest(root, chain, probe, defines ?? [], memo, walks, hashed).join('\n')),
 			roots: [root].concat(rootsOf(root, chain, probe)),
 			hashed: hashed
 		} : null;
@@ -252,7 +256,7 @@ final class OracleCache {
 	public static function cacheFile(hxml: String, cwd: Null<String>, ?defines: Array<String>): String {
 		#if (sys || nodejs)
 		final key: String = '${absolute(cwd ?? Sys.getCwd(), hxml)}|${cwd ?? ''}|${(defines ?? []).join(' ')}';
-		return Path.join([TempScratch.root(), 'apq-oracle-verdict-${md5(key)}.json']);
+		return Path.join([TempScratch.root(), 'apq-oracle-verdict-${ContentHash.md5(key)}.json']);
 		#else
 		return '';
 		#end
@@ -323,15 +327,6 @@ final class OracleCache {
 	}
 
 	/**
-	 * md5 of `data`. Node's native digest is orders of magnitude faster than the pure-Haxe
-	 * implementation, and that difference is what keeps hashing every source from dominating
-	 * the very typecheck this cache exists to avoid.
-	 */
-	public static function md5(data: String): String {
-		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
-	}
-
-	/**
 	 * `store`, but only when the compile input still hashes to `fingerprint` — the fingerprint taken BEFORE the compile.
 	 * A tree that moved while the compiler ran (an editor saving, another run regenerating an hxml) produced a verdict
 	 * about neither state, and filing it under the old fingerprint would hand it to the next run of
@@ -356,9 +351,9 @@ final class OracleCache {
 	public static function readsHashed(root: String, parsed: Null<Array<String>>, hashed: Map<String, String>): Bool {
 		#if (sys || nodejs)
 		if (parsed == null || parsed.length == 0) return false;
-		final read: Array<String> = parsed.map(path -> OracleCoverage.canonical(root, path));
+		final read: Array<String> = parsed.map(path -> FileIdentity.canonical(root, path));
 		if ([for (path in read) if (!hashed.exists(path)) path].length == 0) return true;
-		final resolved: Map<String, String> = [for (path => hash in hashed) OracleCoverage.canonical(root, path) => hash];
+		final resolved: Map<String, String> = [for (path => hash in hashed) FileIdentity.canonical(root, path) => hash];
 		return [for (path in read) if (!resolved.exists(path)) path].length == 0;
 		#else
 		return false;
@@ -479,7 +474,7 @@ final class OracleCache {
 				if (lines.length == 0) return null;
 				continue;
 			}
-			lines.push('hxml $path ${md5(text)}');
+			lines.push('hxml $path ${ContentHash.md5(text)}');
 			mergeRefs(root, hxmlRefs(text), queue, classPaths, libs);
 		}
 		return { lines: lines, classPaths: classPaths, libs: libs };
@@ -595,7 +590,7 @@ final class OracleCache {
 			} else if (full.endsWith('.hx') && !into.exists(full)) {
 				final held: Null<String> = memo?.get(full);
 				final text: Null<String> = held == null ? readText(full) : null;
-				final hash: Null<String> = held ?? (text == null ? null : md5(text));
+				final hash: Null<String> = held ?? (text == null ? null : ContentHash.md5(text));
 				if (hash != null) {
 					into[full] = hash;
 					memo?.set(full, hash);

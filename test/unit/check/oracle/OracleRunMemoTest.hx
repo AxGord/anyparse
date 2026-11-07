@@ -3,10 +3,10 @@ package unit.check.oracle;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.facts.TypedFactsProbe;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.OracleServerPool;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.query.cli.command.LintFixSafeTrail;
@@ -116,7 +116,7 @@ final class OracleRunMemoTest extends Test {
 	@:pin('control')
 	@:killer('M-POOL-SERVER-UNTETHERED')
 	@:access(anyparse.check.oracle.OracleServerPool)
-	@:access(anyparse.check.oracle.PendingRuns)
+	@:access(anyparse.proc.PendingRuns)
 	public function testAWarmServerDiesWithItsDriver(): Void {
 		#if nodejs
 		final dir: Null<String> = scratch(GOOD, BUILD);

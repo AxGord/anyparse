@@ -1,8 +1,8 @@
 package dev;
 
-import anyparse.check.oracle.HaxeRun;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.proc.HaxeRun;
 import anyparse.query.cli.BatchAnswer;
 import anyparse.query.cli.BatchAnswersParser;
 import anyparse.query.cli.BatchCalls;

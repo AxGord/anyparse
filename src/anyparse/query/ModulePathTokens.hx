@@ -137,13 +137,16 @@ final class ModulePathTokens {
 
 	/**
 	 * The spans of `source` that are not code — its comments and the TEXT of its literals, an interpolation hole left out
-	 * (`InertRegions`) — sorted by start; the whole literals when the source does not parse.
+	 * (`InertRegions`), and its import and using statements, which bind a name and never use it — sorted by start; the whole
+	 * literals when the source does not parse. An import statement a move adds to a file must not change what the file's names
+	 * count as.
 	 */
 	public static function inertSpans(source: String, plugin: GrammarPlugin): Array<Span> {
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final out: Array<Span> =
 			tree == null ? regions.map(r -> new Span(r.from, r.to)) : InertRegions.of(tree, regions, plugin.refShape());
+		if (tree != null) collectImportStatements(tree, out);
 		out.sort((a, b) -> a.from - b.from);
 		return out;
 	}
@@ -160,6 +163,15 @@ final class ModulePathTokens {
 			if (content == pkg || content.endsWith(last)) out.push(r.from);
 		}
 		return out;
+	}
+
+	private static function collectImportStatements(node: QueryNode, out: Array<Span>): Void {
+		final span: Null<Span> = node.span;
+		if (span != null && ModuleScan.IMPORT_DECL_KINDS.contains(node.kind)) {
+			out.push(span);
+			return;
+		}
+		for (child in node.children) collectImportStatements(child, out);
 	}
 
 	/** Whether the nearest non-blank character before `at` is a dot — a member or a qualified path segment. */

@@ -2,8 +2,8 @@ package unit.check.common.members;
 
 import anyparse.check.Severity;
 import anyparse.check.common.members.ScratchField;
-import anyparse.check.oracle.HaxeRun;
-import anyparse.check.oracle.HaxeSpawn;
+import anyparse.proc.HaxeRun;
+import anyparse.proc.HaxeSpawn;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import sys.io.File;
