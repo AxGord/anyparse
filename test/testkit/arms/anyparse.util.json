@@ -1,0 +1,383 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.util. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-UTIL-LINE-START-PREV",
+			"type": "anyparse.util.Strings",
+			"method": "lineStart",
+			"find": "fastCodeAt(source, i - 1)",
+			"replace": "fastCodeAt(source, i)",
+			"note": "the walk back tests the character at the position instead of the one before it, so a position that starts a line, or sits on a break, stops one early"
+		},
+		{
+			"name": "M-UTIL-LINE-START-CLAMP",
+			"type": "anyparse.util.Strings",
+			"method": "lineStart",
+			"find": "? at : source.length",
+			"replace": "? at : 0",
+			"note": "a position past the text no longer resolves to the last line"
+		},
+		{
+			"name": "M-UTIL-LINE-START-NEGATIVE",
+			"type": "anyparse.util.Strings",
+			"method": "lineStart",
+			"find": "return i < 0 ? 0 : i;",
+			"replace": "return i;",
+			"note": "a negative position is returned as it is instead of the text start"
+		},
+		{
+			"name": "M-UTIL-LINE-OF-BASE",
+			"type": "anyparse.util.Strings",
+			"method": "lineOf",
+			"find": "var line: Int = 1",
+			"replace": "var line: Int = 0",
+			"note": "lines are counted from zero"
+		},
+		{
+			"name": "M-UTIL-LINE-OF-BREAK",
+			"type": "anyparse.util.Strings",
+			"method": "lineOf",
+			"find": "== '\\n'.code",
+			"replace": "== '\\r'.code",
+			"note": "a carriage return is counted as the line break instead of the newline"
+		},
+		{
+			"name": "M-UTIL-FIRST-LINE-CUT",
+			"type": "anyparse.util.Strings",
+			"method": "firstLine",
+			"find": "text.substring(0, end)",
+			"replace": "text.substring(0, end + 1)",
+			"note": "the first line keeps the break that ends it"
+		},
+		{
+			"name": "M-UTIL-FIRST-LINE-WHOLE",
+			"type": "anyparse.util.Strings",
+			"method": "firstLine",
+			"find": "if (nl < 0) return text;",
+			"replace": "if (nl < 0) return '';",
+			"note": "a text without a break has an empty first line"
+		},
+		{
+			"name": "M-UTIL-FIRST-LINE-CR",
+			"type": "anyparse.util.Strings",
+			"method": "firstLine",
+			"find": "? nl - 1 : nl",
+			"replace": "? nl : nl",
+			"note": "the carriage return of a CRLF break stays in the first line"
+		},
+		{
+			"name": "M-UTIL-FIRST-LINE-NO-BREAK-CR",
+			"type": "anyparse.util.Strings",
+			"method": "firstLine",
+			"find": "if (nl < 0) return text;",
+			"replace": "if (nl < 0) return StringTools.rtrim(text);",
+			"note": "the carriage return of a text without a line feed is dropped"
+		},
+		{
+			"name": "M-UTIL-BLANK-RANGE",
+			"type": "anyparse.util.Strings",
+			"method": "isBlank",
+			"find": "c > '\\r'.code",
+			"replace": "c > '\\n'.code",
+			"note": "vertical tab and form feed are not white space"
+		},
+		{
+			"name": "M-UTIL-BLANK-EMPTY",
+			"type": "anyparse.util.Strings",
+			"method": "isBlank",
+			"find": "return true;",
+			"replace": "return false;",
+			"note": "the empty text is not blank"
+		},
+		{
+			"name": "M-UTIL-IDENT-START-UNDERSCORE",
+			"type": "anyparse.util.Strings",
+			"method": "isIdentStart",
+			"find": "c == '_'.code",
+			"replace": "c == '-'.code",
+			"note": "an underscore does not start an identifier"
+		},
+		{
+			"name": "M-UTIL-IDENT-CHAR-DIGIT",
+			"type": "anyparse.util.Strings",
+			"method": "isIdentChar",
+			"find": "c <= '9'.code",
+			"replace": "c <= '8'.code",
+			"note": "the digit nine does not continue an identifier"
+		},
+		{
+			"name": "M-UTIL-IDENTIFIER-START",
+			"type": "anyparse.util.Strings",
+			"method": "isIdentifier",
+			"find": "!isIdentStart(",
+			"replace": "!isIdentChar(",
+			"note": "an identifier may start with a digit"
+		},
+		{
+			"name": "M-UTIL-IDENTIFIER-REST",
+			"type": "anyparse.util.Strings",
+			"method": "isIdentifier",
+			"find": "for (i in 1...text.length)",
+			"replace": "for (i in 1...1)",
+			"note": "only the first character of an identifier is checked"
+		},
+		{
+			"name": "M-UTIL-QUOTE-DQ",
+			"type": "anyparse.util.Strings",
+			"method": "quote",
+			"find": "out.add('\\\\\"')",
+			"replace": "out.add('\"')",
+			"note": "a double quote in the text is written unescaped"
+		},
+		{
+			"name": "M-UTIL-QUOTE-BS",
+			"type": "anyparse.util.Strings",
+			"method": "quote",
+			"find": "out.add('\\\\\\\\')",
+			"replace": "out.add('\\\\')",
+			"note": "a backslash in the text is written once"
+		},
+		{
+			"name": "M-UTIL-QUOTE-NL",
+			"type": "anyparse.util.Strings",
+			"method": "quote",
+			"find": "out.add('\\\\n')",
+			"replace": "out.add('\\\\r')",
+			"note": "a newline is written as the escape of a carriage return"
+		},
+		{
+			"name": "M-UTIL-QUOTE-BACKSPACE",
+			"type": "anyparse.util.Strings",
+			"method": "quote",
+			"find": "case '\\x08'.code:",
+			"replace": "case '\\x07'.code:",
+			"note": "a backspace is no longer written as its short escape"
+		},
+		{
+			"name": "M-UTIL-QUOTE-FORMFEED",
+			"type": "anyparse.util.Strings",
+			"method": "quote",
+			"find": "case '\\x0C'.code:",
+			"replace": "case '\\x0B'.code:",
+			"note": "a form feed is no longer written as its short escape"
+		},
+		{
+			"name": "M-UTIL-QUOTE-CONTROL",
+			"type": "anyparse.util.Strings",
+			"method": "quote",
+			"find": "c < ' '.code",
+			"replace": "c < 0",
+			"note": "a control character is written raw, which no JSON reader accepts"
+		},
+		{
+			"name": "M-UTIL-CHAR-COUNT",
+			"type": "anyparse.util.Strings",
+			"method": "charCount",
+			"find": "n++",
+			"replace": "n += 2",
+			"note": "each occurrence counts twice"
+		},
+		{
+			"name": "M-UTIL-BEFORE-CUT",
+			"type": "anyparse.util.Strings",
+			"method": "allBeforeOrNull",
+			"find": "text.substring(0, at)",
+			"replace": "text.substring(0, at + 1)",
+			"note": "the part before the delimiter keeps its first character"
+		},
+		{
+			"name": "M-UTIL-BEFORE-MISSING",
+			"type": "anyparse.util.Strings",
+			"method": "allBeforeOrNull",
+			"find": "at < 0 ? null",
+			"replace": "at < 0 ? ''",
+			"note": "a missing delimiter gives an empty string instead of null"
+		},
+		{
+			"name": "M-UTIL-BEFORE-PLAIN",
+			"type": "anyparse.util.Strings",
+			"method": "allBefore",
+			"find": "?? text",
+			"replace": "?? ''",
+			"note": "a missing delimiter empties the text instead of leaving it"
+		},
+		{
+			"name": "M-UTIL-AFTER-CUT",
+			"type": "anyparse.util.Strings",
+			"method": "allAfterOrNull",
+			"find": "at + delimiter.length",
+			"replace": "at + 1",
+			"note": "the part after the delimiter skips one character of it, not all of it"
+		},
+		{
+			"name": "M-UTIL-AFTER-MISSING",
+			"type": "anyparse.util.Strings",
+			"method": "allAfterOrNull",
+			"find": "at < 0 ? null",
+			"replace": "at < 0 ? ''",
+			"note": "a missing delimiter gives an empty string instead of null"
+		},
+		{
+			"name": "M-UTIL-AFTER-PLAIN",
+			"type": "anyparse.util.Strings",
+			"method": "allAfter",
+			"find": "?? text",
+			"replace": "?? ''",
+			"note": "a missing delimiter empties the text instead of leaving it"
+		},
+		{
+			"name": "M-UTIL-AFTER-LAST-CUT",
+			"type": "anyparse.util.Strings",
+			"method": "allAfterLastOrNull",
+			"find": "at + delimiter.length",
+			"replace": "at + 1",
+			"note": "the part after the last delimiter skips one character of it, not all of it"
+		},
+		{
+			"name": "M-UTIL-AFTER-LAST-LAST",
+			"type": "anyparse.util.Strings",
+			"method": "allAfterLastOrNull",
+			"find": "text.lastIndexOf(delimiter)",
+			"replace": "text.indexOf(delimiter)",
+			"note": "the first delimiter is used where the last one is meant"
+		},
+		{
+			"name": "M-UTIL-AFTER-LAST-MISSING",
+			"type": "anyparse.util.Strings",
+			"method": "allAfterLastOrNull",
+			"find": "at < 0 ? null",
+			"replace": "at < 0 ? ''",
+			"note": "a missing delimiter gives an empty string instead of null"
+		},
+		{
+			"name": "M-UTIL-AFTER-LAST-PLAIN",
+			"type": "anyparse.util.Strings",
+			"method": "allAfterLast",
+			"find": "?? text",
+			"replace": "?? ''",
+			"note": "a missing delimiter empties the text instead of leaving it"
+		},
+		{
+			"name": "M-UTIL-FIRST-SPLIT-FIRST",
+			"type": "anyparse.util.Strings",
+			"method": "firstSplit",
+			"find": "text.indexOf(delimiter)",
+			"replace": "text.lastIndexOf(delimiter)",
+			"note": "the last delimiter is used where the first one is meant"
+		},
+		{
+			"name": "M-UTIL-FIRST-SPLIT-MISSING",
+			"type": "anyparse.util.Strings",
+			"method": "firstSplit",
+			"find": "at < 0 ? null",
+			"replace": "at < 0 ? {before: '', after: ''}",
+			"note": "a missing delimiter gives two empty parts instead of null"
+		},
+		{
+			"name": "M-UTIL-LAST-SPLIT-LAST",
+			"type": "anyparse.util.Strings",
+			"method": "lastSplit",
+			"find": "text.lastIndexOf(delimiter)",
+			"replace": "text.indexOf(delimiter)",
+			"note": "the first delimiter is used where the last one is meant"
+		},
+		{
+			"name": "M-UTIL-LAST-SPLIT-MISSING",
+			"type": "anyparse.util.Strings",
+			"method": "lastSplit",
+			"find": "at < 0 ? null",
+			"replace": "at < 0 ? {before: '', after: ''}",
+			"note": "a missing delimiter gives two empty parts instead of null"
+		},
+		{
+			"name": "M-UTIL-EXTRACT-START",
+			"type": "anyparse.util.Strings",
+			"method": "extract",
+			"find": "from + open.length",
+			"replace": "from + 1",
+			"note": "the extract starts inside a multi-character opening delimiter"
+		},
+		{
+			"name": "M-UTIL-EXTRACT-CLOSE-AFTER",
+			"type": "anyparse.util.Strings",
+			"method": "extract",
+			"find": "text.indexOf(close, start)",
+			"replace": "text.indexOf(close)",
+			"note": "a closing delimiter before the opening one ends the extract"
+		},
+		{
+			"name": "M-UTIL-EXTRACT-NO-OPEN",
+			"type": "anyparse.util.Strings",
+			"method": "extract",
+			"find": "if (from < 0) return null;",
+			"replace": "if (from < -1) return null;",
+			"note": "a missing opening delimiter lets the extract start at the text start"
+		},
+		{
+			"name": "M-UTIL-EXTRACT-NO-CLOSE",
+			"type": "anyparse.util.Strings",
+			"method": "extract",
+			"find": "to < 0 ? null",
+			"replace": "to < 0 ? ''",
+			"note": "a missing closing delimiter gives an empty extract instead of null"
+		},
+		{
+			"name": "M-UTIL-COMPARE-INT-LESS",
+			"type": "anyparse.util.Compare",
+			"method": "compareInt",
+			"find": "a < b",
+			"replace": "a < b - 1",
+			"note": "a smaller integer that is one below compares as equal"
+		},
+		{
+			"name": "M-UTIL-COMPARE-INT-MORE",
+			"type": "anyparse.util.Compare",
+			"method": "compareInt",
+			"find": "a > b",
+			"replace": "a > b + 1",
+			"note": "a larger integer that is one above compares as equal"
+		},
+		{
+			"name": "M-UTIL-COMPARE-INT-EQUAL",
+			"type": "anyparse.util.Compare",
+			"method": "compareInt",
+			"find": "a > b",
+			"replace": "a >= b",
+			"note": "equal integers compare as larger"
+		},
+		{
+			"name": "M-UTIL-COMPARE-STRING-LESS",
+			"type": "anyparse.util.Compare",
+			"method": "compareString",
+			"find": "a < b",
+			"replace": "a > b",
+			"note": "the smaller string compares as equal"
+		},
+		{
+			"name": "M-UTIL-COMPARE-STRING-MORE",
+			"type": "anyparse.util.Compare",
+			"method": "compareString",
+			"find": "a > b",
+			"replace": "a < b",
+			"note": "the larger string compares as equal"
+		},
+		{
+			"name": "M-UTIL-COMPARE-STRING-EQUAL",
+			"type": "anyparse.util.Compare",
+			"method": "compareString",
+			"find": "a > b",
+			"replace": "a >= b",
+			"note": "equal strings compare as larger"
+		},
+		{
+			"name": "M-UTIL-COMPARE-STRING-CASE",
+			"type": "anyparse.util.Compare",
+			"method": "compareString",
+			"find": "a < b",
+			"replace": "a.toLowerCase() < b.toLowerCase()",
+			"note": "the order follows the letter, not the code unit"
+		}
+	]
+}
