@@ -197,7 +197,7 @@ final class KwBranchLowering {
 					blankBefore: _trailOptCap.blankBefore,
 					blankAfterLeadingComments: _trailOptCap.blankAfterLeadingComments,
 					newlineBefore: _trailOptCap.newlineBefore,
-					leadingComments: _trailOptCap.leadingComments,
+					leadingComments: _trailOptCap.leadingComments
 				};
 			});
 		} else {

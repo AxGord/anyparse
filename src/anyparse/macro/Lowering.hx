@@ -1043,7 +1043,7 @@ class Lowering {
 					// glued; line-style is filtered at emit. Empty
 					// leadingComments → false (nothing to glue).
 					leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,
-					node: _node,
+					node: _node
 				});
 			}
 			skipWs(ctx);

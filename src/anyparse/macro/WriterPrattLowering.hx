@@ -176,7 +176,7 @@ final class WriterPrattLowering {
 			_dt(' '),
 			_dt($v{opText}),
 			_dop(' '),
-			$rightEmit,
+			$rightEmit
 		]);
 		if (opText != '=' || isAsymmetric) return plainExpr;
 		final argTypeCT: ComplexType = pc.ruleValueCT(c.typePath);
@@ -439,7 +439,7 @@ final class WriterPrattLowering {
 					: _glued
 				: _dg(_dc([
 					_left,
-					_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right])),
+					_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right]))
 				]));
 			final _rhsTrail: Null<String> = $rhsTrailExpr;
 			final _innerT: anyparse.core.Doc = _rhsTrail != null ? _dc([_inner, trailingCommentDocVerbatim(_rhsTrail, opt)]) : _inner;
@@ -711,7 +711,7 @@ final class WriterPrattLowering {
 			macro _dc([
 				$leftCall,
 				$opEmitExpr,
-				$rightCall,
+				$rightCall
 			]);
 		return macro {
 			final _inner: anyparse.core.Doc = $innerExpr;

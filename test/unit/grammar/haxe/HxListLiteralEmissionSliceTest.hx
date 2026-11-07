@@ -330,6 +330,16 @@ class HxListLiteralEmissionSliceTest extends Test {
 		Assert.equals(TrailingCommaPolicy.Remove, opts('{"trailingCommas":{"functionParameterDefault":"yes"}}').trailingComma);
 	}
 
+	/** The parameter-list and anon-type add-knobs (`"yes"`) do not imply `Keep`: only array, call and object-literal knobs do. */
+	@:pin('guard')
+	public function testParamAndAnonTypeAddKnobsDoNotImplyKeep(): Void {
+		Assert.equals(TrailingCommaPolicy.Remove, opts('{"trailingCommas":{"functionParameterDefault":"yes"}}').trailingComma);
+		Assert.equals(TrailingCommaPolicy.Remove, opts('{"trailingCommas":{"anonTypeDefault":"yes"}}').trailingComma);
+		Assert.equals(
+			TrailingCommaPolicy.Remove, opts('{"trailingCommas":{"functionParameterDefault":"yes","anonTypeDefault":"yes"}}').trailingComma
+		);
+	}
+
 	private static inline function collapse(source: String): String {
 		return write(source, COLLAPSE_JSON);
 	}

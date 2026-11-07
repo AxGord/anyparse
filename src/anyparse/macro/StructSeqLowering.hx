@@ -1249,7 +1249,7 @@ final class StructSeqLowering {
 					blankBefore: _captured.blankBefore,
 					blankAfterLeadingComments: _captured.blankAfterLeadingComments,
 					newlineBefore: _captured.newlineBefore,
-					leadingComments: _captured.leadingComments,
+					leadingComments: _captured.leadingComments
 				};
 			});
 		}

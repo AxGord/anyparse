@@ -539,7 +539,7 @@ class WriterCodegen {
 				_dn(_cols, _dc([_lead, _dc(_inner)])),
 				_trail,
 				closeInside,
-				_dt(close),
+				_dt(close)
 			]));
 		};
 		return {
@@ -599,7 +599,7 @@ class WriterCodegen {
 				openInside,
 				_dn(_cols, _dc([_fill, _trail])),
 				closeInside,
-				_dt(close),
+				_dt(close)
 			]));
 		};
 		return {

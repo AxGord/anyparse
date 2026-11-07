@@ -77,7 +77,7 @@ final class StarLoopLowering {
 							trailingComment: _trailing,
 							trailingBeforeSep: _trailingBeforeSep != null,
 							sepAfter: _sepAfter,
-							node: _node,
+							node: _node
 						});
 					} catch (_e: anyparse.runtime.ParseError)
 						$triviaCatch;
@@ -100,7 +100,7 @@ final class StarLoopLowering {
 							trailingComment: _trailing,
 							trailingBeforeSep: false,
 							sepAfter: true,
-							node: _node,
+							node: _node
 						});
 					} catch (_e: anyparse.runtime.ParseError)
 						$triviaCatch;
@@ -206,7 +206,7 @@ final class StarLoopLowering {
 						trailingComment: _trailing,
 						trailingBeforeSep: _trailingBeforeSep != null,
 						sepAfter: _sepAfter,
-						node: _node,
+						node: _node
 					});
 				} catch (_e: anyparse.runtime.ParseError)
 					$exitArm;
@@ -256,7 +256,7 @@ final class StarLoopLowering {
 							trailingComment: _trailing,
 							trailingBeforeSep: false,
 							sepAfter: true,
-							node: _node,
+							node: _node
 						});
 					} catch (_e: anyparse.runtime.ParseError)
 						$nestExitArm;
@@ -319,7 +319,7 @@ final class StarLoopLowering {
 						trailingComment: _trailing,
 						trailingBeforeSep: false,
 						sepAfter: true,
-						node: _node,
+						node: _node
 					});
 				} catch (_e: anyparse.runtime.ParseError)
 					$nonNestCatch;
@@ -389,7 +389,7 @@ final class StarLoopLowering {
 					blankBefore: _gap.blankBefore,
 					blankAfterLeadingComments: _gap.blankAfterLeadingComments,
 					newlineBefore: false,
-					leadingComments: _gap.leadingComments,
+					leadingComments: _gap.leadingComments
 				};
 			} else {
 				ctx.pos = _gapPos;
@@ -438,7 +438,7 @@ final class StarLoopLowering {
 					trailingBeforeSep: _trailingBeforeSep != null && !_sepAcrossGap,
 					sepAfter: _sepAfter,
 					leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,
-					node: _node,
+					node: _node
 				});
 			}
 		};

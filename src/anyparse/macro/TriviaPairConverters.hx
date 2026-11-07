@@ -510,7 +510,7 @@ final class TriviaPairConverters {
 						trailingComment: (null: Null<String>),
 						trailingBeforeSep: false,
 						sepAfter: true,
-						node: $innerWrap,
+						node: $innerWrap
 					})
 					: innerWrap;
 				final compr: Expr = {

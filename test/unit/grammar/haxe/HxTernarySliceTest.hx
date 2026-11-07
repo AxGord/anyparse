@@ -115,7 +115,7 @@ class HxTernarySliceTest extends HxTestHelpers {
 			{ src: 'a + b is T', tree: '(a + (b is T))' },
 			{ src: 'a is T % b', tree: '((a is T) % b)' },
 			{ src: '!a is T', tree: '((!a) is T)' },
-			{ src: '!a ?? b', tree: '((!a) ?? b)' },
+			{ src: '!a ?? b', tree: '((!a) ?? b)' }
 		];
 		for (c in cases) Assert.equals(c.tree, shape(parseSingleVarDecl('class Foo { var x:Int = ${c.src}; }').init), c.src);
 	}

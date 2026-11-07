@@ -86,7 +86,7 @@ final class OperatorLoopLowering {
 						blankBefore: _hadBlank,
 						blankAfterLeadingComments: false,
 						newlineBefore: true,
-						leadingComments: [],
+						leadingComments: []
 					};
 				} else {
 					_pt.newlineBefore = true;
@@ -219,7 +219,7 @@ final class OperatorLoopLowering {
 					trailingComment: _trailing,
 					trailingBeforeSep: _afterSep == null,
 					sepAfter: _sepAfter,
-					node: _node,
+					node: _node
 				});
 			}
 			skipWs(ctx);
@@ -283,7 +283,7 @@ final class OperatorLoopLowering {
 						blankBefore: _hadBlank,
 						blankAfterLeadingComments: false,
 						newlineBefore: true,
-						leadingComments: [],
+						leadingComments: []
 					};
 				} else {
 					_pt.newlineBefore = true;

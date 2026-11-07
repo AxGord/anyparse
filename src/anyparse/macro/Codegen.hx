@@ -347,7 +347,7 @@ class Codegen {
 					blankBefore: false,
 					blankAfterLeadingComments: false,
 					newlineBefore: false,
-					leadingComments: [_verbatim],
+					leadingComments: [_verbatim]
 				};
 			else
 				_pt.leadingComments.push(_verbatim);
@@ -371,7 +371,7 @@ class Codegen {
 					blankBefore: false,
 					blankAfterLeadingComments: false,
 					newlineBefore: false,
-					leadingComments: [_verbatim],
+					leadingComments: [_verbatim]
 				};
 			else
 				_pt.leadingComments.push(_verbatim);
@@ -763,7 +763,7 @@ class Codegen {
 				blankAfterLeadingComments: _blankAfterLeadingComments,
 				newlineBefore: _newlineBefore,
 				newlineAfterLeadingComments: _leading.length > 0 && _newlineAfterLeadingComments,
-				leadingComments: _leading,
+				leadingComments: _leading
 			};
 		};
 		return {
