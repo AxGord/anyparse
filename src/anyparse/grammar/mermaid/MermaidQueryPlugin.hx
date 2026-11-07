@@ -10,6 +10,7 @@ import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.TypeSyntax;
+import anyparse.query.merge.StructuralMerge.MergeShape;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -37,6 +38,9 @@ final class MermaidQueryPlugin implements GrammarPlugin {
 
 	/** The file extensions (lower case, with the dot) a file of this grammar carries; the CLI routes such a file here. */
 	public static final EXTENSIONS: Array<String> = ['.mmd', '.mermaid'];
+
+	/** How `apq merge-file` takes this grammar's files apart — by declarations. */
+	public static final MERGE: MergeShape = Declarations;
 
 	/** The metavariable sigil a pattern node id opens with. */
 	private static inline final METAVAR_SIGIL: String = '$';

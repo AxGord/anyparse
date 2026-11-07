@@ -1881,6 +1881,29 @@
 			"find": "return !shared.hasKwSlots ||",
 			"replace": "return true ||",
 			"note": "the FitLine body layout never reads the keyword's comment slots, so `else // c` before a non-block body loses its comment"
+		},
+		{
+			"name": "M-GRAMMAR-DISCOVERY-NONE",
+			"type": "anyparse.macro.GrammarDiscovery",
+			"method": "pluginModules",
+			"force": "[]",
+			"note": "the classpath walk finds no plugin, so the CLI registry is empty and every --lang, extension and stdin content test is refused"
+		},
+		{
+			"name": "M-GRAMMAR-DISCOVERY-NO-CONTENT-TEST",
+			"type": "anyparse.macro.GrammarDiscovery",
+			"method": "entry",
+			"find": "final recognises: Expr = statics.contains(RECOGNISES) ? macro $path.recognises : macro null;",
+			"replace": "final recognises: Expr = macro null;",
+			"note": "a plugin's declared recognises is dropped from its row, so stdin with no --lang is never told by its content"
+		},
+		{
+			"name": "M-GRAMMAR-DISCOVERY-DOT-ENTRIES",
+			"type": "anyparse.macro.GrammarDiscovery",
+			"method": "collect",
+			"find": "!entry.startsWith('.')",
+			"replace": "true",
+			"note": "a dot-directory or dotfile under a classpath root is walked too, so a *QueryPlugin.hx inside .git or a hidden tree is registered under a module path the compiler cannot type"
 		}
 	]
 }

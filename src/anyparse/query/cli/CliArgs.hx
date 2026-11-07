@@ -3,6 +3,7 @@ package anyparse.query.cli;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.grammar.mermaid.MermaidQueryPlugin;
+import anyparse.macro.GrammarDiscovery;
 import anyparse.query.merge.StructuralMerge.MergeShape;
 import anyparse.runtime.Span;
 
@@ -77,6 +78,17 @@ final class CliArgs {
 		return (first == "'" && last == "'") || (first == '"' && last == '"') ? t.substring(1, t.length - 1) : t;
 	}
 
+	/**
+	 * Every grammar the CLI can dispatch, each with the `--lang`, file extensions, content test and merge shape its
+	 * plugin declares — the ONE registry `pickPlugin`, `langOfFile` and `langOfContent` read. The rows are the plugins
+	 * `GrammarDiscovery` finds on the classpath at compile time, so a new grammar package needs no edit here and no
+	 * extension is spelled anywhere in the CLI. Built fresh per call: a shared registry would be process-scoped
+	 * state (invariant 1).
+	 */
+	public static inline function grammars(): Array<GrammarEntry> {
+		return GrammarDiscovery.rows();
+	}
+
 	/** The one wording for a plain-pipeline request on an engine built without it (`-D anyparse_plain_pipeline` absent). */
 	public static function noPlainPipeline(lang: String): String {
 		return 'no plain pipeline for lang "$lang" in this engine (build with -D anyparse_plain_pipeline)';
@@ -147,38 +159,6 @@ final class CliArgs {
 	 */
 	public static function langNames(): Array<String> {
 		return [HaxeQueryPlugin.LANG];
-	}
-
-	/**
-	 * Every grammar the CLI can dispatch, each with the `--lang`, file extensions and content test its plugin
-	 * declares — the ONE registry `pickPlugin`, `langOfFile` and `langOfContent` read, so a new grammar is a new
-	 * row here and no extension is spelled anywhere else in the CLI. Built fresh per call: a shared
-	 * registry would be process-scoped state (invariant 1).
-	 */
-	public static function grammars(): Array<GrammarEntry> {
-		return [
-			{
-				lang: HaxeQueryPlugin.LANG,
-				extensions: HaxeQueryPlugin.EXTENSIONS,
-				recognises: null,
-				make: HaxeQueryPlugin.new,
-				merge: Declarations
-			},
-			{
-				lang: JsonQueryPlugin.LANG,
-				extensions: JsonQueryPlugin.EXTENSIONS,
-				recognises: JsonQueryPlugin.recognises,
-				make: JsonQueryPlugin.new,
-				merge: Records
-			},
-			{
-				lang: MermaidQueryPlugin.LANG,
-				extensions: MermaidQueryPlugin.EXTENSIONS,
-				recognises: null,
-				make: MermaidQueryPlugin.new,
-				merge: Declarations
-			}
-		];
 	}
 
 	public static function pickPlugin(lang: String): GrammarPlugin {

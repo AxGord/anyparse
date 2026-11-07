@@ -22,6 +22,16 @@ Parsing strategies are plugins (`Pratt`, `Kw`, `Lit`, `Prefix`/`Postfix`/`Ternar
   pipeline.
 - **sexpr** — S-expression writer, used for the `ast` dump output.
 
+## Registering a grammar with the CLI
+
+The CLI finds its grammars at compile time: every module on the build's classpath whose file
+is named `<Name>QueryPlugin.hx` becomes a `--lang`. Its class implements `GrammarPlugin`, takes
+no constructor argument and declares the statics `LANG` (the `--lang` name), `EXTENSIONS`
+(lower case, with the dot), `MERGE` (`Declarations` for source, `Records` for data — how
+`merge-file` takes a file apart) and, optionally, `recognises(text): Bool`, which lets stdin
+with no `--lang` be told by its content. A new grammar package needs no CLI edit; a module that
+carries the name and breaks this contract fails the build with a message naming it.
+
 ## Known limitations
 
 - **Refactoring and typed analysis are Haxe-only.** The CLI parses every grammar that has a

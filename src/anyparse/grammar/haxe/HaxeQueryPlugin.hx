@@ -23,6 +23,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
+import anyparse.query.merge.StructuralMerge.MergeShape;
 import anyparse.runtime.BodySkip;
 import anyparse.runtime.ByteOrderMark;
 import anyparse.runtime.ParseError;
@@ -74,6 +75,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	/** The file extensions (lower case, with the dot) a file of this grammar carries; the CLI routes such a file here. */
 	public static final EXTENSIONS: Array<String> = ['.hx'];
+
+	/** How `apq merge-file` takes this grammar's files apart — a source grammar: by declarations. */
+	public static final MERGE: MergeShape = Declarations;
 
 	/**
 	 * Search-only kind-equivalence. One Haxe declaration keyword surfaces as several
