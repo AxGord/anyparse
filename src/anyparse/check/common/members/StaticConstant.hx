@@ -9,6 +9,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 /**
  * Flags an INSTANCE `final` field whose initializer is a pure compile-time literal, and rewrites it
@@ -280,8 +281,8 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 			final idx: Int = source.indexOf(name, at);
 			if (idx < 0) return false;
 			at = idx + len;
-			final boundedBefore: Bool = idx == 0 || !SourceText.isIdentChar(source.fastCodeAt(idx - 1));
-			final boundedAfter: Bool = at >= source.length || !SourceText.isIdentChar(source.fastCodeAt(at));
+			final boundedBefore: Bool = idx == 0 || !Strings.isIdentChar(source.fastCodeAt(idx - 1));
+			final boundedAfter: Bool = at >= source.length || !Strings.isIdentChar(source.fastCodeAt(at));
 			if (!boundedBefore || !boundedAfter || (idx >= decl.from && idx < decl.to)) continue;
 			if (precededByDot(source, idx)) return true;
 		}

@@ -2,8 +2,8 @@ package anyparse.check.scan;
 
 import anyparse.query.MemberKinds;
 import anyparse.query.RefactorSupport;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 import haxe.Exception;
 
 /**
@@ -92,12 +92,12 @@ final class PublicReach {
 		final stop: Int = to <= source.length ? to : source.length;
 		var i: Int = from;
 		while (i < stop) {
-			if (!SourceText.isIdentStartChar(source.fastCodeAt(i))) {
+			if (!Strings.isIdentStart(source.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			var end: Int = i + 1;
-			while (end < stop && SourceText.isIdentChar(source.fastCodeAt(end))) end++;
+			while (end < stop && Strings.isIdentChar(source.fastCodeAt(end))) end++;
 			final token: String = source.substring(i, end);
 			out[token] = (out[token] ?? 0) + 1;
 			i = end;

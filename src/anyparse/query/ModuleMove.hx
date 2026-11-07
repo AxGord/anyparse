@@ -570,7 +570,7 @@ final class ModuleMove {
 	private static function isSubTypeOf(path: String, module: String, shape: RefShape): Bool {
 		if (!path.startsWith('$module.')) return false;
 		final rest: String = path.substr(module.length + 1);
-		if (rest.length == 0 || rest.indexOf('.') >= 0 || !SourceText.isIdentifier(rest)) return false;
+		if (rest.length == 0 || rest.indexOf('.') >= 0 || !Strings.isIdentifier(rest)) return false;
 		final initial: Int = rest.fastCodeAt(0);
 		return shape.typeNamesUpperInitial != true || (initial >= 'A'.code && initial <= 'Z'.code);
 	}
@@ -685,7 +685,7 @@ final class ModuleMove {
 	private static function isPackagePath(pkg: String, shape: RefShape): Bool {
 		final pattern: Null<String> = shape.packageSegmentPattern;
 		final segment: Null<EReg> = pattern == null ? null : new EReg(pattern, '');
-		return pkg.split('.').foreach(s -> SourceText.isIdentifier(s) && (segment == null || segment.match(s)));
+		return pkg.split('.').foreach(s -> Strings.isIdentifier(s) && (segment == null || segment.match(s)));
 	}
 
 	/**

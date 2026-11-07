@@ -7,6 +7,7 @@ import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.TypeExtraction.SourceClass;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 import haxe.ds.Either;
 
 using Lambda;
@@ -91,7 +92,7 @@ final class ExtractInterface {
 		srcFile: String, srcTypeName: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String,
 		plugin: GrammarPlugin, ?optsJson: String, ?srcOptsJson: String
 	): MoveResult {
-		if (!SourceText.isIdentifier(ifaceName)) return Err('interface name "$ifaceName" is not a valid identifier');
+		if (!Strings.isIdentifier(ifaceName)) return Err('interface name "$ifaceName" is not a valid identifier');
 		if (ifaceName == srcTypeName) return Err('interface name must differ from the source type "$srcTypeName"');
 
 		final src: SourceClass = switch TypeExtraction.sourceClass(srcFile, srcSource, srcTypeName, plugin) {

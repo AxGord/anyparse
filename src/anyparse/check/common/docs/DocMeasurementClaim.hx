@@ -3,6 +3,7 @@ package anyparse.check.common.docs;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 /**
  * One reading found inside a comment: the bytes it covers, and the shape that identifies it.
@@ -315,7 +316,7 @@ final class DocMeasurementClaim extends RuleBase implements DefaultOff implement
 
 	/** Whether a token starts at `at` — nothing an identifier may carry stands before it. */
 	private static function isTokenStart(source: String, from: Int, at: Int): Bool {
-		return at == from || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
+		return at == from || !Strings.isIdentChar(source.fastCodeAt(at - 1));
 	}
 
 	/**

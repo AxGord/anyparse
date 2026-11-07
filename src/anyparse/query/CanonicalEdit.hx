@@ -5,6 +5,7 @@ import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 import haxe.Exception;
 
 using Lambda;
@@ -345,7 +346,7 @@ final class CanonicalEdit {
 			// which ends on an orphaned `/** … */`) with a remedy `add-member` cannot
 			// perform — it has no addressing options at all.
 			final next: Int = j >= source.length ? -1 : source.fastCodeAt(j);
-			if (!SourceText.isIdentStartChar(next) && next != '@'.code && next != '#'.code) continue;
+			if (!Strings.isIdentStart(next) && next != '@'.code && next != '#'.code) continue;
 			final eol: Int = source.indexOf('\n', j);
 			final owner: String = (eol < 0 ? source.substring(j) : source.substring(j, eol)).trim();
 			final shown: String = owner.length <= SourceText.REGION_EXCERPT_CHARS

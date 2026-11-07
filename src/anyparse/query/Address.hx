@@ -106,18 +106,8 @@ final class Address {
 		final name: Null<String> = node.name;
 		final span: Null<Span> = node.span;
 		if (name == null || span == null || name.length == 0) return null;
-		final stop: Int = span.to < source.length ? span.to : source.length;
-		var i: Int = span.from;
-		while (i + name.length <= stop) {
-			final at: Int = source.indexOf(name, i);
-			if (at < 0 || at + name.length > stop) return null;
-			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
-			final afterIdx: Int = at + name.length;
-			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
-			if (beforeOk && afterOk) return at;
-			i = at + 1;
-		}
-		return null;
+		final at: Int = SourceText.identTokenOffset(source, span, name);
+		return at < 0 ? null : at;
 	}
 
 	/**

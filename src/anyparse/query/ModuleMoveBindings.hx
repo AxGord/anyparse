@@ -8,6 +8,8 @@ import anyparse.query.TypeNameBinding.NameTarget;
 import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypingService.HeadReading;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -310,10 +312,10 @@ final class ModuleMoveBindings {
 		final dot: Int = o.at + o.name.length;
 		if (dot >= text.length || text.fastCodeAt(dot) != '.'.code) return '';
 		var end: Int = dot + 1;
-		while (end < text.length && SourceText.isIdentChar(text.fastCodeAt(end))) end++;
+		while (end < text.length && Strings.isIdentChar(text.fastCodeAt(end))) end++;
 		final sub: String = text.substring(dot + 1, end);
 		final initial: Int = sub.length == 0 ? 0 : sub.fastCodeAt(0);
-		return SourceText.isIdentifier(sub) && (!upper || (initial >= 'A'.code && initial <= 'Z'.code)) ? sub : '';
+		return Strings.isIdentifier(sub) && (!upper || (initial >= 'A'.code && initial <= 'Z'.code)) ? sub : '';
 	}
 
 	/** Every qualified spelling `Head.Sub` written in code in `text` — interpolation holes included — read by its shape alone. */
@@ -350,7 +352,7 @@ final class ModuleMoveBindings {
 	/** One declaration set as a comparable key: each `module#Type` (module through `mapped`), sorted. */
 	private static function declsKey(decls: Array<ResolvedType>, mapped: (String) -> String): String {
 		final keys: Array<String> = decls.map(d -> '${mapped(d.file.module)}#${d.type.name}');
-		keys.sort(Reflect.compare);
+		keys.sort(Compare.compareString);
 		return keys.join(',');
 	}
 

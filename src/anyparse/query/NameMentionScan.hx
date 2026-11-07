@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -100,9 +101,9 @@ final class NameMentionScan {
 			final at: Int = source.indexOf(path, from);
 			if (at < 0) return -1;
 			from = at + 1;
-			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
+			final beforeOk: Bool = at == 0 || !Strings.isIdentChar(source.fastCodeAt(at - 1));
 			final afterIdx: Int = at + path.length;
-			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !Strings.isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk && !OccurrenceScan.offsetWithinAny(at, comments) && !OccurrenceScan.offsetWithinAny(at, excluded))
 				return at;
 		}

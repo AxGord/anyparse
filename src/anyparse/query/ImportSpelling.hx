@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.util.Strings;
+
 /**
  * An `import` / `using` argument as the caller spelled it: the keyword it opened with, or null for
  * a bare module path, and the path with the keyword and the closing `;` taken off.
@@ -69,10 +71,10 @@ final class ImportSpelling {
 	 */
 	public static function isModulePath(path: String): Bool {
 		final aliasAt: Int = aliasStart(path);
-		if (aliasAt >= 0 && !SourceText.isIdentifier(path.substr(aliasAt + ALIAS_WORD_WIDTH).trim())) return false;
+		if (aliasAt >= 0 && !Strings.isIdentifier(path.substr(aliasAt + ALIAS_WORD_WIDTH).trim())) return false;
 		final segments: Array<String> = (aliasAt < 0 ? path : path.substring(0, aliasAt)).split('.');
-		for (i in 0...segments.length)
-			if (!(segments[i] == '*' && i > 0 && i == segments.length - 1) && !SourceText.isIdentifier(segments[i])) return false;
+		for (i => segment in segments) if (!(segment == '*' && i > 0 && i == segments.length - 1) && !Strings.isIdentifier(segment))
+			return false;
 		return true;
 	}
 

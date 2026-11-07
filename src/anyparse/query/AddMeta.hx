@@ -4,6 +4,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 /**
  * Add one `@:metadata` entry to an existing declaration — the annotation
@@ -125,13 +126,13 @@ final class AddMeta {
 		if (!text.startsWith('@')) return null;
 		var i: Int = text.charAt(1) == ':' ? 2 : 1;
 		final from: Int = i;
-		while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
+		while (i < text.length && Strings.isIdentChar(text.fastCodeAt(i))) i++;
 		if (i == from) return null;
 		// A dotted name (`@:foo.bar`) is one entry; the grammar carries the whole path.
 		while (i < text.length && text.charAt(i) == '.') {
 			i++;
 			final seg: Int = i;
-			while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
+			while (i < text.length && Strings.isIdentChar(text.fastCodeAt(i))) i++;
 			if (i == seg) return null;
 		}
 		final rest: String = text.substr(i).trim();

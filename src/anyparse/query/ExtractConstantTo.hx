@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 import haxe.ds.Either;
 
 using Lambda;
@@ -60,7 +61,7 @@ final class ExtractConstantTo {
 	 */
 	public static function extractTo(request: ExtractToRequest, plugin: GrammarPlugin): ExtractToResult {
 		final name: String = request.name;
-		if (!SourceText.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
+		if (!Strings.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
 		final source: String = request.source;
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, request.sourceFile) {
 			case Unparsed(message): return Err(message);

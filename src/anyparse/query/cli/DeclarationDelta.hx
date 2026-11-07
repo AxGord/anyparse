@@ -6,6 +6,7 @@ import anyparse.query.Address.AddressIndex;
 import anyparse.query.DeclarationLines;
 import anyparse.query.LineDiff;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -262,8 +263,8 @@ final class DeclarationDelta {
 		for (i => token in a) {
 			final from: String = token.text;
 			final to: String = b[i].text;
-			if (from == to && !SourceText.isIdentifier(from)) continue;
-			if (!SourceText.isIdentifier(from) || !SourceText.isIdentifier(to)) return null;
+			if (from == to && !Strings.isIdentifier(from)) continue;
+			if (!Strings.isIdentifier(from) || !Strings.isIdentifier(to)) return null;
 			final mapped: Null<String> = forward[from];
 			final source: Null<String> = backward[to];
 			if ((mapped != null && mapped != to) || (source != null && source != from)) return null;
@@ -415,9 +416,9 @@ final class DeclarationDelta {
 		var i: Int = 0;
 		while (i < text.length) {
 			final code: Int = text.fastCodeAt(i);
-			if (SourceText.isIdentStartChar(code)) {
+			if (Strings.isIdentStart(code)) {
 				final from: Int = i;
-				while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
+				while (i < text.length && Strings.isIdentChar(text.fastCodeAt(i))) i++;
 				out.push({ text: text.substring(from, i), at: base + from });
 				continue;
 			}

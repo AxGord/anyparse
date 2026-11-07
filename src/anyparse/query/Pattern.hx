@@ -1,6 +1,8 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -196,9 +198,9 @@ final class Metavar {
 			}
 			if (c == '$'.code && i + 1 < len) {
 				final next: Int = source.fastCodeAt(i + 1);
-				if (isIdentStart(next)) {
+				if (Strings.isIdentStart(next)) {
 					var j: Int = i + 1;
-					while (j < len && isIdentCont(source.fastCodeAt(j))) j++;
+					while (j < len && Strings.isIdentChar(source.fastCodeAt(j))) j++;
 					final bare: String = source.substring(i + 1, j);
 					buf.add(PLACEHOLDER_PREFIX);
 					buf.add(bare);
@@ -300,16 +302,8 @@ final class Metavar {
 		final written: Map<String, Int> = placeholderCounts(substituted);
 		final kept: Map<String, Int> = treeCounts(tree);
 		final out: Array<String> = [for (name => count in written) if (count > kept[name] ?? 0) name];
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
-	}
-
-	private static inline function isIdentStart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
-	}
-
-	private static inline function isIdentCont(c: Int): Bool {
-		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
 	}
 
 	private static function scanStringEnd(source: String, start: Int, quote: Int): Int {

@@ -7,6 +7,7 @@ import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.TypeExtraction.SourceClass;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 import haxe.ds.Either;
 
 using Lambda;
@@ -75,7 +76,7 @@ final class ExtractSuperclass {
 		srcFile: String, srcTypeName: String, superName: String, superFile: String, memberNames: Array<String>, srcSource: String,
 		plugin: GrammarPlugin, ?optsJson: String, ?srcOptsJson: String
 	): MoveResult {
-		if (!SourceText.isIdentifier(superName)) return Err('superclass name "$superName" is not a valid identifier');
+		if (!Strings.isIdentifier(superName)) return Err('superclass name "$superName" is not a valid identifier');
 		if (superName == srcTypeName) return Err('superclass name must differ from the source type "$srcTypeName"');
 		if (memberNames.length == 0) return Err('no members named — nothing to pull up');
 

@@ -112,21 +112,6 @@ final class HxStringEscape {
 	}
 
 	/**
-	 * Whether `code` starts a Haxe identifier (a letter or an underscore) — the test that
-	 * decides whether a `$` begins the `$name` shorthand. Shared with the `$name`
-	 * lookahead in `HaxeStringFoldSupport`: the two ends of one feature must not drift
-	 * apart on what a name is.
-	 */
-	public static function isIdentStart(code: Int): Bool {
-		return (code >= 'a'.code && code <= 'z'.code) || (code >= 'A'.code && code <= 'Z'.code) || code == '_'.code;
-	}
-
-	/** Whether `code` continues a Haxe identifier (a letter, a digit, or an underscore). */
-	public static function isIdentContinue(code: Int): Bool {
-		return isIdentStart(code) || (code >= '0'.code && code <= '9'.code);
-	}
-
-	/**
 	 * The one character `raw` spells at `i`. A backslash opens an escape: `\xNN` and
 	 * `\uNNNN` / `\u{N…}` decode their hex digits, `\n` / `\r` / `\t` their control
 	 * character, and every other two-character form decodes to the character after

@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 import anyparse.query.SourceText;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -133,7 +134,7 @@ final class HaxeIdentifierCase {
 	 */
 	public static function upperSnakeConstant(name: String): Null<String> {
 		final upper: String = SourceText.upperSnake(name);
-		return upper != name && SourceText.isIdentifier(upper) ? upper : null;
+		return upper != name && Strings.isIdentifier(upper) ? upper : null;
 	}
 
 	/**

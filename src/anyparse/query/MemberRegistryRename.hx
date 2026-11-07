@@ -7,6 +7,7 @@ import anyparse.query.TypePathRegistries.MemberRecord;
 import anyparse.query.TypePathRegistries.RegistryEdit;
 import anyparse.query.TypePathRegistries.StringSlot;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 import haxe.Exception;
 
 using Lambda;
@@ -220,7 +221,7 @@ final class MemberRegistryRename {
 	private static function isSelfSpelling(text: String, at: Int): Bool {
 		if (at == 0 || text.fastCodeAt(at - 1) != ACCESS) return true;
 		final from: Int = at - SELF_RECEIVER.length;
-		return from >= 0 && text.substring(from, at) == SELF_RECEIVER && (from == 0 || !SourceText.isIdentChar(text.fastCodeAt(from - 1)));
+		return from >= 0 && text.substring(from, at) == SELF_RECEIVER && (from == 0 || !Strings.isIdentChar(text.fastCodeAt(from - 1)));
 	}
 
 	/** Whether the top-level type around `target` declares a member named `name` whose name the rename edited. */

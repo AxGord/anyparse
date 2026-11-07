@@ -9,6 +9,7 @@ import anyparse.query.RawSourceScan;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 /**
  * Flags a `static final` constant of a basic scalar type whose initializer is a compile-time
@@ -247,16 +248,6 @@ final class InlineConstant extends RuleBase {
 	 */
 	private static inline function isPinMeta(meta: Null<String>, seams: ConstantFieldSeams): Bool {
 		return meta != null && (meta == seams.retainedMetaName || meta == seams.reflectedMetaName);
-	}
-
-	/** Whether `c` can start an identifier — a letter or `_`. */
-	private static inline function isIdentStart(c: Int): Bool {
-		return c == '_'.code || isUpper(c) || (c >= 'a'.code && c <= 'z'.code);
-	}
-
-	/** Whether `c` can continue an identifier — an identifier-start char or a digit. */
-	private static inline function isIdentPart(c: Int): Bool {
-		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
 	}
 
 	/** Whether `c` is an ASCII uppercase letter — the first char of a type / module name. */
@@ -594,10 +585,10 @@ final class InlineConstant extends RuleBase {
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = source.fastCodeAt(i);
-			if (isIdentStart(c)) {
+			if (Strings.isIdentStart(c)) {
 				final start: Int = i;
 				i++;
-				while (i < n && isIdentPart(source.fastCodeAt(i))) i++;
+				while (i < n && Strings.isIdentChar(source.fastCodeAt(i))) i++;
 				final token: String = source.substring(start, i);
 				if (isUpper(token.fastCodeAt(0)) && !out.contains(token)) out.push(token);
 			} else {

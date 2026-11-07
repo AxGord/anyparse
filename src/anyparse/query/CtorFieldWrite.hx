@@ -4,6 +4,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 import haxe.Exception;
 
 using Lambda;
@@ -783,8 +784,8 @@ final class CtorFieldWrite {
 			final idx: Int = source.indexOf(name, from);
 			if (idx < 0) return false;
 			from = idx + len;
-			final boundedBefore: Bool = idx == 0 || !SourceText.isIdentChar(source.fastCodeAt(idx - 1));
-			final boundedAfter: Bool = from >= n || !SourceText.isIdentChar(source.fastCodeAt(from));
+			final boundedBefore: Bool = idx == 0 || !Strings.isIdentChar(source.fastCodeAt(idx - 1));
+			final boundedAfter: Bool = from >= n || !Strings.isIdentChar(source.fastCodeAt(from));
 			if (boundedBefore && boundedAfter && (idx < exclude.from || idx >= exclude.to) && callFollows(source, from)) return true;
 		}
 	}
@@ -795,8 +796,8 @@ final class CtorFieldWrite {
 		var i: Int = SourceComments.skipForwardTrivia(source, pos);
 		if (i >= n || source.fastCodeAt(i) != '.'.code) return false;
 		i = SourceComments.skipForwardTrivia(source, i + 1);
-		if (i >= n || !SourceText.isIdentStartChar(source.fastCodeAt(i))) return false;
-		while (i < n && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
+		if (i >= n || !Strings.isIdentStart(source.fastCodeAt(i))) return false;
+		while (i < n && Strings.isIdentChar(source.fastCodeAt(i))) i++;
 		i = SourceComments.skipForwardTrivia(source, i);
 		return i < n && source.fastCodeAt(i) == '('.code;
 	}

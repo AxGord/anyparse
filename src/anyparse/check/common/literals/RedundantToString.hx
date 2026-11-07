@@ -11,6 +11,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeResolver;
+import anyparse.util.Strings;
 
 /**
  * Flags a `.toString()` call sitting in a position that ALREADY stringifies, so the call only
@@ -151,15 +152,6 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 			if (edit != null && wanted.contains(spanKey(found.span))) edits.push(edit);
 		}
 		return edits;
-	}
-
-	/**
-	 * Whether `c` continues an identifier. Hand-rolled rather than taken from a seam: the
-	 * `$name` shorthand is the ONE place this check emits new syntax, and the alphabet that
-	 * bounds it is the interpolation scanner's, not the grammar's general identifier rule.
-	 */
-	private static inline function isIdentContinue(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 	}
 
 	/** A span rendered as the key `fix` matches a violation against its re-collected candidate by. */
@@ -508,7 +500,7 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 		final literalSource: String = source.substring(literalSpan.from, literalSpan.to);
 		return if (literalSource.indexOf('\\x') != -1 || literalSource.indexOf('\\u') != -1)
 			null
-		else if (span.to < source.length && isIdentContinue(source.fastCodeAt(span.to)))
+		else if (span.to < source.length && Strings.isIdentChar(source.fastCodeAt(span.to)))
 			null
 		else
 			{ span: span, text: '$$$name' };

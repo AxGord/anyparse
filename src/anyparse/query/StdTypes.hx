@@ -4,6 +4,7 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.util.Strings;
 import haxe.Exception;
 
 using Lambda;
@@ -220,7 +221,7 @@ final class StdTypes {
 	public static function valueNameOf(written: String): Null<String> {
 		final path: String = written.trim();
 		final simple: String = path.substr(path.lastIndexOf('.') + 1);
-		return SourceText.isIdentifier(path.replace('.', ''))
+		return Strings.isIdentifier(path.replace('.', ''))
 			&& simple.length > 0
 			&& simple.charAt(0) != simple.charAt(0).toLowerCase()
 			&& StdTypes.toplevelPath(simple) == null

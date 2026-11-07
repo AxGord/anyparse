@@ -5,6 +5,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 /** A resolved parameter to fold into the object: its name, type source, and node. */
 private typedef Field = {
@@ -76,7 +77,7 @@ final class IntroduceParameterObject {
 		source: String, line: Int, col: Int, paramNames: Array<String>, typeName: String, objName: Null<String>, plugin: GrammarPlugin,
 		shape: RefShape, ?optsJson: String, ?file: String
 	): EditResult {
-		if (!SourceText.isIdentifier(typeName)) return Err('type name "$typeName" is not a valid identifier');
+		if (!Strings.isIdentifier(typeName)) return Err('type name "$typeName" is not a valid identifier');
 		if (paramNames.length == 0) return Err('no parameters named — nothing to fold');
 
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
@@ -150,7 +151,7 @@ final class IntroduceParameterObject {
 		if (typeErr != null) return Refused(typeErr);
 
 		final obj: String = objName ?? SourceText.lowerCamel(typeName);
-		if (!SourceText.isIdentifier(obj)) return Refused('object parameter name "$obj" is not a valid identifier');
+		if (!Strings.isIdentifier(obj)) return Refused('object parameter name "$obj" is not a valid identifier');
 		for (p in params) if (p.name == obj && !paramNames.contains(p.name))
 			return Refused('object name "$obj" collides with an existing parameter — pass --name');
 

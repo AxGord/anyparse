@@ -16,10 +16,10 @@ import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.ShapeVocab;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -876,8 +876,8 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 			final at: Int = source.indexOf(className, i);
 			if (at < 0) return false;
 			final afterIdx: Int = at + len;
-			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
-			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
+			final beforeOk: Bool = at == 0 || !Strings.isIdentChar(source.fastCodeAt(at - 1));
+			final afterOk: Bool = afterIdx >= source.length || !Strings.isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk && precededByNew(source, at)) return true;
 			i = at + 1;
 		}
@@ -893,13 +893,13 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		var j: Int = skipWhitespaceBack(source, pos - 1);
 		while (j >= 0 && source.fastCodeAt(j) == '.'.code) {
 			j = skipWhitespaceBack(source, j - 1);
-			while (j >= 0 && SourceText.isIdentChar(source.fastCodeAt(j))) j--;
+			while (j >= 0 && Strings.isIdentChar(source.fastCodeAt(j))) j--;
 			j = skipWhitespaceBack(source, j);
 		}
 		final start: Int = j + 1 - kw.length;
 		if (start < 0) return false;
 		for (k in 0...kw.length) if (source.fastCodeAt(start + k) != kw.fastCodeAt(k)) return false;
-		return start == 0 || !SourceText.isIdentChar(source.fastCodeAt(start - 1));
+		return start == 0 || !Strings.isIdentChar(source.fastCodeAt(start - 1));
 	}
 
 	/**

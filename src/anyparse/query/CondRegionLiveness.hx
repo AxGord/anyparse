@@ -5,6 +5,7 @@ import anyparse.query.CondValue;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -420,7 +421,7 @@ final class CondRegionLiveness {
 			cursor.ok = false;
 			return null;
 		}
-		if (SourceText.isIdentStartChar(code)) {
+		if (Strings.isIdentStart(code)) {
 			final from: Int = cursor.pos;
 			cursor.pos = flagEnd(text, cursor.pos);
 			final flag: String = text.substring(from, cursor.pos);
@@ -519,9 +520,9 @@ final class CondRegionLiveness {
 	private static function flagEnd(text: String, at: Int): Int {
 		var i: Int = at;
 		while (true) {
-			while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
+			while (i < text.length && Strings.isIdentChar(text.fastCodeAt(i))) i++;
 			if (i + 1 >= text.length || text.fastCodeAt(i) != '.'.code) return i;
-			if (!SourceText.isIdentStartChar(text.fastCodeAt(i + 1))) return i;
+			if (!Strings.isIdentStart(text.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
 	}

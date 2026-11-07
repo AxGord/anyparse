@@ -3,6 +3,7 @@ package anyparse.check.scan;
 import anyparse.check.Check.FixEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.SourceText;
+import anyparse.util.Strings;
 
 /**
  * The RAW-SOURCE geometry of a property head: where its `(read, write)` accessor clause is, what
@@ -145,7 +146,7 @@ final class AccessorClauseText {
 	private static function identAt(source: String, i: Int, n: Int): Null<{ id: String, next: Int }> {
 		final start: Int = i;
 		var j: Int = i;
-		while (j < n && SourceText.isIdentChar(source.fastCodeAt(j))) j++;
+		while (j < n && Strings.isIdentChar(source.fastCodeAt(j))) j++;
 		return j > start ? { id: source.substring(start, j), next: j } : null;
 	}
 
@@ -166,7 +167,7 @@ final class AccessorClauseText {
 		if (span.from + kw.length > n || source.substring(span.from, span.from + kw.length) != kw) return -1;
 		var i: Int = skipSpace(source, span.from + kw.length, n);
 		final nameStart: Int = i;
-		while (i < n && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < n && Strings.isIdentChar(source.fastCodeAt(i))) i++;
 		return i == nameStart ? -1 : i;
 	}
 

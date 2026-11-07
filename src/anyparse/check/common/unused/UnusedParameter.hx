@@ -502,7 +502,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	 */
 	private static function renameNameStart(source: String, fnSpan: Span, param: QueryNode, matchMask: Array<Span>): Int {
 		final name: Null<String> = param.name;
-		if (name == null) return -1;
+		if (name == null || name.length == 0) return -1;
 		final pspan: Null<Span> = param.span;
 		return if (pspan == null)
 			-1
@@ -513,31 +513,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		else if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan], matchMask))
 			-1
 		else
-			firstIdentOccurrence(source, name, pspan.from, pspan.to);
-	}
-
-
-	/**
-	 * The offset of the first word-boundary occurrence of `name` in `[from, to)`,
-	 * or `-1`. A word boundary requires a non-identifier character (or the buffer
-	 * edge) on each side, so a longer identifier that merely contains `name` is
-	 * not matched.
-	 */
-	private static function firstIdentOccurrence(source: String, name: String, from: Int, to: Int): Int {
-		final len: Int = name.length;
-		if (len == 0) return -1;
-		final stop: Int = to <= source.length ? to : source.length;
-		var i: Int = from;
-		while (i + len <= stop) {
-			final at: Int = source.indexOf(name, i);
-			if (at < 0 || at + len > stop) return -1;
-			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
-			final afterIdx: Int = at + len;
-			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
-			if (beforeOk && afterOk) return at;
-			i = at + 1;
-		}
-		return -1;
+			SourceText.identTokenOffset(source, pspan, name);
 	}
 
 

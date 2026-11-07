@@ -5,6 +5,7 @@ import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -358,7 +359,7 @@ final class CondQuery {
 	 * produce, and rejecting it left the branch reporting nothing at all.
 	 */
 	private static function isSymbolName(name: String): Bool {
-		return name.length != 0 && name.split('.').foreach(SourceText.isIdentifier);
+		return name.length != 0 && name.split('.').foreach(Strings.isIdentifier);
 	}
 
 	/**

@@ -4,8 +4,8 @@ import anyparse.check.Check;
 import anyparse.check.common.types.ExplicitLocalType;
 import anyparse.check.common.types.ExplicitType;
 import anyparse.check.oracle.PositionTypeOracle;
-import anyparse.query.SourceText;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -183,7 +183,7 @@ private final class IdentTypeOracle extends PositionTypeOracle {
 
 	public function typeAt(file: String, bytePos: Int): Null<String> {
 		var start: Int = bytePos + 1;
-		while (start > 0 && SourceText.isIdentChar(_source.fastCodeAt(start - 1))) start--;
+		while (start > 0 && Strings.isIdentChar(_source.fastCodeAt(start - 1))) start--;
 		return _byName[_source.substring(start, bytePos + 1)];
 	}
 

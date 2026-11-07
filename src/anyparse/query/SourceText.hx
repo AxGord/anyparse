@@ -3,6 +3,7 @@ package anyparse.query;
 using Lambda;
 
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 /**
  * Character-, word- and line-level primitives over RAW source text. Nothing here reads the
@@ -69,11 +70,7 @@ final class SourceText {
 
 	/** A name is renameable when it is a valid identifier and not `this`. */
 	public static inline function isRenameableName(name: Null<String>): Bool {
-		return name != null && name != 'this' && isIdentifier(name);
-	}
-
-	public static inline function isIdentStartChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
+		return name != null && name != 'this' && Strings.isIdentifier(name);
 	}
 
 	/**
@@ -83,10 +80,6 @@ final class SourceText {
 	public static inline function isUpperInitial(s: String): Bool {
 		final c: Int = s.fastCodeAt(0);
 		return c >= 'A'.code && c <= 'Z'.code;
-	}
-
-	public static inline function isIdentChar(c: Int): Bool {
-		return isIdentStartChar(c) || (c >= '0'.code && c <= '9'.code);
 	}
 
 	/** Is `c` an ASCII space / tab / newline / carriage return? */
@@ -134,22 +127,13 @@ final class SourceText {
 		while (i + name.length <= to) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + name.length > to) return -1;
-			final beforeOk: Bool = at == 0 || !isIdentChar(source.fastCodeAt(at - 1));
+			final beforeOk: Bool = at == 0 || !Strings.isIdentChar(source.fastCodeAt(at - 1));
 			final afterIdx: Int = at + name.length;
-			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(source.fastCodeAt(afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !Strings.isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk) return at;
 			i = at + 1;
 		}
 		return -1;
-	}
-
-	/** Whole-string check: a non-empty identifier (`[A-Za-z_][A-Za-z0-9_]*`). */
-	public static function isIdentifier(s: String): Bool {
-		if (s.length == 0) return false;
-		final first: Int = s.fastCodeAt(0);
-		if (!isIdentStartChar(first)) return false;
-		for (i in 1...s.length) if (!isIdentChar(s.fastCodeAt(i))) return false;
-		return true;
 	}
 
 	/**
@@ -222,9 +206,9 @@ final class SourceText {
 	 */
 	public static function firstTokenEnd(source: String, from: Int): Int {
 		if (from < 0 || from >= source.length) return from;
-		if (!isIdentChar(source.fastCodeAt(from))) return from + 1;
+		if (!Strings.isIdentChar(source.fastCodeAt(from))) return from + 1;
 		var i: Int = from + 1;
-		while (i < source.length && isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < source.length && Strings.isIdentChar(source.fastCodeAt(i))) i++;
 		return i;
 	}
 
@@ -433,7 +417,8 @@ final class SourceText {
 	/** Whether the occurrence of `name` at `at` in `head` stands alone — no identifier character on either side. */
 	private static inline function standaloneIdentAt(head: String, name: String, at: Int): Bool {
 		final after: Int = at + name.length;
-		return (at == 0 || !isIdentChar(head.fastCodeAt(at - 1))) && (after >= head.length || !isIdentChar(head.fastCodeAt(after)));
+		return (at == 0 || !Strings.isIdentChar(head.fastCodeAt(at - 1)))
+			&& (after >= head.length || !Strings.isIdentChar(head.fastCodeAt(after)));
 	}
 
 	private static inline function isUpperCode(code: Int): Bool {

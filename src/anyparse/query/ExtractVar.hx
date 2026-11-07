@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -126,7 +127,7 @@ final class ExtractVar {
 	public static function extractVar(
 		source: String, line: Int, col: Int, name: String, plugin: GrammarPlugin, ?exactTo: Int
 	): ExtractResult {
-		if (!SourceText.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
+		if (!Strings.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
 			case Unparsed(message): return Err(message);

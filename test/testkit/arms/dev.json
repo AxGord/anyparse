@@ -30,7 +30,7 @@
 			"name": "M-SCRUB-PRIVATE-DOTTED-BLIND",
 			"type": "dev.ScrubGuard",
 			"method": "namings",
-			"find": "if (segments.length < 2 || !segments.foreach(isIdentifier)) return out;",
+			"find": "if (segments.length < 2 || !segments.foreach(Strings.isIdentifier)) return out;",
 			"replace": "if (segments.length >= 0) return out;",
 			"note": "a dotted name names nothing, so a private module spelled as a package path passes the guard"
 		},

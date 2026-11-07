@@ -5,6 +5,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 /**
  * Flags a property whose BOTH accessors are `default` — `var x(default, default):T` — and
@@ -154,7 +155,7 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 	/** The offset just past a `default` identifier at `i`, or -1 when the token there is anything else. */
 	private static function plainAccessorEnd(source: String, i: Int, limit: Int): Int {
 		var j: Int = i;
-		while (j < limit && SourceText.isIdentChar(source.fastCodeAt(j))) j++;
+		while (j < limit && Strings.isIdentChar(source.fastCodeAt(j))) j++;
 		return j > i && source.substring(i, j) == PLAIN_ACCESSOR ? j : -1;
 	}
 

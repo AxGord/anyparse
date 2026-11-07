@@ -6,6 +6,7 @@ import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -275,14 +276,14 @@ final class ModuleScan {
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = bare.fastCodeAt(i);
-			if (!SourceText.isIdentChar(c) && c != '.'.code) {
+			if (!Strings.isIdentChar(c) && c != '.'.code) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
 			while (i < n) {
 				final cc: Int = bare.fastCodeAt(i);
-				if (!SourceText.isIdentChar(cc) && cc != '.'.code) break;
+				if (!Strings.isIdentChar(cc) && cc != '.'.code) break;
 				i++;
 			}
 			runs.push(bare.substring(start, i));

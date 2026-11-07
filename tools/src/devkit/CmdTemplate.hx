@@ -2,6 +2,8 @@ package devkit;
 
 using StringTools;
 
+import anyparse.util.Strings;
+
 /**
  * The template language of `Cmd.cmd`, read at compile time into an argument vector: words split on whitespace, a
  * `"…"` run groups literal text that holds spaces (the quotes are dropped, `""` is one empty word), `$name` and
@@ -63,12 +65,7 @@ final class CmdTemplate {
 
 	/** Whether `code` may stand in an identifier — as its first character when `first`. */
 	private static inline function isIdentChar(code: Null<Int>, first: Bool): Bool {
-		return code != null && (
-			code == '_'.code
-			|| (code >= 'a'.code && code <= 'z'.code)
-			|| (code >= 'A'.code && code <= 'Z'.code)
-			|| (!first && code >= '0'.code && code <= '9'.code)
-		);
+		return code != null && (first ? Strings.isIdentStart(code) : Strings.isIdentChar(code));
 	}
 
 	/**

@@ -17,6 +17,8 @@ import anyparse.query.SymbolIndex.Reification;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
+import anyparse.util.Strings;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -614,7 +616,7 @@ final class SymbolIndexBuilder {
 		for (c in meta.children) {
 			final span: Null<Span> = c.span;
 			final path: Null<String> = span == null ? null : source.substring(span.from, span.to).trim().replace(' ', '');
-			if (path == null || !path.split('.').foreach(SourceText.isIdentifier)) return null;
+			if (path == null || !path.split('.').foreach(Strings.isIdentifier)) return null;
 			out.push(path);
 		}
 		return out;
@@ -1238,7 +1240,7 @@ final class SymbolIndexBuilder {
 		final out: Array<Reification> = [];
 		for (typeName => names in byType) {
 			final spelled: Array<String> = [for (name in names.keys()) name];
-			spelled.sort(Reflect.compare);
+			spelled.sort(Compare.compareString);
 			out.push({ typeName: typeName, names: spelled });
 		}
 		out.sort((a, b) -> Reflect.compare(a.typeName, b.typeName));

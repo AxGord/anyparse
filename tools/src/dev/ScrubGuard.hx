@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Strings;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import haxe.io.Path;
@@ -274,7 +275,7 @@ final class ScrubGuard {
 			return out;
 		}
 		final segments: Array<String> = name.split('.');
-		if (segments.length < 2 || !segments.foreach(isIdentifier)) return out;
+		if (segments.length < 2 || !segments.foreach(Strings.isIdentifier)) return out;
 		var size: Int = segments.length;
 		while (size >= 2) {
 			for (first in 0...segments.length - size + 1) {
@@ -462,11 +463,6 @@ final class ScrubGuard {
 	/** Whether the path segment `segment` ends in an extension: a dot after its first character, then letters and digits. */
 	private static function hasExtension(segment: String): Bool {
 		return ~/^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[A-Za-z0-9]+$/.match(segment);
-	}
-
-	/** Whether `segment` is an identifier, as each segment of a dotted module path is. */
-	private static function isIdentifier(segment: String): Bool {
-		return ~/^[A-Za-z_][A-Za-z0-9_]*$/.match(segment);
 	}
 
 }

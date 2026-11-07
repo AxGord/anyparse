@@ -21,6 +21,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.query.ValueDoors;
+import anyparse.util.Strings;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
@@ -465,7 +466,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 
 	/** Whether `c` can sit INSIDE a dotted type path — an identifier character or the separator itself. */
 	private static inline function isPathChar(c: Int): Bool {
-		return c == '.'.code || SourceText.isIdentChar(c);
+		return c == '.'.code || Strings.isIdentChar(c);
 	}
 
 	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */

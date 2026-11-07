@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.grammar.haxe.HxStringEscape.HxDecodedChar;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -98,7 +99,7 @@ final class HxInterpProjection {
 		if (span == null || span.to - span.from < 2) return;
 		final inner: String = source.substring(span.from + 1, span.to - 1);
 		final decoded: Array<HxDecodedChar> = HxStringEscape.decode(inner);
-		if (!decoded.exists(c -> c.to - c.from > 1 && (c.code == HxStringEscape.DOLLAR || HxStringEscape.isIdentContinue(c.code)))) return;
+		if (!decoded.exists(c -> c.to - c.from > 1 && (c.code == HxStringEscape.DOLLAR || Strings.isIdentChar(c.code)))) return;
 		final parsed: Map<String, QueryNode> = [];
 		for (c in node.children) {
 			final childSpan: Null<Span> = c.span;
@@ -166,10 +167,10 @@ final class HxInterpProjection {
 			out.push(node(BLOCK_KIND, null, decoded, i, close, base));
 			return close + 1;
 		}
-		if (HxStringEscape.isIdentStart(next)) {
+		if (Strings.isIdentStart(next)) {
 			var end: Int = i + 1;
 			final name: StringBuf = new StringBuf();
-			while (end < decoded.length && HxStringEscape.isIdentContinue(decoded[end].code)) {
+			while (end < decoded.length && Strings.isIdentChar(decoded[end].code)) {
 				name.addChar(decoded[end].code);
 				end++;
 			}

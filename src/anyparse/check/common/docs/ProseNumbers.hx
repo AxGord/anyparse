@@ -1,5 +1,7 @@
 package anyparse.check.common.docs;
 
+import anyparse.util.Strings;
+
 /**
  * Where the numbers, words and counts of comment prose start and end — the token arithmetic
  * `doc-measurement-claim` reads its shapes with. Every function takes the comment's end as `to` and
@@ -116,7 +118,7 @@ final class ProseNumbers {
 	/** Where the identifier token at `at` ends; `at` itself when none starts there. */
 	public static function tokenEnd(source: String, to: Int, at: Int): Int {
 		var i: Int = at;
-		while (i < to && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < to && Strings.isIdentChar(source.fastCodeAt(i))) i++;
 		return i;
 	}
 
@@ -226,7 +228,7 @@ final class ProseNumbers {
 	/** Where the prose word at `at` ends — letters, digits, and the hyphen or apostrophe inside a word. */
 	private static function wordEnd(source: String, to: Int, at: Int): Int {
 		var i: Int = at;
-		while (i < to && (i == at ? SourceText.isIdentChar(source.fastCodeAt(i)) : continuesWord(source, to, i))) i++;
+		while (i < to && (i == at ? Strings.isIdentChar(source.fastCodeAt(i)) : continuesWord(source, to, i))) i++;
 		return i;
 	}
 
@@ -234,8 +236,8 @@ final class ProseNumbers {
 	private static function continuesWord(source: String, to: Int, at: Int): Bool {
 		if (at >= to) return false;
 		final c: Int = source.fastCodeAt(at);
-		return SourceText.isIdentChar(c)
-			|| ((c == '-'.code || c == '\''.code) && at + 1 < to && SourceText.isIdentChar(source.fastCodeAt(at + 1)));
+		return Strings.isIdentChar(c)
+			|| ((c == '-'.code || c == '\''.code) && at + 1 < to && Strings.isIdentChar(source.fastCodeAt(at + 1)));
 	}
 
 	/** Whether the word `[at, end)` is a noun a census counts. */
@@ -252,14 +254,14 @@ final class ProseNumbers {
 	private static function wordStartBefore(source: String, from: Int, at: Int): Int {
 		var i: Int = at;
 		while (i > from && source.fastCodeAt(i - 1) == ' '.code) i--;
-		while (i > from && SourceText.isIdentChar(source.fastCodeAt(i - 1))) i--;
+		while (i > from && Strings.isIdentChar(source.fastCodeAt(i - 1))) i--;
 		return i;
 	}
 
 	/** Where the word starting at `start` ends, never past `limit`. */
 	private static function trimmedEnd(source: String, start: Int, limit: Int): Int {
 		var i: Int = start;
-		while (i < limit && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < limit && Strings.isIdentChar(source.fastCodeAt(i))) i++;
 		return i;
 	}
 

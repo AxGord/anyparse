@@ -5,6 +5,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.BodySkip.SkipMark;
 import anyparse.runtime.BodySkip.SkipMarkRole;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -60,7 +61,7 @@ final class CondDirectives {
 	 * identifier spliced next to it. Out of range answers false: nothing there to weld with.
 	 */
 	public static inline function isIdentCharAt(source: String, at: Int): Bool {
-		return at >= 0 && at < source.length && SourceText.isIdentChar(source.fastCodeAt(at));
+		return at >= 0 && at < source.length && Strings.isIdentChar(source.fastCodeAt(at));
 	}
 
 	/**
@@ -294,7 +295,7 @@ final class CondDirectives {
 		for (keyword in keywords) {
 			final end: Int = at + keyword.length;
 			if (end > source.length || source.substring(at, end) != keyword) continue;
-			if (end == source.length || !SourceText.isIdentChar(source.fastCodeAt(end))) return keyword;
+			if (end == source.length || !Strings.isIdentChar(source.fastCodeAt(end))) return keyword;
 		}
 		return null;
 	}
@@ -355,7 +356,7 @@ final class CondDirectives {
 		final c: Int = source.fastCodeAt(at);
 		if (c == '('.code) return scanParens(source, at);
 		if (isQuote(c)) return scanQuoted(source, at);
-		if (SourceText.isIdentStartChar(c)) return scanFlagName(source, at + 1);
+		if (Strings.isIdentStart(c)) return scanFlagName(source, at + 1);
 		if (!isDigit(c)) return at;
 		var i: Int = at + 1;
 		while (i < source.length) {
@@ -436,9 +437,9 @@ final class CondDirectives {
 	private static function scanFlagName(source: String, from: Int): Int {
 		var i: Int = from;
 		while (true) {
-			while (i < source.length && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
+			while (i < source.length && Strings.isIdentChar(source.fastCodeAt(i))) i++;
 			if (i + 1 >= source.length || source.fastCodeAt(i) != '.'.code) return i;
-			if (!SourceText.isIdentStartChar(source.fastCodeAt(i + 1))) return i;
+			if (!Strings.isIdentStart(source.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
 	}

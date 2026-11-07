@@ -432,7 +432,7 @@
 			"name": "M-DOCSPLIT-OWNER-ANY",
 			"type": "anyparse.query.CanonicalEdit",
 			"method": "docSplittingEdit",
-			"find": "if (!SourceText.isIdentStartChar(next) && next != '@'.code && next != '#'.code) continue;",
+			"find": "if (!Strings.isIdentStart(next) && next != '@'.code && next != '#'.code) continue;",
 			"replace": "",
 			"note": "the positive criterion is gone, so an orphaned doc before the byte that CLOSES a body counts as documenting something and add-member's append is refused with a remedy it cannot perform"
 		},
@@ -14194,7 +14194,7 @@
 			"name": "M-MODMOVE-DOTTED-UNBOUNDED",
 			"type": "anyparse.query.ModulePathTokens",
 			"method": "occurrences",
-			"find": "if (after >= 0 && SourceText.isIdentChar(after)) continue;",
+			"find": "if (after >= 0 && Strings.isIdentChar(after)) continue;",
 			"replace": "",
 			"note": "a module path is matched as a prefix of a longer name, so pkg.AB follows pkg.A"
 		},

@@ -1,8 +1,8 @@
 package anyparse.check.common.control;
 
 import anyparse.query.CondDirectives;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -132,9 +132,9 @@ final class RedundantCondCompParens extends RuleBase {
 		if (source.fastCodeAt(condition.from) != '('.code || source.fastCodeAt(close) != ')'.code) return null;
 		var from: Int = condition.from + 1;
 		while (from < close && isSpaceAt(source, from)) from++;
-		if (from >= close || !SourceText.isIdentStartChar(source.fastCodeAt(from))) return null;
+		if (from >= close || !Strings.isIdentStart(source.fastCodeAt(from))) return null;
 		var to: Int = from;
-		while (to < close && SourceText.isIdentChar(source.fastCodeAt(to))) to++;
+		while (to < close && Strings.isIdentChar(source.fastCodeAt(to))) to++;
 		final flag: String = source.substring(from, to);
 		while (to < close && isSpaceAt(source, to)) to++;
 		return to == close ? flag : null;

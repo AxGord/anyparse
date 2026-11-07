@@ -10,6 +10,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
+import anyparse.util.Strings;
 
 /**
  * Flags `throw '<string>'` — a raw string thrown as an exception. The value carries no
@@ -257,8 +258,8 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 			final at: Int = source.indexOf(CATCH_KEYWORD, i);
 			if (at < 0) return false;
 			i = at + CATCH_KEYWORD.length;
-			if (at > 0 && SourceText.isIdentChar(source.fastCodeAt(at - 1))) continue;
-			if (i < n && SourceText.isIdentChar(source.fastCodeAt(i))) continue;
+			if (at > 0 && Strings.isIdentChar(source.fastCodeAt(at - 1))) continue;
+			if (i < n && Strings.isIdentChar(source.fastCodeAt(i))) continue;
 			var open: Int = i;
 			while (open < n && source.isSpace(open)) open++;
 			if (open >= n || source.fastCodeAt(open) != '('.code) continue;

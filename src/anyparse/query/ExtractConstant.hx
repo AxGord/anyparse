@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -49,7 +50,7 @@ final class ExtractConstant {
 	public static function extractConstant(
 		source: String, typeName: String, name: String, literal: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		if (!SourceText.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
+		if (!Strings.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
 
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
 			case Unparsed(message): return Err(message);
@@ -90,7 +91,7 @@ final class ExtractConstant {
 		scopeFiles: Array<{ file: String, source: String }>, modulePkg: String, moduleClass: String, moduleExists: Bool,
 		moduleSource: Null<String>, name: String, literal: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): ExtractIntoResult {
-		if (!SourceText.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
+		if (!Strings.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
 
 		final modulePath: String = modulePkg == '' ? moduleClass : '$modulePkg.$moduleClass';
 		final ref: String = '$moduleClass.$name';

@@ -5,6 +5,7 @@ import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using StringTools;
 using Lambda;
@@ -369,7 +370,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 				buf.add('$${$src}');
 			case SegIdent(name):
 				final nc: Int = nextOutputChar(segments, escaped, i + 1);
-				buf.add(nc != -1 && HxStringEscape.isIdentContinue(nc) ? '$${$name}' : '$$$name');
+				buf.add(nc != -1 && Strings.isIdentChar(nc) ? '$${$name}' : '$$$name');
 		}
 		buf.add("'");
 		return buf.toString();
